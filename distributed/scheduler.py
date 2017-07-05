@@ -38,7 +38,6 @@ from .utils import (All, ignoring, get_ip, get_fileno_limit, log_errors,
 from .utils_comm import (scatter_to_workers, gather_from_workers)
 from .versions import get_versions
 
-from .channels import ChannelScheduler
 from .publish import PublishExtension
 from .queues import QueueExtension
 from .recreate_exceptions import ReplayExceptionScheduler
@@ -191,7 +190,7 @@ class Scheduler(ServerNode):
     def __init__(self, center=None, loop=None,
                  delete_interval=500, synchronize_worker_interval=60000,
                  services=None, allowed_failures=ALLOWED_FAILURES,
-                 extensions=[ChannelScheduler, PublishExtension, WorkStealing,
+                 extensions=[PublishExtension, WorkStealing,
                              ReplayExceptionScheduler, QueueExtension,
                              VariableExtension],
                  validate=False, scheduler_file=None, security=None,

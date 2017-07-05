@@ -104,7 +104,6 @@ Contents
 
    adaptive
    asynchronous
-   channels
    configuration
    ec2
    local-cluster

@@ -490,8 +490,6 @@ class Client(Node):
 
         self.start(timeout=timeout, asynchronous=asynchronous)
 
-        from distributed.channels import ChannelClient
-        ChannelClient(self)  # registers itself on construction
         from distributed.recreate_exceptions import ReplayExceptionClient
         ReplayExceptionClient(self)
 
@@ -923,6 +921,12 @@ class Client(Node):
         API.
         """
         return ClientExecutor(self, **kwargs)
+
+    def channel(self, *args, **kwargs):
+        """ Deprecated: see dask.distributed.Queue instead """
+        msg = ("Channels have been removed.  Consider using Queues instead. "
+               "http://distributed.readthedocs.io/en/latest/api.html#distributed.Queue")
+        raise NotImplementedError(msg)
 
     def submit(self, func, *args, **kwargs):
         """ Submit a function application to the scheduler

@@ -180,46 +180,6 @@ async def test_asyncio_exceptions():
 
 
 @coro_test
-async def test_asyncio_channels():
-    async with AioClient(processes=False) as c:
-        x = c.channel('x')
-        y = c.channel('y')
-
-        assert len(x) == 0
-
-        while set(c.extensions['channels'].channels) != {'x', 'y'}:
-            await asyncio.sleep(0.01)
-
-        xx = c.channel('x')
-        yy = c.channel('y')
-
-        assert len(x) == 0
-
-        await asyncio.sleep(0.1)
-        assert set(c.extensions['channels'].channels) == {'x', 'y'}
-
-        future = c.submit(inc, 1)
-
-        x.append(future)
-
-        while not x.data:
-            await asyncio.sleep(0.01)
-
-        assert len(x) == 1
-
-        assert xx.data[0].key == future.key
-
-        xxx = c.channel('x')
-        while not xxx.data:
-            await asyncio.sleep(0.01)
-
-        assert xxx.data[0].key == future.key
-
-        assert 'x' in repr(x)
-        assert '1' in repr(x)
-
-
-@coro_test
 async def test_asyncio_exception_on_exception():
     async with AioClient(processes=False) as c:
         x = c.submit(lambda: 1 / 0)
