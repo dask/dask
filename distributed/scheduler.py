@@ -296,7 +296,8 @@ class Scheduler(ServerNode):
                                 'task-erred': self.handle_task_erred,
                                 'release': self.handle_missing_data,
                                 'release-worker-data': self.release_worker_data,
-                                'add-keys': self.add_keys}
+                                'add-keys': self.add_keys,
+                                'long-running': self.handle_long_running}
 
         self.client_handlers = {'update-graph': self.update_graph,
                                 'client-desires-keys': self.client_desires_keys,
@@ -642,7 +643,8 @@ class Scheduler(ServerNode):
 
     def update_graph(self, client=None, tasks=None, keys=None,
                      dependencies=None, restrictions=None, priority=None,
-                     loose_restrictions=None, resources=None):
+                     loose_restrictions=None, resources=None,
+                     submitting_task=None):
         """
         Add new computations to the internal dask graph
 
@@ -699,10 +701,17 @@ class Scheduler(ServerNode):
         recommendations = OrderedDict()
 
         new_priority = priority or order(tasks)  # TODO: define order wrt old graph
-        self.generation += 1  # older graph generations take precedence
+        if submitting_task:  # sub-tasks get better priority than parent tasks
+            try:
+                generation = self.priority[submitting_task][0] - 0.01
+            except KeyError:  # super-task already cleaned up
+                generation = self.generation
+        else:
+            self.generation += 1  # older graph generations take precedence
+            generation = self.generation
         for key in set(new_priority) & touched:
             if key not in self.priority:
-                self.priority[key] = (self.generation, new_priority[key]) # prefer old
+                self.priority[key] = (generation, new_priority[key]) # prefer old
 
         if restrictions:
             # *restrictions* is a dict keying task ids to lists of
@@ -1292,6 +1301,37 @@ class Scheduler(ServerNode):
                 recommendations[key] = 'released'
         if recommendations:
             self.transitions(recommendations)
+
+    def handle_long_running(self, key=None, worker=None, compute_duration=None):
+        """ A task has seceded from the thread pool
+
+        We stop the task from being stolen in the future, and change task
+        duration accounting as if the task has stopped.
+        """
+        self.extensions['stealing'].remove_key_from_stealable(key)
+
+        try:
+            actual_worker = self.rprocessing[key]
+        except KeyError:
+            logger.debug("Received long-running signal from duplicate task. "
+                         "Ignoring.")
+            return
+
+        if compute_duration:
+            ks = key_split(key)
+            old_duration = self.task_duration.get(ks, 0)
+            new_duration = compute_duration
+            if not old_duration:
+                avg_duration = new_duration
+            else:
+                avg_duration = (0.5 * old_duration
+                              + 0.5 * new_duration)
+
+            self.task_duration[ks] = avg_duration
+
+        worker = self.rprocessing[key]
+        self.occupancy[actual_worker] -= self.processing[actual_worker][key]
+        self.processing[actual_worker][key] = 0
 
     @gen.coroutine
     def handle_worker(self, worker):
@@ -2307,7 +2347,7 @@ class Scheduler(ServerNode):
             #############################
             # Update Timing Information #
             #############################
-            if compute_start:
+            if compute_start and self.processing[worker].get(key, True):
                 # Update average task duration for worker
                 info = self.worker_info[worker]
                 ks = key_split(key)

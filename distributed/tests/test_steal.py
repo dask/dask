@@ -548,7 +548,7 @@ def test_dont_steal_long_running_tasks(c, s, a, b):
         assert time() < start + 1
 
     na = len(a.executing)
-    nb= len(b.executing)
+    nb = len(b.executing)
 
     incs = c.map(inc, range(100), workers=a.address, allow_other_workers=True)
 

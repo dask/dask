@@ -18,7 +18,7 @@ from tornado import gen
 from tornado.ioloop import TimeoutError
 
 import distributed
-from distributed import Nanny
+from distributed import Nanny, Client, get_client, wait, default_client
 from distributed.core import rpc, connect
 from distributed.client import _wait
 from distributed.scheduler import Scheduler
@@ -29,8 +29,7 @@ from distributed.sizeof import sizeof
 from distributed.worker import Worker, error_message, logger, TOTAL_MEMORY
 from distributed.utils import ignoring, tmpfile
 from distributed.utils_test import (loop, inc, mul, gen_cluster, div, dec,
-        slow, slowinc, throws, gen_test, readone)
-
+        slow, slowinc, throws, gen_test, readone, cluster)
 
 
 def test_worker_ncores():
@@ -806,3 +805,82 @@ def test_fail_write_many_to_disk(c, s, a, b):
 @gen_cluster()
 def test_pid(s, a, b):
     assert s.worker_info[a.address]['pid'] == os.getpid()
+
+
+@gen_cluster(client=True)
+def test_get_client(c, s, a, b):
+    def f(x):
+        cc = get_client()
+        future = cc.submit(inc, x)
+        return future.result()
+
+    assert default_client() is c
+
+    future = c.submit(f, 10, workers=a.address)
+    result = yield future
+    assert result == 11
+
+    assert a._client
+    assert not b._client
+
+    assert a._client is c
+    assert default_client() is c
+
+    a_client = a._client
+
+    for i in range(10):
+        yield wait(c.submit(f, i))
+
+    assert a._client is a_client
+
+
+def test_get_client_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            def f(x):
+                cc = get_client()
+                future = cc.submit(inc, x)
+                return future.result()
+
+            future = c.submit(f, 10)
+            assert future.result() == 11
+
+
+@gen_cluster(client=True)
+def test_get_client_coroutine(c, s, a, b):
+    @gen.coroutine
+    def f():
+        client = yield get_client()
+        future = client.submit(inc, 10)
+        result = yield future
+        raise gen.Return(result)
+
+    results = yield c.run_coroutine(f)
+    assert results == {a.address: 11,
+                       b.address: 11}
+
+
+def test_get_client_coroutine_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            @gen.coroutine
+            def f():
+                client = yield get_client()
+                future = client.submit(inc, 10)
+                result = yield future
+                raise gen.Return(result)
+
+            results = c.run_coroutine(f)
+            assert results == {a['address']: 11,
+                               b['address']: 11}
+
+
+@gen_cluster()
+def test_global_workers(s, a, b):
+    from distributed.worker import _global_workers
+    n = len(_global_workers)
+    w = _global_workers[-1]()
+    assert w is a or w is b
+    yield a._close()
+    yield b._close()
+    assert len(_global_workers) == n - 2

@@ -8,9 +8,10 @@ import os
 from pickle import PicklingError
 import random
 import tempfile
-from threading import current_thread, local
+import threading
 import shutil
 import sys
+import weakref
 
 from dask.core import istask
 from dask.compatibility import apply
@@ -26,7 +27,7 @@ from tornado.locks import Event
 from .batched import BatchedSend
 from .comm import get_address_host, get_local_address_for
 from .config import config
-from .compatibility import unicode
+from .compatibility import unicode, get_thread_identity
 from .core import (error_message, CommClosedError,
                    rpc, pingpong, coerce_to_address)
 from .metrics import time
@@ -36,7 +37,7 @@ from .protocol import (pickle, to_serialize, deserialize_bytes,
                        serialize_bytelist)
 from .security import Security
 from .sizeof import safe_sizeof as sizeof
-from .threadpoolexecutor import ThreadPoolExecutor
+from .threadpoolexecutor import ThreadPoolExecutor, secede as tpe_secede
 from .utils import (funcname, get_ip, has_arg, _maybe_complex, log_errors,
                     ignoring, validate_key, mp_context, import_file,
                     silence_logging)
@@ -44,7 +45,7 @@ from .utils_comm import pack_data, gather_from_workers
 
 _ncores = mp_context.cpu_count()
 
-thread_state = local()
+thread_state = threading.local()
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,8 @@ IN_PLAY = ('waiting', 'ready', 'executing', 'long-running')
 PENDING = ('waiting', 'ready', 'constrained')
 PROCESSING = ('waiting', 'ready', 'constrained', 'executing', 'long-running')
 READY = ('ready', 'constrained')
+
+_global_workers = []
 
 
 class WorkerBase(ServerNode):
@@ -317,6 +320,8 @@ class WorkerBase(ServerNode):
         if self.status in ('closed', 'closing'):
             return
         logger.info("Stopping worker at %s", self.address)
+        if self._client:
+            yield self._client._close()
         self.status = 'closing'
         self.stop()
         self.heartbeat_callback.stop()
@@ -341,6 +346,18 @@ class WorkerBase(ServerNode):
 
         self.rpc.close()
         self._closed.set()
+        self._remove_from_global_workers()
+
+    def __del__(self):
+        self._remove_from_global_workers()
+
+    def _remove_from_global_workers(self):
+        with log_errors():
+            for ref in list(_global_workers):
+                if ref() is self:
+                    _global_workers.remove(ref)
+                if ref() is None:
+                    _global_workers.remove(ref)
 
     @gen.coroutine
     def terminate(self, comm, report=True):
@@ -652,6 +669,7 @@ def apply_function(function, args, kwargs, execution_state, key):
     -------
     msg: dictionary with status, result/error, timings, etc..
     """
+    thread_state.start_time = time()
     thread_state.execution_state = execution_state
     thread_state.key = key
     start = time()
@@ -670,7 +688,7 @@ def apply_function(function, args, kwargs, execution_state, key):
         end = time()
     msg['start'] = start
     msg['stop'] = end
-    msg['thread'] = current_thread().ident
+    msg['thread'] = get_thread_identity()
     return msg
 
 
@@ -944,6 +962,7 @@ class Worker(WorkerBase):
         self.has_what = defaultdict(set)
         self.pending_data_per_worker = defaultdict(deque)
         self.extensions = {}
+        self._lock = threading.Lock()
 
         self.data_needed = deque()  # TODO: replace with heap?
 
@@ -1005,8 +1024,11 @@ class Worker(WorkerBase):
         self.incoming_count = 0
         self.outgoing_transfer_log = deque(maxlen=(100000))
         self.outgoing_count = 0
+        self._client = None
 
         WorkerBase.__init__(self, *args, **kwargs)
+
+        _global_workers.append(weakref.ref(self))
 
     def __str__(self):
         return "<%s: %s, %s, stored: %d, running: %d/%d, ready: %d, comm: %d, waiting: %d>" % (
@@ -1399,14 +1421,16 @@ class Worker(WorkerBase):
                 import pdb; pdb.set_trace()
             raise
 
-    def transition_executing_long_running(self, key):
+    def transition_executing_long_running(self, key, compute_duration=None):
         try:
             if self.validate:
                 assert key in self.executing
 
             self.executing.remove(key)
             self.long_running.add(key)
-            self.batched_stream.send({'op': 'long-running', 'key': key})
+            self.batched_stream.send({'op': 'long-running',
+                                      'key': key,
+                                      'compute_duration': compute_duration})
 
             self.ensure_computing()
         except Exception as e:
@@ -1414,6 +1438,10 @@ class Worker(WorkerBase):
             if LOG_PDB:
                 import pdb; pdb.set_trace()
             raise
+
+    def maybe_transition_long_running(self, key, compute_duration=None):
+        if self.task_state.get(key) == 'executing':
+            self.transition(key, 'long-running', compute_duration=compute_duration)
 
     ##########################
     # Gather Data from Peers #
@@ -2103,6 +2131,40 @@ class Worker(WorkerBase):
                            for c in msg
                            if isinstance(c, (tuple, list, set)))]
 
+    @property
+    def client(self):
+        """ Get local client attached to this worker
+
+        If no such client exists, create one
+
+        See Also
+        --------
+        get_client
+        """
+        with self._lock:
+            if self._client:
+                return self._client
+
+            try:
+                from .client import default_client
+                client = default_client()
+            except ValueError:  # no clients found, need to make a new one
+                pass
+            else:
+                if client.scheduler.address == self.scheduler.address:
+                    self._client = client
+
+            if not self._client:
+                from .client import Client
+                asynchronous = get_thread_identity() == self.loop._thread_ident
+                self._client = Client(self.scheduler.address, loop=self.loop,
+                                      security=self.security,
+                                      set_as_default=True,
+                                      asynchronous=asynchronous)
+                if not asynchronous:
+                    assert self._client.status == 'running'
+            return self._client
+
 
 def get_worker():
     """ Get the worker currently running this task
@@ -2119,6 +2181,83 @@ def get_worker():
 
     See Also
     --------
+    get_client
     worker_client
     """
-    return thread_state.execution_state['worker']
+    try:
+        return thread_state.execution_state['worker']
+    except AttributeError:
+        for ref in _global_workers[::-1]:
+            worker = ref()
+            if worker:
+                return worker
+        raise ValueError("No workers found")
+
+
+def get_client(address=None):
+    """ Get a client while within a task
+
+    This client connects to the same scheduler to which the worker is connected
+
+    Examples
+    --------
+    >>> def f():
+    ...     client = get_client()
+    ...     futures = client.map(lambda x: x + 1, range(10))  # spawn many tasks
+    ...     results = client.gather(futures)
+    ...     return sum(results)
+
+    >>> future = client.submit(f)  # doctest: +SKIP
+    >>> future.result()  # doctest: +SKIP
+    55
+
+    See Also
+    --------
+    get_worker
+    worker_client
+    secede
+    """
+    try:
+        worker = get_worker()
+    except ValueError:  # could not find worker
+        pass
+    else:
+        if not address or worker.scheduler.address == address:
+            return worker.client
+
+    from .client import _get_global_client
+    client = _get_global_client()  # TODO: assumes the same scheduler
+    if client and not address or client.scheduler.address == address:
+        return client
+    elif address:
+        from .client import Client
+        return Client(address)
+    else:
+        raise ValueError("No global client found and no address provided")
+
+
+def secede():
+    """
+    Have this task secede from the worker's thread pool
+
+    This opens up a new scheduling slot and a new thread for a new task.
+
+    Examples
+    --------
+    >>> def mytask(x):
+    ...     # do some work
+    ...     client = get_client()
+    ...     futures = client.map(...)  # do some remote work
+    ...     secede()  # while that work happens, remove ourself from the pool
+    ...     return client.gather(futures)  # return gathered results
+
+    See Also
+    --------
+    get_client
+    get_worker
+    """
+    worker = get_worker()
+    tpe_secede()  # have this thread secede from the thread pool
+    duration = time() - thread_state.start_time
+    worker.loop.add_callback(worker.maybe_transition_long_running,
+                             thread_state.key, compute_duration=duration)

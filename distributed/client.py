@@ -45,7 +45,8 @@ from .node import Node
 from .protocol import to_serialize
 from .protocol.pickle import dumps, loads
 from .security import Security
-from .worker import dumps_task
+from .sizeof import sizeof
+from .worker import dumps_task, thread_state, get_client
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator,
         tokey, log_errors, str_graph, key_split, format_bytes)
 from .versions import get_versions
@@ -268,10 +269,11 @@ class Future(WrappedKey):
             self.client._dec_ref(tokey(self.key))
 
     def __getstate__(self):
-        return self.key
+        return (self.key, self.client.scheduler.address)
 
-    def __setstate__(self, key):
-        c = default_client()
+    def __setstate__(self, state):
+        key, address = state
+        c = get_client(address)
         Future.__init__(self, key, c)
         c._send_to_scheduler({'op': 'update-graph', 'tasks': {},
                               'keys': [tokey(self.key)], 'client': c.id})
@@ -431,7 +433,7 @@ class Client(Node):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.coroutines = []
-        self.id = type(self).__name__ + '-' + str(uuid.uuid1())
+        self.id = type(self).__name__ + '-' + str(uuid.uuid1(clock_seq=os.getpid()))
         self.generation = 0
         self.status = None
         self._pending_msg_buffer = []
@@ -442,7 +444,7 @@ class Client(Node):
         assert isinstance(self.security, Security)
         self.connection_args = self.security.get_connection_args('client')
         self._connecting_to_scheduler = False
-        self.asynchronous = asynchronous
+        self._asynchronous = asynchronous
         self._loop_thread = None
         self.scheduler = None
         self._lock = threading.Lock()
@@ -488,10 +490,33 @@ class Client(Node):
         super(Client, self).__init__(connection_args=self.connection_args,
                                      io_loop=self.loop)
 
-        self.start(timeout=timeout, asynchronous=asynchronous)
+        self.start(timeout=timeout)
 
         from distributed.recreate_exceptions import ReplayExceptionClient
         ReplayExceptionClient(self)
+
+    @property
+    def asynchronous(self):
+        """ Are we running in the event loop?
+
+        This is true if the user signaled that we might be when creating the
+        client as in the following::
+
+            client = Client(asynchronous=True)
+
+        However, we override this expectation if we can definitively tell that
+        we are running from a thread that is not the event loop.  This is
+        common when calling get_client() from within a worker task.  Even
+        though the client was originally created in asynchronous mode we may
+        find ourselves in contexts when it is better to operate synchronously.
+        """
+        result = self._asynchronous
+        try:
+            if get_thread_identity() != self.loop._thread_ident:
+                result = False
+        except AttributeError:  # AsyncIOLoop doesn't have _thread_ident
+            pass
+        return result
 
     def sync(self, func, *args, **kwargs):
         if self.asynchronous:
@@ -565,11 +590,12 @@ class Client(Node):
         else:
             return text
 
-    def start(self, asynchronous=None, **kwargs):
+    def start(self, **kwargs):
         """ Start scheduler running in separate thread """
         if self._loop_thread is not None:
             return
-        if not asynchronous and not self.loop._running:
+
+        if not self.asynchronous and not self.loop._running:
             self._loop_thread = threading.Thread(target=self.loop.start,
                                                  name="Client loop")
             self._loop_thread.daemon = True
@@ -578,14 +604,16 @@ class Client(Node):
                 self._should_close_loop = True
             while not self.loop._running:
                 sleep(0.001)
+
         pc = PeriodicCallback(lambda: None, 1000, io_loop=self.loop)
         self.loop.add_callback(pc.start)
         _set_global_client(self)
-        if asynchronous:
+        self.status = 'connecting'
+
+        if self.asynchronous:
             self._started = self._start(**kwargs)
         else:
             sync(self.loop, self._start, **kwargs)
-        self.status = 'running'
 
     def __await__(self):
         return self._started.__await__()
@@ -1109,7 +1137,7 @@ class Client(Node):
                 keys = [key + '-' + tokenize(func, kwargs, *args)
                         for args in zip(*iterables)]
             else:
-                uid = str(uuid.uuid4())
+                uid = str(uuid.uuid1())
                 keys = [key + '-' + uid + '-' + str(i)
                         for i in range(min(map(len, iterables)))] if iterables else []
 
@@ -1155,7 +1183,7 @@ class Client(Node):
         return [futures[tokey(k)] for k in keys]
 
     @gen.coroutine
-    def _gather(self, futures, errors='raise', direct=False):
+    def _gather(self, futures, errors='raise', direct=False, local_worker=None):
         futures2, keys = unpack_remotedata(futures, byte_keys=True)
         keys = [tokey(key) for key in keys]
         bad_data = dict()
@@ -1200,20 +1228,29 @@ class Client(Node):
                         bad_data[key] = None
                     else:
                         raise ValueError("Bad value, `errors=%s`" % errors)
+
             keys = [k for k in keys if k not in bad_keys]
 
-            if direct:
+            data = {}
+
+            if local_worker:  # look inside local worker
+                data.update({k: local_worker.data[k]
+                             for k in keys
+                             if k in local_worker.data})
+                keys = [k for k in keys if k not in data]
+
+            if direct or local_worker:  # gather directly from workers
                 who_has = yield self.scheduler.who_has(keys=keys)
-                data, missing_keys, missing_workers = yield gather_from_workers(
+                data2, missing_keys, missing_workers = yield gather_from_workers(
                     who_has, rpc=self.rpc, close=False)
-                response = {'status': 'OK', 'data': data}
+                response = {'status': 'OK', 'data': data2}
                 if missing_keys:
-                    keys2 = [key for key in keys if key not in data]
+                    keys2 = [key for key in keys if key not in data2]
                     response = yield self.scheduler.gather(keys=keys2)
                     if response['status'] == 'OK':
-                        response['data'].update(data)
+                        response['data'].update(data2)
 
-            else:
+            else:  # ask scheduler to gather data for us
                 response = yield self.scheduler.gather(keys=keys)
 
             if response['status'] == 'error':
@@ -1229,7 +1266,7 @@ class Client(Node):
         if bad_data and errors == 'skip' and isinstance(futures2, list):
             futures2 = [f for f in futures2 if f not in bad_data]
 
-        data = response['data']
+        data.update(response['data'])
         result = pack_data(futures2, merge(data, bad_data))
         raise gen.Return(result)
 
@@ -1300,11 +1337,16 @@ class Client(Node):
             return (self.gather(f, errors=errors, direct=direct)
                     for f in futures)
         else:
+            if hasattr(thread_state, 'execution_state'):  # within worker task
+                local_worker = thread_state.execution_state['worker']
+            else:
+                local_worker = None
             return self.sync(self._gather, futures, errors=errors,
-                             direct=direct)
+                             direct=direct, local_worker=local_worker)
 
     @gen.coroutine
-    def _scatter(self, data, workers=None, broadcast=False, direct=False):
+    def _scatter(self, data, workers=None, broadcast=False, direct=False,
+                 local_worker=None):
         if isinstance(workers, six.string_types):
             workers = [workers]
         if isinstance(data, dict) and not all(isinstance(k, (bytes, unicode))
@@ -1330,24 +1372,34 @@ class Client(Node):
 
         assert isinstance(data, dict)
 
-        data2 = valmap(to_serialize, data)
         types = valmap(type, data)
-        if direct:
-            ncores = yield self.scheduler.ncores(workers=workers)
-            if not ncores:
-                raise ValueError("No valid workers")
 
-            _, who_has, nbytes = yield scatter_to_workers(ncores, data2,
-                                                          report=False,
-                                                          rpc=self.rpc)
+        if local_worker:  # running within task
+            local_worker.update_data(data=data, report=False)
 
-            yield self.scheduler.update_data(who_has=who_has, nbytes=nbytes)
+            yield self.scheduler.update_data(
+                    who_has={key: [local_worker.address] for key in data},
+                    nbytes=valmap(sizeof, data),
+                    client=self.id)
+
         else:
-            yield self.scheduler.scatter(data=data2, workers=workers,
-                                            client=self.id,
-                                            broadcast=broadcast)
+            data2 = valmap(to_serialize, data)
+            if direct:
+                ncores = yield self.scheduler.ncores(workers=workers)
+                if not ncores:
+                    raise ValueError("No valid workers")
 
-        out = {k: self._Future(k, self) for k in data2}
+                _, who_has, nbytes = yield scatter_to_workers(ncores, data2,
+                                                              report=False,
+                                                              rpc=self.rpc)
+
+                yield self.scheduler.update_data(who_has=who_has, nbytes=nbytes)
+            else:
+                yield self.scheduler.scatter(data=data2, workers=workers,
+                                                client=self.id,
+                                                broadcast=broadcast)
+
+        out = {k: self._Future(k, self) for k in data}
         for key, typ in types.items():
             self.futures[key].finish(type=typ)
 
@@ -1463,8 +1515,13 @@ class Client(Node):
             else:
                 return queue_to_iterator(qout)
         else:
+            if hasattr(thread_state, 'execution_state'): # inside worker task
+                local_worker = thread_state.execution_state['worker']
+            else:
+                local_worker = None
             return self.sync(self._scatter, data, workers=workers,
-                             broadcast=broadcast, direct=direct)
+                             broadcast=broadcast, direct=direct,
+                             local_worker=local_worker)
 
     @gen.coroutine
     def _cancel(self, futures):
@@ -1768,8 +1825,8 @@ class Client(Node):
                                      'restrictions': restrictions or {},
                                      'loose_restrictions': loose_restrictions,
                                      'priority': priority,
-                                     'resources': resources})
-
+                                     'resources': resources,
+                                     'submitting_task': getattr(thread_state, 'key', None)})
             return futures
 
     def get(self, dsk, keys, restrictions=None, loose_restrictions=None,

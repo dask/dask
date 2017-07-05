@@ -11,6 +11,7 @@ import os
 import pickle
 import random
 import sys
+import threading
 from threading import Thread, Semaphore
 from time import sleep
 import traceback
@@ -27,7 +28,8 @@ from tornado.ioloop import IOLoop
 import dask
 from dask import delayed
 from dask.context import _globals
-from distributed import Worker, Nanny, recreate_exceptions, fire_and_forget
+from distributed import (Worker, Nanny, recreate_exceptions, fire_and_forget,
+        get_client, secede, get_worker)
 from distributed.comm import CommClosedError
 from distributed.utils_comm import WrappedKey
 from distributed.client import (Client, Future, _wait,
@@ -4267,9 +4269,9 @@ def test_threadsafe(loop):
                 total = c.submit(sum, list(d))
                 return total.result()
 
-            from multiprocessing.pool import ThreadPool
-            pool = ThreadPool(20)
-            results = pool.map(f, range(20))
+            from concurrent.futures import ThreadPoolExecutor
+            e = ThreadPoolExecutor(20)
+            results = list(e.map(f, range(20)))
             assert results and all(results)
 
 
@@ -4286,9 +4288,9 @@ def test_threadsafe_get(loop):
                     sleep(0.001)
                 return total
 
-            from multiprocessing.pool import ThreadPool
-            pool = ThreadPool(30)
-            results = pool.map(f, range(30))
+            from concurrent.futures import ThreadPoolExecutor
+            e = ThreadPoolExecutor(30)
+            results = list(e.map(f, range(30)))
             assert results and all(results)
 
 
@@ -4306,9 +4308,9 @@ def test_threadsafe_compute(loop):
                     sleep(0.001)
                 return total
 
-            from multiprocessing.pool import ThreadPool
-            pool = ThreadPool(30)
-            results = pool.map(f, range(30))
+            from concurrent.futures import ThreadPoolExecutor
+            e = ThreadPoolExecutor(30)
+            results = list(e.map(f, range(30)))
             assert results and all(results)
 
 
@@ -4318,6 +4320,159 @@ def test_identity(c, s, a, b):
     assert a.id.lower().startswith('worker')
     assert b.id.lower().startswith('worker')
     assert s.id.lower().startswith('scheduler')
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 4)] * 2)
+def test_get_client(c, s, a, b):
+    assert get_client() is c
+    assert c.asynchronous
+    def f(x):
+        client = get_client()
+        future = client.submit(inc, x)
+        import distributed
+        assert not client.asynchronous
+        assert client is distributed.tmp_client
+        return future.result()
+
+    import distributed
+    distributed.tmp_client = c
+    try:
+        futures = c.map(f, range(5))
+        results = yield c.gather(futures)
+        assert results == list(map(inc, range(5)))
+    finally:
+        del distributed.tmp_client
+
+
+@gen_cluster(client=True)
+def test_serialize_collections(c, s, a, b):
+    da = pytest.importorskip('dask.array')
+    x = da.arange(10, chunks=(5,)).persist()
+
+    def f(x):
+        assert isinstance(x, da.Array)
+        return x.sum().compute()
+
+    future = c.submit(f, x)
+    result = yield future
+    assert result == sum(range(10))
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 1, timeout=100)
+def test_secede_simple(c, s, a):
+    def f():
+        client = get_client()
+        secede()
+        return client.submit(inc, 1).result()
+
+    result = yield c.submit(f)
+    assert result == 2
+
+
+@slow
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2, timeout=60)
+def test_secede_balances(c, s, a, b):
+    def f(x):
+        client = get_client()
+        sleep(0.01)  # do some work
+        secede()
+        futures = client.map(slowinc, range(10), pure=False, delay=0.01)
+        total = client.submit(sum, futures).result()
+        return total
+
+    futures = c.map(f, range(100))
+    start = time()
+    while not all(f.status == 'finished' for f in futures):
+        yield gen.sleep(0.01)
+        assert threading.active_count() < 50
+
+    # assert 0.005 < s.task_duration['f'] < 0.1
+    assert len(a.log) < 2 * len(b.log)
+    assert len(b.log) < 2 * len(a.log)
+
+    results = yield c.gather(futures)
+    assert results == [sum(map(inc, range(10)))] * 100
+
+
+@gen_cluster(client=True)
+def test_sub_submit_priority(c, s, a, b):
+    def f():
+        client = get_client()
+        client.submit(slowinc, 1, delay=0.2)
+
+    future = c.submit(f)
+    yield gen.sleep(0.1)
+    if len(s.task_state) == 2:
+        f_key = [k for k in s.task_state if k.startswith('f')][0]
+        slowinc_key = [k for k in s.task_state if k.startswith('slowinc')][0]
+        assert s.priorities[f_key] > s.priorities[slowinc_key]  # lower values schedule first
+
+
+def test_get_client_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            results = c.run(lambda: get_worker().scheduler.address)
+            assert results == {w['address']: s['address'] for w in [a, b]}
+
+            results = c.run(lambda: get_client().scheduler.address)
+            assert results == {w['address']: s['address'] for w in [a, b]}
+
+
+@gen_cluster(client=True)
+def test_serialize_collections_of_futures(c, s, a, b):
+    pd = pytest.importorskip('pandas')
+    dd = pytest.importorskip('dask.dataframe')
+    from dask.dataframe.utils import assert_eq
+
+    df = pd.DataFrame({'x': [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=2).persist()
+    future = yield c.scatter(ddf)
+
+    ddf2 = yield future
+    df2 = yield c.compute(ddf2)
+
+    assert_eq(df, df2)
+
+
+def test_serialize_collections_of_futures_sync(loop):
+    pd = pytest.importorskip('pandas')
+    dd = pytest.importorskip('dask.dataframe')
+    from dask.dataframe.utils import assert_eq
+
+    df = pd.DataFrame({'x': [1, 2, 3]})
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            ddf = dd.from_pandas(df, npartitions=2).persist()
+            future = c.scatter(ddf)
+
+            result = future.result()
+            assert_eq(result.compute(), df)
+
+            assert future.type == dd.DataFrame
+            assert c.submit(lambda x, y:  assert_eq(x.compute(), y), future, df).result()
+
+
+def _dynamic_workload(x, delay=0.01):
+    if delay == 'random':
+        sleep(random.random() / 2)
+    else:
+        sleep(delay)
+    if x > 4:
+        return 4
+    secede()
+    client = get_client()
+    futures = client.map(_dynamic_workload, [x + i + 1 for i in range(2)],
+                         pure=False, delay=delay)
+    total = client.submit(sum, futures)
+    return total.result()
+
+
+@pytest.mark.parametrize('delay', [0.02, slow('random')])
+def test_dynamic_workloads_sync(loop, delay):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            future = c.submit(_dynamic_workload, 0, delay=delay)
+            assert future.result(timeout=40) == 52
 
 
 @gen_cluster(client=True)

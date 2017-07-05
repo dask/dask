@@ -17,8 +17,6 @@ def test_tpe():
 
     assert e.submit(f).result() == 1
 
-    assert len(e._threads) == 1
-
     list(e.map(sleep, [0.01] * 4))
     assert len(threads | e._threads) == 3
 

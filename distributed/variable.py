@@ -15,6 +15,7 @@ except ImportError:
 from .client import Future, _get_global_client, Client
 from .metrics import time
 from .utils import tokey, log_errors
+from .worker import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +199,9 @@ class Variable(object):
 
     def __setstate__(self, state):
         name, address = state
-        client = _get_global_client()
-        if client is None or client.scheduler.address != address:
+        try:
+            client = get_client(address)
+            assert client.address == address
+        except (AttributeError, AssertionError):
             client = Client(address, set_as_default=False)
         self.__init__(name=name, client=client)

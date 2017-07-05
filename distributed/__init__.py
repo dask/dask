@@ -12,7 +12,7 @@ from .queues import Queue
 from .scheduler import Scheduler
 from .utils import sync
 from .variable import Variable
-from .worker import Worker, get_worker
+from .worker import Worker, get_worker, get_client, secede
 from .worker_client import local_client, worker_client
 
 from ._version import get_versions

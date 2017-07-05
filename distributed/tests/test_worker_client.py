@@ -2,15 +2,17 @@ from __future__ import print_function, division, absolute_import
 
 import random
 from time import sleep
+import warnings
 
 import dask
 from dask import delayed
 import pytest
 from tornado import gen
 
-from distributed import worker_client, Client, as_completed
+from distributed import worker_client, Client, as_completed, get_worker
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, double, cluster, loop
+from distributed.worker import thread_state
 
 
 @gen_cluster(client=True)
@@ -36,12 +38,13 @@ def test_submit_from_worker(c, s, a, b):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
 def test_scatter_from_worker(c, s, a, b):
     def func():
+        from distributed.worker import thread_state
         with worker_client() as c:
             futures = c.scatter([1, 2, 3, 4, 5])
             assert isinstance(futures, (list, tuple))
             assert len(futures) == 5
 
-            x = dict(c.worker.data)
+            x = dict(get_worker().data)
             y = {f.key: i for f, i in zip(futures, [1, 2, 3, 4, 5])}
             assert x == y
 
@@ -61,7 +64,7 @@ def test_scatter_from_worker(c, s, a, b):
 
             o = object()
             futures = c.scatter({'x': o})
-            correct &= c.worker.data['x'] is o
+            correct &= get_worker().data['x'] is o
             return correct
 
     future = c.submit(func)
@@ -110,7 +113,7 @@ def test_gather_multi_machine(c, s, a, b):
 def test_same_loop(c, s, a, b):
     def f():
         with worker_client() as lc:
-            return lc.loop is lc.worker.loop
+            return lc.loop is get_worker().loop
 
     future = c.submit(f)
     result = yield future
@@ -159,11 +162,11 @@ def test_separate_thread_false(c, s, a):
     a.count = 0
     def f(i):
         with worker_client(separate_thread=False) as client:
-            client.worker.count += 1
-            assert client.worker.count <= 3
+            get_worker().count += 1
+            assert get_worker().count <= 3
             sleep(random.random() / 40)
-            assert client.worker.count <= 3
-            client.worker.count -= 1
+            assert get_worker().count <= 3
+            get_worker().count -= 1
         return i
 
     futures = c.map(f, range(20))
@@ -198,3 +201,19 @@ def test_dont_override_default_get(loop):
             b2.compute()
 
         assert dask.context._globals['get'] == c.get
+
+
+@gen_cluster(client=True)
+def test_local_client_warning(c, s, a, b):
+    from distributed import local_client
+    def func(x):
+        with warnings.catch_warnings(record=True) as record:
+            with local_client() as c:
+                x = c.submit(inc, x)
+                result = x.result()
+            assert any("worker_client" in str(r.message) for r in record)
+            return result
+
+    future = c.submit(func, 10)
+    result = yield future
+    assert result == 11
