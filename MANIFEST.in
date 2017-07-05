@@ -11,6 +11,7 @@ include MANIFEST.in
 include requirements.txt
 include distributed/config.yaml
 include distributed/tests/mytestegg-1.0.0-py3.4.egg
+include distributed/tests/*.pem
 
 prune docs/_build
 include versioneer.py
