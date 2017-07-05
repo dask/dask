@@ -426,7 +426,9 @@ def test_lstsq(nrow, ncol, chunk):
     A[:, 1] = A[:, 2]
     dA = da.from_array(A, (chunk, ncol))
     db = da.from_array(b, chunk)
-    x, r, rank, s = np.linalg.lstsq(A, b)
+    x, r, rank, s = np.linalg.lstsq(A, b,
+                                    rcond=np.finfo(np.double).eps * max(nrow,
+                                                                        ncol))
     assert rank == ncol - 1
     dx, dr, drank, ds = da.linalg.lstsq(dA, db)
     assert drank.compute() == rank
