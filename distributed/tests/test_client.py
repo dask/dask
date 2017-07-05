@@ -4240,6 +4240,20 @@ def test_quiet_client_shutdown(loop):
         assert not out
 
 
+@gen_cluster()
+def test_close(s, a, b):
+    c = yield Client(s.address, asynchronous=True)
+    future = c.submit(inc, 1)
+    yield wait(future)
+    assert c.id in s.wants_what
+    yield c.close()
+
+    start = time()
+    while c.id in s.wants_what or s.task_state:
+        yield gen.sleep(0.01)
+        assert time() < start + 5
+
+
 def test_threadsafe(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:

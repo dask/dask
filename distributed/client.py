@@ -840,6 +840,23 @@ class Client(Node):
         logger.exception(exception)
 
     @gen.coroutine
+    def _close(self):
+        with log_errors():
+            if self.status == 'closed':
+                raise gen.Return()
+            if self.status == 'running':
+                self._send_to_scheduler({'op': 'close-stream'})
+            with ignoring(AttributeError):
+                yield self.scheduler_comm.close()
+            with ignoring(AttributeError):
+                self.scheduler.close_rpc()
+            self.status = 'closed'
+
+    def close(self):
+        """ Close this client and its connection to the scheduler """
+        return self.sync(self._close)
+
+    @gen.coroutine
     def _shutdown(self, fast=False):
         """ Send shutdown signal and wait until scheduler completes """
         with log_errors():
