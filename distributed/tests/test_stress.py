@@ -16,7 +16,7 @@ from distributed.config import config
 from distributed.metrics import time
 from distributed.utils import All
 from distributed.utils_test import (gen_cluster, cluster, inc, slowinc, loop,
-        slowadd, slow, slowsum)
+        slowadd, slow, slowsum, bump_rlimit)
 from distributed.client import _wait
 from tornado import gen
 
@@ -170,14 +170,7 @@ def test_stress_communication(c, s, *workers):
     da = pytest.importorskip('dask.array')
     # Test consumes many file descriptors and can hang if the limit is too low
     resource = pytest.importorskip('resource')
-    try:
-        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-        lim = 8192
-        if soft < lim:
-            resource.setrlimit(resource.RLIMIT_NOFILE, (lim, max(hard, lim)))
-    except Exception as e:
-        pytest.skip("file descriptor limit too low and can't be increased :"
-                    + str(e))
+    bump_rlimit(resource.RLIMIT_NOFILE, 8192)
 
     n = 20
     xs = [da.random.random((100, 100), chunks=(5, 5)) for i in range(n)]

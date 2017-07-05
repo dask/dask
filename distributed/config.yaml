@@ -22,6 +22,7 @@ connect-timeout: 3      # seconds delay before connecting fails
 tcp-timeout: 30         # seconds delay before calling an unresponsive connection dead
 default-scheme: tcp
 require-encryption: False   # whether to require encryption on non-local comms
+socket-backlog: 2048
 #tls:
     #ca-file: xxx.pem
     #scheduler:

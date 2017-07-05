@@ -938,6 +938,7 @@ def get_server_ssl_context(certfile='tls-cert.pem', keyfile='tls-key.pem',
     ctx.load_cert_chain(get_cert(certfile), get_cert(keyfile))
     return ctx
 
+
 def get_client_ssl_context(certfile='tls-cert.pem', keyfile='tls-key.pem',
                            ca_file='tls-ca-cert.pem'):
     ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH,
@@ -946,3 +947,15 @@ def get_client_ssl_context(certfile='tls-cert.pem', keyfile='tls-key.pem',
     ctx.verify_mode = ssl.CERT_REQUIRED
     ctx.load_cert_chain(get_cert(certfile), get_cert(keyfile))
     return ctx
+
+
+def bump_rlimit(limit, desired):
+    resource = pytest.importorskip('resource')
+    try:
+        soft, hard = resource.getrlimit(limit)
+        if soft < desired:
+            resource.setrlimit(limit,
+                               (desired, max(hard, desired)))
+    except Exception as e:
+        pytest.skip("rlimit too low (%s) and can't be increased: %s"
+                    % (soft, e))
