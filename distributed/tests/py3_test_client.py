@@ -39,6 +39,22 @@ def test_as_completed_async_for(c, s, a, b):
     assert set(results) == set(range(1, 11))
 
 
+@gen_cluster(client=True)
+def test_as_completed_async_for_results(c, s, a, b):
+    futures = c.map(inc, range(10))
+    ac = as_completed(futures, with_results=True)
+    results = []
+
+    async def f():
+        async for future, result in ac:
+            results.append(result)
+
+    yield f()
+
+    assert set(results) == set(range(1, 11))
+    assert not s.counters['op'].components[0]['gather']
+
+
 def test_async_with(loop):
     result = None
     client = None

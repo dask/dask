@@ -352,12 +352,11 @@ class WorkerBase(ServerNode):
         self._remove_from_global_workers()
 
     def _remove_from_global_workers(self):
-        with log_errors():
-            for ref in list(_global_workers):
-                if ref() is self:
-                    _global_workers.remove(ref)
-                if ref() is None:
-                    _global_workers.remove(ref)
+        for ref in list(_global_workers):
+            if ref() is self:
+                _global_workers.remove(ref)
+            if ref() is None:
+                _global_workers.remove(ref)
 
     @gen.coroutine
     def terminate(self, comm, report=True):

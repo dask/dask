@@ -738,8 +738,7 @@ def test_launch_without_blocked_services():
 @gen_cluster(ncores=[], client=True)
 def test_scatter_no_workers(c, s):
     with pytest.raises(gen.TimeoutError):
-        yield gen.with_timeout(timedelta(seconds=0.1),
-                               s.scatter(data={'x': 1}, client='alice'))
+        yield s.scatter(data={'x': 1}, client='alice', timeout=0.1)
 
     w = Worker(s.ip, s.port, ncores=3)
     yield [c._scatter(data={'x': 1}),
