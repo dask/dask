@@ -13,7 +13,7 @@ from dask.base import (compute, tokenize, normalize_token, normalize_function,
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
-from dask.compatibility import unicode
+from dask.compatibility import long, unicode
 
 
 def import_or_none(path):
@@ -167,7 +167,7 @@ def test_tokenize_numpy_ufunc_consistent():
 
 
 def test_normalize_base():
-    for i in [1, 1.1, '1', slice(1, 2, 3)]:
+    for i in [1, long(1), 1.1, '1', slice(1, 2, 3)]:
         assert normalize_token(i) is i
 
 

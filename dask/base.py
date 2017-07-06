@@ -13,7 +13,7 @@ from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
 from . import sharedict
-from .compatibility import bind_method, unicode, PY3
+from .compatibility import bind_method, long, unicode, PY3
 from .context import _globals
 from .core import flatten
 from .hashing import hash_buffer_hex
@@ -305,8 +305,8 @@ def _normalize_function(func):
 
 
 normalize_token = Dispatch()
-normalize_token.register((int, float, str, unicode, bytes, type(None), type,
-                          slice, complex),
+normalize_token.register((int, long, float, str, unicode, bytes, type(None),
+                          type, slice, complex),
                          identity)
 
 
