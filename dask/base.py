@@ -7,6 +7,7 @@ from hashlib import md5
 import inspect
 import pickle
 import os
+import threading
 import uuid
 
 from toolz import merge, groupby, curry, identity
@@ -264,6 +265,7 @@ def visualize(*args, **kwargs):
 
 
 function_cache = {}
+function_cache_lock = threading.Lock()
 
 
 def normalize_function(func):
@@ -272,8 +274,10 @@ def normalize_function(func):
     except KeyError:
         result = _normalize_function(func)
         if len(function_cache) >= 500:  # clear half of cache if full
-            for k in list(function_cache)[::2]:
-                del function_cache[k]
+            with function_cache_lock:
+                if len(function_cache) >= 500:
+                    for k in list(function_cache)[::2]:
+                        del function_cache[k]
         function_cache[func] = result
         return result
     except TypeError:  # not hashable
