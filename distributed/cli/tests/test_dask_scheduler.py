@@ -290,10 +290,15 @@ def test_preload_module(loop):
         path = os.path.join(tmpdir, 'scheduler_info.py')
         with open(path, 'w') as f:
             f.write(PRELOAD_TEXT)
+        env = os.environ.copy()
+        if 'PYTHONPATH' in env:
+            env['PYTHONPATH'] = tmpdir + ':' + env['PYTHONPATH']
+        else:
+            env['PYTHONPATH'] = tmpdir
         with tmpfile() as fn:
             with popen(['dask-scheduler', '--scheduler-file', fn,
                         '--preload', 'scheduler_info'],
-                       env=dict(os.environ, PYTHONPATH=tmpdir)):
+                       env=env):
                 with Client(scheduler_file=fn, loop=loop) as c:
                     assert c.run_on_scheduler(check_scheduler) == \
                            c.scheduler.address
