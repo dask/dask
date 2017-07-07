@@ -2400,7 +2400,7 @@ def test_run_coroutine(c, s, a, b):
 
     with pytest.raises(RuntimeError) as exc_info:
         yield c.run_coroutine(throws, 1)
-    exc_info.match("hello")
+    assert "hello" in str(exc_info)
 
     if sys.version_info >= (3, 5):
         results = yield c.run_coroutine(asyncinc, 2, delay=0.01)

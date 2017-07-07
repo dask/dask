@@ -301,7 +301,7 @@ async def test_asyncio_run_coroutine():
 
         with pytest.raises(RuntimeError) as exc_info:
             await c.run_coroutine(aiothrows, 1)
-        exc_info.match("hello")
+        assert "hello" in str(exc_info)
 
 
 @slow
