@@ -214,6 +214,8 @@ def test_dumps_loads_Serialized():
     assert result == result3
 
 
+@pytest.mark.skipif(sys.version_info[0] < 3,
+                    reason='NumPy doesnt use memoryviews')
 def test_maybe_compress_memoryviews():
     np = pytest.importorskip('numpy')
     pytest.importorskip('lz4')

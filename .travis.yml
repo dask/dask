@@ -6,11 +6,11 @@ services:
 
 env:
   matrix:
-    - PYTHON=2.7 PACKAGES="blosc futures faulthandler"
-    - PYTHON=3.5 COVERAGE=true PACKAGES=blosc CRICK=true
+    - PYTHON=2.7 PACKAGES="python-blosc futures faulthandler"
+    - PYTHON=3.5 COVERAGE=true PACKAGES=python-blosc CRICK=true
     - PYTHON=3.6
     - HDFS=true PYTHON=2.7
-    - HDFS=true PYTHON=3.5 PACKAGES=blosc
+    - HDFS=true PYTHON=3.5 PACKAGES=python-blosc
 
 matrix:
   fast_finish: true
