@@ -39,7 +39,7 @@ Submit Tasks
    Client.map
    Future.result
 
-Then can submit individual tasks using the ``submit`` method.
+Then you can submit individual tasks using the ``submit`` method.
 
 .. code-block:: python
 
@@ -71,17 +71,18 @@ thread/process/worker until you ask for it back explicitly.
    >>> a.result()  # blocks until task completes and data arrives
    11
 
-You can pass futures as inputs to submit.  Dask will handle dependency
-tracking, and so will wait until all inputs have completed, and then will move
-all inputs to a single worker if necessary, and then start the computation.
-You do not need to wait for inputs to finish before submitting a new task; Dask
-will handle this automatically.
+You can pass futures as inputs to submit.  Dask automatically handles dependency
+tracking; once all input futures have completed they will be moved onto a
+single worker (if necessary), and then the computation that depends on them
+will be started.  You do not need to wait for inputs to finish before
+submitting a new task; Dask will handle this automatically.
 
 .. code-block:: python
 
    c = client.submit(add, a, b)  # calls add on the results of a and b
 
-You can use ``map`` to call ``submit`` on the same function and many inputs:
+Similar to Python's ``map`` you can use ``Client.map`` to call the same
+function and many inputs:
 
 .. code-block:: python
 
@@ -126,7 +127,7 @@ you can either include it as a normal input to a submit or map call:
    >>> future = client.submit(my_function, df)
 
 Or you can ``scatter`` it explicitly.  Scattering moves your data to a worker
-and gives you back a future pointing to that data:
+and returns a future pointing to that data:
 
 .. code-block:: python
 
@@ -137,12 +138,12 @@ and gives you back a future pointing to that data:
    >>> future = client.submit(my_function, remote_df)
 
 Both of these accomplish the same result, but using scatter can sometimes be
-faster, especially if you are using processes or distributed workers (where
-data transfer is necessary) and you want to use ``df`` in many computations.
-Scattering the data beforehand avoids excessive data movement.
+faster.  This is especially true if you use processes or distributed workers
+(where data transfer is necessary) and you want to use ``df`` in many
+computations.  Scattering the data beforehand avoids excessive data movement.
 
-Scattering lists scatters all elements individually.  Dask will spread these
-elements evenly throughout workers in a round-robin fashion:
+Calling scatter on a list scatters all elements individually.  Dask will spread
+these elements evenly throughout workers in a round-robin fashion:
 
 .. code-block:: python
 
@@ -161,14 +162,14 @@ References, Cancellation, and Exceptions
    Client.cancel
 
 Dask will only compute and hold onto results for which there are active
-futures.  In this way your local variables define what is active in Dask.  If
-you delete the last future to a piece of remote data then Dask will feel free
+futures.  In this way your local variables define what is active in Dask.  When
+a future is garbage collected by your local Python session, Dask will feel free
 to delete that data or stop ongoing computations that were trying to produce
 it.
 
 .. code-block:: python
 
-   >>> del future  # deletes remote data if no other futures point to it
+   >>> del future  # deletes remote data once future is garbage collected
 
 You can also explicitly cancel a task using the ``Future.cancel`` or
 ``Client.cancel`` methods.
@@ -218,7 +219,7 @@ You can wait on a future or collection of futures using the ``wait`` function:
 
 .. code-block:: python
 
-   from dask.distributed import wait, as_completed
+   from dask.distributed import wait
 
    >>> wait(futures)
 
@@ -228,6 +229,8 @@ You can also iterate over the futures as they complete using the
 ``as_completed`` function:
 
 .. code-block:: python
+
+   from dask.distributed import as_completed
 
    futures = client.map(score, x_values)
 
@@ -379,8 +382,8 @@ Coordinate Data Between Clients
 
 In the section above we saw that you could have multiple clients running at the
 same time, each of which generated and manipulated futures.  These clients can
-coordinate with each other using Dask ``Queues`` and ``Variables``, which can
-communicate futures or small bits of data between clients sensibly.
+coordinate with each other using Dask ``Queue`` and ``Variable`` objects, which
+can communicate futures or small bits of data between clients sensibly.
 
 Dask queues follow the API for the standard Python Queue, but now move futures
 or small messages between clients.  Queues serialize sensibly and reconnect
