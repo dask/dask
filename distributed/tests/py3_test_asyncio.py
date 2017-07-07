@@ -27,6 +27,7 @@ def coro_test(fn):
         try:
             IOLoop.clear_current()
             loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             loop.run_until_complete(fn(*args, **kwargs))
         finally:
             if loop is not None:
@@ -36,6 +37,11 @@ def coro_test(fn):
             asyncio.set_event_loop(None)
 
     return wrapper
+
+
+@coro_test
+async def test_coro_test():
+    assert asyncio.get_event_loop().is_running()
 
 
 @coro_test
