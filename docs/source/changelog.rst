@@ -1,6 +1,16 @@
 Changelog
 =========
 
+0.15.1 / 2017-07-08
+-------------------
+
+-  Add storage_options to to_textfiles and to_csv (:pr:`2466`)
+-  Rechunk and simplify rfftfreq (:pr:`2473`), (:pr:`2475`)
+-  Better support ndarray subclasses (:pr:`2486`)
+-  Import star in dask.distributed (:pr:`2503`)
+-  Threadsafe cache handling with tokenization (:pr:`2511`)
+
+
 0.15.0 / 2017-06-09
 -------------------
 
