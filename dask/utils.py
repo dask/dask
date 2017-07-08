@@ -431,8 +431,8 @@ def _skip_doctest(line):
     stripped = line.strip()
     if stripped == '>>>' or stripped.startswith('>>> #'):
         return stripped
-    elif '>>>' in stripped:
-        return line + '    # doctest: +SKIP'
+    elif '>>>' in stripped and '+SKIP' not in stripped:
+        return line + '  # doctest: +SKIP'
     else:
         return line
 
@@ -441,6 +441,24 @@ def skip_doctest(doc):
     if doc is None:
         return ''
     return '\n'.join([_skip_doctest(line) for line in doc.split('\n')])
+
+
+def extra_titles(doc):
+    lines = doc.split('\n')
+    titles = {i: lines[i].strip() for i in range(len(lines) - 1)
+              if lines[i + 1] and all(c == '-' for c in lines[i + 1].strip())}
+
+    seen = set()
+    for i, title in sorted(titles.items()):
+        if title in seen:
+            new_title = 'Extra ' + title
+            lines[i] = lines[i].replace(title, new_title)
+            lines[i + 1] = lines[i + 1].replace('-' * len(title),
+                                                '-' * len(new_title))
+        else:
+            seen.add(title)
+
+    return '\n'.join(lines)
 
 
 def derived_from(original_klass, version=None, ua_args=[]):
@@ -479,10 +497,12 @@ def derived_from(original_klass, version=None, ua_args=[]):
 
             if len(not_supported) > 0:
                 note = ("\n        Notes\n        -----\n"
-                        "        Dask doesn't supports following argument(s).\n\n")
+                        "        Dask doesn't support the following argument(s).\n\n")
                 args = ''.join(['        * {0}\n'.format(a) for a in not_supported])
                 doc = doc + note + args
             doc = skip_doctest(doc)
+            doc = extra_titles(doc)
+
             method.__doc__ = doc
             return method
 
