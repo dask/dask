@@ -1,6 +1,19 @@
 Changelog
 =========
 
+1.18.0 - July 8th, 2017
+-----------------------
+-  Multi-threading safety (:pr:`1191`), (:pr:`1228`), (:pr:`1229`)
+-  Improve handling of byte counting (:pr:`1198`) (:pr:`1224`)
+-  Add get_client, secede functions, refactor worker-client relationship
+  (:pr:`1201`)
+-  Allow logging configuraiton using logging.dictConfig() (:pr:`1206`) (:pr:`1211`)
+-  Offload serialization and deserialization to separate thread (:pr:`1218`)
+-  Support fire-and-forget tasks (:pr:`1221`)
+-  Support bytestrings as keys (for Julia) (:pr:`1234`)
+-  Resolve testing corner-cases (:pr:`1236`), (:pr:`1237`), (:pr:`1240`), (:pr:`1241`), (:pr:`1242`), (:pr:`1244`)
+-  Automatic use of scatter/gather(direct=True) in more cases (:pr:`1239`)
+
 1.17.1 - June 14th, 2017
 ------------------------
 
