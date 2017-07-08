@@ -8,7 +8,7 @@ from dask.sharedict import ShareDict
 from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
                         memory_repr, methodcaller, M, skip_doctest,
                         SerializableLock, funcname, ndeepmap, ensure_dict,
-                        package_of)
+                        package_of, extra_titles)
 from dask.utils_test import inc
 
 
@@ -130,12 +130,44 @@ def test_skip_doctest():
 >>> xxx"""
 
     res = skip_doctest(example)
-    assert res == """>>> xxx    # doctest: +SKIP
+    assert res == """>>> xxx  # doctest: +SKIP
 >>>
 >>> # comment
->>> xxx    # doctest: +SKIP"""
+>>> xxx  # doctest: +SKIP"""
 
     assert skip_doctest(None) == ''
+
+
+def test_extra_titles():
+    example = """
+
+    Notes
+    -----
+    hello
+
+    Foo
+    ---
+
+    Notes
+    -----
+    bar
+    """
+
+    expected = """
+
+    Notes
+    -----
+    hello
+
+    Foo
+    ---
+
+    Extra Notes
+    -----------
+    bar
+    """
+
+    assert extra_titles(example) == expected
 
 
 def test_SerializableLock():

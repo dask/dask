@@ -506,7 +506,7 @@ API
    wait
 
 .. autofunction:: as_completed
-.. autofucntion:: fire_and_forget
+.. autofunction:: fire_and_forget
 .. autofunction:: get_client
 .. autofunction:: secede
 .. autofunction:: wait
