@@ -233,10 +233,27 @@ def concat(dfs, axis=0, join='outer', uniform=False):
         if isinstance(dfs[0], pd.CategoricalIndex):
             return pd.CategoricalIndex(union_categoricals(dfs),
                                        name=dfs[0].name)
+        elif isinstance(dfs[0], pd.MultiIndex):
+            first, rest = dfs[0], dfs[1:]
+            if all((isinstance(o, pd.MultiIndex) and o.nlevels >= first.nlevels)
+                    for o in rest):
+                arrays = [concat([i._get_level_values(n) for i in dfs])
+                          for n in range(first.nlevels)]
+                return pd.MultiIndex.from_arrays(arrays, names=first.names)
+
+            to_concat = (first.values, ) + tuple(k._values for k in rest)
+            new_tuples = np.concatenate(to_concat)
+            try:
+                return pd.MultiIndex.from_tuples(new_tuples, names=first.names)
+            except:
+                return pd.Index(new_tuples)
         return dfs[0].append(dfs[1:])
 
     # Handle categorical index separately
-    if isinstance(dfs[0].index, pd.CategoricalIndex):
+    dfs0_index = dfs[0].index
+    if (isinstance(dfs0_index, pd.CategoricalIndex) or
+            (isinstance(dfs0_index, pd.MultiIndex) and
+             any(isinstance(i, pd.CategoricalIndex) for i in dfs0_index.levels))):
         dfs2 = [df.reset_index(drop=True) for df in dfs]
         ind = concat([df.index for df in dfs])
     else:
