@@ -206,6 +206,14 @@ def pivot_count(df, index, columns, values):
 # concat
 # ---------------------------------
 
+if PANDAS_VERSION < '0.20.0':
+    def _get_level_values(x, n):
+        return x.get_level_values(n)
+else:
+    def _get_level_values(x, n):
+        return x._get_level_values(n)
+
+
 def concat(dfs, axis=0, join='outer', uniform=False):
     """Concatenate, handling some edge cases:
 
@@ -237,7 +245,7 @@ def concat(dfs, axis=0, join='outer', uniform=False):
             first, rest = dfs[0], dfs[1:]
             if all((isinstance(o, pd.MultiIndex) and o.nlevels >= first.nlevels)
                     for o in rest):
-                arrays = [concat([i._get_level_values(n) for i in dfs])
+                arrays = [concat([_get_level_values(i, n) for i in dfs])
                           for n in range(first.nlevels)]
                 return pd.MultiIndex.from_arrays(arrays, names=first.names)
 
