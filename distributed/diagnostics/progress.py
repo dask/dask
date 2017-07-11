@@ -283,9 +283,9 @@ class AllProgress(SchedulerPlugin):
                         pass
 
         if start == 'memory':
-            self.nbytes[k] -= self.scheduler.nbytes[key]
+            self.nbytes[k] -= self.scheduler.nbytes.get(key, 0)
         if finish == 'memory':
-            self.nbytes[k] += self.scheduler.nbytes[key]
+            self.nbytes[k] += self.scheduler.nbytes.get(key, 0)
 
     def restart(self, scheduler):
         self.all.clear()

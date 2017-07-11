@@ -781,7 +781,7 @@ class Scheduler(ServerNode):
             recommendations = self.transition(key, 'memory', worker=worker,
                                               **kwargs)
 
-            if self.task_state[key] == 'memory':
+            if self.task_state.get(key) == 'memory':
                 if key not in self.has_what[worker]:
                     self.worker_bytes[worker] += self.nbytes.get(key,
                                                                  DEFAULT_DATA_SIZE)
