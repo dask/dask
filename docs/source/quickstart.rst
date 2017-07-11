@@ -20,7 +20,7 @@ scheduler and worker for you.
 .. code-block:: python
 
    >>> from dask.distributed import Client
-   >>> client = Client()  # set up local cluster on your lapotp
+   >>> client = Client()  # set up local cluster on your laptop
    >>> client
    <Client: scheduler="127.0.0.1:8786" processes=8 cores=8>
 
