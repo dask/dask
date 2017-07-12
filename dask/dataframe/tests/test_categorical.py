@@ -49,6 +49,8 @@ for df in frames:
                              y=df.y.cat.set_categories(list('abc'))))
 frames3 = [i.set_index(i.y) for i in frames]
 frames4 = [i.set_index(i.y) for i in frames2]
+frames5 = [i.set_index([i.y, i.x]) for i in frames]
+frames6 = [i.set_index([i.y, i.x]) for i in frames2]
 
 
 def test_concat_unions_categoricals():
@@ -77,6 +79,13 @@ def test_concat_unions_categoricals():
     # Non-categorical Series, Categorical Index
     tm.assert_series_equal(_concat([i.x for i in frames3]),
                            pd.concat([i.x for i in frames4]))
+
+    # MultiIndex with Categorical Index
+    tm.assert_index_equal(_concat([i.index for i in frames5]),
+                          pd.concat([i for i in frames6]).index)
+
+    # DataFrame, MultiIndex with CategoricalIndex
+    tm.assert_frame_equal(_concat(frames5), pd.concat(frames6))
 
 
 def test_unknown_categoricals():
