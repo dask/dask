@@ -199,6 +199,10 @@ docstrings with pytest as follows::
 
    py.test dask --doctest-modules
 
+Docstring testing requires graphviz to be installed. This can be done via::
+
+   conda install -y graphviz
+
 
 Style
 ~~~~~
