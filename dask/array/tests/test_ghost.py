@@ -362,3 +362,13 @@ def test_none_boundaries():
          [33, 33,  8,  9, 10, 11, 33, 33],
          [33, 33, 12, 13, 14, 15, 33, 33]])
     assert_eq(exp, res)
+
+
+def test_ghost_small():
+    x = da.ones((10, 10), chunks=(5, 5))
+
+    y = x.map_overlap(lambda x: x, depth=1)
+    assert len(y.dask) < 200
+
+    y = x.map_overlap(lambda x: x, depth=1, boundary='none')
+    assert len(y.dask) < 100

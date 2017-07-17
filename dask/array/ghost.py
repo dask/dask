@@ -112,8 +112,9 @@ def ghost_internal(x, axes):
         if k != frac_slice:
             interior_slices[k] = frac_slice
 
-        ghost_blocks[(name,) + k[1:]] = (concatenate3,
-                                         (concrete, expand_key2(k)))
+        else:
+            ghost_blocks[(name,) + k[1:]] = (concatenate3,
+                                             (concrete, expand_key2(k)))
 
     chunks = []
     for i, bds in enumerate(x.chunks):
