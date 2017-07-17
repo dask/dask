@@ -514,3 +514,10 @@ def test_optimize_None():
 
     with dask.set_options(array_optimize=None, get=my_get):
         y.compute()
+
+
+def test_array_nondim():
+    # regression #1847 this shall not raise an exception.
+    x = da.ones((100,3), chunks=10)
+    y = da.array(x)
+    assert isinstance(y, da.Array)
