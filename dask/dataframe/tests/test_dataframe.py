@@ -2569,6 +2569,19 @@ def test_to_datetime():
               dd.to_datetime(ds, infer_datetime_format=True))
 
 
+def test_to_timedelta():
+    s = pd.Series(range(10))
+    ds = dd.from_pandas(s, npartitions=2)
+
+    assert_eq(pd.to_timedelta(s), dd.to_timedelta(ds))
+    assert_eq(pd.to_timedelta(s, unit='h'), dd.to_timedelta(ds, unit='h'))
+
+    s = pd.Series([1, 2, 'this will error'])
+    ds = dd.from_pandas(s, npartitions=2)
+    assert_eq(pd.to_timedelta(s, errors='coerce'),
+              dd.to_timedelta(ds, errors='coerce'))
+
+
 @pytest.mark.parametrize('drop', [0, 9])
 def test_slice_on_filtered_boundary(drop):
     # https://github.com/dask/dask/issues/2211

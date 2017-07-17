@@ -3827,6 +3827,13 @@ def to_datetime(arg, **kwargs):
     return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
 
 
+@wraps(pd.to_timedelta)
+def to_timedelta(arg, unit='ns', errors='raise'):
+    meta = pd.Series([pd.Timedelta(1, unit=unit)])
+    return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors,
+                          meta=meta)
+
+
 def _repr_data_series(s, index):
     """A helper for creating the ``_repr_data`` property"""
     npartitions = len(index) - 1
