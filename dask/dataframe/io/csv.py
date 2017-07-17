@@ -16,6 +16,7 @@ from ...bytes.core import write_bytes
 from ...bytes.compression import seekable_files, files as cfiles
 from ...compatibility import PY2, PY3
 from ...delayed import delayed
+from ...utils import asciitable
 
 from ..utils import clear_known_categories, PANDAS_VERSION
 
@@ -77,30 +78,51 @@ def coerce_dtypes(df, dtypes):
     df: Pandas DataFrame
     dtypes: dict like {'x': float}
     """
+    bad = []
+    errors = []
     for c in df.columns:
         if c in dtypes and df.dtypes[c] != dtypes[c]:
-            if is_float_dtype(df.dtypes[c]) and is_integer_dtype(dtypes[c]):
-                # There is a mismatch between floating and integer columns.
-                # Determine all mismatched and error.
-                mismatched = sorted(c for c in df.columns if
-                                    is_float_dtype(df.dtypes[c]) and
-                                    is_integer_dtype(dtypes[c]))
+            actual = df.dtypes[c]
+            desired = dtypes[c]
+            if is_float_dtype(actual) and is_integer_dtype(desired):
+                bad.append((c, actual, desired))
+            else:
+                try:
+                    df[c] = df[c].astype(dtypes[c])
+                except Exception as e:
+                    bad.append((c, actual, desired))
+                    errors.append((c, e))
 
-                msg = ("Mismatched dtypes found.\n"
-                       "Expected integers, but found floats for columns:\n"
-                       "%s\n\n"
-                       "To fix, specify dtypes manually by adding:\n\n"
-                       "%s\n\n"
-                       "to the call to `read_csv`/`read_table`.\n\n"
-                       "Alternatively, provide `assume_missing=True` to "
-                       "interpret all unspecified integer columns as floats.")
+    if bad:
+        if errors:
+            ex = '\n'.join("- %s\n  %r" % (c, e) for c, e in
+                           sorted(errors, key=lambda x: str(x[0])))
+            exceptions = ("The following columns also raised exceptions on "
+                          "conversion:\n\n%s\n\n") % ex
+            extra = ""
+        else:
+            exceptions = ""
+            # All mismatches are int->float, also suggest `assume_missing=True`
+            extra = ("\n\nAlternatively, provide `assume_missing=True` "
+                     "to interpret\n"
+                     "all unspecified integer columns as floats.")
 
-                missing_list = '\n'.join('- %r' % c for c in mismatched)
-                dtype_list = ('%r: float' % c for c in mismatched)
-                missing_dict = 'dtype={%s}' % ',\n       '.join(dtype_list)
-                raise ValueError(msg % (missing_list, missing_dict))
+        bad = sorted(bad, key=lambda x: str(x[0]))
+        table = asciitable(['Column', 'Found', 'Expected'], bad)
+        dtype_kw = ('dtype={%s}' % ',\n'
+                    '       '.join("%r: '%s'" % (k, v) for (k, v, _) in bad))
 
-            df[c] = df[c].astype(dtypes[c])
+        msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
+               "\n"
+               "{table}\n"
+               "\n{exceptions}"
+               "Usually this is due to dask's dtype inference failing, and\n"
+               "*may* be fixed by specifying dtypes manually by adding:\n\n"
+               "{dtype_kw}\n\n"
+               "to the call to `read_csv`/`read_table`."
+               "{extra}").format(table=table, exceptions=exceptions,
+                                 dtype_kw=dtype_kw, extra=extra)
+        raise ValueError(msg)
 
 
 def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,

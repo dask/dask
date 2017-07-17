@@ -8,7 +8,7 @@ from dask.sharedict import ShareDict
 from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
                         memory_repr, methodcaller, M, skip_doctest,
                         SerializableLock, funcname, ndeepmap, ensure_dict,
-                        package_of, extra_titles)
+                        package_of, extra_titles, asciitable)
 from dask.utils_test import inc
 
 
@@ -168,6 +168,22 @@ def test_extra_titles():
     """
 
     assert extra_titles(example) == expected
+
+
+def test_asciitable():
+    res = asciitable(['fruit', 'color'],
+                     [('apple', 'red'),
+                      ('banana', 'yellow'),
+                      ('tomato', 'red'),
+                      ('pear', 'green')])
+    assert res == ('+--------+--------+\n'
+                   '| fruit  | color  |\n'
+                   '+--------+--------+\n'
+                   '| apple  | red    |\n'
+                   '| banana | yellow |\n'
+                   '| tomato | red    |\n'
+                   '| pear   | green  |\n'
+                   '+--------+--------+')
 
 
 def test_SerializableLock():
