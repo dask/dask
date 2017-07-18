@@ -425,13 +425,7 @@ class Bag(Base):
         >>> b.map(myadd, b.max()).compute()
         [4, 5, 6, 7, 8]
         """
-        if takes_multiple_arguments(func, varargs=False) and not args:
-            warn("Automatic 'splatting' of arguments in `Bag.map` is "
-                 "deprecated and will be removed in a future release. "
-                 "Please use `Bag.starmap` instead.")
-            return self.starmap(func, **kwargs)
-        else:
-            return bag_map(func, self, *args, **kwargs)
+        return bag_map(func, self, *args, **kwargs)
 
     def starmap(self, func, **kwargs):
         """Apply a function using argument tuples from the given bag.
@@ -1060,10 +1054,6 @@ class Bag(Base):
         dsk = dict(((name, i), (list, (toolz.concat, (self.name, i))))
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
-
-    def concat(self):
-        warn("Deprecated.  Use the .flatten method instead")
-        return self.flatten()
 
     def __iter__(self):
         return iter(self.compute())

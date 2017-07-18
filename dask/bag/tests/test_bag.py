@@ -48,71 +48,6 @@ def test_keys():
     assert sorted(b._keys()) == sorted(dsk.keys())
 
 
-# Deprecated test for old map behavior
-def test_map():
-    c = b.map(inc)
-    assert c.compute() == list(map(inc, b.compute()))
-    assert c.name == b.map(inc).name
-
-
-# Deprecated test for old map behavior
-def test_map_function_with_multiple_arguments():
-    b = db.from_sequence([(1, 10), (2, 20), (3, 30)], npartitions=3)
-    assert list(b.map(lambda x, y: x + y).compute(get=dask.get)) == [11, 22, 33]
-    assert list(b.map(list).compute()) == [[1, 10], [2, 20], [3, 30]]
-
-
-class A(object):
-    def __init__(self, a, b, c):
-        pass
-
-
-class B(object):
-    def __init__(self, a):
-        pass
-
-
-# Deprecated test for old map behavior
-def test_map_with_constructors():
-    assert db.from_sequence([[1, 2, 3]]).map(A).compute()
-    assert db.from_sequence([1, 2, 3]).map(B).compute()
-    assert db.from_sequence([[1, 2, 3]]).map(B).compute()
-
-    failed = False
-    try:
-        db.from_sequence([[1,]]).map(A).compute()
-    except TypeError:
-        failed = True
-    assert failed
-
-
-# Deprecated test for old map behavior
-def test_map_with_builtins():
-    b = db.from_sequence(range(3))
-    assert ' '.join(b.map(str)) == '0 1 2'
-    assert b.map(str).map(tuple).compute() == [('0',), ('1',), ('2',)]
-    assert b.map(str).map(tuple).map(any).compute() == [True, True, True]
-
-    b2 = b.map(lambda n: [(n, n + 1), (2 * (n - 1), -n)])
-    assert b2.map(dict).compute() == [{0: 1, -2: 0}, {1: 2, 0: -1}, {2: -2}]
-    assert b.map(lambda n: (n, n + 1)).map(pow).compute() == [0, 1, 8]
-    assert b.map(bool).compute() == [False, True, True]
-    assert db.from_sequence([(1, 'real'), ('1', 'real')]).map(hasattr).compute() == \
-        [True, False]
-
-
-# Deprecated test for old map behavior
-def test_map_with_kwargs():
-    b = db.from_sequence(range(100), npartitions=10)
-    assert b.map(lambda x, factor=0: x * factor,
-                 factor=2).sum().compute() == 9900.0
-    assert b.map(lambda x, total=0: x / total,
-                 total=b.sum()).sum().compute() == 1.0
-    assert b.map(lambda x, factor=0, total=0: x * factor / total,
-                 total=b.sum(),
-                 factor=2).sum().compute() == 2.0
-
-
 def test_bag_map():
     b = db.from_sequence(range(100), npartitions=10)
     b2 = db.from_sequence(range(100, 200), npartitions=10)
@@ -763,7 +698,6 @@ def test_concat():
 def test_flatten():
     b = db.from_sequence([[1], [2, 3]])
     assert list(b.flatten()) == [1, 2, 3]
-    assert list(b.flatten()) == list(b.concat())
     assert b.flatten().name == b.flatten().name
 
 
