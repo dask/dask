@@ -22,7 +22,7 @@ An IPyParallel ``Client`` can launch a ``dask.distributed`` Scheduler and
 Workers on those IPython engines, effectively launching a full dask.distributed
 system.
 
-This is possible with the Client.become_distributed_ method::
+This is possible with the Client.become_dask_ method::
 
    $ ipcluster start
 
@@ -31,11 +31,11 @@ This is possible with the Client.become_distributed_ method::
    >>> from ipyparallel import Client
    >>> c = Client()  # connect to IPyParallel cluster
 
-   >>> e = c.become_distributed()  # start dask on top of IPyParallel
+   >>> e = c.become_dask()  # start dask on top of IPyParallel
    >>> e
    <Client: scheduler="127.0.0.1:59683" processes=8 cores=8>
 
-.. _Client.become_distributed: https://ipyparallel.readthedocs.io/en/latest/api/ipyparallel.html#ipyparallel.Client.become_distributed
+.. _Client.become_dask: https://ipyparallel.readthedocs.io/en/latest/api/ipyparallel.html#ipyparallel.Client.become_dask
 
 
 Launch IPython within Dask Workers
