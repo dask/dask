@@ -4100,6 +4100,13 @@ def test_recreate_error_collection(c, s, a, b):
     with pytest.raises(ValueError):
         function(*args, **kwargs)
 
+    # with persist
+    df3 = c.persist(df2)
+    function, args, kwargs = yield c._recreate_error_locally(df3)
+    with pytest.raises(ValueError):
+        function(*args, **kwargs)
+
+
 
 def test_recreate_error_sync(loop):
     with cluster() as (s, [a, b]):
