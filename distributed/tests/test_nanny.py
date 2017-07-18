@@ -96,7 +96,7 @@ def test_nanny_process_failure(c, s):
         yield gen.sleep(0.01)
         assert time() - start < 5
 
-    assert n.worker_address != original_address  # most likely
+    # assert n.worker_address != original_address  # most likely
 
     start = time()
     while n.worker_address not in s.ncores or n.worker_dir is None:
