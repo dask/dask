@@ -348,15 +348,15 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
         A list of columns that if not None, will limit the return
         columns (default is None)
     chunksize : positive integer, optional
-        Maximal number of rows per partition (default is 1000000)
+        Maximal number of rows per partition (default is 1000000).
+    sorted_index : boolean, optional
+        Option to specify whether or not the input hdf files have a sorted
+        index (default is False).
     lock : boolean, optional
         Option to use a lock to prevent concurrency issues (default is True).
-    mode : {'a', 'w', 'r', 'r+'}, default 'a'
+    mode : {'a', 'r', 'r+'}, default 'a'
         'r'
             Read-only; no data can be modified.
-        'w'
-            Write; a new file is created (an existing file with the same
-            name would be deleted).
         'a'
             Append; an existing file is opened for reading and writing,
             and if the file does not exist it is created.
