@@ -217,3 +217,31 @@ def test_local_client_warning(c, s, a, b):
     future = c.submit(func, 10)
     result = yield future
     assert result == 11
+
+
+def test_secede_without_stealing_issue_1262():
+    """
+    Tests that seceding works with the Stealing extension disabled
+    https://github.com/dask/distributed/issues/1262
+    """
+
+    # turn off all extensions
+    extensions = []
+
+    # run the loop as an inner function so all workers are closed
+    # and exceptions can be examined
+    @gen_cluster(client=True, scheduler_kwargs={'extensions': extensions})
+    def secede_test(c, s, a, b):
+        def func(x):
+            with worker_client() as wc:
+                y = wc.submit(lambda: 1 + x)
+                return wc.gather(y)
+        f = yield c._gather(c.submit(func, 1))
+
+        raise gen.Return((c, s, a, b, f))
+
+    c, s, a, b, f = secede_test()
+
+    assert f == 2
+    # ensure no workers had errors
+    assert all([f.exception() is None for f in s._worker_coroutines])

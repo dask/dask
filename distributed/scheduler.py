@@ -53,6 +53,14 @@ ALLOWED_FAILURES = config.get('allowed-failures', 3)
 LOG_PDB = config.get('pdb-on-err') or os.environ.get('DASK_ERROR_PDB', False)
 DEFAULT_DATA_SIZE = config.get('default-data-size', 1000)
 
+DEFAULT_EXTENSIONS = [
+    PublishExtension,
+    WorkStealing,
+    ReplayExceptionScheduler,
+    QueueExtension,
+    VariableExtension,
+]
+
 
 class Scheduler(ServerNode):
     """ Dynamic distributed task scheduler
@@ -187,14 +195,19 @@ class Scheduler(ServerNode):
     """
     default_port = 8786
 
-    def __init__(self, center=None, loop=None,
-                 delete_interval=500, synchronize_worker_interval=60000,
-                 services=None, allowed_failures=ALLOWED_FAILURES,
-                 extensions=[PublishExtension, WorkStealing,
-                             ReplayExceptionScheduler, QueueExtension,
-                             VariableExtension],
-                 validate=False, scheduler_file=None, security=None,
-                 **kwargs):
+    def __init__(
+            self,
+            center=None,
+            loop=None,
+            delete_interval=500,
+            synchronize_worker_interval=60000,
+            services=None,
+            allowed_failures=ALLOWED_FAILURES,
+            extensions=None,
+            validate=False,
+            scheduler_file=None,
+            security=None,
+            **kwargs):
 
         # Attributes
         self.allowed_failures = allowed_failures
@@ -355,6 +368,8 @@ class Scheduler(ServerNode):
             connection_args=self.connection_args,
             **kwargs)
 
+        if extensions is None:
+            extensions = DEFAULT_EXTENSIONS
         for ext in extensions:
             ext(self)
 
@@ -1308,7 +1323,8 @@ class Scheduler(ServerNode):
         We stop the task from being stolen in the future, and change task
         duration accounting as if the task has stopped.
         """
-        self.extensions['stealing'].remove_key_from_stealable(key)
+        if 'stealing' in self.extensions:
+            self.extensions['stealing'].remove_key_from_stealable(key)
 
         try:
             actual_worker = self.rprocessing[key]
@@ -3202,7 +3218,8 @@ class Scheduler(ServerNode):
         self.total_occupancy += new - old
         self.check_idle_saturated(w)
 
-        if new > old * 1.3:  # significant increase in duration
+        # significant increase in duration
+        if (new > old * 1.3) and ('stealing' in self.extensions):
             steal = self.extensions['stealing']
             for key in processing:
                 steal.remove_key_from_stealable(key)
