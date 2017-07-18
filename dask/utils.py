@@ -634,6 +634,28 @@ def memory_repr(num):
         num /= 1024.0
 
 
+def asciitable(columns, rows):
+    """Formats an ascii table for given columns and rows.
+
+    Parameters
+    ----------
+    columns : list
+        The column names
+    rows : list of tuples
+        The rows in the table. Each tuple must be the same length as
+        ``columns``.
+    """
+    rows = [tuple(str(i) for i in r) for r in rows]
+    columns = tuple(str(i) for i in columns)
+    widths = tuple(max(max(map(len, x)), len(c))
+                   for x, c in zip(zip(*rows), columns))
+    row_template = ('|' + (' %%-%ds |' * len(columns))) % widths
+    header = row_template % tuple(columns)
+    bar = '+%s+' % '+'.join('-' * (w + 2) for w in widths)
+    data = '\n'.join(row_template % r for r in rows)
+    return '\n'.join([bar, header, bar, data, bar])
+
+
 def put_lines(buf, lines):
     if any(not isinstance(x, unicode) for x in lines):
         lines = [unicode(x) for x in lines]

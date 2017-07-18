@@ -563,33 +563,67 @@ def test_read_csv_of_modified_file_has_different_name():
 def test_late_dtypes():
     text = 'numbers,names,more_numbers,integers\n'
     for i in range(1000):
-        text += '1,foo,2,3\n'
+        text += '1,,2,3\n'
     text += '1.5,bar,2.5,3\n'
     with filetext(text) as fn:
         sol = pd.read_csv(fn)
         with pytest.raises(ValueError) as e:
             dd.read_csv(fn, sample=50).compute(get=dask.get)
 
-        msg = ("Mismatched dtypes found.\n"
-               "Expected integers, but found floats for columns:\n"
-               "- 'more_numbers'\n"
-               "- 'numbers'\n"
+        msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
                "\n"
-               "To fix, specify dtypes manually by adding:\n"
+               "+--------------+---------+----------+\n"
+               "| Column       | Found   | Expected |\n"
+               "+--------------+---------+----------+\n"
+               "| more_numbers | float64 | int64    |\n"
+               "| names        | object  | float64  |\n"
+               "| numbers      | float64 | int64    |\n"
+               "+--------------+---------+----------+\n"
                "\n"
-               "dtype={'more_numbers': float,\n"
-               "       'numbers': float}\n"
+               "- names\n"
+               "  ValueError(.*)\n"
+               "\n"
+               "Usually this is due to dask's dtype inference failing, and\n"
+               "*may* be fixed by specifying dtypes manually by adding:\n"
+               "\n"
+               "dtype={'more_numbers': 'float64',\n"
+               "       'names': 'object',\n"
+               "       'numbers': 'float64'}\n"
+               "\n"
+               "to the call to `read_csv`/`read_table`.\n")
+
+        e.match(msg)
+
+        with pytest.raises(ValueError) as e:
+            dd.read_csv(fn, sample=50,
+                        dtype={'names': 'O'}).compute(get=dask.get)
+
+        msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
+               "\n"
+               "+--------------+---------+----------+\n"
+               "| Column       | Found   | Expected |\n"
+               "+--------------+---------+----------+\n"
+               "| more_numbers | float64 | int64    |\n"
+               "| numbers      | float64 | int64    |\n"
+               "+--------------+---------+----------+\n"
+               "\n"
+               "Usually this is due to dask's dtype inference failing, and\n"
+               "*may* be fixed by specifying dtypes manually by adding:\n"
+               "\n"
+               "dtype={'more_numbers': 'float64',\n"
+               "       'numbers': 'float64'}\n"
                "\n"
                "to the call to `read_csv`/`read_table`.\n"
                "\n"
-               "Alternatively, provide `assume_missing=True` to interpret "
+               "Alternatively, provide `assume_missing=True` to interpret\n"
                "all unspecified integer columns as floats.")
 
         assert str(e.value) == msg
 
         # Specifying dtypes works
         res = dd.read_csv(fn, sample=50,
-                          dtype={'more_numbers': float, 'numbers': float})
+                          dtype={'more_numbers': float, 'names': object,
+                                 'numbers': float})
         assert_eq(res, sol)
 
 
