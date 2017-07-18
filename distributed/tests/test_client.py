@@ -2282,6 +2282,11 @@ def test_futures_of(c, s, a, b):
     assert set(futures_of(b)) == {x, y, z}
 
 
+def test_futures_of_class():
+    da = pytest.importorskip('dask.array')
+    assert futures_of([da.Array]) == []
+
+
 @gen_cluster(client=True)
 def test_futures_of_cancelled_raises(c, s, a, b):
     x = c.submit(inc, 1)

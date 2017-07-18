@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import atexit
-from collections import defaultdict, Iterator, Iterable
+from collections import defaultdict, Iterator, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
 from contextlib import contextmanager
@@ -3069,7 +3069,7 @@ def futures_of(o, client=None):
             stack.extend(x.values())
         if isinstance(x, Future):
             futures.add(x)
-        if hasattr(x, 'dask'):
+        if hasattr(x, 'dask') and isinstance(x.dask, Mapping):
             stack.extend(x.dask.values())
 
     if client is not None:
