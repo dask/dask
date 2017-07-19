@@ -1065,6 +1065,11 @@ class Worker(WorkerBase):
                     break
                 except EnvironmentError as e:
                     break
+                except Exception as e:
+                    logger.error("Worker failed to read message. "
+                                 "This will likely cause the cluster to fail.",
+                                 exc_info=True)
+                    raise
 
                 start = time()
 
