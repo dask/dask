@@ -186,7 +186,7 @@ class Future(WrappedKey):
         else:
             raise gen.Return(None)
 
-    def exception(self, timeout=None):
+    def exception(self, timeout=None, **kwargs):
         """ Return the exception of a failed task
 
         If *timeout* seconds are elapsed before returning, a TimeoutError
@@ -196,7 +196,8 @@ class Future(WrappedKey):
         --------
         Future.traceback
         """
-        return self.client.sync(self._exception, callback_timeout=timeout)
+        return self.client.sync(self._exception, callback_timeout=timeout,
+                                **kwargs)
 
     def add_done_callback(self, fn):
         """ Call callback on future when callback has finished
@@ -237,7 +238,7 @@ class Future(WrappedKey):
         else:
             raise gen.Return(None)
 
-    def traceback(self, timeout=None):
+    def traceback(self, timeout=None, **kwargs):
         """ Return the traceback of a failed task
 
         This returns a traceback object.  You can inspect this object using the
@@ -258,7 +259,8 @@ class Future(WrappedKey):
         --------
         Future.exception
         """
-        return self.client.sync(self._traceback, callback_timeout=timeout)
+        return self.client.sync(self._traceback, callback_timeout=timeout,
+                                **kwargs)
 
     @property
     def type(self):
@@ -520,7 +522,8 @@ class Client(Node):
         return result
 
     def sync(self, func, *args, **kwargs):
-        if self.asynchronous:
+        asynchronous = kwargs.pop('asynchronous', None)
+        if asynchronous or self.asynchronous:
             callback_timeout = kwargs.pop('callback_timeout', None)
             future = func(*args, **kwargs)
             if callback_timeout is not None:
@@ -881,9 +884,9 @@ class Client(Node):
                 self.scheduler.close_rpc()
             self.status = 'closed'
 
-    def close(self):
+    def close(self, **kwargs):
         """ Close this client and its connection to the scheduler """
-        return self.sync(self._close)
+        return self.sync(self._close, **kwargs)
 
     @gen.coroutine
     def _shutdown(self, fast=False):
@@ -1293,7 +1296,8 @@ class Client(Node):
             for item in results:
                 qout.put(item)
 
-    def gather(self, futures, errors='raise', maxsize=0, direct=None):
+    def gather(self, futures, errors='raise', maxsize=0, direct=None,
+               asynchronous=None):
         """ Gather futures from distributed memory
 
         Accepts a future, nested container of futures, iterator, or queue.
@@ -1352,7 +1356,8 @@ class Client(Node):
             else:
                 local_worker = None
             return self.sync(self._gather, futures, errors=errors,
-                             direct=direct, local_worker=local_worker)
+                             direct=direct, local_worker=local_worker,
+                             asynchronous=asynchronous)
 
     @gen.coroutine
     def _scatter(self, data, workers=None, broadcast=False, direct=None,
@@ -1465,7 +1470,7 @@ class Client(Node):
                 qout.put(future)
 
     def scatter(self, data, workers=None, broadcast=False, direct=None,
-                maxsize=0, timeout=3):
+                maxsize=0, timeout=3, asynchronous=None):
         """ Scatter data into distributed memory
 
         This moves data from the local client process into the workers of the
@@ -1551,7 +1556,8 @@ class Client(Node):
                 local_worker = None
             return self.sync(self._scatter, data, workers=workers,
                              broadcast=broadcast, direct=direct,
-                             local_worker=local_worker, timeout=timeout)
+                             local_worker=local_worker, timeout=timeout,
+                             asynchronous=asynchronous)
 
     @gen.coroutine
     def _cancel(self, futures):
@@ -1562,7 +1568,7 @@ class Client(Node):
             if st is not None:
                 st.cancel()
 
-    def cancel(self, futures):
+    def cancel(self, futures, asynchronous=None):
         """
         Cancel running futures
 
@@ -1574,7 +1580,7 @@ class Client(Node):
         ----------
         futures: list of Futures
         """
-        return self.sync(self._cancel, futures)
+        return self.sync(self._cancel, futures, asynchronous=asynchronous)
 
     @gen.coroutine
     def _publish_dataset(self, **kwargs):
@@ -1630,7 +1636,7 @@ class Client(Node):
         """
         return self.sync(self._publish_dataset, **kwargs)
 
-    def unpublish_dataset(self, name):
+    def unpublish_dataset(self, name, **kwargs):
         """
         Remove named datasets from scheduler
 
@@ -1646,9 +1652,9 @@ class Client(Node):
         --------
         Client.publish_dataset
         """
-        return self.sync(self.scheduler.publish_delete, name=name)
+        return self.sync(self.scheduler.publish_delete, name=name, **kwargs)
 
-    def list_datasets(self):
+    def list_datasets(self, **kwargs):
         """
         List named datasets available on the scheduler
 
@@ -1657,7 +1663,7 @@ class Client(Node):
         Client.publish_dataset
         Client.get_dataset
         """
-        return self.sync(self.scheduler.publish_list)
+        return self.sync(self.scheduler.publish_list, **kwargs)
 
     @gen.coroutine
     def _get_dataset(self, name):
@@ -1667,7 +1673,7 @@ class Client(Node):
             data = loads(out['data'])
         raise gen.Return(data)
 
-    def get_dataset(self, name):
+    def get_dataset(self, name, **kwargs):
         """
         Get named dataset from the scheduler
 
@@ -1676,7 +1682,7 @@ class Client(Node):
         Client.publish_dataset
         Client.list_datasets
         """
-        return self.sync(self._get_dataset, tokey(name))
+        return self.sync(self._get_dataset, tokey(name), **kwargs)
 
     @gen.coroutine
     def _run_on_scheduler(self, function, *args, **kwargs):
@@ -1710,7 +1716,7 @@ class Client(Node):
         Client.start_ipython_scheduler: Start an IPython session on scheduler
         """
         return self.sync(self._run_on_scheduler, function, *args,
-                **kwargs)
+                         **kwargs)
 
     @gen.coroutine
     def _run(self, function, *args, **kwargs):
@@ -1860,7 +1866,7 @@ class Client(Node):
             return futures
 
     def get(self, dsk, keys, restrictions=None, loose_restrictions=None,
-            resources=None, sync=True, **kwargs):
+            resources=None, sync=True, asynchronous=None, **kwargs):
         """ Compute dask graph
 
         Parameters
@@ -1890,7 +1896,7 @@ class Client(Node):
         packed = pack_data(keys, futures)
         if sync:
             try:
-                results = self.gather(packed)
+                results = self.gather(packed, asynchronous=asynchronous)
             finally:
                 for f in futures.values():
                     f.release()
@@ -2159,13 +2165,13 @@ class Client(Node):
 
         raise gen.Return(self)
 
-    def restart(self):
+    def restart(self, **kwargs):
         """ Restart the distributed network
 
         This kills all active work, deletes all data on the network, and
         restarts the worker processes.
         """
-        return self.sync(self._restart)
+        return self.sync(self._restart, **kwargs)
 
     @gen.coroutine
     def _upload_file(self, filename, raise_on_error=True):
@@ -2212,7 +2218,7 @@ class Client(Node):
 
         assert all(len(data) == v for v in response.values())
 
-    def upload_file(self, filename):
+    def upload_file(self, filename, **kwargs):
         """ Upload local package to workers
 
         This sends a local file up to all worker nodes.  This file is placed
@@ -2231,7 +2237,7 @@ class Client(Node):
         >>> L = c.map(myfunc, seq)  # doctest: +SKIP
         """
         result = self.sync(self._upload_file, filename,
-                           raise_on_error=self.asynchronous)
+                           raise_on_error=self.asynchronous, **kwargs)
         if isinstance(result, Exception):
             raise result
         else:
@@ -2244,7 +2250,7 @@ class Client(Node):
         result = yield self.scheduler.rebalance(keys=keys, workers=workers)
         assert result['status'] == 'OK'
 
-    def rebalance(self, futures=None, workers=None):
+    def rebalance(self, futures=None, workers=None, **kwargs):
         """ Rebalance data within network
 
         Move data between workers to roughly balance memory burden.  This
@@ -2262,7 +2268,7 @@ class Client(Node):
         workers: list, optional
             A list of workers on which to balance, defaults to all workers
         """
-        return self.sync(self._rebalance, futures, workers)
+        return self.sync(self._rebalance, futures, workers, **kwargs)
 
     @gen.coroutine
     def _replicate(self, futures, n=None, workers=None, branching_factor=2):
@@ -2272,7 +2278,8 @@ class Client(Node):
         yield self.scheduler.replicate(keys=list(keys), n=n, workers=workers,
                 branching_factor=branching_factor)
 
-    def replicate(self, futures, n=None, workers=None, branching_factor=2):
+    def replicate(self, futures, n=None, workers=None, branching_factor=2,
+                  **kwargs):
         """ Set replication of futures within network
 
         Copy data onto many workers.  This helps to broadcast frequently
@@ -2309,9 +2316,9 @@ class Client(Node):
         Client.rebalance
         """
         return self.sync(self._replicate, futures, n=n, workers=workers,
-                         branching_factor=branching_factor)
+                         branching_factor=branching_factor, **kwargs)
 
-    def ncores(self, workers=None):
+    def ncores(self, workers=None, **kwargs):
         """ The number of threads/cores available on each worker node
 
         Parameters
@@ -2338,9 +2345,9 @@ class Client(Node):
             workers = list(workers)
         if workers is not None and not isinstance(workers, (list, set)):
             workers = [workers]
-        return self.sync(self.scheduler.ncores, workers=workers)
+        return self.sync(self.scheduler.ncores, workers=workers, **kwargs)
 
-    def who_has(self, futures=None):
+    def who_has(self, futures=None, **kwargs):
         """ The workers storing each future's data
 
         Parameters
@@ -2371,9 +2378,9 @@ class Client(Node):
             keys = list({f.key for f in futures})
         else:
             keys = None
-        return self.sync(self.scheduler.who_has, keys=keys)
+        return self.sync(self.scheduler.who_has, keys=keys, **kwargs)
 
-    def has_what(self, workers=None):
+    def has_what(self, workers=None, **kwargs):
         """ Which keys are held by which workers
 
         Parameters
@@ -2400,7 +2407,7 @@ class Client(Node):
             workers = list(workers)
         if workers is not None and not isinstance(workers, (list, set)):
             workers = [workers]
-        return self.sync(self.scheduler.has_what, workers=workers)
+        return self.sync(self.scheduler.has_what, workers=workers, **kwargs)
 
     def stacks(self, workers=None):
         """ The task queues on each worker
@@ -2463,7 +2470,7 @@ class Client(Node):
         return valmap(set, sync(self.loop, self.scheduler.processing,
                                 workers=workers))
 
-    def nbytes(self, keys=None, summary=True):
+    def nbytes(self, keys=None, summary=True, **kwargs):
         """ The bytes taken up by each key on the cluster
 
         This is as measured by ``sys.getsizeof`` which may not accurately
@@ -2492,9 +2499,9 @@ class Client(Node):
         Client.who_has
         """
         return self.sync(self.scheduler.nbytes, keys=keys,
-                    summary=summary)
+                         summary=summary, **kwargs)
 
-    def scheduler_info(self):
+    def scheduler_info(self, **kwargs):
         """ Basic information about the workers in the cluster
 
         Examples
@@ -2510,7 +2517,7 @@ class Client(Node):
                                          'stored': 0,
                                          'time-delay': 0.0061032772064208984}}}
         """
-        return self.sync(self.scheduler.identity)
+        return self.sync(self.scheduler.identity, **kwargs)
 
     def get_versions(self, check=False):
         """ Return version info for the scheduler, all workers and myself

@@ -166,6 +166,20 @@ functions.
        result = yield future
        return result
 
+If you want to reuse the same client in asynchronous and synchronous
+environments you can apply the ``asynchronous=True`` keyword at each method
+call.
+
+.. code-block:: python
+
+   client = Client()  # normal blocking client
+
+   @gen.corotuine
+   def f():
+       futures = client.map(func, L)
+       results = yield client.gather(futures, asynchronous=True)
+       return results
+
 See the :doc:`Asynchronous <asynchronous>` documentation for more information.
 
 

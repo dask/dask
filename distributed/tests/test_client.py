@@ -4507,5 +4507,19 @@ def test_bytes_keys(c, s, a, b):
     assert result == 2
 
 
+def test_use_synchronous_scheduler_in_async_context(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            @gen.coroutine
+            def f():
+                x = yield c.scatter(123, asynchronous=True)
+                y = c.submit(inc, x)
+                z = yield c.gather(y, asynchronous=True)
+                raise gen.Return(z)
+
+            z = sync(loop, f)
+            assert z == 124
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *

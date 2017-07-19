@@ -156,7 +156,7 @@ class Variable(object):
             yield self.client.scheduler.variable_set(data=value,
                                                      name=self.name)
 
-    def set(self, value):
+    def set(self, value, **kwargs):
         """ Set the value of this variable
 
         Parameters
@@ -164,7 +164,7 @@ class Variable(object):
         value: Future or object
             Must be either a Future or a msgpack-encodable value
         """
-        return self.client.sync(self._set, value)
+        return self.client.sync(self._set, value, **kwargs)
 
     @gen.coroutine
     def _get(self, timeout=None):
@@ -181,9 +181,9 @@ class Variable(object):
             value = d['value']
         raise gen.Return(value)
 
-    def get(self, timeout=None):
+    def get(self, timeout=None, **kwargs):
         """ Get the value of this variable """
-        return self.client.sync(self._get, timeout=timeout)
+        return self.client.sync(self._get, timeout=timeout, **kwargs)
 
     def delete(self):
         """ Delete this variable

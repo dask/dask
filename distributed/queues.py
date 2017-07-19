@@ -176,11 +176,11 @@ class Queue(object):
                                                   timeout=timeout,
                                                   name=self.name)
 
-    def put(self, value, timeout=None):
+    def put(self, value, timeout=None, **kwargs):
         """ Put data into the queue """
-        return self.client.sync(self._put, value, timeout=timeout)
+        return self.client.sync(self._put, value, timeout=timeout, **kwargs)
 
-    def get(self, timeout=None, batch=False):
+    def get(self, timeout=None, batch=False, **kwargs):
         """ Get data from the queue
 
         Parameters
@@ -192,11 +192,12 @@ class Queue(object):
             If an integer than return that many elements from the queue
             If False (default) then return one item at a time
          """
-        return self.client.sync(self._get, timeout=timeout, batch=batch)
+        return self.client.sync(self._get, timeout=timeout, batch=batch,
+                                **kwargs)
 
-    def qsize(self):
+    def qsize(self, **kwargs):
         """ Current number of elements in the queue """
-        return self.client.sync(self._qsize)
+        return self.client.sync(self._qsize, **kwargs)
 
     @gen.coroutine
     def _get(self, timeout=None, batch=False):

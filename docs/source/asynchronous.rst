@@ -43,6 +43,19 @@ received information from the scheduler should now be ``await``'ed.
 
    result = await client.gather(future)
 
+If you want to reuse the same client in asynchronous and synchronous
+environments you can apply the ``asynchronous=True`` keyword at each method
+call.
+
+.. code-block:: python
+
+   client = Client()  # normal blocking client
+
+   async def f():
+       futures = client.map(func, L)
+       results = await client.gather(futures, asynchronous=True)
+       return results
+
 AsyncIO
 -------
 
