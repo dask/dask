@@ -827,7 +827,7 @@ class WorkerTable(DashboardComponent):
 
         mem_plot = figure(title='Memory Use (%)', toolbar_location=None,
                           x_range=(0, 1), y_range=(-0.1, 0.1), height=80,
-                          **kwargs)
+                          tools='', **kwargs)
         mem_plot.circle(source=self.source, x='memory_percent', y=0,
                         size=10, fill_alpha=0.5)
         mem_plot.ygrid.visible = False
@@ -847,7 +847,7 @@ class WorkerTable(DashboardComponent):
 
         cpu_plot = figure(title='CPU Use (%)', toolbar_location=None,
                           x_range=(0, 1), y_range=(-0.1, 0.1), height=80,
-                          **kwargs)
+                          tools='', **kwargs)
         cpu_plot.circle(source=self.source, x='cpu', y=0,
                         size=10, fill_alpha=0.5)
         cpu_plot.ygrid.visible = False

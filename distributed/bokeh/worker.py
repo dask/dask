@@ -359,7 +359,7 @@ class SystemMonitor(DashboardComponent):
         x_range = DataRange1d(follow='end', follow_interval=20000,
                               range_padding=0)
 
-        tools = 'reset,pan,wheel_zoom'
+        tools = 'reset,xpan,xwheel_zoom'
 
         self.cpu = figure(title="CPU", x_axis_type='datetime',
                           height=height, tools=tools, x_range=x_range, **kwargs)
