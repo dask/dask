@@ -357,7 +357,7 @@ def test__read_text(c, s, a, b):
 
         b = db.read_text('hdfs://%s/other.txt' % basedir)
         b = c.persist(b)
-        future = c.compute(b.str.split().concat())
+        future = c.compute(b.str.split().flatten())
         result = yield future
         assert result == ['a', 'b', 'c', 'd']
 
