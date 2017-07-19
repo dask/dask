@@ -35,11 +35,6 @@ def divide(a, b, dtype=None):
     return f(a, b, dtype=dtype)
 
 
-def empty_of_type(obj, *args, **kwargs):
-    """Create an empty array with of the same cls as `obj`"""
-    return empty_lookup.dispatch(type(obj))(*args, **kwargs)
-
-
 def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
               split_every=None, combine=None, name=None, out=None):
     """ General version of reductions
@@ -245,8 +240,8 @@ def nannumel(x, **kwargs):
 def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     n = numel(x, dtype=dtype, **kwargs)
     total = sum(x, dtype=dtype, **kwargs)
-    result = empty_of_type(n, shape=n.shape,
-                           dtype=[('total', total.dtype), ('n', n.dtype)])
+    empty = empty_lookup.dispatch(type(n))
+    result = empty(n.shape, dtype=[('total', total.dtype), ('n', n.dtype)])
     result['n'] = n
     result['total'] = total
     return result
@@ -255,7 +250,8 @@ def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
 def mean_combine(pair, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     n = sum(pair['n'], **kwargs)
     total = sum(pair['total'], **kwargs)
-    result = empty_of_type(n, shape=n.shape, dtype=pair.dtype)
+    empty = empty_lookup.dispatch(type(n))
+    result = empty(n.shape, dtype=pair.dtype)
     result['n'] = n
     result['total'] = total
     return result
@@ -297,13 +293,13 @@ def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     total = sum(A, dtype=dtype, **kwargs)
     n = numel(A, **kwargs).astype(np.int64)
     u = total / n
-    M = empty_of_type(n, shape=n.shape + (order - 1,), dtype=dtype)
+    empty = empty_lookup.dispatch(type(n))
+    M = empty(n.shape + (order - 1,), dtype=dtype)
     for i in range(2, order + 1):
         M[..., i - 2] = sum((A - u)**i, dtype=dtype, **kwargs)
-    result = empty_of_type(n, shape=n.shape,
-                           dtype=[('total', total.dtype),
-                                  ('n', n.dtype),
-                                  ('M', M.dtype, (order - 1,))])
+    result = empty(n.shape, dtype=[('total', total.dtype),
+                                   ('n', n.dtype),
+                                   ('M', M.dtype, (order - 1,))])
     result['total'] = total
     result['n'] = n
     result['M'] = M
@@ -329,15 +325,15 @@ def moment_combine(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
     n = sum(ns, **kwargs)
     mu = divide(total, n, dtype=dtype)
     inner_term = divide(totals, ns, dtype=dtype) - mu
-    M = empty_of_type(n, shape=n.shape + (order - 1,), dtype=dtype)
+    empty = empty_lookup.dispatch(type(n))
+    M = empty(n.shape + (order - 1,), dtype=dtype)
 
     for o in range(2, order + 1):
         M[..., o - 2] = _moment_helper(Ms, ns, inner_term, o, sum, kwargs)
 
-    result = empty_of_type(n, shape=n.shape,
-                           dtype=[('total', total.dtype),
-                                  ('n', n.dtype),
-                                  ('M', Ms.dtype, (order - 1,))])
+    result = empty(n.shape, dtype=[('total', total.dtype),
+                                   ('n', n.dtype),
+                                   ('M', Ms.dtype, (order - 1,))])
     result['total'] = total
     result['n'] = n
     result['M'] = M
