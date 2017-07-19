@@ -344,10 +344,24 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
     start : optional, integer (defaults to 0), row number to start at
     stop : optional, integer (defaults to None, the last row), row number to
         stop at
-    columns : optional, a list of columns that if not None, will limit the
-        return columns
-    chunksize : optional, positive integer
-        maximal number of rows per partition
+    columns : list of columns, optional
+        A list of columns that if not None, will limit the return
+        columns (default is None)
+    chunksize : positive integer, optional
+        Maximal number of rows per partition (default is 1000000).
+    sorted_index : boolean, optional
+        Option to specify whether or not the input hdf files have a sorted
+        index (default is False).
+    lock : boolean, optional
+        Option to use a lock to prevent concurrency issues (default is True).
+    mode : {'a', 'r', 'r+'}, default 'a'. Mode to use when opening file(s).
+        'r'
+            Read-only; no data can be modified.
+        'a'
+            Append; an existing file is opened for reading and writing,
+            and if the file does not exist it is created.
+        'r+'
+            It is similar to 'a', but the file must already exist.
 
     Returns
     -------
