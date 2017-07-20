@@ -106,6 +106,12 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
                        categories, pf.schema, pf.cats, pf.dtypes)
            for i, rg in enumerate(rgs)}
 
+    if not dsk:
+        # empty dataframe
+        dsk = {(name, 0): meta}
+        divisions = (None, None)
+        return out_type(dsk, name, meta, divisions)
+
     if index_col:
         minmax = fastparquet.api.sorted_partitioned_columns(pf)
         if index_col in minmax:
@@ -120,11 +126,6 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
 
     if isinstance(divisions[0], np.datetime64):
         divisions = [pd.Timestamp(d) for d in divisions]
-
-    if not dsk:
-        # empty dataframe
-        dsk = {(name, 0): meta}
-        divisions = (None, None)
 
     return out_type(dsk, name, meta, divisions)
 
