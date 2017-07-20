@@ -623,12 +623,13 @@ class Client(Node):
         return self._started.__await__()
 
     def _send_to_scheduler(self, msg):
-        if self.status is 'running':
+        if self.status in ('running', 'closing'):
             self.loop.add_callback(self.scheduler_comm.send, msg)
         elif self.status is 'connecting':
             self.loop.add_callback(self._pending_msg_buffer.append, msg)
         else:
-            raise Exception("Client not running.  Status: %s" % self.status)
+            raise Exception("Tried sending message after closing.  Status: %s\n"
+                            "Message: %s" % (self.status, msg))
 
     @gen.coroutine
     def _start(self, timeout=5, **kwargs):
@@ -752,13 +753,13 @@ class Client(Node):
 
     @gen.coroutine
     def __aexit__(self, typ, value, traceback):
-        yield self._shutdown()
+        yield self._close()
 
     def __exit__(self, type, value, traceback):
-        self.shutdown()
+        self.close()
 
     def __del__(self):
-        self.shutdown()
+        self.close()
 
     def _inc_ref(self, key):
         with self._refcount_lock:
@@ -871,31 +872,22 @@ class Client(Node):
         logger.warning("Scheduler exception:")
         logger.exception(exception)
 
-    @gen.coroutine
-    def _close(self):
-        with log_errors():
-            if self.status == 'closed':
-                raise gen.Return()
-            if self.status == 'running':
-                self._send_to_scheduler({'op': 'close-stream'})
-            with ignoring(AttributeError):
-                yield self.scheduler_comm.close()
-            with ignoring(AttributeError):
-                self.scheduler.close_rpc()
-            self.status = 'closed'
-
     def close(self, **kwargs):
         """ Close this client and its connection to the scheduler """
         return self.sync(self._close, **kwargs)
 
     @gen.coroutine
-    def _shutdown(self, fast=False):
-        """ Send shutdown signal and wait until scheduler completes """
+    def _close(self, fast=False):
+        """ Send close signal and wait until scheduler completes """
         with log_errors():
             if self.status == 'closed':
                 raise gen.Return()
+            for key in list(self.futures):
+                self._release_key(key=key)
             if self.status == 'running':
                 self._send_to_scheduler({'op': 'close-stream'})
+            if self.scheduler_comm:
+                yield self.scheduler_comm.close()
             if self._start_arg is None:
                 with ignoring(AttributeError):
                     yield self.cluster._close()
@@ -907,13 +899,13 @@ class Client(Node):
                     yield [gen.with_timeout(timedelta(seconds=2), f)
                             for f in self.coroutines]
             with ignoring(AttributeError):
-                yield self.scheduler_comm.close()
-            with ignoring(AttributeError):
                 self.scheduler.close_rpc()
             self.scheduler = None
 
-    def shutdown(self, timeout=10):
-        """ Send shutdown signal and wait until scheduler terminates
+    _shutdown = _close
+
+    def close(self, timeout=10):
+        """ Send close signal and wait until scheduler terminates
 
         This cancels all currently running tasks, clears the state of the
         scheduler, and shuts down all workers and scheduler.
@@ -926,7 +918,7 @@ class Client(Node):
         Client.restart
         """
         if self.asynchronous:
-            future = self._shutdown()
+            future = self._close()
             if timeout:
                 future = gen.with_timeout(timedelta(seconds=timeout), future)
             return future
@@ -939,7 +931,7 @@ class Client(Node):
             with ignoring(AttributeError):
                 self.cluster.close()
 
-        sync(self.loop, self._shutdown, fast=True)
+        sync(self.loop, self._close, fast=True)
         assert self.status == 'closed'
 
         if self._should_close_loop:
@@ -953,6 +945,8 @@ class Client(Node):
             dask.set_options(shuffle=self._previous_shuffle)
         if self.get == _globals.get('get'):
             del _globals['get']
+
+    shutdown = close
 
     def get_executor(self, **kwargs):
         """ Return a concurrent.futures Executor for submitting tasks
@@ -3134,14 +3128,14 @@ def temp_default_client(c):
         _set_global_client(old_exec)
 
 
-def _shutdown_global_client():
+def _close_global_client():
     """
-    Force shutdown of global client.  This cleans up when a client
-    wasn't shutdown explicitly, e.g. interactive sessions.
+    Force close of global client.  This cleans up when a client
+    wasn't close explicitly, e.g. interactive sessions.
     """
     c = _get_global_client()
     if c is not None:
-        c.shutdown(timeout=2)
+        c.close(timeout=2)
 
 
-atexit.register(_shutdown_global_client)
+atexit.register(_close_global_client)

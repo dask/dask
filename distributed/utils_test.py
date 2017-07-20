@@ -549,7 +549,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                         return loop.run_sync(lambda: cor(*args), timeout=timeout)
                     finally:
                         if client:
-                            loop.run_sync(c[0]._shutdown)
+                            loop.run_sync(c[0]._close)
                         loop.run_sync(lambda: end_cluster(s, workers))
 
                     for w in workers:

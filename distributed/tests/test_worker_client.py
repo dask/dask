@@ -9,7 +9,8 @@ from dask import delayed
 import pytest
 from tornado import gen
 
-from distributed import worker_client, Client, as_completed, get_worker
+from distributed import (worker_client, Client, as_completed, get_worker, wait,
+        get_client)
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, double, cluster, loop
 from distributed.worker import thread_state
@@ -217,6 +218,17 @@ def test_local_client_warning(c, s, a, b):
     future = c.submit(func, 10)
     result = yield future
     assert result == 11
+
+
+@gen_cluster(client=True)
+def test_closing_worker_doesnt_close_client(c, s, a, b):
+    def func(x):
+        get_client()
+        return
+
+    yield wait(c.map(func, range(10)))
+    yield a._close()
+    assert c.status == 'running'
 
 
 def test_secede_without_stealing_issue_1262():

@@ -9,7 +9,7 @@ class ClusterTest(object):
         self.client = Client(self.cluster.scheduler_address)
 
     def tearDown(self):
-        self.client.shutdown()
+        self.client.close()
         self.cluster.close()
 
     def test_cores(self):

@@ -100,7 +100,7 @@ Python 3 with Tornado
        client = await Client(asynchronous=True)
        future = client.submit(lambda x: x + 1, 10)
        result = await future
-       await client.shutdown()
+       await client.close()
        return result
 
    from tornado.ioloop import IOLoop
@@ -119,7 +119,7 @@ Python 2/3 with Tornado
        client = yield Client(asynchronous=True)
        future = client.submit(lambda x: x + 1, 10)
        result = yield future
-       yield client.shutdown()
+       yield client.close()
        raise gen.Result(result)
 
    from tornado.ioloop import IOLoop
@@ -136,7 +136,7 @@ Python 3 with Asyncio
        client = await AioClient()
        future = client.submit(lambda x: x + 1, 10)
        result = await future
-       await client.shutdown()
+       await client.close()
        return result
 
    from asyncio import get_event_loop

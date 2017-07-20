@@ -269,8 +269,8 @@ def test_multiple_clients_restart(s, a, b):
     assert x.cancelled()
     assert y.cancelled()
 
-    yield e1._shutdown(fast=True)
-    yield e2._shutdown(fast=True)
+    yield e1._close(fast=True)
+    yield e2._close(fast=True)
 
 
 @gen_cluster(Worker=Nanny)

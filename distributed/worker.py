@@ -320,8 +320,6 @@ class WorkerBase(ServerNode):
         if self.status in ('closed', 'closing'):
             return
         logger.info("Stopping worker at %s", self.address)
-        if self._client:
-            yield self._client._close()
         self.status = 'closing'
         self.stop()
         self.heartbeat_callback.stop()

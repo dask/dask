@@ -45,7 +45,7 @@ async def test_coro_test():
 
 
 @coro_test
-async def test_asyncio_start_shutdown():
+async def test_asyncio_start_close():
     c = await AioClient(processes=False)
 
     assert c.status == 'running'
@@ -55,7 +55,7 @@ async def test_asyncio_start_shutdown():
     result = await c.submit(inc, 10)
     assert result == 11
 
-    await c.shutdown()
+    await c.close()
     assert c.status == 'closed'
     assert IOLoop.current(instance=False) is None
 

@@ -69,7 +69,7 @@ class AioClient(Client):
 
             # Use the client....
 
-            await client.shutdown()
+            await client.close()
 
     An ``async with`` statement is a more convenient way to start and shut down
     the client::
@@ -117,17 +117,17 @@ class AioClient(Client):
         return self
 
     async def __aexit__(self, type, value, traceback):
-        await self.shutdown()
+        await self.close()
 
     def __await__(self):
         return to_asyncio_future(self._started).__await__()
 
-    async def shutdown(self, fast=False):
+    async def close(self, fast=False):
         if self.status == 'closed':
             return
 
         try:
-            future = self._shutdown(fast=fast)
+            future = self._close(fast=fast)
             await to_asyncio_future(future)
 
             with ignoring(AttributeError):
@@ -138,7 +138,7 @@ class AioClient(Client):
             BaseAsyncIOLoop.clear_current()
 
     def __del__(self):
-        # Override Client.__del__ to avoid running self.shutdown()
+        # Override Client.__del__ to avoid running self.close()
         assert self.status != 'running'
 
     gather = to_asyncio(Client._gather)
@@ -157,6 +157,7 @@ class AioClient(Client):
     rebalance = to_asyncio(Client._rebalance)
     replicate = to_asyncio(Client._replicate)
     start_ipython_workers = to_asyncio(Client._start_ipython_workers)
+    shutdown = close
 
     def __enter__(self):
         raise RuntimeError("Use AioClient in an 'async with' block, not 'with'")

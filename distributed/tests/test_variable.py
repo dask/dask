@@ -70,7 +70,7 @@ def test_hold_futures(s, a, b):
     x1 = Variable('x')
     yield x1.set(future)
     del x1
-    yield c1.shutdown()
+    yield c1.close()
 
     yield gen.sleep(0.1)
 
@@ -80,7 +80,7 @@ def test_hold_futures(s, a, b):
     result = yield future2
 
     assert result == 11
-    yield c2.shutdown()
+    yield c2.close()
 
 
 @gen_cluster(client=True)
@@ -204,4 +204,4 @@ def test_Future_knows_status_immediately(c, s, a, b):
             assert time() < start + 5
             yield gen.sleep(0.05)
 
-    yield c2.shutdown()
+    yield c2.close()

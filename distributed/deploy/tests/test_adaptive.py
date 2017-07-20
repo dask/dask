@@ -67,5 +67,5 @@ def test_adaptive_local_cluster_multi_workers():
     futures = c.map(slowinc, range(100), delay=0.01)
     yield c._gather(futures)
 
-    yield c._shutdown()
+    yield c._close()
     yield cluster._close()

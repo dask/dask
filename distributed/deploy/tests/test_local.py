@@ -262,7 +262,7 @@ def test_scale_up_and_down():
     assert len(cluster.workers) == 1
     assert addr not in cluster.scheduler.ncores
 
-    yield c._shutdown()
+    yield c._close()
     yield cluster._close()
 
 
