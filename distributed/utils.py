@@ -35,6 +35,7 @@ from tornado import gen
 
 from .compatibility import Queue, PY3, PY2, get_thread_identity, unicode
 from .config import config
+from .metrics import time
 
 
 logger = logging.getLogger(__name__)
@@ -844,3 +845,12 @@ else:
             return len(frame)
         else:
             return frame.nbytes
+
+
+@contextmanager
+def time_warn(duration, text):
+    start = time()
+    yield
+    end = time()
+    if end - start > duration:
+        print('TIME WARNING', text, end - start)

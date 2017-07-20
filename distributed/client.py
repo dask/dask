@@ -1355,7 +1355,7 @@ class Client(Node):
 
     @gen.coroutine
     def _scatter(self, data, workers=None, broadcast=False, direct=None,
-                 local_worker=None, timeout=3):
+                 local_worker=None, timeout=3, hash=True):
         if isinstance(workers, six.string_types):
             workers = [workers]
         if isinstance(data, dict) and not all(isinstance(k, (bytes, unicode))
@@ -1376,7 +1376,10 @@ class Client(Node):
             unpack = True
             data = [data]
         if isinstance(data, (list, tuple)):
-            names = list(map(tokenize, data))
+            if hash:
+                names = [type(x).__name__ + '-' + tokenize(x) for x in data]
+            else:
+                names = [type(x).__name__ + '-' + uuid.uuid1().hex for x in data]
             data = dict(zip(names, data))
 
         assert isinstance(data, dict)
@@ -1464,7 +1467,7 @@ class Client(Node):
                 qout.put(future)
 
     def scatter(self, data, workers=None, broadcast=False, direct=None,
-                maxsize=0, timeout=3, asynchronous=None):
+                hash=True, maxsize=0, timeout=3, asynchronous=None):
         """ Scatter data into distributed memory
 
         This moves data from the local client process into the workers of the
@@ -1488,6 +1491,9 @@ class Client(Node):
             able to talk directly with the workers.
         maxsize: int (optional)
             Maximum size of queue if using queues, 0 implies infinite
+        hash: bool (optional)
+            Whether or not to hash data to determine key.
+            If False then this uses a random key
 
         Returns
         -------
@@ -1551,7 +1557,7 @@ class Client(Node):
             return self.sync(self._scatter, data, workers=workers,
                              broadcast=broadcast, direct=direct,
                              local_worker=local_worker, timeout=timeout,
-                             asynchronous=asynchronous)
+                             asynchronous=asynchronous, hash=hash)
 
     @gen.coroutine
     def _cancel(self, futures):

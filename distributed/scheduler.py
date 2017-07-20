@@ -2789,7 +2789,8 @@ class Scheduler(ServerNode):
                                                             DEFAULT_DATA_SIZE)
                     try:
                         self.worker_comms[w].send({'op': 'delete-data',
-                                                     'keys': [key], 'report': False})
+                                                   'keys': [key],
+                                                   'report': False})
                     except EnvironmentError:
                         self.loop.add_callback(self.remove_worker, address=w)
 

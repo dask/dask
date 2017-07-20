@@ -108,13 +108,17 @@ class Server(object):
         self.events = defaultdict(lambda: deque(maxlen=10000))
         self.event_counts = defaultdict(lambda: 0)
 
+        self.periodic_callbacks = dict()
+
         pc = PeriodicCallback(self.monitor.update, 500, io_loop=self.io_loop)
         self.io_loop.add_callback(pc.start)
-        if self.digests is not None:
-            self._last_tick = time()
-            self._tick_pc = PeriodicCallback(self._measure_tick, 20,
-                                             io_loop=self.io_loop)
-            self.io_loop.add_callback(self._tick_pc.start)
+        self.periodic_callbacks['monitor'] = pc
+
+        self._last_tick = time()
+        pc = PeriodicCallback(self._measure_tick, 20,
+                                         io_loop=self.io_loop)
+        self.io_loop.add_callback(pc.start)
+        self.periodic_callbacks['tick'] = pc
 
         self.__stopped = False
 
@@ -134,13 +138,15 @@ class Server(object):
     def _measure_tick(self):
         now = time()
         diff = now - self._last_tick
-        self.digests['tick-duration'].add(diff)
         self._last_tick = now
         if diff > 1:
             logger.warn("Event loop was unresponsive for %.1fs.  "
                         "This is often caused by long-running GIL-holding "
-                        "functions.  This can cause timeouts and instability.",
+                        "functions or moving large chunks of data. "
+                        "This can cause timeouts and instability.",
                         diff)
+        if self.digests is not None:
+            self.digests['tick-duration'].add(diff)
 
     def log_event(self, name, msg):
         msg['time'] = time()

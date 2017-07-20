@@ -230,3 +230,34 @@ def test_close_connections(c, s, *workers):
         #     print(w)
 
     yield _wait(future)
+
+
+@pytest.mark.xfail(reason="IOStream._handle_write blocks on large write_buffer"
+                          " https://github.com/tornadoweb/tornado/issues/2110")
+@gen_cluster(client=True, timeout=20, ncores=[('127.0.0.1', 1)])
+def test_no_delay_during_large_transfer(c, s, w):
+    pytest.importorskip('crick')
+    np = pytest.importorskip('numpy')
+    x = np.random.random(100000000)
+
+    # Reset digests
+    from distributed.counter import Digest
+    from collections import defaultdict
+    from functools import partial
+    from dask.diagnostics import ResourceProfiler
+
+    for server in [s, w]:
+        server.digests = defaultdict(partial(Digest, loop=server.io_loop))
+        server._last_tick = time()
+
+    with ResourceProfiler(dt=0.01) as rprof:
+        future = yield c.scatter(x, direct=True, hash=False)
+        yield gen.sleep(0.5)
+
+    for server in [s, w]:
+        assert server.digests['tick-duration'].components[0].max() < 0.5
+
+    nbytes = np.array([t.mem for t in rprof.results])
+    nbytes -= nbytes[0]
+    assert nbytes.max() < (x.nbytes * 2) / 1e6
+    assert nbytes[-1] < (x.nbytes * 1.2) / 1e6

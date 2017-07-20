@@ -42,10 +42,11 @@ class WorkStealing(SchedulerPlugin):
         for worker in scheduler.workers:
             self.add_worker(worker=worker)
 
-        self._pc = PeriodicCallback(callback=self.balance,
+        pc = PeriodicCallback(callback=self.balance,
                                     callback_time=100,
                                     io_loop=self.scheduler.loop)
-        self.scheduler.loop.add_callback(self._pc.start)
+        self._pc = pc
+        self.scheduler.loop.add_callback(pc.start)
         self.scheduler.plugins.append(self)
         self.scheduler.extensions['stealing'] = self
         self.scheduler.events['stealing'] = deque(maxlen=100000)

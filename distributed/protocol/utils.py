@@ -4,7 +4,7 @@ import struct
 
 from ..utils import ensure_bytes, nbytes
 
-BIG_BYTES_SHARD_SIZE = 2**28
+BIG_BYTES_SHARD_SIZE = 2**26
 
 
 def frame_split_size(frames, n=BIG_BYTES_SHARD_SIZE):

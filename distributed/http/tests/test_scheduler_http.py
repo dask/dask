@@ -140,7 +140,7 @@ def test_with_data(e, s, a, b):
     out = json.loads(response.body.decode())
     assert set(out) == {a.address, b.address}
     assert all(isinstance(v, dict) for v in out.values())
-    assert all(k in {'inc', 'data'} for d in out.values() for k in d)
+    assert all(k in {'inc', 'str'} for d in out.values() for k in d)
     assert all(isinstance(v, int) for d in out.values() for v in d.values())
 
     assert sum(v for d in out.values() for v in d.values()) == \
