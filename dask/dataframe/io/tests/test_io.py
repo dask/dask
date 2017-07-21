@@ -513,6 +513,10 @@ def test_from_delayed():
     with pytest.raises(ValueError):
         dd.from_delayed(dfs, meta=meta, divisions=[0, 1, 3, 6])
 
+    with pytest.raises(ValueError) as e:
+        dd.from_delayed(dfs, meta=meta.a).compute()
+    assert str(e.value).startswith('Metadata mismatch found in `from_delayed`')
+
 
 def test_from_delayed_sorted():
     a = pd.DataFrame({'x': [1, 2]}, index=[1, 10])
