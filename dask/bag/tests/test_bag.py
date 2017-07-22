@@ -1231,13 +1231,13 @@ def test_repeated_groupby():
     assert valmap(len, dict(c)) == valmap(len, dict(c))
 
 
-def test_temporary_directory():
+def test_temporary_directory(tmpdir):
     b = db.range(10, npartitions=4)
 
-    with dask.set_options(temporary_directory=os.getcwd()):
+    with dask.set_options(temporary_directory=str(tmpdir)):
         b2 = b.groupby(lambda x: x % 2)
         b2.compute()
-        assert any(fn.endswith('.partd') for fn in os.listdir(os.getcwd()))
+        assert any(fn.endswith('.partd') for fn in os.listdir(str(tmpdir)))
 
 
 def test_empty_bag():

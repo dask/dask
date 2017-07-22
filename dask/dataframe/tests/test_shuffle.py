@@ -607,17 +607,17 @@ def test_compute_divisions():
     assert b.known_divisions
 
 
-def test_temporary_directory():
+def test_temporary_directory(tmpdir):
     df = pd.DataFrame({'x': np.random.random(100),
                        'y': np.random.random(100),
                        'z': np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=10, name='x', sort=False)
 
-    with dask.set_options(temporary_directory=os.getcwd(),
+    with dask.set_options(temporary_directory=str(tmpdir),
                           get=dask.multiprocessing.get):
         ddf2 = ddf.set_index('x', shuffle='disk')
         ddf2.compute()
-        assert any(fn.endswith('.partd') for fn in os.listdir(os.getcwd()))
+        assert any(fn.endswith('.partd') for fn in os.listdir(str(tmpdir)))
 
 
 def test_empty_partitions():
