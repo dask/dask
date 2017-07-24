@@ -49,6 +49,7 @@ Top level user functions:
    eye
    fabs
    fix
+   flatnonzero
    floor
    fmax
    fmin
@@ -330,6 +331,7 @@ Other functions
 .. autofunction:: eye
 .. autofunction:: fabs
 .. autofunction:: fix
+.. autofunction:: flatnonzero
 .. autofunction:: floor
 .. autofunction:: fmax
 .. autofunction:: fmin
