@@ -21,6 +21,7 @@ except ImportError:
 
 from ..core import get_deps
 from ..local import get_sync
+from ..utils import asciitable
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
@@ -424,6 +425,64 @@ def meta_nonempty(x):
     else:
         raise TypeError("Expected Index, Series, DataFrame, or scalar, "
                         "got {0}".format(type(x).__name__))
+
+
+def check_meta(x, meta, funcname=None, numeric_equal=True):
+    """Check that the dask metadata matches the result.
+
+    If metadata matches, ``x`` is passed through unchanged. A nice error is
+    raised if metadata doesn't match.
+
+    Parameters
+    ----------
+    x : DataFrame, Series, or Index
+    meta : DataFrame, Series, or Index
+        The expected metadata that ``x`` should match
+    funcname : str, optional
+        The name of the function in which the metadata was specified. If
+        provided, the function name will be included in the error message to be
+        more helpful to users.
+    numeric_equal : bool, optionl
+        If True, integer and floating dtypes compare equal. This is useful due
+        to panda's implicit conversion of integer to floating upon encountering
+        missingness, which is hard to infer statically.
+    """
+    eq_types = {'i', 'f'} if numeric_equal else {}
+
+    def equal_dtypes(a, b):
+        if is_categorical_dtype(a) != is_categorical_dtype(b):
+            return False
+        if (a is '-' or b is '-'):
+            return False
+        return (a.kind in eq_types and b.kind in eq_types) or (a == b)
+
+    if not isinstance(meta, (pd.Series, pd.Index, pd.DataFrame)):
+        raise TypeError("Expected partition to be DataFrame, Series, or "
+                        "Index, got `%s`" % type(meta).__name__)
+
+    if type(x) != type(meta):
+        errmsg = ("Expected partition of type `%s` but got "
+                  "`%s`" % (type(meta).__name__, type(x).__name__))
+    elif isinstance(meta, pd.DataFrame):
+        dtypes = pd.concat([x.dtypes, meta.dtypes], axis=1)
+        bad = [(col, a, b) for col, a, b in dtypes.fillna('-').itertuples()
+               if not equal_dtypes(a, b)]
+        if not bad:
+            return x
+        errmsg = ("Partition type: `%s`\n%s" %
+                  (type(meta).__name__,
+                   asciitable(['Column', 'Found', 'Expected'], bad)))
+    else:
+        if equal_dtypes(x.dtype, meta.dtype):
+            return x
+        errmsg = ("Partition type: `%s`\n%s" %
+                  (type(meta).__name__,
+                   asciitable(['', 'dtype'], [('Found', x.dtype),
+                                              ('Expected', meta.dtype)])))
+
+    raise ValueError("Metadata mismatch found%s.\n\n"
+                     "%s" % ((" in `%s`" % funcname if funcname else ""),
+                             errmsg))
 
 
 ###############################################################
