@@ -2449,6 +2449,24 @@ def take(a, indices, axis=0):
         return a[(slice(None),) * axis + (indices,)]
 
 
+@wraps(np.extract)
+def extract(condition, a):
+    from .wrap import zeros
+
+    a = asarray(a).ravel()
+    condition = asarray(condition).ravel()
+
+    condition = condition.astype(bool)
+
+    if len(condition) < len(a):
+        condition_xtr = zeros(a.shape, dtype=bool, chunks=a.chunks)
+        condition_xtr = condition_xtr[len(condition):]
+        condition = concatenate([condition, condition_xtr])
+
+    condition = np.array(condition)
+    return a[condition]
+
+
 @wraps(np.compress)
 def compress(condition, a, axis=None):
     if axis is None:
