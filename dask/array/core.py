@@ -2851,6 +2851,16 @@ def where(condition, x=None, y=None):
         return choose(condition, [y, x])
 
 
+@wraps(np.nonzero)
+def nonzero(a):
+    from .creation import indices
+
+    nz = (a != 0).flatten()
+    ind = indices(a.shape, chunks=a.chunks).reshape((a.ndim, -1))
+
+    return tuple(compress(nz, ind[i], axis=0) for i in range(a.ndim))
+
+
 @wraps(chunk.coarsen)
 def coarsen(reduction, x, axes, trim_excess=False):
     if (not trim_excess and
