@@ -100,6 +100,7 @@ Top level user functions:
    nansum
    nanvar
    nextafter
+   nonzero
    notnull
    ones
    percentile
@@ -380,6 +381,7 @@ Other functions
 .. autofunction:: nansum
 .. autofunction:: nanvar
 .. autofunction:: nextafter
+.. autofunction:: nonzero
 .. autofunction:: notnull
 .. autofunction:: ones
 .. autofunction:: percentile
