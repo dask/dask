@@ -29,8 +29,8 @@ from dask.array.core import (getem, getter, top, dotmany,
                              concatenate3, broadcast_dimensions, Array, stack,
                              concatenate, from_array, take, elemwise, isnull,
                              notnull, broadcast_shapes, partial_by_order,
-                             tensordot, choose, where, coarsen, insert,
-                             broadcast_to, fromfunction,
+                             tensordot, choose, where, nonzero, coarsen,
+                             insert, broadcast_to, fromfunction,
                              blockdims_from_blockshape, store, optimize,
                              from_func, normalize_chunks, broadcast_chunks,
                              atop, from_delayed, concatenate_axes,
@@ -725,6 +725,38 @@ def test_where_has_informative_error():
         da.where(x > 0)
     except Exception as e:
         assert 'dask' in str(e)
+
+
+def test_nonzero():
+    x = np.random.randint(10, size=(15, 16))
+    d = from_array(x, chunks=(4, 5))
+
+    x_nz = np.nonzero(x)
+    d_nz = nonzero(d)
+
+    assert isinstance(d_nz, type(x_nz))
+    assert len(d_nz) == len(x_nz)
+
+    x_nza = np.stack(x_nz)
+    d_nza = da.stack(d_nz)
+
+    assert_eq(d_nza, x_nza)
+
+
+def test_nonzero_method():
+    x = np.random.randint(10, size=(15, 16))
+    d = from_array(x, chunks=(4, 5))
+
+    x_nz = x.nonzero()
+    d_nz = d.nonzero()
+
+    assert isinstance(d_nz, type(x_nz))
+    assert len(d_nz) == len(x_nz)
+
+    x_nza = np.stack(x_nz)
+    d_nza = da.stack(d_nz)
+
+    assert_eq(d_nza, x_nza)
 
 
 def test_coarsen():
