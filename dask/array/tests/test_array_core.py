@@ -727,6 +727,14 @@ def test_where_has_informative_error():
         assert 'dask' in str(e)
 
 
+@pytest.mark.parametrize('axis', [None, 0, (1,), (0, 1)])
+def test_count_nonzero(axis):
+    x = np.random.randint(10, size=(15, 16))
+    d = from_array(x, chunks=(4, 5))
+
+    assert_eq(da.count_nonzero(d, axis), da.count_nonzero(x, axis))
+
+
 def test_flatnonzero():
     x = np.random.randint(10, size=(15, 16))
     d = from_array(x, chunks=(4, 5))
