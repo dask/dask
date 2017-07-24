@@ -1768,6 +1768,10 @@ class Array(Base):
     def repeat(self, repeats, axis=None):
         return repeat(self, repeats, axis=axis)
 
+    @wraps(np.nonzero)
+    def nonzero(self):
+        return nonzero(self)
+
 
 def ensure_int(f):
     i = int(f)
