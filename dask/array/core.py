@@ -2855,6 +2855,11 @@ def where(condition, x=None, y=None):
         return choose(condition, [y, x])
 
 
+@wraps(np.flatnonzero)
+def flatnonzero(a):
+    return a.ravel().nonzero()[0]
+
+
 @wraps(np.nonzero)
 def nonzero(a):
     from .creation import indices
