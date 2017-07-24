@@ -2842,12 +2842,16 @@ def where(condition, x=None, y=None):
     x = broadcast_to(x, shape).astype(dtype)
     y = broadcast_to(y, shape).astype(dtype)
 
-    if isinstance(condition, (bool, np.bool8)):
+    if np.isscalar(condition):
+        condition = bool(condition)
+
+    if isinstance(condition, bool):
         if condition:
             return x
         else:
             return y
     else:
+        condition = asarray(condition).astype('bool')
         return choose(condition, [y, x])
 
 
