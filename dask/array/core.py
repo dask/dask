@@ -2855,6 +2855,11 @@ def where(condition, x=None, y=None):
         return choose(condition, [y, x])
 
 
+@wraps(np.count_nonzero)
+def count_nonzero(a, axis=None):
+    return (a != 0).sum(axis=axis)
+
+
 @wraps(np.flatnonzero)
 def flatnonzero(a):
     return a.ravel().nonzero()[0]
