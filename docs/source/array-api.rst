@@ -34,6 +34,7 @@ Top level user functions:
    corrcoef
    cos
    cosh
+   count_nonzero
    cov
    cumprod
    cumsum
@@ -316,6 +317,7 @@ Other functions
 .. autofunction:: corrcoef
 .. autofunction:: cos
 .. autofunction:: cosh
+.. autofunction:: count_nonzero
 .. autofunction:: cov
 .. autofunction:: cumprod
 .. autofunction:: cumsum
