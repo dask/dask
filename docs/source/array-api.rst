@@ -46,6 +46,7 @@ Top level user functions:
    empty
    exp
    expm1
+   extract
    eye
    fabs
    fix
@@ -326,6 +327,7 @@ Other functions
 .. autofunction:: empty
 .. autofunction:: exp
 .. autofunction:: expm1
+.. autofunction:: extract
 .. autofunction:: eye
 .. autofunction:: fabs
 .. autofunction:: fix
