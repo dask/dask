@@ -2764,7 +2764,7 @@ def test_repeat():
     d = da.from_array(x, chunks=(4, 5, 3))
 
     repeats = [1, 2, 5]
-    axes = [0, 1, 2]
+    axes = [-3, -2, -1, 0, 1, 2]
 
     for r in repeats:
         for a in axes:
@@ -2780,6 +2780,10 @@ def test_repeat():
 
     with pytest.raises(NotImplementedError):
         da.repeat(d, 2)
+
+    for invalid_axis in [3, -4]:
+        with pytest.raises(ValueError):
+            da.repeat(d, 2, axis=invalid_axis)
 
     x = np.arange(5)
     d = da.arange(5, chunks=(2,))
