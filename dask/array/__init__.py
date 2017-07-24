@@ -6,7 +6,8 @@ from .core import (Array, stack, concatenate, take, tensordot, transpose,
         roll, fromfunction, unique, store, squeeze, topk, bincount, tile,
         digitize, histogram, map_blocks, atop, to_hdf5, dot, cov, array,
         dstack, vstack, hstack, to_npy_stack, from_npy_stack, compress,
-        from_delayed, round, swapaxes, repeat, nonzero, asarray, asanyarray)
+        from_delayed, round, swapaxes, repeat, flatnonzero, nonzero,
+        asarray, asanyarray)
 from .core import (around, isnull, notnull, isclose, eye, triu,
                    tril, diag, corrcoef)
 from .reshape import reshape
