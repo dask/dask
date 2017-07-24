@@ -49,7 +49,7 @@ from .security import Security
 from .sizeof import sizeof
 from .worker import dumps_task, thread_state, get_client, get_worker
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator,
-        tokey, log_errors, str_graph, key_split, format_bytes)
+        tokey, log_errors, str_graph, key_split, format_bytes, asciitable)
 from .versions import get_versions
 
 
@@ -2538,44 +2538,34 @@ class Client(Node):
         except KeyError:
             scheduler = None
 
-        def f(worker=None):
-
-            # use our local version
-            try:
-                from distributed.versions import get_versions
-                return get_versions()
-            except ImportError:
-                return None
-
-        workers = sync(self.loop, self._run, f)
+        workers = sync(self.loop, self._run, get_versions)
         result = {'scheduler': scheduler, 'workers': workers, 'client': client}
 
         if check:
             # we care about the required & optional packages matching
-            extract = lambda x: merge(result[x]['packages'].values())
-            client_versions = extract('client')
-            scheduler_versions = extract('scheduler')
+            to_packages = lambda d: merge(d['packages'].values())
+            client_versions = to_packages(result['client'])
+            versions = [('scheduler', to_packages(result['scheduler']))]
+            versions.extend((w, to_packages(d))
+                            for w, d in sorted(workers.items()))
 
-            for pkg, cv in client_versions.items():
-                sv = scheduler_versions[pkg]
-                if sv != cv:
-                    raise ValueError("package [{package}] is version [{client}] "
-                                     "on client and [{scheduler}] on scheduler!".format(
-                                         package=pkg,
-                                         client=cv,
-                                         scheduler=sv))
-
-            for w, d in workers.items():
-                worker_versions = merge(d['packages'].values())
+            mismatched = defaultdict(list)
+            for name, vers in versions:
                 for pkg, cv in client_versions.items():
-                    wv = worker_versions[pkg]
-                    if wv != cv:
-                        raise ValueError("package [{package}] is version [{client}] "
-                                         "on client and [{worker}] on worker [{w}]!".format(
-                                             package=pkg,
-                                             client=cv,
-                                             worker=wv,
-                                             w=w))
+                    v = vers.get(pkg, 'MISSING')
+                    if cv != v:
+                        mismatched[pkg].append((name, v))
+
+            if mismatched:
+                errs = []
+                for pkg, versions in sorted(mismatched.items()):
+                    rows = [('client', client_versions[pkg])] 
+                    rows.extend(versions)
+                    errs.append("%s\n%s" % (pkg, asciitable(['', 'version'], rows)))
+
+                raise ValueError("Mismatched versions found\n"
+                                 "\n"
+                                 "%s" % ('\n\n'.join(errs)))
 
         return result
 
