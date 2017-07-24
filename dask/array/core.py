@@ -2870,7 +2870,8 @@ def nonzero(a):
     from .creation import indices
 
     nz = (a != 0).flatten()
-    ind = indices(a.shape, chunks=a.chunks).reshape((a.ndim, -1))
+    ind = indices(a.shape, dtype=np.int64, chunks=a.chunks)
+    ind = ind.reshape((a.ndim, -1))
 
     return tuple(compress(nz, ind[i], axis=0) for i in range(a.ndim))
 
