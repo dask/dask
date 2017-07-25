@@ -428,6 +428,21 @@ def test_take():
     assert same_keys(take(a, [3, 4, 5], axis=-1), take(a, [3, 4, 5], axis=-1))
 
 
+def test_extract():
+    x = np.arange(25).reshape((5, 5))
+    a = from_array(x, chunks=(2, 2))
+
+    assert_eq(np.extract([True, False, True, False, True], x),
+              da.extract([True, False, True, False, True], a))
+    assert_eq(np.extract([True, False], x),
+              da.extract([True, False], a))
+    assert_eq(np.extract((a.size + 1) * [False], x),
+              da.extract((a.size + 1) * [False], a))
+
+    with pytest.raises(IndexError):
+        da.extract((a.size + 1) * [True], x)
+
+
 def test_compress():
     x = np.arange(25).reshape((5, 5))
     a = from_array(x, chunks=(2, 2))
