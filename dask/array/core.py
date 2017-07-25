@@ -2843,13 +2843,7 @@ def where(condition, x=None, y=None):
     y = broadcast_to(y, shape).astype(dtype)
 
     if np.isscalar(condition):
-        condition = bool(condition)
-
-    if isinstance(condition, bool):
-        if condition:
-            return x
-        else:
-            return y
+        return x if condition else y
     else:
         condition = asarray(condition).astype('bool')
         return choose(condition, [y, x])
