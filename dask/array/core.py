@@ -2487,6 +2487,13 @@ def compress(condition, a, axis=None):
         return a[slc]
 
 
+@wraps(np.extract)
+def extract(condition, arr):
+    if not isinstance(condition, Array):
+        condition = np.array(condition, dtype=bool)
+    return compress(condition.ravel(), arr.ravel())
+
+
 def _take_dask_array_from_numpy(a, indices, axis):
     assert isinstance(a, np.ndarray)
     assert isinstance(indices, Array)
