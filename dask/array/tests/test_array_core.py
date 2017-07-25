@@ -432,15 +432,17 @@ def test_compress():
     x = np.arange(25).reshape((5, 5))
     a = from_array(x, chunks=(2, 2))
 
+    assert_eq(np.compress([True, False, True, False, True], x),
+              da.compress([True, False, True, False, True], a))
     assert_eq(np.compress([True, False, True, False, True], x, axis=0),
               da.compress([True, False, True, False, True], a, axis=0))
     assert_eq(np.compress([True, False, True, False, True], x, axis=1),
               da.compress([True, False, True, False, True], a, axis=1))
+    assert_eq(np.compress([True, False], x),
+              da.compress([True, False], a))
     assert_eq(np.compress([True, False], x, axis=1),
               da.compress([True, False], a, axis=1))
 
-    with pytest.raises(NotImplementedError):
-        da.compress([True, False], a)
     with pytest.raises(ValueError):
         da.compress([True, False], a, axis=100)
     with pytest.raises(ValueError):

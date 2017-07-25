@@ -2452,7 +2452,8 @@ def take(a, indices, axis=0):
 @wraps(np.compress)
 def compress(condition, a, axis=None):
     if axis is None:
-        raise NotImplementedError("Must select axis for compression")
+        a = a.ravel()
+        axis = 0
     if not -a.ndim <= axis < a.ndim:
         raise ValueError('axis=(%s) out of bounds' % axis)
     if axis < 0:
