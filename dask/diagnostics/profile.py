@@ -305,6 +305,7 @@ class CacheProfiler(Callback):
     """
 
     def __init__(self, metric=None, metric_name=None):
+        self.clear()
         self._metric = metric if metric else lambda value: 1
         if metric_name:
             self._metric_name = metric_name
