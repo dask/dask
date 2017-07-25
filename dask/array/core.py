@@ -3955,6 +3955,11 @@ def repeat(a, repeats, axis=None):
     if not isinstance(repeats, Integral):
         raise NotImplementedError("Only integer valued repeats supported")
 
+    if -a.ndim <= axis < 0:
+        axis += a.ndim
+    elif not 0 <= axis <= a.ndim - 1:
+        raise ValueError("axis(=%d) out of bounds" % axis)
+
     if repeats == 1:
         return a
 
