@@ -2451,6 +2451,8 @@ def take(a, indices, axis=0):
 
 @wraps(np.compress)
 def compress(condition, a, axis=None):
+    from .wrap import zeros
+
     if axis is None:
         a = a.ravel()
         axis = 0
@@ -2459,13 +2461,15 @@ def compress(condition, a, axis=None):
     if axis < 0:
         axis += a.ndim
 
-    condition = np.array(condition, dtype=bool)
+    condition = asarray(condition).astype(bool)
     if condition.ndim != 1:
         raise ValueError("Condition must be one dimensional")
     if len(condition) < a.shape[axis]:
-        condition = condition.copy()
-        condition.resize(a.shape[axis])
+        condition_xtr = zeros(a.shape[axis], dtype=bool, chunks=a.chunks[axis])
+        condition_xtr = condition_xtr[len(condition):]
+        condition = concatenate([condition, condition_xtr])
 
+    condition = np.array(condition)
     slc = ((slice(None),) * axis + (condition, ) +
            (slice(None),) * (a.ndim - axis - 1))
     return a[slc]
