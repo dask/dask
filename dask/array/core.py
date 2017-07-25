@@ -2451,7 +2451,11 @@ def take(a, indices, axis=0):
 
 @wraps(np.compress)
 def compress(condition, a, axis=None):
+    from ..delayed import delayed
     from .wrap import zeros
+
+    a = asarray(a)
+    condition = asarray(condition).astype(bool)
 
     if axis is None:
         a = a.ravel()
@@ -2461,7 +2465,6 @@ def compress(condition, a, axis=None):
     if axis < 0:
         axis += a.ndim
 
-    condition = asarray(condition).astype(bool)
     if condition.ndim != 1:
         raise ValueError("Condition must be one dimensional")
     if len(condition) < a.shape[axis]:
@@ -2469,10 +2472,30 @@ def compress(condition, a, axis=None):
         condition_xtr = condition_xtr[len(condition):]
         condition = concatenate([condition, condition_xtr])
 
-    condition = np.array(condition)
-    slc = ((slice(None),) * axis + (condition, ) +
-           (slice(None),) * (a.ndim - axis - 1))
-    return a[slc]
+    slc_shape = list(a.shape)
+    slc_shape[axis] = np.nan
+    slc_shape = tuple(slc_shape)
+
+    @delayed
+    def _helper_slice(arr, start, stop, step, axis):
+        slc = (
+            (slice(None),) * axis +
+            (slice(int(start), int(stop), int(step)),) +
+            (slice(None),) * (arr.ndim - axis - 1)
+        )
+        return arr[slc]
+
+    result = []
+    for i in range(a.shape[axis]):
+        j = i + condition[i].astype(int)
+        result.append(from_delayed(
+            _helper_slice(a, i, j, 1, axis),
+            slc_shape,
+            a.dtype
+        ))
+    result = concatenate(result)
+
+    return result
 
 
 def _take_dask_array_from_numpy(a, indices, axis):
