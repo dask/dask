@@ -2451,8 +2451,6 @@ def take(a, indices, axis=0):
 
 @wraps(np.compress)
 def compress(condition, a, axis=None):
-    from .wrap import zeros
-
     if axis is None:
         a = a.ravel()
         axis = 0
@@ -2461,18 +2459,39 @@ def compress(condition, a, axis=None):
     if axis < 0:
         axis += a.ndim
 
-    condition = asarray(condition).astype(bool)
+    # Only coerce non-lazy values to numpy arrays
+    if not isinstance(condition, Array):
+        condition = np.array(condition, dtype=bool)
     if condition.ndim != 1:
         raise ValueError("Condition must be one dimensional")
-    if len(condition) < a.shape[axis]:
-        condition_xtr = zeros(a.shape[axis], dtype=bool, chunks=a.chunks[axis])
-        condition_xtr = condition_xtr[len(condition):]
-        condition = concatenate([condition, condition_xtr])
 
-    condition = np.array(condition)
-    slc = ((slice(None),) * axis + (condition, ) +
-           (slice(None),) * (a.ndim - axis - 1))
-    return a[slc]
+    if isinstance(condition, Array):
+        if len(condition) < a.shape[axis]:
+            a = a[tuple(slice(None, len(condition))
+                        if i == axis else slice(None)
+                        for i in range(a.ndim))]
+        inds = tuple(range(a.ndim))
+        out = atop(np.compress, inds, condition, (inds[axis],), a, inds,
+                   axis=axis, dtype=a.dtype)
+        out._chunks = tuple((np.NaN,) * len(c) if i == axis else c
+                            for i, c in enumerate(out.chunks))
+        return out
+    else:
+        # Optimized case when condition is known
+        if len(condition) < a.shape[axis]:
+            condition = condition.copy()
+            condition.resize(a.shape[axis])
+
+        slc = ((slice(None),) * axis + (condition, ) +
+               (slice(None),) * (a.ndim - axis - 1))
+        return a[slc]
+
+
+@wraps(np.extract)
+def extract(condition, arr):
+    if not isinstance(condition, Array):
+        condition = np.array(condition, dtype=bool)
+    return compress(condition.ravel(), arr.ravel())
 
 
 def _take_dask_array_from_numpy(a, indices, axis):
