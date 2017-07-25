@@ -134,6 +134,10 @@ class ResourceProfiler(Callback):
     manually.
 
     >>> prof.clear()  # doctest: +SKIP
+
+    Note that when used as a context manager data will be collected throughout
+    the duration of the enclosed block. In contrast, when registered globally
+    data will only be collected while a dask scheduler is active.
     """
     def __init__(self, dt=1):
         self._tracker = _Tracker(dt)
