@@ -685,7 +685,7 @@ def test_choose():
 
 
 def test_where():
-    x = np.random.randint(10, size=(15, 16))
+    x = np.random.randint(10, size=(15, 14))
     x[5, 5] = x[4, 4] = 0 # Ensure some false elements
     d = from_array(x, chunks=(4, 5))
     y = np.random.randint(10, size=15).astype(np.uint8)
@@ -695,14 +695,30 @@ def test_where():
                    (d, x),
                    (1, 1),
                    (0, 0),
+                   (5, 5),
                    (True, True),
                    (np.True_, np.True_),
                    (False, False),
                    (np.False_, np.False_)]:
-        for b1, b2 in [(0, 0), (-e[:, None], -y[:, None])]:
+        for b1, b2 in [(0, 0), (-e[:, None], -y[:, None]), (e[:14], y[:14])]:
             w1 = where(c1, d, b1)
             w2 = np.where(c2, x, b2)
             assert_eq(w1, w2)
+
+
+def test_where_scalar_dtype():
+    x = np.int32(3)
+    y1 = np.array([4, 5, 6], dtype=np.int16)
+    c1 = np.array([1, 0, 1])
+    y2 = from_array(y1, chunks=2)
+    c2 = from_array(c1, chunks=2)
+    w1 = np.where(c1, x, y1)
+    w2 = where(c2, x, y2)
+    assert_eq(w1, w2)
+    # Test again for the bool optimization
+    w3 = np.where(True, x, y1)
+    w4 = where(True, x, y1)
+    assert_eq(w3, w4)
 
 
 def test_where_bool_optimization():

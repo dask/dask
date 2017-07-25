@@ -2833,20 +2833,21 @@ def where(condition, x=None, y=None):
     if x is None or y is None:
         raise TypeError(where_error_message)
 
-    x = asarray(x)
-    y = asarray(y)
-
-    shape = broadcast_shapes(x.shape, y.shape)
-    dtype = np.promote_types(x.dtype, y.dtype)
-
-    x = broadcast_to(x, shape).astype(dtype)
-    y = broadcast_to(y, shape).astype(dtype)
-
     if np.isscalar(condition):
-        return x if condition else y
+        # Match the dtype inference logic from elemwise
+        vals = [np.empty((1,) * a.ndim, dtype=a.dtype)
+                if not is_scalar_for_elemwise(a) else a
+                for a in (x, y)]
+        dtype = apply_infer_dtype(np.where, [condition] + vals, {}, 'where', suggest_dtype=False)
+        x = asarray(x)
+        y = asarray(y)
+
+        shape = broadcast_shapes(x.shape, y.shape)
+        out = x if condition else y
+
+        return broadcast_to(out, shape).astype(dtype)
     else:
-        condition = asarray(condition).astype('bool')
-        return choose(condition, [y, x])
+        return elemwise(np.where, condition, x, y)
 
 
 @wraps(chunk.coarsen)
