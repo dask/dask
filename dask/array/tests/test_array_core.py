@@ -686,11 +686,15 @@ def test_choose():
 
 def test_where():
     x = np.random.randint(10, size=(15, 16))
+    x[5, 5] = x[4, 4] = 0 # Ensure some false elements
     d = from_array(x, chunks=(4, 5))
     y = np.random.randint(10, size=15).astype(np.uint8)
     e = from_array(y, chunks=(4,))
 
     for c1, c2 in [(d > 5, x > 5),
+                   (d, x),
+                   (1, 1),
+                   (0, 0),
                    (True, True),
                    (np.True_, np.True_),
                    (False, False),
@@ -698,7 +702,6 @@ def test_where():
         for b1, b2 in [(0, 0), (-e[:, None], -y[:, None])]:
             w1 = where(c1, d, b1)
             w2 = np.where(c2, x, b2)
-
             assert_eq(w1, w2)
 
 
@@ -708,7 +711,7 @@ def test_where_bool_optimization():
     y = np.random.randint(10, size=(15, 16))
     e = from_array(y, chunks=(4, 5))
 
-    for c in [True, False, np.True_, np.False_]:
+    for c in [True, False, np.True_, np.False_, 1, 0]:
         w1 = where(c, d, e)
         w2 = np.where(c, x, y)
 
