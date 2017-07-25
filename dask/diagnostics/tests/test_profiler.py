@@ -28,7 +28,7 @@ dsk = {'a': 1,
        'd': (mul, 'a', 'b'),
        'e': (mul, 'c', 'd')}
 
-dsk2 = {'a': 1, 'b': 2, 'c': (lambda a, b: sleep(0.1) or (a + b), 'a', 'b')}
+dsk2 = {'a': 1, 'b': 2, 'c': (lambda a, b: sleep(1.0) or (a + b), 'a', 'b')}
 
 
 def test_profiler():
@@ -80,6 +80,7 @@ def test_resource_profiler():
     with ResourceProfiler(dt=0.01) as rprof:
         get(dsk2, 'c')
     results = rprof.results
+    assert len(results) > 0
     assert all(isinstance(i, tuple) and len(i) == 3 for i in results)
 
     rprof.clear()
@@ -139,6 +140,25 @@ def test_cache_profiler():
     assert tics[-1] == results[-1].metric
     assert cprof._metric_name == 'nbytes'
     assert CacheProfiler(metric=nbytes, metric_name='foo')._metric_name == 'foo'
+
+
+@pytest.mark.parametrize(
+    'profiler',
+    [Profiler,
+     pytest.param(lambda: ResourceProfiler(dt=0.01),
+                  marks=pytest.mark.skipif("not psutil")),
+     CacheProfiler])
+def test_register(profiler):
+    prof = profiler()
+    try:
+        prof.register()
+        get(dsk2, 'c')
+        n = len(prof.results)
+        assert n > 0
+        get(dsk2, 'c')
+        assert len(prof.results) > n
+    finally:
+        prof.unregister()
 
 
 @pytest.mark.skipif("not bokeh")
