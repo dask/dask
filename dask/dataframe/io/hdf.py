@@ -339,7 +339,9 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
 
     Parameters
     ----------
-    pattern : pattern (string), or buffer to read from. Can contain wildcards
+    pattern : string, list
+        File pattern (string), buffer to read from, or list of file
+        paths. Can contain wildcards.
     key : group identifier in the store. Can contain wildcards
     start : optional, integer (defaults to 0), row number to start at
     stop : optional, integer (defaults to None, the last row), row number to
@@ -377,6 +379,8 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
 
     >>> dd.read_hdf('myfile.*.hdf5', '/x')  # doctest: +SKIP
 
+    >>> dd.read_hdf(['myfile.1.hdf5', 'myfile.2.hdf5'], '/x')  # doctest: +SKIP
+
     Load multiple datasets
 
     >>> dd.read_hdf('myfile.1.hdf5', '/*')  # doctest: +SKIP
@@ -385,7 +389,10 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
         lock = get_scheduler_lock()
 
     key = key if key.startswith('/') else '/' + key
-    paths = sorted(glob(pattern))
+    if isinstance(pattern, str):
+        paths = sorted(glob(pattern))
+    else:
+        paths = pattern
     if (start != 0 or stop is not None) and len(paths) > 1:
         raise NotImplementedError(read_hdf_error_msg)
     if chunksize <= 0:
