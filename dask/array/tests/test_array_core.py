@@ -856,7 +856,12 @@ def test_count_nonzero_obj_axis(axis):
     if d_c.shape == tuple():
         assert x_c == d_c.compute()
     else:
-        assert_eq(x_c, d_c)
+        #######################################################
+        # Workaround oddness with Windows and object arrays.  #
+        #                                                     #
+        # xref: https://github.com/numpy/numpy/issues/9468    #
+        #######################################################
+        assert_eq(x_c.astype(np.int64), d_c)
 
 
 def test_count_nonzero_str():
