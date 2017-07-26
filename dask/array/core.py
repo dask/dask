@@ -2838,11 +2838,23 @@ See the following documentation page for details:
 """.strip()
 
 
+def isnonzero(a):
+    a = asarray(a)
+    if issubclass(a.dtype.type, Number):
+        return (a != 0)
+    if issubclass(a.dtype.type, (np.bytes_, np.unicode_)):
+        np_isnonzero = np.vectorize(lambda v: bool(v.strip()), otypes=[bool])
+        return a.map_blocks(np_isnonzero, dtype=bool)
+    else:
+        np_isnonzero = np.vectorize(lambda v: bool(v), otypes=[bool])
+        return a.map_blocks(np_isnonzero, dtype=bool)
+
+
 @wraps(np.argwhere)
 def argwhere(a):
     from .creation import indices
 
-    nz = (a != 0).flatten()
+    nz = isnonzero(a).flatten()
 
     ind = indices(a.shape, dtype=np.int64, chunks=a.chunks)
     ind = stack([ind[i].ravel() for i in range(len(ind))], axis=1)
@@ -2876,7 +2888,7 @@ def where(condition, x=None, y=None):
 
 @wraps(np.count_nonzero)
 def count_nonzero(a, axis=None):
-    return (a != 0).astype(np.int64).sum(axis=axis)
+    return isnonzero(a).astype(np.int64).sum(axis=axis)
 
 
 @wraps(np.flatnonzero)
