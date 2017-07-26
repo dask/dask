@@ -783,10 +783,8 @@ def test_nonzero():
     assert isinstance(d_nz, type(x_nz))
     assert len(d_nz) == len(x_nz)
 
-    x_nza = np.stack(x_nz)
-    d_nza = da.stack(d_nz)
-
-    assert_eq(d_nza, x_nza)
+    for i in range(len(x_nz)):
+        assert_eq(d_nz[i], x_nz[i])
 
 
 def test_nonzero_method():
@@ -799,10 +797,8 @@ def test_nonzero_method():
     assert isinstance(d_nz, type(x_nz))
     assert len(d_nz) == len(x_nz)
 
-    x_nza = np.stack(x_nz)
-    d_nza = da.stack(d_nz)
-
-    assert_eq(d_nza, x_nza)
+    for i in range(len(x_nz)):
+        assert_eq(d_nz[i], x_nz[i])
 
 
 def test_coarsen():
