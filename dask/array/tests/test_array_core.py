@@ -8,6 +8,7 @@ import os
 import sys
 import time
 from distutils.version import LooseVersion
+from itertools import product
 import operator
 from operator import add, sub, getitem
 from threading import Lock
@@ -710,25 +711,28 @@ def test_choose():
 
 
 def test_where():
-    x = np.random.randint(10, size=(15, 14))
-    x[5, 5] = x[4, 4] = 0 # Ensure some false elements
-    d = from_array(x, chunks=(4, 5))
-    y = np.random.randint(10, size=15).astype(np.uint8)
-    e = from_array(y, chunks=(4,))
+    np_types = np.typecodes["AllInteger"] + np.typecodes["AllFloat"]
+    np_types = [np.dtype(s).type for s in np_types]
 
-    for c1, c2 in [(d > 5, x > 5),
-                   (d, x),
-                   (1, 1),
-                   (0, 0),
-                   (5, 5),
-                   (True, True),
-                   (np.True_, np.True_),
-                   (False, False),
-                   (np.False_, np.False_)]:
-        for b1, b2 in [(0, 0), (-e[:, None], -y[:, None]), (e[:14], y[:14])]:
-            w1 = where(c1, d, b1)
-            w2 = np.where(c2, x, b2)
-            assert_eq(w1, w2)
+    for x_t, y_t in product(*(2 * [np_types])):
+        x = np.random.randint(10, size=(15, 14)).astype(x_t)
+        x[5, 5] = x[4, 4] = 0 # Ensure some false elements
+        d = from_array(x, chunks=(4, 5))
+        y = np.random.randint(10, size=15).astype(y_t)
+        e = from_array(y, chunks=(4,))
+
+        for c1, c2 in [(d > 5, x > 5),
+                       (d, x),
+                       (1, 1),
+                       (0, 0),
+                       (True, True),
+                       (np.True_, np.True_),
+                       (False, False),
+                       (np.False_, np.False_)]:
+            for b1, b2 in [(0, 0), (-e[:, None], -y[:, None]), (e[:14], y[:14])]:
+                w1 = where(c1, d, b1)
+                w2 = np.where(c2, x, b2)
+                assert_eq(w1, w2)
 
 
 def test_where_scalar_dtype():
