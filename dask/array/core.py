@@ -2857,7 +2857,8 @@ def argwhere(a):
     nz = isnonzero(a).flatten()
 
     ind = indices(a.shape, dtype=np.int64, chunks=a.chunks)
-    ind = stack([ind[i].ravel() for i in range(len(ind))], axis=1)
+    if ind.ndim > 1:
+        ind = stack([ind[i].ravel() for i in range(len(ind))], axis=1)
     ind = compress(nz, ind, axis=0)
 
     return ind
@@ -2899,7 +2900,10 @@ def flatnonzero(a):
 @wraps(np.nonzero)
 def nonzero(a):
     ind = argwhere(a)
-    return tuple(ind[:, i] for i in range(ind.shape[1]))
+    if ind.ndim > 1:
+        return tuple(ind[:, i] for i in range(ind.shape[1]))
+    else:
+        return (ind,)
 
 
 @wraps(chunk.coarsen)
