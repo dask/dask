@@ -511,6 +511,12 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
     return o.dtype
 
 
+@wraps(np.result_type)
+def result_type(*args):
+    args = [a if is_scalar_for_elemwise(a) else a.dtype for a in args]
+    return np.result_type(*args)
+
+
 def map_blocks(func, *args, **kwargs):
     """ Map a function across all blocks of a dask array.
 
@@ -2857,20 +2863,17 @@ def where(condition, x=None, y=None):
     if x is None or y is None:
         raise TypeError(where_error_message)
 
-    x = asarray(x)
-    y = asarray(y)
-
-    shape = broadcast_shapes(x.shape, y.shape)
-    dtype = np.promote_types(x.dtype, y.dtype)
-
-    x = broadcast_to(x, shape).astype(dtype)
-    y = broadcast_to(y, shape).astype(dtype)
-
     if np.isscalar(condition):
-        return x if condition else y
+        dtype = result_type(x, y)
+        x = asarray(x)
+        y = asarray(y)
+
+        shape = broadcast_shapes(x.shape, y.shape)
+        out = x if condition else y
+
+        return broadcast_to(out, shape).astype(dtype)
     else:
-        condition = asarray(condition).astype('bool')
-        return choose(condition, [y, x])
+        return elemwise(np.where, condition, x, y)
 
 
 @wraps(chunk.coarsen)
