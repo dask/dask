@@ -794,8 +794,29 @@ def test_where_incorrect_args():
             assert 'either both or neither of x and y should be given' in str(e)
 
 
+def test_count_nonzero():
+    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+        x = np.random.randint(10, size=shape)
+        d = from_array(x, chunks=chunks)
+
+        x_c = np.count_nonzero(x)
+        d_c = da.count_nonzero(d)
+
+        if d_c.shape == tuple():
+            assert x_c == d_c.compute()
+        else:
+            assert_eq(x_c, d_c)
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
+                    reason="NumPy's count_nonzero doesn't yet support axis")
 @pytest.mark.parametrize('axis', [None, 0, (1,), (0, 1)])
-def test_count_nonzero(axis):
+def test_count_nonzero_axis(axis):
+    if (LooseVersion(np.__version__) < LooseVersion("1.12.0")):
+        pytest.skip(
+            "NumPy %s doesn't support multiple axes with `roll`."
+            " Need NumPy 1.12.0 or greater." % np.__version__
+        )
     for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.randint(10, size=shape)
         d = from_array(x, chunks=chunks)
@@ -809,8 +830,23 @@ def test_count_nonzero(axis):
             assert_eq(x_c, d_c)
 
 
+def test_count_nonzero_obj():
+    x = np.random.randint(10, size=(15, 16)).astype(object)
+    d = from_array(x, chunks=(4, 5))
+
+    x_c = np.count_nonzero(x)
+    d_c = da.count_nonzero(d)
+
+    if d_c.shape == tuple():
+        assert x_c == d_c.compute()
+    else:
+        assert_eq(x_c, d_c)
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
+                    reason="NumPy's count_nonzero doesn't yet support axis")
 @pytest.mark.parametrize('axis', [None, 0, (1,), (0, 1)])
-def test_count_nonzero_obj(axis):
+def test_count_nonzero_obj_axis(axis):
     x = np.random.randint(10, size=(15, 16)).astype(object)
     d = from_array(x, chunks=(4, 5))
 
