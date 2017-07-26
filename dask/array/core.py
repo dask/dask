@@ -2895,7 +2895,7 @@ def nonzero(a):
     ind = indices(a.shape, dtype=np.int64, chunks=a.chunks)
     ind = ind.reshape((a.ndim, -1))
 
-    return tuple(compress(nz, ind[i], axis=0) for i in range(a.ndim))
+    return tuple(compress(nz, ind[i]) for i in range(a.ndim))
 
 
 @wraps(chunk.coarsen)
