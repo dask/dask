@@ -709,6 +709,17 @@ def test_choose():
     assert_eq(choose(d > 5, [-d, d]), np.choose(x > 5, [-x, x]))
 
 
+def test_argwhere():
+    x = np.random.randint(10, size=(15, 16))
+    x[5, 5] = x[4, 4] = 0 # Ensure some false elements
+    d = from_array(x, chunks=(4, 5))
+
+    x_nz = np.argwhere(x)
+    d_nz = da.argwhere(d)
+
+    assert_eq(d_nz, x_nz)
+
+
 def test_where():
     x = np.random.randint(10, size=(15, 16))
     x[5, 5] = x[4, 4] = 0 # Ensure some false elements
