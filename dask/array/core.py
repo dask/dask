@@ -2886,7 +2886,8 @@ def flatnonzero(a):
 
 @wraps(np.nonzero)
 def nonzero(a):
-    return tuple(argwhere(a).T)
+    ind = argwhere(a)
+    return tuple(ind[:, i] for i in range(ind.shape[1]))
 
 
 @wraps(chunk.coarsen)
