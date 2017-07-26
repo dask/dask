@@ -762,6 +762,17 @@ def test_where_nonzero():
         assert_eq(d_w[i], x_w[i])
 
 
+def test_where_incorrect_args():
+    a = da.ones(5, chunks=3)
+
+    for kwd in ["x", "y"]:
+        kwargs = {kwd: a}
+        try:
+            da.where(a > 0, **kwargs)
+        except ValueError as e:
+            assert 'either both or neither of x and y should be given' in str(e)
+
+
 @pytest.mark.parametrize('axis', [None, 0, (1,), (0, 1)])
 def test_count_nonzero(axis):
     x = np.random.randint(10, size=(15, 16))
