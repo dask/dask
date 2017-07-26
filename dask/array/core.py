@@ -2829,24 +2829,6 @@ def choose(a, choices):
     return elemwise(variadic_choose, a, *choices)
 
 
-where_error_message = """
-The dask.array version of where only handles the three argument case.
-
-    da.where(x > 0, x, 0)
-
-and not the single argument case
-
-    da.where(x > 0)
-
-This is because dask.array operations must be able to infer the shape of their
-outputs prior to execution.  The number of positive elements of x requires
-execution.  See the ``np.where`` docstring for examples and the following link
-for a more thorough explanation:
-
-    http://dask.pydata.org/en/latest/array-overview.html#construct
-""".strip()
-
-
 chunks_none_error_message = """
 You must specify a chunks= keyword argument.
 This specifies the chunksize of your array blocks.
@@ -2858,8 +2840,10 @@ See the following documentation page for details:
 
 @wraps(np.where)
 def where(condition, x=None, y=None):
-    if x is None or y is None:
-        raise TypeError(where_error_message)
+    if (x is None) != (y is None):
+        raise ValueError("either both or neither of x and y should be given")
+    if (x is None) and (y is None):
+        return condition.nonzero()
 
     x = asarray(x)
     y = asarray(y)
