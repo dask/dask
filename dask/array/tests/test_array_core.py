@@ -747,12 +747,19 @@ def test_where_bool_optimization():
         assert w1 is ex_w1
 
 
-def test_where_has_informative_error():
-    x = da.ones(5, chunks=3)
-    try:
-        da.where(x > 0)
-    except Exception as e:
-        assert 'dask' in str(e)
+def test_where_nonzero():
+    x = np.random.randint(10, size=(15, 16))
+    x[5, 5] = x[4, 4] = 0 # Ensure some false elements
+    d = from_array(x, chunks=(4, 5))
+
+    x_w = np.where(x)
+    d_w = where(d)
+
+    assert isinstance(d_w, type(x_w))
+    assert len(d_w) == len(x_w)
+
+    for i in range(len(x_w)):
+        assert_eq(d_w[i], x_w[i])
 
 
 @pytest.mark.parametrize('axis', [None, 0, (1,), (0, 1)])
