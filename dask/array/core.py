@@ -2876,7 +2876,7 @@ def where(condition, x=None, y=None):
 
 @wraps(np.count_nonzero)
 def count_nonzero(a, axis=None):
-    return (a != 0).sum(axis=axis)
+    return (a != 0).astype(np.int64).sum(axis=axis)
 
 
 @wraps(np.flatnonzero)
