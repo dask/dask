@@ -1,4 +1,4 @@
-tornado >= 4.4
+tornado >= 4.4.3
 toolz >= 0.7.4
 msgpack-python
 cloudpickle >= 0.2.2

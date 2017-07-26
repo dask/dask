@@ -194,6 +194,7 @@ class TCP(Comm):
     @gen.coroutine
     def write(self, msg):
         stream = self.stream
+        bytes_since_last_yield = 0
         if stream is None:
             raise CommClosedError
 
@@ -210,11 +211,11 @@ class TCP(Comm):
                 #   the previous future will be orphaned and will never resolve")
                 if not self._iostream_allows_memoryview:
                     frame = ensure_bytes(frame)
-                stream.write(frame)
-                if len(frame) > 1000000:  # brief pause between large writes
-                    yield gen.moment
-                while len(stream._write_buffer) > 1e7:  # let write buffer clear
-                    yield gen.sleep(0.002)  # 5GB/s cap
+                future = stream.write(frame)
+                bytes_since_last_yield += nbytes(frame)
+                if bytes_since_last_yield > 128e6:
+                    yield future
+                    bytes_since_last_yield = 0
         except StreamClosedError as e:
             stream = None
             convert_stream_closed_error(self, e)
