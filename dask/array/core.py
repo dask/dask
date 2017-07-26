@@ -2887,15 +2887,7 @@ def flatnonzero(a):
 
 @wraps(np.nonzero)
 def nonzero(a):
-    from .creation import indices
-
-    nz = (a != 0).flatten()
-
-    ind = indices(a.shape, dtype=np.int64, chunks=a.chunks)
-    ind = ind.reshape((a.ndim, -1))
-    ind = compress(nz, ind, axis=1)
-
-    return tuple(ind)
+    return tuple(argwhere(a).T)
 
 
 @wraps(chunk.coarsen)
