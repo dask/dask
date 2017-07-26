@@ -2892,10 +2892,12 @@ def nonzero(a):
     from .creation import indices
 
     nz = (a != 0).flatten()
+
     ind = indices(a.shape, dtype=np.int64, chunks=a.chunks)
     ind = ind.reshape((a.ndim, -1))
+    ind = compress(nz, ind, axis=1)
 
-    return tuple(compress(nz, ind[i]) for i in range(a.ndim))
+    return tuple(ind)
 
 
 @wraps(chunk.coarsen)
