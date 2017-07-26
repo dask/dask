@@ -2838,6 +2838,20 @@ See the following documentation page for details:
 """.strip()
 
 
+@wraps(np.argwhere)
+def argwhere(a):
+    from .creation import indices
+
+    nz = (a != 0).flatten()
+
+    ind = indices(a.shape, dtype=np.int64, chunks=a.chunks)
+    ind = ind.reshape((a.ndim, -1))
+    ind = compress(nz, ind, axis=1)
+    ind = ind.T
+
+    return ind
+
+
 @wraps(np.where)
 def where(condition, x=None, y=None):
     if (x is None) != (y is None):
