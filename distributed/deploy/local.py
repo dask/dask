@@ -244,9 +244,11 @@ class LocalCluster(object):
         if self.loop._running:
             sync(self.loop, self._close)
         if hasattr(self, '_thread'):
-            sync(self.loop, self.loop.stop)
-            self._thread.join(timeout=1)
-            self.loop.close()
+            self.loop.add_callback(self.loop.stop)
+            try:
+                self._thread.join(timeout=1)
+            finally:
+                self.loop.close()
             del self._thread
 
     @gen.coroutine

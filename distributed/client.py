@@ -935,9 +935,11 @@ class Client(Node):
         assert self.status == 'closed'
 
         if self._should_close_loop:
-            sync(self.loop, self.loop.stop)
-            self.loop.close()
-            self._loop_thread.join(timeout=timeout)
+            self.loop.add_callback(self.loop.stop)
+            try:
+                self._loop_thread.join(timeout=timeout)
+            finally:
+                self.loop.close()
         self._loop_thread = None
         with ignoring(AttributeError):
             dask.set_options(get=self._previous_get)
@@ -2559,7 +2561,7 @@ class Client(Node):
             if mismatched:
                 errs = []
                 for pkg, versions in sorted(mismatched.items()):
-                    rows = [('client', client_versions[pkg])] 
+                    rows = [('client', client_versions[pkg])]
                     rows.extend(versions)
                     errs.append("%s\n%s" % (pkg, asciitable(['', 'version'], rows)))
 
