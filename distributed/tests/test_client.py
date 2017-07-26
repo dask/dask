@@ -3384,7 +3384,6 @@ def test_open_close_many_workers(loop, worker, count, repeat):
                 running[w] = addr
                 yield gen.sleep(duration)
                 yield w._close()
-                del running[w]
                 del w
                 yield gen.moment
             done.release()

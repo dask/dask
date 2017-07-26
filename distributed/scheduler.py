@@ -940,7 +940,7 @@ class Scheduler(ServerNode):
             if not self.processing:
                 logger.info("Lost all workers")
 
-            logger.info("Removed worker %s", address)
+            logger.debug("Removed worker %s", address)
         return 'OK'
 
     def stimulus_cancel(self, comm, keys=None, client=None):
