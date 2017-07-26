@@ -317,10 +317,6 @@ def test_plan_rechunk():
     steps2 = _plan((f, c), (c, f), block_size_limit=3999, itemsize=10)
     _assert_steps(steps2, steps)
 
-    # Memory limit too low => no intermediate
-    steps = _plan((f, c), (c, f), block_size_limit=40)
-    _assert_steps(steps, [(c, f)])
-
     # Larger problem size => more intermediates
     c = ((1000,) * 2)   # coarse
     f = ((2,) * 1000)   # fine
@@ -378,6 +374,17 @@ def test_plan_rechunk_heterogenous():
     #  * cf -> fc also fits the bill (graph size and block size neutral)
     steps = _plan((cc, ff, cf), (ff, cf, cc), block_size_limit=100)
     _assert_steps(steps, [(cc, ff, cc), (ff, cf, cc)])
+
+
+def test_plan_rechunk_asymmetric():
+    a = ((1,) * 1000, (80000000,))
+    b = ((1000,), (80000,) * 1000)
+    steps = plan_rechunk(a, b, itemsize=8)
+    assert len(steps) > 1
+
+    x = da.ones((1000, 80000000), chunks=(1, 80000000))
+    y = x.rechunk((1000, x.shape[1] // 1000))
+    assert len(y.dask) < 100000
 
 
 def test_rechunk_warning():

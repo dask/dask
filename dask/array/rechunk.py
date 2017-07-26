@@ -519,7 +519,7 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
                                         graph_size * threshold)
         chunks, memory_limit_hit = find_merge_rechunk(chunks, new_chunks,
                                                       block_size_limit)
-        if chunks == current_chunks or chunks == new_chunks:
+        if (chunks == current_chunks and not first_pass) or chunks == new_chunks:
             break
         steps.append(chunks)
         current_chunks = chunks
