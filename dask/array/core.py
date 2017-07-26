@@ -2843,6 +2843,12 @@ def isnonzero(a):
     if issubclass(a.dtype.type, Number):
         return (a != 0)
     if issubclass(a.dtype.type, (np.bytes_, np.unicode_)):
+        ######################################################
+        # Treats empty or whitespace only strings as False.  #
+        # This behavior mimics NumPy's own behavior.         #
+        #                                                    #
+        # xref: https://github.com/numpy/numpy/issues/9462   #
+        ######################################################
         np_isnonzero = np.vectorize(lambda v: bool(v.strip()), otypes=[bool])
         return a.map_blocks(np_isnonzero, dtype=bool)
     else:
