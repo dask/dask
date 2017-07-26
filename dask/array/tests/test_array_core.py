@@ -720,6 +720,16 @@ def test_argwhere():
         assert_eq(d_nz, x_nz)
 
 
+def test_argwhere_obj():
+    x = np.random.randint(10, size=(15, 16)).astype(object)
+    d = from_array(x, chunks=(4, 5))
+
+    x_nz = np.argwhere(x)
+    d_nz = da.argwhere(d)
+
+    assert_eq(d_nz, x_nz)
+
+
 def test_where():
     x = np.random.randint(10, size=(15, 16))
     x[5, 5] = x[4, 4] = 0 # Ensure some false elements
@@ -799,6 +809,30 @@ def test_count_nonzero(axis):
             assert_eq(x_c, d_c)
 
 
+@pytest.mark.parametrize('axis', [None, 0, (1,), (0, 1)])
+def test_count_nonzero_obj(axis):
+    x = np.random.randint(10, size=(15, 16)).astype(object)
+    d = from_array(x, chunks=(4, 5))
+
+    x_c = np.count_nonzero(x, axis)
+    d_c = da.count_nonzero(d, axis)
+
+    if d_c.shape == tuple():
+        assert x_c == d_c.compute()
+    else:
+        assert_eq(x_c, d_c)
+
+
+def test_count_nonzero_str():
+    x = np.array(list("Hello world"))
+    d = from_array(x, chunks=(4,))
+
+    x_c = np.count_nonzero(x)
+    d_c = da.count_nonzero(d)
+
+    assert x_c == d_c.compute()
+
+
 def test_flatnonzero():
     for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.randint(10, size=shape)
@@ -823,6 +857,20 @@ def test_nonzero():
 
         for i in range(len(x_nz)):
             assert_eq(d_nz[i], x_nz[i])
+
+
+def test_nonzero_str():
+    x = np.array(list("Hello world"))
+    d = from_array(x, chunks=(4,))
+
+    x_nz = np.nonzero(x)
+    d_nz = da.nonzero(d)
+
+    assert isinstance(d_nz, type(x_nz))
+    assert len(d_nz) == len(x_nz)
+
+    for i in range(len(x_nz)):
+        assert_eq(d_nz[i], x_nz[i])
 
 
 def test_nonzero_method():
