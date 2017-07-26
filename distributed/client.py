@@ -47,9 +47,10 @@ from .protocol import to_serialize
 from .protocol.pickle import dumps, loads
 from .security import Security
 from .sizeof import sizeof
-from .worker import dumps_task, thread_state, get_client, get_worker
+from .worker import dumps_task, get_client, get_worker
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator,
-        tokey, log_errors, str_graph, key_split, format_bytes, asciitable)
+        tokey, log_errors, str_graph, key_split, format_bytes, asciitable,
+        thread_state)
 from .versions import get_versions
 
 
@@ -523,7 +524,7 @@ class Client(Node):
 
     def sync(self, func, *args, **kwargs):
         asynchronous = kwargs.pop('asynchronous', None)
-        if asynchronous or self.asynchronous:
+        if asynchronous or self.asynchronous or getattr(thread_state, 'asynchronous', False):
             callback_timeout = kwargs.pop('callback_timeout', None)
             future = func(*args, **kwargs)
             if callback_timeout is not None:

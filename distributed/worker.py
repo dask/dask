@@ -40,12 +40,10 @@ from .sizeof import safe_sizeof as sizeof
 from .threadpoolexecutor import ThreadPoolExecutor, secede as tpe_secede
 from .utils import (funcname, get_ip, has_arg, _maybe_complex, log_errors,
                     ignoring, validate_key, mp_context, import_file,
-                    silence_logging)
+                    silence_logging, thread_state)
 from .utils_comm import pack_data, gather_from_workers
 
 _ncores = mp_context.cpu_count()
-
-thread_state = threading.local()
 
 logger = logging.getLogger(__name__)
 

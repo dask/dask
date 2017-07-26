@@ -38,6 +38,8 @@ from .config import config
 from .metrics import time
 
 
+thread_state = threading.local()
+
 logger = logging.getLogger(__name__)
 
 
@@ -221,11 +223,13 @@ def sync(loop, func, *args, **kwargs):
             if main_tid == get_thread_identity():
                 raise RuntimeError("sync() called from thread of running loop")
             yield gen.moment
+            thread_state.asynchronous = True
             result[0] = yield make_coro()
         except Exception as exc:
             logger.exception(exc)
             error[0] = sys.exc_info()
         finally:
+            thread_state.asynchronous = False
             e.set()
 
     loop.add_callback(f)
@@ -235,6 +239,28 @@ def sync(loop, func, *args, **kwargs):
         six.reraise(*error[0])
     else:
         return result[0]
+
+
+@contextmanager
+def set_thread_state(**kwargs):
+    old = {}
+    for k in kwargs:
+        try:
+            old[k] = getattr(thread_state, k)
+        except AttributeError:
+            pass
+    for k, v in kwargs.items():
+        setattr(thread_state, k, v)
+    try:
+        yield
+    finally:
+        for k in kwargs:
+            try:
+                v = old[k]
+            except KeyError:
+                delattr(thread_state, k)
+            else:
+                setattr(thread_state, k, v)
 
 
 @contextmanager

@@ -4523,14 +4523,14 @@ def test_bytes_keys(c, s, a, b):
     assert result == 2
 
 
-def test_use_synchronous_scheduler_in_async_context(loop):
+def test_use_synchronous_client_in_async_context(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             @gen.coroutine
             def f():
-                x = yield c.scatter(123, asynchronous=True)
+                x = yield c.scatter(123)
                 y = c.submit(inc, x)
-                z = yield c.gather(y, asynchronous=True)
+                z = yield c.gather(y)
                 raise gen.Return(z)
 
             z = sync(loop, f)

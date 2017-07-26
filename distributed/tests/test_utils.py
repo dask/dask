@@ -23,7 +23,8 @@ from distributed.metrics import time
 from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
         truncate_exception, get_traceback, queue_to_iterator,
         iterator_to_queue, _maybe_complex, read_block, seek_delimiter,
-        funcname, ensure_bytes, open_port, get_ip_interface, nbytes)
+        funcname, ensure_bytes, open_port, get_ip_interface, nbytes,
+        set_thread_state, thread_state)
 from distributed.utils_test import loop, inc, throws, div, has_ipv6
 
 
@@ -337,3 +338,10 @@ def test_open_port():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(('', port))
     s.close()
+
+
+def test_set_thread_state():
+    with set_thread_state(x=1):
+        assert thread_state.x == 1
+
+    assert not hasattr(thread_state, 'x')
