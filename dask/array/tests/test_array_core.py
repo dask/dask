@@ -789,7 +789,7 @@ def test_count_nonzero(axis):
     x = np.random.randint(10, size=(15, 16))
     d = from_array(x, chunks=(4, 5))
 
-    assert_eq(da.count_nonzero(d, axis), da.count_nonzero(x, axis))
+    assert_eq(da.count_nonzero(d, axis), np.count_nonzero(x, axis))
 
 
 def test_flatnonzero():
