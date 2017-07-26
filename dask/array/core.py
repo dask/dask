@@ -511,6 +511,12 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
     return o.dtype
 
 
+@wraps(np.result_type)
+def result_type(*args):
+    args = [a if is_scalar_for_elemwise(a) else a.dtype for a in args]
+    return np.result_type(*args)
+
+
 def map_blocks(func, *args, **kwargs):
     """ Map a function across all blocks of a dask array.
 
@@ -2834,11 +2840,7 @@ def where(condition, x=None, y=None):
         raise TypeError(where_error_message)
 
     if np.isscalar(condition):
-        # Match the dtype inference logic from elemwise
-        vals = [np.empty((1,) * a.ndim, dtype=a.dtype)
-                if not is_scalar_for_elemwise(a) else a
-                for a in (x, y)]
-        dtype = apply_infer_dtype(np.where, [condition] + vals, {}, 'where', suggest_dtype=False)
+        dtype = result_type(x, y)
         x = asarray(x)
         y = asarray(y)
 
