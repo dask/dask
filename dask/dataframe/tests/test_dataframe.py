@@ -2298,6 +2298,33 @@ def test_idxmaxmin(idx, skipna):
             ddf.a.idxmin(skipna=skipna, split_every=2)._name)
 
 
+def test_idxmaxmin_empty_partitions():
+    df = pd.DataFrame({'a': [1, 2, 3],
+                       'b': [1.5, 2, 3],
+                       'c': [np.NaN] * 3,
+                       'd': [1, 2, np.NaN]})
+    empty = df.iloc[:0]
+
+    ddf = dd.concat([dd.from_pandas(df, npartitions=1)] +
+                    [dd.from_pandas(empty, npartitions=1)] * 10)
+
+    for skipna in [True, False]:
+        assert_eq(ddf.idxmin(skipna=skipna, split_every=3),
+                  df.idxmin(skipna=skipna))
+
+    assert_eq(ddf[['a', 'b', 'd']].idxmin(skipna=skipna, split_every=3),
+              df[['a', 'b', 'd']].idxmin(skipna=skipna))
+
+    assert_eq(ddf.b.idxmax(split_every=3), df.b.idxmax())
+
+    # Completely empty raises
+    ddf = dd.concat([dd.from_pandas(empty, npartitions=1)] * 10)
+    with pytest.raises(ValueError):
+        ddf.idxmax().compute()
+    with pytest.raises(ValueError):
+        ddf.b.idxmax().compute()
+
+
 def test_getitem_meta():
     data = {'col1': ['a', 'a', 'b'],
             'col2': [0, 1, 0]}

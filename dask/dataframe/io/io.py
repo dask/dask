@@ -16,7 +16,7 @@ from ...delayed import delayed
 
 from ..core import DataFrame, Series, new_dd_object
 from ..shuffle import set_partition
-from ..utils import insert_meta_param_description
+from ..utils import insert_meta_param_description, check_meta
 
 from ...utils import M, ensure_dict
 
@@ -499,13 +499,6 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed'):
         if not isinstance(df, Delayed):
             raise TypeError("Expected Delayed object, got %s" %
                             type(df).__name__)
-    dsk = merge(df.dask for df in dfs)
-
-    name = prefix + '-' + tokenize(*dfs)
-    names = [(name, i) for i in range(len(dfs))]
-    values = [df.key for df in dfs]
-    dsk2 = dict(zip(names, values))
-    dsk3 = merge(dsk, dsk2)
 
     if meta is None:
         meta = dfs[0].compute()
@@ -514,6 +507,11 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed'):
     else:
         Frame = DataFrame
 
+    name = prefix + '-' + tokenize(*dfs)
+    dsk = merge(df.dask for df in dfs)
+    dsk.update({(name, i): (check_meta, df.key, meta, 'from_delayed')
+                for (i, df) in enumerate(dfs)})
+
     if divisions is None or divisions == 'sorted':
         divs = [None] * (len(dfs) + 1)
     else:
@@ -521,7 +519,7 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed'):
         if len(divs) != len(dfs) + 1:
             raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
-    df = Frame(dsk3, name, meta, divs)
+    df = Frame(dsk, name, meta, divs)
 
     if divisions == 'sorted':
         from ..shuffle import compute_divisions

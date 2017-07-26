@@ -3737,23 +3737,31 @@ def _reduction_aggregate(x, aca_aggregate=None, **kwargs):
 
 
 def idxmaxmin_chunk(x, fn=None, skipna=True):
-    idx = getattr(x, fn)(skipna=skipna)
     minmax = 'max' if fn == 'idxmax' else 'min'
-    value = getattr(x, minmax)(skipna=skipna)
-    if isinstance(x, pd.DataFrame):
+    if len(x) > 0:
+        idx = getattr(x, fn)(skipna=skipna)
+        value = getattr(x, minmax)(skipna=skipna)
+    else:
+        idx = value = pd.Series([], dtype='i8')
+    if isinstance(idx, pd.Series):
         return pd.DataFrame({'idx': idx, 'value': value})
     return pd.DataFrame({'idx': [idx], 'value': [value]})
 
 
 def idxmaxmin_row(x, fn=None, skipna=True):
-    x = x.set_index('idx')
-    idx = getattr(x.value, fn)(skipna=skipna)
     minmax = 'max' if fn == 'idxmax' else 'min'
-    value = getattr(x.value, minmax)(skipna=skipna)
-    return pd.DataFrame({'idx': [idx], 'value': [value]})
+    if len(x) > 0:
+        x = x.set_index('idx')
+        idx = [getattr(x.value, fn)(skipna=skipna)]
+        value = [getattr(x.value, minmax)(skipna=skipna)]
+    else:
+        idx = value = pd.Series([], dtype='i8')
+    return pd.DataFrame({'idx': idx, 'value': value})
 
 
 def idxmaxmin_combine(x, fn=None, skipna=True):
+    if len(x) == 0:
+        return x
     return (x.groupby(level=0)
              .apply(idxmaxmin_row, fn=fn, skipna=skipna)
              .reset_index(level=1, drop=True))
@@ -3761,6 +3769,8 @@ def idxmaxmin_combine(x, fn=None, skipna=True):
 
 def idxmaxmin_agg(x, fn=None, skipna=True, scalar=False):
     res = idxmaxmin_combine(x, fn, skipna=skipna)['idx']
+    if len(res) == 0:
+        raise ValueError("attempt to get argmax of an empty sequence")
     if scalar:
         return res[0]
     res.name = None

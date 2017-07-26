@@ -2456,22 +2456,46 @@ def take(a, indices, axis=0):
 @wraps(np.compress)
 def compress(condition, a, axis=None):
     if axis is None:
-        raise NotImplementedError("Must select axis for compression")
+        a = a.ravel()
+        axis = 0
     if not -a.ndim <= axis < a.ndim:
         raise ValueError('axis=(%s) out of bounds' % axis)
     if axis < 0:
         axis += a.ndim
 
-    condition = np.array(condition, dtype=bool)
+    # Only coerce non-lazy values to numpy arrays
+    if not isinstance(condition, Array):
+        condition = np.array(condition, dtype=bool)
     if condition.ndim != 1:
         raise ValueError("Condition must be one dimensional")
-    if len(condition) < a.shape[axis]:
-        condition = condition.copy()
-        condition.resize(a.shape[axis])
 
-    slc = ((slice(None),) * axis + (condition, ) +
-           (slice(None),) * (a.ndim - axis - 1))
-    return a[slc]
+    if isinstance(condition, Array):
+        if len(condition) < a.shape[axis]:
+            a = a[tuple(slice(None, len(condition))
+                        if i == axis else slice(None)
+                        for i in range(a.ndim))]
+        inds = tuple(range(a.ndim))
+        out = atop(np.compress, inds, condition, (inds[axis],), a, inds,
+                   axis=axis, dtype=a.dtype)
+        out._chunks = tuple((np.NaN,) * len(c) if i == axis else c
+                            for i, c in enumerate(out.chunks))
+        return out
+    else:
+        # Optimized case when condition is known
+        if len(condition) < a.shape[axis]:
+            condition = condition.copy()
+            condition.resize(a.shape[axis])
+
+        slc = ((slice(None),) * axis + (condition, ) +
+               (slice(None),) * (a.ndim - axis - 1))
+        return a[slc]
+
+
+@wraps(np.extract)
+def extract(condition, arr):
+    if not isinstance(condition, Array):
+        condition = np.array(condition, dtype=bool)
+    return compress(condition.ravel(), arr.ravel())
 
 
 def _take_dask_array_from_numpy(a, indices, axis):
@@ -2846,12 +2870,10 @@ def where(condition, x=None, y=None):
     x = broadcast_to(x, shape).astype(dtype)
     y = broadcast_to(y, shape).astype(dtype)
 
-    if isinstance(condition, (bool, np.bool8)):
-        if condition:
-            return x
-        else:
-            return y
+    if np.isscalar(condition):
+        return x if condition else y
     else:
+        condition = asarray(condition).astype('bool')
         return choose(condition, [y, x])
 
 
@@ -3979,6 +4001,11 @@ def repeat(a, repeats, axis=None):
 
     if not isinstance(repeats, Integral):
         raise NotImplementedError("Only integer valued repeats supported")
+
+    if -a.ndim <= axis < 0:
+        axis += a.ndim
+    elif not 0 <= axis <= a.ndim - 1:
+        raise ValueError("axis(=%d) out of bounds" % axis)
 
     if repeats == 1:
         return a

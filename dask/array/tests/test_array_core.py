@@ -432,19 +432,44 @@ def test_compress():
     x = np.arange(25).reshape((5, 5))
     a = from_array(x, chunks=(2, 2))
 
-    assert_eq(np.compress([True, False, True, False, True], x, axis=0),
-              da.compress([True, False, True, False, True], a, axis=0))
-    assert_eq(np.compress([True, False, True, False, True], x, axis=1),
-              da.compress([True, False, True, False, True], a, axis=1))
-    assert_eq(np.compress([True, False], x, axis=1),
-              da.compress([True, False], a, axis=1))
+    c1 = np.array([True, False, True, False, True])
+    c2 = np.array([True, False])
+    c3 = [True, False]
+    dc1 = da.from_array(c1, chunks=3)
+    dc2 = da.from_array(c2, chunks=2)
 
-    with pytest.raises(NotImplementedError):
-        da.compress([True, False], a)
+    for c, dc in [(c1, c1), (c2, c2), (c3, c3),
+                  (c1, dc1), (c2, dc2), (c3, dc2)]:
+        for axis in [None, 0, 1]:
+            res = da.compress(dc, a, axis=axis)
+            assert_eq(np.compress(c, x, axis=axis), res)
+            if isinstance(dc, Array):
+                axis = axis or 0
+                assert np.isnan(res.chunks[axis]).all()
+
     with pytest.raises(ValueError):
         da.compress([True, False], a, axis=100)
     with pytest.raises(ValueError):
         da.compress([[True], [False]], a, axis=100)
+
+
+def test_extract():
+    x = np.arange(25).reshape((5, 5))
+    a = from_array(x, chunks=(2, 2))
+
+    c1 = np.array([True, False, True, False, True])
+    c2 = np.array([[True, False], [True, False]])
+    c3 = np.array([True, False])
+    dc1 = da.from_array(c1, chunks=3)
+    dc2 = da.from_array(c2, chunks=(2, 1))
+    dc3 = da.from_array(c3, chunks=2)
+
+    for c, dc in [(c1, c1), (c2, c2), (c3, c3),
+                  (c1, dc1), (c2, dc2), (c3, dc3)]:
+        res = da.extract(dc, a)
+        assert_eq(np.extract(c, x), res)
+        if isinstance(dc, Array):
+            assert np.isnan(res.chunks[0]).all()
 
 
 def test_binops():
@@ -686,11 +711,15 @@ def test_choose():
 
 def test_where():
     x = np.random.randint(10, size=(15, 16))
+    x[5, 5] = x[4, 4] = 0 # Ensure some false elements
     d = from_array(x, chunks=(4, 5))
     y = np.random.randint(10, size=15).astype(np.uint8)
     e = from_array(y, chunks=(4,))
 
     for c1, c2 in [(d > 5, x > 5),
+                   (d, x),
+                   (1, 1),
+                   (0, 0),
                    (True, True),
                    (np.True_, np.True_),
                    (False, False),
@@ -698,7 +727,6 @@ def test_where():
         for b1, b2 in [(0, 0), (-e[:, None], -y[:, None])]:
             w1 = where(c1, d, b1)
             w2 = np.where(c2, x, b2)
-
             assert_eq(w1, w2)
 
 
@@ -708,7 +736,7 @@ def test_where_bool_optimization():
     y = np.random.randint(10, size=(15, 16))
     e = from_array(y, chunks=(4, 5))
 
-    for c in [True, False, np.True_, np.False_]:
+    for c in [True, False, np.True_, np.False_, 1, 0]:
         w1 = where(c, d, e)
         w2 = np.where(c, x, y)
 
@@ -2814,7 +2842,7 @@ def test_repeat():
     d = da.from_array(x, chunks=(4, 5, 3))
 
     repeats = [1, 2, 5]
-    axes = [0, 1, 2]
+    axes = [-3, -2, -1, 0, 1, 2]
 
     for r in repeats:
         for a in axes:
@@ -2830,6 +2858,10 @@ def test_repeat():
 
     with pytest.raises(NotImplementedError):
         da.repeat(d, 2)
+
+    for invalid_axis in [3, -4]:
+        with pytest.raises(ValueError):
+            da.repeat(d, 2, axis=invalid_axis)
 
     x = np.arange(5)
     d = da.arange(5, chunks=(2,))

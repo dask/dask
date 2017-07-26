@@ -1247,8 +1247,8 @@ class Bag(Base):
         Accumulate also takes an optional argument that will be used as the
         first value.
 
-        >>> b.accumulate(add, -1)  # doctest: +SKIP
-        [-1, 0, 2, 5, 9, 15]
+        >>> b.accumulate(add, initial=-1)  # doctest: +SKIP
+        [-1, 0, 2, 5, 9, 14]
         """
         if not _implement_accumulate:
             raise NotImplementedError("accumulate requires `toolz` > 0.7.4"
