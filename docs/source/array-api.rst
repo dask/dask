@@ -19,6 +19,7 @@ Top level user functions:
    arctanh
    argmax
    argmin
+   argwhere
    around
    array
    bincount
@@ -302,6 +303,7 @@ Other functions
 .. autofunction:: arctanh
 .. autofunction:: argmax
 .. autofunction:: argmin
+.. autofunction:: argwhere
 .. autofunction:: around
 .. autofunction:: array
 .. autofunction:: bincount
