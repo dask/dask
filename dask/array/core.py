@@ -2881,7 +2881,7 @@ def count_nonzero(a, axis=None):
 
 @wraps(np.flatnonzero)
 def flatnonzero(a):
-    return a.ravel().nonzero()[0]
+    return argwhere(a.ravel())[:, 0]
 
 
 @wraps(np.nonzero)
