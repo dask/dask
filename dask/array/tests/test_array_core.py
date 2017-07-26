@@ -710,14 +710,14 @@ def test_choose():
 
 
 def test_argwhere():
-    x = np.random.randint(10, size=(15, 16))
-    x[5, 5] = x[4, 4] = 0 # Ensure some false elements
-    d = from_array(x, chunks=(4, 5))
+    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+        x = np.random.randint(10, size=shape)
+        d = from_array(x, chunks=chunks)
 
-    x_nz = np.argwhere(x)
-    d_nz = da.argwhere(d)
+        x_nz = np.argwhere(x)
+        d_nz = da.argwhere(d)
 
-    assert_eq(d_nz, x_nz)
+        assert_eq(d_nz, x_nz)
 
 
 def test_where():
@@ -759,18 +759,18 @@ def test_where_bool_optimization():
 
 
 def test_where_nonzero():
-    x = np.random.randint(10, size=(15, 16))
-    x[5, 5] = x[4, 4] = 0 # Ensure some false elements
-    d = from_array(x, chunks=(4, 5))
+    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+        x = np.random.randint(10, size=shape)
+        d = from_array(x, chunks=chunks)
 
-    x_w = np.where(x)
-    d_w = where(d)
+        x_w = np.where(x)
+        d_w = where(d)
 
-    assert isinstance(d_w, type(x_w))
-    assert len(d_w) == len(x_w)
+        assert isinstance(d_w, type(x_w))
+        assert len(d_w) == len(x_w)
 
-    for i in range(len(x_w)):
-        assert_eq(d_w[i], x_w[i])
+        for i in range(len(x_w)):
+            assert_eq(d_w[i], x_w[i])
 
 
 def test_where_incorrect_args():
@@ -793,41 +793,44 @@ def test_count_nonzero(axis):
 
 
 def test_flatnonzero():
-    x = np.random.randint(10, size=(15, 16))
-    d = from_array(x, chunks=(4, 5))
+    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+        x = np.random.randint(10, size=shape)
+        d = from_array(x, chunks=chunks)
 
-    x_fnz = np.flatnonzero(x)
-    d_fnz = da.flatnonzero(d)
+        x_fnz = np.flatnonzero(x)
+        d_fnz = da.flatnonzero(d)
 
-    assert_eq(d_fnz, x_fnz)
+        assert_eq(d_fnz, x_fnz)
 
 
 def test_nonzero():
-    x = np.random.randint(10, size=(15, 16))
-    d = from_array(x, chunks=(4, 5))
+    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+        x = np.random.randint(10, size=shape)
+        d = from_array(x, chunks=chunks)
 
-    x_nz = np.nonzero(x)
-    d_nz = da.nonzero(d)
+        x_nz = np.nonzero(x)
+        d_nz = da.nonzero(d)
 
-    assert isinstance(d_nz, type(x_nz))
-    assert len(d_nz) == len(x_nz)
+        assert isinstance(d_nz, type(x_nz))
+        assert len(d_nz) == len(x_nz)
 
-    for i in range(len(x_nz)):
-        assert_eq(d_nz[i], x_nz[i])
+        for i in range(len(x_nz)):
+            assert_eq(d_nz[i], x_nz[i])
 
 
 def test_nonzero_method():
-    x = np.random.randint(10, size=(15, 16))
-    d = from_array(x, chunks=(4, 5))
+    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+        x = np.random.randint(10, size=shape)
+        d = from_array(x, chunks=chunks)
 
-    x_nz = x.nonzero()
-    d_nz = d.nonzero()
+        x_nz = x.nonzero()
+        d_nz = d.nonzero()
 
-    assert isinstance(d_nz, type(x_nz))
-    assert len(d_nz) == len(x_nz)
+        assert isinstance(d_nz, type(x_nz))
+        assert len(d_nz) == len(x_nz)
 
-    for i in range(len(x_nz)):
-        assert_eq(d_nz[i], x_nz[i])
+        for i in range(len(x_nz)):
+            assert_eq(d_nz[i], x_nz[i])
 
 
 def test_coarsen():
