@@ -792,7 +792,10 @@ def test_count_nonzero(axis):
     x_c = np.count_nonzero(x, axis)
     d_c = da.count_nonzero(d, axis)
 
-    assert_eq(x_c, d_c)
+    if d_c.shape == tuple():
+        assert x_c == d_c.compute()
+    else:
+        assert_eq(x_c, d_c)
 
 
 def test_flatnonzero():
