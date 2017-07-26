@@ -2845,9 +2845,8 @@ def argwhere(a):
     nz = (a != 0).flatten()
 
     ind = indices(a.shape, dtype=np.int64, chunks=a.chunks)
-    ind = ind.reshape((a.ndim, -1))
-    ind = compress(nz, ind, axis=1)
-    ind = ind.T
+    ind = ind.reshape((a.ndim, -1)).T
+    ind = compress(nz, ind, axis=0)
 
     return ind
 
