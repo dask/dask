@@ -2,9 +2,9 @@ from __future__ import absolute_import, division, print_function
 
 from ..utils import ignoring
 from .core import (Array, stack, concatenate, take, tensordot, transpose,
-        from_array, choose, where, coarsen, insert, broadcast_to, ravel,
-        roll, fromfunction, unique, store, squeeze, topk, bincount, tile,
-        digitize, histogram, map_blocks, atop, to_hdf5, dot, cov, array,
+        from_array, choose, argwhere, where, coarsen, insert, broadcast_to,
+        ravel, roll, fromfunction, unique, store, squeeze, topk, bincount,
+        tile, digitize, histogram, map_blocks, atop, to_hdf5, dot, cov, array,
         dstack, vstack, hstack, to_npy_stack, from_npy_stack, compress,
         extract, from_delayed, round, swapaxes, repeat, count_nonzero,
         flatnonzero, nonzero, asarray, asanyarray)
