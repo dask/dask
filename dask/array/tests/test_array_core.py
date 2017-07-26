@@ -710,7 +710,7 @@ def test_choose():
 
 
 def test_argwhere():
-    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+    for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.randint(10, size=shape)
         d = from_array(x, chunks=chunks)
 
@@ -769,7 +769,7 @@ def test_where_bool_optimization():
 
 
 def test_where_nonzero():
-    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+    for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.randint(10, size=shape)
         d = from_array(x, chunks=chunks)
 
@@ -795,7 +795,7 @@ def test_where_incorrect_args():
 
 
 def test_count_nonzero():
-    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+    for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.randint(10, size=shape)
         d = from_array(x, chunks=chunks)
 
@@ -817,7 +817,7 @@ def test_count_nonzero_axis(axis):
             "NumPy %s doesn't support multiple axes with `roll`."
             " Need NumPy 1.12.0 or greater." % np.__version__
         )
-    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+    for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.randint(10, size=shape)
         d = from_array(x, chunks=chunks)
 
@@ -875,7 +875,7 @@ def test_count_nonzero_str():
 
 
 def test_flatnonzero():
-    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+    for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.randint(10, size=shape)
         d = from_array(x, chunks=chunks)
 
@@ -886,7 +886,7 @@ def test_flatnonzero():
 
 
 def test_nonzero():
-    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+    for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.randint(10, size=shape)
         d = from_array(x, chunks=chunks)
 
@@ -915,7 +915,7 @@ def test_nonzero_str():
 
 
 def test_nonzero_method():
-    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+    for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.randint(10, size=shape)
         d = from_array(x, chunks=chunks)
 
