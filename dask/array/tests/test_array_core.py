@@ -786,16 +786,17 @@ def test_where_incorrect_args():
 
 @pytest.mark.parametrize('axis', [None, 0, (1,), (0, 1)])
 def test_count_nonzero(axis):
-    x = np.random.randint(10, size=(15, 16))
-    d = from_array(x, chunks=(4, 5))
+    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+        x = np.random.randint(10, size=shape)
+        d = from_array(x, chunks=chunks)
 
-    x_c = np.count_nonzero(x, axis)
-    d_c = da.count_nonzero(d, axis)
+        x_c = np.count_nonzero(x, axis)
+        d_c = da.count_nonzero(d, axis)
 
-    if d_c.shape == tuple():
-        assert x_c == d_c.compute()
-    else:
-        assert_eq(x_c, d_c)
+        if d_c.shape == tuple():
+            assert x_c == d_c.compute()
+        else:
+            assert_eq(x_c, d_c)
 
 
 def test_flatnonzero():
