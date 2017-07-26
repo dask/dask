@@ -1393,6 +1393,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return self.map_partitions(M.isnull)
 
     @derived_from(pd.DataFrame)
+    def isin(self, values):
+        return elemwise(M.isin, self, list(values))
+
+    @derived_from(pd.DataFrame)
     def astype(self, dtype):
         meta = self._meta.astype(dtype)
         meta = clear_known_categories(meta)
@@ -1764,8 +1768,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                    split_every=split_every, n=n)
 
     @derived_from(pd.Series)
-    def isin(self, other):
-        return elemwise(M.isin, self, list(other))
+    def isin(self, values):
+        return elemwise(M.isin, self, list(values))
 
     @insert_meta_param_description(pad=12)
     @derived_from(pd.Series)

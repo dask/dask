@@ -626,9 +626,13 @@ def test_unique():
 
 
 def test_isin():
+    # Series test
     assert_eq(d.a.isin([0, 1, 2]), full.a.isin([0, 1, 2]))
     assert_eq(d.a.isin(pd.Series([0, 1, 2])),
               full.a.isin(pd.Series([0, 1, 2])))
+
+    # DataFrame test
+    assert_eq(d.isin([0, 1, 2]), full.isin([0, 1, 2]))
 
 
 def test_len():
