@@ -817,7 +817,7 @@ def test_count_nonzero_axis(axis):
             "NumPy %s doesn't support multiple axes with `roll`."
             " Need NumPy 1.12.0 or greater." % np.__version__
         )
-    for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.randint(10, size=shape)
         d = from_array(x, chunks=chunks)
 
