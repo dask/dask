@@ -171,7 +171,7 @@ def indices(dimensions, dtype=int, chunks=None):
     chunks = tuple(chunks)
 
     if len(dimensions) != len(chunks):
-        raise ValueError("Need one more chunk than dimensions.")
+        raise ValueError("Need same number of chunks as dimensions.")
 
     grid = []
     if np.prod(dimensions):
