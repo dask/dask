@@ -2847,7 +2847,10 @@ _isnonzero_vec = np.vectorize(_isnonzero_vec, otypes=[bool])
 
 def isnonzero(a):
     a = asarray(a)
-    if issubclass(a.dtype.type, (np.bytes_, np.unicode_)):
+
+    try:
+        np.zeros(tuple(), dtype=a.dtype).astype(bool)
+    except ValueError:
         ######################################################
         # Handle special cases where conversion to bool does #
         # not work correctly.                                #
