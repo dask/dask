@@ -202,10 +202,10 @@ def test_cleanup():
 
 def test_repeated():
     with LocalCluster(scheduler_port=8448, silence_logs=False,
-            diagnostics_port=None) as c:
+                      diagnostics_port=None) as c:
         pass
     with LocalCluster(scheduler_port=8448, silence_logs=False,
-            diagnostics_port=None) as c:
+                      diagnostics_port=None) as c:
         pass
 
 

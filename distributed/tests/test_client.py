@@ -4536,5 +4536,32 @@ def test_use_synchronous_client_in_async_context(loop):
             assert z == 124
 
 
+def test_quiet_quit_when_cluster_leaves(loop):
+    from distributed import LocalCluster
+    import logging
+    thread = Thread(target=loop.start,
+                    name="LocalCluster loop")
+    thread.daemon = True
+    thread.start()
+    while not loop._running:
+        sleep(0.001)
+
+    cluster = LocalCluster(loop=loop, scheduler_port=0, diagnostics_port=None,
+                           silence_logs=False)
+    with captured_logger('distributed.comm') as sio:
+        client = Client(cluster, loop=loop)
+        futures = client.map(lambda x: x + 1, range(10))
+        sleep(0.05)
+        cluster.close()
+        sleep(0.05)
+        client.close()
+
+    text = sio.getvalue()
+    assert not text
+
+    loop.add_callback(loop.stop)
+    thread.join(timeout=1)
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *

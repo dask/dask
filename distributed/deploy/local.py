@@ -244,7 +244,8 @@ class LocalCluster(object):
         if self.loop._running:
             sync(self.loop, self._close)
         if hasattr(self, '_thread'):
-            self.loop.add_callback(self.loop.stop)
+            if self.loop._running:
+                self.loop.add_callback(self.loop.stop)
             try:
                 self._thread.join(timeout=1)
             finally:

@@ -796,18 +796,21 @@ def assert_can_connect_locally_6(port, timeout=None, connection_args=None):
 
 
 @contextmanager
-def captured_logger(logger):
+def captured_logger(logger, level=logging.INFO):
     """Capture output from the given Logger.
     """
     if isinstance(logger, str):
         logger = logging.getLogger(logger)
+    orig_level = logger.level
     orig_handlers = logger.handlers[:]
     sio = six.StringIO()
     logger.handlers[:] = [logging.StreamHandler(sio)]
+    logger.setLevel(level)
     try:
         yield sio
     finally:
         logger.handlers[:] = orig_handlers
+        logger.setLevel(orig_level)
 
 
 @contextmanager

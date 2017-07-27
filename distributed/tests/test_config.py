@@ -60,7 +60,7 @@ def test_logging_default():
         fb = logging.getLogger('foo.bar')
 
         with captured_handler(d.handlers[0]) as distributed_log:
-            with captured_logger(root) as foreign_log:
+            with captured_logger(root, level=logging.ERROR) as foreign_log:
                 h = logging.StreamHandler(foreign_log)
                 fmt = '[%(levelname)s in %(name)s] - %(message)s'
                 h.setFormatter(logging.Formatter(fmt))

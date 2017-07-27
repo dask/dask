@@ -883,10 +883,11 @@ class Client(Node):
         with log_errors():
             if self.status == 'closed':
                 raise gen.Return()
-            for key in list(self.futures):
-                self._release_key(key=key)
-            if self.status == 'running':
-                self._send_to_scheduler({'op': 'close-stream'})
+            if self.scheduler_comm and self.scheduler_comm.comm and not self.scheduler_comm.comm.closed():
+                for key in list(self.futures):
+                    self._release_key(key=key)
+                if self.status == 'running':
+                    self._send_to_scheduler({'op': 'close-stream'})
             if self.scheduler_comm:
                 yield self.scheduler_comm.close()
             if self._start_arg is None:
