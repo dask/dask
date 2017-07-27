@@ -2838,6 +2838,10 @@ See the following documentation page for details:
 """.strip()
 
 
+def _isnonzero_str(v):
+    return bool(v.strip())
+
+
 def isnonzero(a):
     a = asarray(a)
     if issubclass(a.dtype.type, (np.bytes_, np.unicode_)):
@@ -2847,7 +2851,7 @@ def isnonzero(a):
         #                                                    #
         # xref: https://github.com/numpy/numpy/issues/9462   #
         ######################################################
-        np_isnonzero = np.vectorize(lambda v: bool(v.strip()), otypes=[bool])
+        np_isnonzero = np.vectorize(_isnonzero_str, otypes=[bool])
         return a.map_blocks(np_isnonzero, dtype=bool)
     else:
         return a.astype(bool)
