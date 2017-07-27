@@ -2840,8 +2840,6 @@ See the following documentation page for details:
 
 def isnonzero(a):
     a = asarray(a)
-    if issubclass(a.dtype.type, Number):
-        return (a != 0)
     if issubclass(a.dtype.type, (np.bytes_, np.unicode_)):
         ######################################################
         # Treats empty or whitespace only strings as False.  #
@@ -2852,8 +2850,7 @@ def isnonzero(a):
         np_isnonzero = np.vectorize(lambda v: bool(v.strip()), otypes=[bool])
         return a.map_blocks(np_isnonzero, dtype=bool)
     else:
-        np_isnonzero = np.vectorize(lambda v: bool(v), otypes=[bool])
-        return a.map_blocks(np_isnonzero, dtype=bool)
+        return a.astype(bool)
 
 
 @wraps(np.argwhere)
