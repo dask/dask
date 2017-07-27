@@ -267,16 +267,16 @@ often a better choice.  If you are a *core developer*, then you should start her
 Dask is part of the Blaze_ project supported and offered by
 `Continuum Analytics`_ and contributors under a `3-clause BSD license`_.
 
-.. _Blaze: http://continuum.io/open-source/blaze
-.. _`Continuum Analytics`: http://continuum.io
+.. _Blaze: http://blaze.pydata.org
+.. _`Continuum Analytics`: https://www.continuum.io
 .. _`3-clause BSD license`: https://github.com/dask/dask/blob/master/LICENSE.txt
 
-.. _`#dask tag`: http://stackoverflow.com/questions/tagged/dask
+.. _`#dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub issue tracker`: https://github.com/dask/dask/issues
 .. _`blaze-dev@continuum.io`: https://groups.google.com/a/continuum.io/forum/#!forum/blaze-dev
 .. _`gitter chat room`: https://gitter.im/dask/dask
 .. _`xarray`: https://xray.readthedocs.io/en/stable/
-.. _`scikit-image`: http://scikit-image.org/docs/stable/
+.. _`scikit-image`: https://scikit-image.org/docs/stable/
 .. _`scikit-allel`: https://scikits.appspot.com/scikit-allel
-.. _`pandas`: http://pandas.pydata.org/pandas-docs/version/0.17.0/
+.. _`pandas`: https://pandas.pydata.org/pandas-docs/version/0.17.0/
 .. _`distributed scheduler`: https://distributed.readthedocs.io/en/latest/
