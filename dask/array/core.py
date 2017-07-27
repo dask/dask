@@ -2838,23 +2838,23 @@ See the following documentation page for details:
 """.strip()
 
 
-def _isnonzero_str(v):
-    return bool(v.strip())
+def _isnonzero_vec(v):
+    return bool(np.count_nonzero(v))
 
 
-_isnonzero_str = np.vectorize(_isnonzero_str, otypes=[bool])
+_isnonzero_vec = np.vectorize(_isnonzero_vec, otypes=[bool])
 
 
 def isnonzero(a):
     a = asarray(a)
     if issubclass(a.dtype.type, (np.bytes_, np.unicode_)):
         ######################################################
-        # Treats empty or whitespace only strings as False.  #
-        # This behavior mimics NumPy's own behavior.         #
+        # Handle special cases where conversion to bool does #
+        # not work correctly.                                #
         #                                                    #
-        # xref: https://github.com/numpy/numpy/issues/9462   #
+        # xref: https://github.com/numpy/numpy/issues/9479   #
         ######################################################
-        return a.map_blocks(_isnonzero_str, dtype=bool)
+        return a.map_blocks(_isnonzero_vec, dtype=bool)
     else:
         return a.astype(bool)
 
