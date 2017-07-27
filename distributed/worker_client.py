@@ -4,7 +4,7 @@ from contextlib import contextmanager
 import warnings
 
 from .threadpoolexecutor import secede
-from .worker import thread_state, get_worker
+from .worker import thread_state, get_client, get_worker
 
 
 @contextmanager
@@ -41,11 +41,12 @@ def worker_client(timeout=3, separate_thread=True):
     secede
     """
     worker = get_worker()
+    client = get_client(timeout=timeout)
     if separate_thread:
         secede()  # have this thread secede from the thread pool
         worker.loop.add_callback(worker.transition, thread_state.key, 'long-running')
 
-    yield worker.client
+    yield client
 
 
 def local_client(*args, **kwargs):

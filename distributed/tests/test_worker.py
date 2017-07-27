@@ -323,7 +323,7 @@ def test_io_loop(loop):
 @gen_cluster(client=True, ncores=[])
 def test_spill_to_disk(e, s):
     np = pytest.importorskip('numpy')
-    w = Worker(s.address, loop=s.loop, memory_limit=1000)
+    w = Worker(s.address, loop=s.loop, memory_limit=1200)
     yield w._start()
 
     x = e.submit(np.random.randint, 0, 255, size=500, dtype='u1', key='x')

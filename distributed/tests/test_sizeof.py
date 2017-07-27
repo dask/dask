@@ -17,7 +17,7 @@ def test_containers():
 
 def test_numpy():
     np = pytest.importorskip('numpy')
-    assert sizeof(np.empty(1000, dtype='f8')) == 8000
+    assert 8000 <= sizeof(np.empty(1000, dtype='f8')) <= 9000
     dt = np.dtype('f8')
     assert sizeof(dt) == sys.getsizeof(dt)
 

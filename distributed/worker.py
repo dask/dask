@@ -2135,6 +2135,13 @@ class Worker(WorkerBase):
 
     @property
     def client(self):
+        with self._lock:
+            if self._client:
+                return self._client
+            else:
+                return self._get_client()
+
+    def _get_client(self, timeout=3):
         """ Get local client attached to this worker
 
         If no such client exists, create one
@@ -2143,29 +2150,26 @@ class Worker(WorkerBase):
         --------
         get_client
         """
-        with self._lock:
-            if self._client:
-                return self._client
+        try:
+            from .client import default_client
+            client = default_client()
+        except ValueError:  # no clients found, need to make a new one
+            pass
+        else:
+            if client.scheduler.address == self.scheduler.address:
+                self._client = client
 
-            try:
-                from .client import default_client
-                client = default_client()
-            except ValueError:  # no clients found, need to make a new one
-                pass
-            else:
-                if client.scheduler.address == self.scheduler.address:
-                    self._client = client
-
-            if not self._client:
-                from .client import Client
-                asynchronous = get_thread_identity() == self.loop._thread_ident
-                self._client = Client(self.scheduler.address, loop=self.loop,
-                                      security=self.security,
-                                      set_as_default=True,
-                                      asynchronous=asynchronous)
-                if not asynchronous:
-                    assert self._client.status == 'running'
-            return self._client
+        if not self._client:
+            from .client import Client
+            asynchronous = get_thread_identity() == self.loop._thread_ident
+            self._client = Client(self.scheduler.address, loop=self.loop,
+                                  security=self.security,
+                                  set_as_default=True,
+                                  asynchronous=asynchronous,
+                                  timeout=timeout)
+            if not asynchronous:
+                assert self._client.status == 'running'
+        return self._client
 
 
 def get_worker():
@@ -2196,7 +2200,7 @@ def get_worker():
         raise ValueError("No workers found")
 
 
-def get_client(address=None):
+def get_client(address=None, timeout=3):
     """ Get a client while within a task
 
     This client connects to the same scheduler to which the worker is connected
@@ -2225,7 +2229,7 @@ def get_client(address=None):
         pass
     else:
         if not address or worker.scheduler.address == address:
-            return worker.client
+            return worker._get_client(timeout=timeout)
 
     from .client import _get_global_client
     client = _get_global_client()  # TODO: assumes the same scheduler
@@ -2233,7 +2237,7 @@ def get_client(address=None):
         return client
     elif address:
         from .client import Client
-        return Client(address)
+        return Client(address, timeout=timeout)
     else:
         raise ValueError("No global client found and no address provided")
 

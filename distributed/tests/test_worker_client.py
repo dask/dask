@@ -231,6 +231,18 @@ def test_closing_worker_doesnt_close_client(c, s, a, b):
     assert c.status == 'running'
 
 
+def test_timeout(loop):
+    def func():
+        with worker_client(timeout=0) as wc:
+            print('hello')
+
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            future = c.submit(func)
+            with pytest.raises(EnvironmentError):
+                result = future.result()
+
+
 def test_secede_without_stealing_issue_1262():
     """
     Tests that seceding works with the Stealing extension disabled
