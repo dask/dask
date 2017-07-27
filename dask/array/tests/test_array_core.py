@@ -730,6 +730,16 @@ def test_argwhere_obj():
     assert_eq(d_nz, x_nz)
 
 
+def test_argwhere_str():
+    x = np.array(list("Hello world"))
+    d = from_array(x, chunks=(4,))
+
+    x_nz = np.argwhere(x)
+    d_nz = da.argwhere(d)
+
+    assert_eq(d_nz, x_nz)
+
+
 def test_where():
     x = np.random.randint(10, size=(15, 16))
     x[5, 5] = x[4, 4] = 0 # Ensure some false elements
@@ -893,20 +903,6 @@ def test_nonzero():
 
         for i in range(len(x_nz)):
             assert_eq(d_nz[i], x_nz[i])
-
-
-def test_nonzero_str():
-    x = np.array(list("Hello world"))
-    d = from_array(x, chunks=(4,))
-
-    x_nz = np.nonzero(x)
-    d_nz = da.nonzero(d)
-
-    assert isinstance(d_nz, type(x_nz))
-    assert len(d_nz) == len(x_nz)
-
-    for i in range(len(x_nz)):
-        assert_eq(d_nz[i], x_nz[i])
 
 
 def test_nonzero_method():
