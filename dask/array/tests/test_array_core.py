@@ -812,11 +812,6 @@ def test_count_nonzero():
                     reason="NumPy's count_nonzero doesn't yet support axis")
 @pytest.mark.parametrize('axis', [None, 0, (1,), (0, 1)])
 def test_count_nonzero_axis(axis):
-    if (LooseVersion(np.__version__) < LooseVersion("1.12.0")):
-        pytest.skip(
-            "NumPy %s doesn't support multiple axes with `roll`."
-            " Need NumPy 1.12.0 or greater." % np.__version__
-        )
     for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.randint(10, size=shape)
         d = from_array(x, chunks=chunks)
