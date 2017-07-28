@@ -19,6 +19,7 @@ Top level user functions:
    arctanh
    argmax
    argmin
+   argwhere
    around
    array
    bincount
@@ -34,6 +35,7 @@ Top level user functions:
    corrcoef
    cos
    cosh
+   count_nonzero
    cov
    cumprod
    cumsum
@@ -49,6 +51,7 @@ Top level user functions:
    eye
    fabs
    fix
+   flatnonzero
    floor
    fmax
    fmin
@@ -100,6 +103,7 @@ Top level user functions:
    nansum
    nanvar
    nextafter
+   nonzero
    notnull
    ones
    percentile
@@ -299,6 +303,7 @@ Other functions
 .. autofunction:: arctanh
 .. autofunction:: argmax
 .. autofunction:: argmin
+.. autofunction:: argwhere
 .. autofunction:: around
 .. autofunction:: array
 .. autofunction:: bincount
@@ -314,6 +319,7 @@ Other functions
 .. autofunction:: corrcoef
 .. autofunction:: cos
 .. autofunction:: cosh
+.. autofunction:: count_nonzero
 .. autofunction:: cov
 .. autofunction:: cumprod
 .. autofunction:: cumsum
@@ -329,6 +335,7 @@ Other functions
 .. autofunction:: eye
 .. autofunction:: fabs
 .. autofunction:: fix
+.. autofunction:: flatnonzero
 .. autofunction:: floor
 .. autofunction:: fmax
 .. autofunction:: fmin
@@ -380,6 +387,7 @@ Other functions
 .. autofunction:: nansum
 .. autofunction:: nanvar
 .. autofunction:: nextafter
+.. autofunction:: nonzero
 .. autofunction:: notnull
 .. autofunction:: ones
 .. autofunction:: percentile

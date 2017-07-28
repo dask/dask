@@ -709,6 +709,37 @@ def test_choose():
     assert_eq(choose(d > 5, [-d, d]), np.choose(x > 5, [-x, x]))
 
 
+def test_argwhere():
+    for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+        x = np.random.randint(10, size=shape)
+        d = from_array(x, chunks=chunks)
+
+        x_nz = np.argwhere(x)
+        d_nz = da.argwhere(d)
+
+        assert_eq(d_nz, x_nz)
+
+
+def test_argwhere_obj():
+    x = np.random.randint(10, size=(15, 16)).astype(object)
+    d = from_array(x, chunks=(4, 5))
+
+    x_nz = np.argwhere(x)
+    d_nz = da.argwhere(d)
+
+    assert_eq(d_nz, x_nz)
+
+
+def test_argwhere_str():
+    x = np.array(list("Hello world"))
+    d = from_array(x, chunks=(4,))
+
+    x_nz = np.argwhere(x)
+    d_nz = da.argwhere(d)
+
+    assert_eq(d_nz, x_nz)
+
+
 def test_where():
     x = np.random.randint(10, size=(15, 14))
     x[5, 5] = x[4, 4] = 0 # Ensure some false elements
@@ -763,12 +794,146 @@ def test_where_bool_optimization():
         assert w1 is ex_w1
 
 
-def test_where_has_informative_error():
-    x = da.ones(5, chunks=3)
-    try:
-        da.where(x > 0)
-    except Exception as e:
-        assert 'dask' in str(e)
+def test_where_nonzero():
+    for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+        x = np.random.randint(10, size=shape)
+        d = from_array(x, chunks=chunks)
+
+        x_w = np.where(x)
+        d_w = where(d)
+
+        assert isinstance(d_w, type(x_w))
+        assert len(d_w) == len(x_w)
+
+        for i in range(len(x_w)):
+            assert_eq(d_w[i], x_w[i])
+
+
+def test_where_incorrect_args():
+    a = da.ones(5, chunks=3)
+
+    for kwd in ["x", "y"]:
+        kwargs = {kwd: a}
+        try:
+            da.where(a > 0, **kwargs)
+        except ValueError as e:
+            assert 'either both or neither of x and y should be given' in str(e)
+
+
+def test_count_nonzero():
+    for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+        x = np.random.randint(10, size=shape)
+        d = from_array(x, chunks=chunks)
+
+        x_c = np.count_nonzero(x)
+        d_c = da.count_nonzero(d)
+
+        if d_c.shape == tuple():
+            assert x_c == d_c.compute()
+        else:
+            assert_eq(x_c, d_c)
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
+                    reason="NumPy's count_nonzero doesn't yet support axis")
+@pytest.mark.parametrize('axis', [None, 0, (1,), (0, 1)])
+def test_count_nonzero_axis(axis):
+    for shape, chunks in [((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+        x = np.random.randint(10, size=shape)
+        d = from_array(x, chunks=chunks)
+
+        x_c = np.count_nonzero(x, axis)
+        d_c = da.count_nonzero(d, axis)
+
+        if d_c.shape == tuple():
+            assert x_c == d_c.compute()
+        else:
+            assert_eq(x_c, d_c)
+
+
+def test_count_nonzero_obj():
+    x = np.random.randint(10, size=(15, 16)).astype(object)
+    d = from_array(x, chunks=(4, 5))
+
+    x_c = np.count_nonzero(x)
+    d_c = da.count_nonzero(d)
+
+    if d_c.shape == tuple():
+        assert x_c == d_c.compute()
+    else:
+        assert_eq(x_c, d_c)
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
+                    reason="NumPy's count_nonzero doesn't yet support axis")
+@pytest.mark.parametrize('axis', [None, 0, (1,), (0, 1)])
+def test_count_nonzero_obj_axis(axis):
+    x = np.random.randint(10, size=(15, 16)).astype(object)
+    d = from_array(x, chunks=(4, 5))
+
+    x_c = np.count_nonzero(x, axis)
+    d_c = da.count_nonzero(d, axis)
+
+    if d_c.shape == tuple():
+        assert x_c == d_c.compute()
+    else:
+        #######################################################
+        # Workaround oddness with Windows and object arrays.  #
+        #                                                     #
+        # xref: https://github.com/numpy/numpy/issues/9468    #
+        #######################################################
+        assert_eq(x_c.astype(np.int64), d_c)
+
+
+def test_count_nonzero_str():
+    x = np.array(list("Hello world"))
+    d = from_array(x, chunks=(4,))
+
+    x_c = np.count_nonzero(x)
+    d_c = da.count_nonzero(d)
+
+    assert x_c == d_c.compute()
+
+
+def test_flatnonzero():
+    for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+        x = np.random.randint(10, size=shape)
+        d = from_array(x, chunks=chunks)
+
+        x_fnz = np.flatnonzero(x)
+        d_fnz = da.flatnonzero(d)
+
+        assert_eq(d_fnz, x_fnz)
+
+
+def test_nonzero():
+    for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+        x = np.random.randint(10, size=shape)
+        d = from_array(x, chunks=chunks)
+
+        x_nz = np.nonzero(x)
+        d_nz = da.nonzero(d)
+
+        assert isinstance(d_nz, type(x_nz))
+        assert len(d_nz) == len(x_nz)
+
+        for i in range(len(x_nz)):
+            assert_eq(d_nz[i], x_nz[i])
+
+
+def test_nonzero_method():
+    for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
+        x = np.random.randint(10, size=shape)
+        d = from_array(x, chunks=chunks)
+
+        x_nz = x.nonzero()
+        d_nz = d.nonzero()
+
+        assert isinstance(d_nz, type(x_nz))
+        assert len(d_nz) == len(x_nz)
+
+        for i in range(len(x_nz)):
+            assert_eq(d_nz[i], x_nz[i])
 
 
 def test_coarsen():

@@ -1774,6 +1774,10 @@ class Array(Base):
     def repeat(self, repeats, axis=None):
         return repeat(self, repeats, axis=axis)
 
+    @wraps(np.nonzero)
+    def nonzero(self):
+        return nonzero(self)
+
 
 def ensure_int(f):
     i = int(f)
@@ -2831,24 +2835,6 @@ def choose(a, choices):
     return elemwise(variadic_choose, a, *choices)
 
 
-where_error_message = """
-The dask.array version of where only handles the three argument case.
-
-    da.where(x > 0, x, 0)
-
-and not the single argument case
-
-    da.where(x > 0)
-
-This is because dask.array operations must be able to infer the shape of their
-outputs prior to execution.  The number of positive elements of x requires
-execution.  See the ``np.where`` docstring for examples and the following link
-for a more thorough explanation:
-
-    http://dask.pydata.org/en/latest/array-overview.html#construct
-""".strip()
-
-
 chunks_none_error_message = """
 You must specify a chunks= keyword argument.
 This specifies the chunksize of your array blocks.
@@ -2858,10 +2844,50 @@ See the following documentation page for details:
 """.strip()
 
 
+def _isnonzero_vec(v):
+    return bool(np.count_nonzero(v))
+
+
+_isnonzero_vec = np.vectorize(_isnonzero_vec, otypes=[bool])
+
+
+def isnonzero(a):
+    try:
+        np.zeros(tuple(), dtype=a.dtype).astype(bool)
+    except ValueError:
+        ######################################################
+        # Handle special cases where conversion to bool does #
+        # not work correctly.                                #
+        #                                                    #
+        # xref: https://github.com/numpy/numpy/issues/9479   #
+        ######################################################
+        return a.map_blocks(_isnonzero_vec, dtype=bool)
+    else:
+        return a.astype(bool)
+
+
+@wraps(np.argwhere)
+def argwhere(a):
+    from .creation import indices
+
+    a = asarray(a)
+
+    nz = isnonzero(a).flatten()
+
+    ind = indices(a.shape, dtype=np.int64, chunks=a.chunks)
+    if ind.ndim > 1:
+        ind = stack([ind[i].ravel() for i in range(len(ind))], axis=1)
+    ind = compress(nz, ind, axis=0)
+
+    return ind
+
+
 @wraps(np.where)
 def where(condition, x=None, y=None):
-    if x is None or y is None:
-        raise TypeError(where_error_message)
+    if (x is None) != (y is None):
+        raise ValueError("either both or neither of x and y should be given")
+    if (x is None) and (y is None):
+        return nonzero(condition)
 
     if np.isscalar(condition):
         dtype = result_type(x, y)
@@ -2874,6 +2900,25 @@ def where(condition, x=None, y=None):
         return broadcast_to(out, shape).astype(dtype)
     else:
         return elemwise(np.where, condition, x, y)
+
+
+@wraps(np.count_nonzero)
+def count_nonzero(a, axis=None):
+    return isnonzero(asarray(a)).astype(np.int64).sum(axis=axis)
+
+
+@wraps(np.flatnonzero)
+def flatnonzero(a):
+    return argwhere(asarray(a).ravel())[:, 0]
+
+
+@wraps(np.nonzero)
+def nonzero(a):
+    ind = argwhere(a)
+    if ind.ndim > 1:
+        return tuple(ind[:, i] for i in range(ind.shape[1]))
+    else:
+        return (ind,)
 
 
 @wraps(chunk.coarsen)
