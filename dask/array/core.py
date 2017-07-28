@@ -2846,8 +2846,6 @@ _isnonzero_vec = np.vectorize(_isnonzero_vec, otypes=[bool])
 
 
 def isnonzero(a):
-    a = asarray(a)
-
     try:
         np.zeros(tuple(), dtype=a.dtype).astype(bool)
     except ValueError:
@@ -2865,6 +2863,8 @@ def isnonzero(a):
 @wraps(np.argwhere)
 def argwhere(a):
     from .creation import indices
+
+    a = asarray(a)
 
     nz = isnonzero(a).flatten()
 
@@ -2901,12 +2901,12 @@ def where(condition, x=None, y=None):
 
 @wraps(np.count_nonzero)
 def count_nonzero(a, axis=None):
-    return isnonzero(a).astype(np.int64).sum(axis=axis)
+    return isnonzero(asarray(a)).astype(np.int64).sum(axis=axis)
 
 
 @wraps(np.flatnonzero)
 def flatnonzero(a):
-    return argwhere(a.ravel())[:, 0]
+    return argwhere(asarray(a).ravel())[:, 0]
 
 
 @wraps(np.nonzero)
