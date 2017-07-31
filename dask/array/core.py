@@ -993,7 +993,7 @@ class Array(Base):
     --------
     dask.array.from_array
     """
-    __slots__ = 'dask', 'name', '_chunks', 'dtype'
+    __slots__ = 'dask', '_name', '_cached_keys', '_chunks', 'dtype'
 
     _optimize = staticmethod(optimize)
     _default_get = staticmethod(threaded.get)
@@ -1109,12 +1109,20 @@ class Array(Base):
         """ Length of one array element in bytes """
         return self.dtype.itemsize
 
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, val):
+        self._name = val
+        # Clear the key cache when the name is reset
+        self._cached_keys = None
+
     def _keys(self, *args):
         if not args:
-            try:
+            if self._cached_keys is not None:
                 return self._cached_keys
-            except AttributeError:
-                pass
 
         if not self.chunks:
             return [(self.name,)]
@@ -2791,8 +2799,6 @@ def handle_out(out, result):
                 "Mismatched shapes between result and out parameter. "
                 "out=%s, result=%s" % (str(out.shape), str(result.shape)))
         out._chunks = result.chunks
-        if hasattr(out, '_cached_keys'):
-            del out._cached_keys
         out.dask = result.dask
         out.dtype = result.dtype
         out.name = result.name
