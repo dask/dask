@@ -303,8 +303,7 @@ class _Frame(Base):
             divisions = pd.Index(self.divisions, name=name)
         else:
             # avoid to be converted to NaN
-            divisions = pd.Index(['None'] * (self.npartitions + 1),
-                                 name=name)
+            divisions = pd.Index([''] * (self.npartitions + 1), name=name)
         return divisions
 
     def __repr__(self):
