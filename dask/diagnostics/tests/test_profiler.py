@@ -28,7 +28,7 @@ dsk = {'a': 1,
        'd': (mul, 'a', 'b'),
        'e': (mul, 'c', 'd')}
 
-dsk2 = {'a': 1, 'b': 2, 'c': (lambda a, b: sleep(1.0) or (a + b), 'a', 'b')}
+dsk2 = {'a': 1, 'b': 2, 'c': (lambda a, b: sleep(0.1) or (a + b), 'a', 'b')}
 
 
 def test_profiler():

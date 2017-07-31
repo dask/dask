@@ -230,7 +230,7 @@ class _Tracker(Process):
                 break
             elif msg == 'collect':
                 ps = self._update_pids(pid)
-                while not self.child_conn.poll():
+                while not data or not self.child_conn.poll():
                     tic = default_timer()
                     mem = cpu = 0
                     for p in ps:
