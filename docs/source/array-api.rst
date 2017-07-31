@@ -115,6 +115,7 @@ Top level user functions:
    rechunk
    repeat
    reshape
+   result_type
    rint
    roll
    round
@@ -399,6 +400,7 @@ Other functions
 .. autofunction:: rechunk
 .. autofunction:: repeat
 .. autofunction:: reshape
+.. autofunction:: result_type
 .. autofunction:: rint
 .. autofunction:: roll
 .. autofunction:: round

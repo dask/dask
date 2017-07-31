@@ -7,7 +7,7 @@ from .core import (Array, stack, concatenate, take, tensordot, transpose,
         tile, digitize, histogram, map_blocks, atop, to_hdf5, dot, cov, array,
         dstack, vstack, hstack, to_npy_stack, from_npy_stack, compress,
         extract, from_delayed, round, swapaxes, repeat, count_nonzero,
-        flatnonzero, nonzero, asarray, asanyarray)
+        flatnonzero, nonzero, asarray, asanyarray, result_type)
 from .core import (around, isnull, notnull, isclose, eye, triu,
                    tril, diag, corrcoef)
 from .reshape import reshape

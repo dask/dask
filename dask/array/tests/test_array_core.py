@@ -34,7 +34,7 @@ from dask.array.core import (getem, getter, top, dotmany,
                              blockdims_from_blockshape, store, optimize,
                              from_func, normalize_chunks, broadcast_chunks,
                              atop, from_delayed, concatenate_axes,
-                             common_blockdim)
+                             common_blockdim, result_type)
 from dask.array.utils import assert_eq
 
 # temporary until numpy functions migrated
@@ -555,6 +555,41 @@ def test_elemwise_differently_chunked():
 
     assert_eq(a + b, x + y)
     assert_eq(b + a, x + y)
+
+
+def test_result_type():
+    a = from_array(np.ones(5, np.float32), chunks=(3,))
+    b = from_array(np.ones(5, np.int16), chunks=(3,))
+    c = from_array(np.ones(5, np.int64), chunks=(3,))
+    x = np.ones(5, np.float32)
+    assert result_type(b, c) == np.int64
+    assert result_type(a, b, c) == np.float64
+    assert result_type(b, np.float32) == np.float32
+    assert result_type(b, np.dtype(np.float32)) == np.float32
+    assert result_type(b, x) == np.float32
+    # Effect of scalars depends on their value
+    assert result_type(1, b) == np.int16
+    assert result_type(1.0, a) == np.float32
+    assert result_type(np.int64(1), b) == np.int16
+    assert result_type(np.ones((), np.int64), b) == np.int16  # 0d array
+    assert result_type(1e200, a) == np.float64   # 1e200 is too big for float32
+    # dask 0d-arrays are NOT treated like scalars
+    c = from_array(np.ones((), np.float64), chunks=())
+    assert result_type(a, c) == np.float64
+
+
+def test_elemwise_dtype():
+    values = [
+        from_array(np.ones(5, np.float32), chunks=3),
+        from_array(np.ones(5, np.int16), chunks=3),
+        from_array(np.ones(5, np.int64), chunks=3),
+        from_array(np.ones((), np.float64), chunks=()) * 1e200,
+        np.ones(5, np.float32),
+        1, 1.0, 1e200, np.int64(1), np.ones((), np.int64),
+    ]
+    for x in values:
+        for y in values:
+            assert da.maximum(x, y).dtype == result_type(x, y)
 
 
 def test_operators():
