@@ -209,20 +209,20 @@ def test_dataframe_format_unknown_divisions():
     exp = ("Dask DataFrame Structure:\n"
            "                   A       B                C\n"
            "npartitions=3                                \n"
-           "None           int64  object  category[known]\n"
-           "None             ...     ...              ...\n"
-           "None             ...     ...              ...\n"
-           "None             ...     ...              ...\n"
+           "               int64  object  category[known]\n"
+           "                 ...     ...              ...\n"
+           "                 ...     ...              ...\n"
+           "                 ...     ...              ...\n"
            "Dask Name: from_pandas, 3 tasks")
     assert repr(ddf) == exp
     assert str(ddf) == exp
 
     exp = ("                   A       B                C\n"
            "npartitions=3                                \n"
-           "None           int64  object  category[known]\n"
-           "None             ...     ...              ...\n"
-           "None             ...     ...              ...\n"
-           "None             ...     ...              ...")
+           "               int64  object  category[known]\n"
+           "                 ...     ...              ...\n"
+           "                 ...     ...              ...\n"
+           "                 ...     ...              ...")
     assert ddf.to_string() == exp
 
     exp_table = """<table border="1" class="dataframe">
@@ -242,25 +242,25 @@ def test_dataframe_format_unknown_divisions():
   </thead>
   <tbody>
     <tr>
-      <th>None</th>
+      <th></th>
       <td>int64</td>
       <td>object</td>
       <td>category[known]</td>
     </tr>
     <tr>
-      <th>None</th>
+      <th></th>
       <td>...</td>
       <td>...</td>
       <td>...</td>
     </tr>
     <tr>
-      <th>None</th>
+      <th></th>
       <td>...</td>
       <td>...</td>
       <td>...</td>
     </tr>
     <tr>
-      <th>None</th>
+      <th></th>
       <td>...</td>
       <td>...</td>
       <td>...</td>
