@@ -150,7 +150,7 @@ def test_optimize(fn, c):
     assert_eq(df[c], ddf[c])
     x = ddf[c]
 
-    dsk = x._optimize(x.dask, x._keys())
+    dsk, _ = x._optimize(x.dask, x._keys())
     assert len(dsk) == x.npartitions
     assert all(v[4] == c for v in dsk.values())
 

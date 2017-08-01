@@ -73,8 +73,11 @@ def order(dsk, dependencies=None):
     >>> order(dsk)
     {'a': 2, 'c': 1, 'b': 3, 'd': 0}
     """
-    if dependencies is None:
+    if not dependencies:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+    elif isinstance(next(iter(dependencies.values())), list):
+        dependencies = {k: set(v) for k, v in dependencies.items()}
+
     dependents = reverse_dict(dependencies)
 
     ndeps = ndependents(dependencies, dependents)

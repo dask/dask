@@ -272,7 +272,7 @@ def test_inline_functions():
            d: (double, y),
            x: 1, y: 1}
 
-    result = inline_functions(dsk, [], fast_functions=set([inc]))
+    result, _ = inline_functions(dsk, [], fast_functions=set([inc]))
     expected = {'out': (add, (inc, x), d),
                 d: (double, y),
                 x: 1, y: 1}
@@ -284,14 +284,14 @@ def test_inline_ignores_curries_and_partials():
            'a': (partial(add, 1), 'x'),
            'b': (inc, 'a')}
 
-    result = inline_functions(dsk, [], fast_functions=set([add]))
+    result, _ = inline_functions(dsk, [], fast_functions=set([add]))
     assert result['b'] == (inc, dsk['a'])
     assert 'a' not in result
 
 
 def test_inline_doesnt_shrink_fast_functions_at_top():
     dsk = {'x': (inc, 'y'), 'y': 1}
-    result = inline_functions(dsk, [], fast_functions=set([inc]))
+    result, _ = inline_functions(dsk, [], fast_functions=set([inc]))
     assert result == dsk
 
 
@@ -304,15 +304,15 @@ def test_inline_traverses_lists():
     expected = {'out': (sum, [(inc, x), d]),
                 d: (double, y),
                 x: 1, y: 1}
-    result = inline_functions(dsk, [], fast_functions=set([inc]))
+    result, _ = inline_functions(dsk, [], fast_functions=set([inc]))
     assert result == expected
 
 
 def test_inline_functions_protects_output_keys():
     dsk = {'x': (inc, 1), 'y': (double, 'x')}
-    assert inline_functions(dsk, [], [inc]) == {'y': (double, (inc, 1))}
-    assert inline_functions(dsk, ['x'], [inc]) == {'y': (double, 'x'),
-                                                   'x': (inc, 1)}
+    assert inline_functions(dsk, [], [inc])[0] == {'y': (double, (inc, 1))}
+    assert inline_functions(dsk, ['x'], [inc])[0] == {'y': (double, 'x'),
+                                                      'x': (inc, 1)}
 
 
 def test_functions_of():

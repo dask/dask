@@ -508,7 +508,7 @@ def test_optimize_None():
     x = da.ones(10, chunks=(5,))
     y = x[:9][1:8][::2] + 1  # normally these slices would be fused
 
-    def my_get(dsk, keys):
+    def my_get(dsk, keys, **kwargs):
         assert dsk == dict(y.dask)  # but they aren't
         return dask.get(dsk, keys)
 

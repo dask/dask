@@ -32,7 +32,7 @@ def test_column_optimizations_with_bcolz_and_rewrite():
                                     bc, slice(0, 2), ['a', 'b'], {}))
                         for i in [1, 2, 3])
 
-        result = dd.optimize(dsk2, [('y', i) for i in [1, 2, 3]])
+        result, _ = dd.optimize(dsk2, [('y', i) for i in [1, 2, 3]])
         assert result == expected
 
 
@@ -43,9 +43,9 @@ def test_fuse_ave_width():
     s = ((df.x + 1) + (df.x + 2))
 
     with dask.set_options(fuse_ave_width=4):
-        a = s._optimize(s.dask, s._keys())
+        a, _ = s._optimize(s.dask, s._keys())
 
-    b = s._optimize(s.dask, s._keys())
+    b, _ = s._optimize(s.dask, s._keys())
 
     assert len(a) < len(b)
     assert len(a) <= 15

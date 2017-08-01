@@ -2471,7 +2471,7 @@ def test_hash_split_unique(npartitions, split_every, split_out):
 
     dropped = ds.unique(split_every=split_every, split_out=split_out)
 
-    dsk = dropped._optimize(dropped.dask, dropped._keys())
+    dsk, _ = dropped._optimize(dropped.dask, dropped._keys())
     from dask.core import get_deps
     dependencies, dependents = get_deps(dsk)
 

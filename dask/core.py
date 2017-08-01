@@ -4,6 +4,8 @@ from itertools import chain
 
 from .utils_test import add, inc  # noqa: F401
 
+no_default = '--no-default--'
+
 
 def ishashable(x):
     """ Is x hashable?
@@ -156,7 +158,7 @@ def get(d, x, recursive=False, **kwargs):
     raise KeyError("{0} is not a key in the graph".format(x))
 
 
-def get_dependencies(dsk, key=None, task=None, as_list=False):
+def get_dependencies(dsk, key=None, task=no_default, as_list=False):
     """ Get the immediate tasks on which this task depends
 
     Examples
@@ -187,7 +189,7 @@ def get_dependencies(dsk, key=None, task=None, as_list=False):
     """
     if key is not None:
         arg = dsk[key]
-    elif task is not None:
+    elif task is not no_default:
         arg = task
     else:
         raise ValueError("Provide either key or task")

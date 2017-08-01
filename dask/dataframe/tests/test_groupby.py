@@ -960,7 +960,7 @@ def test_hash_groupby_aggregate(npartitions, split_every, split_out):
     result = ddf.groupby('x').y.var(split_every=split_every,
                                     split_out=split_out)
 
-    dsk = result._optimize(result.dask, result._keys())
+    dsk, _ = result._optimize(result.dask, result._keys())
     from dask.core import get_deps
     dependencies, dependents = get_deps(dsk)
 

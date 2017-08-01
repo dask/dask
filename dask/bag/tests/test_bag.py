@@ -485,18 +485,18 @@ def test_inline_singleton_lists():
     inp = {'b': (list, 'a'),
            'c': (f, 'b', 1)}
     out = {'c': (f, (list, 'a'), 1)}
-    assert inline_singleton_lists(inp) == out
+    assert inline_singleton_lists(inp)[0] == out
 
     out = {'c': (f, 'a', 1)}
-    assert optimize(inp, ['c'], rename_fused_keys=False) == out
+    assert optimize(inp, ['c'], rename_fused_keys=False)[0] == out
 
     inp = {'b': (list, 'a'),
            'c': (f, 'b', 1),
            'd': (f, 'b', 2)}
-    assert inline_singleton_lists(inp) == inp
+    assert inline_singleton_lists(inp)[0] == inp
 
     inp = {'b': (4, 5)} # doesn't inline constants
-    assert inline_singleton_lists(inp) == inp
+    assert inline_singleton_lists(inp)[0] == inp
 
 
 def test_take():
@@ -1199,10 +1199,10 @@ def test_optimize_fuse_keys():
     y = x.map(inc)
     z = y.map(inc)
 
-    dsk = z._optimize(z.dask, z._keys())
+    dsk, _ = z._optimize(z.dask, z._keys())
     assert not set(y.dask) & set(dsk)
 
-    dsk = z._optimize(z.dask, z._keys(), fuse_keys=y._keys())
+    dsk, _ = z._optimize(z.dask, z._keys(), fuse_keys=y._keys())
     assert all(k in dsk for k in y._keys())
 
 

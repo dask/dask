@@ -114,7 +114,7 @@ def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
     dsk3, dependencies = fuse(dsk2, keys + (fuse_keys or []),
                               dependencies=dependencies,
                               rename_keys=rename_fused_keys)
-    dsk4, depnendencies = inline_singleton_lists(dsk3, dependencies)
+    dsk4, dependencies = inline_singleton_lists(dsk3, dependencies)
     dsk5 = lazify(dsk4)
     return dsk5, dependencies
 
@@ -181,7 +181,7 @@ def to_textfiles(b, path, name_function=None, compression='infer',
 
     # Use Bag optimizations on these delayed objects
     dsk = ensure_dict(delayed(writes).dask)
-    dsk2 = Bag._optimize(dsk, [w.key for w in writes])
+    dsk2, _ = Bag._optimize(dsk, [w.key for w in writes])
     out = [Delayed(w.key, dsk2) for w in writes]
 
     if compute:
@@ -1178,8 +1178,8 @@ class Bag(Base):
                for i in range(self.npartitions)}
 
         divisions = [None] * (self.npartitions + 1)
-        return dd.DataFrame(merge(optimize(self.dask, self._keys()), dsk),
-                            name, meta, divisions)
+        dsk2, _ = optimize(self.dask, self._keys())
+        return dd.DataFrame(merge(dsk2, dsk), name, meta, divisions)
 
     def to_delayed(self):
         """ Convert bag to list of dask Delayed
@@ -1187,7 +1187,7 @@ class Bag(Base):
         Returns list of Delayed, one per partition.
         """
         from dask.delayed import Delayed
-        dsk = self._optimize(self.dask, self._keys())
+        dsk, _ = self._optimize(self.dask, self._keys())
         return [Delayed(k, dsk) for k in self._keys()]
 
     def repartition(self, npartitions):

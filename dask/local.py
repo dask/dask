@@ -481,6 +481,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
             if should_cull:
                 dsk, dependencies = cull(dsk, list(results))
+
+            if dependencies and isinstance(next(iter(dependencies.values())), list):
                 dependencies = {k: set(v) for k, v in dependencies.items()}
 
             keyorder = order(dsk, dependencies=dependencies)
@@ -521,6 +523,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
 
             # Main loop, wait on tasks to finish, insert new ones
             while state['waiting'] or state['ready'] or state['running']:
+                if not state['running'] and not queue.qsize():
+                    import pdb; pdb.set_trace()
                 key, res_info, failed = queue_get(queue)
                 if failed:
                     exc, tb = loads(res_info)

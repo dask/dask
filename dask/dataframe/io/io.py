@@ -436,7 +436,7 @@ def to_bag(df, index=False):
     name = 'to_bag-' + tokenize(df, index)
     dsk = dict(((name, i), (_df_to_bag, block, index))
                for (i, block) in enumerate(df._keys()))
-    dsk.update(df._optimize(df.dask, df._keys()))
+    dsk.update(df._optimize(df.dask, df._keys())[0])
     return Bag(dsk, name, df.npartitions)
 
 

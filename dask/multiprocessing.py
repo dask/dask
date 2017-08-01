@@ -126,7 +126,7 @@ def pack_exception(e, dumps):
 
 
 def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
-        optimize_graph=True, **kwargs):
+        optimize_graph=True, dependencies=None, **kwargs):
     """ Multiprocessed get function appropriate for Bags
 
     Parameters
@@ -157,7 +157,7 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
     # Optimize Dask
     dsk2, dependencies = cull(dsk, keys)
     if optimize_graph:
-        dsk3, dependencies = fuse(dsk2, keys, dependencies)
+        dsk3, dependencies = fuse(dsk2, keys, dependencies=dependencies)
     else:
         dsk3 = dsk2
 
@@ -174,7 +174,8 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
         result = get_async(pool.apply_async, len(pool._pool), dsk3, keys,
                            get_id=_process_get_id, dumps=dumps, loads=loads,
                            pack_exception=pack_exception,
-                           raise_exception=reraise, **kwargs)
+                           raise_exception=reraise, dependencies=dependencies,
+                           **kwargs)
     finally:
         if cleanup:
             pool.close()
