@@ -39,3 +39,6 @@ socket-backlog: 2048
 
 # Bokeh web dashboard
 bokeh-export-tool: False
+
+tick-time: 20             # milliseconds between event loop health checks
+tick-maximum-delay: 1000  # milliseconds allowed before triggering a warning

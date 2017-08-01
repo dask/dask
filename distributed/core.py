@@ -18,6 +18,7 @@ from tornado.locks import Event
 from .comm import (connect, listen, CommClosedError,
                    normalize_address,
                    unparse_host_port, get_address_host_port)
+from .config import config
 from .metrics import time
 from .system_monitor import SystemMonitor
 from .utils import get_traceback, truncate_exception, ignoring, shutting_down
@@ -115,7 +116,7 @@ class Server(object):
         self.periodic_callbacks['monitor'] = pc
 
         self._last_tick = time()
-        pc = PeriodicCallback(self._measure_tick, 20,
+        pc = PeriodicCallback(self._measure_tick, config.get('tick-time', 20),
                                          io_loop=self.io_loop)
         self.io_loop.add_callback(pc.start)
         self.periodic_callbacks['tick'] = pc
@@ -139,8 +140,8 @@ class Server(object):
         now = time()
         diff = now - self._last_tick
         self._last_tick = now
-        if diff > 1:
-            logger.warn("Event loop was unresponsive for %.1fs.  "
+        if diff > config.get('tick-maximum-delay', 1000) / 1000:
+            logger.warn("Event loop was unresponsive for %.2fs.  "
                         "This is often caused by long-running GIL-holding "
                         "functions or moving large chunks of data. "
                         "This can cause timeouts and instability.",

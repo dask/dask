@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from contextlib import contextmanager
 import logging
 import logging.config
 import os
@@ -129,6 +130,26 @@ def initialize_logging(config):
             _initialize_logging_new_style(config)
         else:
             _initialize_logging_old_style(config)
+
+
+@contextmanager
+def set_config(**kwargs):
+    old = {}
+    for key in kwargs:
+        if key in config:
+            old[key] = config[key]
+
+    for key, value in kwargs.items():
+        config[key] = value
+
+    try:
+        yield
+    finally:
+        for key in kwargs:
+            if key in old:
+                config[key] = old[key]
+            else:
+                del config[key]
 
 
 try:

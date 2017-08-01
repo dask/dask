@@ -10,6 +10,7 @@ from tornado import gen, ioloop
 import pytest
 
 from distributed.compatibility import finalize
+from distributed.config import set_config
 from distributed.core import (
     pingpong, Server, rpc, connect, send_recv,
     coerce_to_address, ConnectionPool, CommClosedError)
@@ -22,7 +23,7 @@ from distributed.utils_test import (
     assert_can_connect_from_everywhere_4,
     assert_can_connect_from_everywhere_4_6, assert_can_connect_from_everywhere_6,
     assert_can_connect_locally_4, assert_can_connect_locally_6,
-    tls_security)
+    tls_security, captured_logger)
 
 
 EXTERNAL_IP4 = get_ip()
@@ -543,3 +544,14 @@ def test_ticks(s, a, b):
     c = s.digests['tick-duration']
     assert c.size()
     assert 0.01 < c.components[0].quantile(0.5) < 0.5
+
+
+@gen_cluster()
+def test_tick_logging(s, a, b):
+    pytest.importorskip('crick')
+    with set_config(**{'tick-maximum-delay': 10}):
+        with captured_logger('distributed.core') as sio:
+            yield gen.sleep(0.1)
+
+    text = sio.getvalue()
+    assert "unresponsive" in text
