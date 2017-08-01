@@ -36,13 +36,14 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
     dsk3, dependencies = fuse(dsk2, hold + keys + (fuse_keys or []),
                               dependencies, rename_keys=rename_fused_keys)
     if inline_functions_fast_functions:
-        dsk4 = inline_functions(dsk3, keys, dependencies=dependencies,
-                                fast_functions=inline_functions_fast_functions)
+        dsk4, dependencies = inline_functions(dsk3, keys,
+                                              dependencies=dependencies,
+                                  fast_functions=inline_functions_fast_functions)
     else:
         dsk4 = dsk3
     dsk5 = optimize_slices(dsk4)
 
-    return dsk5
+    return dsk5, dependencies
 
 
 def hold_keys(dsk, dependencies):
@@ -94,8 +95,8 @@ def optimize_slices(dsk):
         fuse_slice_dict
     """
     fancy_ind_types = (list, np.ndarray)
-    dsk = dsk.copy()
-    for k, v in dsk.items():
+    dsk2 = dsk.copy()
+    for k, v in dsk2.items():
         if type(v) is tuple and v[0] in GETTERS and len(v) in (3, 5):
             if len(v) == 3:
                 get, a, a_index = v
@@ -146,17 +147,17 @@ def optimize_slices(dsk):
                  (type(a_index) is tuple and
                   all(type(s) is slice and not s.start and s.stop is None and
                       s.step is None for s in a_index)))):
-                dsk[k] = a
+                dsk2[k] = a
             elif get is getitem or (a_asarray and not a_lock):
                 # default settings are fine, drop the extra parameters Since we
                 # always fallback to inner `get` functions, `get is getitem`
                 # can only occur if all gets are getitem, meaning all
                 # parameters must be getitem defaults.
-                dsk[k] = (get, a, a_index)
+                dsk2[k] = (get, a, a_index)
             else:
-                dsk[k] = (get, a, a_index, a_asarray, a_lock)
+                dsk2[k] = (get, a, a_index, a_asarray, a_lock)
 
-    return dsk
+    return dsk2
 
 
 def normalize_slice(s):

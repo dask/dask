@@ -4,7 +4,7 @@ from functools import partial
 import pytest
 
 from dask.utils_test import add, inc
-from dask.core import get_dependencies
+from dask.core import get_dependencies, get_deps
 from dask.optimize import (cull, fuse, inline, inline_functions, functions_of,
                            fuse_getitem, fuse_selections, fuse_linear)
 
@@ -207,44 +207,62 @@ def test_inline():
          'b': (inc, 'a'),
          'c': (inc, 'b'),
          'd': (add, 'a', 'c')}
-    assert inline(d) == {'a': 1,
-                         'b': (inc, 1),
-                         'c': (inc, 'b'),
-                         'd': (add, 1, 'c')}
-    assert inline(d, ['a', 'b', 'c']) == {'a': 1,
-                                          'b': (inc, 1),
-                                          'c': (inc, (inc, 1)),
-                                          'd': (add, 1, (inc, (inc, 1)))}
+    dsk, dependencies = inline(d)
+    assert dsk == {'a': 1,
+                   'b': (inc, 1),
+                   'c': (inc, 'b'),
+                   'd': (add, 1, 'c')}
+    assert dependencies == get_deps(dsk)[0]
+
+
+    dsk, dependencies = inline(d, ['a', 'b', 'c'])
+    assert dsk == {'a': 1,
+                   'b': (inc, 1),
+                   'c': (inc, (inc, 1)),
+                   'd': (add, 1, (inc, (inc, 1)))}
+    assert dependencies == get_deps(dsk)[0]
+
     d = {'x': 1,
          'y': (inc, 'x'),
          'z': (add, 'x', 'y')}
-    assert inline(d) == {'x': 1,
-                         'y': (inc, 1),
-                         'z': (add, 1, 'y')}
-    assert inline(d, keys='y') == {'x': 1,
-                                   'y': (inc, 1),
-                                   'z': (add, 1, (inc, 1))}
-    assert inline(d, keys='y',
-                  inline_constants=False) == {'x': 1,
-                                              'y': (inc, 'x'),
-                                              'z': (add, 'x', (inc, 'x'))}
+    dsk, dependencies = inline(d)
+    assert dsk == {'x': 1,
+                   'y': (inc, 1),
+                   'z': (add, 1, 'y')}
+    assert dependencies == get_deps(dsk)[0]
+
+    dsk, dependencies = inline(d, keys='y')
+    assert dsk == {'x': 1,
+                   'y': (inc, 1),
+                   'z': (add, 1, (inc, 1))}
+    assert dependencies == get_deps(dsk)[0]
+
+    dsk, dependencies = inline(d, keys='y', inline_constants=False)
+    assert dsk == {'x': 1,
+                   'y': (inc, 'x'),
+                   'z': (add, 'x', (inc, 'x'))}
+    assert dependencies == get_deps(dsk)[0]
 
     d = {'a': 1,
          'b': 'a',
          'c': 'b',
          'd': ['a', 'b', 'c'],
          'e': (add, (len, 'd'), 'a')}
-    assert inline(d, 'd') == {'a': 1,
-                              'b': 1,
-                              'c': 1,
-                              'd': [1, 1, 1],
-                              'e': (add, (len, [1, 1, 1]), 1)}
-    assert inline(d, 'a',
-                  inline_constants=False) == {'a': 1,
-                                              'b': 1,
-                                              'c': 'b',
-                                              'd': [1, 'b', 'c'],
-                                              'e': (add, (len, 'd'), 1)}
+    dsk, dependencies = inline(d, 'd')
+    assert dsk == {'a': 1,
+                   'b': 1,
+                   'c': 1,
+                   'd': [1, 1, 1],
+                   'e': (add, (len, [1, 1, 1]), 1)}
+    assert dependencies == get_deps(dsk)[0]
+
+    dsk, dependencies = inline(d, 'a', inline_constants=False)
+    assert dsk == {'a': 1,
+                   'b': 1,
+                   'c': 'b',
+                   'd': [1, 'b', 'c'],
+                   'e': (add, (len, 'd'), 1)}
+    assert dependencies == get_deps(dsk)[0]
 
 
 def test_inline_functions():

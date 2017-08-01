@@ -134,7 +134,7 @@ def _get_recursive(d, x):
         return x
 
 
-def get(d, x, recursive=False):
+def get(d, x, recursive=False, **kwargs):
     """ Get value from Dask
 
     Examples

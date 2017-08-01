@@ -101,8 +101,8 @@ class Base(object):
     @classmethod
     def _get(cls, dsk, keys, get=None, **kwargs):
         get = get or _globals['get'] or cls._default_get
-        dsk2 = optimization_function(cls)(ensure_dict(dsk), keys, **kwargs)
-        return get(dsk2, keys, **kwargs)
+        dsk2, dependencies = optimization_function(cls)(ensure_dict(dsk), keys, **kwargs)
+        return get(dsk2, keys, dependencies=dependencies, should_cull=False, **kwargs)
 
     @classmethod
     def _bind_operator(cls, op):
@@ -200,9 +200,10 @@ def compute(*args, **kwargs):
                              "scheduler `get` function using either "
                              "the `get` kwarg or globally with `set_options`.")
 
-    dsk = collections_to_dsk(variables, optimize_graph, **kwargs)
+    dsk, dependencies = collections_to_dsk(variables, optimize_graph, **kwargs)
     keys = [var._keys() for var in variables]
-    results = get(dsk, keys, **kwargs)
+    results = get(dsk, keys, dependencies=dependencies,
+                  should_cull=not optimize_graph, **kwargs)
 
     results_iter = iter(results)
     return tuple(a if not isinstance(a, Base)
@@ -430,8 +431,8 @@ def tokenize(*args, **kwargs):
     return md5(str(tuple(map(normalize_token, args))).encode()).hexdigest()
 
 
-def dont_optimize(dsk, keys):
-    return dsk
+def dont_optimize(dsk, keys, **kwargs):
+    return dsk, kwargs.get('dependencies', None)
 
 
 def optimization_function(obj):
@@ -459,14 +460,20 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
         groups = {opt: _extract_graph_and_keys(val)
                   for opt, val in groups.items()}
         for opt in optimizations:
-            groups = {k: [opt(ensure_dict(dsk), keys), keys]
+            groups = {k: opt(ensure_dict(dsk), keys) + (keys,)
                       for k, (dsk, keys) in groups.items()}
-        dsk = merge([opt(dsk, keys, **kwargs)
-                     for opt, (dsk, keys) in groups.items()])
+        out = [opt(dsk, keys, **kwargs) for opt, (dsk, keys) in groups.items()]
+        dsks, dependenciess = zip(*out)
+        dsk = merge(dsks)
+        if all(d is not None for d in dependenciess):
+            dependencies = merge(dependenciess)
+        else:
+            dependencies = None
     else:
         dsk = ensure_dict(sharedict.merge(*[c.dask for c in collections]))
+        dependencies = None
 
-    return dsk
+    return dsk, dependencies
 
 
 def _extract_graph_and_keys(vals):
@@ -585,9 +592,10 @@ def persist(*args, **kwargs):
                              "scheduler `get` function using either "
                              "the `get` kwarg or globally with `set_options`.")
 
-    dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
+    dsk, dependencies = collections_to_dsk(collections, optimize_graph, **kwargs)
     keys = list(flatten([var._keys() for var in collections]))
-    results = get(dsk, keys, **kwargs)
+    results = get(dsk, keys, dependencies=dependencies, should_cull=not
+                  optimize_graph, **kwargs)
 
     d = dict(zip(keys, results))
 

@@ -25,5 +25,5 @@ def optimize(dsk, keys, **kwargs):
         dsk = fuse_getitem(dsk, _read_parquet_row_group, 4)
     dsk, dependencies = fuse(dsk, keys, dependencies=dependencies,
                              ave_width=_globals.get('fuse_ave_width', 0))
-    dsk, _ = cull(dsk, keys)
-    return dsk
+    dsk, dependencies = cull(dsk, keys)
+    return dsk, dependencies

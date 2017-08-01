@@ -99,7 +99,7 @@ def test_optimize_with_getitem_fusion():
            'b': (getter, 'a', (slice(10, 20), slice(100, 200))),
            'c': (getter, 'b', (5, slice(50, 60)))}
 
-    result = optimize(dsk, ['c'])
+    result, _ = optimize(dsk, ['c'])
     expected_task = (getter, 'some-array', (15, slice(150, 160)))
     assert any(v == expected_task for v in result.values())
     assert len(result) < len(dsk)
@@ -178,7 +178,7 @@ def test_dont_fuse_numpy_arrays():
     for chunks in [(5,), (10,)]:
         y = da.from_array(x, chunks=(10,))
 
-        dsk = y._optimize(y.dask, y._keys())
+        dsk, _ = y._optimize(y.dask, y._keys())
         assert sum(isinstance(v, np.ndarray) for v in dsk.values()) == 1
 
 
@@ -186,7 +186,7 @@ def test_minimize_data_transfer():
     x = np.ones(100)
     y = da.from_array(x, chunks=25)
     z = y + 1
-    dsk = z._optimize(z.dask, z._keys())
+    dsk, _ = z._optimize(z.dask, z._keys())
 
     keys = list(dsk)
     results = dask.get(dsk, keys)
@@ -206,7 +206,7 @@ def test_fuse_slices_with_alias():
            ('alias', 0, 0): ('dx', 0, 0),
            ('dx2', 0): (getitem, ('alias', 0, 0), (slice(None), 0))}
     keys = [('dx2', 0)]
-    dsk2 = optimize(dsk, keys)
+    dsk2, _ = optimize(dsk, keys)
     assert len(dsk2) == 3
     fused_key = set(dsk2).difference(['x', ('dx2', 0)]).pop()
     assert dsk2[fused_key] == (getter, 'x', (slice(0, 4), 0))
@@ -226,7 +226,7 @@ def test_fuse_getter_with_asarray(chunks):
     x = np.ones(10) * 1234567890
     y = da.ones(10, chunks=chunks)
     z = x + y
-    dsk = z._optimize(z.dask, z._keys())
+    dsk, _ = z._optimize(z.dask, z._keys())
     assert any(v is x for v in dsk.values())
     for v in dsk.values():
         s = str(v)
@@ -246,10 +246,10 @@ def test_turn_off_fusion():
     x = da.ones(10, chunks=(5,))
     y = da.sum(x + 1 + 2 + 3)
 
-    a = y._optimize(y.dask, y._keys())
+    a, _ = y._optimize(y.dask, y._keys())
 
     with dask.set_options(fuse_ave_width=0):
-        b = y._optimize(y.dask, y._keys())
+        b, _ = y._optimize(y.dask, y._keys())
 
     assert dask.get(a, y._keys()) == dask.get(b, y._keys())
     assert len(a) < len(b)

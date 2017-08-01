@@ -3830,7 +3830,7 @@ def to_delayed(df):
     >>> partitions = df.to_delayed()  # doctest: +SKIP
     """
     from ..delayed import Delayed
-    dsk = df._optimize(df.dask, df._keys())
+    dsk, _ = df._optimize(df.dask, df._keys())
     return [Delayed(k, dsk) for k in df._keys()]
 
 

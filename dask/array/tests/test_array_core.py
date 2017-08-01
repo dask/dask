@@ -1790,7 +1790,7 @@ def test_optimize():
     x = np.arange(5).astype('f4')
     a = da.from_array(x, chunks=(2,))
     expr = a[1:4] + 1
-    result = optimize(expr.dask, expr._keys())
+    result, _ = optimize(expr.dask, expr._keys())
     assert isinstance(result, dict)
     assert all(key in result for key in expr._keys())
 
@@ -2951,10 +2951,10 @@ def test_optimize_fuse_keys():
     y = x + 1
     z = y + 1
 
-    dsk = z._optimize(z.dask, z._keys())
+    dsk, _ = z._optimize(z.dask, z._keys())
     assert not set(y.dask) & set(dsk)
 
-    dsk = z._optimize(z.dask, z._keys(), fuse_keys=y._keys())
+    dsk, _ = z._optimize(z.dask, z._keys(), fuse_keys=y._keys())
     assert all(k in dsk for k in y._keys())
 
 

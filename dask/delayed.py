@@ -68,7 +68,7 @@ def to_task_dask(expr):
     if isinstance(expr, base.Base):
         name = 'finalize-' + tokenize(expr, pure=True)
         keys = expr._keys()
-        dsk = expr._optimize(ensure_dict(expr.dask), keys)
+        dsk, _ = expr._optimize(ensure_dict(expr.dask), keys)
         dsk[name] = (expr._finalize, (concrete, keys))
         return name, dsk
 

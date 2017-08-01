@@ -1766,7 +1766,7 @@ class Array(Base):
         dask.array.from_delayed
         """
         from ..delayed import Delayed
-        dsk = self._optimize(self.dask, self._keys())
+        dsk, _ = self._optimize(self.dask, self._keys())
         L = ndeepmap(self.ndim, lambda k: Delayed(k, dsk), self._keys())
         return np.array(L, dtype=object)
 

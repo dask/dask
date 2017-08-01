@@ -273,12 +273,19 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
 
     # Make new dask with substitutions
     dsk2 = keysubs.copy()
+    dependencies2 = {key: get_dependencies(dsk2, key) for key in dsk2}
     for key, val in dsk.items():
         if key not in dsk2:
-            for item in keys & dependencies[key]:
-                val = subs(val, item, keysubs[item])
+            s = keys & dependencies[key]
+            if s:
+                for item in s:
+                    val = subs(val, item, keysubs[item])
+                dependencies2[key] = dependencies[key] - s
+            else:
+                dependencies2[key] = dependencies[key]
             dsk2[key] = val
-    return dsk2
+
+    return dsk2, dependencies2
 
 
 def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
@@ -322,11 +329,12 @@ def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
             ]
 
     if keys:
-        dsk = inline(dsk, keys, inline_constants=inline_constants,
-                     dependencies=dependencies)
+        dsk, dependencies = inline(dsk, keys, inline_constants=inline_constants,
+                                   dependencies=dependencies)
         for k in keys:
             del dsk[k]
-    return dsk
+            del dependencies[k]
+    return dsk, dependencies
 
 
 def unwrap_partial(func):
@@ -811,4 +819,4 @@ def key_split(s):
 
 
 def dont_optimize(dsk, keys, **kwargs):
-    return dsk
+    return dsk, kwargs.get('dependencies', None)

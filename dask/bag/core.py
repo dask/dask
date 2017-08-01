@@ -100,21 +100,23 @@ def inline_singleton_lists(dsk, dependencies=None):
 
     keys = [k for k, v in dsk.items()
             if istask(v) and v and v[0] is list and len(dependents[k]) == 1]
-    dsk = inline(dsk, keys, inline_constants=False)
+    dsk, dependencies  = inline(dsk, keys, inline_constants=False)
     for k in keys:
         del dsk[k]
-    return dsk
+        del dependencies[k]
+    return dsk, dependencies
 
 
 @defer_to_globals('bag_optimize', falsey=dont_optimize)
 def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
     """ Optimize a dask from a dask.bag """
     dsk2, dependencies = cull(dsk, keys)
-    dsk3, dependencies = fuse(dsk2, keys + (fuse_keys or []), dependencies,
+    dsk3, dependencies = fuse(dsk2, keys + (fuse_keys or []),
+                              dependencies=dependencies,
                               rename_keys=rename_fused_keys)
-    dsk4 = inline_singleton_lists(dsk3, dependencies)
+    dsk4, depnendencies = inline_singleton_lists(dsk3, dependencies)
     dsk5 = lazify(dsk4)
-    return dsk5
+    return dsk5, dependencies
 
 
 def to_textfiles(b, path, name_function=None, compression='infer',
@@ -316,7 +318,7 @@ class Item(Base):
         Returns a single value.
         """
         from dask.delayed import Delayed
-        dsk = self._optimize(self.dask, [self.key])
+        dsk, _ = self._optimize(self.dask, [self.key])
         return Delayed(self.key, dsk)
 
 

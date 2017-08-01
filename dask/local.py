@@ -154,7 +154,7 @@ else:
 DEBUG = False
 
 
-def start_state_from_dask(dsk, cache=None, sortkey=None):
+def start_state_from_dask(dsk, cache=None, sortkey=None, dependencies=None):
     """ Start state from a dask
 
     Examples
@@ -181,6 +181,9 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
                       'y': set(['w']),
                       'z': set(['w'])}}
     """
+    original_cache = cache
+    if dependencies is None:
+        dependencies = {k: get_dependencies(dsk, k) for k in dsk}
     if sortkey is None:
         sortkey = order(dsk).get
     if cache is None:
@@ -191,12 +194,15 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     for k, v in dsk.items():
         if not has_tasks(dsk, v):
             cache[k] = v
+            dependencies[k] = set()
             data_keys.add(k)
 
     dsk2 = dsk.copy()
-    dsk2.update(cache)
+    if cache:
+        dsk2.update(cache)
+    else:
+        dsk2 = dsk
 
-    dependencies = {k: get_dependencies(dsk2, k) for k in dsk}
     waiting = {k: v.copy()
                for k, v in dependencies.items()
                if k not in data_keys}
@@ -205,7 +211,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     for a in cache:
         for b in dependents.get(a, ()):
             waiting[b].remove(a)
-    waiting_data = dict((k, v.copy()) for k, v in dependents.items() if v)
+    waiting_data = {k: v.copy() for k, v in dependents.items() if v}
 
     ready_set = set([k for k, v in waiting.items() if not v])
     ready = sorted(ready_set, key=sortkey, reverse=True)
@@ -405,7 +411,8 @@ The main function of the scheduler.  Get is the main entry point.
 def get_async(apply_async, num_workers, dsk, result, cache=None,
               get_id=default_get_id, rerun_exceptions_locally=None,
               pack_exception=default_pack_exception, raise_exception=reraise,
-              callbacks=None, dumps=identity, loads=identity, **kwargs):
+              callbacks=None, dumps=identity, loads=identity,
+              dependencies=None, should_cull=True, **kwargs):
     """ Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
@@ -470,11 +477,14 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                     cb[0](dsk)
                 started_cbs.append(cb)
 
-            dsk, dependencies = cull(dsk, list(results))
+            if should_cull:
+                dsk, dependencies = cull(dsk, list(results))
+                dependencies = {k: set(v) for k, v in dependencies.items()}
 
-            keyorder = order(dsk)
+            keyorder = order(dsk, dependencies=dependencies)
 
-            state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
+            state = start_state_from_dask(dsk, cache=cache,
+                    sortkey=keyorder.get, dependencies=dependencies)
 
             for _, start_state, _, _, _ in callbacks:
                 if start_state:
@@ -495,8 +505,8 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                     f(key, dsk, state)
 
                 # Prep data to send
-                data = dict((dep, state['cache'][dep])
-                            for dep in get_dependencies(dsk, key))
+                data = {dep: state['cache'][dep]
+                        for dep in get_dependencies(dsk, key)}
                 # Submit
                 apply_async(execute_task,
                             args=(key, dumps((dsk[key], data)),
