@@ -209,6 +209,13 @@ def test_keys():
     dx = Array(dsk, 'x', chunks=(10, 10), shape=(50, 60), dtype='f8')
     assert dx._keys() == [[(dx.name, i, j) for j in range(6)]
                           for i in range(5)]
+    # Cache works
+    assert dx._keys() is dx._keys()
+    # Test mutating names clears key cache
+    dx.dask = {('y', i, j): () for i in range(5) for j in range(6)}
+    dx.name = 'y'
+    assert dx._keys() == [[(dx.name, i, j) for j in range(6)]
+                          for i in range(5)]
     d = Array({}, 'x', (), shape=(), dtype='f8')
     assert d._keys() == [('x',)]
 

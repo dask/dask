@@ -26,6 +26,7 @@ __all__ = ("Base", "compute", "normalize_token", "tokenize", "visualize")
 
 class Base(object):
     """Base class for dask collections"""
+    __slots__ = ()
 
     def visualize(self, filename='mydask', format=None, optimize_graph=False,
                   **kwargs):
