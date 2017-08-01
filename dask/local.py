@@ -269,18 +269,20 @@ def _execute_task(arg, cache, dsk=None):
     >>> _execute_task('foo', cache)  # Passes through on non-keys
     'foo'
     """
-    if isinstance(arg, list):
+    typ = type(arg)
+    if typ is list:
         return [_execute_task(a, cache) for a in arg]
-    elif istask(arg):
+    elif typ is tuple and arg and callable(arg[0]):
         func, args = arg[0], arg[1:]
         args2 = [_execute_task(a, cache) for a in args]
         return func(*args2)
-    elif not ishashable(arg):
-        return arg
-    elif arg in cache:
-        return cache[arg]
     else:
-        return arg
+        try:
+            return cache[arg]
+        except TypeError:
+            return arg
+        except KeyError:
+            return arg
 
 
 def execute_task(key, task_info, dumps, loads, get_id, pack_exception):
