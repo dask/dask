@@ -2156,7 +2156,8 @@ class Worker(WorkerBase):
         except ValueError:  # no clients found, need to make a new one
             pass
         else:
-            if client.scheduler.address == self.scheduler.address:
+            if (client.scheduler and client.scheduler.address == self.scheduler.address
+                or client._start_arg == self.scheduler.address):
                 self._client = client
 
         if not self._client:
