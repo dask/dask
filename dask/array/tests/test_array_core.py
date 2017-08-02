@@ -2294,6 +2294,7 @@ def test_vindex_errors():
     pytest.raises(IndexError, lambda: d.vindex[np.newaxis])
     pytest.raises(IndexError, lambda: d.vindex[:5])
     pytest.raises(IndexError, lambda: d.vindex[[1, 2], [1, 2, 3]])
+    pytest.raises(IndexError, lambda: d.vindex[[True] * 5])
 
 
 def test_vindex_merge():

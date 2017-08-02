@@ -3739,6 +3739,9 @@ def _vindex(x, *indexes):
 
     array_indexes = {i: np.asarray(ind) for i, ind in enumerate(indexes)
                      if not isinstance(ind, slice)}
+    if any(ind.dtype.kind == 'b' for ind in array_indexes.values()):
+        raise IndexError('vindex does not support indexing with boolean arrays')
+
     try:
         broadcast_indexes = np.broadcast_arrays(*array_indexes.values())
     except ValueError:
