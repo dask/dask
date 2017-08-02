@@ -434,8 +434,15 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     else:
         name = dask_key_name
 
+    dsk = sharedict.ShareDict()
     args, dasks = unzip(map(to_task_dask, args), 2)
-    dsk = sharedict.merge(*dasks)
+    for arg, d in zip(args, dasks):
+        if isinstance(d, sharedict.ShareDict):
+            dsk.update_with_key(d)
+        elif isinstance(arg, str):
+            dsk.update_with_key(d, key=arg)
+        else:
+            dsk.update(d)
     if kwargs:
         dask_kwargs, dsk2 = to_task_dask(kwargs)
         dsk.update(dsk2)
