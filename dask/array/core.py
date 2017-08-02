@@ -1307,6 +1307,10 @@ class Array(Base):
 
     flatten = ravel
 
+    @wraps(np.choose)
+    def choose(self, choices):
+        return elemwise(variadic_choose, self, *choices)
+
     @wraps(np.reshape)
     def reshape(self, *shape):
         from .reshape import reshape
