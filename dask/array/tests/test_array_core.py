@@ -709,6 +709,7 @@ def test_norm():
 
 
 def test_choose():
+    # test choose function
     x = np.random.randint(10, size=(15, 16))
     d = from_array(x, chunks=(4, 5))
 
@@ -717,7 +718,7 @@ def test_choose():
 
     # test choose method
     index_dask = d > 5
-    index_numpy = d > 5
+    index_numpy = x > 5
     assert_eq(index_dask.choose([0, d]), index_numpy.choose([0, x]))
     assert_eq(index_dask.choose([-d, d]), index_numpy.choose([-x, x]))
 
