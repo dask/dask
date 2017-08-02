@@ -1574,7 +1574,8 @@ class Scheduler(ServerNode):
                        if nanny_address is not None]
 
             try:
-                resps = All([nanny.restart(close=True) for nanny in nannies])
+                resps = All([nanny.restart(close=True, timeout=timeout * 0.8)
+                             for nanny in nannies])
                 resps = yield gen.with_timeout(timedelta(seconds=timeout), resps)
                 assert all(resp == 'OK' for resp in resps)
             except gen.TimeoutError:

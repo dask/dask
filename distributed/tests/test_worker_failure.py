@@ -18,7 +18,7 @@ from distributed.client import _wait
 from distributed.metrics import time
 from distributed.utils import sync, ignoring
 from distributed.utils_test import (gen_cluster, cluster, inc, loop, slow, div,
-        slowinc, slowadd)
+        slowinc, slowadd, captured_logger)
 
 
 def test_submit_after_failed_worker_sync(loop):
@@ -372,3 +372,14 @@ def test_worker_who_has_clears_after_failed_connection(c, s, a, b):
     assert not any(n_worker_address in s for s in a.who_has.values())
 
     yield n._close()
+
+
+@gen_cluster(client=True, timeout=None, Worker=Nanny, ncores=[('127.0.0.1', 1)])
+def test_restart_timeout_on_long_running_task(c, s, a):
+    with captured_logger('distributed.scheduler') as sio:
+        future = c.submit(sleep, 3600)
+        yield gen.sleep(0.1)
+        yield c.restart()
+
+    text = sio.getvalue()
+    assert 'timeout' not in text.lower()

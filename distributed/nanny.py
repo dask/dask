@@ -141,7 +141,7 @@ class Nanny(ServerNode):
         self.loop.add_callback(self._start, addr_or_port)
 
     @gen.coroutine
-    def kill(self, comm=None, timeout=10):
+    def kill(self, comm=None, timeout=2):
         """ Kill the local worker process
 
         Blocks until both the process is down and the scheduler is properly
@@ -152,7 +152,7 @@ class Nanny(ServerNode):
             raise gen.Return('OK')
 
         deadline = self.loop.time() + timeout
-        yield self.process.kill(grace_delay=0.8 * (deadline - self.loop.time()))
+        yield self.process.kill(timeout=0.8 * (deadline - self.loop.time()))
         yield self._unregister(deadline - self.loop.time())
 
     @gen.coroutine
@@ -195,9 +195,9 @@ class Nanny(ServerNode):
         raise gen.Return('OK')
 
     @gen.coroutine
-    def restart(self, comm=None):
+    def restart(self, comm=None, timeout=2):
         if self.process is not None:
-            yield self.kill()
+            yield self.kill(timeout=timeout)
         yield self.instantiate()
         raise gen.Return('OK')
 
@@ -346,13 +346,13 @@ class WorkerProcess(object):
                 self.on_exit(r)
 
     @gen.coroutine
-    def kill(self, grace_delay=10):
+    def kill(self, timeout=2):
         """
         Ensure the worker process is stopped, waiting at most
-        *grace_delay* seconds before terminating it abruptly.
+        *timeout* seconds before terminating it abruptly.
         """
         loop = IOLoop.current()
-        deadline = loop.time() + grace_delay
+        deadline = loop.time() + timeout
 
         if self.status == 'stopped':
             return
@@ -372,7 +372,7 @@ class WorkerProcess(object):
 
         if process.is_alive():
             logger.warning("Worker process still alive after %d seconds, killing",
-                           grace_delay)
+                           timeout)
             try:
                 yield process.terminate()
             except Exception as e:

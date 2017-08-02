@@ -329,7 +329,7 @@ class WorkerBase(ServerNode):
                         self.scheduler.unregister(address=self.address),
                         io_loop=self.loop)
         self.scheduler.close_rpc()
-        self.executor.shutdown()
+        self.executor.shutdown(wait=False)
         if os.path.exists(self.local_dir):
             shutil.rmtree(self.local_dir)
 

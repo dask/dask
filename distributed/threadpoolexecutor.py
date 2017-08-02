@@ -64,9 +64,9 @@ class ThreadPoolExecutor(thread.ThreadPoolExecutor):
             self._threads.add(t)
             t.start()
 
-    def shutdown(self):
+    def shutdown(self, wait=True):
         with threads_lock:
-            thread.ThreadPoolExecutor.shutdown(self)
+            thread.ThreadPoolExecutor.shutdown(self, wait=wait)
 
 
 def secede():
