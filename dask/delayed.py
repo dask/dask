@@ -5,9 +5,9 @@ import operator
 import uuid
 
 try:
-    from cytoolz import curry, first
+    from cytoolz import curry, first, pluck
 except ImportError:
-    from toolz import curry, first
+    from toolz import curry, first, pluck
 
 from . import base, threaded
 from .compatibility import apply
@@ -435,14 +435,17 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
         name = dask_key_name
 
     dsk = sharedict.ShareDict()
-    args, dasks = unzip(map(to_task_dask, args), 2)
-    for arg, d in zip(args, dasks):
+    args_dasks = list(map(to_task_dask, args))
+    for arg, d in args_dasks:
         if isinstance(d, sharedict.ShareDict):
             dsk.update_with_key(d)
         elif isinstance(arg, str):
             dsk.update_with_key(d, key=arg)
         else:
             dsk.update(d)
+
+    args = tuple(pluck(0, args_dasks))
+
     if kwargs:
         dask_kwargs, dsk2 = to_task_dask(kwargs)
         dsk.update(dsk2)
