@@ -157,3 +157,11 @@ Asyncio Client
 .. currentmodule:: distributed.asyncio
 .. autoclass:: AioClient
    :members:
+
+
+Adaptive
+--------
+
+.. currentmodule:: distributed.deploy
+.. autoclass:: Adaptive
+   :members:
