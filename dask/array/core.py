@@ -1307,7 +1307,7 @@ class Array(Base):
 
     flatten = ravel
 
-    @wraps(np.choose)
+    @wraps(np.ndarray.choose)
     def choose(self, choices):
         return elemwise(variadic_choose, self, *choices)
 
@@ -2842,7 +2842,7 @@ def variadic_choose(a, *choices):
 
 @wraps(np.choose)
 def choose(a, choices):
-    return elemwise(variadic_choose, a, *choices)
+    return a.choose(choices)
 
 
 chunks_none_error_message = """
