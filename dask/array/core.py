@@ -1318,6 +1318,10 @@ class Array(Base):
 
     flatten = ravel
 
+    @derived_from(np.ndarray)
+    def choose(self, choices):
+        return choose(self, choices)
+
     @wraps(np.reshape)
     def reshape(self, *shape):
         from .reshape import reshape
