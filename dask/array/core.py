@@ -31,7 +31,7 @@ from toolz import pipe, map, reduce
 import numpy as np
 
 from . import chunk
-from .slicing import slice_array
+from .slicing import slice_array, replace_ellipsis
 from . import numpy_compat
 from ..base import Base, tokenize, normalize_token
 from ..context import _globals
@@ -1253,31 +1253,42 @@ class Array(Base):
         return Array(dsk2, out, chunks, dtype=self.dtype)
 
     def _vindex(self, key):
-        if (not isinstance(key, tuple) or
-           not len([k for k in key if isinstance(k, (np.ndarray, list))]) >= 2 or
-           not all(isinstance(k, (np.ndarray, list)) or k == slice(None, None)
-                   for k in key)):
-            msg = ("vindex expects only lists and full slices\n"
-                   "At least two entries must be a list\n"
-                   "For other combinations try doing normal slicing first, followed\n"
-                   "by vindex slicing.  Got: \n\t%s")
-            raise IndexError(msg % str(key))
-        if any((isinstance(k, np.ndarray) and k.ndim != 1) or
-               (isinstance(k, list) and k and isinstance(k[0], list))
-               for k in key):
-            raise IndexError("vindex does not support multi-dimensional keys\n"
-                             "Got: %s" % str(key))
-        if len(set(len(k) for k in key if isinstance(k, (list, np.ndarray)))) != 1:
-            raise IndexError("All indexers must have the same length, got\n"
-                             "\t%s" % str(key))
-        key = key + (slice(None, None),) * (self.ndim - len(key))
-        key = [i if isinstance(i, list) else
-               i.tolist() if isinstance(i, np.ndarray) else
-               None for i in key]
+        if not isinstance(key, tuple):
+            key = (key,)
+        if any(k is None for k in key):
+            raise IndexError(
+                "vindex does not support indexing with None (np.newaxis), "
+                "got {}".format(key))
+        if all(isinstance(k, slice) for k in key):
+            raise IndexError(
+                "vindex requires at least one non-slice to vectorize over. "
+                "Use normal slicing instead when only using slices. Got: {}"
+                .format(key))
         return _vindex(self, *key)
 
     @property
     def vindex(self):
+        """Vectorized indexing with broadcasting.
+
+        This is equivalent to numpy's advanced indexing, using arrays that are
+        broadcast against each other. This allows for pointwise indexing:
+
+        >>> x = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+        >>> x = from_array(x, chunks=2)
+        >>> x.vindex[[0, 1, 2], [0, 1, 2]].compute()
+        array([1, 5, 9])
+
+        Mixed basic/advanced indexing with slices/arrays is also supported. The
+        order of dimensions in the result follows those proposed for
+        ndarray.vindex [1]_: the subspace spanned by arrays is followed by all
+        slices.
+
+        Note: ``vindex`` provides more general functionality than standard
+        indexing, but it also has fewer optimizations and can be significantly
+        slower.
+
+        _[1]: https://github.com/numpy/numpy/pull/6256
+        """
         return IndexCallable(self._vindex)
 
     @wraps(np.dot)
@@ -3707,9 +3718,7 @@ def keyname(name, i, okey):
 
 
 def _vindex(x, *indexes):
-    """ Point wise slicing
-
-    This is equivalent to numpy slicing with multiple input lists
+    """Point wise indexing with broadcasting.
 
     >>> x = np.arange(56).reshape((7, 8))
     >>> x
@@ -3726,6 +3735,38 @@ def _vindex(x, *indexes):
     >>> result.compute()
     array([ 0,  9, 48,  7])
     """
+    indexes = replace_ellipsis(x.ndim, indexes)
+    partial_slices = {i: ind for i, ind in enumerate(indexes)
+                      if isinstance(ind, slice) and ind != slice(None)}
+    if partial_slices:
+        key = tuple(partial_slices.get(i, slice(None))
+                    for i in range(len(indexes)))
+        x = x[key]
+
+    array_indexes = {i: np.asarray(ind) for i, ind in enumerate(indexes)
+                     if not isinstance(ind, slice)}
+    if any(ind.dtype.kind == 'b' for ind in array_indexes.values()):
+        raise IndexError('vindex does not support indexing with boolean arrays')
+
+    try:
+        broadcast_indexes = np.broadcast_arrays(*array_indexes.values())
+    except ValueError:
+        # note: error message exactly matches numpy
+        shapes_str = ' '.join(str(a.shape) for a in array_indexes.values())
+        raise IndexError('shape mismatch: indexing arrays could not be '
+                         'broadcast together with shapes ' + shapes_str)
+    broadcast_shape = broadcast_indexes[0].shape
+
+    lookup = dict(zip(array_indexes, broadcast_indexes))
+    flat_indexes = [lookup[i].ravel().tolist() if i in lookup else None
+                    for i in range(len(indexes))]
+    flat_indexes.extend([None] * (x.ndim - len(flat_indexes)))
+    result_1d = _vindex_1d(x, *flat_indexes)
+    return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
+
+
+def _vindex_1d(x, *indexes):
+    """Point wise indexing with only 1D lists and full slices."""
     indexes = [list(index) if index is not None else index for index in indexes]
     bounds = [list(accumulate(add, (0,) + c)) for c in x.chunks]
     bounds2 = [b for i, b in zip(indexes, bounds) if i is not None]
