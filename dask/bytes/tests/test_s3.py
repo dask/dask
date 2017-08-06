@@ -282,9 +282,17 @@ def test_read_text_passes_through_options():
         assert df.count().compute(get=get) == 3
 
 
-def test_parquet(s3):
+@pytest.mark.parametrize("engine", [
+    'auto',
+    'pyarrow',
+    'fastparquet'
+])
+def test_parquet(s3, engine):
     dd = pytest.importorskip('dask.dataframe')
-    pytest.importorskip('fastparquet')
+    if engine is not 'auto':
+        pytest.importorskip(engine)
+    else:
+        pytest.importorskip('fastparquet')
     from dask.dataframe.io.parquet import to_parquet, read_parquet
 
     import pandas as pd
@@ -306,7 +314,7 @@ def test_parquet(s3):
     assert '_metadata' in files
     assert 'part.0.parquet' in files
 
-    df2 = read_parquet(url, index='foo')
+    df2 = read_parquet(url, index='foo', engine=engine)
     assert len(df2.divisions) > 1
 
     pd.util.testing.assert_frame_equal(data, df2.compute())

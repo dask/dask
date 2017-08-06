@@ -172,7 +172,10 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
     if isinstance(columns, tuple):
         columns = list(columns)
 
-    dataset = api.ParquetDataset(paths)
+    dataset = api.ParquetDataset(
+        path_or_paths=paths,
+        filesystem=fs
+    )
     schema = dataset.schema.to_arrow_schema()
     has_pandas_metadata = schema.metadata is not None and b'pandas' in schema.metadata
     task_name = 'read-parquet-' + tokenize(dataset, columns)
