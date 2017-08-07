@@ -214,7 +214,7 @@ def test_subs_with_unfriendly_eq():
 def test_subs_with_surprisingly_friendly_eq():
     try:
         import pandas as pd
-    except: ImportError
+    except ImportError:
         return
     else:
         df = pd.DataFrame()
