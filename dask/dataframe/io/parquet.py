@@ -18,13 +18,13 @@ try:
     from fastparquet.api import _pre_allocate
     from fastparquet.util import check_column_names
     default_encoding = parquet_thrift.Encoding.PLAIN
-except:
+except ImportError:
     fastparquet = False
     default_encoding = None
 
 try:
     import pyarrow.parquet as pyarrow_parquet
-except:
+except ImportError:
     pyarrow_parquet = False
 
 
@@ -54,7 +54,7 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
             pf = fastparquet.ParquetFile(paths[0] + fs.sep + '_metadata',
                                          open_with=myopen,
                                          sep=fs.sep)
-        except:
+        except Exception:
             pf = fastparquet.ParquetFile(paths[0], open_with=myopen, sep=fs.sep)
 
     check_column_names(pf.columns, categories)

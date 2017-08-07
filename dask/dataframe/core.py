@@ -51,7 +51,7 @@ def _concat(args):
     if not isinstance(args[0], (pd.DataFrame, pd.Series, pd.Index)):
         try:
             return pd.Series(args)
-        except:
+        except Exception:
             return args
     # We filter out empty partitions here because pandas frequently has
     # inconsistent dtypes in results between empty and non-empty frames.

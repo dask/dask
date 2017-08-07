@@ -57,7 +57,7 @@ def s3_context(bucket, files):
     for f, data in files.items():
         try:
             client.delete_object(Bucket=bucket, Key=f, Body=data)
-        except:
+        except Exception:
             pass
     m.stop()
 

@@ -53,7 +53,7 @@ def has_tasks(dsk, x):
     try:
         if x in dsk:
             return True
-    except:
+    except Exception:
         pass
     if isinstance(x, list):
         for i in x:

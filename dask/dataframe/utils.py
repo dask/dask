@@ -285,7 +285,7 @@ def make_meta(x, index=None):
         try:
             dtype = np.dtype(x)
             return _scalar_from_dtype(dtype)
-        except:
+        except Exception:
             # Continue on to next check
             pass
 

@@ -11,11 +11,11 @@ import pytest
 
 try:
     import bokeh
-except:
+except ImportError:
     bokeh = None
 try:
     import psutil
-except:
+except ImportError:
     psutil = None
 
 
