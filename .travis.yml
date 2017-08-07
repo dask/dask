@@ -25,7 +25,7 @@ install: source continuous_integration/travis/install.sh
 script:
   - source continuous_integration/travis/run_tests.sh
   - flake8 dask
-  - pycodestyle --select=E722 --exclude=tests dask  # check for bare `except:` blocks
+  - pycodestyle --select=E722 dask  # check for bare `except:` blocks
   - if [[ $TEST_IMPORTS == 'true' ]]; then source continuous_integration/travis/test_imports.sh; fi
 after_success: source continuous_integration/travis/after_success.sh
 
