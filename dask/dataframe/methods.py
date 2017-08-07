@@ -253,7 +253,7 @@ def concat(dfs, axis=0, join='outer', uniform=False):
             new_tuples = np.concatenate(to_concat)
             try:
                 return pd.MultiIndex.from_tuples(new_tuples, names=first.names)
-            except:
+            except Exception:
                 return pd.Index(new_tuples)
         return dfs[0].append(dfs[1:])
 

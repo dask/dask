@@ -194,7 +194,7 @@ def test_subs_no_key_data_eq():
 def test_subs_with_unfriendly_eq():
     try:
         import numpy as np
-    except:
+    except ImportError:
         return
     else:
         task = (np.sum, np.array([1, 2]))
@@ -214,7 +214,7 @@ def test_subs_with_unfriendly_eq():
 def test_subs_with_surprisingly_friendly_eq():
     try:
         import pandas as pd
-    except:
+    except: ImportError
         return
     else:
         df = pd.DataFrame()

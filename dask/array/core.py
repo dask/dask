@@ -731,7 +731,7 @@ def map_blocks(func, *args, **kwargs):
         else:
             try:
                 chunks2 = list(broadcast_chunks(*[a.chunks for a in arrs]))
-            except:
+            except Exception:
                 raise ValueError("Arrays in `map_blocks` don't align, can't "
                                  "infer output chunks. Please provide "
                                  "`chunks` kwarg.")
