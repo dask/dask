@@ -16,7 +16,7 @@ from ...delayed import delayed
 
 from ..core import DataFrame, Series, new_dd_object
 from ..shuffle import set_partition
-from ..utils import insert_meta_param_description, check_meta
+from ..utils import insert_meta_param_description, check_meta, make_meta
 
 from ...utils import M, ensure_dict
 
@@ -502,10 +502,7 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed'):
 
     if meta is None:
         meta = dfs[0].compute()
-    if isinstance(meta, (str, pd.Series)):
-        Frame = Series
-    else:
-        Frame = DataFrame
+    meta = make_meta(meta)
 
     name = prefix + '-' + tokenize(*dfs)
     dsk = merge(df.dask for df in dfs)
@@ -519,7 +516,7 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed'):
         if len(divs) != len(dfs) + 1:
             raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
-    df = Frame(dsk, name, meta, divs)
+    df = new_dd_object(dsk, name, meta, divs)
 
     if divisions == 'sorted':
         from ..shuffle import compute_divisions

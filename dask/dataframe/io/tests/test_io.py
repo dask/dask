@@ -510,6 +510,10 @@ def test_from_delayed():
         assert list(s.map_partitions(my_len).compute()) == [1, 2, 3, 4]
         assert ddf.known_divisions == (divisions is not None)
 
+    meta2 = [(c, 'f8') for c in df.columns]
+    assert_eq(dd.from_delayed(dfs, meta=meta2), df)
+    assert_eq(dd.from_delayed([d.a for d in dfs], meta=('a', 'f8')), df.a)
+
     with pytest.raises(ValueError):
         dd.from_delayed(dfs, meta=meta, divisions=[0, 1, 3, 6])
 
