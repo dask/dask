@@ -654,7 +654,7 @@ def map_blocks(func, *args, **kwargs):
         spec = getargspec(func)
         block_id = ('block_id' in spec.args or
                     'block_id' in getattr(spec, 'kwonly_args', ()))
-    except:
+    except Exception:
         block_id = False
 
     if block_id:
