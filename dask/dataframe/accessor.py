@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from toolz import partial
 
+from ..utils import derived_from
+
 
 def maybe_wrap_pandas(obj, x):
     if isinstance(x, np.ndarray):
@@ -100,3 +102,7 @@ class StringAccessor(Accessor):
     def _validate(self, series):
         if not series.dtype == 'object':
             raise AttributeError("Can only use .str accessor with object dtype")
+
+    @derived_from(pd.core.strings.StringMethods)
+    def split(self, pat=None, n=-1):
+        return self._function_map('split', pat=pat, n=n)
