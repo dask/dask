@@ -1348,6 +1348,10 @@ def test_str_accessor():
     assert 'str' not in dir(a.y)
     assert not hasattr(a.y, 'str')
 
+    # not implemented methods don't show up
+    assert 'get_dummies' not in dir(a.x.str)
+    assert not hasattr(a.x.str, 'get_dummies')
+
     assert 'upper' in dir(a.x.str)
     assert_eq(a.x.str.upper(), df.x.str.upper())
     assert set(a.x.str.upper().dask) == set(a.x.str.upper().dask)
