@@ -8,7 +8,8 @@ import toolz
 from ..base import tokenize
 from ..compatibility import apply
 from .. import sharedict
-from .core import top, dotmany, Array, eye
+from .core import top, dotmany, Array
+from .creation import eye
 from .random import RandomState
 
 

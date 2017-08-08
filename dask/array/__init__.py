@@ -7,9 +7,8 @@ from .core import (Array, stack, concatenate, take, tensordot, transpose,
         tile, digitize, histogram, map_blocks, atop, to_hdf5, dot, cov, array,
         dstack, vstack, hstack, to_npy_stack, from_npy_stack, compress,
         extract, from_delayed, round, swapaxes, repeat, count_nonzero,
-        flatnonzero, nonzero, asarray, asanyarray)
-from .core import (around, isnull, notnull, isclose, eye, triu,
-                   tril, diag, corrcoef)
+        flatnonzero, nonzero, asarray, asanyarray, around, isnull, notnull,
+        isclose, corrcoef)
 from .reshape import reshape
 from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
         true_divide, floor_divide, negative, power, remainder, mod, conj, exp,
@@ -37,4 +36,4 @@ from .rechunk import rechunk
 from ..context import set_options
 from ..base import compute
 from .optimization import optimize
-from .creation import arange, linspace, indices
+from .creation import arange, linspace, indices, diag, eye, triu, tril
