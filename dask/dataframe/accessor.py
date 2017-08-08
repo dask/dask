@@ -26,6 +26,8 @@ class Accessor(object):
     * _accessor
     * _accessor_name
     """
+    _not_implemented = set()
+
     def __init__(self, series):
         from .core import Series
         if not isinstance(series, Series):
@@ -62,12 +64,15 @@ class Accessor(object):
                                            self._accessor_name, attr, args,
                                            kwargs, meta=meta, token=token)
 
+    @property
+    def _delegates(self):
+        return set(dir(self._accessor)).difference(self._not_implemented)
+
     def __dir__(self):
-        return sorted(set(dir(type(self)) + list(self.__dict__) +
-                      dir(self._accessor)))
+        return self._delegates.union(dir(type(self)) + list(self.__dict__))
 
     def __getattr__(self, key):
-        if key in dir(self._accessor):
+        if key in self._delegates:
             if isinstance(getattr(self._accessor, key), property):
                 return self._property_map(key)
             else:
@@ -98,6 +103,7 @@ class StringAccessor(Accessor):
     """
     _accessor = pd.Series.str
     _accessor_name = 'str'
+    _not_implemented = {'get_dummies'}
 
     def _validate(self, series):
         if not series.dtype == 'object':
