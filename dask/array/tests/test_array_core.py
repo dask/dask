@@ -30,12 +30,11 @@ from dask.array.core import (getem, getter, top, dotmany,
                              concatenate, from_array, take, elemwise, isnull,
                              notnull, broadcast_shapes, partial_by_order,
                              tensordot, choose, where, coarsen, insert,
-                             broadcast_to, fromfunction,
-                             blockdims_from_blockshape, store, optimize,
-                             from_func, normalize_chunks, broadcast_chunks,
-                             atop, from_delayed, concatenate_axes,
-                             common_blockdim)
-from dask.array.utils import assert_eq
+                             broadcast_to, blockdims_from_blockshape, store,
+                             optimize, from_func, normalize_chunks,
+                             broadcast_chunks, atop, from_delayed,
+                             concatenate_axes, common_blockdim)
+from dask.array.utils import assert_eq, same_keys
 
 # temporary until numpy functions migrated
 try:
@@ -44,15 +43,6 @@ except ImportError:  # pragma: no cover
     import dask.array.numpy_compat as npcompat
     nancumsum = npcompat.nancumsum
     nancumprod = npcompat.nancumprod
-
-
-def same_keys(a, b):
-    def key(k):
-        if isinstance(k, str):
-            return (k, -1, -1, -1)
-        else:
-            return k
-    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
 
 
 def test_getem():
@@ -1285,15 +1275,6 @@ def test_map_blocks_dtype_inference():
         assert 'RuntimeError' in e.args[0]
     else:
         assert False, "Should have errored"
-
-
-def test_fromfunction():
-    def f(x, y):
-        return x + y
-    d = fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8')
-
-    assert_eq(d, np.fromfunction(f, shape=(5, 5)))
-    assert same_keys(d, fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8'))
 
 
 def test_from_function_requires_block_args():
@@ -2938,79 +2919,6 @@ def test_round():
         assert_eq(x.round(i), d.round(i))
 
     assert_eq(d.round(2), da.round(d, 2))
-
-
-def test_repeat():
-    x = np.random.random((10, 11, 13))
-    d = da.from_array(x, chunks=(4, 5, 3))
-
-    repeats = [1, 2, 5]
-    axes = [-3, -2, -1, 0, 1, 2]
-
-    for r in repeats:
-        for a in axes:
-            assert_eq(x.repeat(r, axis=a), d.repeat(r, axis=a))
-
-    assert_eq(d.repeat(2, 0), da.repeat(d, 2, 0))
-
-    with pytest.raises(NotImplementedError):
-        da.repeat(d, np.arange(10))
-
-    with pytest.raises(NotImplementedError):
-        da.repeat(d, 2, None)
-
-    with pytest.raises(NotImplementedError):
-        da.repeat(d, 2)
-
-    for invalid_axis in [3, -4]:
-        with pytest.raises(ValueError):
-            da.repeat(d, 2, axis=invalid_axis)
-
-    x = np.arange(5)
-    d = da.arange(5, chunks=(2,))
-
-    assert_eq(x.repeat(3), d.repeat(3))
-
-    for r in [1, 2, 3, 4]:
-        assert all(concat(d.repeat(r).chunks))
-
-
-@pytest.mark.parametrize('shape, chunks', [
-    ((10,), (1,)),
-    ((10, 11, 13), (4, 5, 3)),
-])
-@pytest.mark.parametrize('reps', [0, 1, 2, 3, 5])
-def test_tile(shape, chunks, reps):
-    x = np.random.random(shape)
-    d = da.from_array(x, chunks=chunks)
-
-    assert_eq(np.tile(x, reps), da.tile(d, reps))
-
-
-@pytest.mark.parametrize('shape, chunks', [
-    ((10,), (1,)),
-    ((10, 11, 13), (4, 5, 3)),
-])
-@pytest.mark.parametrize('reps', [-1, -5])
-def test_tile_neg_reps(shape, chunks, reps):
-    x = np.random.random(shape)
-    d = da.from_array(x, chunks=chunks)
-
-    with pytest.raises(ValueError):
-        da.tile(d, reps)
-
-
-@pytest.mark.parametrize('shape, chunks', [
-    ((10,), (1,)),
-    ((10, 11, 13), (4, 5, 3)),
-])
-@pytest.mark.parametrize('reps', [[1], [1, 2]])
-def test_tile_array_reps(shape, chunks, reps):
-    x = np.random.random(shape)
-    d = da.from_array(x, chunks=chunks)
-
-    with pytest.raises(NotImplementedError):
-        da.tile(d, reps)
 
 
 def test_concatenate_stack_dont_warn():

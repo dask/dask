@@ -1,15 +1,19 @@
 from __future__ import absolute_import, division, print_function
 
 from functools import partial, wraps
-import itertools
+from itertools import chain, product
+from operator import add
+from numbers import Integral
 
 import numpy as np
+from toolz import accumulate, sliding_window
 
-from .core import Array, normalize_chunks, stack
-from .wrap import empty
-from . import chunk
-from ..base import tokenize
 from .. import sharedict
+from ..base import tokenize
+from ..utils import ignoring
+from . import chunk
+from .core import Array, normalize_chunks, stack, concatenate
+from .wrap import empty
 
 
 def linspace(start, stop, num=50, chunks=None, dtype=None):
@@ -184,7 +188,7 @@ def indices(dimensions, dtype=int, chunks=None):
             r = arange(dimensions[i], dtype=dtype, chunks=chunks[i])
             r = r[s]
 
-            for j in itertools.chain(range(i), range(i + 1, len(dimensions))):
+            for j in chain(range(i), range(i + 1, len(dimensions))):
                 r = r.repeat(dimensions[j], axis=j)
 
             grid.append(r)
@@ -388,3 +392,102 @@ def tril(m, k=0):
                 dsk[(name, i, j)] = (np.zeros, (m.chunks[0][i], m.chunks[1][j]))
     dsk = sharedict.merge(m.dask, (name, dsk))
     return Array(dsk, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
+
+
+def offset_func(func, offset, *args):
+    """  Offsets inputs by offset
+
+    >>> double = lambda x: x * 2
+    >>> f = offset_func(double, (10,))
+    >>> f(1)
+    22
+    >>> f(300)
+    620
+    """
+    def _offset(*args):
+        args2 = list(map(add, args, offset))
+        return func(*args2)
+
+    with ignoring(Exception):
+        _offset.__name__ = 'offset_' + func.__name__
+
+    return _offset
+
+
+@wraps(np.fromfunction)
+def fromfunction(func, chunks=None, shape=None, dtype=None):
+    if chunks:
+        chunks = normalize_chunks(chunks, shape)
+    name = 'fromfunction-' + tokenize(func, chunks, shape, dtype)
+    keys = list(product([name], *[range(len(bd)) for bd in chunks]))
+    aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in chunks]
+    offsets = list(product(*aggdims))
+    shapes = list(product(*chunks))
+
+    values = [(np.fromfunction, offset_func(func, offset), shp)
+              for offset, shp in zip(offsets, shapes)]
+
+    dsk = dict(zip(keys, values))
+
+    return Array(dsk, name, chunks, dtype=dtype)
+
+
+@wraps(np.repeat)
+def repeat(a, repeats, axis=None):
+    if axis is None:
+        if a.ndim == 1:
+            axis = 0
+        else:
+            raise NotImplementedError("Must supply an integer axis value")
+
+    if not isinstance(repeats, Integral):
+        raise NotImplementedError("Only integer valued repeats supported")
+
+    if -a.ndim <= axis < 0:
+        axis += a.ndim
+    elif not 0 <= axis <= a.ndim - 1:
+        raise ValueError("axis(=%d) out of bounds" % axis)
+
+    if repeats == 1:
+        return a
+
+    cchunks = np.cumsum((0,) + a.chunks[axis])
+    slices = []
+    for c_start, c_stop in sliding_window(2, cchunks):
+        ls = np.linspace(c_start, c_stop, repeats).round(0)
+        for ls_start, ls_stop in sliding_window(2, ls):
+            if ls_start != ls_stop:
+                slices.append(slice(ls_start, ls_stop))
+
+    all_slice = slice(None, None, None)
+    slices = [(all_slice,) * axis + (s,) + (all_slice,) * (a.ndim - axis - 1)
+              for s in slices]
+
+    slabs = [a[slc] for slc in slices]
+
+    out = []
+    for slab in slabs:
+        chunks = list(slab.chunks)
+        assert len(chunks[axis]) == 1
+        chunks[axis] = (chunks[axis][0] * repeats,)
+        chunks = tuple(chunks)
+        result = slab.map_blocks(np.repeat, repeats, axis=axis, chunks=chunks,
+                                 dtype=slab.dtype)
+        out.append(result)
+
+    return concatenate(out, axis=axis)
+
+
+@wraps(np.tile)
+def tile(A, reps):
+    if not isinstance(reps, Integral):
+        raise NotImplementedError("Only integer valued `reps` supported.")
+
+    if reps < 0:
+        raise ValueError("Negative `reps` are not allowed.")
+    elif reps == 0:
+        return A[..., :0]
+    elif reps == 1:
+        return A
+
+    return concatenate(reps * [A], axis=-1)

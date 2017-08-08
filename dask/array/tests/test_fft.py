@@ -7,20 +7,11 @@ import pytest
 import dask.array as da
 import dask.array.fft
 from dask.array.fft import fft_wrap
-from dask.array.utils import assert_eq
+from dask.array.utils import assert_eq, same_keys
 
 from dask.array.core import (
     normalize_chunks as _normalize_chunks,
 )
-
-
-def same_keys(a, b):
-    def key(k):
-        if isinstance(k, str):
-            return (k, -1, -1, -1)
-        else:
-            return k
-    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
 
 
 all_1d_funcnames = [

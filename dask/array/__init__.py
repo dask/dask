@@ -3,12 +3,11 @@ from __future__ import absolute_import, division, print_function
 from ..utils import ignoring
 from .core import (Array, stack, concatenate, take, tensordot, transpose,
         from_array, choose, argwhere, where, coarsen, insert, broadcast_to,
-        ravel, roll, fromfunction, unique, store, squeeze, topk, bincount,
-        tile, digitize, histogram, map_blocks, atop, to_hdf5, dot, cov, array,
-        dstack, vstack, hstack, to_npy_stack, from_npy_stack, compress,
-        extract, from_delayed, round, swapaxes, repeat, count_nonzero,
-        flatnonzero, nonzero, asarray, asanyarray, around, isnull, notnull,
-        isclose, corrcoef)
+        ravel, roll, unique, store, squeeze, topk, bincount, digitize,
+        histogram, map_blocks, atop, to_hdf5, dot, cov, array, dstack, vstack,
+        hstack, to_npy_stack, from_npy_stack, compress, extract, from_delayed,
+        round, swapaxes, count_nonzero, flatnonzero, nonzero, asarray,
+        asanyarray, around, isnull, notnull, isclose, corrcoef)
 from .reshape import reshape
 from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
         true_divide, floor_divide, negative, power, remainder, mod, conj, exp,
@@ -36,4 +35,5 @@ from .rechunk import rechunk
 from ..context import set_options
 from ..base import compute
 from .optimization import optimize
-from .creation import arange, linspace, indices, diag, eye, triu, tril
+from .creation import (arange, linspace, indices, diag, eye, triu, tril,
+                       fromfunction, tile, repeat)

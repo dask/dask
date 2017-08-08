@@ -10,17 +10,8 @@ import dask.array as da
 from dask.array.slicing import (_sanitize_index_element, _slice_1d,
                                 new_blockdim, sanitize_index, slice_array,
                                 take)
-from dask.array.utils import assert_eq
+from dask.array.utils import assert_eq, same_keys
 from dask.compatibility import skip
-
-
-def same_keys(a, b):
-    def key(k):
-        if isinstance(k, str):
-            return (k, -1, -1, -1)
-        else:
-            return k
-    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
 
 
 def test_slice_1d():

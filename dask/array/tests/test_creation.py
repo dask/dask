@@ -3,9 +3,10 @@ pytest.importorskip('numpy')
 
 import numpy as np
 import pytest
+from toolz import concat
 
 import dask.array as da
-from dask.array.utils import assert_eq
+from dask.array.utils import assert_eq, same_keys
 
 
 def test_linspace():
@@ -222,3 +223,85 @@ def test_diag():
 
     d = da.from_array(x, chunks=(4, 4))
     assert_eq(da.diag(d), np.diag(x))
+
+
+def test_fromfunction():
+    def f(x, y):
+        return x + y
+    d = da.fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8')
+
+    assert_eq(d, np.fromfunction(f, shape=(5, 5)))
+    assert same_keys(d, da.fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8'))
+
+
+def test_repeat():
+    x = np.random.random((10, 11, 13))
+    d = da.from_array(x, chunks=(4, 5, 3))
+
+    repeats = [1, 2, 5]
+    axes = [-3, -2, -1, 0, 1, 2]
+
+    for r in repeats:
+        for a in axes:
+            assert_eq(x.repeat(r, axis=a), d.repeat(r, axis=a))
+
+    assert_eq(d.repeat(2, 0), da.repeat(d, 2, 0))
+
+    with pytest.raises(NotImplementedError):
+        da.repeat(d, np.arange(10))
+
+    with pytest.raises(NotImplementedError):
+        da.repeat(d, 2, None)
+
+    with pytest.raises(NotImplementedError):
+        da.repeat(d, 2)
+
+    for invalid_axis in [3, -4]:
+        with pytest.raises(ValueError):
+            da.repeat(d, 2, axis=invalid_axis)
+
+    x = np.arange(5)
+    d = da.arange(5, chunks=(2,))
+
+    assert_eq(x.repeat(3), d.repeat(3))
+
+    for r in [1, 2, 3, 4]:
+        assert all(concat(d.repeat(r).chunks))
+
+
+@pytest.mark.parametrize('shape, chunks', [
+    ((10,), (1,)),
+    ((10, 11, 13), (4, 5, 3)),
+])
+@pytest.mark.parametrize('reps', [0, 1, 2, 3, 5])
+def test_tile(shape, chunks, reps):
+    x = np.random.random(shape)
+    d = da.from_array(x, chunks=chunks)
+
+    assert_eq(np.tile(x, reps), da.tile(d, reps))
+
+
+@pytest.mark.parametrize('shape, chunks', [
+    ((10,), (1,)),
+    ((10, 11, 13), (4, 5, 3)),
+])
+@pytest.mark.parametrize('reps', [-1, -5])
+def test_tile_neg_reps(shape, chunks, reps):
+    x = np.random.random(shape)
+    d = da.from_array(x, chunks=chunks)
+
+    with pytest.raises(ValueError):
+        da.tile(d, reps)
+
+
+@pytest.mark.parametrize('shape, chunks', [
+    ((10,), (1,)),
+    ((10, 11, 13), (4, 5, 3)),
+])
+@pytest.mark.parametrize('reps', [[1], [1, 2]])
+def test_tile_array_reps(shape, chunks, reps):
+    x = np.random.random(shape)
+    d = da.from_array(x, chunks=chunks)
+
+    with pytest.raises(NotImplementedError):
+        da.tile(d, reps)
