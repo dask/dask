@@ -25,15 +25,17 @@ from dask.utils import ignoring, tmpfile, tmpdir
 from dask.utils_test import inc
 
 from dask.array import chunk
-from dask.array.core import (getem, getter, top, dotmany,
-                             concatenate3, broadcast_dimensions, Array, stack,
-                             concatenate, from_array, take, elemwise, isnull,
-                             notnull, broadcast_shapes, partial_by_order,
-                             tensordot, choose, where, coarsen, insert,
-                             broadcast_to, blockdims_from_blockshape, store,
-                             optimize, from_func, normalize_chunks,
-                             broadcast_chunks, atop, from_delayed,
-                             concatenate_axes, common_blockdim)
+
+from dask.array.core import (getem, getter, top, dotmany, concatenate3,
+                             broadcast_dimensions, Array, stack, concatenate,
+                             from_array, elemwise, broadcast_shapes,
+                             partial_by_order, broadcast_to,
+                             blockdims_from_blockshape, store, optimize,
+                             from_func, normalize_chunks, broadcast_chunks,
+                             atop, from_delayed, concatenate_axes,
+                             common_blockdim)
+from dask.array.routines import (take, isnull, notnull, tensordot, choose,
+                                 where, coarsen, insert)
 from dask.array.utils import assert_eq, same_keys
 
 # temporary until numpy functions migrated

@@ -1,13 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
 from ..utils import ignoring
-from .core import (Array, stack, concatenate, take, tensordot, transpose,
-        from_array, choose, argwhere, where, coarsen, insert, broadcast_to,
-        ravel, roll, unique, store, squeeze, topk, bincount, digitize,
-        histogram, map_blocks, atop, to_hdf5, dot, cov, array, dstack, vstack,
-        hstack, to_npy_stack, from_npy_stack, compress, extract, from_delayed,
-        round, swapaxes, count_nonzero, flatnonzero, nonzero, asarray,
-        asanyarray, around, isnull, notnull, isclose, corrcoef)
+from .core import (Array, concatenate, stack, from_array, store, map_blocks,
+                   atop, to_hdf5, to_npy_stack, from_npy_stack, from_delayed,
+                   asarray, asanyarray, broadcast_to)
+from .routines import (take, choose, argwhere, where, coarsen, insert,
+                       ravel, roll, unique, squeeze, topk,
+                       bincount, digitize, histogram, cov, array, dstack,
+                       vstack, hstack, compress, extract, round, count_nonzero,
+                       flatnonzero, nonzero, around, isnull, notnull, isclose,
+                       corrcoef, swapaxes, tensordot, transpose, dot)
 from .reshape import reshape
 from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
         true_divide, floor_divide, negative, power, remainder, mod, conj, exp,
