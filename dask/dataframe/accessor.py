@@ -69,7 +69,10 @@ class Accessor(object):
         return set(dir(self._accessor)).difference(self._not_implemented)
 
     def __dir__(self):
-        return self._delegates.union(dir(type(self)) + list(self.__dict__))
+        o = self._delegates
+        o.update(self.__dict__)
+        o.update(dir(type(self)))
+        return list(o)
 
     def __getattr__(self, key):
         if key in self._delegates:
