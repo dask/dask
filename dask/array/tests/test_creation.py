@@ -3,9 +3,10 @@ pytest.importorskip('numpy')
 
 import numpy as np
 import pytest
+from toolz import concat
 
 import dask.array as da
-from dask.array.utils import assert_eq
+from dask.array.utils import assert_eq, same_keys
 
 
 def test_linspace():
@@ -152,3 +153,155 @@ def test_indicies():
     darr = da.indices((2, 3), chunks=(1, 2))
     nparr = np.indices((2, 3))
     assert_eq(darr, nparr)
+
+
+def test_tril_triu():
+    A = np.random.randn(20, 20)
+    for chk in [5, 4]:
+        dA = da.from_array(A, (chk, chk))
+
+        assert np.allclose(da.triu(dA).compute(), np.triu(A))
+        assert np.allclose(da.tril(dA).compute(), np.tril(A))
+
+        for k in [-25, -20, -19, -15, -14, -9, -8, -6, -5, -1,
+                  1, 4, 5, 6, 8, 10, 11, 15, 16, 19, 20, 21]:
+            assert np.allclose(da.triu(dA, k).compute(), np.triu(A, k))
+            assert np.allclose(da.tril(dA, k).compute(), np.tril(A, k))
+
+
+def test_tril_triu_errors():
+    A = np.random.randint(0, 11, (10, 10, 10))
+    dA = da.from_array(A, chunks=(5, 5, 5))
+    pytest.raises(ValueError, lambda: da.triu(dA))
+
+    A = np.random.randint(0, 11, (30, 35))
+    dA = da.from_array(A, chunks=(5, 5))
+    pytest.raises(NotImplementedError, lambda: da.triu(dA))
+
+
+def test_eye():
+    assert_eq(da.eye(9, chunks=3), np.eye(9))
+    assert_eq(da.eye(10, chunks=3), np.eye(10))
+    assert_eq(da.eye(9, chunks=3, M=11), np.eye(9, M=11))
+    assert_eq(da.eye(11, chunks=3, M=9), np.eye(11, M=9))
+    assert_eq(da.eye(7, chunks=3, M=11), np.eye(7, M=11))
+    assert_eq(da.eye(11, chunks=3, M=7), np.eye(11, M=7))
+    assert_eq(da.eye(9, chunks=3, k=2), np.eye(9, k=2))
+    assert_eq(da.eye(9, chunks=3, k=-2), np.eye(9, k=-2))
+    assert_eq(da.eye(7, chunks=3, M=11, k=5), np.eye(7, M=11, k=5))
+    assert_eq(da.eye(11, chunks=3, M=7, k=-6), np.eye(11, M=7, k=-6))
+    assert_eq(da.eye(6, chunks=3, M=9, k=7), np.eye(6, M=9, k=7))
+    assert_eq(da.eye(12, chunks=3, M=6, k=-3), np.eye(12, M=6, k=-3))
+
+    assert_eq(da.eye(9, chunks=3, dtype=int), np.eye(9, dtype=int))
+    assert_eq(da.eye(10, chunks=3, dtype=int), np.eye(10, dtype=int))
+
+
+def test_diag():
+    v = np.arange(11)
+    assert_eq(da.diag(v), np.diag(v))
+
+    v = da.arange(11, chunks=3)
+    darr = da.diag(v)
+    nparr = np.diag(v)
+    assert_eq(darr, nparr)
+    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
+
+    v = v + v + 3
+    darr = da.diag(v)
+    nparr = np.diag(v)
+    assert_eq(darr, nparr)
+
+    v = da.arange(11, chunks=11)
+    darr = da.diag(v)
+    nparr = np.diag(v)
+    assert_eq(darr, nparr)
+    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
+
+    x = np.arange(64).reshape((8, 8))
+    assert_eq(da.diag(x), np.diag(x))
+
+    d = da.from_array(x, chunks=(4, 4))
+    assert_eq(da.diag(d), np.diag(x))
+
+
+def test_fromfunction():
+    def f(x, y):
+        return x + y
+    d = da.fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8')
+
+    assert_eq(d, np.fromfunction(f, shape=(5, 5)))
+    assert same_keys(d, da.fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8'))
+
+
+def test_repeat():
+    x = np.random.random((10, 11, 13))
+    d = da.from_array(x, chunks=(4, 5, 3))
+
+    repeats = [1, 2, 5]
+    axes = [-3, -2, -1, 0, 1, 2]
+
+    for r in repeats:
+        for a in axes:
+            assert_eq(x.repeat(r, axis=a), d.repeat(r, axis=a))
+
+    assert_eq(d.repeat(2, 0), da.repeat(d, 2, 0))
+
+    with pytest.raises(NotImplementedError):
+        da.repeat(d, np.arange(10))
+
+    with pytest.raises(NotImplementedError):
+        da.repeat(d, 2, None)
+
+    with pytest.raises(NotImplementedError):
+        da.repeat(d, 2)
+
+    for invalid_axis in [3, -4]:
+        with pytest.raises(ValueError):
+            da.repeat(d, 2, axis=invalid_axis)
+
+    x = np.arange(5)
+    d = da.arange(5, chunks=(2,))
+
+    assert_eq(x.repeat(3), d.repeat(3))
+
+    for r in [1, 2, 3, 4]:
+        assert all(concat(d.repeat(r).chunks))
+
+
+@pytest.mark.parametrize('shape, chunks', [
+    ((10,), (1,)),
+    ((10, 11, 13), (4, 5, 3)),
+])
+@pytest.mark.parametrize('reps', [0, 1, 2, 3, 5])
+def test_tile(shape, chunks, reps):
+    x = np.random.random(shape)
+    d = da.from_array(x, chunks=chunks)
+
+    assert_eq(np.tile(x, reps), da.tile(d, reps))
+
+
+@pytest.mark.parametrize('shape, chunks', [
+    ((10,), (1,)),
+    ((10, 11, 13), (4, 5, 3)),
+])
+@pytest.mark.parametrize('reps', [-1, -5])
+def test_tile_neg_reps(shape, chunks, reps):
+    x = np.random.random(shape)
+    d = da.from_array(x, chunks=chunks)
+
+    with pytest.raises(ValueError):
+        da.tile(d, reps)
+
+
+@pytest.mark.parametrize('shape, chunks', [
+    ((10,), (1,)),
+    ((10, 11, 13), (4, 5, 3)),
+])
+@pytest.mark.parametrize('reps', [[1], [1, 2]])
+def test_tile_array_reps(shape, chunks, reps):
+    x = np.random.random(shape)
+    d = da.from_array(x, chunks=chunks)
+
+    with pytest.raises(NotImplementedError):
+        da.tile(d, reps)

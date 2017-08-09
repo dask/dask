@@ -9,16 +9,7 @@ import scipy.linalg
 
 import dask.array as da
 from dask.array.linalg import tsqr, svd_compressed, qr, svd
-from dask.array.utils import assert_eq
-
-
-def same_keys(a, b):
-    def key(k):
-        if isinstance(k, str):
-            return (k, -1, -1, -1)
-        else:
-            return k
-    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
+from dask.array.utils import assert_eq, same_keys
 
 
 def test_tsqr_regular_blocks():

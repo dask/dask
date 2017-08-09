@@ -4,7 +4,7 @@ import pytest
 pytest.importorskip('numpy')
 
 import dask.array as da
-from dask.array.utils import assert_eq as _assert_eq
+from dask.array.utils import assert_eq as _assert_eq, same_keys
 from dask.core import get_deps
 from dask.context import set_options
 
@@ -19,15 +19,6 @@ except ImportError:  # pragma: no cover
 
 def assert_eq(a, b):
     _assert_eq(a, b, equal_nan=True)
-
-
-def same_keys(a, b):
-    def key(k):
-        if isinstance(k, str):
-            return (k, -1, -1, -1)
-        else:
-            return k
-    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
 
 
 def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
