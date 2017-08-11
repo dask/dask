@@ -438,6 +438,17 @@ def test_slicing_consistent_names():
     assert same_keys(a[0], a[0])
     assert same_keys(a[:, [1, 2, 3]], a[:, [1, 2, 3]])
     assert same_keys(a[:, 5:2:-1], a[:, 5:2:-1])
+    assert same_keys(a[0, ...], a[0, ...])
+    assert same_keys(a[...], a[...])
+    assert same_keys(a[[1, 3, 5]], a[[1, 3, 5]])
+
+
+def test_slicing_consistent_names_after_normalization():
+    x = da.zeros(10, chunks=(5,))
+    assert same_keys(x[0:], x[:10])
+    assert same_keys(x[0:], x[0:10])
+    assert same_keys(x[0:], x[0:10:1])
+    assert same_keys(x[:], x[0:10:1])
 
 
 def test_sanitize_index_element():
@@ -515,7 +526,9 @@ def test_slicing_with_Nones(shape, slice):
 
 indexers = [Ellipsis, slice(2), 0, 1, -2, -1, slice(-2, None), None]
 
+
 """
+# We comment this out because it is 4096 tests
 @pytest.mark.parametrize('a', indexers)
 @pytest.mark.parametrize('b', indexers)
 @pytest.mark.parametrize('c', indexers)

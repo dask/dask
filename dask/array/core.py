@@ -1164,12 +1164,11 @@ class Array(Base):
                                       % type(key))
 
     def __getitem__(self, index):
-        out = 'getitem-' + tokenize(self, index)
-
         # Field access, e.g. x['a'] or x[['a', 'b']]
         if (isinstance(index, (str, unicode)) or
                 (isinstance(index, list) and index and
                  all(isinstance(i, (str, unicode)) for i in index))):
+            out = 'getitem-' + tokenize(self, index)
             if isinstance(index, (str, unicode)):
                 dt = self.dtype[index]
             else:
@@ -1193,9 +1192,13 @@ class Array(Base):
         if any(isinstance(i, Array) for i in index):
             raise NotImplementedError("Indexing with a dask Array")
 
+        from .slicing import normalize_index
+        index = normalize_index(index, self.shape)
+
         if all(isinstance(i, slice) and i == slice(None) for i in index):
             return self
 
+        out = 'getitem-' + tokenize(self, index)
         dsk, chunks = slice_array(out, self.name, self.chunks, index)
 
         dsk2 = sharedict.merge(self.dask, (out, dsk))

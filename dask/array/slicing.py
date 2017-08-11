@@ -93,7 +93,6 @@ def slice_array(out_name, in_name, blockdims, index):
 
     Parameters
     ----------
-
     in_name - string
       This is the dask variable name that will be used as input
     out_name - string
@@ -103,7 +102,6 @@ def slice_array(out_name, in_name, blockdims, index):
 
     Returns
     -------
-
     Dict where the keys are tuples of
 
         (out_name, dim_index[, dim_index[, ...]])
@@ -119,7 +117,6 @@ def slice_array(out_name, in_name, blockdims, index):
 
     Examples
     --------
-
     >>> dsk, blockdims = slice_array('y', 'x', [(20, 20, 20, 20, 20)],
     ...                              (slice(10, 35),))  #  doctest: +SKIP
     >>> dsk  # doctest: +SKIP
@@ -130,7 +127,6 @@ def slice_array(out_name, in_name, blockdims, index):
 
     See Also
     --------
-
     This function works by successively unwrapping cases and passing down
     through a sequence of functions.
 
@@ -697,6 +693,59 @@ def replace_ellipsis(n, index):
             index[loc + 1:])
 
 
+def normalize_slice(idx, dim):
+    if isinstance(idx, slice):
+        start, stop, step = idx.start, idx.stop, idx.step
+        if start is not None:
+            while start < 0:
+                start += dim
+        if stop is not None:
+            while stop < 0:
+                stop += dim
+        if start == 0:
+            start = None
+        if stop == dim:
+            stop = None
+        if step == 1:
+            step = None
+        return slice(start, stop, step)
+    return idx
+
+
+def normalize_index(idx, shape):
+    """ Normalize slicing indexes
+
+    1.  Replaces ellipses with many full slices
+    2.  Adds full slices to end of index
+    3.  Checks bounding conditions
+    4.  Replaces numpy arrays with lists
+    5.  Posify's integers and lists
+    6.  Normalizes slices to canonical form
+    """
+    if not isinstance(idx, tuple):
+        idx = (idx,)
+    idx = replace_ellipsis(len(shape), idx)
+    non_none = sum(i is not None for i in idx)
+    idx = idx + (slice(None),) * (len(shape) - non_none)
+    if len([i for i in idx if i is not None]) > len(shape):
+        raise IndexError("Too many indices for array")
+
+    none_shape = []
+    i = 0
+    for ind in idx:
+        if ind is not None:
+            none_shape.append(shape[i])
+            i += 1
+        else:
+            none_shape.append(None)
+
+    for i, d in zip(idx, none_shape):
+        check_index(i, d)
+    idx = tuple(map(sanitize_index, idx))
+    idx = tuple(map(normalize_slice, idx, none_shape))
+    return idx
+
+
 def check_index(ind, dimension):
     """ Check validity of index for a given dimension
 
@@ -732,6 +781,8 @@ def check_index(ind, dimension):
         if (x >= dimension).any() or (x < -dimension).any():
             raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
+        return
+    elif ind is None:
         return
 
     elif ind >= dimension:
