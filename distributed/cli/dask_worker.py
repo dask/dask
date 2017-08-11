@@ -107,6 +107,10 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
         logger.error("Failed to launch worker.  You cannot use the --name argument when nprocs > 1.")
         exit(1)
 
+    if nprocs > 1 and not nanny:
+        logger.error("Failed to launch worker.  You cannot use the --no-nanny argument when nprocs > 1.")
+        exit(1)
+
     if not nthreads:
         nthreads = _ncores // nprocs
 

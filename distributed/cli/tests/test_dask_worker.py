@@ -108,3 +108,11 @@ def test_scheduler_file(loop, nanny):
                     while not c.scheduler_info()['workers']:
                         sleep(0.1)
                         assert time() < start + 10
+
+
+def test_nprocs_requires_nanny(loop):
+    with popen(['dask-scheduler', '--no-bokeh']) as sched:
+        with popen(['dask-worker', '127.0.0.1:8786', '--nprocs=2',
+                    '--no-nanny']) as worker:
+            assert any(b'Failed to launch worker' in worker.stderr.readline()
+                       for i in range(15))
