@@ -15,6 +15,7 @@ import threading
 from threading import Thread, Semaphore
 from time import sleep
 import traceback
+import warnings
 import weakref
 import zipfile
 
@@ -29,7 +30,7 @@ import dask
 from dask import delayed
 from dask.context import _globals
 from distributed import (Worker, Nanny, recreate_exceptions, fire_and_forget,
-        get_client, secede, get_worker)
+        get_client, secede, get_worker, Executor)
 from distributed.comm import CommClosedError
 from distributed.utils_comm import WrappedKey
 from distributed.client import (Client, Future, _wait,
@@ -4563,6 +4564,15 @@ def test_quiet_quit_when_cluster_leaves(loop):
 
     loop.add_callback(loop.stop)
     thread.join(timeout=1)
+
+
+def test_warn_executor(loop):
+    with cluster() as (s, [a, b]):
+        with warnings.catch_warnings(record=True) as record:
+            with Executor(s['address'], loop=loop) as c:
+                pass
+
+        assert any('Client' in str(r.message) for r in record)
 
 
 if sys.version_info >= (3, 5):

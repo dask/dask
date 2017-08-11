@@ -20,6 +20,7 @@ import uuid
 import threading
 import six
 import socket
+import warnings
 import weakref
 
 import dask
@@ -2771,7 +2772,11 @@ class Client(Node):
         return collections_to_dsk(collections, *args, **kwargs)
 
 
-Executor = Client
+class Executor(Client):
+    """ Deprecated: see Client """
+    def __init__(self, *args, **kwargs):
+        warnings.warn("Executor has been renamed to Client")
+        super(Executor, self).__init__(*args, **kwargs)
 
 
 def CompatibleExecutor(*args, **kwargs):
