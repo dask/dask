@@ -876,10 +876,6 @@ class Client(Node):
         logger.warning("Scheduler exception:")
         logger.exception(exception)
 
-    def close(self, **kwargs):
-        """ Close this client and its connection to the scheduler """
-        return self.sync(self._close, **kwargs)
-
     @gen.coroutine
     def _close(self, fast=False):
         """ Send close signal and wait until scheduler completes """
@@ -910,13 +906,12 @@ class Client(Node):
     _shutdown = _close
 
     def close(self, timeout=10):
-        """ Send close signal and wait until scheduler terminates
+        """ Close this client
 
-        This cancels all currently running tasks, clears the state of the
-        scheduler, and shuts down all workers and scheduler.
+        Clients will also close automatically when your Python session ends
 
-        You do not need to call this when you finish your session.  You only
-        need to call this if you want to take down the distributed cluster.
+        If you started a client without arguments like ``Client()`` then this
+        will also close the local cluster that was started at the same time.
 
         See Also
         --------
