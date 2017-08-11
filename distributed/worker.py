@@ -724,7 +724,7 @@ def convert_args_to_str(args, max_len=None):
     for i, arg in enumerate(args):
         try:
             sarg = repr(arg)
-        except:
+        except Exception:
             sarg = "< could not convert arg to str >"
         strs[i] = sarg
         length += len(sarg) + 2
@@ -743,7 +743,7 @@ def convert_kwargs_to_str(kwargs, max_len=None):
     for i, (argname, arg) in enumerate(kwargs.items()):
         try:
             sarg = repr(arg)
-        except:
+        except Exception:
             sarg = "< could not convert arg to str >"
         skwarg = repr(argname) + ": " + sarg
         strs[i] = skwarg

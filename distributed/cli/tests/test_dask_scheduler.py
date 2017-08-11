@@ -122,7 +122,7 @@ def test_bokeh_non_standard_ports(loop):
                 response = requests.get('http://localhost:4832/status/')
                 assert response.ok
                 break
-            except:
+            except Exception:
                 sleep(0.1)
                 assert time() < start + 20
     with pytest.raises(Exception):

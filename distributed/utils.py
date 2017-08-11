@@ -67,7 +67,7 @@ def funcname(func):
         func = func.func
     try:
         return func.__name__
-    except:
+    except AttributeError:
         return str(func)
 
 
@@ -345,7 +345,7 @@ def key_split(s):
             if result[0] == '<':
                 result = result.strip('<>').split()[0].split('.')[-1]
             return result
-    except:
+    except Exception:
         return 'Other'
 
 
@@ -480,7 +480,7 @@ def truncate_exception(e, n=10000):
         try:
             return type(e)("Long error message",
                            str(e)[:n])
-        except:
+        except Exception:
             return Exception("Long error message",
                               type(e),
                               str(e)[:n])

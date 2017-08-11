@@ -46,7 +46,7 @@ def dumps(x):
                 return result
             else:
                 return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
-    except:
+    except Exception:
         try:
             return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
         except Exception as e:

@@ -40,7 +40,7 @@ class DaskHDFileSystem(HDFileSystem):
             part.append(parts)
             try:
                 self.mkdir('/'.join(part))
-            except:
+            except Exception:
                 pass
 
     def glob(self, path):

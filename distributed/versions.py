@@ -62,7 +62,7 @@ def get_package_info(pkgs):
             mod = importlib.import_module(modname)
             ver = ver_f(mod)
             pversions.append((modname, ver))
-        except:
+        except Exception:
             pversions.append((modname, None))
 
     return pversions

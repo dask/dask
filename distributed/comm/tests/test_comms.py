@@ -350,7 +350,7 @@ def run_coro_in_thread(func, *args, **kwargs):
         try:
             res = thread_loop.run_sync(partial(func, *args, **kwargs),
                                        timeout=10)
-        except:
+        except Exception:
             main_loop.add_callback(fut.set_exc_info, sys.exc_info())
         else:
             main_loop.add_callback(fut.set_result, res)

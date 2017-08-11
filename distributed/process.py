@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 def _call_and_set_future(loop, future, func, *args, **kwargs):
     try:
         res = func(*args, **kwargs)
-    except:
+    except Exception:
         # Tornado futures are not thread-safe, need to
         # set_result() / set_exc_info() from the loop's thread
         loop.add_callback(future.set_exc_info, sys.exc_info())
