@@ -409,7 +409,10 @@ def log_errors(pdb=False):
     except (CommClosedError, gen.Return):
         raise
     except Exception as e:
-        logger.exception(e)
+        try:
+            logger.exception(e)
+        except TypeError:  # logger becomes None during process cleanup
+            pass
         if pdb:
             import pdb; pdb.set_trace()
         raise

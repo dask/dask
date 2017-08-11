@@ -1165,10 +1165,12 @@ class Scheduler(ServerNode):
         finally:
             if not comm.closed():
                 self.comms[client].send({'op': 'stream-closed'})
-            if self.comms[client] is not None:
+            try:
                 yield self.comms[client].close()
                 del self.comms[client]
-            logger.info("Close client connection: %s", client)
+                logger.info("Close client connection: %s", client)
+            except TypeError:  # comm becomes None during GC
+                pass
 
     def remove_client(self, client=None):
         """ Remove client from network """
@@ -1194,7 +1196,7 @@ class Scheduler(ServerNode):
         bcomm.start(comm)
         self.comms[client] = bcomm
 
-        with log_errors(pdb=LOG_PDB):
+        try:
             bcomm.send({'op': 'stream-start'})
 
             breakout = False
@@ -1253,6 +1255,11 @@ class Scheduler(ServerNode):
 
             self.remove_client(client=client)
             logger.debug('Finished handle_client coroutine')
+        except Exception:
+            try:
+                logger.error("Exception in handle_client", exc_info=True)
+            except TypeError:
+                pass
 
     def send_task_to_worker(self, worker, key):
         """ Send a single computational task to a worker """
@@ -3179,7 +3186,7 @@ class Scheduler(ServerNode):
         think about.
         """
         DELAY = 0.1
-        with log_errors():
+        try:
             import psutil
             proc = psutil.Process()
             last = time()
@@ -3204,6 +3211,9 @@ class Scheduler(ServerNode):
                     if duration > 0.005:  # 5ms since last release
                         yield gen.sleep(duration * 5)  # 25ms gap
                         last = time()
+        except Exception:
+            logger.error("Error in reevaluate occupancy", exc_info=True)
+            raise
 
     def _reevaluate_occupancy_worker(self, worker):
         """ See reevaluate_occupancy """
