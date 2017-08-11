@@ -16,6 +16,12 @@ from distributed.utils_test import (cluster, loop, gen_cluster,
         gen_test, wait_for_port, slow, new_config, tls_only_security)
 from distributed.utils import get_ip
 
+
+def test_bare_cluster(loop):
+    with cluster(nworkers=10) as (s, _):
+        pass
+
+
 def test_cluster(loop):
     with cluster() as (s, [a, b]):
         with rpc(s['address']) as s:

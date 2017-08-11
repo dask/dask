@@ -213,7 +213,7 @@ class TCP(Comm):
                     frame = ensure_bytes(frame)
                 future = stream.write(frame)
                 bytes_since_last_yield += nbytes(frame)
-                if bytes_since_last_yield > 128e6:
+                if bytes_since_last_yield > 32e6:
                     yield future
                     bytes_since_last_yield = 0
         except StreamClosedError as e:

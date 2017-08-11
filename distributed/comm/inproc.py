@@ -45,7 +45,10 @@ class Manager(object):
 
     def remove_listener(self, addr):
         with self.lock:
-            del self.listeners[addr]
+            try:
+                del self.listeners[addr]
+            except KeyError:
+                pass
 
     def get_listener_for(self, addr):
         with self.lock:

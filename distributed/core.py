@@ -6,6 +6,7 @@ import logging
 import six
 import traceback
 import uuid
+import weakref
 
 from six import string_types
 
@@ -77,6 +78,7 @@ class Server(object):
 
     *  ``{'op': 'ping'}``
     *  ``{'op': 'add': 'x': 10, 'y': 20}``
+
     """
     default_ip = ''
     default_port = 0
@@ -84,7 +86,7 @@ class Server(object):
     def __init__(self, handlers, connection_limit=512, deserialize=True,
                  io_loop=None):
         self.handlers = assoc(handlers, 'identity', self.identity)
-        self.id = type(self).__name__ + '-' + str(uuid.uuid1())
+        self.id = type(self).__name__ + '-' + str(uuid.uuid4())
         self._address = None
         self._listen_address = None
         self._port = None
@@ -95,6 +97,7 @@ class Server(object):
         self.digests = None
         self.events = None
         self.event_counts = None
+        self._ongoing_coroutines = weakref.WeakSet()
 
         self.listener = None
         self.io_loop = io_loop or IOLoop.current()
@@ -270,6 +273,7 @@ class Server(object):
                     try:
                         result = handler(comm, **msg)
                         if type(result) is gen.Future:
+                            self._ongoing_coroutines.add(result)
                             result = yield result
                     except CommClosedError as e:
                         logger.warning("Lost connection to %r: %s", address, e)
@@ -298,6 +302,19 @@ class Server(object):
                 except Exception as e:
                     logger.error("Failed while closing connection to %r: %s",
                                  address, e)
+
+    @gen.coroutine
+    def close(self):
+        self.listener.stop()
+        for comm in self._comms:
+            comm.close()
+        for cb in self._ongoing_coroutines:
+            cb.cancel()
+        for i in range(10):
+            if all(cb.cancelled() for c in self._ongoing_coroutines):
+                break
+            else:
+                yield gen.sleep(0.01)
 
 
 def pingpong(comm):

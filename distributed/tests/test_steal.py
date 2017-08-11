@@ -65,18 +65,19 @@ def test_steal_cheap_data_slow_computation(c, s, a, b):
     assert abs(len(a.data) - len(b.data)) <= 5
 
 
+@pytest.mark.avoid_travis
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
 def test_steal_expensive_data_slow_computation(c, s, a, b):
     np = pytest.importorskip('numpy')
 
     x = c.submit(slowinc, 100, delay=0.2, workers=a.address)
-    yield _wait([x])  # learn that slowinc is slow
+    yield wait(x)  # learn that slowinc is slow
 
     x = c.submit(np.arange, 1000000, workers=a.address)  # put expensive data
-    yield _wait([x])
+    yield wait(x)
 
     slow = [c.submit(slowinc, x, delay=0.1, pure=False) for i in range(20)]
-    yield _wait([slow])
+    yield wait(slow)
 
     assert b.data  # not empty
 
@@ -88,7 +89,7 @@ def test_worksteal_many_thieves(c, s, *workers):
 
     xs = c.map(slowinc, [x] * 100, pure=False, delay=0.1)
 
-    yield _wait(xs)
+    yield wait(xs)
 
     for w, keys in s.has_what.items():
         assert 2 < len(keys) < 30
@@ -310,6 +311,7 @@ def test_dont_steal_few_saturated_tasks_many_workers(c, s, a, *rest):
     assert not any(w.task_state for w in rest)
 
 
+@pytest.mark.skip(reason='leaks large amount of memory')
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)
 def test_steal_when_more_tasks(c, s, a, *rest):
     s.extensions['stealing']._pc.callback_time = 20
@@ -324,6 +326,7 @@ def test_steal_when_more_tasks(c, s, a, *rest):
     assert any(w.task_state for w in rest)
 
 
+@pytest.mark.skip(reason='leaks large amount of memory')
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)
 def test_steal_more_attractive_tasks(c, s, a, *rest):
     def slow2(x):
@@ -471,6 +474,8 @@ def test_restart(c, s, a, b):
     assert not any(x for L in steal.stealable.values() for x in L)
 
 
+# @pytest.mark.avoid_travis  # leaks large amounts of memory
+@pytest.mark.skip(reason='leaks memory')
 @gen_cluster(client=True)
 def test_steal_communication_heavy_tasks(c, s, a, b):
     s.task_duration['slowadd'] = 0.001

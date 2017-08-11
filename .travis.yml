@@ -9,19 +9,25 @@ env:
     - PYTHON=2.7 PACKAGES="python-blosc futures faulthandler"
     - PYTHON=3.5 COVERAGE=true PACKAGES=python-blosc CRICK=true
     - PYTHON=3.6
-    - HDFS=true PYTHON=2.7
-    - HDFS=true PYTHON=3.5 PACKAGES=python-blosc
 
 matrix:
   fast_finish: true
   include:
   - os: osx
     env: PYTHON=3.6 RUNSLOW=false
+  - os: linux
+    env: HDFS=true PYTHON=2.7
+  - os: linux
+    env: HDFS=true PYTHON=3.5 PACKAGES=python-blosc
   # Together with fast_finish, allow build to be marked successful before the OS X job finishes
   allow_failures:
   - os: osx
     # This needs to be the exact same line as above
     env: PYTHON=3.6 RUNSLOW=false
+  - os: linux
+    env: HDFS=true PYTHON=2.7
+  - os: linux
+    env: HDFS=true PYTHON=3.5 PACKAGES=python-blosc
 
 addons:
   hosts:

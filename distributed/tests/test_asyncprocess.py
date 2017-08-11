@@ -44,7 +44,7 @@ def threads_info(q):
     q.put(threading.current_thread().name)
 
 
-@gen_test()
+@gen_test(should_check_state=False)
 def test_simple():
     to_child = mp_context.Queue()
     from_child = mp_context.Queue()
@@ -123,7 +123,7 @@ def test_simple():
         assert dt < 2.0
 
 
-@gen_test()
+@gen_test(should_check_state=False)
 def test_exitcode():
     q = mp_context.Queue()
 
@@ -244,7 +244,7 @@ def test_exit_callback():
     assert evt.is_set()
 
 
-@gen_test()
+@gen_test(should_check_state=False)
 def test_child_main_thread():
     """
     The main thread in the child should be called "MainThread".
@@ -257,6 +257,9 @@ def test_child_main_thread():
     main_name = q.get()
     assert n_threads == 1
     assert main_name == "MainThread"
+    q.close()
+    q._reader.close()
+    q._writer.close()
 
 
 @pytest.mark.skipif(sys.platform.startswith('win'),

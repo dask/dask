@@ -36,7 +36,7 @@ def test_stress_1(c, s, a, b):
 
 @pytest.mark.parametrize(('func', 'n'), [(slowinc, 100), (inc, 1000)])
 def test_stress_gc(loop, func, n):
-    with cluster() as (s, [a, b]):
+    with cluster(should_check_state=False) as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             x = c.submit(func, 1)
             for i in range(n):
@@ -47,7 +47,8 @@ def test_stress_gc(loop, func, n):
 
 @pytest.mark.skipif(sys.platform.startswith('win'),
                     reason="test can leave dangling RPC objects")
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 4, timeout=None)
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 4, timeout=None,
+             should_check_state=False)
 def test_cancel_stress(c, s, *workers):
     da = pytest.importorskip('dask.array')
     x = da.random.random((40, 40), chunks=(1, 1))
@@ -64,7 +65,7 @@ def test_cancel_stress(c, s, *workers):
 def test_cancel_stress_sync(loop):
     da = pytest.importorskip('dask.array')
     x = da.random.random((40, 40), chunks=(1, 1))
-    with cluster() as (s, [a, b]):
+    with cluster(active_rpc_timeout=10) as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             x = c.persist(x)
             y = (x.sum(axis=0) + x.sum(axis=1) + 1).std()

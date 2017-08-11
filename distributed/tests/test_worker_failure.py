@@ -22,11 +22,11 @@ from distributed.utils_test import (gen_cluster, cluster, inc, loop, slow, div,
 
 
 def test_submit_after_failed_worker_sync(loop):
-    with cluster() as (s, [a, b]):
+    with cluster(active_rpc_timeout=10) as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             L = c.map(inc, range(10))
             wait(L)
-            a['proc'].terminate()
+            a['proc']().terminate()
             total = c.submit(sum, L)
             assert total.result() == sum(map(inc, range(10)))
 
@@ -62,29 +62,29 @@ def test_submit_after_failed_worker(c, s, a, b):
 
 
 def test_gather_after_failed_worker(loop):
-    with cluster() as (s, [a, b]):
+    with cluster(active_rpc_timeout=10) as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             L = c.map(inc, range(10))
             wait(L)
-            a['proc'].terminate()
+            a['proc']().terminate()
             result = c.gather(L)
             assert result == list(map(inc, range(10)))
 
 
 @slow
 def test_gather_then_submit_after_failed_workers(loop):
-    with cluster(nworkers=4) as (s, [w, x, y, z]):
+    with cluster(nworkers=4, active_rpc_timeout=10) as (s, [w, x, y, z]):
         with Client(s['address'], loop=loop) as c:
             L = c.map(inc, range(20))
             wait(L)
-            w['proc'].terminate()
+            w['proc']().terminate()
             total = c.submit(sum, L)
             wait([total])
 
             addr = c.who_has()[total.key][0]
             for d in [x, y, z]:
                 if d['address'] == addr:
-                    d['proc'].terminate()
+                    d['proc']().terminate()
                     break
             else:
                 assert 0, "Could not find worker %r" % (addr,)

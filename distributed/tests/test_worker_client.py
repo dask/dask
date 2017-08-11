@@ -260,7 +260,7 @@ def test_secede_without_stealing_issue_1262():
             with worker_client() as wc:
                 y = wc.submit(lambda: 1 + x)
                 return wc.gather(y)
-        f = yield c._gather(c.submit(func, 1))
+        f = yield c.gather(c.submit(func, 1))
 
         raise gen.Return((c, s, a, b, f))
 

@@ -19,7 +19,7 @@ from tornado import gen
 
 import pytest
 
-from distributed import Nanny, Worker, Client
+from distributed import Nanny, Worker, Client, wait
 from distributed.core import connect, rpc, CommClosedError
 from distributed.scheduler import validate_state, Scheduler, BANDWIDTH
 from distributed.client import _wait, _first_completed
@@ -372,7 +372,7 @@ def test_feed_large_bytestring(s, a, b):
     comm = yield connect(s.address)
     yield comm.write({'op': 'feed',
                       'function': dumps(func),
-                      'interval': 0.01})
+                      'interval': 0.05})
 
     for i in range(5):
         response = yield comm.read()
@@ -886,6 +886,9 @@ def test_include_communication_in_occupancy(c, s, a, b):
         print("task_duration:", s.task_duration)
         print("nbytes:", s.nbytes)
         raise
+
+    yield wait(z)
+    del z
 
 
 @gen_cluster(client=True)

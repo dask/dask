@@ -329,6 +329,21 @@ def test_get_sync(loop):
             assert c.get({'x': (inc, 1)}, 'x') == 2
 
 
+def test_no_future_referneces(loop):
+    from weakref import WeakSet
+    ws = WeakSet()
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            futures = c.map(inc, range(10))
+            ws.update(futures)
+            del futures
+            import gc; gc.collect()
+            start = time()
+            while list(ws):
+                sleep(0.01)
+                assert time() < start + 2
+
+
 def test_get_sync_optimize_graph_passes_through(loop):
     import dask.bag as db
     import dask
@@ -3133,20 +3148,6 @@ def test_get_processing_sync(loop):
             c.cancel(futures)
 
 
-def dont_test_scheduler_falldown(loop):
-    with cluster(worker_kwargs={'heartbeat_interval': 10}) as (s, [a, b]):
-        s['proc'].terminate()
-        s['proc'].join(timeout=2)
-        try:
-            s2 = Scheduler(loop=loop, validate=True)
-            loop.add_callback(s2.start, s['port'])
-            sleep(0.1)
-            with Client(s['address'], loop=loop) as ee:
-                assert len(ee.ncores()) == 2
-        finally:
-            s2.close()
-
-
 def test_close_idempotent(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
@@ -3367,7 +3368,7 @@ def test_open_close_many_workers(loop, worker, count, repeat):
     psutil = pytest.importorskip('psutil')
     proc = psutil.Process()
 
-    with cluster(nworkers=0, active_rpc_timeout=20) as (s, []):
+    with cluster(nworkers=0, active_rpc_timeout=20, should_check_state=False) as (s, []):
         gc.collect()
         before = proc.num_fds()
         done = Semaphore(0)
@@ -3484,7 +3485,7 @@ def test_threaded_get_within_distributed(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             import dask.multiprocessing
-            for get in [dask.async.get_sync,
+            for get in [dask.local.get_sync,
                         dask.multiprocessing.get,
                         dask.threaded.get]:
                 def f():
@@ -4306,9 +4307,10 @@ def test_threadsafe(loop):
                 return total.result()
 
             from concurrent.futures import ThreadPoolExecutor
-            e = ThreadPoolExecutor(20)
-            results = list(e.map(f, range(20)))
-            assert results and all(results)
+            with ThreadPoolExecutor(20) as e:
+                results = list(e.map(f, range(20)))
+                assert results and all(results)
+                del results
 
 
 @slow
