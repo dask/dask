@@ -1748,6 +1748,9 @@ class Client(Node):
         if generally used for side effects, such and collecting diagnostic
         information or installing libraries.
 
+        If your function takes an input argument named ``dask_worker`` then
+        that variable will be populated with the worker itself.
+
         Parameters
         ----------
         function: callable
@@ -1770,6 +1773,13 @@ class Client(Node):
         ...                           '192.168.0.101:9000'])  # doctest: +SKIP
         {'192.168.0.100:9000': 1234,
          '192.168.0.101:9000': 4321}
+
+        >>> def get_status(dask_worker):
+        ...     return dask_worker.status
+
+        >>> c.run(get_hostname)  # doctest: +SKIP
+        {'192.168.0.100:9000': 'running',
+         '192.168.0.101:9000': 'running}
         """
         return self.sync(self._run, function, *args, **kwargs)
 
@@ -1939,13 +1949,13 @@ class Client(Node):
 
         Examples
         --------
-        >>> len(x.dask)  # x is a dask collection with 100 tasks
+        >>> len(x.dask)  # x is a dask collection with 100 tasks  # doctest: +SKIP
         100
-        >>> set(client.futures).intersection(x.dask)  # some overlap exists
+        >>> set(client.futures).intersection(x.dask)  # some overlap exists  # doctest: +SKIP
         10
 
-        >>> x = client.normalize_collection(x)
-        >>> len(x.dask)  # smaller computational graph
+        >>> x = client.normalize_collection(x)  # doctest: +SKIP
+        >>> len(x.dask)  # smaller computational graph  # doctest: +SKIP
         20
 
         See Also
