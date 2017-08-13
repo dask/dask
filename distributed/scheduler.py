@@ -55,11 +55,13 @@ DEFAULT_DATA_SIZE = config.get('default-data-size', 1000)
 
 DEFAULT_EXTENSIONS = [
     PublishExtension,
-    WorkStealing,
     ReplayExceptionScheduler,
     QueueExtension,
     VariableExtension,
 ]
+
+if config.get('work-stealing', True):
+    DEFAULT_EXTENSIONS.append(WorkStealing)
 
 
 class Scheduler(ServerNode):
