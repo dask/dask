@@ -69,7 +69,7 @@ class AsyncProcess(object):
     def _start_threads(self):
         self._watch_message_thread = threading.Thread(
             target=self._watch_message_queue,
-            name="AsyncProcess %s watch" % self.name,
+            name="AsyncProcess %s watch message queue" % self.name,
             args=(weakref.ref(self), self._process, self._loop,
                   self._state, self._watch_q, self._exit_future,))
         self._watch_message_thread.daemon = True
@@ -109,7 +109,7 @@ class AsyncProcess(object):
 
             thread = threading.Thread(
                 target=AsyncProcess._watch_process,
-                name="AsyncProcess %s watch" % name,
+                name="AsyncProcess %s watch process join" % name,
                 args=(selfref, process, state, q))
             thread.daemon = True
             thread.start()
@@ -136,22 +136,20 @@ class AsyncProcess(object):
         r = repr(selfref())
         process.join()
         exitcode = process.exitcode
-        if exitcode is not None:
-            logger.debug("[%s] process %r exited with code %r",
-                         r, state.pid, exitcode)
-            state.is_alive = False
-            state.exitcode = exitcode
-            # Make sure the process is removed from the global list
-            # (see _children in multiprocessing/process.py)
-            process.join(timeout=0)
-            # Then notify the Process object
-            self = selfref()  # only keep self alive when required
-            try:
-                if self is not None:
-                    self._loop.add_callback(self._on_exit, exitcode)
-            finally:
-                self = None  # lose reference
-                q.put({'op': 'stop'})
+        assert exitcode is not None
+        logger.debug("[%s] process %r exited with code %r",
+                     r, state.pid, exitcode)
+        state.is_alive = False
+        state.exitcode = exitcode
+        # Make sure the process is removed from the global list
+        # (see _children in multiprocessing/process.py)
+        # Then notify the Process object
+        self = selfref()  # only keep self alive when required
+        try:
+            if self is not None:
+                self._loop.add_callback(self._on_exit, exitcode)
+        finally:
+            self = None  # lose reference
 
     def start(self):
         """

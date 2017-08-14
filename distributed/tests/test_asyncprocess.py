@@ -289,3 +289,11 @@ def test_num_fds():
         yield gen.sleep(0.1)
         print("fds:", before, p.num_fds())
         assert time() < start + 10
+
+
+@gen_test(should_check_state=False)
+def test_terminate_after_stop():
+    proc = AsyncProcess(target=sleep, args=(0,))
+    yield proc.start()
+    yield gen.sleep(0.1)
+    yield proc.terminate()
