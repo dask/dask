@@ -627,11 +627,18 @@ class Client(Node):
     def __await__(self):
         return self._started.__await__()
 
-    def _send_to_scheduler(self, msg):
+    def _send_to_scheduler_safe(self, msg):
         if self.status in ('running', 'closing'):
-            self.loop.add_callback(self.scheduler_comm.send, msg)
+            self.scheduler_comm.send(msg)
         elif self.status is 'connecting':
-            self.loop.add_callback(self._pending_msg_buffer.append, msg)
+            self._pending_msg_buffer.append(msg)
+        else:
+            raise Exception("Tried sending message after closing.  Status: %s\n"
+                            "Message: %s" % (self.status, msg))
+
+    def _send_to_scheduler(self, msg):
+        if self.status in ('running', 'closing', 'connecting'):
+            self.loop.add_callback(self._send_to_scheduler_safe, msg)
         else:
             raise Exception("Tried sending message after closing.  Status: %s\n"
                             "Message: %s" % (self.status, msg))
