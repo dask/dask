@@ -493,7 +493,7 @@ def process_state():
     if not WINDOWS:
         d['num-fds'] = psutil.Process().num_fds()
 
-    d['used-memory'] = psutil.virtual_memory().used
+    d['used-memory'] = psutil.Process().memory_info().rss
     return d
 
 
@@ -535,7 +535,7 @@ def check_state(before, after):
           "total leaked total",  (after['used-memory'] - initial_state['used-memory']) / 1e6)  # , end=' ')
 
     total_diff = after['used-memory'] - initial_state['used-memory']
-    assert total_diff < 2e9, total_diff
+    # assert total_diff < 2e9, total_diff
 
 
 @gen.coroutine

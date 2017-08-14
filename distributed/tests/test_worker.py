@@ -397,6 +397,7 @@ def test_Executor(c, s):
         yield w._close()
 
 
+@pytest.mark.skip(reason="Leaks a large amount of memory")
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)], timeout=30)
 def test_spill_by_default(c, s, w):
     da = pytest.importorskip('dask.array')
