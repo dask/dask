@@ -311,7 +311,6 @@ def test_dont_steal_few_saturated_tasks_many_workers(c, s, a, *rest):
     assert not any(w.task_state for w in rest)
 
 
-@pytest.mark.skip(reason='leaks large amount of memory')
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)
 def test_steal_when_more_tasks(c, s, a, *rest):
     s.extensions['stealing']._pc.callback_time = 20
@@ -326,7 +325,6 @@ def test_steal_when_more_tasks(c, s, a, *rest):
     assert any(w.task_state for w in rest)
 
 
-@pytest.mark.skip(reason='leaks large amount of memory')
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)
 def test_steal_more_attractive_tasks(c, s, a, *rest):
     def slow2(x):
@@ -474,8 +472,6 @@ def test_restart(c, s, a, b):
     assert not any(x for L in steal.stealable.values() for x in L)
 
 
-# @pytest.mark.avoid_travis  # leaks large amounts of memory
-@pytest.mark.skip(reason='leaks memory')
 @gen_cluster(client=True)
 def test_steal_communication_heavy_tasks(c, s, a, b):
     s.task_duration['slowadd'] = 0.001

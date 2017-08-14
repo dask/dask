@@ -330,7 +330,10 @@ class WorkerBase(ServerNode):
                         self.scheduler.unregister(address=self.address),
                         io_loop=self.loop)
         self.scheduler.close_rpc()
-        self.executor.shutdown(wait=False)
+        if isinstance(self.executor, ThreadPoolExecutor):
+            self.executor.shutdown(timeout=timeout)
+        else:
+            self.executor.shutdown(wait=False)
         if os.path.exists(self.local_dir):
             shutil.rmtree(self.local_dir)
 

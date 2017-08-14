@@ -22,11 +22,12 @@ which is included as a comment at the end of this file:
 """
 from __future__ import print_function, division, absolute_import
 
-from concurrent.futures import thread
+from . import _concurrent_futures_thread as thread
 import logging
 import threading
 
 from .compatibility import get_thread_identity
+from .metrics import time
 
 logger = logging.getLogger(__name__)
 
@@ -64,9 +65,19 @@ class ThreadPoolExecutor(thread.ThreadPoolExecutor):
             self._threads.add(t)
             t.start()
 
-    def shutdown(self, wait=True):
+    def shutdown(self, wait=True, timeout=None):
         with threads_lock:
-            thread.ThreadPoolExecutor.shutdown(self, wait=wait)
+            with self._shutdown_lock:
+                self._shutdown = True
+                self._work_queue.put(None)
+            if timeout is not None:
+                deadline = time() + timeout
+            for t in self._threads:
+                if timeout is not None:
+                    timeout2 = max(deadline - time(), 0)
+                else:
+                    timeout2 = None
+                t.join(timeout=timeout2)
 
 
 def secede():

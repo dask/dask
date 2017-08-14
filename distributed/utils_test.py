@@ -310,7 +310,7 @@ def run_nanny(q, scheduler_q, **kwargs):
 
 
 @contextmanager
-def check_active_rpc(loop, active_rpc_timeout=0):
+def check_active_rpc(loop, active_rpc_timeout=1):
     if rpc.active > 0:
         # Streams from a previous test dangling around?
         gc.collect()
@@ -339,7 +339,7 @@ def check_active_rpc(loop, active_rpc_timeout=0):
 
 
 @contextmanager
-def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=0,
+def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
             scheduler_kwargs={}, should_check_state=True):
     ws = weakref.WeakSet()
     before = process_state()
@@ -522,7 +522,7 @@ def check_state(before, after):
                 break
 
     start = time()
-    while after['used-memory'] > before['used-memory'] + 1e8:
+    while after['used-memory'] > before['used-memory'] + 1e7:
         gc.collect()
         sleep(0.10)
         after = process_state()
@@ -535,7 +535,7 @@ def check_state(before, after):
           "total leaked total",  (after['used-memory'] - initial_state['used-memory']) / 1e6)  # , end=' ')
 
     total_diff = after['used-memory'] - initial_state['used-memory']
-    assert total_diff < 3e9, total_diff
+    assert total_diff < 2e9, total_diff
 
 
 @gen.coroutine
@@ -592,7 +592,7 @@ def iscoroutinefunction(f):
 def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                 scheduler='127.0.0.1', timeout=10, security=None,
                 Worker=Worker, client=False, scheduler_kwargs={},
-                worker_kwargs={}, active_rpc_timeout=0, should_check_state=True):
+                worker_kwargs={}, active_rpc_timeout=1, should_check_state=True):
     from distributed import Client
     """ Coroutine test with small cluster
 

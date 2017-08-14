@@ -210,7 +210,7 @@ def test_unsupported_arguments(loop):
 
 
 def test_shutdown(loop):
-    with cluster() as (s, [a, b]):
+    with cluster(active_rpc_timeout=10) as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             # shutdown(wait=True) waits for pending tasks to finish
             e = c.get_executor()

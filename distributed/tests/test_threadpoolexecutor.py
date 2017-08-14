@@ -24,3 +24,25 @@ def test_tpe():
     while all(t.is_alive() for t in threads):
         sleep(0.01)
         assert time() < start + 1
+
+
+def test_shutdown_timeout():
+    e = ThreadPoolExecutor(1)
+    futures = [e.submit(sleep, 0.1 * i) for i in range(1, 3, 1)]
+    sleep(0.01)
+
+    start = time()
+    e.shutdown()
+    end = time()
+    assert end - start > 0.1
+
+
+def test_shutdown_timeout_raises():
+    e = ThreadPoolExecutor(1)
+    futures = [e.submit(sleep, 0.1 * i) for i in range(1, 3, 1)]
+    sleep(0.05)
+
+    start = time()
+    e.shutdown(timeout=0.1)
+    end = time()
+    assert end - start > 0.05

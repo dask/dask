@@ -3197,7 +3197,7 @@ def test_Client_clears_references_after_restart(c, s, a, b):
 
 
 def test_get_stops_work_after_error(loop):
-    with cluster() as (s, [a, b]):
+    with cluster(active_rpc_timeout=10) as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             with pytest.raises(RuntimeError):
                 c.get({'x': (throws, 1), 'y': (sleep, 1.5)}, ['x', 'y'])
