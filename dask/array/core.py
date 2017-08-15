@@ -36,7 +36,7 @@ from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      SerializableLock, ensure_dict, package_of)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..delayed import to_task_dask
-from .. import threaded, core
+from .. import threaded, core, local
 from .. import sharedict
 from ..sharedict import ShareDict
 
@@ -2102,7 +2102,7 @@ class ATopCall(object):
         assert len(args) == len(self._args)
         dsk = dict(zip(self._args, args))
         dsk.update(self._ops)
-        return core.get(dsk, self._key, recursive=True)
+        return local.get_sync(dsk, self._key)
 
 
 def extract_atop_tuple(x):
@@ -2218,6 +2218,8 @@ def _atop_subs(task, lk):
         if len(task) == 2 and type(task[0]) is str and task in lk:
             return lk[task]
         return tuple(_atop_subs(i, lk) for i in task)
+    elif isinstance(task, list):
+        return [_atop_subs(i, lk) for i in task]
     return task
 
 
@@ -2247,7 +2249,7 @@ class ATopArray(Array):
         arginds = list(concat([(dsks[a[0]], a[1]) for a in args]))
         func = ATopCall(outind, ops, args)
         return _atop(func, outind[1], *arginds, name=self.name,
-                    dtype=self.dtype).dask
+                     dtype=self.dtype).dask
 
 
 def _atop(func, out_ind, *args, **kwargs):
