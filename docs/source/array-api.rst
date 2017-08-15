@@ -177,6 +177,7 @@ Linear Algebra
    linalg.inv
    linalg.lstsq
    linalg.lu
+   linalg.norm
    linalg.qr
    linalg.solve
    linalg.solve_triangular
@@ -435,6 +436,7 @@ Other functions
 .. autofunction:: inv
 .. autofunction:: lstsq
 .. autofunction:: lu
+.. autofunction:: norm
 .. autofunction:: qr
 .. autofunction:: solve
 .. autofunction:: solve_triangular
