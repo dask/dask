@@ -183,6 +183,28 @@ def diff(a, n=1, axis=-1):
     return r
 
 
+@wraps(np.ediff1d)
+def ediff1d(ary, to_end=None, to_begin=None):
+    ary = asarray(ary)
+
+    if to_end is None:
+        to_end = np.array([], dtype=ary.dtype)
+    if to_begin is None:
+        to_begin = np.array([], dtype=ary.dtype)
+
+    to_end = asarray(to_end)
+    to_begin = asarray(to_begin)
+
+    ary = ary.flatten()
+    to_end = to_end.flatten()
+    to_begin = to_begin.flatten()
+
+    r = diff(ary)
+    r = concatenate([to_begin, r, to_end])
+
+    return r
+
+
 @wraps(np.bincount)
 def bincount(x, weights=None, minlength=None):
     if minlength is None:
