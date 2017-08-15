@@ -2117,15 +2117,7 @@ def extract_atop_tuple(x):
 
 
 def atop(func, out_ind, *args, **kwargs):
-    out = kwargs.pop('name', None)      # May be None at this point
-    token = kwargs.pop('token', None)
-    dtype = kwargs.pop('dtype', None)
-    adjust_chunks = kwargs.pop('adjust_chunks', None)
-    new_axes = kwargs.get('new_axes', {})
-
-    if dtype is None:
-        raise ValueError("Must specify dtype of output array")
-
+    args = [a if i % 2 else asanyarray(a) for i, a in enumerate(args)]
     # [x, ij, y, jk] -> [(x, ij), (y, jk)]
     arginds = list(partition(2, args))
     # {i, j, k}
@@ -2134,8 +2126,17 @@ def atop(func, out_ind, *args, **kwargs):
     dummy_indices = all_indices - set(out_ind)
 
     # Can't delay with dummy indices
-    if dummy_indices:
+    if dummy_indices or kwargs.get('concatenate', False):
         return _atop(func, out_ind, *args, **kwargs)
+
+    out = kwargs.pop('name', None)      # May be None at this point
+    token = kwargs.pop('token', None)
+    dtype = kwargs.pop('dtype', None)
+    adjust_chunks = kwargs.pop('adjust_chunks', None)
+    new_axes = kwargs.get('new_axes', {})
+
+    if dtype is None:
+        raise ValueError("Must specify dtype of output array")
 
     chunkss = unify_chunks(*args, rechunk=False)
     for k, v in new_axes.items():
