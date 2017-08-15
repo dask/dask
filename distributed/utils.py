@@ -356,49 +356,90 @@ except ImportError:
 else:
     key_split = lru_cache(100000)(key_split)
 
+if PY3:
+    def key_split_group(x):
+        """A more fine-grained version of key_split
 
-def key_split_group(x):
-    """A more fine-grained version of key_split
-
-    >>> key_split_group('x')
-    'x'
-    >>> key_split_group('x-1')
-    'x-1'
-    >>> key_split_group('x-1-2-3')
-    'x-1-2-3'
-    >>> key_split_group(('x-2', 1))
-    'x-2'
-    >>> key_split_group("('x-2', 1)")
-    'x-2'
-    >>> key_split_group('hello-world-1')
-    'hello-world-1'
-    >>> key_split_group(b'hello-world-1')
-    'hello-world-1'
-    >>> key_split_group('ae05086432ca935f6eba409a8ecd4896')
-    'data'
-    >>> key_split_group('<module.submodule.myclass object at 0xdaf372')
-    'myclass'
-    >>> key_split_group(None)
-    'Other'
-    >>> key_split_group('x-abcdefab')  # ignores hex
-    'x-abcdefab'
-    """
-    typ = type(x)
-    if typ is tuple:
-        return x[0]
-    elif typ is str:
-        if x[0] == '(':
-            return x.split(',', 1)[0].strip('()"\'')
-        elif len(x) == 32 and re.match(r'[a-f0-9]{32}', x):
-            return 'data'
-        elif x[0] == '<':
-            return x.strip('<>').split()[0].split('.')[-1]
+        >>> key_split_group('x')
+        'x'
+        >>> key_split_group('x-1')
+        'x-1'
+        >>> key_split_group('x-1-2-3')
+        'x-1-2-3'
+        >>> key_split_group(('x-2', 1))
+        'x-2'
+        >>> key_split_group("('x-2', 1)")
+        'x-2'
+        >>> key_split_group('hello-world-1')
+        'hello-world-1'
+        >>> key_split_group(b'hello-world-1')
+        'hello-world-1'
+        >>> key_split_group('ae05086432ca935f6eba409a8ecd4896')
+        'data'
+        >>> key_split_group('<module.submodule.myclass object at 0xdaf372')
+        'myclass'
+        >>> key_split_group(None)
+        'Other'
+        >>> key_split_group('x-abcdefab')  # ignores hex
+        'x-abcdefab'
+        """
+        typ = type(x)
+        if typ is tuple:
+            return x[0]
+        elif typ is str:
+            if x[0] == '(':
+                return x.split(',', 1)[0].strip('()"\'')
+            elif len(x) == 32 and re.match(r'[a-f0-9]{32}', x):
+                return 'data'
+            elif x[0] == '<':
+                return x.strip('<>').split()[0].split('.')[-1]
+            else:
+                return x
+        elif typ is bytes:
+            return key_split_group(x.decode())
         else:
-            return x
-    elif typ is bytes:
-        return key_split_group(x.decode())
-    else:
-        return 'Other'
+            return 'Other'
+else:
+    def key_split_group(x):
+        """A more fine-grained version of key_split
+
+        >>> key_split_group('x')
+        'x'
+        >>> key_split_group('x-1')
+        'x-1'
+        >>> key_split_group('x-1-2-3')
+        'x-1-2-3'
+        >>> key_split_group(('x-2', 1))
+        'x-2'
+        >>> key_split_group("('x-2', 1)")
+        'x-2'
+        >>> key_split_group('hello-world-1')
+        'hello-world-1'
+        >>> key_split_group(b'hello-world-1')
+        'hello-world-1'
+        >>> key_split_group('ae05086432ca935f6eba409a8ecd4896')
+        'data'
+        >>> key_split_group('<module.submodule.myclass object at 0xdaf372')
+        'myclass'
+        >>> key_split_group(None)
+        'Other'
+        >>> key_split_group('x-abcdefab')  # ignores hex
+        'x-abcdefab'
+        """
+        typ = type(x)
+        if typ is tuple:
+            return x[0]
+        elif typ is str or typ is unicode:
+            if x[0] == '(':
+                return x.split(',', 1)[0].strip('()"\'')
+            elif len(x) == 32 and re.match(r'[a-f0-9]{32}', x):
+                return 'data'
+            elif x[0] == '<':
+                return x.strip('<>').split()[0].split('.')[-1]
+            else:
+                return x
+        else:
+            return 'Other'
 
 
 @contextmanager
@@ -535,8 +576,8 @@ def tokey(o):
     >>> tokey(1)
     '1'
     """
-    t = type(o)
-    if t is str or t is bytes:
+    typ = type(o)
+    if typ is unicode or typ is bytes:
         return o
     else:
         return str(o)
@@ -546,9 +587,9 @@ def validate_key(k):
     """Validate a key as received on a stream.
     """
     typ = type(k)
-    if typ is not str and typ is not bytes:
+    if typ is not unicode and typ is not bytes:
         raise TypeError("Unexpected key type %s (value: %r)"
-                        % (type(k), k))
+                        % (typ, k))
 
 
 def _maybe_complex(task):

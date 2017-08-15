@@ -4525,6 +4525,32 @@ def test_bytes_keys(c, s, a, b):
     assert result == 2
 
 
+@gen_cluster(client=True)
+def test_unicode_ascii_keys(c, s, a, b):
+    # cross-version unicode type (py2: unicode, py3: str)
+    uni_type = type(u"")
+    key = u'inc-123'
+    future = c.submit(inc, 1, key=key)
+    result = yield future
+    assert type(future.key) is uni_type
+    assert list(s.task_state)[0] == key
+    assert key in a.data or key in b.data
+    assert result == 2
+
+
+@gen_cluster(client=True)
+def test_unicode_keys(c, s, a, b):
+    # cross-version unicode type (py2: unicode, py3: str)
+    uni_type = type(u"")
+    key = u'inc-123\u03bc'
+    future = c.submit(inc, 1, key=key)
+    result = yield future
+    assert type(future.key) is uni_type
+    assert list(s.task_state)[0] == key
+    assert key in a.data or key in b.data
+    assert result == 2
+
+
 def test_use_synchronous_client_in_async_context(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
