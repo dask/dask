@@ -1937,8 +1937,10 @@ class Scheduler(ServerNode):
                                                             DEFAULT_DATA_SIZE)
                 self.has_what[worker].add(key)
                 self.who_has[key].add(worker)
-            # else:
-                # TODO: delete key from worker
+            else:
+                self.worker_comms[worker].send({'op': 'delete-data',
+                                                'keys': [key],
+                                                'report': False})
         return 'OK'
 
     def update_data(self, comm=None, who_has=None, nbytes=None, client=None):

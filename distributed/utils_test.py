@@ -166,6 +166,11 @@ def slowdec(x, delay=0.02):
     return x - 1
 
 
+def slowdouble(x, delay=0.02):
+    sleep(delay)
+    return 2 * x
+
+
 def randominc(x, scale=1):
     from random import random
     sleep(random() * scale)
@@ -185,7 +190,10 @@ def slowsum(seq, delay=0.02):
 def slowidentity(*args, **kwargs):
     delay = kwargs.get('delay', 0.02)
     sleep(delay)
-    return args
+    if len(args) == 1:
+        return args[0]
+    else:
+        return args
 
 
 @gen.coroutine

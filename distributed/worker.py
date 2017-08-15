@@ -1091,7 +1091,7 @@ class Worker(WorkerBase):
                     elif op == 'compute-task':
                         self.add_task(**msg)
                     elif op == 'release-task':
-                        self.log.append((msg['key'], 'release-task'))
+                        self.log.append((msg['key'], 'release-task', msg.get('reason')))
                         self.release_key(report=False, **msg)
                     elif op == 'delete-data':
                         self.delete_data(**msg)
@@ -1281,8 +1281,14 @@ class Worker(WorkerBase):
                 assert dep in self.in_flight_tasks
 
             del self.in_flight_tasks[dep]
-            self.dep_state[dep] = 'memory'
-            self.put_key_in_memory(dep, value)
+            if self.dependents[dep]:
+                self.dep_state[dep] = 'memory'
+                self.put_key_in_memory(dep, value)
+                self.batched_stream.send({'op': 'add-keys',
+                                          'keys': [dep]})
+            else:
+                self.release_dep(dep)
+
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
@@ -1791,7 +1797,7 @@ class Worker(WorkerBase):
 
             for dep in self.dependencies.pop(key, ()):
                 self.dependents[dep].remove(key)
-                if not self.dependents[dep] and self.dep_state[dep] == 'waiting':
+                if not self.dependents[dep] and self.dep_state[dep] in ('waiting', 'flight'):
                     self.release_dep(dep)
 
             if key in self.threads:

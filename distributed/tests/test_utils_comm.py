@@ -15,11 +15,9 @@ def test_pack_data():
     assert pack_data({'a': ['x'], 'b': 'y'}, data) == {'a': [1], 'b': 'y'}
 
 
-@gen_cluster()
-def test_gather_from_workers_permissive(s, a, b):
-    while not a.batched_stream:
-        yield gen.sleep(0.01)
-    a.update_data(data={'x': 1})
+@gen_cluster(client=True)
+def test_gather_from_workers_permissive(c, s, a, b):
+    x = yield c.scatter({'x': 1}, workers=a.address)
 
     data, missing, bad_workers = yield gather_from_workers(
             {'x': [a.address], 'y': [b.address]}, rpc=rpc)
