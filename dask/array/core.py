@@ -4,7 +4,7 @@ from bisect import bisect
 from collections import Iterable, Mapping
 from collections import Iterator
 from functools import partial, wraps
-from itertools import product
+from itertools import product, count
 import math
 from numbers import Number
 import operator
@@ -31,12 +31,13 @@ from . import chunk
 from .slicing import slice_array, replace_ellipsis
 from ..base import Base, tokenize, normalize_token
 from ..context import _globals
+from ..optimize import fuse
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict, package_of)
-from ..compatibility import unicode, long, getargspec, zip_longest, apply
+from ..compatibility import unicode, long, getargspec, zip_longest, apply, exec_
 from ..delayed import to_task_dask
-from .. import threaded, core, local
+from .. import threaded, core
 from .. import sharedict
 from ..sharedict import ShareDict
 
@@ -2087,22 +2088,54 @@ def unify_chunks(*args, **kwargs):
     return chunkss, arrays
 
 
-class ATopCall(object):
-    __slots__ = '_key', '_ops', '_args'
+def _gencode(x, dsk, names, namespace, cache):
+    if core.istask(x):
+        func, args = x[0], x[1:]
+        func = _gencode(func, dsk, names, namespace, cache)
+        args = [_gencode(a, dsk, names, namespace, cache) for a in args]
+        return "%s(%s)" % (func, ', '.join(args))
+    elif isinstance(x, list):
+        args = [_gencode(a, dsk, names, namespace, cache) for a in x]
+        return "[%s]" % ', '.join(args)
+    # Symbol
+    if core.ishashable(x):
+        if x in cache:
+            sym = cache[x]
+        else:
+            cache[x] = sym = next(names)
+            if x not in dsk:
+                namespace[sym] = x
+    else:
+        sym = next(names)
+        namespace[sym] = x
 
-    def __init__(self, key, ops, args):
-        self._key = key
-        self._ops = ops
-        self._args = args
+    return sym
 
-    def __repr__(self):
-        return 'atop_call'
 
-    def __call__(self, *args):
-        assert len(args) == len(self._args)
-        dsk = dict(zip(self._args, args))
-        dsk.update(self._ops)
-        return local.get_sync(dsk, self._key)
+def gencode(dsk, out, args, name):
+    names = ('_%d' % i for i in count())
+    namespace = {}
+    cache = dict(zip(args, names))
+
+    header = 'def %s(%s):' % (name, ', '.join(cache[a] for a in args))
+    lines = [header]
+
+    for key in core._toposort(dsk, out):
+        task = dsk[key]
+        lhs = _gencode(key, dsk, names, namespace, cache)
+        rhs = _gencode(task, dsk, names, namespace, cache)
+        lines.append('    %s = %s' % (lhs, rhs))
+
+    lines.append('    return %s' % cache[out])
+
+    return '\n'.join(lines), namespace
+
+
+def makefunc(ops, out, args, name='atop_call'):
+    ops, _ = fuse(ops, [out], ave_width=1000, rename_keys=False)
+    code, namespace = gencode(ops, out, args, name)
+    exec_(code, namespace)
+    return namespace[name]
 
 
 def extract_atop_tuple(x):
@@ -2248,7 +2281,7 @@ class ATopArray(Array):
         outind, ops, args, dsks = self._atop
         args = sorted(args)
         arginds = list(concat([(dsks[a[0]], a[1]) for a in args]))
-        func = ATopCall(outind, ops, args)
+        func = makefunc(ops, outind, args)
         return _atop(func, outind[1], *arginds, name=self.name,
                      dtype=self.dtype).dask
 
