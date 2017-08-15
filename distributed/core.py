@@ -285,8 +285,8 @@ class Server(object):
                     try:
                         yield comm.write(result)
                     except EnvironmentError as e:
-                        logger.warning("Lost connection to %r while sending result for op %r: %s",
-                                       address, op, e)
+                        logger.debug("Lost connection to %r while sending result for op %r: %s",
+                                     address, op, e)
                         break
                 msg = result = None
                 if close_desired:
