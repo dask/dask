@@ -187,20 +187,15 @@ def diff(a, n=1, axis=-1):
 def ediff1d(ary, to_end=None, to_begin=None):
     ary = asarray(ary)
 
-    if to_end is None:
-        to_end = np.array([], dtype=ary.dtype)
-    if to_begin is None:
-        to_begin = np.array([], dtype=ary.dtype)
+    aryf = ary.flatten()
+    r = aryf[1:] - aryf[:-1]
 
-    to_end = asarray(to_end)
-    to_begin = asarray(to_begin)
-
-    ary = ary.flatten()
-    to_end = to_end.flatten()
-    to_begin = to_begin.flatten()
-
-    r = diff(ary)
-    r = concatenate([to_begin, r, to_end])
+    r = [r]
+    if to_begin is not None:
+        r = [asarray(to_begin).flatten()] + r
+    if to_end is not None:
+        r = r + [asarray(to_end).flatten()]
+    r = concatenate(r)
 
     return r
 
