@@ -2282,6 +2282,9 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
                "\nData has %d dimensions, but got axis=%d")
         raise ValueError(msg % (ndim, axis))
 
+    if n == 1:
+        return seq[0]
+
     if (not allow_unknown_chunksizes and
         not all(i == axis or all(x.shape[i] == seq[0].shape[i] for x in seq)
                 for i in range(ndim))):
