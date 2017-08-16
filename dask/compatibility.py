@@ -81,10 +81,9 @@ else:
     operator_div = operator.div
     FileNotFoundError = IOError
 
-    eval(compile("""
-        def exec_(codestr, glbls):
-            exec codestr in glbls
-            """, "<_exec>", "exec"))
+    eval(compile(("def exec_(codestr, glbls):\n"
+                  "    exec codestr in glbls\n"),
+                 "<_exec>", "exec"))
 
     def _make_reraise():
         _code = ("def reraise(exc, tb=None):"

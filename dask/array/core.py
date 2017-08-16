@@ -4,7 +4,7 @@ from bisect import bisect
 from collections import Iterable, Mapping
 from collections import Iterator
 from functools import partial, wraps
-from itertools import product, count
+from itertools import product
 import math
 from numbers import Number
 import operator
@@ -31,11 +31,11 @@ from . import chunk
 from .slicing import slice_array, replace_ellipsis
 from ..base import Base, tokenize, normalize_token
 from ..context import _globals
-from ..optimize import fuse
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
-                     SerializableLock, ensure_dict, package_of)
-from ..compatibility import unicode, long, getargspec, zip_longest, apply, exec_
+                     SerializableLock, ensure_dict, package_of,
+                     partial_by_order, SubgraphCallable)
+from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..delayed import to_task_dask
 from .. import threaded, core
 from .. import sharedict
@@ -2088,77 +2088,6 @@ def unify_chunks(*args, **kwargs):
     return chunkss, arrays
 
 
-def _gencode(x, dsk, names, namespace, cache):
-    if core.istask(x):
-        func, args = x[0], x[1:]
-        kwargs = {}
-
-        if func is apply:
-            if len(args) == 3:
-                func, args, kwargs = args
-            else:
-                func, args = args
-
-        if func is partial_by_order:
-            if len(kwargs) > 2:
-                kwargs = kwargs.copy()
-                func, other = kwargs.pop('function'), kwargs.pop('other')
-            else:
-                func, other = kwargs['function'], kwargs['other']
-                kwargs = {}
-            args = list(args)
-            for i, arg in other:
-                args.insert(i, arg)
-
-        func = _gencode(func, dsk, names, namespace, cache)
-        args = [_gencode(a, dsk, names, namespace, cache) for a in args]
-        if kwargs:
-            args.append('**(%s)' % _gencode(kwargs, dsk, names, namespace, cache))
-        return "%s(%s)" % (func, ', '.join(args))
-    elif isinstance(x, list):
-        args = [_gencode(a, dsk, names, namespace, cache) for a in x]
-        return "[%s]" % ', '.join(args)
-    # Symbol
-    if core.ishashable(x):
-        if x in cache:
-            sym = cache[x]
-        else:
-            cache[x] = sym = next(names)
-            if x not in dsk:
-                namespace[sym] = x
-    else:
-        sym = next(names)
-        namespace[sym] = x
-
-    return sym
-
-
-def gencode(dsk, out, args, name):
-    names = ('_%d' % i for i in count())
-    namespace = {}
-    cache = dict(zip(args, names))
-
-    header = 'def %s(%s):' % (name, ', '.join(cache[a] for a in args))
-    lines = [header]
-
-    for key in core._toposort(dsk, out):
-        task = dsk[key]
-        lhs = _gencode(key, dsk, names, namespace, cache)
-        rhs = _gencode(task, dsk, names, namespace, cache)
-        lines.append('    %s = %s' % (lhs, rhs))
-
-    lines.append('    return %s' % cache[out])
-
-    return '\n'.join(lines), namespace
-
-
-def makefunc(ops, out, args, name='atop_call'):
-    ops, _ = fuse(ops, [out], ave_width=1000, rename_keys=False)
-    code, namespace = gencode(ops, out, args, name)
-    exec_(code, namespace)
-    return namespace[name]
-
-
 def extract_atop_tuple(x):
     if isinstance(x, ATopArray):
         return x._atop
@@ -2302,7 +2231,7 @@ class ATopArray(Array):
         outind, ops, args, dsks = self._atop
         args = sorted(args)
         arginds = list(concat([(dsks[a[0]], a[1]) for a in args]))
-        func = makefunc(ops, outind, args)
+        func = SubgraphCallable(ops, outind, args, name='atop_call')
         return _atop(func, outind[1], *arginds, name=self.name,
                      dtype=self.dtype).dask
 
@@ -2610,20 +2539,6 @@ def asanyarray(array):
         array = np.asanyarray(array)
     return from_array(array, chunks=array.shape, getitem=getter_inline,
                       asarray=False)
-
-
-def partial_by_order(*args, **kwargs):
-    """
-
-    >>> partial_by_order(5, function=add, other=[(1, 10)])
-    15
-    """
-    function = kwargs.pop('function')
-    other = kwargs.pop('other')
-    args2 = list(args)
-    for i, arg in other:
-        args2.insert(i, arg)
-    return function(*args2, **kwargs)
 
 
 def is_scalar_for_elemwise(arg):
