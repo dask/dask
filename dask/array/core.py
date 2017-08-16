@@ -2274,12 +2274,14 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     """
     n = len(seq)
     ndim = len(seq[0].shape)
+
     if axis < 0:
         axis = ndim + axis
     if axis >= ndim:
         msg = ("Axis must be less than than number of dimensions"
                "\nData has %d dimensions, but got axis=%d")
         raise ValueError(msg % (ndim, axis))
+
     if (not allow_unknown_chunksizes and
         not all(i == axis or all(x.shape[i] == seq[0].shape[i] for x in seq)
                 for i in range(ndim))):
