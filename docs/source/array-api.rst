@@ -46,6 +46,7 @@ Top level user functions:
    digitize
    dot
    dstack
+   ediff1d
    empty
    exp
    expm1
@@ -332,6 +333,7 @@ Other functions
 .. autofunction:: digitize
 .. autofunction:: dot
 .. autofunction:: dstack
+.. autofunction:: ediff1d
 .. autofunction:: empty
 .. autofunction:: exp
 .. autofunction:: expm1
