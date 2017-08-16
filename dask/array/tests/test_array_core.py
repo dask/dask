@@ -302,6 +302,13 @@ def test_concatenate():
 
     assert set(b.dask.keys()).issubset(y.dask.keys())
 
+    z = concatenate([a], axis=0)
+
+    assert z.shape == a.shape
+    assert z.chunks == a.chunks
+    assert z.dask == a.dask
+    assert z is a
+
     assert (concatenate([a, b, c], axis=-1).chunks ==
             concatenate([a, b, c], axis=1).chunks)
 
