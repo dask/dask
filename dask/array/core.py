@@ -2091,8 +2091,29 @@ def unify_chunks(*args, **kwargs):
 def _gencode(x, dsk, names, namespace, cache):
     if core.istask(x):
         func, args = x[0], x[1:]
+        kwargs = {}
+
+        if func is apply:
+            if len(args) == 3:
+                func, args, kwargs = args
+            else:
+                func, args = args
+
+        if func is partial_by_order:
+            if len(kwargs) > 2:
+                kwargs = kwargs.copy()
+                func, other = kwargs.pop('function'), kwargs.pop('other')
+            else:
+                func, other = kwargs['function'], kwargs['other']
+                kwargs = {}
+            args = list(args)
+            for i, arg in other:
+                args.insert(i, arg)
+
         func = _gencode(func, dsk, names, namespace, cache)
         args = [_gencode(a, dsk, names, namespace, cache) for a in args]
+        if kwargs:
+            args.append('**(%s)' % _gencode(kwargs, dsk, names, namespace, cache))
         return "%s(%s)" % (func, ', '.join(args))
     elif isinstance(x, list):
         args = [_gencode(a, dsk, names, namespace, cache) for a in x]
