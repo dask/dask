@@ -59,13 +59,13 @@ class _LocIndexer(object):
 
             if isinstance(iindexer, slice):
                 return self._loc_slice(iindexer, cindexer)
-            elif isinstance(iindexer, list):
+            elif isinstance(iindexer, list) or isinstance(iindexer, np.ndarray):
                 return self._loc_list(iindexer, cindexer)
             else:
                 # element should raise KeyError
                 return self._loc_element(iindexer, cindexer)
         else:
-            if isinstance(iindexer, list):
+            if isinstance(iindexer, list) or isinstance(iindexer, np.ndarray):
                 # applying map_pattition to each partitions
                 # results in duplicated NaN rows
                 msg = 'Cannot index with list against unknown division'
@@ -124,7 +124,7 @@ class _LocIndexer(object):
                              meta=meta, divisions=[iindexer, iindexer])
 
     def _get_partitions(self, keys):
-        if isinstance(keys, list):
+        if isinstance(keys, list) or isinstance(keys, np.ndarray):
             return _partitions_of_index_values(self.obj.divisions, keys)
         else:
             # element
