@@ -42,9 +42,11 @@ Top level user functions:
    deg2rad
    degrees
    diag
+   diff
    digitize
    dot
    dstack
+   ediff1d
    empty
    exp
    expm1
@@ -178,6 +180,7 @@ Linear Algebra
    linalg.inv
    linalg.lstsq
    linalg.lu
+   linalg.norm
    linalg.qr
    linalg.solve
    linalg.solve_triangular
@@ -327,9 +330,11 @@ Other functions
 .. autofunction:: deg2rad
 .. autofunction:: degrees
 .. autofunction:: diag
+.. autofunction:: diff
 .. autofunction:: digitize
 .. autofunction:: dot
 .. autofunction:: dstack
+.. autofunction:: ediff1d
 .. autofunction:: empty
 .. autofunction:: exp
 .. autofunction:: expm1
@@ -437,6 +442,7 @@ Other functions
 .. autofunction:: inv
 .. autofunction:: lstsq
 .. autofunction:: lu
+.. autofunction:: norm
 .. autofunction:: qr
 .. autofunction:: solve
 .. autofunction:: solve_triangular

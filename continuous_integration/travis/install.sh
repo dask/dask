@@ -79,7 +79,8 @@ pip install -q \
     mmh3 \
     pandas_datareader \
     pytest-xdist \
-    xxhash
+    xxhash \
+    pycodestyle
 
 # Install dask
 pip install -q --no-deps -e .[complete]

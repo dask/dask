@@ -26,6 +26,15 @@ else:
         return np.allclose(a, b, **kwargs)
 
 
+def same_keys(a, b):
+    def key(k):
+        if isinstance(k, str):
+            return (k, -1, -1, -1)
+        else:
+            return k
+    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
+
+
 def _not_empty(x):
     return x.shape and 0 not in x.shape
 

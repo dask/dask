@@ -11,11 +11,11 @@ import pytest
 
 try:
     import bokeh
-except:
+except ImportError:
     bokeh = None
 try:
     import psutil
-except:
+except ImportError:
     psutil = None
 
 
@@ -80,6 +80,7 @@ def test_resource_profiler():
     with ResourceProfiler(dt=0.01) as rprof:
         get(dsk2, 'c')
     results = rprof.results
+    assert len(results) > 0
     assert all(isinstance(i, tuple) and len(i) == 3 for i in results)
 
     rprof.clear()
@@ -139,6 +140,25 @@ def test_cache_profiler():
     assert tics[-1] == results[-1].metric
     assert cprof._metric_name == 'nbytes'
     assert CacheProfiler(metric=nbytes, metric_name='foo')._metric_name == 'foo'
+
+
+@pytest.mark.parametrize(
+    'profiler',
+    [Profiler,
+     pytest.param(lambda: ResourceProfiler(dt=0.01),
+                  marks=pytest.mark.skipif("not psutil")),
+     CacheProfiler])
+def test_register(profiler):
+    prof = profiler()
+    try:
+        prof.register()
+        get(dsk2, 'c')
+        n = len(prof.results)
+        assert n > 0
+        get(dsk2, 'c')
+        assert len(prof.results) > n
+    finally:
+        prof.unregister()
 
 
 @pytest.mark.skipif("not bokeh")

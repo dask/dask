@@ -51,7 +51,7 @@ def _concat(args):
     if not isinstance(args[0], (pd.DataFrame, pd.Series, pd.Index)):
         try:
             return pd.Series(args)
-        except:
+        except Exception:
             return args
     # We filter out empty partitions here because pandas frequently has
     # inconsistent dtypes in results between empty and non-empty frames.
@@ -303,8 +303,7 @@ class _Frame(Base):
             divisions = pd.Index(self.divisions, name=name)
         else:
             # avoid to be converted to NaN
-            divisions = pd.Index(['None'] * (self.npartitions + 1),
-                                 name=name)
+            divisions = pd.Index([''] * (self.npartitions + 1), name=name)
         return divisions
 
     def __repr__(self):

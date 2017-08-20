@@ -335,12 +335,12 @@ def takes_multiple_arguments(func, varargs=True):
 
     try:
         spec = getargspec(func)
-    except:
+    except Exception:
         return False
 
     try:
         is_constructor = spec.args[0] == 'self' and isinstance(func, type)
-    except:
+    except Exception:
         is_constructor = False
 
     if varargs and spec.varargs:
@@ -545,7 +545,7 @@ def funcname(func):
         if name == '<lambda>':
             return 'lambda'
         return name
-    except:
+    except AttributeError:
         return str(func)
 
 

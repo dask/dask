@@ -24,7 +24,7 @@ try:
     if LooseVersion(cytoolz.__version__) > '0.7.3':
         from cytoolz import accumulate  # noqa: F811
         _implement_accumulate = True
-except:
+except ImportError:
     from toolz import (frequencies, merge_with, join, reduceby,
                        count, pluck, groupby, topk)
 

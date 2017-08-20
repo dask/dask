@@ -26,6 +26,7 @@ __all__ = ("Base", "compute", "normalize_token", "tokenize", "visualize")
 
 class Base(object):
     """Base class for dask collections"""
+    __slots__ = ()
 
     def visualize(self, filename='mydask', format=None, optimize_graph=False,
                   **kwargs):
@@ -299,12 +300,12 @@ def _normalize_function(func):
             result = pickle.dumps(func, protocol=0)
             if b'__main__' not in result:  # abort on dynamic functions
                 return result
-        except:
+        except Exception:
             pass
         try:
             import cloudpickle
             return cloudpickle.dumps(func, protocol=0)
-        except:
+        except Exception:
             return str(func)
 
 
@@ -412,7 +413,7 @@ def register_numpy():
             name = x.__name__
             if getattr(np, name) is x:
                 return 'np.' + name
-        except:
+        except AttributeError:
             return normalize_function(x)
 
 

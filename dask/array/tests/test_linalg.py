@@ -9,16 +9,7 @@ import scipy.linalg
 
 import dask.array as da
 from dask.array.linalg import tsqr, svd_compressed, qr, svd
-from dask.array.utils import assert_eq
-
-
-def same_keys(a, b):
-    def key(k):
-        if isinstance(k, str):
-            return (k, -1, -1, -1)
-        else:
-            return k
-    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
+from dask.array.utils import assert_eq, same_keys
 
 
 def test_tsqr_regular_blocks():
@@ -455,3 +446,91 @@ def test_no_chunks_svd():
         dx._chunks = ((np.nan,) * 10, (np.nan,))
         assert_eq(abs(v), abs(dv))
         assert_eq(abs(u), abs(du))
+
+
+@pytest.mark.parametrize("shape, chunks, axis", [
+    [(5,), (2,), None],
+    [(5,), (2,), 0],
+    [(5,), (2,), (0,)],
+    [(5, 6), (2, 2), None],
+    [(5, 6), (2, 2), 0],
+    [(5, 6), (2, 2), 1],
+    [(5, 6), (2, 2), (0, 1)],
+    [(5, 6), (2, 2), (1, 0)],
+])
+@pytest.mark.parametrize("norm", [
+    None,
+    1,
+    -1,
+    np.inf,
+    -np.inf,
+])
+@pytest.mark.parametrize("keepdims", [
+    False,
+    True,
+])
+def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
+    a = np.random.random(shape)
+    d = da.from_array(a, chunks=chunks)
+
+    a_r = np.linalg.norm(a, ord=norm, axis=axis, keepdims=keepdims)
+    d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
+
+    assert_eq(a_r, d_r)
+
+
+@pytest.mark.parametrize("shape, chunks, axis", [
+    [(5,), (2,), None],
+    [(5,), (2,), 0],
+    [(5,), (2,), (0,)],
+])
+@pytest.mark.parametrize("norm", [
+    0,
+    2,
+    -2,
+    0.5,
+])
+@pytest.mark.parametrize("keepdims", [
+    False,
+    True,
+])
+def test_norm_1dim(shape, chunks, axis, norm, keepdims):
+    a = np.random.random(shape)
+    d = da.from_array(a, chunks=chunks)
+
+    a_r = np.linalg.norm(a, ord=norm, axis=axis, keepdims=keepdims)
+    d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
+
+    # Fix a type mismatch on NumPy 1.10.
+    a_r = a_r.astype(float)
+
+    assert_eq(a_r, d_r)
+
+
+@pytest.mark.parametrize("shape, chunks, axis", [
+    [(5, 6), (2, 2), None],
+    [(5, 6), (2, 2), (0, 1)],
+    [(5, 6), (2, 2), (1, 0)],
+])
+@pytest.mark.parametrize("norm", [
+    "fro",
+    "nuc",
+    2,
+    -2
+])
+@pytest.mark.parametrize("keepdims", [
+    False,
+    True,
+])
+def test_norm_2dim(shape, chunks, axis, norm, keepdims):
+    a = np.random.random(shape)
+    d = da.from_array(a, chunks=chunks)
+
+    # Need one chunk on last dimension for svd.
+    if norm == "nuc" or norm == 2 or norm == -2:
+        d = d.rechunk((d.chunks[0], d.shape[1]))
+
+    a_r = np.linalg.norm(a, ord=norm, axis=axis, keepdims=keepdims)
+    d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
+
+    assert_eq(a_r, d_r)

@@ -9,16 +9,7 @@ from dask.array.ghost import (fractional_slice, getitem, trim_internal,
                               ghost_internal, nearest, constant, boundaries,
                               reflect, periodic, ghost)
 from dask.core import get
-from dask.array.utils import assert_eq
-
-
-def same_keys(a, b):
-    def key(k):
-        if isinstance(k, str):
-            return (k, -1, -1, -1)
-        else:
-            return k
-    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
+from dask.array.utils import assert_eq, same_keys
 
 
 def test_fractional_slice():

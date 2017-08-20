@@ -1,18 +1,10 @@
 import pytest
 pytest.importorskip('numpy')
 
-from dask.array.utils import assert_eq
-import dask.array as da
 import numpy as np
 
-
-def same_keys(a, b):
-    def key(k):
-        if isinstance(k, str):
-            return (k, -1, -1, -1)
-        else:
-            return k
-    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
+import dask.array as da
+from dask.array.utils import assert_eq, same_keys
 
 
 def test_percentile():
