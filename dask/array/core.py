@@ -2488,6 +2488,7 @@ def elemwise(op, *args, **kwargs):
     arrays = [a for a in args if not is_scalar_for_elemwise(a)]
     other = [(i, a) for i, a in enumerate(args) if is_scalar_for_elemwise(a)]
 
+    need_enforce_dtype = False
     if 'dtype' in kwargs:
         dt = kwargs['dtype']
     else:
@@ -2496,24 +2497,30 @@ def elemwise(op, *args, **kwargs):
         # their values to compute the result dtype:
         # https://github.com/numpy/numpy/issues/6240
         # We don't inspect the values of 0d dask arrays, because these could
-        # hold potentially very expensive calculations.
-        vals = [np.empty((1,) * a.ndim, dtype=a.dtype)
+        # hold potentially very expensive calculations. Instead, we treat
+        # them just like other arrays, and if necessary cast the result of op
+        # to match.
+        vals = [np.empty((1,) * max(1, a.ndim), dtype=a.dtype)
                 if not is_scalar_for_elemwise(a) else a
                 for a in args]
         dt = apply_infer_dtype(op, vals, {}, 'elemwise', suggest_dtype=False)
+        need_enforce_dtype = any(not is_scalar_for_elemwise(a) and a.ndim == 0 for a in args)
 
     name = kwargs.get('name', None) or '%s-%s' % (funcname(op),
                                                   tokenize(op, dt, *args))
 
+    atop_kwargs = dict(dtype=dt, name=name, token=funcname(op).strip('_'))
     if other:
-        result = atop(partial_by_order, expr_inds,
-                      *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
-                      dtype=dt, name=name, function=op, other=other,
-                      token=funcname(op))
-    else:
-        result = atop(op, expr_inds,
-                      *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
-                      dtype=dt, name=name)
+        atop_kwargs['function'] = op
+        atop_kwargs['other'] = other
+        op = partial_by_order
+    if need_enforce_dtype:
+        atop_kwargs['enforce_dtype'] = dt
+        atop_kwargs['enforce_dtype_function'] = op
+        op = _enforce_dtype
+    result = atop(op, expr_inds,
+                  *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
+                  **atop_kwargs)
 
     return handle_out(out, result)
 
@@ -2546,6 +2553,37 @@ def handle_out(out, result):
         raise NotImplementedError(msg)
     else:
         return result
+
+
+def _enforce_dtype(*args, **kwargs):
+    """Calls a function and converts its result to the given dtype.
+
+    The parameters have deliberately been given unwieldy names to avoid
+    clashes with keyword arguments consumed by atop or partial_by_order.
+
+    A dtype of `object` is treated as a special case and not enforced,
+    because it is used as a dummy value in some places when the result will
+    not be a block in an Array.
+
+    Parameters
+    ----------
+    enforce_dtype : dtype
+        Result dtype
+    enforce_dtype_function : callable
+        The wrapped function, which will be passed the remaining arguments
+    """
+    dtype = kwargs.pop('enforce_dtype')
+    function = kwargs.pop('enforce_dtype_function')
+
+    result = function(*args, **kwargs)
+    if dtype != object:
+        if np.isscalar(result):
+            # scalar astype method doesn't take the keyword arguments, so
+            # have to convert via 0-dimensional array and back.
+            result = result[...].astype(dtype, casting='same_kind', copy=False)[()]
+        else:
+            result = result.astype(dtype, casting='same_kind', copy=False)
+    return result
 
 
 @wraps(chunk.broadcast_to)

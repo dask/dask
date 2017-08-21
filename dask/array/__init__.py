@@ -9,7 +9,8 @@ from .routines import (take, choose, argwhere, where, coarsen, insert,
                        bincount, digitize, histogram, cov, array, dstack,
                        vstack, hstack, compress, extract, round, count_nonzero,
                        flatnonzero, nonzero, around, isnull, notnull, isclose,
-                       corrcoef, swapaxes, tensordot, transpose, dot)
+                       corrcoef, swapaxes, tensordot, transpose, dot,
+                       result_type)
 from .reshape import reshape
 from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
         true_divide, floor_divide, negative, power, remainder, mod, conj, exp,
