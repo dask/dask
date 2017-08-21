@@ -6,7 +6,7 @@ from distutils.version import LooseVersion
 import numpy as np
 
 from ..base import normalize_token
-from .core import (concatenate_lookup, tensordot_lookup, map_blocks, elemwise,
+from .core import (concatenate_lookup, tensordot_lookup, map_blocks,
                    asanyarray, atop)
 
 
@@ -43,7 +43,7 @@ def _tensordot(a, b, axes=2):
     # Please see license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
     try:
         iter(axes)
-    except:
+    except TypeError:
         axes_a = list(range(-axes, 0))
         axes_b = list(range(0, axes))
     else:
@@ -117,7 +117,10 @@ def _wrap_masked(f):
     def _(a, value):
         a = asanyarray(a)
         value = asanyarray(value)
-        return elemwise(f, a, value)
+        ainds = tuple(range(a.ndim))[::-1]
+        vinds = tuple(range(value.ndim))[::-1]
+        oinds = max(ainds, vinds, key=len)
+        return atop(f, oinds, a, ainds, value, vinds, dtype=a.dtype)
 
     return _
 
@@ -134,7 +137,8 @@ def masked_equal(a, value):
     a = asanyarray(a)
     if getattr(value, 'shape', ()):
         raise ValueError("da.ma.masked_equal doesn't support array `value`s")
-    return elemwise(np.ma.masked_equal, a, value)
+    inds = tuple(range(a.ndim))
+    return atop(np.ma.masked_equal, inds, a, inds, value, (), dtype=a.dtype)
 
 
 @wraps(np.ma.masked_invalid)
@@ -162,7 +166,10 @@ def masked_where(condition, a):
                          "input (got %s and %s)" % (cshape, a.shape))
     condition = asanyarray(condition)
     a = asanyarray(a)
-    return elemwise(np.ma.masked_where, condition, a)
+    ainds = tuple(range(a.ndim))
+    cinds = tuple(range(condition.ndim))
+    return atop(np.ma.masked_where, ainds, condition, cinds, a, ainds,
+                dtype=a.dtype)
 
 
 @wraps(np.ma.masked_values)

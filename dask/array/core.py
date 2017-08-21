@@ -2593,13 +2593,22 @@ def _enforce_dtype(*args, **kwargs):
     function = kwargs.pop('enforce_dtype_function')
 
     result = function(*args, **kwargs)
-    if dtype != object:
+    if dtype != result.dtype and dtype != object:
+        if not np.can_cast(result, dtype, casting='same_kind'):
+            raise ValueError("Inferred dtype from function %r was %r "
+                             "but got %r, which can't be cast using "
+                             "casting='same_kind'" %
+                             (funcname(function), str(dtype), str(result.dtype)))
         if np.isscalar(result):
             # scalar astype method doesn't take the keyword arguments, so
             # have to convert via 0-dimensional array and back.
-            result = result[...].astype(dtype, casting='same_kind', copy=False)[()]
+            result = result.astype(dtype)
         else:
-            result = result.astype(dtype, casting='same_kind', copy=False)
+            try:
+                result = result.astype(dtype, copy=False)
+            except TypeError:
+                # Missing copy kwarg
+                result = result.astype(dtype)
     return result
 
 
