@@ -7,7 +7,7 @@ import numpy as np
 
 from ..base import normalize_token
 from .core import (concatenate_lookup, tensordot_lookup, map_blocks, elemwise,
-                   asanyarray)
+                   asanyarray, atop)
 
 
 if LooseVersion(np.__version__) < '1.11.0':
@@ -190,6 +190,40 @@ def getdata(a):
 def getmaskarray(a):
     a = asanyarray(a)
     return a.map_blocks(np.ma.getmaskarray)
+
+
+def _masked_array(data, mask=np.ma.nomask, **kwargs):
+    dtype = kwargs.pop('masked_dtype', None)
+    return np.ma.masked_array(data, mask=mask, dtype=dtype, **kwargs)
+
+
+@wraps(np.ma.masked_array)
+def masked_array(data, mask=np.ma.nomask, fill_value=None,
+                 **kwargs):
+    data = asanyarray(data)
+    inds = tuple(range(data.ndim))
+    arginds = [inds, data, inds]
+
+    if getattr(fill_value, 'shape', ()):
+        raise ValueError("non-scalar fill_value not supported")
+    kwargs['fill_value'] = fill_value
+
+    if mask is not np.ma.nomask:
+        mask = asanyarray(mask)
+        if mask.size == 1:
+            mask = mask.reshape((1,) * data.ndim)
+        elif data.shape != mask.shape:
+            raise np.ma.MaskError("Mask and data not compatible: data shape "
+                                  "is %s, and mask shape is "
+                                  "%s." % (repr(data.shape), repr(mask.shape)))
+        arginds.extend([mask, inds])
+
+    if 'dtype' in kwargs:
+        kwargs['masked_dtype'] = kwargs['dtype']
+    else:
+        kwargs['dtype'] = data.dtype
+
+    return atop(_masked_array, *arginds, **kwargs)
 
 
 def _set_fill_value(x, fill_value):
