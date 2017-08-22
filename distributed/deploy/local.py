@@ -174,8 +174,12 @@ class LocalCluster(object):
 
         self.workers.append(w)
 
-        while w.worker_address not in self.scheduler.worker_info:
+        while w.status != 'closed' and w.worker_address not in self.scheduler.worker_info:
             yield gen.sleep(0.01)
+
+        if w.status == 'closed':
+            self.workers.remove(w)
+            raise gen.TimeoutError("Worker failed to start")
 
         raise gen.Return(w)
 
@@ -249,7 +253,10 @@ class LocalCluster(object):
             try:
                 self._thread.join(timeout=1)
             finally:
-                self.loop.close()
+                try:
+                    self.loop.close()
+                except ValueError:
+                    pass
             del self._thread
 
     @gen.coroutine

@@ -311,3 +311,11 @@ def test_memory_nanny(loop):
             info = c.scheduler_info()
             assert (sum(w['memory_limit'] for w in info['workers'].values())
                     < TOTAL_MEMORY * 0.9)
+
+
+def test_death_timeout_raises(loop):
+    with pytest.raises(gen.TimeoutError):
+        with LocalCluster(scheduler_port=0, silence_logs=False,
+                          death_timeout=1e-10, diagnostics_port=None,
+                          loop=loop) as cluster:
+            pass
