@@ -211,11 +211,9 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
     signal.signal(signal.SIGINT, handle_signal)
     signal.signal(signal.SIGTERM, handle_signal)
 
-    for n in nannies:
-        n.start(addr)
-
     @gen.coroutine
     def run():
+        yield [n.start(addr) for n in nannies]
         while all(n.status != 'closed' for n in nannies):
             yield gen.sleep(0.2)
 
