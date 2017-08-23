@@ -1125,3 +1125,24 @@ def test_correct_bad_time_estimate(c, s, *workers):
     yield _wait(futures)
 
     assert all(w.data for w in workers)
+
+
+@gen_test(timeout=None)
+def test_service_hosts_match_scheduler():
+    from distributed.http.scheduler import HTTPScheduler
+    services = {('http', 0): HTTPScheduler}
+
+    s = Scheduler(services=services)
+    yield s.start('tcp://0.0.0.0')
+
+    sock = first(s.services['http']._sockets.values())
+    assert sock.getsockname()[0] in ('::', '0.0.0.0')
+    yield s.close()
+
+    for host in ['tcp://127.0.0.2', 'tcp://127.0.0.2:38275']:
+        s = Scheduler(services=services)
+        yield s.start(host)
+
+        sock = first(s.services['http']._sockets.values())
+        assert sock.getsockname()[0] == '127.0.0.2'
+        yield s.close()

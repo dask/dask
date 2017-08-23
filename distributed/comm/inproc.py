@@ -232,6 +232,7 @@ class InProc(Comm):
 
 
 class InProcListener(Listener):
+    prefix = 'inproc'
 
     def __init__(self, address, comm_handler, deserialize=True):
         self.manager = global_manager

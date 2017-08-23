@@ -410,12 +410,15 @@ class Scheduler(ServerNode):
         """ Basic information about ourselves and our cluster """
         return get_versions()
 
-    def start_services(self, listen_ip=''):
+    def start_services(self, listen_ip):
         for k, v in self.service_specs.items():
             if isinstance(k, tuple):
                 k, port = k
             else:
                 port = 0
+
+            if listen_ip == '0.0.0.0':
+                listen_ip = ''  # for IPv6
 
             try:
                 service = v(self, io_loop=self.loop)
@@ -450,17 +453,22 @@ class Scheduler(ServerNode):
                 # as it would prevent connecting via 127.0.0.1.
                 self.listen(('', addr_or_port), listen_args=self.listen_args)
                 self.ip = get_ip()
+                listen_ip = ''
             else:
                 self.listen(addr_or_port, listen_args=self.listen_args)
                 self.ip = get_address_host(self.listen_address)
+                listen_ip = self.ip
+
+            if listen_ip == '0.0.0.0':
+                listen_ip = ''
 
             # Services listen on all addresses
-            self.start_services()
+            self.start_services(listen_ip)
 
             self.status = 'running'
             logger.info("  Scheduler at: %25s", self.address)
             for k, v in self.services.items():
-                logger.info("%11s at: %25s", k, '%s:%d' % (self.ip, v.port))
+                logger.info("%11s at: %25s", k, '%s:%d' % (listen_ip, v.port))
 
         if self.scheduler_file:
             with open(self.scheduler_file, 'w') as f:

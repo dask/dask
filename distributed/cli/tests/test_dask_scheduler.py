@@ -38,14 +38,16 @@ def test_defaults(loop):
         loop.run_sync(f)
 
         with Client('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as c:
-            response = requests.get('http://127.0.0.1:9786/info.json')
-            assert response.ok
-            assert response.json()['status'] == 'running'
+            pass
+
+        response = requests.get('http://127.0.0.1:9786/info.json')
+        assert response.ok
+        assert response.json()['status'] == 'running'
 
     with pytest.raises(Exception):
-        response = requests.get('http://127.0.0.1:9786/info.json')
-    with pytest.raises(Exception):
         requests.get('http://127.0.0.1:8787/status/')
+    with pytest.raises(Exception):
+        response = requests.get('http://127.0.0.1:9786/info.json')
 
 
 def test_hostport(loop):
@@ -56,8 +58,7 @@ def test_hostport(loop):
             yield [
                 # The scheduler's main port can't be contacted from the outside
                 assert_can_connect_locally_4(8978, 2.0),
-                # ... but its HTTP port can
-                assert_can_connect_from_everywhere_4_6(8979, 2.0),
+                assert_can_connect_locally_4(8979, 2.0),
                 ]
 
         loop.run_sync(f)

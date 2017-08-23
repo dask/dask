@@ -9,7 +9,7 @@ import sys
 import numpy as np
 
 import pytest
-from toolz import valmap
+from toolz import valmap, first
 from tornado.tcpclient import TCPClient
 from tornado import gen
 
@@ -197,3 +197,17 @@ def test_num_fds(s):
         print("fds:", before, proc.num_fds())
         yield gen.sleep(0.1)
         assert time() < start + 10
+
+
+@gen_cluster(client=True, ncores=[])
+def test_worker_uses_same_host_as_nanny(c, s):
+    for host in ['tcp://0.0.0.0', 'tcp://127.0.0.2']:
+        n = Nanny(s.address)
+        yield n._start(host)
+
+        def func(dask_worker):
+            return dask_worker.listener.listen_address
+
+        result = yield c.run(func)
+        assert host in first(result.values())
+        yield n._close()

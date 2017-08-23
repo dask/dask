@@ -75,7 +75,7 @@ class WorkerBase(ServerNode):
                  name=None, heartbeat_interval=5000, reconnect=True,
                  memory_limit='auto', executor=None, resources=None,
                  silence_logs=None, death_timeout=None, preload=(),
-                 security=None, **kwargs):
+                 security=None, contact_address=None, **kwargs):
         if scheduler_port is None:
             scheduler_addr = coerce_to_address(scheduler_ip)
         else:
@@ -86,6 +86,7 @@ class WorkerBase(ServerNode):
         self.available_resources = (resources or {}).copy()
         self.death_timeout = death_timeout
         self.preload = preload
+        self.contact_address = contact_address
         if silence_logs:
             silence_logging(level=silence_logs)
 
@@ -165,6 +166,7 @@ class WorkerBase(ServerNode):
                               self.heartbeat_interval,
                               io_loop=self.loop)
         self.periodic_callbacks['heartbeat'] = pc
+        self._address = contact_address
 
     @property
     def worker_address(self):
@@ -186,7 +188,7 @@ class WorkerBase(ServerNode):
                     kwargs = {}
 
                 yield self.scheduler.register(
-                        address=self.address,
+                        address=self.contact_address,
                         name=self.name,
                         ncores=self.ncores,
                         now=time(),
@@ -207,6 +209,8 @@ class WorkerBase(ServerNode):
     def _register_with_scheduler(self):
         self.periodic_callbacks['heartbeat'].stop()
         start = time()
+        if self.contact_address is None:
+            self.contact_address = self.address
         while True:
             if self.death_timeout and time() > start + self.death_timeout:
                 yield self._close(timeout=1)
@@ -215,7 +219,8 @@ class WorkerBase(ServerNode):
                 raise gen.Return
             try:
                 future = self.scheduler.register(
-                        ncores=self.ncores, address=self.address,
+                        ncores=self.ncores,
+                        address=self.contact_address,
                         keys=list(self.data),
                         name=self.name,
                         nbytes=self.nbytes,
@@ -254,7 +259,6 @@ class WorkerBase(ServerNode):
                 v, kwargs = v
             else:
                 v, kwargs = v, {}
-
             self.services[k] = v(self, io_loop=self.loop, **kwargs)
             self.services[k].listen((listen_ip, port))
             self.service_ports[k] = self.services[k].port
@@ -266,32 +270,45 @@ class WorkerBase(ServerNode):
         # XXX Factor this out
         if not addr_or_port:
             # Default address is the required one to reach the scheduler
+            listen_host = get_address_host(self.scheduler.address)
             self.listen(get_local_address_for(self.scheduler.address),
                         listen_args=self.listen_args)
             self.ip = get_address_host(self.address)
         elif isinstance(addr_or_port, int):
             # addr_or_port is an integer => assume TCP
-            self.ip = get_ip(
+            listen_host = self.ip = get_ip(
                 get_address_host(self.scheduler.address)
             )
-            self.listen((self.ip, addr_or_port),
+            self.listen((listen_host, addr_or_port),
                         listen_args=self.listen_args)
         else:
             self.listen(addr_or_port, listen_args=self.listen_args)
             self.ip = get_address_host(self.address)
+            try:
+                listen_host = get_address_host(addr_or_port)
+            except ValueError:
+                listen_host = addr_or_port
+
+        if '://' in listen_host:
+            protocol, listen_host = listen_host.split('://')
 
         self.name = self.name or self.address
         preload_modules(self.preload, parameter=self, file_dir=self.local_dir)
         # Services listen on all addresses
         # Note Nanny is not a "real" service, just some metadata
         # passed in service_ports...
-        self.start_services()
+        self.start_services(listen_host)
+
+        try:
+            listening_address = '%s%s:%d' % (self.listener.prefix, listen_host, self.port)
+        except Exception:
+            listening_address = '%s%s' % (self.listener.prefix, listen_host)
 
         logger.info('      Start worker at: %26s', self.address)
+        logger.info('         Listening to: %26s', listening_address)
         for k, v in self.service_ports.items():
-            logger.info('  %16s at: %20s:%d' % (k, self.ip, v))
-        logger.info('Waiting to connect to: %26s',
-                    self.scheduler.address)
+            logger.info('  %16s at: %26s' % (k, listen_host + ':' + str(v)))
+        logger.info('Waiting to connect to: %26s', self.scheduler.address)
         logger.info('-' * 49)
         logger.info('              Threads: %26d', self.ncores)
         if self.memory_limit:
@@ -302,7 +319,7 @@ class WorkerBase(ServerNode):
         yield self._register_with_scheduler()
 
         if self.status == 'running':
-            logger.info('        Registered to: %32s', self.scheduler.address)
+            logger.info('        Registered to: %26s', self.scheduler.address)
             logger.info('-' * 49)
 
     def start(self, port=0):
@@ -327,7 +344,7 @@ class WorkerBase(ServerNode):
         with ignoring(EnvironmentError, gen.TimeoutError):
             if report:
                 yield gen.with_timeout(timedelta(seconds=timeout),
-                        self.scheduler.unregister(address=self.address),
+                        self.scheduler.unregister(address=self.contact_address),
                         io_loop=self.loop)
         self.scheduler.close_rpc()
         if isinstance(self.executor, ThreadPoolExecutor):
@@ -441,7 +458,7 @@ class WorkerBase(ServerNode):
             if report:
                 logger.debug("Reporting loss of keys to scheduler")
                 # TODO: this route seems to not exist?
-                yield self.scheduler.remove_keys(address=self.address,
+                yield self.scheduler.remove_keys(address=self.contact_address,
                                                  keys=list(keys))
         raise Return('OK')
 
@@ -493,7 +510,7 @@ class WorkerBase(ServerNode):
             self.total_resources[r] = quantity
 
         yield self.scheduler.set_resources(resources=self.total_resources,
-                                           worker=self.address)
+                                           worker=self.contact_address)
 
     def start_ipython(self, comm):
         """Start an IPython kernel

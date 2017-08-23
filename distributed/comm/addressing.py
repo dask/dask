@@ -9,16 +9,23 @@ from . import registry
 DEFAULT_SCHEME = config.get('default-scheme', 'tcp')
 
 
-def parse_address(addr):
+def parse_address(addr, strict=False):
     """
     Split address into its scheme and scheme-dependent location string.
 
     >>> parse_address('tcp://127.0.0.1')
     ('tcp', '127.0.0.1')
+
+    If strict is set to true the address must have a scheme.
     """
     if not isinstance(addr, six.string_types):
         raise TypeError("expected str, got %r" % addr.__class__.__name__)
     scheme, sep, loc = addr.rpartition('://')
+    if strict and not sep:
+        msg = ("Invalid url scheme. "
+               "Must include protocol like tcp://localhost:8000. "
+               "Got %s" % addr)
+        raise ValueError(msg)
     if not sep:
         scheme = DEFAULT_SCHEME
     return scheme, loc
@@ -96,17 +103,17 @@ def unparse_host_port(host, port=None):
         return host
 
 
-def get_address_host_port(addr):
+def get_address_host_port(addr, strict=False):
     """
     Get a (host, port) tuple out of the given address.
-
+    For definition of strict check parse_address
     ValueError is raised if the address scheme doesn't allow extracting
     the requested information.
 
     >>> get_address_host_port('tcp://1.2.3.4:80')
     ('1.2.3.4', 80)
     """
-    scheme, loc = parse_address(addr)
+    scheme, loc = parse_address(addr, strict=strict)
     backend = registry.get_backend(scheme)
     try:
         return backend.get_address_host_port(loc)

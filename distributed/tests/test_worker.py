@@ -12,7 +12,7 @@ import traceback
 
 from dask import delayed
 import pytest
-from toolz import pluck, sliding_window
+from toolz import pluck, sliding_window, first
 import tornado
 from tornado import gen
 from tornado.ioloop import TimeoutError
@@ -906,3 +906,16 @@ def test_worker_fds(s):
     while psutil.Process().num_fds() > start:
         yield gen.sleep(0.01)
         assert time() < start + 0.5
+
+
+@gen_cluster(ncores=[])
+def test_service_hosts_match_worker(s):
+    from distributed.http.worker import HTTPWorker
+    services = {('http', 0): HTTPWorker}
+    for host in ['tcp://0.0.0.0', 'tcp://127.0.0.2']:
+        w = Worker(s.address, services=services)
+        yield w._start(host)
+
+        sock = first(w.services['http']._sockets.values())
+        assert sock.getsockname()[0] == host.split('://')[1]
+        yield w._close()

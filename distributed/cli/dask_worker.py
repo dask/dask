@@ -19,6 +19,7 @@ from distributed.http import HTTPWorker
 from distributed.metrics import time
 from distributed.security import Security
 from distributed.cli.utils import check_python_3, uri_from_host_port
+from distributed.comm import get_address_host_port
 
 from toolz import valmap
 from tornado.ioloop import IOLoop, TimeoutError
@@ -47,9 +48,18 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help="Bokeh port, defaults to 8789")
 @click.option('--bokeh/--no-bokeh', 'bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
+@click.option('--listen-address', type=str, default=None,
+        help="The address to which the worker binds. "
+             "Example: tcp://0.0.0.0:9000")
+@click.option('--contact-address', type=str, default=None,
+        help="The address the worker advertises to the scheduler for "
+             "communication with it and other workers. "
+             "Example: tcp://127.0.0.1:9000")
 @click.option('--host', type=str, default=None,
               help="Serving host. Should be an ip address that is"
                    " visible to the scheduler and other workers. "
+                   "See --listen-address and --contact-address if you "
+                   "need different listen and contact addresses. "
                    "See --interface.")
 @click.option('--interface', type=str, default=None,
               help="Network interface like 'eth0' or 'ib0'")
@@ -84,20 +94,16 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 @click.option('--preload', type=str, multiple=True,
               help='Module that should be loaded by each worker process '
                    'like "foo.bar" or "/path/to/foo.py"')
-def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
-         nanny, name, memory_limit, pid_file, reconnect,
-         resources, bokeh, bokeh_port, local_directory, scheduler_file,
-         interface, death_timeout, preload, bokeh_prefix,
-         tls_ca_file, tls_cert, tls_key):
+def main(scheduler, host, worker_port, listen_address, contact_address,
+         http_port, nanny_port, nthreads, nprocs, nanny, name,
+         memory_limit, pid_file, reconnect, resources, bokeh,
+         bokeh_port, local_directory, scheduler_file, interface,
+         death_timeout, preload, bokeh_prefix, tls_ca_file,
+         tls_cert, tls_key):
     sec = Security(tls_ca_file=tls_ca_file,
                    tls_worker_cert=tls_cert,
                    tls_worker_key=tls_key,
                    )
-
-    if nanny:
-        port = nanny_port
-    else:
-        port = worker_port
 
     if nprocs > 1 and worker_port != 0:
         logger.error("Failed to launch worker.  You cannot use the --port argument when nprocs > 1.")
@@ -110,6 +116,40 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
     if nprocs > 1 and not nanny:
         logger.error("Failed to launch worker.  You cannot use the --no-nanny argument when nprocs > 1.")
         exit(1)
+
+    if contact_address and not listen_address:
+        logger.error("Failed to launch worker. "
+                     "Must specify --listen-address when --contact-address is given")
+        exit(1)
+
+    if nprocs > 1 and listen_address:
+        logger.error("Failed to launch worker. "
+                     "You cannot specify --listen-address when nprocs > 1.")
+        exit(1)
+
+    if  (worker_port or host) and listen_address:
+        logger.error("Failed to launch worker. "
+                     "You cannot specify --listen-address when --worker-port or --host is given.")
+        exit(1)
+
+    try:
+        if listen_address:
+            (host, worker_port) = get_address_host_port(listen_address, strict=True)
+
+        if contact_address:
+            # we only need this to verify it is getting parsed
+            (_, _) = get_address_host_port(contact_address, strict=True)
+        else:
+            # if contact address is not present we use the listen_address for contact
+            contact_address = listen_address
+    except ValueError as e:
+        logger.error("Failed to launch worker. " + str(e))
+        exit(1)
+
+    if nanny:
+        port = nanny_port
+    else:
+        port = worker_port
 
     if not nthreads:
         nthreads = _ncores // nprocs
@@ -147,7 +187,7 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
     loop = IOLoop.current()
 
     if nanny:
-        kwargs = {'worker_port': worker_port}
+        kwargs = {'worker_port': worker_port, 'listen_address': listen_address}
         t = Nanny
     else:
         kwargs = {}
@@ -187,7 +227,7 @@ def main(scheduler, host, worker_port, http_port, nanny_port, nthreads, nprocs,
                  services=services, name=name, loop=loop, resources=resources,
                  memory_limit=memory_limit, reconnect=reconnect,
                  local_dir=local_directory, death_timeout=death_timeout,
-                 preload=preload, security=sec,
+                 preload=preload, security=sec, contact_address=contact_address,
                  **kwargs)
                for i in range(nprocs)]
 

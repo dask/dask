@@ -726,11 +726,11 @@ def popen(*args, **kwargs):
             # XXX Also dump stdout if return code != 0 ?
             out, err = proc.communicate()
             if dump_stdout:
-                print('\n\nPrint from stderr\n=================\n')
-                print(err)
+                print('\n\nPrint from stderr\n  %s\n=================\n' % args[0][0])
+                print(err.decode())
 
                 print('\n\nPrint from stdout\n=================\n')
-                print(out)
+                print(out.decode())
 
 
 def wait_for_port(address, timeout=5):
