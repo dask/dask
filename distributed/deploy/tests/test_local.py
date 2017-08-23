@@ -81,7 +81,7 @@ def test_move_unserializable_data():
         assert cluster.workers[0].address.startswith('inproc://')
         with Client(cluster) as client:
             lock = Lock()
-            [x] = client.scatter([lock])
+            x = client.scatter(lock)
             y = client.submit(lambda x: x, x)
             assert y.result() is lock
 

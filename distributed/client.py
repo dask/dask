@@ -839,7 +839,10 @@ class Client(Node):
         state = self.futures.get(key)
         if state is not None:
             if type and not state.type:  # Type exists and not yet set
-                type = loads(type)
+                try:
+                    type = loads(type)
+                except Exception:
+                    type = None
                 # Here, `type` may be a str if actual type failed
                 # serializing in Worker
             else:
