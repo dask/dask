@@ -1624,10 +1624,12 @@ class Worker(WorkerBase):
                 if self.validate:
                     self.validate_state()
 
+                deps = tuple(deps)
+
                 self.log.append(('request-dep', dep, worker, deps))
                 logger.debug("Request %d keys", len(deps))
                 start = time()
-                response = yield self.rpc(worker).get_data(keys=list(deps),
+                response = yield self.rpc(worker).get_data(keys=deps,
                                                            who=self.address)
                 stop = time()
 
@@ -1943,8 +1945,9 @@ class Worker(WorkerBase):
             function, args, kwargs = self.tasks[key]
 
             start = time()
-            args2 = pack_data(args, self.data, key_types=str)
-            kwargs2 = pack_data(kwargs, self.data, key_types=str)
+            data = {k: self.data[k] for k in self.dependencies[key]}
+            args2 = pack_data(args, data, key_types=str)
+            kwargs2 = pack_data(kwargs, data, key_types=str)
             stop = time()
             if stop - start > 0.005:
                 self.startstops[key].append(('disk-read', start, stop))
