@@ -13,7 +13,7 @@ Dynamically scaling a Dask cluster up and down requires tight integration with
 an external cluster management system that can deploy ``dask-worker`` jobs
 throughout the cluster.  Several systems are in wide use today, including
 common examples like SGE, SLURM, Torque, Condor, LSF, Yarn, Mesos, Marathon,
-Kubernetes, etc..  These systems can be quite different from each other, but
+Kubernetes, etc... These systems can be quite different from each other, but
 all are used to manage distributed services throughout different kinds of
 clusters.
 
@@ -51,16 +51,17 @@ The ``distributed.deploy.Adaptive`` class contains the logic about when to ask
 for new workers, and when to close idle ones.  This class requires both a
 scheduler and a cluster object.
 
-The cluster object must support two methods, ``scale_up(n)``, which takes in a
-target number of total workers for the cluster and ``scale_down(workers)``,
-which takes in a list of addresses to remove from the cluster.  The Adaptive
-class will call these methods with the correct values at the correct times.
+The cluster object must support two methods, ``scale_up(n, **kwargs)``, which
+takes in a target number of total workers for the cluster and
+``scale_down(workers)``, which takes in a list of addresses to remove from the
+cluster.  The Adaptive class will call these methods with the correct values at
+the correct times.
 
 .. code-block:: python
 
    class MyCluster(object):
        @gen.coroutine
-       def scale_up(self, n):
+       def scale_up(self, n, **kwargs):
            """
            Bring the total count of workers up to ``n``
 
@@ -142,3 +143,35 @@ We reproduce the full body of the implementation below as an example:
                self.marathon_client.kill_task(self.app.id,
                                               self.scheduler.worker_info[w]['name'],
                                               scale=True)
+
+Subclassing Adaptive
+--------------------
+
+The default behaviors of ``Adaptive`` controlling when to scale up or down, and
+by how much, may not be appropriate for your cluster manager or workload. For
+example, you may have tasks that require a worker with more memory than usual.
+This means we need to pass through some additional keyword arguments to
+``cluster.scale_up`` call.
+
+.. code-block:: python
+
+   from distributed.deploy import Adaptive
+
+   class MyAdaptive(Adaptive):
+       def get_scale_up_kwargs(self):
+           kwargs = super(Adaptive, self).get_scale_up_kwargs()
+           # resource_restrictions maps task keys to a dict of restrictions
+           restrictions = self.scheduler.resource_restrictions.values()
+           memory_restrictions = [x.get('memory') for x in restrictions
+                                  if 'memory' in x]
+
+           if memory_restrictions:
+               kwargs['memory'] = max(memory_restrictions)
+
+           return kwargs
+
+
+So if there are any tasks that are waiting to be run on a worker with enough
+memory, the ``kwargs`` dictionary passed to ``cluster.scale_up`` will include
+a key and value for ``'memory'`` (your ``Cluster.scale_up`` method needs to be
+able to support this).
