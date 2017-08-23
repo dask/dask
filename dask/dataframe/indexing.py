@@ -94,18 +94,22 @@ class _LocIndexer(object):
     def _loc_list(self, iindexer, cindexer):
         name = 'loc-%s' % tokenize(iindexer, self.obj)
         parts = self._get_partitions(iindexer)
-        dsk = {}
-
-        divisions = []
-        items = sorted(parts.items())
-        for i, (div, indexer) in enumerate(items):
-            dsk[name, i] = (methods.loc, (self._name, div),
-                            indexer, cindexer)
-            # append minimum value as division
-            divisions.append(sorted(indexer)[0])
-        # append maximum value of the last division
-        divisions.append(sorted(items[-1][1])[-1])
         meta = self._make_meta(iindexer, cindexer)
+
+        if len(iindexer):
+            dsk = {}
+            divisions = []
+            items = sorted(parts.items())
+            for i, (div, indexer) in enumerate(items):
+                dsk[name, i] = (methods.loc, (self._name, div),
+                                indexer, cindexer)
+                # append minimum value as division
+                divisions.append(sorted(indexer)[0])
+            # append maximum value of the last division
+            divisions.append(sorted(items[-1][1])[-1])
+        else:
+            divisions = [None, None]
+            dsk = {(name, 0): meta.head(0)}
         return new_dd_object(merge(self.obj.dask, dsk), name,
                              meta=meta, divisions=divisions)
 

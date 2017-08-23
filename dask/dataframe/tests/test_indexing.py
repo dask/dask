@@ -45,6 +45,8 @@ def test_loc():
     assert_eq(d.a.loc[[3, 4, 1, 8]], full.a.loc[[3, 4, 1, 8]])
     assert_eq(d.a.loc[[3, 4, 1, 9]], full.a.loc[[3, 4, 1, 9]])
     assert_eq(d.a.loc[np.array([3, 4, 1, 9])], full.a.loc[np.array([3, 4, 1, 9])])
+    assert_eq(d.a.loc[[]], full.a.loc[[]])
+    assert_eq(d.a.loc[np.array([])], full.a.loc[np.array([])])
 
     pytest.raises(KeyError, lambda: d.loc[1000])
     assert_eq(d.loc[1000:], full.loc[1000:])
