@@ -521,3 +521,13 @@ def test_array_nondim():
     x = da.ones((100,3), chunks=10)
     y = da.array(x)
     assert isinstance(y, da.Array)
+
+
+def test_setitem_triggering_realign():
+    import pandas as pd
+    import dask.dataframe as dd
+
+    a = dd.from_pandas(pd.DataFrame({"A": range(12)}), npartitions=3)
+    b = dd.from_pandas(pd.Series(range(12), name='B'), npartitions=4)
+    a['C'] = b
+    assert len(a) == 12
