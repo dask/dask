@@ -28,8 +28,8 @@ messages = {
                     'deque': deque(maxlen=m),
                     'times': deque(maxlen=m),
                     'index': deque(maxlen=m),
-                    'rectangles':{name: deque(maxlen=m) for name in
-                                 'start duration key name color worker worker_thread y alpha'.split()},
+                    'rectangles': {name: deque(maxlen=m) for name in
+                                   'start duration key name color worker worker_thread y alpha'.split()},
                     'workers': dict(),
                     'last_seen': [time()]}
 }

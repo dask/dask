@@ -79,7 +79,7 @@ def register_worker_magic(connection_info, magic_name='worker'):
     which run the given cell in a remote kernel.
     """
     ip = get_ipython()
-    info = dict(connection_info) # copy
+    info = dict(connection_info)  # copy
     key = info.pop('key')
     kc = BlockingKernelClient(**connection_info)
     kc.session.key = key
@@ -92,7 +92,7 @@ def register_worker_magic(connection_info, magic_name='worker'):
             cell = line
         run_cell_remote(ip, kc, cell)
 
-    remote.client = kc # preserve reference on kc, largely for mocking
+    remote.client = kc  # preserve reference on kc, largely for mocking
     ip.register_magic_function(remote, magic_kind='line', magic_name=magic_name)
     ip.register_magic_function(remote, magic_kind='cell', magic_name=magic_name)
 
@@ -118,7 +118,7 @@ def remote_magic(line, cell=None):
         raise NameError(info_name)
     connection_info = dict(ip.user_ns[info_name])
 
-    if not cell: # line magic, use the rest of the line
+    if not cell:  # line magic, use the rest of the line
         if len(split_line) == 1:
             raise ValueError("I need some code to run!")
         cell = split_line[1]
@@ -151,7 +151,7 @@ def register_remote_magic(magic_name='remote'):
     """
     ip = get_ipython()
     if ip is None:
-        return # do nothing if IPython's not running
+        return  # do nothing if IPython's not running
     ip.register_magic_function(remote_magic, magic_kind='line', magic_name=magic_name)
     ip.register_magic_function(remote_magic, magic_kind='cell', magic_name=magic_name)
 
@@ -217,7 +217,10 @@ def start_ipython(ip=None, ns=None, log=None):
     if ip:
         app.ip = ip
     # disable some signal handling, logging
-    noop = lambda : None
+
+    def noop():
+        return None
+
     app.init_signal = noop
     app.log_connection_info = noop
 

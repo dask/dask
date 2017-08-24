@@ -168,7 +168,7 @@ async def test_asyncio_get():
         assert result == []
 
         result = await c.get({('x', 1): (inc, 1), ('x', 2): (inc, ('x', 1))},
-                              ('x', 2))
+                             ('x', 2))
         assert result == 3
 
 
@@ -324,7 +324,8 @@ async def test_asyncio_restart():
 
     key = x.key
     del x
-    import gc; gc.collect()
+    import gc
+    gc.collect()
 
     assert key not in c.refcount
     await c.shutdown()

@@ -24,7 +24,7 @@ def test_numpy():
 
 def test_pandas():
     pd = pytest.importorskip('pandas')
-    df = pd.DataFrame({'x': [1, 2, 3], 'y': ['a'*100, 'b'*100, 'c'*100]},
+    df = pd.DataFrame({'x': [1, 2, 3], 'y': ['a' * 100, 'b' * 100, 'c' * 100]},
                       index=[10, 20, 30])
 
     assert sizeof(df) >= sizeof(df.x) + sizeof(df.y) - sizeof(df.index)
@@ -78,7 +78,7 @@ def test_dataframe_object_dtype():
 
 def test_empty():
     pd = pytest.importorskip('pandas')
-    df = pd.DataFrame({'x': [1, 2, 3], 'y': ['a'*100, 'b'*100, 'c'*100]},
+    df = pd.DataFrame({'x': [1, 2, 3], 'y': ['a' * 100, 'b' * 100, 'c' * 100]},
                       index=[10, 20, 30])
     empty = df.head(0)
 

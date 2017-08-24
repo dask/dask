@@ -74,8 +74,8 @@ class SystemMonitor(object):
 
     def __str__(self):
         return '<SystemMonitor: cpu: %d memory: %d MB fds: %d>' % (
-                self.cpu[-1], self.memory[-1] / 1e6,
-                -1 if WINDOWS else self.num_fds[-1])
+            self.cpu[-1], self.memory[-1] / 1e6,
+            -1 if WINDOWS else self.num_fds[-1])
 
     __repr__ = __str__
 

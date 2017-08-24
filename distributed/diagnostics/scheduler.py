@@ -1,13 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
-import os
 
 try:
     from cytoolz import valmap
 except ImportError:
     from toolz import valmap
 
-from toolz import countby, concat, dissoc
+from toolz import concat, countby
 
 from ..metrics import time
 from ..utils import key_split, log_errors

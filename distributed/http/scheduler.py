@@ -23,6 +23,7 @@ def ensure_string(s):
 
 class Info(RequestHandler):
     """ Basic info about the scheduler """
+
     def get(self):
         self.write({'ncores': self.server.ncores,
                     'status': self.server.status})
@@ -30,6 +31,7 @@ class Info(RequestHandler):
 
 class Processing(RequestHandler):
     """ Active tasks on each worker """
+
     def get(self):
         resp = {addr: [ensure_string(key_split(t)) for t in tasks]
                 for addr, tasks in self.server.processing.items()}
@@ -62,13 +64,15 @@ class Broadcast(RequestHandler):
 
 class MemoryLoad(RequestHandler):
     """The total amount of data held in memory by workers"""
+
     def get(self):
         self.write({worker: sum(self.server.nbytes[k] for k in keys)
-                   for worker, keys in self.server.has_what.items()})
+                    for worker, keys in self.server.has_what.items()})
 
 
 class MemoryLoadByKey(RequestHandler):
     """The total amount of data held in memory by workers"""
+
     def get(self):
         out = {}
         for worker, keys in self.server.has_what.items():
@@ -81,6 +85,7 @@ class MemoryLoadByKey(RequestHandler):
 
 class Tasks(RequestHandler):
     """ Lots of information about all the workers """
+
     def get(self):
         with log_errors():
             from ..diagnostics.scheduler import tasks
@@ -89,6 +94,7 @@ class Tasks(RequestHandler):
 
 class Workers(RequestHandler):
     """ Lots of information about all the workers """
+
     def get(self):
         with log_errors():
             from ..diagnostics.scheduler import workers
@@ -106,5 +112,5 @@ def HTTPScheduler(scheduler, **kwargs):
         (r'/workers.json', Workers, {'server': scheduler}),
         (r'/memory-load.json', MemoryLoad, {'server': scheduler}),
         (r'/memory-load-by-key.json', MemoryLoadByKey, {'server': scheduler}),
-        ]), **kwargs)
+    ]), **kwargs)
     return application

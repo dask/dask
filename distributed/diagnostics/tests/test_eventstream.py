@@ -1,17 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
 from copy import deepcopy
-from time import sleep
 
 import pytest
 from tornado import gen
 
-from distributed import Client, Scheduler, Worker
 from distributed.client import _wait
 from distributed.diagnostics.eventstream import EventStream, eventstream
 from distributed.metrics import time
-from distributed.utils_test import inc, div, dec, gen_cluster
-from distributed.worker import dumps_task
+from distributed.utils_test import div, gen_cluster
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)

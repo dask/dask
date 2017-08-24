@@ -9,7 +9,8 @@ try:  # PyPy does not support sys.getsizeof
     sys.getsizeof(1)
     getsizeof = sys.getsizeof
 except (AttributeError, TypeError):  # Monkey patch
-    getsizeof = lambda x: 100
+    def getsizeof(x):
+        return 100
 
 
 logger = logging.getLogger(__name__)

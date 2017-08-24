@@ -17,6 +17,7 @@ class ReplayExceptionScheduler(object):
 
     *  cause_of_failure
     """
+
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.scheduler.handlers['cause_of_failure'] = self.cause_of_failure

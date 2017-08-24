@@ -2,19 +2,13 @@ from __future__ import print_function, division, absolute_import
 
 import cloudpickle
 from collections import defaultdict, deque
-from copy import deepcopy
 from datetime import timedelta
 import json
 from operator import add, mul
 import sys
-from time import sleep
 
-import dask
 from dask import delayed
-from dask.core import get_deps
 from toolz import merge, concat, valmap, first, frequencies
-from tornado.queues import Queue
-from tornado.gen import TimeoutError
 from tornado import gen
 
 import pytest
@@ -22,13 +16,14 @@ import pytest
 from distributed import Nanny, Worker, Client, wait
 from distributed.core import connect, rpc, CommClosedError
 from distributed.scheduler import validate_state, Scheduler, BANDWIDTH
-from distributed.client import _wait, _first_completed
+from distributed.client import _wait
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.worker import dumps_function, dumps_task
-from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
-        loop, readone, slowinc, slowadd, cluster, div)
-from distributed.utils import All, tmpfile
+from distributed.utils_test import (inc, dec, gen_cluster, gen_test,
+                                    readone, slowinc, slowadd, cluster, div)
+from distributed.utils_test import loop # flake8: noqa
+from distributed.utils import tmpfile
 from distributed.utils_test import slow
 from dask.compatibility import apply
 
@@ -59,7 +54,7 @@ def test_respect_data_in_memory(c, s, a):
 
     z = delayed(add)(x, y)
     f2 = c.persist(z)
-    while not f2.key in s.who_has:
+    while f2.key not in s.who_has:
         assert y.key in s.who_has
         yield gen.sleep(0.0001)
 
@@ -233,11 +228,11 @@ def test_server(s, a, b):
     comm = yield connect(s.address)
     yield comm.write({'op': 'register-client', 'client': 'ident'})
     yield comm.write({'op': 'update-graph',
-                     'tasks': {'x': dumps_task((inc, 1)),
-                               'y': dumps_task((inc, 'x'))},
-                     'dependencies': {'x': [], 'y': ['x']},
-                     'keys': ['y'],
-                     'client': 'ident'})
+                      'tasks': {'x': dumps_task((inc, 1)),
+                                'y': dumps_task((inc, 'x'))},
+                      'dependencies': {'x': [], 'y': ['x']},
+                      'keys': ['y'],
+                      'client': 'ident'})
 
     while True:
         msg = yield readone(comm)
@@ -376,7 +371,7 @@ def test_feed_large_bytestring(s, a, b):
 
     for i in range(5):
         response = yield comm.read()
-        assert response == True
+        assert response is True
 
     yield comm.close()
 
@@ -399,7 +394,7 @@ def test_scheduler_as_center():
                    keys=['a'],
                    dependencies={'a': []})
     start = time()
-    while not 'a' in s.who_has:
+    while 'a' not in s.who_has:
         assert time() - start < 5
         yield gen.sleep(0.01)
     assert 'a' in a.data or 'a' in b.data or 'a' in c.data
@@ -511,14 +506,14 @@ def test_ready_remove_worker(s, a, b):
                    dependencies={'x-%d' % i: [] for i in range(20)})
 
     assert all(len(s.processing[w]) >= s.ncores[w]
-                for w in s.ncores)
+               for w in s.ncores)
 
     s.remove_worker(address=a.address)
 
     for collection in [s.ncores, s.processing]:
         assert set(collection) == {b.address}
     assert all(len(s.processing[w]) >= s.ncores[w]
-                for w in s.ncores)
+               for w in s.ncores)
     assert set(s.processing) == {b.address}
 
 
@@ -557,8 +552,8 @@ def test_broadcast_nanny(s, a, b):
     assert all(d['type'] == 'Nanny' for d in result1.values())
 
     result2 = yield s.broadcast(msg={'op': 'identity'},
-                               workers=[a.worker_address],
-                               nanny=True)
+                                workers=[a.worker_address],
+                                nanny=True)
     assert len(result2) == 1
     assert first(result2.values())['id'] == a.id
 

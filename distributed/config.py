@@ -37,7 +37,7 @@ def determine_config_file():
     path = os.environ.get('DASK_CONFIG')
     if path:
         if (os.path.exists(path) and
-            (os.path.isfile(path) or os.path.islink(path))):
+                (os.path.isfile(path) or os.path.islink(path))):
             return path
         warnings.warn("DASK_CONFIG set to '%s' but file does not exist "
                       "or is not a regular file" % (path,),

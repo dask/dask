@@ -54,7 +54,7 @@ def valid_python_script(tmpdir_factory):
 def client_contract_script(tmpdir_factory):
     local_file = tmpdir_factory.mktemp('data').join('distributed_script.py')
     lines = ("from distributed import Client", "e = Client('127.0.0.1:8989')",
-     'print(e)')
+             'print(e)')
     local_file.write('\n'.join(lines))
     return local_file
 
@@ -119,7 +119,8 @@ def mock_ipython():
     ip = mock.Mock()
     ip.user_ns = {}
     ip.kernel = None
-    get_ip = lambda : ip
+
+    def get_ip(): return ip
     with mock.patch('IPython.get_ipython', get_ip), \
             mock.patch('distributed._ipython_utils.get_ipython', get_ip):
         yield ip
@@ -258,7 +259,7 @@ def readone(comm):
 
 def run_scheduler(q, nputs, **kwargs):
     from distributed import Scheduler
-    from tornado.ioloop import IOLoop, PeriodicCallback
+    from tornado.ioloop import PeriodicCallback
 
     # On Python 2.7 and Unix, fork() is used to spawn child processes,
     # so avoid inheriting the parent's IO loop.
@@ -278,7 +279,7 @@ def run_scheduler(q, nputs, **kwargs):
 
 def run_worker(q, scheduler_q, **kwargs):
     from distributed import Worker
-    from tornado.ioloop import IOLoop, PeriodicCallback
+    from tornado.ioloop import PeriodicCallback
 
     with log_errors():
         with pristine_loop() as loop:
@@ -300,7 +301,7 @@ def run_worker(q, scheduler_q, **kwargs):
 
 def run_nanny(q, scheduler_q, **kwargs):
     from distributed import Nanny
-    from tornado.ioloop import IOLoop, PeriodicCallback
+    from tornado.ioloop import PeriodicCallback
 
     with log_errors():
         with pristine_loop() as loop:
@@ -332,6 +333,7 @@ def check_active_rpc(loop, active_rpc_timeout=1):
         # as Nanny does.
         # (*) (example: gather_from_workers())
         deadline = loop.time() + active_rpc_timeout
+
         @gen.coroutine
         def wait_a_bit():
             yield gen.sleep(0.01)
@@ -342,8 +344,6 @@ def check_active_rpc(loop, active_rpc_timeout=1):
         logger.info("... Finished waiting for active RPC count to drop down")
 
     assert rpc.active == rpc_active
-
-
 
 
 @contextmanager
@@ -401,7 +401,7 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
                 # avoid sending processes down to function
                 yield {'address': saddr}, [{'address': w['address'],
                                             'proc': weakref.ref(w['proc'])}
-                                            for w in workers]
+                                           for w in workers]
             finally:
                 logger.debug("Closing out test cluster")
 
@@ -457,8 +457,8 @@ def disconnect_all(addresses, timeout=3):
 import pytest
 try:
     slow = pytest.mark.skipif(
-                not pytest.config.getoption("--runslow"),
-                reason="need --runslow option to run")
+        not pytest.config.getoption("--runslow"),
+        reason="need --runslow option to run")
 except (AttributeError, ValueError):
     def slow(*args):
         pass
@@ -493,7 +493,6 @@ def gen_test(timeout=10, should_check_state=True):
 
 from .scheduler import Scheduler
 from .worker import Worker
-from .client import Client
 
 
 def process_state():
@@ -587,7 +586,7 @@ def end_cluster(s, workers):
             shutil.rmtree(dir)
 
     yield [end_worker(w) for w in workers]
-    yield s.close() # wait until scheduler stops completely
+    yield s.close()  # wait until scheduler stops completely
     s.stop()
 
 
@@ -623,14 +622,15 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
             with pristine_loop() as loop:
                 with check_active_rpc(loop, active_rpc_timeout):
                     s, workers = loop.run_sync(lambda: start_cluster(ncores,
-                                    scheduler, loop, security=security,
-                                    Worker=Worker,
-                                    scheduler_kwargs=scheduler_kwargs,
-                                    worker_kwargs=worker_kwargs))
+                                                                     scheduler, loop, security=security,
+                                                                     Worker=Worker,
+                                                                     scheduler_kwargs=scheduler_kwargs,
+                                                                     worker_kwargs=worker_kwargs))
                     args = [s] + workers
 
                     if client:
                         c = []
+
                         @gen.coroutine
                         def f():
                             c2 = yield Client(s.address, loop=loop, security=security,
@@ -650,7 +650,8 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
             for w in workers:
                 if hasattr(w, 'data'):
                     w.data.clear()
-            import gc; gc.collect()
+            import gc
+            gc.collect()
             after = process_state()
             if should_check_state:
                 check_state(before, after)
@@ -817,13 +818,14 @@ def assert_can_connect_from_everywhere_4_6(port, timeout=None, connection_args=N
     futures = [
         assert_can_connect('tcp://127.0.0.1:%d' % port, *args),
         assert_can_connect('tcp://%s:%d' % (get_ip(), port), *args),
-        ]
+    ]
     if has_ipv6():
         futures += [
             assert_can_connect('tcp://[::1]:%d' % port, *args),
             assert_can_connect('tcp://[%s]:%d' % (get_ipv6(), port), *args),
-            ]
+        ]
     yield futures
+
 
 @gen.coroutine
 def assert_can_connect_from_everywhere_4(port, timeout=None, connection_args=None):
@@ -832,15 +834,16 @@ def assert_can_connect_from_everywhere_4(port, timeout=None, connection_args=Non
     """
     args = (timeout, connection_args)
     futures = [
-            assert_can_connect('tcp://127.0.0.1:%d' % port, *args),
-            assert_can_connect('tcp://%s:%d' % (get_ip(), port), *args),
-        ]
+        assert_can_connect('tcp://127.0.0.1:%d' % port, *args),
+        assert_can_connect('tcp://%s:%d' % (get_ip(), port), *args),
+    ]
     if has_ipv6():
         futures += [
             assert_cannot_connect('tcp://[::1]:%d' % port, *args),
             assert_cannot_connect('tcp://[%s]:%d' % (get_ipv6(), port), *args),
-            ]
+        ]
     yield futures
+
 
 @gen.coroutine
 def assert_can_connect_locally_4(port, timeout=None, connection_args=None):
@@ -850,17 +853,18 @@ def assert_can_connect_locally_4(port, timeout=None, connection_args=None):
     args = (timeout, connection_args)
     futures = [
         assert_can_connect('tcp://127.0.0.1:%d' % port, *args),
-        ]
+    ]
     if get_ip() != '127.0.0.1':  # No outside IPv4 connectivity?
         futures += [
             assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), *args),
-            ]
+        ]
     if has_ipv6():
         futures += [
             assert_cannot_connect('tcp://[::1]:%d' % port, *args),
             assert_cannot_connect('tcp://[%s]:%d' % (get_ipv6(), port), *args),
-            ]
+        ]
     yield futures
+
 
 @gen.coroutine
 def assert_can_connect_from_everywhere_6(port, timeout=None, connection_args=None):
@@ -874,8 +878,9 @@ def assert_can_connect_from_everywhere_6(port, timeout=None, connection_args=Non
         assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), *args),
         assert_can_connect('tcp://[::1]:%d' % port, *args),
         assert_can_connect('tcp://[%s]:%d' % (get_ipv6(), port), *args),
-        ]
+    ]
     yield futures
+
 
 @gen.coroutine
 def assert_can_connect_locally_6(port, timeout=None, connection_args=None):
@@ -888,11 +893,11 @@ def assert_can_connect_locally_6(port, timeout=None, connection_args=None):
         assert_cannot_connect('tcp://127.0.0.1:%d' % port, *args),
         assert_cannot_connect('tcp://%s:%d' % (get_ip(), port), *args),
         assert_can_connect('tcp://[::1]:%d' % port, *args),
-        ]
+    ]
     if get_ipv6() != '::1':  # No outside IPv6 connectivity?
         futures += [
             assert_cannot_connect('tcp://[%s]:%d' % (get_ipv6(), port), *args),
-            ]
+        ]
     yield futures
 
 
@@ -970,6 +975,7 @@ def new_config_file(c):
 certs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__),
                                          'tests'))
 
+
 def get_cert(filename):
     """
     Get the path to one of the test TLS certificates.
@@ -991,15 +997,15 @@ def tls_config():
             'ca-file': ca_file,
             'client': {
                 'cert': keycert,
-                },
+            },
             'scheduler': {
                 'cert': keycert,
-                },
+            },
             'worker': {
                 'cert': keycert,
-                },
             },
-        }
+        },
+    }
     return c
 
 

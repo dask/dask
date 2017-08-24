@@ -1,29 +1,29 @@
 from __future__ import print_function, division, absolute_import
 
 from contextlib import contextmanager
-from functools import partial
 import os
 import socket
 import weakref
 
-from tornado import gen, ioloop
+from tornado import gen
 import pytest
 
 from distributed.compatibility import finalize
 from distributed.config import set_config
-from distributed.core import (
-    pingpong, Server, rpc, connect, send_recv,
-    coerce_to_address, ConnectionPool, CommClosedError)
+from distributed.core import (pingpong, Server, rpc, connect, send_recv,
+                               coerce_to_address, ConnectionPool)
+
 from distributed.metrics import time
 from distributed.protocol import to_serialize
 from distributed.utils import get_ip, get_ipv6
 from distributed.utils_test import (
-    slow, loop, gen_test, gen_cluster, has_ipv6,
+    slow, gen_test, gen_cluster, has_ipv6,
     assert_can_connect, assert_cannot_connect,
     assert_can_connect_from_everywhere_4,
     assert_can_connect_from_everywhere_4_6, assert_can_connect_from_everywhere_6,
     assert_can_connect_locally_4, assert_can_connect_locally_6,
     tls_security, captured_logger)
+from distributed.utils_test import loop # flake8: noqa
 
 
 EXTERNAL_IP4 = get_ip()
@@ -236,16 +236,19 @@ def test_rpc_default():
     yield check_rpc(8883, '127.0.0.1:8883')
     yield check_rpc(8883)
 
+
 @gen_test()
 def test_rpc_tcp():
     yield check_rpc('tcp://:8883', 'tcp://127.0.0.1:8883')
     yield check_rpc('tcp://')
+
 
 @gen_test()
 def test_rpc_tls():
     sec = tls_security()
     yield check_rpc('tcp://', None, sec.get_listen_args('scheduler'),
                     sec.get_connection_args('worker'))
+
 
 @gen_test()
 def test_rpc_inproc():
@@ -293,13 +296,16 @@ def check_rpc_message_lifetime(*listen_args):
         # If additional instances were created, they were deleted as well
         assert CountedObject.n_instances == 0
 
+
 @gen_test()
 def test_rpc_message_lifetime_default():
     yield check_rpc_message_lifetime()
 
+
 @gen_test()
 def test_rpc_message_lifetime_tcp():
     yield check_rpc_message_lifetime('tcp://')
+
 
 @gen_test()
 def test_rpc_message_lifetime_inproc():
@@ -324,9 +330,11 @@ def check_rpc_with_many_connections(listen_arg):
     remote.close_comms()
     assert all(comm.closed() for comm in remote.comms)
 
+
 @gen_test()
 def test_rpc_with_many_connections_tcp():
     yield check_rpc_with_many_connections('tcp://')
+
 
 @gen_test()
 def test_rpc_with_many_connections_inproc():
@@ -357,6 +365,7 @@ def check_large_packets(listen_arg):
 def test_large_packets_tcp():
     yield check_large_packets('tcp://')
 
+
 @gen_test()
 def test_large_packets_inproc():
     yield check_large_packets('inproc://')
@@ -375,9 +384,11 @@ def check_identity(listen_arg):
 
     server.stop()
 
+
 @gen_test()
 def test_identity_tcp():
     yield check_identity('tcp://')
+
 
 @gen_test()
 def test_identity_inproc():
@@ -409,6 +420,7 @@ def test_ports(loop):
 def stream_div(stream=None, x=None, y=None):
     return x / y
 
+
 @gen_test()
 def test_errors():
     server = Server({'div': stream_div})
@@ -435,7 +447,7 @@ def test_send_recv_args():
     assert result == b'1'
     assert not comm.closed()
     result = yield send_recv(comm, op='echo', x=b'2', reply=False)
-    assert result == None
+    assert result is None
     assert not comm.closed()
     result = yield send_recv(comm, op='echo', x=b'3', close=True)
     assert result == b'3'

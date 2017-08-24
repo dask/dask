@@ -155,7 +155,7 @@ class Adaptive(object):
     def _retire_workers(self):
         with log_errors():
             workers = yield self.scheduler.retire_workers(remove=True,
-                    close_workers=True)
+                                                          close_workers=True)
 
             if workers:
                 logger.info("Retiring workers %s", workers)

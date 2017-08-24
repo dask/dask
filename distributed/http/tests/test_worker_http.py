@@ -1,17 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
 import json
-import tornado
 
-from tornado.ioloop import IOLoop
-from tornado import web, gen
+from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 
-from distributed.utils_test import gen_cluster, gen_test, slowinc
+from distributed.utils_test import gen_cluster, slowinc
 from distributed import Worker
 from distributed.http.worker import HTTPWorker
-from distributed.sizeof import sizeof
 
 
 @gen_cluster(client=True)
@@ -26,13 +23,13 @@ def test_simple(c, s, a, b):
     assert response['status'] == a.status
 
     response = yield client.fetch('http://localhost:%d/resources.json' %
-            server.port)
+                                  server.port)
     response = json.loads(response.body.decode())
 
     futures = yield c._scatter(list(range(10)))
 
     try:
-        import psutil
+        import psutil  # flake8: noqa
         assert 0 < response['memory_percent'] < 100
     except ImportError:
         assert response == {}
@@ -82,9 +79,9 @@ def test_services_port(s, a, b):
     yield c._start()
     assert isinstance(c.services['http'], HTTPServer)
     assert (c.service_ports['http']
-         == c.services['http'].port
-         == s.worker_info[c.address]['services']['http']
-         == 9898)
+            == c.services['http'].port
+            == s.worker_info[c.address]['services']['http']
+            == 9898)
 
     c.services['http'].stop()
     yield c._close()

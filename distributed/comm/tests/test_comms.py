@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from functools import partial
 import os
-import ssl
 import sys
 import threading
 
@@ -11,15 +10,15 @@ import pytest
 from tornado import gen, ioloop, queues
 from tornado.concurrent import Future
 
-from distributed.core import pingpong
 from distributed.metrics import time
 from distributed.utils import get_ip, get_ipv6
-from distributed.utils_test import (slow, loop, gen_test, gen_cluster,
-                                    requires_ipv6, has_ipv6, get_cert,
-                                    get_server_ssl_context, get_client_ssl_context)
+from distributed.utils_test import (gen_test, requires_ipv6, has_ipv6,
+                                    get_cert, get_server_ssl_context,
+                                    get_client_ssl_context)
+from distributed.utils_test import loop  # flake8: noqa
 
-from distributed.protocol import (loads, dumps,
-                                  to_serialize, Serialized, serialize, deserialize)
+from distributed.protocol import (to_serialize, Serialized, serialize,
+                                  deserialize)
 
 from distributed.comm import (tcp, inproc, connect, listen, CommClosedError,
                               parse_address, parse_host_port,
@@ -40,7 +39,8 @@ cert_subject = (
     (('localityName', 'Dask-distributed'),),
     (('organizationName', 'Dask'),),
     (('commonName', 'localhost'),)
-    )
+)
+
 
 def check_tls_extra(info):
     assert isinstance(info, dict)
@@ -77,8 +77,10 @@ def get_comm_pair(listen_addr, listen_args=None, connect_args=None):
 def get_tcp_comm_pair():
     return get_comm_pair('tcp://')
 
+
 def get_tls_comm_pair():
     return get_comm_pair('tls://', **tls_kwargs)
+
 
 def get_inproc_comm_pair():
     return get_comm_pair('inproc://')
@@ -341,6 +343,7 @@ def check_inproc_specific(run_client):
 def run_coro(func, *args, **kwargs):
     return func(*args, **kwargs)
 
+
 def run_coro_in_thread(func, *args, **kwargs):
     fut = Future()
     main_loop = ioloop.IOLoop.current()
@@ -365,6 +368,7 @@ def run_coro_in_thread(func, *args, **kwargs):
 @gen_test()
 def test_inproc_specific_same_thread():
     yield check_inproc_specific(run_coro)
+
 
 @gen_test()
 def test_inproc_specific_different_threads():
@@ -460,7 +464,9 @@ def tcp_eq(expected_host, expected_port=None):
 
     return checker
 
+
 tls_eq = tcp_eq
+
 
 def inproc_check():
     expected_ip = get_ip()
@@ -489,6 +495,7 @@ def test_default_client_server_ipv4():
     yield check_client_server(':3203',
                               tcp_eq('0.0.0.0', 3203), tcp_eq(EXTERNAL_IP4, 3203))
 
+
 @requires_ipv6
 @gen_test()
 def test_default_client_server_ipv6():
@@ -496,6 +503,7 @@ def test_default_client_server_ipv6():
     yield check_client_server('[::1]:3211', tcp_eq('::1', 3211))
     yield check_client_server('[::]', tcp_eq('::'), tcp_eq(EXTERNAL_IP6))
     yield check_client_server('[::]:3212', tcp_eq('::', 3212), tcp_eq(EXTERNAL_IP6, 3212))
+
 
 @gen_test()
 def test_tcp_client_server_ipv4():
@@ -528,6 +536,7 @@ def test_tls_client_server_ipv4():
     yield check_client_server('tls://127.0.0.1:3221', tls_eq('127.0.0.1', 3221), **tls_kwargs)
     yield check_client_server('tls://', tls_eq('0.0.0.0'),
                               tls_eq(EXTERNAL_IP4), **tls_kwargs)
+
 
 @requires_ipv6
 @gen_test()
@@ -627,9 +636,11 @@ def check_comm_closed_implicit(addr, delay=None, listen_args=None,
 def test_tcp_comm_closed_implicit():
     yield check_comm_closed_implicit('tcp://127.0.0.1')
 
+
 @gen_test()
 def test_tls_comm_closed_implicit():
     yield check_comm_closed_implicit('tls://127.0.0.1', **tls_kwargs)
+
 
 @gen_test()
 def test_inproc_comm_closed_implicit():
@@ -667,13 +678,16 @@ def check_comm_closed_explicit(addr, listen_args=None, connect_args=None):
 def test_tcp_comm_closed_explicit():
     yield check_comm_closed_explicit('tcp://127.0.0.1')
 
+
 @gen_test()
 def test_tls_comm_closed_explicit():
     yield check_comm_closed_explicit('tls://127.0.0.1', **tls_kwargs)
 
+
 @gen_test()
 def test_inproc_comm_closed_explicit():
     yield check_comm_closed_explicit(inproc.new_address())
+
 
 @gen_test()
 def test_inproc_comm_closed_explicit_2():
@@ -739,6 +753,7 @@ def check_connect_timeout(addr):
 def test_tcp_connect_timeout():
     yield check_connect_timeout('tcp://127.0.0.1:44444')
 
+
 @gen_test()
 def test_inproc_connect_timeout():
     yield check_connect_timeout(inproc.new_address())
@@ -770,6 +785,7 @@ def test_tcp_many_listeners():
     check_many_listeners('tcp://0.0.0.0')
     check_many_listeners('tcp://')
 
+
 @gen_test()
 def test_inproc_many_listeners():
     check_many_listeners('inproc://')
@@ -798,6 +814,7 @@ def check_listener_deserialize(addr, deserialize, in_value, check_out):
     out_value = yield q.get()
     check_out(out_value)
 
+
 @gen.coroutine
 def check_connector_deserialize(addr, deserialize, in_value, check_out):
     q = queues.Queue()
@@ -815,6 +832,7 @@ def check_connector_deserialize(addr, deserialize, in_value, check_out):
     out_value = yield comm.read()
     yield comm.close()
     check_out(out_value)
+
 
 @gen.coroutine
 def check_deserialize(addr):
@@ -884,10 +902,10 @@ def check_deserialize(addr):
 def test_tcp_deserialize():
     yield check_deserialize('tcp://')
 
+
 @gen_test()
 def test_inproc_deserialize():
     yield check_deserialize('inproc://')
-
 
 
 def _raise_eoferror():
@@ -915,6 +933,7 @@ def check_deserialize_eoferror(addr):
         with pytest.raises(CommClosedError):
             yield comm.read()
 
+
 @gen_test()
 def test_tcp_deserialize_eoferror():
     yield check_deserialize_eoferror('tcp://')
@@ -933,6 +952,7 @@ def check_repr(a, b):
     yield b.close()
     assert 'closed' in repr(b)
 
+
 @gen_test()
 def test_tcp_repr():
     a, b = yield get_tcp_comm_pair()
@@ -940,12 +960,14 @@ def test_tcp_repr():
     assert b.local_address in repr(a)
     yield check_repr(a, b)
 
+
 @gen_test()
 def test_tls_repr():
     a, b = yield get_tls_comm_pair()
     assert a.local_address in repr(b)
     assert b.local_address in repr(a)
     yield check_repr(a, b)
+
 
 @gen_test()
 def test_inproc_repr():
@@ -962,15 +984,18 @@ def check_addresses(a, b):
     a.abort()
     b.abort()
 
+
 @gen_test()
 def test_tcp_adresses():
     a, b = yield get_tcp_comm_pair()
     yield check_addresses(a, b)
 
+
 @gen_test()
 def test_tls_adresses():
     a, b = yield get_tls_comm_pair()
     yield check_addresses(a, b)
+
 
 @gen_test()
 def test_inproc_adresses():

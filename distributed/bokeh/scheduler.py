@@ -11,10 +11,10 @@ import os
 from bokeh.application import Application
 from bokeh.application.handlers.function import FunctionHandler
 from bokeh.layouts import column, row
-from bokeh.models import ( ColumnDataSource, DataRange1d, HoverTool, ResetTool,
-        PanTool, WheelZoomTool, TapTool, OpenURL, Range1d, Plot, Quad,
-        value, LinearAxis, NumeralTickFormatter, BasicTicker, NumberFormatter,
-        BoxSelectTool)
+from bokeh.models import (ColumnDataSource, DataRange1d, HoverTool, ResetTool,
+                          PanTool, WheelZoomTool, TapTool, OpenURL, Range1d, Plot, Quad,
+                          value, LinearAxis, NumeralTickFormatter, BasicTicker, NumberFormatter,
+                          BoxSelectTool)
 from bokeh.models.widgets import DataTable, TableColumn
 from bokeh.plotting import figure
 from bokeh.palettes import Viridis11
@@ -88,6 +88,7 @@ def update(source, data):
 
 class StateTable(DashboardComponent):
     """ Currently running tasks """
+
     def __init__(self, scheduler):
         self.scheduler = scheduler
 
@@ -120,6 +121,7 @@ class StateTable(DashboardComponent):
 
 class Occupancy(DashboardComponent):
     """ Occupancy (in time) per worker """
+
     def __init__(self, scheduler, **kwargs):
         with log_errors():
             self.scheduler = scheduler
@@ -177,8 +179,8 @@ class Occupancy(DashboardComponent):
 
             if total:
                 self.root.title.text = ('Occupancy -- total time: %s  wall time: %s' %
-                                  (format_time(total),
-                                  format_time(total / self.scheduler.total_ncores)))
+                                        (format_time(total),
+                                         format_time(total / self.scheduler.total_ncores)))
             else:
                 self.root.title.text = 'Occupancy'
 
@@ -195,6 +197,7 @@ class Occupancy(DashboardComponent):
 
 class ProcessingHistogram(DashboardComponent):
     """ How many tasks are on each worker """
+
     def __init__(self, scheduler, **kwargs):
         with log_errors():
             self.last = 0
@@ -227,6 +230,7 @@ class ProcessingHistogram(DashboardComponent):
 
 class NBytesHistogram(DashboardComponent):
     """ How many tasks are on each worker """
+
     def __init__(self, scheduler, **kwargs):
         with log_errors():
             self.last = 0
@@ -262,6 +266,7 @@ class NBytesHistogram(DashboardComponent):
 
 class CurrentLoad(DashboardComponent):
     """ How many tasks are on each worker """
+
     def __init__(self, scheduler, width=600, **kwargs):
         with log_errors():
             self.last = 0
@@ -291,7 +296,7 @@ class CurrentLoad(DashboardComponent):
                         x='nbytes-half', y='y',
                         width='nbytes', height=1,
                         color='nbytes-color')
-            nbytes.axis[0].ticker = BasicTicker(mantissas=[1,256,512], base=1024)
+            nbytes.axis[0].ticker = BasicTicker(mantissas=[1, 256, 512], base=1024)
             nbytes.xaxis[0].formatter = NumeralTickFormatter(format='0.0 b')
             nbytes.xaxis.major_label_orientation = -math.pi / 12
             nbytes.x_range.start = 0
@@ -482,7 +487,7 @@ class StealingEvents(DashboardComponent):
                            map(self.convert), list, transpose)
                 if PROFILING:
                     curdoc().add_next_tick_callback(
-                            lambda: self.source.stream(new, 10000))
+                        lambda: self.source.stream(new, 10000))
                 else:
                     self.source.stream(new, 10000)
 
@@ -609,13 +614,14 @@ class TaskStream(components.TaskStream):
 
             if PROFILING:
                 curdoc().add_next_tick_callback(lambda:
-                        self.source.stream(rectangles, self.n_rectangles))
+                                                self.source.stream(rectangles, self.n_rectangles))
             else:
                 self.source.stream(rectangles, self.n_rectangles)
 
 
 class TaskProgress(DashboardComponent):
     """ Progress bars per task type """
+
     def __init__(self, scheduler, **kwargs):
         self.scheduler = scheduler
         ps = [p for p in scheduler.plugins if isinstance(p, AllProgress)]
@@ -714,15 +720,16 @@ class TaskProgress(DashboardComponent):
             totals = {k: sum(state[k].values())
                       for k in ['all', 'memory', 'erred', 'released']}
             totals['processing'] = totals['all'] - sum(v for k, v in
-                    totals.items() if k != 'all')
+                                                       totals.items() if k != 'all')
 
             self.root.title.text = ("Progress -- total: %(all)s, "
-                "in-memory: %(memory)s, processing: %(processing)s, "
-                "erred: %(erred)s" % totals)
+                                    "in-memory: %(memory)s, processing: %(processing)s, "
+                                    "erred: %(erred)s" % totals)
 
 
 class MemoryUse(DashboardComponent):
     """ The memory usage across the cluster, grouped by task type """
+
     def __init__(self, scheduler, **kwargs):
         self.scheduler = scheduler
         ps = [p for p in scheduler.plugins if isinstance(p, AllProgress)]
@@ -774,7 +781,7 @@ class MemoryUse(DashboardComponent):
             nb = nbytes_bar(self.plugin.nbytes)
             update(self.source, nb)
             self.root.title.text = \
-                    "Memory Use: %0.2f MB" % (sum(self.plugin.nbytes.values()) / 1e6)
+                "Memory Use: %0.2f MB" % (sum(self.plugin.nbytes.values()) / 1e6)
 
 
 class WorkerTable(DashboardComponent):
@@ -783,6 +790,7 @@ class WorkerTable(DashboardComponent):
     This is two plots, a text-based table for each host and a thin horizontal
     plot laying out hosts by their current memory use.
     """
+
     def __init__(self, scheduler, **kwargs):
         self.scheduler = scheduler
         self.names = ['disk-read', 'cores', 'cpu', 'disk-write',
@@ -1008,13 +1016,13 @@ class BokehScheduler(BokehServer):
         status = Application(FunctionHandler(partial(status_doc, scheduler, extra)))
 
         self.apps = {
-                '/system': systemmonitor,
-                '/stealing': stealing,
-                '/workers': workers,
-                '/events': events,
-                '/counters': counters,
-                '/tasks': tasks,
-                '/status': status
+            '/system': systemmonitor,
+            '/stealing': stealing,
+            '/workers': workers,
+            '/events': events,
+            '/counters': counters,
+            '/tasks': tasks,
+            '/status': status
         }
 
         self.loop = io_loop or scheduler.loop

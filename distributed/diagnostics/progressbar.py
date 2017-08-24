@@ -4,7 +4,6 @@ import logging
 from timeit import default_timer
 import sys
 
-from dask.core import flatten
 from toolz import valmap
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -89,7 +88,7 @@ class ProgressBar(object):
 
 class TextProgressBar(ProgressBar):
     def __init__(self, keys, scheduler=None, interval=0.1, width=40,
-                       loop=None, complete=True, start=True):
+                 loop=None, complete=True, start=True):
         super(TextProgressBar, self).__init__(keys, scheduler, interval,
                                               complete)
         self.width = width
@@ -118,17 +117,18 @@ class ProgressWidget(ProgressBar):
     progress: User function
     TextProgressBar: Text version suitable for the console
     """
+
     def __init__(self, keys, scheduler=None, interval=0.1,
-                complete=False, loop=None):
+                 complete=False, loop=None):
         super(ProgressWidget, self).__init__(keys, scheduler, interval,
                                              complete)
 
         from ipywidgets import FloatProgress, HBox, VBox, HTML
         self.elapsed_time = HTML('')
-        self.bar = FloatProgress(min=0, max=1, description='', height = '10px')
-        self.bar_text = HTML('', width = "140px")
+        self.bar = FloatProgress(min=0, max=1, description='', height='10px')
+        self.bar_text = HTML('', width="140px")
 
-        self.bar_widget = HBox([ self.bar_text, self.bar ])
+        self.bar_widget = HBox([self.bar_text, self.bar])
         self.widget = VBox([self.elapsed_time, self.bar_widget])
 
     def _ipython_display_(self, **kwargs):
@@ -138,14 +138,17 @@ class ProgressWidget(ProgressBar):
     def _draw_stop(self, remaining, status, **kwargs):
         if status == 'error':
             self.bar.bar_style = 'danger'
-            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Exception:</b> ' + format_time(self.elapsed) + '</div>'
+            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Exception:</b> ' + \
+                format_time(self.elapsed) + '</div>'
         elif not remaining:
             self.bar.bar_style = 'success'
-            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Finished:</b> ' + format_time(self.elapsed) + '</div>'
+            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Finished:</b> ' + \
+                format_time(self.elapsed) + '</div>'
 
     def _draw_bar(self, remaining, all, **kwargs):
         ndone = all - remaining
-        self.elapsed_time.value = '<div style=\"padding: 0px 10px 5px 10px\"><b>Computing:</b> ' + format_time(self.elapsed) + '</div>'
+        self.elapsed_time.value = '<div style=\"padding: 0px 10px 5px 10px\"><b>Computing:</b> ' + \
+            format_time(self.elapsed) + '</div>'
         self.bar.value = ndone / all if all else 1.0
         self.bar_text.value = '<div style="padding: 0px 10px 0px 10px; text-align:right;">%d / %d</div>' % (ndone, all)
 
@@ -220,6 +223,7 @@ class MultiProgressWidget(MultiProgressBar):
     MultiProgress: Non-visualization component that contains most logic
     ProgressWidget: Single progress bar widget
     """
+
     def __init__(self, keys, scheduler=None, minimum=0, interval=0.1, func=key_split,
                  complete=False):
         super(MultiProgressWidget, self).__init__(keys, scheduler, func, interval, complete)
@@ -231,21 +235,27 @@ class MultiProgressWidget(MultiProgressBar):
         self.elapsed_time = HTML('')
         self.bars = {key: FloatProgress(min=0, max=1, description='',
                                         height='10px')
-                        for key in all}
-        self.bar_texts = {key: HTML('', width = "140px") for key in all}
-        self.bar_labels = {key: HTML('<div style=\"padding: 0px 10px 0px 10px; text-align:left; word-wrap: break-word;\">' + html_escape(key.decode() if isinstance(key, bytes) else key) + '</div>')
-                            for key in all}
+                     for key in all}
+        self.bar_texts = {key: HTML('', width="140px") for key in all}
+        self.bar_labels = {key: HTML('<div style=\"padding: 0px 10px 0px 10px;'
+                                     ' text-align:left; word-wrap: '
+                                     'break-word;\">' +
+                                     html_escape(key.decode()
+                                                 if isinstance(key, bytes)
+                                                 else key) +
+                                     '</div>')
+                           for key in all}
 
-        def key(kv):
+        def keyfunc(kv):
             """ Order keys by most numerous, then by string name """
             return kv[::-1]
 
-        key_order = [k for k, v in sorted(all.items(), key=key, reverse=True)]
+        key_order = [k for k, v in sorted(all.items(), key=keyfunc, reverse=True)]
 
-        self.bar_widgets = VBox([ HBox([ self.bar_texts[key],
-                                         self.bars[key],
-                                         self.bar_labels[key] ])
-                                for key in key_order ])
+        self.bar_widgets = VBox([HBox([self.bar_texts[key],
+                                       self.bars[key],
+                                       self.bar_labels[key]])
+                                 for key in key_order])
         self.widget.children = (self.elapsed_time, self.bar_widgets)
 
     def _ipython_display_(self, **kwargs):
@@ -261,18 +271,22 @@ class MultiProgressWidget(MultiProgressBar):
 
         if status == 'error':
             # self.bars[self.func(key)].bar_style = 'danger'  # TODO
-            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Exception:</b> ' + format_time(self.elapsed) + '</div>'
+            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Exception:</b> ' + \
+                format_time(self.elapsed) + '</div>'
         else:
-            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Finished:</b> ' + format_time(self.elapsed) + '</div>'
+            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Finished:</b> ' + \
+                format_time(self.elapsed) + '</div>'
 
     def _draw_bar(self, remaining, all, status, **kwargs):
         if self.keys and not self.widget.children:
             self.make_widget(all)
         for k, ntasks in all.items():
             ndone = ntasks - remaining[k]
-            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Computing:</b> ' + format_time(self.elapsed) + '</div>'
+            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Computing:</b> ' + \
+                format_time(self.elapsed) + '</div>'
             self.bars[k].value = ndone / ntasks if ntasks else 1.0
-            self.bar_texts[k].value = '<div style="padding: 0px 10px 0px 10px; text-align: right">%d / %d</div>' % (ndone, ntasks)
+            self.bar_texts[k].value = '<div style="padding: 0px 10px 0px 10px; text-align: right">%d / %d</div>' % (
+                ndone, ntasks)
 
 
 def progress(*futures, **kwargs):

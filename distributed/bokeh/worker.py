@@ -6,9 +6,9 @@ import math
 import os
 
 from bokeh.layouts import row, column, widgetbox
-from bokeh.models import ( ColumnDataSource, DataRange1d, HoverTool,
-        BoxZoomTool, ResetTool, PanTool, WheelZoomTool, NumeralTickFormatter,
-        Select)
+from bokeh.models import (ColumnDataSource, DataRange1d, HoverTool,
+                          BoxZoomTool, ResetTool, PanTool, WheelZoomTool, NumeralTickFormatter,
+                          Select)
 
 from bokeh.models.widgets import DataTable, TableColumn
 from bokeh.plotting import figure
@@ -37,6 +37,7 @@ template_variables = {'pages': ['main', 'system', 'crossfilter', 'counters']}
 
 class StateTable(DashboardComponent):
     """ Currently running tasks """
+
     def __init__(self, worker):
         self.worker = worker
 
@@ -69,7 +70,7 @@ class CommunicatingStream(DashboardComponent):
         with log_errors():
             self.worker = worker
             names = ['start', 'stop', 'middle', 'duration', 'who', 'y',
-                    'hover', 'alpha', 'bandwidth', 'total' ]
+                     'hover', 'alpha', 'bandwidth', 'total']
 
             self.incoming = ColumnDataSource({name: [] for name in names})
             self.outgoing = ColumnDataSource({name: [] for name in names})
@@ -78,8 +79,8 @@ class CommunicatingStream(DashboardComponent):
             y_range = DataRange1d(range_padding=0)
 
             fig = figure(title='Peer Communications',
-                    x_axis_type='datetime', x_range=x_range, y_range=y_range,
-                    height=height, tools='', **kwargs)
+                         x_axis_type='datetime', x_range=x_range, y_range=y_range,
+                         height=height, tools='', **kwargs)
 
             fig.rect(source=self.incoming, x='middle', y='y', width='duration',
                      height=0.9, color='red', alpha='alpha')
@@ -133,9 +134,9 @@ class CommunicatingStream(DashboardComponent):
                         msg['y'] = self.who[msg['who']]
 
                     msg['hover'] = '%s / %s = %s/s' % (
-                                format_bytes(msg['total']),
-                                format_time(msg['duration']),
-                                format_bytes(msg['total'] / msg['duration']))
+                        format_bytes(msg['total']),
+                        format_time(msg['duration']),
+                        format_bytes(msg['total'] / msg['duration']))
 
                     for k in ['middle', 'duration', 'start', 'stop']:
                         msg[k] = msg[k] * 1000
@@ -143,7 +144,7 @@ class CommunicatingStream(DashboardComponent):
                 if msgs:
                     msgs = transpose(msgs)
                     if (len(source.data['stop']) and
-                        min(msgs['start']) > source.data['stop'][-1] + 10000):
+                            min(msgs['start']) > source.data['stop'][-1] + 10000):
                         source.data.update(msgs)
                     else:
                         source.stream(msgs, rollover=10000)
@@ -176,7 +177,7 @@ class CommunicatingTimeSeries(DashboardComponent):
             self.source.stream({'x': [time() * 1000],
                                 'out': [len(self.worker._comms)],
                                 'in': [len(self.worker.in_flight_workers)]},
-                                10000)
+                               10000)
 
 
 class ExecutingTimeSeries(DashboardComponent):
@@ -290,7 +291,7 @@ class CrossFilter(DashboardComponent):
             if out:
                 out = transpose(out)
                 if (len(self.source.data['stop']) and
-                    min(out['start']) > self.source.data['stop'][-1] + 10):
+                        min(out['start']) > self.source.data['stop'][-1] + 10):
                     self.source.data.update(out)
                 else:
                     self.source.stream(out, rollover=1000)
@@ -325,22 +326,23 @@ class CrossFilter(DashboardComponent):
 
     def process_msg(self, msg):
         try:
-            func = lambda k: msg['keys'].get(k, 0)
+            def func(k):
+                return msg['keys'].get(k, 0)
             main_key = max(msg['keys'], key=func)
             typ = self.worker.types.get(main_key, object).__name__
             keyname = key_split(main_key)
             d = {
-                  'nbytes': msg['total'],
-                  'duration': msg['duration'],
-                  'bandwidth': msg['bandwidth'],
-                  'count': len(msg['keys']),
-                  'type': typ,
-                  'type-color': color_of(typ),
-                  'key': keyname,
-                  'key-color': color_of(keyname),
-                  'start': msg['start'],
-                  'stop': msg['stop']
-                 }
+                'nbytes': msg['total'],
+                'duration': msg['duration'],
+                'bandwidth': msg['bandwidth'],
+                'count': len(msg['keys']),
+                'type': typ,
+                'type-color': color_of(typ),
+                'key': keyname,
+                'key-color': color_of(keyname),
+                'start': msg['start'],
+                'stop': msg['stop']
+            }
             return d
         except Exception as e:
             logger.exception(e)
@@ -446,14 +448,14 @@ class Counters(DashboardComponent):
         with log_errors():
             n = len(self.server.digests[name].intervals)
             sources = {i: ColumnDataSource({'x': [], 'y': []})
-                        for i in range(n)}
+                       for i in range(n)}
 
             kwargs = {}
             if name.endswith('duration'):
                 kwargs['x_axis_type'] = 'datetime'
 
             fig = figure(title=name, tools='', height=150,
-                    sizing_mode=self.sizing_mode, **kwargs)
+                         sizing_mode=self.sizing_mode, **kwargs)
             fig.yaxis.visible = False
             fig.ygrid.visible = False
             if name.endswith('bandwidth') or name.endswith('bytes'):
@@ -475,17 +477,17 @@ class Counters(DashboardComponent):
             n = len(self.server.counters[name].intervals)
             sources = {i: ColumnDataSource({'x': [], 'y': [],
                                             'y-center': [], 'counts': []})
-                        for i in range(n)}
+                       for i in range(n)}
 
             fig = figure(title=name, tools='', height=150,
-                    sizing_mode=self.sizing_mode,
-                    x_range=sorted(map(str, self.server.counters[name].components[0])))
+                         sizing_mode=self.sizing_mode,
+                         x_range=sorted(map(str, self.server.counters[name].components[0])))
             fig.ygrid.visible = False
 
             for i in range(n):
                 width = 0.5 + 0.4 * i / n
                 fig.rect(source=sources[i], x='x', y='y-center', width=width,
-                        height='y', alpha=0.3, color=RdBu[max(n, 3)][-i])
+                         height='y', alpha=0.3, color=RdBu[max(n, 3)][-i])
                 hover = HoverTool(
                     point_policy="follow_mouse",
                     tooltips="""@x : @counts"""
@@ -540,9 +542,9 @@ def main_doc(worker, extra, doc):
         statetable = StateTable(worker)
         executing_ts = ExecutingTimeSeries(worker, sizing_mode='scale_width')
         communicating_ts = CommunicatingTimeSeries(worker,
-                sizing_mode='scale_width')
+                                                   sizing_mode='scale_width')
         communicating_stream = CommunicatingStream(worker,
-                sizing_mode='scale_width')
+                                                   sizing_mode='scale_width')
 
         xr = executing_ts.root.x_range
         communicating_ts.root.x_range = xr

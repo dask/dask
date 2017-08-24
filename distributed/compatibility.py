@@ -18,6 +18,7 @@ if sys.version_info[0] == 2:
     FileExistsError = OSError
 
     import gzip
+
     def gzip_decompress(b):
         f = gzip.GzipFile(fileobj=BytesIO(b))
         result = f.read()
@@ -189,9 +190,9 @@ except ImportError:
         @classmethod
         def _select_for_exit(cls):
             # Return live finalizers marked for exit, oldest first
-            L = [(f,i) for (f,i) in cls._registry.items() if i.atexit]
-            L.sort(key=lambda item:item[1].index)
-            return [f for (f,i) in L]
+            L = [(f, i) for (f, i) in cls._registry.items() if i.atexit]
+            L.sort(key=lambda item: item[1].index)
+            return [f for (f, i) in L]
 
         @classmethod
         def _exitfunc(cls):

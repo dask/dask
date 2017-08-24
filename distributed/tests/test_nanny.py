@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-from datetime import datetime
 import gc
 import os
 import random
@@ -10,15 +9,14 @@ import numpy as np
 
 import pytest
 from toolz import valmap, first
-from tornado.tcpclient import TCPClient
 from tornado import gen
 
-from distributed import Nanny, rpc, Scheduler
-from distributed.core import connect, CommClosedError
+from distributed import Nanny, rpc
+from distributed.core import CommClosedError
 from distributed.metrics import time
-from distributed.protocol.pickle import dumps, loads
+from distributed.protocol.pickle import dumps
 from distributed.utils import ignoring
-from distributed.utils_test import gen_cluster, gen_test, slow
+from distributed.utils_test import gen_cluster, slow
 
 
 @gen_cluster(ncores=[])

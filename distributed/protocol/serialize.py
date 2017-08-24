@@ -174,6 +174,7 @@ class Serialize(object):
     --------
     distributed.protocol.dumps
     """
+
     def __init__(self, data):
         self.data = data
 
@@ -204,6 +205,7 @@ class Serialized(object):
     typically used within the scheduler which accepts messages that contain
     data without actually unpacking that data.
     """
+
     def __init__(self, header, frames):
         self.header = header
         self.frames = frames

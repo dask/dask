@@ -58,6 +58,7 @@ class LocalCluster(object):
     Shut down the extra worker
     >>> c.remove_worker(w)  # doctest: +SKIP
     """
+
     def __init__(self, n_workers=None, threads_per_worker=None, processes=True,
                  loop=None, start=True, ip=None, scheduler_port=0,
                  silence_logs=logging.CRITICAL, diagnostics_port=8787,
@@ -283,8 +284,8 @@ class LocalCluster(object):
         """
         workers = set(workers)
         yield [self._stop_worker(w)
-                for w in self.workers
-                if w.worker_address in workers]
+               for w in self.workers
+               if w.worker_address in workers]
         while workers & set(self.workers):
             yield gen.sleep(0.01)
 

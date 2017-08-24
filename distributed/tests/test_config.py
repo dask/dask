@@ -85,14 +85,14 @@ def test_logging_default():
         assert distributed_log == [
             "distributed - INFO - 2: info",
             "distributed.foo.bar - INFO - 3: info",
-            ]
+        ]
 
         # foreign logs should be unaffected by distributed's logging
         # configuration.  They get the default ERROR level from logging.
         assert foreign_log == [
             "[ERROR in foo.bar] - 5: error",
             "7: error",
-            ]
+        ]
 
     finally:
         root.setLevel(old_root_level)
@@ -111,8 +111,8 @@ def test_logging_simple():
         'logging': {
             'distributed.foo': 'info',
             'distributed.foo.bar': 'error',
-            }
         }
+    }
     # Must test using a subprocess to avoid wrecking pre-existing configuration
     with new_config_file(c):
         code = """if 1:
@@ -146,37 +146,37 @@ def test_logging_extended():
     """
     Test extended ("new-style") logging configuration.
     """
-    c= {
+    c = {
         'logging': {
             'version': '1',
             'formatters': {
                 'simple': {
                     'format': '%(levelname)s: %(name)s: %(message)s',
-                    },
                 },
+            },
             'handlers': {
                 'console': {
                     'class': 'logging.StreamHandler',
                     'stream': 'ext://sys.stderr',
                     'formatter': 'simple',
-                    },
                 },
+            },
             'loggers': {
                 'distributed.foo': {
                     'level': 'INFO',
                     #'handlers': ['console'],
-                    },
+                },
                 'distributed.foo.bar': {
                     'level': 'ERROR',
                     #'handlers': ['console'],
-                    },
                 },
+            },
             'root': {
                 'level': 'WARNING',
                 'handlers': ['console'],
-                },
             },
-        }
+        },
+    }
     # Must test using a subprocess to avoid wrecking pre-existing configuration
     with new_config_file(c):
         code = """if 1:

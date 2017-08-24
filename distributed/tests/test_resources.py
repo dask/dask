@@ -8,8 +8,9 @@ from tornado import gen
 
 from distributed import Worker
 from distributed.client import _wait
-from distributed.utils_test import (inc, ignoring, dec, gen_cluster, gen_test,
-        loop, readone, slowinc, slowadd)
+from distributed.utils_test import (inc, gen_cluster,
+                                    slowinc, slowadd)
+from distributed.utils_test import loop # flake8: noqa
 
 
 @gen_cluster(client=True, ncores=[])
@@ -86,7 +87,7 @@ def test_dont_work_steal(c, s, a, b):
     [x] = yield c._scatter([1], workers=a.address)
 
     futures = [c.submit(slowadd, x, i, resources={'A': 1}, delay=0.05)
-              for i in range(10)]
+               for i in range(10)]
 
     yield _wait(futures)
     assert all(f.key in a.data for f in futures)

@@ -9,6 +9,7 @@ class PublishExtension(object):
     *  publish-get
     *  publish-delete
     """
+
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.datasets = dict()

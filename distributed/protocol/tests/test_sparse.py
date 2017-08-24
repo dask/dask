@@ -1,6 +1,3 @@
-import functools
-import sys
-import traceback
 
 import numpy as np
 from numpy.testing import assert_allclose
@@ -8,7 +5,7 @@ import pytest
 
 sparse = pytest.importorskip('sparse')
 
-from distributed.protocol import serialize, deserialize, dumps, loads, to_serialize
+from distributed.protocol import deserialize, serialize
 
 
 def test_serialize_deserialize_sparse():

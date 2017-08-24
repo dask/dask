@@ -143,19 +143,19 @@ class WorkerBase(ServerNode):
         self.service_specs = services or {}
 
         handlers = {
-          'gather': self.gather,
-          'compute-stream': self.compute_stream,
-          'run': self.run,
-          'run_coroutine': self.run_coroutine,
-          'get_data': self.get_data,
-          'update_data': self.update_data,
-          'delete_data': self.delete_data,
-          'terminate': self.terminate,
-          'ping': pingpong,
-          'health': self.host_health,
-          'upload_file': self.upload_file,
-          'start_ipython': self.start_ipython,
-          'keys': self.keys,
+            'gather': self.gather,
+            'compute-stream': self.compute_stream,
+            'run': self.run,
+            'run_coroutine': self.run_coroutine,
+            'get_data': self.get_data,
+            'update_data': self.update_data,
+            'delete_data': self.delete_data,
+            'terminate': self.terminate,
+            'ping': pingpong,
+            'health': self.host_health,
+            'upload_file': self.upload_file,
+            'start_ipython': self.start_ipython,
+            'keys': self.keys,
         }
 
         super(WorkerBase, self).__init__(handlers, io_loop=self.loop,
@@ -188,18 +188,18 @@ class WorkerBase(ServerNode):
                     kwargs = {}
 
                 yield self.scheduler.register(
-                        address=self.contact_address,
-                        name=self.name,
-                        ncores=self.ncores,
-                        now=time(),
-                        host_info=self.host_health(),
-                        services=self.service_ports,
-                        memory_limit=self.memory_limit,
-                        executing=len(self.executing),
-                        in_memory=len(self.data),
-                        ready=len(self.ready),
-                        in_flight=len(self.in_flight_tasks),
-                        **kwargs)
+                    address=self.contact_address,
+                    name=self.name,
+                    ncores=self.ncores,
+                    now=time(),
+                    host_info=self.host_health(),
+                    services=self.service_ports,
+                    memory_limit=self.memory_limit,
+                    executing=len(self.executing),
+                    in_memory=len(self.data),
+                    ready=len(self.ready),
+                    in_flight=len(self.in_flight_tasks),
+                    **kwargs)
             finally:
                 self.heartbeat_active = False
         else:
@@ -344,8 +344,8 @@ class WorkerBase(ServerNode):
         with ignoring(EnvironmentError, gen.TimeoutError):
             if report:
                 yield gen.with_timeout(timedelta(seconds=timeout),
-                        self.scheduler.unregister(address=self.contact_address),
-                        io_loop=self.loop)
+                                       self.scheduler.unregister(address=self.contact_address),
+                                       io_loop=self.loop)
         self.scheduler.close_rpc()
         if isinstance(self.executor, ThreadPoolExecutor):
             self.executor.shutdown(timeout=timeout)
@@ -401,7 +401,7 @@ class WorkerBase(ServerNode):
         # logger.info("%s:%d Starts job %d, %s", self.ip, self.port, i, key)
         future = self.executor.submit(function, *args, **kwargs)
         pc = PeriodicCallback(lambda: logger.debug("future state: %s - %s",
-            key, future._state), 1000, io_loop=self.loop); pc.start()
+                                                   key, future._state), 1000, io_loop=self.loop); pc.start()
         try:
             yield future
         finally:
@@ -585,10 +585,10 @@ class WorkerBase(ServerNode):
     @gen.coroutine
     def gather(self, comm=None, who_has=None):
         who_has = {k: [coerce_to_address(addr) for addr in v]
-                    for k, v in who_has.items()
-                    if k not in self.data}
+                   for k, v in who_has.items()
+                   if k not in self.data}
         result, missing_keys, missing_workers = yield gather_from_workers(
-                who_has, rpc=self.rpc)
+            who_has, rpc=self.rpc)
         if missing_keys:
             logger.warning("Could not find data: %s on workers: %s (who_has: %s)",
                            missing_keys, missing_workers, who_has)
@@ -680,7 +680,7 @@ def dumps_task(task):
             return d
         elif not any(map(_maybe_complex, task[1:])):
             return {'function': dumps_function(task[0]),
-                        'args': pickle.dumps(task[1:])}
+                    'args': pickle.dumps(task[1:])}
     return to_serialize(task)
 
 
@@ -797,12 +797,12 @@ def run(server, comm, function, args=(), kwargs={}, is_coro=False, wait=True):
             result = (yield result) if wait else None
     except Exception as e:
         logger.warning(" Run Failed\n"
-            "Function: %s\n"
-            "args:     %s\n"
-            "kwargs:   %s\n",
-            str(funcname(function))[:1000],
-            convert_args_to_str(args, max_len=1000),
-            convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
+                       "Function: %s\n"
+                       "args:     %s\n"
+                       "kwargs:   %s\n",
+                       str(funcname(function))[:1000],
+                       convert_args_to_str(args, max_len=1000),
+                       convert_kwargs_to_str(kwargs, max_len=1000), exc_info=True)
 
         response = error_message(e)
     else:
@@ -973,6 +973,7 @@ class Worker(WorkerBase):
     distributed.scheduler.Scheduler
     distributed.nanny.Nanny
     """
+
     def __init__(self, *args, **kwargs):
         self.tasks = dict()
         self.task_state = dict()
@@ -1022,24 +1023,24 @@ class Worker(WorkerBase):
         self.validate = kwargs.pop('validate', False)
 
         self._transitions = {
-                ('waiting', 'ready'): self.transition_waiting_ready,
-                ('waiting', 'memory'): self.transition_waiting_done,
-                ('waiting', 'error'): self.transition_waiting_done,
-                ('ready', 'executing'): self.transition_ready_executing,
-                ('ready', 'memory'): self.transition_ready_memory,
-                ('constrained', 'executing'): self.transition_constrained_executing,
-                ('executing', 'memory'): self.transition_executing_done,
-                ('executing', 'error'): self.transition_executing_done,
-                ('executing', 'long-running'): self.transition_executing_long_running,
-                ('long-running', 'error'): self.transition_executing_done,
-                ('long-running', 'memory'): self.transition_executing_done,
+            ('waiting', 'ready'): self.transition_waiting_ready,
+            ('waiting', 'memory'): self.transition_waiting_done,
+            ('waiting', 'error'): self.transition_waiting_done,
+            ('ready', 'executing'): self.transition_ready_executing,
+            ('ready', 'memory'): self.transition_ready_memory,
+            ('constrained', 'executing'): self.transition_constrained_executing,
+            ('executing', 'memory'): self.transition_executing_done,
+            ('executing', 'error'): self.transition_executing_done,
+            ('executing', 'long-running'): self.transition_executing_long_running,
+            ('long-running', 'error'): self.transition_executing_done,
+            ('long-running', 'memory'): self.transition_executing_done,
         }
 
         self._dep_transitions = {
-                ('waiting', 'flight'): self.transition_dep_waiting_flight,
-                ('waiting', 'memory'): self.transition_dep_waiting_memory,
-                ('flight', 'waiting'): self.transition_dep_flight_waiting,
-                ('flight', 'memory'): self.transition_dep_flight_memory,
+            ('waiting', 'flight'): self.transition_dep_waiting_flight,
+            ('waiting', 'memory'): self.transition_dep_waiting_memory,
+            ('flight', 'waiting'): self.transition_dep_flight_waiting,
+            ('flight', 'memory'): self.transition_dep_flight_memory,
         }
 
         self.incoming_transfer_log = deque(maxlen=(100000))
@@ -1054,10 +1055,10 @@ class Worker(WorkerBase):
 
     def __str__(self):
         return "<%s: %s, %s, stored: %d, running: %d/%d, ready: %d, comm: %d, waiting: %d>" % (
-                self.__class__.__name__, self.address, self.status,
-                len(self.data), len(self.executing), self.ncores,
-                len(self.ready), len(self.in_flight_tasks),
-                len(self.waiting_for_data))
+            self.__class__.__name__, self.address, self.status,
+            len(self.data), len(self.executing), self.ncores,
+            len(self.ready), len(self.in_flight_tasks),
+            len(self.waiting_for_data))
 
     __repr__ = __str__
 
@@ -1131,8 +1132,8 @@ class Worker(WorkerBase):
             raise
 
     def add_task(self, key, function=None, args=None, kwargs=None, task=None,
-            who_has=None, nbytes=None, priority=None, duration=None,
-            resource_restrictions=None, **kwargs2):
+                 who_has=None, nbytes=None, priority=None, duration=None,
+                 resource_restrictions=None, **kwargs2):
         if isinstance(priority, list):
             priority.insert(1, self.priority_counter)
         try:
@@ -1141,7 +1142,7 @@ class Worker(WorkerBase):
                 if state in ('memory', 'error'):
                     if state == 'memory':
                         assert key in self.data
-                    logger.debug("Asked to compute pre-existing result: %s: %s" ,
+                    logger.debug("Asked to compute pre-existing result: %s: %s",
                                  key, state)
                     self.send_task_state_to_scheduler(key)
                     return
@@ -1226,7 +1227,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     ###############
@@ -1258,7 +1260,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     def transition_dep_flight_waiting(self, dep, worker=None):
@@ -1289,7 +1292,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     def transition_dep_flight_memory(self, dep, value=None):
@@ -1309,7 +1313,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     def transition_dep_waiting_memory(self, dep, value=None):
@@ -1322,11 +1327,13 @@ class Worker(WorkerBase):
                     assert self.task_state[dep] == 'memory'
                 except Exception as e:
                     logger.exception(e)
-                    import pdb; pdb.set_trace()
+                    import pdb
+                    pdb.set_trace()
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     def transition(self, key, finish, **kwargs):
@@ -1359,7 +1366,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     def transition_waiting_done(self, key, value=None):
@@ -1375,7 +1383,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     def transition_ready_executing(self, key):
@@ -1392,7 +1401,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     def transition_ready_memory(self, key, value=None):
@@ -1451,7 +1461,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     def transition_executing_long_running(self, key, compute_duration=None):
@@ -1469,7 +1480,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     def maybe_transition_long_running(self, key, compute_duration=None):
@@ -1513,7 +1525,7 @@ class Worker(WorkerBase):
                 if missing_deps:
                     logger.info("Can't find dependencies for key %s", key)
                     missing_deps2 = {dep for dep in missing_deps
-                                         if dep not in self._missing_dep_flight}
+                                     if dep not in self._missing_dep_flight}
                     for dep in missing_deps2:
                         self._missing_dep_flight.add(dep)
                     self.loop.add_callback(self.handle_missing_dep,
@@ -1533,7 +1545,7 @@ class Worker(WorkerBase):
                     if dep not in self.who_has:
                         continue
                     workers = [w for w in self.who_has[dep]
-                                  if w not in self.in_flight_workers]
+                               if w not in self.in_flight_workers]
                     if not workers:
                         in_flight = True
                         continue
@@ -1544,7 +1556,7 @@ class Worker(WorkerBase):
                     for d in to_gather:
                         self.transition_dep(d, 'flight', worker=worker)
                     self.loop.add_callback(self.gather_dep, worker, dep,
-                            to_gather, total_nbytes, cause=key)
+                                           to_gather, total_nbytes, cause=key)
                     changed = True
 
                 if not deps and not in_flight:
@@ -1552,7 +1564,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     def send_task_state_to_scheduler(self, key):
@@ -1688,7 +1701,8 @@ class Worker(WorkerBase):
             except Exception as e:
                 logger.exception(e)
                 if self.batched_stream and LOG_PDB:
-                    import pdb; pdb.set_trace()
+                    import pdb
+                    pdb.set_trace()
                 raise
             finally:
                 self.comm_nbytes -= total_nbytes
@@ -1796,7 +1810,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     def release_key(self, key, cause=None, reason=None, report=True):
@@ -1853,7 +1868,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     def release_dep(self, dep, report=False):
@@ -1891,7 +1907,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     def rescind_key(self, key):
@@ -1918,7 +1935,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     ################
@@ -1953,7 +1971,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     @gen.coroutine
@@ -1993,7 +2012,7 @@ class Worker(WorkerBase):
             result['key'] = key
             value = result.pop('result', None)
             self.startstops[key].append(('compute', result['start'],
-                                                    result['stop']))
+                                         result['stop']))
             self.threads[key] = result['thread']
 
             if result['op'] == 'task-finished':
@@ -2007,14 +2026,14 @@ class Worker(WorkerBase):
                 self.exceptions[key] = result['exception']
                 self.tracebacks[key] = result['traceback']
                 logger.warning(" Compute Failed\n"
-                    "Function:  %s\n"
-                    "args:      %s\n"
-                    "kwargs:    %s\n"
-                    "Exception: %s\n",
-                    str(funcname(function))[:1000],
-                    convert_args_to_str(args2, max_len=1000),
-                    convert_kwargs_to_str(kwargs2, max_len=1000),
-                    repr(pickle.loads(result['exception'])))
+                               "Function:  %s\n"
+                               "args:      %s\n"
+                               "kwargs:    %s\n"
+                               "Exception: %s\n",
+                               str(funcname(function))[:1000],
+                               convert_args_to_str(args2, max_len=1000),
+                               convert_kwargs_to_str(kwargs2, max_len=1000),
+                               repr(pickle.loads(result['exception'])))
                 self.transition(key, 'error')
 
             logger.debug("Send compute response to scheduler: %s, %s", key,
@@ -2032,7 +2051,8 @@ class Worker(WorkerBase):
             else:
                 logger.exception(e)
                 if LOG_PDB:
-                    import pdb; pdb.set_trace()
+                    import pdb
+                    pdb.set_trace()
                 raise
         finally:
             if key in self.executing:
@@ -2081,7 +2101,8 @@ class Worker(WorkerBase):
                 self.validate_key_executing(key)
         except Exception as e:
             logger.exception(e)
-            import pdb; pdb.set_trace()
+            import pdb
+            pdb.set_trace()
             raise
 
     def validate_dep_waiting(self, dep):
@@ -2117,7 +2138,8 @@ class Worker(WorkerBase):
                 raise ValueError("Unknown dependent state", state)
         except Exception as e:
             logger.exception(e)
-            import pdb; pdb.set_trace()
+            import pdb
+            pdb.set_trace()
             raise
 
     def validate_state(self):
@@ -2154,7 +2176,8 @@ class Worker(WorkerBase):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     def stateof(self, key):
@@ -2165,11 +2188,11 @@ class Worker(WorkerBase):
 
     def story(self, *keys):
         return [msg for msg in self.log
-                    if any(key in msg for key in keys)
-                    or any(key in c
-                           for key in keys
-                           for c in msg
-                           if isinstance(c, (tuple, list, set)))]
+                if any(key in msg for key in keys)
+                or any(key in c
+                       for key in keys
+                       for c in msg
+                       if isinstance(c, (tuple, list, set)))]
 
     @property
     def client(self):
@@ -2195,7 +2218,7 @@ class Worker(WorkerBase):
             pass
         else:
             if (client.scheduler and client.scheduler.address == self.scheduler.address
-                or client._start_arg == self.scheduler.address):
+                    or client._start_arg == self.scheduler.address):
                 self._client = client
 
         if not self._client:

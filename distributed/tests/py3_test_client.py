@@ -1,6 +1,6 @@
 import pytest
 
-from distributed.utils_test import gen_cluster, inc, div, loop
+from distributed.utils_test import div, gen_cluster, inc
 from distributed import as_completed, Client
 
 
@@ -8,7 +8,7 @@ from distributed import as_completed, Client
 def test_await_future(c, s, a, b):
     future = c.submit(inc, 1)
 
-    async def f():
+    async def f():  # flake8: noqa
         result = await future
         assert result == 2
 
@@ -59,6 +59,7 @@ def test_async_with(loop):
     result = None
     client = None
     cluster = None
+
     async def f():
         async with Client(processes=False, asynchronous=True) as c:
             nonlocal result, client, cluster

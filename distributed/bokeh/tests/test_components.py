@@ -12,6 +12,7 @@ from distributed.bokeh.components import (
     Processing
 )
 
+
 @pytest.mark.parametrize('Component', [TaskStream,
                                        TaskProgress,
                                        MemoryUsage,
@@ -28,6 +29,7 @@ def test_basic(Component):
 from distributed.utils_test import gen_cluster
 from tornado import gen
 from distributed.diagnostics.scheduler import workers
+
 
 @gen_cluster()
 def test_worker_table(s, a, b):

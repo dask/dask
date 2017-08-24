@@ -1,7 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-from datetime import timedelta
-import sys
 
 import pytest
 pytest.importorskip('numpy')
@@ -11,15 +9,12 @@ import dask
 import dask.dataframe as dd
 import dask.bag as db
 from distributed import Client
-from distributed.client import _wait, wait
-from distributed.utils_test import cluster, loop, gen_cluster
+from distributed.client import wait
+from distributed.utils_test import cluster, gen_cluster
+from distributed.utils_test import loop # flake8: noqa
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
-from toolz import identity
-
-from tornado import gen
-from tornado.ioloop import IOLoop
 
 
 dfs = [pd.DataFrame({'x': [1, 2, 3]}, index=[0, 10, 20]),
@@ -43,7 +38,7 @@ def assert_equal(a, b):
 def test_dataframes(c, s, a, b):
     df = pd.DataFrame({'x': np.random.random(1000),
                        'y': np.random.random(1000)},
-                       index=np.arange(1000))
+                      index=np.arange(1000))
     ldf = dd.from_pandas(df, npartitions=10)
 
     rdf = c.persist(ldf)
@@ -71,15 +66,14 @@ def test_dataframes(c, s, a, b):
         assert_equal(local, remote)
 
 
-
 @gen_cluster(client=True)
 def test__dask_array_collections(c, s, a, b):
     import dask.array as da
 
     x_dsk = {('x', i, j): np.random.random((3, 3)) for i in range(3)
-                                                   for j in range(2)}
+             for j in range(2)}
     y_dsk = {('y', i, j): np.random.random((3, 3)) for i in range(2)
-                                                   for j in range(3)}
+             for j in range(3)}
     x_futures = yield c._scatter(x_dsk)
     y_futures = yield c._scatter(y_dsk)
 
@@ -118,8 +112,8 @@ def test_dataframe_set_index_sync(loop, wait):
         with Client(s['address'], loop=loop) as c:
             with dask.set_options(get=c.get):
                 df = dd.demo.make_timeseries('2000', '2001',
-                        {'value': float, 'name': str, 'id': int},
-                        freq='2H', partition_freq='1M', seed=1)
+                                             {'value': float, 'name': str, 'id': int},
+                                             freq='2H', partition_freq='1M', seed=1)
                 df = c.persist(df)
                 wait(df)
 

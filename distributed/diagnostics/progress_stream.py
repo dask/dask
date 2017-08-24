@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 task_stream_palette = list(viridis(25))
 random.shuffle(task_stream_palette)
 
+
 def counts(scheduler, allprogress):
     return merge({'all': valmap(len, allprogress.all),
                   'nbytes': allprogress.nbytes},

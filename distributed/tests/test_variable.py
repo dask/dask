@@ -1,17 +1,15 @@
 from __future__ import print_function, division, absolute_import
 
-from operator import add
 from time import sleep
 import sys
 
 import pytest
-from toolz import take
 from tornado import gen
 
 from distributed import Client, Variable, worker_client, Nanny, wait
 from distributed.metrics import time
-from distributed.utils_test import (gen_cluster, inc, loop, cluster, slowinc,
-                                    slow, div)
+from distributed.utils_test import (gen_cluster, inc, cluster, slow, div)
+from distributed.utils_test import loop # flake8: noqa
 
 
 @gen_cluster(client=True)
@@ -171,7 +169,8 @@ def test_race(c, s, *workers):
     while len(s.wants_what['variable-x']) != 1:
         yield gen.sleep(0.01)
         if not time() - start < 2:
-            import pdb; pdb.set_trace()
+            import pdb
+            pdb.set_trace()
 
 
 @gen_cluster(client=True)

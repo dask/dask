@@ -1,18 +1,16 @@
 from __future__ import print_function, division, absolute_import
 
 from datetime import timedelta
-from operator import add
 from time import sleep
 import sys
 
 import pytest
-from toolz import take
 from tornado import gen
 
 from distributed import Client, Queue, Nanny, worker_client, wait
 from distributed.metrics import time
-from distributed.utils_test import (gen_cluster, inc, loop, cluster, slowinc,
-                                    slow, div)
+from distributed.utils_test import (gen_cluster, inc, cluster, slow, div)
+from distributed.utils_test import loop # flake8: noqa
 
 
 @gen_cluster(client=True)

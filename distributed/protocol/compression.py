@@ -103,8 +103,8 @@ if default != 'auto':
         default_compression = default
     else:
         raise ValueError("Default compression '%s' not found.\n"
-                "Choices include auto, %s" % (
-                    default, ', '.join(sorted(map(str, compressions)))))
+                         "Choices include auto, %s" % (
+                             default, ', '.join(sorted(map(str, compressions)))))
 
 
 def byte_sample(b, size, n):

@@ -40,13 +40,11 @@ class SchedulerPlugin(object):
     """
 
     def update_graph(self, scheduler, dsk=None, keys=None,
-            restrictions=None, **kwargs):
+                     restrictions=None, **kwargs):
         """ Run when a new graph / tasks enter the scheduler """
-        pass
 
     def restart(self, scheduler, **kwargs):
         """ Run when the scheduler restarts itself """
-        pass
 
     def transition(self, key, start, finish, *args, **kwargs):
         """ Run whenever a task changes state
@@ -62,12 +60,9 @@ class SchedulerPlugin(object):
         *args, **kwargs: More options passed when transitioning
             This may include worker ID, compute time, etc.
         """
-        pass
 
     def add_worker(self, scheduler=None, worker=None, **kwargs):
         """ Run when a new worker enters the cluster """
-        pass
 
     def remove_worker(self, scheduler=None, worker=None, **kwargs):
         """ Run when a worker leaves the cluster"""
-        pass

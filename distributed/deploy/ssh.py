@@ -67,7 +67,7 @@ def async_ssh(cmd_dict):
                                             port=cmd_dict['ssh_port'],
                                             cmd=cmd_dict['cmd']) + bcolors.ENDC)
 
-            print( bcolors.FAIL + '               SSH reported this exception: ' + str(e) + bcolors.ENDC )
+            print(bcolors.FAIL + '               SSH reported this exception: ' + str(e) + bcolors.ENDC)
 
             # Print an exception traceback
             traceback.print_exc()
@@ -77,7 +77,7 @@ def async_ssh(cmd_dict):
             # attempts to retry.
             retries += 1
             if retries >= 3:
-                print( '[ dask-ssh ] : '
+                print('[ dask-ssh ] : '
                       + bcolors.FAIL
                       + 'SSH connection failed after 3 retries. Exiting.'
                       + bcolors.ENDC)
@@ -178,13 +178,13 @@ def async_ssh(cmd_dict):
 
 def start_scheduler(logdir, addr, port, ssh_username, ssh_port, ssh_private_key):
     cmd = '{python} -m distributed.cli.dask_scheduler --port {port}'.format(
-            python=sys.executable, port=port, logdir=logdir)
+        python=sys.executable, port=port, logdir=logdir)
 
     # Optionally re-direct stdout and stderr to a logfile
     if logdir is not None:
         cmd = 'mkdir -p {logdir} && '.format(logdir=logdir) + cmd
         cmd += '&> {logdir}/dask_scheduler_{addr}:{port}.log'.format(addr=addr,
-                port=port, logdir=logdir)
+                                                                     port=port, logdir=logdir)
 
     # Format output labels we can prepend to each line of output, and create
     # a 'status' key to keep track of jobs that terminate prematurely.

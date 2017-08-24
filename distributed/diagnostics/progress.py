@@ -2,18 +2,13 @@ from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
 import logging
-import sys
-import threading
-import time
 from timeit import default_timer
 
-import dask
-from toolz import valmap, groupby, concat
-from tornado.ioloop import PeriodicCallback, IOLoop
+from toolz import groupby, valmap
 from tornado import gen
 
 from .plugin import SchedulerPlugin
-from ..utils import sync, key_split, tokey, log_errors, key_split_group
+from ..utils import key_split, key_split_group, log_errors, tokey
 
 
 logger = logging.getLogger(__name__)
@@ -61,6 +56,7 @@ class Progress(SchedulerPlugin):
     This class performs no visualization.  However it is used by other classes,
     notably TextProgressBar and ProgressWidget, which do perform visualization.
     """
+
     def __init__(self, keys, scheduler, minimum=0, dt=0.1, complete=False):
         self.keys = {k.key if hasattr(k, 'key') else k for k in keys}
         self.keys = {tokey(k) for k in self.keys}
@@ -84,16 +80,16 @@ class Progress(SchedulerPlugin):
 
         self.scheduler.add_plugin(self)  # subtle race condition here
         self.all_keys, errors = dependent_keys(keys, self.scheduler.who_has,
-                self.scheduler.processing,
-                self.scheduler.dependencies, self.scheduler.exceptions,
-                complete=self.complete)
+                                               self.scheduler.processing,
+                                               self.scheduler.dependencies, self.scheduler.exceptions,
+                                               complete=self.complete)
         if not self.complete:
             self.keys = self.all_keys.copy()
         else:
             self.keys, _ = dependent_keys(keys, self.scheduler.who_has,
-                    self.scheduler.processing,
-                    self.scheduler.dependencies, self.scheduler.exceptions,
-                    complete=False)
+                                          self.scheduler.processing,
+                                          self.scheduler.dependencies, self.scheduler.exceptions,
+                                          complete=False)
         self.all_keys.update(keys)
         self.keys |= errors & self.all_keys
 
@@ -156,11 +152,12 @@ class MultiProgress(Progress):
     {'x': {'x-1', 'x-2', 'x-3'},
      'y': {'y-1', 'y-2'}}
     """
+
     def __init__(self, keys, scheduler=None, func=key_split, minimum=0, dt=0.1,
                  complete=False):
         self.func = func
         Progress.__init__(self, keys, scheduler, minimum=minimum, dt=dt,
-                            complete=complete)
+                          complete=complete)
 
     @gen.coroutine
     def setup(self):
@@ -173,16 +170,16 @@ class MultiProgress(Progress):
 
         self.scheduler.add_plugin(self)  # subtle race condition here
         self.all_keys, errors = dependent_keys(keys, self.scheduler.who_has,
-                self.scheduler.processing,
-                self.scheduler.dependencies, self.scheduler.exceptions,
-                complete=self.complete)
+                                               self.scheduler.processing,
+                                               self.scheduler.dependencies, self.scheduler.exceptions,
+                                               complete=self.complete)
         if not self.complete:
             self.keys = self.all_keys.copy()
         else:
             self.keys, _ = dependent_keys(keys, self.scheduler.who_has,
-                    self.scheduler.processing,
-                    self.scheduler.dependencies, self.scheduler.exceptions,
-                    complete=False)
+                                          self.scheduler.processing,
+                                          self.scheduler.dependencies, self.scheduler.exceptions,
+                                          complete=False)
         self.all_keys.update(keys)
         self.keys |= errors & self.all_keys
 
@@ -244,6 +241,7 @@ def format_time(t):
 
 class AllProgress(SchedulerPlugin):
     """ Keep track of all keys, grouped by key_split """
+
     def __init__(self, scheduler):
         self.all = defaultdict(set)
         self.nbytes = defaultdict(lambda: 0)
@@ -264,7 +262,7 @@ class AllProgress(SchedulerPlugin):
         self.all[k].add(key)
         try:
             self.state[start][k].remove(key)
-        except KeyError: # TODO: remove me once we have a new or clean state
+        except KeyError:  # TODO: remove me once we have a new or clean state
             pass
         if finish != 'forgotten':
             self.state[finish][k].add(key)
@@ -294,6 +292,7 @@ class AllProgress(SchedulerPlugin):
 
 class GroupProgress(SchedulerPlugin):
     """ Keep track of all keys, grouped by key_split """
+
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.keys = dict()

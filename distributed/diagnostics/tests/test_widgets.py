@@ -4,7 +4,6 @@ import pytest
 pytest.importorskip('ipywidgets')
 
 from ipykernel.comm import Comm
-import ipywidgets as widgets
 from ipywidgets import Widget
 
 #################
@@ -29,17 +28,21 @@ class DummyComm(Comm):
     def close(self, *args, **kwargs):
         pass
 
+
 _widget_attrs = {}
 displayed = []
 undefined = object()
+
 
 def setup():
     _widget_attrs['_comm_default'] = getattr(Widget, '_comm_default', undefined)
     Widget._comm_default = lambda self: DummyComm()
     _widget_attrs['_ipython_display_'] = Widget._ipython_display_
+
     def raise_not_implemented(*args, **kwargs):
         raise NotImplementedError()
     Widget._ipython_display_ = raise_not_implemented
+
 
 def teardown():
     for attr, value in _widget_attrs.items():
@@ -48,12 +51,15 @@ def teardown():
         else:
             setattr(Widget, attr, value)
 
+
 def f(**kwargs):
     pass
+
 
 def clear_display():
     global displayed
     displayed = []
+
 
 def record_display(*args):
     displayed.extend(args)
@@ -72,11 +78,11 @@ from toolz import valmap
 
 from distributed.client import Client, wait
 from distributed.worker import dumps_task
-from distributed.utils_test import (cluster, loop, inc,
-        div, dec, throws, gen_cluster)
+from distributed.utils_test import (cluster, inc, dec, throws, gen_cluster)
+from distributed.utils_test import loop  # flake8: noqa
 from distributed.utils import sync
 from distributed.diagnostics.progressbar import (ProgressWidget,
-        MultiProgressWidget, progress)
+                                                 MultiProgressWidget, progress)
 
 
 @gen_cluster()
@@ -129,7 +135,7 @@ def test_multi_progressbar_widget(s, a, b):
     assert 'Exception' in p.elapsed_time.value
 
     capacities = [int(re.search(r'\d+ / \d+', row.children[0].value)
-                    .group().split(' / ')[1])
+                      .group().split(' / ')[1])
                   for row in p.bar_widgets.children]
     assert sorted(capacities, reverse=True) == capacities
 

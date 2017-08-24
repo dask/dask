@@ -7,7 +7,7 @@ def serialize_keras_model(model):
     import keras
     if keras.__version__ < '1.2.0':
         raise ImportError("Need Keras >= 1.2.0. "
-                "Try pip install keras --upgrade --no-deps")
+                          "Try pip install keras --upgrade --no-deps")
 
     header = model._updated_config()
     weights = model.get_weights()

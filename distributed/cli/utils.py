@@ -14,7 +14,6 @@ For more information see: http://click.pocoo.org/5/python3/
 
 from distributed.comm import (parse_address, unparse_address,
                               parse_host_port, unparse_host_port)
-from ..utils import get_ip, ensure_ip
 
 
 def check_python_3():

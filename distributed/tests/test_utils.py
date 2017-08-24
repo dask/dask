@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 from collections import Iterator
 from functools import partial
 import io
-import logging
 import socket
 import sys
 from time import sleep
@@ -14,18 +13,18 @@ import traceback
 import numpy as np
 import pytest
 from tornado import gen
-from tornado.ioloop import IOLoop
 from tornado.locks import Event
 
 import dask
 from distributed.compatibility import Queue, isqueue, PY2
 from distributed.metrics import time
 from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
-        truncate_exception, get_traceback, queue_to_iterator,
-        iterator_to_queue, _maybe_complex, read_block, seek_delimiter,
-        funcname, ensure_bytes, open_port, get_ip_interface, nbytes,
-        set_thread_state, thread_state)
-from distributed.utils_test import loop, inc, throws, div, has_ipv6
+                               truncate_exception, get_traceback, queue_to_iterator,
+                               iterator_to_queue, _maybe_complex, read_block, seek_delimiter,
+                               funcname, ensure_bytes, open_port, get_ip_interface, nbytes,
+                               set_thread_state, thread_state)
+from distributed.utils_test import loop # flake8: noqa
+from distributed.utils_test import div, has_ipv6, inc, throws
 
 
 def test_All(loop):
@@ -177,7 +176,7 @@ def test_get_ip_interface():
 
 
 def test_truncate_exception():
-    e = ValueError('a'*1000)
+    e = ValueError('a' * 1000)
     assert len(str(e)) >= 1000
     f = truncate_exception(e, 100)
     assert type(f) == type(e)
@@ -191,13 +190,15 @@ def test_truncate_exception():
 def test_get_traceback():
     def a(x):
         return div(x, 0)
+
     def b(x):
         return a(x)
+
     def c(x):
         return b(x)
 
     try:
-        c(x)
+        c(1)
     except Exception as e:
         tb = get_traceback()
         assert type(tb).__name__ == 'traceback'
@@ -315,7 +316,7 @@ def test_funcname():
 def test_ensure_bytes():
     data = [b'1', '1', memoryview(b'1'), bytearray(b'1')]
     if PY2:
-        data.append(buffer(b'1'))
+        data.append(buffer(b'1'))  # flake8: noqa
     for d in data:
         result = ensure_bytes(d)
         assert isinstance(result, bytes)
@@ -323,7 +324,7 @@ def test_ensure_bytes():
 
 
 def test_nbytes():
-    multi_dim = np.ones(shape=(10,10))
+    multi_dim = np.ones(shape=(10, 10))
     scalar = np.array(1)
 
     assert nbytes(scalar) == scalar.nbytes

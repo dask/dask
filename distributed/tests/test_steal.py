@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 import itertools
-from functools import partial
 from operator import mul
 import random
 import sys
@@ -12,15 +11,13 @@ import pytest
 from toolz import sliding_window, concat
 from tornado import gen
 
-import dask
-from dask import delayed
-from distributed import Worker, Nanny, worker_client, Client, wait
+from distributed import Nanny, Worker, wait, worker_client
 from distributed.config import config
 from distributed.metrics import time
 from distributed.scheduler import BANDWIDTH, key_split
-from distributed.utils_test import (cluster, slowinc, slowadd, randominc,
-        loop, inc, dec, div, throws, gen_cluster, gen_test, double, deep,
-        slowidentity, slowdouble)
+from distributed.utils_test import (slowinc, slowadd, inc, gen_cluster,
+                                    slowidentity)
+from distributed.utils_test import loop # flake8: noqa
 
 import pytest
 
@@ -28,7 +25,7 @@ import pytest
 @pytest.mark.skipif(not sys.platform.startswith('linux'),
                     reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster(client=True, ncores=[('127.0.0.1', 2), ('127.0.0.2', 2)],
-        timeout=20)
+             timeout=20)
 def test_work_stealing(c, s, a, b):
     [x] = yield c._scatter([1], workers=a.address)
     futures = c.map(slowadd, range(50), [x] * 50)
@@ -279,6 +276,7 @@ def test_steal_resource_restrictions(c, s, a):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 5, timeout=20)
 def test_balance_without_dependencies(c, s, *workers):
     s.extensions['stealing']._pc.callback_time = 20
+
     def slow(x):
         y = random.random() * 0.1
         sleep(y)
@@ -323,7 +321,7 @@ def test_steal_when_more_tasks(c, s, a, *rest):
     s.task_duration['slowidentity'] = 0.2
 
     futures = [c.submit(slowidentity, x, pure=False, delay=0.2)
-                for i in range(20)]
+               for i in range(20)]
     yield gen.sleep(0.1)
 
     assert any(w.task_state for w in rest)
@@ -342,7 +340,7 @@ def test_steal_more_attractive_tasks(c, s, a, *rest):
 
     future = c.submit(slow2, x)
     futures = [c.submit(slowidentity, x, pure=False, delay=0.2)
-                for i in range(10)]
+               for i in range(10)]
 
     while not any(w.task_state for w in rest):
         yield gen.sleep(0.01)
@@ -353,7 +351,6 @@ def test_steal_more_attractive_tasks(c, s, a, *rest):
 
 def func(x):
     sleep(1)
-    pass
 
 
 def assert_balanced(inp, expected, c, s, *workers):
@@ -393,66 +390,67 @@ def assert_balanced(inp, expected, c, s, *workers):
 
     if config.get('pdb-on-err'):
         if result2 != expected2:
-            import pdb; pdb.set_trace()
+            import pdb
+            pdb.set_trace()
 
     assert result2 == expected2
 
 
 @pytest.mark.parametrize('inp,expected', [
     ([[1], []],  # don't move unnecessarily
-    [[1], []]),
+     [[1], []]),
 
-   ([[0, 0], []],  # balance
-    [[0], [0]]),
+    ([[0, 0], []],  # balance
+     [[0], [0]]),
 
-   ([[0.1, 0.1], []],  # balance even if results in even
-    [[0], [0]]),
+    ([[0.1, 0.1], []],  # balance even if results in even
+     [[0], [0]]),
 
-   ([[0, 0, 0], []],  # don't over balance
-    [[0, 0], [0]]),
+    ([[0, 0, 0], []],  # don't over balance
+     [[0, 0], [0]]),
 
-   ([[0, 0], [0, 0, 0], []],  # move from larger
-    [[0, 0], [0, 0], [0]]),
+    ([[0, 0], [0, 0, 0], []],  # move from larger
+     [[0, 0], [0, 0], [0]]),
 
-   ([[0, 0, 0], [0], []],  # move to smaller
-    [[0, 0], [0], [0]]),
+    ([[0, 0, 0], [0], []],  # move to smaller
+     [[0, 0], [0], [0]]),
 
-   ([[0, 1], []],  # choose easier first
-    [[1], [0]]),
+    ([[0, 1], []],  # choose easier first
+     [[1], [0]]),
 
-   ([[0, 0, 0, 0], [], []],  # spread evenly
-    [[0, 0], [0], [0]]),
+    ([[0, 0, 0, 0], [], []],  # spread evenly
+     [[0, 0], [0], [0]]),
 
-   ([[1, 0, 2, 0], [], []],  # move easier
-    [[2, 1], [0], [0]]),
+    ([[1, 0, 2, 0], [], []],  # move easier
+     [[2, 1], [0], [0]]),
 
-   ([[1, 1, 1], []],  # be willing to move costly items
-    [[1, 1], [1]]),
+    ([[1, 1, 1], []],  # be willing to move costly items
+     [[1, 1], [1]]),
 
-   ([[1, 1, 1, 1], []],  # but don't move too many
-    [[1, 1, 1], [1]]),
+    ([[1, 1, 1, 1], []],  # but don't move too many
+     [[1, 1, 1], [1]]),
 
-   ([[0, 0], [0, 0], [0, 0], []],  # no one clearly saturated
-    [[0, 0], [0, 0], [0], [0]]),
+    ([[0, 0], [0, 0], [0, 0], []],  # no one clearly saturated
+     [[0, 0], [0, 0], [0], [0]]),
 
-   ([[4, 2, 2, 2, 2, 1, 1],
-     [4, 2, 1, 1],
-     [],
-     [],
-     []],
-    [[4, 2, 2, 2, 2],
-     [4, 2, 1],
-     [1],
-     [1],
-     [1]]),
+    ([[4, 2, 2, 2, 2, 1, 1],
+      [4, 2, 1, 1],
+      [],
+      [],
+      []],
+     [[4, 2, 2, 2, 2],
+      [4, 2, 1],
+      [1],
+      [1],
+      [1]]),
 
-   ([[1, 1, 1, 1, 1, 1, 1],
-     [1, 1], [1, 1], [1, 1],
-     []],
-    [[1, 1, 1, 1, 1],
-     [1, 1], [1, 1], [1, 1],
-     [1, 1]])
-    ])
+    ([[1, 1, 1, 1, 1, 1, 1],
+      [1, 1], [1, 1], [1, 1],
+      []],
+     [[1, 1, 1, 1, 1],
+      [1, 1], [1, 1], [1, 1],
+      [1, 1]])
+])
 def test_balance(inp, expected):
     test = lambda *args, **kwargs: assert_balanced(inp, expected, *args, **kwargs)
     test = gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * len(inp))(test)
@@ -484,7 +482,7 @@ def test_steal_communication_heavy_tasks(c, s, a, b):
 
     futures = [c.submit(slowadd, x, y, delay=1, pure=False, workers=a.address,
                         allow_other_workers=True)
-                for i in range(10)]
+               for i in range(10)]
 
     while not any(f.key in s.rprocessing for f in futures):
         yield gen.sleep(0.01)

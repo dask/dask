@@ -38,13 +38,13 @@ class DashboardComponent(object):
     *  update: a method that consumes the messages dictionary found in
                distributed.bokeh.messages
     """
+
     def __init__(self):
         self.source = None
         self.root = None
 
     def update(self, messages):
         """ Reads from bokeh.distributed.messages and updates self.source """
-        pass
 
 
 class TaskStream(DashboardComponent):
@@ -52,6 +52,7 @@ class TaskStream(DashboardComponent):
 
     The start and stop time of tasks as they occur on each core of the cluster.
     """
+
     def __init__(self, n_rectangles=1000, clear_interval=20000, **kwargs):
         """
         kwargs are applied to the bokeh.models.plots.Plot constructor
@@ -219,13 +220,14 @@ class TaskProgress(DashboardComponent):
             self.source.data.update(d)
             if messages['tasks']['deque']:
                 self.root.title.text = ("Progress -- total: %(total)s, "
-                    "in-memory: %(in-memory)s, processing: %(processing)s, "
-                    "waiting: %(waiting)s, failed: %(failed)s"
-                    % messages['tasks']['deque'][-1])
+                                        "in-memory: %(in-memory)s, processing: %(processing)s, "
+                                        "waiting: %(waiting)s, failed: %(failed)s"
+                                        % messages['tasks']['deque'][-1])
 
 
 class MemoryUsage(DashboardComponent):
     """ The memory usage across the cluster, grouped by task type """
+
     def __init__(self, **kwargs):
         self.source = ColumnDataSource(data=dict(
             name=[], left=[], right=[], center=[], color=[],
@@ -273,7 +275,7 @@ class MemoryUsage(DashboardComponent):
             nb = nbytes_bar(msg['nbytes'])
             self.source.data.update(nb)
             self.root.title.text = \
-                    "Memory Use: %0.2f MB" % (sum(msg['nbytes'].values()) / 1e6)
+                "Memory Use: %0.2f MB" % (sum(msg['nbytes'].values()) / 1e6)
 
 
 class ResourceProfiles(DashboardComponent):
@@ -281,10 +283,11 @@ class ResourceProfiles(DashboardComponent):
 
     This is two plots, one for CPU and Memory and another for Network I/O
     """
+
     def __init__(self, **kwargs):
         self.source = ColumnDataSource(data={'time': [], 'cpu': [],
-            'memory_percent':[], 'network-send':[], 'network-recv':[]}
-        )
+                                             'memory_percent': [], 'network-send': [], 'network-recv': []}
+                                       )
 
         x_range = DataRange1d(follow='end', follow_interval=30000, range_padding=0)
 
@@ -383,6 +386,7 @@ class WorkerTable(DashboardComponent):
     This is two plots, a text-based table for each host and a thin horizontal
     plot laying out hosts by their current memory use.
     """
+
     def __init__(self, **kwargs):
         names = ['processes', 'disk-read', 'cores', 'cpu', 'disk-write',
                  'memory', 'last-seen', 'memory_percent', 'host']
@@ -476,6 +480,7 @@ class Processing(DashboardComponent):
     This shows how many tasks are actively running on each worker and how many
     tasks are enqueued for each worker and how many are in the common pool
     """
+
     def __init__(self, **kwargs):
         data = self.processing_update({'processing': {}, 'ncores': {}})
         self.source = ColumnDataSource(data)

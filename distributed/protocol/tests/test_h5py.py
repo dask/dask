@@ -1,12 +1,11 @@
 import functools
-import sys
 import traceback
 
 import pytest
 
 h5py = pytest.importorskip('h5py')
 
-from distributed.protocol import serialize, deserialize, dumps, loads
+from distributed.protocol import deserialize, serialize
 
 from distributed.utils import PY3, tmpfile
 
@@ -87,11 +86,10 @@ def test_raise_error_on_serialize_write_permissions():
 
 
 from distributed.utils_test import gen_cluster
-from distributed.client import _wait
 
-from tornado import gen
 
 import dask.array as da
+
 
 @silence_h5py_issue775
 @gen_cluster(client=True)

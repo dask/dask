@@ -1,22 +1,18 @@
 from __future__ import print_function, division, absolute_import
 
 import atexit
-from datetime import timedelta
-from functools import partial
 import json
 import logging
 import os
-import shutil
 import signal
 from sys import exit
 from time import sleep
 
 import click
-from distributed import Nanny, Worker, rpc
-from distributed.utils import All, get_ip_interface
+from distributed import Nanny, Worker
+from distributed.utils import get_ip_interface
 from distributed.worker import _ncores
 from distributed.http import HTTPWorker
-from distributed.metrics import time
 from distributed.security import Security
 from distributed.cli.utils import check_python_3, uri_from_host_port
 from distributed.comm import get_address_host_port
@@ -29,6 +25,7 @@ logger = logging.getLogger('distributed.dask_worker')
 
 
 pem_file_option_type = click.Path(exists=True, resolve_path=True)
+
 
 @click.command()
 @click.argument('scheduler', type=str, required=False)
@@ -127,7 +124,7 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
                      "You cannot specify --listen-address when nprocs > 1.")
         exit(1)
 
-    if  (worker_port or host) and listen_address:
+    if (worker_port or host) and listen_address:
         logger.error("Failed to launch worker. "
                      "You cannot specify --listen-address when --worker-port or --host is given.")
         exit(1)
@@ -271,6 +268,7 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
 def go():
     check_python_3()
     main()
+
 
 if __name__ == '__main__':
     go()

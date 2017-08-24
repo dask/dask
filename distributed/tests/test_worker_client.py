@@ -10,10 +10,10 @@ import pytest
 from tornado import gen
 
 from distributed import (worker_client, Client, as_completed, get_worker, wait,
-        get_client)
+                         get_client)
 from distributed.metrics import time
-from distributed.utils_test import gen_cluster, inc, double, cluster, loop
-from distributed.worker import thread_state
+from distributed.utils_test import cluster, double, gen_cluster, inc
+from distributed.utils_test import loop # flake8: noqa
 
 
 @gen_cluster(client=True)
@@ -39,7 +39,6 @@ def test_submit_from_worker(c, s, a, b):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
 def test_scatter_from_worker(c, s, a, b):
     def func():
-        from distributed.worker import thread_state
         with worker_client() as c:
             futures = c.scatter([1, 2, 3, 4, 5])
             assert isinstance(futures, (list, tuple))
@@ -81,6 +80,7 @@ def test_scatter_from_worker(c, s, a, b):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
 def test_scatter_singleton(c, s, a, b):
     np = pytest.importorskip('numpy')
+
     def func():
         with worker_client() as c:
             x = np.ones(5)
@@ -161,6 +161,7 @@ def test_async(c, s, a, b):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 3)])
 def test_separate_thread_false(c, s, a):
     a.count = 0
+
     def f(i):
         with worker_client(separate_thread=False) as client:
             get_worker().count += 1
@@ -189,6 +190,7 @@ def test_client_executor(c, s, a, b):
 
 def test_dont_override_default_get(loop):
     import dask.bag as db
+
     def f(x):
         with worker_client() as c:
             return True
@@ -207,6 +209,7 @@ def test_dont_override_default_get(loop):
 @gen_cluster(client=True)
 def test_local_client_warning(c, s, a, b):
     from distributed import local_client
+
     def func(x):
         with warnings.catch_warnings(record=True) as record:
             with local_client() as c:

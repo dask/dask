@@ -4,14 +4,14 @@ from datetime import timedelta
 import random
 
 import pytest
-from toolz import first, assoc
+from toolz import assoc
 from tornado import gen
 
 from distributed.batched import BatchedSend
 from distributed.core import listen, connect, CommClosedError
 from distributed.metrics import time
-from distributed.utils import sync, All
-from distributed.utils_test import gen_test, slow, gen_cluster
+from distributed.utils import All
+from distributed.utils_test import gen_test, slow
 
 
 class EchoServer(object):
@@ -32,6 +32,7 @@ class EchoServer(object):
         listener.start()
         self.address = listener.contact_address
         self.stop = listener.stop
+
 
 @contextmanager
 def echo_server():
@@ -63,8 +64,10 @@ def test_BatchedSend():
         b.send('HELLO')
         b.send('HELLO')
 
-        result = yield comm.read(); assert result == ['hello', 'hello', 'world']
-        result = yield comm.read(); assert result == ['HELLO', 'HELLO']
+        result = yield comm.read()
+        assert result == ['hello', 'hello', 'world']
+        result = yield comm.read()
+        assert result == ['HELLO', 'HELLO']
 
         assert b.byte_count > 1
 
@@ -80,7 +83,8 @@ def test_send_before_start():
         b.send('world')
 
         b.start(comm)
-        result = yield comm.read(); assert result == ['hello', 'world']
+        result = yield comm.read()
+        assert result == ['hello', 'world']
 
 
 @gen_test()

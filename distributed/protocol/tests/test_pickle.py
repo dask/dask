@@ -23,6 +23,7 @@ def test_pickle_numpy():
 
 def test_pickle_functions():
     value = 1
+
     def f(x):  # closure
         return x + value
 

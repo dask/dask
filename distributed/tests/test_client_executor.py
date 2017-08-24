@@ -1,22 +1,19 @@
 from __future__ import print_function, division, absolute_import
 
-from operator import add
 import random
 import time
 
 from concurrent.futures import (
     CancelledError, TimeoutError, Future, wait, as_completed,
-    FIRST_COMPLETED, FIRST_EXCEPTION, ALL_COMPLETED)
+    FIRST_COMPLETED, FIRST_EXCEPTION)
 
 import pytest
 from toolz import take
-from tornado import gen
 
 from distributed.client import Client
-from distributed.scheduler import Scheduler, KilledWorker
-from distributed.sizeof import sizeof
-from distributed.utils_test import (slow, slowinc, slowadd, slowdec,
-        loop, inc, dec, div, throws, gen_cluster, cluster)
+from distributed.utils_test import (slowinc, slowadd, slowdec,
+                                    inc, throws, cluster)
+from distributed.utils_test import loop # flake8: noqa
 
 
 def number_of_processing_tasks(client):

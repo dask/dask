@@ -35,6 +35,7 @@ import os
 _threads_queues = weakref.WeakKeyDictionary()
 _shutdown = False
 
+
 def _python_exit():
     global _shutdown
     _shutdown = True
@@ -44,7 +45,9 @@ def _python_exit():
     for t, q in items:
         t.join()
 
+
 atexit.register(_python_exit)
+
 
 class _WorkItem(object):
     def __init__(self, future, fn, args, kwargs):
@@ -63,6 +66,7 @@ class _WorkItem(object):
             self.future.set_exception(e)
         else:
             self.future.set_result(result)
+
 
 def _worker(executor_reference, work_queue):
     try:
@@ -85,6 +89,7 @@ def _worker(executor_reference, work_queue):
             del executor
     except BaseException:
         _base.LOGGER.critical('Exception in worker', exc_info=True)
+
 
 class ThreadPoolExecutor(_base.Executor):
 

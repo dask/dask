@@ -74,7 +74,7 @@ class BatchedSend(object):
                 self.next_deadline = None
                 continue
             if (self.next_deadline is not None and
-                self.loop.time() < self.next_deadline):
+                    self.loop.time() < self.next_deadline):
                 # Send interval not expired yet
                 continue
             payload, self.buffer = self.buffer, []

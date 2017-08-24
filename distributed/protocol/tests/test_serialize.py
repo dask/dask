@@ -8,9 +8,9 @@ import pytest
 from toolz import identity
 
 from distributed.protocol import (register_serialization, serialize,
-        deserialize, nested_deserialize, Serialize, Serialized,
-        to_serialize, serialize_bytes, deserialize_bytes, serialize_bytelist,
-        decompress)
+                                  deserialize, nested_deserialize, Serialize,
+                                  Serialized, to_serialize, serialize_bytes,
+                                  deserialize_bytes, serialize_bytelist,)
 from distributed.utils import nbytes
 
 
@@ -24,6 +24,7 @@ class MyObj(object):
 
 def serialize_myobj(x):
     return {}, [pickle.dumps(x.data)]
+
 
 def deserialize_myobj(header, frames):
     return MyObj(pickle.loads(frames[0]))
@@ -143,6 +144,7 @@ class Empty(object):
 
 def serialize_empty(x):
     return {}, []
+
 
 def deserialize_empty(header, frames):
     return Empty()

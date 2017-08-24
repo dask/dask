@@ -3,17 +3,16 @@ from __future__ import print_function, division, absolute_import
 import pytest
 
 from distributed.counter import Counter
+from distributed.utils_test import loop  # flake8: noqa
 
 try:
     from distributed.counter import Digest
 except ImportError:
     Digest = None
 
-from distributed.utils_test import loop
-
 
 @pytest.mark.parametrize('CD,size', [(Counter, lambda d: sum(d.values())),
-                  pytest.mark.skipif(not Digest, reason="no crick library")(
+                                     pytest.mark.skipif(not Digest, reason="no crick library")(
                                      (Digest, lambda x: x.size()))])
 def test_digest(loop, CD, size):
     c = CD(loop=loop)

@@ -29,6 +29,7 @@ class VariableExtension(object):
     *  variable-get
     *  variable-delete
     """
+
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.variables = dict()
@@ -143,6 +144,7 @@ class Variable(object):
     --------
     Queue:
     """
+
     def __init__(self, name=None, client=None, maxsize=0):
         self.client = client or _get_global_client()
         self.name = name or 'variable-' + uuid.uuid4().hex

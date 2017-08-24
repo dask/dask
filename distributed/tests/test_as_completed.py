@@ -6,7 +6,8 @@ import pytest
 
 from distributed import Client
 from distributed.client import _as_completed, as_completed, _first_completed
-from distributed.utils_test import gen_cluster, inc, loop, cluster
+from distributed.utils_test import cluster, gen_cluster, inc
+from distributed.utils_test import loop # flake8: noqa
 from distributed.compatibility import Queue
 
 

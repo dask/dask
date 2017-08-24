@@ -43,8 +43,8 @@ class WorkStealing(SchedulerPlugin):
             self.add_worker(worker=worker)
 
         pc = PeriodicCallback(callback=self.balance,
-                                    callback_time=100,
-                                    io_loop=self.scheduler.loop)
+                              callback_time=100,
+                              io_loop=self.scheduler.loop)
         self._pc = pc
         self.scheduler.loop.add_callback(pc.start)
         self.scheduler.plugins.append(self)
@@ -66,7 +66,7 @@ class WorkStealing(SchedulerPlugin):
         self._pc.stop()
 
     def transition(self, key, start, finish, compute_start=None,
-            compute_stop=None, *args, **kwargs):
+                   compute_stop=None, *args, **kwargs):
         if finish == 'processing':
             self.put_key_in_stealable(key)
 
@@ -113,7 +113,7 @@ class WorkStealing(SchedulerPlugin):
         if (key not in self.scheduler.loose_restrictions
                 and (key in self.scheduler.host_restrictions or
                      key in self.scheduler.worker_restrictions) or
-            key in self.scheduler.resource_restrictions):
+                key in self.scheduler.resource_restrictions):
             return None, None  # don't steal
 
         if not self.scheduler.dependencies[key]:  # no dependencies fast path
@@ -147,12 +147,13 @@ class WorkStealing(SchedulerPlugin):
         try:
             if self.scheduler.validate:
                 if victim != self.scheduler.rprocessing[key]:
-                    import pdb; pdb.set_trace()
+                    import pdb
+                    pdb.set_trace()
 
             self.remove_key_from_stealable(key)
             logger.debug("Moved %s, %s: %2f -> %s: %2f", key,
-                    victim, self.scheduler.occupancy[victim],
-                    thief, self.scheduler.occupancy[thief])
+                         victim, self.scheduler.occupancy[victim],
+                         thief, self.scheduler.occupancy[thief])
 
             duration = self.scheduler.processing[victim].pop(key)
             self.scheduler.occupancy[victim] -= duration
@@ -181,7 +182,8 @@ class WorkStealing(SchedulerPlugin):
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
-                import pdb; pdb.set_trace()
+                import pdb
+                pdb.set_trace()
             raise
 
     def balance(self):
@@ -203,8 +205,8 @@ class WorkStealing(SchedulerPlugin):
             if not s.saturated:
                 saturated = topk(10, s.workers, key=occupancy.get)
                 saturated = [w for w in saturated
-                                if occupancy[w] > 0.2
-                               and len(s.processing[w]) > s.ncores[w]]
+                             if occupancy[w] > 0.2
+                             and len(s.processing[w]) > s.ncores[w]]
             elif len(s.saturated) < 20:
                 saturated = sorted(saturated, key=occupancy.get, reverse=True)
 
@@ -229,7 +231,7 @@ class WorkStealing(SchedulerPlugin):
                         duration = s.processing[sat][key]
 
                         if (occupancy[idl] + cost_multiplier * duration
-                          <= occupancy[sat] - duration / 2):
+                                <= occupancy[sat] - duration / 2):
                             self.move_task(key, sat, idl)
                             log.append((start, level, key, duration,
                                         sat, occupancy[sat],
@@ -257,7 +259,7 @@ class WorkStealing(SchedulerPlugin):
                         duration = s.processing[sat][key]
 
                         if (occupancy[idl] + cost_multiplier * duration
-                            <= occupancy[sat] - duration / 2):
+                                <= occupancy[sat] - duration / 2):
                             self.move_task(key, sat, idl)
                             log.append((start, level, key, duration,
                                         sat, occupancy[sat],

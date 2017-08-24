@@ -1,17 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
-import json
 import logging
 import os
 import socket
 
-from toolz import first
 from tornado import web, gen
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httpserver import HTTPServer
 
 from .. import metrics
-from ..utils import log_errors
 from ..comm.utils import get_tcp_server_address
 
 
@@ -51,6 +48,7 @@ def resource_collect(pid=None):
 
 class Resources(RequestHandler):
     """Served details about this process and machine"""
+
     def get(self):
         self.write(resource_collect())
 

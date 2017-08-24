@@ -4,7 +4,6 @@ import atexit
 from collections import Iterable
 from contextlib import contextmanager
 from datetime import timedelta
-import inspect
 import functools
 import logging
 import multiprocessing
@@ -199,6 +198,7 @@ def sync(loop, func, *args, **kwargs):
     Run coroutine in loop running in separate thread.
     """
     timeout = kwargs.pop('callback_timeout', None)
+
     def make_coro():
         coro = gen.maybe_future(func(*args, **kwargs))
         if timeout is None:
@@ -455,7 +455,8 @@ def log_errors(pdb=False):
         except TypeError:  # logger becomes None during process cleanup
             pass
         if pdb:
-            import pdb; pdb.set_trace()
+            import pdb
+            pdb.set_trace()
         raise
 
 
@@ -470,7 +471,7 @@ def silence_logging(level, root='distributed'):
     for name, logger in logging.root.manager.loggerDict.items():
         if (isinstance(logger, logging.Logger)
             and logger.name.startswith(root + '.')
-            and logger.level < level):
+                and logger.level < level):
             logger.setLevel(level)
 
 
@@ -523,8 +524,8 @@ def truncate_exception(e, n=10000):
                            str(e)[:n])
         except Exception:
             return Exception("Long error message",
-                              type(e),
-                              str(e)[:n])
+                             type(e),
+                             str(e)[:n])
     else:
         return e
 
@@ -738,7 +739,7 @@ def ensure_bytes(s):
     if hasattr(s, 'encode'):
         return s.encode()
     raise TypeError(
-            "Object %s is neither a bytes object nor has an encode method" % s)
+        "Object %s is neither a bytes object nor has an encode method" % s)
 
 
 def divide_n_among_bins(n, bins):
@@ -927,7 +928,7 @@ if PY2:
                 return frame.itemsize
             else:
                 return functools.reduce(operator.mul, frame.shape,
-                                                      frame.itemsize)
+                                        frame.itemsize)
         else:
             return frame.nbytes
 else:

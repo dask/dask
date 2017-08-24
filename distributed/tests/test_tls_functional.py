@@ -5,16 +5,11 @@ Most are taken from other test files and adapted.
 
 from __future__ import print_function, division, absolute_import
 
-from operator import add
-from time import sleep
 
-import pytest
-from toolz import take
 from tornado import gen
 
 from distributed import Nanny, worker_client, Queue
 from distributed.client import _wait
-from distributed.metrics import time
 from distributed.utils_test import (gen_cluster, tls_only_security,
                                     inc, double, slowinc, slowadd)
 

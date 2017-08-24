@@ -9,24 +9,28 @@ from .serialize import (
     to_serialize, register_serialization, register_serialization_lazy,
     serialize_bytes, deserialize_bytes, serialize_bytelist)
 
-from ..utils  import ignoring
+from ..utils import ignoring
 
 
 @partial(register_serialization_lazy, "numpy")
 def _register_numpy():
     from . import numpy
 
+
 @partial(register_serialization_lazy, "h5py")
 def _register_h5py():
     from . import h5py
+
 
 @partial(register_serialization_lazy, "netCDF4")
 def _register_netcdf4():
     from . import netcdf4
 
+
 @partial(register_serialization_lazy, "keras")
 def _register_keras():
     from . import keras
+
 
 @partial(register_serialization_lazy, "sparse")
 def _register_sparse():

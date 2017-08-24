@@ -12,7 +12,7 @@ import click
 
 from distributed import Scheduler
 from distributed.security import Security
-from distributed.utils import ignoring, open_port, get_ip_interface
+from distributed.utils import get_ip_interface, ignoring
 from distributed.http import HTTPScheduler
 from distributed.cli.utils import (check_python_3, install_signal_handlers,
                                    uri_from_host_port)
@@ -23,6 +23,7 @@ logger = logging.getLogger('distributed.scheduler')
 
 
 pem_file_option_type = click.Path(exists=True, resolve_path=True)
+
 
 @click.command()
 @click.option('--host', type=str, default='',

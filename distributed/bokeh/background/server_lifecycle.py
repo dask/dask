@@ -15,7 +15,7 @@ from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.diagnostics.eventstream import eventstream
 from distributed.diagnostics.progress_stream import (progress_stream,
-        task_stream_append)
+                                                     task_stream_append)
 from distributed.bokeh.worker_monitor import resource_append
 import distributed.bokeh
 from distributed.bokeh.utils import parse_args
@@ -56,7 +56,7 @@ def workers():
     """ Get data from JSON route, store in messages deques """
     try:
         response = yield client.fetch(
-                'http://%(host)s:%(http-port)d/workers.json' % options)
+            'http://%(host)s:%(http-port)d/workers.json' % options)
     except HTTPError:
         logger.warning("workers http route failed")
         return

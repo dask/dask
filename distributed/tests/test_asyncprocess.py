@@ -15,7 +15,7 @@ from tornado.locks import Event
 
 from distributed.metrics import time
 from distributed.process import AsyncProcess
-from distributed.utils import ignoring, mp_context
+from distributed.utils import mp_context
 from distributed.utils_test import gen_test, pristine_loop
 
 
@@ -23,11 +23,14 @@ def feed(in_q, out_q):
     obj = in_q.get(timeout=5)
     out_q.put(obj)
 
+
 def exit(q):
     sys.exit(q.get())
 
+
 def exit_now(rc=0):
     sys.exit(rc)
+
 
 def exit_with_signal(signum):
     signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -35,9 +38,11 @@ def exit_with_signal(signum):
         os.kill(os.getpid(), signum)
         sleep(0.01)
 
+
 def wait():
     while True:
         sleep(0.01)
+
 
 def threads_info(q):
     q.put(len(threading.enumerate()))

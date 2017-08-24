@@ -14,8 +14,8 @@ from distributed.client import _wait
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec
 from distributed.bokeh.worker import (BokehWorker, StateTable, CrossFilter,
-        CommunicatingStream, ExecutingTimeSeries, CommunicatingTimeSeries,
-        SystemMonitor, Counters)
+                                      CommunicatingStream, ExecutingTimeSeries, CommunicatingTimeSeries,
+                                      SystemMonitor, Counters)
 
 
 @pytest.mark.skipif(sys.version_info[0] == 2,
@@ -46,7 +46,7 @@ def test_services_kwargs(c, s, a, b):
 @gen_cluster(client=True)
 def test_basic(c, s, a, b):
     for component in [StateTable, ExecutingTimeSeries,
-            CommunicatingTimeSeries, CrossFilter, SystemMonitor]:
+                      CommunicatingTimeSeries, CrossFilter, SystemMonitor]:
 
         aa = component(a)
         bb = component(b)
@@ -56,7 +56,6 @@ def test_basic(c, s, a, b):
 
         def slowall(*args):
             sleep(1)
-            pass
 
         x = c.submit(slowall, xs, ys, 1, workers=a.address)
         y = c.submit(slowall, xs, ys, 2, workers=b.address)

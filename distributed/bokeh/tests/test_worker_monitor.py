@@ -3,10 +3,8 @@ from __future__ import print_function, division, absolute_import
 import pytest
 pytest.importorskip('bokeh')
 
-from tornado import gen
 
 from distributed.bokeh.worker_monitor import resource_append
-from distributed.utils_test import gen_cluster
 
 
 def test_resource_append():

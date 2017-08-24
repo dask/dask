@@ -10,6 +10,7 @@ def test_gzip():
     d = gzip_decompress(c)
     assert b == d
 
+
 def test_finalize():
     class C(object):
         pass

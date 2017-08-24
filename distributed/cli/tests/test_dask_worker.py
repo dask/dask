@@ -3,19 +3,16 @@ from __future__ import print_function, division, absolute_import
 import pytest
 pytest.importorskip('requests')
 
-import os
-import requests
-import signal
 import sys
 from time import sleep
 from toolz import first
 
-from distributed import Scheduler, Client
-from distributed.core import rpc
+from distributed import Client
 from distributed.metrics import time
-from distributed.utils import sync, ignoring, tmpfile
-from distributed.utils_test import (loop, popen, slow, terminate_process,
+from distributed.utils import sync, tmpfile
+from distributed.utils_test import (popen, slow, terminate_process,
                                     wait_for_port)
+from distributed.utils_test import loop  # flake8: noqa
 
 
 def test_nanny_worker_ports(loop):

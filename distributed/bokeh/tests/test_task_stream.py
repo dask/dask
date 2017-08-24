@@ -31,7 +31,6 @@ def test_TaskStreamPlugin(c, s, *workers):
     assert set(counts.values()) == {9, 1}
     assert len(set(rects['y'])) == 3
 
-
     rects = es.rectangles(2, 5, workers)
     assert all(len(L) == 3 for L in rects.values())
 

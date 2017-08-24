@@ -120,7 +120,7 @@ class Server(object):
 
         self._last_tick = time()
         pc = PeriodicCallback(self._measure_tick, config.get('tick-time', 20),
-                                         io_loop=self.io_loop)
+                              io_loop=self.io_loop)
         self.io_loop.add_callback(pc.start)
         self.periodic_callbacks['tick'] = pc
 
@@ -243,8 +243,8 @@ class Server(object):
                 except EnvironmentError as e:
                     if not shutting_down():
                         logger.debug("Lost connection to %r while reading message: %s."
-                                    " Last operation: %s",
-                                    address, e, op)
+                                     " Last operation: %s",
+                                     address, e, op)
                     break
                 except Exception as e:
                     logger.exception(e)
@@ -493,6 +493,7 @@ class PooledRPCCall(object):
     See Also:
         ConnectionPool
     """
+
     def __init__(self, addr, pool):
         self.addr = addr
         self.pool = pool
@@ -556,6 +557,7 @@ class ConnectionPool(object):
     deserialize: bool
         Whether or not to deserialize data by default or pass it through
     """
+
     def __init__(self, limit=512, deserialize=True, connection_args=None):
         self.open = 0          # Total number of open comms
         self.active = 0        # Number of comms currently in use
@@ -570,7 +572,7 @@ class ConnectionPool(object):
 
     def __str__(self):
         return "<ConnectionPool: open=%d, active=%d>" % (self.open,
-                self.active)
+                                                         self.active)
 
     __repr__ = __str__
 

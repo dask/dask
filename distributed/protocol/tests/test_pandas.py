@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-from zlib import crc32
 
 import pandas as pd
 import pandas.util.testing as tm
@@ -8,12 +7,8 @@ import pytest
 
 from dask.dataframe.utils import assert_eq
 
-from distributed.protocol import (serialize, deserialize, decompress, dumps,
-        loads, to_serialize)
-from distributed.protocol.utils import BIG_BYTES_SHARD_SIZE
-from distributed.utils import tmpfile
-from distributed.utils_test import slow
-from distributed.protocol.compression import maybe_compress
+from distributed.protocol import (serialize, deserialize, decompress)
+
 
 dfs = [
     pd.DataFrame({}),

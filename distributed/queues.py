@@ -30,6 +30,7 @@ class QueueExtension(object):
     *  queue_get
     *  queue_size
     """
+
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.queues = dict()
@@ -147,6 +148,7 @@ class Queue(object):
     --------
     Variable: shared variable between clients
     """
+
     def __init__(self, name=None, client=None, maxsize=0):
         self.client = client or _get_global_client()
         self.name = name or 'queue-' + uuid.uuid4().hex
