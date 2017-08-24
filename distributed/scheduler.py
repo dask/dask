@@ -309,9 +309,10 @@ class Scheduler(ServerNode):
 
         self.worker_handlers = {'task-finished': self.handle_task_finished,
                                 'task-erred': self.handle_task_erred,
-                                'release': self.handle_missing_data,
+                                'release': self.handle_release_data,
                                 'release-worker-data': self.release_worker_data,
                                 'add-keys': self.add_keys,
+                                'missing-data': self.handle_missing_data,
                                 'long-running': self.handle_long_running}
 
         self.client_handlers = {'update-graph': self.update_graph,
@@ -1108,8 +1109,10 @@ class Scheduler(ServerNode):
                 set(self.worker_comms)):
             raise ValueError("Workers not the same in all collections")
 
-        assert self.worker_bytes == {w: sum(self.nbytes[k] for k in keys)
-                                     for w, keys in self.has_what.items()}
+        a = self.worker_bytes
+        b = {w: sum(self.nbytes[k] for k in keys)
+             for w, keys in self.has_what.items()}
+        assert a == b, (a, b)
 
         for key, workers in self.who_has.items():
             for worker in workers:
@@ -1317,13 +1320,28 @@ class Scheduler(ServerNode):
         r = self.stimulus_task_erred(key=key, **msg)
         self.transitions(r)
 
-    def handle_missing_data(self, key=None, worker=None, client=None, **msg):
+    def handle_release_data(self, key=None, worker=None, client=None, **msg):
         if self.rprocessing.get(key) != worker:
             return
         r = self.stimulus_missing_data(key=key, ensure=False, **msg)
         self.transitions(r)
         if self.validate:
             assert all(self.who_has.values())
+
+    def handle_missing_data(self, key=None, errant_worker=None, **kwargs):
+        logger.debug("handle missing data key=%s worker=%s", key, errant_worker)
+        self.transition_log.append((key, 'missing', errant_worker, ()))
+        if key not in self.who_has:
+            return
+        if errant_worker in self.who_has[key]:
+            self.who_has[key].remove(errant_worker)
+            self.has_what[errant_worker].remove(key)
+            self.worker_bytes[errant_worker] -= self.nbytes.get(key, DEFAULT_DATA_SIZE)
+        if not self.who_has[key]:
+            if key in self.tasks:
+                self.transitions({key: 'released'})
+            else:
+                self.transitions({key: 'forgotten'})
 
     def release_worker_data(self, stream=None, keys=None, worker=None):
         hw = self.has_what[worker]
@@ -2130,7 +2148,7 @@ class Scheduler(ServerNode):
                 #            for dep in self.dependencies[key])
 
             if not all(dep in self.task_state for dep in
-                    self.dependencies[key]):
+                       self.dependencies[key]):
                 return {key: 'forgotten'}
 
             self.waiting[key] = set()

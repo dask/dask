@@ -318,7 +318,7 @@ def test_broken_worker_during_computation(c, s, a, b):
     with ignoring(CommClosedError, EnvironmentError):  # perhaps new worker can't be contacted yet
         yield c._run(os._exit, 1, workers=[n.worker_address])
 
-    result = yield c._gather(L)
+    result = yield c.gather(L)
     assert isinstance(result[0], int)
 
     yield n._close()

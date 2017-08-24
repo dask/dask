@@ -109,7 +109,7 @@ def test_stress_scatter_death(c, s, *workers):
     import random
     s.allowed_failures = 1000
     np = pytest.importorskip('numpy')
-    L = yield c._scatter([np.random.random(10000) for i in range(len(workers))])
+    L = yield c.scatter([np.random.random(10000) for i in range(len(workers))])
     yield c._replicate(L, n=2)
 
     adds = [delayed(slowadd, pure=True)(random.choice(L),
