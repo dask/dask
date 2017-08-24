@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import atexit
 from datetime import timedelta
 import logging
+import os
 import sys
 import threading
 import weakref
@@ -48,8 +49,21 @@ class AsyncProcess(object):
         self._state = _ProcessState()
         self._loop = loop or IOLoop.current(instance=False)
 
+        # _keep_child_alive is the write side of a pipe, which, when it is
+        # closed, causes the read side of the pipe to unblock for reading. Note
+        # that it is never closed directly. The write side is closed by the
+        # kernel when our process exits, or possibly by the garbage collector
+        # closing the file descriptor when the last reference to
+        # _keep_child_alive goes away. We can take advantage of this fact to
+        # monitor from the child and exit when the parent goes away unexpectedly
+        # (for example due to SIGKILL). This variable is otherwise unused except
+        # for the assignment here.
+        parent_alive_pipe, self._keep_child_alive = mp_context.Pipe(duplex=False)
+
         self._process = mp_context.Process(target=self._run, name=name,
-                                           args=(target, args, kwargs))
+                                           args=(target, args, kwargs,
+                                                 parent_alive_pipe,
+                                                 self._keep_child_alive))
         _dangling.add(self._process)
         self._name = self._process.name
         self._watch_q = PyQueue()
@@ -91,8 +105,47 @@ class AsyncProcess(object):
         self._exit_future.set_result(exitcode)
 
     @classmethod
-    def _run(cls, target, args, kwargs):
+    def _immediate_exit_when_closed(cls, parent_alive_pipe):
+        """
+        Immediately exit the process when parent_alive_pipe is closed.
+        """
+        def monitor_parent():
+            try:
+                # The parent_alive_pipe should be held open as long as the
+                # parent is alive and wants us to stay alive. Nothing writes to
+                # it, so the read will block indefinitely.
+                parent_alive_pipe.recv()
+            except EOFError:
+                # Parent process went away unexpectedly. Exit immediately. Could
+                # consider other exiting approches here. My initial preference
+                # is to unconditionally and immediately exit. If we're in this
+                # state it is possible that a "clean" process exit won't work
+                # anyway - if, for example, the system is getting bogged down
+                # due to the running out of memory, exiting sooner rather than
+                # later might be needed to restore normal system function.
+                # If this is in appropriate for your use case, please file a
+                # bug.
+                os._exit(-1)
+            else:
+                # If we get here, something odd is going on. File descriptors
+                # got crossed?
+                raise RuntimeError("unexpected state: should be unreachable")
+
+        t = threading.Thread(target=monitor_parent)
+        t.daemon = True
+        t.start()
+
+    @classmethod
+    def _run(cls, target, args, kwargs, parent_alive_pipe, _keep_child_alive):
+        # On Python 2 with the fork method, we inherit the _keep_child_alive fd,
+        # whether it is passed or not. Therefore, pass it unconditionally and
+        # close it here, so that there are no other references to the pipe lying
+        # around.
+        _keep_child_alive.close()
+
         # Child process entry point
+        cls._immediate_exit_when_closed(parent_alive_pipe)
+
         threading.current_thread().name = "MainThread"
         target(*args, **kwargs)
 

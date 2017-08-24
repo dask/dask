@@ -16,7 +16,7 @@ from tornado.locks import Event
 from distributed.metrics import time
 from distributed.process import AsyncProcess
 from distributed.utils import ignoring, mp_context
-from distributed.utils_test import gen_test
+from distributed.utils_test import gen_test, pristine_loop
 
 
 def feed(in_q, out_q):
@@ -255,7 +255,7 @@ def test_child_main_thread():
     yield proc.join()
     n_threads = q.get()
     main_name = q.get()
-    assert n_threads == 1
+    assert n_threads == 2
     assert main_name == "MainThread"
     q.close()
     q._reader.close()
@@ -297,3 +297,124 @@ def test_terminate_after_stop():
     yield proc.start()
     yield gen.sleep(0.1)
     yield proc.terminate()
+
+
+def _worker_process(worker_ready, child_pipe):
+    # child_pipe is the write-side of the children_alive pipe held by the
+    # test process. When this _worker_process exits, this file descriptor should
+    # have no references remaining anywhere and be closed by the kernel. The
+    # test will therefore be able to tell that this process has exited by
+    # reading children_alive.
+
+    # Signal to parent process that this process has started and made it this
+    # far. This should cause the parent to exit rapidly after this statement.
+    worker_ready.set()
+
+    # The parent exiting should cause this process to os._exit from a monitor
+    # thread. This sleep should never return.
+    shorter_timeout = 2.5 # timeout shorter than that in the spawning test.
+    sleep(shorter_timeout)
+
+    # Unreachable if functioning correctly.
+    child_pipe.send("child should have exited by now")
+
+
+def _parent_process(child_pipe):
+    """ Simulate starting an AsyncProcess and then dying.
+
+    The child_alive pipe is held open for as long as the child is alive, and can
+    be used to determine if it exited correctly. """
+    def parent_process_coroutine():
+        worker_ready = mp_context.Event()
+
+        worker = AsyncProcess(target=_worker_process,
+                              args=(worker_ready, child_pipe))
+
+        yield worker.start()
+
+        # Wait for the child process to have started.
+        worker_ready.wait()
+
+        # Exit immediately, without doing any process teardown (including atexit
+        # and 'finally:' blocks) as if by SIGKILL. This should cause
+        # worker_process to also exit.
+        os._exit(255)
+
+    with pristine_loop() as loop:
+        try:
+            loop.run_sync(gen.coroutine(parent_process_coroutine), timeout=10)
+        finally:
+            loop.stop()
+
+            raise RuntimeError("this should be unreachable due to os._exit")
+
+
+def test_asyncprocess_child_teardown_on_parent_exit():
+    """ Check that a child process started by AsyncProcess exits if its parent
+    exits.
+
+    The motivation is to ensure that if an AsyncProcess is created and the
+    creator process dies unexpectedly (e.g, via Out-of-memory SIGKILL), the
+    child process and resources held by it should not be leaked.
+
+    The child should monitor its parent and exit promptly if the parent exits.
+
+    [test process] -> [parent using AsyncProcess (dies)] -> [worker process]
+                 \                                          /
+                  \________ <--   child_pipe   <-- ________/
+    """
+    # When child_pipe is closed, the children_alive pipe unblocks.
+    children_alive, child_pipe = mp_context.Pipe(duplex=False)
+
+    try:
+        parent = mp_context.Process(target=_parent_process, args=(child_pipe,))
+        parent.start()
+
+        # Close our reference to child_pipe so that the child has the only one.
+        child_pipe.close()
+
+        # Wait for the parent to exit. By the time join returns, the child
+        # process is orphaned, and should be in the process of exiting by
+        # itself.
+        parent.join()
+
+        # By the time we reach here,the parent has exited. The parent only exits
+        # when the child is ready to enter the sleep, so all of the slow things
+        # (process startup, etc) should have happened by now, even on a busy
+        # system. A short timeout should therefore be appropriate.
+        short_timeout = 5.
+        # Poll is used to allow other tests to proceed after this one in case of
+        # test failure.
+        try:
+            readable = children_alive.poll(short_timeout)
+        except EnvironmentError:
+            # Windows can raise BrokenPipeError. EnvironmentError is caught for
+            # Python2/3 portability.
+            assert sys.platform.startswith('win'), "should only raise on windows"
+            # Broken pipe implies closed, which is readable.
+            readable = True
+
+        # If this assert fires, then something went wrong. Either the child
+        # should write into the pipe, or it should exit and the pipe should be
+        # closed (which makes it become readable).
+        assert readable
+
+        try:
+            # This won't block due to the above 'assert readable'.
+            result = children_alive.recv()
+        except EOFError:
+            pass # Test passes.
+        except EnvironmentError:
+            # Windows can raise BrokenPipeError. EnvironmentError is caught for
+            # Python2/3 portability.
+            assert sys.platform.startswith('win'), "should only raise on windows"
+            # Test passes.
+        else:
+            # Oops, children_alive read something. It should be closed. If
+            # something was read, it's a message from the child telling us they
+            # are still alive!
+            raise RuntimeError("unreachable: {}".format(result))
+
+    finally:
+        # Cleanup.
+        children_alive.close()
