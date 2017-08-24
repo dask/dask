@@ -433,9 +433,6 @@ def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False, split_every=None,
     elif ord == 1:
         return sum(abs(a), axis=axis, dtype=dtype, keepdims=keepdims,
                    split_every=split_every, out=out)
-    elif ord % 2 == 0:
-        return sum(a ** ord, axis=axis, dtype=dtype, keepdims=keepdims,
-                   split_every=split_every, out=out) ** (1. / ord)
     else:
         return sum(abs(a) ** ord, axis=axis, dtype=dtype, keepdims=keepdims,
                    split_every=split_every, out=out) ** (1. / ord)
