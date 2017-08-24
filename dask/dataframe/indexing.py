@@ -59,13 +59,13 @@ class _LocIndexer(object):
 
             if isinstance(iindexer, slice):
                 return self._loc_slice(iindexer, cindexer)
-            elif isinstance(iindexer, list):
+            elif isinstance(iindexer, (list, np.ndarray)):
                 return self._loc_list(iindexer, cindexer)
             else:
                 # element should raise KeyError
                 return self._loc_element(iindexer, cindexer)
         else:
-            if isinstance(iindexer, list):
+            if isinstance(iindexer, (list, np.ndarray)):
                 # applying map_pattition to each partitions
                 # results in duplicated NaN rows
                 msg = 'Cannot index with list against unknown division'
@@ -94,18 +94,22 @@ class _LocIndexer(object):
     def _loc_list(self, iindexer, cindexer):
         name = 'loc-%s' % tokenize(iindexer, self.obj)
         parts = self._get_partitions(iindexer)
-        dsk = {}
-
-        divisions = []
-        items = sorted(parts.items())
-        for i, (div, indexer) in enumerate(items):
-            dsk[name, i] = (methods.loc, (self._name, div),
-                            indexer, cindexer)
-            # append minimum value as division
-            divisions.append(sorted(indexer)[0])
-        # append maximum value of the last division
-        divisions.append(sorted(items[-1][1])[-1])
         meta = self._make_meta(iindexer, cindexer)
+
+        if len(iindexer):
+            dsk = {}
+            divisions = []
+            items = sorted(parts.items())
+            for i, (div, indexer) in enumerate(items):
+                dsk[name, i] = (methods.loc, (self._name, div),
+                                indexer, cindexer)
+                # append minimum value as division
+                divisions.append(sorted(indexer)[0])
+            # append maximum value of the last division
+            divisions.append(sorted(items[-1][1])[-1])
+        else:
+            divisions = [None, None]
+            dsk = {(name, 0): meta.head(0)}
         return new_dd_object(merge(self.obj.dask, dsk), name,
                              meta=meta, divisions=divisions)
 
@@ -124,7 +128,7 @@ class _LocIndexer(object):
                              meta=meta, divisions=[iindexer, iindexer])
 
     def _get_partitions(self, keys):
-        if isinstance(keys, list):
+        if isinstance(keys, (list, np.ndarray)):
             return _partitions_of_index_values(self.obj.divisions, keys)
         else:
             # element
