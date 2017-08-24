@@ -1195,9 +1195,11 @@ class Worker(WorkerBase):
 
                 if dep not in self.dep_state:
                     if self.task_state.get(dep) == 'memory':
-                        self.dep_state[dep] = 'memory'
+                        state = 'memory'
                     else:
-                        self.dep_state[dep] = 'waiting'
+                        state = 'waiting'
+                    self.dep_state[dep] = state
+                    self.log.append((dep, 'new-dep', state))
 
                 if self.dep_state[dep] != 'memory':
                     self.waiting_for_data[key].add(dep)
@@ -1654,7 +1656,8 @@ class Worker(WorkerBase):
                 if self.validate:
                     self.validate_state()
 
-                deps = tuple(deps)
+                deps = tuple(dep for dep in deps
+                                 if self.dep_state.get(dep) in ('waiting', 'flight'))
 
                 self.log.append(('request-dep', dep, worker, deps))
                 logger.debug("Request %d keys", len(deps))
