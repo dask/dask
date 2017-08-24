@@ -694,6 +694,19 @@ def replace_ellipsis(n, index):
 
 
 def normalize_slice(idx, dim):
+    """ Normalize slices to canonical form
+
+    Parameters
+    ----------
+    idx: slice or other index
+    dim: dimension length
+
+    Examples
+    --------
+    >>> normalize_slice(slice(0, 10, 1), 10)
+    slice(None, None, None)
+    """
+
     if isinstance(idx, slice):
         start, stop, step = idx.start, idx.stop, idx.step
         if start is not None:
