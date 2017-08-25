@@ -1,6 +1,43 @@
 Changelog
 =========
 
+0.15.2 / 2017-08-25
+-------------------
+
+Array
++++++
+
+-  Remove spurious keys from map_overlap graph (:pr:`2520`)
+-  where works with non-bool condition and scalar values (:pr:`2543`) (:pr:`2549`)
+-  Improve compress (:pr:`2541`) (:pr:`2545`) (:pr:`2555`)
+-  Add argwhere, _nonzero, and where(cond) (:pr:`2539`)
+-  Generalize vindex in dask.array to handle multi-dimensional indices (:pr:`2573`)
+-  Add choose method (:pr:`2584`)
+-  Split code into reorganized files (:pr:`2595`)
+-  Add linalg.norm (:pr:`2597`)
+-  Add diff, ediff1d (:pr:`2607`), (:pr:`2609`)
+-  Improve dtype inference and reflection (:pr:`2571`)
+
+Bag
++++
+
+-   Remove deprecated Bag behaviors (:pr:`2525`)
+
+DataFrame
++++++++++
+
+-  Support callables in assign (:pr:`2513`)
+-  better error messages for read_csv (:pr:`2522`)
+-  Add dd.to_timedelta (:pr:`2523`)
+-  Verify metadata in from_delayed (:pr:`2534`) (:pr:`2591`)
+-  Add DataFrame.isin (:pr:`2558`)
+-  Read_hdf supports iterables of files (:pr:`2547`)
+
+Core
+++++
+
+-  Remove bare ``except:`` blocks everywhere (:pr:`2590`)
+
 0.15.1 / 2017-07-08
 -------------------
 
