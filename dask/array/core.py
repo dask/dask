@@ -1193,13 +1193,13 @@ class Array(Base):
             raise NotImplementedError("Indexing with a dask Array")
 
         from .slicing import normalize_index
-        index = normalize_index(index, self.shape)
+        index2 = normalize_index(index, self.shape)
 
-        if all(isinstance(i, slice) and i == slice(None) for i in index):
+        if all(isinstance(i, slice) and i == slice(None) for i in index2):
             return self
 
-        out = 'getitem-' + tokenize(self, index)
-        dsk, chunks = slice_array(out, self.name, self.chunks, index)
+        out = 'getitem-' + tokenize(self, index2)
+        dsk, chunks = slice_array(out, self.name, self.chunks, index2)
 
         dsk2 = sharedict.merge(self.dask, (out, dsk))
 
