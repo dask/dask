@@ -208,13 +208,10 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     take - handle slicing with lists ("fancy" indexing)
     slice_slices_and_integers - handle slicing with slices and integers
     """
-    shape = tuple(map(sum, blockdims))
     assert all(isinstance(i, (slice, list, Integral, np.ndarray))
                for i in index)
     if not len(blockdims) == len(index):
         raise IndexError("Too many indices for array")
-
-    index2 = index
 
     # Do we have more than one list in the index?
     where_list = [i for i, ind in enumerate(index)
