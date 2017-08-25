@@ -2144,6 +2144,7 @@ class DataFrame(_Frame):
         self.dask = df.dask
         self._name = df._name
         self._meta = df._meta
+        self.divisions = df.divisions
 
     def __delitem__(self, key):
         result = self.drop([key], axis=1)

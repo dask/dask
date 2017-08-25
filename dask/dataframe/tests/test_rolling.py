@@ -111,14 +111,15 @@ def rolling_functions_tests(p, d):
                   dd.rolling_kurt(d, 3), check_less_precise=True)
         assert_eq(pd.rolling_quantile(p, 3, 0.5), dd.rolling_quantile(d, 3, 0.5))
         assert_eq(pd.rolling_apply(p, 3, mad), dd.rolling_apply(d, 3, mad))
-        assert_eq(pd.rolling_window(p, 3, win_type='boxcar'),
-                  dd.rolling_window(d, 3, win_type='boxcar'))
         # Test with edge-case window sizes
         assert_eq(pd.rolling_sum(p, 0), dd.rolling_sum(d, 0))
         assert_eq(pd.rolling_sum(p, 1), dd.rolling_sum(d, 1))
         # Test with kwargs
         assert_eq(pd.rolling_sum(p, 3, min_periods=3),
                   dd.rolling_sum(d, 3, min_periods=3))
+        pytest.importorskip("scipy")
+        assert_eq(pd.rolling_window(p, 3, win_type='boxcar'),
+                  dd.rolling_window(d, 3, win_type='boxcar'))
 
 
 def test_rolling_functions_series():
