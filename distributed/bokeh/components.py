@@ -486,7 +486,7 @@ class Processing(DashboardComponent):
         self.source = ColumnDataSource(data)
 
         x_range = Range1d(-1, 1)
-        fig = figure(title='Processing and Pending', tools='resize',
+        fig = figure(title='Processing and Pending', tools='',
                      x_range=x_range, id='bk-processing-stacks-plot', **kwargs)
         fig.quad(source=self.source, left=0, right='right', color=Spectral9[0],
                  top='top', bottom='bottom')
