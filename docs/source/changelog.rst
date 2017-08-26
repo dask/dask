@@ -1,6 +1,35 @@
 Changelog
 =========
 
+1.18.1 - August 25th, 2017
+--------------------------
+-  Clean up forgotten keys in fire-and-forget workloads (:pr:`1250`)
+-  Handle missing extensions (:pr:`1263`)
+-  Allow recreate_exception on persisted collections (:pr:`1253`)
+-  Add asynchronous= keyword to blocking client methods (:pr:`1272`)
+-  Restrict to horizontal panning in bokeh plots (:pr:`1274`)
+-  Rename client.shutdown to client.close (:pr:`1275`)
+-  Avoid blocking on event loop (:pr:`1270`)
+-  Avoid cloudpickle errors for Client.get_versions (:pr:`1279`)
+-  Yield on Tornado IOStream.write futures (:pr:`1289`)
+-  Assume async behavior if inside a sync statement (:pr:`1284`)
+-  Avoid error messages on closing (:pr:`1297`), (:pr:`1296`) (:pr:`1318`)
+  (:pr:`1319`)
+-  Add timeout= keyword to get_client (:pr:`1290`)
+-  Respect timeouts when restarting (:pr:`1304`)
+-  Clean file descriptor and memory leaks in tests (:pr:`1317`)
+-  Deprecate Executor (:pr:`1302`)
+-  Add timeout to ThreadPoolExecutor.shutdown (:pr:`1330`)
+-  Clean up AsyncProcess handling (:pr:`1324`)
+-  Allow unicode keys in Python 2 scheduler (:pr:`1328`)
+-  Avoid leaking stolen data (:pr:`1326`)
+-  Improve error handling on failed nanny starts (:pr:`1337`), (:pr:`1331`)
+-  Make Adaptive more flexible
+-  Support ``--contact-address`` and ``--listen-address`` in worker (:pr:`1278`)
+-  Remove old dworker, dscheduler executables (:pr:`1355`)
+-  Exit workers if nanny process fails (:pr:`1345`)
+-  Auto pep8 and flake (:pr:`1353`)
+
 1.18.0 - July 8th, 2017
 -----------------------
 -  Multi-threading safety (:pr:`1191`), (:pr:`1228`), (:pr:`1229`)
