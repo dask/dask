@@ -81,8 +81,11 @@ class BatchedSend(object):
             self.batch_count += 1
             self.next_deadline = self.loop.time() + self.interval
             try:
-                self.recent_message_log.append(payload)
                 nbytes = yield self.comm.write(payload)
+                if nbytes < 1e6:
+                    self.recent_message_log.append(payload)
+                else:
+                    self.recent_message_log.append('large-message')
                 self.byte_count += nbytes
             except CommClosedError as e:
                 logger.info("Batched Comm Closed: %s", e)
