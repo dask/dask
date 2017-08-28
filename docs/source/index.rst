@@ -264,16 +264,13 @@ often a better choice.  If you are a *core developer*, then you should start her
    cite.rst
    funding.rst
 
-Dask is part of the Blaze_ project supported and offered by
-`Continuum Analytics`_ and contributors under a `3-clause BSD license`_.
+Dask is supported by `Anaconda Inc`_ and develops under the BSD 3-clause license.
 
-.. _Blaze: http://blaze.pydata.org
-.. _`Continuum Analytics`: https://www.continuum.io
+.. _`Anaconda Inc`: https://www.anaconda.com
 .. _`3-clause BSD license`: https://github.com/dask/dask/blob/master/LICENSE.txt
 
 .. _`#dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub issue tracker`: https://github.com/dask/dask/issues
-.. _`blaze-dev@continuum.io`: https://groups.google.com/a/continuum.io/forum/#!forum/blaze-dev
 .. _`gitter chat room`: https://gitter.im/dask/dask
 .. _`xarray`: https://xray.readthedocs.io/en/stable/
 .. _`scikit-image`: https://scikit-image.org/docs/stable/
