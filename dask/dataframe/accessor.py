@@ -115,3 +115,12 @@ class StringAccessor(Accessor):
     @derived_from(pd.core.strings.StringMethods)
     def split(self, pat=None, n=-1):
         return self._function_map('split', pat=pat, n=n)
+
+    def __getitem__(self, index):
+        return self._series.map_partitions(str_get, index,
+                                           meta=self._series._meta)
+
+
+def str_get(series, index):
+    """ Implements series.str[index] """
+    return series.str[index]

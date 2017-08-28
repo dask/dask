@@ -2703,3 +2703,11 @@ def test_better_errors_object_reductions():
     with pytest.raises(ValueError) as err:
         ds.mean()
     assert str(err.value) == "`mean` not supported with object series"
+
+
+def test_string_accessor_getitem():
+    s = pd.Series(['cat', 'dog', 'mouse'])
+    ds = dd.from_pandas(s, npartitions=2)
+
+    assert_eq(s.str[:2], ds.str[:2])
+    assert_eq(s.str[1], ds.str[1])
