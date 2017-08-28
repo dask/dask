@@ -538,6 +538,7 @@ def test_T():
 
 def test_norm():
     a = np.arange(200, dtype='f8').reshape((20, 10))
+    a = a + (a.max() - a) * 1j
     b = from_array(a, chunks=(5, 5))
 
     assert_eq(b.vnorm(), np.linalg.norm(a))
