@@ -1339,7 +1339,7 @@ def test_datetime_accessor():
 
 
 def test_str_accessor():
-    df = pd.DataFrame({'x': ['a', 'b', 'c', 'D'], 'y': [1, 2, 3, 4]},
+    df = pd.DataFrame({'x': ['abc', 'bcd', 'cdef', 'DEFG'], 'y': [1, 2, 3, 4]},
                       index=['e', 'f', 'g', 'H'])
 
     a = dd.from_pandas(df, 2, sort=False)
@@ -1375,6 +1375,9 @@ def test_str_accessor():
     for regex in [True, False]:
         assert_eq(a.x.str.contains('a', regex=regex), df.x.str.contains('a', regex=regex))
         assert set(a.x.str.contains('a', regex=regex).dask) == set(a.x.str.contains('a', regex=regex).dask)
+
+    assert_eq(df.x.str[:2], df.x.str[:2])
+    assert_eq(a.x.str[1], a.x.str[1])
 
 
 def test_empty_max():
