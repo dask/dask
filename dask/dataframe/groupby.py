@@ -14,7 +14,7 @@ from .methods import drop_columns
 from .shuffle import shuffle
 from .utils import make_meta, insert_meta_param_description, raise_on_meta_error
 from ..base import tokenize
-from ..utils import derived_from, M, funcname
+from ..utils import derived_from, M, funcname, itemgetter
 
 
 # #############################################
@@ -440,7 +440,7 @@ def _build_agg_args_simple(result_column, func, input_column, impl_pair):
                      dict(column=input_column, func=chunk_impl))],
         aggregate_funcs=[(intermediate, _apply_func_to_column,
                          dict(column=intermediate, func=agg_impl))],
-        finalizer=(result_column, lambda x: x[intermediate], dict()),
+        finalizer=(result_column, itemgetter(intermediate), dict()),
     )
 
 
