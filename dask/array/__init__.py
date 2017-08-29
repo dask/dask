@@ -34,6 +34,7 @@ with ignoring(ImportError):
     from .reductions import nanprod, nancumprod, nancumsum
 from . import random, linalg, ghost, learn, fft
 from .wrap import ones, zeros, empty, full
+from .creation import ones_like, zeros_like, empty_like, full_like
 from .rechunk import rechunk
 from ..context import set_options
 from ..base import compute
