@@ -28,10 +28,6 @@ results in higher quality answers much more quickly.
 Paid support
 ------------
 
-Dask is an open source project that originated at `Continuum Analytics, Inc. <https://www.continuum.io/>`_.
-In addition to the previous options, Continuum offers paid training and support:  https://www.continuum.io/support
-
-Give us feedback
-----------------
-
-Help us make the documentation better! Please send feedback about the dask documentation to documentation@continuum.io.
+Dask is an open source project that originated at `Anaconda Inc.
+<https://www.anaconda.com/>`_.  In addition to the previous options, Anaconda
+offers paid training and support:  `<https://www.anaconda.com/support>`_
