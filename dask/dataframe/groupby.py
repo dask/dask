@@ -440,7 +440,7 @@ def _build_agg_args_simple(result_column, func, input_column, impl_pair):
                      dict(column=input_column, func=chunk_impl))],
         aggregate_funcs=[(intermediate, _apply_func_to_column,
                          dict(column=intermediate, func=agg_impl))],
-        finalizer=(result_column, operator.itemgetter(intermediate), dict()),
+        finalizer=(result_column, lambda x: x[intermediate], dict()),
     )
 
 
