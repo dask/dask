@@ -7,7 +7,8 @@ import pytest
 from tornado import gen
 
 from distributed import Worker
-from distributed.client import _wait
+from distributed.client import wait
+from distributed.utils import tokey
 from distributed.utils_test import (inc, gen_cluster,
                                     slowinc, slowadd)
 from distributed.utils_test import loop # flake8: noqa
@@ -43,10 +44,10 @@ def test_resource_submit(c, s, a, b):
     y = c.submit(inc, 2, resources={'B': 1})
     z = c.submit(inc, 3, resources={'C': 2})
 
-    yield _wait(x)
+    yield wait(x)
     assert x.key in a.data
 
-    yield _wait(y)
+    yield wait(y)
     assert y.key in b.data
 
     assert z.key in s.unrunnable
@@ -54,7 +55,7 @@ def test_resource_submit(c, s, a, b):
     d = Worker(s.ip, s.port, loop=s.loop, resources={'C': 10})
     yield d._start()
 
-    yield _wait(z)
+    yield wait(z)
     assert z.key in d.data
 
     yield d._close()
@@ -64,7 +65,7 @@ def test_resource_submit(c, s, a, b):
                                   ('127.0.0.1', 1, {'resources': {'B': 1}})])
 def test_submit_many_non_overlapping(c, s, a, b):
     futures = [c.submit(inc, i, resources={'A': 1}) for i in range(5)]
-    yield _wait(futures)
+    yield wait(futures)
 
     assert len(a.data) == 5
     assert len(b.data) == 0
@@ -77,7 +78,7 @@ def test_move(c, s, a, b):
 
     future = c.submit(inc, x, resources={'A': 1})
 
-    yield _wait(future)
+    yield wait(future)
     assert a.data[future.key] == 2
 
 
@@ -89,7 +90,7 @@ def test_dont_work_steal(c, s, a, b):
     futures = [c.submit(slowadd, x, i, resources={'A': 1}, delay=0.05)
                for i in range(10)]
 
-    yield _wait(futures)
+    yield wait(futures)
     assert all(f.key in a.data for f in futures)
 
 
@@ -97,7 +98,7 @@ def test_dont_work_steal(c, s, a, b):
                                   ('127.0.0.1', 1, {'resources': {'B': 1}})])
 def test_map(c, s, a, b):
     futures = c.map(inc, range(10), resources={'B': 1})
-    yield _wait(futures)
+    yield wait(futures)
     assert set(b.data) == {f.key for f in futures}
     assert not a.data
 
@@ -110,7 +111,7 @@ def test_persist(c, s, a, b):
 
     xx, yy = c.persist([x, y], resources={x: {'A': 1}, y: {'B': 1}})
 
-    yield _wait([xx, yy])
+    yield wait([xx, yy])
 
     assert x.key in a.data
     assert y.key in b.data
@@ -123,7 +124,7 @@ def test_compute(c, s, a, b):
     y = delayed(inc)(x)
 
     yy = c.compute(y, resources={x: {'A': 1}, y: {'B': 1}})
-    yield _wait(yy)
+    yield wait(yy)
 
     assert b.data
 
@@ -145,7 +146,7 @@ def test_persist_tuple(c, s, a, b):
 
     xx, yy = c.persist([x, y], resources={(x, y): {'A': 1}})
 
-    yield _wait([xx, yy])
+    yield wait([xx, yy])
 
     assert x.key in a.data
     assert y.key in a.data
@@ -162,7 +163,7 @@ def test_submit_many_non_overlapping(c, s, a, b):
         assert len(a.executing) <= 2
         assert len(b.executing) <= 1
 
-    yield _wait(futures)
+    yield wait(futures)
     assert a.total_resources == a.available_resources
     assert b.total_resources == b.available_resources
 
@@ -175,7 +176,7 @@ def test_minimum_resource(c, s, a):
         yield gen.sleep(0.01)
         assert len(a.executing) <= 1
 
-    yield _wait(futures)
+    yield wait(futures)
     assert a.total_resources == a.available_resources
 
 
@@ -185,7 +186,7 @@ def test_prefer_constrained(c, s, a):
     constrained = c.map(inc, range(10), resources={'A': 1})
 
     start = time()
-    yield _wait(constrained)
+    yield wait(constrained)
     end = time()
     assert end - start < 1
     assert s.processing[a.address]
@@ -198,7 +199,7 @@ def test_balance_resources(c, s, a, b):
     futures = c.map(slowinc, range(100), delay=0.1, workers=a.address)
     constrained = c.map(inc, range(2), resources={'A': 1})
 
-    yield _wait(constrained)
+    yield wait(constrained)
     assert any(f.key in a.data for f in constrained)  # share
     assert any(f.key in b.data for f in constrained)
 
@@ -218,3 +219,35 @@ def test_set_resources(c, s, a):
     assert a.total_resources['A'] == 3
     assert a.available_resources['A'] == 2
     assert s.worker_resources[a.address] == {'A': 3}
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1, {'resources': {'A': 1}}),
+                                  ('127.0.0.1', 1, {'resources': {'B': 1}})])
+def test_persist_collections(c, s, a, b):
+    da = pytest.importorskip('dask.array')
+    x = da.arange(10, chunks=(5,))
+    y = x.map_blocks(lambda x: x + 1)
+    z = y.map_blocks(lambda x: 2 * x)
+    w = z.sum()
+
+    ww, yy = c.persist([w, y], resources={tuple(y._keys()): {'A': 1}})
+
+    yield wait([ww, yy])
+
+    assert all(tokey(key) in a.data for key in y._keys())
+
+
+@pytest.mark.xfail(reason="Should protect resource keys from optimization")
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1, {'resources': {'A': 1}}),
+                                  ('127.0.0.1', 1, {'resources': {'B': 1}})])
+def test_dont_optimize_out(c, s, a, b):
+    da = pytest.importorskip('dask.array')
+    x = da.arange(10, chunks=(5,))
+    y = x.map_blocks(lambda x: x + 1)
+    z = y.map_blocks(lambda x: 2 * x)
+    w = z.sum()
+
+    yield c.compute(w, resources={tuple(y._keys()): {'A': 1}},)
+
+    for key in map(tokey, y._keys()):
+        assert 'executing' in str(a.story(key))

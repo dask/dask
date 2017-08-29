@@ -58,3 +58,28 @@ you are consistent across workers and clients.
 
 It's worth noting that Dask separately track number of cores and available
 memory as actual resources and uses these in normal scheduling operation.
+
+
+Resources with collections
+--------------------------
+
+You can also use resources with Dask collections, like arrays, dataframes, and
+delayed objects.  You can pass a dictionary mapping keys of the collection to
+resource requirements during compute or persist calls.
+
+.. code-block:: python
+
+    x = dd.read_csv(...)
+    y = x.map_partitions(func1)
+    z = y.map_parititons(func2)
+
+    z.compute(resources={tuple(y._keys()): {'GPU': 1})
+
+In some cases (such as the case above) the keys for ``y`` may be optimized away
+before execution.  You can avoid that either by requiring them as an explicit
+output, or by passing the ``optimize_graph=False`` keyword.
+
+
+.. code-block:: python
+
+    z.compute(resources={tuple(y._keys()): {'GPU': 1}, optimize_graph=False)
