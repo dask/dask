@@ -58,8 +58,8 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Dask.distributed'
-copyright = u'2016, Continuum Analytics'
-author = u'Continuum Analytics'
+copyright = u'2016, Anaconda, Inc.'
+author = u'Anaconda, Inc.'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

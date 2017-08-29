@@ -9,7 +9,7 @@ Conda
 
 To install the latest version of dask.distributed from the
 `conda-forge <https://conda-forge.github.io/>`_ repository using
-`conda <https://www.continuum.io/downloads>`_::
+`conda <https://www.anaconda.com/downloads>`_::
 
     conda install dask distributed -c conda-forge
 
