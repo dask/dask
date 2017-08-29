@@ -8,7 +8,8 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq, assert_dask_graph, assert_max_deps
+from dask.dataframe.utils import (assert_eq, assert_dask_graph,
+                                  assert_max_deps, PANDAS_VERSION)
 
 
 def groupby_internal_repr():
@@ -1116,6 +1117,9 @@ def test_groupby_agg_grouper_multiple(slice_):
     assert_eq(result, expected)
 
 
+@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
+                    reason="Need pandas groupby bug fix "
+                           "(pandas-dev/pandas#16859)")
 @pytest.mark.parametrize('agg_func', [
     'cumprod', 'cumcount', 'cumsum', 'var', 'sum', 'mean', 'count', 'size',
     'std', 'min', 'max',
@@ -1149,10 +1153,12 @@ def test_groupby_column_and_index_agg_funcs(agg_func):
 
     # Test aggregate strings
     if agg_func in {'sum', 'mean', 'var', 'size', 'std', 'count'}:
-        result = ddf_no_divs.groupby(['idx', 'a']).agg(agg_func)
-        assert_eq(expected, result)
+            result = ddf_no_divs.groupby(['idx', 'a']).agg(agg_func)
+            assert_eq(expected, result)
 
     # Column and then index
+
+    # Compute expected result
     expected = call(df.groupby(['a', 'idx']), agg_func)
     if agg_func in {'mean', 'var'}:
         expected = expected.astype(float)
@@ -1165,11 +1171,35 @@ def test_groupby_column_and_index_agg_funcs(agg_func):
 
     # Test aggregate strings
     if agg_func in {'sum', 'mean', 'var', 'size', 'std', 'count'}:
-        result = ddf_no_divs.groupby(['a', 'idx']).agg(agg_func)
+            result = ddf_no_divs.groupby(['a', 'idx']).agg(agg_func)
+            assert_eq(expected, result)
+
+    # Index only
+
+    # Compute expected result
+    expected = call(df.groupby('idx'), agg_func)
+    if agg_func in {'mean', 'var'}:
+        expected = expected.astype(float)
+
+    result = call(ddf.groupby('idx'), agg_func)
+    assert_eq(expected, result)
+
+    result = call(ddf_no_divs.groupby('idx'), agg_func)
+    assert_eq(expected, result)
+
+    # Test aggregate strings
+    if agg_func in {'sum', 'mean', 'var', 'size', 'std', 'count'}:
+        result = ddf_no_divs.groupby('idx').agg(agg_func)
         assert_eq(expected, result)
 
 
-def test_groupby_column_and_index_apply():
+@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
+                    reason="Need 0.21.0 for mixed column/index grouping")
+@pytest.mark.parametrize(
+    'group_args', [['idx', 'a'], ['a', 'idx'], ['idx'], 'idx'])
+@pytest.mark.parametrize(
+    'apply_func', [np.min, np.mean, lambda s: np.max(s) - np.mean(s)])
+def test_groupby_column_and_index_apply(group_args, apply_func):
     df = pd.DataFrame({'idx': [1, 1, 1, 2, 2, 2],
                        'a': [1, 2, 1, 2, 1, 2],
                        'b': np.arange(6)}
@@ -1178,18 +1208,28 @@ def test_groupby_column_and_index_apply():
     ddf = dd.from_pandas(df, npartitions=df.index.nunique())
     ddf_no_divs = dd.from_pandas(df, npartitions=df.index.nunique(), sort=False)
 
-    # Specify apply function
-    def func(frame):
-        frame['b'] = frame.b - frame.b.mean()
-        return frame
-
     # Expected result
-    expected = df.groupby(['idx', 'a']).apply(func)
+    expected = df.groupby(group_args).apply(apply_func)
 
     # Compute on dask DataFrame with divisions (no shuffling)
-    result = ddf.groupby(['idx', 'a']).apply(func)
-    assert_eq(expected, result)
+    result = ddf.groupby(group_args).apply(apply_func)
+    assert_eq(expected, result, check_divisions=False)
+
+    # Check that partitioning is preserved
+    assert ddf.divisions == result.divisions
+
+    # Check that no shuffling occurred.
+    # The groupby operation should add only 1 task per partition
+    assert len(result.dask) == (len(ddf.dask) + ddf.npartitions)
 
     # Compute on dask DataFrame without divisions (requires shuffling)
-    result = ddf_no_divs.groupby(['idx', 'a']).apply(func)
-    assert_eq(expected, result)
+    result = ddf_no_divs.groupby(group_args).apply(apply_func)
+    assert_eq(expected, result, check_divisions=False)
+
+    # Check that divisions were preserved (all None in this case)
+    assert ddf_no_divs.divisions == result.divisions
+
+    # Crude check to see if shuffling was performed.
+    # The groupby operation should add only more than 1 task per partition
+    assert len(result.dask) > (len(ddf_no_divs.dask) + ddf_no_divs.npartitions)
+

@@ -2747,20 +2747,25 @@ class DataFrame(_Frame):
 
     def _select_columns_or_index(self, columns_or_index):
         """
-        :param columns_or_index: Column name or list of column names
-        and/or the name of the DataFrame's index
-        :return: Dask DataFrame with columns corresponding to each column or
-        index level in columns_or_index.  If included, the column corresponding 
-        to the index level is named _index
+        Parameters
+        ----------
+        columns_or_index
+            Column or index name, or a list of these
+
+        Returns
+        -------
+        dd.DataFrame
+            Dask DataFrame with columns corresponding to each column or
+            index level in columns_or_index.  If included, the column
+            corresponding to the index level is named _index
         """
+
         # Ensure columns_or_index is a list
         columns_or_index = (columns_or_index
                             if isinstance(columns_or_index, list)
                             else [columns_or_index])
 
-        column_names = [n for n in columns_or_index
-                        if np.isscalar(n)
-                        and n in self.columns]
+        column_names = [n for n in columns_or_index if self._is_column_label(n)]
 
         selected_df = self[column_names]
         if self._contains_index_name(columns_or_index):
@@ -2769,16 +2774,31 @@ class DataFrame(_Frame):
 
         return selected_df
 
+    def _is_column_label(self, c):
+        """
+        Test whether a value matches the label of a column in the DataFrame
+        """
+        return (np.isscalar(c) or isinstance(c, tuple)) and c in self.columns
+
+    def _is_index_label(self, i):
+        """
+        Test whether a value matches the label of the index of the DataFrame
+        """
+        return (self.index.name is not None
+                and (np.isscalar(i) or isinstance(i, tuple))
+                and i == self.index.name)
+
     def _contains_index_name(self, columns_or_index):
+        """
+        Test whether the input contains the label of the index of the DataFrame
+        """
         if isinstance(columns_or_index, list):
-            return (self.index.name
-                    and any(n == self.index.name and n not in self.columns
-                            for n in columns_or_index
-                            if np.isscalar(n)))
+            return (any(self._is_index_label(n) and
+                        not self._is_column_label(n)
+                        for n in columns_or_index))
         else:
-            return (columns_or_index
-                    and np.isscalar(columns_or_index)
-                    and columns_or_index == self.index.name)
+            return (self._is_index_label(columns_or_index)
+                    and not self._is_column_label(columns_or_index))
 
 
 # bind operators

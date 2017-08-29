@@ -706,7 +706,12 @@ class _GroupBy(object):
                else self.obj.index
                for i in index})
 
-        cumlast = map_partitions(_apply_chunk, cumpart_ext, *index,
+        # Use pd.Grouper objects to specify that we are grouping by columns.
+        # Otherwise, pandas will throw an ambiguity warning if the
+        # DataFrame's index (self.obj.index) was included in the grouping
+        # specification (self.index). See pandas #14432
+        index_groupers = [pd.Grouper(key=ind) for ind in index]
+        cumlast = map_partitions(_apply_chunk, cumpart_ext, *index_groupers,
                                  columns=0 if columns is None else columns,
                                  chunk=M.last,
                                  meta=meta,
