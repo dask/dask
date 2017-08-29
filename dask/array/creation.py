@@ -12,8 +12,162 @@ from .. import sharedict
 from ..base import tokenize
 from ..utils import ignoring
 from . import chunk
-from .core import Array, normalize_chunks, stack, concatenate
-from .wrap import empty
+from .core import Array, asarray, normalize_chunks, stack, concatenate
+from .wrap import empty, ones, zeros, full
+
+
+def empty_like(a, dtype=None, chunks=None):
+    """
+    Return a new array with the same shape and type as a given array.
+
+    Parameters
+    ----------
+    a : array_like
+        The shape and data-type of `a` define these same attributes of the
+        returned array.
+    dtype : data-type, optional
+        Overrides the data type of the result.
+    chunks : sequence of ints
+        The number of samples on each block. Note that the last block will have
+        fewer samples if ``len(array) % chunks != 0``.
+
+    Returns
+    -------
+    out : ndarray
+        Array of uninitialized (arbitrary) data with the same
+        shape and type as `a`.
+
+    See Also
+    --------
+    ones_like : Return an array of ones with shape and type of input.
+    zeros_like : Return an array of zeros with shape and type of input.
+    empty : Return a new uninitialized array.
+    ones : Return a new array setting values to one.
+    zeros : Return a new array setting values to zero.
+
+    Notes
+    -----
+    This function does *not* initialize the returned array; to do that use
+    `zeros_like` or `ones_like` instead.  It may be marginally faster than
+    the functions that do set the array values.
+    """
+
+    a = asarray(a)
+    return empty(
+        a.shape, dtype=(dtype or a.dtype), chunks=(chunks or a.chunks)
+    )
+
+
+def ones_like(a, dtype=None, chunks=None):
+    """
+    Return an array of ones with the same shape and type as a given array.
+
+    Parameters
+    ----------
+    a : array_like
+        The shape and data-type of `a` define these same attributes of
+        the returned array.
+    dtype : data-type, optional
+        Overrides the data type of the result.
+    chunks : sequence of ints
+        The number of samples on each block. Note that the last block will have
+        fewer samples if ``len(array) % chunks != 0``.
+
+    Returns
+    -------
+    out : ndarray
+        Array of ones with the same shape and type as `a`.
+
+    See Also
+    --------
+    zeros_like : Return an array of zeros with shape and type of input.
+    empty_like : Return an empty array with shape and type of input.
+    zeros : Return a new array setting values to zero.
+    ones : Return a new array setting values to one.
+    empty : Return a new uninitialized array.
+    """
+
+    a = asarray(a)
+    return ones(
+        a.shape, dtype=(dtype or a.dtype), chunks=(chunks or a.chunks)
+    )
+
+
+def zeros_like(a, dtype=None, chunks=None):
+    """
+    Return an array of zeros with the same shape and type as a given array.
+
+    Parameters
+    ----------
+    a : array_like
+        The shape and data-type of `a` define these same attributes of
+        the returned array.
+    dtype : data-type, optional
+        Overrides the data type of the result.
+    chunks : sequence of ints
+        The number of samples on each block. Note that the last block will have
+        fewer samples if ``len(array) % chunks != 0``.
+
+    Returns
+    -------
+    out : ndarray
+        Array of zeros with the same shape and type as `a`.
+
+    See Also
+    --------
+    ones_like : Return an array of ones with shape and type of input.
+    empty_like : Return an empty array with shape and type of input.
+    zeros : Return a new array setting values to zero.
+    ones : Return a new array setting values to one.
+    empty : Return a new uninitialized array.
+    """
+
+    a = asarray(a)
+    return zeros(
+        a.shape, dtype=(dtype or a.dtype), chunks=(chunks or a.chunks)
+    )
+
+
+def full_like(a, fill_value, dtype=None, chunks=None):
+    """
+    Return a full array with the same shape and type as a given array.
+
+    Parameters
+    ----------
+    a : array_like
+        The shape and data-type of `a` define these same attributes of
+        the returned array.
+    fill_value : scalar
+        Fill value.
+    dtype : data-type, optional
+        Overrides the data type of the result.
+    chunks : sequence of ints
+        The number of samples on each block. Note that the last block will have
+        fewer samples if ``len(array) % chunks != 0``.
+
+    Returns
+    -------
+    out : ndarray
+        Array of `fill_value` with the same shape and type as `a`.
+
+    See Also
+    --------
+    zeros_like : Return an array of zeros with shape and type of input.
+    ones_like : Return an array of ones with shape and type of input.
+    empty_like : Return an empty array with shape and type of input.
+    zeros : Return a new array setting values to zero.
+    ones : Return a new array setting values to one.
+    empty : Return a new uninitialized array.
+    full : Fill a new array.
+    """
+
+    a = asarray(a)
+    return full(
+        a.shape,
+        fill_value,
+        dtype=(dtype or a.dtype),
+        chunks=(chunks or a.chunks)
+    )
 
 
 def linspace(start, stop, num=50, chunks=None, dtype=None):
