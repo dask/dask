@@ -2939,7 +2939,10 @@ class as_completed(object):
 
     @gen.coroutine
     def track_future(self, future):
-        yield _wait(future)
+        try:
+            yield _wait(future)
+        except CancelledError:
+            return
         if self.with_results:
             result = yield future._result()
         with self.lock:
