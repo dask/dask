@@ -2778,13 +2778,16 @@ class DataFrame(_Frame):
         """
         Test whether a value matches the label of a column in the DataFrame
         """
-        return (np.isscalar(c) or isinstance(c, tuple)) and c in self.columns
+        return (not isinstance(c, Base) and
+                (np.isscalar(c) or isinstance(c, tuple)) and
+                c in self.columns)
 
     def _is_index_label(self, i):
         """
         Test whether a value matches the label of the index of the DataFrame
         """
         return (self.index.name is not None and
+                not isinstance(i, Base) and
                 (np.isscalar(i) or isinstance(i, tuple)) and
                 i == self.index.name)
 
