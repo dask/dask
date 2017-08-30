@@ -59,6 +59,9 @@ if PY3:
             raise exc.with_traceback(tb)
         raise exc
 
+    def exec_(codestr, glbls):
+        exec(codestr, glbls)
+
 else:
     import __builtin__ as builtins
     from Queue import Queue, Empty
@@ -77,6 +80,10 @@ else:
     reduce = reduce
     operator_div = operator.div
     FileNotFoundError = IOError
+
+    eval(compile(("def exec_(codestr, glbls):\n"
+                  "    exec codestr in glbls\n"),
+                 "<_exec>", "exec"))
 
     def _make_reraise():
         _code = ("def reraise(exc, tb=None):"

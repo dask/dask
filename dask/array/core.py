@@ -33,7 +33,8 @@ from ..base import Base, tokenize, normalize_token
 from ..context import _globals
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
-                     SerializableLock, ensure_dict, package_of)
+                     SerializableLock, ensure_dict, package_of,
+                     partial_by_order, SubgraphCallable)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..delayed import to_task_dask
 from .. import threaded, core
@@ -400,7 +401,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     # {i: 0, j: 0}, {i: 0, j: 1}, ...
     keydicts = [dict(zip(out_indices, tup)) for tup in keytups]
 
-    # {j: [1, 2, 3], ...}  For j a dummy index of dimension 3
+    # {j: [0, 1, 2], ...}  For j a dummy index of dimension 3
     dummies = dict((i, list(range(dims[i]))) for i in dummy_indices)
 
     # Create argument lists
@@ -2024,6 +2025,8 @@ def unify_chunks(*args, **kwargs):
     ----------
     *args: sequence of Array, index pairs
         Sequence like (x, 'ij', y, 'jk', z, 'i')
+    rechunk : bool, optional
+        If True, returns rechunked arrays as well. Default is True.
 
     Examples
     --------
@@ -2053,16 +2056,22 @@ def unify_chunks(*args, **kwargs):
     """
     args = [asarray(a) if i % 2 == 0 else a for i, a in enumerate(args)]
     warn = kwargs.get('warn', True)
+    rechunk = kwargs.get('rechunk', True)
     arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
     arrays, inds = zip(*arginds)
     if all(ind == inds[0] for ind in inds) and all(a.chunks == arrays[0].chunks for a in arrays):
-        return dict(zip(inds[0], arrays[0].chunks)), arrays
+        chunks = dict(zip(inds[0], arrays[0].chunks))
+        return (chunks, arrays) if rechunk else chunks
 
     nameinds = [(a.name, i) for a, i in arginds]
     blockdim_dict = dict((a.name, a.chunks) for a, _ in arginds)
 
     chunkss = broadcast_dimensions(nameinds, blockdim_dict,
                                    consolidate=common_blockdim)
+
+    if not rechunk:
+        return chunkss
+
     max_parts = max(arg.npartitions for arg in args[::2])
     nparts = np.prod(list(map(len, chunkss.values())))
 
@@ -2082,7 +2091,155 @@ def unify_chunks(*args, **kwargs):
     return chunkss, arrays
 
 
+def extract_atop_tuple(x):
+    if isinstance(x, ATopArray):
+        return x._atop
+    elif isinstance(x, Array):
+        name = x.name
+        inds = tuple(range(x.ndim))
+        return ((name, inds), {}, {(name, inds)}, {name: x.copy()})
+    else:
+        raise TypeError("Unknown type")
+
+
 def atop(func, out_ind, *args, **kwargs):
+    args = [a if i % 2 else asanyarray(a) for i, a in enumerate(args)]
+    # [x, ij, y, jk] -> [(x, ij), (y, jk)]
+    arginds = list(partition(2, args))
+    # {i, j, k}
+    all_indices = set(concat(pluck(1, arginds)))
+    # indices present in args but not in out
+    dummy_indices = all_indices - set(out_ind)
+
+    # Can't delay with dummy indices
+    if dummy_indices or kwargs.get('concatenate', False):
+        return _atop(func, out_ind, *args, **kwargs)
+
+    out = kwargs.pop('name', None)      # May be None at this point
+    token = kwargs.pop('token', None)
+    dtype = kwargs.pop('dtype', None)
+    adjust_chunks = kwargs.pop('adjust_chunks', None)
+    new_axes = kwargs.get('new_axes', {})
+
+    if dtype is None:
+        raise ValueError("Must specify dtype of output array")
+
+    chunkss = unify_chunks(*args, rechunk=False)
+    for k, v in new_axes.items():
+        chunkss[k] = (v,)
+
+    chunks = [chunkss[i] for i in out_ind]
+    if adjust_chunks:
+        for i, ind in enumerate(out_ind):
+            if ind in adjust_chunks:
+                ac = adjust_chunks[ind]
+                if callable(ac):
+                    chunks[i] = tuple(map(ac, chunks[i]))
+                elif isinstance(ac, int):
+                    chunks[i] = (ac,) * len(chunks[i])
+                elif isinstance(ac, (tuple, list)):
+                    chunks[i] = tuple(ac)
+                else:
+                    raise NotImplementedError(
+                        "adjust_chunks values must be callable, int, or tuple")
+    chunks = tuple(chunks)
+
+    # Remap generic indices to tuples of ints for consistency
+    ind_map = {i: n for n, i in enumerate(out_ind)}
+    arginds2 = [(a, tuple(ind_map[i] for i in ind)) for a, ind in arginds]
+
+    argindsstr = list(concat([(a.name, ind) for a, ind in arginds2]))
+    # Finish up the name
+    if not out:
+        out = '%s-%s' % (token or funcname(func).strip('_'),
+                         tokenize(func, out_ind, argindsstr, dtype, **kwargs))
+
+    out_ind = tuple(ind_map[i] for i in out_ind)
+    atops = [(extract_atop_tuple(a), i) for a, i in arginds2]
+    atop_tuple = build_op(func, (out, out_ind), atops, kwargs)
+
+    return ATopArray(atop_tuple, chunks, dtype=dtype)
+
+
+def build_op(func, out, args, kwargs):
+    ops = {}
+    dsks = {}
+    args_set = set()
+    func_args = []
+
+    for arg, call_inds in args:
+        (a_name, a_inds), a_ops, a_args, a_dsks = arg
+
+        if call_inds != a_inds:
+            remap = dict(zip(a_inds, call_inds))
+            rename = {}
+
+            for (name, inds) in a_args.union(a_ops):
+                inds2 = tuple(remap[i] for i in inds)
+                if inds2 != inds:
+                    rename[(name, inds)] = (name, inds2)
+
+            if rename:
+                a_ops = {rename.get(k, k): _atop_subs(v, rename)
+                         for k, v in a_ops.items()}
+
+            args_set.update(rename.get(k, k) for k in a_args)
+            func_args.append((a_name, call_inds))
+        else:
+            args_set.update(a_args)
+            func_args.append((a_name, a_inds))
+
+        ops.update(a_ops)
+        dsks.update(a_dsks)
+
+    if kwargs:
+        ops[out] = (apply, func, func_args, kwargs)
+    else:
+        ops[out] = (func,) + tuple(func_args)
+
+    return (out, ops, args_set, dsks)
+
+
+def _atop_subs(task, lk):
+    if isinstance(task, tuple):
+        if len(task) == 2 and type(task[0]) is str and task in lk:
+            return lk[task]
+        return tuple(_atop_subs(i, lk) for i in task)
+    elif isinstance(task, list):
+        return [_atop_subs(i, lk) for i in task]
+    return task
+
+
+class ATopArray(Array):
+    def __new__(cls, atop_tuple, chunks, dtype):
+        self = super(Array, cls).__new__(cls)
+        self._atop = atop_tuple
+        self._chunks = chunks
+        self._cached_keys = None
+        self.dtype = np.dtype(dtype)
+
+        for plugin in _globals.get('array_plugins', ()):
+            result = plugin(self)
+            if result is not None:
+                self = result
+
+        return self
+
+    @property
+    def name(self):
+        return self._atop[0][0]
+
+    @property
+    def dask(self):
+        outind, ops, args, dsks = self._atop
+        args = sorted(args)
+        arginds = list(concat([(dsks[a[0]], a[1]) for a in args]))
+        func = SubgraphCallable(ops, outind, args, name='atop_call')
+        return _atop(func, outind[1], *arginds, name=self.name,
+                     dtype=self.dtype).dask
+
+
+def _atop(func, out_ind, *args, **kwargs):
     """ Tensor operation: Generalized inner and outer products
 
     A broad class of blocked algorithms and patterns can be specified with a
@@ -2390,20 +2547,6 @@ def asanyarray(array):
         array = np.asanyarray(array)
     return from_array(array, chunks=array.shape, getitem=getter_inline,
                       asarray=False)
-
-
-def partial_by_order(*args, **kwargs):
-    """
-
-    >>> partial_by_order(5, function=add, other=[(1, 10)])
-    15
-    """
-    function = kwargs.pop('function')
-    other = kwargs.pop('other')
-    args2 = list(args)
-    for i, arg in other:
-        args2.insert(i, arg)
-    return function(*args2, **kwargs)
 
 
 def is_scalar_for_elemwise(arg):

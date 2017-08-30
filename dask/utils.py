@@ -11,16 +11,17 @@ from errno import ENOENT
 from collections import Iterator
 from contextlib import contextmanager
 from importlib import import_module
+from itertools import count
 from numbers import Integral
 from threading import Lock
 import multiprocessing as mp
 import uuid
 from weakref import WeakValueDictionary
 
-from .compatibility import getargspec, PY3, unicode, urlsplit
-from .core import get_deps
+from .compatibility import getargspec, PY3, unicode, urlsplit, exec_, apply
+from .core import get_deps, _toposort, istask, ishashable, has_tasks
 from .context import _globals
-from .optimize import key_split    # noqa: F401
+from .optimize import key_split, fuse    # noqa: F401
 
 
 system_encoding = sys.getdefaultencoding()
@@ -899,3 +900,118 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
         inferred_storage_options.update(inherit_storage_options)
 
     return inferred_storage_options
+
+
+def partial_by_order(*args, **kwargs):
+    """
+
+    >>> partial_by_order(5, function=add, other=[(1, 10)])
+    15
+    """
+    function = kwargs.pop('function')
+    other = kwargs.pop('other')
+    args2 = list(args)
+    for i, arg in other:
+        args2.insert(i, arg)
+    return function(*args2, **kwargs)
+
+
+def _gencode(x, dsk, names, namespace, cache):
+    """A helper for generating code for SubgraphCallable."""
+    if istask(x):
+        func, args = x[0], x[1:]
+        kwargs = {}
+
+        if func is apply:
+            if len(args) == 3:
+                func, args, kwargs = args
+            else:
+                func, args = args
+
+        if func is partial_by_order:
+            if len(kwargs) > 2:
+                kwargs = kwargs.copy()
+                func, other = kwargs.pop('function'), kwargs.pop('other')
+            else:
+                func, other = kwargs['function'], kwargs['other']
+                kwargs = {}
+            args = list(args)
+            for i, arg in other:
+                args.insert(i, arg)
+
+        func = _gencode(func, dsk, names, namespace, cache)
+        args = [_gencode(a, dsk, names, namespace, cache) for a in args]
+        if kwargs:
+            args.append('**(%s)' % _gencode(kwargs, dsk, names, namespace, cache))
+        return "%s(%s)" % (func, ', '.join(args))
+    elif isinstance(x, list) and has_tasks(dsk, x):
+        args = [_gencode(a, dsk, names, namespace, cache) for a in x]
+        return "[%s]" % ', '.join(args)
+    elif ishashable(x):
+        if x in cache:
+            sym = cache[x]
+        else:
+            sym = cache[x] = next(names)
+            if x not in dsk:
+                namespace[sym] = x
+        return sym
+    else:
+        sym = next(names)
+        namespace[sym] = x
+        return sym
+
+
+class SubgraphCallable(object):
+    """Create a callable object from a dask graph.
+
+    Parameters
+    ----------
+    dsk : dict
+        A dask graph
+    outkey : hashable
+        The output key from the graph
+    inkeys : list
+        A list of keys to be used as arguments to the callable.
+    name : str, optional
+        The name to use for the function.
+    """
+    __slots__ = ('code', 'namespace', 'name', 'func')
+
+    def __init__(self, dsk, outkey, inkeys, name='subgraph_callable'):
+        dsk, _ = fuse(dsk, [outkey], ave_width=1000, rename_keys=False)
+        names = ('_%d' % i for i in count())
+        namespace = {}
+        cache = dict(zip(inkeys, names))
+
+        header = 'def %s(%s):' % (name, ', '.join(cache[a] for a in inkeys))
+        lines = [header]
+
+        for key in _toposort(dsk, outkey):
+            task = dsk[key]
+            lhs = _gencode(key, dsk, names, namespace, cache)
+            rhs = _gencode(task, dsk, names, namespace, cache)
+            lines.append('    %s = %s' % (lhs, rhs))
+
+        lines.append('    return %s' % cache[outkey])
+
+        self.code = '\n'.join(lines)
+        self.namespace = namespace
+        self.name = name
+        self.func = None
+
+    def __repr__(self):
+        return self.name
+
+    def __call__(self, *args):
+        if self.func is None:
+            n = self.namespace.copy()
+            exec_(self.code, n)
+            self.func = n[self.name]
+        return self.func(*args)
+
+    def __getstate__(self):
+        return (self.code, self.namespace, self.name)
+
+    def __setstate__(self, state):
+        self.code, self.namespace, self.name = state
+        self.func = None

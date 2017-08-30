@@ -4,12 +4,15 @@ import functools
 import numpy as np
 import pytest
 
+from dask.compatibility import apply
+from dask.local import get_sync
 from dask.sharedict import ShareDict
 from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
                         memory_repr, methodcaller, M, skip_doctest,
                         SerializableLock, funcname, ndeepmap, ensure_dict,
-                        package_of, extra_titles, asciitable)
-from dask.utils_test import inc
+                        package_of, extra_titles, asciitable, partial_by_order,
+                        SubgraphCallable)
+from dask.utils_test import inc, add
 
 
 def test_takes_multiple_arguments():
@@ -313,3 +316,51 @@ def test_package_of():
         pass
     else:
         assert package_of(numpy.memmap) is numpy
+
+
+def test_partial_by_order():
+    assert partial_by_order(5, function=add, other=[(1, 20)]) == 25
+
+
+def dontcall(x):
+    raise ValueError("shouldn't be called")
+
+
+def func_with_kwargs(a, b, c=2):
+    return a + b + c
+
+
+def test_SubgraphCallable():
+    non_hashable = [1, 2, 3]
+
+    dsk = {'a': (apply, add, ['in1', 2]),
+           'b': (apply, partial_by_order, ['in2'],
+                 {'function': func_with_kwargs, 'other': [(1, 20)], 'c': 4}),
+           'c': (apply, partial_by_order, ['in2', 'in1'],
+                 {'function': func_with_kwargs, 'other': [(1, 20)]}),
+           'd': (inc, 'a'),
+           'e': (add, 'c', 'd'),
+           'f': ['a', 2, 'b', (add, 'b', (sum, non_hashable))],
+           'g': (dontcall, 'in1'),
+           'h': (add, (sum, 'f'), (sum, ['a', 'b']))}
+
+    f = SubgraphCallable(dsk, 'h', ['in1', 'in2'], name='test')
+    assert f.name == 'test'
+    nglobals = len(f.namespace)
+    glbls = list(f.namespace.values())
+    assert dontcall not in glbls
+    assert apply not in glbls
+    assert partial_by_order not in glbls
+    assert non_hashable in glbls
+
+    dsk2 = dsk.copy()
+    dsk2.update({'in1': 1, 'in2': 2})
+    assert f(1, 2) == get_sync(dsk2, ['h'])[0]
+    assert f(1, 2) == f(1, 2)
+
+    assert len(f.namespace) == nglobals
+    f2 = pickle.loads(pickle.dumps(f))
+    assert f2(1, 2) == f(1, 2)
+    assert f2.name == f.name
+    assert f2.code == f.code
+    assert f2.namespace == f.namespace

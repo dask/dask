@@ -18,12 +18,10 @@ except ImportError:
 
 from .. import array as da
 from .. import core
-from ..array.core import partial_by_order
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method, PY3
-from ..utils import (random_state_data,
-                     pseudorandom, derived_from, funcname, memory_repr,
-                     put_lines, M, key_split)
+from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
+                     memory_repr, put_lines, M, key_split, partial_by_order)
 from ..base import Base, tokenize, normalize_token
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
