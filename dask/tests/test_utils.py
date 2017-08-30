@@ -8,7 +8,7 @@ from dask.sharedict import ShareDict
 from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
                         memory_repr, methodcaller, M, skip_doctest,
                         SerializableLock, funcname, ndeepmap, ensure_dict,
-                        package_of, extra_titles, asciitable)
+                        package_of, extra_titles, asciitable, itemgetter)
 from dask.utils_test import inc
 
 
@@ -313,3 +313,12 @@ def test_package_of():
         pass
     else:
         assert package_of(numpy.memmap) is numpy
+
+
+def test_itemgetter():
+    data = [1, 2, 3]
+    g = itemgetter(1)
+    assert g(data) == 2
+    g2 = pickle.loads(pickle.dumps(g))
+    assert g2(data) == 2
+    assert g2.index == 1

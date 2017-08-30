@@ -99,3 +99,15 @@ def test_to_hdf_scheduler_distributed(npartitions, loop):
     with cluster() as (s, [a, b]):
         with distributed.Client(s['address'], loop=loop):
             test_to_hdf_schedulers(None, npartitions)
+
+
+@gen_cluster(client=True)
+def test_serializable_groupby_agg(c, s, a, b):
+    pd = pytest.importorskip('pandas')
+    dd = pytest.importorskip('dask.dataframe')
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [1, 0, 1, 0]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    result = ddf.groupby('y').agg('count')
+
+    yield c.compute(result)

@@ -666,9 +666,12 @@ _method_cache = {}
 
 
 class methodcaller(object):
-    """Return a callable object that calls the given method on its operand.
+    """
+    Return a callable object that calls the given method on its operand.
 
-    Unlike the builtin `methodcaller`, this class is serializable"""
+    Unlike the builtin `operator.methodcaller`, instances of this class are
+    serializable
+    """
 
     __slots__ = ('method',)
     func = property(lambda self: self.method)  # For `funcname` to work
@@ -691,6 +694,25 @@ class methodcaller(object):
         return "<%s: %s>" % (self.__class__.__name__, self.method)
 
     __repr__ = __str__
+
+
+class itemgetter(object):
+    """
+    Return a callable object that gets an item from the operand
+
+    Unlike the builtin `operator.itemgetter`, instances of this class are
+    serializable
+    """
+    __slots__ = ('index',)
+
+    def __init__(self, index):
+        self.index = index
+
+    def __call__(self, x):
+        return x[self.index]
+
+    def __reduce__(self):
+        return (itemgetter, (self.index,))
 
 
 class MethodCache(object):
