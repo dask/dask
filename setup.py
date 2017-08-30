@@ -61,5 +61,6 @@ setup(name='distributed',
         dask-remote=distributed.cli.dask_remote:go
         dask-scheduler=distributed.cli.dask_scheduler:go
         dask-worker=distributed.cli.dask_worker:go
+        dask-mpi=distributed.cli.dask_mpi:go
       ''',
       zip_safe=False)

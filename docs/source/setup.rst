@@ -108,6 +108,32 @@ Note, the ``--scheduler-file`` option is *only* valuable if your scheduler and
 workers share a standard POSIX file system.
 
 
+Using MPI
+---------
+
+You can launch a Dask network using ``mpirun`` or ``mpiexec`` and the
+``dask-mpi`` command line executable.
+
+.. code-block:: bash
+
+   mpirun --np 4 dask-mpi --scheduler-file /path/to/scheduler.json
+
+.. code-block:: python
+
+   from dask.distributed import Client
+   client = Client(scheduler_file='/path/to/scheduler.json')
+
+This depends on the `mpi4py <http://mpi4py.readthedocs.io/>`_ library.  It only
+uses MPI to start the Dask cluster, and not for inter-node communication.  You
+may want to specify a high-bandwidth network interface like infiniband using
+the ``--interface`` keyword
+
+.. code-block:: bash
+
+   mpirun --np 4 dask-mpi --nthreads 1 \
+                          --interface ib0 \
+                          --scheduler-file /path/to/scheduler.json
+
 Using the Python API
 --------------------
 

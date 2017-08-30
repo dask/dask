@@ -906,7 +906,9 @@ def test_service_hosts_match_worker(s):
 def test_scheduler_file():
     with tmpfile() as fn:
         s = Scheduler(scheduler_file=fn)
-        s.start(8008)
+        s.start(8009)
         w = Worker(scheduler_file=fn)
         yield w._start()
         assert s.workers == {w.address}
+        yield w._close()
+        s.stop()
