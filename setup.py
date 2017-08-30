@@ -35,5 +35,7 @@ setup(name='dask',
       packages=packages + tests,
       long_description=(open('README.rst').read() if exists('README.rst')
                         else ''),
+      setup_requires=['pytest-runner'],
+      tests_require=['pytest'],
       extras_require=extras_require,
       zip_safe=False)
