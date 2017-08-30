@@ -930,13 +930,13 @@ class _GroupBy(object):
 
         # Validate self.index
         if (isinstance(self.index, list) and
-              any(isinstance(item, Series) for item in self.index)):
+                any(isinstance(item, Series) for item in self.index)):
             raise NotImplementedError("groupby-apply with a multiple Series "
                                       "is currently not supported")
 
         df = self.obj
-        should_shuffle = not (df.known_divisions
-                              and df._contains_index_name(self.index))
+        should_shuffle = not (df.known_divisions and
+                              df._contains_index_name(self.index))
 
         if should_shuffle:
             if isinstance(self.index, DataFrame):  # add index columns to dataframe

@@ -1232,4 +1232,3 @@ def test_groupby_column_and_index_apply(group_args, apply_func):
     # Crude check to see if shuffling was performed.
     # The groupby operation should add only more than 1 task per partition
     assert len(result.dask) > (len(ddf_no_divs.dask) + ddf_no_divs.npartitions)
-

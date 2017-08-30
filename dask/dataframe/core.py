@@ -2784,9 +2784,9 @@ class DataFrame(_Frame):
         """
         Test whether a value matches the label of the index of the DataFrame
         """
-        return (self.index.name is not None
-                and (np.isscalar(i) or isinstance(i, tuple))
-                and i == self.index.name)
+        return (self.index.name is not None and
+                (np.isscalar(i) or isinstance(i, tuple)) and
+                i == self.index.name)
 
     def _contains_index_name(self, columns_or_index):
         """
@@ -2797,8 +2797,8 @@ class DataFrame(_Frame):
                         not self._is_column_label(n)
                         for n in columns_or_index))
         else:
-            return (self._is_index_label(columns_or_index)
-                    and not self._is_column_label(columns_or_index))
+            return (self._is_index_label(columns_or_index) and
+                    not self._is_column_label(columns_or_index))
 
 
 # bind operators
