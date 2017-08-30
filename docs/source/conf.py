@@ -44,7 +44,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'dask'
-copyright = u'2015, Anaconda'
+copyright = u'2017, Anaconda'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -258,7 +258,7 @@ texinfo_documents = [
 epub_title = u'dask'
 epub_author = u'Dask Development Team'
 epub_publisher = u'Anaconda Inc'
-epub_copyright = u'2015, Anaconda Inc'
+epub_copyright = u'2017, Anaconda Inc'
 
 # The language of the text. It defaults to the language option
 # or en if the language is not set.
