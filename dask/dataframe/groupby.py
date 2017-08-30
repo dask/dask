@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import collections
 import itertools as it
-import operator
 import warnings
 
 import numpy as np

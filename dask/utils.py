@@ -704,6 +704,7 @@ class itemgetter(object):
     serializable
     """
     __slots__ = ('index',)
+
     def __init__(self, index):
         self.index = index
 
