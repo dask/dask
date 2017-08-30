@@ -9,6 +9,49 @@ import dask.array as da
 from dask.array.utils import assert_eq, same_keys
 
 
+@pytest.mark.parametrize(
+    "funcname", [
+        "empty_like",
+        "ones_like",
+        "zeros_like",
+        "full_like",
+    ]
+)
+@pytest.mark.parametrize(
+    "shape, chunks", [
+        ((10, 10), (4, 4)),
+    ]
+)
+@pytest.mark.parametrize(
+    "dtype", [
+        "i4",
+    ]
+)
+def test_arr_like(funcname, shape, dtype, chunks):
+    np_func = getattr(np, funcname)
+    da_func = getattr(da, funcname)
+
+    if funcname == "full_like":
+        old_np_func = np_func
+        old_da_func = da_func
+
+        np_func = lambda *a, **k: old_np_func(*a, fill_value=5, **k)
+        da_func = lambda *a, **k: old_da_func(*a, fill_value=5, **k)
+
+    dtype = np.dtype(dtype)
+
+    a = np.random.randint(0, 10, shape).astype(dtype)
+
+    np_r = np_func(a)
+    da_r = da_func(a, chunks=chunks)
+
+    assert np_r.shape == da_r.shape
+    assert np_r.dtype == da_r.dtype
+
+    if funcname != "empty_like":
+        assert (np_r == np.asarray(da_r)).all()
+
+
 def test_linspace():
     darr = da.linspace(6, 49, chunks=5)
     nparr = np.linspace(6, 49)

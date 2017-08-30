@@ -48,6 +48,7 @@ Top level user functions:
    dstack
    ediff1d
    empty
+   empty_like
    exp
    expm1
    eye
@@ -61,6 +62,7 @@ Top level user functions:
    frexp
    fromfunction
    full
+   full_like
    histogram
    hstack
    hypot
@@ -108,6 +110,7 @@ Top level user functions:
    nonzero
    notnull
    ones
+   ones_like
    percentile
    prod
    rad2deg
@@ -147,6 +150,7 @@ Top level user functions:
    vstack
    where
    zeros
+   zeros_like
 
 Fast Fourier Transforms
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -336,6 +340,7 @@ Other functions
 .. autofunction:: dstack
 .. autofunction:: ediff1d
 .. autofunction:: empty
+.. autofunction:: empty_like
 .. autofunction:: exp
 .. autofunction:: expm1
 .. autofunction:: eye
@@ -349,6 +354,7 @@ Other functions
 .. autofunction:: frexp
 .. autofunction:: fromfunction
 .. autofunction:: full
+.. autofunction:: full_like
 .. autofunction:: histogram
 .. autofunction:: hstack
 .. autofunction:: hypot
@@ -396,6 +402,7 @@ Other functions
 .. autofunction:: nonzero
 .. autofunction:: notnull
 .. autofunction:: ones
+.. autofunction:: ones_like
 .. autofunction:: percentile
 .. autofunction:: prod
 .. autofunction:: rad2deg
@@ -435,6 +442,7 @@ Other functions
 .. autofunction:: vstack
 .. autofunction:: where
 .. autofunction:: zeros
+.. autofunction:: zeros_like
 
 .. currentmodule:: dask.array.linalg
 
