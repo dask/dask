@@ -1042,7 +1042,7 @@ class Client(Node):
         if allow_other_workers and workers is None:
             raise ValueError("Only use allow_other_workers= if using workers=")
 
-        if isinstance(workers, six.string_types):
+        if isinstance(workers, six.string_types + (Number,)):
             workers = [workers]
         if workers is not None:
             restrictions = {skey: workers}
@@ -1160,7 +1160,7 @@ class Client(Node):
             dsk = {key: (apply, func, (tuple, list(args)), kwargs)
                    for key, args in zip(keys, zip(*iterables))}
 
-        if isinstance(workers, six.string_types):
+        if isinstance(workers, six.string_types + (Number,)):
             workers = [workers]
         if isinstance(workers, (list, set)):
             if workers and isinstance(first(workers), (list, set)):
@@ -1370,7 +1370,7 @@ class Client(Node):
     @gen.coroutine
     def _scatter(self, data, workers=None, broadcast=False, direct=None,
                  local_worker=None, timeout=3, hash=True):
-        if isinstance(workers, six.string_types):
+        if isinstance(workers, six.string_types + (Number,)):
             workers = [workers]
         if isinstance(data, dict) and not all(isinstance(k, (bytes, unicode))
                                               for k in data):
@@ -2659,7 +2659,7 @@ class Client(Node):
         --------
         Client.start_ipython_scheduler: start ipython on the scheduler
         """
-        if isinstance(workers, six.string_types):
+        if isinstance(workers, six.string_types + (Number,)):
             workers = [workers]
 
         (workers, info_dict) = sync(self.loop, self._start_ipython_workers, workers)

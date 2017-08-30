@@ -2555,17 +2555,24 @@ def test_worker_aliases():
     s.start(0)
     a = Worker(s.ip, s.port, name='alice')
     b = Worker(s.ip, s.port, name='bob')
-    yield [a._start(), b._start()]
+    w = Worker(s.ip, s.port, name=3)
+    yield [a._start(), b._start(), w._start()]
 
     c = yield Client((s.ip, s.port), asynchronous=True)
 
     L = c.map(inc, range(10), workers='alice')
+    future = yield c.scatter(123, workers=3)
     yield wait(L)
     assert len(a.data) == 10
     assert len(b.data) == 0
+    assert dict(w.data) == {future.key: 123}
+
+    for i, alias in enumerate([3, [3], 'alice']):
+        result = yield c.submit(lambda x: x + 1, i, workers=alias)
+        assert result == i + 1
 
     yield c.close()
-    yield [a._close(), b._close()]
+    yield [a._close(), b._close(), w._close()]
     yield s.close()
 
 
