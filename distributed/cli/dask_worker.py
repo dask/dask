@@ -1,12 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
 import atexit
-import json
 import logging
 import os
 import signal
 from sys import exit
-from time import sleep
 
 import click
 from distributed import Nanny, Worker
@@ -192,19 +190,7 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
             kwargs['service_ports'] = {'nanny': nanny_port}
         t = Worker
 
-    if scheduler_file:
-        while not os.path.exists(scheduler_file):
-            sleep(0.01)
-        for i in range(10):
-            try:
-                with open(scheduler_file) as f:
-                    cfg = json.load(f)
-                scheduler = cfg['address']
-                break
-            except (ValueError, KeyError):  # race with scheduler on file
-                sleep(0.01)
-
-    if not scheduler:
+    if not scheduler and not scheduler_file:
         raise ValueError("Need to provide scheduler address like\n"
                          "dask-worker SCHEDULER_ADDRESS:8786")
 
@@ -220,7 +206,7 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
         # Choose appropriate address for scheduler
         addr = None
 
-    nannies = [t(scheduler, ncores=nthreads,
+    nannies = [t(scheduler, scheduler_file=scheduler_file, ncores=nthreads,
                  services=services, name=name, loop=loop, resources=resources,
                  memory_limit=memory_limit, reconnect=reconnect,
                  local_dir=local_directory, death_timeout=death_timeout,

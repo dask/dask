@@ -16,7 +16,7 @@ from .core import rpc, RPCClosed, CommClosedError, coerce_to_address
 from .node import ServerNode
 from .process import AsyncProcess
 from .security import Security
-from .utils import get_ip, mp_context, silence_logging
+from .utils import get_ip, mp_context, silence_logging, json_load_robust
 from .worker import _ncores, run
 
 
@@ -32,13 +32,17 @@ class Nanny(ServerNode):
     process = None
     status = None
 
-    def __init__(self, scheduler_ip, scheduler_port=None, worker_port=0,
+    def __init__(self, scheduler_ip=None, scheduler_port=None,
+                 scheduler_file=None, worker_port=0,
                  ncores=None, loop=None, local_dir=None, services=None,
                  name=None, memory_limit='auto', reconnect=True,
                  validate=False, quiet=False, resources=None, silence_logs=None,
                  death_timeout=None, preload=(), security=None,
                  contact_address=None, listen_address=None, **kwargs):
-        if scheduler_port is None:
+        if scheduler_file:
+            cfg = json_load_robust(scheduler_file)
+            self.scheduler_addr = cfg['address']
+        elif scheduler_port is None:
             self.scheduler_addr = coerce_to_address(scheduler_ip)
         else:
             self.scheduler_addr = coerce_to_address((scheduler_ip, scheduler_port))

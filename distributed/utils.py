@@ -5,6 +5,7 @@ from collections import Iterable
 from contextlib import contextmanager
 from datetime import timedelta
 import functools
+import json
 import logging
 import multiprocessing
 import operator
@@ -12,6 +13,7 @@ import os
 import re
 import shutil
 import socket
+from time import sleep
 from importlib import import_module
 
 import six
@@ -947,3 +949,18 @@ def time_warn(duration, text):
     end = time()
     if end - start > duration:
         print('TIME WARNING', text, end - start)
+
+
+def json_load_robust(fn, load=json.load):
+    """ Reads a JSON file from disk that may be being written as we read """
+    while not os.path.exists(fn):
+        sleep(0.01)
+    for i in range(10):
+        try:
+            with open(fn) as f:
+                cfg = load(f)
+            if cfg:
+                return cfg
+        except (ValueError, KeyError):  # race with writing process
+            pass
+        sleep(0.1)

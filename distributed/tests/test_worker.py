@@ -241,10 +241,12 @@ def test_broadcast(s, a, b):
 def test_worker_with_port_zero():
     s = Scheduler()
     s.start(8007)
-    w = Worker(s.ip, s.port)
+    w = Worker(s.address)
     yield w._start()
     assert isinstance(w.port, int)
     assert w.port > 1024
+
+    yield w._close()
 
 
 @slow
@@ -898,3 +900,13 @@ def test_service_hosts_match_worker(s):
         sock = first(w.services['http']._sockets.values())
         assert sock.getsockname()[0] == host.split('://')[1]
         yield w._close()
+
+
+@gen_test()
+def test_scheduler_file():
+    with tmpfile() as fn:
+        s = Scheduler(scheduler_file=fn)
+        s.start(8008)
+        w = Worker(scheduler_file=fn)
+        yield w._start()
+        assert s.workers == {w.address}

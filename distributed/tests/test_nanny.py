@@ -11,12 +11,12 @@ import pytest
 from toolz import valmap, first
 from tornado import gen
 
-from distributed import Nanny, rpc
+from distributed import Nanny, rpc, Scheduler
 from distributed.core import CommClosedError
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
-from distributed.utils import ignoring
-from distributed.utils_test import gen_cluster, slow
+from distributed.utils import ignoring, tmpfile
+from distributed.utils_test import gen_cluster, gen_test, slow
 
 
 @gen_cluster(ncores=[])
@@ -209,3 +209,13 @@ def test_worker_uses_same_host_as_nanny(c, s):
         result = yield c.run(func)
         assert host in first(result.values())
         yield n._close()
+
+
+@gen_test()
+def test_scheduler_file():
+    with tmpfile() as fn:
+        s = Scheduler(scheduler_file=fn)
+        s.start(8008)
+        w = Nanny(scheduler_file=fn)
+        yield w._start()
+        assert s.workers == {w.worker_address}

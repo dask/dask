@@ -40,7 +40,7 @@ from .sizeof import safe_sizeof as sizeof
 from .threadpoolexecutor import ThreadPoolExecutor, secede as tpe_secede
 from .utils import (funcname, get_ip, has_arg, _maybe_complex, log_errors,
                     ignoring, validate_key, mp_context, import_file,
-                    silence_logging, thread_state)
+                    silence_logging, thread_state, json_load_robust)
 from .utils_comm import pack_data, gather_from_workers
 
 _ncores = mp_context.cpu_count()
@@ -70,13 +70,17 @@ _global_workers = []
 
 
 class WorkerBase(ServerNode):
-    def __init__(self, scheduler_ip, scheduler_port=None, ncores=None,
-                 loop=None, local_dir=None, services=None, service_ports=None,
-                 name=None, heartbeat_interval=5000, reconnect=True,
-                 memory_limit='auto', executor=None, resources=None,
-                 silence_logs=None, death_timeout=None, preload=(),
-                 security=None, contact_address=None, **kwargs):
-        if scheduler_port is None:
+    def __init__(self, scheduler_ip=None, scheduler_port=None,
+                 scheduler_file=None, ncores=None, loop=None, local_dir=None,
+                 services=None, service_ports=None, name=None,
+                 heartbeat_interval=5000, reconnect=True, memory_limit='auto',
+                 executor=None, resources=None, silence_logs=None,
+                 death_timeout=None, preload=(), security=None,
+                 contact_address=None, **kwargs):
+        if scheduler_file:
+            cfg = json_load_robust(scheduler_file)
+            scheduler_addr = cfg['address']
+        elif scheduler_port is None:
             scheduler_addr = coerce_to_address(scheduler_ip)
         else:
             scheduler_addr = coerce_to_address((scheduler_ip, scheduler_port))
