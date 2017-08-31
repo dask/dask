@@ -15,6 +15,9 @@ To start off, common groupby operations like
 var, count, nunique`` are all quite fast and efficient, even if partitions are
 not cleanly divided with known divisions.  This is the common case.
 
+Additionally, if divisions are known then applying an arbitrary function to
+groups is efficient when the grouping columns include the index.
+
 Joins are also quite fast when joining a Dask dataframe to a Pandas dataframe
 or when joining two Dask dataframes along their index.  No special
 considerations need to be made when operating in these common cases.
@@ -25,21 +28,23 @@ time.
 
 .. code-block:: python
 
-   >>> df.groupby(columns).known_reduction()    # Fast and common case
-   >>> dask_df.join(pandas_df, on=column)       # Fast and common case
+   >>> df.groupby(columns).known_reduction()             # Fast and common case
+   >>> df.groupby(columns_with_index).apply(user_fn)     # Fast and common case
+   >>> dask_df.join(pandas_df, on=column)                # Fast and common case
 
 Difficult Cases
 ---------------
 
-In some cases, such as when applying an arbitrary function to groups, when
-joining along non-index columns, or when explicitly setting an unsorted column
-to be the index, we may need to trigger a full dataset shuffle
+In some cases, such as when applying an arbitrary function to groups (when not
+grouping on index with known divisions), when joining along non-index columns,
+or when explicitly setting an unsorted column to be the index, we may need to
+trigger a full dataset shuffle
 
 .. code-block:: python
 
-   >>> df.groupby(columns).apply(arbitrary_user_function)  # Requires shuffle
-   >>> lhs.join(rhs, on=column)                            # Requires shuffle
-   >>> df.set_index(column)                                # Requires shuffle
+   >>> df.groupby(columns_no_index).apply(user_fn)   # Requires shuffle
+   >>> lhs.join(rhs, on=column)                      # Requires shuffle
+   >>> df.set_index(column)                          # Requires shuffle
 
 A shuffle is necessary when we need to re-sort our data along a new index.  For
 example if we have banking records that are organized by time and we now want

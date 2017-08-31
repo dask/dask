@@ -2745,6 +2745,64 @@ class DataFrame(_Frame):
         return self._HTML_FMT.format(data=data, name=key_split(self._name),
                                      task=len(self.dask))
 
+    def _select_columns_or_index(self, columns_or_index):
+        """
+        Parameters
+        ----------
+        columns_or_index
+            Column or index name, or a list of these
+
+        Returns
+        -------
+        dd.DataFrame
+            Dask DataFrame with columns corresponding to each column or
+            index level in columns_or_index.  If included, the column
+            corresponding to the index level is named _index
+        """
+
+        # Ensure columns_or_index is a list
+        columns_or_index = (columns_or_index
+                            if isinstance(columns_or_index, list)
+                            else [columns_or_index])
+
+        column_names = [n for n in columns_or_index if self._is_column_label(n)]
+
+        selected_df = self[column_names]
+        if self._contains_index_name(columns_or_index):
+            # Index name was included
+            selected_df = selected_df.assign(_index=self.index)
+
+        return selected_df
+
+    def _is_column_label(self, c):
+        """
+        Test whether a value matches the label of a column in the DataFrame
+        """
+        return (not isinstance(c, Base) and
+                (np.isscalar(c) or isinstance(c, tuple)) and
+                c in self.columns)
+
+    def _is_index_label(self, i):
+        """
+        Test whether a value matches the label of the index of the DataFrame
+        """
+        return (self.index.name is not None and
+                not isinstance(i, Base) and
+                (np.isscalar(i) or isinstance(i, tuple)) and
+                i == self.index.name)
+
+    def _contains_index_name(self, columns_or_index):
+        """
+        Test whether the input contains the label of the index of the DataFrame
+        """
+        if isinstance(columns_or_index, list):
+            return (any(self._is_index_label(n) and
+                        not self._is_column_label(n)
+                        for n in columns_or_index))
+        else:
+            return (self._is_index_label(columns_or_index) and
+                    not self._is_column_label(columns_or_index))
+
 
 # bind operators
 for op in [operator.abs, operator.add, operator.and_, operator_div,

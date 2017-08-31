@@ -609,7 +609,9 @@ def assert_divisions(ddf):
     if not ddf.known_divisions:
         return
 
-    index = lambda x: x if isinstance(x, pd.Index) else x.index
+    def index(x):
+        return (x if isinstance(x, pd.Index)
+                else x.index.get_level_values(0))
 
     results = get_sync(ddf.dask, ddf._keys())
     for i, df in enumerate(results[:-1]):
