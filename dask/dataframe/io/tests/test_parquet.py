@@ -208,6 +208,27 @@ def test_append():
         assert_eq(df, ddf3)
 
 
+def test_append_with_partition():
+    with tmpdir() as tmp:
+        df0 = pd.DataFrame({'lat': np.arange(0, 10), 'lon': np.arange(10, 20),
+                            'value': np.arange(100, 110)})
+        df0.index.name = 'index'
+        df1 = pd.DataFrame({'lat': np.arange(10, 20), 'lon': np.arange(10, 20),
+                            'value': np.arange(120, 130)})
+        df1.index.name = 'index'
+        dd_df0 = dd.from_pandas(df0, npartitions=1)
+        dd_df1 = dd.from_pandas(df1, npartitions=1)
+        dd.to_parquet(tmp, dd_df0, partition_on=['lon'])
+        dd.to_parquet(tmp, dd_df1, partition_on=['lon'], append=True,
+                      ignore_divisions=True)
+
+        out = dd.read_parquet(tmp).compute()
+    out['lon'] = out.lon.astype('int64')  # just to pass assert
+    # sort required since partitioning breaks index order
+    assert_eq(out.sort_values('value'), pd.concat([df0, df1])[out.columns],
+              check_index=False)
+
+
 def test_append_wo_index():
     """Test append with write_index=False."""
     with tmpdir() as tmp:
