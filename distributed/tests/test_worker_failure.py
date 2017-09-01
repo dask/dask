@@ -12,7 +12,7 @@ from tornado import gen
 from dask import delayed
 from distributed import Client, Nanny, wait
 from distributed.comm import CommClosedError
-from distributed.client import _wait
+from distributed.client import wait
 from distributed.metrics import time
 from distributed.utils import sync, ignoring
 from distributed.utils_test import (gen_cluster, cluster, inc, slow, div,
@@ -38,7 +38,7 @@ def test_submit_after_failed_worker_async(c, s, a, b):
         yield gen.sleep(0.1)
 
     L = c.map(inc, range(10))
-    yield _wait(L)
+    yield wait(L)
 
     s.loop.add_callback(n.kill)
     total = c.submit(sum, L)
@@ -51,7 +51,7 @@ def test_submit_after_failed_worker_async(c, s, a, b):
 @gen_cluster(client=True)
 def test_submit_after_failed_worker(c, s, a, b):
     L = c.map(inc, range(10))
-    yield _wait(L)
+    yield wait(L)
     yield a._close()
 
     total = c.submit(sum, L)
@@ -94,7 +94,7 @@ def test_gather_then_submit_after_failed_workers(loop):
 @gen_cluster(Worker=Nanny, timeout=60, client=True)
 def test_failed_worker_without_warning(c, s, a, b):
     L = c.map(inc, range(10))
-    yield _wait(L)
+    yield wait(L)
 
     original_pid = a.pid
     with ignoring(CommClosedError):
@@ -111,17 +111,17 @@ def test_failed_worker_without_warning(c, s, a, b):
         yield gen.sleep(0.01)
         assert time() - start < 10
 
-    yield _wait(L)
+    yield wait(L)
 
     L2 = c.map(inc, range(10, 20))
-    yield _wait(L2)
+    yield wait(L2)
     assert all(len(keys) > 0 for keys in s.has_what.values())
     ncores2 = s.ncores.copy()
 
     yield c._restart()
 
     L = c.map(inc, range(10))
-    yield _wait(L)
+    yield wait(L)
     assert all(len(keys) > 0 for keys in s.has_what.values())
 
     assert not (set(ncores2) & set(s.ncores))  # no overlap
@@ -160,7 +160,7 @@ def test_restart(c, s, a, b):
 def test_restart_cleared(c, s, a, b):
     x = 2 * delayed(1) + 1
     f = c.compute(x)
-    yield _wait([f])
+    yield wait([f])
     assert s.released
 
     yield c._restart()
@@ -352,7 +352,7 @@ def test_worker_who_has_clears_after_failed_connection(c, s, a, b):
         assert time() < start + 5
 
     futures = c.map(slowinc, range(20), delay=0.01)
-    yield _wait(futures)
+    yield wait(futures)
 
     result = yield c.submit(sum, futures, workers=a.address)
     for dep in set(a.dep_state) - set(a.task_state):

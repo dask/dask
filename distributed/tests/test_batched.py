@@ -188,7 +188,7 @@ def test_stress():
 
 
 @gen.coroutine
-def _run_traffic_jam(nsends, nbytes):
+def run_traffic_jam(nsends, nbytes):
     # This test eats `nsends * nbytes` bytes in RAM
     np = pytest.importorskip('numpy')
     from distributed.protocol import to_serialize
@@ -226,13 +226,13 @@ def _run_traffic_jam(nsends, nbytes):
 
 @gen_test()
 def test_sending_traffic_jam():
-    yield _run_traffic_jam(50, 300000)
+    yield run_traffic_jam(50, 300000)
 
 
 @slow
 @gen_test()
 def test_large_traffic_jam():
-    yield _run_traffic_jam(500, 1500000)
+    yield run_traffic_jam(500, 1500000)
 
 
 @gen_cluster(client=True)

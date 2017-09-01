@@ -19,7 +19,7 @@ from tornado.ioloop import TimeoutError
 from distributed import Nanny, Client, get_client, wait, default_client
 from distributed.compatibility import WINDOWS
 from distributed.core import rpc
-from distributed.client import _wait
+from distributed.client import wait
 from distributed.scheduler import Scheduler
 from distributed.metrics import time
 from distributed.worker import Worker, error_message, logger, TOTAL_MEMORY
@@ -89,7 +89,7 @@ def test_worker_bad_args(c, s, a, b):
             raise ValueError("I have no repr representation.")
 
     x = c.submit(NoReprObj, workers=a.address)
-    yield _wait(x)
+    yield wait(x)
     assert not a.executing
     assert a.data
 
@@ -120,7 +120,7 @@ def test_worker_bad_args(c, s, a, b):
     logger.setLevel(logging.DEBUG)
     logger.addHandler(hdlr)
     y = c.submit(bad_func, x, k=x, workers=b.address)
-    yield _wait(y)
+    yield wait(y)
 
     assert not b.executing
     assert y.status == 'error'
@@ -264,7 +264,7 @@ def test_worker_waits_for_center_to_come_up(loop):
 def test_worker_task_data(c, s, w):
     x = delayed(2)
     xx = c.persist(x)
-    yield _wait(xx)
+    yield wait(xx)
     assert w.data[x.key] == 2
 
 
@@ -307,15 +307,15 @@ def test_spill_to_disk(e, s):
     yield w._start()
 
     x = e.submit(np.random.randint, 0, 255, size=500, dtype='u1', key='x')
-    yield _wait(x)
+    yield wait(x)
     y = e.submit(np.random.randint, 0, 255, size=500, dtype='u1', key='y')
-    yield _wait(y)
+    yield wait(y)
 
     assert set(w.data) == {x.key, y.key}
     assert set(w.data.fast) == {x.key, y.key}
 
     z = e.submit(np.random.randint, 0, 255, size=500, dtype='u1', key='z')
-    yield _wait(z)
+    yield wait(z)
     assert set(w.data) == {x.key, y.key, z.key}
     assert set(w.data.fast) == {y.key, z.key}
     assert set(w.data.slow) == {x.key} or set(w.data.slow) == {x.key, y.key}
@@ -465,11 +465,11 @@ def test_types(c, s, a, b):
     assert not a.types
     assert not b.types
     x = c.submit(inc, 1, workers=a.address)
-    yield _wait(x)
+    yield wait(x)
     assert a.types[x.key] == int
 
     y = c.submit(inc, x, workers=b.address)
-    yield _wait(y)
+    yield wait(y)
     assert b.types == {x.key: int, y.key: int}
 
     yield c._cancel(y)
@@ -512,7 +512,7 @@ def test_clean_nbytes(c, s, a, b):
     total = delayed(sum)(L)
 
     future = c.compute(total)
-    yield _wait(future)
+    yield wait(future)
 
     yield gen.sleep(1)
     assert len(a.nbytes) + len(b.nbytes) == 1
@@ -529,7 +529,7 @@ def test_gather_many_small(c, s, a, *workers):
         return 10
 
     future = c.submit(f, *futures, workers=a.address)
-    yield _wait(future)
+    yield wait(future)
 
     types = list(pluck(0, a.log))
     req = [i for i, t in enumerate(types) if t == 'request-dep']
@@ -545,7 +545,7 @@ def test_multiple_transfers(c, s, w1, w2, w3):
     y = c.submit(inc, 2, workers=w2.address)
     z = c.submit(add, x, y, workers=w3.address)
 
-    yield _wait(z)
+    yield wait(z)
 
     r = w3.startstops[z.key]
     transfers = [t for t in r if t[0] == 'transfer']
@@ -556,10 +556,10 @@ def test_multiple_transfers(c, s, w1, w2, w3):
 def test_share_communication(c, s, w1, w2, w3):
     x = c.submit(mul, b'1', int(w3.target_message_size + 1), workers=w1.address)
     y = c.submit(mul, b'2', int(w3.target_message_size + 1), workers=w2.address)
-    yield _wait([x, y])
+    yield wait([x, y])
     yield c._replicate([x, y], workers=[w1.address, w2.address])
     z = c.submit(add, x, y, workers=w3.address)
-    yield _wait(z)
+    yield wait(z)
     assert len(w3.incoming_transfer_log) == 2
     assert w1.outgoing_transfer_log
     assert w2.outgoing_transfer_log
@@ -569,9 +569,9 @@ def test_share_communication(c, s, w1, w2, w3):
 def test_dont_overlap_communications_to_same_worker(c, s, a, b):
     x = c.submit(mul, b'1', int(b.target_message_size + 1), workers=a.address)
     y = c.submit(mul, b'2', int(b.target_message_size + 1), workers=a.address)
-    yield _wait([x, y])
+    yield wait([x, y])
     z = c.submit(add, x, y, workers=b.address)
-    yield _wait(z)
+    yield wait(z)
     assert len(b.incoming_transfer_log) == 2
     l1, l2 = b.incoming_transfer_log
 
@@ -588,7 +588,7 @@ def test_log_exception_on_failed_task(c, s, a, b):
             logger.addHandler(fh)
 
             future = c.submit(div, 1, 0)
-            yield _wait(future)
+            yield wait(future)
 
             yield gen.sleep(0.1)
             fh.flush()
@@ -610,7 +610,7 @@ def test_clean_up_dependencies(c, s, a, b):
     z = delayed(add)(xx, yy)
 
     zz = c.persist(z)
-    yield _wait(zz)
+    yield wait(zz)
 
     start = time()
     while len(a.data) + len(b.data) > 1:
@@ -624,7 +624,7 @@ def test_clean_up_dependencies(c, s, a, b):
 def test_hold_onto_dependents(c, s, a, b):
     x = c.submit(inc, 1, workers=a.address)
     y = c.submit(inc, x, workers=b.address)
-    yield _wait(y)
+    yield wait(y)
 
     assert x.key in b.data
 
@@ -686,7 +686,7 @@ def test_priorities_2(c, s, w):
         values.append(b1)
 
     futures = c.compute(values)
-    yield _wait(futures)
+    yield wait(futures)
 
     log = [t[0] for t in w.log
            if t[1] == 'executing'
@@ -742,7 +742,7 @@ def test_fail_write_to_disk(c, s, a, b):
             return int(100e9)
 
     future = c.submit(Bad)
-    yield _wait(future)
+    yield wait(future)
 
     assert future.status == 'error'
 
@@ -772,7 +772,7 @@ def test_fail_write_many_to_disk(c, s, a, b):
     futures = c.map(Bad, range(10))
     future = c.submit(lambda *args: 123, *futures)
 
-    yield _wait(future)
+    yield wait(future)
 
     with pytest.raises(Exception) as info:
         yield future

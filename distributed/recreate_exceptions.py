@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import logging
 from tornado import gen
-from .client import futures_of, _wait
+from .client import futures_of, wait
 from .utils import sync, tokey
 from .utils_comm import pack_data
 from .worker import _deserialize
@@ -124,7 +124,7 @@ class ReplayExceptionClient(object):
 
     @gen.coroutine
     def _recreate_error_locally(self, future):
-        yield _wait(future)
+        yield wait(future)
         out = yield self._get_futures_error(future)
         function, args, kwargs, deps = out
         futures = self.client._graph_to_futures({}, deps)

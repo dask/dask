@@ -7,7 +7,7 @@ from tornado import gen
 
 from dask.core import get_deps
 from distributed import Nanny
-from distributed.client import _wait
+from distributed.client import wait
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec, div
 from distributed.diagnostics.progress import (Progress, SchedulerPlugin,
@@ -111,7 +111,7 @@ def test_AllProgress(c, s, a, b):
     x, y, z = c.map(inc, [1, 2, 3])
     xx, yy, zz = c.map(dec, [x, y, z])
 
-    yield _wait([x, y, z])
+    yield wait([x, y, z])
     p = AllProgress(s)
     assert p.all['inc'] == {x.key, y.key, z.key}
     assert p.state['memory']['inc'] == {x.key, y.key, z.key}
@@ -121,7 +121,7 @@ def test_AllProgress(c, s, a, b):
     assert isinstance(p.nbytes['inc'], int)
     assert p.nbytes['inc'] > 0
 
-    yield _wait([xx, yy, zz])
+    yield wait([xx, yy, zz])
     assert p.all['dec'] == {xx.key, yy.key, zz.key}
     assert p.state['memory']['dec'] == {xx.key, yy.key, zz.key}
     assert p.state['released'] == {}
@@ -146,7 +146,7 @@ def test_AllProgress(c, s, a, b):
         assert p.nbytes['inc'] == 0
 
     xxx = c.submit(div, 1, 0)
-    yield _wait([xxx])
+    yield wait([xxx])
     assert p.state['erred'] == {'div': {xxx.key}}
 
     tkey = t.key
@@ -171,7 +171,7 @@ def test_AllProgress(c, s, a, b):
 
     yield gen.sleep(1)
 
-    yield _wait([future])
+    yield wait([future])
     assert p.state['memory'] == {'f': {future.key}}
 
     yield c._restart()
@@ -180,7 +180,7 @@ def test_AllProgress(c, s, a, b):
         assert not coll
 
     x = c.submit(div, 1, 2)
-    yield _wait([x])
+    yield wait([x])
     assert set(p.all) == {'div'}
     assert all(set(d) == {'div'} for d in p.state.values())
 
@@ -189,7 +189,7 @@ def test_AllProgress(c, s, a, b):
 def test_AllProgress_lost_key(c, s, a, b, timeout=None):
     p = AllProgress(s)
     futures = c.map(inc, range(5))
-    yield _wait(futures)
+    yield wait(futures)
     assert len(p.state['memory']['inc']) == 5
 
     yield a._close()
@@ -209,7 +209,7 @@ def test_GroupProgress(c, s, a, b):
     y = x + 1
     z = (x * y).sum().persist(optimize_graph=False)
 
-    yield _wait(z)
+    yield wait(z)
     assert 3 < len(fp.groups) < 10
     for k, g in fp.groups.items():
         assert fp.keys[k]

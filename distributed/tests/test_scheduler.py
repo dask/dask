@@ -16,7 +16,7 @@ import pytest
 from distributed import Nanny, Worker, Client, wait
 from distributed.core import connect, rpc, CommClosedError
 from distributed.scheduler import validate_state, Scheduler, BANDWIDTH
-from distributed.client import _wait
+from distributed.client import wait
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.worker import dumps_function, dumps_task
@@ -47,7 +47,7 @@ def test_respect_data_in_memory(c, s, a):
     x = delayed(inc)(1)
     y = delayed(inc)(x)
     f = c.persist(y)
-    yield _wait([f])
+    yield wait([f])
 
     assert s.released == {x.key}
     assert s.who_has == {y.key: {a.address}}
@@ -65,7 +65,7 @@ def test_recompute_released_results(c, s, a, b):
     y = delayed(inc)(x)
 
     yy = c.persist(y)
-    yield _wait(yy)
+    yield wait(yy)
 
     while x.key in s.who_has or x.key in a.data or x.key in b.data:  # let x go away
         yield gen.sleep(0.01)
@@ -84,7 +84,7 @@ def test_decide_worker_with_many_independent_leaves(c, s, a, b):
     ys = [delayed(inc)(x) for x in xs]
 
     y2s = c.persist(ys)
-    yield _wait(y2s)
+    yield wait(y2s)
 
     nhits = (sum(y.key in a.data for y in y2s[::2]) +
              sum(y.key in b.data for y in y2s[1::2]))
@@ -95,7 +95,7 @@ def test_decide_worker_with_many_independent_leaves(c, s, a, b):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)
 def test_decide_worker_with_restrictions(client, s, a, b, c):
     x = client.submit(inc, 1, workers=[a.address, b.address])
-    yield _wait(x)
+    yield wait(x)
     assert x.key in a.data or x.key in b.data
 
 
@@ -103,7 +103,7 @@ def test_decide_worker_with_restrictions(client, s, a, b, c):
 def test_move_data_over_break_restrictions(client, s, a, b, c):
     [x] = yield client._scatter([1], workers=b.address)
     y = client.submit(inc, x, workers=[a.address, b.address])
-    yield _wait(y)
+    yield wait(y)
     assert y.key in a.data or y.key in b.data
 
 
@@ -112,7 +112,7 @@ def test_balance_with_restrictions(client, s, a, b, c):
     [x], [y] = yield [client._scatter([[1, 2, 3]], workers=a.address),
                       client._scatter([1], workers=c.address)]
     z = client.submit(inc, 1, workers=[a.address, c.address])
-    yield _wait(z)
+    yield wait(z)
 
     assert s.who_has[z.key] == {c.address}
 
@@ -520,7 +520,7 @@ def test_ready_remove_worker(s, a, b):
 @gen_cluster(client=True, Worker=Nanny)
 def test_restart(c, s, a, b):
     futures = c.map(inc, range(20))
-    yield _wait(futures)
+    yield wait(futures)
 
     yield s.restart()
 
@@ -704,7 +704,7 @@ def test_transition_story(c, s, a, b):
     x = delayed(inc)(1)
     y = delayed(inc)(x)
     f = c.persist(y)
-    yield _wait([f])
+    yield wait([f])
 
     assert s.transition_log
 
@@ -797,13 +797,13 @@ def test_file_descriptors(c, s):
 
     x = da.random.normal(10, 1, size=(1000, 1000), chunks=(10, 10))
     x = c.persist(x)
-    yield _wait(x)
+    yield wait(x)
 
     num_fds_4 = proc.num_fds()
     assert num_fds_4 < num_fds_3 + N
 
     y = c.persist(x + x.T)
-    yield _wait(y)
+    yield wait(y)
 
     num_fds_5 = proc.num_fds()
     assert num_fds_5 < num_fds_4 + N
@@ -839,7 +839,7 @@ def test_learn_occupancy_2(c, s, a, b):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 30)
 def test_balance_many_workers(c, s, *workers):
     futures = c.map(slowinc, range(20), delay=0.2)
-    yield _wait(futures)
+    yield wait(futures)
     assert set(map(len, s.has_what.values())) == {0, 1}
 
 
@@ -847,7 +847,7 @@ def test_balance_many_workers(c, s, *workers):
 def test_balance_many_workers_2(c, s, *workers):
     s.extensions['stealing']._pc.callback_time = 100000000
     futures = c.map(slowinc, range(90), delay=0.2)
-    yield _wait(futures)
+    yield wait(futures)
     assert set(map(len, s.has_what.values())) == {3}
 
 
@@ -857,7 +857,7 @@ def test_learn_occupancy_multiple_workers(c, s, a, b):
     yield gen.sleep(0.05)
     futures = c.map(slowinc, range(100), delay=0.2)
 
-    yield _wait(x)
+    yield wait(x)
 
     assert not any(v == 0.5 for vv in s.processing.values() for v in vv)
     s.validate_state()
@@ -920,13 +920,13 @@ def test_worker_breaks_and_returns(c, s, a):
     for i in range(10):
         future = c.submit(slowinc, future, delay=0.1)
 
-    yield _wait(future)
+    yield wait(future)
 
     a.batched_stream.comm.close()
 
     yield gen.sleep(0.1)
     start = time()
-    yield _wait(future)
+    yield wait(future)
     end = time()
 
     assert end - start < 1
@@ -1080,7 +1080,7 @@ def test_fifo_submission(c, s, w):
         future = c.submit(slowinc, i, delay=0.1, key='inc-%02d' % i)
         futures.append(future)
         yield gen.sleep(0.01)
-    yield _wait(futures[-1])
+    yield wait(futures[-1])
     assert futures[10].status == 'finished'
 
 
@@ -1110,14 +1110,14 @@ def test_non_existent_worker(c, s):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)
 def test_correct_bad_time_estimate(c, s, *workers):
     future = c.submit(slowinc, 1, delay=0)
-    yield _wait(future)
+    yield wait(future)
 
     futures = [c.submit(slowinc, future, delay=0.1, pure=False)
                for i in range(20)]
 
     yield gen.sleep(0.5)
 
-    yield _wait(futures)
+    yield wait(futures)
 
     assert all(w.data for w in workers)
 

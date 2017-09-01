@@ -5,7 +5,7 @@ from copy import deepcopy
 import pytest
 from tornado import gen
 
-from distributed.client import _wait
+from distributed.client import wait
 from distributed.diagnostics.eventstream import EventStream, eventstream
 from distributed.metrics import time
 from distributed.utils_test import div, gen_cluster
@@ -21,8 +21,8 @@ def test_eventstream(c, s, *workers):
 
     futures = c.map(div, [1] * 10, range(10))
     total = c.submit(sum, futures[1:])
-    yield _wait(total)
-    yield _wait(futures)
+    yield wait(total)
+    yield wait(futures)
 
     assert len(es.buffer) == 11
 

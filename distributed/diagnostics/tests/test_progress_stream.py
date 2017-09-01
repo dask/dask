@@ -5,7 +5,7 @@ import pytest
 pytest.importorskip('bokeh')
 
 from dask import delayed
-from distributed.client import _wait
+from distributed.client import wait
 from distributed.diagnostics.progress_stream import (progress_quads,
                                                      nbytes_bar, progress_stream, _incrementing_index_cache)
 from distributed.utils_test import div, gen_cluster, inc
@@ -58,7 +58,7 @@ def test_progress_stream(c, s, a, b):
         x = delayed(inc)(x)
     future = c.compute(x)
 
-    yield _wait(futures + [future])
+    yield wait(futures + [future])
 
     comm = yield progress_stream(s.address, interval=0.010)
     msg = yield comm.read()

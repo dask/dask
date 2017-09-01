@@ -10,7 +10,7 @@ from toolz import first
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
 
-from distributed.client import _wait
+from distributed.client import wait
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec
 from distributed.bokeh.worker import (BokehWorker, StateTable, CrossFilter,
@@ -109,7 +109,7 @@ def test_CommunicatingStream(c, s, a, b):
     adds = c.map(add, xs, ys, workers=a.address)
     subs = c.map(sub, xs, ys, workers=b.address)
 
-    yield _wait([adds, subs])
+    yield wait([adds, subs])
 
     aa.update()
     bb.update()

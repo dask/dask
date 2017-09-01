@@ -6,7 +6,7 @@ pytest.importorskip('bokeh')
 from toolz import frequencies
 
 from distributed.utils_test import gen_cluster, div
-from distributed.client import _wait
+from distributed.client import wait
 from distributed.bokeh.task_stream import TaskStreamPlugin
 
 
@@ -17,7 +17,7 @@ def test_TaskStreamPlugin(c, s, *workers):
 
     futures = c.map(div, [1] * 10, range(10))
     total = c.submit(sum, futures[1:])
-    yield _wait(total)
+    yield wait(total)
 
     assert len(es.buffer) == 11
 

@@ -18,7 +18,7 @@ from distributed.utils_test import cluster, gen_cluster, make_hdfs
 from distributed.utils_test import loop # flake8: noqa
 from distributed.utils import get_ip
 from distributed import Client
-from distributed.client import _wait, Future
+from distributed.client import wait, Future
 
 hdfs3 = pytest.importorskip('hdfs3')
 _orig_cluster = cluster
@@ -228,7 +228,7 @@ def test_write_bytes(c, s, a, b):
 
         futures = c.compute(write_bytes(remote_data,
                                         'hdfs://%s/data/file.*.dat' % basedir))
-        yield _wait(futures)
+        yield wait(futures)
 
         yield futures[0]
 
@@ -239,7 +239,7 @@ def test_write_bytes(c, s, a, b):
         hdfs.mkdir('%s/data2/' % basedir)
         futures = c.compute(write_bytes(remote_data,
                                         'hdfs://%s/data2/' % basedir))
-        yield _wait(futures)
+        yield wait(futures)
 
         assert len(hdfs.ls('%s/data2/' % basedir)) == 3
 

@@ -4,7 +4,7 @@ import pytest
 
 from distributed.utils_test import gen_cluster, div
 from distributed.diagnostics.scheduler import tasks, workers
-from distributed.client import _wait
+from distributed.client import wait
 
 
 @gen_cluster(client=True)
@@ -17,7 +17,7 @@ def test_tasks(c, s, a, b):
     assert d['waiting'] == 0
 
     L = c.map(div, range(10), range(10))
-    yield _wait(L)
+    yield wait(L)
 
     d = tasks(s)
     assert d['failed'] == 1
@@ -40,7 +40,7 @@ def test_workers(c, s, a, b):
     # assert d[a.ip]['last-seen'] > 0
 
     L = c.map(div, range(10), range(10))
-    yield _wait(L)
+    yield wait(L)
 
     assert 0 <= d[a.ip]['cpu'] <= 100
     assert 0 <= d[a.ip]['memory']

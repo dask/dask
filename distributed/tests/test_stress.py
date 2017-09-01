@@ -18,7 +18,7 @@ from distributed.utils import All
 from distributed.utils_test import (gen_cluster, cluster, inc, slowinc,
                                     slowadd, slow, slowsum, bump_rlimit)
 from distributed.utils_test import loop # flake8: noqa
-from distributed.client import _wait
+from distributed.client import wait
 from tornado import gen
 
 
@@ -54,7 +54,7 @@ def test_cancel_stress(c, s, *workers):
     da = pytest.importorskip('dask.array')
     x = da.random.random((40, 40), chunks=(1, 1))
     x = c.persist(x)
-    yield _wait([x])
+    yield wait([x])
     y = (x.sum(axis=0) + x.sum(axis=1) + 1).std()
     for i in range(5):
         f = c.compute(y)
@@ -233,7 +233,7 @@ def test_close_connections(c, s, *workers):
         # for w in workers:
         #     print(w)
 
-    yield _wait(future)
+    yield wait(future)
 
 
 @pytest.mark.xfail(reason="IOStream._handle_write blocks on large write_buffer"
