@@ -1611,6 +1611,16 @@ def test_slice_with_floats():
         d[[1, 1.5]]
 
 
+def test_slice_with_uint():
+    d = da.ones((5,), chunks=(3,))
+    assert_eq(d[np.array([0])],
+              d[np.array([0], dtype='uint64')])
+    assert_eq(d[np.array([0])],
+              d[np.array([0], dtype='uint32')])
+    assert_eq(d[np.array([0])],
+              d[np.array([0], dtype='uint16')])
+
+
 def test_vindex_basic():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(3, 4))
