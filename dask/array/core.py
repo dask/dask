@@ -61,6 +61,20 @@ def register_sparse():
     tensordot_lookup.register(sparse.COO, sparse.tensordot)
 
 
+concatenate_lookup = Dispatch('concatenate')
+tensordot_lookup = Dispatch('tensordot')
+concatenate_lookup.register((object, np.ndarray), np.concatenate)
+tensordot_lookup.register((object, np.ndarray), np.tensordot)
+
+
+@tensordot_lookup.register_lazy('sparse')
+@concatenate_lookup.register_lazy('sparse')
+def register_sparse():
+    import sparse
+    concatenate_lookup.register(sparse.COO, sparse.concatenate)
+    tensordot_lookup.register(sparse.COO, sparse.tensordot)
+
+
 def getter(a, b, asarray=True, lock=None):
     if isinstance(b, tuple) and any(x is None for x in b):
         b2 = tuple(x for x in b if x is not None)
