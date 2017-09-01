@@ -55,18 +55,21 @@ following operations:
 
 1.  Simple slicing with slices, lists, and elements (for slicing, rechunking,
     reshaping, etc).
-2.  A ``concatenate`` function at the top level of the package (for assembling
-    results)
+2.  A ``concatenate`` function matching the interface of ``np.concatenate``.
+    This must be registered in ``dask.array.core.concatenate_lookup``.
 3.  All ufuncs must support the full ufunc interface, including ``dtype=`` and
     ``out=`` parameters (even if they don't function properly)
 4.  All reductions must support the full ``axis=`` and ``keepdims=`` keywords
     and behave like numpy in this respect
 5.  The array class should follow the ``__array_priority__`` protocol and be
     prepared to respond to other arrays of lower priority.
+6.  If ``dot`` support is desired, a ``tensordot`` function matching the
+    interface of ``np.tensordot`` should be registered in
+    ``dask.array.core.tensordot_lookup``.
 
-The implementation of other operations like tensordot, reshape, transpose, etc.
+The implementation of other operations like reshape, transpose, etc.
 should follow standard NumPy conventions regarding shape and dtype.  Not
-implementing these is fine; the parallel dask.array will err at runtime if
+implementing these is fine; the parallel ``dask.array`` will err at runtime if
 these operations are attempted.
 
 
