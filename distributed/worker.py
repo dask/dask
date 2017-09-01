@@ -1992,8 +1992,8 @@ class Worker(WorkerBase):
 
             start = time()
             data = {k: self.data[k] for k in self.dependencies[key]}
-            args2 = pack_data(args, data, key_types=str)
-            kwargs2 = pack_data(kwargs, data, key_types=str)
+            args2 = pack_data(args, data, key_types=(bytes, unicode))
+            kwargs2 = pack_data(kwargs, data, key_types=(bytes, unicode))
             stop = time()
             if stop - start > 0.005:
                 self.startstops[key].append(('disk-read', start, stop))

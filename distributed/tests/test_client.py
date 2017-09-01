@@ -4572,6 +4572,14 @@ def test_unicode_keys(c, s, a, b):
     assert key in a.data or key in b.data
     assert result == 2
 
+    future2 = c.submit(inc, future)
+    result2 = yield future2
+    assert result2 == 3
+
+    future3 = yield c.scatter({u'data-123': 123})
+    result3 = yield future3[u'data-123']
+    assert result3 == 123
+
 
 def test_use_synchronous_client_in_async_context(loop):
     with cluster() as (s, [a, b]):
