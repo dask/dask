@@ -62,7 +62,7 @@ def sanitize_index(ind):
             # If a 1-element tuple, unwrap the element
             nonzero = nonzero[0]
         return np.asanyarray(nonzero)
-    elif np.issubdtype(index_array.dtype, int):
+    elif np.issubdtype(index_array.dtype, np.integer):
         return index_array
     elif np.issubdtype(index_array.dtype, float):
         int_index = index_array.astype(np.intp)
