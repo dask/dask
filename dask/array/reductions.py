@@ -12,12 +12,27 @@ from . import chunk
 from .core import _concatenate2, Array, atop, lol_tuples, handle_out
 from .ufunc import sqrt
 from .wrap import zeros, ones
-from .numpy_compat import divide
+from .numpy_compat import ma_divide, divide as np_divide
 from ..compatibility import getargspec, builtins
 from ..base import tokenize
 from ..context import _globals
-from ..utils import ignoring, funcname
+from ..utils import ignoring, funcname, Dispatch
 from .. import sharedict
+
+
+# Generic functions to support chunks of different types
+empty_lookup = Dispatch('empty')
+empty_lookup.register((object, np.ndarray), np.empty)
+empty_lookup.register(np.ma.masked_array, np.ma.empty)
+divide_lookup = Dispatch('divide')
+divide_lookup.register((object, np.ndarray), np_divide)
+divide_lookup.register(np.ma.masked_array, ma_divide)
+
+
+def divide(a, b, dtype=None):
+    key = lambda x: getattr(x, '__array_priority__', float('-inf'))
+    f = divide_lookup.dispatch(type(builtins.max(a, b, key=key)))
+    return f(a, b, dtype=dtype)
 
 
 def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
@@ -225,8 +240,8 @@ def nannumel(x, **kwargs):
 def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     n = numel(x, dtype=dtype, **kwargs)
     total = sum(x, dtype=dtype, **kwargs)
-    result = np.empty(shape=n.shape,
-                      dtype=[('total', total.dtype), ('n', n.dtype)])
+    empty = empty_lookup.dispatch(type(n))
+    result = empty(n.shape, dtype=[('total', total.dtype), ('n', n.dtype)])
     result['n'] = n
     result['total'] = total
     return result
@@ -235,7 +250,8 @@ def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
 def mean_combine(pair, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     n = sum(pair['n'], **kwargs)
     total = sum(pair['total'], **kwargs)
-    result = np.empty(shape=n.shape, dtype=pair.dtype)
+    empty = empty_lookup.dispatch(type(n))
+    result = empty(n.shape, dtype=pair.dtype)
     result['n'] = n
     result['total'] = total
     return result
@@ -275,14 +291,15 @@ with ignoring(AttributeError):
 
 def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     total = sum(A, dtype=dtype, **kwargs)
-    n = numel(A, **kwargs).astype(np.int64, copy=False)
+    n = numel(A, **kwargs).astype(np.int64)
     u = total / n
-    M = np.empty(shape=n.shape + (order - 1,), dtype=dtype)
+    empty = empty_lookup.dispatch(type(n))
+    M = empty(n.shape + (order - 1,), dtype=dtype)
     for i in range(2, order + 1):
         M[..., i - 2] = sum((A - u)**i, dtype=dtype, **kwargs)
-    result = np.empty(shape=n.shape, dtype=[('total', total.dtype),
-                                            ('n', n.dtype),
-                                            ('M', M.dtype, (order - 1,))])
+    result = empty(n.shape, dtype=[('total', total.dtype),
+                                   ('n', n.dtype),
+                                   ('M', M.dtype, (order - 1,))])
     result['total'] = total
     result['n'] = n
     result['M'] = M
@@ -308,14 +325,15 @@ def moment_combine(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
     n = sum(ns, **kwargs)
     mu = divide(total, n, dtype=dtype)
     inner_term = divide(totals, ns, dtype=dtype) - mu
-    M = np.empty(shape=n.shape + (order - 1,), dtype=dtype)
+    empty = empty_lookup.dispatch(type(n))
+    M = empty(n.shape + (order - 1,), dtype=dtype)
 
     for o in range(2, order + 1):
         M[..., o - 2] = _moment_helper(Ms, ns, inner_term, o, sum, kwargs)
 
-    result = np.zeros(shape=n.shape, dtype=[('total', total.dtype),
-                                            ('n', n.dtype),
-                                            ('M', Ms.dtype, (order - 1,))])
+    result = empty(n.shape, dtype=[('total', total.dtype),
+                                   ('n', n.dtype),
+                                   ('M', Ms.dtype, (order - 1,))])
     result['total'] = total
     result['n'] = n
     result['M'] = M
@@ -470,6 +488,13 @@ def arg_chunk(func, argfunc, x, axis, offset_info):
         arg[:] = np.ravel_multi_index(total_ind, total_shape)
     else:
         arg += offset_info
+
+    if isinstance(vals, np.ma.masked_array):
+        if 'min' in argfunc.__name__:
+            fill_value = np.ma.minimum_fill_value(vals)
+        else:
+            fill_value = np.ma.maximum_fill_value(vals)
+        vals = np.ma.filled(vals, fill_value)
 
     result = np.empty(shape=vals.shape, dtype=[('vals', vals.dtype),
                                                ('arg', arg.dtype)])
@@ -653,14 +678,28 @@ def cumreduction(func, binop, ident, x, axis, dtype=None, out=None):
     return handle_out(out, result)
 
 
+def _cumsum_merge(a, b):
+    if isinstance(a, np.ma.masked_array) or isinstance(b, np.ma.masked_array):
+        values = np.ma.getdata(a) + np.ma.getdata(b)
+        return np.ma.masked_array(values, mask=np.ma.getmaskarray(b))
+    return a + b
+
+
+def _cumprod_merge(a, b):
+    if isinstance(a, np.ma.masked_array) or isinstance(b, np.ma.masked_array):
+        values = np.ma.getdata(a) * np.ma.getdata(b)
+        return np.ma.masked_array(values, mask=np.ma.getmaskarray(b))
+    return a * b
+
+
 @wraps(np.cumsum)
 def cumsum(x, axis, dtype=None, out=None):
-    return cumreduction(np.cumsum, operator.add, 0, x, axis, dtype, out=out)
+    return cumreduction(np.cumsum, _cumsum_merge, 0, x, axis, dtype, out=out)
 
 
 @wraps(np.cumprod)
 def cumprod(x, axis, dtype=None, out=None):
-    return cumreduction(np.cumprod, operator.mul, 1, x, axis, dtype, out=out)
+    return cumreduction(np.cumprod, _cumprod_merge, 1, x, axis, dtype, out=out)
 
 
 def validate_axis(ndim, axis):

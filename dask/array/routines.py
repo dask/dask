@@ -14,12 +14,11 @@ from toolz import concat, sliding_window, interleave
 from .. import sharedict
 from ..core import flatten
 from ..base import tokenize
-from ..utils import package_of
 from . import numpy_compat, chunk
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    concatenate, stack, atop, broadcast_shapes,
-                   is_scalar_for_elemwise, broadcast_to)
+                   is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
 
 
 @wraps(np.array)
@@ -111,8 +110,8 @@ ALPHABET = alphabet.upper()
 
 def _tensordot(a, b, axes):
     x = max([a, b], key=lambda x: x.__array_priority__)
-    module = package_of(type(x)) or np
-    x = module.tensordot(a, b, axes=axes)
+    tensordot = tensordot_lookup.dispatch(type(x))
+    x = tensordot(a, b, axes=axes)
     ind = [slice(None, None)] * x.ndim
     for a in sorted(axes[0]):
         ind.insert(a, None)

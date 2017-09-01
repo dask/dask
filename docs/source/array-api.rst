@@ -192,6 +192,28 @@ Linear Algebra
    linalg.svd_compressed
    linalg.tsqr
 
+Masked Arrays
+~~~~~~~~~~~~~
+
+.. autosummary::
+   ma.filled
+   ma.fix_invalid
+   ma.getdata
+   ma.getmaskarray
+   ma.masked_array
+   ma.masked_equal
+   ma.masked_greater
+   ma.masked_greater_equal
+   ma.masked_inside
+   ma.masked_invalid
+   ma.masked_less
+   ma.masked_less_equal
+   ma.masked_not_equal
+   ma.masked_outside
+   ma.masked_values
+   ma.masked_where
+   ma.set_fill_value
+
 Random
 ~~~~~~
 
@@ -457,6 +479,25 @@ Other functions
 .. autofunction:: svd
 .. autofunction:: svd_compressed
 .. autofunction:: tsqr
+
+.. currentmodule:: dask.array.ma
+.. autofunction:: filled
+.. autofunction:: fix_invalid
+.. autofunction:: getdata
+.. autofunction:: getmaskarray
+.. autofunction:: masked_array
+.. autofunction:: masked_equal
+.. autofunction:: masked_greater
+.. autofunction:: masked_greater_equal
+.. autofunction:: masked_inside
+.. autofunction:: masked_invalid
+.. autofunction:: masked_less
+.. autofunction:: masked_less_equal
+.. autofunction:: masked_not_equal
+.. autofunction:: masked_outside
+.. autofunction:: masked_values
+.. autofunction:: masked_where
+.. autofunction:: set_fill_value
 
 .. currentmodule:: dask.array.ghost
 

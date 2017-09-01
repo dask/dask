@@ -8,7 +8,7 @@ from dask.sharedict import ShareDict
 from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
                         memory_repr, methodcaller, M, skip_doctest,
                         SerializableLock, funcname, ndeepmap, ensure_dict,
-                        package_of, extra_titles, asciitable, itemgetter)
+                        extra_titles, asciitable, itemgetter)
 from dask.utils_test import inc
 
 
@@ -302,17 +302,6 @@ def test_ensure_dict():
     md['x'] = 1
     assert type(ensure_dict(md)) is dict
     assert ensure_dict(md) == d
-
-
-def test_package_of():
-    import math
-    assert package_of(math.sin) is math
-    try:
-        import numpy
-    except ImportError:
-        pass
-    else:
-        assert package_of(numpy.memmap) is numpy
 
 
 def test_itemgetter():
