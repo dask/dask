@@ -187,7 +187,6 @@ fmod = ufunc(np.fmod)
 floor = ufunc(np.floor)
 ceil = ufunc(np.ceil)
 trunc = ufunc(np.trunc)
-divide = ufunc(np.divide)
 
 # more math routines, from this page:
 # http://docs.scipy.org/doc/numpy/reference/routines.math.html

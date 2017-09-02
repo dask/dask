@@ -115,7 +115,6 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
 
     prefix = 'get-categories-agg-' + token
     k = df.npartitions
-    b = a
     depth = 0
     while k > split_every:
         b = prefix + str(depth)
