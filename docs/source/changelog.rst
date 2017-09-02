@@ -1,6 +1,13 @@
 Changelog
 =========
 
+1.18.2 - September 2nd, 2017
+----------------------------
+-  Silently pass on cancelled futures in as_completed (:pr:`1366`)
+-  Fix unicode keys error in Python 2 (:pr:`1370`)
+-  Support numeric worker names
+-  Add dask-mpi executable (:pr:`1367`)
+
 1.18.1 - August 25th, 2017
 --------------------------
 -  Clean up forgotten keys in fire-and-forget workloads (:pr:`1250`)
