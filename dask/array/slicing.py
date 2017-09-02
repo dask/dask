@@ -6,9 +6,9 @@ from numbers import Integral, Number
 from operator import add, getitem, itemgetter
 
 import numpy as np
-from toolz import accumulate, memoize, merge, pluck
+from toolz import accumulate, memoize, merge, pluck, concat
 
-from ..base import tokenize
+from ..base import tokenize, Base
 
 colon = slice(None, None, None)
 
@@ -55,6 +55,8 @@ def sanitize_index(ind):
                      _sanitize_index_element(ind.step))
     elif isinstance(ind, Number):
         return _sanitize_index_element(ind)
+    elif isinstance(ind, Base):
+        return ind
     index_array = np.asanyarray(ind)
     if index_array.dtype == bool:
         nonzero = np.nonzero(index_array)
@@ -803,6 +805,8 @@ def check_index(ind, dimension):
             raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
         return
+    elif isinstance(ind, Base):
+        return
     elif ind is None:
         return
 
@@ -813,3 +817,34 @@ def check_index(ind, dimension):
     elif ind < -dimension:
         msg = "Negative index is not greater than negative dimension %d <= -%d"
         raise IndexError(msg % (ind, dimension))
+
+
+def slice_with_dask_array(x, index):
+    from .core import Array, atop
+    out_index = [slice(None) if isinstance(ind, Array)
+                            and ind.dtype == bool else ind
+                 for ind in index]
+    indexes = [ind
+               if isinstance(ind, Array) and ind.dtype == bool
+               else slice(None)
+               for ind in index]
+
+    arginds = list(concat((ind, (i,))
+                          if isinstance(ind, Array) and ind.dtype == bool
+                          else (slice(None), None)
+                          for i, ind in enumerate(indexes)))
+
+    out = atop(getitem_variadic, tuple(range(x.ndim)), x, tuple(range(x.ndim)), *arginds, dtype=x.dtype)
+
+    chunks = []
+    for ind, chunk in zip(index, out.chunks):
+        if isinstance(ind, Array) and ind.dtype == bool:
+            chunks.append((np.nan,) * len(chunk))
+        else:
+            chunks.append(chunk)
+    out._chunks = tuple(chunks)
+    return out, tuple(out_index)
+
+
+def getitem_variadic(x, *index):
+    return x[index]
