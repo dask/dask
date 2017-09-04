@@ -147,6 +147,6 @@ A mean function can be implemented as
         'custom_mean',
         lambda s: (s.count(), s.sum()),
         lambda count, sum: (count.sum(), sum.sum()),
-        lambda count, sum: sum/ count,
+        lambda count, sum: sum / count,
     )
     df.groupby('g').agg(custom_mean)
