@@ -1246,3 +1246,9 @@ def test_empty_bag():
     assert not b.map(inc).any().compute(get=dask.get)
     assert not b.map(inc).sum().compute(get=dask.get)
     assert not b.map(inc).count().compute(get=dask.get)
+
+
+def test_bag_paths():
+    b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
+    print(b.to_textfiles("foo*"))
+    assert b.to_textfiles("foo*") == ['foo0', 'foo1']
