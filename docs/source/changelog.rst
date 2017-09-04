@@ -1,6 +1,20 @@
 Changelog
 =========
 
+0.15.3 / 2017-09-04
+-------------------
+
+Array
++++++
+
+-  Added `*_like` array creation functions (:pr:`2640`)
+-  Added support for masked arrays (:pr:`2301`)
+
+DataFrame
++++++++++
+
+-  Added user defined aggregations (:pr:`2344`)
+
 0.15.2 / 2017-08-25
 -------------------
 
