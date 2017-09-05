@@ -3,14 +3,14 @@ from __future__ import print_function, division, absolute_import
 import io
 import os
 
-from toolz import merge, partial
+from toolz import merge
 from warnings import warn
 
 from .compression import seekable_files, files as compress_files
 from .utils import (SeekableFile, read_block, infer_compression,
                     infer_storage_options, build_name_function)
 from ..compatibility import PY2, unicode
-from ..base import tokenize, normalize_token
+from ..base import tokenize
 from ..delayed import delayed
 from ..utils import import_required, ensure_bytes, ensure_unicode, is_integer
 
@@ -266,10 +266,9 @@ class OpenFileCreator(object):
         return OpenFile(self.fs.open, path, self.compression, mode,
                         self.text, self.encoding, self.errors)
 
-
-@partial(normalize_token.register, OpenFileCreator)
-def normalize_OpenFileCreator(ofc):
-    return ofc.compression, ofc.text, ofc.encoding, ofc.protocol, ofc.storage_options
+    def __dask_tokenize__(self):
+        return (self.compression, self.text, self.encoding,
+                self.protocol, self.storage_options)
 
 
 class OpenFile(object):

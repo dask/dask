@@ -21,14 +21,15 @@ from .. import core
 from ..utils import partial_by_order
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method, PY3
-from ..utils import (random_state_data,
-                     pseudorandom, derived_from, funcname, memory_repr,
-                     put_lines, M, key_split)
-from ..base import Base, tokenize, normalize_token
+from ..context import globalmethod
+from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
+                     memory_repr, put_lines, M, key_split, OperatorMethodMixin)
+from ..base import Base, tokenize, dont_optimize, is_dask_collection
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
 from .hashing import hash_pandas_object
+from .optimize import optimize
 from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
                     raise_on_meta_error, clear_known_categories,
                     is_categorical_dtype, has_known_categories, PANDAS_VERSION)
@@ -82,22 +83,12 @@ def new_dd_object(dsk, _name, meta, divisions):
     return _get_return_type(meta)(dsk, _name, meta, divisions)
 
 
-def optimize(dsk, keys, **kwargs):
-    from .optimize import optimize
-    return optimize(dsk, keys, **kwargs)
-
-
 def finalize(results):
     return _concat(results)
 
 
-class Scalar(Base):
+class Scalar(Base, OperatorMethodMixin):
     """ A Dask object to represent a pandas scalar"""
-
-    _optimize = staticmethod(optimize)
-    _default_get = staticmethod(threaded.get)
-    _finalize = staticmethod(first)
-
     def __init__(self, dsk, name, meta, divisions=None):
         # divisions is ignored, only present to be compatible with other
         # objects.
@@ -108,6 +99,25 @@ class Scalar(Base):
             raise TypeError("Expected meta to specify scalar, got "
                             "{0}".format(type(meta).__name__))
         self._meta = meta
+
+    def __dask_graph__(self):
+        return self.dask
+
+    def __dask_keys__(self):
+        return [self.key]
+
+    def __dask_tokenize__(self):
+        return self._name
+
+    __dask_optimize__ = globalmethod(optimize, key='dataframe_optimize',
+                                     falsey=dont_optimize)
+    __dask_default_get__ = staticmethod(threaded.get)
+
+    def __dask_postcompute__(self):
+        return first, ()
+
+    def __dask_postpersist__(self):
+        return Scalar, (self._name, self._meta, self.divisions)
 
     @property
     def _meta_nonempty(self):
@@ -156,9 +166,6 @@ class Scalar(Base):
     def key(self):
         return (self._name, 0)
 
-    def _keys(self):
-        return [self.key]
-
     @classmethod
     def _get_unary_operator(cls, op):
         def f(self):
@@ -182,7 +189,7 @@ def _scalar_binary(op, self, other, inv=False):
     if isinstance(other, Scalar):
         dsk = merge(dsk, other.dask)
         other_key = (other._name, 0)
-    elif isinstance(other, Base):
+    elif is_dask_collection(other):
         return NotImplemented
     else:
         other_key = other
@@ -206,7 +213,7 @@ def _scalar_binary(op, self, other, inv=False):
         return Scalar(dsk, name, meta)
 
 
-class _Frame(Base):
+class _Frame(Base, OperatorMethodMixin):
     """ Superclass for DataFrame and Series
 
     Parameters
@@ -223,11 +230,6 @@ class _Frame(Base):
     divisions: tuple of index values
         Values along which we partition our blocks on the index
     """
-
-    _optimize = staticmethod(optimize)
-    _default_get = staticmethod(threaded.get)
-    _finalize = staticmethod(finalize)
-
     def __init__(self, dsk, name, meta, divisions):
         self.dask = dsk
         self._name = name
@@ -238,6 +240,25 @@ class _Frame(Base):
                                          type(meta).__name__))
         self._meta = meta
         self.divisions = tuple(divisions)
+
+    def __dask_graph__(self):
+        return self.dask
+
+    def __dask_keys__(self):
+        return [(self._name, i) for i in range(self.npartitions)]
+
+    def __dask_tokenize__(self):
+        return self._name
+
+    __dask_optimize__ = globalmethod(optimize, key='dataframe_optimize',
+                                     falsey=dont_optimize)
+    __dask_default_get__ = staticmethod(threaded.get)
+
+    def __dask_postcompute__(self):
+        return finalize, ()
+
+    def __dask_postpersist__(self):
+        return type(self), (self._name, self._meta, self.divisions)
 
     @property
     def _constructor(self):
@@ -278,9 +299,6 @@ class _Frame(Base):
         return new_dd_object(self.dask, self._name,
                              self._meta, self.divisions)
 
-    def _keys(self):
-        return [(self._name, i) for i in range(self.npartitions)]
-
     def __array__(self, dtype=None, **kwargs):
         self._computed = self.compute()
         x = np.array(self._computed)
@@ -319,8 +337,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     def index(self):
         """Return dask Index instance"""
         name = self._name + '-index'
-        dsk = dict(((name, i), (getattr, key, 'index'))
-                   for i, key in enumerate(self._keys()))
+        dsk = {(name, i): (getattr, key, 'index')
+               for i, key in enumerate(self.__dask_keys__())}
 
         return Index(merge(dsk, self.dask), name,
                      self._meta.index, self.divisions)
@@ -1426,14 +1444,14 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         token = tokenize(self, other, join, axis, fill_value)
 
         name1 = 'align1-' + token
-        dsk1 = dict(((name1, i), (getitem, key, 0))
-                    for i, key in enumerate(aligned._keys()))
+        dsk1 = {(name1, i): (getitem, key, 0)
+                for i, key in enumerate(aligned.__dask_keys__())}
         dsk1.update(aligned.dask)
         result1 = new_dd_object(dsk1, name1, meta1, aligned.divisions)
 
         name2 = 'align2-' + token
-        dsk2 = dict(((name2, i), (getitem, key, 1))
-                    for i, key in enumerate(aligned._keys()))
+        dsk2 = {(name2, i): (getitem, key, 1)
+                for i, key in enumerate(aligned.__dask_keys__())}
         dsk2.update(aligned.dask)
         result2 = new_dd_object(dsk2, name2, meta2, aligned.divisions)
 
@@ -1550,7 +1568,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         else:
             suffix = ()
         dsk = {(name, i) + suffix: (getattr, key, 'values')
-               for (i, key) in enumerate(self._keys())}
+               for (i, key) in enumerate(self.__dask_keys__())}
         return Array(merge(self.dask, dsk), name, chunks, x.dtype)
 
 
@@ -1561,9 +1579,6 @@ def _raise_if_object_series(x, funcname):
     """
     if isinstance(x, Series) and hasattr(x, "dtype") and x.dtype == object:
         raise ValueError("`%s` not supported with object series" % funcname)
-
-
-normalize_token.register((Scalar, _Frame), lambda a: a._name)
 
 
 class Series(_Frame):
@@ -1783,8 +1798,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             raise TypeError("arg must be pandas.Series, dict or callable."
                             " Got {0}".format(type(arg)))
         name = 'map-' + tokenize(self, arg, na_action)
-        dsk = dict(((name, i), (M.map, k, arg, na_action)) for i, k in
-                   enumerate(self._keys()))
+        dsk = {(name, i): (M.map, k, arg, na_action) for i, k in
+               enumerate(self.__dask_keys__())}
         dsk.update(self.dask)
         if meta is no_default:
             meta = _emulate(M.map, self, arg, na_action=na_action)
@@ -2792,7 +2807,7 @@ class DataFrame(_Frame):
         """
         Test whether a value matches the label of a column in the DataFrame
         """
-        return (not isinstance(c, Base) and
+        return (not is_dask_collection(c) and
                 (np.isscalar(c) or isinstance(c, tuple)) and
                 c in self.columns)
 
@@ -2801,7 +2816,7 @@ class DataFrame(_Frame):
         Test whether a value matches the label of the index of the DataFrame
         """
         return (self.index.name is not None and
-                not isinstance(i, Base) and
+                not is_dask_collection(i) and
                 (np.isscalar(i) or isinstance(i, tuple)) and
                 i == self.index.name)
 
@@ -2877,8 +2892,9 @@ def elemwise(op, *args, **kwargs):
              if not isinstance(arg, (_Frame, Scalar))]
 
     # adjust the key length of Scalar
-    keys = [d._keys() * n if isinstance(d, Scalar) or _is_broadcastable(d)
-            else d._keys() for d in dasks]
+    keys = [d.__dask_keys__() * n
+            if isinstance(d, Scalar) or _is_broadcastable(d)
+            else d.__dask_keys__() for d in dasks]
 
     if other:
         dsk = {(_name, i):
@@ -3033,7 +3049,8 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
     # Chunk
     a = '{0}-chunk-{1}'.format(token or funcname(chunk), token_key)
     if len(args) == 1 and isinstance(args[0], _Frame) and not chunk_kwargs:
-        dsk = {(a, 0, i, 0): (chunk, key) for i, key in enumerate(args[0]._keys())}
+        dsk = {(a, 0, i, 0): (chunk, key)
+               for i, key in enumerate(args[0].__dask_keys__())}
     else:
         dsk = {(a, 0, i, 0): (apply, chunk,
                               [(x._name, i) if isinstance(x, _Frame)
@@ -3310,10 +3327,10 @@ def quantile(df, q):
         new_divisions = [np.min(q), np.max(q)]
 
     name = 'quantiles-1-' + token
-    val_dsk = dict(((name, i), (_percentile, (getattr, key, 'values'), qs))
-                   for i, key in enumerate(df._keys()))
+    val_dsk = {(name, i): (_percentile, (getattr, key, 'values'), qs)
+               for i, key in enumerate(df.__dask_keys__())}
     name2 = 'quantiles-2-' + token
-    len_dsk = dict(((name2, i), (len, key)) for i, key in enumerate(df._keys()))
+    len_dsk = {(name2, i): (len, key) for i, key in enumerate(df.__dask_keys__())}
 
     name3 = 'quantiles-3-' + token
     merge_dsk = {(name3, 0): finalize_tsk((merge_percentiles, qs,
@@ -3367,7 +3384,7 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     funcname = 'corr' if corr else 'cov'
     a = '{0}-chunk-{1}'.format(funcname, df._name)
     dsk = {(a, i): (cov_corr_chunk, f, corr)
-           for (i, f) in enumerate(df._keys())}
+           for (i, f) in enumerate(df.__dask_keys__())}
 
     prefix = '{0}-combine-{1}-'.format(funcname, df._name)
     k = df.npartitions
@@ -3902,9 +3919,10 @@ def to_delayed(df):
     --------
     >>> partitions = df.to_delayed()  # doctest: +SKIP
     """
-    from ..delayed import Delayed
-    dsk = df._optimize(df.dask, df._keys())
-    return [Delayed(k, dsk) for k in df._keys()]
+    from dask.delayed import Delayed
+    keys = df.__dask_keys__()
+    dsk = df.__dask_optimize__(df.__dask_graph__(), keys)
+    return [Delayed(k, dsk) for k in keys]
 
 
 @wraps(pd.to_datetime)

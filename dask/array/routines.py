@@ -14,7 +14,7 @@ from toolz import concat, sliding_window, interleave
 
 from .. import sharedict
 from ..core import flatten
-from ..base import tokenize
+from ..base import tokenize, compute_as_if_collection
 from . import numpy_compat, chunk
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
@@ -331,13 +331,12 @@ def bincount(x, weights=None, minlength=None):
     token = tokenize(x, weights, minlength)
     name = 'bincount-' + token
     if weights is not None:
-        dsk = dict(((name, i),
-                   (np.bincount, (x.name, i), (weights.name, i), minlength))
-                   for i, _ in enumerate(x._keys()))
+        dsk = {(name, i): (np.bincount, (x.name, i), (weights.name, i), minlength)
+               for i, _ in enumerate(x.__dask_keys__())}
         dtype = np.bincount([1], weights=[1]).dtype
     else:
-        dsk = dict(((name, i), (np.bincount, (x.name, i), None, minlength))
-                   for i, _ in enumerate(x._keys()))
+        dsk = {(name, i): (np.bincount, (x.name, i), None, minlength)
+               for i, _ in enumerate(x.__dask_keys__())}
         dtype = np.bincount([]).dtype
 
     # Sum up all of the intermediate bincounts per block
@@ -417,7 +416,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         bin_token = bins
     token = tokenize(a, bin_token, range, normed, weights, density)
 
-    nchunks = len(list(flatten(a._keys())))
+    nchunks = len(list(flatten(a.__dask_keys__())))
     chunks = ((1,) * nchunks, (len(bins) - 1,))
 
     name = 'histogram-sum-' + token
@@ -427,14 +426,14 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         return np.histogram(x, bins, weights=weights)[0][np.newaxis]
 
     if weights is None:
-        dsk = dict(((name, i, 0), (block_hist, k))
-                   for i, k in enumerate(flatten(a._keys())))
+        dsk = {(name, i, 0): (block_hist, k)
+               for i, k in enumerate(flatten(a.__dask_keys__()))}
         dtype = np.histogram([])[0].dtype
     else:
-        a_keys = flatten(a._keys())
-        w_keys = flatten(weights._keys())
-        dsk = dict(((name, i, 0), (block_hist, k, w))
-                   for i, (k, w) in enumerate(zip(a_keys, w_keys)))
+        a_keys = flatten(a.__dask_keys__())
+        w_keys = flatten(weights.__dask_keys__())
+        dsk = {(name, i, 0): (block_hist, k, w)
+               for i, (k, w) in enumerate(zip(a_keys, w_keys))}
         dtype = weights.dtype
 
     all_dsk = sharedict.merge(a.dask, (name, dsk))
@@ -532,8 +531,9 @@ def round(a, decimals=0):
 @wraps(np.unique)
 def unique(x):
     name = 'unique-' + x.name
-    dsk = dict(((name, i), (np.unique, key)) for i, key in enumerate(x._keys()))
-    parts = Array._get(sharedict.merge((name, dsk), x.dask), list(dsk.keys()))
+    dsk = {(name, i): (np.unique, key) for i, key in enumerate(x.__dask_keys__())}
+    parts = compute_as_if_collection(Array, sharedict.merge((name, dsk), x.dask),
+                                     list(dsk.keys()))
     return np.unique(np.concatenate(parts))
 
 
@@ -630,8 +630,8 @@ def topk(k, x):
 
     token = tokenize(k, x)
     name = 'chunk.topk-' + token
-    dsk = dict(((name, i), (chunk.topk, k, key))
-               for i, key in enumerate(x._keys()))
+    dsk = {(name, i): (chunk.topk, k, key)
+           for i, key in enumerate(x.__dask_keys__())}
     name2 = 'topk-' + token
     dsk[(name2, 0)] = (getitem, (np.sort, (np.concatenate, list(dsk))),
                        slice(-1, -k - 1, -1))
@@ -831,9 +831,8 @@ def coarsen(reduction, x, axes, trim_excess=False):
         reduction = getattr(np, reduction.__name__)
 
     name = 'coarsen-' + tokenize(reduction, x, axes, trim_excess)
-    dsk = dict(((name,) + key[1:], (chunk.coarsen, reduction, key, axes,
-                                    trim_excess))
-               for key in flatten(x._keys()))
+    dsk = {(name,) + key[1:]: (chunk.coarsen, reduction, key, axes, trim_excess)
+           for key in flatten(x.__dask_keys__())}
     chunks = tuple(tuple(int(bd // axes.get(i, 1)) for bd in bds)
                    for i, bds in enumerate(x.chunks))
 

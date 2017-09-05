@@ -10,7 +10,7 @@ from toolz import accumulate, memoize, merge, pluck, concat
 
 from .. import core
 from .. import sharedict
-from ..base import tokenize, Base
+from ..base import tokenize, is_dask_collection
 
 colon = slice(None, None, None)
 
@@ -57,7 +57,7 @@ def sanitize_index(ind):
                      _sanitize_index_element(ind.step))
     elif isinstance(ind, Number):
         return _sanitize_index_element(ind)
-    elif isinstance(ind, Base):
+    elif is_dask_collection(ind):
         return ind
     index_array = np.asanyarray(ind)
     if index_array.dtype == bool:
@@ -814,7 +814,7 @@ def check_index(ind, dimension):
             raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
         return
-    elif isinstance(ind, Base):
+    elif is_dask_collection(ind):
         return
     elif ind is None:
         return
@@ -839,7 +839,7 @@ def slice_with_dask_array(x, index):
     if len(index) == 1 and index[0].ndim == x.ndim:
         y = elemwise(getitem, x, *index, dtype=x.dtype)
         name = 'getitem-' + tokenize(x, index)
-        dsk = {(name, i): k for i, k in enumerate(core.flatten(y._keys()))}
+        dsk = {(name, i): k for i, k in enumerate(core.flatten(y.__dask_keys__()))}
         chunks = ((np.nan,) * y.npartitions,)
         return (Array(sharedict.merge(y.dask, (name, dsk)), name, chunks, x.dtype),
                 out_index)

@@ -14,7 +14,7 @@ from .hashing import hash_pandas_object
 from .utils import PANDAS_VERSION
 
 from .. import base
-from ..base import tokenize, compute
+from ..base import tokenize, compute, compute_as_if_collection
 from ..context import _globals
 from ..delayed import delayed
 from ..sizeof import sizeof
@@ -266,12 +266,12 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     # Partition data on disk
     name = 'shuffle-partition-' + always_new_token
     dsk2 = {(name, i): (shuffle_group_3, key, column, npartitions, p)
-            for i, key in enumerate(df._keys())}
+            for i, key in enumerate(df.__dask_keys__())}
 
     dsk = merge(df.dask, dsk1, dsk2)
     if compute:
         keys = [p, sorted(dsk2)]
-        pp, values = (_globals.get('get') or DataFrame._get)(dsk, keys)
+        pp, values = compute_as_if_collection(DataFrame, dsk, keys)
         dsk1 = {p: pp}
         dsk = dict(zip(sorted(dsk2), values))
 
@@ -354,7 +354,7 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
         parts = [i % df.npartitions for i in range(npartitions)]
         token = tokenize(df2, npartitions)
         dsk = {('repartition-group-' + token, i): (shuffle_group_2, k, column)
-               for i, k in enumerate(df2._keys())}
+               for i, k in enumerate(df2.__dask_keys__())}
         for p in range(npartitions):
             dsk[('repartition-get-' + token, p)] = \
                 (shuffle_group_get, ('repartition-group-' + token, parts[p]), p)

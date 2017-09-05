@@ -7,7 +7,7 @@ import numpy as np
 from toolz import curry
 
 from .core import Array, elemwise, atop, apply_infer_dtype, asarray
-from ..base import Base
+from ..base import is_dask_collection
 from .. import core, sharedict
 from ..utils import skip_doctest
 
@@ -80,8 +80,8 @@ class ufunc(object):
         if 'out' in kwargs:
             raise ValueError("`out` kwarg not supported")
 
-        A_is_dask = isinstance(A, Base)
-        B_is_dask = isinstance(B, Base)
+        A_is_dask = is_dask_collection(A)
+        B_is_dask = is_dask_collection(B)
         if not A_is_dask and not B_is_dask:
             return self._ufunc.outer(A, B, **kwargs)
         elif (A_is_dask and not isinstance(A, Array) or
@@ -223,10 +223,10 @@ def frexp(x):
     tmp = elemwise(np.frexp, x, dtype=object)
     left = 'mantissa-' + tmp.name
     right = 'exponent-' + tmp.name
-    ldsk = dict(((left,) + key[1:], (getitem, key, 0))
-                for key in core.flatten(tmp._keys()))
-    rdsk = dict(((right,) + key[1:], (getitem, key, 1))
-                for key in core.flatten(tmp._keys()))
+    ldsk = {(left,) + key[1:]: (getitem, key, 0)
+            for key in core.flatten(tmp.__dask_keys__())}
+    rdsk = {(right,) + key[1:]: (getitem, key, 1)
+            for key in core.flatten(tmp.__dask_keys__())}
 
     a = np.empty((1, ), dtype=x.dtype)
     l, r = np.frexp(a)
@@ -244,10 +244,10 @@ def modf(x):
     tmp = elemwise(np.modf, x, dtype=object)
     left = 'modf1-' + tmp.name
     right = 'modf2-' + tmp.name
-    ldsk = dict(((left,) + key[1:], (getitem, key, 0))
-                for key in core.flatten(tmp._keys()))
-    rdsk = dict(((right,) + key[1:], (getitem, key, 1))
-                for key in core.flatten(tmp._keys()))
+    ldsk = {(left,) + key[1:]: (getitem, key, 0)
+            for key in core.flatten(tmp.__dask_keys__())}
+    rdsk = {(right,) + key[1:]: (getitem, key, 1)
+            for key in core.flatten(tmp.__dask_keys__())}
 
     a = np.empty((1,), dtype=x.dtype)
     l, r = np.modf(a)

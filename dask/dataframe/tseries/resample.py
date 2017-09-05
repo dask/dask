@@ -112,7 +112,7 @@ class Resampler(object):
         # Repartition divs into bins. These won't match labels after mapping
         partitioned = self.obj.repartition(newdivs, force=True)
 
-        keys = partitioned._keys()
+        keys = partitioned.__dask_keys__()
         dsk = partitioned.dask
 
         args = zip(keys, outdivs, outdivs[1:], ['left'] * (len(keys) - 1) + [None])

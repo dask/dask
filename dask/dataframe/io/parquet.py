@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import pandas as pd
-from toolz import partial
 
 from ..core import DataFrame, Series
 from ..utils import UNKNOWN_CATEGORIES
@@ -21,11 +20,19 @@ try:
 except ImportError:
     fastparquet = False
     default_encoding = None
+else:
+    @normalize_token.register(fastparquet.ParquetFile)
+    def normalize_ParquetFile(pf):
+        return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
 
 try:
     import pyarrow.parquet as pyarrow_parquet
 except ImportError:
     pyarrow_parquet = False
+else:
+    @normalize_token.register(pyarrow_parquet.ParquetDataset)
+    def normalize_PyArrowParquetDataset(ds):
+        return (type(ds), ds.paths)
 
 
 def _meta_from_dtypes(to_read_columns, file_columns, file_dtypes):
@@ -479,22 +486,6 @@ def _write_metadata(writes, filenames, fmd, path, metadata_fn, myopen, sep):
 
     fn = sep.join([path, '_common_metadata'])
     fastparquet.writer.write_common_metadata(fn, fmd, open_with=myopen)
-
-
-if fastparquet:
-    @partial(normalize_token.register, fastparquet.ParquetFile)
-    def normalize_ParquetFile(pf):
-        return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
-
-
-try:
-    from pyarrow.parquet import ParquetDataset
-except ImportError:
-    pass
-else:
-    @partial(normalize_token.register, ParquetDataset)
-    def normalize_PyArrowParquetDataset(ds):
-        return (type(ds), ds.paths)
 
 
 if PY3:

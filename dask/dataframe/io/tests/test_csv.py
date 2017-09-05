@@ -15,6 +15,7 @@ import pandas.util.testing as tm
 
 import dask
 import dask.dataframe as dd
+from dask.base import compute_as_if_collection
 from dask.dataframe.io.csv import (text_blocks_to_pandas, pandas_read_text,
                                    auto_blocksize)
 from dask.dataframe.utils import assert_eq, has_known_categories, PANDAS_VERSION
@@ -279,7 +280,9 @@ def test_read_csv_index():
         result = f.compute(get=dask.get)
         assert result.index.name == 'amount'
 
-        blocks = dd.DataFrame._get(f.dask, f._keys(), get=dask.get)
+        blocks = compute_as_if_collection(dd.DataFrame, f.dask,
+                                          f.__dask_keys__(),
+                                          get=dask.get)
         for i, block in enumerate(blocks):
             if i < len(f.divisions) - 2:
                 assert (block.index < f.divisions[i + 1]).all()

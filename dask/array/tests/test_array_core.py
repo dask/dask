@@ -18,7 +18,7 @@ from toolz.curried import identity
 
 import dask
 import dask.array as da
-from dask.base import tokenize
+from dask.base import tokenize, compute_as_if_collection
 from dask.delayed import delayed
 from dask.local import get_sync
 from dask.utils import ignoring, tmpfile, tmpdir
@@ -170,8 +170,8 @@ def test_Array():
 
     assert a.numblocks == (10, 10)
 
-    assert a._keys() == [[('x', i, j) for j in range(10)]
-                         for i in range(10)]
+    assert a.__dask_keys__() == [[('x', i, j) for j in range(10)]
+                                 for i in range(10)]
 
     assert a.chunks == ((100,) * 10, (100,) * 10)
 
@@ -192,23 +192,23 @@ def test_numblocks_suppoorts_singleton_block_dims():
     dsk = merge({name: 'some-array'}, getem(name, shape=shape, chunks=chunks))
     a = Array(dsk, name, chunks, shape=shape, dtype='f8')
 
-    assert set(concat(a._keys())) == set([('x', i, 0) for i in range(100 // 10)])
+    assert set(concat(a.__dask_keys__())) == {('x', i, 0) for i in range(10)}
 
 
 def test_keys():
     dsk = dict((('x', i, j), ()) for i in range(5) for j in range(6))
     dx = Array(dsk, 'x', chunks=(10, 10), shape=(50, 60), dtype='f8')
-    assert dx._keys() == [[(dx.name, i, j) for j in range(6)]
-                          for i in range(5)]
+    assert dx.__dask_keys__() == [[(dx.name, i, j) for j in range(6)]
+                                  for i in range(5)]
     # Cache works
-    assert dx._keys() is dx._keys()
+    assert dx.__dask_keys__() is dx.__dask_keys__()
     # Test mutating names clears key cache
     dx.dask = {('y', i, j): () for i in range(5) for j in range(6)}
     dx.name = 'y'
-    assert dx._keys() == [[(dx.name, i, j) for j in range(6)]
-                          for i in range(5)]
+    assert dx.__dask_keys__() == [[(dx.name, i, j) for j in range(6)]
+                                  for i in range(5)]
     d = Array({}, 'x', (), shape=(), dtype='f8')
-    assert d._keys() == [('x',)]
+    assert d.__dask_keys__() == [('x',)]
 
 
 def test_Array_computation():
@@ -265,7 +265,8 @@ def test_short_stack():
     d = da.from_array(x, chunks=(1,))
     s = da.stack([d])
     assert s.shape == (1, 1)
-    assert Array._get(s.dask, s._keys())[0][0].shape == (1, 1)
+    chunks = compute_as_if_collection(Array, s.dask, s.__dask_keys__())
+    assert chunks[0][0].shape == (1, 1)
 
 
 def test_stack_scalars():
@@ -416,7 +417,7 @@ def test_broadcast_shapes():
 def test_elemwise_on_scalars():
     x = np.arange(10, dtype=np.int64)
     a = from_array(x, chunks=(5,))
-    assert len(a._keys()) == 2
+    assert len(a.__dask_keys__()) == 2
     assert_eq(a.sum()**2, x.sum()**2)
 
     y = np.arange(10, dtype=np.int32)
@@ -1303,9 +1304,9 @@ def test_optimize():
     x = np.arange(5).astype('f4')
     a = da.from_array(x, chunks=(2,))
     expr = a[1:4] + 1
-    result = optimize(expr.dask, expr._keys())
+    result = optimize(expr.dask, expr.__dask_keys__())
     assert isinstance(result, dict)
-    assert all(key in result for key in expr._keys())
+    assert all(key in result for key in expr.__dask_keys__())
 
 
 def test_slicing_with_non_ndarrays():
@@ -1386,7 +1387,7 @@ def test_from_array_with_lock():
 def test_from_array_no_asarray():
 
     def assert_chunks_are_of_type(x, cls):
-        chunks = x._get(x.dask, x._keys())
+        chunks = compute_as_if_collection(Array, x.dask, x.__dask_keys__())
         for c in concat(chunks):
             assert type(c) is cls
 
@@ -1443,7 +1444,8 @@ def test_asanyarray():
     x = np.matrix([1, 2, 3])
     dx = da.asanyarray(x)
     assert dx.numblocks == (1, 1)
-    assert isinstance(dx._get(dx.dask, dx._keys())[0][0], np.matrix)
+    chunks = compute_as_if_collection(Array, dx.dask, dx.__dask_keys__())
+    assert isinstance(chunks[0][0], np.matrix)
     assert da.asanyarray(dx) is dx
 
 
@@ -2247,11 +2249,12 @@ def test_optimize_fuse_keys():
     y = x + 1
     z = y + 1
 
-    dsk = z._optimize(z.dask, z._keys())
+    dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
     assert not set(y.dask) & set(dsk)
 
-    dsk = z._optimize(z.dask, z._keys(), fuse_keys=y._keys())
-    assert all(k in dsk for k in y._keys())
+    dsk = z.__dask_optimize__(z.dask, z.__dask_keys__(),
+                              fuse_keys=y.__dask_keys__())
+    assert all(k in dsk for k in y.__dask_keys__())
 
 
 def test_concatenate_stack_dont_warn():

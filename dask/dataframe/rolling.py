@@ -135,7 +135,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
     else:
         nexts = [None] * df.npartitions
 
-    for i, (prev, current, next) in enumerate(zip(prevs, df._keys(), nexts)):
+    for i, (prev, current, next) in enumerate(zip(prevs, df.__dask_keys__(), nexts)):
         dsk[(name, i)] = (overlap_chunk, func, prev, current, next, before,
                           after, args, kwargs)
 

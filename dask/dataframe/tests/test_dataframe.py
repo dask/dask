@@ -8,8 +8,9 @@ import numpy as np
 import pytest
 
 import dask
-from dask.utils import ignoring, put_lines
 import dask.dataframe as dd
+from dask.base import compute_as_if_collection
+from dask.utils import ignoring, put_lines
 
 from dask.dataframe.core import repartition_divisions, aca, _concat, Scalar
 from dask.dataframe import methods
@@ -1020,7 +1021,8 @@ def test_repartition():
         """Check data is split properly"""
         keys = [k for k in d.dask if k[0].startswith('repartition-split')]
         keys = sorted(keys)
-        sp = pd.concat([d._get(d.dask, k) for k in keys])
+        sp = pd.concat([compute_as_if_collection(dd.DataFrame, d.dask, k)
+                        for k in keys])
         assert_eq(orig, sp)
         assert_eq(orig, d)
 
@@ -1031,7 +1033,8 @@ def test_repartition():
     b = a.repartition(divisions=[10, 20, 50, 60])
     assert b.divisions == (10, 20, 50, 60)
     assert_eq(a, b)
-    assert_eq(a._get(b.dask, (b._name, 0)), df.iloc[:1])
+    assert_eq(compute_as_if_collection(dd.DataFrame, b.dask, (b._name, 0)),
+              df.iloc[:1])
 
     for div in [[20, 60], [10, 50], [1],   # first / last element mismatch
                 [0, 60], [10, 70],   # do not allow to expand divisions by default
@@ -1146,7 +1149,7 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
     b = a.repartition(npartitions=k)
     assert_eq(a, b)
     assert b.npartitions == k
-    parts = dask.get(b.dask, b._keys())
+    parts = dask.get(b.dask, b.__dask_keys__())
     assert all(map(len, parts))
 
 
@@ -2496,7 +2499,7 @@ def test_hash_split_unique(npartitions, split_every, split_out):
 
     dropped = ds.unique(split_every=split_every, split_out=split_out)
 
-    dsk = dropped._optimize(dropped.dask, dropped._keys())
+    dsk = dropped.__dask_optimize__(dropped.dask, dropped.__dask_keys__())
     from dask.core import get_deps
     dependencies, dependents = get_deps(dsk)
 

@@ -31,8 +31,8 @@ import numpy as np
 
 from . import chunk
 from .slicing import slice_array, replace_ellipsis
-from ..base import Base, tokenize, normalize_token
-from ..context import _globals
+from ..base import Base, tokenize, dont_optimize, compute_as_if_collection
+from ..context import _globals, globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict, Dispatch)
@@ -897,7 +897,7 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
     name = 'store-' + tokenize(*keys)
     dsk = sharedict.merge((name, updates), *[src.dask for src in sources])
     if compute:
-        Array._get(dsk, keys, **kwargs)
+        compute_as_if_collection(Array, dsk, keys, **kwargs)
     else:
         from ..delayed import Delayed
         dsk.update({name: keys})
@@ -977,10 +977,6 @@ class Array(Base):
     """
     __slots__ = 'dask', '_name', '_cached_keys', '_chunks', 'dtype'
 
-    _optimize = staticmethod(optimize)
-    _default_get = staticmethod(threaded.get)
-    _finalize = staticmethod(finalize)
-
     def __new__(cls, dask, name, chunks, dtype, shape=None):
         self = super(Array, cls).__new__(cls)
         assert isinstance(dask, Mapping)
@@ -1006,6 +1002,41 @@ class Array(Base):
 
     def __reduce__(self):
         return (Array, (self.dask, self.name, self.chunks, self.dtype))
+
+    def __dask_graph__(self):
+        return self.dask
+
+    def __dask_keys__(self):
+        if self._cached_keys is not None:
+            return self._cached_keys
+
+        name, chunks, numblocks = self.name, self.chunks, self.numblocks
+
+        def keys(*args):
+            if not chunks:
+                return [(name,)]
+            ind = len(args)
+            if ind + 1 == len(numblocks):
+                result = [(name,) + args + (i,) for i in range(numblocks[ind])]
+            else:
+                result = [keys(*(args + (i,))) for i in range(numblocks[ind])]
+            return result
+
+        self._cached_keys = result = keys()
+        return result
+
+    def __dask_tokenize__(self):
+        return self.name
+
+    __dask_optimize__ = globalmethod(optimize, key='array_optimize',
+                                     falsey=dont_optimize)
+    __dask_default_get__ = staticmethod(threaded.get)
+
+    def __dask_postcompute__(self):
+        return finalize, ()
+
+    def __dask_postpersist__(self):
+        return Array, (self.name, self.chunks, self.dtype)
 
     @property
     def numblocks(self):
@@ -1100,24 +1131,6 @@ class Array(Base):
         self._name = val
         # Clear the key cache when the name is reset
         self._cached_keys = None
-
-    def _keys(self, *args):
-        if not args:
-            if self._cached_keys is not None:
-                return self._cached_keys
-
-        if not self.chunks:
-            return [(self.name,)]
-        ind = len(args)
-        if ind + 1 == self.ndim:
-            result = [(self.name,) + args + (i,)
-                      for i in range(self.numblocks[ind])]
-        else:
-            result = [self._keys(*(args + (i,)))
-                      for i in range(self.numblocks[ind])]
-        if not args:
-            self._cached_keys = result
-        return result
 
     __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
 
@@ -1783,8 +1796,9 @@ class Array(Base):
         dask.array.from_delayed
         """
         from ..delayed import Delayed
-        dsk = self._optimize(self.dask, self._keys())
-        L = ndeepmap(self.ndim, lambda k: Delayed(k, dsk), self._keys())
+        keys = self.__dask_keys__()
+        dsk = self.__dask_optimize__(self.__dask_graph__(), keys)
+        L = ndeepmap(self.ndim, lambda k: Delayed(k, dsk), keys)
         return np.array(L, dtype=object)
 
     @derived_from(np.ndarray)
@@ -1803,9 +1817,6 @@ def ensure_int(f):
     if i != f:
         raise ValueError("Could not coerce %f to integer" % f)
     return i
-
-
-normalize_token.register(Array, lambda a: a.name)
 
 
 def normalize_chunks(chunks, shape=None):
@@ -2397,8 +2408,8 @@ def insert_to_ooc(out, arr, lock=True, region=None):
     slices = slices_from_chunks(arr.chunks)
 
     name = 'store-%s' % arr.name
-    dsk = dict(((name,) + t[1:], (store, out, t, slc, lock, region))
-               for t, slc in zip(core.flatten(arr._keys()), slices))
+    dsk = {(name,) + t[1:]: (store, out, t, slc, lock, region)
+           for t, slc in zip(core.flatten(arr.__dask_keys__()), slices)}
 
     return dsk
 
@@ -2644,10 +2655,10 @@ def broadcast_to(x, shape):
     chunks = (tuple((s,) for s in shape[:ndim_new]) +
               tuple(bd if old > 1 else (new,)
               for bd, old, new in zip(x.chunks, x.shape, shape[ndim_new:])))
-    dsk = dict(((name,) + (0,) * ndim_new + key[1:],
-                (chunk.broadcast_to, key, shape[:ndim_new] +
-                 tuple(bd[i] for i, bd in zip(key[1:], chunks[ndim_new:]))))
-               for key in core.flatten(x._keys()))
+    dsk = {(name,) + (0,) * ndim_new + key[1:]:
+           (chunk.broadcast_to, key, shape[:ndim_new] +
+            tuple(bd[i] for i, bd in zip(key[1:], chunks[ndim_new:])))
+           for key in core.flatten(x.__dask_keys__())}
     return Array(sharedict.merge((name, dsk), x.dask), name, chunks, dtype=x.dtype)
 
 
@@ -3191,10 +3202,10 @@ def to_npy_stack(dirname, x, axis=0):
         pickle.dump(meta, f)
 
     name = 'to-npy-stack-' + str(uuid.uuid1())
-    dsk = dict(((name, i), (np.save, os.path.join(dirname, '%d.npy' % i), key))
-               for i, key in enumerate(core.flatten(xx._keys())))
+    dsk = {(name, i): (np.save, os.path.join(dirname, '%d.npy' % i), key)
+           for i, key in enumerate(core.flatten(xx.__dask_keys__()))}
 
-    Array._get(sharedict.merge(dsk, xx.dask), list(dsk))
+    compute_as_if_collection(Array, sharedict.merge(dsk, xx.dask), list(dsk))
 
 
 def from_npy_stack(dirname, mmap_mode='r'):

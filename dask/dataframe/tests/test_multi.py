@@ -4,6 +4,7 @@ import pandas as pd
 import pandas.util.testing as tm
 
 from dask.local import get_sync
+from dask.base import compute_as_if_collection
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
@@ -1030,7 +1031,9 @@ def test_concat_categorical(known, cat_index, divisions):
         res = dd.concat(ddfs, join=join, interleave_partitions=divisions)
         assert_eq(res, sol)
         if known:
-            for p in [i.iloc[:0] for i in res._get(res.dask, res._keys())]:
+            parts = compute_as_if_collection(dd.DataFrame, res.dask,
+                                             res.__dask_keys__())
+            for p in [i.iloc[:0] for i in parts]:
                 res._meta == p  # will error if schemas don't align
         assert not cat_index or has_known_categories(res.index) == known
         return res
