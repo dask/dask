@@ -503,7 +503,7 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
     """
     values = [_to_csv_chunk(d, **kwargs) for d in df.to_delayed()]
     (values, names) = write_bytes(values, filename, name_function, compression,
-                         encoding=None, **(storage_options or {}))
+                                  encoding=None, **(storage_options or {}))
 
     if compute:
         delayed(values).compute(get=get)

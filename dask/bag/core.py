@@ -175,7 +175,7 @@ def to_textfiles(b, path, name_function=None, compression='infer',
     """
     from dask import delayed
     (writes,names) = write_bytes(b.to_delayed(), path, name_function, compression,
-                         encoding=encoding, **(storage_options or {}))
+                                 encoding=encoding, **(storage_options or {}))
 
     # Use Bag optimizations on these delayed objects
     dsk = ensure_dict(delayed(writes).dask)

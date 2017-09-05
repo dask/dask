@@ -1250,5 +1250,7 @@ def test_empty_bag():
 
 def test_bag_paths():
     b = db.from_sequence(['abc', '123', 'xyz'], npartitions=2)
-    print(b.to_textfiles("foo*"))
-    assert b.to_textfiles("foo*") == ['foo0', 'foo1']
+    assert b.to_textfiles('foo*') == ['foo0', 'foo1']
+    os.remove('foo0')
+    os.remove('foo1')
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
