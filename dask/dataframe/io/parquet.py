@@ -393,32 +393,35 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
         if pf.file_scheme != 'hive':
             raise ValueError('Requested file scheme is hive, '
                              'but existing file scheme is not.')
-        elif set(pf.columns) != set(df.columns):
+        elif ((set(pf.columns) != set(df.columns) - set(partition_on)) or
+              (set(partition_on) != set(pf.cats))):
             raise ValueError('Appended columns not the same.\n'
                              'New: {} | Previous: {}'
                              .format(pf.columns, list(df.columns)))
-        elif set(pf.dtypes.items()) != set(df.dtypes.iteritems()):
+        elif set(pf.dtypes[c] for c in pf.columns) != set(df[pf.columns].dtypes):
             raise ValueError('Appended dtypes differ.\n{}'
                              .format(set(pf.dtypes.items()) ^
                                      set(df.dtypes.iteritems())))
         # elif fmd.schema != pf.fmd.schema:
         #    raise ValueError('Appended schema differs.')
         else:
-            df = df[pf.columns]
+            df = df[pf.columns + partition_on]
 
         fmd = pf.fmd
         i_offset = fastparquet.writer.find_max_part(fmd.row_groups)
 
         if not ignore_divisions:
             minmax = fastparquet.api.sorted_partitioned_columns(pf)
-            divisions = list(minmax[index_col]['min']) + [
-                minmax[index_col]['max'][-1]]
+            if index_col in minmax:
 
-            if new_divisions[0] < divisions[-1]:
-                raise ValueError(
-                    'Appended divisions overlapping with the previous ones.\n'
-                    'New: {} | Previous: {}'
-                    .format(divisions[-1], new_divisions[0]))
+                divisions = list(minmax[index_col]['min']) + [
+                    minmax[index_col]['max'][-1]]
+
+                if new_divisions[0] < divisions[-1]:
+                    raise ValueError(
+                        'Appended divisions overlapping with the previous ones.'
+                        '\nNew: {} | Previous: {}'
+                        .format(divisions[-1], new_divisions[0]))
     else:
         i_offset = 0
 
