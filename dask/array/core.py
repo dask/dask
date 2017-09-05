@@ -18,12 +18,14 @@ import uuid
 import warnings
 
 try:
-    from cytoolz.curried import (partition, concat, pluck, join, first,
-                                 groupby, valmap, accumulate, assoc, filter)
+    from cytoolz import (partition, concat, join, first,
+                         groupby, valmap, accumulate, assoc)
+    from cytoolz.curried import filter, pluck
 
 except ImportError:
-    from toolz.curried import (partition, concat, pluck, join, first,
-                               groupby, valmap, accumulate, assoc, filter)
+    from toolz import (partition, concat, join, first,
+                       groupby, valmap, accumulate, assoc)
+    from toolz.curried import filter, pluck
 from toolz import pipe, map, reduce
 import numpy as np
 
@@ -279,8 +281,9 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)),
     {'i': 'Hello', 'j': (2, 3)}
     """
     # List like [('i', 2), ('j', 1), ('i', 1), ('j', 2)]
+    argpairs2 = [(a, ind) for a, ind in argpairs if ind is not None]
     L = concat([zip(inds, dims) for (x, inds), (x, dims)
-                in join(first, argpairs, first, numblocks.items())])
+                in join(first, argpairs2, first, numblocks.items())])
 
     g = groupby(0, L)
     g = dict((k, set([d for i, d in v])) for k, v in g.items())
@@ -666,9 +669,11 @@ def map_blocks(func, *args, **kwargs):
         new_axis = [new_axis]
 
     arrs = [a for a in args if isinstance(a, Array)]
-    other = [(i, a) for i, a in enumerate(args) if not isinstance(a, Array)]
 
-    argpairs = [(a.name, tuple(range(a.ndim))[::-1]) for a in arrs]
+    argpairs = [(a.name, tuple(range(a.ndim))[::-1])
+                if isinstance(a, Array)
+                else (a, None)
+                for a in args]
     numblocks = {a.name: a.numblocks for a in arrs}
     arginds = list(concat(argpairs))
     out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
@@ -683,13 +688,8 @@ def map_blocks(func, *args, **kwargs):
     if block_id:
         kwargs['block_id'] = '__dummy__'
 
-    if other:
-        dsk = top(partial_by_order, name, out_ind, *arginds,
-                  numblocks=numblocks, function=func, other=other,
-                  **kwargs)
-    else:
-        dsk = top(func, name, out_ind, *arginds, numblocks=numblocks,
-                  **kwargs)
+    dsk = top(func, name, out_ind, *arginds, numblocks=numblocks,
+              **kwargs)
 
     # If func has block_id as an argument, add it to the kwargs for each call
     if block_id:
@@ -2436,20 +2436,6 @@ def asanyarray(array):
                       asarray=False)
 
 
-def partial_by_order(*args, **kwargs):
-    """
-
-    >>> partial_by_order(5, function=add, other=[(1, 10)])
-    15
-    """
-    function = kwargs.pop('function')
-    other = kwargs.pop('other')
-    args2 = list(args)
-    for i, arg in other:
-        args2.insert(i, arg)
-    return function(*args2, **kwargs)
-
-
 def is_scalar_for_elemwise(arg):
     """
 
@@ -2532,9 +2518,6 @@ def elemwise(op, *args, **kwargs):
     out_ndim = len(broadcast_shapes(*shapes))   # Raises ValueError if dimensions mismatch
     expr_inds = tuple(range(out_ndim))[::-1]
 
-    arrays = [a for a in args if not is_scalar_for_elemwise(a)]
-    other = [(i, a) for i, a in enumerate(args) if is_scalar_for_elemwise(a)]
-
     need_enforce_dtype = False
     if 'dtype' in kwargs:
         dt = kwargs['dtype']
@@ -2557,16 +2540,14 @@ def elemwise(op, *args, **kwargs):
                                                   tokenize(op, dt, *args))
 
     atop_kwargs = dict(dtype=dt, name=name, token=funcname(op).strip('_'))
-    if other:
-        atop_kwargs['function'] = op
-        atop_kwargs['other'] = other
-        op = partial_by_order
     if need_enforce_dtype:
         atop_kwargs['enforce_dtype'] = dt
         atop_kwargs['enforce_dtype_function'] = op
         op = _enforce_dtype
     result = atop(op, expr_inds,
-                  *concat((a, tuple(range(a.ndim)[::-1])) for a in arrays),
+                  *concat((a, tuple(range(a.ndim)[::-1])
+                           if not is_scalar_for_elemwise(a)
+                           else None) for a in args),
                   **atop_kwargs)
 
     return handle_out(out, result)
@@ -2606,7 +2587,7 @@ def _enforce_dtype(*args, **kwargs):
     """Calls a function and converts its result to the given dtype.
 
     The parameters have deliberately been given unwieldy names to avoid
-    clashes with keyword arguments consumed by atop or partial_by_order.
+    clashes with keyword arguments consumed by atop
 
     A dtype of `object` is treated as a special case and not enforced,
     because it is used as a dummy value in some places when the result will
