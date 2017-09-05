@@ -596,9 +596,8 @@ def assert_dask_graph(dask, label):
             k = k[0]
         if k.startswith(label):
             return True
-    else:
-        msg = "given dask graph doesn't contan label: {0}"
-        raise AssertionError(msg.format(label))
+    raise AssertionError("given dask graph doesn't contain label: {label}"
+                         .format(label=label))
 
 
 def assert_divisions(ddf):

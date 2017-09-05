@@ -75,7 +75,6 @@ def hold_keys(dsk, dependencies):
                         # linear chain
                         if new_task[0] in GETTERS or new_task in dsk:
                             dep = new_dep
-                            task = new_task
                         else:
                             break
                 except (IndexError, TypeError):
@@ -243,7 +242,6 @@ def fuse_slice(a, b):
                 stop = min(a.stop, stop)
             else:
                 stop = a.stop
-            stop = stop
         step = a.step * b.step
         if step == 1:
             step = None

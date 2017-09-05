@@ -219,7 +219,6 @@ class _Tracker(Process):
 
     def run(self):
         pid = current_process()
-        ps = self._update_pids(pid)
         data = []
         while True:
             try:

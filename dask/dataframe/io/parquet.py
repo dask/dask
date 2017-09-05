@@ -155,10 +155,10 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
     api = pyarrow_parquet
 
     if filters is not None:
-        raise NotImplemented("Predicate pushdown not implemented")
+        raise NotImplementedError("Predicate pushdown not implemented")
 
     if categories is not None:
-        raise NotImplemented("Categorical reads not yet implemented")
+        raise NotImplementedError("Categorical reads not yet implemented")
 
     if isinstance(columns, tuple):
         columns = list(columns)
