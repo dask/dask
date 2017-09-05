@@ -520,3 +520,12 @@ def test_read_hdf_doesnt_segfault():
 
         ddf = dd.read_hdf(fn, '/x', chunksize=2)
         assert len(ddf) == N
+
+
+def test_hdf_filenames():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert ddf.to_hdf("foo*.hdf5", "key") == ["foo0.hdf5", "foo1.hdf5"]
+    os.remove("foo0.hdf5")
+    os.remove("foo1.hdf5")
