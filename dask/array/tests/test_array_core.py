@@ -29,11 +29,10 @@ from dask.array import chunk
 from dask.array.core import (getem, getter, top, dotmany, concatenate3,
                              broadcast_dimensions, Array, stack, concatenate,
                              from_array, elemwise, broadcast_shapes,
-                             partial_by_order, broadcast_to,
-                             blockdims_from_blockshape, store, optimize,
-                             from_func, normalize_chunks, broadcast_chunks,
-                             atop, from_delayed, concatenate_axes,
-                             common_blockdim)
+                             broadcast_to, blockdims_from_blockshape, store,
+                             optimize, from_func, normalize_chunks,
+                             broadcast_chunks, atop, from_delayed,
+                             concatenate_axes, common_blockdim)
 from dask.array.utils import assert_eq, same_keys
 
 # temporary until numpy functions migrated
@@ -428,10 +427,6 @@ def test_elemwise_on_scalars():
     assert result.compute().dtype == np.int64
     assert (x.sum() * y).dtype == np.int32
     assert_eq((x.sum() * y).astype(np.int64), result)
-
-
-def test_partial_by_order():
-    assert partial_by_order(5, function=add, other=[(1, 20)]) == 25
 
 
 def test_elemwise_with_ndarrays():

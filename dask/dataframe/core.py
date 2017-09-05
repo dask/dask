@@ -18,7 +18,7 @@ except ImportError:
 
 from .. import array as da
 from .. import core
-from ..array.core import partial_by_order
+from ..utils import partial_by_order
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method, PY3
 from ..utils import (random_state_data,
