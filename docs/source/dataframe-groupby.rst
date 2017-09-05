@@ -104,3 +104,49 @@ keyword argument to ``groupby`` or ``set_index``
 
     df.set_index(column, method='disk')
     df.set_index(column, method='tasks')
+
+
+Aggregate
+=========
+
+Dask support Pandas' ``aggregate`` syntax to run multiple reductions on the
+same groups. Common reductions, such as ``max``, ``sum``, ``mean`` are directly
+supported:
+
+.. code-block:: python
+
+    >>> df.groupby(columns).aggregate(['sum', 'mean', 'max', 'min'])
+
+Dask also supports user defined reductions. To ensure proper performance, the
+reduction has to be formulated in terms of three independent steps. The
+``chunk`` step is applied to each partition independently and reduces the data
+within a partition. The ``aggregate`` combines the within partition results.
+The optional ``finalize`` step combines the results returned from the
+``aggregate`` step and should return a single final column. For Dask to
+recognize the reduction, it has to be passed as an instance of
+``dask.dataframe.Aggregation``.
+
+For example, ``sum`` could be implemented as
+
+.. code-block:: python
+
+    custom_sum = dd.Aggregation('custom_sum', lambda s: s.sum(), lambda s0: s0.sum())
+    df.groupby('g').agg(custom_sum)
+
+The name argument should be different from existing reductions to avoid data
+corruption. The arguments to each function are pre-grouped series objects,
+similar to ``df.groupby('g')['value']``.
+
+Many reductions can only be implemented with multiple temporaries. To implement
+these reductions, the steps should return tuples and expect multiple arguments.
+A mean function can be implemented as
+
+.. code-block:: python
+
+    custom_mean = dd.Aggregation(
+        'custom_mean',
+        lambda s: (s.count(), s.sum()),
+        lambda count, sum: (count.sum(), sum.sum()),
+        lambda count, sum: sum / count,
+    )
+    df.groupby('g').agg(custom_mean)

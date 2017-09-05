@@ -824,28 +824,6 @@ def ensure_dict(d):
     return dict(d)
 
 
-_packages = {}
-
-
-def package_of(typ):
-    """ Return package containing type's definition
-
-    Or return None if not found
-    """
-    try:
-        return _packages[typ]
-    except KeyError:
-        # http://stackoverflow.com/questions/43462701/get-package-of-python-object/43462865#43462865
-        mod = inspect.getmodule(typ)
-        if not mod:
-            result = None
-        else:
-            base, _sep, _stem = mod.__name__.partition('.')
-            result = sys.modules[base]
-        _packages[typ] = result
-        return result
-
-
 # XXX: Kept to keep old versions of distributed/dask in sync. After
 # distributed's dask requirement is updated to > this commit, this function can
 # be moved to dask.bytes.utils.
