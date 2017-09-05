@@ -19,11 +19,11 @@ import warnings
 
 try:
     from cytoolz.curried import (partition, concat, pluck, join, first,
-                                 groupby, valmap, accumulate, assoc)
+                                 groupby, valmap, accumulate, assoc, filter)
 
 except ImportError:
     from toolz.curried import (partition, concat, pluck, join, first,
-                               groupby, valmap, accumulate, assoc)
+                               groupby, valmap, accumulate, assoc, filter)
 from toolz import pipe, map, reduce
 import numpy as np
 
@@ -390,6 +390,13 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     {('z', 0): (apply, f, [('x', 0)], {'b': 10}),
      ('z', 1): (apply, f, [('x', 1)], {'b': 10})}
 
+    Include literals by indexing with ``None``
+
+    >>> top(add, 'z', 'i', 'x', 'i', 100, None,  numblocks={'x': (2,)})  # doctest: +SKIP
+    {('z', 0): (add, ('x', 0), 100),
+     ('z', 1): (add, ('x', 1), 100)}
+
+
     See Also
     --------
     atop
@@ -399,9 +406,9 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     new_axes = kwargs.pop('new_axes', {})
     argpairs = list(partition(2, arrind_pairs))
 
-    assert set(numblocks) == set(pluck(0, argpairs))
+    assert set(numblocks) == {name for name, ind in argpairs if ind is not None}
 
-    all_indices = pipe(argpairs, pluck(1), concat, set)
+    all_indices = pipe(argpairs, pluck(1), filter(None), concat, set)
     dummy_indices = all_indices - set(out_indices)
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
@@ -417,20 +424,33 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     # {j: [1, 2, 3], ...}  For j a dummy index of dimension 3
     dummies = dict((i, list(range(dims[i]))) for i in dummy_indices)
 
+    dsk = {}
+
+    # Unpack dask values in non-array arguments
+    for i, (arg, ind) in enumerate(argpairs):
+        if ind is None:
+            arg2, dsk2 = to_task_dask(arg)
+            if dsk2:
+                dsk.update(ensure_dict(dsk2))
+                argpairs[i] = (arg2, ind)
+
     # Create argument lists
     valtups = []
     for kd in keydicts:
         args = []
         for arg, ind in argpairs:
-            tups = lol_tuples((arg,), ind, kd, dummies)
-            if any(nb == 1 for nb in numblocks[arg]):
-                tups2 = zero_broadcast_dimensions(tups, numblocks[arg])
+            if ind is None:
+                args.append(arg)
             else:
-                tups2 = tups
-            if concatenate and isinstance(tups2, list):
-                axes = [n for n, i in enumerate(ind) if i in dummies]
-                tups2 = (concatenate_axes, tups2, axes)
-            args.append(tups2)
+                tups = lol_tuples((arg,), ind, kd, dummies)
+                if any(nb == 1 for nb in numblocks[arg]):
+                    tups2 = zero_broadcast_dimensions(tups, numblocks[arg])
+                else:
+                    tups2 = tups
+                if concatenate and isinstance(tups2, list):
+                    axes = [n for n, i in enumerate(ind) if i in dummies]
+                    tups2 = (concatenate_axes, tups2, axes)
+                args.append(tups2)
         valtups.append(args)
 
     if not kwargs:  # will not be used in an apply, should be a tuple
@@ -439,7 +459,6 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     # Add heads to tuples
     keys = [(output,) + kt for kt in keytups]
 
-    dsk = {}
     # Unpack delayed objects in kwargs
     if kwargs:
         task, dsk2 = to_task_dask(kwargs)
@@ -2065,19 +2084,23 @@ def unify_chunks(*args, **kwargs):
     --------
     common_blockdim
     """
-    args = [asarray(a) if i % 2 == 0 else a for i, a in enumerate(args)]
+    arginds = [(asarray(a) if ind is not None else a, ind)
+               for a, ind in partition(2, args)]  # [x, ij, y, jk]
+    args = list(concat(arginds))  # [(x, ij), (y, jk)]
     warn = kwargs.get('warn', True)
-    arginds = list(partition(2, args)) # [x, ij, y, jk] -> [(x, ij), (y, jk)]
+
     arrays, inds = zip(*arginds)
     if all(ind == inds[0] for ind in inds) and all(a.chunks == arrays[0].chunks for a in arrays):
         return dict(zip(inds[0], arrays[0].chunks)), arrays
 
-    nameinds = [(a.name, i) for a, i in arginds]
-    blockdim_dict = dict((a.name, a.chunks) for a, _ in arginds)
+    nameinds = [(a.name if i is not None else a, i) for a, i in arginds]
+    blockdim_dict = {a.name: a.chunks
+                     for a, ind in arginds
+                     if ind is not None}
 
     chunkss = broadcast_dimensions(nameinds, blockdim_dict,
                                    consolidate=common_blockdim)
-    max_parts = max(arg.npartitions for arg in args[::2])
+    max_parts = max(arg.npartitions for arg, ind in arginds if ind is not None)
     nparts = np.prod(list(map(len, chunkss.values())))
 
     if warn and nparts and nparts >= max_parts * 10:
@@ -2086,13 +2109,16 @@ def unify_chunks(*args, **kwargs):
 
     arrays = []
     for a, i in arginds:
-        chunks = tuple(chunkss[j] if a.shape[n] > 1 else a.shape[n]
-                       if not np.isnan(sum(chunkss[j])) else None
-                       for n, j in enumerate(i))
-        if chunks != a.chunks and all(a.chunks):
-            arrays.append(a.rechunk(chunks))
-        else:
+        if i is None:
             arrays.append(a)
+        else:
+            chunks = tuple(chunkss[j] if a.shape[n] > 1 else a.shape[n]
+                           if not np.isnan(sum(chunkss[j])) else None
+                           for n, j in enumerate(i))
+            if chunks != a.chunks and all(a.chunks):
+                arrays.append(a.rechunk(chunks))
+            else:
+                arrays.append(a)
     return chunkss, arrays
 
 
@@ -2185,6 +2211,10 @@ def atop(func, out_ind, *args, **kwargs):
     >>> y = atop(double, 'ij', x, 'ij',
     ...          adjust_chunks={'i': lambda n: 2 * n}, dtype=x.dtype)  # doctest: +SKIP
 
+    Include literals by indexing with None
+
+    >>> y = atop(add, 'ij', x, 'ij', 1234, None, dtype=x.dtype)  # doctest: +SKIP
+
     See Also
     --------
     top - dict formulation of this function, contains most logic
@@ -2203,15 +2233,15 @@ def atop(func, out_ind, *args, **kwargs):
         chunkss[k] = (v,)
     arginds = list(zip(arrays, args[1::2]))
 
-    numblocks = dict([(a.name, a.numblocks) for a, _ in arginds])
-    argindsstr = list(concat([(a.name, ind) for a, ind in arginds]))
+    numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
+    argindsstr = list(concat([(a if ind is None else a.name, ind) for a, ind in arginds]))
     # Finish up the name
     if not out:
         out = '%s-%s' % (token or funcname(func).strip('_'),
                          tokenize(func, out_ind, argindsstr, dtype, **kwargs))
 
     dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs)
-    dsks = [a.dask for a, _ in arginds]
+    dsks = [a.dask for a, ind in arginds if ind is not None]
 
     chunks = [chunkss[i] for i in out_ind]
     if adjust_chunks:

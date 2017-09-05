@@ -92,6 +92,26 @@ def test_top_supports_broadcasting_rules():
          ('z', 1, 1): (add, ('x', 0, 1), ('y', 1, 0))}
 
 
+def test_top_literals():
+    assert top(add, 'z', 'ij', 'x', 'ij', 123, None, numblocks={'x': (2, 2)}) == \
+        {('z', 0, 0): (add, ('x', 0, 0), 123),
+         ('z', 0, 1): (add, ('x', 0, 1), 123),
+         ('z', 1, 0): (add, ('x', 1, 0), 123),
+         ('z', 1, 1): (add, ('x', 1, 1), 123)}
+
+
+def test_atop_literals():
+    x = da.ones((10, 10), chunks=(5, 5))
+    z = atop(add, 'ij', x, 'ij', 100, None, dtype=x.dtype)
+    assert_eq(z, x + 100)
+
+    z = atop(lambda x, y, z: x * y + z, 'ij', 2, None,  x, 'ij', 100, None, dtype=x.dtype)
+    assert_eq(z, 2 * x + 100)
+
+    z = atop(getitem, 'ij', x, 'ij', slice(None), None, dtype=x.dtype)
+    assert_eq(z, x)
+
+
 def test_concatenate3_on_scalars():
     assert_eq(concatenate3([1, 2]), np.array([1, 2]))
 
