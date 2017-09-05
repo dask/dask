@@ -2324,6 +2324,19 @@ def test_index_array_with_array_1d():
         dx[dy > 5]
 
 
+def test_index_array_2d_with_array_1d():
+    x = np.arange(24).reshape((4, 6))
+    dx = da.from_array(x, chunks=(2, 2))
+
+    print(sorted(x[x[:, 0] % 2 == 0].tolist()))
+    print(sorted(dx[dx[:, 0] % 2 == 0].compute().tolist()))
+
+    assert (sorted(x[x[:, 0] % 2 == 0].tolist()) ==
+            sorted(dx[dx[:, 0] % 2 == 0].compute().tolist()))
+    assert (sorted(x[x[:, 0] > 6].tolist()) ==
+            sorted(dx[dx[:, 0] > 6].compute().tolist()))
+
+
 def test_index_array_with_array_2d():
     x = np.arange(24).reshape((4, 6))
     dx = da.from_array(x, chunks=(2, 2))
