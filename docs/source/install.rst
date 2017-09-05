@@ -10,9 +10,9 @@ Anaconda
 Conda
 -----
 
-Dask is installed by default in `Anaconda <https://www.continuum.io/downloads>`_::
+Dask is installed by default in `Anaconda <https://www.anaconda.com/download/>`_::
 
-You can update Dask using `conda <https://www.continuum.io/downloads>`_::
+You can update Dask using `conda <https://www.anaconda.com/download/>`_::
 
     conda install dask
 
