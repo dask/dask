@@ -619,7 +619,7 @@ nanargmin = make_arg_reduction(chunk.nanmin, _nanargmin, True)
 nanargmax = make_arg_reduction(chunk.nanmax, _nanargmax, True)
 
 
-def cumreduction(func, binop, ident, x, axis, dtype=None, out=None):
+def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
     """ Generic function for cumulative reduction
 
     Parameters
@@ -643,6 +643,9 @@ def cumreduction(func, binop, ident, x, axis, dtype=None, out=None):
     cumsum
     cumprod
     """
+    if axis is None:
+        x = x.flatten()
+        axis = 0
     if dtype is None:
         dtype = func(np.empty((0,), dtype=x.dtype)).dtype
     assert isinstance(axis, int)
