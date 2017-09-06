@@ -949,3 +949,11 @@ def test_to_csv_with_get():
         assert flag[0]
         result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
         assert_eq(result, df)
+
+
+def test_to_csv_paths():
+    df = pd.DataFrame({"A": range(10)})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert ddf.to_csv("foo*.csv") == ['foo0.csv', 'foo1.csv']
+    os.remove('foo0.csv')
+    os.remove('foo1.csv')

@@ -194,6 +194,11 @@ def to_hdf(df, path, key, mode='a', append=False, get=None,
     if single_node:
         kwargs2['append'] = True
 
+    filenames = []
+    for i in range(0,df.npartitions):
+        i_name = name_function(i)
+        filenames.append(fmt_obj(path, i_name))
+
     for i in range(1, df.npartitions):
         i_name = name_function(i)
         task = (_pd_to_hdf, pd_to_hdf, lock,
@@ -211,7 +216,8 @@ def to_hdf(df, path, key, mode='a', append=False, get=None,
         keys = [(name, i) for i in range(df.npartitions)]
 
     if compute:
-        return DataFrame._get(dsk, keys, get=get, **dask_kwargs)
+        DataFrame._get(dsk, keys, get=get, **dask_kwargs)
+        return filenames
     else:
         return delayed([Delayed(k, dsk) for k in keys])
 

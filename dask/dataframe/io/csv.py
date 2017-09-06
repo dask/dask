@@ -496,13 +496,18 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
         European data
     storage_options: dict
         Parameters passed on to the backend filesystem class.
+    Returns
+    -------
+    The names of the file written if they were computed right away
+    If not, the delayed tasks associated to the writing of the files
     """
     values = [_to_csv_chunk(d, **kwargs) for d in df.to_delayed()]
-    values = write_bytes(values, filename, name_function, compression,
-                         encoding=None, **(storage_options or {}))
+    (values, names) = write_bytes(values, filename, name_function, compression,
+                                  encoding=None, **(storage_options or {}))
 
     if compute:
         delayed(values).compute(get=get)
+        return names
     else:
         return values
 

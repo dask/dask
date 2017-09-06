@@ -84,8 +84,9 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
                                             num=len(data), encoding=encoding,
                                             **kwargs)
 
-    return [delayed(write_block_to_file, pure=False)(d, myopen(f, mode='wb'))
-            for d, f in zip(data, names)]
+    values = [delayed(write_block_to_file, pure=False)(d, myopen(f, mode='wb'))
+              for d, f in zip(data, names)]
+    return values, names
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,

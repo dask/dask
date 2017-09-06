@@ -174,8 +174,8 @@ def to_textfiles(b, path, name_function=None, compression='infer',
     >>> b_dict.map(json.dumps).to_textfiles("/path/to/data/*.json")  # doctest: +SKIP
     """
     from dask import delayed
-    writes = write_bytes(b.to_delayed(), path, name_function, compression,
-                         encoding=encoding, **(storage_options or {}))
+    (writes,names) = write_bytes(b.to_delayed(), path, name_function, compression,
+                                 encoding=encoding, **(storage_options or {}))
 
     # Use Bag optimizations on these delayed objects
     dsk = ensure_dict(delayed(writes).dask)
@@ -185,6 +185,7 @@ def to_textfiles(b, path, name_function=None, compression='infer',
     if compute:
         get = get or _globals.get('get', None) or Bag._default_get
         delayed(out).compute(get=get)
+        return names
     else:
         return out
 
