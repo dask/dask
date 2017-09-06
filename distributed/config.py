@@ -114,7 +114,7 @@ def _initialize_logging_file_config(config):
     Initialize logging using logging's "Configuration file format".
     (ref.: https://docs.python.org/2/library/logging.config.html#configuration-file-format)
     """
-    logging.config.fileConfig(config['logging-file-config'])
+    logging.config.fileConfig(config['logging-file-config'], disable_existing_loggers=False)
 
 
 def initialize_logging(config):
