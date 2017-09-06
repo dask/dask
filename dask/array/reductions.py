@@ -696,12 +696,12 @@ def _cumprod_merge(a, b):
 
 
 @wraps(np.cumsum)
-def cumsum(x, axis, dtype=None, out=None):
+def cumsum(x, axis=None, dtype=None, out=None):
     return cumreduction(np.cumsum, _cumsum_merge, 0, x, axis, dtype, out=out)
 
 
 @wraps(np.cumprod)
-def cumprod(x, axis, dtype=None, out=None):
+def cumprod(x, axis=None, dtype=None, out=None):
     return cumreduction(np.cumprod, _cumprod_merge, 1, x, axis, dtype, out=out)
 
 
