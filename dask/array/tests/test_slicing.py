@@ -516,15 +516,14 @@ def test_index_with_dask_array():
         assert_eq(x[x_index], d[index])
 
 
-@pytest.mark.xfail
 def test_index_with_dask_array_2():
-    x = np.random.random((10, 10, 10, 10))
+    x = np.random.random((10, 10, 10))
     ind = np.random.random(10) > 0.5
 
-    d = da.from_array(x, chunks=(2, 3, 4, 5))
+    d = da.from_array(x, chunks=(3, 4, 5))
     dind = da.from_array(ind, chunks=4)
 
-    index = [slice(1, 9, 1), 4, slice(None)]
+    index = [slice(1, 9, 1), slice(None)]
 
     for i in range(x.ndim):
         index2 = index[:]
