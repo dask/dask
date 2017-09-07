@@ -6,8 +6,10 @@ from numbers import Integral, Number
 from operator import add, getitem, itemgetter
 
 import numpy as np
-from toolz import accumulate, memoize, merge, pluck, concat
+from toolz import accumulate, memoize, merge, pluck, concat, first
 
+from .. import core
+from .. import sharedict
 from ..base import tokenize, Base
 
 colon = slice(None, None, None)
@@ -747,8 +749,15 @@ def normalize_index(idx, shape):
     if not isinstance(idx, tuple):
         idx = (idx,)
     idx = replace_ellipsis(len(shape), idx)
-    non_none = sum(i is not None for i in idx)
-    idx = idx + (slice(None),) * (len(shape) - non_none)
+    n_sliced_dims = 0
+    for i in idx:
+        if hasattr(i, 'ndim'):
+            n_sliced_dims += i.ndim
+        elif i is None:
+            continue
+        else:
+            n_sliced_dims += 1
+    idx = idx + (slice(None),) * (len(shape) - n_sliced_dims)
     if len([i for i in idx if i is not None]) > len(shape):
         raise IndexError("Too many indices for array")
 
@@ -829,20 +838,46 @@ def slice_with_dask_array(x, index):
                else slice(None)
                for ind in index]
 
-    arginds = list(concat((ind, (i,))
-                          if isinstance(ind, Array) and ind.dtype == bool
-                          else (slice(None), None)
-                          for i, ind in enumerate(indexes)))
+    arginds = []
+    i = 0
+    for ind in indexes:
+        if isinstance(ind, Array) and ind.dtype == bool:
+            new = (ind, tuple(range(i, i + ind.ndim)))
+            i += x.ndim
+        else:
+            new = (slice(None), None)
+            i += 1
+        arginds.append(new)
+
+    arginds = list(concat(arginds))
 
     out = atop(getitem_variadic, tuple(range(x.ndim)), x, tuple(range(x.ndim)), *arginds, dtype=x.dtype)
 
-    chunks = []
-    for ind, chunk in zip(index, out.chunks):
-        if isinstance(ind, Array) and ind.dtype == bool:
-            chunks.append((np.nan,) * len(chunk))
-        else:
-            chunks.append(chunk)
-    out._chunks = tuple(chunks)
+    ind = first(ind for ind in index if isinstance(ind, Array) and ind.dtype == bool)
+    if ind.ndim > 1:
+        loc = index.index(ind)
+        def transform(key):
+            sub = key[loc: loc + ind.ndim]
+            total = 0
+            for s, ci in zip(sub, np.cumprod((1,) + ind.numblocks[::-1])[1::-1]):
+                total += s * ci
+            return key[:loc] + (total,) + key[loc + ind.ndim:]
+
+        name = 'getitem-' + tokenize(out, index)
+
+        dsk = {(name,) + transform(key[1:]): key for key in core.flatten(out._keys())}
+        chunks = (out.chunks[:loc] +
+                  ((np.nan,) * np.prod(out.numblocks[loc: loc + ind.ndim]),) +
+                  out.chunks[loc + ind.ndim:])
+        out = Array(sharedict.merge(out.dask, (name, dsk)), name, chunks, x.dtype)
+    else:
+        chunks = []
+        for ind, chunk in zip(index, out.chunks):
+            if isinstance(ind, Array) and ind.dtype == bool:
+                chunks.append((np.nan,) * len(chunk))
+            else:
+                chunks.append(chunk)
+        out._chunks = tuple(chunks)
     return out, tuple(out_index)
 
 
