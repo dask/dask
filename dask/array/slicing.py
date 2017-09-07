@@ -6,7 +6,7 @@ from numbers import Integral, Number
 from operator import add, getitem, itemgetter
 
 import numpy as np
-from toolz import accumulate, memoize, merge, pluck, concat, first
+from toolz import accumulate, memoize, merge, pluck, concat
 
 from .. import core
 from .. import sharedict
@@ -829,10 +829,25 @@ def check_index(ind, dimension):
 
 
 def slice_with_dask_array(x, index):
-    from .core import Array, atop
-    out_index = [slice(None) if isinstance(ind, Array)
-                            and ind.dtype == bool else ind
+    from .core import Array, atop, elemwise
+
+    out_index = [slice(None)
+                 if isinstance(ind, Array) and ind.dtype == bool
+                 else ind
                  for ind in index]
+
+    if len(index) == 1 and index[0].ndim == x.ndim:
+        y = elemwise(getitem, x, *index, dtype=x.dtype)
+        name = 'getitem-' + tokenize(x, index)
+        dsk = {(name, i): k for i, k in enumerate(core.flatten(y._keys()))}
+        chunks = ((np.nan,) * y.npartitions,)
+        return (Array(sharedict.merge(y.dask, (name, dsk)), name, chunks, x.dtype),
+                out_index)
+
+    if any(isinstance(ind, Array) and ind.dtype == bool and ind.ndim != 1
+            for ind in index):
+        raise NotImplementedError("Slicing with dask.array only permitted for "
+                                  "dimension 1 and dimension n")
     indexes = [ind
                if isinstance(ind, Array) and ind.dtype == bool
                else slice(None)
@@ -853,31 +868,13 @@ def slice_with_dask_array(x, index):
 
     out = atop(getitem_variadic, tuple(range(x.ndim)), x, tuple(range(x.ndim)), *arginds, dtype=x.dtype)
 
-    ind = first(ind for ind in index if isinstance(ind, Array) and ind.dtype == bool)
-    if ind.ndim > 1:
-        loc = index.index(ind)
-        def transform(key):
-            sub = key[loc: loc + ind.ndim]
-            total = 0
-            for s, ci in zip(sub, np.cumprod((1,) + ind.numblocks[::-1])[1::-1]):
-                total += s * ci
-            return key[:loc] + (total,) + key[loc + ind.ndim:]
-
-        name = 'getitem-' + tokenize(out, index)
-
-        dsk = {(name,) + transform(key[1:]): key for key in core.flatten(out._keys())}
-        chunks = (out.chunks[:loc] +
-                  ((np.nan,) * np.prod(out.numblocks[loc: loc + ind.ndim]),) +
-                  out.chunks[loc + ind.ndim:])
-        out = Array(sharedict.merge(out.dask, (name, dsk)), name, chunks, x.dtype)
-    else:
-        chunks = []
-        for ind, chunk in zip(index, out.chunks):
-            if isinstance(ind, Array) and ind.dtype == bool:
-                chunks.append((np.nan,) * len(chunk))
-            else:
-                chunks.append(chunk)
-        out._chunks = tuple(chunks)
+    chunks = []
+    for ind, chunk in zip(index, out.chunks):
+        if isinstance(ind, Array) and ind.dtype == bool:
+            chunks.append((np.nan,) * len(chunk))
+        else:
+            chunks.append(chunk)
+    out._chunks = tuple(chunks)
     return out, tuple(out_index)
 
 
