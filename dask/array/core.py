@@ -3224,12 +3224,28 @@ def from_npy_stack(dirname, mmap_mode='r'):
 
 
 def slice_with_dask_array(x, index):
-    y = elemwise(getitem, x, index, dtype=x.dtype)
+    token = 'getitem'
+    name = token + tokenize(x, index)
 
-    name = 'getitem-' + tokenize(x, index)
+    if index.ndim < x.ndim:
+        x = x.reshape((-1,) + x.shape[index.ndim:])
+        index = index.flatten()
 
-    dsk = {(name, i): k
-           for i, k in enumerate(core.flatten(y._keys()))}
-    chunks = ((np.nan,) * y.npartitions,)
+        inds = tuple(range(x.ndim))
+        y = atop(np.compress,
+                 inds,
+                 index, (0,),
+                 x, inds,
+                 axis=0,
+                 token=token, dtype=x.dtype)
+        y._chunks = (len(y._chunks[0]) * (np.NaN,),) + y._chunks[1:]
 
-    return Array(sharedict.merge(y.dask, (name, dsk)), name, chunks, x.dtype)
+        return y
+    else:
+        y = elemwise(getitem, x, index, dtype=x.dtype)
+
+        dsk = {(name, i): k
+               for i, k in enumerate(core.flatten(y._keys()))}
+        chunks = ((np.nan,) * y.npartitions,)
+
+        return Array(sharedict.merge(y.dask, (name, dsk)), name, chunks, x.dtype)
