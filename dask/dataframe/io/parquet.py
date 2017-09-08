@@ -390,7 +390,7 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
 
     if append:
         pf = fastparquet.api.ParquetFile(path, open_with=myopen, sep=sep)
-        if pf.file_scheme != 'hive':
+        if pf.file_scheme not in ['hive', 'empty', 'flat']:
             raise ValueError('Requested file scheme is hive, '
                              'but existing file scheme is not.')
         elif ((set(pf.columns) != set(df.columns) - set(partition_on)) or
