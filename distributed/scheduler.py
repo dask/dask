@@ -539,7 +539,7 @@ class Scheduler(ServerNode):
 
             self.remove_worker(address=worker)
 
-            with rpc(address) as r:
+            with rpc(address, connection_args=self.connection_args) as r:
                 try:
                     yield r.terminate(report=False)
                 except EnvironmentError as e:
@@ -1608,7 +1608,7 @@ class Scheduler(ServerNode):
 
             logger.debug("Send kill signal to nannies: %s", nannies)
 
-            nannies = [rpc(nanny_address)
+            nannies = [rpc(nanny_address, connection_args=self.connection_args)
                        for nanny_address in nannies.values()
                        if nanny_address is not None]
 
