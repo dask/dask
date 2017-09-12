@@ -846,8 +846,10 @@ def slice_with_dask_array(x, index):
 
     if any(isinstance(ind, Array) and ind.dtype == bool and ind.ndim != 1
             for ind in index):
-        raise NotImplementedError("Slicing with dask.array only permitted for "
-                                  "dimension 1 and dimension n")
+        raise NotImplementedError("Slicing with dask.array only permitted when "
+                                  "the indexer has only one dimension or when "
+                                  "it has the same dimension as the sliced "
+                                  "array")
     indexes = [ind
                if isinstance(ind, Array) and ind.dtype == bool
                else slice(None)
