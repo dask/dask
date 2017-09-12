@@ -6,6 +6,7 @@ from toolz import merge
 
 np = pytest.importorskip('numpy')
 
+import dask
 import dask.array as da
 from dask.array.slicing import (_sanitize_index_element, _slice_1d,
                                 new_blockdim, sanitize_index, slice_array,
@@ -505,10 +506,33 @@ def test_oob_check():
         x[0, 0]
 
 
-def test_index_with_dask_array_errors():
-    x = da.ones((5, 5), chunks=2)
-    with pytest.raises(NotImplementedError):
-        x[0, x > 10]
+def test_index_with_dask_array():
+    x = np.arange(36).reshape((6, 6))
+    d = da.from_array(x, chunks=(3, 3))
+    ind = np.asarray([True, True, False, True, False, False], dtype=bool)
+    ind = da.from_array(ind, chunks=2)
+    for index in [ind, (slice(1, 9, 2), ind), (ind, slice(2, 8, 1))]:
+        x_index = dask.compute(index)[0]
+        assert_eq(x[x_index], d[index])
+
+
+def test_index_with_dask_array_2():
+    x = np.random.random((10, 10, 10))
+    ind = np.random.random(10) > 0.5
+
+    d = da.from_array(x, chunks=(3, 4, 5))
+    dind = da.from_array(ind, chunks=4)
+
+    index = [slice(1, 9, 1), slice(None)]
+
+    for i in range(x.ndim):
+        index2 = index[:]
+        index2.insert(i, dind)
+
+        index3 = index[:]
+        index3.insert(i, ind)
+
+        assert_eq(x[tuple(index3)], d[tuple(index2)])
 
 
 @pytest.mark.xfail

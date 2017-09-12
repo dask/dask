@@ -1215,18 +1215,14 @@ class Array(Base):
             else:
                 return self.map_blocks(getitem, index, dtype=dt, name=out)
 
-        # Slicing
-        if isinstance(index, Array):
-            return slice_with_dask_array(self, index)
-
         if not isinstance(index, tuple):
             index = (index,)
 
-        if any(isinstance(i, Array) for i in index):
-            raise NotImplementedError("Indexing with a dask Array")
-
-        from .slicing import normalize_index
+        from .slicing import normalize_index, slice_with_dask_array
         index2 = normalize_index(index, self.shape)
+
+        if any(isinstance(i, Array) for i in index2):
+            self, index2 = slice_with_dask_array(self, index2)
 
         if all(isinstance(i, slice) and i == slice(None) for i in index2):
             return self
@@ -2554,7 +2550,7 @@ def elemwise(op, *args, **kwargs):
 
 
 def handle_out(out, result):
-    """ Handle out paramters
+    """ Handle out parameters
 
     If out is a dask.array then this overwrites the contents of that array with
     the result
@@ -3221,15 +3217,3 @@ def from_npy_stack(dirname, mmap_mode='r'):
     dsk = dict(zip(keys, values))
 
     return Array(dsk, name, chunks, dtype)
-
-
-def slice_with_dask_array(x, index):
-    y = elemwise(getitem, x, index, dtype=x.dtype)
-
-    name = 'getitem-' + tokenize(x, index)
-
-    dsk = {(name, i): k
-           for i, k in enumerate(core.flatten(y._keys()))}
-    chunks = ((np.nan,) * y.npartitions,)
-
-    return Array(sharedict.merge(y.dask, (name, dsk)), name, chunks, x.dtype)
