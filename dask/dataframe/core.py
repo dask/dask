@@ -3642,7 +3642,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
                 raise ValueError('check for duplicate partitions\nold:\n%s\n\n'
                                  'new:\n%s\n\ncombined:\n%s'
                                  % (pformat(a), pformat(b), pformat(c)))
-            d[(out2, j - 1)] = (pd.concat, tmp)
+            d[(out2, j - 1)] = (methods.concat, tmp)
         j += 1
     return d
 
@@ -3674,10 +3674,10 @@ def repartition_npartitions(df, npartitions):
                                      for new_partition_index in range(npartitions + 1)]
         dsk = {}
         for new_partition_index in range(npartitions):
-            value = (pd.concat, [(df._name, old_partition_index)
-                                 for old_partition_index in
-                                 range(new_partitions_boundaries[new_partition_index],
-                                       new_partitions_boundaries[new_partition_index + 1])])
+            value = (methods.concat,
+                     [(df._name, old_partition_index) for old_partition_index in
+                      range(new_partitions_boundaries[new_partition_index],
+                            new_partitions_boundaries[new_partition_index + 1])])
             dsk[new_name, new_partition_index] = value
         divisions = [df.divisions[new_partition_index]
                      for new_partition_index in new_partitions_boundaries]
