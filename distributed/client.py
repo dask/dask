@@ -2916,7 +2916,7 @@ class as_completed(object):
 
     Optionally wait until the result has been gathered as well
 
-    >>> ac = as_completed([x, y, z], results=True)  # doctest: +SKIP
+    >>> ac = as_completed([x, y, z], with_results=True)  # doctest: +SKIP
     >>> for future, result in ac:  # doctest: +SKIP
     ...     print(result)  # doctest: +SKIP
     2
