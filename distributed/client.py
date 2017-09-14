@@ -2179,7 +2179,7 @@ class Client(Node):
         return self.sync(self._upload_environment, name, zipfile)
 
     @gen.coroutine
-    def _restart(self, timeout=3):
+    def _restart(self, timeout=5):
         self._send_to_scheduler({'op': 'restart', 'timeout': timeout})
         self._restart_event = Event()
         yield self._restart_event.wait()

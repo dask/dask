@@ -221,3 +221,9 @@ def test_scheduler_file():
         assert s.workers == {w.worker_address}
         yield w._close()
         s.stop()
+
+
+@gen_cluster(client=True, Worker=Nanny)
+def test_nanny_timeout(c, s, a, b):
+    with pytest.raises(gen.TimeoutError):
+        response = yield a.restart(timeout=0.1)

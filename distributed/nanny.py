@@ -13,6 +13,7 @@ from tornado.locks import Event
 
 from .comm import get_address_host, get_local_address_for, unparse_host_port
 from .core import rpc, RPCClosed, CommClosedError, coerce_to_address
+from .metrics import time
 from .node import ServerNode
 from .process import AsyncProcess
 from .security import Security
@@ -211,9 +212,13 @@ class Nanny(ServerNode):
 
     @gen.coroutine
     def restart(self, comm=None, timeout=2):
+        start = time()
         if self.process is not None:
-            yield self.kill(timeout=timeout)
-        yield self.instantiate()
+            yield gen.with_timeout(timedelta(seconds=timeout),
+                                   self.kill(timeout=timeout))
+        timeout2 = timeout - (time() - start)
+        yield gen.with_timeout(timedelta(seconds=timeout2),
+                               self.instantiate())
         raise gen.Return('OK')
 
     def is_alive(self):
@@ -398,7 +403,7 @@ class WorkerProcess(object):
         delay = 0.05
         while True:
             if self.status != 'starting':
-                raise ValueError("Worker not started")
+                return
             try:
                 msg = self.init_result_q.get_nowait()
             except Empty:
