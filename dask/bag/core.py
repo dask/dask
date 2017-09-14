@@ -893,6 +893,112 @@ class Bag(Base):
                    for i in range(n) for j in range(m))
         return type(self)(merge(self.dask, other.dask, dsk), name, n * m)
 
+    def foldby2(self, key, binop, initial=no_default, combine=None,
+               combine_initial=no_default):
+        """ Combined reduction and groupby
+
+        Foldby provides a combined groupby and reduce for efficient parallel
+        split-apply-combine tasks.
+
+        The computation
+
+        >>> b.foldby(key, binop, init)                        # doctest: +SKIP
+
+        is equivalent to the following:
+
+        >>> def reduction(group):                               # doctest: +SKIP
+        ...     return reduce(binop, group, init)               # doctest: +SKIP
+
+        >>> b.groupby(key).map(lambda (k, v): (k, reduction(v)))# doctest: +SKIP
+
+        But uses minimal communication and so is *much* faster.
+
+        >>> b = from_sequence(range(10))
+        >>> iseven = lambda x: x % 2 == 0
+        >>> add = lambda x, y: x + y
+        >>> dict(b.foldby(iseven, add))                         # doctest: +SKIP
+        {True: 20, False: 25}
+
+        **Key Function**
+
+        The key function determines how to group the elements in your bag.
+        In the common case where your bag holds dictionaries then the key
+        function often gets out one of those elements.
+
+        >>> def key(x):
+        ...     return x['name']
+
+        This case is so common that it is special cased, and if you provide a
+        key that is not a callable function then dask.bag will turn it into one
+        automatically.  The following are equivalent:
+
+        >>> b.foldby(lambda x: x['name'], ...)  # doctest: +SKIP
+        >>> b.foldby('name', ...)  # doctest: +SKIP
+
+        **Binops**
+
+        It can be tricky to construct the right binary operators to perform
+        analytic queries.  The ``foldby`` method accepts two binary operators,
+        ``binop`` and ``combine``.  Binary operators two inputs and output must
+        have the same type.
+
+        Binop takes a running total and a new element and produces a new total:
+
+        >>> def binop(total, x):
+        ...     return total + x['amount']
+
+        Combine takes two totals and combines them:
+
+        >>> def combine(total1, total2):
+        ...     return total1 + total2
+
+        Each of these binary operators may have a default first value for
+        total, before any other value is seen.  For addition binary operators
+        like above this is often ``0`` or the identity element for your
+        operation.
+
+        >>> b.foldby('name', binop, 0, combine, 0)  # doctest: +SKIP
+
+        See Also
+        --------
+
+        toolz.reduceby
+        pyspark.combineByKey
+        """
+        token = tokenize(self, key, binop, initial, combine, combine_initial)
+        a = 'foldby-a-' + token
+        b = 'foldby-b-' + token
+        if combine is None:
+            combine = binop
+        if initial is not no_default:
+            dsk = dict(((a, i), (reduceby, key, binop, (self.name, i), initial))
+                       for i in range(self.npartitions))
+        else:
+            dsk = dict(((a, i), (reduceby, key, binop, (self.name, i)))
+                       for i in range(self.npartitions))
+
+        def combine2(acc, x):
+            return combine(acc, x[1])
+
+        dsk2 = dict()
+        if combine_initial is not no_default:
+            raise NotImplementedError("Not yet, sorry!")
+        else:
+            powers_of_2 = [pos for pos, char in enumerate(reversed(bin(self.npartitions))) if char == "1"]
+            i = sum(powers_of_2)
+            queue = list(dsk.keys())
+            while len(queue) > 1:
+                key = (b, i)
+                inputs = [queue.pop(0), queue.pop(0)]
+                dsk2[key] = (merge_with, (partial, reduce, combine), inputs)
+                queue.append(key)
+                i -= 1
+
+            # apply to last reduce.
+            dsk2[key] = (dictitems, dsk2[key])
+
+        return type(self)(merge(self.dask, dsk, dsk2), b, 1)
+
     def foldby(self, key, binop, initial=no_default, combine=None,
                combine_initial=no_default):
         """ Combined reduction and groupby
@@ -980,6 +1086,7 @@ class Bag(Base):
         def combine2(acc, x):
             return combine(acc, x[1])
 
+        dsk2 = dict()
         if combine_initial is not no_default:
             dsk2 = {(b, 0): (dictitems, (reduceby, 0, combine2,
                                          (toolz.concat, (map, dictitems,
@@ -988,6 +1095,7 @@ class Bag(Base):
         else:
             dsk2 = {(b, 0): (dictitems, (merge_with, (partial, reduce, combine),
                                          list(dsk.keys())))}
+
         return type(self)(merge(self.dask, dsk, dsk2), b, 1)
 
     def take(self, k, npartitions=1, compute=True):
@@ -1359,6 +1467,7 @@ def from_url(urls):
      '\\n',
      'Dask provides multi-core execution on larger-than-memory datasets using blocked\\n',
      'algorithms and task scheduling.  It maps high-level NumPy and list operations\\n',
+        import ipdb; ipdb.set_trace()
      'on large datasets on to graphs of many operations on small in-memory datasets.\\n')
 
     >>> b = from_url(['http://github.com', 'http://google.com'])  # doctest: +SKIP
