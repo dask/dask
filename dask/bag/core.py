@@ -986,7 +986,7 @@ class Bag(Base):
         else:
             powers_of_2 = [pos for pos, char in enumerate(reversed(bin(self.npartitions))) if char == "1"]
             i = sum(powers_of_2)
-            queue = list(dsk.keys())
+            queue = sorted(dsk.keys(), key=lambda x: x[1], reverse=True)
             while len(queue) > 1:
                 key = (b, i)
                 inputs = [queue.pop(0), queue.pop(0)]
