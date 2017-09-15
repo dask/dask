@@ -230,6 +230,17 @@ def test_upload_egg(c, s, a, b):
     assert not os.path.exists(os.path.join(a.local_dir, eggname))
 
 
+@pytest.mark.xfail(reason='Still lose time to network I/O')
+@gen_cluster(client=True)
+def test_upload_large_file(c, s, a, b):
+    pytest.importorskip('crick')
+    yield gen.sleep(0.05)
+    with rpc(a.address) as aa:
+        yield aa.upload_file(filename='myfile.dat', data=b'0' * 100000000)
+        yield gen.sleep(0.05)
+        assert a.digests['tick-duration'].components[0].max() < 0.050
+
+
 @gen_cluster()
 def test_broadcast(s, a, b):
     with rpc(s.address) as cc:
