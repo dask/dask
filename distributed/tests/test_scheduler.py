@@ -1141,3 +1141,19 @@ def test_service_hosts_match_scheduler():
         sock = first(s.services['http']._sockets.values())
         assert sock.getsockname()[0] == '127.0.0.2'
         yield s.close()
+
+
+@gen_cluster(client=True)
+def test_aggregate_profiles(c, s, a, b):
+    x = c.map(slowinc, range(10))
+    y = c.map(slowadd, range(10), range(10))
+
+    yield wait(x + y)
+
+    prof = yield c.profile()
+    xx = yield c.profile('slowinc')
+    yy = yield c.profile('slowadd')
+    assert 'slowinc' in str(xx)
+    assert 'slowadd' not in str(xx)
+
+    assert xx['count'] + yy['count'] == prof['count']

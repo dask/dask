@@ -6,10 +6,11 @@ pytest.importorskip('bokeh')
 from bokeh.models import ColumnDataSource, Model
 
 from distributed.bokeh import messages
+from distributed.utils_test import slowinc
 
 from distributed.bokeh.components import (
     TaskStream, TaskProgress, MemoryUsage, ResourceProfiles, WorkerTable,
-    Processing
+    Processing, ProfilePlot
 )
 
 
@@ -42,3 +43,12 @@ def test_worker_table(s, a, b):
     c = WorkerTable()
     c.update(messages)
     assert c.source.data['host'] == ['127.0.0.1']
+
+
+@gen_cluster(client=True)
+def test_profile_plot(c, s, a, b):
+    p = ProfilePlot()
+    assert len(p.source.data['left']) <= 1
+    yield c.map(slowinc, range(10), delay=0.05)
+    p.update(a.profile_recent)
+    assert len(p.source.data['left']) > 1

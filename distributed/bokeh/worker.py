@@ -15,7 +15,7 @@ from bokeh.plotting import figure
 from bokeh.palettes import RdBu
 from toolz import merge, partition_all
 
-from .components import DashboardComponent
+from .components import DashboardComponent, ProfilePlot
 from .core import BokehServer, format_time
 from .utils import transpose
 from ..compatibility import WINDOWS
@@ -32,7 +32,7 @@ with open(os.path.join(os.path.dirname(__file__), 'template.html')) as f:
     template_source = f.read()
 
 template = jinja2.Template(template_source)
-template_variables = {'pages': ['main', 'system', 'crossfilter', 'counters']}
+template_variables = {'pages': ['main', 'system', 'profile', 'crossfilter', 'counters']}
 
 
 class StateTable(DashboardComponent):
@@ -604,6 +604,19 @@ def counters_doc(server, extra, doc):
         doc.template_variables.update(extra)
 
 
+def profile_doc(server, extra, doc):
+    with log_errors():
+        doc.title = "Dask Worker Profile"
+        profile = ProfilePlot(sizing_mode='stretch_both')
+        print(server.profile_recent['count'])
+        profile.update(server.profile_recent)
+
+        doc.add_root(profile.root)
+        doc.template = template
+        doc.template_variables['active_page'] = 'profile'
+        doc.template_variables.update(extra)
+
+
 class BokehWorker(BokehServer):
     def __init__(self, worker, io_loop=None, prefix='', **kwargs):
         self.worker = worker
@@ -622,11 +635,13 @@ class BokehWorker(BokehServer):
         crossfilter = Application(FunctionHandler(partial(crossfilter_doc, worker, extra)))
         systemmonitor = Application(FunctionHandler(partial(systemmonitor_doc, worker, extra)))
         counters = Application(FunctionHandler(partial(counters_doc, worker, extra)))
+        profile = Application(FunctionHandler(partial(profile_doc, worker, extra)))
 
         self.apps = {'/main': main,
                      '/counters': counters,
                      '/crossfilter': crossfilter,
-                     '/system': systemmonitor}
+                     '/system': systemmonitor,
+                     '/profile': profile}
 
         self.loop = io_loop or worker.loop
         self.server = None

@@ -31,6 +31,7 @@ from .config import config
 from .compatibility import unicode, get_thread_identity
 from .core import (error_message, CommClosedError,
                    rpc, pingpong, coerce_to_address)
+from .diagnostics import profile
 from .metrics import time
 from .node import ServerNode
 from .preloading import preload_modules
@@ -41,7 +42,7 @@ from .sizeof import safe_sizeof as sizeof
 from .threadpoolexecutor import ThreadPoolExecutor, secede as tpe_secede
 from .utils import (funcname, get_ip, has_arg, _maybe_complex, log_errors,
                     ignoring, validate_key, mp_context, import_file,
-                    silence_logging, thread_state, json_load_robust)
+                    silence_logging, thread_state, json_load_robust, key_split)
 from .utils_comm import pack_data, gather_from_workers
 
 _ncores = mp_context.cpu_count()
@@ -160,6 +161,9 @@ class WorkerBase(ServerNode):
             'health': self.host_health,
             'upload_file': self.upload_file,
             'start_ipython': self.start_ipython,
+            'call_stack': self.get_call_stack,
+            'profile': self.get_profile,
+            'get_profile_metadata': self.get_profile_metadata,
             'keys': self.keys,
         }
 
@@ -700,13 +704,17 @@ def dumps_task(task):
     return to_serialize(task)
 
 
-def apply_function(function, args, kwargs, execution_state, key):
+def apply_function(function, args, kwargs, execution_state, key,
+                   active_threads, active_threads_lock):
     """ Run a function, collect information
 
     Returns
     -------
     msg: dictionary with status, result/error, timings, etc..
     """
+    ident = get_thread_identity()
+    with active_threads_lock:
+        active_threads[ident] = key
     thread_state.start_time = time()
     thread_state.execution_state = execution_state
     thread_state.key = key
@@ -726,7 +734,9 @@ def apply_function(function, args, kwargs, execution_state, key):
         end = time()
     msg['start'] = start
     msg['stop'] = end
-    msg['thread'] = get_thread_identity()
+    msg['thread'] = ident
+    with active_threads_lock:
+        del active_threads[ident]
     return msg
 
 
@@ -940,6 +950,8 @@ class Worker(WorkerBase):
         The type of a particular piece of data
     * **threads**: ``{key: int}``
         The ID of the thread on which the task ran
+    * **active_threads**: ``{int: key}``
+        The keys currently running on active threads
     * **exceptions**: ``{key: exception}``
         The exception caused by running a task if it erred
     * **tracebacks**: ``{key: traceback}``
@@ -1019,6 +1031,11 @@ class Worker(WorkerBase):
         self.exceptions = dict()
         self.tracebacks = dict()
 
+        self.active_threads_lock = threading.Lock()
+        self.active_threads = dict()
+        self.profile_keys = defaultdict(profile.create)
+        self.profile_recent = profile.create()
+
         self.priorities = dict()
         self.priority_counter = 0
         self.durations = dict()
@@ -1066,6 +1083,12 @@ class Worker(WorkerBase):
         self._client = None
 
         WorkerBase.__init__(self, *args, **kwargs)
+
+        pc = PeriodicCallback(self.trigger_profile,
+                              kwargs.get('profile_interval', 10),
+                              io_loop=self.loop)
+        pc.start()
+        self.periodic_callbacks['profile'] = pc
 
         _global_workers.append(weakref.ref(self))
 
@@ -2020,7 +2043,9 @@ class Worker(WorkerBase):
             try:
                 result = yield self.executor_submit(key, apply_function, function,
                                                     args2, kwargs2,
-                                                    self.execution_state, key)
+                                                    self.execution_state, key,
+                                                    self.active_threads,
+                                                    self.active_threads_lock)
             except RuntimeError as e:
                 executor_error = e
                 raise
@@ -2080,6 +2105,53 @@ class Worker(WorkerBase):
     ##################
     # Administrative #
     ##################
+
+    def trigger_profile(self):
+        """
+        Get a frame from all actively computing threads
+
+        Merge these frames into existing profile counts
+        """
+        if not self.active_threads:  # hope that this is thread-atomic?
+            return
+        start = time()
+        with self.active_threads_lock:
+            active_threads = self.active_threads.copy()
+        frames = sys._current_frames()
+        frames = {ident: frames[ident] for ident in active_threads}
+        for ident, frame in frames.items():
+            key = key_split(active_threads[ident])
+            profile.process(frame, None, self.profile_recent, stop='apply_function')
+            profile.process(frame, None, self.profile_keys[key], stop='apply_function')
+        stop = time()
+        if self.digests is not None:
+            self.digests['profile-duration'].add(stop - start)
+
+    def get_profile(self, stream=None, keys=None, merge=False):
+        if keys is None:
+            return self.profile_recent
+        else:
+            print('other profile')
+            result = {k: self.profile_keys[k] for k in keys
+                    if k in self.profile_keys}
+            if merge:
+                result = profile.merge(*result.values())
+            return result
+
+    def get_profile_metadata(self, stream=None):
+        return {'keys': list(self.profile_keys)}
+
+    def get_call_stack(self, stream=None, keys=None):
+        with self.active_threads_lock:
+            frames = sys._current_frames()
+            active_threads = self.active_threads.copy()
+            frames = {k: frames[ident]
+                      for ident, k in active_threads.items()}
+        if keys is not None:
+            frames = {k: frame for k, frame in frames.items() if k in keys}
+
+        result = {k: profile.call_stack(frame) for k, frame in frames.items()}
+        return result
 
     def validate_key_memory(self, key):
         assert key in self.data

@@ -923,3 +923,27 @@ def test_scheduler_file():
         assert s.workers == {w.address}
         yield w._close()
         s.stop()
+
+
+@gen_cluster(client=True)
+def test_statistical_profiling(c, s, a, b):
+    futures = c.map(slowinc, range(10), delay=0.1)
+    yield wait(futures)
+
+    profile = a.profile_keys['slowinc']
+    assert profile['count']
+    assert 'threading' not in str(profile)
+
+
+@gen_cluster(client=True)
+def test_statistical_profiling(c, s, a, b):
+    da = pytest.importorskip('dask.array')
+    for i in range(5):
+        x = da.random.random(1000000, chunks=(10000,))
+        y = (x + x * 2) - x.sum().persist()
+        yield wait(y)
+    profile = a.profile_recent
+    assert profile['count']
+    assert 'threading' not in str(profile)
+    assert 'sum' in str(profile)
+    assert 'random' in str(profile)

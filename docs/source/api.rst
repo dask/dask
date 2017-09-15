@@ -9,6 +9,7 @@ API
 
 .. autosummary::
    Client
+   Client.call_stack
    Client.cancel
    Client.close
    Client.compute

@@ -17,9 +17,10 @@ from bokeh.palettes import Spectral9
 from bokeh.plotting import figure
 from toolz import valmap
 
-from distributed.config import config
-from distributed.diagnostics.progress_stream import progress_quads, nbytes_bar
-from distributed.utils import log_errors
+from ..config import config
+from ..diagnostics.progress_stream import progress_quads, nbytes_bar
+from ..diagnostics import profile
+from ..utils import log_errors
 
 if config.get('bokeh-export-tool', False):
     from .export_tool import ExportTool
@@ -548,3 +549,53 @@ class Processing(DashboardComponent):
             d['alpha'] = [0.7] * n
 
             return d
+
+
+class ProfilePlot(DashboardComponent):
+    """ Time plots of the current resource usage on the cluster
+
+    This is two plots, one for CPU and Memory and another for Network I/O
+    """
+
+    def __init__(self, **kwargs):
+        state = profile.create()
+        data = profile.plot_data(state)
+        self.states = data.pop('states')
+        self.source = ColumnDataSource(data=data)
+
+        def cb(attr, old, new):
+            with log_errors():
+                try:
+                    ind = new['1d']['indices'][0]
+                except IndexError:
+                    return
+                data = profile.plot_data(self.states[ind])
+                del self.states[:]
+                self.states.extend(data.pop('states'))
+                self.source.data.update(data)
+                self.source.selected = old
+
+        self.source.on_change('selected', cb)
+
+        self.root = figure(tools='tap', **kwargs)
+        self.root.quad('left', 'right', 'top', 'bottom', color='color',
+                      line_color='black', line_width=2, source=self.source)
+        self.root.text(x='left', y='bottom', text='short_text',
+                       x_offset=5, text_font_size=value('10pt'),
+                       source=self.source)
+
+        hover = HoverTool()
+        hover.tooltips = "@long_text{safe}"  # this is unsafe
+        hover.point_policy = 'follow_mouse'
+        self.root.add_tools(hover)
+
+        self.root.xaxis.visible = False
+        self.root.yaxis.visible = False
+        self.root.grid.visible = False
+
+    def update(self, state):
+        with log_errors():
+            self.state = state
+            data = profile.plot_data(self.state)
+            self.states = data.pop('states')
+            self.source.data.update(data)

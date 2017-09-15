@@ -4637,5 +4637,47 @@ def test_warn_executor(loop):
         assert any('Client' in str(r.message) for r in record)
 
 
+@gen_cluster([('127.0.0.1', 4)] * 2, client=True)
+def test_call_stack_future(c, s, a, b):
+    future = c.submit(slowinc, 1, delay=0.5)
+    yield gen.sleep(0.1)
+    result = yield c.call_stack(future)
+    w = a if a.executing else b
+    assert list(result) == [w.address]
+    assert list(result[w.address]) == [future.key]
+    assert 'slowinc' in str(result)
+
+
+@gen_cluster([('127.0.0.1', 4)] * 2, client=True)
+def test_call_stack_all(c, s, a, b):
+    future = c.submit(slowinc, 1, delay=0.5)
+    yield gen.sleep(0.1)
+    result = yield c.call_stack()
+    w = a if a.executing else b
+    assert list(result) == [w.address]
+    assert list(result[w.address]) == [future.key]
+    assert 'slowinc' in str(result)
+
+
+@gen_cluster([('127.0.0.1', 4)] * 2, client=True)
+def test_call_stack_collections(c, s, a, b):
+    da = pytest.importorskip('dask.array')
+    x = da.random.random(1000, chunks=(10,)).map_blocks(slowinc).persist()
+    while not a.executing and not b.executing:
+        yield gen.sleep(0.001)
+    result = yield c.call_stack(x)
+    assert result
+
+
+@gen_cluster([('127.0.0.1', 4)] * 2, client=True)
+def test_call_stack_collections_all(c, s, a, b):
+    da = pytest.importorskip('dask.array')
+    x = da.random.random(1000, chunks=(10,)).map_blocks(slowinc).persist()
+    while not a.executing and not b.executing:
+        yield gen.sleep(0.001)
+    result = yield c.call_stack()
+    assert result
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # flake8: noqa

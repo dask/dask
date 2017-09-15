@@ -20,13 +20,14 @@ from bokeh.plotting import figure
 from bokeh.palettes import Viridis11
 from bokeh.io import curdoc
 from toolz import pipe
+from tornado import gen
 try:
     import numpy as np
 except ImportError:
     np = False
 
 from . import components
-from .components import DashboardComponent
+from .components import DashboardComponent, ProfilePlot
 from .core import BokehServer
 from .worker import SystemMonitor, format_time, counters_doc
 from .utils import transpose
@@ -53,7 +54,8 @@ with open(os.path.join(os.path.dirname(__file__), 'template.html')) as f:
 
 template = jinja2.Template(template_source)
 
-template_variables = {'pages': ['status', 'workers', 'tasks', 'system', 'counters']}
+template_variables = {'pages': ['status', 'workers', 'tasks', 'system',
+                                'profile', 'counters']}
 
 
 def update(source, data):
@@ -994,6 +996,24 @@ def status_doc(scheduler, extra, doc):
         doc.template_variables.update(extra)
 
 
+def profile_doc(scheduler, extra, doc):
+    with log_errors():
+        doc.title = "Dask Profile"
+        prof = ProfilePlot(sizing_mode='stretch_both')
+        doc.add_root(prof.root)
+        doc.template = template
+        doc.template_variables['active_page'] = 'profile'
+        doc.template_variables.update(extra)
+
+        @gen.coroutine
+        def _():
+            profile = yield scheduler.get_profile()
+            doc.add_next_tick_callback(lambda: prof.update(profile))
+
+        from tornado.ioloop import IOLoop
+        IOLoop.current().add_callback(_)
+
+
 class BokehScheduler(BokehServer):
     def __init__(self, scheduler, io_loop=None, prefix='', **kwargs):
         self.scheduler = scheduler
@@ -1014,6 +1034,7 @@ class BokehScheduler(BokehServer):
         events = Application(FunctionHandler(partial(events_doc, scheduler, extra)))
         tasks = Application(FunctionHandler(partial(tasks_doc, scheduler, extra)))
         status = Application(FunctionHandler(partial(status_doc, scheduler, extra)))
+        profile = Application(FunctionHandler(partial(profile_doc, scheduler, extra)))
 
         self.apps = {
             '/system': systemmonitor,
@@ -1022,7 +1043,8 @@ class BokehScheduler(BokehServer):
             '/events': events,
             '/counters': counters,
             '/tasks': tasks,
-            '/status': status
+            '/status': status,
+            '/profile': profile,
         }
 
         self.loop = io_loop or scheduler.loop
