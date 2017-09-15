@@ -821,7 +821,7 @@ def norm(x, ord=None, axis=None, keepdims=False):
         if len(axis) == 1:
             raise ValueError("Invalid norm order for vectors.")
 
-        r = svd(x)[1].sum()
+        r = svd(x)[1][None].sum(keepdims=keepdims)
     elif ord == np.inf:
         r = abs(r)
         if len(axis) == 1:
@@ -848,9 +848,9 @@ def norm(x, ord=None, axis=None, keepdims=False):
     elif len(axis) == 2 and ord == -1:
         r = abs(r).sum(axis=axis[0], keepdims=keepdims).min(keepdims=keepdims)
     elif len(axis) == 2 and ord == 2:
-        r = svd(x)[1].max()
+        r = svd(x)[1][None].max(keepdims=keepdims)
     elif len(axis) == 2 and ord == -2:
-        r = svd(x)[1].min()
+        r = svd(x)[1][None].min(keepdims=keepdims)
     else:
         if len(axis) == 2:
             raise ValueError("Invalid norm order for matrices.")
