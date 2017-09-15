@@ -821,23 +821,19 @@ def norm(x, ord=None, axis=None, keepdims=False):
         if len(axis) == 1:
             raise ValueError("Invalid norm order for vectors.")
 
-        r = svd(x)[1].sum()
+        r = svd(x)[1][None].sum(keepdims=keepdims)
     elif ord == np.inf:
         r = abs(r)
         if len(axis) == 1:
             r = r.max(axis=axis, keepdims=keepdims)
         else:
-            r = r.sum(axis=axis[1]).max()
-            if keepdims:
-                r = r[None, None]
+            r = r.sum(axis=axis[1], keepdims=keepdims).max(keepdims=keepdims)
     elif ord == -np.inf:
         r = abs(r)
         if len(axis) == 1:
             r = r.min(axis=axis, keepdims=keepdims)
         else:
-            r = r.sum(axis=axis[1]).min()
-            if keepdims:
-                r = r[None, None]
+            r = r.sum(axis=axis[1], keepdims=keepdims).min(keepdims=keepdims)
     elif ord == 0:
         if len(axis) == 2:
             raise ValueError("Invalid norm order for matrices.")
@@ -848,17 +844,13 @@ def norm(x, ord=None, axis=None, keepdims=False):
         if len(axis) == 1:
             r = r.sum(axis=axis, keepdims=keepdims)
         else:
-            r = r.sum(axis=axis[0]).max()
-            if keepdims:
-                r = r[None, None]
+            r = r.sum(axis=axis[0], keepdims=keepdims).max(keepdims=keepdims)
     elif len(axis) == 2 and ord == -1:
-        r = abs(r).sum(axis=axis[0]).min()
-        if keepdims:
-            r = r[None, None]
+        r = abs(r).sum(axis=axis[0], keepdims=keepdims).min(keepdims=keepdims)
     elif len(axis) == 2 and ord == 2:
-        r = svd(x)[1].max()
+        r = svd(x)[1][None].max(keepdims=keepdims)
     elif len(axis) == 2 and ord == -2:
-        r = svd(x)[1].min()
+        r = svd(x)[1][None].min(keepdims=keepdims)
     else:
         if len(axis) == 2:
             raise ValueError("Invalid norm order for matrices.")
