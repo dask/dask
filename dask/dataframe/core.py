@@ -250,6 +250,7 @@ class _Frame(Base):
 
     @property
     def size(self):
+        """ Size of the series """
         return self.reduction(methods.size, np.sum, token='size', meta=int,
                               split_every=False)
 
@@ -352,6 +353,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return len(self.divisions) > 0 and self.divisions[0] is not None
 
     def clear_divisions(self):
+        """ Forget division information """
         divisions = (None,) * (self.npartitions + 1)
         return type(self)(self.dask, self._name, self._meta, divisions)
 
@@ -928,7 +930,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         See Also
         --------
-            dask.DataFrame.random_split, pd.DataFrame.sample
+        DataFrame.random_split
+        pandas.DataFrame.sample
         """
 
         if random_state is None:
@@ -1564,9 +1567,10 @@ normalize_token.register((Scalar, _Frame), lambda a: a._name)
 
 
 class Series(_Frame):
-    """ Out-of-core Series object
+    """ Parallel Pandas Series
 
-    Mimics ``pandas.Series``.
+    Do not use this class directly.  Instead use functions like
+    ``dd.read_csv``, ``dd.read_parquet``, or ``dd.from_pandas``.
 
     Parameters
     ----------
@@ -1584,7 +1588,6 @@ class Series(_Frame):
 
     See Also
     --------
-
     dask.dataframe.DataFrame
     """
 
@@ -1621,6 +1624,7 @@ class Series(_Frame):
 
     @cache_readonly
     def dt(self):
+        """ Namespace of datetime methods """
         return DatetimeAccessor(self)
 
     @cache_readonly
@@ -1629,6 +1633,7 @@ class Series(_Frame):
 
     @cache_readonly
     def str(self):
+        """ Namespace for string methods """
         return StringAccessor(self)
 
     def __dir__(self):
@@ -1644,6 +1649,7 @@ class Series(_Frame):
 
     @property
     def nbytes(self):
+        """ Number of bytes """
         return self.reduction(methods.nbytes, np.sum, token='nbytes',
                               meta=int, split_every=False)
 
@@ -1826,6 +1832,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return self.map_partitions(M.combine_first, other)
 
     def to_bag(self, index=False):
+        """ Craeate a Dask Bag from a Series """
         from .io import to_bag
         return to_bag(self, index)
 
@@ -2060,11 +2067,13 @@ class Index(Series):
 
 class DataFrame(_Frame):
     """
-    Implements out-of-core DataFrame as a sequence of pandas DataFrames
+    Parallel Pandas DataFrame
+
+    Do not use this class directly.  Instead use functions like
+    ``dd.read_csv``, ``dd.read_parquet``, or ``dd.from_pandas``.
 
     Parameters
     ----------
-
     dask: dict
         The dask graph to compute this DataFrame
     name: str
@@ -2329,7 +2338,9 @@ class DataFrame(_Frame):
         return self.map_partitions(M.rename, None, columns)
 
     def query(self, expr, **kwargs):
-        """ Blocked version of pd.DataFrame.query
+        """ Filter dataframe with complex expression
+
+        Blocked version of pd.DataFrame.query
 
         This is like the sequential version except that this will also happen
         in many threads.  This may conflict with ``numexpr`` which will use
@@ -2339,10 +2350,10 @@ class DataFrame(_Frame):
             import numexpr
             numexpr.set_nthreads(1)
 
-        The original docstring follows below:\n
-        """ + (pd.DataFrame.query.__doc__
-               if pd.DataFrame.query.__doc__ is not None else '')
-
+        See also
+        --------
+        pandas.DataFrame.query
+        """
         name = 'query-%s' % tokenize(self, expr)
         if kwargs:
             name = name + '--' + tokenize(kwargs)
