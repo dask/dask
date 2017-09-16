@@ -3,7 +3,8 @@ API
 
 .. currentmodule:: dask.dataframe
 
-Top level user functions:
+Dataframe
+~~~~~~~~~
 
 .. autosummary::
 
@@ -82,6 +83,120 @@ Top level user functions:
     DataFrame.var
     DataFrame.visualize
     DataFrame.where
+
+Series
+~~~~~~
+
+.. autosummary::
+
+   Series
+   Series.add
+   Series.align
+   Series.all
+   Series.any
+   Series.append
+   Series.apply
+   Series.astype
+   Series.autocorr
+   Series.between
+   Series.bfill
+   Series.cat
+   Series.clear_divisions
+   Series.clip
+   Series.clip_lower
+   Series.clip_upper
+   Series.compute
+   Series.copy
+   Series.corr
+   Series.count
+   Series.cov
+   Series.cummax
+   Series.cummin
+   Series.cumprod
+   Series.cumsum
+   Series.describe
+   Series.diff
+   Series.div
+   Series.drop_duplicates
+   Series.dropna
+   Series.dt
+   Series.dtype
+   Series.eq
+   Series.ffill
+   Series.fillna
+   Series.first
+   Series.floordiv
+   Series.ge
+   Series.get_partition
+   Series.groupby
+   Series.gt
+   Series.head
+   Series.idxmax
+   Series.idxmin
+   Series.isin
+   Series.isnull
+   Series.iteritems
+   Series.known_divisions
+   Series.last
+   Series.le
+   Series.loc
+   Series.lt
+   Series.map
+   Series.map_overlap
+   Series.map_partitions
+   Series.mask
+   Series.max
+   Series.mean
+   Series.memory_usage
+   Series.min
+   Series.mod
+   Series.mul
+   Series.nbytes
+   Series.ndim
+   Series.ne
+   Series.nlargest
+   Series.notnull
+   Series.nsmallest
+   Series.nunique
+   Series.nunique_approx
+   Series.persist
+   Series.pipe
+   Series.pow
+   Series.prod
+   Series.quantile
+   Series.radd
+   Series.random_split
+   Series.rdiv
+   Series.reduction
+   Series.repartition
+   Series.resample
+   Series.reset_index
+   Series.rolling
+   Series.round
+   Series.sample
+   Series.sem
+   Series.shift
+   Series.size
+   Series.std
+   Series.str
+   Series.sub
+   Series.sum
+   Series.to_bag
+   Series.to_csv
+   Series.to_delayed
+   Series.to_frame
+   Series.to_hdf
+   Series.to_parquet
+   Series.to_string
+   Series.to_timestamp
+   Series.truediv
+   Series.unique
+   Series.value_counts
+   Series.values
+   Series.var
+   Series.visualize
+   Series.where
+
 
 Groupby Operations
 ~~~~~~~~~~~~~~~~~~

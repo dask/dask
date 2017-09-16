@@ -137,8 +137,7 @@ Array
 +++++
 
 -  Micro-optimize optimizations (:pr:`2058`)
--  Change slicing optimizations to avoid fusing raw numpy arrays (:pr:`2075`)
-  (:pr:`2080`)
+-  Change slicing optimizations to avoid fusing raw numpy arrays (:pr:`2075`) (:pr:`2080`)
 -  Dask.array operations now work on numpy arrays (:pr:`2079`)
 -  Reshape now works in a much broader set of cases (:pr:`2089`)
 -  Support deepcopy python protocol (:pr:`2090`)
@@ -153,12 +152,10 @@ DataFrame
 -  Fix to_parquet with empty partitions (:pr:`2020`)
 -  Optional ``npartitions='auto'`` mode in ``set_index`` (:pr:`2025`)
 -  Optimize shuffle performance (:pr:`2032`)
--  Support efficient repartitioning along time windows like
-  ``repartition(freq='12h')`` (:pr:`2059`)
+-  Support efficient repartitioning along time windows like ``repartition(freq='12h')`` (:pr:`2059`)
 -  Improve speed of categorize (:pr:`2010`)
 -  Support single-row dataframe arithmetic (:pr:`2085`)
--  Automatically avoid shuffle when setting index with a sorted column
-   (:pr:`2091`)
+-  Automatically avoid shuffle when setting index with a sorted column (:pr:`2091`)
 -  Improve handling of integer-na handling in read_csv (:pr:`2098`)
 
 Delayed
