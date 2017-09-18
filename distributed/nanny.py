@@ -4,11 +4,12 @@ from datetime import timedelta
 import logging
 from multiprocessing.queues import Empty
 import os
+import psutil
 import shutil
 import threading
 
 from tornado import gen
-from tornado.ioloop import IOLoop, TimeoutError
+from tornado.ioloop import IOLoop, TimeoutError, PeriodicCallback
 from tornado.locks import Event
 
 from .comm import get_address_host, get_local_address_for, unparse_host_port
@@ -17,8 +18,9 @@ from .metrics import time
 from .node import ServerNode
 from .process import AsyncProcess
 from .security import Security
-from .utils import get_ip, mp_context, silence_logging, json_load_robust
-from .worker import _ncores, run
+from .utils import (get_ip, mp_context, silence_logging, json_load_robust,
+        ignoring)
+from .worker import _ncores, run, TOTAL_MEMORY
 
 
 logger = logging.getLogger(__name__)
@@ -67,9 +69,16 @@ class Nanny(ServerNode):
         self.scheduler = rpc(self.scheduler_addr, connection_args=self.connection_args)
         self.services = services
         self.name = name
-        self.memory_limit = memory_limit
         self.quiet = quiet
         self.auto_restart = True
+
+        if memory_limit == 'auto':
+            memory_limit = int(TOTAL_MEMORY * 0.6 * min(1, self.ncores / _ncores))
+        with ignoring(TypeError):
+            memory_limit = float(memory_limit)
+        if isinstance(memory_limit, float) and memory_limit <= 1:
+            memory_limit = memory_limit * TOTAL_MEMORY
+        self.memory_limit = memory_limit
 
         if silence_logs:
             silence_logging(level=silence_logs)
@@ -85,6 +94,9 @@ class Nanny(ServerNode):
         super(Nanny, self).__init__(handlers, io_loop=self.loop,
                                     connection_args=self.connection_args,
                                     **kwargs)
+
+        pc = PeriodicCallback(self.memory_monitor, 100, io_loop=self.loop)
+        self.periodic_callbacks['memory'] = pc
 
         self._listen_address = listen_address
         self.status = 'init'
@@ -144,6 +156,9 @@ class Nanny(ServerNode):
         if response == 'OK':
             assert self.worker_address
             self.status = 'running'
+
+        for pc in self.periodic_callbacks.values():
+            pc.start()
 
     def start(self, addr_or_port=0):
         self.loop.add_callback(self._start, addr_or_port)
@@ -220,6 +235,16 @@ class Nanny(ServerNode):
         yield gen.with_timeout(timedelta(seconds=timeout2),
                                self.instantiate())
         raise gen.Return('OK')
+
+    def memory_monitor(self):
+        """ Track worker's memory.  Restart if it goes above 95% """
+        if self.status != 'running':
+            return
+        memory = psutil.Process(self.process.pid).memory_info().vms
+        frac = memory / self.memory_limit
+        if frac > 0.95:
+            logger.warn("Worker exceeded 95% memory budget.  Restarting")
+            self.process.process.terminate()
 
     def is_alive(self):
         return self.process is not None and self.process.status == 'running'

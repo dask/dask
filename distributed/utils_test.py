@@ -35,7 +35,7 @@ from .metrics import time
 from .nanny import Nanny
 from .security import Security
 from .utils import ignoring, log_errors, sync, mp_context, get_ip, get_ipv6
-from .worker import Worker
+from .worker import Worker, TOTAL_MEMORY
 import pytest
 import psutil
 
@@ -374,7 +374,8 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
             for i in range(nworkers):
                 q = mp_context.Queue()
                 fn = '_test_worker-%s' % uuid.uuid4()
-                kwargs = merge({'ncores': 1, 'local_dir': fn}, worker_kwargs)
+                kwargs = merge({'ncores': 1, 'local_dir': fn,
+                                'memory_limit': TOTAL_MEMORY}, worker_kwargs)
                 proc = mp_context.Process(target=_run_worker,
                                           args=(q, scheduler_q),
                                           kwargs=kwargs)
@@ -611,6 +612,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
         start
         end
     """
+    worker_kwargs = merge({'memory_limit': TOTAL_MEMORY}, worker_kwargs)
     def _(func):
         cor = func
         if not iscoroutinefunction(func):

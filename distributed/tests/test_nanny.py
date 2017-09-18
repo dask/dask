@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import gc
+import logging
 import os
 import random
 import sys
@@ -16,7 +17,7 @@ from distributed.core import CommClosedError
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.utils import ignoring, tmpfile
-from distributed.utils_test import gen_cluster, gen_test, slow
+from distributed.utils_test import gen_cluster, gen_test, slow, captured_logger
 
 
 @gen_cluster(ncores=[])
@@ -227,3 +228,26 @@ def test_scheduler_file():
 def test_nanny_timeout(c, s, a, b):
     with pytest.raises(gen.TimeoutError):
         response = yield a.restart(timeout=0.1)
+
+
+@gen_cluster(ncores=[('127.0.0.1', 1)], client=True, Worker=Nanny,
+             worker_kwargs={'memory_limit': 1e9}, timeout=20)
+def test_nanny_terminate(c, s, a):
+    from time import sleep
+
+    def leak():
+        L = []
+        while True:
+            L.append(b'0' * 5000000)
+            sleep(0.001)
+
+    proc = a.process.pid
+    with captured_logger(logging.getLogger('distributed.nanny')) as logger:
+        future = c.submit(leak)
+        start = time()
+        while a.process.pid == proc:
+            yield gen.sleep(0.1)
+            assert time() < start + 10
+        out = logger.getvalue()
+        assert 'restart' in out.lower()
+        assert 'memory' in out.lower()

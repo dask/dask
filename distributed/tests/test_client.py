@@ -3568,7 +3568,7 @@ def test_scatter_compute_store_lose(c, s, a, b):
     Kill the machine with the irreplaceable data.  What happens to the complete
     result?  How about after it GCs and tries to come back?
     """
-    [x] = yield c.scatter([1], workers=a.address)
+    x = yield c.scatter(1, workers=a.address)
     xx = c.submit(inc, x, workers=a.address)
     y = c.submit(inc, 1)
 
