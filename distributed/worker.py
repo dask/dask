@@ -78,7 +78,7 @@ class WorkerBase(ServerNode):
                  heartbeat_interval=5000, reconnect=True, memory_limit='auto',
                  executor=None, resources=None, silence_logs=None,
                  death_timeout=None, preload=(), security=None,
-                 contact_address=None, **kwargs):
+                 contact_address=None, memory_monitor_interval=200, **kwargs):
         if scheduler_file:
             cfg = json_load_robust(scheduler_file)
             scheduler_addr = cfg['address']
@@ -93,6 +93,7 @@ class WorkerBase(ServerNode):
         self.death_timeout = death_timeout
         self.preload = preload
         self.contact_address = contact_address
+        self.memory_monitor_interval = memory_monitor_interval
         if silence_logs:
             silence_logging(level=silence_logs)
 
@@ -114,6 +115,7 @@ class WorkerBase(ServerNode):
         if isinstance(memory_limit, float) and memory_limit <= 1:
             memory_limit = memory_limit * TOTAL_MEMORY
         self.memory_limit = memory_limit
+        self.paused = False
 
         if self.memory_limit:
             try:
@@ -132,6 +134,7 @@ class WorkerBase(ServerNode):
         self.executor = executor or ThreadPoolExecutor(self.ncores)
         self.scheduler = rpc(scheduler_addr, connection_args=self.connection_args)
         self.name = name
+        self.pause_fraction = config.get('worker-pause-memory-fraction', 0.8)
         self.heartbeat_interval = heartbeat_interval
         self.heartbeat_active = False
         self.execution_state = {'scheduler': self.scheduler.address,
@@ -176,6 +179,12 @@ class WorkerBase(ServerNode):
                               io_loop=self.loop)
         self.periodic_callbacks['heartbeat'] = pc
         self._address = contact_address
+
+        self._memory_monitoring = False
+        pc = PeriodicCallback(self.memory_monitor,
+                              self.memory_monitor_interval,
+                              io_loop=self.loop)
+        self.periodic_callbacks['memory'] = pc
 
     @property
     def worker_address(self):
@@ -330,6 +339,9 @@ class WorkerBase(ServerNode):
         if self.status == 'running':
             logger.info('        Registered to: %26s', self.scheduler.address)
             logger.info('-' * 49)
+
+        for pc in self.periodic_callbacks.values():
+            pc.start()
 
     def start(self, port=0):
         self.loop.add_callback(self._start, port)
@@ -1087,7 +1099,6 @@ class Worker(WorkerBase):
         pc = PeriodicCallback(self.trigger_profile,
                               kwargs.get('profile_interval', 10),
                               io_loop=self.loop)
-        pc.start()
         self.periodic_callbacks['profile'] = pc
 
         _global_workers.append(weakref.ref(self))
@@ -1995,6 +2006,8 @@ class Worker(WorkerBase):
         return True
 
     def ensure_computing(self):
+        if self.paused:
+            return
         try:
             while self.constrained and len(self.executing) < self.ncores:
                 key = self.constrained[0]
@@ -2106,6 +2119,49 @@ class Worker(WorkerBase):
     # Administrative #
     ##################
 
+    @gen.coroutine
+    def memory_monitor(self):
+        """ Track this process's memory usage and act accordingly
+
+        If we rise above 70% memory use, start dumping data to disk.
+
+        If we rise above 80% memory use, stop execution of new tasks
+        """
+        if self._memory_monitoring:
+            return
+        self._memory_monitoring = True
+        total = 0
+        proc = psutil.Process()
+        frac = proc.memory_info().vms / self.memory_limit
+
+        if frac > self.pause_fraction:
+            if not self.paused:
+                logger.warn("Worker is at %d percent memory usage.  Stopping work.",
+                            int(frac * 100))
+                self.paused = True
+        elif self.paused:
+            logger.warn("Worker at %d percent memory usage. Restarting work.",
+                        int(frac * 100))
+            self.paused = False
+            self.ensure_computing()
+
+        if frac > 0.70:  # dump data to disk
+            target = self.memory_limit * 0.60
+            count = 0
+
+            while proc.memory_info().vms > target:
+                if not self.data.fast:
+                    break
+                total += self.data.fast.evict()
+                print(count)
+                count += 1
+                yield gen.moment
+            if count:
+                logger.debug("Moved %d pieces of data data and %e bytes to disk",
+                             count, total)
+        self._memory_monitoring = False
+        raise gen.Return(total)
+
     def trigger_profile(self):
         """
         Get a frame from all actively computing threads
@@ -2121,8 +2177,8 @@ class Worker(WorkerBase):
         frames = {ident: frames[ident] for ident in active_threads}
         for ident, frame in frames.items():
             key = key_split(active_threads[ident])
-            profile.process(frame, None, self.profile_recent, stop='apply_function')
-            profile.process(frame, None, self.profile_keys[key], stop='apply_function')
+            profile.process(frame, None, self.profile_recent, stop='_concurrent_futures_thread.py')
+            profile.process(frame, None, self.profile_keys[key], stop='_concurrent_futures_thread.py')
         stop = time()
         if self.digests is not None:
             self.digests['profile-duration'].add(stop - start)

@@ -18,6 +18,7 @@ from distributed.scheduler import BANDWIDTH, key_split
 from distributed.utils_test import (slowinc, slowadd, inc, gen_cluster,
                                     slowidentity)
 from distributed.utils_test import loop # flake8: noqa
+from distributed.worker import TOTAL_MEMORY
 
 import pytest
 
@@ -157,7 +158,7 @@ def test_new_worker_steals(c, s, a):
     while len(a.task_state) < 10:
         yield gen.sleep(0.01)
 
-    b = Worker(s.ip, s.port, loop=s.loop, ncores=1)
+    b = Worker(s.ip, s.port, loop=s.loop, ncores=1, memory_limit=TOTAL_MEMORY)
     yield b._start()
 
     result = yield total
@@ -313,7 +314,8 @@ def test_dont_steal_few_saturated_tasks_many_workers(c, s, a, *rest):
     assert not any(w.task_state for w in rest)
 
 
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10,
+             worker_kwargs={'memory_limit': TOTAL_MEMORY})
 def test_steal_when_more_tasks(c, s, a, *rest):
     s.extensions['stealing']._pc.callback_time = 20
     x = c.submit(mul, b'0', 100000000, workers=a.address)  # 100 MB
