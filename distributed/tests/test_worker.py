@@ -929,6 +929,16 @@ def test_scheduler_file():
         s.stop()
 
 
+@gen_cluster(client=True, worker_kwargs={'heartbeat_interval': 50})
+def test_scheduler_delay(c, s, a, b):
+    old = a.scheduler_delay
+    assert abs(a.scheduler_delay) < 0.01
+    assert abs(b.scheduler_delay) < 0.01
+
+    yield gen.sleep(0.100)
+    assert a.scheduler_delay != old
+
+
 @gen_cluster(client=True)
 def test_statistical_profiling(c, s, a, b):
     futures = c.map(slowinc, range(10), delay=0.1)

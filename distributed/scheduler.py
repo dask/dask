@@ -607,11 +607,13 @@ class Scheduler(ServerNode):
 
             if address in self.workers:
                 self.log_event(address, merge({'action': 'heartbeat'}, info))
-                return 'OK'
+                return {'status': 'OK', 'time': time()}
 
             name = name or address
             if name in self.aliases:
-                return 'name taken, %s' % name
+                return {'status': 'error',
+                        'message': 'name taken, %s' % name,
+                        'time': time()}
 
             if 'addresses' not in self.host_info[host]:
                 self.host_info[host].update({'addresses': set(), 'cores': 0})
@@ -669,7 +671,7 @@ class Scheduler(ServerNode):
             self.log_event('all', {'action': 'add-worker',
                                    'worker': address})
             logger.info("Register %s", str(address))
-            return 'OK'
+            return {'status': 'OK', 'time': time()}
 
     def update_graph(self, client=None, tasks=None, keys=None,
                      dependencies=None, restrictions=None, priority=None,
@@ -1436,7 +1438,6 @@ class Scheduler(ServerNode):
 
                         op = msg.pop('op')
                         if op:
-                            self.correct_time_delay(worker, msg)
                             handler = self.worker_handlers[op]
                             handler(worker=worker, **msg)
 
@@ -1463,26 +1464,6 @@ class Scheduler(ServerNode):
             else:
                 assert comm.closed()
                 worker_comm.abort()
-
-    def correct_time_delay(self, worker, msg):
-        """
-        Apply offset time delay in message times.
-
-        Clocks on different workers differ.  We keep track of a relative "now"
-        through periodic heartbeats.  We use this known delay to align message
-        times to Scheduler local time.  In particular this helps with
-        diagnostics.
-
-        Operates in place
-        """
-        if 'time-delay' in self.worker_info[worker]:
-            delay = self.worker_info[worker]['time-delay']
-            if 'time' in msg:
-                msg['time'] += delay
-
-            if 'startstops' in msg:
-                msg['startstops'] = [(a, b + delay, c + delay)
-                                     for a, b, c in msg['startstops']]
 
     def add_plugin(self, plugin):
         """

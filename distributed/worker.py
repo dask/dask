@@ -205,7 +205,8 @@ class WorkerBase(ServerNode):
                 else:
                     kwargs = {}
 
-                yield self.scheduler.register(
+                start = time()
+                response = yield self.scheduler.register(
                     address=self.contact_address,
                     name=self.name,
                     ncores=self.ncores,
@@ -218,6 +219,9 @@ class WorkerBase(ServerNode):
                     ready=len(self.ready),
                     in_flight=len(self.in_flight_tasks),
                     **kwargs)
+                end = time()
+                middle = (start + end) / 2
+                self.scheduler_delay = response['time'] - middle
             finally:
                 self.heartbeat_active = False
         else:
@@ -236,6 +240,7 @@ class WorkerBase(ServerNode):
             if self.status in ('closed', 'closing'):
                 raise gen.Return
             try:
+                _start = time()
                 future = self.scheduler.register(
                         ncores=self.ncores,
                         address=self.contact_address,
@@ -253,7 +258,10 @@ class WorkerBase(ServerNode):
                     diff = self.death_timeout - (time() - start)
                     future = gen.with_timeout(timedelta(seconds=diff), future,
                                               io_loop=self.loop)
-                resp = yield future
+                response = yield future
+                _end = time()
+                middle = (_start + _end) / 2
+                self.scheduler_delay = response['time'] - middle
                 self.status = 'running'
                 break
             except EnvironmentError:
@@ -262,8 +270,9 @@ class WorkerBase(ServerNode):
                 yield gen.sleep(0.1)
             except gen.TimeoutError:
                 pass
-        if resp != 'OK':
-            raise ValueError("Unexpected response from register: %r" % (resp,))
+        if response['status'] != 'OK':
+            raise ValueError("Unexpected response from register: %r" %
+                             (response,))
         self.periodic_callbacks['heartbeat'].start()
 
     def start_services(self, listen_ip=''):
@@ -508,8 +517,8 @@ class WorkerBase(ServerNode):
         self.outgoing_count += 1
         duration = (stop - start) or 0.5  # windows
         self.outgoing_transfer_log.append({
-            'start': start,
-            'stop': stop,
+            'start': start + self.scheduler_delay,
+            'stop': stop + self.scheduler_delay,
             'middle': (start + stop) / 2,
             'duration': duration,
             'who': who,
@@ -717,7 +726,7 @@ def dumps_task(task):
 
 
 def apply_function(function, args, kwargs, execution_state, key,
-                   active_threads, active_threads_lock):
+                   active_threads, active_threads_lock, time_delay):
     """ Run a function, collect information
 
     Returns
@@ -744,8 +753,8 @@ def apply_function(function, args, kwargs, execution_state, key,
                'type': type(result) if result is not None else None}
     finally:
         end = time()
-    msg['start'] = start
-    msg['stop'] = end
+    msg['start'] = start + time_delay
+    msg['stop'] = end + time_delay
     msg['thread'] = ident
     with active_threads_lock:
         del active_threads[ident]
@@ -1093,6 +1102,8 @@ class Worker(WorkerBase):
         self.outgoing_transfer_log = deque(maxlen=(100000))
         self.outgoing_count = 0
         self._client = None
+
+        self.scheduler_delay = 0
 
         WorkerBase.__init__(self, *args, **kwargs)
 
@@ -1711,10 +1722,11 @@ class Worker(WorkerBase):
 
                 self.log.append(('request-dep', dep, worker, deps))
                 logger.debug("Request %d keys", len(deps))
-                start = time()
+
+                start = time() + self.scheduler_delay
                 response = yield self.rpc(worker).get_data(keys=deps,
                                                            who=self.address)
-                stop = time()
+                stop = time() + self.scheduler_delay
 
                 if cause:
                     self.startstops[cause].append(('transfer', start, stop))
@@ -2058,7 +2070,8 @@ class Worker(WorkerBase):
                                                     args2, kwargs2,
                                                     self.execution_state, key,
                                                     self.active_threads,
-                                                    self.active_threads_lock)
+                                                    self.active_threads_lock,
+                                                    self.scheduler_delay)
             except RuntimeError as e:
                 executor_error = e
                 raise
