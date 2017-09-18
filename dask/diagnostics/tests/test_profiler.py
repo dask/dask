@@ -224,7 +224,10 @@ def test_profiler_plot():
     assert check_title(p, "Not the default")
     # Test empty, checking for errors
     prof.clear()
-    prof.visualize(show=False, save=False)
+    with pytest.warns(None) as record:
+        prof.visualize(show=False, save=False)
+
+    assert len(record) == 0
 
 
 @pytest.mark.skipif("not bokeh")
@@ -244,7 +247,11 @@ def test_resource_profiler_plot():
     assert check_title(p, "Not the default")
     # Test empty, checking for errors
     rprof.clear()
-    rprof.visualize(show=False, save=False)
+
+    with pytest.warns(None) as record:
+        rprof.visualize(show=False, save=False)
+
+    assert len(record) == 0
 
 
 @pytest.mark.skipif("not bokeh")
@@ -264,7 +271,10 @@ def test_cache_profiler_plot():
     assert p.axis[1].axis_label == 'Cache Size (non-standard)'
     # Test empty, checking for errors
     cprof.clear()
-    cprof.visualize(show=False, save=False)
+    with pytest.warns(None) as record:
+        cprof.visualize(show=False, save=False)
+
+    assert len(record) == 0
 
 
 @pytest.mark.skipif("not bokeh")
