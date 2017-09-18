@@ -113,7 +113,7 @@ def test_svd_compressed():
     usvt = np.dot(u, np.dot(np.diag(s), vt))
 
     tol = 0.2
-    assert_eq(np.linalg.norm(mat - usvt),
+    assert_eq(np.linalg.norm(usvt),
               np.linalg.norm(mat),
               rtol=tol, atol=tol)  # average accuracy check
 
