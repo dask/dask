@@ -43,3 +43,6 @@ bokeh-export-tool: False
 
 tick-time: 20             # milliseconds between event loop health checks
 tick-maximum-delay: 1000  # milliseconds allowed before triggering a warning
+
+profile-interval: 10  # milliseconds in between statistical profiling queries
+profile-cycle-interval: 1000  # milliseconds between starting new profile

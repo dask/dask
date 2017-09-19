@@ -3241,7 +3241,8 @@ class Scheduler(ServerNode):
 
     @gen.coroutine
     def get_profile_metadata(self, comm=None, workers=None, merge_workers=True,
-                             start=None, stop=None, dt=1):
+                             start=None, stop=None, profile_cycle_interval=None):
+        dt = profile_cycle_interval or config.get('profile-cycle-interval', 1000) / 1000
         if workers is None:
             workers = self.workers
         else:

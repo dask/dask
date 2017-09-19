@@ -30,6 +30,9 @@ else:
     ExportTool = None
 
 
+profile_interval = config.get('profile-interval')
+
+
 class DashboardComponent(object):
     """ Base class for Dask.distributed UI dashboard components.
 
@@ -561,7 +564,7 @@ class ProfilePlot(DashboardComponent):
 
     def __init__(self, **kwargs):
         state = profile.create()
-        data = profile.plot_data(state)
+        data = profile.plot_data(state, profile_interval)
         self.states = data.pop('states')
         self.source = ColumnDataSource(data=data)
 
@@ -571,7 +574,7 @@ class ProfilePlot(DashboardComponent):
                     ind = new['1d']['indices'][0]
                 except IndexError:
                     return
-                data = profile.plot_data(self.states[ind])
+                data = profile.plot_data(self.states[ind], profile_interval)
                 del self.states[:]
                 self.states.extend(data.pop('states'))
                 self.source.data.update(data)
@@ -617,7 +620,7 @@ class ProfilePlot(DashboardComponent):
     def update(self, state):
         with log_errors():
             self.state = state
-            data = profile.plot_data(self.state)
+            data = profile.plot_data(self.state, profile_interval)
             self.states = data.pop('states')
             self.source.data.update(data)
 
@@ -633,7 +636,7 @@ class ProfileTimePlot(DashboardComponent):
             self.doc = weakref.ref(doc)
         self.server = server
         state = profile.create()
-        data = profile.plot_data(state)
+        data = profile.plot_data(state, profile_interval)
         self.states = data.pop('states')
         self.source = ColumnDataSource(data=data)
 
@@ -643,7 +646,7 @@ class ProfileTimePlot(DashboardComponent):
                     ind = new['1d']['indices'][0]
                 except IndexError:
                     return
-                data = profile.plot_data(self.states[ind])
+                data = profile.plot_data(self.states[ind], profile_interval)
                 del self.states[:]
                 self.states.extend(data.pop('states'))
                 self.source.data.update(data)
@@ -723,7 +726,7 @@ class ProfileTimePlot(DashboardComponent):
     def update(self, state, ts=None):
         with log_errors():
             self.state = state
-            data = profile.plot_data(self.state)
+            data = profile.plot_data(self.state, profile_interval)
             self.states = data.pop('states')
             self.source.data.update(data)
 

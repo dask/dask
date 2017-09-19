@@ -1108,12 +1108,13 @@ class Worker(WorkerBase):
         self.outgoing_count = 0
         self._client = None
 
-        profile_cycle_interval = kwargs.pop('profile_cycle_interval', 1000)
+        profile_cycle_interval = kwargs.pop('profile_cycle_interval',
+                                        config.get('profile-cycle-interval', 1000))
 
         WorkerBase.__init__(self, *args, **kwargs)
 
         pc = PeriodicCallback(self.trigger_profile,
-                              kwargs.get('profile_interval', 10),
+                              config.get('profile-interval', 10),
                               io_loop=self.loop)
         self.periodic_callbacks['profile'] = pc
 

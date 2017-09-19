@@ -33,8 +33,6 @@ import toolz
 
 from ..utils import format_time
 
-dt = 0.010
-
 
 def identifier(frame):
     """ A string identifier from a frame
@@ -145,7 +143,7 @@ def call_stack(frame):
     return L[::-1]
 
 
-def plot_data(state):
+def plot_data(state, profile_interval=0.010):
     """ Convert a profile state into data useful by Bokeh
 
     See Also
@@ -174,7 +172,7 @@ def plot_data(state):
         width = stop - start
         widths.append(width)
         states.append(state)
-        times.append(format_time(state['count'] * dt))
+        times.append(format_time(state['count'] * profile_interval))
 
         desc = state['description']
         filenames.append(desc['filename'])
