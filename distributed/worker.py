@@ -111,7 +111,7 @@ class WorkerBase(ServerNode):
         self.listen_args = self.security.get_listen_args('worker')
 
         if memory_limit == 'auto':
-            memory_limit = int(TOTAL_MEMORY * 0.6 * min(1, self.ncores / _ncores))
+            memory_limit = int(TOTAL_MEMORY * min(1, self.ncores / _ncores))
         with ignoring(TypeError):
             memory_limit = float(memory_limit)
         if isinstance(memory_limit, float) and memory_limit <= 1:
@@ -126,7 +126,7 @@ class WorkerBase(ServerNode):
                 raise ImportError("Please `pip install zict` for spill-to-disk workers")
             path = os.path.join(self.local_dir, 'storage')
             storage = Func(serialize_bytelist, deserialize_bytes, File(path))
-            self.data = Buffer({}, storage, int(float(self.memory_limit)), weight)
+            self.data = Buffer({}, storage, int(float(self.memory_limit) * 0.6), weight)
         else:
             self.data = dict()
         self.loop = loop or IOLoop.current()
@@ -342,7 +342,7 @@ class WorkerBase(ServerNode):
         logger.info('-' * 49)
         logger.info('              Threads: %26d', self.ncores)
         if self.memory_limit:
-            logger.info('               Memory: %23.2f GB', self.memory_limit / 1e9)
+            logger.info('               Memory: %26s', format_bytes(self.memory_limit))
         logger.info('      Local Directory: %26s', self.local_dir)
         logger.info('-' * 49)
 
@@ -1003,7 +1003,7 @@ class Worker(WorkerBase):
     heartbeat_interval: int
         Milliseconds between heartbeats to scheduler
     memory_limit: int
-        Number of bytes of data to keep in memory before using disk
+        Number of bytes of memory that this worker should use
     executor: concurrent.futures.Executor
     resources: dict
         Resources that thiw worker has like ``{'GPU': 2}``
@@ -2196,6 +2196,7 @@ class Worker(WorkerBase):
             if count:
                 logger.debug("Moved %d pieces of data data and %s to disk",
                              count, format_bytes(total))
+
         self._memory_monitoring = False
         raise gen.Return(total)
 

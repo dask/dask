@@ -303,7 +303,7 @@ def test_remote_access(loop):
 def test_memory(loop):
     with LocalCluster(scheduler_port=0, processes=False, silence_logs=False,
                       diagnostics_port=None, loop=loop) as cluster:
-        assert sum(w.memory_limit for w in cluster.workers) < TOTAL_MEMORY * 0.8
+        assert sum(w.memory_limit for w in cluster.workers) <= TOTAL_MEMORY
 
 
 def test_memory_nanny(loop):
@@ -312,7 +312,7 @@ def test_memory_nanny(loop):
         with Client(cluster.scheduler_address, loop=loop) as c:
             info = c.scheduler_info()
             assert (sum(w['memory_limit'] for w in info['workers'].values())
-                    < TOTAL_MEMORY * 0.9)
+                    <= TOTAL_MEMORY)
 
 
 def test_death_timeout_raises(loop):

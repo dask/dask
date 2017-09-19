@@ -30,7 +30,7 @@ else:
     ExportTool = None
 
 
-profile_interval = config.get('profile-interval')
+profile_interval = config.get('profile-interval', 0.010)
 
 
 class DashboardComponent(object):

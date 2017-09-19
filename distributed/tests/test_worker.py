@@ -319,7 +319,7 @@ def test_io_loop(loop):
 @gen_cluster(client=True, ncores=[])
 def test_spill_to_disk(e, s):
     np = pytest.importorskip('numpy')
-    w = Worker(s.address, loop=s.loop, memory_limit=1200)
+    w = Worker(s.address, loop=s.loop, memory_limit=1200 / 0.6)
     yield w._start()
 
     x = e.submit(np.random.randint, 0, 255, size=500, dtype='u1', key='x')
@@ -986,8 +986,7 @@ def test_robust_to_bad_sizeof_estimates(c, s, a):
     start = time()
     while not a.data.slow:
         yield gen.sleep(0.1)
-        if time() > start + 5:
-            import pdb; pdb.set_trace()
+        assert time() < start + 5
 
 
 @pytest.mark.slow

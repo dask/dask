@@ -47,50 +47,6 @@ This ``.data`` attribute is a ``MutableMapping`` that is typically a
 combination of in-memory and on-disk storage with an LRU policy to move data
 between them.
 
-Spill Excess Data to Disk
--------------------------
-
-Short version: To enable workers to spill excess data to disk start
-``dask-worker`` with the ``--memory-limit`` option.  Either giving ``auto`` to
-have it guess how many bytes to keep in memory or an integer, if you know the
-number of bytes it should use::
-
-    $ dask-worker scheduler:port --memory-limit=auto  # 75% of available RAM
-    $ dask-worker scheduler:port --memory-limit=2e9  # two gigabytes
-
-Some workloads may produce more data at one time than there is available RAM on
-the cluster.  In these cases Workers may choose to write excess values to disk.
-This causes some performance degradation because writing to and reading from
-disk is generally slower than accessing memory, but is better than running out
-of memory entirely, which can cause the system to halt.
-
-If the ``dask-worker --memory-limit=NBYTES`` keyword is set during
-initialization then the worker will store at most NBYTES of data (as measured
-with ``sizeof``) in memory.  After that it will start storing least recently
-used (LRU) data in a temporary directory.   Workers serialize data for writing
-to disk with the same system used to write data on the wire, a combination of
-``pickle`` and the default compressor.
-
-Now whenever new data comes in it will push out old data until at most NBYTES
-of data is in RAM.  If an old value is requested it will be read from disk,
-possibly pushing other values down.
-
-It is still possible to run out of RAM on a worker.  Here are a few possible
-issues:
-
-1.  The objects being stored take up more RAM than is stated with the
-    `__sizeof__ protocol <https://docs.python.org/3/library/sys.html#sys.getsizeof>`_.
-    If you use custom classes then we encourage adding a faithful
-    ``__sizeof__`` method to your class that returns an accurate accounting of
-    the bytes used.
-2.  Computations and communications may take up additional RAM not accounted
-    for.  It is wise to have a suitable buffer of memory that can handle your
-    most expensive function RAM-wise running as many times as there are active
-    threads on the machine.
-3.  It is possible to misjudge the amount of RAM on the machine.  Using the
-    ``--memory-limit=auto`` heuristic sets the value to 75% of the return value
-    of ``psutil.virtual_memory().total``.
-
 
 Thread Pool
 -----------
@@ -181,6 +137,79 @@ thread pool.
 A task either errs or its result is put into memory.  In either case a response
 is sent back to the scheduler.
 
+
+Memory Management
+-----------------
+
+Workers are given a target memory limit to stay under with the
+command line ``--memory-limit`` keyword or the ``memory_limit=`` Python
+keyword argument.::
+
+    $ dask-worker tcp://scheduler:port --memory-limit=auto  # total available RAM
+    $ dask-worker tcp://scheduler:port --memory-limit=4e9  # four gigabytes
+
+Workers use a few different policies to keep memory use beneath this limit:
+
+1.  At 60% of memory load (as estimated by ``sizeof``), spill least recently used data to disk
+2.  At 70% of memory load, spill least recently used data to disk regardless of
+    what is reported by ``sizeof``
+3.  At 80% of memory load, stop accepting new work on local thread pool
+4.  At 95% of memory load, terminate and restart the worker
+
+Spill data to Disk
+~~~~~~~~~~~~~~~~~~
+
+Every time the worker finishes a task it estimates the size in bytes that the
+result costs to keep in memory using the ``sizeof`` function.  This function
+defaults to ``sys.getsizeof`` for arbitrary objects which uses the standard
+Python `__sizeof__ protocol
+<https://docs.python.org/3/library/sys.html#sys.getsizeof>`_, but also has
+special-cased implementations for common data types like NumPy arrays and
+Pandas dataframes.
+
+When the sum of the number of bytes of the data in memory exceeds 60% of the
+available threshold the worker will begin to dump the least recently used data
+to disk.  You can control this location with the ``--local-directory``
+keyword.::
+
+   $ dask-worker tcp://scheduler:port --memory-limit 4e9 --local-directory /scratch
+
+That data is still available and will be read back from disk when necessary.
+On the diagnostic dashboard status page disk I/O will show up in the task
+stream plot as orange blocks.  Additionally the memory plot in the upper left
+will become orange and then red.
+
+
+Monitor process memory load
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The approach above can fail for a few reasons
+
+1.  Custom objects may not report their memory size accurately
+2.  User functions may take up more RAM than expected
+3.  Significant amounts of data may accumulate in network I/O buffers
+
+To address this we periodically monitor the memory of the worker process every
+200 ms.  If the system reported memory use is above 70% of the target memory
+usage then the worker will start dumping unused data to disk, even if internal
+``sizeof`` recording hasn't yet reached the normal 60% limit.
+
+
+Halt worker threads
+~~~~~~~~~~~~~~~~~~~
+
+At 80% load the worker's thread pool will stop accepting new tasks.  This
+gives time for the write-to-disk functionality to take effect even in the face
+of rapidly accumulating data.
+
+
+Kill Worker
+~~~~~~~~~~~
+
+At 95% memory load a worker's nanny process will terminate it.  This is to
+avoid having our worker job being terminated by an external job scheduler (like
+YARN, Mesos, SGE, etc..).  After termination the nanny will restart the worker
+in a fresh state.
 
 
 API Documentation

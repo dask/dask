@@ -73,7 +73,7 @@ class Nanny(ServerNode):
         self.auto_restart = True
 
         if memory_limit == 'auto':
-            memory_limit = int(TOTAL_MEMORY * 0.6 * min(1, self.ncores / _ncores))
+            memory_limit = int(TOTAL_MEMORY * min(1, self.ncores / _ncores))
         with ignoring(TypeError):
             memory_limit = float(memory_limit)
         if isinstance(memory_limit, float) and memory_limit <= 1:
