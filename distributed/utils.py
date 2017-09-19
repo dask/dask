@@ -964,3 +964,22 @@ def json_load_robust(fn, load=json.load):
         except (ValueError, KeyError):  # race with writing process
             pass
         sleep(0.1)
+
+
+def format_time(n):
+    """ format integers as time
+
+    >>> format_time(1)
+    '1.00 s'
+    >>> format_time(0.001234)
+    '1.23 ms'
+    >>> format_time(0.00012345)
+    '123.45 us'
+    >>> format_time(123.456)
+    '123.46 s'
+    """
+    if n >= 1:
+        return '%.2f s' % n
+    if n >= 1e-3:
+        return '%.2f ms' % (n * 1e3)
+    return '%.2f us' % (n * 1e6)

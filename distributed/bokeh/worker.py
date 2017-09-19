@@ -15,13 +15,13 @@ from bokeh.plotting import figure
 from bokeh.palettes import RdBu
 from toolz import merge, partition_all
 
-from .components import DashboardComponent, ProfilePlot
-from .core import BokehServer, format_time
+from .components import DashboardComponent, ProfileTimePlot
+from .core import BokehServer
 from .utils import transpose
 from ..compatibility import WINDOWS
 from ..diagnostics.progress_stream import color_of
 from ..metrics import time
-from ..utils import log_errors, key_split, format_bytes
+from ..utils import log_errors, key_split, format_bytes, format_time
 
 
 logger = logging.getLogger(__name__)
@@ -607,9 +607,11 @@ def counters_doc(server, extra, doc):
 def profile_doc(server, extra, doc):
     with log_errors():
         doc.title = "Dask Worker Profile"
-        profile = ProfilePlot(sizing_mode='stretch_both')
-        print(server.profile_recent['count'])
-        profile.update(server.profile_recent)
+        profile = ProfileTimePlot(server, sizing_mode='scale_width')
+        prof = server.get_profile()
+        print(prof['count'])
+        meta = server.get_profile_metadata()
+        profile.update(prof, meta)
 
         doc.add_root(profile.root)
         doc.template = template

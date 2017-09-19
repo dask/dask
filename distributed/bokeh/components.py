@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from bisect import bisect
 from operator import add
 from time import time
+import weakref
 
 from bokeh.layouts import row, column
 from bokeh.models import (
@@ -16,6 +17,7 @@ from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
 from bokeh.palettes import Spectral9
 from bokeh.plotting import figure
 from toolz import valmap
+from tornado import gen
 
 from ..config import config
 from ..diagnostics.progress_stream import progress_quads, nbytes_bar
@@ -580,13 +582,32 @@ class ProfilePlot(DashboardComponent):
         self.root = figure(tools='tap', **kwargs)
         self.root.quad('left', 'right', 'top', 'bottom', color='color',
                       line_color='black', line_width=2, source=self.source)
-        self.root.text(x='left', y='bottom', text='short_text',
-                       x_offset=5, text_font_size=value('10pt'),
-                       source=self.source)
 
-        hover = HoverTool()
-        hover.tooltips = "@long_text{safe}"  # this is unsafe
-        hover.point_policy = 'follow_mouse'
+        hover = HoverTool(
+            point_policy="follow_mouse",
+            tooltips="""
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Name:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@name</span>
+                </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Filename:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@filename</span>
+                </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Line number:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@line_number</span>
+                </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Line:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@line</span>
+                </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Time:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@time</span>
+                </div>
+                """
+        )
         self.root.add_tools(hover)
 
         self.root.xaxis.visible = False
@@ -599,3 +620,115 @@ class ProfilePlot(DashboardComponent):
             data = profile.plot_data(self.state)
             self.states = data.pop('states')
             self.source.data.update(data)
+
+
+class ProfileTimePlot(DashboardComponent):
+    """ Time plots of the current resource usage on the cluster
+
+    This is two plots, one for CPU and Memory and another for Network I/O
+    """
+
+    def __init__(self, server, doc=None, **kwargs):
+        if doc is not None:
+            self.doc = weakref.ref(doc)
+        self.server = server
+        state = profile.create()
+        data = profile.plot_data(state)
+        self.states = data.pop('states')
+        self.source = ColumnDataSource(data=data)
+
+        def cb(attr, old, new):
+            with log_errors():
+                try:
+                    ind = new['1d']['indices'][0]
+                except IndexError:
+                    return
+                data = profile.plot_data(self.states[ind])
+                del self.states[:]
+                self.states.extend(data.pop('states'))
+                self.source.data.update(data)
+                self.source.selected = old
+
+        self.source.on_change('selected', cb)
+
+        self.profile_plot = figure(tools='tap', height=400, **kwargs)
+        self.profile_plot.quad('left', 'right', 'top', 'bottom', color='color',
+                               line_color='black', source=self.source)
+
+        hover = HoverTool(
+            point_policy="follow_mouse",
+            tooltips="""
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Name:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@name</span>
+                </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Filename:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@filename</span>
+                </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Line number:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@line_number</span>
+                </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Line:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@line</span>
+                </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Time:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@time</span>
+                </div>
+                """
+        )
+        self.profile_plot.add_tools(hover)
+
+        self.profile_plot.xaxis.visible = False
+        self.profile_plot.yaxis.visible = False
+        self.profile_plot.grid.visible = False
+
+        self.ts_source = ColumnDataSource({'time': [], 'count': []})
+        self.ts_plot = figure(title='Acivity over time', height=100,
+                              x_axis_type='datetime', active_drag='xbox_select',
+                              tools='pan,xwheel_zoom,xbox_select,reset',
+                              **kwargs)
+        self.ts_plot.line('time', 'count', source=self.ts_source)
+        self.ts_plot.circle('time', 'count', source=self.ts_source, color=None,
+                            selection_color='orange')
+        self.ts_plot.yaxis.visible = False
+        self.ts_plot.grid.visible = False
+
+        def ts_change(attr, old, new):
+            with log_errors():
+                selected = self.ts_source.selected['1d']['indices']
+                if selected:
+                    start = self.ts_source.data['time'][selected[0]] / 1000
+                    stop = self.ts_source.data['time'][selected[-1]] / 1000
+                    start, stop = min(start, stop), max(start, stop)
+
+                    result = self.server.get_profile(start=start, stop=stop)
+
+                    if isinstance(result, gen.Future):
+                        @gen.coroutine
+                        def _():
+                            out = yield result
+                            self.doc().add_next_tick_callback(lambda: self.update(out))
+                        _()
+                    else:
+                        self.update(result)
+
+        self.ts_source.on_change('selected', ts_change)
+
+        self.root = column(self.profile_plot, self.ts_plot, **kwargs)
+
+    def update(self, state, ts=None):
+        with log_errors():
+            self.state = state
+            data = profile.plot_data(self.state)
+            self.states = data.pop('states')
+            self.source.data.update(data)
+
+            if ts is not None and ts['counts']:
+                times, counts = zip(*ts['counts'])
+                ts2 = {'count': counts, 'time': [t * 1000 for t in times]}
+
+                self.ts_source.data.update(ts2)

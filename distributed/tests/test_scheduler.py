@@ -1143,17 +1143,16 @@ def test_service_hosts_match_scheduler():
         yield s.close()
 
 
-@gen_cluster(client=True)
-def test_aggregate_profiles(c, s, a, b):
-    x = c.map(slowinc, range(10))
-    y = c.map(slowadd, range(10), range(10))
+@gen_cluster(client=True, worker_kwargs={'profile_cycle_interval': 100})
+def test_profile_metadata(c, s, a, b):
+    start = time() - 1
+    futures = c.map(slowinc, range(10), delay=0.05, workers=a.address)
+    yield wait(futures)
+    yield gen.sleep(0.200)
 
-    yield wait(x + y)
-
-    prof = yield c.profile()
-    xx = yield c.profile('slowinc')
-    yy = yield c.profile('slowadd')
-    assert 'slowinc' in str(xx)
-    assert 'slowadd' not in str(xx)
-
-    assert xx['count'] + yy['count'] == prof['count']
+    meta = yield s.get_profile_metadata(dt=0.100)
+    now = time()
+    assert meta
+    assert all(start < t < now for t, count in meta['counts'])
+    assert all(0 < count < 11 for t, count in meta['counts'][:4])
+    assert not meta['counts'][-1][1]

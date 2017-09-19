@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import bisect
 from collections import defaultdict, deque
 from datetime import timedelta
 import heapq
@@ -42,7 +43,8 @@ from .sizeof import safe_sizeof as sizeof
 from .threadpoolexecutor import ThreadPoolExecutor, secede as tpe_secede
 from .utils import (funcname, get_ip, has_arg, _maybe_complex, log_errors,
                     ignoring, validate_key, mp_context, import_file,
-                    silence_logging, thread_state, json_load_robust, key_split)
+                    silence_logging, thread_state, json_load_robust, key_split,
+                    format_bytes)
 from .utils_comm import pack_data, gather_from_workers
 
 _ncores = mp_context.cpu_count()
@@ -135,6 +137,7 @@ class WorkerBase(ServerNode):
         self.scheduler = rpc(scheduler_addr, connection_args=self.connection_args)
         self.name = name
         self.pause_fraction = config.get('worker-pause-memory-fraction', 0.8)
+        self.scheduler_delay = 0
         self.heartbeat_interval = heartbeat_interval
         self.heartbeat_active = False
         self.execution_state = {'scheduler': self.scheduler.address,
@@ -166,7 +169,7 @@ class WorkerBase(ServerNode):
             'start_ipython': self.start_ipython,
             'call_stack': self.get_call_stack,
             'profile': self.get_profile,
-            'get_profile_metadata': self.get_profile_metadata,
+            'profile_metadata': self.get_profile_metadata,
             'keys': self.keys,
         }
 
@@ -1055,7 +1058,9 @@ class Worker(WorkerBase):
         self.active_threads_lock = threading.Lock()
         self.active_threads = dict()
         self.profile_keys = defaultdict(profile.create)
+        self.profile_keys_history = deque(maxlen=3600)
         self.profile_recent = profile.create()
+        self.profile_history = deque(maxlen=3600)
 
         self.priorities = dict()
         self.priority_counter = 0
@@ -1103,7 +1108,7 @@ class Worker(WorkerBase):
         self.outgoing_count = 0
         self._client = None
 
-        self.scheduler_delay = 0
+        profile_cycle_interval = kwargs.pop('profile_cycle_interval', 1000)
 
         WorkerBase.__init__(self, *args, **kwargs)
 
@@ -1111,6 +1116,12 @@ class Worker(WorkerBase):
                               kwargs.get('profile_interval', 10),
                               io_loop=self.loop)
         self.periodic_callbacks['profile'] = pc
+
+        pc = PeriodicCallback(self.cycle_profile,
+                              profile_cycle_interval,
+                              io_loop=self.loop)
+        pc.start()
+        self.periodic_callbacks['profile-cycle'] = pc
 
         _global_workers.append(weakref.ref(self))
 
@@ -2149,12 +2160,19 @@ class Worker(WorkerBase):
 
         if frac > self.pause_fraction:
             if not self.paused:
-                logger.warn("Worker is at %d percent memory usage.  Stopping work.",
-                            int(frac * 100))
+                logger.warn("Worker is at %d percent memory usage.  "
+                            "Stopping work. "
+                            "Process memory: %s -- Worker memory limit: %s",
+                            int(frac * 100),
+                            format_bytes(proc.memory_info().vms),
+                            format_bytes(self.memory_limit))
                 self.paused = True
         elif self.paused:
-            logger.warn("Worker at %d percent memory usage. Restarting work.",
-                        int(frac * 100))
+            logger.warn("Worker at %d percent memory usage. Restarting work. "
+                        "Process memory: %s -- Worker memory limit: %s",
+                        int(frac * 100),
+                        format_bytes(proc.memory_info().vms),
+                        format_bytes(self.memory_limit))
             self.paused = False
             self.ensure_computing()
 
@@ -2164,16 +2182,29 @@ class Worker(WorkerBase):
 
             while proc.memory_info().vms > target:
                 if not self.data.fast:
+                    logger.warn("Memory use is high but worker has no data "
+                                "to store to disk.  Perhaps some other process "
+                                "is leaking memory?  Process memory: %s -- "
+                                "Worker memory limit: %s",
+                                format_bytes(proc.memory_info().vms),
+                                format_bytes(self.memory_limit))
                     break
                 total += self.data.fast.evict()
-                print(count)
                 count += 1
                 yield gen.moment
             if count:
-                logger.debug("Moved %d pieces of data data and %e bytes to disk",
-                             count, total)
+                logger.debug("Moved %d pieces of data data and %s to disk",
+                             count, format_bytes(total))
         self._memory_monitoring = False
         raise gen.Return(total)
+
+    def cycle_profile(self):
+        now = time() + self.scheduler_delay
+        prof, self.profile_recent = self.profile_recent, profile.create()
+        self.profile_history.append((now, prof))
+
+        self.profile_keys_history.append((now, dict(self.profile_keys)))
+        self.profile_keys.clear()
 
     def trigger_profile(self):
         """
@@ -2196,21 +2227,41 @@ class Worker(WorkerBase):
         if self.digests is not None:
             self.digests['profile-duration'].add(stop - start)
 
-    def get_profile(self, stream=None, keys=None, merge=False):
-        if keys is None:
-            return self.profile_recent
+    def get_profile(self, comm=None, start=None, stop=None):
+        if start is None:
+            istart = 0
         else:
-            print('other profile')
-            result = {k: self.profile_keys[k] for k in keys
-                    if k in self.profile_keys}
-            if merge:
-                result = profile.merge(*result.values())
-            return result
+            istart = bisect.bisect_left(self.profile_history, (start,))
 
-    def get_profile_metadata(self, stream=None):
-        return {'keys': list(self.profile_keys)}
+        if stop is None:
+            istop = None
+        else:
+            istop = bisect.bisect_right(self.profile_history, (stop,)) + 1
+            istop = min(istop, len(self.profile_history) - 1)
 
-    def get_call_stack(self, stream=None, keys=None):
+        at_end = istop is None or istop >= len(self.profile_history) - 1
+
+        if istart == 0 and at_end:
+            history = list(self.profile_history)
+        else:
+            history = [self.profile_history[i] for i in range(istart, istop)]
+
+        prof = profile.merge(*pluck(1, history))
+
+        # TODO: merge self.profile_recent into profile
+
+        return prof
+
+    def get_profile_metadata(self, comm=None, start=0, stop=None):
+        stop = stop or time() + self.scheduler_delay
+        start = start or 0
+        return {'counts': [(t, d['count']) for t, d in self.profile_history
+                           if start < t < stop],
+                'keys': [(t, {k: d['count'] for k, d in v.items()})
+                         for t, v in self.profile_keys_history
+                         if start < t < stop]}
+
+    def get_call_stack(self, comm=None, keys=None):
         with self.active_threads_lock:
             frames = sys._current_frames()
             active_threads = self.active_threads.copy()

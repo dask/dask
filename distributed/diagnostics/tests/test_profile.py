@@ -30,16 +30,15 @@ def test_basic():
         frame = sys._current_frames()[thread.ident]
         process(frame, None, state)
 
-    assert state['description'] == 'root'
     assert state['count'] == 100
     d = state
     while len(d['children']) == 1:
         d = first(d['children'].values())
 
     assert d['count'] == 100
-    assert 'test_f' in d['description']
-    g = [c for c in d['children'].values() if 'test_g' in c['description']][0]
-    h = [c for c in d['children'].values() if 'test_h' in c['description']][0]
+    assert 'test_f' in str(d['description'])
+    g = [c for c in d['children'].values() if 'test_g' in str(c['description'])][0]
+    h = [c for c in d['children'].values() if 'test_h' in str(c['description'])][0]
 
     assert g['count'] < h['count']
     assert g['count'] + h['count'] == 100

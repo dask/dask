@@ -31,6 +31,10 @@ import linecache
 import itertools
 import toolz
 
+from ..utils import format_time
+
+dt = 0.010
+
 
 def identifier(frame):
     """ A string identifier from a frame
@@ -50,6 +54,15 @@ def repr_frame(frame):
                                             co.co_name)
     line = linecache.getline(co.co_filename, frame.f_lineno, frame.f_globals).lstrip()
     return text + '\n\t' + line
+
+
+def info_frame(frame):
+    co = frame.f_code
+    line = linecache.getline(co.co_filename, frame.f_lineno, frame.f_globals).lstrip()
+    return {'filename': co.co_filename,
+            'name': co.co_name,
+            'line_number': frame.f_lineno,
+            'line': line}
 
 
 def process(frame, child, state, stop=None):
@@ -73,14 +86,14 @@ def process(frame, child, state, stop=None):
      'children': {'...'}}
     """
     ident = identifier(frame)
-    if frame.f_back is not None and (stop is None or frame.f_back.f_code.co_filename.endswith(stop)):
+    if frame.f_back is not None and (stop is None or not frame.f_back.f_code.co_filename.endswith(stop)):
         state = process(frame.f_back, frame, state, stop=stop)
 
     try:
         d = state['children'][ident]
     except KeyError:
         d = {'count': 0,
-             'description': repr_frame(frame),
+             'description': info_frame(frame),
              'children': {},
              'identifier': ident}
         state['children'][ident] = d
@@ -114,7 +127,8 @@ def merge(*args):
 
 
 def create():
-    return {'description': 'root', 'count': 0, 'children': {}, 'identifier': 'root'}
+    return {'count': 0, 'children': {}, 'identifier': 'root', 'description':
+            {'filename': '', 'name': '', 'line_number': 0, 'line': ''}}
 
 
 def call_stack(frame):
@@ -142,31 +156,39 @@ def plot_data(state):
     stops = []
     heights = []
     widths = []
-    short_texts = []
-    long_texts = []
     colors = []
     states = []
+    times = []
+
+    filenames = []
+    lines = []
+    line_numbers = []
+    names = []
 
     def traverse(state, start, stop, height):
+        if not state['count']:
+            return
         starts.append(start)
         stops.append(stop)
         heights.append(height)
         width = stop - start
         widths.append(width)
         states.append(state)
+        times.append(format_time(state['count'] * dt))
+
+        desc = state['description']
+        filenames.append(desc['filename'])
+        lines.append(desc['line'])
+        line_numbers.append(desc['line_number'])
+        names.append(desc['name'])
+
         ident = state['identifier']
-        if width > 0.1:
-            short_texts.append(ident.split(';')[0])
-        else:
-            short_texts.append('')
+
         try:
-            colors.append(color_of(ident.split(';')[1]))
+            colors.append(color_of(desc['filename']))
         except IndexError:
             colors.append(palette[-1])
 
-        long_texts.append(state['description'].replace('\n', '</p><p>'))
-        if not state['count']:
-            return
         delta = (stop - start) / state['count']
 
         x = start
@@ -182,10 +204,13 @@ def plot_data(state):
             'bottom': heights,
             'width': widths,
             'top': [x + 1 for x in heights],
-            'short_text': short_texts,
-            'long_text': long_texts,
             'color': colors,
-            'states': states}
+            'states': states,
+            'filename': filenames,
+            'line': lines,
+            'line_number': line_numbers,
+            'name': names,
+            'time': times}
 
 
 try:

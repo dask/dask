@@ -318,7 +318,7 @@ def test_dont_steal_few_saturated_tasks_many_workers(c, s, a, *rest):
              worker_kwargs={'memory_limit': TOTAL_MEMORY})
 def test_steal_when_more_tasks(c, s, a, *rest):
     s.extensions['stealing']._pc.callback_time = 20
-    x = c.submit(mul, b'0', 100000000, workers=a.address)  # 100 MB
+    x = c.submit(mul, b'0', 50000000, workers=a.address)  # 50 MB
     yield wait(x)
     s.task_duration['slowidentity'] = 0.2
 

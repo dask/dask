@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from collections import defaultdict, deque, OrderedDict
 from datetime import timedelta
 from functools import partial
+import itertools
 import json
 import logging
 import os
@@ -12,9 +13,9 @@ import six
 
 from sortedcontainers import SortedSet
 try:
-    from cytoolz import frequencies, merge
+    from cytoolz import frequencies, merge, pluck, merge_sorted
 except ImportError:
-    from toolz import frequencies, merge
+    from toolz import frequencies, merge, pluck, merge_sorted
 from toolz import memoize, valmap, first, second, concat
 from tornado import gen
 from tornado.gen import Return
@@ -3226,20 +3227,33 @@ class Scheduler(ServerNode):
         return (start_time, self.worker_bytes[worker])
 
     @gen.coroutine
-    def get_profile(self, comm=None, keys=None, workers=None, merge_keys=True,
-                    merge_workers=True):
+    def get_profile(self, comm=None, workers=None, merge_workers=True,
+                    start=None, stop=None):
         if workers is None:
             workers = self.workers
         else:
             workers = self.workers & workers
-        result = yield {w: self.rpc(w).profile(keys=keys, merge=merge_keys)
+        result = yield {w: self.rpc(w).profile(start=start, stop=stop)
                         for w in workers}
         if merge_workers:
-            if merge_keys:
-                result = profile.merge(*result.values())
-            else:
-                raise NotImplementedError()
+            result = profile.merge(*result.values())
         raise gen.Return(result)
+
+    @gen.coroutine
+    def get_profile_metadata(self, comm=None, workers=None, merge_workers=True,
+                             start=None, stop=None, dt=1):
+        if workers is None:
+            workers = self.workers
+        else:
+            workers = self.workers & workers
+        result = yield {w: self.rpc(w).profile_metadata(start=start, stop=stop)
+                        for w in workers}
+
+        counts = [v['counts'] for v in result.values()]
+        counts = itertools.groupby(merge_sorted(*counts), lambda t: t[0] // dt * dt)
+        counts = [(time, sum(pluck(1, group))) for time, group in counts]
+        raise gen.Return({'counts': counts})
+
 
     ###########
     # Cleanup #

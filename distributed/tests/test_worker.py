@@ -956,7 +956,7 @@ def test_statistical_profiling_2(c, s, a, b):
         x = da.random.random(1000000, chunks=(10000,))
         y = (x + x * 2) - x.sum().persist()
         yield wait(y)
-    profile = a.profile_recent
+    profile = a.get_profile()
     assert profile['count']
     assert 'threading' not in str(profile)
     assert 'sum' in str(profile)
@@ -1016,3 +1016,19 @@ def test_pause_executor(c, s, a):
     assert sum(f.status == 'finished' for f in futures) < 4
 
     yield wait(futures)
+
+
+@gen_cluster(client=True, worker_kwargs={'profile_cycle_interval': 100})
+def test_statistical_profiling_cycle(c, s, a, b):
+    futures = c.map(slowinc, range(20), delay=0.05)
+    yield wait(futures)
+    assert len(a.profile_history) > 3
+
+    x = a.get_profile(start=time() + 10, stop=time() + 20)
+    assert not x['count']
+
+    x = a.get_profile(start=0, stop=time())
+    assert x['count'] == sum(p['count'] for _, p in a.profile_history)
+
+    y = a.get_profile(start=time() - 0.300, stop=time())
+    assert 0 < y['count'] < x['count']

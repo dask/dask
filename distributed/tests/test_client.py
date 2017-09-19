@@ -4679,5 +4679,26 @@ def test_call_stack_collections_all(c, s, a, b):
     assert result
 
 
+@gen_cluster(client=True, worker_kwargs={'profile_cycle_interval': 100})
+def test_profile(c, s, a, b):
+    futures = c.map(slowinc, range(10), delay=0.05, workers=a.address)
+    yield wait(futures)
+
+    x = yield c.profile(start=time() + 10, stop=time() + 20)
+    assert not x['count']
+
+    x = yield c.profile(start=0, stop=time())
+    assert x['count'] == sum(p['count'] for _, p in a.profile_history)
+
+    y = yield c.profile(start=time() - 0.300, stop=time())
+    assert 0 < y['count'] < x['count']
+
+    assert not any(p['count'] for _, p in b.profile_history)
+    result = yield c.profile(workers=b.address)
+    assert not result['count']
+
+
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # flake8: noqa

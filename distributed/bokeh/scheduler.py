@@ -27,12 +27,12 @@ except ImportError:
     np = False
 
 from . import components
-from .components import DashboardComponent, ProfilePlot
+from .components import DashboardComponent, ProfileTimePlot
 from .core import BokehServer
-from .worker import SystemMonitor, format_time, counters_doc
+from .worker import SystemMonitor, counters_doc
 from .utils import transpose
 from ..metrics import time
-from ..utils import log_errors, format_bytes
+from ..utils import log_errors, format_bytes, format_time
 from ..diagnostics.progress_stream import color_of, progress_quads, nbytes_bar
 from ..diagnostics.progress import AllProgress
 from .task_stream import TaskStreamPlugin
@@ -999,7 +999,7 @@ def status_doc(scheduler, extra, doc):
 def profile_doc(scheduler, extra, doc):
     with log_errors():
         doc.title = "Dask Profile"
-        prof = ProfilePlot(sizing_mode='stretch_both')
+        prof = ProfileTimePlot(scheduler, sizing_mode='scale_width', doc=doc)
         doc.add_root(prof.root)
         doc.template = template
         doc.template_variables['active_page'] = 'profile'
@@ -1007,8 +1007,9 @@ def profile_doc(scheduler, extra, doc):
 
         @gen.coroutine
         def _():
-            profile = yield scheduler.get_profile()
-            doc.add_next_tick_callback(lambda: prof.update(profile))
+            profile, metadata = yield [scheduler.get_profile(),
+                                       scheduler.get_profile_metadata()]
+            doc.add_next_tick_callback(lambda: prof.update(profile, metadata))
 
         from tornado.ioloop import IOLoop
         IOLoop.current().add_callback(_)
