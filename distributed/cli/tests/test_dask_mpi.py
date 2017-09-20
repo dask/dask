@@ -6,6 +6,8 @@ from time import sleep
 import pytest
 pytest.importorskip('mpi4py')
 
+import requests
+
 from distributed import Client
 from distributed.utils import tmpfile
 from distributed.metrics import time
@@ -46,3 +48,23 @@ def test_no_scheduler(loop):
                     while len(c.scheduler_info()['workers']) != 2:
                         assert time() < start + 10
                         sleep(0.2)
+
+
+def test_bokeh(loop):
+    with tmpfile() as fn:
+        with popen(['mpirun', '--np', '2', 'dask-mpi', '--scheduler-file', fn,
+                    '--bokeh-port', '59583'],
+                   stdin=subprocess.DEVNULL):
+
+            start = time()
+            while True:
+                try:
+                    response = requests.get('http://localhost:59583/status/')
+                    assert response.ok
+                    break
+                except Exception:
+                    sleep(0.1)
+                    assert time() < start + 20
+
+    with pytest.raises(Exception):
+        requests.get('http://localhost:59583/status/')

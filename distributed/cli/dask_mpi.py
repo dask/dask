@@ -1,3 +1,4 @@
+from functools import partial
 
 import click
 from mpi4py import MPI
@@ -5,7 +6,6 @@ from tornado.ioloop import IOLoop
 from tornado import gen
 
 from distributed import Scheduler, Worker
-from distributed.bokeh.scheduler import BokehScheduler
 from distributed.bokeh.worker import BokehWorker
 from distributed.cli.utils import check_python_3, uri_from_host_port
 from distributed.utils import get_ip_interface
@@ -33,17 +33,28 @@ loop = IOLoop()
 @click.option('--scheduler/--no-scheduler', default=True,
               help=("Whether or not to include a scheduler. "
                     "Use --no-scheduler to increase an existing dask cluster"))
+@click.option('--bokeh-port', type=int, default=8787,
+              help="Bokeh port for visual diagnostics")
+@click.option('--bokeh-prefix', type=str, default=None,
+              help="Prefix for the bokeh app")
 def main(scheduler_file, interface, nthreads, local_directory, memory_limit,
-         scheduler):
+         scheduler, bokeh_port, bokeh_prefix):
     if interface:
         host = get_ip_interface(interface)
     else:
         host = None
 
     if rank == 0 and scheduler:
+        try:
+            from distributed.bokeh.scheduler import BokehScheduler
+        except ImportError:
+            services = {}
+        else:
+            services = {('bokeh',  bokeh_port): partial(BokehScheduler,
+                                                        prefix=bokeh_prefix)}
         scheduler = Scheduler(scheduler_file=scheduler_file,
                               loop=loop,
-                              services={('bokeh',  8787): BokehScheduler})
+                              services=services)
         addr = uri_from_host_port(host, None, 8786)
         scheduler.start(addr)
         try:
