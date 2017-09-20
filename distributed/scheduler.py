@@ -467,6 +467,9 @@ class Scheduler(ServerNode):
             if listen_ip == '0.0.0.0':
                 listen_ip = ''
 
+            if isinstance(addr_or_port, str) and addr_or_port.startswith('inproc://'):
+                listen_ip = 'localhost'
+
             # Services listen on all addresses
             self.start_services(listen_ip)
 
