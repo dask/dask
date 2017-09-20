@@ -13,7 +13,7 @@ from tornado import gen
 
 import pytest
 
-from distributed import Nanny, Worker, Client, wait
+from distributed import Nanny, Worker, Client, wait, fire_and_forget
 from distributed.core import connect, rpc, CommClosedError
 from distributed.scheduler import validate_state, Scheduler, BANDWIDTH
 from distributed.client import wait
@@ -1156,3 +1156,18 @@ def test_profile_metadata(c, s, a, b):
     assert all(start < t < now for t, count in meta['counts'])
     assert all(0 < count < 11 for t, count in meta['counts'][:4])
     assert not meta['counts'][-1][1]
+
+
+@gen_cluster(client=True)
+def test_cancel_fire_and_forget(c, s, a, b):
+    x = delayed(slowinc)(1, delay=0.05)
+    y = delayed(slowinc)(x, delay=0.05)
+    z = delayed(slowinc)(y, delay=0.05)
+    w = delayed(slowinc)(z, delay=0.05)
+    future = c.compute(w)
+    fire_and_forget(future)
+
+    yield gen.sleep(0.05)
+    yield future.cancel(force=True)
+    assert future.status == 'cancelled'
+    assert not s.task_state

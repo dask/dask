@@ -225,9 +225,14 @@ class Future(WrappedKey):
         self.client.loop.add_callback(done_callback, self,
                                       partial(cls._cb_executor.submit, execute_callback))
 
-    def cancel(self):
-        """ Returns True if the future has been cancelled """
-        return self.client.cancel([self])
+    def cancel(self, force=False):
+        """ Cancel request to run this future
+
+        See Also
+        --------
+        Client.cancel
+        """
+        return self.client.cancel([self], force=force)
 
     def cancelled(self):
         """ Returns True if the future has been cancelled """
@@ -1574,15 +1579,15 @@ class Client(Node):
                              asynchronous=asynchronous, hash=hash)
 
     @gen.coroutine
-    def _cancel(self, futures):
-        keys = {tokey(f.key) for f in futures_of(futures)}
-        yield self.scheduler.cancel(keys=list(keys), client=self.id)
+    def _cancel(self, futures, force=False):
+        keys = list({tokey(f.key) for f in futures_of(futures)})
+        yield self.scheduler.cancel(keys=keys, client=self.id, force=force)
         for k in keys:
             st = self.futures.pop(k, None)
             if st is not None:
                 st.cancel()
 
-    def cancel(self, futures, asynchronous=None):
+    def cancel(self, futures, asynchronous=None, force=False):
         """
         Cancel running futures
 
@@ -1593,8 +1598,11 @@ class Client(Node):
         Parameters
         ----------
         futures: list of Futures
+        force: boolean (False)
+            Cancel this future even if other clients desire it
         """
-        return self.sync(self._cancel, futures, asynchronous=asynchronous)
+        return self.sync(self._cancel, futures, asynchronous=asynchronous,
+                         force=force)
 
     @gen.coroutine
     def _publish_dataset(self, **kwargs):

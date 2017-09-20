@@ -961,15 +961,16 @@ class Scheduler(ServerNode):
             logger.debug("Removed worker %s", address)
         return 'OK'
 
-    def stimulus_cancel(self, comm, keys=None, client=None):
+    def stimulus_cancel(self, comm, keys=None, client=None, force=False):
         """ Stop execution on a list of keys """
         logger.info("Client %s requests to cancel %d keys", client, len(keys))
         if client:
-            self.log_event(client, {'action': 'cancel', 'count': len(keys)})
+            self.log_event(client, {'action': 'cancel', 'count': len(keys),
+                                    'force': force})
         for key in keys:
-            self.cancel_key(key, client)
+            self.cancel_key(key, client, force=force)
 
-    def cancel_key(self, key, client, retries=5):
+    def cancel_key(self, key, client, retries=5, force=False):
         """ Cancel a particular key and all dependents """
         # TODO: this should be converted to use the transition mechanism
         if key not in self.who_wants:  # no key yet, lets try again in 500ms
@@ -977,12 +978,14 @@ class Scheduler(ServerNode):
                 self.loop.add_future(gen.sleep(0.2),
                                      lambda _: self.cancel_key(key, client, retries - 1))
             return
-        if self.who_wants[key] == {client}:  # no one else wants this key
+        if force or self.who_wants[key] == {client}:  # no one else wants this key
             for dep in list(self.dependents[key]):
-                self.cancel_key(dep, client)
-        logger.debug("Scheduler cancels key %s", key)
+                self.cancel_key(dep, client, force=force)
+        logger.info("Scheduler cancels key %s.  Force=%s", key, force)
         self.report({'op': 'cancelled-key', 'key': key})
-        self.client_releases_keys(keys=[key], client=client)
+        clients = list(self.who_wants[key]) if force else [client]
+        for c in clients:
+            self.client_releases_keys(keys=[key], client=c)
 
     def client_desires_keys(self, keys=None, client=None):
         for k in keys:
