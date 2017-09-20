@@ -113,6 +113,7 @@ Top level user functions:
    ones_like
    percentile
    prod
+   ptp
    rad2deg
    radians
    ravel
@@ -427,6 +428,7 @@ Other functions
 .. autofunction:: ones_like
 .. autofunction:: percentile
 .. autofunction:: prod
+.. autofunction:: ptp
 .. autofunction:: rad2deg
 .. autofunction:: radians
 .. autofunction:: ravel
