@@ -160,6 +160,11 @@ def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
 
+@wraps(np.ptp)
+def ptp(a, axis=None):
+    return a.max(axis=axis) - a.min(axis=axis)
+
+
 @wraps(np.diff)
 def diff(a, n=1, axis=-1):
     a = asarray(a)
