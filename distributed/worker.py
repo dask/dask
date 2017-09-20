@@ -2190,7 +2190,8 @@ class Worker(WorkerBase):
                                 format_bytes(proc.memory_info().vms),
                                 format_bytes(self.memory_limit))
                     break
-                total += self.data.fast.evict()
+                k, v, weight = self.data.fast.evict()
+                total += weight
                 count += 1
                 yield gen.moment
             if count:
