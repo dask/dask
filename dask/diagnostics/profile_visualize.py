@@ -236,7 +236,7 @@ def plot_tasks(results, dsk, palette='Viridis', label_size=60, **kwargs):
     tz = import_required('toolz', _TOOLZ_MISSING_MSG)
 
     defaults = dict(title="Profile Results",
-                    tools="hover,save,reset,resize,xwheel_zoom,xpan",
+                    tools="hover,save,reset,xwheel_zoom,xpan",
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
                     _get_figure_keywords())
@@ -316,7 +316,7 @@ def plot_resources(results, palette='Viridis', **kwargs):
     from bokeh.models import LinearAxis, Range1d
 
     defaults = dict(title="Profile Results",
-                    tools="save,reset,resize,xwheel_zoom,xpan",
+                    tools="save,reset,xwheel_zoom,xpan",
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
                     _get_figure_keywords())
@@ -373,7 +373,7 @@ def plot_cache(results, dsk, start_time, metric_name, palette='Viridis',
     tz = import_required('toolz', _TOOLZ_MISSING_MSG)
 
     defaults = dict(title="Profile Results",
-                    tools="hover,save,reset,resize,wheel_zoom,xpan",
+                    tools="hover,save,reset,wheel_zoom,xpan",
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
                     _get_figure_keywords())
