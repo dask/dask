@@ -2157,7 +2157,7 @@ class Worker(WorkerBase):
         self._memory_monitoring = True
         total = 0
         proc = psutil.Process()
-        frac = proc.memory_info().vms / self.memory_limit
+        frac = proc.memory_info().rss / self.memory_limit
 
         if frac > self.pause_fraction:
             if not self.paused:
@@ -2165,14 +2165,14 @@ class Worker(WorkerBase):
                             "Stopping work. "
                             "Process memory: %s -- Worker memory limit: %s",
                             int(frac * 100),
-                            format_bytes(proc.memory_info().vms),
+                            format_bytes(proc.memory_info().rss),
                             format_bytes(self.memory_limit))
                 self.paused = True
         elif self.paused:
             logger.warn("Worker at %d percent memory usage. Restarting work. "
                         "Process memory: %s -- Worker memory limit: %s",
                         int(frac * 100),
-                        format_bytes(proc.memory_info().vms),
+                        format_bytes(proc.memory_info().rss),
                         format_bytes(self.memory_limit))
             self.paused = False
             self.ensure_computing()
@@ -2181,13 +2181,13 @@ class Worker(WorkerBase):
             target = self.memory_limit * 0.60
             count = 0
 
-            while proc.memory_info().vms > target:
+            while proc.memory_info().rss > target:
                 if not self.data.fast:
                     logger.warn("Memory use is high but worker has no data "
                                 "to store to disk.  Perhaps some other process "
                                 "is leaking memory?  Process memory: %s -- "
                                 "Worker memory limit: %s",
-                                format_bytes(proc.memory_info().vms),
+                                format_bytes(proc.memory_info().rss),
                                 format_bytes(self.memory_limit))
                     break
                 k, v, weight = self.data.fast.evict()

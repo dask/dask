@@ -966,7 +966,7 @@ def test_statistical_profiling_2(c, s, a, b):
 @gen_cluster(ncores=[('127.0.0.1', 1)], client=True, worker_kwargs={'memory_monitor_interval': 10})
 def test_robust_to_bad_sizeof_estimates(c, s, a):
     np = pytest.importorskip('numpy')
-    memory = psutil.Process().memory_info().vms
+    memory = psutil.Process().memory_info().rss
     a.memory_limit = memory / 0.7 + 400e6
 
     class BadAccounting(object):
@@ -977,7 +977,7 @@ def test_robust_to_bad_sizeof_estimates(c, s, a):
             return 10
 
     def f(n):
-        x = np.empty(int(n), dtype='u1')
+        x = np.ones(int(n), dtype='u1')
         result = BadAccounting(x)
         return result
 
@@ -994,12 +994,12 @@ def test_robust_to_bad_sizeof_estimates(c, s, a):
              worker_kwargs={'memory_monitor_interval': 10},
              timeout=20)
 def test_pause_executor(c, s, a):
-    memory = psutil.Process().memory_info().vms
+    memory = psutil.Process().memory_info().rss
     a.memory_limit = memory / 0.8 + 200e6
     np = pytest.importorskip('numpy')
 
     def f():
-        x = np.empty(int(300e6), dtype='u1')
+        x = np.ones(int(300e6), dtype='u1')
         sleep(1)
 
     with captured_logger(logging.getLogger('distributed.worker')) as logger:
