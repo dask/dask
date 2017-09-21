@@ -96,11 +96,9 @@ def assert_eq(a, b, check_shape=True, **kwargs):
                              os.linesep.join(diff))
 
     try:
-        if _not_empty(a) and _not_empty(b):
-            # Treat all empty arrays as equivalent
-            assert a.shape == b.shape
-            assert allclose(a, b, **kwargs)
-        return
+        assert a.shape == b.shape
+        assert allclose(a, b, **kwargs)
+        return True
     except TypeError:
         pass
 
