@@ -3,26 +3,65 @@ sudo: false
 dist: trusty
 os: linux
 
+_base_envs:
+  - &coverage COVERAGE='true' PARALLEL='true'
+  - &no_coverage COVERAGE='false' PARALLEL='true'
+  - &optimize PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
+  - &no_optimize XTRATESTARGS=
+  - &imports TEST_IMPORTS='true'
+  - &no_imports TEST_IMPORTS='false'
+
 jobs:
   fast_finish: true
   include:
-      - env: PYTHON=2.7 NUMPY=1.12.1 PANDAS=0.19.2 COVERAGE='true' PARALLEL='false' TEST_IMPORTS='false' XTRATESTARGS=
+    - env:
+      - PYTHON=2.7
+      - NUMPY=1.12.1
+      - PANDAS=0.19.2
+      - *coverage
+      - *no_optimize
+      - *no_imports
 
-      - env: PYTHON=2.7 NUMPY=1.13.0 PANDAS=0.20.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='false' PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
+    - env:
+      - PYTHON=2.7
+      - NUMPY=1.13.0
+      - PANDAS=0.20.2
+      - *no_coverage
+      - *optimize
+      - *no_imports
 
-      - env: PYTHON=3.4 NUMPY=1.10.4 PANDAS=0.19.1 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='false' PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
-        if: branch = master
+    - env:
+      - PYTHON=3.4
+      - NUMPY=1.10.4
+      - PANDAS=0.19.1
+      - *no_coverage
+      - *optimize
+      - *no_imports
+      if: branch = master
 
-      - env: PYTHON=3.5 NUMPY=1.12.1 PANDAS=0.19.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='false' XTRATESTARGS=
+    - env:
+      - PYTHON=3.5
+      - NUMPY=1.12.1
+      - PANDAS=0.19.2
+      - *no_coverage
+      - *no_optimize
+      - *no_imports
 
-      - env: PYTHON=3.6 NUMPY=1.13.0 PANDAS=0.20.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='true' XTRATESTARGS=
+    - env: &py36_env
+      - PYTHON=3.6
+      - NUMPY=1.13.0
+      - PANDAS=0.20.2
+      - *no_coverage
+      - *no_optimize
+      - *imports
 
-      - env: PYTHON=3.6 NUMPY=1.13.0 PANDAS=0.20.2 COVERAGE='false' PARALLEL='true' TEST_IMPORTS='true' XTRATESTARGS=
-        if: branch = master
-        os: osx
+    - env: *py36_env
+      if: branch = master
+      os: osx
 
   allow_failures:
     - os: osx
+
 
 install:
   - source continuous_integration/travis/install.sh
