@@ -1,6 +1,71 @@
 Changelog
 =========
 
+0.16.0 / ???
+------------
+
+Array
++++++
+
+-
+
+
+DataFrame
++++++++++
+
+-
+
+
+Bag
++++
+
+-
+
+
+Core
+++++
+
+-
+
+
+
+0.15.3 / 2017-09-24
+-------------------
+
+Array
++++++
+
+-  Add masked arrays (:pr:`2301`)
+-  Add ``*_like array creation functions`` (:pr:`2640`)
+-  Indexing with unsigned integer array (:pr:`2647`)
+-  Improved slicing with boolean arrays of different dimensions (:pr:`2658`)
+-  Support literals in ``top`` and ``atop`` (:pr:`2661`)
+-  Optional axis argument in cumulative functions (:pr:`2664`)
+-  Improve tests on scalars with ``assert_eq`` (:pr:`2681`)
+-  Fix norm keepdims (:pr:`2683`)
+-  Add ``ptp`` (:pr:`2691`)
+-  Add apply_along_axis (:pr:`2690`) and apply_over_axes (:pr:`2702`)
+
+DataFrame
++++++++++
+
+-  Added ``Series.str[index]`` (:pr:`2634`)
+-  Allow the groupby by param to handle columns and index levels (:pr:`2636`)
+-  ``DataFrame.to_csv`` and ``Bag.to_textfiles`` now return the filenames to
+    which they have written (:pr:`2655`)
+-  Fix combination of ``partition_on`` and ``append`` in ``to_parquet``
+   (:pr:`2645`)
+-  Fix for parquet file schemes (:pr:`2667`)
+-  Repartition works with mixed categoricals (:pr:`2676`)
+
+Core
+++++
+
+-  ``python setup.py test`` now runs tests (:pr:`2641`)
+-  Added new cheatsheet (:pr:`2649`)
+-  Remove resize tool in Bokeh plots (:pr:`2688`)
+
+
 0.15.2 / 2017-08-25
 -------------------
 
