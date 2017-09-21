@@ -4,7 +4,7 @@ dist: trusty
 os: linux
 
 _base_envs:
-  - &coverage COVERAGE='true' PARALLEL='true'
+  - &coverage COVERAGE='true' PARALLEL='false'
   - &no_coverage COVERAGE='false' PARALLEL='true'
   - &optimize PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
   - &no_optimize XTRATESTARGS=
@@ -37,7 +37,7 @@ jobs:
       - *no_coverage
       - *optimize
       - *no_imports
-      if: branch = master
+      if: type != pull_request
 
     - env:
       - PYTHON=3.5
@@ -56,7 +56,7 @@ jobs:
       - *imports
 
     - env: *py36_env
-      if: branch = master
+      if: type != pull_request
       os: osx
 
   allow_failures:
