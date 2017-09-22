@@ -160,6 +160,40 @@ def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
 
+@wraps(np.apply_along_axis)
+def apply_along_axis(func1d, axis, arr, *args, **kwargs):
+    arr = asarray(arr)
+
+    # Validate and normalize axis
+    arr.shape[axis]
+    axis = len(arr.shape[:axis])
+
+    result = np.empty(arr.shape[:axis] + arr.shape[axis + 1:], dtype=object)
+    result_ranges = [range(s) for s in result.shape]
+
+    for i in product(*result_ranges):
+        result[i] = asarray(func1d(
+            arr[i[:axis] + (Ellipsis,) + i[axis:]],
+            *args,
+            **kwargs
+        ))
+
+    each_res_ndim = result.flat[0].ndim
+    for i in range(result.ndim - 1, -1, -1):
+        stack_axis = 0
+        if i >= axis:
+            stack_axis = result.ndim + each_res_ndim - i - 1
+
+        result2 = result[..., 0]
+        for j in product(*(result_ranges[:i])):
+            result2[j] = stack(result[j].tolist(), axis=stack_axis)
+        result = result2
+
+    result = result[()]
+
+    return result
+
+
 @wraps(np.ptp)
 def ptp(a, axis=None):
     return a.max(axis=axis) - a.min(axis=axis)
