@@ -9,6 +9,7 @@ Top level user functions:
    all
    angle
    any
+   apply_along_axis
    arange
    arccos
    arccosh
@@ -324,6 +325,7 @@ Other functions
 .. autofunction:: all
 .. autofunction:: angle
 .. autofunction:: any
+.. autofunction:: apply_along_axis
 .. autofunction:: arange
 .. autofunction:: arccos
 .. autofunction:: arccosh
