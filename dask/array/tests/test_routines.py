@@ -117,6 +117,14 @@ def test_dot_method():
     [(10, 15, 20), -1],
 ])
 def test_apply_along_axis(func1d_name, func1d, shape, axis):
+    if (func1d_name == "range2" and
+            LooseVersion(np.__version__) < LooseVersion("1.13.0")):
+            pytest.skip(
+                "NumPy %s doesn't support multidimensional results with"
+                " `apply_along_axis`. Need NumPy 1.13.0 or greater."
+                "" % np.__version__
+            )
+
     a = np.random.randint(0, 10, shape)
     d = da.from_array(a, chunks=(len(shape) * (5,)))
 
