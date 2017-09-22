@@ -160,36 +160,55 @@ def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
 
+def _func1d_fmt(arr,
+                func1d,
+                func1d_args,
+                func1d_kwargs,
+                ndim_before=0,
+                ndim_after=0):
+    # Drop singleton dimensions from map_blocks to get 1D array.
+    arr1d = arr.flatten()
+
+    # Compute result and ensure it is an array (consistent with NumPy).
+    res = np.asarray(func1d(arr1d, *func1d_args, **func1d_kwargs))
+
+    # Tack on singleton dimensions that map_blocks will expect.
+    res = res[ndim_before * (None,) + (Ellipsis,) + ndim_after * (None,)]
+
+    return res
+
+
 @wraps(np.apply_along_axis)
 def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     arr = asarray(arr)
 
-    # Validate and normalize axis
+    # Validate and normalize axis.
     arr.shape[axis]
     axis = len(arr.shape[:axis])
 
-    result = np.empty(arr.shape[:axis] + arr.shape[axis + 1:], dtype=object)
-    result_ranges = [range(s) for s in result.shape]
+    # Test out some data with the function.
+    test_data = np.ones((1,), dtype=arr.dtype)
+    test_result = np.array(func1d(test_data, *args, **kwargs))
 
-    for i in product(*result_ranges):
-        result[i] = asarray(func1d(
-            arr[i[:axis] + (Ellipsis,) + i[axis:]],
-            *args,
-            **kwargs
-        ))
+    # Rechunk so that func1d is applied over the full axis.
+    arr = arr.rechunk(
+        axis * (1,) + arr.shape[axis:axis + 1] + (arr.ndim - axis) * (1,)
+    )
 
-    each_res_ndim = result.flat[0].ndim
-    for i in range(result.ndim - 1, -1, -1):
-        stack_axis = 0
-        if i >= axis:
-            stack_axis = result.ndim + each_res_ndim - i - 1
-
-        result2 = result[..., 0]
-        for j in product(*(result_ranges[:i])):
-            result2[j] = stack(result[j].tolist(), axis=stack_axis)
-        result = result2
-
-    result = result[()]
+    # Map func1d over the data to get the result
+    # Adds other axes as needed.
+    result = arr.map_blocks(
+        _func1d_fmt,
+        dtype=test_result.dtype,
+        chunks=(arr.chunks[:axis] + test_result.shape + arr.chunks[axis + 1:]),
+        drop_axis=axis,
+        new_axis=list(range(axis, axis + test_result.ndim, 1)),
+        func1d=func1d,
+        func1d_args=args,
+        func1d_kwargs=kwargs,
+        ndim_before=axis,
+        ndim_after=(arr.ndim - axis - 1)
+    )
 
     return result
 
