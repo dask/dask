@@ -184,7 +184,7 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
 
     # Rechunk so that func1d is applied over the full axis.
     arr = arr.rechunk(
-        axis * (1,) + arr.shape[axis:axis + 1] + (arr.ndim - axis) * (1,)
+        arr.chunks[:axis] + (arr.shape[axis:axis + 1],) + arr.chunks[axis + 1:]
     )
 
     # Map func1d over the data to get the result
