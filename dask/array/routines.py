@@ -184,9 +184,9 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     test_result = np.array(func1d(test_data, *args, **kwargs))
 
     if (LooseVersion(np.__version__) < LooseVersion("1.13.0") and
-            (np.array(test_result.shape) > 1).sum() > 1):
+            (np.array(test_result.shape) > 1).sum(dtype=int) > 1):
             raise ValueError(
-                "Only one non-trivial dimension allowed in result. "
+                "No more than one non-trivial dimension allowed in result. "
                 "Need NumPy 1.13.0+ for this functionality."
             )
 
