@@ -3,6 +3,7 @@ from __future__ import division, print_function, absolute_import
 import inspect
 import warnings
 from collections import Iterable
+from distutils.version import LooseVersion
 from functools import wraps, partial
 from itertools import product
 from numbers import Integral
@@ -158,6 +159,57 @@ def tensordot(lhs, rhs, axes=2):
 @wraps(np.dot)
 def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
+
+
+def _inner_apply_along_axis(arr,
+                            func1d,
+                            func1d_axis,
+                            func1d_args,
+                            func1d_kwargs):
+    return np.apply_along_axis(
+        func1d, func1d_axis, arr, *func1d_args, **func1d_kwargs
+    )
+
+
+@wraps(np.apply_along_axis)
+def apply_along_axis(func1d, axis, arr, *args, **kwargs):
+    arr = asarray(arr)
+
+    # Validate and normalize axis.
+    arr.shape[axis]
+    axis = len(arr.shape[:axis])
+
+    # Test out some data with the function.
+    test_data = np.ones((1,), dtype=arr.dtype)
+    test_result = np.array(func1d(test_data, *args, **kwargs))
+
+    if (LooseVersion(np.__version__) < LooseVersion("1.13.0") and
+            (np.array(test_result.shape) > 1).sum() > 1):
+            raise ValueError(
+                "Only one non-trivial dimension allowed in result. "
+                "Need NumPy 1.13.0+ for this functionality."
+            )
+
+    # Rechunk so that func1d is applied over the full axis.
+    arr = arr.rechunk(
+        arr.chunks[:axis] + (arr.shape[axis:axis + 1],) + arr.chunks[axis + 1:]
+    )
+
+    # Map func1d over the data to get the result
+    # Adds other axes as needed.
+    result = arr.map_blocks(
+        _inner_apply_along_axis,
+        dtype=test_result.dtype,
+        chunks=(arr.chunks[:axis] + test_result.shape + arr.chunks[axis + 1:]),
+        drop_axis=axis,
+        new_axis=list(range(axis, axis + test_result.ndim, 1)),
+        func1d=func1d,
+        func1d_axis=axis,
+        func1d_args=args,
+        func1d_kwargs=kwargs,
+    )
+
+    return result
 
 
 @wraps(np.ptp)
