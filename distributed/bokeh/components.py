@@ -7,13 +7,14 @@ import weakref
 
 from bokeh.layouts import row, column
 from bokeh.models import (
-    ColumnDataSource, Plot, DataRange1d, Rect, LinearAxis,
-    DatetimeAxis, Grid, BasicTicker, HoverTool, BoxZoomTool, ResetTool,
+    ColumnDataSource, Plot, DataRange1d, LinearAxis,
+    DatetimeAxis, HoverTool, BoxZoomTool, ResetTool,
     PanTool, WheelZoomTool, Title, Range1d, Quad, Text, value, Line,
-    NumeralTickFormatter, ToolbarBox, Legend, BoxSelectTool,
-    Circle
+    NumeralTickFormatter, ToolbarBox, Legend, BoxSelectTool, TapTool,
+    Circle, OpenURL,
 )
-from bokeh.models.widgets import DataTable, TableColumn, NumberFormatter
+from bokeh.models.widgets import (DataTable, TableColumn, NumberFormatter,
+        Button, Select)
 from bokeh.palettes import Spectral9
 from bokeh.plotting import figure
 from toolz import valmap
@@ -30,7 +31,7 @@ else:
     ExportTool = None
 
 
-profile_interval = config.get('profile-interval', 0.010)
+profile_interval = config.get('profile-interval', 10) / 1000
 
 
 class DashboardComponent(object):
@@ -76,25 +77,21 @@ class TaskStream(DashboardComponent):
         x_range = DataRange1d(range_padding=0)
         y_range = DataRange1d(range_padding=0)
 
-        self.root = Plot(
-            title=Title(text="Task Stream"), id='bk-task-stream-plot',
+        self.root = figure(
+            title="Task Stream", id='bk-task-stream-plot',
             x_range=x_range, y_range=y_range, toolbar_location="above",
-            min_border_right=35, **kwargs
-        )
+            x_axis_type='datetime', min_border_right=35, **kwargs)
+        self.root.yaxis.axis_label = 'Worker Core'
 
-        self.root.add_glyph(
-            self.source,
-            Rect(x="start", y="y", width="duration", height=0.4, fill_color="color",
-                 line_color="color", line_alpha=0.6, fill_alpha="alpha", line_width=3)
-        )
-
-        self.root.add_layout(DatetimeAxis(axis_label="Time"), "below")
-
-        ticker = BasicTicker(num_minor_ticks=0)
-        self.root.add_layout(LinearAxis(axis_label="Worker Core", ticker=ticker), "left")
-        self.root.add_layout(Grid(dimension=1, grid_line_alpha=0.4, ticker=ticker))
+        rect = self.root.rect(source=self.source, x="start", y="y",
+            width="duration", height=0.4, fill_color="color",
+            line_color="color", line_alpha=0.6, fill_alpha="alpha",
+            line_width=3)
+        rect.nonselection_glyph = None
 
         self.root.yaxis.major_label_text_alpha = 0
+        self.root.yaxis.minor_tick_line_alpha = 0
+        self.root.xgrid.visible = False
 
         hover = HoverTool(
             point_policy="follow_mouse",
@@ -107,8 +104,10 @@ class TaskStream(DashboardComponent):
                 """
         )
 
+        tap = TapTool(callback=OpenURL(url='/profile?key=@name'))
+
         self.root.add_tools(
-            hover,
+            hover, tap,
             BoxZoomTool(),
             ResetTool(reset_size=False),
             PanTool(dimensions="width"),
@@ -634,9 +633,25 @@ class ProfileTimePlot(DashboardComponent):
     def __init__(self, server, doc=None, **kwargs):
         if doc is not None:
             self.doc = weakref.ref(doc)
+            try:
+                self.key = doc.session_context.request.arguments.get('key', None)
+            except AttributeError:
+                self.key = None
+            if isinstance(self.key, list):
+                self.key = self.key[0]
+            if isinstance(self.key, bytes):
+                self.key = self.key.decode()
+            self.task_names = ['All', self.key]
+        else:
+            self.key = None
+            self.task_names = ['All']
+
         self.server = server
-        state = profile.create()
-        data = profile.plot_data(state, profile_interval)
+        self.start = None
+        self.stop = None
+        self.ts = {'count': [], 'time': []}
+        self.state = profile.create()
+        data = profile.plot_data(self.state, profile_interval)
         self.states = data.pop('states')
         self.source = ColumnDataSource(data=data)
 
@@ -690,9 +705,9 @@ class ProfileTimePlot(DashboardComponent):
         self.profile_plot.grid.visible = False
 
         self.ts_source = ColumnDataSource({'time': [], 'count': []})
-        self.ts_plot = figure(title='Acivity over time', height=100,
+        self.ts_plot = figure(title='Activity over time', height=100,
                               x_axis_type='datetime', active_drag='xbox_select',
-                              tools='pan,xwheel_zoom,xbox_select,reset',
+                              tools='xpan,xwheel_zoom,xbox_select,reset',
                               **kwargs)
         self.ts_plot.line('time', 'count', source=self.ts_source)
         self.ts_plot.circle('time', 'count', source=self.ts_source, color=None,
@@ -704,34 +719,65 @@ class ProfileTimePlot(DashboardComponent):
             with log_errors():
                 selected = self.ts_source.selected['1d']['indices']
                 if selected:
-                    start = self.ts_source.data['time'][selected[0]] / 1000
-                    stop = self.ts_source.data['time'][selected[-1]] / 1000
-                    start, stop = min(start, stop), max(start, stop)
-
-                    result = self.server.get_profile(start=start, stop=stop)
-
-                    if isinstance(result, gen.Future):
-                        @gen.coroutine
-                        def _():
-                            out = yield result
-                            self.doc().add_next_tick_callback(lambda: self.update(out))
-                        _()
-                    else:
-                        self.update(result)
+                    start = self.ts_source.data['time'][min(selected)] / 1000
+                    stop = self.ts_source.data['time'][max(selected)] / 1000
+                    self.start, self.stop = min(start, stop), max(start, stop)
+                else:
+                    self.start = self.stop = None
+                self.trigger_update(update_metadata=False)
 
         self.ts_source.on_change('selected', ts_change)
 
-        self.root = column(self.profile_plot, self.ts_plot, **kwargs)
+        self.reset_button = Button(label="Reset", button_type="success")
+        self.reset_button.on_click(lambda: self.update(self.state) )
 
-    def update(self, state, ts=None):
+        self.update_button = Button(label="Update", button_type="success")
+        self.update_button.on_click(self.trigger_update)
+
+        self.select = Select(value=self.task_names[-1], options=self.task_names)
+
+        def select_cb(attr, old, new):
+            if new == 'All':
+                new = None
+            self.key = new
+            self.trigger_update(update_metadata=False)
+
+        self.select.on_change('value', select_cb)
+
+        self.root = column(row(self.select, self.reset_button,
+                               self.update_button, sizing_mode='scale_width'),
+                           self.profile_plot, self.ts_plot, **kwargs)
+
+    def update(self, state, metadata=None):
         with log_errors():
             self.state = state
             data = profile.plot_data(self.state, profile_interval)
             self.states = data.pop('states')
             self.source.data.update(data)
 
-            if ts is not None and ts['counts']:
-                times, counts = zip(*ts['counts'])
-                ts2 = {'count': counts, 'time': [t * 1000 for t in times]}
+            if metadata is not None and metadata['counts']:
+                self.task_names = ['All'] + sorted(metadata['keys'])
+                self.select.options = self.task_names
+                if self.key:
+                    ts = metadata['keys'][self.key]
+                else:
+                    ts = metadata['counts']
+                times, counts = zip(*ts)
+                self.ts = {'count': counts, 'time': [t * 1000 for t in times]}
 
-                self.ts_source.data.update(ts2)
+                self.ts_source.data.update(self.ts)
+
+    def trigger_update(self, update_metadata=True):
+        @gen.coroutine
+        def cb():
+            with log_errors():
+                prof = self.server.get_profile(key=self.key, start=self.start, stop=self.stop)
+                if update_metadata:
+                    metadata = self.server.get_profile_metadata()
+                else:
+                    metadata = None
+                if isinstance(prof, gen.Future):
+                    prof, metadata = yield [prof, metadata]
+                self.doc().add_next_tick_callback(lambda: self.update(prof, metadata))
+
+        self.server.loop.add_callback(cb)

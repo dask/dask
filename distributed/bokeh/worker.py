@@ -608,10 +608,7 @@ def profile_doc(server, extra, doc):
     with log_errors():
         doc.title = "Dask Worker Profile"
         profile = ProfileTimePlot(server, sizing_mode='scale_width')
-        prof = server.get_profile()
-        print(prof['count'])
-        meta = server.get_profile_metadata()
-        profile.update(prof, meta)
+        profile.trigger_update()
 
         doc.add_root(profile.root)
         doc.template = template

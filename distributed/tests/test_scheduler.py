@@ -8,7 +8,7 @@ from operator import add, mul
 import sys
 
 from dask import delayed
-from toolz import merge, concat, valmap, first, frequencies
+from toolz import merge, concat, valmap, first, frequencies, pluck
 from tornado import gen
 
 import pytest
@@ -20,8 +20,8 @@ from distributed.client import wait
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.worker import dumps_function, dumps_task
-from distributed.utils_test import (inc, dec, gen_cluster, gen_test,
-                                    readone, slowinc, slowadd, cluster, div)
+from distributed.utils_test import (inc, dec, gen_cluster, gen_test, readone,
+                                    slowinc, slowadd, slowdec, cluster, div)
 from distributed.utils_test import loop # flake8: noqa
 from distributed.utils import tmpfile
 from distributed.utils_test import slow
@@ -1156,6 +1156,18 @@ def test_profile_metadata(c, s, a, b):
     assert all(start < t < now for t, count in meta['counts'])
     assert all(0 < count < 11 for t, count in meta['counts'][:4])
     assert not meta['counts'][-1][1]
+
+
+@gen_cluster(client=True, worker_kwargs={'profile_cycle_interval': 100})
+def test_profile_metadata_keys(c, s, a, b):
+    start = time() - 1
+    x = c.map(slowinc, range(10), delay=0.05)
+    y = c.map(slowdec, range(10), delay=0.05)
+    yield wait(x + y)
+
+    meta = yield s.get_profile_metadata(profile_cycle_interval=0.100)
+    assert set(meta['keys']) == {'slowinc', 'slowdec'}
+    assert len(meta['counts']) == len(meta['keys']['slowinc'])
 
 
 @gen_cluster(client=True)

@@ -4688,7 +4688,7 @@ def test_profile(c, s, a, b):
     assert not x['count']
 
     x = yield c.profile(start=0, stop=time())
-    assert x['count'] == sum(p['count'] for _, p in a.profile_history)
+    assert x['count'] == sum(p['count'] for _, p in a.profile_history) + a.profile_recent['count']
 
     y = yield c.profile(start=time() - 0.300, stop=time())
     assert 0 < y['count'] < x['count']
@@ -4698,6 +4698,19 @@ def test_profile(c, s, a, b):
     assert not result['count']
 
 
+@gen_cluster(client=True, worker_kwargs={'profile_cycle_interval': 100})
+def test_profile_keys(c, s, a, b):
+    x = c.map(slowinc, range(10), delay=0.05, workers=a.address)
+    y = c.map(slowdec, range(10), delay=0.05, workers=a.address)
+    yield wait(x + y)
+
+    xp = yield c.profile('slowinc')
+    yp = yield c.profile('slowdec')
+    p = yield c.profile()
+
+    assert p['count'] == xp['count'] + yp['count']
+
+    
 @gen_cluster()
 def test_client_with_name(s, a, b):
     with captured_logger('distributed.scheduler') as sio:

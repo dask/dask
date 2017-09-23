@@ -2230,39 +2230,61 @@ class Worker(WorkerBase):
         if self.digests is not None:
             self.digests['profile-duration'].add(stop - start)
 
-    def get_profile(self, comm=None, start=None, stop=None):
+    def get_profile(self, comm=None, start=None, stop=None, key=None):
+        now = time() + self.scheduler_delay
+        if key is None:
+            history = self.profile_history
+        else:
+            history = [(t, d[key]) for t, d in self.profile_keys_history
+                       if key in d]
         if start is None:
             istart = 0
         else:
-            istart = bisect.bisect_left(self.profile_history, (start,))
+            istart = bisect.bisect_left(history, (start,))
 
         if stop is None:
             istop = None
         else:
-            istop = bisect.bisect_right(self.profile_history, (stop,)) + 1
-            istop = min(istop, len(self.profile_history) - 1)
+            istop = bisect.bisect_right(history, (stop,)) + 1
+            if istop >= len(history):
+                istop = None  # include end
 
-        at_end = istop is None or istop >= len(self.profile_history) - 1
-
-        if istart == 0 and at_end:
-            history = list(self.profile_history)
+        if istart == 0 and istop is None:
+            history = list(history)
         else:
-            history = [self.profile_history[i] for i in range(istart, istop)]
+            iistop = len(history) if istop is None else istop
+            history = [history[i] for i in range(istart, iistop)]
 
         prof = profile.merge(*pluck(1, history))
 
-        # TODO: merge self.profile_recent into profile
+        if not history:
+            return profile.create()
+
+        if istop is None and (start is None or start < now):
+            if key is None:
+                recent = self.profile_recent
+            else:
+                recent = self.profile_keys[key]
+            prof = profile.merge(prof, recent)
 
         return prof
 
     def get_profile_metadata(self, comm=None, start=0, stop=None):
-        stop = stop or time() + self.scheduler_delay
+        if stop is None:
+            add_recent = True
+        now = time() + self.scheduler_delay
+        stop = stop or now
         start = start or 0
-        return {'counts': [(t, d['count']) for t, d in self.profile_history
-                           if start < t < stop],
-                'keys': [(t, {k: d['count'] for k, d in v.items()})
-                         for t, v in self.profile_keys_history
-                         if start < t < stop]}
+        result = {'counts': [(t, d['count']) for t, d in self.profile_history
+                             if start < t < stop],
+                  'keys': [(t, {k: d['count'] for k, d in v.items()})
+                           for t, v in self.profile_keys_history
+                           if start < t < stop]}
+        if add_recent:
+            result['counts'].append((now, self.profile_recent['count']))
+            result['keys'].append((now, {k: v['count']
+                                          for k, v in self.profile_keys.items()}))
+        return result
 
     def get_call_stack(self, comm=None, keys=None):
         with self.active_threads_lock:

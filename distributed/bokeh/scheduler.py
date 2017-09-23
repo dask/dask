@@ -20,7 +20,6 @@ from bokeh.plotting import figure
 from bokeh.palettes import Viridis11
 from bokeh.io import curdoc
 from toolz import pipe
-from tornado import gen
 try:
     import numpy as np
 except ImportError:
@@ -137,8 +136,9 @@ class Occupancy(DashboardComponent):
 
             fig = figure(title='Occupancy', tools='', id='bk-occupancy-plot',
                          x_axis_type='datetime', **kwargs)
-            fig.rect(source=self.source, x='x', width='ms', y='y', height=1,
-                     color='color')
+            rect = fig.rect(source=self.source, x='x', width='ms', y='y', height=1,
+                            color='color')
+            rect.nonselection_glyph = None
 
             fig.xaxis.minor_tick_line_alpha = 0
             fig.yaxis.visible = False
@@ -285,19 +285,22 @@ class CurrentLoad(DashboardComponent):
 
             processing = figure(title='Tasks Processing', tools='', id='bk-nprocessing-plot',
                                 width=int(width / 2), **kwargs)
-            processing.rect(source=self.source,
-                            x='nprocessing-half', y='y',
-                            width='nprocessing', height=1,
-                            color='nprocessing-color')
+            rect = processing.rect(source=self.source,
+                                   x='nprocessing-half', y='y',
+                                   width='nprocessing', height=1,
+                                   color='nprocessing-color')
             processing.x_range.start = 0
+            rect.nonselection_glyph = None
 
             nbytes = figure(title='Bytes stored', tools='',
                             id='bk-nbytes-worker-plot', width=int(width / 2),
                             **kwargs)
-            nbytes.rect(source=self.source,
-                        x='nbytes-half', y='y',
-                        width='nbytes', height=1,
-                        color='nbytes-color')
+            rect = nbytes.rect(source=self.source,
+                               x='nbytes-half', y='y',
+                               width='nbytes', height=1,
+                               color='nbytes-color')
+            rect.nonselection_glyph = None
+
             nbytes.axis[0].ticker = BasicTicker(mantissas=[1, 256, 512], base=1024)
             nbytes.xaxis[0].formatter = NumeralTickFormatter(format='0.0 b')
             nbytes.xaxis.major_label_orientation = -math.pi / 12
@@ -1005,14 +1008,7 @@ def profile_doc(scheduler, extra, doc):
         doc.template_variables['active_page'] = 'profile'
         doc.template_variables.update(extra)
 
-        @gen.coroutine
-        def _():
-            profile, metadata = yield [scheduler.get_profile(),
-                                       scheduler.get_profile_metadata()]
-            doc.add_next_tick_callback(lambda: prof.update(profile, metadata))
-
-        from tornado.ioloop import IOLoop
-        IOLoop.current().add_callback(_)
+        prof.trigger_update()
 
 
 class BokehScheduler(BokehServer):

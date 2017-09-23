@@ -23,6 +23,7 @@ API
    Client.ncores
    Client.persist
    Client.publish_dataset
+   Client.profile
    Client.rebalance
    Client.replicate
    Client.restart

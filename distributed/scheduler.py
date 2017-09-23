@@ -3234,12 +3234,12 @@ class Scheduler(ServerNode):
 
     @gen.coroutine
     def get_profile(self, comm=None, workers=None, merge_workers=True,
-                    start=None, stop=None):
+                    start=None, stop=None, key=None):
         if workers is None:
             workers = self.workers
         else:
             workers = self.workers & workers
-        result = yield {w: self.rpc(w).profile(start=start, stop=stop)
+        result = yield {w: self.rpc(w).profile(start=start, stop=stop, key=key)
                         for w in workers}
         if merge_workers:
             result = profile.merge(*result.values())
@@ -3259,7 +3259,28 @@ class Scheduler(ServerNode):
         counts = [v['counts'] for v in result.values()]
         counts = itertools.groupby(merge_sorted(*counts), lambda t: t[0] // dt * dt)
         counts = [(time, sum(pluck(1, group))) for time, group in counts]
-        raise gen.Return({'counts': counts})
+
+        keys = set()
+        for v in result.values():
+            for t, d in v['keys']:
+                for k in d:
+                    keys.add(k)
+        keys = {k: [] for k in keys}
+
+        groups1 = [v['keys'] for v in result.values()]
+        groups2 = list(merge_sorted(*groups1))
+
+        last = 0
+        for t, d in groups2:
+            tt = t // dt * dt
+            if tt > last:
+                last = tt
+                for k, v in keys.items():
+                    v.append([tt, 0])
+            for k, v in d.items():
+                keys[k][-1][1] += v
+
+        raise gen.Return({'counts': counts, 'keys': keys})
 
 
     ###########

@@ -10,7 +10,7 @@ from distributed.utils_test import slowinc
 
 from distributed.bokeh.components import (
     TaskStream, TaskProgress, MemoryUsage, ResourceProfiles, WorkerTable,
-    Processing, ProfilePlot
+    Processing, ProfilePlot, ProfileTimePlot
 )
 
 
@@ -52,3 +52,21 @@ def test_profile_plot(c, s, a, b):
     yield c.map(slowinc, range(10), delay=0.05)
     p.update(a.profile_recent)
     assert len(p.source.data['left']) > 1
+
+
+@gen_cluster(client=True)
+def test_profile_time_plot(c, s, a, b):
+    from bokeh.io import curdoc
+    sp = ProfileTimePlot(s, doc=curdoc())
+    sp.trigger_update()
+
+    ap = ProfileTimePlot(a, doc=curdoc())
+    ap.trigger_update()
+
+    assert len(sp.source.data['left']) <= 1
+    assert len(ap.source.data['left']) <= 1
+
+    yield c.map(slowinc, range(10), delay=0.05)
+    ap.trigger_update()
+    sp.trigger_update()
+    yield gen.sleep(0.05)
