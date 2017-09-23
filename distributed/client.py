@@ -408,6 +408,9 @@ class Client(Node):
         Optional security information
     asynchronous: bool (False by default)
         Set to True if this client will be used within a Tornado event loop
+    name: string (optional)
+        Gives the client a name that will be included in logs generated on
+        the scheduler for matters relating to this client
 
     Examples
     --------
@@ -438,7 +441,7 @@ class Client(Node):
     def __init__(self, address=None, loop=None, timeout=5,
                  set_as_default=True, scheduler_file=None,
                  security=None, start=None, asynchronous=False,
-                 **kwargs):
+                 name=None, **kwargs):
         if start is not None:
             raise ValueError("The start= keyword has been deprecated. "
                              "Starting happens automatically. "
@@ -447,7 +450,7 @@ class Client(Node):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.coroutines = []
-        self.id = type(self).__name__ + '-' + str(uuid.uuid1(clock_seq=os.getpid()))
+        self.id = type(self).__name__ + ('-' + name + '-' if name else '-') + str(uuid.uuid1(clock_seq=os.getpid()))
         self.generation = 0
         self.status = None
         self._pending_msg_buffer = []
