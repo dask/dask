@@ -329,7 +329,7 @@ def test_get_sync(loop):
             assert c.get({'x': (inc, 1)}, 'x') == 2
 
 
-def test_no_future_referneces(loop):
+def test_no_future_references(loop):
     from weakref import WeakSet
     ws = WeakSet()
     with cluster() as (s, [a, b]):
