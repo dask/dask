@@ -199,6 +199,7 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     # Adds other axes as needed.
     result = arr.map_blocks(
         _inner_apply_along_axis,
+        token="apply_along_axis",
         dtype=test_result.dtype,
         chunks=(arr.chunks[:axis] + test_result.shape + arr.chunks[axis + 1:]),
         drop_axis=axis,
