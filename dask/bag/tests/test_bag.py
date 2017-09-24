@@ -366,11 +366,24 @@ def test_foldby():
     assert set(c) == set(reduceby(iseven, lambda acc, x: acc + x, L, 0).items())
     assert c.name == b.foldby(iseven, add, 0, add, 0).name
 
-    d = b.foldby(iseven, add, 0, add, 0, split_every=2)
-    assert c.compute() == d.compute()
-
     c = b.foldby(iseven, lambda acc, x: acc + x)
     assert set(c) == set(reduceby(iseven, lambda acc, x: acc + x, L, 0).items())
+
+
+def test_foldby_tree_reduction():
+    for n in [1, 7, 32]:
+        b = db.from_sequence(range(100), npartitions=n)
+        c = b.foldby(iseven, add)
+        r = c.compute()
+        for m in [False, None, 2, 3]:
+            d = b.foldby(iseven, add, split_every=m)
+            e = b.foldby(iseven, add, 0, split_every=m)
+            f = b.foldby(iseven, add, 0, add, split_every=m)
+            g = b.foldby(iseven, add, 0, add, 0, split_every=m)
+            assert r == d.compute()
+            assert r == e.compute()
+            assert r == f.compute()
+            assert r == g.compute()
 
 
 def test_map_partitions():
