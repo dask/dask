@@ -1001,9 +1001,9 @@ class Bag(Base):
                             for i, inds in enumerate(partition_all(split_every,
                                                                    range(k))))
             else:
-                raise NotImplementedError("Not yet, sorry!")
-#                dsk2 = {(b, 0): (dictitems, (merge_with, (partial, reduce, combine),
-#                                             list(dsk.keys())))}
+                dsk2 = dict(((c, i), (merge_with, (partial, reduce, combine),
+                                      [(b, j) for j in inds]))
+                           for i, inds in enumerate(partition_all(split_every, range(k))))
             dsk.update(dsk2)
             k = len(dsk2)
             b = c
@@ -1016,7 +1016,8 @@ class Bag(Base):
                                          [(b, j) for j in range(k)])),
                                          combine_initial))
         else:
-            raise NotImplementedError("Not yet, sorry!")
+            dsk[(e, 0)] = (dictitems, (merge_with, (partial, reduce, combine),
+                                       [(b, j) for j in range(k)]))
 
         return type(self)(merge(self.dask, dsk), e, 1)
 
