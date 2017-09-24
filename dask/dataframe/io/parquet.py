@@ -298,7 +298,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
                fixed_text=None, object_encoding=None, storage_options=None,
                append=False, ignore_divisions=False, partition_on=None,
-               compute=True):
+               compute=True, times='int64'):
     """Store Dask.dataframe to Parquet files
 
     Notes
@@ -343,6 +343,11 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
         Construct directory-based partitioning by splitting on these fields'
         values. Each dask partition will result in one or more datafiles,
         there will be no global groupby.
+    times: 'int64' (default), or 'int96':
+        In "int64" mode, datetimes are written as 8-byte integers, us
+        resolution; in "int96" mode, they are written as 12-byte blocks, with
+        the first 8 bytes as ns within the day, the next 4 bytes the julian day.
+        'int96' mode is included only for compatibility.
     compute: bool (True)
         If true (default) then we compute immediately.
         If False then we return a dask.delayed object for future computation.
@@ -386,7 +391,7 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
     fmd = fastparquet.writer.make_metadata(
         df._meta, has_nulls=has_nulls, fixed_text=fixed_text,
         object_encoding=object_encoding, index_cols=[index_col],
-        ignore_columns=partition_on)
+        ignore_columns=partition_on, times=times)
 
     if append:
         pf = fastparquet.api.ParquetFile(path, open_with=myopen, sep=sep)
