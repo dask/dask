@@ -1709,7 +1709,7 @@ def test_to_npy_stack():
     d = da.from_array(x, chunks=(2, 4, 4))
 
     with tmpdir() as dirname:
-        da.to_npy_stack(dirname, d, axis=0)
+        da.to_npy_stack(dirname+'/test', d, axis=0)
         assert os.path.exists(os.path.join(dirname, '0.npy'))
         assert (np.load(os.path.join(dirname, '1.npy')) == x[2:4]).all()
 
