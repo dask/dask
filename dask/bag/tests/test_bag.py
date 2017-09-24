@@ -371,19 +371,20 @@ def test_foldby():
 
 
 def test_foldby_tree_reduction():
-    for n in [1, 7, 32]:
-        b = db.from_sequence(range(100), npartitions=n)
-        c = b.foldby(iseven, add)
-        r = c.compute()
-        for m in [False, None, 2, 3]:
-            d = b.foldby(iseven, add, split_every=m)
-            e = b.foldby(iseven, add, 0, split_every=m)
-            f = b.foldby(iseven, add, 0, add, split_every=m)
-            g = b.foldby(iseven, add, 0, add, 0, split_every=m)
-            assert r == d.compute()
-            assert r == e.compute()
-            assert r == f.compute()
-            assert r == g.compute()
+    with dask.set_options(get=dask.local.get_sync):
+        for n in [1, 7, 32]:
+            b = db.from_sequence(range(100), npartitions=n)
+            c = b.foldby(iseven, add)
+            r = c.compute()
+            for m in [False, None, 2, 3]:
+                d = b.foldby(iseven, add, split_every=m)
+                e = b.foldby(iseven, add, 0, split_every=m)
+                f = b.foldby(iseven, add, 0, add, split_every=m)
+                g = b.foldby(iseven, add, 0, add, 0, split_every=m)
+                assert r == d.compute()
+                assert r == e.compute()
+                assert r == f.compute()
+                assert r == g.compute()
 
 
 def test_map_partitions():
