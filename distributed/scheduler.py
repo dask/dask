@@ -1438,11 +1438,12 @@ class Scheduler(ServerNode):
                     for msg in msgs:
                         if msg == 'OK':  # from close
                             break
-
                         if 'status' in msg and 'error' in msg['status']:
-                            logger.error("error from worker %s: %s",
+                            try:
+                                logger.error("error from worker %s: %s",
                                          worker, clean_exception(**msg)[1])
-
+                            except Exception:
+                                logger.error("error from worker %s", worker)
                         op = msg.pop('op')
                         if op:
                             handler = self.worker_handlers[op]
