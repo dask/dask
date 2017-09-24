@@ -366,6 +366,9 @@ def test_foldby():
     assert set(c) == set(reduceby(iseven, lambda acc, x: acc + x, L, 0).items())
     assert c.name == b.foldby(iseven, add, 0, add, 0).name
 
+    d = b.foldby(iseven, add, 0, add, 0, split_every=2)
+    assert c.compute() == d.compute()
+
     c = b.foldby(iseven, lambda acc, x: acc + x)
     assert set(c) == set(reduceby(iseven, lambda acc, x: acc + x, L, 0).items())
 
