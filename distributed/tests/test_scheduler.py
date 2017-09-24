@@ -1122,6 +1122,8 @@ def test_correct_bad_time_estimate(c, s, *workers):
     assert all(w.data for w in workers)
 
 
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
+                    reason="Need 127.0.0.2 to mean localhost")
 @gen_test(timeout=None)
 def test_service_hosts_match_scheduler():
     from distributed.http.scheduler import HTTPScheduler

@@ -198,6 +198,8 @@ def test_num_fds(s):
         assert time() < start + 10
 
 
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
+                    reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster(client=True, ncores=[])
 def test_worker_uses_same_host_as_nanny(c, s):
     for host in ['tcp://0.0.0.0', 'tcp://127.0.0.2']:

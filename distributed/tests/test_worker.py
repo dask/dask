@@ -904,6 +904,8 @@ def test_worker_fds(s):
         assert time() < start + 0.5
 
 
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
+                    reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster(ncores=[])
 def test_service_hosts_match_worker(s):
     from distributed.http.worker import HTTPWorker
