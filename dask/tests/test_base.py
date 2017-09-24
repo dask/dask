@@ -361,7 +361,7 @@ def test_compute_nested():
 
 
 @pytest.mark.skipif('not da')
-@pytest.mark.skipif(sys.flags.optimize == 2,
+@pytest.mark.skipif(sys.flags.optimize,
                     reason="graphviz exception with Python -OO flag")
 def test_visualize():
     pytest.importorskip('graphviz')

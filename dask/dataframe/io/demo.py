@@ -190,6 +190,8 @@ def daily_stock(symbol, start, stop, freq=pd.Timedelta(seconds=1),
     divisions = []
     for i, seed in zip(range(len(df)), seeds):
         s = df.iloc[i]
+        if s.isnull().any():
+            continue
         part = delayed(generate_day)(s.name, s.loc['Open'], s.loc['High'], s.loc['Low'],
                                      s.loc['Close'], s.loc['Volume'],
                                      freq=freq, random_state=seed)

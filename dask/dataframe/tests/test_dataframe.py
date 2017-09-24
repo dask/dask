@@ -12,7 +12,7 @@ from dask.utils import ignoring, put_lines
 import dask.dataframe as dd
 
 from dask.dataframe.core import repartition_divisions, aca, _concat, Scalar
-from dask.dataframe.methods import boundary_slice
+from dask.dataframe import methods
 from dask.dataframe.utils import (assert_eq, make_meta, assert_max_deps,
                                   PANDAS_VERSION)
 
@@ -1103,17 +1103,17 @@ def test_repartition():
 
 def test_repartition_divisions():
     result = repartition_divisions([0, 6], [0, 6, 6], 'a', 'b', 'c')
-    assert result == {('b', 0): (boundary_slice, ('a', 0), 0, 6, False),
-                      ('b', 1): (boundary_slice, ('a', 0), 6, 6, True),
+    assert result == {('b', 0): (methods.boundary_slice, ('a', 0), 0, 6, False),
+                      ('b', 1): (methods.boundary_slice, ('a', 0), 6, 6, True),
                       ('c', 0): ('b', 0),
                       ('c', 1): ('b', 1)}
 
     result = repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')
-    assert result == {('b', 0): (boundary_slice, ('a', 0), 1, 3, False),
-                      ('b', 1): (boundary_slice, ('a', 1), 3, 4, False),
-                      ('b', 2): (boundary_slice, ('a', 1), 4, 6, False),
-                      ('b', 3): (boundary_slice, ('a', 1), 6, 7, True),
-                      ('c', 0): (pd.concat, [('b', 0), ('b', 1)]),
+    assert result == {('b', 0): (methods.boundary_slice, ('a', 0), 1, 3, False),
+                      ('b', 1): (methods.boundary_slice, ('a', 1), 3, 4, False),
+                      ('b', 2): (methods.boundary_slice, ('a', 1), 4, 6, False),
+                      ('b', 3): (methods.boundary_slice, ('a', 1), 6, 7, True),
+                      ('c', 0): (methods.concat, [('b', 0), ('b', 1)]),
                       ('c', 1): ('b', 2),
                       ('c', 2): ('b', 3)}
 
@@ -2637,23 +2637,23 @@ def test_slice_on_filtered_boundary(drop):
 def test_boundary_slice_nonmonotonic():
     x = np.array([-1, -2, 2, 4, 3])
     df = pd.DataFrame({"B": range(len(x))}, index=x)
-    result = boundary_slice(df, 0, 4)
+    result = methods.boundary_slice(df, 0, 4)
     expected = df.iloc[2:]
     tm.assert_frame_equal(result, expected)
 
-    result = boundary_slice(df, -1, 4)
+    result = methods.boundary_slice(df, -1, 4)
     expected = df.drop(-2)
     tm.assert_frame_equal(result, expected)
 
-    result = boundary_slice(df, -2, 3)
+    result = methods.boundary_slice(df, -2, 3)
     expected = df.drop(4)
     tm.assert_frame_equal(result, expected)
 
-    result = boundary_slice(df, -2, 3.5)
+    result = methods.boundary_slice(df, -2, 3.5)
     expected = df.drop(4)
     tm.assert_frame_equal(result, expected)
 
-    result = boundary_slice(df, -2, 4)
+    result = methods.boundary_slice(df, -2, 4)
     expected = df
     tm.assert_frame_equal(result, expected)
 
@@ -2674,7 +2674,7 @@ def test_boundary_slice_nonmonotonic():
 def test_with_boundary(start, stop, right_boundary, left_boundary, drop):
     x = np.array([-1, -2, 2, 4, 3])
     df = pd.DataFrame({"B": range(len(x))}, index=x)
-    result = boundary_slice(df, start, stop, right_boundary, left_boundary)
+    result = methods.boundary_slice(df, start, stop, right_boundary, left_boundary)
     expected = df.drop(drop)
     tm.assert_frame_equal(result, expected)
 
@@ -2695,7 +2695,7 @@ def test_with_boundary(start, stop, right_boundary, left_boundary, drop):
 ])
 def test_boundary_slice_same(index, left, right):
     df = pd.DataFrame({"A": range(len(index))}, index=index)
-    result = boundary_slice(df, left, right)
+    result = methods.boundary_slice(df, left, right)
     tm.assert_frame_equal(result, df)
 
 

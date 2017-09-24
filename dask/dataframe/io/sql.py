@@ -68,7 +68,9 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
     engine = sa.create_engine(uri)
     meta = sa.MetaData()
     if isinstance(table, six.string_types):
-        table = sa.Table(table, meta, autoload=True, autoload_with=engine)
+        schema = kwargs.pop('schema', None)
+        table = sa.Table(table, meta, autoload=True, autoload_with=engine,
+                         schema=schema)
 
     index = (table.columns[index_col] if isinstance(index_col, six.string_types)
              else index_col)

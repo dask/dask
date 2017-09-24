@@ -223,6 +223,19 @@ def test_categorical_set_index(shuffle):
         assert list(sorted(d2.index.compute())) == ['b', 'b', 'c']
 
 
+@pytest.mark.parametrize('npartitions', [1, 4])
+def test_repartition_on_categoricals(npartitions):
+    df = pd.DataFrame({'x': range(10), 'y': list('abababcbcb')})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf['y'] = ddf['y'].astype('category')
+    ddf2 = ddf.repartition(npartitions=npartitions)
+
+    df = df.copy()
+    df['y'] = df['y'].astype('category')
+    assert_eq(df, ddf)
+    assert_eq(df, ddf2)
+
+
 def test_categorical_accessor_presence():
     df = pd.DataFrame({'x': list('a' * 5 + 'b' * 5 + 'c' * 5), 'y': range(15)})
     df.x = df.x.astype('category')

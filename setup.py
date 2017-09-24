@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import sys
 from os.path import exists
 from setuptools import setup
 import versioneer
@@ -22,6 +23,11 @@ packages = ['dask', 'dask.array', 'dask.bag', 'dask.store', 'dask.bytes',
 
 tests = [p + '.tests' for p in packages]
 
+# Only include pytest-runner in setup_requires if we're invoking tests
+if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
+    setup_requires = ['pytest-runner']
+else:
+    setup_requires = []
 
 setup(name='dask',
       version=versioneer.get_version(),
@@ -35,7 +41,7 @@ setup(name='dask',
       packages=packages + tests,
       long_description=(open('README.rst').read() if exists('README.rst')
                         else ''),
-      setup_requires=['pytest-runner'],
+      setup_requires=setup_requires,
       tests_require=['pytest'],
       extras_require=extras_require,
       zip_safe=False)

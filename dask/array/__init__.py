@@ -5,12 +5,12 @@ from .core import (Array, concatenate, stack, from_array, store, map_blocks,
                    atop, to_hdf5, to_npy_stack, from_npy_stack, from_delayed,
                    asarray, asanyarray, broadcast_to)
 from .routines import (take, choose, argwhere, where, coarsen, insert,
-                       ravel, roll, unique, squeeze, topk, diff, ediff1d,
+                       ravel, roll, unique, squeeze, topk, ptp, diff, ediff1d,
                        bincount, digitize, histogram, cov, array, dstack,
                        vstack, hstack, compress, extract, round, count_nonzero,
                        flatnonzero, nonzero, around, isnull, notnull, isclose,
                        corrcoef, swapaxes, tensordot, transpose, dot,
-                       result_type)
+                       apply_along_axis, apply_over_axes, result_type)
 from .reshape import reshape
 from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
         true_divide, floor_divide, negative, power, remainder, mod, conj, exp,

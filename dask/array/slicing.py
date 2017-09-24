@@ -6,9 +6,11 @@ from numbers import Integral, Number
 from operator import add, getitem, itemgetter
 
 import numpy as np
-from toolz import accumulate, memoize, merge, pluck
+from toolz import accumulate, memoize, merge, pluck, concat
 
-from ..base import tokenize
+from .. import core
+from .. import sharedict
+from ..base import tokenize, Base
 
 colon = slice(None, None, None)
 
@@ -55,6 +57,8 @@ def sanitize_index(ind):
                      _sanitize_index_element(ind.step))
     elif isinstance(ind, Number):
         return _sanitize_index_element(ind)
+    elif isinstance(ind, Base):
+        return ind
     index_array = np.asanyarray(ind)
     if index_array.dtype == bool:
         nonzero = np.nonzero(index_array)
@@ -745,8 +749,15 @@ def normalize_index(idx, shape):
     if not isinstance(idx, tuple):
         idx = (idx,)
     idx = replace_ellipsis(len(shape), idx)
-    non_none = sum(i is not None for i in idx)
-    idx = idx + (slice(None),) * (len(shape) - non_none)
+    n_sliced_dims = 0
+    for i in idx:
+        if hasattr(i, 'ndim'):
+            n_sliced_dims += i.ndim
+        elif i is None:
+            continue
+        else:
+            n_sliced_dims += 1
+    idx = idx + (slice(None),) * (len(shape) - n_sliced_dims)
     if len([i for i in idx if i is not None]) > len(shape):
         raise IndexError("Too many indices for array")
 
@@ -803,6 +814,8 @@ def check_index(ind, dimension):
             raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
         return
+    elif isinstance(ind, Base):
+        return
     elif ind is None:
         return
 
@@ -813,3 +826,59 @@ def check_index(ind, dimension):
     elif ind < -dimension:
         msg = "Negative index is not greater than negative dimension %d <= -%d"
         raise IndexError(msg % (ind, dimension))
+
+
+def slice_with_dask_array(x, index):
+    from .core import Array, atop, elemwise
+
+    out_index = [slice(None)
+                 if isinstance(ind, Array) and ind.dtype == bool
+                 else ind
+                 for ind in index]
+
+    if len(index) == 1 and index[0].ndim == x.ndim:
+        y = elemwise(getitem, x, *index, dtype=x.dtype)
+        name = 'getitem-' + tokenize(x, index)
+        dsk = {(name, i): k for i, k in enumerate(core.flatten(y._keys()))}
+        chunks = ((np.nan,) * y.npartitions,)
+        return (Array(sharedict.merge(y.dask, (name, dsk)), name, chunks, x.dtype),
+                out_index)
+
+    if any(isinstance(ind, Array) and ind.dtype == bool and ind.ndim != 1
+            for ind in index):
+        raise NotImplementedError("Slicing with dask.array only permitted when "
+                                  "the indexer has only one dimension or when "
+                                  "it has the same dimension as the sliced "
+                                  "array")
+    indexes = [ind
+               if isinstance(ind, Array) and ind.dtype == bool
+               else slice(None)
+               for ind in index]
+
+    arginds = []
+    i = 0
+    for ind in indexes:
+        if isinstance(ind, Array) and ind.dtype == bool:
+            new = (ind, tuple(range(i, i + ind.ndim)))
+            i += x.ndim
+        else:
+            new = (slice(None), None)
+            i += 1
+        arginds.append(new)
+
+    arginds = list(concat(arginds))
+
+    out = atop(getitem_variadic, tuple(range(x.ndim)), x, tuple(range(x.ndim)), *arginds, dtype=x.dtype)
+
+    chunks = []
+    for ind, chunk in zip(index, out.chunks):
+        if isinstance(ind, Array) and ind.dtype == bool:
+            chunks.append((np.nan,) * len(chunk))
+        else:
+            chunks.append(chunk)
+    out._chunks = tuple(chunks)
+    return out, tuple(out_index)
+
+
+def getitem_variadic(x, *index):
+    return x[index]

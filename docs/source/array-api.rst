@@ -9,6 +9,8 @@ Top level user functions:
    all
    angle
    any
+   apply_along_axis
+   apply_over_axes
    arange
    arccos
    arccosh
@@ -113,6 +115,7 @@ Top level user functions:
    ones_like
    percentile
    prod
+   ptp
    rad2deg
    radians
    ravel
@@ -323,6 +326,8 @@ Other functions
 .. autofunction:: all
 .. autofunction:: angle
 .. autofunction:: any
+.. autofunction:: apply_along_axis
+.. autofunction:: apply_over_axes
 .. autofunction:: arange
 .. autofunction:: arccos
 .. autofunction:: arccosh
@@ -427,6 +432,7 @@ Other functions
 .. autofunction:: ones_like
 .. autofunction:: percentile
 .. autofunction:: prod
+.. autofunction:: ptp
 .. autofunction:: rad2deg
 .. autofunction:: radians
 .. autofunction:: ravel
