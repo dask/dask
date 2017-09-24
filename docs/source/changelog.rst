@@ -1,6 +1,22 @@
 Changelog
 =========
 
+1.19.0 - September 24nd, 2017
+-----------------------------
+
+-  Avoid storing messages in message log (:pr:`1361`)
+-  fileConfig does not disable existing loggers (:pr:`1380`)
+-  Offload upload_file disk I/O to separate thread (:pr:`1383`)
+-  Add missing SSLContext (:pr:`1385`)
+-  Collect worker thread information from sys._curent_frames (:pr:`1387`)
+-  Add nanny timeout (:pr:`1395`)
+-  Restart worker if memory use goes above 95% (:pr:`1397`)
+-  Track workers memory use with psutil (:pr:`1398`)
+-  Track scheduler delay times in workers (:pr:`1400`)
+-  Add time slider to profile plot (:pr:`1403`)
+-  Change memory-limit keyword to refer to maximum number of bytes (:pr:`1405`)
+-  Add ``cancel(force=)`` keyword (:pr:`1408`)
+
 1.18.2 - September 2nd, 2017
 ----------------------------
 -  Silently pass on cancelled futures in as_completed (:pr:`1366`)
