@@ -19,7 +19,7 @@ DataFrame
 Bag
 +++
 
--
+- Add tree reduction support for foldby (:pr: `2710`)
 
 
 Core
