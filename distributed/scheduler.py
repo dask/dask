@@ -31,7 +31,7 @@ from .compatibility import finalize
 from .config import config
 from .core import (rpc, connect, Server, send_recv,
                    error_message, clean_exception, CommClosedError)
-from .diagnostics import profile
+from . import profile
 from .metrics import time
 from .node import ServerNode
 from .security import Security

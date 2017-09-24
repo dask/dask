@@ -25,6 +25,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop, PeriodicCallback
 from tornado.locks import Event
 
+from . import profile
 from .batched import BatchedSend
 from .comm import get_address_host, get_local_address_for
 from .comm.utils import offload
@@ -32,7 +33,6 @@ from .config import config
 from .compatibility import unicode, get_thread_identity
 from .core import (error_message, CommClosedError,
                    rpc, pingpong, coerce_to_address)
-from .diagnostics import profile
 from .metrics import time
 from .node import ServerNode
 from .preloading import preload_modules

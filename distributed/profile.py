@@ -31,7 +31,7 @@ import linecache
 import itertools
 import toolz
 
-from ..utils import format_time
+from .utils import format_time
 
 
 def identifier(frame):

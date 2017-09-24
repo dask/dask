@@ -3,7 +3,7 @@ import time
 from toolz import first
 from threading import Thread
 
-from distributed.diagnostics.profile import process, merge, create, call_stack
+from distributed.profile import process, merge, create, call_stack
 from distributed.compatibility import get_thread_identity
 
 

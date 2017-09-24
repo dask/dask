@@ -22,7 +22,7 @@ from tornado import gen
 
 from ..config import config
 from ..diagnostics.progress_stream import progress_quads, nbytes_bar
-from ..diagnostics import profile
+from .. import profile
 from ..utils import log_errors
 
 if config.get('bokeh-export-tool', False):
