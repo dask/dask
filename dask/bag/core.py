@@ -979,11 +979,11 @@ class Bag(Base):
         if combine is None:
             combine = binop
         if initial is not no_default:
-            dsk = dict(((a, i), (reduceby, key, binop, (self.name, i), initial))
-                       for i in range(self.npartitions))
+            dsk = {(a, i): (reduceby, key, binop, (self.name, i), initial)
+                   for i in range(self.npartitions)}
         else:
-            dsk = dict(((a, i), (reduceby, key, binop, (self.name, i)))
-                       for i in range(self.npartitions))
+            dsk = {(a, i): (reduceby, key, binop, (self.name, i))
+                   for i in range(self.npartitions)}
 
         def combine2(acc, x):
             return combine(acc, x[1])
@@ -994,16 +994,17 @@ class Bag(Base):
         while k > split_every:
             c = b + str(depth)
             if combine_initial is not no_default:
-                dsk2 = dict(((c, i), (reduceby, 0, combine2,
-                                             (toolz.concat, (map, dictitems,
-                                             [(b, j) for j in inds])),
-                                             combine_initial))
-                            for i, inds in enumerate(partition_all(split_every,
-                                                                   range(k))))
+                dsk2 = {(c, i): (reduceby, 0, combine2,
+                                 (toolz.concat, (map, dictitems,
+                                                 [(b, j) for j in inds])),
+                                 combine_initial)
+                        for i, inds in enumerate(partition_all(split_every,
+                                                               range(k)))}
             else:
-                dsk2 = dict(((c, i), (merge_with, (partial, reduce, combine),
-                                      [(b, j) for j in inds]))
-                           for i, inds in enumerate(partition_all(split_every, range(k))))
+                dsk2 = {(c, i): (merge_with, (partial, reduce, combine),
+                                 [(b, j) for j in inds])
+                        for i, inds in enumerate(partition_all(split_every,
+                                                               range(k)))}
             dsk.update(dsk2)
             k = len(dsk2)
             b = c
@@ -1012,9 +1013,9 @@ class Bag(Base):
         e = 'foldby-b-' + token
         if combine_initial is not no_default:
             dsk[(e, 0)] = (dictitems, (reduceby, 0, combine2,
-                                         (toolz.concat, (map, dictitems,
-                                         [(b, j) for j in range(k)])),
-                                         combine_initial))
+                                       (toolz.concat, (map, dictitems,
+                                                       [(b, j) for j in range(k)])),
+                                       combine_initial))
         else:
             dsk[(e, 0)] = (dictitems, (merge_with, (partial, reduce, combine),
                                        [(b, j) for j in range(k)]))
