@@ -63,8 +63,9 @@ def fit(model, x, y, get=threaded.get, **kwargs):
     dask.array<x_11, shape=(400,), chunks=((100, 100, 100, 100),), dtype=int64>
     """
     assert x.ndim == 2
-    assert y.ndim == 1
-    assert x.chunks[0] == y.chunks[0]
+    if y is not None:
+        assert y.ndim == 1
+        assert x.chunks[0] == y.chunks[0]
     assert hasattr(model, 'partial_fit')
     if len(x.chunks[1]) > 1:
         x = x.reblock(chunks=(x.chunks[0], sum(x.chunks[1])))
@@ -75,10 +76,10 @@ def fit(model, x, y, get=threaded.get, **kwargs):
     dsk = {(name, -1): model}
     dsk.update(dict(((name, i), (_partial_fit, (name, i - 1),
                                                (x.name, i, 0),
-                                               (y.name, i), kwargs))
+                                               (getattr(y, 'name', ''), i), kwargs))
                     for i in range(nblocks)))
 
-    return get(merge(x.dask, y.dask, dsk), (name, nblocks - 1))
+    return get(merge(x.dask, getattr(y, 'dask', {}), dsk), (name, nblocks - 1))
 
 
 def _predict(model, x):
