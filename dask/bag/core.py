@@ -1390,7 +1390,6 @@ def from_url(urls):
      '\\n',
      'Dask provides multi-core execution on larger-than-memory datasets using blocked\\n',
      'algorithms and task scheduling.  It maps high-level NumPy and list operations\\n',
-        import ipdb; ipdb.set_trace()
      'on large datasets on to graphs of many operations on small in-memory datasets.\\n')
 
     >>> b = from_url(['http://github.com', 'http://google.com'])  # doctest: +SKIP
