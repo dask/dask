@@ -503,3 +503,13 @@ def test_empty(fn):
     out = dd.read_parquet(fn).compute()
     assert len(out) == 0
     assert_eq(out, df)
+
+
+def test_timestamp96(fn):
+    df = pd.DataFrame({'a': ['now']}, dtype='M8[ns]')
+    ddf = dd.from_pandas(df, 1)
+    ddf.to_parquet(fn, write_index=False, times='int96')
+    pf = fastparquet.ParquetFile(fn)
+    assert pf._schema[1].type == fastparquet.parquet_thrift.Type.INT96
+    out = dd.read_parquet(fn).compute()
+    assert_eq(out, df)
