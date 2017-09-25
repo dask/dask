@@ -6,6 +6,7 @@ from collections import Iterator, deque
 from concurrent.futures import CancelledError
 import gc
 import itertools
+import logging
 import os
 import pickle
 import random
@@ -28,7 +29,7 @@ import dask
 from dask import delayed
 from dask.context import _globals
 from distributed import (Worker, Nanny, fire_and_forget,
-                         get_client, secede, get_worker, Executor)
+                         get_client, secede, get_worker, Executor, profile)
 from distributed.comm import CommClosedError
 from distributed.client import (Client, Future, wait, as_completed, tokenize,
                                 _get_global_client, default_client,
@@ -4297,7 +4298,6 @@ def test_fire_and_forget_err(c, s, a, b):
 
 
 def test_quiet_client_close(loop):
-    import logging
     with captured_logger(logging.getLogger('distributed')) as logger:
         with Client(loop=loop, processes=False, threads_per_worker=4) as c:
             futures = c.map(slowinc, range(1000), delay=0.01)
@@ -4710,7 +4710,13 @@ def test_profile_keys(c, s, a, b):
 
     assert p['count'] == xp['count'] + yp['count']
 
-    
+    with captured_logger(logging.getLogger('distributed')) as logger:
+        prof = yield c.profile('does-not-exist')
+        assert prof == profile.create()
+    out = logger.getvalue()
+    assert not out
+
+
 @gen_cluster()
 def test_client_with_name(s, a, b):
     with captured_logger('distributed.scheduler') as sio:

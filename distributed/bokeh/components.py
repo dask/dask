@@ -80,7 +80,7 @@ class TaskStream(DashboardComponent):
         self.root = figure(
             title="Task Stream", id='bk-task-stream-plot',
             x_range=x_range, y_range=y_range, toolbar_location="above",
-            x_axis_type='datetime', min_border_right=35, **kwargs)
+            x_axis_type='datetime', min_border_right=35, tools='', **kwargs)
         self.root.yaxis.axis_label = 'Worker Core'
 
         rect = self.root.rect(source=self.source, x="start", y="y",
