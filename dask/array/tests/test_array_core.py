@@ -1709,11 +1709,12 @@ def test_to_npy_stack():
     d = da.from_array(x, chunks=(2, 4, 4))
 
     with tmpdir() as dirname:
-        da.to_npy_stack(dirname, d, axis=0)
-        assert os.path.exists(os.path.join(dirname, '0.npy'))
-        assert (np.load(os.path.join(dirname, '1.npy')) == x[2:4]).all()
+        stackdir = os.path.join(dirname, 'test')
+        da.to_npy_stack(stackdir, d, axis=0)
+        assert os.path.exists(os.path.join(stackdir, '0.npy'))
+        assert (np.load(os.path.join(stackdir, '1.npy')) == x[2:4]).all()
 
-        e = da.from_npy_stack(dirname)
+        e = da.from_npy_stack(stackdir)
         assert_eq(d, e)
 
 
