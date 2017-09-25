@@ -1,6 +1,12 @@
 Changelog
 =========
 
+1.19.1 - September 25th, 2017
+-----------------------------
+
+-  Fix tool issues with TaskStream plot (:pr:`1425`)
+-  Move profile module to top level (:pr:`1423`)
+
 1.19.0 - September 24nd, 2017
 -----------------------------
 
