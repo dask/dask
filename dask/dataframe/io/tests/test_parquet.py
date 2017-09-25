@@ -513,3 +513,25 @@ def test_timestamp96(fn):
     assert pf._schema[1].type == fastparquet.parquet_thrift.Type.INT96
     out = dd.read_parquet(fn).compute()
     assert_eq(out, df)
+
+
+def test_drill_scheme(fn):
+    N = 5
+    df1 = pd.DataFrame({c: np.random.random(N)
+                        for i, c in enumerate(['a', 'b', 'c'])})
+    df2 = pd.DataFrame({c: np.random.random(N)
+                        for i, c in enumerate(['a', 'b', 'c'])})
+    files = []
+    for d in ['test_data1', 'test_data2']:
+        dn = os.path.join(fn, d)
+        if not os.path.exists(dn):
+            os.mkdir(dn)
+        files.append(os.path.join(dn, 'data1.parq'))
+
+    fastparquet.write(files[0], df1)
+    fastparquet.write(files[1], df2)
+
+    df = dd.read_parquet(files)
+    out = df.compute()
+    assert 'dir0' in out
+    assert (np.unique(out.dir0) == ['test_data1', 'test_data2']).all()
