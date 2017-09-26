@@ -7,7 +7,7 @@ Changelog
 Array
 +++++
 
--
+-  Indexing with np.int (:pr:`2718`)
 
 
 DataFrame

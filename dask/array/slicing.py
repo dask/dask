@@ -751,7 +751,7 @@ def normalize_index(idx, shape):
     idx = replace_ellipsis(len(shape), idx)
     n_sliced_dims = 0
     for i in idx:
-        if hasattr(i, 'ndim'):
+        if hasattr(i, 'ndim') and i.ndim >= 1:
             n_sliced_dims += i.ndim
         elif i is None:
             continue
