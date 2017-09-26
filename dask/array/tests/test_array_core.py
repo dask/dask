@@ -1626,12 +1626,26 @@ def test_slice_with_floats():
         d[[1, 1.5]]
 
 
-def test_slice_with_uint():
+def test_slice_with_integer_types():
     x = np.arange(10)
     dx = da.from_array(x, chunks=5)
     inds = np.array([0, 3, 6], dtype='u8')
     assert_eq(dx[inds], x[inds])
     assert_eq(dx[inds.astype('u4')], x[inds.astype('u4')])
+
+    inds = np.array([0, 3, 6], dtype=np.int64)
+    assert_eq(dx[inds], x[inds])
+    assert_eq(dx[inds.astype('u4')], x[inds.astype('u4')])
+
+
+def test_index_with_integer_types():
+    x = np.arange(10)
+    dx = da.from_array(x, chunks=5)
+    inds = int(3)
+    assert_eq(dx[inds], x[inds])
+
+    inds = np.int64(3)
+    assert_eq(dx[inds], x[inds])
 
 
 def test_vindex_basic():
