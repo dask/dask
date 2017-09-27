@@ -532,7 +532,7 @@ def test_drill_scheme(fn):
     fastparquet.write(files[1], df2)
 
     df = dd.read_parquet(files)
-    assert 'dir0' in df
+    assert 'dir0' in df.columns
     out = df.compute()
     assert 'dir0' in out
     assert (np.unique(out.dir0) == ['test_data1', 'test_data2']).all()
