@@ -7,7 +7,7 @@ Changelog
 -  Fix tool issues with TaskStream plot (:pr:`1425`)
 -  Move profile module to top level (:pr:`1423`)
 
-1.19.0 - September 24nd, 2017
+1.19.0 - September 24th, 2017
 -----------------------------
 
 -  Avoid storing messages in message log (:pr:`1361`)
