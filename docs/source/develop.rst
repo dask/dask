@@ -85,7 +85,7 @@ using the ``@gen_cluster`` style of test
    @gen_cluster(client=True)
    def test_submit(c, s, a, b):
        assert isinstance(c, Client)
-       assert isinstance(c, Scheduler)
+       assert isinstance(s, Scheduler)
        assert isinstance(a, Worker)
        assert isinstance(b, Worker)
 
