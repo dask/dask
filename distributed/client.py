@@ -3000,6 +3000,7 @@ class as_completed(object):
         try:
             yield _wait(future)
         except CancelledError:
+            del self.futures[future]
             return
         if self.with_results:
             result = yield future._result()

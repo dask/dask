@@ -127,3 +127,5 @@ def test_as_completed_cancel(loop):
 
             with pytest.raises(Empty):
                 ac.queue.get(timeout=0.1)
+
+            assert list(as_completed([x, y, x])) == [y]
