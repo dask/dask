@@ -119,6 +119,8 @@ The asynchronous variants must be run within a Tornado coroutine.  See the
 Client
 ------
 
+.. currentmodule:: distributed.client
+
 .. autoclass:: Client
    :members:
 

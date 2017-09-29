@@ -1007,6 +1007,8 @@ class Client(Node):
         workers: set, iterable of sets
             A set of worker hostnames on which computations may be performed.
             Leave empty to default to all workers (common case)
+        key: str
+            Unique identifier for the task.  Defaults to function-name and hash
         allow_other_workers: bool (defaults to False)
             Used with `workers`. Inidicates whether or not the computations
             may be performed on workers that are not in the `workers` set(s).
