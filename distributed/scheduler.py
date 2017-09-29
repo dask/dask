@@ -897,7 +897,8 @@ class Scheduler(ServerNode):
             host = get_address_host(address)
 
             self.log_event(['all', address], {'action': 'remove-worker',
-                                              'worker': address})
+                                              'worker': address,
+                                              'processing-tasks': self.processing[address]})
             logger.info("Remove worker %s", address)
             if close:
                 with ignoring(AttributeError, CommClosedError):

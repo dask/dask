@@ -1185,3 +1185,10 @@ def test_cancel_fire_and_forget(c, s, a, b):
     yield future.cancel(force=True)
     assert future.status == 'cancelled'
     assert not s.task_state
+
+
+@gen_cluster(client=True, Worker=Nanny)
+def test_log_tasks_during_restart(c, s, a, b):
+    future = c.submit(sys.exit, 0)
+    yield wait(future)
+    assert 'exit' in str(s.events)
