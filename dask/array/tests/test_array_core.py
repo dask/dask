@@ -1626,12 +1626,26 @@ def test_slice_with_floats():
         d[[1, 1.5]]
 
 
-def test_slice_with_uint():
+def test_slice_with_integer_types():
     x = np.arange(10)
     dx = da.from_array(x, chunks=5)
     inds = np.array([0, 3, 6], dtype='u8')
     assert_eq(dx[inds], x[inds])
     assert_eq(dx[inds.astype('u4')], x[inds.astype('u4')])
+
+    inds = np.array([0, 3, 6], dtype=np.int64)
+    assert_eq(dx[inds], x[inds])
+    assert_eq(dx[inds.astype('u4')], x[inds.astype('u4')])
+
+
+def test_index_with_integer_types():
+    x = np.arange(10)
+    dx = da.from_array(x, chunks=5)
+    inds = int(3)
+    assert_eq(dx[inds], x[inds])
+
+    inds = np.int64(3)
+    assert_eq(dx[inds], x[inds])
 
 
 def test_vindex_basic():
@@ -1709,11 +1723,12 @@ def test_to_npy_stack():
     d = da.from_array(x, chunks=(2, 4, 4))
 
     with tmpdir() as dirname:
-        da.to_npy_stack(dirname, d, axis=0)
-        assert os.path.exists(os.path.join(dirname, '0.npy'))
-        assert (np.load(os.path.join(dirname, '1.npy')) == x[2:4]).all()
+        stackdir = os.path.join(dirname, 'test')
+        da.to_npy_stack(stackdir, d, axis=0)
+        assert os.path.exists(os.path.join(stackdir, '0.npy'))
+        assert (np.load(os.path.join(stackdir, '1.npy')) == x[2:4]).all()
 
-        e = da.from_npy_stack(dirname)
+        e = da.from_npy_stack(stackdir)
         assert_eq(d, e)
 
 

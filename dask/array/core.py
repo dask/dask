@@ -3177,7 +3177,7 @@ def to_npy_stack(dirname, x, axis=0):
     xx = x.rechunk(chunks)
 
     if not os.path.exists(dirname):
-        os.path.mkdir(dirname)
+        os.mkdir(dirname)
 
     meta = {'chunks': chunks, 'dtype': x.dtype, 'axis': axis}
 
