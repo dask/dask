@@ -536,3 +536,19 @@ def test_drill_scheme(fn):
     out = df.compute()
     assert 'dir0' in out
     assert (np.unique(out.dir0) == ['test_data1', 'test_data2']).all()
+
+
+def test_parquet_select_cats(fn):
+    df = pd.DataFrame({
+        'categories': pd.Series(
+            np.random.choice(['a', 'b', 'c', 'd', 'e', 'f'], size=100),
+            dtype='category'),
+        'ints': pd.Series(list(range(0, 100)), dtype='int'),
+        'floats': pd.Series(list(range(0, 100)), dtype='float')})
+
+    ddf = dd.from_pandas(df, 1)
+    ddf.to_parquet(fn)
+    rddf = dd.read_parquet(fn, columns=['ints'])
+    assert list(rddf.columns) == ['ints']
+    rddf = dd.read_parquet(fn)
+    assert list(rddf.columns) == list(df)

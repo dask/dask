@@ -91,8 +91,9 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
                              dtypes)
 
     for cat in categories:
-        meta[cat] = pd.Series(pd.Categorical([],
-                              categories=[UNKNOWN_CATEGORIES]))
+        if cat in meta:
+            meta[cat] = pd.Series(pd.Categorical([],
+                                  categories=[UNKNOWN_CATEGORIES]))
 
     if index_col:
         meta = meta.set_index(index_col)
