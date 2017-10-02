@@ -505,6 +505,7 @@ def unique(x):
 
 @wraps(np.roll)
 def roll(array, shift, axis=None):
+    array = asarray(array)
     result = array
 
     if axis is None:
@@ -546,7 +547,7 @@ def roll(array, shift, axis=None):
 
         result = concatenate([result[sl1], result[sl2]], axis=i)
 
-    result = result.reshape(array.shape)
+    result = result.reshape(array.shape).rechunk(array.chunks)
 
     return result
 
