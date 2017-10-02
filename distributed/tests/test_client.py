@@ -4728,5 +4728,21 @@ def test_client_with_name(s, a, b):
     assert 'foo' in text
 
 
+@gen_cluster(client=True)
+def test_future_auto_inform(c, s, a, b):
+    x = c.submit(inc, 1)
+    yield wait(x)
+
+    client = yield Client(s.address, asynchronous=True)
+    future = Future(x.key, client)
+
+    start = time()
+    while future.status != 'finished':
+        yield gen.sleep(0.01)
+        assert time() < start + 1
+
+    yield client.close()
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # flake8: noqa

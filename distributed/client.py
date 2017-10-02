@@ -99,7 +99,7 @@ class Future(WrappedKey):
     _cb_executor = None
     _cb_executor_pid = None
 
-    def __init__(self, key, client, inform=False, state=None):
+    def __init__(self, key, client, inform=True, state=None):
         self.key = key
         self._cleared = False
         tkey = tokey(key)
@@ -1047,7 +1047,7 @@ class Client(Node):
 
         with self._lock:
             if skey in self.futures:
-                return self._Future(key, self)
+                return self._Future(key, self, inform=False)
 
         if allow_other_workers and workers is None:
             raise ValueError("Only use allow_other_workers= if using workers=")
@@ -1453,7 +1453,7 @@ class Client(Node):
                                              client=self.id,
                                              broadcast=broadcast)
 
-        out = {k: self._Future(k, self) for k in data}
+        out = {k: self._Future(k, self, inform=False) for k in data}
         for key, typ in types.items():
             self.futures[key].finish(type=typ)
 
@@ -1857,7 +1857,7 @@ class Client(Node):
         with self._lock:
             keyset = set(keys)
             flatkeys = list(map(tokey, keys))
-            futures = {key: self._Future(key, self) for key in keyset}
+            futures = {key: self._Future(key, self, inform=False) for key in keyset}
 
             values = {k for k, v in dsk.items() if isinstance(v, Future)
                       and k not in keyset}
@@ -1956,7 +1956,7 @@ class Client(Node):
                 if not changed:
                     changed = True
                     dsk = dict(dsk)
-                dsk[key] = self._Future(key, self)
+                dsk[key] = self._Future(key, self, inform=False)
 
         if changed:
             dsk, _ = dask.optimize.cull(dsk, keys)
