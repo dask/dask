@@ -401,12 +401,12 @@ def _maybe_len(l):
 @pytest.mark.parametrize('shift', [3, 7, 9, (3, 9), (7, 2)])
 @pytest.mark.parametrize('axis', [None, 0, 1, -1, (0, 1), (1, 0)])
 def test_roll(chunks, shift, axis):
-    x = np.random.randint(10, size=(4, 6))
-    a = da.from_array(x, chunks=chunks)
+    a = np.random.randint(10, size=(4, 6))
+    d = da.from_array(a, chunks=chunks)
 
     if _maybe_len(shift) != _maybe_len(axis):
         with pytest.raises(TypeError if axis is None else ValueError):
-            da.roll(a, shift, axis)
+            da.roll(d, shift, axis)
     else:
         if (_maybe_len(shift) > 1 and
                 LooseVersion(np.__version__) < LooseVersion("1.12.0")):
@@ -414,7 +414,7 @@ def test_roll(chunks, shift, axis):
                 "NumPy %s doesn't support multiple axes with `roll`."
                 " Need NumPy 1.12.0 or greater." % np.__version__
             )
-        assert_eq(np.roll(x, shift, axis), da.roll(a, shift, axis))
+        assert_eq(np.roll(a, shift, axis), da.roll(d, shift, axis))
 
 
 def test_ravel():
