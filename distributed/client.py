@@ -225,14 +225,14 @@ class Future(WrappedKey):
         self.client.loop.add_callback(done_callback, self,
                                       partial(cls._cb_executor.submit, execute_callback))
 
-    def cancel(self, force=False):
+    def cancel(self, **kwargs):
         """ Cancel request to run this future
 
         See Also
         --------
         Client.cancel
         """
-        return self.client.cancel([self], force=force)
+        return self.client.cancel([self], **kwargs)
 
     def cancelled(self):
         """ Returns True if the future has been cancelled """
@@ -2990,10 +2990,16 @@ class as_completed(object):
         self.lock = threading.Lock()
         self.loop = loop or default_client().loop
         self.condition = Condition()
+        self.th_condition = threading.Condition()
         self.with_results = with_results
 
         if futures:
             self.update(futures)
+
+    def _notify(self):
+        self.condition.notify()
+        with self.th_condition:
+            self.th_condition.notify()
 
     @gen.coroutine
     def track_future(self, future):
@@ -3001,6 +3007,8 @@ class as_completed(object):
             yield _wait(future)
         except CancelledError:
             del self.futures[future]
+            if not self.futures:
+                self._notify()
             return
         if self.with_results:
             result = yield future._result()
@@ -3012,7 +3020,7 @@ class as_completed(object):
                 self.queue.put_nowait((future, result))
             else:
                 self.queue.put_nowait(future)
-            self.condition.notify()
+            self._notify()
 
     def update(self, futures):
         """ Add multiple futures to the collection.
@@ -3044,8 +3052,12 @@ class as_completed(object):
         return self
 
     def __next__(self):
-        if self.is_empty():
-            raise StopIteration()
+        while self.queue.empty():
+            if not self.futures:
+                raise StopIteration()
+            self.th_condition.acquire()
+            self.th_condition.wait()
+            self.th_condition.release()
         return self.queue.get()
 
     @gen.coroutine
@@ -3053,7 +3065,10 @@ class as_completed(object):
         if not self.futures and self.queue.empty():
             raise StopAsyncIteration  # flake8: noqa
         while self.queue.empty():
+            if not self.futures:
+                raise StopAsyncIteration  # flake8: noqa
             yield self.condition.wait()
+
         raise gen.Return(self.queue.get())
 
     next = __next__

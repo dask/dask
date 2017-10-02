@@ -129,3 +129,24 @@ def test_as_completed_cancel(loop):
                 ac.queue.get(timeout=0.1)
 
             assert list(as_completed([x, y, x])) == [y]
+
+
+def test_as_completed_cancel_last(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            w = c.submit(sleep, 0.3)
+            x = c.submit(inc, 1)
+            y = c.submit(sleep, 0.3)
+
+            @gen.coroutine
+            def _():
+                yield gen.sleep(0.1)
+                yield w.cancel(asynchronous=True)
+                yield y.cancel(asynchronous=True)
+
+            loop.add_callback(_)
+
+            ac = as_completed([x, y])
+            result = list(ac)
+
+            assert result == [x]
