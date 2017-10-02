@@ -414,7 +414,12 @@ def test_roll(chunks, shift, axis):
                 "NumPy %s doesn't support multiple axes with `roll`."
                 " Need NumPy 1.12.0 or greater." % np.__version__
             )
-        assert_eq(np.roll(a, shift, axis), da.roll(d, shift, axis))
+
+        a_r = np.roll(a, shift, axis)
+        d_r = da.roll(d, shift, axis)
+
+        assert d.chunks == d_r.chunks
+        assert_eq(a_r, d_r)
 
 
 def test_ravel():
