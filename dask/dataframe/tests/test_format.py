@@ -5,7 +5,22 @@ from textwrap import dedent
 import dask.dataframe as dd
 from dask.dataframe.utils import PANDAS_VERSION
 
-if PANDAS_VERSION >= '0.20.0':
+if PANDAS_VERSION >= '0.21.0':
+    style = """<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+"""
+elif PANDAS_VERSION >= '0.20.0':
     style = """<style>
     .dataframe thead tr:only-child th {
         text-align: right;
