@@ -202,7 +202,7 @@ def test_categorize_index():
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
 def test_categorical_set_index(shuffle):
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': ['a', 'b', 'b', 'c']})
-    df['y'] = df.y.astype('category', ordered=True)
+    df['y'] = pd.Categorical(df['y'], categories=['a', 'b', 'c'], ordered=True)
     a = dd.from_pandas(df, npartitions=2)
 
     with dask.set_options(get=dask.get, shuffle=shuffle):

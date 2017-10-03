@@ -2198,13 +2198,23 @@ def test_categorize_info():
     # Verbose=False
     buf = StringIO()
     ddf.info(buf=buf, verbose=True)
-    assert buf.getvalue() == unicode("<class 'dask.dataframe.core.DataFrame'>\n"
-                                     "Int64Index: 4 entries, 0 to 3\n"
-                                     "Data columns (total 3 columns):\n"
-                                     "x    4 non-null int64\n"
-                                     "y    4 non-null category\n"
-                                     "z    4 non-null object\n"
-                                     "dtypes: category(1), object(1), int64(1)")
+    if PANDAS_VERSION > '0.21.0':
+        expected = unicode("<class 'dask.dataframe.core.DataFrame'>\n"
+                           "Int64Index: 4 entries, 0 to 3\n"
+                           "Data columns (total 3 columns):\n"
+                           "x    4 non-null int64\n"
+                           "y    4 non-null CategoricalDtype(categories=['a', 'b', 'c'], ordered=False)\n"  # noqa
+                           "z    4 non-null object\n"
+                           "dtypes: CategoricalDtype(categories=['a', 'b', 'c'], ordered=False)(1), object(1), int64(1)")  # noqa
+    else:
+        expected = unicode("<class 'dask.dataframe.core.DataFrame'>\n"
+                           "Int64Index: 4 entries, 0 to 3\n"
+                           "Data columns (total 3 columns):\n"
+                           "x    4 non-null int64\n"
+                           "y    4 non-null category\n"
+                           "z    4 non-null object\n"
+                           "dtypes: category(1), object(1), int64(1)")
+    assert buf.getvalue() == expected
 
 
 def test_gh_1301():
