@@ -16,6 +16,11 @@ def test_array():
     assert_eq(da.array(d, ndmin=3, dtype='i8'),
               np.array(x, ndmin=3, dtype='i8'))
 
+    # regression #1847 this shall not raise an exception.
+    x = da.ones((100,3), chunks=10)
+    y = da.array(x)
+    assert isinstance(y, da.Array)
+
 
 def test_transpose():
     x = np.arange(240).reshape((4, 6, 10))

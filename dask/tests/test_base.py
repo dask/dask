@@ -514,20 +514,3 @@ def test_optimize_None():
 
     with dask.set_options(array_optimize=None, get=my_get):
         y.compute()
-
-
-def test_array_nondim():
-    # regression #1847 this shall not raise an exception.
-    x = da.ones((100,3), chunks=10)
-    y = da.array(x)
-    assert isinstance(y, da.Array)
-
-
-def test_setitem_triggering_realign():
-    import pandas as pd
-    import dask.dataframe as dd
-
-    a = dd.from_pandas(pd.DataFrame({"A": range(12)}), npartitions=3)
-    b = dd.from_pandas(pd.Series(range(12), name='B'), npartitions=4)
-    a['C'] = b
-    assert len(a) == 12

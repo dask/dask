@@ -2256,6 +2256,13 @@ def test_attribute_assignment():
     assert_eq(ddf, df.assign(y=df.x + df.y))
 
 
+def test_setitem_triggering_realign():
+    a = dd.from_pandas(pd.DataFrame({"A": range(12)}), npartitions=3)
+    b = dd.from_pandas(pd.Series(range(12), name='B'), npartitions=4)
+    a['C'] = b
+    assert len(a) == 12
+
+
 def test_inplace_operators():
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
                        'y': [1., 2., 3., 4., 5.]})
