@@ -1,10 +1,10 @@
 # Install conda
 case "$(uname -s)" in
     'Darwin')
-        MINICONDA_FILENAME="Miniconda3-latest-MacOSX-x86_64.sh"
+        MINICONDA_FILENAME="Miniconda3-4.3.21-MacOSX-x86_64.sh"
         ;;
     'Linux')
-        MINICONDA_FILENAME="Miniconda3-latest-Linux-x86_64.sh"
+        MINICONDA_FILENAME="Miniconda3-4.3.21-Linux-x86_64.sh"
         ;;
     *)  ;;
 esac
@@ -43,13 +43,15 @@ conda install -q -c conda-forge \
     ipython \
     partd \
     psutil \
-    pytables \
     "pytest<=3.1.1" \
     scikit-image \
     scikit-learn \
     scipy \
     sqlalchemy \
     toolz
+
+# install pytables from defaults for now
+conda install -q pytables
 
 pip install -q git+https://github.com/dask/partd --upgrade --no-deps
 pip install -q git+https://github.com/dask/zict --upgrade --no-deps
@@ -84,5 +86,5 @@ pip install -q \
 
 # Install dask
 pip install -q --no-deps -e .[complete]
-echo pip freeze
-pip freeze
+echo conda list
+conda list
