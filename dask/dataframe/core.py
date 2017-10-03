@@ -37,7 +37,7 @@ no_default = '__no_default__'
 
 if PANDAS_VERSION >= '0.20.0':
     from pandas.util import cache_readonly
-    pd.core.computation.expressions.set_use_numexpr(False)
+    pd.set_option('compute.use_numexpr', False)
 else:
     from pandas.util.decorators import cache_readonly
     pd.computation.expressions.set_use_numexpr(False)
