@@ -342,3 +342,16 @@ class TestCategoricalAccessor:
         res = db.compute()
         tm.assert_index_equal(db.cat.categories, get_cat(res).categories)
         assert_array_index_eq(db.cat.codes, get_cat(res).codes)
+
+    def test_categorical_string_ops(self):
+        a = pd.Series(['a', 'a', 'b'], dtype='category')
+        da = dd.from_pandas(a, 2)
+        result = da.str.upper()
+        expected = a.str.upper()
+        assert_eq(result, expected)
+
+    def test_categorical_non_string_raises(self):
+        a = pd.Series([1, 2, 3], dtype='category')
+        da = dd.from_pandas(a, 2)
+        with pytest.raises(AttributeError):
+            da.str.upper()
