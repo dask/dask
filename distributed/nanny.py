@@ -13,6 +13,7 @@ from tornado.ioloop import IOLoop, TimeoutError, PeriodicCallback
 from tornado.locks import Event
 
 from .comm import get_address_host, get_local_address_for, unparse_host_port
+from .config import config
 from .core import rpc, RPCClosed, CommClosedError, coerce_to_address
 from .metrics import time
 from .node import ServerNode
@@ -57,6 +58,7 @@ class Nanny(ServerNode):
         self.death_timeout = death_timeout
         self.preload = preload
         self.contact_address = contact_address
+        self.memory_terminate_fraction = config.get('worker-memory-terminate', 0.95)
 
         self.security = security or Security()
         assert isinstance(self.security, Security)
@@ -242,7 +244,7 @@ class Nanny(ServerNode):
             return
         memory = psutil.Process(self.process.pid).memory_info().rss
         frac = memory / self.memory_limit
-        if frac > 0.95:
+        if self.memory_terminate_fraction and frac > self.memory_terminate_fraction:
             logger.warn("Worker exceeded 95% memory budget.  Restarting")
             self.process.process.terminate()
 

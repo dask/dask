@@ -51,7 +51,7 @@ _ncores = mp_context.cpu_count()
 
 logger = logging.getLogger(__name__)
 
-LOG_PDB = config.get('pdb-on-err') or os.environ.get('DASK_ERROR_PDB', False)
+LOG_PDB = config.get('pdb-on-err')
 
 no_value = '--no-value-sentinel--'
 
@@ -119,6 +119,10 @@ class WorkerBase(ServerNode):
         self.memory_limit = memory_limit
         self.paused = False
 
+        self.memory_target_fraction = config.get('worker-memory-target', 0.6)
+        self.memory_spill_fraction = config.get('worker-memory-spill', 0.7)
+        self.memory_pause_fraction = config.get('worker-memory-pause', 0.8)
+
         if self.memory_limit:
             try:
                 from zict import Buffer, File, Func
@@ -126,7 +130,8 @@ class WorkerBase(ServerNode):
                 raise ImportError("Please `pip install zict` for spill-to-disk workers")
             path = os.path.join(self.local_dir, 'storage')
             storage = Func(serialize_bytelist, deserialize_bytes, File(path))
-            self.data = Buffer({}, storage, int(float(self.memory_limit) * 0.6), weight)
+            target = int(float(self.memory_limit) * self.memory_target_fraction)
+            self.data = Buffer({}, storage, target, weight)
         else:
             self.data = dict()
         self.loop = loop or IOLoop.current()
@@ -136,7 +141,6 @@ class WorkerBase(ServerNode):
         self.executor = executor or ThreadPoolExecutor(self.ncores)
         self.scheduler = rpc(scheduler_addr, connection_args=self.connection_args)
         self.name = name
-        self.pause_fraction = config.get('worker-pause-memory-fraction', 0.8)
         self.scheduler_delay = 0
         self.heartbeat_interval = heartbeat_interval
         self.heartbeat_active = False
@@ -2159,7 +2163,8 @@ class Worker(WorkerBase):
         proc = psutil.Process()
         frac = proc.memory_info().rss / self.memory_limit
 
-        if frac > self.pause_fraction:
+        # Pause worker threads if above 80% memory use
+        if self.memory_pause_fraction and frac > self.memory_pause_fraction:
             if not self.paused:
                 logger.warn("Worker is at %d percent memory usage.  "
                             "Stopping work. "
@@ -2177,8 +2182,9 @@ class Worker(WorkerBase):
             self.paused = False
             self.ensure_computing()
 
-        if frac > 0.70:  # dump data to disk
-            target = self.memory_limit * 0.60
+        # Dump data to disk if above 70%
+        if self.memory_spill_fraction and frac > self.memory_spill_fraction:
+            target = self.memory_limit * self.memory_target_fraction
             count = 0
 
             while proc.memory_info().rss > target:
