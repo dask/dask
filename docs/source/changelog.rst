@@ -13,7 +13,7 @@ Array
 DataFrame
 +++++++++
 
--
+- Added the `.str` accessor to Categoricals with string categories (:pr:`2743`)
 
 
 Bag
