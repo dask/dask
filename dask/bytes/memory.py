@@ -1,14 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
-from glob import glob
 from io import BytesIO
-import os
 import re
 import time
 
 from . import core
-from .utils import infer_storage_options
-from ..base import tokenize
 from ..compatibility import FileNotFoundError
 
 

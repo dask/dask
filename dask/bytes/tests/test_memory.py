@@ -1,11 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
-from contextlib import contextmanager
-from io import BytesIO
 import pytest
-from toolz import concat, valmap, partial
+from toolz import concat
 
-from dask import compute, get, delayed
+from dask import compute, delayed
 from dask.bytes.memory import MemoryFileSystem, MemoryFile
 from dask.bytes.core import read_bytes, open_files, open_text_files
 from dask.bytes import core
