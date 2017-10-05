@@ -4729,6 +4729,14 @@ def test_client_with_name(s, a, b):
 
 
 @gen_cluster(client=True)
+def test_future_defaults_to_default_client(c, s, a, b):
+    x = c.submit(inc, 1)
+    yield wait(x)
+
+    future = Future(x.key)
+    assert future.client is c
+
+@gen_cluster(client=True)
 def test_future_auto_inform(c, s, a, b):
     x = c.submit(inc, 1)
     yield wait(x)

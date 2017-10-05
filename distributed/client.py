@@ -76,9 +76,17 @@ class Future(WrappedKey):
     manages future objects in the local Python process to determine what
     happens in the larger cluster.
 
+    Parameters
+    ----------
+    key: str, or tuple
+        Key of remote data to which this future refers
+    client: Client
+        Client that should own this future.  Defaults to _get_global_client()
+    inform: bool
+        Do we inform the scheduler that we need an update on this future
+
     Examples
     --------
-
     Futures typically emerge from Client computations
 
     >>> my_future = client.submit(add, 1, 2)  # doctest: +SKIP
@@ -99,7 +107,7 @@ class Future(WrappedKey):
     _cb_executor = None
     _cb_executor_pid = None
 
-    def __init__(self, key, client, inform=True, state=None):
+    def __init__(self, key, client=None, inform=True, state=None):
         self.key = key
         self._cleared = False
         tkey = tokey(key)
@@ -107,10 +115,10 @@ class Future(WrappedKey):
         self.client._inc_ref(tkey)
         self._generation = self.client.generation
 
-        if tkey in client.futures:
-            self._state = client.futures[tkey]
+        if tkey in self.client.futures:
+            self._state = self.client.futures[tkey]
         else:
-            self._state = client.futures[tkey] = FutureState(Event())
+            self._state = self.client.futures[tkey] = FutureState(Event())
 
         if inform:
             self.client._send_to_scheduler({'op': 'client-desires-keys',
