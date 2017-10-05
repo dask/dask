@@ -2475,6 +2475,27 @@ class Worker(WorkerBase):
                 assert self._client.status == 'running'
         return self._client
 
+    def get_current_task(self):
+        """ Get the key of the task we are currently running
+
+        This only makes sense to run within a task
+
+        Examples
+        --------
+        >>> from dask.distributed import get_worker
+        >>> def f():
+        ...     return get_worker().get_current_task()
+
+        >>> future = client.submit(f)  # doctest: +SKIP
+        >>> future.result()  # doctest: +SKIP
+        'f-1234'
+
+        See Also
+        --------
+        get_worker
+        """
+        return self.active_threads[get_thread_identity()]
+
 
 def get_worker():
     """ Get the worker currently running this task

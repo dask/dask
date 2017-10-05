@@ -13,9 +13,9 @@ import six
 
 from sortedcontainers import SortedSet
 try:
-    from cytoolz import frequencies, merge, pluck, merge_sorted
+    from cytoolz import frequencies, merge, pluck, merge_sorted, first
 except ImportError:
-    from toolz import frequencies, merge, pluck, merge_sorted
+    from toolz import frequencies, merge, pluck, merge_sorted, first
 from toolz import memoize, valmap, first, second, concat
 from tornado import gen
 from tornado.gen import Return
@@ -3272,7 +3272,7 @@ class Scheduler(ServerNode):
         keys = {k: [] for k in keys}
 
         groups1 = [v['keys'] for v in result.values()]
-        groups2 = list(merge_sorted(*groups1))
+        groups2 = list(merge_sorted(*groups1, key=first))
 
         last = 0
         for t, d in groups2:

@@ -18,7 +18,8 @@ import tornado
 from tornado import gen
 from tornado.ioloop import TimeoutError
 
-from distributed import Nanny, Client, get_client, wait, default_client
+from distributed import (Nanny, Client, get_client, wait, default_client,
+        get_worker)
 from distributed.compatibility import WINDOWS
 from distributed.core import rpc
 from distributed.client import wait
@@ -1034,3 +1035,13 @@ def test_statistical_profiling_cycle(c, s, a, b):
 
     y = a.get_profile(start=time() - 0.300, stop=time())
     assert 0 < y['count'] < x['count']
+
+
+@gen_cluster(client=True)
+def test_get_current_task(c, s, a, b):
+
+    def some_name():
+        return get_worker().get_current_task()
+
+    result = yield c.submit(some_name)
+    assert result.startswith('some_name')
