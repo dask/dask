@@ -44,7 +44,7 @@ def _resample_series(series, start, end, reindex_closed, rule,
 
 def _resample_bin_and_out_divs(divisions, rule, closed='left', label='left'):
     rule = pd.tseries.frequencies.to_offset(rule)
-    g = pd.TimeGrouper(rule, how='count', closed=closed, label=label)
+    g = pd.Grouper(freq=rule, how='count', closed=closed, label=label)
 
     # Determine bins to apply `how` to. Disregard labeling scheme.
     divs = pd.Series(range(len(divisions)), index=divisions)

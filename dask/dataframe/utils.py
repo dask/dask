@@ -454,6 +454,13 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             return False
         if (a is '-' or b is '-'):
             return False
+        if is_categorical_dtype(a) and is_categorical_dtype(b):
+            # Pandas 0.21 CategoricalDtype compat
+            if (PANDAS_VERSION >= '0.21.0' and
+                    (UNKNOWN_CATEGORIES in a.categories or
+                     UNKNOWN_CATEGORIES in b.categories)):
+                return True
+            return a == b
         return (a.kind in eq_types and b.kind in eq_types) or (a == b)
 
     if not isinstance(meta, (pd.Series, pd.Index, pd.DataFrame)):

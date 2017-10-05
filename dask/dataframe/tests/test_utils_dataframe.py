@@ -163,7 +163,8 @@ def test_meta_nonempty_empty_categories():
         # Series
         s = idx.to_series()
         res = meta_nonempty(s)
-        assert res.dtype == s.dtype
+        assert res.dtype == 'category'
+        assert s.dtype == 'category'
         assert type(res.cat.categories) is type(s.cat.categories)
         assert res.cat.ordered == s.cat.ordered
         assert res.name == s.name
@@ -302,13 +303,30 @@ def test_check_meta():
     df2 = df[['a', 'b', 'd', 'e']]
     with pytest.raises(ValueError) as err:
         check_meta(df2, meta2, funcname='from_delayed')
-    assert str(err.value) == ('Metadata mismatch found in `from_delayed`.\n'
-                              '\n'
-                              'Partition type: `DataFrame`\n'
-                              '+--------+----------+----------+\n'
-                              '| Column | Found    | Expected |\n'
-                              '+--------+----------+----------+\n'
-                              '| a      | object   | category |\n'
-                              '| c      | -        | float64  |\n'
-                              '| e      | category | -        |\n'
-                              '+--------+----------+----------+')
+
+    if PANDAS_VERSION >= '0.21.0':
+        exp = (
+            'Metadata mismatch found in `from_delayed`.\n'
+            '\n'
+            'Partition type: `DataFrame`\n'
+            '+--------+-------------------------------------------------------------+------------------------------------------------+\n'  # noqa
+            '| Column | Found                                                       | Expected                                       |\n'  # noqa
+            '+--------+-------------------------------------------------------------+------------------------------------------------+\n'  # noqa
+            '| a      | object                                                      | CategoricalDtype(categories=[], ordered=False) |\n'  # noqa
+            '| c      | -                                                           | float64                                        |\n'  # noqa
+            "| e      | CategoricalDtype(categories=['x', 'y', 'z'], ordered=False) | -                                              |\n"  # noqa
+            '+--------+-------------------------------------------------------------+------------------------------------------------+'    # noqa
+        )
+    else:
+        exp = (
+            'Metadata mismatch found in `from_delayed`.\n'
+            '\n'
+            'Partition type: `DataFrame`\n'
+            '+--------+----------+----------+\n'
+            '| Column | Found    | Expected |\n'
+            '+--------+----------+----------+\n'
+            '| a      | object   | category |\n'
+            '| c      | -        | float64  |\n'
+            '| e      | category | -        |\n'
+            '+--------+----------+----------+')
+    assert str(err.value) == exp
