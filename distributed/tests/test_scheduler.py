@@ -700,7 +700,7 @@ def test_io_loop(loop):
 
 
 @gen_cluster(client=True)
-def test_transition_story(c, s, a, b):
+def test_story(c, s, a, b):
     x = delayed(inc)(1)
     y = delayed(inc)(x)
     f = c.persist(y)
@@ -708,12 +708,12 @@ def test_transition_story(c, s, a, b):
 
     assert s.transition_log
 
-    story = s.transition_story(x.key)
+    story = s.story(x.key)
     assert all(line in s.transition_log for line in story)
     assert len(story) < len(s.transition_log)
     assert all(x.key == line[0] or x.key in line[-2] for line in story)
 
-    assert len(s.transition_story(x.key, y.key)) > len(story)
+    assert len(s.story(x.key, y.key)) > len(story)
 
 
 @gen_test()

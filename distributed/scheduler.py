@@ -3056,11 +3056,13 @@ class Scheduler(ServerNode):
             for key in keys:
                 self.validate_key(key)
 
-    def transition_story(self, *keys):
+    def story(self, *keys):
         """ Get all transitions that touch one of the input keys """
         keys = set(keys)
         return [t for t in self.transition_log
                 if t[0] in keys or keys.intersection(t[3])]
+
+    transition_story = story
 
     ##############################
     # Assigning Tasks to Workers #
