@@ -112,3 +112,10 @@ def test_coarsen_on_uneven_shape():
 
 def test_integer_input():
     assert da.zeros((4, 6), chunks=2).rechunk(3).chunks == ((3, 1), (3, 3))
+
+
+def test_rechunk_zero_dim():
+    da = pytest.importorskip('dask.array')
+
+    x = da.ones((0, 10, 100), chunks=(0, 10, 10)).rechunk((0, 10, 50))
+    assert len(x.compute()) == 0
