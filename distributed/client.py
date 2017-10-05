@@ -2546,13 +2546,20 @@ class Client(Node):
         return self.sync(self.scheduler.nbytes, keys=keys,
                          summary=summary, **kwargs)
 
-    def call_stack(self, futures=None):
+    def call_stack(self, futures=None, keys=None):
         """ The actively running call stack of all relevant keys
+
+        You can specify data of interest either by providing futures or
+        collections in the ``futures=`` keyword or a list of explicit keys in
+        the ``keys=`` keyword.  If neither are provided then all call stacks
+        will be returned.
 
         Parameters
         ----------
         futures: list (optional)
-            A list of futures, defaults to all data
+            List of futures, defaults to all data
+        keys: list (optional)
+            List of key names, defaults to all data
 
         Examples
         --------
@@ -2561,12 +2568,11 @@ class Client(Node):
 
         >>> client.call_stack()  # Or call with no arguments for all activity  # doctest: +SKIP
         """
+        keys = keys or []
         if futures is not None:
             futures = self.futures_of(futures)
-            keys = list(map(tokey, {f.key for f in futures}))
-        else:
-            keys = None
-        return self.sync(self.scheduler.call_stack, keys=keys)
+            keys += list(map(tokey, {f.key for f in futures}))
+        return self.sync(self.scheduler.call_stack, keys=keys or None)
 
     def profile(self, key=None, start=None, stop=None, workers=None, merge_workers=True):
         """ Collect statistical profiling information about recent work

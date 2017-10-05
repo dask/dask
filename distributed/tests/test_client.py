@@ -21,7 +21,7 @@ import zipfile
 
 import pytest
 from toolz import (identity, isdistinct, concat, pluck, valmap,
-                   partial)
+                   partial, first)
 from tornado import gen
 from tornado.ioloop import IOLoop
 
@@ -4639,13 +4639,18 @@ def test_warn_executor(loop):
 
 @gen_cluster([('127.0.0.1', 4)] * 2, client=True)
 def test_call_stack_future(c, s, a, b):
+    x = c.submit(slowdec, 1, delay=0.5)
     future = c.submit(slowinc, 1, delay=0.5)
     yield gen.sleep(0.1)
-    result = yield c.call_stack(future)
-    w = a if a.executing else b
+    results = yield [c.call_stack(future), c.call_stack(keys=[future.key])]
+    assert all(list(first(result.values())) == [future.key] for result in results)
+    assert results[0] == results[1]
+    result = results[0]
+    w = a if future.key in a.executing else b
     assert list(result) == [w.address]
     assert list(result[w.address]) == [future.key]
     assert 'slowinc' in str(result)
+    assert 'slowdec' not in str(result)
 
 
 @gen_cluster([('127.0.0.1', 4)] * 2, client=True)

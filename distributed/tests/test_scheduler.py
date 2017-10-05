@@ -1156,7 +1156,7 @@ def test_profile_metadata(c, s, a, b):
     now = time()
     assert meta
     assert all(start < t < now for t, count in meta['counts'])
-    assert all(0 < count < 13 for t, count in meta['counts'][:4])
+    assert all(0 <= count < 30 for t, count in meta['counts'][:4])
     assert not meta['counts'][-1][1]
 
 
