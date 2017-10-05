@@ -1408,9 +1408,10 @@ def test_eval():
 
         # catch FutureWarning from pandas about assignment in eval
         with pytest.warns(None):
-            if p.eval('z = x + y', inplace=None) is None:
-                with pytest.raises(NotImplementedError):
-                    d.eval('z = x + y', inplace=None)
+            if PANDAS_VERSION < '0.21.0':
+                if p.eval('z = x + y', inplace=None) is None:
+                    with pytest.raises(NotImplementedError):
+                        d.eval('z = x + y', inplace=None)
 
 
 @pytest.mark.parametrize('include, exclude', [
