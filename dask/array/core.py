@@ -1823,6 +1823,9 @@ def normalize_chunks(chunks, shape=None):
     >>> normalize_chunks(10, shape=(30, 5))  # Supports integer inputs
     ((10, 10, 10), (5,))
 
+    >>> normalize_chunks((-1,), shape=(10,))  # -1 gets mapped to full size
+    ((10,),)
+
     >>> normalize_chunks((), shape=(0, 0))  #  respects null dimensions
     ((0,), (0,))
     """
@@ -1843,7 +1846,8 @@ def normalize_chunks(chunks, shape=None):
                 "Got chunks=%s, shape=%s" % (chunks, shape))
 
     if shape is not None:
-        chunks = tuple(c if c is not None else s for c, s in zip(chunks, shape))
+        chunks = tuple(c if c not in {None, -1} else s
+                       for c, s in zip(chunks, shape))
 
     if chunks and shape is not None:
         chunks = sum((blockdims_from_blockshape((s,), (c,))

@@ -1414,6 +1414,13 @@ def test_from_array_getitem():
     assert_eq(x, y)
 
 
+def test_from_array_minus_one():
+    x = np.arange(10)
+    y = da.from_array(x, -1)
+    assert y.chunks == ((10,),)
+    assert_eq(x, y)
+
+
 def test_asarray():
     assert_eq(da.asarray([1, 2, 3]), np.asarray([1, 2, 3]))
 

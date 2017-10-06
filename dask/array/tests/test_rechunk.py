@@ -198,6 +198,13 @@ def test_rechunk_same():
     assert x is y
 
 
+def test_rechunk_minus_one():
+    x = da.ones((24, 24), chunks=(4, 8))
+    y = x.rechunk((-1, 8))
+    assert y.chunks == ((24,), (8, 8, 8))
+    assert_eq(x, y)
+
+
 def test_rechunk_intermediates():
     x = da.random.normal(10, 0.1, (10, 10), chunks=(10, 1))
     y = x.rechunk((1, 10))
