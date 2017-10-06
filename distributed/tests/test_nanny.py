@@ -17,7 +17,8 @@ from distributed.core import CommClosedError
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.utils import ignoring, tmpfile
-from distributed.utils_test import gen_cluster, gen_test, slow, captured_logger
+from distributed.utils_test import (gen_cluster, gen_test, slow,
+        captured_logger)
 
 
 @gen_cluster(ncores=[])
@@ -226,10 +227,20 @@ def test_scheduler_file():
         s.stop()
 
 
-@gen_cluster(client=True, Worker=Nanny)
-def test_nanny_timeout(c, s, a, b):
-    with pytest.raises(gen.TimeoutError):
+@gen_cluster(client=True, Worker=Nanny, ncores=[('127.0.0.1', 2)])
+def test_nanny_timeout(c, s, a):
+    x = yield c.scatter(123)
+    with captured_logger(logging.getLogger('distributed.nanny'),
+                         level=logging.ERROR) as logger:
         response = yield a.restart(timeout=0.1)
+
+    out = logger.getvalue()
+    assert 'timed out' in out.lower()
+
+    start = time()
+    while x.status != 'cancelled':
+        yield gen.sleep(0.1)
+        assert time() < start + 7
 
 
 @gen_cluster(ncores=[('127.0.0.1', 1)], client=True, Worker=Nanny,

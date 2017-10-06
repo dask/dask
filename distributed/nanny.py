@@ -230,13 +230,20 @@ class Nanny(ServerNode):
     @gen.coroutine
     def restart(self, comm=None, timeout=2):
         start = time()
-        if self.process is not None:
-            yield gen.with_timeout(timedelta(seconds=timeout),
-                                   self.kill(timeout=timeout))
-        timeout2 = timeout - (time() - start)
-        yield gen.with_timeout(timedelta(seconds=timeout2),
-                               self.instantiate())
-        raise gen.Return('OK')
+
+        @gen.coroutine
+        def _():
+            if self.process is not None:
+                yield self.kill()
+                yield self.instantiate()
+
+        try:
+            yield gen.with_timeout(timedelta(seconds=timeout), _())
+        except gen.TimeoutError:
+            logger.error("Restart timed out, returning before finished")
+            raise gen.Return('timed out')
+        else:
+            raise gen.Return('OK')
 
     def memory_monitor(self):
         """ Track worker's memory.  Restart if it goes above 95% """

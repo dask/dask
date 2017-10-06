@@ -1611,7 +1611,8 @@ class Scheduler(ServerNode):
                 resps = yield gen.with_timeout(timedelta(seconds=timeout), resps)
                 assert all(resp == 'OK' for resp in resps)
             except gen.TimeoutError:
-                logger.info("Nannies didn't report back restarted within timeout")
+                logger.error("Nannies didn't report back restarted within "
+                             "timeout.  Continuuing with restart process")
             finally:
                 for nanny in nannies:
                     nanny.close_rpc()
