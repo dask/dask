@@ -1876,6 +1876,8 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
         - A blockshape like (1000, 1000).
         - Explicit sizes of all blocks along all dimensions
           like ((1000, 1000, 500), (400, 400)).
+
+        -1 as a blocksize indicates the size of the corresponding dimension.
     name : str, optional
         The key name to use for the array. Defaults to a hash of ``x``.
         Use ``name=False`` to generate a random name instead of hashing (fast)
