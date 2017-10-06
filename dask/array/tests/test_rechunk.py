@@ -579,3 +579,10 @@ def test_old_to_new_known():
                 [(2, slice(5, 10, None))],
                 [(3, slice(0, 10, None)), (4, slice(0, 10, None))]]]
     assert result == expected
+
+
+def test_rechunk_zero_dim():
+    da = pytest.importorskip('dask.array')
+
+    x = da.ones((0, 10, 100), chunks=(0, 10, 10)).rechunk((0, 10, 50))
+    assert len(x.compute()) == 0
