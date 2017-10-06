@@ -1823,6 +1823,9 @@ def normalize_chunks(chunks, shape=None):
     >>> normalize_chunks(10, shape=(30, 5))  # Supports integer inputs
     ((10, 10, 10), (5,))
 
+    >>> normalize_chunks((-1,), shape=(10,))  # -1 gets mapped to full size
+    ((10,),)
+
     >>> normalize_chunks((), shape=(0, 0))  #  respects null dimensions
     ((0,), (0,))
     """
@@ -1843,7 +1846,8 @@ def normalize_chunks(chunks, shape=None):
                 "Got chunks=%s, shape=%s" % (chunks, shape))
 
     if shape is not None:
-        chunks = tuple(c if c is not None else s for c, s in zip(chunks, shape))
+        chunks = tuple(c if c not in {None, -1} else s
+                       for c, s in zip(chunks, shape))
 
     if chunks and shape is not None:
         chunks = sum((blockdims_from_blockshape((s,), (c,))
@@ -1872,6 +1876,8 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
         - A blockshape like (1000, 1000).
         - Explicit sizes of all blocks along all dimensions
           like ((1000, 1000, 500), (400, 400)).
+
+        -1 as a blocksize indicates the size of the corresponding dimension.
     name : str, optional
         The key name to use for the array. Defaults to a hash of ``x``.
         Use ``name=False`` to generate a random name instead of hashing (fast)

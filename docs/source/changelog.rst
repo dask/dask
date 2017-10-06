@@ -9,6 +9,7 @@ Array
 
 -  Indexing with np.int (:pr:`2718`)
 -  Rechunking with zero dimensions (:pr:`2747`)
+-  Support -1 as an alias for "size of the dimension" in ``chunks``.
 
 
 DataFrame

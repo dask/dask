@@ -375,7 +375,7 @@ def add_dummy_padding(x, depth, boundary):
             ax_chunks = list(out_chunks[k])
             ax_chunks[0] += d
             ax_chunks[-1] += d
-            out_chunks[k] = ax_chunks
+            out_chunks[k] = tuple(ax_chunks)
 
             x = concatenate([empty, x, empty], axis=k)
             x = x.rechunk(out_chunks)
