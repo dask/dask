@@ -4757,5 +4757,11 @@ def test_future_auto_inform(c, s, a, b):
     yield client.close()
 
 
+def test_client_async_before_loop_starts():
+    loop = IOLoop()
+    client = Client(asynchronous=True, loop=loop)
+    assert client.asynchronous
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # flake8: noqa

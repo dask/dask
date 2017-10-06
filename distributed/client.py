@@ -537,7 +537,7 @@ class Client(Node):
         """
         result = self._asynchronous
         try:
-            if get_thread_identity() != self.loop._thread_ident:
+            if self.loop._thread_ident and get_thread_identity() != self.loop._thread_ident:
                 result = False
         except AttributeError:  # AsyncIOLoop doesn't have _thread_ident
             pass
