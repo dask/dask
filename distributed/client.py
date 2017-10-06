@@ -3069,9 +3069,8 @@ class as_completed(object):
         while self.queue.empty():
             if not self.futures:
                 raise StopIteration()
-            self.th_condition.acquire()
-            self.th_condition.wait()
-            self.th_condition.release()
+            with self.th_condition:
+                self.th_condition.wait()
         return self.queue.get()
 
     @gen.coroutine
