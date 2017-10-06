@@ -520,6 +520,11 @@ class Client(Node):
         from distributed.recreate_exceptions import ReplayExceptionClient
         ReplayExceptionClient(self)
 
+    @classmethod
+    def current(cls):
+        """ Return global client if one exists, otherwise raise ValueError """
+        return default_client()
+
     @property
     def asynchronous(self):
         """ Are we running in the event loop?
