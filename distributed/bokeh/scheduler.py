@@ -149,7 +149,7 @@ class Occupancy(DashboardComponent):
             tap = TapTool(callback=OpenURL(url='http://@bokeh_address/'))
 
             hover = HoverTool()
-            hover.tooltips = "@worker : @occupancy s.  Click for worker page"
+            hover.tooltips = "@worker : @occupancy s."
             hover.point_policy = 'follow_mouse'
             fig.add_tools(hover, tap)
 
@@ -278,6 +278,7 @@ class CurrentLoad(DashboardComponent):
                                             'nprocessing-color': ['red', 'blue'],
                                             'nbytes': [1, 2],
                                             'nbytes-half': [0.5, 1],
+                                            'nbytes_text': ['1B' '2B'],
                                             'worker': ['a', 'b'],
                                             'y': [1, 2],
                                             'nbytes-color': ['blue', 'blue'],
@@ -319,12 +320,12 @@ class CurrentLoad(DashboardComponent):
                 fig.yaxis.visible = False
 
             hover = HoverTool()
-            hover.tooltips = "@worker : @nprocessing tasks.  Click for worker page"
+            hover.tooltips = "@worker : @nprocessing tasks"
             hover.point_policy = 'follow_mouse'
             processing.add_tools(hover)
 
             hover = HoverTool()
-            hover.tooltips = "@worker : @nbytes bytes.  Click for worker page"
+            hover.tooltips = "@worker : @nbytes_text bytes"
             hover.point_policy = 'follow_mouse'
             nbytes.add_tools(hover)
 
@@ -356,6 +357,7 @@ class CurrentLoad(DashboardComponent):
                     processing_color.append('blue')
 
             nbytes = [self.scheduler.worker_bytes[w] for w in workers]
+            nbytes_text = [format_bytes(nb) for nb in nbytes]
             nbytes_color = []
             max_limit = 0
             for w, nb in zip(workers, nbytes):
@@ -382,6 +384,7 @@ class CurrentLoad(DashboardComponent):
                           'nbytes': nbytes,
                           'nbytes-half': [nb / 2 for nb in nbytes],
                           'nbytes-color': nbytes_color,
+                          'nbytes_text': nbytes_text,
                           'bokeh_address': bokeh_addresses,
                           'worker': workers,
                           'y': y}

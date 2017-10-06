@@ -1153,7 +1153,7 @@ def test_profile_metadata(c, s, a, b):
     yield gen.sleep(0.200)
 
     meta = yield s.get_profile_metadata(profile_cycle_interval=0.100)
-    now = time()
+    now = time() + 1
     assert meta
     assert all(start < t < now for t, count in meta['counts'])
     assert all(0 <= count < 30 for t, count in meta['counts'][:4])
