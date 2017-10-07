@@ -1,6 +1,21 @@
 Changelog
 =========
 
+1.19.2 - 2017-10-06
+-------------------
+
+-  as_completed doesn't block on cancelled futures (:pr:`1436`)
+-  Notify waiting threads/coroutines on cancellation (:pr:`1438`)
+-  Set Future(inform=True) as default (:pr:`1437`)
+-  Rename Scheduler.transition_story to story (:pr:`1445`)
+-  Future uses default client by default (:pr:`1449`)
+-  Add keys= keyword to Client.call_stack (:pr:`1446`)
+-  Add get_current_task to worker (:pr:`1444`)
+-  Ensure that Client remains asynchornous before ioloop starts (:pr:`1452`)
+-  Remove "click for worker page" in bokeh plot (:pr:`1453`)
+-  Add Client.current() (:pr:`1450`)
+-  Clean handling of restart timeouts (:pr:`1442`)
+
 1.19.1 - September 25th, 2017
 -----------------------------
 

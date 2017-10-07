@@ -278,7 +278,7 @@ class CurrentLoad(DashboardComponent):
                                             'nprocessing-color': ['red', 'blue'],
                                             'nbytes': [1, 2],
                                             'nbytes-half': [0.5, 1],
-                                            'nbytes_text': ['1B' '2B'],
+                                            'nbytes_text': ['1B', '2B'],
                                             'worker': ['a', 'b'],
                                             'y': [1, 2],
                                             'nbytes-color': ['blue', 'blue'],
