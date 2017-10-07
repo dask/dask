@@ -1,8 +1,8 @@
 Changelog
 =========
 
-0.16.0 / ???
-------------
+0.15.4 / 2017-10-06
+-------------------
 
 Array
 +++++
@@ -10,12 +10,20 @@ Array
 -  Indexing with np.int (:pr:`2718`)
 -  Rechunking with zero dimensions (:pr:`2747`)
 -  Support -1 as an alias for "size of the dimension" in ``chunks``.
+-  Call mkdir in array.to_npy_stack (:pr:`2709`)
+-  Support indexing in arrays with np.int (fixes regression) (:pr:`2719`)
+-  Handle zero dimension with rechunking (:pr:`2747`)
+-  Support -1 as an alias for dimension size in chunks (:pr:`2749`)
 
 
 DataFrame
 +++++++++
 
-- Added the `.str` accessor to Categoricals with string categories (:pr:`2743`)
+-  Added the `.str` accessor to Categoricals with string categories (:pr:`2743`)
+-  Support int96 (spark) datetimes in parquet writer (:pr:`2711`)
+-  Pass on file scheme to fastparquet (:pr:`2714`)
+-  Add .str accessor for categorical with object dtype (:pr:`2743`)
+-  Support Pandas 0.21 (:pr:`2737`)
 
 
 Bag
@@ -27,8 +35,7 @@ Bag
 Core
 ++++
 
--
-
+-  Drop s3fs from ``pip install dask[complete]`` (:pr:`2750`)
 
 
 0.15.3 / 2017-09-24
