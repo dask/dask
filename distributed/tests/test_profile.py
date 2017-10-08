@@ -3,7 +3,8 @@ import time
 from toolz import first
 from threading import Thread
 
-from distributed.profile import process, merge, create, call_stack
+from distributed.profile import (process, merge, create, call_stack,
+        identifier)
 from distributed.compatibility import get_thread_identity
 
 
@@ -106,3 +107,9 @@ def test_call_stack():
     assert isinstance(L, list)
     assert all(isinstance(s, str) for s in L)
     assert 'test_call_stack' in str(L[-1])
+
+
+def test_identifier():
+    frame = sys._current_frames()[get_thread_identity()]
+    assert identifier(frame) == identifier(frame)
+    assert identifier(None) == identifier(None)

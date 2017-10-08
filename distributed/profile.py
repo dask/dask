@@ -39,9 +39,12 @@ def identifier(frame):
 
     Strings are cheaper to use as indexes into dicts than tuples or dicts
     """
-    return ';'.join((frame.f_code.co_name,
-                     frame.f_code.co_filename,
-                     str(frame.f_code.co_firstlineno)))
+    if frame is None:
+        return 'None'
+    else:
+        return ';'.join((frame.f_code.co_name,
+                         frame.f_code.co_filename,
+                         str(frame.f_code.co_firstlineno)))
 
 
 def repr_frame(frame):
@@ -83,9 +86,10 @@ def process(frame, child, state, stop=None):
      'description': 'root',
      'children': {'...'}}
     """
-    ident = identifier(frame)
     if frame.f_back is not None and (stop is None or not frame.f_back.f_code.co_filename.endswith(stop)):
         state = process(frame.f_back, frame, state, stop=stop)
+
+    ident = identifier(frame)
 
     try:
         d = state['children'][ident]
