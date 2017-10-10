@@ -41,6 +41,7 @@ def result_type(*args):
 def atleast_3d(*arys):
     new_arys = []
     for x in arys:
+        x = asarray(x)
         if x.ndim == 0:
             x = x[None, None, None]
         elif x.ndim == 1:
@@ -60,6 +61,7 @@ def atleast_3d(*arys):
 def atleast_2d(*arys):
     new_arys = []
     for x in arys:
+        x = asarray(x)
         if x.ndim == 0:
             x = x[None, None]
         elif x.ndim == 1:
@@ -77,6 +79,7 @@ def atleast_2d(*arys):
 def atleast_1d(*arys):
     new_arys = []
     for x in arys:
+        x = asarray(x)
         if x.ndim == 0:
             x = x[None]
 
