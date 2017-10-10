@@ -156,12 +156,11 @@ class Future(WrappedKey):
         is raised.
         """
         if self.client.asynchronous:
-            result = self._result
-            if timeout:
-                result = gen.with_timeout(timedelta(seconds=timeout), result)
-            return result
-        result = sync(self.client.loop,
-                      self._result, raiseit=False, callback_timeout=timeout)
+            return self.client.sync(self._result, callback_timeout=timeout)
+
+        # shorten error traceback
+        result = self.client.sync(self._result, callback_timeout=timeout,
+                                  raiseit=False)
         if self.status == 'error':
             six.reraise(*result)
         elif self.status == 'cancelled':
@@ -334,7 +333,7 @@ class Future(WrappedKey):
         return text
 
     def __await__(self):
-        return self._result().__await__()
+        return self.result().__await__()
 
 
 class FutureState(object):
@@ -444,8 +443,6 @@ class Client(Node):
     --------
     distributed.scheduler.Scheduler: Internal scheduler
     """
-    _Future = Future
-
     def __init__(self, address=None, loop=None, timeout=5,
                  set_as_default=True, scheduler_file=None,
                  security=None, start=None, asynchronous=False,
@@ -1060,7 +1057,7 @@ class Client(Node):
 
         with self._lock:
             if skey in self.futures:
-                return self._Future(key, self, inform=False)
+                return Future(key, self, inform=False)
 
         if allow_other_workers and workers is None:
             raise ValueError("Only use allow_other_workers= if using workers=")
@@ -1466,7 +1463,7 @@ class Client(Node):
                                              client=self.id,
                                              broadcast=broadcast)
 
-        out = {k: self._Future(k, self, inform=False) for k in data}
+        out = {k: Future(k, self, inform=False) for k in data}
         for key, typ in types.items():
             self.futures[key].finish(type=typ)
 
@@ -1870,7 +1867,7 @@ class Client(Node):
         with self._lock:
             keyset = set(keys)
             flatkeys = list(map(tokey, keys))
-            futures = {key: self._Future(key, self, inform=False) for key in keyset}
+            futures = {key: Future(key, self, inform=False) for key in keyset}
 
             values = {k for k, v in dsk.items() if isinstance(v, Future)
                       and k not in keyset}
@@ -1969,7 +1966,7 @@ class Client(Node):
                 if not changed:
                     changed = True
                     dsk = dict(dsk)
-                dsk[key] = self._Future(key, self, inform=False)
+                dsk[key] = Future(key, self, inform=False)
 
         if changed:
             dsk, _ = dask.optimize.cull(dsk, keys)

@@ -164,6 +164,25 @@ def test_Future_exception_sync(loop):
             assert x.exception() is None
 
 
+def test_short_tracebacks(loop):
+    tblib = pytest.importorskip('tblib')
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            future = c.submit(div, 1, 0)
+            try:
+                future.result()
+            except Exception:
+                _, _, tb = sys.exc_info()
+            tb = tblib.Traceback(tb).to_dict()
+            n = 0
+
+            while tb != None:
+                n += 1
+                tb = tb['tb_next']
+
+            assert n < 5
+
+
 @gen_cluster(client=True)
 def test_map_naming(c, s, a, b):
     L1 = c.map(inc, range(5))

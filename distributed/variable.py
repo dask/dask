@@ -142,7 +142,7 @@ class Variable(object):
 
     See Also
     --------
-    Queue:
+    Queue: shared multi-producer/multi-consumer queue between clients
     """
 
     def __init__(self, name=None, client=None, maxsize=0):
