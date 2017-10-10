@@ -49,12 +49,12 @@ def atleast_3d(x):
 
 
 def atleast_2d(x):
-    if x.ndim == 1:
+    if x.ndim == 0:
+        return x[None, None]
+    elif x.ndim == 1:
         return x[None, :]
     elif x.ndim > 1:
         return x
-    else:
-        raise NotImplementedError()
 
 
 def atleast_1d(x):
