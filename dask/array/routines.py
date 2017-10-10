@@ -57,6 +57,13 @@ def atleast_2d(x):
         raise NotImplementedError()
 
 
+def atleast_1d(x):
+    if x.ndim == 0:
+        x = x[None]
+
+    return x
+
+
 @wraps(np.vstack)
 def vstack(tup):
     tup = tuple(atleast_2d(x) for x in tup)
