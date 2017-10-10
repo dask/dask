@@ -37,6 +37,7 @@ def result_type(*args):
     return np.result_type(*args)
 
 
+@wraps(np.atleast_3d)
 def atleast_3d(x):
     if x.ndim == 0:
         return x[None, None, None]
@@ -48,6 +49,7 @@ def atleast_3d(x):
         return x
 
 
+@wraps(np.atleast_2d)
 def atleast_2d(x):
     if x.ndim == 0:
         return x[None, None]
@@ -57,6 +59,7 @@ def atleast_2d(x):
         return x
 
 
+@wraps(np.atleast_1d)
 def atleast_1d(x):
     if x.ndim == 0:
         x = x[None]
