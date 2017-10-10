@@ -7,7 +7,7 @@ X.Y.Z / YYYY-MM-DD
 Array
 +++++
 
--
+- Add ``atleast_1d``, ``atleast_2d``, and ``atleast_3d`` (:pr:`2760`)
 
 DataFrame
 +++++++++
