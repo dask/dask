@@ -40,23 +40,22 @@ def result_type(*args):
 @wraps(np.atleast_3d)
 def atleast_3d(x):
     if x.ndim == 0:
-        return x[None, None, None]
+        x = x[None, None, None]
     elif x.ndim == 1:
-        return x[None, :, None]
+        x = x[None, :, None]
     elif x.ndim == 2:
-        return x[:, :, None]
-    elif x.ndim > 2:
-        return x
+        x = x[:, :, None]
 
+    return x
 
 @wraps(np.atleast_2d)
 def atleast_2d(x):
     if x.ndim == 0:
-        return x[None, None]
+        x = x[None, None]
     elif x.ndim == 1:
-        return x[None, :]
-    elif x.ndim > 1:
-        return x
+        x = x[None, :]
+
+    return x
 
 
 @wraps(np.atleast_1d)
