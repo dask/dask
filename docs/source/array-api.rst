@@ -24,6 +24,9 @@ Top level user functions:
    argwhere
    around
    array
+   atleast_1d
+   atleast_2d
+   atleast_3d
    bincount
    broadcast_to
    coarsen
@@ -341,6 +344,9 @@ Other functions
 .. autofunction:: argwhere
 .. autofunction:: around
 .. autofunction:: array
+.. autofunction:: atleast_1d
+.. autofunction:: atleast_2d
+.. autofunction:: atleast_3d
 .. autofunction:: bincount
 .. autofunction:: broadcast_to
 .. autofunction:: coarsen
