@@ -439,7 +439,7 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     for arg, d in args_dasks:
         if isinstance(d, sharedict.ShareDict):
             dsk.update_with_key(d)
-        elif isinstance(arg, str):
+        elif isinstance(arg, (str, tuple)):
             dsk.update_with_key(d, key=arg)
         else:
             dsk.update(d)

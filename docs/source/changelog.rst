@@ -23,7 +23,7 @@ Bag
 Core
 ++++
 
--
+-  Allow tuples as sharedict keys
 
 0.15.4 / 2017-10-06
 -------------------

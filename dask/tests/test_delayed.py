@@ -9,6 +9,7 @@ import pytest
 from dask import set_options, compute
 from dask.compatibility import PY2, PY3
 from dask.delayed import delayed, to_task_dask, Delayed
+from dask.utils_test import inc
 
 
 def test_to_task_dask():
@@ -442,7 +443,8 @@ def test_delayed_name():
 
 
 def test_finalize_name():
-    import dask.array as da
+    da = pytest.importorskip('dask.array')
+
     x = da.ones(10, chunks=5)
     v = delayed([x])
     assert set(x.dask).issubset(v.dask)
@@ -453,3 +455,13 @@ def test_finalize_name():
         return s.split('-')[0]
 
     assert all(key(k).isalpha() for k in v.dask)
+
+
+def test_keys_from_array():
+    da = pytest.importorskip('dask.array')
+    from dask.array.utils import _check_dsk
+
+    X = da.ones((10, 10), chunks=5).to_delayed().flatten()
+    xs = [delayed(inc)(x) for x in X]
+
+    _check_dsk(xs[0].dask)
