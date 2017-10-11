@@ -67,21 +67,29 @@ def test_atleast_nd_one_arg(funcname, shape, chunks):
     "atleast_2d",
     "atleast_3d",
 ])
-@pytest.mark.parametrize("shape, chunks", [
+@pytest.mark.parametrize("shape1, chunks1", [
     (tuple(), tuple()),
     ((4,), (2,)),
     ((4, 6), (2, 3)),
     ((4, 6, 8), (2, 3, 4)),
     ((4, 6, 8, 10), (2, 3, 4, 5)),
 ])
-def test_atleast_nd_two_args(funcname, shape, chunks):
-    num_arrs = 2
+@pytest.mark.parametrize("shape2, chunks2", [
+    (tuple(), tuple()),
+    ((4,), (2,)),
+    ((4, 6), (2, 3)),
+    ((4, 6, 8), (2, 3, 4)),
+    ((4, 6, 8, 10), (2, 3, 4, 5)),
+])
+def test_atleast_nd_two_args(funcname, shape1, chunks1, shape2, chunks2):
+    np_a_1 = np.random.random(shape1)
+    da_a_1 = da.from_array(np_a_1, chunks=chunks1)
 
-    np_a = np.random.random(shape)
-    da_a = da.from_array(np_a, chunks=chunks)
+    np_a_2 = np.random.random(shape2)
+    da_a_2 = da.from_array(np_a_2, chunks=chunks2)
 
-    np_a_n = num_arrs * [np_a]
-    da_a_n = num_arrs * [da_a]
+    np_a_n = [np_a_1, np_a_2]
+    da_a_n = [da_a_1, da_a_2]
 
     np_func = getattr(np, funcname)
     da_func = getattr(da, funcname)
