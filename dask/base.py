@@ -193,6 +193,10 @@ def compute(*args, **kwargs):
 
     get = kwargs.pop('get', None) or _globals['get']
 
+    if get is None and _globals.get('distributed_worker'):
+        from distributed.worker import get_worker
+        get = get_worker().client.get
+
     if not get:
         get = variables[0]._default_get
         if not all(a._default_get == get for a in variables):
@@ -553,6 +557,10 @@ def persist(*args, **kwargs):
         return args
 
     get = kwargs.pop('get', None) or _globals['get']
+
+    if get is None and _globals.get('distributed_worker'):
+        from distributed.worker import get_worker
+        get = get_worker().client.get
 
     if inspect.ismethod(get):
         try:
