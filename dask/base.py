@@ -24,6 +24,9 @@ from .sharedict import ShareDict
 __all__ = ("Base", "compute", "normalize_token", "tokenize", "visualize")
 
 
+thread_state = threading.local()
+
+
 class Base(object):
     """Base class for dask collections"""
     __slots__ = ()
@@ -193,7 +196,7 @@ def compute(*args, **kwargs):
 
     get = kwargs.pop('get', None) or _globals['get']
 
-    if get is None and _globals.get('distributed_worker'):
+    if get is None and getattr(thread_state, 'key', False):
         from distributed.worker import get_worker
         get = get_worker().client.get
 
@@ -558,7 +561,7 @@ def persist(*args, **kwargs):
 
     get = kwargs.pop('get', None) or _globals['get']
 
-    if get is None and _globals.get('distributed_worker'):
+    if get is None and getattr(thread_state, 'key', False):
         from distributed.worker import get_worker
         get = get_worker().client.get
 
