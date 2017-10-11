@@ -82,6 +82,9 @@ def test_atleast_nd_one_arg(funcname, shape, chunks):
     ((4, 6, 8, 10), (2, 3, 4, 5)),
 ])
 def test_atleast_nd_two_args(funcname, shape1, chunks1, shape2, chunks2):
+    if len(shape1) > len(shape2):
+        pytest.skip("The reverse order case is already tested.")
+
     np_a_1 = np.random.random(shape1)
     da_a_1 = da.from_array(np_a_1, chunks=chunks1)
 
