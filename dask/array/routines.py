@@ -37,24 +37,58 @@ def result_type(*args):
     return np.result_type(*args)
 
 
-def atleast_3d(x):
-    if x.ndim == 1:
-        return x[None, :, None]
-    elif x.ndim == 2:
-        return x[:, :, None]
-    elif x.ndim > 2:
-        return x
+@wraps(np.atleast_3d)
+def atleast_3d(*arys):
+    new_arys = []
+    for x in arys:
+        x = asarray(x)
+        if x.ndim == 0:
+            x = x[None, None, None]
+        elif x.ndim == 1:
+            x = x[None, :, None]
+        elif x.ndim == 2:
+            x = x[:, :, None]
+
+        new_arys.append(x)
+
+    if len(new_arys) == 1:
+        return new_arys[0]
     else:
-        raise NotImplementedError()
+        return new_arys
 
 
-def atleast_2d(x):
-    if x.ndim == 1:
-        return x[None, :]
-    elif x.ndim > 1:
-        return x
+@wraps(np.atleast_2d)
+def atleast_2d(*arys):
+    new_arys = []
+    for x in arys:
+        x = asarray(x)
+        if x.ndim == 0:
+            x = x[None, None]
+        elif x.ndim == 1:
+            x = x[None, :]
+
+        new_arys.append(x)
+
+    if len(new_arys) == 1:
+        return new_arys[0]
     else:
-        raise NotImplementedError()
+        return new_arys
+
+
+@wraps(np.atleast_1d)
+def atleast_1d(*arys):
+    new_arys = []
+    for x in arys:
+        x = asarray(x)
+        if x.ndim == 0:
+            x = x[None]
+
+        new_arys.append(x)
+
+    if len(new_arys) == 1:
+        return new_arys[0]
+    else:
+        return new_arys
 
 
 @wraps(np.vstack)

@@ -22,6 +22,51 @@ def test_array():
     assert isinstance(y, da.Array)
 
 
+@pytest.mark.parametrize("funcname", [
+    "atleast_1d",
+    "atleast_2d",
+    "atleast_3d",
+])
+@pytest.mark.parametrize("num_arrs", [
+    0,
+    1,
+    2
+])
+@pytest.mark.parametrize("shape, chunks", [
+    (tuple(), tuple()),
+    ((4,), (2,)),
+    ((4, 6), (2, 3)),
+    ((4, 6, 8), (2, 3, 4)),
+    ((4, 6, 8, 10), (2, 3, 4, 5)),
+])
+def test_atleast_nd(funcname, num_arrs, shape, chunks):
+    np_a = np.random.random(shape)
+    da_a = da.from_array(np_a, chunks=chunks)
+
+    np_a_n = num_arrs * [np_a]
+    da_a_n = num_arrs * [da_a]
+
+    np_func = getattr(np, funcname)
+    da_func = getattr(da, funcname)
+
+    np_r_n = np_func(*np_a_n)
+    da_r_n = da_func(*da_a_n)
+
+    if num_arrs != 1:
+        assert type(np_r_n) is type(da_r_n)
+    else:
+        assert type(np_r_n) is np.ndarray
+        assert type(da_r_n) is da.Array
+
+        np_r_n = [np_r_n]
+        da_r_n = [da_r_n]
+
+    assert len(np_r_n) == len(da_r_n)
+
+    for np_r, da_r in zip(np_r_n, da_r_n):
+        assert_eq(np_r, da_r)
+
+
 def test_transpose():
     x = np.arange(240).reshape((4, 6, 10))
     d = da.from_array(x, (2, 3, 4))
