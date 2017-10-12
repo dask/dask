@@ -45,6 +45,7 @@ API
    get_worker
    get_client
    secede
+   rejoin
 
 .. currentmodule:: distributed.recreate_exceptions
 
@@ -148,6 +149,7 @@ Other
 .. autofunction:: distributed.get_worker
 .. autofunction:: distributed.get_client
 .. autofunction:: distributed.secede
+.. autofunction:: distributed.rejoin
 
 .. autoclass:: Queue
    :members:

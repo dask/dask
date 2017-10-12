@@ -10,6 +10,7 @@ from .client import (Client, Executor, CompatibleExecutor,
 from .nanny import Nanny
 from .queues import Queue
 from .scheduler import Scheduler
+from .threadpoolexecutor import rejoin
 from .utils import sync
 from .variable import Variable
 from .worker import Worker, get_worker, get_client, secede

@@ -4469,6 +4469,7 @@ def test_secede_simple(c, s, a):
 @slow
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2, timeout=60)
 def test_secede_balances(c, s, a, b):
+    count = threading.active_count()
     def f(x):
         client = get_client()
         sleep(0.01)  # do some work
@@ -4481,7 +4482,7 @@ def test_secede_balances(c, s, a, b):
     start = time()
     while not all(f.status == 'finished' for f in futures):
         yield gen.sleep(0.01)
-        assert threading.active_count() < 50
+        assert threading.active_count() < count + 20
 
     # assert 0.005 < s.task_duration['f'] < 0.1
     assert len(a.log) < 2 * len(b.log)
