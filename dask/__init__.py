@@ -8,7 +8,7 @@ try:
 except ImportError:
     pass
 try:
-    from .base import visualize, compute, persist
+    from .base import visualize, compute, persist, thread_state
 except ImportError:
     pass
 
