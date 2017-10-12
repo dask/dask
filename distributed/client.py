@@ -48,7 +48,8 @@ from .protocol import to_serialize
 from .protocol.pickle import dumps, loads
 from .security import Security
 from .sizeof import sizeof
-from .worker import dumps_task, get_client, get_worker
+from .threadpoolexecutor import rejoin
+from .worker import dumps_task, get_client, get_worker, secede
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator,
                     tokey, log_errors, str_graph, key_split, format_bytes, asciitable,
                     thread_state)
@@ -457,7 +458,7 @@ class Client(Node):
         self.coroutines = []
         self.id = type(self).__name__ + ('-' + name + '-' if name else '-') + str(uuid.uuid1(clock_seq=os.getpid()))
         self.generation = 0
-        self.status = None
+        self.status = 'newly-created'
         self._pending_msg_buffer = []
         self.extensions = {}
         self.scheduler_file = scheduler_file
@@ -649,14 +650,14 @@ class Client(Node):
     def _send_to_scheduler_safe(self, msg):
         if self.status in ('running', 'closing'):
             self.scheduler_comm.send(msg)
-        elif self.status is 'connecting':
+        elif self.status in ('connecting', 'newly-created'):
             self._pending_msg_buffer.append(msg)
         else:
             raise Exception("Tried sending message after closing.  Status: %s\n"
                             "Message: %s" % (self.status, msg))
 
     def _send_to_scheduler(self, msg):
-        if self.status in ('running', 'closing', 'connecting'):
+        if self.status in ('running', 'closing', 'connecting', 'newly-created'):
             self.loop.add_callback(self._send_to_scheduler_safe, msg)
         else:
             raise Exception("Tried sending message after closing.  Status: %s\n"
@@ -1942,11 +1943,15 @@ class Client(Node):
                                          resources=resources)
         packed = pack_data(keys, futures)
         if sync:
+            if getattr(thread_state, 'key', False):
+                secede()
             try:
                 results = self.gather(packed, asynchronous=asynchronous)
             finally:
                 for f in futures.values():
                     f.release()
+                if getattr(thread_state, 'key', False):
+                    rejoin()
             return results
         return packed
 
@@ -3153,7 +3158,7 @@ def AsCompleted(*args, **kwargs):
 
 
 def default_client(c=None):
-    """ Return an client if exactly one has started """
+    """ Return a client if one has started """
     c = c or _get_global_client()
     if c:
         return c

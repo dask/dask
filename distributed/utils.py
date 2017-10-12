@@ -39,7 +39,10 @@ from .config import config
 from .metrics import time
 
 
-thread_state = threading.local()
+try:
+    from dask import thread_state
+except ImportError:
+    thread_state = threading.local()
 
 logger = logging.getLogger(__name__)
 
