@@ -1,5 +1,7 @@
 from __future__ import division, print_function, absolute_import
 
+import itertools
+
 import pytest
 from distutils.version import LooseVersion
 
@@ -67,29 +69,24 @@ def test_atleast_nd_one_arg(funcname, shape, chunks):
     "atleast_2d",
     "atleast_3d",
 ])
-@pytest.mark.parametrize("shape1, chunks1", [
-    (tuple(), tuple()),
-    ((4,), (2,)),
-    ((4, 6), (2, 3)),
-    ((4, 6, 8), (2, 3, 4)),
-    ((4, 6, 8, 10), (2, 3, 4, 5)),
-])
-@pytest.mark.parametrize("shape2, chunks2", [
-    (tuple(), tuple()),
-    ((4,), (2,)),
-    ((4, 6), (2, 3)),
-    ((4, 6, 8), (2, 3, 4)),
-    ((4, 6, 8, 10), (2, 3, 4, 5)),
-])
-def test_atleast_nd_two_args(funcname, shape1, chunks1, shape2, chunks2):
-    if len(shape1) > len(shape2):
-        pytest.skip("The reverse order case is already tested.")
-
+@pytest.mark.parametrize("shape1, shape2", list(
+    itertools.combinations_with_replacement(
+        [
+            tuple(),
+            (4,),
+            (4, 6),
+            (4, 6, 8),
+            (4, 6, 8, 10),
+        ],
+        2
+    )
+))
+def test_atleast_nd_two_args(funcname, shape1, shape2):
     np_a_1 = np.random.random(shape1)
-    da_a_1 = da.from_array(np_a_1, chunks=chunks1)
+    da_a_1 = da.from_array(np_a_1, chunks=tuple(c // 2 for c in shape1))
 
     np_a_2 = np.random.random(shape2)
-    da_a_2 = da.from_array(np_a_2, chunks=chunks2)
+    da_a_2 = da.from_array(np_a_2, chunks=tuple(c // 2 for c in shape2))
 
     np_a_n = [np_a_1, np_a_2]
     da_a_n = [da_a_1, da_a_2]
