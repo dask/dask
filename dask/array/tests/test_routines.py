@@ -1,5 +1,7 @@
 from __future__ import division, print_function, absolute_import
 
+import itertools
+
 import pytest
 from distutils.version import LooseVersion
 
@@ -27,10 +29,20 @@ def test_array():
     "atleast_2d",
     "atleast_3d",
 ])
-@pytest.mark.parametrize("num_arrs", [
-    0,
-    1,
-    2
+def test_atleast_nd_no_args(funcname):
+    np_func = getattr(np, funcname)
+    da_func = getattr(da, funcname)
+
+    np_r_n = np_func()
+    da_r_n = da_func()
+
+    assert np_r_n == da_r_n
+
+
+@pytest.mark.parametrize("funcname", [
+    "atleast_1d",
+    "atleast_2d",
+    "atleast_3d",
 ])
 @pytest.mark.parametrize("shape, chunks", [
     (tuple(), tuple()),
@@ -39,12 +51,45 @@ def test_array():
     ((4, 6, 8), (2, 3, 4)),
     ((4, 6, 8, 10), (2, 3, 4, 5)),
 ])
-def test_atleast_nd(funcname, num_arrs, shape, chunks):
+def test_atleast_nd_one_arg(funcname, shape, chunks):
     np_a = np.random.random(shape)
     da_a = da.from_array(np_a, chunks=chunks)
 
-    np_a_n = num_arrs * [np_a]
-    da_a_n = num_arrs * [da_a]
+    np_func = getattr(np, funcname)
+    da_func = getattr(da, funcname)
+
+    np_r = np_func(np_a)
+    da_r = da_func(da_a)
+
+    assert_eq(np_r, da_r)
+
+
+@pytest.mark.parametrize("funcname", [
+    "atleast_1d",
+    "atleast_2d",
+    "atleast_3d",
+])
+@pytest.mark.parametrize("shape1, shape2", list(
+    itertools.combinations_with_replacement(
+        [
+            tuple(),
+            (4,),
+            (4, 6),
+            (4, 6, 8),
+            (4, 6, 8, 10),
+        ],
+        2
+    )
+))
+def test_atleast_nd_two_args(funcname, shape1, shape2):
+    np_a_1 = np.random.random(shape1)
+    da_a_1 = da.from_array(np_a_1, chunks=tuple(c // 2 for c in shape1))
+
+    np_a_2 = np.random.random(shape2)
+    da_a_2 = da.from_array(np_a_2, chunks=tuple(c // 2 for c in shape2))
+
+    np_a_n = [np_a_1, np_a_2]
+    da_a_n = [da_a_1, da_a_2]
 
     np_func = getattr(np, funcname)
     da_func = getattr(da, funcname)
@@ -52,14 +97,7 @@ def test_atleast_nd(funcname, num_arrs, shape, chunks):
     np_r_n = np_func(*np_a_n)
     da_r_n = da_func(*da_a_n)
 
-    if num_arrs != 1:
-        assert type(np_r_n) is type(da_r_n)
-    else:
-        assert type(np_r_n) is np.ndarray
-        assert type(da_r_n) is da.Array
-
-        np_r_n = [np_r_n]
-        da_r_n = [da_r_n]
+    assert type(np_r_n) is type(da_r_n)
 
     assert len(np_r_n) == len(da_r_n)
 

@@ -18,7 +18,7 @@ from ..base import tokenize
 from . import numpy_compat, chunk
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
-                   concatenate, stack, atop, broadcast_shapes,
+                   asanyarray, concatenate, stack, atop, broadcast_shapes,
                    is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
 
 
@@ -41,7 +41,7 @@ def result_type(*args):
 def atleast_3d(*arys):
     new_arys = []
     for x in arys:
-        x = asarray(x)
+        x = asanyarray(x)
         if x.ndim == 0:
             x = x[None, None, None]
         elif x.ndim == 1:
@@ -61,7 +61,7 @@ def atleast_3d(*arys):
 def atleast_2d(*arys):
     new_arys = []
     for x in arys:
-        x = asarray(x)
+        x = asanyarray(x)
         if x.ndim == 0:
             x = x[None, None]
         elif x.ndim == 1:
@@ -79,7 +79,7 @@ def atleast_2d(*arys):
 def atleast_1d(*arys):
     new_arys = []
     for x in arys:
-        x = asarray(x)
+        x = asanyarray(x)
         if x.ndim == 0:
             x = x[None]
 
