@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+from distutils.version import LooseVersion
+
 import bokeh
 from bokeh.server.server import Server
 
@@ -17,7 +19,7 @@ class BokehServer(object):
             ip = None
         for i in range(5):
             try:
-                if bokeh.__version__ <= '0.12.4':
+                if LooseVersion(bokeh.__version__) <= '0.12.4':
                     kwargs = {'host': ['*']}
                 else:
                     kwargs = {}
@@ -29,7 +31,7 @@ class BokehServer(object):
                                      check_unused_sessions_milliseconds=500,
                                      allow_websocket_origin=["*"],
                                      **kwargs)
-                if bokeh.__version__ <= '0.12.3':
+                if LooseVersion(bokeh.__version__) <= '0.12.3':
                     self.server.start(start_loop=False)
                 else:
                     self.server.start()
@@ -54,5 +56,5 @@ class BokehServer(object):
             self.server._tornado._ping_job.stop()
 
         # https://github.com/bokeh/bokeh/issues/5494
-        if bokeh.__version__ >= '0.12.4':
+        if LooseVersion(bokeh.__version__) >= '0.12.4':
             self.server.stop()
