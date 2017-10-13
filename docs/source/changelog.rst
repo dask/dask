@@ -28,6 +28,7 @@ Core
 -  Allow tuples as sharedict keys (:pr:`2763`)
 -  Calling compute within a dask.distributed task defaults to distributed
    scheduler (:pr:`2762`)
+-  Auto-import gcsfs when gcs:// protocol is used (:pr:`2776`)
 
 0.15.4 / 2017-10-06
 -------------------

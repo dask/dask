@@ -483,6 +483,13 @@ def ensure_protocol(protocol):
                         "    or\n"
                         "    pip install s3fs")
 
+    elif protocol in ('gs', 'gcs'):
+        import_required('gcsfs',
+                        "Need to install `gcsfs` library for Google Cloud Storage support\n"
+                        "    conda install gcsfs -c conda-forge\n"
+                        "    or\n"
+                        "    pip install gcsfs")
+
     elif protocol == 'hdfs':
         msg = ("Need to install `distributed` and `hdfs3` "
                "for HDFS support\n"
