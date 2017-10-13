@@ -288,7 +288,7 @@ def test_is_dask_collection():
 
 class Tuple(DaskMethodsMixin):
     __slots__ = ('_dask', '_keys')
-    __dask_default_get__ = staticmethod(dask.threaded.get)
+    __dask_scheduler__ = staticmethod(dask.threaded.get)
 
     def __init__(self, dsk, keys):
         self._dask = dsk

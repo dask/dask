@@ -210,7 +210,7 @@ def compute_as_if_collection(cls, dsk, keys, get=None, **kwargs):
     """Compute a graph as if it were of type cls.
 
     Allows for applying the same optimizations and default scheduler."""
-    get = get or _globals['get'] or cls.__dask_default_get__
+    get = get or _globals['get'] or cls.__dask_scheduler__
     dsk2 = optimization_function(cls)(ensure_dict(dsk), keys, **kwargs)
     return get(dsk2, keys, **kwargs)
 
@@ -322,8 +322,8 @@ def compute(*args, **kwargs):
         get = get_worker().client.get
 
     if not get:
-        get = variables[0].__dask_default_get__
-        if not all(a.__dask_default_get__ == get for a in variables):
+        get = variables[0].__dask_scheduler__
+        if not all(a.__dask_scheduler__ == get for a in variables):
             raise ValueError("Compute called on multiple collections with "
                              "differing default schedulers. Please specify a "
                              "scheduler `get` function using either "
@@ -482,8 +482,8 @@ def persist(*args, **kwargs):
     optimize_graph = kwargs.pop('optimize_graph', True)
 
     if not get:
-        get = collections[0].__dask_default_get__
-        if not all(a.__dask_default_get__ == get for a in collections):
+        get = collections[0].__dask_scheduler__
+        if not all(a.__dask_scheduler__ == get for a in collections):
             raise ValueError("Compute called on multiple collections with "
                              "differing default schedulers. Please specify a "
                              "scheduler `get` function using either "

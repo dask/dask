@@ -799,7 +799,7 @@ class SerializableLock(object):
 def effective_get(get=None, collection=None):
     """Get the effective get method used in a given situation"""
     return (get or _globals.get('get') or
-            getattr(collection, '__dask_default_get__', None))
+            getattr(collection, '__dask_scheduler__', None))
 
 
 def get_scheduler_lock(get=None, collection=None):

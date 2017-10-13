@@ -363,7 +363,7 @@ class Delayed(Base, OperatorMethodMixin):
     def __dask_tokenize__(self):
         return self.key
 
-    __dask_default_get__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(threaded.get)
     __dask_optimize__ = globalmethod(dont_optimize, key='delayed_optimize')
 
     def __dask_postcompute__(self):

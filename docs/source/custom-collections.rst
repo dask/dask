@@ -96,7 +96,7 @@ interface is used inside dask.
         The optimized dask graph.
 
 
-.. staticmethod:: __dask_default_get__(dsk, keys, \*\*kwargs)
+.. staticmethod:: __dask_scheduler__(dsk, keys, \*\*kwargs)
 
     The default scheduler ``get`` to use for this object.
 
@@ -105,7 +105,7 @@ interface is used inside dask.
     >>> import dask.threaded
     >>> class MyCollection(object):
     ...     # Use the threaded scheduler by default
-    ...     __dask_default_get__ = staticmethod(dask.threaded.get)
+    ...     __dask_scheduler__ = staticmethod(dask.threaded.get)
 
 
 .. method:: __dask_postcompute__(self)
@@ -208,7 +208,7 @@ The operation of ``compute`` can be broken into three stages:
    - If a ``get`` function is specified directly as a keyword, use that.
    - Otherwise, if a global scheduler is set, use that.
    - Otherwise fall back to the default scheduler for the given collections.
-     Note that if all collections don't share the same ``__dask_default_get__``
+     Note that if all collections don't share the same ``__dask_scheduler__``
      then an error will be raised.
 
    Once the appropriate scheduler ``get`` function is determined, it's called
@@ -427,7 +427,7 @@ elements of ``dask.delayed``.
             return dsk2
 
         # Use the threaded scheduler by default.
-        __dask_default_get__ = staticmethod(dask.threaded.get)
+        __dask_scheduler__ = staticmethod(dask.threaded.get)
 
         def __dask_postcompute__(self):
             # We want to return the results as a tuple, so our finalize

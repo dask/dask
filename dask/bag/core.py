@@ -182,7 +182,7 @@ def to_textfiles(b, path, name_function=None, compression='infer',
     out = [Delayed(w.key, dsk2) for w in writes]
 
     if compute:
-        get = get or _globals.get('get', None) or Bag.__dask_default_get__
+        get = get or _globals.get('get', None) or Bag.__dask_scheduler__
         delayed(out).compute(get=get)
         return names
     else:
@@ -285,7 +285,7 @@ class Item(Base):
 
     __dask_optimize__ = globalmethod(optimize, key='bag_optimize',
                                      falsey=dont_optimize)
-    __dask_default_get__ = staticmethod(mpget)
+    __dask_scheduler__ = staticmethod(mpget)
 
     def __dask_postcompute__(self):
         return finalize_item, ()
@@ -378,7 +378,7 @@ class Bag(Base):
 
     __dask_optimize__ = globalmethod(optimize, key='bag_optimize',
                                      falsey=dont_optimize)
-    __dask_default_get__ = staticmethod(mpget)
+    __dask_scheduler__ = staticmethod(mpget)
 
     def __dask_postcompute__(self):
         return finalize, ()

@@ -111,7 +111,7 @@ class Scalar(Base, OperatorMethodMixin):
 
     __dask_optimize__ = globalmethod(optimize, key='dataframe_optimize',
                                      falsey=dont_optimize)
-    __dask_default_get__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(threaded.get)
 
     def __dask_postcompute__(self):
         return first, ()
@@ -252,7 +252,7 @@ class _Frame(Base, OperatorMethodMixin):
 
     __dask_optimize__ = globalmethod(optimize, key='dataframe_optimize',
                                      falsey=dont_optimize)
-    __dask_default_get__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(threaded.get)
 
     def __dask_postcompute__(self):
         return finalize, ()
