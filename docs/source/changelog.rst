@@ -8,6 +8,7 @@ Array
 +++++
 
 - Add ``atleast_1d``, ``atleast_2d``, and ``atleast_3d`` (:pr:`2760`)
+- Remove ``random.different_seeds`` from Dask Array API docs (:pr:`2772`)
 
 DataFrame
 +++++++++

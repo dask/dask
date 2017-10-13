@@ -227,7 +227,6 @@ Random
    random.beta
    random.binomial
    random.chisquare
-   random.different_seeds
    random.exponential
    random.f
    random.gamma
