@@ -7,6 +7,7 @@ Top level user functions:
 
 .. autosummary::
    all
+   allclose
    angle
    any
    apply_along_axis
@@ -326,6 +327,7 @@ Other functions
 .. autofunction:: concatenate
 
 .. autofunction:: all
+.. autofunction:: allclose
 .. autofunction:: angle
 .. autofunction:: any
 .. autofunction:: apply_along_axis

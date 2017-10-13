@@ -9,7 +9,7 @@ from .routines import (take, choose, argwhere, where, coarsen, insert,
                        bincount, digitize, histogram, cov, array, dstack,
                        vstack, hstack, compress, extract, round, count_nonzero,
                        flatnonzero, nonzero, around, isnull, notnull, isclose,
-                       corrcoef, swapaxes, tensordot, transpose, dot,
+                       allclose, corrcoef, swapaxes, tensordot, transpose, dot,
                        apply_along_axis, apply_over_axes, result_type,
                        atleast_1d, atleast_2d, atleast_3d)
 from .reshape import reshape
