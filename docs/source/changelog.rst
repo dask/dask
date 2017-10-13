@@ -10,6 +10,7 @@ Array
 - Add ``atleast_1d``, ``atleast_2d``, and ``atleast_3d`` (:pr:`2760`)
 - Add ``allclose`` (:pr:`2771`)
 - Remove ``random.different_seeds`` from Dask Array API docs (:pr:`2772`)
+- Deprecate ``vnorm`` in favor of ``dask.array.linalg.norm`` (:pr:`2773`)
 
 DataFrame
 +++++++++
