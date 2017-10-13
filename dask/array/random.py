@@ -174,7 +174,7 @@ class RandomState(object):
             dsks = []
             # Normalize and validate `a`
             if isinstance(a, Integral):
-                dtype = np.arange(1).dtype
+                dtype = np.random.choice(1, size=()).dtype
                 len_a = a
                 if a < 0:
                     raise ValueError("a must be greater than 0")

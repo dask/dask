@@ -219,7 +219,7 @@ def test_multinomial():
 
 
 def test_choice():
-    np_dtype = np.dtype(int)
+    np_dtype = np.random.choice(1, size=()).dtype
     size = (10, 3)
     chunks = 4
     x = da.random.choice(3, size=size, chunks=chunks)
