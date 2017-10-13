@@ -532,8 +532,18 @@ def round(a, decimals=0):
 @wraps(np.unique)
 def unique(x):
     name = 'unique-' + x.name
-    dsk = dict(((name, i), (np.unique, key)) for i, key in enumerate(x._keys()))
+    dsk = dict(((name, i), (np.unique, key, return_index))
+               for i, key in enumerate(x._keys()))
     parts = Array._get(sharedict.merge((name, dsk), x.dask), list(dsk.keys()))
+
+    if return_index:
+        arr = np.concatenate([p[0] for p in parts])
+        offset = np.cumsum((0, ) + x.chunks[0])[:-1]
+        idx = np.concatenate([p[1] + o for (p, o) in zip(parts, offset)])
+    
+        u, i = np.unique(arr, return_index=True)
+        return u, idx[i]
+    
     return np.unique(np.concatenate(parts))
 
 
