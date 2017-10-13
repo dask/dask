@@ -245,13 +245,21 @@ def test_resource_profiler_plot():
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
     assert check_title(p, "Not the default")
-    # Test empty, checking for errors
+
+    # Test with empty and one point, checking for errors
     rprof.clear()
-
-    with pytest.warns(None) as record:
-        rprof.visualize(show=False, save=False)
-
-    assert len(record) == 0
+    for results in [[], [(1.0, 0, 0)]]:
+        rprof.results = results
+        with pytest.warns(None) as record:
+            p = rprof.visualize(show=False, save=False)
+        assert len(record) == 0
+        # Check bounds are valid
+        assert p.x_range.start == 0
+        assert p.x_range.end == 1
+        assert p.y_range.start == 0
+        assert p.y_range.end == 100
+        assert p.extra_y_ranges['memory'].start == 0
+        assert p.extra_y_ranges['memory'].end == 100
 
 
 @pytest.mark.skipif("not bokeh")
