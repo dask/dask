@@ -14,12 +14,14 @@ from toolz import concat, sliding_window, interleave
 
 from .. import sharedict
 from ..core import flatten
-from ..base import tokenize, compute_as_if_collection
+from ..base import tokenize
+from ..delayed import delayed
 from . import numpy_compat, chunk
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
-                   asanyarray, concatenate, stack, atop, broadcast_shapes,
-                   is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
+                   from_delayed, asanyarray, concatenate, stack, atop,
+                   broadcast_shapes, is_scalar_for_elemwise, broadcast_to,
+                   tensordot_lookup)
 
 
 @wraps(np.array)
@@ -530,11 +532,14 @@ def round(a, decimals=0):
 
 @wraps(np.unique)
 def unique(x):
-    name = 'unique-' + x.name
-    dsk = {(name, i): (np.unique, key) for i, key in enumerate(x.__dask_keys__())}
-    parts = compute_as_if_collection(Array, sharedict.merge((name, dsk), x.dask),
-                                     list(dsk.keys()))
-    return np.unique(np.concatenate(parts))
+    x = x.ravel()
+
+    out = atop(np.unique, "i", x, "i", dtype=x.dtype)
+    out._chunks = tuple((np.nan,) * len(c) for c in out.chunks)
+
+    out = from_delayed(delayed(np.unique)(out), (np.nan,), x.dtype)
+
+    return out
 
 
 @wraps(np.roll)
