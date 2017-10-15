@@ -473,9 +473,15 @@ def test_round():
 
 
 def test_unique():
-    x = np.array([1, 2, 4, 4, 5, 2])
-    d = da.from_array(x, chunks=(3,))
-    assert_eq(da.unique(d), np.unique(x))
+    a = np.array([1, 2, 4, 4, 5, 2])
+    d = da.from_array(a, chunks=(3,))
+
+    r_a = np.unique(a)
+    r_d = da.unique(d)
+
+    assert isinstance(r_d, da.Array)
+
+    assert_eq(r_d, r_a)
 
 
 def _maybe_len(l):
