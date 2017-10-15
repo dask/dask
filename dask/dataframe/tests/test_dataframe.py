@@ -1910,7 +1910,7 @@ def test_cov_corr_meta():
 
 @pytest.mark.slow
 def test_cov_corr_stable():
-    df = pd.DataFrame(np.random.random((20000000, 2)) * 2 - 1, columns=['a', 'b'])
+    df = pd.DataFrame(np.random.uniform(-1, 1, (20000000, 2)), columns=['a', 'b'])
     ddf = dd.from_pandas(df, npartitions=50)
     assert_eq(ddf.cov(split_every=8), df.cov())
     assert_eq(ddf.corr(split_every=8), df.corr())
