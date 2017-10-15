@@ -7,8 +7,9 @@ import string
 from copy import copy
 
 import dask
-from dask import delayed
 import dask.dataframe as dd
+from dask import delayed
+from dask.base import compute_as_if_collection
 from dask.threaded import get as threaded_get
 from dask.multiprocessing import get as mp_get
 from dask.dataframe.shuffle import (shuffle,
@@ -98,7 +99,7 @@ def test_shuffle_empty_partitions(method):
     df = pd.DataFrame({'x': [1, 2, 3] * 10})
     ddf = dd.from_pandas(df, npartitions=3)
     s = shuffle(ddf, ddf.x, npartitions=6, shuffle=method)
-    parts = s._get(s.dask, s._keys())
+    parts = compute_as_if_collection(dd.DataFrame, s.dask, s.__dask_keys__())
     for p in parts:
         assert s.columns == p.columns
 
@@ -252,7 +253,7 @@ def test_rearrange(shuffle, get):
 
     # Every value in exactly one partition
     a = result.compute(get=get)
-    parts = get(result.dask, result._keys())
+    parts = get(result.dask, result.__dask_keys__())
     for i in a.y.drop_duplicates():
         assert sum(i in part.y for part in parts) == 1
 

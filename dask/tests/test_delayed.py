@@ -6,10 +6,31 @@ from random import random
 from toolz import identity, partial, merge
 import pytest
 
+import dask
 from dask import set_options, compute
 from dask.compatibility import PY2, PY3
 from dask.delayed import delayed, to_task_dask, Delayed
 from dask.utils_test import inc
+
+
+class Tuple(object):
+    __dask_scheduler__ = staticmethod(dask.threaded.get)
+
+    def __init__(self, dsk, keys):
+        self._dask = dsk
+        self._keys = keys
+
+    def __dask_tokenize__(self):
+        return self._keys
+
+    def __dask_graph__(self):
+        return self._dask
+
+    def __dask_keys__(self):
+        return self._keys
+
+    def __dask_postcompute__(self):
+        return tuple, ()
 
 
 def test_to_task_dask():
@@ -44,6 +65,14 @@ def test_to_task_dask():
     task, dask = to_task_dask(MyClass())
     assert type(task) is MyClass
     assert dict(dask) == {}
+
+    # Custom dask objects
+    x = Tuple({'a': 1, 'b': 2, 'c': (add, 'a', 'b')}, ['a', 'b', 'c'])
+    task, dask = to_task_dask(x)
+    assert task in dask
+    f = dask.pop(task)
+    assert f == (tuple, ['a', 'b', 'c'])
+    assert dask == x._dask
 
 
 def test_delayed():
@@ -91,12 +120,11 @@ def test_attributes():
     assert (a.real + a.imag).compute() == 3
 
 
-def test_method_getattr_optimize():
+def test_method_getattr_call_same_task():
     a = delayed([1, 2, 3])
     o = a.index(1)
-    dsk = o._optimize(o.dask, o._keys())
     # Don't getattr the method, then call in separate task
-    assert getattr not in set(v[0] for v in dsk.values())
+    assert getattr not in set(v[0] for v in o.__dask_graph__().values())
 
 
 def test_delayed_errors():
@@ -307,6 +335,15 @@ def test_kwargs():
     assert dmysum(1, 2, c=c, four=dmysum(2, 3)).key != ten.key
     assert dmysum(1, 2, c=c, four=4).key != ten.key
     assert dmysum(1, 2, c=c, four=4).key != dmysum(2, 2, c=c, four=4).key
+
+
+def test_custom_delayed():
+    x = Tuple({'a': 1, 'b': 2, 'c': (add, 'a', 'b')}, ['a', 'b', 'c'])
+    x2 = delayed(add, pure=True)(x, (4, 5, 6))
+    n = delayed(len, pure=True)(x)
+    assert delayed(len, pure=True)(x).key == n.key
+    assert x2.compute() == (1, 2, 3, 4, 5, 6)
+    assert compute(n, x2, x) == (3, (1, 2, 3, 4, 5, 6), (1, 2, 3))
 
 
 def test_array_delayed():

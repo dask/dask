@@ -619,7 +619,7 @@ def assert_divisions(ddf):
         return (x if isinstance(x, pd.Index)
                 else x.index.get_level_values(0))
 
-    results = get_sync(ddf.dask, ddf._keys())
+    results = get_sync(ddf.dask, ddf.__dask_keys__())
     for i, df in enumerate(results[:-1]):
         if len(df):
             assert index(df).min() >= ddf.divisions[i]

@@ -17,7 +17,7 @@ import multiprocessing as mp
 import uuid
 from weakref import WeakValueDictionary
 
-from .compatibility import getargspec, PY3, unicode, urlsplit
+from .compatibility import getargspec, PY3, unicode, urlsplit, bind_method
 from .core import get_deps
 from .context import _globals
 from .optimize import key_split    # noqa: F401
@@ -798,8 +798,8 @@ class SerializableLock(object):
 
 def effective_get(get=None, collection=None):
     """Get the effective get method used in a given situation"""
-    collection_get = collection._default_get if collection is not None else None
-    return get or _globals.get('get') or collection_get
+    return (get or _globals.get('get') or
+            getattr(collection, '__dask_scheduler__', None))
 
 
 def get_scheduler_lock(get=None, collection=None):
@@ -822,6 +822,44 @@ def ensure_dict(d):
             result.update(dd)
         return result
     return dict(d)
+
+
+class OperatorMethodMixin(object):
+    """A mixin for dynamically implementing operators"""
+
+    @classmethod
+    def _bind_operator(cls, op):
+        """ bind operator to this class """
+        name = op.__name__
+
+        if name.endswith('_'):
+            # for and_ and or_
+            name = name[:-1]
+        elif name == 'inv':
+            name = 'invert'
+
+        meth = '__{0}__'.format(name)
+
+        if name in ('abs', 'invert', 'neg', 'pos'):
+            bind_method(cls, meth, cls._get_unary_operator(op))
+        else:
+            bind_method(cls, meth, cls._get_binary_operator(op))
+
+            if name in ('eq', 'gt', 'ge', 'lt', 'le', 'ne', 'getitem'):
+                return
+
+            rmeth = '__r{0}__'.format(name)
+            bind_method(cls, rmeth, cls._get_binary_operator(op, inv=True))
+
+    @classmethod
+    def _get_unary_operator(cls, op):
+        """ Must return a method used by unary operator """
+        raise NotImplementedError
+
+    @classmethod
+    def _get_binary_operator(cls, op, inv=False):
+        """ Must return a method used by binary operator """
+        raise NotImplementedError
 
 
 # XXX: Kept to keep old versions of distributed/dask in sync. After

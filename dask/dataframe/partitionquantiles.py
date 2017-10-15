@@ -431,7 +431,7 @@ def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
         random_state = hash(token) % np.iinfo(np.int32).max
     state_data = random_state_data(df.npartitions, random_state)
 
-    df_keys = df._keys()
+    df_keys = df.__dask_keys__()
 
     name0 = 're-quantiles-0-' + token
     dtype_dsk = {(name0, 0): (dtype_info, df_keys[0])}

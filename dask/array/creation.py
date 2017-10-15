@@ -427,14 +427,14 @@ def diag(v):
                         "got {0}".format(type(v)))
     if v.ndim != 1:
         if v.chunks[0] == v.chunks[1]:
-            dsk = dict(((name, i), (np.diag, row[i])) for (i, row)
-                       in enumerate(v._keys()))
+            dsk = {(name, i): (np.diag, row[i])
+                   for i, row in enumerate(v.__dask_keys__())}
             return Array(sharedict.merge(v.dask, (name, dsk)), name, (v.chunks[0],), dtype=v.dtype)
         else:
             raise NotImplementedError("Extracting diagonals from non-square "
                                       "chunked arrays")
     chunks_1d = v.chunks[0]
-    blocks = v._keys()
+    blocks = v.__dask_keys__()
     dsk = {}
     for i, m in enumerate(chunks_1d):
         for j, n in enumerate(chunks_1d):

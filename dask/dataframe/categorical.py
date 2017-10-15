@@ -4,7 +4,7 @@ from collections import defaultdict
 import pandas as pd
 from toolz import partition_all
 
-from ..base import tokenize
+from ..base import tokenize, compute_as_if_collection
 from .accessor import Accessor
 from .utils import (has_known_categories, clear_known_categories, is_scalar,
                     is_categorical_dtype)
@@ -111,7 +111,7 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
     token = tokenize(df, columns, index, split_every)
     a = 'get-categories-chunk-' + token
     dsk = {(a, i): (_get_categories, key, columns, index)
-           for (i, key) in enumerate(df._keys())}
+           for (i, key) in enumerate(df.__dask_keys__())}
 
     prefix = 'get-categories-agg-' + token
     k = df.npartitions
@@ -128,7 +128,8 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
     dsk.update(df.dask)
 
     # Compute the categories
-    categories, index = df._get(dsk, (prefix, 0), **kwargs)
+    categories, index = compute_as_if_collection(type(df), dsk, (prefix, 0),
+                                                 **kwargs)
 
     # Categorize each partition
     return df.map_partitions(_categorize_block, categories, index)
