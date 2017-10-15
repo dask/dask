@@ -407,6 +407,7 @@ def test_binops():
 
 
 def test_broadcast_shapes():
+    assert (0, 5) == broadcast_shapes((0, 1), (1, 5))
     assert (3, 4, 5) == broadcast_shapes((3, 4, 5), (4, 1), ())
     assert (3, 4) == broadcast_shapes((3, 1), (1, 4), (4,))
     assert (5, 6, 7, 3, 4) == broadcast_shapes((3, 1), (), (5, 6, 7, 1, 4))
@@ -574,7 +575,7 @@ def test_broadcast_to():
     x = np.random.randint(10, size=(5, 1, 6))
     a = from_array(x, chunks=(3, 1, 3))
 
-    for shape in [a.shape, (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
+    for shape in [a.shape, (5, 0, 6), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
         xb = chunk.broadcast_to(x, shape)
         ab = broadcast_to(a, shape)
 
@@ -590,7 +591,7 @@ def test_broadcast_to():
 def test_broadcast_to_array():
     x = np.random.randint(10, size=(5, 1, 6))
 
-    for shape in [(5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
+    for shape in [(5, 0, 6), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
         a = np.broadcast_to(x, shape)
         d = broadcast_to(x, shape)
 
@@ -600,7 +601,7 @@ def test_broadcast_to_array():
 def test_broadcast_to_scalar():
     x = 5
 
-    for shape in [tuple(), (2, 3), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
+    for shape in [tuple(), (0,), (2, 3), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
         a = np.broadcast_to(x, shape)
         d = broadcast_to(x, shape)
 
