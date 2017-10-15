@@ -240,7 +240,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
                     np.issubdtype(x.dtype[name], np.unicode_) or
                     np.issubdtype(x.dtype[name], np.object_)):
                 a = da.from_array(x[name], chunks=(chunksize * len(x.names),))
-                categories[name] = da.unique(a)
+                categories[name] = da.unique(a).compute()
 
     columns = tuple(x.dtype.names)
     divisions = tuple(range(0, len(x), chunksize))
