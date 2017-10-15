@@ -15,13 +15,11 @@ from toolz import concat, sliding_window, interleave
 from .. import sharedict
 from ..core import flatten
 from ..base import tokenize
-from ..delayed import delayed
 from . import numpy_compat, chunk
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
-                   from_delayed, asanyarray, concatenate, stack, atop,
-                   broadcast_shapes, is_scalar_for_elemwise, broadcast_to,
-                   tensordot_lookup)
+                   asanyarray, concatenate, stack, atop, broadcast_shapes,
+                   is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
 
 
 @wraps(np.array)
@@ -537,7 +535,11 @@ def unique(x):
     out = atop(np.unique, "i", x, "i", dtype=x.dtype)
     out._chunks = tuple((np.nan,) * len(c) for c in out.chunks)
 
-    out = from_delayed(delayed(np.unique)(out), (np.nan,), x.dtype)
+    name = 'unique-aggregate-' + out.name
+    dsk = {(name, 0): (np.unique, (np.concatenate, out._keys()))}
+    out = Array(
+        sharedict.merge((name, dsk), out.dask), name, ((np.nan,),), out.dtype
+    )
 
     return out
 
