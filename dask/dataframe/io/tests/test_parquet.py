@@ -150,7 +150,7 @@ def test_optimize(fn, c):
     assert_eq(df[c], ddf[c])
     x = ddf[c]
 
-    dsk = x._optimize(x.dask, x._keys())
+    dsk = x.__dask_optimize__(x.dask, x.__dask_keys__())
     assert len(dsk) == x.npartitions
     assert all(v[4] == c for v in dsk.values())
 
@@ -513,3 +513,42 @@ def test_timestamp96(fn):
     assert pf._schema[1].type == fastparquet.parquet_thrift.Type.INT96
     out = dd.read_parquet(fn).compute()
     assert_eq(out, df)
+
+
+def test_drill_scheme(fn):
+    N = 5
+    df1 = pd.DataFrame({c: np.random.random(N)
+                        for i, c in enumerate(['a', 'b', 'c'])})
+    df2 = pd.DataFrame({c: np.random.random(N)
+                        for i, c in enumerate(['a', 'b', 'c'])})
+    files = []
+    for d in ['test_data1', 'test_data2']:
+        dn = os.path.join(fn, d)
+        if not os.path.exists(dn):
+            os.mkdir(dn)
+        files.append(os.path.join(dn, 'data1.parq'))
+
+    fastparquet.write(files[0], df1)
+    fastparquet.write(files[1], df2)
+
+    df = dd.read_parquet(files)
+    assert 'dir0' in df.columns
+    out = df.compute()
+    assert 'dir0' in out
+    assert (np.unique(out.dir0) == ['test_data1', 'test_data2']).all()
+
+
+def test_parquet_select_cats(fn):
+    df = pd.DataFrame({
+        'categories': pd.Series(
+            np.random.choice(['a', 'b', 'c', 'd', 'e', 'f'], size=100),
+            dtype='category'),
+        'ints': pd.Series(list(range(0, 100)), dtype='int'),
+        'floats': pd.Series(list(range(0, 100)), dtype='float')})
+
+    ddf = dd.from_pandas(df, 1)
+    ddf.to_parquet(fn)
+    rddf = dd.read_parquet(fn, columns=['ints'])
+    assert list(rddf.columns) == ['ints']
+    rddf = dd.read_parquet(fn)
+    assert list(rddf.columns) == list(df)

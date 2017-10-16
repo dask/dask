@@ -5,17 +5,15 @@ from operator import getitem
 import numpy as np
 
 from .core import getter, getter_nofancy, getter_inline
-from ..context import defer_to_globals
 from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
-from ..optimize import cull, fuse, inline_functions, dont_optimize
+from ..optimize import cull, fuse, inline_functions
 from ..utils import ensure_dict
 
 
 GETTERS = (getter, getter_nofancy, getter_inline, getitem)
 
 
-@defer_to_globals('array_optimize', falsey=dont_optimize)
 def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
              inline_functions_fast_functions=(getter_inline,), rename_fused_keys=True,
              **kwargs):

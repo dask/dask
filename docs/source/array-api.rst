@@ -7,6 +7,7 @@ Top level user functions:
 
 .. autosummary::
    all
+   allclose
    angle
    any
    apply_along_axis
@@ -24,6 +25,9 @@ Top level user functions:
    argwhere
    around
    array
+   atleast_1d
+   atleast_2d
+   atleast_3d
    bincount
    broadcast_to
    coarsen
@@ -224,7 +228,6 @@ Random
    random.beta
    random.binomial
    random.chisquare
-   random.different_seeds
    random.exponential
    random.f
    random.gamma
@@ -324,6 +327,7 @@ Other functions
 .. autofunction:: concatenate
 
 .. autofunction:: all
+.. autofunction:: allclose
 .. autofunction:: angle
 .. autofunction:: any
 .. autofunction:: apply_along_axis
@@ -341,6 +345,9 @@ Other functions
 .. autofunction:: argwhere
 .. autofunction:: around
 .. autofunction:: array
+.. autofunction:: atleast_1d
+.. autofunction:: atleast_2d
+.. autofunction:: atleast_3d
 .. autofunction:: bincount
 .. autofunction:: broadcast_to
 .. autofunction:: coarsen

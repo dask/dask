@@ -4,8 +4,7 @@ import pandas.util.testing as tm
 
 import pytest
 from threading import Lock
-
-import threading
+from multiprocessing.pool import ThreadPool
 
 import dask.array as da
 import dask.dataframe as dd
@@ -15,7 +14,7 @@ from dask.delayed import Delayed, delayed
 from dask.utils import tmpfile
 from dask.local import get_sync
 
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, is_categorical_dtype
 
 
 ####################
@@ -119,13 +118,14 @@ def test_from_array_with_record_dtype():
 
 def test_from_bcolz_multiple_threads():
     bcolz = pytest.importorskip('bcolz')
+    pool = ThreadPool(processes=5)
 
-    def check():
+    def check(i):
         t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
                          names=['x', 'y', 'a'])
         d = dd.from_bcolz(t, chunksize=2)
         assert d.npartitions == 2
-        assert str(d.dtypes['a']) == 'category'
+        assert is_categorical_dtype(d.dtypes['a'])
         assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
         assert list(d.a.compute(get=get_sync)) == ['a', 'b', 'a']
 
@@ -139,14 +139,7 @@ def test_from_bcolz_multiple_threads():
         assert (sorted(dd.from_bcolz(t, chunksize=2).dask) !=
                 sorted(dd.from_bcolz(t, chunksize=3).dask))
 
-    threads = []
-    for i in range(5):
-        thread = threading.Thread(target=check)
-        thread.start()
-        threads.append(thread)
-
-    for thread in threads:
-        thread.join()
+    pool.map(check, range(5))
 
 
 def test_from_bcolz():
@@ -156,7 +149,7 @@ def test_from_bcolz():
                      names=['x', 'y', 'a'])
     d = dd.from_bcolz(t, chunksize=2)
     assert d.npartitions == 2
-    assert str(d.dtypes['a']) == 'category'
+    assert is_categorical_dtype(d.dtypes['a'])
     assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
     assert list(d.a.compute(get=get_sync)) == ['a', 'b', 'a']
     L = list(d.index.compute(get=get_sync))

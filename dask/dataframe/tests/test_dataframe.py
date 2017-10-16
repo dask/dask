@@ -8,8 +8,9 @@ import numpy as np
 import pytest
 
 import dask
-from dask.utils import ignoring, put_lines
 import dask.dataframe as dd
+from dask.base import compute_as_if_collection
+from dask.utils import ignoring, put_lines
 
 from dask.dataframe.core import repartition_divisions, aca, _concat, Scalar
 from dask.dataframe import methods
@@ -1020,7 +1021,8 @@ def test_repartition():
         """Check data is split properly"""
         keys = [k for k in d.dask if k[0].startswith('repartition-split')]
         keys = sorted(keys)
-        sp = pd.concat([d._get(d.dask, k) for k in keys])
+        sp = pd.concat([compute_as_if_collection(dd.DataFrame, d.dask, k)
+                        for k in keys])
         assert_eq(orig, sp)
         assert_eq(orig, d)
 
@@ -1031,7 +1033,8 @@ def test_repartition():
     b = a.repartition(divisions=[10, 20, 50, 60])
     assert b.divisions == (10, 20, 50, 60)
     assert_eq(a, b)
-    assert_eq(a._get(b.dask, (b._name, 0)), df.iloc[:1])
+    assert_eq(compute_as_if_collection(dd.DataFrame, b.dask, (b._name, 0)),
+              df.iloc[:1])
 
     for div in [[20, 60], [10, 50], [1],   # first / last element mismatch
                 [0, 60], [10, 70],   # do not allow to expand divisions by default
@@ -1146,7 +1149,7 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
     b = a.repartition(npartitions=k)
     assert_eq(a, b)
     assert b.npartitions == k
-    parts = dask.get(b.dask, b._keys())
+    parts = dask.get(b.dask, b.__dask_keys__())
     assert all(map(len, parts))
 
 
@@ -1408,9 +1411,10 @@ def test_eval():
 
         # catch FutureWarning from pandas about assignment in eval
         with pytest.warns(None):
-            if p.eval('z = x + y', inplace=None) is None:
-                with pytest.raises(NotImplementedError):
-                    d.eval('z = x + y', inplace=None)
+            if PANDAS_VERSION < '0.21.0':
+                if p.eval('z = x + y', inplace=None) is None:
+                    with pytest.raises(NotImplementedError):
+                        d.eval('z = x + y', inplace=None)
 
 
 @pytest.mark.parametrize('include, exclude', [
@@ -1909,7 +1913,7 @@ def test_cov_corr_meta():
 
 @pytest.mark.slow
 def test_cov_corr_stable():
-    df = pd.DataFrame(np.random.random((20000000, 2)) * 2 - 1, columns=['a', 'b'])
+    df = pd.DataFrame(np.random.uniform(-1, 1, (20000000, 2)), columns=['a', 'b'])
     ddf = dd.from_pandas(df, npartitions=50)
     assert_eq(ddf.cov(split_every=8), df.cov())
     assert_eq(ddf.corr(split_every=8), df.corr())
@@ -2198,13 +2202,23 @@ def test_categorize_info():
     # Verbose=False
     buf = StringIO()
     ddf.info(buf=buf, verbose=True)
-    assert buf.getvalue() == unicode("<class 'dask.dataframe.core.DataFrame'>\n"
-                                     "Int64Index: 4 entries, 0 to 3\n"
-                                     "Data columns (total 3 columns):\n"
-                                     "x    4 non-null int64\n"
-                                     "y    4 non-null category\n"
-                                     "z    4 non-null object\n"
-                                     "dtypes: category(1), object(1), int64(1)")
+    if PANDAS_VERSION > '0.21.0':
+        expected = unicode("<class 'dask.dataframe.core.DataFrame'>\n"
+                           "Int64Index: 4 entries, 0 to 3\n"
+                           "Data columns (total 3 columns):\n"
+                           "x    4 non-null int64\n"
+                           "y    4 non-null CategoricalDtype(categories=['a', 'b', 'c'], ordered=False)\n"  # noqa
+                           "z    4 non-null object\n"
+                           "dtypes: CategoricalDtype(categories=['a', 'b', 'c'], ordered=False)(1), object(1), int64(1)")  # noqa
+    else:
+        expected = unicode("<class 'dask.dataframe.core.DataFrame'>\n"
+                           "Int64Index: 4 entries, 0 to 3\n"
+                           "Data columns (total 3 columns):\n"
+                           "x    4 non-null int64\n"
+                           "y    4 non-null category\n"
+                           "z    4 non-null object\n"
+                           "dtypes: category(1), object(1), int64(1)")
+    assert buf.getvalue() == expected
 
 
 def test_gh_1301():
@@ -2254,6 +2268,13 @@ def test_attribute_assignment():
 
     ddf.y = ddf.x + ddf.y
     assert_eq(ddf, df.assign(y=df.x + df.y))
+
+
+def test_setitem_triggering_realign():
+    a = dd.from_pandas(pd.DataFrame({"A": range(12)}), npartitions=3)
+    b = dd.from_pandas(pd.Series(range(12), name='B'), npartitions=4)
+    a['C'] = b
+    assert len(a) == 12
 
 
 def test_inplace_operators():
@@ -2478,7 +2499,7 @@ def test_hash_split_unique(npartitions, split_every, split_out):
 
     dropped = ds.unique(split_every=split_every, split_out=split_out)
 
-    dsk = dropped._optimize(dropped.dask, dropped._keys())
+    dsk = dropped.__dask_optimize__(dropped.dask, dropped.__dask_keys__())
     from dask.core import get_deps
     dependencies, dependents = get_deps(dsk)
 

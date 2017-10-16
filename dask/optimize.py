@@ -5,11 +5,10 @@ import re
 from operator import getitem
 
 from .compatibility import unicode
-
 from .context import _globals
-from .core import add, inc  # noqa: F401
 from .core import (istask, get_dependencies, subs, toposort, flatten,
                    reverse_dict, ishashable)
+from .utils_test import add, inc  # noqa: F401
 
 
 def cull(dsk, keys):
@@ -807,7 +806,3 @@ def key_split(s):
             return result
     except Exception:
         return 'Other'
-
-
-def dont_optimize(dsk, keys, **kwargs):
-    return dsk

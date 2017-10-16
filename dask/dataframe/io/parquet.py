@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import pandas as pd
-from toolz import partial
 
 from ..core import DataFrame, Series
 from ..utils import UNKNOWN_CATEGORIES
@@ -21,11 +20,19 @@ try:
 except ImportError:
     fastparquet = False
     default_encoding = None
+else:
+    @normalize_token.register(fastparquet.ParquetFile)
+    def normalize_ParquetFile(pf):
+        return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
 
 try:
     import pyarrow.parquet as pyarrow_parquet
 except ImportError:
     pyarrow_parquet = False
+else:
+    @normalize_token.register(pyarrow_parquet.ParquetDataset)
+    def normalize_PyArrowParquetDataset(ds):
+        return (type(ds), ds.paths)
 
 
 def _meta_from_dtypes(to_read_columns, file_columns, file_dtypes):
@@ -91,8 +98,9 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
                              dtypes)
 
     for cat in categories:
-        meta[cat] = pd.Series(pd.Categorical([],
-                              categories=[UNKNOWN_CATEGORIES]))
+        if cat in meta:
+            meta[cat] = pd.Series(pd.Categorical([],
+                                  categories=[UNKNOWN_CATEGORIES]))
 
     if index_col:
         meta = meta.set_index(index_col)
@@ -103,7 +111,8 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
 
     dsk = {(name, i): (_read_parquet_row_group, myopen, pf.row_group_filename(rg),
                        index_col, all_columns, rg, out_type == Series,
-                       categories, pf.schema, pf.cats, pf.dtypes)
+                       categories, pf.schema, pf.cats, pf.dtypes,
+                       pf.file_scheme)
            for i, rg in enumerate(rgs)}
 
     if not dsk:
@@ -131,7 +140,7 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
 
 
 def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
-                            schema, cs, dt, *args):
+                            schema, cs, dt, scheme, *args):
     if not isinstance(columns, (tuple, list)):
         columns = (columns,)
         series = True
@@ -139,7 +148,7 @@ def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
         columns = columns + type(columns)([index])
     df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt)
     read_row_group_file(fn, rg, columns, categories, schema, cs,
-                        open=open, assign=views)
+                        open=open, assign=views, scheme=scheme)
 
     if series:
         return df[df.columns[0]]
@@ -477,22 +486,6 @@ def _write_metadata(writes, filenames, fmd, path, metadata_fn, myopen, sep):
 
     fn = sep.join([path, '_common_metadata'])
     fastparquet.writer.write_common_metadata(fn, fmd, open_with=myopen)
-
-
-if fastparquet:
-    @partial(normalize_token.register, fastparquet.ParquetFile)
-    def normalize_ParquetFile(pf):
-        return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
-
-
-try:
-    from pyarrow.parquet import ParquetDataset
-except ImportError:
-    pass
-else:
-    @partial(normalize_token.register, ParquetDataset)
-    def normalize_PyArrowParquetDataset(ds):
-        return (type(ds), ds.paths)
 
 
 if PY3:

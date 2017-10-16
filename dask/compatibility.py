@@ -242,9 +242,6 @@ def getargspec(func):
         else:
             return _getargspec(func)
 
-def skip(func):
-    return
-
 
 def bind_method(cls, name, func):
     """Bind a method to class

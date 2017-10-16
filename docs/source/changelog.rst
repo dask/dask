@@ -1,19 +1,57 @@
 Changelog
 =========
 
-0.16.0 / ???
-------------
+X.Y.Z / YYYY-MM-DD
+-------------------
 
 Array
 +++++
 
--  Indexing with np.int (:pr:`2718`)
-
+- Add ``atleast_1d``, ``atleast_2d``, and ``atleast_3d`` (:pr:`2760`)
+- Add ``allclose`` (:pr:`2771`)
+- Remove ``random.different_seeds`` from Dask Array API docs (:pr:`2772`)
+- Deprecate ``vnorm`` in favor of ``dask.array.linalg.norm`` (:pr:`2773`)
+- Reimplement ``unique`` to be lazy (:pr:`2775`)
+- Support broadcasting of Dask Arrays with 0-length dimensions (:pr:`2784`)
 
 DataFrame
 +++++++++
 
 -
+
+Bag
++++
+
+-
+
+
+Core
+++++
+
+-  Allow tuples as sharedict keys (:pr:`2763`)
+-  Calling compute within a dask.distributed task defaults to distributed
+   scheduler (:pr:`2762`)
+-  Auto-import gcsfs when gcs:// protocol is used (:pr:`2776`)
+
+0.15.4 / 2017-10-06
+-------------------
+
+Array
++++++
+
+-  Support indexing in arrays with np.int (fixes regression) (:pr:`2719`)
+-  Handle zero dimension with rechunking (:pr:`2747`)
+-  Support -1 as an alias for "size of the dimension" in ``chunks`` (:pr:`2749`)
+-  Call mkdir in array.to_npy_stack (:pr:`2709`)
+
+
+DataFrame
++++++++++
+
+-  Added the `.str` accessor to Categoricals with string categories (:pr:`2743`)
+-  Support int96 (spark) datetimes in parquet writer (:pr:`2711`)
+-  Pass on file scheme to fastparquet (:pr:`2714`)
+-  Support Pandas 0.21 (:pr:`2737`)
 
 
 Bag
@@ -25,8 +63,7 @@ Bag
 Core
 ++++
 
--
-
+-  Drop s3fs from ``pip install dask[complete]`` (:pr:`2750`)
 
 
 0.15.3 / 2017-09-24

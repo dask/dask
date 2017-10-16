@@ -28,14 +28,14 @@ except ImportError:
     from toolz import (frequencies, merge_with, join, reduceby,
                        count, pluck, groupby, topk)
 
-from ..base import Base, normalize_token, tokenize
+from ..base import Base, tokenize, dont_optimize, is_dask_collection
 from ..bytes.core import write_bytes
 from ..compatibility import apply, urlopen
-from ..context import _globals, defer_to_globals
+from ..context import _globals, globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict
 from ..delayed import Delayed
 from ..multiprocessing import get as mpget
-from ..optimize import fuse, cull, inline, dont_optimize
+from ..optimize import fuse, cull, inline
 from ..utils import (system_encoding, takes_multiple_arguments, funcname,
                      digit, insert, ensure_dict)
 
@@ -106,7 +106,6 @@ def inline_singleton_lists(dsk, dependencies=None):
     return dsk
 
 
-@defer_to_globals('bag_optimize', falsey=dont_optimize)
 def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
     """ Optimize a dask from a dask.bag """
     dsk2, dependencies = cull(dsk, keys)
@@ -179,11 +178,11 @@ def to_textfiles(b, path, name_function=None, compression='infer',
 
     # Use Bag optimizations on these delayed objects
     dsk = ensure_dict(delayed(writes).dask)
-    dsk2 = Bag._optimize(dsk, [w.key for w in writes])
+    dsk2 = Bag.__dask_optimize__(dsk, [w.key for w in writes])
     out = [Delayed(w.key, dsk2) for w in writes]
 
     if compute:
-        get = get or _globals.get('get', None) or Bag._default_get
+        get = get or _globals.get('get', None) or Bag.__dask_scheduler__
         delayed(out).compute(get=get)
         return names
     else:
@@ -270,9 +269,29 @@ def robust_wraps(wrapper):
 
 
 class Item(Base):
-    _optimize = staticmethod(optimize)
-    _default_get = staticmethod(mpget)
-    _finalize = staticmethod(finalize_item)
+    def __init__(self, dsk, key):
+        self.dask = dsk
+        self.key = key
+        self.name = key
+
+    def __dask_graph__(self):
+        return self.dask
+
+    def __dask_keys__(self):
+        return [self.key]
+
+    def __dask_tokenize__(self):
+        return self.key
+
+    __dask_optimize__ = globalmethod(optimize, key='bag_optimize',
+                                     falsey=dont_optimize)
+    __dask_scheduler__ = staticmethod(mpget)
+
+    def __dask_postcompute__(self):
+        return finalize_item, ()
+
+    def __dask_postpersist__(self):
+        return Item, (self.key,)
 
     @staticmethod
     def from_delayed(value):
@@ -286,11 +305,6 @@ class Item(Base):
         assert isinstance(value, Delayed)
         return Item(ensure_dict(value.dask), value.key)
 
-    def __init__(self, dsk, key):
-        self.dask = dsk
-        self.key = key
-        self.name = key
-
     @property
     def _args(self):
         return (self.dask, self.key)
@@ -300,9 +314,6 @@ class Item(Base):
 
     def __setstate__(self, state):
         self.dask, self.key = state
-
-    def _keys(self):
-        return [self.key]
 
     def apply(self, func):
         name = 'apply-{0}-{1}'.format(funcname(func), tokenize(self, func))
@@ -317,7 +328,8 @@ class Item(Base):
         Returns a single value.
         """
         from dask.delayed import Delayed
-        dsk = self._optimize(self.dask, [self.key])
+        dsk = self.__dask_optimize__(self.__dask_graph__(),
+                                     self.__dask_keys__())
         return Delayed(self.key, dsk)
 
 
@@ -350,14 +362,29 @@ class Bag(Base):
     >>> int(b.fold(lambda x, y: x + y))  # doctest: +SKIP
     30
     """
-    _optimize = staticmethod(optimize)
-    _default_get = staticmethod(mpget)
-    _finalize = staticmethod(finalize)
-
     def __init__(self, dsk, name, npartitions):
         self.dask = dsk
         self.name = name
         self.npartitions = npartitions
+
+    def __dask_graph__(self):
+        return self.dask
+
+    def __dask_keys__(self):
+        return [(self.name, i) for i in range(self.npartitions)]
+
+    def __dask_tokenize__(self):
+        return self.name
+
+    __dask_optimize__ = globalmethod(optimize, key='bag_optimize',
+                                     falsey=dont_optimize)
+    __dask_scheduler__ = staticmethod(mpget)
+
+    def __dask_postcompute__(self):
+        return finalize, ()
+
+    def __dask_postpersist__(self):
+        return type(self), (self.name, self.npartitions)
 
     def __str__(self):
         name = self.name if len(self.name) < 10 else self.name[:7] + '...'
@@ -1070,9 +1097,6 @@ class Bag(Base):
         else:
             return b
 
-    def _keys(self):
-        return [(self.name, i) for i in range(self.npartitions)]
-
     def flatten(self):
         """ Concatenate nested lists into one long list
 
@@ -1205,12 +1229,11 @@ class Bag(Base):
         cols = list(meta.columns)
         dtypes = meta.dtypes.to_dict()
         name = 'to_dataframe-' + tokenize(self, cols, dtypes)
-        dsk = {(name, i): (to_dataframe, (self.name, i), cols, dtypes)
-               for i in range(self.npartitions)}
-
+        dsk = self.__dask_optimize__(self.dask, self.__dask_keys__())
+        dsk.update({(name, i): (to_dataframe, (self.name, i), cols, dtypes)
+                    for i in range(self.npartitions)})
         divisions = [None] * (self.npartitions + 1)
-        return dd.DataFrame(merge(optimize(self.dask, self._keys()), dsk),
-                            name, meta, divisions)
+        return dd.DataFrame(dsk, name, meta, divisions)
 
     def to_delayed(self):
         """ Convert bag to list of dask Delayed
@@ -1218,8 +1241,9 @@ class Bag(Base):
         Returns list of Delayed, one per partition.
         """
         from dask.delayed import Delayed
-        dsk = self._optimize(self.dask, self._keys())
-        return [Delayed(k, dsk) for k in self._keys()]
+        keys = self.__dask_keys__()
+        dsk = self.__dask_optimize__(self.__dask_graph__(), keys)
+        return [Delayed(k, dsk) for k in keys]
 
     def repartition(self, npartitions):
         """ Coalesce bag into fewer partitions
@@ -1309,10 +1333,6 @@ def accumulate_part(binop, seq, initial, is_first=False):
     if is_first:
         return res, res[-1] if res else [], initial
     return res[1:], res[-1]
-
-
-normalize_token.register(Item, lambda a: a.key)
-normalize_token.register(Bag, lambda a: a.name)
 
 
 def partition(grouper, sequence, npartitions, p, nelements=2**20):
@@ -1428,8 +1448,8 @@ def concat(bags):
     """
     name = 'concat-' + tokenize(*bags)
     counter = itertools.count(0)
-    dsk = dict(((name, next(counter)), key)
-               for bag in bags for key in sorted(bag._keys()))
+    dsk = {(name, next(counter)): key
+           for bag in bags for key in bag.__dask_keys__()}
     return Bag(merge(dsk, *[b.dask for b in bags]), name, len(dsk))
 
 
@@ -1632,7 +1652,7 @@ def unpack_scalar_dask_kwargs(kwargs):
         if isinstance(v, (Delayed, Item)):
             dsk.update(ensure_dict(v.dask))
             kwargs2[k] = v.key
-        elif isinstance(v, Base):
+        elif is_dask_collection(v):
             raise NotImplementedError("dask.bag doesn't support kwargs of "
                                       "type %s" % type(v).__name__)
         else:
@@ -1802,7 +1822,7 @@ def map_partitions(func, *args, **kwargs):
                 dsk.update(ensure_dict(a.dask))
                 if isinstance(a, Bag):
                     bags.append(a)
-            elif isinstance(a, Base):
+            elif is_dask_collection(a):
                 raise NotImplementedError("dask.bag doesn't support args of "
                                           "type %s" % type(a).__name__)
 

@@ -3,7 +3,7 @@ from operator import getitem
 from toolz import merge
 
 import dask
-from dask.dataframe.optimize import dataframe_from_ctable
+from dask.dataframe.io import dataframe_from_ctable
 import dask.dataframe as dd
 import pandas as pd
 
@@ -43,9 +43,9 @@ def test_fuse_ave_width():
     s = ((df.x + 1) + (df.x + 2))
 
     with dask.set_options(fuse_ave_width=4):
-        a = s._optimize(s.dask, s._keys())
+        a = s.__dask_optimize__(s.dask, s.__dask_keys__())
 
-    b = s._optimize(s.dask, s._keys())
+    b = s.__dask_optimize__(s.dask, s.__dask_keys__())
 
     assert len(a) < len(b)
     assert len(a) <= 15

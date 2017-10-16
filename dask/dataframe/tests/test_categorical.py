@@ -202,7 +202,7 @@ def test_categorize_index():
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
 def test_categorical_set_index(shuffle):
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': ['a', 'b', 'b', 'c']})
-    df['y'] = df.y.astype('category', ordered=True)
+    df['y'] = pd.Categorical(df['y'], categories=['a', 'b', 'c'], ordered=True)
     a = dd.from_pandas(df, npartitions=2)
 
     with dask.set_options(get=dask.get, shuffle=shuffle):
@@ -342,3 +342,16 @@ class TestCategoricalAccessor:
         res = db.compute()
         tm.assert_index_equal(db.cat.categories, get_cat(res).categories)
         assert_array_index_eq(db.cat.codes, get_cat(res).codes)
+
+    def test_categorical_string_ops(self):
+        a = pd.Series(['a', 'a', 'b'], dtype='category')
+        da = dd.from_pandas(a, 2)
+        result = da.str.upper()
+        expected = a.str.upper()
+        assert_eq(result, expected)
+
+    def test_categorical_non_string_raises(self):
+        a = pd.Series([1, 2, 3], dtype='category')
+        da = dd.from_pandas(a, 2)
+        with pytest.raises(AttributeError):
+            da.str.upper()

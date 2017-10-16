@@ -5,6 +5,7 @@ import pandas as pd
 from toolz import partial
 
 from ..utils import derived_from
+from .utils import is_categorical_dtype
 
 
 def maybe_wrap_pandas(obj, x):
@@ -109,7 +110,9 @@ class StringAccessor(Accessor):
     _not_implemented = {'get_dummies'}
 
     def _validate(self, series):
-        if not series.dtype == 'object':
+        if not (series.dtype == 'object' or (
+                is_categorical_dtype(series) and
+                series.cat.categories.dtype == 'object')):
             raise AttributeError("Can only use .str accessor with object dtype")
 
     @derived_from(pd.core.strings.StringMethods)

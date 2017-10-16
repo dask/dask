@@ -45,7 +45,7 @@ def test_Bag():
 
 
 def test_keys():
-    assert sorted(b._keys()) == sorted(dsk.keys())
+    assert b.__dask_keys__() == sorted(dsk.keys())
 
 
 def test_bag_map():
@@ -1042,7 +1042,7 @@ def test_repartition(nin, nout):
 
     assert c.npartitions == nout
     assert b.compute(get=dask.get) == c.compute(get=dask.get)
-    results = dask.get(c.dask, c._keys())
+    results = dask.get(c.dask, c.__dask_keys__())
     assert all(results)
 
 
@@ -1078,7 +1078,7 @@ def test_accumulate():
 def test_groupby_tasks():
     b = db.from_sequence(range(160), npartitions=4)
     out = b.groupby(lambda x: x % 10, max_branch=4, method='tasks')
-    partitions = dask.get(out.dask, out._keys())
+    partitions = dask.get(out.dask, out.__dask_keys__())
 
     for a in partitions:
         for b in partitions:
@@ -1088,7 +1088,7 @@ def test_groupby_tasks():
     b = db.from_sequence(range(1000), npartitions=100)
     out = b.groupby(lambda x: x % 123, method='tasks')
     assert len(out.dask) < 100**2
-    partitions = dask.get(out.dask, out._keys())
+    partitions = dask.get(out.dask, out.__dask_keys__())
 
     for a in partitions:
         for b in partitions:
@@ -1097,7 +1097,7 @@ def test_groupby_tasks():
 
     b = db.from_sequence(range(10000), npartitions=345)
     out = b.groupby(lambda x: x % 2834, max_branch=24, method='tasks')
-    partitions = dask.get(out.dask, out._keys())
+    partitions = dask.get(out.dask, out.__dask_keys__())
 
     for a in partitions:
         for b in partitions:
@@ -1216,11 +1216,12 @@ def test_optimize_fuse_keys():
     y = x.map(inc)
     z = y.map(inc)
 
-    dsk = z._optimize(z.dask, z._keys())
+    dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
     assert not set(y.dask) & set(dsk)
 
-    dsk = z._optimize(z.dask, z._keys(), fuse_keys=y._keys())
-    assert all(k in dsk for k in y._keys())
+    dsk = z.__dask_optimize__(z.dask, z.__dask_keys__(),
+                              fuse_keys=y.__dask_keys__())
+    assert all(k in dsk for k in y.__dask_keys__())
 
 
 def test_reductions_are_lazy():

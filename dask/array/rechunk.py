@@ -370,7 +370,7 @@ def find_merge_rechunk(old_chunks, new_chunks, block_size_limit):
     }
 
     block_size_effect = {
-        dim: new_largest_width[dim] / old_largest_width[dim]
+        dim: new_largest_width[dim] / (old_largest_width[dim] or 1)
         for dim in range(ndim)
     }
 
@@ -403,7 +403,7 @@ def find_merge_rechunk(old_chunks, new_chunks, block_size_limit):
     for dim in sorted_candidates:
         # Examine this dimension for possible graph reduction
         new_largest_block_size = (
-            largest_block_size * new_largest_width[dim] // old_largest_width[dim])
+            largest_block_size * new_largest_width[dim] // (old_largest_width[dim] or 1))
         if new_largest_block_size <= block_size_limit:
             # Full replacement by new chunks is possible
             chunks[dim] = new_chunks[dim]
