@@ -17,6 +17,7 @@ API
    Client.get
    Client.get_dataset
    Client.get_executor
+   Client.get_metadata
    Client.has_what
    Client.list_datasets
    Client.map
@@ -31,6 +32,7 @@ API
    Client.run_on_scheduler
    Client.scatter
    Client.scheduler_info
+   Client.set_metadata
    Client.start_ipython_workers
    Client.start_ipython_scheduler
    Client.submit

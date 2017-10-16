@@ -270,6 +270,7 @@ class Scheduler(ServerNode):
         self.exceptions_blame = dict()
         self.datasets = dict()
         self.n_tasks = 0
+        self.task_metadata = dict()
 
         self.idle = SortedSet()
         self.saturated = set()
@@ -348,7 +349,9 @@ class Scheduler(ServerNode):
                          'run_function': self.run_function,
                          'update_data': self.update_data,
                          'set_resources': self.add_resources,
-                         'retire_workers': self.retire_workers}
+                         'retire_workers': self.retire_workers,
+                         'get_metadata': self.get_metadata,
+                         'set_metadata': self.set_metadata}
 
         self._transitions = {
             ('released', 'waiting'): self.transition_released_waiting,
@@ -2157,6 +2160,24 @@ class Scheduler(ServerNode):
         self.log_event('all', {'action': 'run-function', 'function': function})
         return run(self, stream, function=function, args=args, kwargs=kwargs)
 
+    def set_metadata(self, stream=None, keys=None, value=None):
+        try:
+            metadata = self.task_metadata
+            for key in keys[:-1]:
+                if key not in metadata or not isinstance(metadata[key], (dict, list)):
+                    metadata[key] = dict()
+                metadata = metadata[key]
+            metadata[keys[-1]] = value
+        except Exception as e:
+            import pdb; pdb.set_trace()
+
+    def get_metadata(self, stream=None, keys=None):
+        metadata = self.task_metadata
+        for key in keys[:-1]:
+            metadata = metadata[key]
+        return metadata[keys[-1]]
+
+
     #####################
     # State Transitions #
     #####################
@@ -2829,6 +2850,8 @@ class Scheduler(ServerNode):
             del self.nbytes[key]
         if key in self.resource_restrictions:
             del self.resource_restrictions[key]
+        if key in self.task_metadata:
+            del self.task_metadata[key]
 
     def transition_memory_forgotten(self, key):
         try:

@@ -4812,5 +4812,40 @@ def test_nested_compute(c, s, a, b):
     assert len(s.transition_log) > 50
 
 
+@gen_cluster(client=True)
+def test_task_metadata(c, s, a, b):
+    yield c.set_metadata('x', 1)
+    result = yield c.get_metadata('x')
+    assert result == 1
+
+    future = c.submit(inc, 1)
+    key = future.key
+    yield wait(future)
+    yield c.set_metadata(key, 123)
+    result = yield c.get_metadata(key)
+    assert result == 123
+
+    del future
+
+    while key in s.task_state:
+        yield gen.sleep(0.01)
+
+    with pytest.raises(KeyError):
+        yield c.get_metadata(key)
+
+    yield c.set_metadata(['x', 'a'], 1)
+    result = yield c.get_metadata('x')
+    assert result == {'a': 1}
+    yield c.set_metadata(['x', 'b'], 2)
+    result = yield c.get_metadata('x')
+    assert result == {'a': 1, 'b': 2}
+    result = yield c.get_metadata(['x', 'a'])
+    assert result == 1
+
+    yield c.set_metadata(['x', 'a', 'c', 'd'], 1)
+    result = yield c.get_metadata('x')
+    assert result == {'a': {'c': {'d': 1}}, 'b': 2}
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # flake8: noqa

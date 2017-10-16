@@ -2626,6 +2626,66 @@ class Client(Node):
         """
         return self.sync(self.scheduler.identity, **kwargs)
 
+    def get_metadata(self, key):
+        """ Get arbitrary metadata from scheduler
+
+        See set_metadata for the full docstring with examples
+
+        See also
+        --------
+        Client.set_metadata
+        """
+        if not isinstance(key, list):
+            key = [key]
+        return self.sync(self.scheduler.get_metadata, keys=key)
+
+    def set_metadata(self, key, value):
+        """ Set arbitrary metadata in the scheduler
+
+        This allows you to store small amounts of data on the central scheduler
+        process for administrative purposes.  Data should be msgpack
+        serializable (ints, strings, lists, dicts)
+
+        If the key corresponds to a task then that key will be cleaned up when
+        the task is forgotten by the scheduler.
+
+        If the key is a list then it will be assumed that you want to index
+        into a nested dictionary structure using those keys.  For example if
+        you call the following::
+
+            >>> client.set_metadata(['a', 'b', 'c'], 123)
+
+        Then this is the same as setting
+
+            >>> scheduler.task_metadata['a']['b']['c'] = 123
+
+        The lower level dictionaries will be created on demand.
+
+        Examples
+        --------
+        >>> client.set_metadata('x', 123)  # doctest: +SKIP
+        >>> client.get_metadata('x')  # doctest: +SKIP
+        123
+
+        >>> client.set_metadata(['x', 'y'], 123)  # doctest: +SKIP
+        >>> client.get_metadata('x')  # doctest: +SKIP
+        {'y': 123}
+
+        >>> client.set_metadata(['x', 'w', 'z'], 456)  # doctest: +SKIP
+        >>> client.get_metadata('x')  # doctest: +SKIP
+        {'y': 123, 'w': {'z': 456}}
+
+        >>> client.get_metadata(['x', 'w'])  # doctest: +SKIP
+        {'z': 456}
+
+        See Also
+        --------
+        get_metadata
+        """
+        if not isinstance(key, list):
+            key = [key]
+        return self.sync(self.scheduler.set_metadata, keys=key, value=value)
+
     def get_versions(self, check=False):
         """ Return version info for the scheduler, all workers and myself
 
