@@ -1,7 +1,7 @@
 Changelog
 =========
 
-1.19.3 - 2017-10-11
+1.19.3 - 2017-10-16
 -------------------
 
 -  Handle None case in profile.identity (:pr:`1456`)
