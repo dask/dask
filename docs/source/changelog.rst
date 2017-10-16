@@ -1,6 +1,16 @@
 Changelog
 =========
 
+1.19.3 - 2017-10-11
+-------------------
+
+-  Handle None case in profile.identity (:pr:`1456`)
+-  Asyncio rewrite (:pr:`1458`)
+-  Add rejoin function partner to secede (:pr:`1462`)
+-  Nested compute (:pr:`1465`)
+-  Use LooseVersion when comparing Bokeh versions (:pr:`1470`)
+
+
 1.19.2 - 2017-10-06
 -------------------
 
