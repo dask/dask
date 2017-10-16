@@ -249,6 +249,7 @@ def test_choice():
         assert res.dtype == np_a.dtype
         assert set(np.unique(res)).issubset(np_a[1:])
 
+    np_dtype = np.random.choice(1, size=(), p=np.array([1])).dtype
     x = da.random.choice(5, size=size, chunks=chunks, p=np_p)
     res = x.compute()
     assert x.dtype == np_dtype
