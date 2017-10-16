@@ -407,6 +407,7 @@ def test_binops():
 
 
 def test_broadcast_shapes():
+    assert (0, 5) == broadcast_shapes((0, 1), (1, 5))
     assert (3, 4, 5) == broadcast_shapes((3, 4, 5), (4, 1), ())
     assert (3, 4) == broadcast_shapes((3, 1), (1, 4), (4,))
     assert (5, 6, 7, 3, 4) == broadcast_shapes((3, 1), (), (5, 6, 7, 1, 4))
@@ -574,7 +575,7 @@ def test_broadcast_to():
     x = np.random.randint(10, size=(5, 1, 6))
     a = from_array(x, chunks=(3, 1, 3))
 
-    for shape in [a.shape, (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
+    for shape in [a.shape, (5, 0, 6), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
         xb = chunk.broadcast_to(x, shape)
         ab = broadcast_to(a, shape)
 
@@ -590,7 +591,7 @@ def test_broadcast_to():
 def test_broadcast_to_array():
     x = np.random.randint(10, size=(5, 1, 6))
 
-    for shape in [(5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
+    for shape in [(5, 0, 6), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
         a = np.broadcast_to(x, shape)
         d = broadcast_to(x, shape)
 
@@ -600,11 +601,33 @@ def test_broadcast_to_array():
 def test_broadcast_to_scalar():
     x = 5
 
-    for shape in [tuple(), (2, 3), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
+    for shape in [tuple(), (0,), (2, 3), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
         a = np.broadcast_to(x, shape)
         d = broadcast_to(x, shape)
 
         assert_eq(a, d)
+
+
+@pytest.mark.parametrize('u_shape, v_shape', [
+    [tuple(), (2, 3)],
+    [(1,), (2, 3)],
+    [(1, 1), (2, 3)],
+    [(0, 3), (1, 3)],
+    [(2, 0), (2, 1)],
+    [(1, 0), (2, 1)],
+    [(0, 1), (1, 3)],
+])
+def test_broadcast_operator(u_shape, v_shape):
+    u = np.random.random(u_shape)
+    v = np.random.random(v_shape)
+
+    d_u = from_array(u, chunks=1)
+    d_v = from_array(v, chunks=1)
+
+    w = u * v
+    d_w = d_u * d_v
+
+    assert_eq(w, d_w)
 
 
 @pytest.mark.parametrize('original_shape,new_shape,chunks', [
