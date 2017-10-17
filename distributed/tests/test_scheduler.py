@@ -1192,3 +1192,23 @@ def test_log_tasks_during_restart(c, s, a, b):
     future = c.submit(sys.exit, 0)
     yield wait(future)
     assert 'exit' in str(s.events)
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
+def test_reschedule(c, s, a, b):
+    yield c.submit(slowinc, -1, delay=0.1)  # learn cost
+    x = c.map(slowinc, range(4), delay=0.1)
+
+    # add much more work onto worker a
+    futures = c.map(slowinc, range(10, 20), delay=0.1, workers=a.address)
+
+    while len(s.task_state) < len(x) + len(futures):
+        yield gen.sleep(0.001)
+
+    for future in x:
+        s.reschedule(key=future.key)
+
+    # Worker b gets more of the original tasks
+    yield wait(x)
+    assert sum(future.key in b.data for future in x) >= 3
+    assert sum(future.key in a.data for future in x) <= 1

@@ -19,7 +19,7 @@ from tornado import gen
 from tornado.ioloop import TimeoutError
 
 from distributed import (Nanny, Client, get_client, wait, default_client,
-        get_worker)
+        get_worker, Reschedule)
 from distributed.compatibility import WINDOWS
 from distributed.core import rpc
 from distributed.client import wait
@@ -1045,3 +1045,19 @@ def test_get_current_task(c, s, a, b):
 
     result = yield c.submit(some_name)
     assert result.startswith('some_name')
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
+def test_reschedule(c, s, a, b):
+    s.extensions['stealing']._pc.stop()
+    a_address = a.address
+    def f(x):
+        sleep(0.1)
+        if get_worker().address == a_address:
+            raise Reschedule()
+
+    futures = c.map(f, range(4))
+    futures2 = c.map(slowinc, range(10), delay=0.1, workers=a.address)
+    yield wait(futures)
+
+    assert all(f.key in b.data for f in futures)

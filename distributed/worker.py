@@ -752,6 +752,7 @@ def apply_function(function, args, kwargs, execution_state, key,
     except Exception as e:
         msg = error_message(e)
         msg['op'] = 'task-erred'
+        msg['actual-exception'] = e
     else:
         msg = {'op': 'task-finished',
                'status': 'OK',
@@ -1094,9 +1095,11 @@ class Worker(WorkerBase):
             ('constrained', 'executing'): self.transition_constrained_executing,
             ('executing', 'memory'): self.transition_executing_done,
             ('executing', 'error'): self.transition_executing_done,
+            ('executing', 'rescheduled'): self.transition_executing_done,
             ('executing', 'long-running'): self.transition_executing_long_running,
             ('long-running', 'error'): self.transition_executing_done,
             ('long-running', 'memory'): self.transition_executing_done,
+            ('long-running', 'rescheduled'): self.transition_executing_done,
         }
 
         self._dep_transitions = {
@@ -1495,7 +1498,7 @@ class Worker(WorkerBase):
         if self.validate:
             assert all(v >= 0 for v in self.available_resources.values())
 
-    def transition_executing_done(self, key, value=no_value):
+    def transition_executing_done(self, key, value=no_value, report=True):
         try:
             if self.validate:
                 assert key in self.executing or key in self.long_running
@@ -1528,7 +1531,7 @@ class Worker(WorkerBase):
                 if key in self.dep_state:
                     self.transition_dep(key, 'memory')
 
-            if self.batched_stream:
+            if report and self.batched_stream:
                 self.send_task_state_to_scheduler(key)
             else:
                 raise CommClosedError
@@ -2109,18 +2112,23 @@ class Worker(WorkerBase):
                     self.digests['task-duration'].add(result['stop'] -
                                                       result['start'])
             else:
-                self.exceptions[key] = result['exception']
-                self.tracebacks[key] = result['traceback']
-                logger.warning(" Compute Failed\n"
-                               "Function:  %s\n"
-                               "args:      %s\n"
-                               "kwargs:    %s\n"
-                               "Exception: %s\n",
-                               str(funcname(function))[:1000],
-                               convert_args_to_str(args2, max_len=1000),
-                               convert_kwargs_to_str(kwargs2, max_len=1000),
-                               repr(pickle.loads(result['exception'])))
-                self.transition(key, 'error')
+                if isinstance(result.pop('actual-exception'), Reschedule):
+                    self.batched_stream.send({'op': 'reschedule', 'key': key})
+                    self.transition(key, 'rescheduled', report=False)
+                    self.release_key(key, report=False)
+                else:
+                    self.exceptions[key] = result['exception']
+                    self.tracebacks[key] = result['traceback']
+                    logger.warning(" Compute Failed\n"
+                                   "Function:  %s\n"
+                                   "args:      %s\n"
+                                   "kwargs:    %s\n"
+                                   "Exception: %s\n",
+                                   str(funcname(function))[:1000],
+                                   convert_args_to_str(args2, max_len=1000),
+                                   convert_kwargs_to_str(kwargs2, max_len=1000),
+                                   repr(pickle.loads(result['exception'])))
+                    self.transition(key, 'error')
 
             logger.debug("Send compute response to scheduler: %s, %s", key,
                          result)
@@ -2592,3 +2600,18 @@ def secede():
     duration = time() - thread_state.start_time
     worker.loop.add_callback(worker.maybe_transition_long_running,
                              thread_state.key, compute_duration=duration)
+
+
+class Reschedule(Exception):
+    """ Reschedule this task
+
+    Raising this exception will stop the current execution of the task and ask
+    the scheduler to reschedule this task, possibly on a different machine.
+
+    This does not guarantee that the task will move onto a different machine.
+    The scheduler will proceed through its normal heuristics to determine the
+    optimal machine to accept this task.  The machine will likely change if the
+    load across the cluster has significantly changed since first scheduling
+    the task.
+    """
+    pass

@@ -318,7 +318,8 @@ class Scheduler(ServerNode):
                                 'release-worker-data': self.release_worker_data,
                                 'add-keys': self.add_keys,
                                 'missing-data': self.handle_missing_data,
-                                'long-running': self.handle_long_running}
+                                'long-running': self.handle_long_running,
+                                'reschedule': self.reschedule}
 
         self.client_handlers = {'update-graph': self.update_graph,
                                 'client-desires-keys': self.client_desires_keys,
@@ -2316,7 +2317,6 @@ class Scheduler(ServerNode):
         assert worker
         return worker
 
-
     def transition_waiting_processing(self, key):
         try:
             if self.validate:
@@ -3096,6 +3096,18 @@ class Scheduler(ServerNode):
                 if t[0] in keys or keys.intersection(t[3])]
 
     transition_story = story
+
+    def reschedule(self, key=None, worker=None):
+        """ Reschedule a task
+
+        Things may have shifted and this task may now be better suited to run
+        elsewhere
+        """
+        if self.task_state[key] != 'processing':
+            return
+        if worker and self.rprocessing[key] != worker:
+            return
+        self.transitions({key: 'released'})
 
     ##############################
     # Assigning Tasks to Workers #
