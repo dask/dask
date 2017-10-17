@@ -2290,6 +2290,33 @@ class Scheduler(ServerNode):
                 pdb.set_trace()
             raise
 
+    def decide_worker(self, key):
+        valid_workers = self.valid_workers(key)
+
+        if not valid_workers and key not in self.loose_restrictions and self.ncores:
+            self.unrunnable.add(key)
+            self.task_state[key] = 'no-worker'
+            return {}
+
+        if self.dependencies.get(key, None) or valid_workers is not True:
+            worker = decide_worker(self.dependencies, self.occupancy,
+                                   self.who_has, valid_workers, self.loose_restrictions,
+                                   partial(self.worker_objective, key), key)
+        elif self.idle:
+            if len(self.idle) < 20:  # smart but linear in small case
+                worker = min(self.idle, key=self.occupancy.get)
+            else:  # dumb but fast in large case
+                worker = self.idle[self.n_tasks % len(self.idle)]
+        else:
+            if len(self.workers) < 20:  # smart but linear in small case
+                worker = min(self.workers, key=self.occupancy.get)
+            else:  # dumb but fast in large case
+                worker = self.workers[self.n_tasks % len(self.workers)]
+
+        assert worker
+        return worker
+
+
     def transition_waiting_processing(self, key):
         try:
             if self.validate:
@@ -2308,29 +2335,9 @@ class Scheduler(ServerNode):
 
             del self.waiting[key]
 
-            valid_workers = self.valid_workers(key)
-
-            if not valid_workers and key not in self.loose_restrictions and self.ncores:
-                self.unrunnable.add(key)
-                self.task_state[key] = 'no-worker'
-                return {}
-
-            if self.dependencies.get(key, None) or valid_workers is not True:
-                worker = decide_worker(self.dependencies, self.occupancy,
-                                       self.who_has, valid_workers, self.loose_restrictions,
-                                       partial(self.worker_objective, key), key)
-            elif self.idle:
-                if len(self.idle) < 20:  # smart but linear in small case
-                    worker = min(self.idle, key=self.occupancy.get)
-                else:  # dumb but fast in large case
-                    worker = self.idle[self.n_tasks % len(self.idle)]
-            else:
-                if len(self.workers) < 20:  # smart but linear in small case
-                    worker = min(self.workers, key=self.occupancy.get)
-                else:  # dumb but fast in large case
-                    worker = self.workers[self.n_tasks % len(self.workers)]
-
-            assert worker
+            worker = self.decide_worker(key)
+            if not worker:
+                return worker
 
             ks = key_split(key)
 
