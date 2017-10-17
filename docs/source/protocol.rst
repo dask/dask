@@ -70,9 +70,8 @@ MsgPack as a base serialization format for the following reasons:
    which is particularly important in an early stage project like
    ``dask.distributed``
 *  It is very fast, much faster than JSON, and there are nicely optimized
-   implementations, particularly within the ``pandas.msgpack`` module.  With
-   few exceptions (described later) MsgPack does not come anywhere near being a
-   bottleneck, even under heavy use.
+   implementations.  With few exceptions (described later) MsgPack does not come
+   anywhere near being a bottleneck, even under heavy use.
 *  Unlike JSON it supports bytestrings
 *  It covers the standard set of types necessary to encode most information
 *  It is widely implemented in a number of languages (see cross language

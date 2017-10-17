@@ -8,10 +8,7 @@ try:
 except ImportError:
     from toolz import valmap, get_in
 
-try:
-    import msgpack
-except ImportError:
-    import pandas.msgpack as msgpack
+import msgpack
 
 from . import pickle
 from ..compatibility import PY2

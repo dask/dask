@@ -2,10 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import logging
 
-try:
-    import msgpack
-except ImportError:
-    import pandas.msgpack as msgpack
+import msgpack
 
 try:
     from cytoolz import get_in
