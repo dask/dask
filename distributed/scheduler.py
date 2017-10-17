@@ -43,6 +43,7 @@ from .versions import get_versions
 from .publish import PublishExtension
 from .queues import QueueExtension
 from .recreate_exceptions import ReplayExceptionScheduler
+from .lock import LockExtension
 from .stealing import WorkStealing
 from .variable import VariableExtension
 
@@ -56,6 +57,7 @@ LOG_PDB = config.get('pdb-on-err') or os.environ.get('DASK_ERROR_PDB', False)
 DEFAULT_DATA_SIZE = config.get('default-data-size', 1000)
 
 DEFAULT_EXTENSIONS = [
+    LockExtension,
     PublishExtension,
     ReplayExceptionScheduler,
     QueueExtension,

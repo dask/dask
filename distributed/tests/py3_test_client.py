@@ -4,7 +4,7 @@ import pytest
 from tornado import gen
 
 from distributed.utils_test import div, gen_cluster, inc, loop
-from distributed import as_completed, Client
+from distributed import as_completed, Client, Lock
 
 
 @gen_cluster(client=True)
@@ -99,3 +99,15 @@ def test_async_with(loop):
     assert result == 11
     assert client.status == 'closed'
     assert cluster.status == 'closed'
+
+
+def test_locks(loop):
+    async def f():
+        async with Client(processes=False, asynchronous=True) as c:
+            assert c.asynchronous == True
+            async with Lock('x'):
+                lock2 = Lock('x')
+                with pytest.raises(gen.TimeoutError):
+                    await lock2.acquire(timeout=0.1)
+
+    loop.run_sync(f)

@@ -74,6 +74,7 @@ API
 
 .. currentmodule:: distributed
 
+.. autosummary:: Lock
 .. autosummary:: Queue
 .. autosummary:: Variable
 
