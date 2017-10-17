@@ -2414,17 +2414,18 @@ def insert_to_ooc(out, arr, lock=True, region=None):
     return dsk
 
 
-def asarray(array):
-    """Coerce array-like object into a dask array.
+def asarray(a):
+    """Convert the input to a dask array.
 
     Parameters
     ----------
-    array : array-like
-        Input to be coerced into a dask array.
+    a : array-like
+        Input data, in any form that can be converted to a dask array.
 
     Returns
     -------
-    dask array
+    out : dask array
+        Dask array interpretation of a.
 
     Examples
     --------
@@ -2437,13 +2438,12 @@ def asarray(array):
     >>> y = [[1, 2, 3], [4, 5, 6]]
     >>> da.asarray(y)
     dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3)>
-
     """
-    if isinstance(array, Array):
-        return array
-    if not isinstance(getattr(array, 'shape', None), Iterable):
-        array = np.asarray(array)
-    return from_array(array, chunks=array.shape, getitem=getter_inline)
+    if isinstance(a, Array):
+        return a
+    if not isinstance(getattr(a, 'shape', None), Iterable):
+        a = np.asarray(a)
+    return from_array(a, chunks=a.shape, getitem=getter_inline)
 
 
 def asanyarray(array):
