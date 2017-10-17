@@ -25,6 +25,7 @@ Top level user functions:
    argwhere
    around
    array
+   asarray
    atleast_1d
    atleast_2d
    atleast_3d
@@ -345,6 +346,7 @@ Other functions
 .. autofunction:: argwhere
 .. autofunction:: around
 .. autofunction:: array
+.. autofunction:: asarray
 .. autofunction:: atleast_1d
 .. autofunction:: atleast_2d
 .. autofunction:: atleast_3d

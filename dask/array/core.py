@@ -2415,13 +2415,29 @@ def insert_to_ooc(out, arr, lock=True, region=None):
 
 
 def asarray(array):
-    """Coerce argument into a dask array
+    """Coerce array-like object into a dask array.
+
+    Parameters
+    ----------
+    array : array-like
+        Input to be coerced into a dask array.
+
+    Returns
+    -------
+    dask array
 
     Examples
     --------
+    >>> import dask.array as da
+    >>> import numpy as np
     >>> x = np.arange(3)
-    >>> asarray(x)
+    >>> da.asarray(x)
     dask.array<array, shape=(3,), dtype=int64, chunksize=(3,)>
+
+    >>> y = [[1, 2, 3], [4, 5, 6]]
+    >>> da.asarray(y)
+    dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3)>
+
     """
     if isinstance(array, Array):
         return array
