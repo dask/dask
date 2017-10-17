@@ -2446,22 +2446,38 @@ def asarray(a):
     return from_array(a, chunks=a.shape, getitem=getter_inline)
 
 
-def asanyarray(array):
-    """Coerce argument into a dask array.
+def asanyarray(a):
+    """Convert the input to a dask array.
 
-    Subclasses of `np.ndarray` will be passed through as chunks unchanged.
+    Subclasses of ``np.ndarray`` will be passed through as chunks unchanged.
+
+    Parameters
+    ----------
+    a : array-like
+        Input data, in any form that can be converted to a dask array.
+
+    Returns
+    -------
+    out : dask array
+        Dask array interpretation of a.
 
     Examples
     --------
+    >>> import dask.array as da
+    >>> import numpy as np
     >>> x = np.arange(3)
-    >>> asanyarray(x)
+    >>> da.asanyarray(x)
     dask.array<array, shape=(3,), dtype=int64, chunksize=(3,)>
+
+    >>> y = [[1, 2, 3], [4, 5, 6]]
+    >>> da.asanyarray(y)
+    dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3)>
     """
-    if isinstance(array, Array):
-        return array
-    if not isinstance(getattr(array, 'shape', None), Iterable):
-        array = np.asanyarray(array)
-    return from_array(array, chunks=array.shape, getitem=getter_inline,
+    if isinstance(a, Array):
+        return a
+    if not isinstance(getattr(a, 'shape', None), Iterable):
+        a = np.asanyarray(a)
+    return from_array(a, chunks=a.shape, getitem=getter_inline,
                       asarray=False)
 
 
