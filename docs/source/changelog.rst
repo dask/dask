@@ -39,6 +39,7 @@ Core
 Array
 +++++
 
+-  ``da.random.choice`` now works with array arguments (:pr:`2781`)
 -  Support indexing in arrays with np.int (fixes regression) (:pr:`2719`)
 -  Handle zero dimension with rechunking (:pr:`2747`)
 -  Support -1 as an alias for "size of the dimension" in ``chunks`` (:pr:`2749`)

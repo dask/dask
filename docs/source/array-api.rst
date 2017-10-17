@@ -228,6 +228,7 @@ Random
    random.beta
    random.binomial
    random.chisquare
+   random.choice
    random.exponential
    random.f
    random.gamma
