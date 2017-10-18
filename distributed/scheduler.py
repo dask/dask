@@ -354,7 +354,8 @@ class Scheduler(ServerNode):
                          'set_resources': self.add_resources,
                          'retire_workers': self.retire_workers,
                          'get_metadata': self.get_metadata,
-                         'set_metadata': self.set_metadata}
+                         'set_metadata': self.set_metadata,
+                         'get_task_status': self.get_task_status}
 
         self._transitions = {
             ('released', 'waiting'): self.transition_released_waiting,
@@ -2180,6 +2181,8 @@ class Scheduler(ServerNode):
             metadata = metadata[key]
         return metadata[keys[-1]]
 
+    def get_task_status(self, stream=None, keys=None):
+        return {key: self.task_state.get(key) for key in keys}
 
     #####################
     # State Transitions #
