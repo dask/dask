@@ -1294,7 +1294,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             qnames = [(_q._name, 0) for _q in quantiles]
 
             if isinstance(quantiles[0], Scalar):
-                dask[(keyname, 0)] = (pd.Series, qnames, num.columns)
+                dask[(keyname, 0)] = (pd.Series, qnames, num.columns,
+                                      None, meta.name)
                 divisions = (min(num.columns), max(num.columns))
                 return Series(dask, keyname, meta, divisions)
             else:
@@ -3326,6 +3327,7 @@ def quantile(df, q):
     else:
         new_divisions = [np.min(q), np.max(q)]
 
+    df = df.dropna()
     name = 'quantiles-1-' + token
     val_dsk = {(name, i): (_percentile, (getattr, key, 'values'), qs)
                for i, key in enumerate(df.__dask_keys__())}

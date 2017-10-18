@@ -17,7 +17,12 @@ Array
 DataFrame
 +++++++++
 
--
+- Fixed ``DataFrame.quantile`` and ``Series.quantile`` returning ``nan`` when
+  missing values are present (:pr:`2791`:)
+- Fixed ``DataFrame.quantile`` losing the result ``.name`` when ``q`` is a
+  scalar (:pr:`2791`:)
+
+
 
 Bag
 +++
