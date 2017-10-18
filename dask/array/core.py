@@ -2441,7 +2441,9 @@ def asarray(a):
     """
     if isinstance(a, Array):
         return a
-    if not isinstance(getattr(a, 'shape', None), Iterable):
+    if isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
+        a = stack(a)
+    elif not isinstance(getattr(a, 'shape', None), Iterable):
         a = np.asarray(a)
     return from_array(a, chunks=a.shape, getitem=getter_inline)
 
@@ -2475,7 +2477,9 @@ def asanyarray(a):
     """
     if isinstance(a, Array):
         return a
-    if not isinstance(getattr(a, 'shape', None), Iterable):
+    if isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
+        a = stack(a)
+    elif not isinstance(getattr(a, 'shape', None), Iterable):
         a = np.asanyarray(a)
     return from_array(a, chunks=a.shape, getitem=getter_inline,
                       asarray=False)
