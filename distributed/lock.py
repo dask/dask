@@ -45,11 +45,19 @@ class LockExtension(object):
                     future = gen.with_timeout(timedelta(seconds=timeout), future)
                 try:
                     yield future
+                except gen.TimeoutError:
+                    result = False
+                else:
+                    result = True
                 finally:
                     event2 = self.events[name].popleft()
                     assert event is event2
-            assert name not in self.ids
-            self.ids[name] = id
+            else:
+                result = True
+            if result:
+                assert name not in self.ids
+                self.ids[name] = id
+            raise gen.Return(result)
 
     def release(self, stream=None, name=None, id=None):
         with log_errors():
@@ -97,6 +105,10 @@ class Lock(object):
         --------
         >>> lock = Lock('x')  # doctest: +SKIP
         >>> lock.acquire(timeout=1)  # doctest: +SKIP
+
+        Returns
+        -------
+        True or False whether or not it sucessfully acquired the lock
         """
         result = self.client.sync(self.client.scheduler.lock_acquire,
                                   name=self.name, id=self.id, timeout=timeout)

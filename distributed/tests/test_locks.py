@@ -34,15 +34,20 @@ def test_lock(c, s, a, b):
 def test_timeout(c, s, a, b):
     locks = s.extensions['locks']
     lock = Lock('x')
-    yield lock.acquire()
+    result = yield lock.acquire()
+    assert result is True
+    assert locks.ids['x'] == lock.id
+
     lock2 = Lock('x')
     assert lock.id != lock2.id
 
     start = time()
-    with pytest.raises(gen.TimeoutError):
-        yield lock2.acquire(timeout=0.1)
+    result = yield lock2.acquire(timeout=0.1)
     stop = time()
     assert stop - start < 0.3
+    assert result is False
+    assert locks.ids['x'] == lock.id
+    assert not locks.events['x']
 
     yield lock.release()
 
@@ -64,8 +69,7 @@ def test_timeout_sync(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             with Lock('x') as lock:
-                with pytest.raises(gen.TimeoutError):
-                    Lock('x').acquire(timeout=0.1)
+                assert Lock('x').acquire(timeout=0.1) is False
 
 
 @gen_cluster(client=True)

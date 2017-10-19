@@ -107,7 +107,7 @@ def test_locks(loop):
             assert c.asynchronous == True
             async with Lock('x'):
                 lock2 = Lock('x')
-                with pytest.raises(gen.TimeoutError):
-                    await lock2.acquire(timeout=0.1)
+                result = await lock2.acquire(timeout=0.1)
+                assert result is False
 
     loop.run_sync(f)
