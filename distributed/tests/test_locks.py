@@ -73,3 +73,19 @@ def test_errors(c, s, a, b):
     lock = Lock('x')
     with pytest.raises(ValueError):
         yield lock.release()
+
+
+def test_lock_sync(loop):
+    def f(x):
+        with Lock('x') as lock:
+            client = get_client()
+            assert client.get_metadata('locked') == False
+            client.set_metadata('locked', True)
+            sleep(0.05)
+            assert client.get_metadata('locked') == True
+            client.set_metadata('locked', False)
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            c.set_metadata('locked', False)
+            futures = c.map(f, range(10))
+            c.gather(futures)

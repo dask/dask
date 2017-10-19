@@ -10,6 +10,7 @@ import tornado.locks
 
 from .client import _get_global_client
 from .utils import log_errors
+from .worker import get_worker
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ class Lock(object):
     >>> lock.release()  # doctest: +SKIP
     """
     def __init__(self, name=None, client=None):
-        self.client = client or _get_global_client()
+        self.client = client or _get_global_client() or get_worker().client
         self.name = name or 'variable-' + uuid.uuid4().hex
         self.id = uuid.uuid4().hex
         self._locked = False
