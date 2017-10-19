@@ -29,7 +29,7 @@ from . import profile
 from .batched import BatchedSend
 from .comm import get_address_host, get_local_address_for
 from .comm.utils import offload
-from .config import config
+from .config import config, log_format
 from .compatibility import unicode, get_thread_identity
 from .core import (error_message, CommClosedError,
                    rpc, pingpong, coerce_to_address)
@@ -44,12 +44,15 @@ from .threadpoolexecutor import ThreadPoolExecutor, secede as tpe_secede
 from .utils import (funcname, get_ip, has_arg, _maybe_complex, log_errors,
                     ignoring, validate_key, mp_context, import_file,
                     silence_logging, thread_state, json_load_robust, key_split,
-                    format_bytes)
+                    format_bytes, DequeHandler)
 from .utils_comm import pack_data, gather_from_workers
 
 _ncores = mp_context.cpu_count()
 
 logger = logging.getLogger(__name__)
+deque_handler = DequeHandler(n=config.get('log-length', 10000))
+deque_handler.setFormatter(logging.Formatter(log_format))
+logger.addHandler(deque_handler)
 
 LOG_PDB = config.get('pdb-on-err')
 
@@ -174,6 +177,7 @@ class WorkerBase(ServerNode):
             'call_stack': self.get_call_stack,
             'profile': self.get_profile,
             'profile_metadata': self.get_profile_metadata,
+            'get_logs': self.get_logs,
             'keys': self.keys,
         }
 
@@ -2311,6 +2315,14 @@ class Worker(WorkerBase):
 
         result = {k: profile.call_stack(frame) for k, frame in frames.items()}
         return result
+
+    def get_logs(self, comm=None, n=None):
+        if n is None:
+            L = list(deque_handler.deque)
+        else:
+            L = deque_handler.deque
+            L = [L[-i] for i in range(min(n, len(L)))]
+        return [(msg.levelname, deque_handler.format(msg)) for msg in L]
 
     def validate_key_memory(self, key):
         assert key in self.data

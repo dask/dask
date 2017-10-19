@@ -87,10 +87,8 @@ def _initialize_logging_old_style(config):
     loggers.setdefault('tornado', 'critical')
     loggers.setdefault('tornado.application', 'error')
 
-    fmt = '%(name)s - %(levelname)s - %(message)s'
-
     handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(logging.Formatter(fmt))
+    handler.setFormatter(logging.Formatter(log_format))
     for name, level in loggers.items():
         if isinstance(level, str):
             level = logging_names[level.upper()]
@@ -161,5 +159,7 @@ else:
     load_config_file(config, path)
 
 load_env_vars(config)
+
+log_format = config.get('log-format', '%(name)s - %(levelname)s - %(message)s')
 
 initialize_logging(config)

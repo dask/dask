@@ -28,7 +28,7 @@ from .batched import BatchedSend
 from .comm import (normalize_address, resolve_address,
                    get_address_host, unparse_host_port)
 from .compatibility import finalize
-from .config import config
+from .config import config, log_format
 from .core import (rpc, connect, Server, send_recv,
                    error_message, clean_exception, CommClosedError)
 from . import profile
@@ -36,7 +36,7 @@ from .metrics import time
 from .node import ServerNode
 from .security import Security
 from .utils import (All, ignoring, get_ip, get_fileno_limit, log_errors,
-                    key_split, validate_key, no_default)
+                    key_split, validate_key, no_default, DequeHandler)
 from .utils_comm import (scatter_to_workers, gather_from_workers)
 from .versions import get_versions
 
@@ -49,6 +49,10 @@ from .variable import VariableExtension
 
 
 logger = logging.getLogger(__name__)
+deque_handler = DequeHandler(n=config.get('log-length', 10000))
+deque_handler.setFormatter(logging.Formatter(log_format))
+logger.addHandler(deque_handler)
+
 
 BANDWIDTH = config.get('bandwidth', 100e6)
 ALLOWED_FAILURES = config.get('allowed-failures', 3)
@@ -343,6 +347,8 @@ class Scheduler(ServerNode):
                          'processing': self.get_processing,
                          'call_stack': self.get_call_stack,
                          'profile': self.get_profile,
+                         'logs': self.get_logs,
+                         'worker_logs': self.get_worker_logs,
                          'nbytes': self.get_nbytes,
                          'versions': self.get_versions,
                          'add_keys': self.add_keys,
@@ -3340,6 +3346,20 @@ class Scheduler(ServerNode):
 
         raise gen.Return({'counts': counts, 'keys': keys})
 
+    def get_logs(self, comm=None, n=None):
+        if n is None:
+            L = list(deque_handler.deque)
+        else:
+            L = deque_handler.deque
+            L = [L[-i] for i in range(min(n, len(L)))]
+        return [(msg.levelname, deque_handler.format(msg)) for msg in L]
+
+
+    @gen.coroutine
+    def get_worker_logs(self, comm=None, n=None, workers=None):
+        results = yield self.broadcast(msg={'op': 'get_logs', 'n': n},
+                                       workers=workers)
+        raise gen.Return(results)
 
     ###########
     # Cleanup #

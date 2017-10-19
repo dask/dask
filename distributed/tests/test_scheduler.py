@@ -1221,3 +1221,12 @@ def test_get_task_status(c, s, a, b):
 
     result = yield a.scheduler.get_task_status(keys=[future.key])
     assert result == {future.key: 'memory'}
+
+
+def test_deque_handler():
+    from distributed.scheduler import deque_handler, logger
+    logger.info('foo123')
+    assert deque_handler.deque
+    msg = deque_handler.deque[-1]
+    assert 'distributed.scheduler' in deque_handler.format(msg)
+    assert any(msg.msg == 'foo123' for msg in deque_handler.deque)

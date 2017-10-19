@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import atexit
-from collections import Iterable
+from collections import Iterable, deque
 from contextlib import contextmanager
 from datetime import timedelta
 import functools
@@ -989,3 +989,14 @@ def format_time(n):
     if n >= 1e-3:
         return '%.2f ms' % (n * 1e3)
     return '%.2f us' % (n * 1e6)
+
+
+class DequeHandler(logging.Handler):
+    """ A logging.Handler that records records into a deque """
+    def __init__(self, *args, **kwargs):
+        n = kwargs.pop('n', 10000)
+        self.deque = deque(maxlen=n)
+        super(DequeHandler, self).__init__(*args, **kwargs)
+
+    def emit(self, record):
+        self.deque.append(record)

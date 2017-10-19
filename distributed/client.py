@@ -2649,6 +2649,39 @@ class Client(Node):
         return self.sync(self.scheduler.get_metadata, keys=keys,
                          default=default)
 
+    def get_scheduler_logs(self, n=None):
+        """ Get logs from scheduler
+
+        Parameters
+        ----------
+        n: int
+            Number of logs to retrive.  Maxes out at 10000 by default,
+            confiruable in config.yaml::log-length
+
+        Returns
+        -------
+        Logs in reversed order (newest first)
+        """
+        return self.sync(self.scheduler.logs, n=n)
+
+    def get_worker_logs(self, n=None, workers=None):
+        """ Get logs from workers
+
+        Parameters
+        ----------
+        n: int
+            Number of logs to retrive.  Maxes out at 10000 by default,
+            confiruable in config.yaml::log-length
+        workers: iterable
+            List of worker addresses to retrive.  Gets all workers by default.
+
+        Returns
+        -------
+        Dictionary mapping worker address to logs.
+        Logs are returned in reversed order (newest first)
+        """
+        return self.sync(self.scheduler.worker_logs, n=n, workers=workers)
+
     def set_metadata(self, key, value):
         """ Set arbitrary metadata in the scheduler
 
