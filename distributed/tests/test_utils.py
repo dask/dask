@@ -324,14 +324,18 @@ def test_ensure_bytes():
 
 
 def test_nbytes():
+    def check(obj, expected):
+        assert nbytes(obj) == expected
+        assert nbytes(memoryview(obj)) == expected
+
+    check(b'123', 3)
+    check(bytearray(b'4567'), 4)
+
     multi_dim = np.ones(shape=(10, 10))
     scalar = np.array(1)
 
-    assert nbytes(scalar) == scalar.nbytes
-    assert nbytes(multi_dim) == multi_dim.nbytes
-
-    assert nbytes(memoryview(scalar)) == scalar.nbytes
-    assert nbytes(memoryview(multi_dim)) == multi_dim.nbytes
+    check(multi_dim, multi_dim.nbytes)
+    check(scalar, scalar.nbytes)
 
 
 def test_open_port():

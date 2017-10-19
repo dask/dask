@@ -924,9 +924,9 @@ def asciitable(columns, rows):
 
 
 if PY2:
-    def nbytes(frame):
+    def nbytes(frame, _bytes_like=(bytes, bytearray, buffer)):
         """ Number of bytes of a frame or memoryview """
-        if isinstance(frame, (bytes, buffer)):
+        if isinstance(frame, _bytes_like):
             return len(frame)
         elif isinstance(frame, memoryview):
             if frame.shape is None:
@@ -937,9 +937,9 @@ if PY2:
         else:
             return frame.nbytes
 else:
-    def nbytes(frame):
+    def nbytes(frame, _bytes_like=(bytes, bytearray)):
         """ Number of bytes of a frame or memoryview """
-        if isinstance(frame, bytes):
+        if isinstance(frame, _bytes_like):
             return len(frame)
         else:
             return frame.nbytes
