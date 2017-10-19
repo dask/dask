@@ -47,6 +47,9 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+no_default = '__no_default__'
+
+
 def _initialize_mp_context():
     if PY3 and not sys.platform.startswith('win'):
         method = config.get('multiprocessing-method', 'forkserver')

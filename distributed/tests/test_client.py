@@ -4833,6 +4833,9 @@ def test_task_metadata(c, s, a, b):
     with pytest.raises(KeyError):
         yield c.get_metadata(key)
 
+    result = yield c.get_metadata(key, None)
+    assert result is None
+
     yield c.set_metadata(['x', 'a'], 1)
     result = yield c.get_metadata('x')
     assert result == {'a': 1}

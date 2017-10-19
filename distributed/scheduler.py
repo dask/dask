@@ -36,7 +36,7 @@ from .metrics import time
 from .node import ServerNode
 from .security import Security
 from .utils import (All, ignoring, get_ip, get_fileno_limit, log_errors,
-                    key_split, validate_key)
+                    key_split, validate_key, no_default)
 from .utils_comm import (scatter_to_workers, gather_from_workers)
 from .versions import get_versions
 
@@ -2175,11 +2175,17 @@ class Scheduler(ServerNode):
         except Exception as e:
             import pdb; pdb.set_trace()
 
-    def get_metadata(self, stream=None, keys=None):
+    def get_metadata(self, stream=None, keys=None, default=no_default):
         metadata = self.task_metadata
         for key in keys[:-1]:
             metadata = metadata[key]
-        return metadata[keys[-1]]
+        try:
+            return metadata[keys[-1]]
+        except KeyError:
+            if default != no_default:
+                return default
+            else:
+                raise
 
     def get_task_status(self, stream=None, keys=None):
         return {key: self.task_state.get(key) for key in keys}

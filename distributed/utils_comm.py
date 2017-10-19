@@ -13,9 +13,6 @@ from .core import rpc
 from .utils import All, tokey
 
 
-no_default = '__no_default__'
-
-
 @gen.coroutine
 def gather_from_workers(who_has, rpc, close=True):
     """ Gather data directly from peers

@@ -52,7 +52,7 @@ from .threadpoolexecutor import rejoin
 from .worker import dumps_task, get_client, get_worker, secede
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator,
                     tokey, log_errors, str_graph, key_split, format_bytes, asciitable,
-                    thread_state)
+                    thread_state, no_default)
 from .versions import get_versions
 
 
@@ -2626,18 +2626,28 @@ class Client(Node):
         """
         return self.sync(self.scheduler.identity, **kwargs)
 
-    def get_metadata(self, key):
+    def get_metadata(self, keys, default=no_default):
         """ Get arbitrary metadata from scheduler
 
         See set_metadata for the full docstring with examples
+
+        Parameter
+        ---------
+        keys: key or list
+            Key to access.  If a list then gets within a nested collection
+        default: optional
+            If the key does not exist then return this value instead.
+            If not provided then this raises a KeyError if the key is not
+            present
 
         See also
         --------
         Client.set_metadata
         """
-        if not isinstance(key, list):
-            key = [key]
-        return self.sync(self.scheduler.get_metadata, keys=key)
+        if not isinstance(keys, list):
+            keys = [keys]
+        return self.sync(self.scheduler.get_metadata, keys=keys,
+                         default=default)
 
     def set_metadata(self, key, value):
         """ Set arbitrary metadata in the scheduler
