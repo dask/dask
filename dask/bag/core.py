@@ -119,7 +119,7 @@ def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
 def to_textfiles(b, path, name_function=None, compression='infer',
                  encoding=system_encoding, compute=True, get=None,
                  storage_options=None):
-    """ Write dask bag to disk, one filename per partition, one line per element.
+    """ Write dask Bag to disk, one filename per partition, one line per element.
 
     **Paths**: This will create one file for each partition in your bag. You
     can specify the filenames in a variety of ways.
