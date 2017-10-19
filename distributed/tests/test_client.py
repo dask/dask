@@ -4645,12 +4645,11 @@ def test_quiet_quit_when_cluster_leaves(loop):
     cluster = LocalCluster(loop=loop, scheduler_port=0, diagnostics_port=None,
                            silence_logs=False)
     with captured_logger('distributed.comm') as sio:
-        client = Client(cluster, loop=loop)
-        futures = client.map(lambda x: x + 1, range(10))
-        sleep(0.05)
-        cluster.close()
-        sleep(0.05)
-        client.close()
+        with Client(cluster, loop=loop) as client:
+            futures = client.map(lambda x: x + 1, range(10))
+            sleep(0.05)
+            cluster.close()
+            sleep(0.05)
 
     text = sio.getvalue()
     assert not text
@@ -4756,7 +4755,8 @@ def test_profile_keys(c, s, a, b):
 @gen_cluster()
 def test_client_with_name(s, a, b):
     with captured_logger('distributed.scheduler') as sio:
-        client = yield Client(s.address, asynchronous=True, name='foo')
+        client = yield Client(s.address, asynchronous=True, name='foo',
+                              silence_logs=False)
         assert 'foo' in client.id
         yield client.close()
 
