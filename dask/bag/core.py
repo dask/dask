@@ -395,7 +395,7 @@ class Bag(Base):
     str = property(fget=StringAccessor)
 
     def map(self, func, *args, **kwargs):
-        """Apply a function elementwise across one or more bags.
+        """Apply a function elementwise across one or more bags
 
         Note that all ``Bag`` arguments must be partitioned identically.
 
@@ -456,7 +456,7 @@ class Bag(Base):
         return bag_map(func, self, *args, **kwargs)
 
     def starmap(self, func, **kwargs):
-        """Apply a function using argument tuples from the given bag.
+        """Apply a function using argument tuples from the given bag
 
         This is similar to ``itertools.starmap``, except it also accepts
         keyword arguments. In pseudocode, this is could be written as:
@@ -538,7 +538,7 @@ class Bag(Base):
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def random_sample(self, prob, random_state=None):
-        """ Return elements from bag with probability of ``prob``.
+        """ Return elements from bag with probability of ``prob``
 
         Parameters
         ----------
@@ -587,7 +587,7 @@ class Bag(Base):
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def map_partitions(self, func, *args, **kwargs):
-        """Apply a function to every partition across one or more bags.
+        """Apply a function to every partition across one or more bags
 
         Note that all ``Bag`` arguments must be partitioned identically.
 
@@ -646,7 +646,7 @@ class Bag(Base):
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def unzip(self, n):
-        """Transform a bag of tuples to ``n`` bags of their elements.
+        """Transform a bag of tuples to ``n`` bags of their elements
 
         Examples
         --------
@@ -985,8 +985,9 @@ class Bag(Base):
         operation.
 
         **split_every**
-        Group partitions into groups of this size while performing reduction
-        Defaults to 8
+        
+        Group partitions into groups of this size while performing reduction.
+        Defaults to 8.
 
         >>> b.foldby('name', binop, 0, combine, 0)  # doctest: +SKIP
 
@@ -1289,7 +1290,7 @@ class Bag(Base):
         return Bag(dsk=merge(self.dask, dsk), name=new_name, npartitions=npartitions)
 
     def accumulate(self, binop, initial=no_default):
-        """ Repeatedly apply binary function to a sequence, accumulating results.
+        """ Repeatedly apply binary function to a sequence, accumulating results
 
         This assumes that the bag is ordered.  While this is typically the case
         not all Dask.bag functions preserve this property.
@@ -1377,7 +1378,7 @@ def from_sequence(seq, partition_size=None, npartitions=None):
 
     See Also
     --------
-    read_text: Create bag from textfiles
+    read_text: Create bag from text files
     """
     seq = list(seq)
     if npartitions and not partition_size:
@@ -1404,14 +1405,14 @@ def from_url(urls):
     1
 
     >>> a.take(8)  # doctest: +SKIP
-    ('Dask\\n',
-     '====\\n',
-     '\\n',
-     '|Build Status| |Coverage| |Doc Status| |Gitter|\\n',
-     '\\n',
-     'Dask provides multi-core execution on larger-than-memory datasets using blocked\\n',
-     'algorithms and task scheduling.  It maps high-level NumPy and list operations\\n',
-     'on large datasets on to graphs of many operations on small in-memory datasets.\\n')
+    (b'Dask\\n',
+     b'====\\n',
+     b'\\n',
+     b'|Build Status| |Coverage| |Doc Status| |Gitter| |Version Status|\\n',
+     b'\\n',
+     b'Dask is a flexible parallel computing library for analytics.  See\\n',
+     b'documentation_ for more information.\\n',
+     b'\\n')
 
     >>> b = from_url(['http://github.com', 'http://google.com'])  # doctest: +SKIP
     >>> b.npartitions  # doctest: +SKIP
