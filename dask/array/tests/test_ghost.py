@@ -9,16 +9,7 @@ from dask.array.ghost import (fractional_slice, getitem, trim_internal,
                               ghost_internal, nearest, constant, boundaries,
                               reflect, periodic, ghost)
 from dask.core import get
-from dask.array.utils import assert_eq
-
-
-def same_keys(a, b):
-    def key(k):
-        if isinstance(k, str):
-            return (k, -1, -1, -1)
-        else:
-            return k
-    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
+from dask.array.utils import assert_eq, same_keys
 
 
 def test_fractional_slice():
@@ -191,8 +182,12 @@ def test_ghost():
 
 def test_map_overlap():
     x = da.arange(10, chunks=5)
-
     y = x.map_overlap(lambda x: x + len(x), depth=2, dtype=x.dtype)
+    assert_eq(y, np.arange(10) + 5 + 2 + 2)
+
+    x = da.arange(10, chunks=5)
+    y = x.map_overlap(lambda x: x + len(x), depth=np.int64(2), dtype=x.dtype)
+    assert all([(type(s) is int) for s in y.shape])
     assert_eq(y, np.arange(10) + 5 + 2 + 2)
 
     x = np.arange(16).reshape((4, 4))
@@ -202,6 +197,21 @@ def test_map_overlap():
                          boundary={0: 'reflect', 1: 'none'}, dtype=d.dtype)
     assert_eq(exp1, x + 16)
     assert_eq(exp2, x + 12)
+
+
+@pytest.mark.parametrize("boundary", [
+    None,
+    "reflect",
+    "periodic",
+    "nearest",
+    "none",
+    0
+])
+def test_map_overlap_no_depth(boundary):
+    x = da.arange(10, chunks=5)
+
+    y = x.map_overlap(lambda i: i, depth=0, boundary=boundary, dtype=x.dtype)
+    assert_eq(y, x)
 
 
 def test_nearest_ghost():
@@ -343,3 +353,13 @@ def test_none_boundaries():
          [33, 33,  8,  9, 10, 11, 33, 33],
          [33, 33, 12, 13, 14, 15, 33, 33]])
     assert_eq(exp, res)
+
+
+def test_ghost_small():
+    x = da.ones((10, 10), chunks=(5, 5))
+
+    y = x.map_overlap(lambda x: x, depth=1)
+    assert len(y.dask) < 200
+
+    y = x.map_overlap(lambda x: x, depth=1, boundary='none')
+    assert len(y.dask) < 100

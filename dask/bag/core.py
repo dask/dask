@@ -5,14 +5,12 @@ from functools import wraps, partial
 import itertools
 import math
 from operator import getitem
-import os
 import types
 import uuid
 from random import Random
 from warnings import warn
 from distutils.version import LooseVersion
 
-from ..utils import ignoring, eq_strict
 
 from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
                    remove, compose, curry, first, second, accumulate, peek)
@@ -26,36 +24,44 @@ try:
     if LooseVersion(cytoolz.__version__) > '0.7.3':
         from cytoolz import accumulate  # noqa: F811
         _implement_accumulate = True
-except:
+except ImportError:
     from toolz import (frequencies, merge_with, join, reduceby,
                        count, pluck, groupby, topk)
 
-from ..base import Base, normalize_token, tokenize
+from ..base import Base, tokenize, dont_optimize, is_dask_collection
+from ..bytes.core import write_bytes
 from ..compatibility import apply, urlopen
-from ..context import _globals
+from ..context import _globals, globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict
+from ..delayed import Delayed
 from ..multiprocessing import get as mpget
 from ..optimize import fuse, cull, inline
-from ..utils import (open, system_encoding, takes_multiple_arguments, funcname,
-                     digit, insert)
-from ..bytes.core import write_bytes
+from ..utils import (system_encoding, takes_multiple_arguments, funcname,
+                     digit, insert, ensure_dict)
 
 
 no_default = '__no__default__'
-no_result = '__no__result__'
+no_result = type('no_result', (object,),
+                 {'__slots__': (),
+                  '__reduce__': lambda self: 'no_result'})
 
 
 def lazify_task(task, start=True):
     """
-    Given a task, remove unnecessary calls to ``list``
+    Given a task, remove unnecessary calls to ``list`` and ``reify``
+
+    This traverses tasks and small lists.  We choose not to traverse down lists
+    of size >= 50 because it is unlikely that sequences this long contain other
+    sequences in practice.
 
     Examples
     --------
-
     >>> task = (sum, (list, (map, inc, [1, 2, 3])))  # doctest: +SKIP
     >>> lazify_task(task)  # doctest: +SKIP
     (sum, (map, inc, [1, 2, 3]))
     """
+    if type(task) is list and len(task) < 50:
+        return [lazify_task(arg, False) for arg in task]
     if not istask(task):
         return task
     head, tail = task[0], task[1:]
@@ -75,11 +81,6 @@ def lazify(dsk):
     ``dask.bag.core.lazify_task``
     """
     return valmap(lazify_task, dsk)
-
-
-def list2(L):
-    """A call to list that won't get removed by lazify"""
-    return list(L)
 
 
 def inline_singleton_lists(dsk, dependencies=None):
@@ -116,7 +117,8 @@ def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
 
 
 def to_textfiles(b, path, name_function=None, compression='infer',
-                 encoding=system_encoding, compute=True, get=None):
+                 encoding=system_encoding, compute=True, get=None,
+                 storage_options=None):
     """ Write bag to disk, one filename per partition, one line per element
 
     **Paths**: This will create one file for each partition in your bag. You
@@ -170,12 +172,19 @@ def to_textfiles(b, path, name_function=None, compression='infer',
 
     >>> b_dict.map(json.dumps).to_textfiles("/path/to/data/*.json")  # doctest: +SKIP
     """
-    out = write_bytes(b.to_delayed(), path, name_function, compression,
-                      encoding=encoding)
+    from dask import delayed
+    (writes,names) = write_bytes(b.to_delayed(), path, name_function, compression,
+                                 encoding=encoding, **(storage_options or {}))
+
+    # Use Bag optimizations on these delayed objects
+    dsk = ensure_dict(delayed(writes).dask)
+    dsk2 = Bag.__dask_optimize__(dsk, [w.key for w in writes])
+    out = [Delayed(w.key, dsk2) for w in writes]
+
     if compute:
-        from dask import delayed
-        get = get or _globals.get('get', None) or Bag._default_get
+        get = get or _globals.get('get', None) or Bag.__dask_scheduler__
         delayed(out).compute(get=get)
+        return names
     else:
         return out
 
@@ -194,29 +203,6 @@ def finalize(results):
 
 def finalize_item(results):
     return results[0]
-
-
-def unpack_kwargs(kwargs):
-    """ Extracts dask values from kwargs
-
-    Currently only dask.bag.Item and python literal values are supported.
-
-    Returns a merged dask graph and a list of [key, val] pairs suitable for
-    eventually constructing a dict.
-    """
-    dsk = {}
-    kw_pairs = []
-    for key, val in iteritems(kwargs):
-        if isinstance(val, Item):
-            dsk.update(val.dask)
-            val = val.key
-        # TODO elif isinstance(val, Delayed):
-        elif isinstance(val, Base):
-            raise NotImplementedError(
-                '%s not supported as kwarg value to Bag.map_partitions'
-                % type(val).__name__)
-        kw_pairs.append([key, val])
-    return dsk, kw_pairs
 
 
 class StringAccessor(object):
@@ -283,9 +269,29 @@ def robust_wraps(wrapper):
 
 
 class Item(Base):
-    _optimize = staticmethod(optimize)
-    _default_get = staticmethod(mpget)
-    _finalize = staticmethod(finalize_item)
+    def __init__(self, dsk, key):
+        self.dask = dsk
+        self.key = key
+        self.name = key
+
+    def __dask_graph__(self):
+        return self.dask
+
+    def __dask_keys__(self):
+        return [self.key]
+
+    def __dask_tokenize__(self):
+        return self.key
+
+    __dask_optimize__ = globalmethod(optimize, key='bag_optimize',
+                                     falsey=dont_optimize)
+    __dask_scheduler__ = staticmethod(mpget)
+
+    def __dask_postcompute__(self):
+        return finalize_item, ()
+
+    def __dask_postpersist__(self):
+        return Item, (self.key,)
 
     @staticmethod
     def from_delayed(value):
@@ -297,12 +303,7 @@ class Item(Base):
         if not isinstance(value, Delayed) and hasattr(value, 'key'):
             value = delayed(value)
         assert isinstance(value, Delayed)
-        return Item(value.dask, value.key)
-
-    def __init__(self, dsk, key):
-        self.dask = dsk
-        self.key = key
-        self.name = key
+        return Item(ensure_dict(value.dask), value.key)
 
     @property
     def _args(self):
@@ -313,9 +314,6 @@ class Item(Base):
 
     def __setstate__(self, state):
         self.dask, self.key = state
-
-    def _keys(self):
-        return [self.key]
 
     def apply(self, func):
         name = 'apply-{0}-{1}'.format(funcname(func), tokenize(self, func))
@@ -330,7 +328,9 @@ class Item(Base):
         Returns a single value.
         """
         from dask.delayed import Delayed
-        return Delayed(self.key, self.dask)
+        dsk = self.__dask_optimize__(self.__dask_graph__(),
+                                     self.__dask_keys__())
+        return Delayed(self.key, dsk)
 
 
 class Bag(Base):
@@ -362,14 +362,29 @@ class Bag(Base):
     >>> int(b.fold(lambda x, y: x + y))  # doctest: +SKIP
     30
     """
-    _optimize = staticmethod(optimize)
-    _default_get = staticmethod(mpget)
-    _finalize = staticmethod(finalize)
-
     def __init__(self, dsk, name, npartitions):
         self.dask = dsk
         self.name = name
         self.npartitions = npartitions
+
+    def __dask_graph__(self):
+        return self.dask
+
+    def __dask_keys__(self):
+        return [(self.name, i) for i in range(self.npartitions)]
+
+    def __dask_tokenize__(self):
+        return self.name
+
+    __dask_optimize__ = globalmethod(optimize, key='bag_optimize',
+                                     falsey=dont_optimize)
+    __dask_scheduler__ = staticmethod(mpget)
+
+    def __dask_postcompute__(self):
+        return finalize, ()
+
+    def __dask_postpersist__(self):
+        return type(self), (self.name, self.npartitions)
 
     def __str__(self):
         name = self.name if len(self.name) < 10 else self.name[:7] + '...'
@@ -379,52 +394,120 @@ class Bag(Base):
 
     str = property(fget=StringAccessor)
 
-    def map(self, func, **kwargs):
-        """ Map a function across all elements in collection
+    def map(self, func, *args, **kwargs):
+        """Apply a function elementwise across one or more bags.
 
-        >>> import dask.bag as db
-        >>> b = db.from_sequence(range(5))
-        >>> list(b.map(lambda x: x * 10))  # doctest: +SKIP
-        [0, 10, 20, 30, 40]
+        Note that all ``Bag`` arguments must be partitioned identically.
 
-        Keyword arguments are passed through to ``func``. These can be either
-        ``dask.bag.Item``, or normal python objects.
+        Parameters
+        ----------
+        func : callable
+        *args, **kwargs : Bag, Item, or object
+            Extra arguments and keyword arguments to pass to ``func`` *after*
+            the calling bag instance. Non-Bag args/kwargs are broadcasted
+            across all calls to ``func``.
+
+        Notes
+        -----
+        For calls with multiple `Bag` arguments, corresponding partitions
+        should have the same length; if they do not, the call will error at
+        compute time.
 
         Examples
         --------
         >>> import dask.bag as db
-        >>> b = db.from_sequence(range(1, 101), npartitions=10)
-        >>> def div(num, den=1):
-        ...     return num / den
+        >>> b = db.from_sequence(range(5), npartitions=2)
+        >>> b2 = db.from_sequence(range(5, 10), npartitions=2)
 
-        Using a python object:
+        Apply a function to all elements in a bag:
 
-        >>> hi = b.max().compute()
-        >>> hi
-        100
-        >>> b.map(div, den=hi).take(5)
-        (0.01, 0.02, 0.03, 0.04, 0.05)
+        >>> b.map(lambda x: x + 1).compute()
+        [1, 2, 3, 4, 5]
 
-        Using an ``Item``:
+        Apply a function with arguments from multiple bags:
 
-        >>> b.map(div, den=b.max()).take(5)
-        (0.01, 0.02, 0.03, 0.04, 0.05)
+        >>> from operator import add
+        >>> b.map(add, b2).compute()
+        [5, 7, 9, 11, 13]
 
-        Note that while both versions give the same output, the second forms a
-        single graph, and then computes everything at once, and in some cases
-        may be more efficient.
+        Non-bag arguments are broadcast across all calls to the mapped
+        function:
+
+        >>> b.map(add, 1).compute()
+        [1, 2, 3, 4, 5]
+
+        Keyword arguments are also supported, and have the same semantics as
+        regular arguments:
+
+        >>> def myadd(x, y=0):
+        ...     return x + y
+        >>> b.map(myadd, y=b2).compute()
+        [5, 7, 9, 11, 13]
+        >>> b.map(myadd, y=1).compute()
+        [1, 2, 3, 4, 5]
+
+        Both arguments and keyword arguments can also be instances of
+        ``dask.bag.Item``. Here we'll add the max value in the bag to each
+        element:
+
+        >>> b.map(myadd, b.max()).compute()
+        [4, 5, 6, 7, 8]
         """
-        name = 'map-{0}-{1}'.format(funcname(func),
-                                    tokenize(self, func, kwargs))
-        if takes_multiple_arguments(func):
-            func = partial(apply, func)
+        return bag_map(func, self, *args, **kwargs)
+
+    def starmap(self, func, **kwargs):
+        """Apply a function using argument tuples from the given bag.
+
+        This is similar to ``itertools.starmap``, except it also accepts
+        keyword arguments. In pseudocode, this is could be written as:
+
+        >>> def starmap(func, bag, **kwargs):
+        ...     return (func(*args, **kwargs) for args in bag)
+
+        Parameters
+        ----------
+        func : callable
+        **kwargs : Item, Delayed, or object, optional
+            Extra keyword arguments to pass to ``func``. These can either be
+            normal objects, ``dask.bag.Item``, or ``dask.delayed.Delayed``.
+
+        Examples
+        --------
+        >>> import dask.bag as db
+        >>> data = [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10)]
+        >>> b = db.from_sequence(data, npartitions=2)
+
+        Apply a function to each argument tuple:
+
+        >>> from operator import add
+        >>> b.starmap(add).compute()
+        [3, 7, 11, 15, 19]
+
+        Apply a function to each argument tuple, with additional keyword
+        arguments:
+
+        >>> def myadd(x, y, z=0):
+        ...     return x + y + z
+        >>> b.starmap(myadd, z=10).compute()
+        [13, 17, 21, 25, 29]
+
+        Keyword arguments can also be instances of ``dask.bag.Item`` or
+        ``dask.delayed.Delayed``:
+
+        >>> max_second = b.pluck(1).max()
+        >>> max_second.compute()
+        10
+        >>> b.starmap(myadd, z=max_second).compute()
+        [13, 17, 21, 25, 29]
+        """
+        name = 'starmap-{0}-{1}'.format(funcname(func),
+                                        tokenize(self, func, kwargs))
         dsk = self.dask.copy()
         if kwargs:
-            kw_dsk, kw_pairs = unpack_kwargs(kwargs)
+            kw_dsk, kwargs = unpack_scalar_dask_kwargs(kwargs)
             dsk.update(kw_dsk)
-            func = (apply, partial, [func], (dict, kw_pairs))
-        dsk.update(((name, i), (reify, (map, func, (self.name, i))))
-                   for i in range(self.npartitions))
+        dsk.update({(name, i): (reify, (starmap_chunk, func, (self.name, i), kwargs))
+                   for i in range(self.npartitions)})
         return type(self)(dsk, name, self.npartitions)
 
     @property
@@ -503,16 +586,18 @@ class Bag(Base):
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
-    def map_partitions(self, func, **kwargs):
-        """ Apply function to every partition within collection
+    def map_partitions(self, func, *args, **kwargs):
+        """Apply a function to every partition across one or more bags.
 
-        Note that this requires you to understand how dask.bag partitions your
-        data and so is somewhat internal.
+        Note that all ``Bag`` arguments must be partitioned identically.
 
-        >>> b.map_partitions(myfunc)  # doctest: +SKIP
-
-        Keyword arguments are passed through to ``func``. These can be either
-        ``dask.bag.Item``, or normal python objects.
+        Parameters
+        ----------
+        func : callable
+        *args, **kwargs : Bag, Item, Delayed, or object
+            Arguments and keyword arguments to pass to ``func``.
+            Partitions from this bag will be the first argument, and these will
+            be passed *after*.
 
         Examples
         --------
@@ -538,17 +623,7 @@ class Bag(Base):
         single graph, and then computes everything at once, and in some cases
         may be more efficient.
         """
-        name = 'map-partitions-{0}-{1}'.format(funcname(func),
-                                               tokenize(self, func, kwargs))
-        dsk = self.dask.copy()
-        if kwargs:
-            kw_dsk, kw_pairs = unpack_kwargs(kwargs)
-            dsk.update(kw_dsk)
-        dsk.update(((name, i),
-                    (apply, func, [(self.name, i)], (dict, kw_pairs))
-                    if kwargs else (func, (self.name, i)))
-                   for i in range(self.npartitions))
-        return type(self)(dsk, name, self.npartitions)
+        return map_partitions(func, self, *args, **kwargs)
 
     def pluck(self, key, default=no_default):
         """ Select item from all tuples/dicts in collection
@@ -590,9 +665,10 @@ class Bag(Base):
 
     @wraps(to_textfiles)
     def to_textfiles(self, path, name_function=None, compression='infer',
-                     encoding=system_encoding, compute=True, get=None):
+                     encoding=system_encoding, compute=True, get=None,
+                     storage_options=None):
         return to_textfiles(self, path, name_function, compression, encoding,
-                            compute, get=get)
+                            compute, get=get, storage_options=storage_options)
 
     def fold(self, binop, combine=None, initial=no_default, split_every=None):
         """ Parallelizable reduction
@@ -721,20 +797,21 @@ class Bag(Base):
             split_every = 8
         if split_every is False:
             split_every = self.npartitions
+
         token = tokenize(self, perpartition, aggregate, split_every)
         a = '%s-part-%s' % (name or funcname(perpartition), token)
         is_last = self.npartitions == 1
-        dsk = dict(((a, i), (empty_safe_apply, perpartition, (self.name, i), is_last))
-                   for i in range(self.npartitions))
+        dsk = {(a, i): (empty_safe_apply, perpartition, (self.name, i), is_last)
+               for i in range(self.npartitions)}
         k = self.npartitions
         b = a
         fmt = '%s-aggregate-%s' % (name or funcname(aggregate), token)
         depth = 0
-        while k > 1:
+
+        while k > split_every:
             c = fmt + str(depth)
-            is_last = k <= split_every
             dsk2 = dict(((c, i), (empty_safe_aggregate, aggregate,
-                                  [(b, j) for j in inds], is_last))
+                                  [(b, j) for j in inds], False))
                         for i, inds in enumerate(partition_all(split_every,
                                                                range(k))))
             dsk.update(dsk2)
@@ -742,11 +819,14 @@ class Bag(Base):
             b = c
             depth += 1
 
+        dsk[(fmt, 0)] = (empty_safe_aggregate, aggregate,
+                         [(b, j) for j in range(k)], True)
+
         if out_type is Item:
-            dsk[b] = dsk.pop((b, 0))
-            return Item(merge(self.dask, dsk), b)
+            dsk[fmt] = dsk.pop((fmt, 0))
+            return Item(merge(self.dask, dsk), fmt)
         else:
-            return Bag(merge(self.dask, dsk), b, 1)
+            return Bag(merge(self.dask, dsk), fmt, 1)
 
     def sum(self, split_every=None):
         """ Sum all elements """
@@ -841,7 +921,7 @@ class Bag(Base):
         return type(self)(merge(self.dask, other.dask, dsk), name, n * m)
 
     def foldby(self, key, binop, initial=no_default, combine=None,
-               combine_initial=no_default):
+               combine_initial=no_default, split_every=None):
         """ Combined reduction and groupby
 
         Foldby provides a combined groupby and reduce for efficient parallel
@@ -904,6 +984,10 @@ class Bag(Base):
         like above this is often ``0`` or the identity element for your
         operation.
 
+        **split_every**
+        Group partitions into groups of this size while performing reduction
+        Defaults to 8
+
         >>> b.foldby('name', binop, 0, combine, 0)  # doctest: +SKIP
 
         See Also
@@ -912,30 +996,58 @@ class Bag(Base):
         toolz.reduceby
         pyspark.combineByKey
         """
+        if split_every is None:
+            split_every = 8
+        if split_every is False:
+            split_every = self.npartitions
+
         token = tokenize(self, key, binop, initial, combine, combine_initial)
         a = 'foldby-a-' + token
-        b = 'foldby-b-' + token
         if combine is None:
             combine = binop
         if initial is not no_default:
-            dsk = dict(((a, i), (reduceby, key, binop, (self.name, i), initial))
-                       for i in range(self.npartitions))
+            dsk = {(a, i): (reduceby, key, binop, (self.name, i), initial)
+                   for i in range(self.npartitions)}
         else:
-            dsk = dict(((a, i), (reduceby, key, binop, (self.name, i)))
-                       for i in range(self.npartitions))
+            dsk = {(a, i): (reduceby, key, binop, (self.name, i))
+                   for i in range(self.npartitions)}
 
         def combine2(acc, x):
             return combine(acc, x[1])
 
+        depth = 0
+        k = self.npartitions
+        b = a
+        while k > split_every:
+            c = b + str(depth)
+            if combine_initial is not no_default:
+                dsk2 = {(c, i): (reduceby, 0, combine2,
+                                 (toolz.concat, (map, dictitems,
+                                                 [(b, j) for j in inds])),
+                                 combine_initial)
+                        for i, inds in enumerate(partition_all(split_every,
+                                                               range(k)))}
+            else:
+                dsk2 = {(c, i): (merge_with, (partial, reduce, combine),
+                                 [(b, j) for j in inds])
+                        for i, inds in enumerate(partition_all(split_every,
+                                                               range(k)))}
+            dsk.update(dsk2)
+            k = len(dsk2)
+            b = c
+            depth += 1
+
+        e = 'foldby-b-' + token
         if combine_initial is not no_default:
-            dsk2 = {(b, 0): (dictitems, (reduceby, 0, combine2,
-                                         (toolz.concat, (map, dictitems,
-                                                         list(dsk.keys()))),
-                                         combine_initial))}
+            dsk[(e, 0)] = (dictitems, (reduceby, 0, combine2,
+                                       (toolz.concat, (map, dictitems,
+                                                       [(b, j) for j in range(k)])),
+                                       combine_initial))
         else:
-            dsk2 = {(b, 0): (dictitems, (merge_with, (partial, reduce, combine),
-                                         list(dsk.keys())))}
-        return type(self)(merge(self.dask, dsk, dsk2), b, 1)
+            dsk[(e, 0)] = (dictitems, (merge_with, (partial, reduce, combine),
+                                       [(b, j) for j in range(k)]))
+
+        return type(self)(merge(self.dask, dsk), e, 1)
 
     def take(self, k, npartitions=1, compute=True):
         """ Take the first k elements
@@ -985,20 +1097,17 @@ class Bag(Base):
         else:
             return b
 
-    def _keys(self):
-        return [(self.name, i) for i in range(self.npartitions)]
-
-    def concat(self):
+    def flatten(self):
         """ Concatenate nested lists into one long list
 
         >>> b = from_sequence([[1], [2, 3]])
         >>> list(b)
         [[1], [2, 3]]
 
-        >>> list(b.concat())
+        >>> list(b.flatten())
         [1, 2, 3]
         """
-        name = 'concat-' + tokenize(self)
+        name = 'flatten-' + tokenize(self)
         dsk = dict(((name, i), (list, (toolz.concat, (self.name, i))))
                    for i in range(self.npartitions))
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
@@ -1024,7 +1133,7 @@ class Bag(Base):
         npartitions: int
             If using the disk-based shuffle, the number of output partitions
         blocksize: int
-            If using the disk-based shuffle, the size of shuffle blocks
+            If using the disk-based shuffle, the size of shuffle blocks (bytes)
         max_branch: int
             If using the task-based shuffle, the amount of splitting each
             partition undergoes.  Increase this for fewer copies but more
@@ -1057,7 +1166,7 @@ class Bag(Base):
             msg = "Shuffle method must be 'disk' or 'tasks'"
             raise NotImplementedError(msg)
 
-    def to_dataframe(self, columns=None):
+    def to_dataframe(self, meta=None, columns=None):
         """ Create Dask Dataframe from a Dask Bag
 
         Bag should contain tuples, dict records, or scalars.
@@ -1067,15 +1176,24 @@ class Bag(Base):
 
         Parameters
         ----------
-        columns : pandas.DataFrame or list, optional
-            If a ``pandas.DataFrame``, it should mirror the column names and
-            dtypes of the output dataframe. If a list, it provides the desired
-            column names. If not provided or a list, a single element from
-            the first partition will be computed, triggering a potentially
-            expensive call to ``compute``. Providing a list is only useful for
-            selecting subset of columns, to avoid an internal compute call you
-            must provide a ``pandas.DataFrame`` as dask requires dtype knowledge
-            ahead of time.
+        meta : pd.DataFrame, dict, iterable, optional
+            An empty ``pd.DataFrame`` that matches the dtypes and column names
+            of the output. This metadata is necessary for many algorithms in
+            dask dataframe to work.  For ease of use, some alternative inputs
+            are also available. Instead of a ``DataFrame``, a ``dict`` of
+            ``{name: dtype}`` or iterable of ``(name, dtype)`` can be provided.
+            If not provided or a list, a single element from the first
+            partition will be computed, triggering a potentially expensive call
+            to ``compute``. This may lead to unexpected results, so providing
+            ``meta`` is recommended. For more information, see
+            ``dask.dataframe.utils.make_meta``.
+        columns : sequence, optional
+            Column names to use. If the passed data do not have names
+            associated with them, this argument provides names for the columns.
+            Otherwise this argument indicates the order of the columns in the
+            result (any names not found in the data will become all-NA
+            columns).  Note that if ``meta`` is provided, column names will be
+            taken from there and this parameter is invalid.
 
         Examples
         --------
@@ -1094,22 +1212,28 @@ class Bag(Base):
         """
         import pandas as pd
         import dask.dataframe as dd
-        if isinstance(columns, pd.DataFrame):
-            meta = columns
+        if meta is None:
+            if isinstance(columns, pd.DataFrame):
+                warn("Passing metadata to `columns` is deprecated. Please "
+                     "use the `meta` keyword instead.")
+                meta = columns
+            else:
+                head = self.take(1)[0]
+                meta = pd.DataFrame([head], columns=columns)
+        elif columns is not None:
+            raise ValueError("Can't specify both `meta` and `columns`")
         else:
-            head = self.take(1)[0]
-            meta = pd.DataFrame([head], columns=columns)
+            meta = dd.utils.make_meta(meta)
         # Serializing the columns and dtypes is much smaller than serializing
         # the empty frame
         cols = list(meta.columns)
         dtypes = meta.dtypes.to_dict()
         name = 'to_dataframe-' + tokenize(self, cols, dtypes)
-        dsk = {(name, i): (to_dataframe, (list2, (self.name, i)), cols, dtypes)
-               for i in range(self.npartitions)}
-
+        dsk = self.__dask_optimize__(self.dask, self.__dask_keys__())
+        dsk.update({(name, i): (to_dataframe, (self.name, i), cols, dtypes)
+                    for i in range(self.npartitions)})
         divisions = [None] * (self.npartitions + 1)
-        return dd.DataFrame(merge(optimize(self.dask, self._keys()), dsk),
-                            name, meta, divisions)
+        return dd.DataFrame(dsk, name, meta, divisions)
 
     def to_delayed(self):
         """ Convert bag to list of dask Delayed
@@ -1117,7 +1241,9 @@ class Bag(Base):
         Returns list of Delayed, one per partition.
         """
         from dask.delayed import Delayed
-        return [Delayed(k, self.dask) for k in self._keys()]
+        keys = self.__dask_keys__()
+        dsk = self.__dask_optimize__(self.__dask_graph__(), keys)
+        return [Delayed(k, dsk) for k in keys]
 
     def repartition(self, npartitions):
         """ Coalesce bag into fewer partitions
@@ -1178,8 +1304,8 @@ class Bag(Base):
         Accumulate also takes an optional argument that will be used as the
         first value.
 
-        >>> b.accumulate(add, -1)  # doctest: +SKIP
-        [-1, 0, 2, 5, 9, 15]
+        >>> b.accumulate(add, initial=-1)  # doctest: +SKIP
+        [-1, 0, 2, 5, 9, 14]
         """
         if not _implement_accumulate:
             raise NotImplementedError("accumulate requires `toolz` > 0.7.4"
@@ -1209,10 +1335,6 @@ def accumulate_part(binop, seq, initial, is_first=False):
     return res[1:], res[-1]
 
 
-normalize_token.register(Item, lambda a: a.key)
-normalize_token.register(Bag, lambda a: a.name)
-
-
 def partition(grouper, sequence, npartitions, p, nelements=2**20):
     """ Partition a bag along a grouper, store partitions on disk """
     for block in partition_all(nelements, sequence):
@@ -1228,38 +1350,6 @@ def collect(grouper, group, p, barrier_token):
     """ Collect partitions from disk and yield k,v group pairs """
     d = groupby(grouper, p.get(group, lock=False))
     return list(d.items())
-
-
-def write(data, filename, compression, encoding):
-    dirname = os.path.dirname(filename)
-    if not os.path.exists(dirname):
-        with ignoring(OSError):
-            os.makedirs(dirname)
-
-    f = open(filename, mode='wb', compression=compression)
-
-    # Check presence of endlines
-    data = iter(data)
-    try:
-        firstline = next(data)
-    except StopIteration:
-        f.close()
-        return
-    if not (firstline.endswith(os.linesep) or firstline.endswith('\n')):
-        sep = os.linesep if firstline.endswith(os.linesep) else '\n'
-        firstline = firstline + sep
-        data = (line + sep for line in data)
-    f.write(firstline.encode(encoding))
-
-    try:
-        lastline = ''
-        for line in data:
-            f.write(lastline.encode(encoding))
-            lastline = line
-        f.write(lastline.rstrip(os.linesep).encode(encoding))
-
-    finally:
-        f.close()
 
 
 def from_sequence(seq, partition_size=None, npartitions=None):
@@ -1358,8 +1448,8 @@ def concat(bags):
     """
     name = 'concat-' + tokenize(*bags)
     counter = itertools.count(0)
-    dsk = dict(((name, next(counter)), key)
-               for bag in bags for key in sorted(bag._keys()))
+    dsk = {(name, next(counter)): key
+           for bag in bags for key in bag.__dask_keys__()}
     return Bag(merge(dsk, *[b.dask for b in bags]), name, len(dsk))
 
 
@@ -1403,7 +1493,7 @@ def from_delayed(values):
               if not isinstance(v, Delayed) and hasattr(v, 'key')
               else v
               for v in values]
-    dsk = merge(v.dask for v in values)
+    dsk = merge(ensure_dict(v.dask) for v in values)
 
     name = 'bag-from-delayed-' + tokenize(*values)
     names = [(name, i) for i in range(len(values))]
@@ -1504,6 +1594,269 @@ def bag_zip(*bags):
         for i in range(npartitions))
     bags_dsk = merge(*(bag.dask for bag in bags))
     return Bag(merge(bags_dsk, dsk), name, npartitions)
+
+
+def map_chunk(f, args, bag_kwargs, kwargs):
+    if kwargs:
+        f = partial(f, **kwargs)
+
+    args = [iter(a) for a in args]
+    iters = list(args)
+    if bag_kwargs:
+        keys = list(bag_kwargs)
+        kw_val_iters = [iter(v) for v in bag_kwargs.values()]
+        iters.extend(kw_val_iters)
+        kw_iter = (dict(zip(keys, k)) for k in zip(*kw_val_iters))
+        if args:
+            for a, k in zip(zip(*args), kw_iter):
+                yield f(*a, **k)
+        else:
+            for k in kw_iter:
+                yield f(**k)
+    else:
+        for a in zip(*args):
+            yield f(*a)
+
+    # Check that all iterators are fully exhausted
+    if len(iters) > 1:
+        for i in iters:
+            if isinstance(i, itertools.repeat):
+                continue
+            try:
+                next(i)
+            except StopIteration:
+                pass
+            else:
+                msg = ("map called with multiple bags that aren't identically "
+                       "partitioned. Please ensure that all bag arguments "
+                       "have the same partition lengths")
+                raise ValueError(msg)
+
+
+def starmap_chunk(f, x, kwargs):
+    if kwargs:
+        f = partial(f, **kwargs)
+    return itertools.starmap(f, x)
+
+
+def unpack_scalar_dask_kwargs(kwargs):
+    """Extracts dask values from kwargs
+
+    Currently only ``dask.bag.Item`` and ``dask.delayed.Delayed`` are
+    supported.  Returns a merged dask graph and a task resulting in a keyword
+    dict.
+    """
+    dsk = {}
+    kwargs2 = {}
+    for k, v in kwargs.items():
+        if isinstance(v, (Delayed, Item)):
+            dsk.update(ensure_dict(v.dask))
+            kwargs2[k] = v.key
+        elif is_dask_collection(v):
+            raise NotImplementedError("dask.bag doesn't support kwargs of "
+                                      "type %s" % type(v).__name__)
+        else:
+            kwargs2[k] = v
+    if dsk:
+        kwargs = (dict, (zip, list(kwargs2), list(kwargs2.values())))
+    return dsk, kwargs
+
+
+def bag_map(func, *args, **kwargs):
+    """Apply a function elementwise across one or more bags.
+
+    Note that all ``Bag`` arguments must be partitioned identically.
+
+    Parameters
+    ----------
+    func : callable
+    *args, **kwargs : Bag, Item, Delayed, or object
+        Arguments and keyword arguments to pass to ``func``. Non-Bag args/kwargs
+        are broadcasted across all calls to ``func``.
+
+    Notes
+    -----
+    For calls with multiple `Bag` arguments, corresponding partitions should
+    have the same length; if they do not, the call will error at compute time.
+
+    Examples
+    --------
+    >>> import dask.bag as db
+    >>> b = db.from_sequence(range(5), npartitions=2)
+    >>> b2 = db.from_sequence(range(5, 10), npartitions=2)
+
+    Apply a function to all elements in a bag:
+
+    >>> db.map(lambda x: x + 1, b).compute()
+    [1, 2, 3, 4, 5]
+
+    Apply a function with arguments from multiple bags:
+
+    >>> from operator import add
+    >>> db.map(add, b, b2).compute()
+    [5, 7, 9, 11, 13]
+
+    Non-bag arguments are broadcast across all calls to the mapped function:
+
+    >>> db.map(add, b, 1).compute()
+    [1, 2, 3, 4, 5]
+
+    Keyword arguments are also supported, and have the same semantics as
+    regular arguments:
+
+    >>> def myadd(x, y=0):
+    ...     return x + y
+    >>> db.map(myadd, b, y=b2).compute()
+    [5, 7, 9, 11, 13]
+    >>> db.map(myadd, b, y=1).compute()
+    [1, 2, 3, 4, 5]
+
+    Both arguments and keyword arguments can also be instances of
+    ``dask.bag.Item`` or ``dask.delayed.Delayed``. Here we'll add the max value
+    in the bag to each element:
+
+    >>> db.map(myadd, b, b.max()).compute()
+    [4, 5, 6, 7, 8]
+    """
+    name = 'map-%s-%s' % (funcname(func), tokenize(func, args, kwargs))
+    dsk = {}
+
+    bags = []
+    args2 = []
+    for a in args:
+        if isinstance(a, Bag):
+            bags.append(a)
+            args2.append(a)
+            dsk.update(a.dask)
+        elif isinstance(a, (Item, Delayed)):
+            args2.append((itertools.repeat, a.key))
+            dsk.update(ensure_dict(a.dask))
+        else:
+            args2.append((itertools.repeat, a))
+
+    bag_kwargs = {}
+    other_kwargs = {}
+    for k, v in kwargs.items():
+        if isinstance(v, Bag):
+            bag_kwargs[k] = v
+            bags.append(v)
+            dsk.update(v.dask)
+        else:
+            other_kwargs[k] = v
+
+    kw_dsk, other_kwargs = unpack_scalar_dask_kwargs(other_kwargs)
+    dsk.update(kw_dsk)
+
+    if not bags:
+        raise ValueError("At least one argument must be a Bag.")
+
+    npartitions = {b.npartitions for b in bags}
+    if len(npartitions) > 1:
+        raise ValueError("All bags must have the same number of partitions.")
+    npartitions = npartitions.pop()
+
+    def build_args(n):
+        return [(a.name, n) if isinstance(a, Bag) else a for a in args2]
+
+    def build_bag_kwargs(n):
+        if not bag_kwargs:
+            return None
+        return (dict, (zip, list(bag_kwargs),
+                       [(b.name, n) for b in bag_kwargs.values()]))
+
+    dsk.update({(name, n): (reify, (map_chunk, func, build_args(n),
+                                    build_bag_kwargs(n), other_kwargs))
+                for n in range(npartitions)})
+
+    # If all bags are the same type, use that type, otherwise fallback to Bag
+    return_type = set(map(type, bags))
+    return_type = return_type.pop() if len(return_type) == 1 else Bag
+
+    return return_type(dsk, name, npartitions)
+
+
+def map_partitions(func, *args, **kwargs):
+    """Apply a function to every partition across one or more bags.
+
+    Note that all ``Bag`` arguments must be partitioned identically.
+
+    Parameters
+    ----------
+    func : callable
+    *args, **kwargs : Bag, Item, Delayed, or object
+        Arguments and keyword arguments to pass to ``func``.
+
+    Examples
+    --------
+    >>> import dask.bag as db
+    >>> b = db.from_sequence(range(1, 101), npartitions=10)
+    >>> def div(nums, den=1):
+    ...     return [num / den for num in nums]
+
+    Using a python object:
+
+    >>> hi = b.max().compute()
+    >>> hi
+    100
+    >>> b.map_partitions(div, den=hi).take(5)
+    (0.01, 0.02, 0.03, 0.04, 0.05)
+
+    Using an ``Item``:
+
+    >>> b.map_partitions(div, den=b.max()).take(5)
+    (0.01, 0.02, 0.03, 0.04, 0.05)
+
+    Note that while both versions give the same output, the second forms a
+    single graph, and then computes everything at once, and in some cases
+    may be more efficient.
+    """
+    name = 'map-partitions-%s-%s' % (funcname(func),
+                                     tokenize(func, args, kwargs))
+
+    # Extract bag arguments, build initial graph
+    bags = []
+    dsk = {}
+    for vals in [args, kwargs.values()]:
+        for a in vals:
+            if isinstance(a, (Bag, Item, Delayed)):
+                dsk.update(ensure_dict(a.dask))
+                if isinstance(a, Bag):
+                    bags.append(a)
+            elif is_dask_collection(a):
+                raise NotImplementedError("dask.bag doesn't support args of "
+                                          "type %s" % type(a).__name__)
+
+    if not bags:
+        raise ValueError("At least one argument must be a Bag.")
+
+    npartitions = {b.npartitions for b in bags}
+    if len(npartitions) > 1:
+        raise ValueError("All bags must have the same number of partitions.")
+    npartitions = npartitions.pop()
+
+    def build_task(n):
+        args2 = [(a.name, n) if isinstance(a, Bag) else a.key
+                 if isinstance(a, (Item, Delayed)) else a for a in args]
+
+        if any(isinstance(v, (Bag, Item, Delayed)) for v in kwargs.values()):
+            vals = [(v.name, n) if isinstance(v, Bag) else v.key
+                    if isinstance(v, (Item, Delayed)) else v
+                    for v in kwargs.values()]
+            kwargs2 = (dict, (zip, list(kwargs), vals))
+        else:
+            kwargs2 = kwargs
+
+        if kwargs2 or len(args2) > 1:
+            return (apply, func, args2, kwargs2)
+        return (func, args2[0])
+
+    dsk.update({(name, n): build_task(n) for n in range(npartitions)})
+
+    # If all bags are the same type, use that type, otherwise fallback to Bag
+    return_type = set(map(type, bags))
+    return_type = return_type.pop() if len(return_type) == 1 else Bag
+
+    return return_type(dsk, name, npartitions)
 
 
 def _reduce(binop, sequence, initial=no_default):
@@ -1628,7 +1981,7 @@ def empty_safe_apply(func, part, is_last):
 
 
 def empty_safe_aggregate(func, parts, is_last):
-    parts2 = (p for p in parts if not eq_strict(p, no_result))
+    parts2 = (p for p in parts if p is not no_result)
     return empty_safe_apply(func, parts2, is_last)
 
 
@@ -1695,5 +2048,9 @@ def split(seq, n):
 
 def to_dataframe(seq, columns, dtypes):
     import pandas as pd
-    res = pd.DataFrame(seq, columns=columns)
+    seq = reify(seq)
+    # pd.DataFrame expects lists, only copy if necessary
+    if not isinstance(seq, list):
+        seq = list(seq)
+    res = pd.DataFrame(seq, columns=list(columns))
     return res.astype(dtypes, copy=False)

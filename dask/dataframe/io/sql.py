@@ -68,7 +68,9 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
     engine = sa.create_engine(uri)
     meta = sa.MetaData()
     if isinstance(table, six.string_types):
-        table = sa.Table(table, meta, autoload=True, autoload_with=engine)
+        schema = kwargs.pop('schema', None)
+        table = sa.Table(table, meta, autoload=True, autoload_with=engine,
+                         schema=schema)
 
     index = (table.columns[index_col] if isinstance(index_col, six.string_types)
              else index_col)
@@ -110,7 +112,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
             q = sql.select([sql.func.count(index)]).select_from(table)
             count = pd.read_sql(q, engine)['count_1'][0]
             bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / 5
-            npartitions = round(count * bytes_per_row / bytes_per_chunk)
+            npartitions = round(count * bytes_per_row / bytes_per_chunk) or 1
         if dtype.kind == "M":
             divisions = pd.date_range(
                 start=mini, end=maxi, freq='%iS' % (

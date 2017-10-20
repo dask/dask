@@ -53,7 +53,7 @@ def has_tasks(dsk, x):
     try:
         if x in dsk:
             return True
-    except:
+    except Exception:
         pass
     if isinstance(x, list):
         for i in x:
@@ -232,7 +232,7 @@ def get_deps(dsk):
     return dependencies, dependents
 
 
-def flatten(seq):
+def flatten(seq, container=list):
     """
 
     >>> list(flatten([1]))
@@ -254,8 +254,8 @@ def flatten(seq):
         yield seq
     else:
         for item in seq:
-            if isinstance(item, list):
-                for item2 in flatten(item):
+            if isinstance(item, container):
+                for item2 in flatten(item, container=container):
                     yield item2
             else:
                 yield item
@@ -303,8 +303,13 @@ def subs(task, key, val):
             arg = subs(arg, key, val)
         elif type_arg is list:
             arg = [subs(x, key, val) for x in arg]
-        elif type_arg is type(key) and arg == key:
-            arg = val
+        elif type_arg is type(key):
+            # Can't do a simple equality check, since this may trigger
+            # a FutureWarning from NumPy about array equality
+            # https://github.com/dask/dask/pull/2457
+            if len(arg) == len(key) and all(type(aa) == type(bb) and aa == bb
+                                            for aa, bb in zip(arg, key)):
+                arg = val
         newargs.append(arg)
     return task[:1] + tuple(newargs)
 

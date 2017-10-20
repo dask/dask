@@ -1,7 +1,42 @@
 # coding: utf-8
 import pandas as pd
+from textwrap import dedent
 
 import dask.dataframe as dd
+from dask.dataframe.utils import PANDAS_VERSION
+
+if PANDAS_VERSION >= '0.21.0':
+    style = """<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+"""
+elif PANDAS_VERSION >= '0.20.0':
+    style = """<style>
+    .dataframe thead tr:only-child th {
+        text-align: right;
+    }
+
+    .dataframe thead th {
+        text-align: left;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+</style>
+"""
+else:
+    style = ""
 
 
 def test_repr():
@@ -96,12 +131,12 @@ def test_dataframe_format():
 <div>Dask Name: from_pandas, 3 tasks</div>""".format(exp_table=exp_table)
     assert ddf.to_html() == exp
 
-    # table is boxed with div
+    # table is boxed with div and has style
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
-{exp_table}
+{style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 3 tasks</div>""".format(exp_table=exp_table)
+<div>Dask Name: from_pandas, 3 tasks</div>""".format(style=style, exp_table=exp_table)
     assert ddf._repr_html_() == exp
 
 
@@ -170,12 +205,12 @@ def test_dataframe_format_with_index():
 <div>Dask Name: from_pandas, 3 tasks</div>""".format(exp_table=exp_table)
     assert ddf.to_html() == exp
 
-    # table is boxed with div
+    # table is boxed with div and has style
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
-{exp_table}
+{style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 3 tasks</div>""".format(exp_table=exp_table)
+<div>Dask Name: from_pandas, 3 tasks</div>""".format(style=style, exp_table=exp_table)
     assert ddf._repr_html_() == exp
 
 
@@ -190,20 +225,20 @@ def test_dataframe_format_unknown_divisions():
     exp = ("Dask DataFrame Structure:\n"
            "                   A       B                C\n"
            "npartitions=3                                \n"
-           "None           int64  object  category[known]\n"
-           "None             ...     ...              ...\n"
-           "None             ...     ...              ...\n"
-           "None             ...     ...              ...\n"
+           "               int64  object  category[known]\n"
+           "                 ...     ...              ...\n"
+           "                 ...     ...              ...\n"
+           "                 ...     ...              ...\n"
            "Dask Name: from_pandas, 3 tasks")
     assert repr(ddf) == exp
     assert str(ddf) == exp
 
     exp = ("                   A       B                C\n"
            "npartitions=3                                \n"
-           "None           int64  object  category[known]\n"
-           "None             ...     ...              ...\n"
-           "None             ...     ...              ...\n"
-           "None             ...     ...              ...")
+           "               int64  object  category[known]\n"
+           "                 ...     ...              ...\n"
+           "                 ...     ...              ...\n"
+           "                 ...     ...              ...")
     assert ddf.to_string() == exp
 
     exp_table = """<table border="1" class="dataframe">
@@ -223,25 +258,25 @@ def test_dataframe_format_unknown_divisions():
   </thead>
   <tbody>
     <tr>
-      <th>None</th>
+      <th></th>
       <td>int64</td>
       <td>object</td>
       <td>category[known]</td>
     </tr>
     <tr>
-      <th>None</th>
+      <th></th>
       <td>...</td>
       <td>...</td>
       <td>...</td>
     </tr>
     <tr>
-      <th>None</th>
+      <th></th>
       <td>...</td>
       <td>...</td>
       <td>...</td>
     </tr>
     <tr>
-      <th>None</th>
+      <th></th>
       <td>...</td>
       <td>...</td>
       <td>...</td>
@@ -254,12 +289,12 @@ def test_dataframe_format_unknown_divisions():
 <div>Dask Name: from_pandas, 3 tasks</div>""".format(exp_table=exp_table)
     assert ddf.to_html() == exp
 
-    # table is boxed with div
+    # table is boxed with div and has style
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
-{exp_table}
+{style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 3 tasks</div>""".format(exp_table=exp_table)
+<div>Dask Name: from_pandas, 3 tasks</div>""".format(style=style, exp_table=exp_table)
     assert ddf._repr_html_() == exp
 
 
@@ -346,9 +381,9 @@ def test_dataframe_format_long():
     # table is boxed with div
     exp = u"""<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
-{exp_table}
+{style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 10 tasks</div>""".format(exp_table=exp_table)
+<div>Dask Name: from_pandas, 10 tasks</div>""".format(style=style, exp_table=exp_table)
     assert ddf._repr_html_() == exp
 
 
@@ -421,14 +456,26 @@ Dask Name: from_pandas, 6 tasks"""
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8],
                   index=pd.CategoricalIndex([1, 2, 3, 4, 5, 6, 7, 8], name='YYY'))
     ds = dd.from_pandas(s, 3)
-    exp = """Dask Index Structure:
-npartitions=3
-1    category[known]
-4                ...
-7                ...
-8                ...
-Name: YYY, dtype: category
-Dask Name: from_pandas, 6 tasks"""
+    if PANDAS_VERSION >= '0.21.0':
+        exp = dedent("""\
+        Dask Index Structure:
+        npartitions=3
+        1    category[known]
+        4                ...
+        7                ...
+        8                ...
+        Name: YYY, dtype: CategoricalDtype(categories=[1, 2, 3, 4, 5, 6, 7, 8], ordered=False)
+        Dask Name: from_pandas, 6 tasks""")
+    else:
+        exp = dedent("""\
+        Dask Index Structure:
+        npartitions=3
+        1    category[known]
+        4                ...
+        7                ...
+        8                ...
+        Name: YYY, dtype: category
+        Dask Name: from_pandas, 6 tasks""")
     assert repr(ds.index) == exp
     assert str(ds.index) == exp
 
@@ -437,17 +484,36 @@ def test_categorical_format():
     s = pd.Series(['a', 'b', 'c']).astype('category')
     known = dd.from_pandas(s, npartitions=1)
     unknown = known.cat.as_unknown()
-    exp = ("Dask Series Structure:\n"
-           "npartitions=1\n"
-           "0    category[known]\n"
-           "2                ...\n"
-           "dtype: category\n"
-           "Dask Name: from_pandas, 1 tasks")
+    if PANDAS_VERSION >= '0.21.0':
+        exp = dedent("""\
+        Dask Series Structure:
+        npartitions=1
+        0    category[known]
+        2                ...
+        dtype: CategoricalDtype(categories=['a', 'b', 'c'], ordered=False)
+        Dask Name: from_pandas, 1 tasks""")
+    else:
+        exp = ("Dask Series Structure:\n"
+               "npartitions=1\n"
+               "0    category[known]\n"
+               "2                ...\n"
+               "dtype: category\n"
+               "Dask Name: from_pandas, 1 tasks")
     assert repr(known) == exp
-    exp = ("Dask Series Structure:\n"
-           "npartitions=1\n"
-           "0    category[unknown]\n"
-           "2                  ...\n"
-           "dtype: category\n"
-           "Dask Name: from_pandas, 1 tasks")
+    if PANDAS_VERSION >= '0.21.0':
+        exp = dedent("""\
+        Dask Series Structure:
+        npartitions=1
+        0    category[unknown]
+        2                  ...
+        dtype: CategoricalDtype(categories=['__UNKNOWN_CATEGORIES__'], ordered=False)
+        Dask Name: from_pandas, 1 tasks""")
+
+    else:
+        exp = ("Dask Series Structure:\n"
+               "npartitions=1\n"
+               "0    category[unknown]\n"
+               "2                  ...\n"
+               "dtype: category\n"
+               "Dask Name: from_pandas, 1 tasks")
     assert repr(unknown) == exp

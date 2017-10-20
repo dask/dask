@@ -1,10 +1,10 @@
 # Install conda
 case "$(uname -s)" in
     'Darwin')
-        MINICONDA_FILENAME="Miniconda3-latest-MacOSX-x86_64.sh"
+        MINICONDA_FILENAME="Miniconda3-4.3.21-MacOSX-x86_64.sh"
         ;;
     'Linux')
-        MINICONDA_FILENAME="Miniconda3-latest-Linux-x86_64.sh"
+        MINICONDA_FILENAME="Miniconda3-4.3.21-Linux-x86_64.sh"
         ;;
     *)  ;;
 esac
@@ -26,42 +26,40 @@ echo "numpy $NUMPY" >> $CONDA_PREFIX/conda-meta/pinned
 echo "pandas $PANDAS" >> $CONDA_PREFIX/conda-meta/pinned
 
 # Install dependencies.
-# XXX: Due to a weird conda dependency resolution issue, we need to install
-# dependencies in two separate calls, otherwise we sometimes get version
-# incompatible with the installed version of numpy leading to crashes. This
-# seems to have to do with differences between conda-forge and defaults.
 conda install -q -c conda-forge \
     numpy \
     pandas \
     bcolz \
     blosc \
     bokeh \
+    boto3 \
     chest \
+    cloudpickle \
     coverage \
     cytoolz \
+    distributed \
     graphviz \
     h5py \
     ipython \
     partd \
     psutil \
-    pytables \
-    pytest \
+    "pytest<=3.1.1" \
     scikit-image \
     scikit-learn \
     scipy \
     sqlalchemy \
     toolz
 
-# Specify numpy/pandas here to prevent upgrade/downgrade
-conda install -q -c conda-forge \
-    distributed \
-    cloudpickle \
+# install pytables from defaults for now
+conda install -q pytables
 
 pip install -q git+https://github.com/dask/partd --upgrade --no-deps
 pip install -q git+https://github.com/dask/zict --upgrade --no-deps
 pip install -q git+https://github.com/dask/distributed --upgrade --no-deps
+pip install -q git+https://github.com/mrocklin/sparse --upgrade --no-deps
+pip install -q git+https://github.com/dask/s3fs --upgrade --no-deps
 
-if [[ $PYTHONOPTIMIZE != '2' ]]; then
+if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]] && [[ $NUMPY < '1.13.0' ]]; then
     conda install -q -c conda-forge numba cython
     pip install -q git+https://github.com/dask/fastparquet
 fi
@@ -74,12 +72,19 @@ pip install -q \
     cachey \
     graphviz \
     moto \
+    pyarrow \
     --upgrade --no-deps
 
 pip install -q \
+    cityhash \
     flake8 \
+    mmh3 \
     pandas_datareader \
-    pytest-xdist
+    pytest-xdist \
+    xxhash \
+    pycodestyle
 
 # Install dask
 pip install -q --no-deps -e .[complete]
+echo conda list
+conda list

@@ -4,6 +4,9 @@ import numpy as np
 import pandas as pd
 from toolz import partial
 
+from ..utils import derived_from
+from .utils import is_categorical_dtype
+
 
 def maybe_wrap_pandas(obj, x):
     if isinstance(x, np.ndarray):
@@ -24,6 +27,8 @@ class Accessor(object):
     * _accessor
     * _accessor_name
     """
+    _not_implemented = set()
+
     def __init__(self, series):
         from .core import Series
         if not isinstance(series, Series):
@@ -60,12 +65,18 @@ class Accessor(object):
                                            self._accessor_name, attr, args,
                                            kwargs, meta=meta, token=token)
 
+    @property
+    def _delegates(self):
+        return set(dir(self._accessor)).difference(self._not_implemented)
+
     def __dir__(self):
-        return sorted(set(dir(type(self)) + list(self.__dict__) +
-                      dir(self._accessor)))
+        o = self._delegates
+        o.update(self.__dict__)
+        o.update(dir(type(self)))
+        return list(o)
 
     def __getattr__(self, key):
-        if key in dir(self._accessor):
+        if key in self._delegates:
             if isinstance(getattr(self._accessor, key), property):
                 return self._property_map(key)
             else:
@@ -96,7 +107,23 @@ class StringAccessor(Accessor):
     """
     _accessor = pd.Series.str
     _accessor_name = 'str'
+    _not_implemented = {'get_dummies'}
 
     def _validate(self, series):
-        if not series.dtype == 'object':
+        if not (series.dtype == 'object' or (
+                is_categorical_dtype(series) and
+                series.cat.categories.dtype == 'object')):
             raise AttributeError("Can only use .str accessor with object dtype")
+
+    @derived_from(pd.core.strings.StringMethods)
+    def split(self, pat=None, n=-1):
+        return self._function_map('split', pat=pat, n=n)
+
+    def __getitem__(self, index):
+        return self._series.map_partitions(str_get, index,
+                                           meta=self._series._meta)
+
+
+def str_get(series, index):
+    """ Implements series.str[index] """
+    return series.str[index]

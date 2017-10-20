@@ -41,7 +41,7 @@ on Dask's distributed scheduler,
 Familiar user interface
 -----------------------
 
-**Dask DataFrame** mimics Pandas
+**Dask DataFrame** mimics Pandas - :doc:`documentation <dataframe>`
 
 .. code-block:: python
 
@@ -49,7 +49,7 @@ Familiar user interface
     df = pd.read_csv('2015-01-01.csv')      df = dd.read_csv('2015-*-*.csv')
     df.groupby(df.user_id).value.mean()     df.groupby(df.user_id).value.mean().compute()
 
-**Dask Array** mimics NumPy
+**Dask Array** mimics NumPy - :doc:`documentation <array>`
 
 .. code-block:: python
 
@@ -59,7 +59,7 @@ Familiar user interface
                                                               chunks=(1000, 1000))
    x - x.mean(axis=1)                       x - x.mean(axis=1).compute()
 
-**Dask Bag** mimics iterators, Toolz, and PySpark
+**Dask Bag** mimics iterators, Toolz, and PySpark - :doc:`documentation <bag>`
 
 .. code-block:: python
 
@@ -67,7 +67,7 @@ Familiar user interface
    b = db.read_text('2015-*-*.json.gz').map(json.loads)
    b.pluck('name').frequencies().topk(10, lambda pair: pair[1]).compute()
 
-**Dask Delayed** mimics for loops and wraps custom code
+**Dask Delayed** mimics for loops and wraps custom code - :doc:`documentation <delayed>`
 
 .. code-block:: python
 
@@ -81,7 +81,7 @@ Familiar user interface
    result.compute()
 
 The **concurrent.futures** interface provides general submission of custom
-tasks:
+tasks: - :doc:`documentation <futures>`
 
 .. code-block:: python
 
@@ -156,6 +156,7 @@ then you should start here.
 * :doc:`bag`
 * :doc:`dataframe`
 * :doc:`delayed`
+* :doc:`futures`
 
 .. toctree::
    :maxdepth: 1
@@ -166,6 +167,7 @@ then you should start here.
    bag.rst
    dataframe.rst
    delayed.rst
+   futures.rst
    machine-learning.rst
 
 **Scheduling**
@@ -242,6 +244,7 @@ often a better choice.  If you are a *core developer*, then you should start her
 * :doc:`caching`
 * :doc:`bytes`
 * :doc:`remote-data-services`
+* :doc:`custom-collections`
 * :doc:`cite`
 
 .. toctree::
@@ -259,22 +262,20 @@ often a better choice.  If you are a *core developer*, then you should start her
    caching.rst
    bytes.rst
    remote-data-services.rst
+   custom-collections.rst
    cite.rst
    funding.rst
 
-Dask is part of the Blaze_ project supported and offered by
-`Continuum Analytics`_ and contributors under a `3-clause BSD license`_.
+Dask is supported by `Anaconda Inc`_ and develops under the BSD 3-clause license.
 
-.. _Blaze: http://continuum.io/open-source/blaze
-.. _`Continuum Analytics`: http://continuum.io
+.. _`Anaconda Inc`: https://www.anaconda.com
 .. _`3-clause BSD license`: https://github.com/dask/dask/blob/master/LICENSE.txt
 
-.. _`#dask tag`: http://stackoverflow.com/questions/tagged/dask
+.. _`#dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub issue tracker`: https://github.com/dask/dask/issues
-.. _`blaze-dev@continuum.io`: https://groups.google.com/a/continuum.io/forum/#!forum/blaze-dev
 .. _`gitter chat room`: https://gitter.im/dask/dask
 .. _`xarray`: https://xray.readthedocs.io/en/stable/
-.. _`scikit-image`: http://scikit-image.org/docs/stable/
+.. _`scikit-image`: https://scikit-image.org/docs/stable/
 .. _`scikit-allel`: https://scikits.appspot.com/scikit-allel
-.. _`pandas`: http://pandas.pydata.org/pandas-docs/version/0.17.0/
+.. _`pandas`: https://pandas.pydata.org/pandas-docs/version/0.17.0/
 .. _`distributed scheduler`: https://distributed.readthedocs.io/en/latest/

@@ -9,18 +9,16 @@ from warnings import warn
 import pandas as pd
 from toolz import merge
 
-from ...async import get_sync
-from ...base import tokenize
+from .io import _link
+from ..core import DataFrame, new_dd_object
+from ... import multiprocessing
+from ...base import tokenize, compute_as_if_collection
+from ...bytes.utils import build_name_function
 from ...compatibility import PY3
 from ...context import _globals
 from ...delayed import Delayed, delayed
-from ... import multiprocessing
-
-from ..core import DataFrame, new_dd_object
-
-from ...utils import build_name_function, effective_get, get_scheduler_lock
-
-from .io import _link
+from ...local import get_sync
+from ...utils import effective_get, get_scheduler_lock
 
 
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
@@ -196,6 +194,11 @@ def to_hdf(df, path, key, mode='a', append=False, get=None,
     if single_node:
         kwargs2['append'] = True
 
+    filenames = []
+    for i in range(0,df.npartitions):
+        i_name = name_function(i)
+        filenames.append(fmt_obj(path, i_name))
+
     for i in range(1, df.npartitions):
         i_name = name_function(i)
         task = (_pd_to_hdf, pd_to_hdf, lock,
@@ -213,7 +216,8 @@ def to_hdf(df, path, key, mode='a', append=False, get=None,
         keys = [(name, i) for i in range(df.npartitions)]
 
     if compute:
-        return DataFrame._get(dsk, keys, get=get, **dask_kwargs)
+        compute_as_if_collection(DataFrame, dsk, keys, get=get, **dask_kwargs)
+        return filenames
     else:
         return delayed([Delayed(k, dsk) for k in keys])
 
@@ -341,15 +345,31 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
 
     Parameters
     ----------
-    pattern : pattern (string), or buffer to read from. Can contain wildcards
+    pattern : string, list
+        File pattern (string), buffer to read from, or list of file
+        paths. Can contain wildcards.
     key : group identifier in the store. Can contain wildcards
     start : optional, integer (defaults to 0), row number to start at
     stop : optional, integer (defaults to None, the last row), row number to
         stop at
-    columns : optional, a list of columns that if not None, will limit the
-        return columns
-    chunksize : optional, positive integer
-        maximal number of rows per partition
+    columns : list of columns, optional
+        A list of columns that if not None, will limit the return
+        columns (default is None)
+    chunksize : positive integer, optional
+        Maximal number of rows per partition (default is 1000000).
+    sorted_index : boolean, optional
+        Option to specify whether or not the input hdf files have a sorted
+        index (default is False).
+    lock : boolean, optional
+        Option to use a lock to prevent concurrency issues (default is True).
+    mode : {'a', 'r', 'r+'}, default 'a'. Mode to use when opening file(s).
+        'r'
+            Read-only; no data can be modified.
+        'a'
+            Append; an existing file is opened for reading and writing,
+            and if the file does not exist it is created.
+        'r+'
+            It is similar to 'a', but the file must already exist.
 
     Returns
     -------
@@ -365,6 +385,8 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
 
     >>> dd.read_hdf('myfile.*.hdf5', '/x')  # doctest: +SKIP
 
+    >>> dd.read_hdf(['myfile.1.hdf5', 'myfile.2.hdf5'], '/x')  # doctest: +SKIP
+
     Load multiple datasets
 
     >>> dd.read_hdf('myfile.1.hdf5', '/*')  # doctest: +SKIP
@@ -373,7 +395,10 @@ def read_hdf(pattern, key, start=0, stop=None, columns=None,
         lock = get_scheduler_lock()
 
     key = key if key.startswith('/') else '/' + key
-    paths = sorted(glob(pattern))
+    if isinstance(pattern, str):
+        paths = sorted(glob(pattern))
+    else:
+        paths = pattern
     if (start != 0 or stop is not None) and len(paths) > 1:
         raise NotImplementedError(read_hdf_error_msg)
     if chunksize <= 0:

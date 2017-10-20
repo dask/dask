@@ -15,6 +15,9 @@ To start off, common groupby operations like
 var, count, nunique`` are all quite fast and efficient, even if partitions are
 not cleanly divided with known divisions.  This is the common case.
 
+Additionally, if divisions are known then applying an arbitrary function to
+groups is efficient when the grouping columns include the index.
+
 Joins are also quite fast when joining a Dask dataframe to a Pandas dataframe
 or when joining two Dask dataframes along their index.  No special
 considerations need to be made when operating in these common cases.
@@ -25,21 +28,23 @@ time.
 
 .. code-block:: python
 
-   >>> df.groupby(columns).known_reduction()    # Fast and common case
-   >>> dask_df.join(pandas_df, on=column)       # Fast and common case
+   >>> df.groupby(columns).known_reduction()             # Fast and common case
+   >>> df.groupby(columns_with_index).apply(user_fn)     # Fast and common case
+   >>> dask_df.join(pandas_df, on=column)                # Fast and common case
 
 Difficult Cases
 ---------------
 
-In some cases, such as when applying an arbitrary function to groups, when
-joining along non-index columns, or when explicitly setting an unsorted column
-to be the index, we may need to trigger a full dataset shuffle
+In some cases, such as when applying an arbitrary function to groups (when not
+grouping on index with known divisions), when joining along non-index columns,
+or when explicitly setting an unsorted column to be the index, we may need to
+trigger a full dataset shuffle
 
 .. code-block:: python
 
-   >>> df.groupby(columns).apply(arbitrary_user_function)  # Requires shuffle
-   >>> lhs.join(rhs, on=column)                            # Requires shuffle
-   >>> df.set_index(column)                                # Requires shuffle
+   >>> df.groupby(columns_no_index).apply(user_fn)   # Requires shuffle
+   >>> lhs.join(rhs, on=column)                      # Requires shuffle
+   >>> df.set_index(column)                          # Requires shuffle
 
 A shuffle is necessary when we need to re-sort our data along a new index.  For
 example if we have banking records that are organized by time and we now want
@@ -99,3 +104,49 @@ keyword argument to ``groupby`` or ``set_index``
 
     df.set_index(column, method='disk')
     df.set_index(column, method='tasks')
+
+
+Aggregate
+=========
+
+Dask support Pandas' ``aggregate`` syntax to run multiple reductions on the
+same groups. Common reductions, such as ``max``, ``sum``, ``mean`` are directly
+supported:
+
+.. code-block:: python
+
+    >>> df.groupby(columns).aggregate(['sum', 'mean', 'max', 'min'])
+
+Dask also supports user defined reductions. To ensure proper performance, the
+reduction has to be formulated in terms of three independent steps. The
+``chunk`` step is applied to each partition independently and reduces the data
+within a partition. The ``aggregate`` combines the within partition results.
+The optional ``finalize`` step combines the results returned from the
+``aggregate`` step and should return a single final column. For Dask to
+recognize the reduction, it has to be passed as an instance of
+``dask.dataframe.Aggregation``.
+
+For example, ``sum`` could be implemented as
+
+.. code-block:: python
+
+    custom_sum = dd.Aggregation('custom_sum', lambda s: s.sum(), lambda s0: s0.sum())
+    df.groupby('g').agg(custom_sum)
+
+The name argument should be different from existing reductions to avoid data
+corruption. The arguments to each function are pre-grouped series objects,
+similar to ``df.groupby('g')['value']``.
+
+Many reductions can only be implemented with multiple temporaries. To implement
+these reductions, the steps should return tuples and expect multiple arguments.
+A mean function can be implemented as
+
+.. code-block:: python
+
+    custom_mean = dd.Aggregation(
+        'custom_mean',
+        lambda s: (s.count(), s.sum()),
+        lambda count, sum: (count.sum(), sum.sum()),
+        lambda count, sum: sum / count,
+    )
+    df.groupby('g').agg(custom_mean)

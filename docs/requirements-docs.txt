@@ -1,6 +1,7 @@
-numpydoc
+numpydoc==0.6
 sphinx
 sphinx_rtd_theme
 toolz
 cloudpickle
 pandas>=0.19.0
+distributed

@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import datetime
 import warnings
 from functools import wraps
 
@@ -14,18 +15,32 @@ from .utils import make_meta
 
 def overlap_chunk(func, prev_part, current_part, next_part, before, after,
                   args, kwargs):
-    if ((prev_part is not None and prev_part.shape[0] != before) or
-            (next_part is not None and next_part.shape[0] != after)):
-        raise NotImplementedError("Partition size is less than overlapping "
-                                  "window size. Try using ``df.repartition`` "
-                                  "to increase the partition size.")
+
+    msg = ("Partition size is less than overlapping "
+           "window size. Try using ``df.repartition`` "
+           "to increase the partition size.")
+
+    if prev_part is not None and isinstance(before, int):
+        if prev_part.shape[0] != before:
+            raise NotImplementedError(msg)
+
+    if next_part is not None and isinstance(after, int):
+        if next_part.shape[0] != after:
+            raise NotImplementedError(msg)
+    # We validate that the window isn't too large for tiemdeltas in map_overlap
+
     parts = [p for p in (prev_part, current_part, next_part) if p is not None]
     combined = pd.concat(parts)
     out = func(combined, *args, **kwargs)
     if prev_part is None:
         before = None
+    if isinstance(before, datetime.timedelta):
+        before = len(prev_part)
+
     if next_part is None:
         return out.iloc[before:]
+    if isinstance(after, datetime.timedelta):
+        after = len(next_part)
     return out.iloc[before:-after]
 
 
@@ -37,11 +52,11 @@ def map_overlap(func, df, before, after, *args, **kwargs):
     func : function
         Function applied to each partition.
     df : dd.DataFrame, dd.Series
-    before : int
-        The number of rows to prepend to partition ``i`` from the end of
+    before : int or timedelta
+        The rows to prepend to partition ``i`` from the end of
         partition ``i - 1``.
-    after : int
-        The number of rows to append to partition ``i`` from the beginning
+    after : int or timedelta
+        The rows to append to partition ``i`` from the beginning
         of partition ``i + 1``.
     args, kwargs :
         Arguments and keywords to pass to the function. The partition will
@@ -51,9 +66,14 @@ def map_overlap(func, df, before, after, *args, **kwargs):
     --------
     dd.DataFrame.map_overlap
     """
-    if not (isinstance(before, int) and before >= 0 and
-            isinstance(after, int) and after >= 0):
-        raise ValueError("before and after must be positive integers")
+    if (isinstance(before, datetime.timedelta) or isinstance(after, datetime.timedelta)):
+        if not df.index._meta_nonempty.is_all_dates:
+            raise TypeError("Must have a `DatetimeIndex` when using string offset "
+                            "for `before` and `after`")
+    else:
+        if not (isinstance(before, int) and before >= 0 and
+                isinstance(after, int) and after >= 0):
+            raise ValueError("before and after must be positive integers")
 
     if 'token' in kwargs:
         func_name = kwargs.pop('token')
@@ -74,21 +94,48 @@ def map_overlap(func, df, before, after, *args, **kwargs):
     df_name = df._name
 
     dsk = df.dask.copy()
-    if before:
+
+    # Have to do the checks for too large windows in the time-delta case
+    # here instead of in `overlap_chunk`, since we can't rely on fix-frequency
+    # index
+
+    timedelta_partition_message = (
+        "Partition size is less than specified window. "
+        "Try using ``df.repartition`` to increase the partition size"
+    )
+
+    if before and isinstance(before, int):
         dsk.update({(name_a, i): (M.tail, (df_name, i), before)
+                    for i in range(df.npartitions - 1)})
+        prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
+    elif isinstance(before, datetime.timedelta):
+        # Assumes monotonic (increasing?) index
+        deltas = pd.Series(df.divisions).diff().iloc[1:-1]
+        if (before > deltas).any():
+            raise ValueError(timedelta_partition_message)
+        dsk.update({(name_a, i): (_tail_timedelta, (df_name, i), (df_name, i + 1), before)
                     for i in range(df.npartitions - 1)})
         prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
     else:
         prevs = [None] * df.npartitions
 
-    if after:
+    if after and isinstance(after, int):
         dsk.update({(name_b, i): (M.head, (df_name, i), after)
+                    for i in range(1, df.npartitions)})
+        nexts = [(name_b, i) for i in range(1, df.npartitions)] + [None]
+    elif isinstance(after, datetime.timedelta):
+        # TODO: Do we have a use-case for this? Pandas doesn't allow negative rolling windows
+        deltas = pd.Series(df.divisions).diff().iloc[1:-1]
+        if (after > deltas).any():
+            raise ValueError(timedelta_partition_message)
+
+        dsk.update({(name_b, i): (_head_timedelta, (df_name, i - 0), (df_name, i), after)
                     for i in range(1, df.npartitions)})
         nexts = [(name_b, i) for i in range(1, df.npartitions)] + [None]
     else:
         nexts = [None] * df.npartitions
 
-    for i, (prev, current, next) in enumerate(zip(prevs, df._keys(), nexts)):
+    for i, (prev, current, next) in enumerate(zip(prevs, df.__dask_keys__(), nexts)):
         dsk[(name, i)] = (overlap_chunk, func, prev, current, next, before,
                           after, args, kwargs)
 
@@ -114,6 +161,40 @@ def wrap_rolling(func, method_name):
         rolling = arg.rolling(window, **rolling_kwargs)
         return getattr(rolling, method_name)(*args, **method_kwargs)
     return rolling
+
+
+def _head_timedelta(current, next_, after):
+    """Return rows of ``next_`` whose index is before the last
+    observation in ``current`` + ``after``.
+
+    Parameters
+    ----------
+    current : DataFrame
+    next_ : DataFrame
+    after : timedelta
+
+    Returns
+    -------
+    overlapped : DataFrame
+    """
+    return next_[next_.index < (current.index.max() + after)]
+
+
+def _tail_timedelta(prev, current, before):
+    """Return rows of ``prev`` whose index is after the first
+    observation in ``current`` - ``before``.
+
+    Parameters
+    ----------
+    current : DataFrame
+    next_ : DataFrame
+    before : timedelta
+
+    Returns
+    -------
+    overlapped : DataFrame
+    """
+    return prev[prev.index > (current.index.min() - before)]
 
 
 rolling_count = wrap_rolling(pd.rolling_count, 'count')
@@ -155,10 +236,18 @@ class Rolling(object):
         self.window = window
         self.min_periods = min_periods
         self.center = center
-        self.win_type = win_type
         self.axis = axis
+        self.win_type = win_type
         # Allow pandas to raise if appropriate
-        obj._meta.rolling(**self._rolling_kwargs())
+        pd_roll = obj._meta.rolling(**self._rolling_kwargs())
+        # Using .rolling(window='2s'), pandas will convert the
+        # offset str to a window in nanoseconds. But pandas doesn't
+        # accept the integer window with win_type='freq', so we store
+        # that information here.
+        # See https://github.com/pandas-dev/pandas/issues/15969
+        self._window = pd_roll.window
+        self._win_type = pd_roll.win_type
+        self._min_periods = pd_roll.min_periods
 
     def _rolling_kwargs(self):
         return {'window': self.window,
@@ -167,13 +256,22 @@ class Rolling(object):
                 'win_type': self.win_type,
                 'axis': self.axis}
 
+    @property
+    def _has_single_partition(self):
+        """
+        Indicator for whether the object has a single partition (True)
+        or multiple (False).
+        """
+        return (self.axis in (1, 'columns') or
+                (isinstance(self.window, int) and self.window <= 1) or
+                self.obj.npartitions == 1)
+
     def _call_method(self, method_name, *args, **kwargs):
         rolling_kwargs = self._rolling_kwargs()
         meta = pandas_rolling_method(self.obj._meta_nonempty, rolling_kwargs,
                                      method_name, *args, **kwargs)
 
-        if (self.axis in (1, 'columns') or self.window <= 1 or
-                self.obj.npartitions == 1):
+        if self._has_single_partition:
             # There's no overlap just use map_partitions
             return self.obj.map_partitions(pandas_rolling_method,
                                            rolling_kwargs, method_name,
@@ -183,10 +281,12 @@ class Rolling(object):
         if self.center:
             before = self.window // 2
             after = self.window - before - 1
+        elif self._win_type == 'freq':
+            before = pd.Timedelta(self.window)
+            after = 0
         else:
             before = self.window - 1
             after = 0
-
         return map_overlap(pandas_rolling_method, self.obj, before, after,
                            rolling_kwargs, method_name, *args,
                            token=method_name, meta=meta, **kwargs)
@@ -240,6 +340,18 @@ class Rolling(object):
         return self._call_method('apply', func, args=args, kwargs=kwargs)
 
     def __repr__(self):
+
+        def order(item):
+            k, v = item
+            _order = {'window': 0, 'min_periods': 1, 'center': 2,
+                      'win_type': 3, 'axis': 4}
+            return _order[k]
+
+        rolling_kwargs = self._rolling_kwargs()
+        # pandas translates the '2S' offset to nanoseconds
+        rolling_kwargs['window'] = self._window
+        rolling_kwargs['win_type'] = self._win_type
         return 'Rolling [{}]'.format(','.join(
             '{}={}'.format(k, v)
-            for k, v in self._rolling_kwargs().items() if v is not None))
+            for k, v in sorted(rolling_kwargs.items(), key=order)
+            if v is not None))

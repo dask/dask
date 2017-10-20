@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import gzip
 import os
 from time import sleep
+import sys
 
 import pytest
 from toolz import concat, valmap, partial
@@ -62,12 +63,42 @@ def test_read_bytes_blocksize_none():
         assert sum(map(len, values)) == len(files)
 
 
+def test_read_bytes_blocksize_float():
+    with filetexts(files, mode='b'):
+        sample, vals = read_bytes('.test.account*', blocksize=5.0)
+        results = compute(*concat(vals))
+        ourlines = b"".join(results).split(b'\n')
+        testlines = b"".join(files.values()).split(b'\n')
+        assert set(ourlines) == set(testlines)
+
+        with pytest.raises(TypeError):
+            read_bytes('.test.account*', blocksize=5.5)
+
+
 def test_with_urls():
     with filetexts(files, mode='b'):
         # OS-independent file:// URI with glob *
         url = to_uri('.test.accounts.') + '*'
         sample, values = read_bytes(url, blocksize=None)
         assert sum(map(len, values)) == len(files)
+
+
+@pytest.mark.skipif(sys.platform == 'win32',
+                    reason="pathlib and moto clash on windows")
+def test_with_paths():
+    pathlib = pytest.importorskip('pathlib')
+    with filetexts(files, mode='b'):
+        url = pathlib.Path('./.test.accounts.*')
+        sample, values = read_bytes(url, blocksize=None)
+        assert sum(map(len, values)) == len(files)
+    with pytest.raises(OSError):
+        # relative path doesn't work
+        url = pathlib.Path('file://.test.accounts.*')
+        read_bytes(url, blocksize=None)
+    pytest.importorskip("s3fs")
+    with pytest.raises(ValueError):
+        url = pathlib.Path('s3://bucket/test.accounts.*')
+        sample, values = read_bytes(url, blocksize=None)
 
 
 def test_read_bytes_block():
@@ -205,9 +236,9 @@ def test_compression_text(fmt):
 
 @pytest.mark.parametrize('fmt', list(compression.seekable_files))
 def test_getsize(fmt):
-    fs = LocalFileSystem()
     compress = compression.compress[fmt]
     with filetexts({'.tmp.getsize': compress(b'1234567890')}, mode='b'):
+        fs = LocalFileSystem()
         assert fs.logical_size('.tmp.getsize', fmt) == 10
 
 
@@ -317,6 +348,22 @@ def test_py2_local_bytes(tmpdir):
 
     with lazy_file as f:
         assert all(isinstance(line, unicode) for line in f)
+
+
+def test_abs_paths(tmpdir):
+    tmpdir = str(tmpdir)
+    here = os.getcwd()
+    os.chdir(tmpdir)
+    with open('tmp', 'w') as f:
+        f.write('hi')
+    out = LocalFileSystem().glob('*')
+    assert len(out) == 1
+    assert os.sep in out[0]
+    assert tmpdir in out[0] and 'tmp' in out[0]
+
+    fs = LocalFileSystem()
+    os.chdir(here)
+    assert fs.open('tmp', 'r').read() == 'hi'
 
 
 try:

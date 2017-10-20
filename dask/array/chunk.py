@@ -191,3 +191,7 @@ def topk(k, x):
 def arange(start, stop, step, length, dtype):
     res = np.arange(start, stop, step, dtype)
     return res[:-1] if len(res) > length else res
+
+
+def astype(x, astype_dtype=None, **kwargs):
+    return x.astype(astype_dtype, **kwargs)

@@ -1,22 +1,29 @@
 from __future__ import absolute_import, division, print_function
 
 from ..utils import ignoring
-from .core import (Array, stack, concatenate, take, tensordot, transpose,
-        from_array, choose, where, coarsen, insert, broadcast_to, ravel,
-        roll, fromfunction, unique, store, squeeze, topk, bincount, tile,
-        digitize, histogram, map_blocks, atop, to_hdf5, dot, cov, array,
-        dstack, vstack, hstack, to_npy_stack, from_npy_stack, compress,
-        from_delayed, round, swapaxes, repeat, asarray)
-from .core import (around, isnull, notnull, isclose, eye, triu,
-                   tril, diag, corrcoef)
+from .core import (Array, concatenate, stack, from_array, store, map_blocks,
+                   atop, to_hdf5, to_npy_stack, from_npy_stack, from_delayed,
+                   asarray, asanyarray, broadcast_to)
+from .routines import (take, choose, argwhere, where, coarsen, insert,
+                       ravel, roll, unique, squeeze, topk, ptp, diff, ediff1d,
+                       bincount, digitize, histogram, cov, array, dstack,
+                       vstack, hstack, compress, extract, round, count_nonzero,
+                       flatnonzero, nonzero, around, isnull, notnull, isclose,
+                       allclose, corrcoef, swapaxes, tensordot, transpose, dot,
+                       apply_along_axis, apply_over_axes, result_type,
+                       atleast_1d, atleast_2d, atleast_3d)
 from .reshape import reshape
-from .ufunc import (logaddexp, logaddexp2, conj, exp, log, log2, log10, log1p,
-        expm1, sqrt, square, sin, cos, tan, arcsin, arccos, arctan, arctan2,
-        hypot, sinh, cosh, tanh, arcsinh, arccosh, arctanh, deg2rad, rad2deg,
-        logical_and, logical_or, logical_xor, logical_not, maximum, minimum,
+from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
+        true_divide, floor_divide, negative, power, remainder, mod, conj, exp,
+        exp2, log, log2, log10, log1p, expm1, sqrt, square, cbrt, reciprocal,
+        sin, cos, tan, arcsin, arccos, arctan, arctan2, hypot, sinh, cosh,
+        tanh, arcsinh, arccosh, arctanh, deg2rad, rad2deg, greater,
+        greater_equal, less, less_equal, not_equal, equal, logical_and,
+        logical_or, logical_xor, logical_not, maximum, minimum,
         fmax, fmin, isreal, iscomplex, isfinite, isinf, isnan, signbit,
-        copysign, nextafter, ldexp, fmod, floor, ceil, trunc, degrees, radians,
-        rint, fix, angle, real, imag, clip, fabs, sign, absolute, frexp, modf)
+        copysign, nextafter, spacing, ldexp, fmod, floor, ceil, trunc, degrees,
+        radians, rint, fix, angle, real, imag, clip, fabs, sign, absolute,
+        i0, sinc, nan_to_num, frexp, modf, divide)
 from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
                          moment,
                          argmin, argmax,
@@ -26,10 +33,14 @@ from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
 from .percentile import percentile
 with ignoring(ImportError):
     from .reductions import nanprod, nancumprod, nancumsum
+with ignoring(ImportError):
+    from . import ma
 from . import random, linalg, ghost, learn, fft
 from .wrap import ones, zeros, empty, full
+from .creation import ones_like, zeros_like, empty_like, full_like
 from .rechunk import rechunk
 from ..context import set_options
 from ..base import compute
 from .optimization import optimize
-from .creation import arange, linspace
+from .creation import (arange, linspace, indices, diag, eye, triu, tril,
+                       fromfunction, tile, repeat)

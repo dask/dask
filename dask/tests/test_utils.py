@@ -1,52 +1,16 @@
-import os
-import pickle
 import functools
+import operator
+import pickle
 
 import numpy as np
 import pytest
 
-from dask.compatibility import BZ2File, GzipFile, LZMAFile, LZMA_AVAILABLE
 from dask.sharedict import ShareDict
-from dask.utils import (textblock, filetext, takes_multiple_arguments,
-                        Dispatch, tmpfile, random_state_data, file_size,
-                        infer_storage_options, eq_strict, memory_repr,
-                        methodcaller, M, skip_doctest, SerializableLock,
-                        funcname, ndeepmap, ensure_dict)
+from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
+                        memory_repr, methodcaller, M, skip_doctest,
+                        SerializableLock, funcname, ndeepmap, ensure_dict,
+                        extra_titles, asciitable, itemgetter, partial_by_order)
 from dask.utils_test import inc
-
-SKIP_XZ = pytest.mark.skipif(not LZMA_AVAILABLE, reason="no lzma library")
-
-
-@pytest.mark.parametrize('myopen,compression',
-                         [(open, None), (GzipFile, 'gzip'), (BZ2File, 'bz2'),
-                          SKIP_XZ((LZMAFile, 'xz'))])
-def test_textblock(myopen, compression):
-    text = b'123 456 789 abc def ghi'.replace(b' ', os.linesep.encode())
-    with filetext(text, open=myopen, mode='wb') as fn:
-        text = ''.join(textblock(fn, 1, 11, compression)).encode()
-        assert text == ('456 789 '.replace(' ', os.linesep)).encode()
-        assert set(map(len, text.split())) == set([3])
-
-        k = 3 + len(os.linesep)
-        assert ''.join(textblock(fn, 0, k, compression)).encode() == ('123' + os.linesep).encode()
-        assert ''.join(textblock(fn, k, k, compression)).encode() == b''
-
-
-@pytest.mark.parametrize('myopen,compression',
-                         [(open, None), (GzipFile, 'gzip'), (BZ2File, 'bz2'),
-                          SKIP_XZ((LZMAFile, 'xz'))])
-def test_filesize(myopen, compression):
-    text = b'123 456 789 abc def ghi'.replace(b' ', os.linesep.encode())
-    with filetext(text, open=myopen, mode='wb') as fn:
-        assert file_size(fn, compression) == len(text)
-
-
-def test_textblock_multibyte_linesep():
-    text = b'12 34 56 78'.replace(b' ', b'\r\n')
-    with filetext(text, mode='wb') as fn:
-        text = [line.encode()
-                for line in textblock(fn, 5, 13, linesep='\r\n', buffersize=2)]
-        assert text == [line.encode() for line in ('56\r\n', '78')]
 
 
 def test_takes_multiple_arguments():
@@ -68,6 +32,17 @@ def test_takes_multiple_arguments():
     assert not takes_multiple_arguments(Singular)
     assert takes_multiple_arguments(Multi)
 
+    def f():
+        pass
+
+    assert not takes_multiple_arguments(f)
+
+    def vararg(*args):
+        pass
+
+    assert takes_multiple_arguments(vararg)
+    assert not takes_multiple_arguments(vararg, varargs=False)
+
 
 def test_dispatch():
     foo = Dispatch()
@@ -80,41 +55,38 @@ def test_dispatch():
         pass
     b = Bar()
     assert foo(1) == 2
+    assert foo.dispatch(int)(1) == 2
     assert foo(1.0) == 0.0
     assert foo(b) == b
     assert foo((1, 2.0, b)) == (2, 1.0, b)
 
 
-def test_gh606():
-    encoding = 'utf-16-le'
-    euro = u'\u20ac'
-    yen = u'\u00a5'
-    linesep = os.linesep
+def test_dispatch_lazy():
+    # this tests the recursive component of dispatch
+    foo = Dispatch()
+    foo.register(int, lambda a: a)
 
-    bin_euro = u'\u20ac'.encode(encoding)
-    bin_linesep = linesep.encode(encoding)
+    import decimal
 
-    data = (euro * 10) + linesep + (yen * 10) + linesep + (euro * 10)
-    bin_data = data.encode(encoding)
+    # keep it outside lazy dec for test
+    def foo_dec(a):
+        return a + 1
 
-    with tmpfile() as fn:
-        with open(fn, 'wb') as f:
-            f.write(bin_data)
+    @foo.register_lazy("decimal")
+    def register_decimal():
+        import decimal
+        foo.register(decimal.Decimal, foo_dec)
 
-        stop = len(bin_euro) * 10 + len(bin_linesep) + 1
-        res = ''.join(textblock(fn, 1, stop, encoding=encoding)).encode(encoding)
-        assert res == ((yen * 10) + linesep).encode(encoding)
-
-        stop = len(bin_euro) * 10 + len(bin_linesep) + 1
-        res = ''.join(textblock(fn, 0, stop, encoding=encoding)).encode(encoding)
-        assert res == ((euro * 10) + linesep + (yen * 10) + linesep).encode(encoding)
+    # This test needs to be *before* any other calls
+    assert foo.dispatch(decimal.Decimal) == foo_dec
+    assert foo(decimal.Decimal(1)) == decimal.Decimal(2)
+    assert foo(1) == 1
 
 
-@pytest.mark.slow
 def test_random_state_data():
     seed = 37
     state = np.random.RandomState(seed)
-    n = 100000
+    n = 10000
 
     # Use an integer
     states = random_state_data(n, seed)
@@ -123,6 +95,7 @@ def test_random_state_data():
     # Use RandomState object
     states2 = random_state_data(n, state)
     for s1, s2 in zip(states, states2):
+        assert s1.shape == (624,)
         assert (s1 == s2).all()
 
     # Consistent ordering
@@ -131,71 +104,6 @@ def test_random_state_data():
 
     for s1, s2 in zip(states, states2):
         assert (s1 == s2).all()
-
-
-def test_infer_storage_options():
-    so = infer_storage_options('/mnt/datasets/test.csv')
-    assert so.pop('protocol') == 'file'
-    assert so.pop('path') == '/mnt/datasets/test.csv'
-    assert not so
-
-    assert infer_storage_options('./test.csv')['path'] == './test.csv'
-    assert infer_storage_options('../test.csv')['path'] == '../test.csv'
-
-    so = infer_storage_options('C:\\test.csv')
-    assert so.pop('protocol') == 'file'
-    assert so.pop('path') == 'C:\\test.csv'
-    assert not so
-
-    assert infer_storage_options('d:\\test.csv')['path'] == 'd:\\test.csv'
-    assert infer_storage_options('\\test.csv')['path'] == '\\test.csv'
-    assert infer_storage_options('.\\test.csv')['path'] == '.\\test.csv'
-    assert infer_storage_options('test.csv')['path'] == 'test.csv'
-
-    so = infer_storage_options(
-        'hdfs://username:pwd@Node:123/mnt/datasets/test.csv?q=1#fragm',
-        inherit_storage_options={'extra': 'value'})
-    assert so.pop('protocol') == 'hdfs'
-    assert so.pop('username') == 'username'
-    assert so.pop('password') == 'pwd'
-    assert so.pop('host') == 'Node'
-    assert so.pop('port') == 123
-    assert so.pop('path') == '/mnt/datasets/test.csv'
-    assert so.pop('url_query') == 'q=1'
-    assert so.pop('url_fragment') == 'fragm'
-    assert so.pop('extra') == 'value'
-    assert not so
-
-    so = infer_storage_options('hdfs://User-name@Node-name.com/mnt/datasets/test.csv')
-    assert so.pop('username') == 'User-name'
-    assert so.pop('host') == 'Node-name.com'
-
-    assert infer_storage_options('s3://Bucket-name.com/test.csv')['host'] == 'Bucket-name.com'
-    assert infer_storage_options('http://127.0.0.1:8080/test.csv')['host'] == '127.0.0.1'
-
-    with pytest.raises(KeyError):
-        infer_storage_options('file:///bucket/file.csv', {'path': 'collide'})
-    with pytest.raises(KeyError):
-        infer_storage_options('hdfs:///bucket/file.csv', {'protocol': 'collide'})
-
-
-@pytest.mark.parametrize('urlpath, expected_path', (
-    (r'c:\foo\bar', r'c:\foo\bar'),
-    (r'C:\\foo\bar', r'C:\\foo\bar'),
-    (r'c:/foo/bar', r'c:/foo/bar'),
-    (r'file:///c|\foo\bar', r'c:\foo\bar'),
-    (r'file:///C|/foo/bar', r'C:/foo/bar'),
-    (r'file:///C:/foo/bar', r'C:/foo/bar'),
-))
-def test_infer_storage_options_c(urlpath, expected_path):
-    so = infer_storage_options(urlpath)
-    assert so['protocol'] == 'file'
-    assert so['path'] == expected_path
-
-
-def test_eq_strict():
-    assert eq_strict('a', 'a')
-    assert not eq_strict(b'a', u'a')
 
 
 def test_memory_repr():
@@ -223,12 +131,60 @@ def test_skip_doctest():
 >>> xxx"""
 
     res = skip_doctest(example)
-    assert res == """>>> xxx    # doctest: +SKIP
+    assert res == """>>> xxx  # doctest: +SKIP
 >>>
 >>> # comment
->>> xxx    # doctest: +SKIP"""
+>>> xxx  # doctest: +SKIP"""
 
     assert skip_doctest(None) == ''
+
+
+def test_extra_titles():
+    example = """
+
+    Notes
+    -----
+    hello
+
+    Foo
+    ---
+
+    Notes
+    -----
+    bar
+    """
+
+    expected = """
+
+    Notes
+    -----
+    hello
+
+    Foo
+    ---
+
+    Extra Notes
+    -----------
+    bar
+    """
+
+    assert extra_titles(example) == expected
+
+
+def test_asciitable():
+    res = asciitable(['fruit', 'color'],
+                     [('apple', 'red'),
+                      ('banana', 'yellow'),
+                      ('tomato', 'red'),
+                      ('pear', 'green')])
+    assert res == ('+--------+--------+\n'
+                   '| fruit  | color  |\n'
+                   '+--------+--------+\n'
+                   '| apple  | red    |\n'
+                   '| banana | yellow |\n'
+                   '| tomato | red    |\n'
+                   '| pear   | green  |\n'
+                   '+--------+--------+')
 
 
 def test_SerializableLock():
@@ -347,3 +303,16 @@ def test_ensure_dict():
     md['x'] = 1
     assert type(ensure_dict(md)) is dict
     assert ensure_dict(md) == d
+
+
+def test_itemgetter():
+    data = [1, 2, 3]
+    g = itemgetter(1)
+    assert g(data) == 2
+    g2 = pickle.loads(pickle.dumps(g))
+    assert g2(data) == 2
+    assert g2.index == 1
+
+
+def test_partial_by_order():
+    assert partial_by_order(5, function=operator.add, other=[(1, 20)]) == 25

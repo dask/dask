@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import collections
+from functools import wraps
 import inspect
 
 import numpy as np
@@ -9,6 +11,9 @@ try:
     import scipy.fftpack
 except ImportError:
     scipy = None
+
+from .core import concatenate as _concatenate
+from .creation import arange as _arange
 
 
 chunk_error = ("Dask array only supports taking an FFT along an axis that \n"
@@ -211,3 +216,65 @@ irfft2 = fft_wrap(np.fft.irfft2, dtype=np.float_)
 irfftn = fft_wrap(np.fft.irfftn, dtype=np.float_)
 hfft = fft_wrap(np.fft.hfft, dtype=np.float_)
 ihfft = fft_wrap(np.fft.ihfft, dtype=np.complex_)
+
+
+def _fftfreq_block(i, n, d):
+    r = i.copy()
+    r[i >= (n + 1) // 2] -= n
+    r /= n * d
+    return r
+
+
+@wraps(np.fft.fftfreq)
+def fftfreq(n, d=1.0, chunks=None):
+    n = int(n)
+    d = float(d)
+
+    r = _arange(n, dtype=float, chunks=chunks)
+
+    return r.map_blocks(_fftfreq_block, dtype=float, n=n, d=d)
+
+
+@wraps(np.fft.rfftfreq)
+def rfftfreq(n, d=1.0, chunks=None):
+    n = int(n)
+    d = float(d)
+
+    r = _arange(n // 2 + 1, dtype=float, chunks=chunks)
+    r /= n * d
+
+    return r
+
+
+def _fftshift_helper(x, axes=None, inverse=False):
+    if axes is None:
+        axes = list(range(x.ndim))
+    elif not isinstance(axes, collections.Sequence):
+        axes = (axes,)
+
+    y = x
+    for i in axes:
+        n = y.shape[i]
+        n_2 = (n + int(inverse is False)) // 2
+
+        l = y.ndim * [slice(None)]
+        l[i] = slice(None, n_2)
+        l = tuple(l)
+
+        r = y.ndim * [slice(None)]
+        r[i] = slice(n_2, None)
+        r = tuple(r)
+
+        y = _concatenate([y[r], y[l]], axis=i)
+
+    return y
+
+
+@wraps(np.fft.fftshift)
+def fftshift(x, axes=None):
+    return _fftshift_helper(x, axes=axes, inverse=False)
+
+
+@wraps(np.fft.ifftshift)
+def ifftshift(x, axes=None):
+    return _fftshift_helper(x, axes=axes, inverse=True)

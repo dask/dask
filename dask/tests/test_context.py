@@ -1,4 +1,4 @@
-from dask.context import set_options, _globals
+from dask.context import set_options, _globals, globalmethod
 import dask.array as da
 import dask
 
@@ -34,3 +34,39 @@ def test_set_options_context_manger():
         assert _globals['foo'] == 'baz'
     finally:
         del _globals['foo']
+
+
+def foo():
+    return 'foo'
+
+
+def bar():
+    return 'bar'
+
+
+class Foo(object):
+    @globalmethod(key='f')
+    def f():
+        return 1
+
+    g = globalmethod(foo, key='g', falsey=bar)
+
+
+def test_globalmethod():
+    x = Foo()
+
+    assert x.f() == 1
+
+    with dask.set_options(f=lambda: 2):
+        assert x.f() == 2
+
+    with dask.set_options(f=foo):
+        assert x.f is foo
+        assert x.f() == 'foo'
+
+    assert x.g is foo
+    assert x.g() == 'foo'
+
+    with dask.set_options(g=False):
+        assert x.g is bar
+        assert x.g() == 'bar'

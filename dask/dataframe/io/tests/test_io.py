@@ -4,8 +4,7 @@ import pandas.util.testing as tm
 
 import pytest
 from threading import Lock
-
-import threading
+from multiprocessing.pool import ThreadPool
 
 import dask.array as da
 import dask.dataframe as dd
@@ -13,9 +12,9 @@ from dask.dataframe.io.io import _meta_from_array
 from dask.delayed import Delayed, delayed
 
 from dask.utils import tmpfile
-from dask.async import get_sync
+from dask.local import get_sync
 
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, is_categorical_dtype
 
 
 ####################
@@ -119,13 +118,14 @@ def test_from_array_with_record_dtype():
 
 def test_from_bcolz_multiple_threads():
     bcolz = pytest.importorskip('bcolz')
+    pool = ThreadPool(processes=5)
 
-    def check():
+    def check(i):
         t = bcolz.ctable([[1, 2, 3], [1., 2., 3.], ['a', 'b', 'a']],
                          names=['x', 'y', 'a'])
         d = dd.from_bcolz(t, chunksize=2)
         assert d.npartitions == 2
-        assert str(d.dtypes['a']) == 'category'
+        assert is_categorical_dtype(d.dtypes['a'])
         assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
         assert list(d.a.compute(get=get_sync)) == ['a', 'b', 'a']
 
@@ -139,14 +139,7 @@ def test_from_bcolz_multiple_threads():
         assert (sorted(dd.from_bcolz(t, chunksize=2).dask) !=
                 sorted(dd.from_bcolz(t, chunksize=3).dask))
 
-    threads = []
-    for i in range(5):
-        thread = threading.Thread(target=check)
-        thread.start()
-        threads.append(thread)
-
-    for thread in threads:
-        thread.join()
+    pool.map(check, range(5))
 
 
 def test_from_bcolz():
@@ -156,7 +149,7 @@ def test_from_bcolz():
                      names=['x', 'y', 'a'])
     d = dd.from_bcolz(t, chunksize=2)
     assert d.npartitions == 2
-    assert str(d.dtypes['a']) == 'category'
+    assert is_categorical_dtype(d.dtypes['a'])
     assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
     assert list(d.a.compute(get=get_sync)) == ['a', 'b', 'a']
     L = list(d.index.compute(get=get_sync))
@@ -231,10 +224,12 @@ def test_from_pandas_dataframe():
     tm.assert_frame_equal(df, ddf.compute())
     ddf = dd.from_pandas(df, chunksize=8)
     msg = 'Exactly one of npartitions and chunksize must be specified.'
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError) as err:
         dd.from_pandas(df, npartitions=2, chunksize=2)
-    with tm.assertRaisesRegexp((ValueError, AssertionError), msg):
+    assert msg in str(err.value)
+    with pytest.raises((ValueError, AssertionError)) as err:
         dd.from_pandas(df)
+    assert msg in str(err.value)
     assert len(ddf.dask) == 3
     assert len(ddf.divisions) == len(ddf.dask) + 1
     assert isinstance(ddf.divisions[0], type(df.index[0]))
@@ -308,12 +303,14 @@ def test_from_pandas_single_row():
     assert_eq(ddf, df)
 
 
+@pytest.mark.skipif(np.__version__ < '1.11',
+                    reason='datetime unit unsupported in NumPy < 1.11')
 def test_from_pandas_with_datetime_index():
     df = pd.DataFrame({"Date": ["2015-08-28", "2015-08-27", "2015-08-26",
                                 "2015-08-25", "2015-08-24", "2015-08-21",
                                 "2015-08-20", "2015-08-19", "2015-08-18"],
                        "Val": list(range(9))})
-    df.Date = df.Date.astype('datetime64')
+    df.Date = df.Date.astype('datetime64[ns]')
     ddf = dd.from_pandas(df, 2)
     assert_eq(df, ddf)
     ddf = dd.from_pandas(df, chunksize=2)
@@ -506,8 +503,16 @@ def test_from_delayed():
         assert list(s.map_partitions(my_len).compute()) == [1, 2, 3, 4]
         assert ddf.known_divisions == (divisions is not None)
 
+    meta2 = [(c, 'f8') for c in df.columns]
+    assert_eq(dd.from_delayed(dfs, meta=meta2), df)
+    assert_eq(dd.from_delayed([d.a for d in dfs], meta=('a', 'f8')), df.a)
+
     with pytest.raises(ValueError):
         dd.from_delayed(dfs, meta=meta, divisions=[0, 1, 3, 6])
+
+    with pytest.raises(ValueError) as e:
+        dd.from_delayed(dfs, meta=meta.a).compute()
+    assert str(e.value).startswith('Metadata mismatch found in `from_delayed`')
 
 
 def test_from_delayed_sorted():
@@ -528,3 +533,12 @@ def test_to_delayed():
     assert isinstance(b, Delayed)
 
     assert_eq(a.compute(), df.iloc[:2])
+
+
+def test_to_delayed_optimizes():
+    df = pd.DataFrame({'x': list(range(20))})
+    ddf = dd.from_pandas(df, npartitions=20)
+    x = (ddf + 1).loc[:2]
+
+    d = x.to_delayed()[0]
+    assert len(d.dask) < 20

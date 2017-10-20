@@ -11,11 +11,11 @@ import pytest
 
 try:
     import bokeh
-except:
+except ImportError:
     bokeh = None
 try:
     import psutil
-except:
+except ImportError:
     psutil = None
 
 
@@ -80,6 +80,7 @@ def test_resource_profiler():
     with ResourceProfiler(dt=0.01) as rprof:
         get(dsk2, 'c')
     results = rprof.results
+    assert len(results) > 0
     assert all(isinstance(i, tuple) and len(i) == 3 for i in results)
 
     rprof.clear()
@@ -139,6 +140,25 @@ def test_cache_profiler():
     assert tics[-1] == results[-1].metric
     assert cprof._metric_name == 'nbytes'
     assert CacheProfiler(metric=nbytes, metric_name='foo')._metric_name == 'foo'
+
+
+@pytest.mark.parametrize(
+    'profiler',
+    [Profiler,
+     pytest.param(lambda: ResourceProfiler(dt=0.01),
+                  marks=pytest.mark.skipif("not psutil")),
+     CacheProfiler])
+def test_register(profiler):
+    prof = profiler()
+    try:
+        prof.register()
+        get(dsk2, 'c')
+        n = len(prof.results)
+        assert n > 0
+        get(dsk2, 'c')
+        assert len(prof.results) > n
+    finally:
+        prof.unregister()
 
 
 @pytest.mark.skipif("not bokeh")
@@ -204,7 +224,10 @@ def test_profiler_plot():
     assert check_title(p, "Not the default")
     # Test empty, checking for errors
     prof.clear()
-    prof.visualize(show=False, save=False)
+    with pytest.warns(None) as record:
+        prof.visualize(show=False, save=False)
+
+    assert len(record) == 0
 
 
 @pytest.mark.skipif("not bokeh")
@@ -222,9 +245,21 @@ def test_resource_profiler_plot():
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
     assert check_title(p, "Not the default")
-    # Test empty, checking for errors
+
+    # Test with empty and one point, checking for errors
     rprof.clear()
-    rprof.visualize(show=False, save=False)
+    for results in [[], [(1.0, 0, 0)]]:
+        rprof.results = results
+        with pytest.warns(None) as record:
+            p = rprof.visualize(show=False, save=False)
+        assert len(record) == 0
+        # Check bounds are valid
+        assert p.x_range.start == 0
+        assert p.x_range.end == 1
+        assert p.y_range.start == 0
+        assert p.y_range.end == 100
+        assert p.extra_y_ranges['memory'].start == 0
+        assert p.extra_y_ranges['memory'].end == 100
 
 
 @pytest.mark.skipif("not bokeh")
@@ -244,7 +279,10 @@ def test_cache_profiler_plot():
     assert p.axis[1].axis_label == 'Cache Size (non-standard)'
     # Test empty, checking for errors
     cprof.clear()
-    cprof.visualize(show=False, save=False)
+    with pytest.warns(None) as record:
+        cprof.visualize(show=False, save=False)
+
+    assert len(record) == 0
 
 
 @pytest.mark.skipif("not bokeh")

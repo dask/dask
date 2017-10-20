@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+from contextlib import contextmanager
+
 from .context import _globals
 
 __all__ = ['Callback', 'add_callbacks']
@@ -83,6 +85,22 @@ def unpack_callbacks(cbs):
         return [[i for i in f if i] for f in zip(*cbs)]
     else:
         return [(), (), (), (), ()]
+
+
+@contextmanager
+def local_callbacks(callbacks=None):
+    """Allows callbacks to work with nested schedulers.
+
+    Callbacks will only be used by the first started scheduler they encounter.
+    This means that only the outermost scheduler will use global callbacks."""
+    global_callbacks = callbacks is None
+    if global_callbacks:
+        callbacks, _globals['callbacks'] = _globals['callbacks'], set()
+    try:
+        yield callbacks or ()
+    finally:
+        if global_callbacks:
+            _globals['callbacks'] = callbacks
 
 
 def normalize_callback(cb):

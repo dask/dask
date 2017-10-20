@@ -13,10 +13,27 @@ df = pd.DataFrame({'a': np.random.randn(N).cumsum(),
                    'e': np.random.randint(100, size=(N,))})
 ddf = dd.from_pandas(df, 3)
 
+idx = (pd.date_range('2016-01-01', freq='3s', periods=100) |
+       pd.date_range('2016-01-01', freq='5s', periods=100))[:N]
+
+ts = pd.DataFrame({'a': np.random.randn(N).cumsum(),
+                   'b': np.random.randint(100, size=(N,)),
+                   'c': np.random.randint(100, size=(N,)),
+                   'd': np.random.randint(100, size=(N,)),
+                   'e': np.random.randint(100, size=(N,))},
+                  index=idx)
+dts = dd.from_pandas(ts, 3)
+
 
 def shifted_sum(df, before, after, c=0):
     a = df.shift(before)
     b = df.shift(-after)
+    return df + a + b + c
+
+
+def ts_shifted_sum(df, before, after, c=0):
+    a = df.shift(before.seconds)
+    b = df.shift(-after.seconds)
     return df + a + b + c
 
 
@@ -66,6 +83,11 @@ def test_map_partitions_errors():
     with pytest.raises(NotImplementedError):
         ddf.map_overlap(shifted_sum, 0, 100, 0, 100, c=2).compute()
 
+    # Offset with non-datetime
+    with pytest.raises(TypeError):
+        ddf.map_overlap(shifted_sum, pd.Timedelta('1s'), pd.Timedelta('1s'),
+                        0, 2, c=2)
+
 
 def mad(x):
     return np.fabs(x - x.mean()).mean()
@@ -73,29 +95,31 @@ def mad(x):
 
 def rolling_functions_tests(p, d):
     # Old-fashioned rolling API
-    assert_eq(pd.rolling_count(p, 3), dd.rolling_count(d, 3))
-    assert_eq(pd.rolling_sum(p, 3), dd.rolling_sum(d, 3))
-    assert_eq(pd.rolling_mean(p, 3), dd.rolling_mean(d, 3))
-    assert_eq(pd.rolling_median(p, 3), dd.rolling_median(d, 3))
-    assert_eq(pd.rolling_min(p, 3), dd.rolling_min(d, 3))
-    assert_eq(pd.rolling_max(p, 3), dd.rolling_max(d, 3))
-    assert_eq(pd.rolling_std(p, 3), dd.rolling_std(d, 3))
-    assert_eq(pd.rolling_var(p, 3), dd.rolling_var(d, 3))
-    # see note around test_rolling_dataframe for logic concerning precision
-    assert_eq(pd.rolling_skew(p, 3),
-              dd.rolling_skew(d, 3), check_less_precise=True)
-    assert_eq(pd.rolling_kurt(p, 3),
-              dd.rolling_kurt(d, 3), check_less_precise=True)
-    assert_eq(pd.rolling_quantile(p, 3, 0.5), dd.rolling_quantile(d, 3, 0.5))
-    assert_eq(pd.rolling_apply(p, 3, mad), dd.rolling_apply(d, 3, mad))
-    assert_eq(pd.rolling_window(p, 3, win_type='boxcar'),
-              dd.rolling_window(d, 3, win_type='boxcar'))
-    # Test with edge-case window sizes
-    assert_eq(pd.rolling_sum(p, 0), dd.rolling_sum(d, 0))
-    assert_eq(pd.rolling_sum(p, 1), dd.rolling_sum(d, 1))
-    # Test with kwargs
-    assert_eq(pd.rolling_sum(p, 3, min_periods=3),
-              dd.rolling_sum(d, 3, min_periods=3))
+    with pytest.warns(FutureWarning):
+        assert_eq(pd.rolling_count(p, 3), dd.rolling_count(d, 3))
+        assert_eq(pd.rolling_sum(p, 3), dd.rolling_sum(d, 3))
+        assert_eq(pd.rolling_mean(p, 3), dd.rolling_mean(d, 3))
+        assert_eq(pd.rolling_median(p, 3), dd.rolling_median(d, 3))
+        assert_eq(pd.rolling_min(p, 3), dd.rolling_min(d, 3))
+        assert_eq(pd.rolling_max(p, 3), dd.rolling_max(d, 3))
+        assert_eq(pd.rolling_std(p, 3), dd.rolling_std(d, 3))
+        assert_eq(pd.rolling_var(p, 3), dd.rolling_var(d, 3))
+        # see note around test_rolling_dataframe for logic concerning precision
+        assert_eq(pd.rolling_skew(p, 3),
+                  dd.rolling_skew(d, 3), check_less_precise=True)
+        assert_eq(pd.rolling_kurt(p, 3),
+                  dd.rolling_kurt(d, 3), check_less_precise=True)
+        assert_eq(pd.rolling_quantile(p, 3, 0.5), dd.rolling_quantile(d, 3, 0.5))
+        assert_eq(pd.rolling_apply(p, 3, mad), dd.rolling_apply(d, 3, mad))
+        # Test with edge-case window sizes
+        assert_eq(pd.rolling_sum(p, 0), dd.rolling_sum(d, 0))
+        assert_eq(pd.rolling_sum(p, 1), dd.rolling_sum(d, 1))
+        # Test with kwargs
+        assert_eq(pd.rolling_sum(p, 3, min_periods=3),
+                  dd.rolling_sum(d, 3, min_periods=3))
+        pytest.importorskip("scipy")
+        assert_eq(pd.rolling_window(p, 3, win_type='boxcar'),
+                  dd.rolling_window(d, 3, win_type='boxcar'))
 
 
 def test_rolling_functions_series():
@@ -111,7 +135,7 @@ def test_rolling_functions_dataframe():
     rolling_functions_tests(df, ddf)
 
 
-@pytest.mark.parametrize('method,args,check_less_precise', [
+rolling_method_args_check_less_precise = [
     ('count', (), False),
     ('sum', (), False),
     ('mean', (), False),
@@ -129,7 +153,11 @@ def test_rolling_functions_dataframe():
                           # as they involve third degree powers and higher
     ('quantile', (.38,), False),
     ('apply', (mad,), False),
-])
+]
+
+
+@pytest.mark.parametrize('method,args,check_less_precise',
+                         rolling_method_args_check_less_precise)
 @pytest.mark.parametrize('window', [1, 2, 4, 5])
 @pytest.mark.parametrize('center', [True, False])
 def test_rolling_methods(method, args, window, center, check_less_precise):
@@ -199,9 +227,59 @@ def test_rolling_partition_size():
 
 def test_rolling_repr():
     ddf = dd.from_pandas(pd.DataFrame([10] * 30), npartitions=3)
-    assert repr(ddf.rolling(4)) in {'Rolling [window=4,center=False,axis=0]',
-                                    'Rolling [window=4,axis=0,center=False]',
-                                    'Rolling [center=False,axis=0,window=4]',
-                                    'Rolling [center=False,window=4,axis=0]',
-                                    'Rolling [axis=0,window=4,center=False]',
-                                    'Rolling [axis=0,center=False,window=4]'}
+    assert repr(ddf.rolling(4)) == 'Rolling [window=4,center=False,axis=0]'
+
+
+def test_time_rolling_repr():
+    assert repr(dts.rolling('4s')) == (
+        'Rolling [window=4000000000,center=False,win_type=freq,axis=0]')
+
+
+def test_time_rolling_constructor():
+    result = dts.rolling('4s')
+    assert result.window == '4s'
+    assert result.min_periods is None
+    assert result.win_type is None
+
+    assert result._win_type == 'freq'
+    assert result._window == 4000000000  # ns
+    assert result._min_periods == 1
+
+
+@pytest.mark.parametrize('method,args,check_less_precise',
+                         rolling_method_args_check_less_precise)
+@pytest.mark.parametrize('window', ['1S', '2S', '3S', pd.offsets.Second(5)])
+def test_time_rolling_methods(method, args, window, check_less_precise):
+    # DataFrame
+    prolling = ts.rolling(window)
+    drolling = dts.rolling(window)
+    assert_eq(getattr(prolling, method)(*args),
+              getattr(drolling, method)(*args),
+              check_less_precise=check_less_precise)
+
+    # Series
+    prolling = ts.a.rolling(window)
+    drolling = dts.a.rolling(window)
+    assert_eq(getattr(prolling, method)(*args),
+              getattr(drolling, method)(*args),
+              check_less_precise=check_less_precise)
+
+
+@pytest.mark.parametrize('window', [pd.Timedelta('31s'), pd.Timedelta('1M')])
+def test_time_rolling_window_too_large(window):
+    with pytest.raises(ValueError):
+        dts.map_overlap(ts_shifted_sum, window, window, window, window, c=2)
+
+
+@pytest.mark.parametrize('before, after', [
+    ('6s', '6s'),
+    ('2s', '2s'),
+    ('6s', '2s'),
+])
+def test_time_rolling(before, after):
+    window = before
+    before = pd.Timedelta(before)
+    after = pd.Timedelta(after)
+    result = dts.map_overlap(lambda x: x.rolling(window).count(), before, after)
+    expected = dts.compute().rolling(window).count()
+    assert_eq(result, expected)

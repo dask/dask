@@ -1,6 +1,238 @@
 Changelog
 =========
 
+X.Y.Z / YYYY-MM-DD
+-------------------
+
+Array
++++++
+
+- Add ``atleast_1d``, ``atleast_2d``, and ``atleast_3d`` (:pr:`2760`)
+- Add ``allclose`` (:pr:`2771`)
+- Remove ``random.different_seeds`` from Dask Array API docs (:pr:`2772`)
+- Deprecate ``vnorm`` in favor of ``dask.array.linalg.norm`` (:pr:`2773`)
+- Reimplement ``unique`` to be lazy (:pr:`2775`)
+- Support broadcasting of Dask Arrays with 0-length dimensions (:pr:`2784`)
+
+DataFrame
++++++++++
+
+-
+
+Bag
++++
+
+-
+
+
+Core
+++++
+
+-  Allow tuples as sharedict keys (:pr:`2763`)
+-  Calling compute within a dask.distributed task defaults to distributed
+   scheduler (:pr:`2762`)
+-  Auto-import gcsfs when gcs:// protocol is used (:pr:`2776`)
+
+0.15.4 / 2017-10-06
+-------------------
+
+Array
++++++
+
+-  ``da.random.choice`` now works with array arguments (:pr:`2781`)
+-  Support indexing in arrays with np.int (fixes regression) (:pr:`2719`)
+-  Handle zero dimension with rechunking (:pr:`2747`)
+-  Support -1 as an alias for "size of the dimension" in ``chunks`` (:pr:`2749`)
+-  Call mkdir in array.to_npy_stack (:pr:`2709`)
+
+
+DataFrame
++++++++++
+
+-  Added the `.str` accessor to Categoricals with string categories (:pr:`2743`)
+-  Support int96 (spark) datetimes in parquet writer (:pr:`2711`)
+-  Pass on file scheme to fastparquet (:pr:`2714`)
+-  Support Pandas 0.21 (:pr:`2737`)
+
+
+Bag
++++
+
+- Add tree reduction support for foldby (:pr: `2710`)
+
+
+Core
+++++
+
+-  Drop s3fs from ``pip install dask[complete]`` (:pr:`2750`)
+
+
+0.15.3 / 2017-09-24
+-------------------
+
+Array
++++++
+
+-  Add masked arrays (:pr:`2301`)
+-  Add ``*_like array creation functions`` (:pr:`2640`)
+-  Indexing with unsigned integer array (:pr:`2647`)
+-  Improved slicing with boolean arrays of different dimensions (:pr:`2658`)
+-  Support literals in ``top`` and ``atop`` (:pr:`2661`)
+-  Optional axis argument in cumulative functions (:pr:`2664`)
+-  Improve tests on scalars with ``assert_eq`` (:pr:`2681`)
+-  Fix norm keepdims (:pr:`2683`)
+-  Add ``ptp`` (:pr:`2691`)
+-  Add apply_along_axis (:pr:`2690`) and apply_over_axes (:pr:`2702`)
+
+DataFrame
++++++++++
+
+-  Added ``Series.str[index]`` (:pr:`2634`)
+-  Allow the groupby by param to handle columns and index levels (:pr:`2636`)
+-  ``DataFrame.to_csv`` and ``Bag.to_textfiles`` now return the filenames to
+    which they have written (:pr:`2655`)
+-  Fix combination of ``partition_on`` and ``append`` in ``to_parquet``
+   (:pr:`2645`)
+-  Fix for parquet file schemes (:pr:`2667`)
+-  Repartition works with mixed categoricals (:pr:`2676`)
+
+Core
+++++
+
+-  ``python setup.py test`` now runs tests (:pr:`2641`)
+-  Added new cheatsheet (:pr:`2649`)
+-  Remove resize tool in Bokeh plots (:pr:`2688`)
+
+
+0.15.2 / 2017-08-25
+-------------------
+
+Array
++++++
+
+-  Remove spurious keys from map_overlap graph (:pr:`2520`)
+-  where works with non-bool condition and scalar values (:pr:`2543`) (:pr:`2549`)
+-  Improve compress (:pr:`2541`) (:pr:`2545`) (:pr:`2555`)
+-  Add argwhere, _nonzero, and where(cond) (:pr:`2539`)
+-  Generalize vindex in dask.array to handle multi-dimensional indices (:pr:`2573`)
+-  Add choose method (:pr:`2584`)
+-  Split code into reorganized files (:pr:`2595`)
+-  Add linalg.norm (:pr:`2597`)
+-  Add diff, ediff1d (:pr:`2607`), (:pr:`2609`)
+-  Improve dtype inference and reflection (:pr:`2571`)
+
+Bag
++++
+
+-   Remove deprecated Bag behaviors (:pr:`2525`)
+
+DataFrame
++++++++++
+
+-  Support callables in assign (:pr:`2513`)
+-  better error messages for read_csv (:pr:`2522`)
+-  Add dd.to_timedelta (:pr:`2523`)
+-  Verify metadata in from_delayed (:pr:`2534`) (:pr:`2591`)
+-  Add DataFrame.isin (:pr:`2558`)
+-  Read_hdf supports iterables of files (:pr:`2547`)
+
+Core
+++++
+
+-  Remove bare ``except:`` blocks everywhere (:pr:`2590`)
+
+0.15.1 / 2017-07-08
+-------------------
+
+-  Add storage_options to to_textfiles and to_csv (:pr:`2466`)
+-  Rechunk and simplify rfftfreq (:pr:`2473`), (:pr:`2475`)
+-  Better support ndarray subclasses (:pr:`2486`)
+-  Import star in dask.distributed (:pr:`2503`)
+-  Threadsafe cache handling with tokenization (:pr:`2511`)
+
+
+0.15.0 / 2017-06-09
+-------------------
+
+Array
++++++
+
+-  Add dask.array.stats submodule (:pr:`2269`)
+-  Support ``ufunc.outer`` (:pr:`2345`)
+-  Optimize fancy indexing by reducing graph overhead (:pr:`2333`) (:pr:`2394`)
+-  Faster array tokenization using alternative hashes (:pr:`2377`)
+-  Added the matmul ``@`` operator (:pr:`2349`)
+-  Improved coverage of the ``numpy.fft`` module (:pr:`2320`) (:pr:`2322`) (:pr:`2327`) (:pr:`2323`)
+-  Support NumPy's ``__array_ufunc__`` protocol (:pr:`2438`)
+
+Bag
++++
+
+-  Fix bug where reductions on bags with no partitions would fail (:pr:`2324`)
+-  Add broadcasting and variadic ``db.map`` top-level function.  Also remove
+   auto-expansion of tuples as map arguments (:pr:`2339`)
+-  Rename ``Bag.concat`` to ``Bag.flatten`` (:pr:`2402`)
+
+DataFrame
++++++++++
+
+-  Parquet improvements (:pr:`2277`) (:pr:`2422`)
+
+Core
+++++
+
+-  Move dask.async module to dask.local (:pr:`2318`)
+-  Support callbacks with nested scheduler calls (:pr:`2397`)
+-  Support pathlib.Path objects as uris  (:pr:`2310`)
+
+
+0.14.3 / 2017-05-05
+-------------------
+
+DataFrame
++++++++++
+
+-  Pandas 0.20.0 support
+
+0.14.2 / 2017-05-03
+-------------------
+
+Array
++++++
+
+-  Add da.indices (:pr:`2268`), da.tile (:pr:`2153`), da.roll (:pr:`2135`)
+-  Simultaneously support drop_axis and new_axis in da.map_blocks (:pr:`2264`)
+-  Rechunk and concatenate work with unknown chunksizes (:pr:`2235`) and (:pr:`2251`)
+-  Support non-numpy container arrays, notably sparse arrays (:pr:`2234`)
+-  Tensordot contracts over multiple axes (:pr:`2186`)
+-  Allow delayed targets in da.store (:pr:`2181`)
+-  Support interactions against lists and tuples (:pr:`2148`)
+-  Constructor plugins for debugging (:pr:`2142`)
+-  Multi-dimensional FFTs (single chunk) (:pr:`2116`)
+
+Bag
++++
+
+-  to_dataframe enforces consistent types (:pr:`2199`)
+
+DataFrame
++++++++++
+
+-  Set_index always fully sorts the index (:pr:`2290`)
+-  Support compatibility with pandas 0.20.0 (:pr:`2249`), (:pr:`2248`), and (:pr:`2246`)
+-  Support Arrow Parquet reader (:pr:`2223`)
+-  Time-based rolling windows (:pr:`2198`)
+-  Repartition can now create more partitions, not just less (:pr:`2168`)
+
+Core
+++++
+
+-  Always use absolute paths when on POSIX file system (:pr:`2263`)
+-  Support user provided graph optimizations (:pr:`2219`)
+-  Refactor path handling (:pr:`2207`)
+-  Improve fusion performance (:pr:`2129`), (:pr:`2131`), and (:pr:`2112`)
+
+
 0.14.1 / 2017-03-22
 -------------------
 
@@ -8,8 +240,7 @@ Array
 +++++
 
 -  Micro-optimize optimizations (:pr:`2058`)
--  Change slicing optimizations to avoid fusing raw numpy arrays (:pr:`2075`)
-  (:pr:`2080`)
+-  Change slicing optimizations to avoid fusing raw numpy arrays (:pr:`2075`) (:pr:`2080`)
 -  Dask.array operations now work on numpy arrays (:pr:`2079`)
 -  Reshape now works in a much broader set of cases (:pr:`2089`)
 -  Support deepcopy python protocol (:pr:`2090`)
@@ -24,12 +255,10 @@ DataFrame
 -  Fix to_parquet with empty partitions (:pr:`2020`)
 -  Optional ``npartitions='auto'`` mode in ``set_index`` (:pr:`2025`)
 -  Optimize shuffle performance (:pr:`2032`)
--  Support efficient repartitioning along time windows like
-  ``repartition(freq='12h')`` (:pr:`2059`)
+-  Support efficient repartitioning along time windows like ``repartition(freq='12h')`` (:pr:`2059`)
 -  Improve speed of categorize (:pr:`2010`)
 -  Support single-row dataframe arithmetic (:pr:`2085`)
--  Automatically avoid shuffle when setting index with a sorted column
-   (:pr:`2091`)
+-  Automatically avoid shuffle when setting index with a sorted column (:pr:`2091`)
 -  Improve handling of integer-na handling in read_csv (:pr:`2098`)
 
 Delayed

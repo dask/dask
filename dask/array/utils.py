@@ -9,7 +9,7 @@ import numpy as np
 from toolz import frequencies, concat
 
 from .core import Array
-from ..async import get_sync
+from ..local import get_sync
 from ..sharedict import ShareDict
 
 if LooseVersion(np.__version__) >= '1.10.0':
@@ -26,6 +26,15 @@ else:
         return np.allclose(a, b, **kwargs)
 
 
+def same_keys(a, b):
+    def key(k):
+        if isinstance(k, str):
+            return (k, -1, -1, -1)
+        else:
+            return k
+    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
+
+
 def _not_empty(x):
     return x.shape and 0 not in x.shape
 
@@ -35,7 +44,7 @@ def _check_dsk(dsk):
     if not isinstance(dsk, ShareDict):
         return
 
-    assert all(isinstance(k, str) for k in dsk.dicts)
+    assert all(isinstance(k, (tuple, str)) for k in dsk.dicts)
     freqs = frequencies(concat(dsk.dicts.values()))
     non_one = {k: v for k, v in freqs.items() if v != 1}
     assert not non_one, non_one
@@ -58,6 +67,8 @@ def assert_eq(a, b, check_shape=True, **kwargs):
         adt = a.dtype
         _check_dsk(a.dask)
         a = a.compute(get=get_sync)
+        if hasattr(a, 'todense'):
+            a = a.todense()
         if _not_empty(a):
             assert a.dtype == a_original.dtype
         if check_shape:
@@ -70,6 +81,8 @@ def assert_eq(a, b, check_shape=True, **kwargs):
         bdt = b.dtype
         _check_dsk(b.dask)
         b = b.compute(get=get_sync)
+        if hasattr(b, 'todense'):
+            b = b.todense()
         if _not_empty(b):
             assert b.dtype == b_original.dtype
         if check_shape:
@@ -83,11 +96,9 @@ def assert_eq(a, b, check_shape=True, **kwargs):
                              os.linesep.join(diff))
 
     try:
-        if _not_empty(a) and _not_empty(b):
-            # Treat all empty arrays as equivalent
-            assert a.shape == b.shape
-            assert allclose(a, b, **kwargs)
-        return
+        assert a.shape == b.shape
+        assert allclose(a, b, **kwargs)
+        return True
     except TypeError:
         pass
 

@@ -4,6 +4,8 @@ co-released.  We may want to check their status while releasing
 
 Release per project:
 
+*   Update release notes in docs/source/changelog.rst
+
 *   Tag commit
 
         git tag -a x.x.x -m 'Version x.x.x'
@@ -19,6 +21,13 @@ Release per project:
         twine upload dist/*
 
 *   Update conda recipe feedstock on `conda-forge <https://conda-forge.github.io/>`_.
+
     *  Update conda-smithy and run conda-smithy rerender
+
+            git clone git@github.com:conda-forge/distributed-feedstock
+            cd distributed-feedstock
+            conda install conda-smithy
+            conda-smithy rerender
+
     *  Get sha256 hash from pypi.org
     *  Update version number and hash in recipe

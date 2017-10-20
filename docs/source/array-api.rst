@@ -7,8 +7,11 @@ Top level user functions:
 
 .. autosummary::
    all
+   allclose
    angle
    any
+   apply_along_axis
+   apply_over_axes
    arange
    arccos
    arccosh
@@ -19,8 +22,12 @@ Top level user functions:
    arctanh
    argmax
    argmin
+   argwhere
    around
    array
+   atleast_1d
+   atleast_2d
+   atleast_3d
    bincount
    broadcast_to
    coarsen
@@ -34,21 +41,26 @@ Top level user functions:
    corrcoef
    cos
    cosh
+   count_nonzero
    cov
    cumprod
    cumsum
    deg2rad
    degrees
    diag
+   diff
    digitize
    dot
    dstack
+   ediff1d
    empty
+   empty_like
    exp
    expm1
    eye
    fabs
    fix
+   flatnonzero
    floor
    fmax
    fmin
@@ -56,10 +68,12 @@ Top level user functions:
    frexp
    fromfunction
    full
+   full_like
    histogram
    hstack
    hypot
    imag
+   indices
    insert
    isclose
    iscomplex
@@ -99,10 +113,13 @@ Top level user functions:
    nansum
    nanvar
    nextafter
+   nonzero
    notnull
    ones
+   ones_like
    percentile
    prod
+   ptp
    rad2deg
    radians
    ravel
@@ -110,6 +127,7 @@ Top level user functions:
    rechunk
    repeat
    reshape
+   result_type
    rint
    roll
    round
@@ -139,6 +157,7 @@ Top level user functions:
    vstack
    where
    zeros
+   zeros_like
 
 Fast Fourier Transforms
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -159,6 +178,10 @@ Fast Fourier Transforms
    fft.irfftn
    fft.hfft
    fft.ihfft
+   fft.fftfreq
+   fft.rfftfreq
+   fft.fftshift
+   fft.ifftshift
 
 Linear Algebra
 ~~~~~~~~~~~~~~
@@ -168,12 +191,35 @@ Linear Algebra
    linalg.inv
    linalg.lstsq
    linalg.lu
+   linalg.norm
    linalg.qr
    linalg.solve
    linalg.solve_triangular
    linalg.svd
    linalg.svd_compressed
    linalg.tsqr
+
+Masked Arrays
+~~~~~~~~~~~~~
+
+.. autosummary::
+   ma.filled
+   ma.fix_invalid
+   ma.getdata
+   ma.getmaskarray
+   ma.masked_array
+   ma.masked_equal
+   ma.masked_greater
+   ma.masked_greater_equal
+   ma.masked_inside
+   ma.masked_invalid
+   ma.masked_less
+   ma.masked_less_equal
+   ma.masked_not_equal
+   ma.masked_outside
+   ma.masked_values
+   ma.masked_where
+   ma.set_fill_value
 
 Random
 ~~~~~~
@@ -182,7 +228,7 @@ Random
    random.beta
    random.binomial
    random.chisquare
-   random.different_seeds
+   random.choice
    random.exponential
    random.f
    random.gamma
@@ -215,6 +261,28 @@ Random
    random.weibull
    random.zipf
 
+Stats
+~~~~~
+
+.. autosummary::
+   stats.ttest_ind
+   stats.ttest_1samp
+   stats.ttest_rel
+   stats.chisquare
+   stats.power_divergence
+   stats.skew
+   stats.skewtest
+   stats.kurtosis
+   stats.kurtosistest
+   stats.normaltest
+   stats.f_oneway
+   stats.moment
+
+Image Support
+~~~~~~~~~~~~~
+
+.. autosummary::
+   image.imread
 
 Slightly Overlapping Ghost Computations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -260,8 +328,11 @@ Other functions
 .. autofunction:: concatenate
 
 .. autofunction:: all
+.. autofunction:: allclose
 .. autofunction:: angle
 .. autofunction:: any
+.. autofunction:: apply_along_axis
+.. autofunction:: apply_over_axes
 .. autofunction:: arange
 .. autofunction:: arccos
 .. autofunction:: arccosh
@@ -272,8 +343,12 @@ Other functions
 .. autofunction:: arctanh
 .. autofunction:: argmax
 .. autofunction:: argmin
+.. autofunction:: argwhere
 .. autofunction:: around
 .. autofunction:: array
+.. autofunction:: atleast_1d
+.. autofunction:: atleast_2d
+.. autofunction:: atleast_3d
 .. autofunction:: bincount
 .. autofunction:: broadcast_to
 .. autofunction:: coarsen
@@ -287,21 +362,26 @@ Other functions
 .. autofunction:: corrcoef
 .. autofunction:: cos
 .. autofunction:: cosh
+.. autofunction:: count_nonzero
 .. autofunction:: cov
 .. autofunction:: cumprod
 .. autofunction:: cumsum
 .. autofunction:: deg2rad
 .. autofunction:: degrees
 .. autofunction:: diag
+.. autofunction:: diff
 .. autofunction:: digitize
 .. autofunction:: dot
 .. autofunction:: dstack
+.. autofunction:: ediff1d
 .. autofunction:: empty
+.. autofunction:: empty_like
 .. autofunction:: exp
 .. autofunction:: expm1
 .. autofunction:: eye
 .. autofunction:: fabs
 .. autofunction:: fix
+.. autofunction:: flatnonzero
 .. autofunction:: floor
 .. autofunction:: fmax
 .. autofunction:: fmin
@@ -309,10 +389,12 @@ Other functions
 .. autofunction:: frexp
 .. autofunction:: fromfunction
 .. autofunction:: full
+.. autofunction:: full_like
 .. autofunction:: histogram
 .. autofunction:: hstack
 .. autofunction:: hypot
 .. autofunction:: imag
+.. autofunction:: indices
 .. autofunction:: insert
 .. autofunction:: isclose
 .. autofunction:: iscomplex
@@ -352,10 +434,13 @@ Other functions
 .. autofunction:: nansum
 .. autofunction:: nanvar
 .. autofunction:: nextafter
+.. autofunction:: nonzero
 .. autofunction:: notnull
 .. autofunction:: ones
+.. autofunction:: ones_like
 .. autofunction:: percentile
 .. autofunction:: prod
+.. autofunction:: ptp
 .. autofunction:: rad2deg
 .. autofunction:: radians
 .. autofunction:: ravel
@@ -363,6 +448,7 @@ Other functions
 .. autofunction:: rechunk
 .. autofunction:: repeat
 .. autofunction:: reshape
+.. autofunction:: result_type
 .. autofunction:: rint
 .. autofunction:: roll
 .. autofunction:: round
@@ -392,6 +478,7 @@ Other functions
 .. autofunction:: vstack
 .. autofunction:: where
 .. autofunction:: zeros
+.. autofunction:: zeros_like
 
 .. currentmodule:: dask.array.linalg
 
@@ -399,12 +486,32 @@ Other functions
 .. autofunction:: inv
 .. autofunction:: lstsq
 .. autofunction:: lu
+.. autofunction:: norm
 .. autofunction:: qr
 .. autofunction:: solve
 .. autofunction:: solve_triangular
 .. autofunction:: svd
 .. autofunction:: svd_compressed
 .. autofunction:: tsqr
+
+.. currentmodule:: dask.array.ma
+.. autofunction:: filled
+.. autofunction:: fix_invalid
+.. autofunction:: getdata
+.. autofunction:: getmaskarray
+.. autofunction:: masked_array
+.. autofunction:: masked_equal
+.. autofunction:: masked_greater
+.. autofunction:: masked_greater_equal
+.. autofunction:: masked_inside
+.. autofunction:: masked_invalid
+.. autofunction:: masked_less
+.. autofunction:: masked_less_equal
+.. autofunction:: masked_not_equal
+.. autofunction:: masked_outside
+.. autofunction:: masked_values
+.. autofunction:: masked_where
+.. autofunction:: set_fill_value
 
 .. currentmodule:: dask.array.ghost
 
@@ -437,6 +544,10 @@ Other functions
 .. autofunction:: irfftn
 .. autofunction:: hfft
 .. autofunction:: ihfft
+.. autofunction:: fftfreq
+.. autofunction:: rfftfreq
+.. autofunction:: fftshift
+.. autofunction:: ifftshift
 
 .. currentmodule:: dask.array.random
 
@@ -474,6 +585,25 @@ Other functions
 .. autofunction:: wald
 .. autofunction:: weibull
 .. autofunction:: zipf
+
+.. currentmodule:: dask.array.stats
+
+.. autofunction:: ttest_ind
+.. autofunction:: ttest_1samp
+.. autofunction:: ttest_rel
+.. autofunction:: chisquare
+.. autofunction:: power_divergence
+.. autofunction:: skew
+.. autofunction:: skewtest
+.. autofunction:: kurtosis
+.. autofunction:: kurtosistest
+.. autofunction:: normaltest
+.. autofunction:: f_oneway
+.. autofunction:: moment
+
+.. currentmodule:: dask.array.image
+
+.. autofunction:: imread
 
 .. currentmodule:: dask.array.core
 

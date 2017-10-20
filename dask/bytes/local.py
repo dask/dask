@@ -1,15 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
 from glob import glob
-import logging
 import os
 
-from ..base import tokenize
-from ..utils import infer_storage_options
-
-logger = logging.getLogger(__name__)
-
 from . import core
+from .utils import infer_storage_options
+from ..base import tokenize
 
 
 class LocalFileSystem(core.FileSystem):
@@ -28,13 +24,13 @@ class LocalFileSystem(core.FileSystem):
         storage_options: key-value
             May be credentials, or other configuration specific to the backend.
         """
-        # no configuration necessary
-        pass
+        self.cwd = os.getcwd()
 
-    @staticmethod
-    def _trim_filename(fn):
-        so = infer_storage_options(fn)
-        return so['path']
+    def _trim_filename(self, fn):
+        path = infer_storage_options(fn)['path']
+        if not os.path.isabs(path):
+            path = os.path.normpath(os.path.join(self.cwd, path))
+        return path
 
     def glob(self, path):
         """For a template path, return matching files"""

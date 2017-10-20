@@ -134,6 +134,10 @@ class ResourceProfiler(Callback):
     manually.
 
     >>> prof.clear()  # doctest: +SKIP
+
+    Note that when used as a context manager data will be collected throughout
+    the duration of the enclosed block. In contrast, when registered globally
+    data will only be collected while a dask scheduler is active.
     """
     def __init__(self, dt=1):
         self._tracker = _Tracker(dt)
@@ -215,7 +219,6 @@ class _Tracker(Process):
 
     def run(self):
         pid = current_process()
-        ps = self._update_pids(pid)
         data = []
         while True:
             try:
@@ -226,11 +229,20 @@ class _Tracker(Process):
                 break
             elif msg == 'collect':
                 ps = self._update_pids(pid)
-                while not self.child_conn.poll():
+                while not data or not self.child_conn.poll():
                     tic = default_timer()
-                    mem = sum(p.memory_info().rss for p in ps) / 1e6
-                    cpu = sum(p.cpu_percent() for p in ps)
-                    data.append((tic, mem, cpu))
+                    mem = cpu = 0
+                    for p in ps:
+                        try:
+                            mem2 = p.memory_info().rss
+                            cpu2 = p.cpu_percent()
+                        except Exception: # could be a few different exceptions
+                            pass
+                        else:
+                            # Only increment if both were successful
+                            mem += mem2
+                            cpu += cpu2
+                    data.append((tic, mem / 1e6, cpu))
                     sleep(self.dt)
             elif msg == 'send_data':
                 self.child_conn.send(data)
@@ -292,6 +304,7 @@ class CacheProfiler(Callback):
     """
 
     def __init__(self, metric=None, metric_name=None):
+        self.clear()
         self._metric = metric if metric else lambda value: 1
         if metric_name:
             self._metric_name = metric_name

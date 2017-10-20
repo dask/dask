@@ -101,10 +101,12 @@ def align_partitions(*dfs):
         raise ValueError("dfs contains no DataFrame and Series")
     if not all(df.known_divisions for df in dfs1):
         raise ValueError("Not all divisions are known, can't align "
-                         "partitions. Please use `set_index` or "
-                         "`set_partition` to set the index.")
+                         "partitions. Please use `set_index` "
+                         "to set the index.")
 
     divisions = list(unique(merge_sorted(*[df.divisions for df in dfs1])))
+    if len(divisions) == 1:  # single value for index
+        divisions = (divisions[0], divisions[0])
     dfs2 = [df.repartition(divisions, force=True)
             if isinstance(df, _Frame) else df for df in dfs]
 
@@ -295,10 +297,9 @@ def single_partition_join(left, right, **kwargs):
     meta = pd.merge(left._meta_nonempty, right._meta_nonempty, **kwargs)
     name = 'merge-' + tokenize(left, right, **kwargs)
     if left.npartitions == 1:
-        left_key = first(left._keys())
-        dsk = dict(((name, i), (apply, pd.merge, [left_key, right_key],
-                                kwargs))
-                   for i, right_key in enumerate(right._keys()))
+        left_key = first(left.__dask_keys__())
+        dsk = {(name, i): (apply, pd.merge, [left_key, right_key], kwargs)
+               for i, right_key in enumerate(right.__dask_keys__())}
 
         if kwargs.get('right_index'):
             divisions = right.divisions
@@ -306,10 +307,9 @@ def single_partition_join(left, right, **kwargs):
             divisions = [None for _ in right.divisions]
 
     elif right.npartitions == 1:
-        right_key = first(right._keys())
-        dsk = dict(((name, i), (apply, pd.merge, [left_key, right_key],
-                                kwargs))
-                   for i, left_key in enumerate(left._keys()))
+        right_key = first(right.__dask_keys__())
+        dsk = {(name, i): (apply, pd.merge, [left_key, right_key], kwargs)
+               for i, left_key in enumerate(left.__dask_keys__())}
 
         if kwargs.get('left_index'):
             divisions = left.divisions
@@ -468,7 +468,7 @@ def stack_partitions(dfs, divisions, join='outer'):
         except (ValueError, TypeError):
             match = False
 
-        for key in df._keys():
+        for key in df.__dask_keys__():
             if match:
                 dsk[(name, i)] = key
             else:

@@ -4,14 +4,18 @@ from operator import getitem
 
 import numpy as np
 
-from .core import getarray, getarray_nofancy, getarray_inline
+from .core import getter, getter_nofancy, getter_inline
+from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
 from ..optimize import cull, fuse, inline_functions
 from ..utils import ensure_dict
 
 
+GETTERS = (getter, getter_nofancy, getter_inline, getitem)
+
+
 def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
-             inline_functions_fast_functions=(getarray_inline,), rename_fused_keys=True,
+             inline_functions_fast_functions=(getter_inline,), rename_fused_keys=True,
              **kwargs):
     """ Optimize dask for array computation
 
@@ -45,31 +49,35 @@ def hold_keys(dsk, dependencies):
     We don't want to fuse data present in the graph because it is easier to
     serialize as a raw value.
 
-    We don't want to fuse getitem/getarrays because we want to move around only
-    small pieces of data, rather than the underlying arrays.
+    We don't want to fuse chains after getitem/GETTERS because we want to
+    move around only small pieces of data, rather than the underlying arrays.
     """
     dependents = reverse_dict(dependencies)
     data = {k for k, v in dsk.items() if type(v) not in (tuple, str)}
-    getters = (getitem, getarray, getarray_inline)
 
     hold_keys = list(data)
     for dat in data:
         deps = dependents[dat]
         for dep in deps:
             task = dsk[dep]
-            try:
-                if task[0] in getters:
+            # If the task is a get* function, we walk up the chain, and stop
+            # when there's either more than one dependent, or the dependent is
+            # no longer a get* function or an alias. We then add the final
+            # key to the list of keys not to fuse.
+            if type(task) is tuple and task and task[0] in GETTERS:
+                try:
                     while len(dependents[dep]) == 1:
                         new_dep = next(iter(dependents[dep]))
                         new_task = dsk[new_dep]
-                        if new_task[0] in (getitem, getarray):
+                        # If the task is a get* or an alias, continue up the
+                        # linear chain
+                        if new_task[0] in GETTERS or new_task in dsk:
                             dep = new_dep
-                            task = new_task
                         else:
                             break
-                    hold_keys.append(dep)
-            except (IndexError, TypeError):
-                pass
+                except (IndexError, TypeError):
+                    pass
+                hold_keys.append(dep)
     return hold_keys
 
 
@@ -83,14 +91,26 @@ def optimize_slices(dsk):
         fuse_slice_dict
     """
     fancy_ind_types = (list, np.ndarray)
-    getters = (getarray_nofancy, getarray, getitem, getarray_inline)
     dsk = dsk.copy()
     for k, v in dsk.items():
-        if type(v) is tuple and v[0] in getters and len(v) == 3:
-            f, a, a_index = v
-            getter = f
-            while type(a) is tuple and a[0] in getters and len(a) == 3:
-                f2, b, b_index = a
+        if type(v) is tuple and v[0] in GETTERS and len(v) in (3, 5):
+            if len(v) == 3:
+                get, a, a_index = v
+                # getter defaults to asarray=True, getitem is semantically False
+                a_asarray = get is not getitem
+                a_lock = None
+            else:
+                get, a, a_index, a_asarray, a_lock = v
+            while type(a) is tuple and a[0] in GETTERS and len(a) in (3, 5):
+                if len(a) == 3:
+                    f2, b, b_index = a
+                    b_asarray = f2 is not getitem
+                    b_lock = None
+                else:
+                    f2, b, b_index, b_asarray, b_lock = a
+
+                if a_lock and a_lock is not b_lock:
+                    break
                 if (type(a_index) is tuple) != (type(b_index) is tuple):
                     break
                 if type(a_index) is tuple:
@@ -98,39 +118,41 @@ def optimize_slices(dsk):
                     if (len(a_index) != len(b_index) and
                             any(i is None for i in indices)):
                         break
-                    if (f2 is getarray_nofancy and
+                    if (f2 is getter_nofancy and
                             any(isinstance(i, fancy_ind_types) for i in indices)):
                         break
-                elif (f2 is getarray_nofancy and
+                elif (f2 is getter_nofancy and
                         (type(a_index) in fancy_ind_types or
                          type(b_index) in fancy_ind_types)):
                     break
                 try:
                     c_index = fuse_slice(b_index, a_index)
                     # rely on fact that nested gets never decrease in
-                    # strictness e.g. `(getarray, (getitem, ...))` never
+                    # strictness e.g. `(getter_nofancy, (getter, ...))` never
                     # happens
-                    getter = f2
-                    if getter is getarray_inline:
-                        getter = getarray
+                    get = getter if f2 is getter_inline else f2
                 except NotImplementedError:
                     break
-                a, a_index = b, c_index
-            if getter is not getitem:
-                dsk[k] = (getter, a, a_index)
-            elif (type(a_index) is slice and
-                    not a_index.start and
-                    a_index.stop is None and
-                    a_index.step is None):
+                a, a_index, a_lock = b, c_index, b_lock
+                a_asarray |= b_asarray
+
+            # Skip the get call if no asarray call, no lock, and nothing to do
+            if ((not a_asarray and not a_lock) and
+                ((type(a_index) is slice and not a_index.start and
+                  a_index.stop is None and a_index.step is None) or
+                 (type(a_index) is tuple and
+                  all(type(s) is slice and not s.start and s.stop is None and
+                      s.step is None for s in a_index)))):
                 dsk[k] = a
-            elif type(a_index) is tuple and all(type(s) is slice and
-                                                not s.start and
-                                                s.stop is None and
-                                                s.step is None
-                                                for s in a_index):
-                dsk[k] = a
+            elif get is getitem or (a_asarray and not a_lock):
+                # default settings are fine, drop the extra parameters Since we
+                # always fallback to inner `get` functions, `get is getitem`
+                # can only occur if all gets are getitem, meaning all
+                # parameters must be getitem defaults.
+                dsk[k] = (get, a, a_index)
             else:
-                dsk[k] = (getitem, a, a_index)
+                dsk[k] = (get, a, a_index, a_asarray, a_lock)
+
     return dsk
 
 
@@ -148,6 +170,20 @@ def normalize_slice(s):
     if start < 0 or step < 0 or stop is not None and stop < 0:
         raise NotImplementedError()
     return slice(start, stop, step)
+
+
+def check_for_nonfusible_fancy_indexing(fancy, normal):
+    # Check for fancy indexing and normal indexing, where the fancy
+    # indexed dimensions != normal indexed dimensions with integers. E.g.:
+    # disallow things like:
+    # x[:, [1, 2], :][0, :, :] -> x[0, [1, 2], :] or
+    # x[0, :, :][:, [1, 2], :] -> x[0, [1, 2], :]
+    for f, n in zip_longest(fancy, normal, fillvalue=slice(None)):
+        if type(f) is not list and isinstance(n, int):
+            raise NotImplementedError("Can't handle normal indexing with "
+                                      "integers and fancy indexing if the "
+                                      "integers and fancy indices don't "
+                                      "align with the same dimensions.")
 
 
 def fuse_slice(a, b):
@@ -204,7 +240,6 @@ def fuse_slice(a, b):
                 stop = min(a.stop, stop)
             else:
                 stop = a.stop
-            stop = stop
         step = a.step * b.step
         if step == 1:
             step = None
@@ -222,9 +257,15 @@ def fuse_slice(a, b):
     # and newaxes
     if isinstance(a, tuple) and isinstance(b, tuple):
 
-        if (any(isinstance(item, list) for item in a) and
-                any(isinstance(item, list) for item in b)):
+        # Check for non-fusible cases with fancy-indexing
+        a_has_lists = any(isinstance(item, list) for item in a)
+        b_has_lists = any(isinstance(item, list) for item in b)
+        if a_has_lists and b_has_lists:
             raise NotImplementedError("Can't handle multiple list indexing")
+        elif a_has_lists:
+            check_for_nonfusible_fancy_indexing(a, b)
+        elif b_has_lists:
+            check_for_nonfusible_fancy_indexing(b, a)
 
         j = 0
         result = list()

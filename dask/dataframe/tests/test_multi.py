@@ -3,7 +3,8 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
-from dask.async import get_sync
+from dask.local import get_sync
+from dask.base import compute_as_if_collection
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
@@ -583,6 +584,7 @@ def test_join_by_index_patterns(how, shuffle):
 @pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
 def test_merge_by_multiple_columns(how, shuffle):
+    # warnings here from pandas
     pdf1l = pd.DataFrame({'a': list('abcdefghij'),
                           'b': list('abcdefghij'),
                           'c': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]},
@@ -805,8 +807,9 @@ def test_concat_unknown_divisions():
 
     assert not aa.known_divisions
 
-    assert_eq(pd.concat([a, b], axis=1),
-              dd.concat([aa, bb], axis=1))
+    with pytest.warns(UserWarning):
+        assert_eq(pd.concat([a, b], axis=1),
+                  dd.concat([aa, bb], axis=1))
 
     cc = dd.from_pandas(b, npartitions=1, sort=False)
     with pytest.raises(ValueError):
@@ -820,7 +823,8 @@ def test_concat_unknown_divisions_errors():
     bb = dd.from_pandas(b, npartitions=2, sort=False)
 
     with pytest.raises(ValueError):
-        dd.concat([aa, bb], axis=1).compute()
+        with pytest.warns(UserWarning):  # Concat with unknown divisions
+            dd.concat([aa, bb], axis=1).compute()
 
 
 def test_concat2():
@@ -917,8 +921,9 @@ def test_concat4_interleave_partitions():
     for case in cases:
         pdcase = [c.compute() for c in case]
 
-        with tm.assertRaisesRegexp(ValueError, msg):
+        with pytest.raises(ValueError) as err:
             dd.concat(case)
+        assert msg in str(err.value)
 
         assert_eq(dd.concat(case, interleave_partitions=True),
                   pd.concat(pdcase))
@@ -926,8 +931,9 @@ def test_concat4_interleave_partitions():
                   pd.concat(pdcase, join='inner'))
 
     msg = "'join' must be 'inner' or 'outer'"
-    with tm.assertRaisesRegexp(ValueError, msg):
+    with pytest.raises(ValueError) as err:
         dd.concat([ddf1, ddf1], join='invalid', interleave_partitions=True)
+    assert msg in str(err.value)
 
 
 def test_concat5():
@@ -957,8 +963,10 @@ def test_concat5():
     for case in cases:
         pdcase = [c.compute() for c in case]
 
-        assert_eq(dd.concat(case, interleave_partitions=True),
-                  pd.concat(pdcase))
+        with pytest.warns(None):
+            # some cases will raise warning directly from pandas
+            assert_eq(dd.concat(case, interleave_partitions=True),
+                      pd.concat(pdcase))
 
         assert_eq(dd.concat(case, join='inner', interleave_partitions=True),
                   pd.concat(pdcase, join='inner'))
@@ -1023,7 +1031,9 @@ def test_concat_categorical(known, cat_index, divisions):
         res = dd.concat(ddfs, join=join, interleave_partitions=divisions)
         assert_eq(res, sol)
         if known:
-            for p in [i.iloc[:0] for i in res._get(res.dask, res._keys())]:
+            parts = compute_as_if_collection(dd.DataFrame, res.dask,
+                                             res.__dask_keys__())
+            for p in [i.iloc[:0] for i in parts]:
                 res._meta == p  # will error if schemas don't align
         assert not cat_index or has_known_categories(res.index) == known
         return res
@@ -1109,29 +1119,37 @@ def test_append2():
     assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute()))
     assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute()))
     # Series + DataFrame
-    assert_eq(ddf1.a.append(ddf2), ddf1.a.compute().append(ddf2.compute()))
-    assert_eq(ddf2.a.append(ddf1), ddf2.a.compute().append(ddf1.compute()))
+    with pytest.warns(None):
+        # RuntimeWarning from pandas on comparing int and str
+        assert_eq(ddf1.a.append(ddf2), ddf1.a.compute().append(ddf2.compute()))
+        assert_eq(ddf2.a.append(ddf1), ddf2.a.compute().append(ddf1.compute()))
 
     # different columns
     assert_eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute()))
     assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute()))
     # Series + DataFrame
-    assert_eq(ddf1.a.append(ddf3), ddf1.a.compute().append(ddf3.compute()))
-    assert_eq(ddf3.b.append(ddf1), ddf3.b.compute().append(ddf1.compute()))
+    with pytest.warns(None):
+        # RuntimeWarning from pandas on comparing int and str
+        assert_eq(ddf1.a.append(ddf3), ddf1.a.compute().append(ddf3.compute()))
+        assert_eq(ddf3.b.append(ddf1), ddf3.b.compute().append(ddf1.compute()))
 
     # Dask + pandas
     assert_eq(ddf1.append(ddf2.compute()), ddf1.compute().append(ddf2.compute()))
     assert_eq(ddf2.append(ddf1.compute()), ddf2.compute().append(ddf1.compute()))
     # Series + DataFrame
-    assert_eq(ddf1.a.append(ddf2.compute()), ddf1.a.compute().append(ddf2.compute()))
-    assert_eq(ddf2.a.append(ddf1.compute()), ddf2.a.compute().append(ddf1.compute()))
+    with pytest.warns(None):
+        # RuntimeWarning from pandas on comparing int and str
+        assert_eq(ddf1.a.append(ddf2.compute()), ddf1.a.compute().append(ddf2.compute()))
+        assert_eq(ddf2.a.append(ddf1.compute()), ddf2.a.compute().append(ddf1.compute()))
 
     # different columns
     assert_eq(ddf1.append(ddf3.compute()), ddf1.compute().append(ddf3.compute()))
     assert_eq(ddf3.append(ddf1.compute()), ddf3.compute().append(ddf1.compute()))
     # Series + DataFrame
-    assert_eq(ddf1.a.append(ddf3.compute()), ddf1.a.compute().append(ddf3.compute()))
-    assert_eq(ddf3.b.append(ddf1.compute()), ddf3.b.compute().append(ddf1.compute()))
+    with pytest.warns(None):
+        # RuntimeWarning from pandas on comparing int and str
+        assert_eq(ddf1.a.append(ddf3.compute()), ddf1.a.compute().append(ddf3.compute()))
+        assert_eq(ddf3.b.append(ddf1.compute()), ddf3.b.compute().append(ddf1.compute()))
 
 
 def test_append_categorical():
@@ -1171,3 +1189,13 @@ def test_append_categorical():
         res = ddf1.index.append(ddf2.index)
         assert_eq(res, df1.index.append(df2.index))
         assert has_known_categories(res) == known
+
+
+def test_singleton_divisions():
+    df = pd.DataFrame({'x': [1, 1, 1]}, index=[1, 2, 3])
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = ddf.set_index('x')
+
+    joined = ddf2.join(ddf2, rsuffix='r')
+    assert joined.divisions == (1, 1)
+    joined.compute()

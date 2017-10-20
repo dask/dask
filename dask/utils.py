@@ -1,27 +1,23 @@
 from __future__ import absolute_import, division, print_function
 
-import codecs
 import functools
 import inspect
-import io
-import math
 import os
 import re
 import shutil
-import struct
 import sys
 import tempfile
 from errno import ENOENT
 from collections import Iterator
 from contextlib import contextmanager
 from importlib import import_module
+from numbers import Integral
 from threading import Lock
 import multiprocessing as mp
 import uuid
 from weakref import WeakValueDictionary
 
-from .compatibility import (long, getargspec, BZ2File, GzipFile, LZMAFile, PY3,
-                            urlsplit, unicode)
+from .compatibility import getargspec, PY3, unicode, urlsplit, bind_method
 from .core import get_deps
 from .context import _globals
 from .optimize import key_split    # noqa: F401
@@ -170,18 +166,6 @@ def noop_context():
     yield
 
 
-def repr_long_list(seq):
-    """
-
-    >>> repr_long_list(list(range(100)))
-    '[0, 1, 2, ..., 98, 99]'
-    """
-    if len(seq) < 8:
-        return repr(seq)
-    else:
-        return repr(seq[:3])[:-1] + ', ..., ' + repr(seq[-2:])[1:]
-
-
 class IndexCallable(object):
     """ Provide getitem syntax for functions
 
@@ -231,152 +215,6 @@ def filetexts(d, open=open, mode='t', use_tmpdir=True):
                     os.remove(filename)
 
 
-compressions = {'gz': 'gzip', 'bz2': 'bz2', 'xz': 'xz'}
-
-
-def infer_compression(filename):
-    extension = os.path.splitext(filename)[-1].strip('.')
-    return compressions.get(extension, None)
-
-
-opens = {'gzip': GzipFile, 'bz2': BZ2File, 'xz': LZMAFile}
-
-
-def open(filename, mode='rb', compression=None, **kwargs):
-    if compression == 'infer':
-        compression = infer_compression(filename)
-    return opens.get(compression, io.open)(filename, mode, **kwargs)
-
-
-def get_bom(fn, compression=None):
-    """
-    Get the Byte Order Mark (BOM) if it exists.
-    """
-    boms = set((codecs.BOM_UTF16, codecs.BOM_UTF16_BE, codecs.BOM_UTF16_LE))
-    with open(fn, mode='rb', compression=compression) as f:
-        f.seek(0)
-        bom = f.read(2)
-        f.seek(0)
-    if bom in boms:
-        return bom
-    else:
-        return b''
-
-
-def get_bin_linesep(encoding, linesep):
-    """
-    Simply doing `linesep.encode(encoding)` does not always give you
-    *just* the linesep bytes, for some encodings this prefix's the
-    linesep bytes with the BOM. This function ensures we just get the
-    linesep bytes.
-    """
-    if encoding == 'utf-16':
-        return linesep.encode('utf-16')[2:]  # [2:] strips bom
-    else:
-        return linesep.encode(encoding)
-
-
-def textblock(filename, start, end, compression=None, encoding=system_encoding,
-              linesep=os.linesep, buffersize=4096):
-    """Pull out a block of text from a file given start and stop bytes.
-
-    This gets data starting/ending from the next linesep delimiter. Each block
-    consists of bytes in the range [start,end[, i.e. the stop byte is excluded.
-    If `start` is 0, then `start` corresponds to the true start byte. If
-    `start` is greater than 0 and does not point to the beginning of a new
-    line, then `start` is incremented until it corresponds to the start byte of
-    the next line. If `end` does not point to the beginning of a new line, then
-    the line that begins before `end` is included in the block although its
-    last byte exceeds `end`.
-
-    Examples
-    --------
-    >> with open('myfile.txt', 'wb') as f:
-    ..     f.write('123\n456\n789\nabc')
-
-    In the example below, 1 and 10 don't line up with endlines.
-
-    >> u''.join(textblock('myfile.txt', 1, 10))
-    '456\n789\n'
-    """
-    # Make sure `linesep` is not a byte string because
-    # `io.TextIOWrapper` in Python versions other than 2.7 dislike byte
-    # strings for the `newline` argument.
-    linesep = str(linesep)
-
-    # Get byte representation of the line separator.
-    bin_linesep = get_bin_linesep(encoding, linesep)
-    bin_linesep_len = len(bin_linesep)
-
-    if buffersize < bin_linesep_len:
-        error = ('`buffersize` ({0:d}) must be at least as large as the '
-                 'number of line separator bytes ({1:d}).')
-        raise ValueError(error.format(buffersize, bin_linesep_len))
-
-    chunksize = end - start
-
-    with open(filename, 'rb', compression) as f:
-        with io.BufferedReader(f) as fb:
-            # If `start` does not correspond to the beginning of the file, we
-            # need to move the file pointer to `start - len(bin_linesep)`,
-            # search for the position of the next a line separator, and set
-            # `start` to the position after that line separator.
-            if start > 0:
-                # `start` is decremented by `len(bin_linesep)` to detect the
-                # case where the original `start` value corresponds to the
-                # beginning of a line.
-                start = max(0, start - bin_linesep_len)
-                # Set the file pointer to `start`.
-                fb.seek(start)
-                # Number of bytes to shift the file pointer before reading a
-                # new chunk to make sure that a multi-byte line separator, that
-                # is split by the chunk reader, is still detected.
-                shift = 1 - bin_linesep_len
-                while True:
-                    buf = f.read(buffersize)
-                    if len(buf) < bin_linesep_len:
-                        raise StopIteration
-                    try:
-                        # Find the position of the next line separator and add
-                        # `len(bin_linesep)` which yields the position of the
-                        # first byte of the next line.
-                        start += buf.index(bin_linesep)
-                        start += bin_linesep_len
-                    except ValueError:
-                        # No line separator was found in the current chunk.
-                        # Before reading the next chunk, we move the file
-                        # pointer back `len(bin_linesep) - 1` bytes to make
-                        # sure that a multi-byte line separator, that may have
-                        # been split by the chunk reader, is still detected.
-                        start += len(buf)
-                        start += shift
-                        fb.seek(shift, os.SEEK_CUR)
-                    else:
-                        # We have found the next line separator, so we need to
-                        # set the file pointer to the first byte of the next
-                        # line.
-                        fb.seek(start)
-                        break
-
-            with io.TextIOWrapper(fb, encoding, newline=linesep) as fbw:
-                # Retrieve and yield lines until the file pointer reaches
-                # `end`.
-                while start < end:
-                    line = next(fbw)
-                    # We need to encode the line again to get the byte length
-                    # in order to correctly update `start`.
-                    bin_line_len = len(line.encode(encoding))
-                    if chunksize < bin_line_len:
-                        error = ('`chunksize` ({0:d}) is less than the line '
-                                 'length ({1:d}). This may cause duplicate '
-                                 'processing of this line. It is advised to '
-                                 'increase `chunksize`.')
-                        raise IOError(error.format(chunksize, bin_line_len))
-
-                    yield line
-                    start += bin_line_len
-
-
 def concrete(seq):
     """ Make nested iterators concrete lists
 
@@ -390,10 +228,6 @@ def concrete(seq):
     if isinstance(seq, (tuple, list)):
         seq = list(map(concrete, seq))
     return seq
-
-
-def skip(func):
-    pass
 
 
 def pseudorandom(n, p, random_state=None):
@@ -429,7 +263,7 @@ def random_state_data(n, random_state=None):
     Parameters
     ----------
     n : int
-        Number of tuples to return.
+        Number of arrays to return.
     random_state : int or np.random.RandomState, optional
         If an int, is used to seed a new ``RandomState``.
     """
@@ -438,9 +272,10 @@ def random_state_data(n, random_state=None):
     if not isinstance(random_state, np.random.RandomState):
         random_state = np.random.RandomState(random_state)
 
-    maxuint32 = np.iinfo(np.uint32).max
-    return [(random_state.rand(624) * maxuint32).astype('uint32')
-            for i in range(n)]
+    random_data = random_state.bytes(624 * n * 4)  # `n * 624` 32-bit integers
+    l = list(np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1)))
+    assert len(l) == n
+    return l
 
 
 def is_integer(i):
@@ -452,33 +287,7 @@ def is_integer(i):
     >>> is_integer('abc')
     False
     """
-    import numpy as np
-    if isinstance(i, (int, long)):
-        return True
-    if isinstance(i, float):
-        return (i).is_integer()
-    if issubclass(type(i), np.integer):
-        return i
-    else:
-        return False
-
-
-def file_size(fn, compression=None):
-    """ Size of a file on disk
-
-    If compressed then return the uncompressed file size
-    """
-    if compression == 'gzip':
-        with open(fn, 'rb') as f:
-            f.seek(-4, 2)
-            result = struct.unpack('I', f.read(4))[0]
-    elif compression:
-        # depending on the implementation, this may be inefficient
-        with open(fn, 'rb', compression) as f:
-            result = f.seek(0, 2)
-    else:
-        result = os.stat(fn).st_size
-    return result
+    return isinstance(i, Integral) or (isinstance(i, float) and i.is_integer())
 
 
 ONE_ARITY_BUILTINS = set([abs, all, any, bool, bytearray, bytes, callable, chr,
@@ -494,7 +303,7 @@ MULTI_ARITY_BUILTINS = set([compile, delattr, divmod, filter, getattr, hasattr,
                             isinstance, issubclass, map, pow, setattr])
 
 
-def takes_multiple_arguments(func):
+def takes_multiple_arguments(func, varargs=True):
     """ Does this function take multiple arguments?
 
     >>> def f(x, y): pass
@@ -526,20 +335,19 @@ def takes_multiple_arguments(func):
 
     try:
         spec = getargspec(func)
-    except:
+    except Exception:
         return False
 
     try:
         is_constructor = spec.args[0] == 'self' and isinstance(func, type)
-    except:
+    except Exception:
         is_constructor = False
 
-    if spec.varargs:
+    if varargs and spec.varargs:
         return True
 
-    if spec.defaults is None:
-        return len(spec.args) - is_constructor != 1
-    return len(spec.args) - len(spec.defaults) - is_constructor > 1
+    ndefaults = 0 if spec.defaults is None else len(spec.defaults)
+    return len(spec.args) - ndefaults - is_constructor > 1
 
 
 class Dispatch(object):
@@ -573,31 +381,38 @@ class Dispatch(object):
 
         return wrapper(func) if func is not None else wrapper
 
-    def __call__(self, arg):
-        # Fast path with direct lookup on type
+    def dispatch(self, cls):
+        """Return the function implementation for the given ``cls``"""
+        # Fast path with direct lookup on cls
         lk = self._lookup
-        typ = type(arg)
         try:
-            impl = lk[typ]
+            impl = lk[cls]
         except KeyError:
             pass
         else:
-            return impl(arg)
+            return impl
         # Is a lazy registration function present?
-        toplevel, _, _ = typ.__module__.partition('.')
+        toplevel, _, _ = cls.__module__.partition('.')
         try:
             register = self._lazy.pop(toplevel)
         except KeyError:
             pass
         else:
             register()
-            return self(arg)  # recurse
+            return self.dispatch(cls) # recurse
         # Walk the MRO and cache the lookup result
-        for cls in inspect.getmro(typ)[1:]:
-            if cls in lk:
-                lk[typ] = lk[cls]
-                return lk[cls](arg)
-        raise TypeError("No dispatch for {0} type".format(typ))
+        for cls2 in inspect.getmro(cls)[1:]:
+            if cls2 in lk:
+                lk[cls] = lk[cls2]
+                return lk[cls2]
+        raise TypeError("No dispatch for {0}".format(cls))
+
+    def __call__(self, arg):
+        """
+        Call the corresponding method based on type of argument.
+        """
+        meth = self.dispatch(type(arg))
+        return meth(arg)
 
 
 def ensure_not_exists(filename):
@@ -616,8 +431,8 @@ def _skip_doctest(line):
     stripped = line.strip()
     if stripped == '>>>' or stripped.startswith('>>> #'):
         return stripped
-    elif '>>>' in stripped:
-        return line + '    # doctest: +SKIP'
+    elif '>>>' in stripped and '+SKIP' not in stripped:
+        return line + '  # doctest: +SKIP'
     else:
         return line
 
@@ -626,6 +441,24 @@ def skip_doctest(doc):
     if doc is None:
         return ''
     return '\n'.join([_skip_doctest(line) for line in doc.split('\n')])
+
+
+def extra_titles(doc):
+    lines = doc.split('\n')
+    titles = {i: lines[i].strip() for i in range(len(lines) - 1)
+              if lines[i + 1] and all(c == '-' for c in lines[i + 1].strip())}
+
+    seen = set()
+    for i, title in sorted(titles.items()):
+        if title in seen:
+            new_title = 'Extra ' + title
+            lines[i] = lines[i].replace(title, new_title)
+            lines[i + 1] = lines[i + 1].replace('-' * len(title),
+                                                '-' * len(new_title))
+        else:
+            seen.add(title)
+
+    return '\n'.join(lines)
 
 
 def derived_from(original_klass, version=None, ua_args=[]):
@@ -664,10 +497,12 @@ def derived_from(original_klass, version=None, ua_args=[]):
 
             if len(not_supported) > 0:
                 note = ("\n        Notes\n        -----\n"
-                        "        Dask doesn't supports following argument(s).\n\n")
+                        "        Dask doesn't support the following argument(s).\n\n")
                 args = ''.join(['        * {0}\n'.format(a) for a in not_supported])
                 doc = doc + note + args
             doc = skip_doctest(doc)
+            doc = extra_titles(doc)
+
             method.__doc__ = doc
             return method
 
@@ -710,7 +545,7 @@ def funcname(func):
         if name == '<lambda>':
             return 'lambda'
         return name
-    except:
+    except AttributeError:
         return str(func)
 
 
@@ -776,109 +611,6 @@ def insert(tup, loc, val):
     return tuple(L)
 
 
-def build_name_function(max_int):
-    """ Returns a function that receives a single integer
-    and returns it as a string padded by enough zero characters
-    to align with maximum possible integer
-
-    >>> name_f = build_name_function(57)
-
-    >>> name_f(7)
-    '07'
-    >>> name_f(31)
-    '31'
-    >>> build_name_function(1000)(42)
-    '0042'
-    >>> build_name_function(999)(42)
-    '042'
-    >>> build_name_function(0)(0)
-    '0'
-    """
-    # handle corner cases max_int is 0 or exact power of 10
-    max_int += 1e-8
-
-    pad_length = int(math.ceil(math.log10(max_int)))
-
-    def name_function(i):
-        return str(i).zfill(pad_length)
-
-    return name_function
-
-
-def infer_storage_options(urlpath, inherit_storage_options=None):
-    """ Infer storage options from URL path and merge it with existing storage
-    options.
-
-    Parameters
-    ----------
-    urlpath: str or unicode
-        Either local absolute file path or URL (hdfs://namenode:8020/file.csv)
-    storage_options: dict (optional)
-        Its contents will get merged with the inferred information from the
-        given path
-
-    Returns
-    -------
-    Storage options dict.
-
-    Examples
-    --------
-    >>> infer_storage_options('/mnt/datasets/test.csv')  # doctest: +SKIP
-    {"protocol": "file", "path", "/mnt/datasets/test.csv"}
-    >>> infer_storage_options(
-    ...          'hdfs://username:pwd@node:123/mnt/datasets/test.csv?q=1',
-    ...          inherit_storage_options={'extra': 'value'})  # doctest: +SKIP
-    {"protocol": "hdfs", "username": "username", "password": "pwd",
-    "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
-    "url_query": "q=1", "extra": "value"}
-    """
-    # Handle Windows paths including disk name in this special case
-    if re.match(r'^[a-zA-Z]:[\\/]', urlpath):
-        return {'protocol': 'file',
-                'path': urlpath}
-
-    parsed_path = urlsplit(urlpath)
-    protocol = parsed_path.scheme or 'file'
-    path = parsed_path.path
-    if protocol == 'file':
-        # Special case parsing file protocol URL on Windows according to:
-        # https://msdn.microsoft.com/en-us/library/jj710207.aspx
-        windows_path = re.match(r'^/([a-zA-Z])[:|]([\\/].*)$', path)
-        if windows_path:
-            path = '%s:%s' % windows_path.groups()
-
-    inferred_storage_options = {
-        'protocol': protocol,
-        'path': path,
-    }
-
-    if parsed_path.netloc:
-        # Parse `hostname` from netloc manually because `parsed_path.hostname`
-        # lowercases the hostname which is not always desirable (e.g. in S3):
-        # https://github.com/dask/dask/issues/1417
-        inferred_storage_options['host'] = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
-        if parsed_path.port:
-            inferred_storage_options['port'] = parsed_path.port
-        if parsed_path.username:
-            inferred_storage_options['username'] = parsed_path.username
-        if parsed_path.password:
-            inferred_storage_options['password'] = parsed_path.password
-
-    if parsed_path.query:
-        inferred_storage_options['url_query'] = parsed_path.query
-    if parsed_path.fragment:
-        inferred_storage_options['url_fragment'] = parsed_path.fragment
-
-    if inherit_storage_options:
-        if set(inherit_storage_options) & set(inferred_storage_options):
-            raise KeyError("storage options (%r) and path url options (%r) "
-                           "collision is detected"
-                           % (inherit_storage_options, inferred_storage_options))
-        inferred_storage_options.update(inherit_storage_options)
-
-    return inferred_storage_options
-
-
 def dependency_depth(dsk):
     import toolz
 
@@ -895,18 +627,33 @@ def dependency_depth(dsk):
     return max(max_depth_by_deps(dep_key) for dep_key in deps.keys())
 
 
-def eq_strict(a, b):
-    """Returns True if both values have the same type and are equal."""
-    if type(a) is type(b):
-        return a == b
-    return False
-
-
 def memory_repr(num):
     for x in ['bytes', 'KB', 'MB', 'GB', 'TB']:
         if num < 1024.0:
             return "%3.1f %s" % (num, x)
         num /= 1024.0
+
+
+def asciitable(columns, rows):
+    """Formats an ascii table for given columns and rows.
+
+    Parameters
+    ----------
+    columns : list
+        The column names
+    rows : list of tuples
+        The rows in the table. Each tuple must be the same length as
+        ``columns``.
+    """
+    rows = [tuple(str(i) for i in r) for r in rows]
+    columns = tuple(str(i) for i in columns)
+    widths = tuple(max(max(map(len, x)), len(c))
+                   for x, c in zip(zip(*rows), columns))
+    row_template = ('|' + (' %%-%ds |' * len(columns))) % widths
+    header = row_template % tuple(columns)
+    bar = '+%s+' % '+'.join('-' * (w + 2) for w in widths)
+    data = '\n'.join(row_template % r for r in rows)
+    return '\n'.join([bar, header, bar, data, bar])
 
 
 def put_lines(buf, lines):
@@ -919,9 +666,12 @@ _method_cache = {}
 
 
 class methodcaller(object):
-    """Return a callable object that calls the given method on its operand.
+    """
+    Return a callable object that calls the given method on its operand.
 
-    Unlike the builtin `methodcaller`, this class is serializable"""
+    Unlike the builtin `operator.methodcaller`, instances of this class are
+    serializable
+    """
 
     __slots__ = ('method',)
     func = property(lambda self: self.method)  # For `funcname` to work
@@ -944,6 +694,25 @@ class methodcaller(object):
         return "<%s: %s>" % (self.__class__.__name__, self.method)
 
     __repr__ = __str__
+
+
+class itemgetter(object):
+    """
+    Return a callable object that gets an item from the operand
+
+    Unlike the builtin `operator.itemgetter`, instances of this class are
+    serializable
+    """
+    __slots__ = ('index',)
+
+    def __init__(self, index):
+        self.index = index
+
+    def __call__(self, x):
+        return x[self.index]
+
+    def __reduce__(self):
+        return (itemgetter, (self.index,))
 
 
 class MethodCache(object):
@@ -1029,8 +798,8 @@ class SerializableLock(object):
 
 def effective_get(get=None, collection=None):
     """Get the effective get method used in a given situation"""
-    collection_get = collection._default_get if collection else None
-    return get or _globals.get('get') or collection_get
+    return (get or _globals.get('get') or
+            getattr(collection, '__dask_scheduler__', None))
 
 
 def get_scheduler_lock(get=None, collection=None):
@@ -1053,3 +822,133 @@ def ensure_dict(d):
             result.update(dd)
         return result
     return dict(d)
+
+
+class OperatorMethodMixin(object):
+    """A mixin for dynamically implementing operators"""
+
+    @classmethod
+    def _bind_operator(cls, op):
+        """ bind operator to this class """
+        name = op.__name__
+
+        if name.endswith('_'):
+            # for and_ and or_
+            name = name[:-1]
+        elif name == 'inv':
+            name = 'invert'
+
+        meth = '__{0}__'.format(name)
+
+        if name in ('abs', 'invert', 'neg', 'pos'):
+            bind_method(cls, meth, cls._get_unary_operator(op))
+        else:
+            bind_method(cls, meth, cls._get_binary_operator(op))
+
+            if name in ('eq', 'gt', 'ge', 'lt', 'le', 'ne', 'getitem'):
+                return
+
+            rmeth = '__r{0}__'.format(name)
+            bind_method(cls, rmeth, cls._get_binary_operator(op, inv=True))
+
+    @classmethod
+    def _get_unary_operator(cls, op):
+        """ Must return a method used by unary operator """
+        raise NotImplementedError
+
+    @classmethod
+    def _get_binary_operator(cls, op, inv=False):
+        """ Must return a method used by binary operator """
+        raise NotImplementedError
+
+
+# XXX: Kept to keep old versions of distributed/dask in sync. After
+# distributed's dask requirement is updated to > this commit, this function can
+# be moved to dask.bytes.utils.
+def infer_storage_options(urlpath, inherit_storage_options=None):
+    """ Infer storage options from URL path and merge it with existing storage
+    options.
+
+    Parameters
+    ----------
+    urlpath: str or unicode
+        Either local absolute file path or URL (hdfs://namenode:8020/file.csv)
+    storage_options: dict (optional)
+        Its contents will get merged with the inferred information from the
+        given path
+
+    Returns
+    -------
+    Storage options dict.
+
+    Examples
+    --------
+    >>> infer_storage_options('/mnt/datasets/test.csv')  # doctest: +SKIP
+    {"protocol": "file", "path", "/mnt/datasets/test.csv"}
+    >>> infer_storage_options(
+    ...          'hdfs://username:pwd@node:123/mnt/datasets/test.csv?q=1',
+    ...          inherit_storage_options={'extra': 'value'})  # doctest: +SKIP
+    {"protocol": "hdfs", "username": "username", "password": "pwd",
+    "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
+    "url_query": "q=1", "extra": "value"}
+    """
+    # Handle Windows paths including disk name in this special case
+    if re.match(r'^[a-zA-Z]:[\\/]', urlpath):
+        return {'protocol': 'file',
+                'path': urlpath}
+
+    parsed_path = urlsplit(urlpath)
+    protocol = parsed_path.scheme or 'file'
+    path = parsed_path.path
+    if protocol == 'file':
+        # Special case parsing file protocol URL on Windows according to:
+        # https://msdn.microsoft.com/en-us/library/jj710207.aspx
+        windows_path = re.match(r'^/([a-zA-Z])[:|]([\\/].*)$', path)
+        if windows_path:
+            path = '%s:%s' % windows_path.groups()
+
+    inferred_storage_options = {
+        'protocol': protocol,
+        'path': path,
+    }
+
+    if parsed_path.netloc:
+        # Parse `hostname` from netloc manually because `parsed_path.hostname`
+        # lowercases the hostname which is not always desirable (e.g. in S3):
+        # https://github.com/dask/dask/issues/1417
+        inferred_storage_options['host'] = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
+        if parsed_path.port:
+            inferred_storage_options['port'] = parsed_path.port
+        if parsed_path.username:
+            inferred_storage_options['username'] = parsed_path.username
+        if parsed_path.password:
+            inferred_storage_options['password'] = parsed_path.password
+
+    if parsed_path.query:
+        inferred_storage_options['url_query'] = parsed_path.query
+    if parsed_path.fragment:
+        inferred_storage_options['url_fragment'] = parsed_path.fragment
+
+    if inherit_storage_options:
+        if set(inherit_storage_options) & set(inferred_storage_options):
+            raise KeyError("storage options (%r) and path url options (%r) "
+                           "collision is detected"
+                           % (inherit_storage_options, inferred_storage_options))
+        inferred_storage_options.update(inherit_storage_options)
+
+    return inferred_storage_options
+
+
+def partial_by_order(*args, **kwargs):
+    """
+
+    >>> from operator import add
+    >>> partial_by_order(5, function=add, other=[(1, 10)])
+    15
+    """
+    function = kwargs.pop('function')
+    other = kwargs.pop('other')
+    args2 = list(args)
+    for i, arg in other:
+        args2.insert(i, arg)
+    return function(*args2, **kwargs)

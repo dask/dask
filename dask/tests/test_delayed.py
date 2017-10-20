@@ -1,4 +1,4 @@
-from collections import Iterator, namedtuple
+from collections import namedtuple
 from operator import add, setitem
 import pickle
 from random import random
@@ -6,9 +6,31 @@ from random import random
 from toolz import identity, partial, merge
 import pytest
 
-from dask import set_options
+import dask
+from dask import set_options, compute
 from dask.compatibility import PY2, PY3
-from dask.delayed import delayed, to_task_dask, compute, Delayed
+from dask.delayed import delayed, to_task_dask, Delayed
+from dask.utils_test import inc
+
+
+class Tuple(object):
+    __dask_scheduler__ = staticmethod(dask.threaded.get)
+
+    def __init__(self, dsk, keys):
+        self._dask = dsk
+        self._keys = keys
+
+    def __dask_tokenize__(self):
+        return self._keys
+
+    def __dask_graph__(self):
+        return self._dask
+
+    def __dask_keys__(self):
+        return self._keys
+
+    def __dask_postcompute__(self):
+        return tuple, ()
 
 
 def test_to_task_dask():
@@ -32,6 +54,10 @@ def test_to_task_dask():
     assert task == x
     assert dict(dask) == {}
 
+    task, dask = to_task_dask(slice(a, b, 3))
+    assert task == (slice, 'a', 'b', 3)
+    assert dict(dask) == merge(a.dask, b.dask)
+
     # Issue https://github.com/dask/dask/issues/2107
     class MyClass(dict):
         pass
@@ -39,6 +65,14 @@ def test_to_task_dask():
     task, dask = to_task_dask(MyClass())
     assert type(task) is MyClass
     assert dict(dask) == {}
+
+    # Custom dask objects
+    x = Tuple({'a': 1, 'b': 2, 'c': (add, 'a', 'b')}, ['a', 'b', 'c'])
+    task, dask = to_task_dask(x)
+    assert task in dask
+    f = dask.pop(task)
+    assert f == (tuple, ['a', 'b', 'c'])
+    assert dask == x._dask
 
 
 def test_delayed():
@@ -58,6 +92,8 @@ def test_operators():
     a = delayed([1, 2, 3])
     assert a[0].compute() == 1
     assert (a + a).compute() == [1, 2, 3, 1, 2, 3]
+    b = delayed(2)
+    assert a[:b].compute() == [1, 2]
 
     a = delayed(10)
     assert (a + 1).compute() == 11
@@ -84,12 +120,11 @@ def test_attributes():
     assert (a.real + a.imag).compute() == 3
 
 
-def test_method_getattr_optimize():
+def test_method_getattr_call_same_task():
     a = delayed([1, 2, 3])
     o = a.index(1)
-    dsk = o._optimize(o.dask, o._keys())
     # Don't getattr the method, then call in separate task
-    assert getattr not in set(v[0] for v in dsk.values())
+    assert getattr not in set(v[0] for v in o.__dask_graph__().values())
 
 
 def test_delayed_errors():
@@ -154,7 +189,6 @@ def test_lists_are_concrete():
     assert c.compute() == 20
 
 
-@pytest.mark.xfail
 def test_iterators():
     a = delayed(1)
     b = delayed(2)
@@ -163,7 +197,6 @@ def test_iterators():
     assert c.compute() == 3
 
     def f(seq):
-        assert isinstance(seq, Iterator)
         return sum(seq)
 
     c = delayed(f)(iter([a, b]))
@@ -304,6 +337,15 @@ def test_kwargs():
     assert dmysum(1, 2, c=c, four=4).key != dmysum(2, 2, c=c, four=4).key
 
 
+def test_custom_delayed():
+    x = Tuple({'a': 1, 'b': 2, 'c': (add, 'a', 'b')}, ['a', 'b', 'c'])
+    x2 = delayed(add, pure=True)(x, (4, 5, 6))
+    n = delayed(len, pure=True)(x)
+    assert delayed(len, pure=True)(x).key == n.key
+    assert x2.compute() == (1, 2, 3, 4, 5, 6)
+    assert compute(n, x2, x) == (3, (1, 2, 3, 4, 5, 6), (1, 2, 3))
+
+
 def test_array_delayed():
     np = pytest.importorskip('numpy')
     da = pytest.importorskip('dask.array')
@@ -403,7 +445,7 @@ def test_callable_obj():
     assert f().compute() == 2
 
 
-def test_name_consitent_across_instances():
+def test_name_consistent_across_instances():
     func = delayed(identity, pure=True)
 
     data = {'x': 1, 'y': 25, 'z': [1, 2, 3]}
@@ -438,7 +480,8 @@ def test_delayed_name():
 
 
 def test_finalize_name():
-    import dask.array as da
+    da = pytest.importorskip('dask.array')
+
     x = da.ones(10, chunks=5)
     v = delayed([x])
     assert set(x.dask).issubset(v.dask)
@@ -449,3 +492,13 @@ def test_finalize_name():
         return s.split('-')[0]
 
     assert all(key(k).isalpha() for k in v.dask)
+
+
+def test_keys_from_array():
+    da = pytest.importorskip('dask.array')
+    from dask.array.utils import _check_dsk
+
+    X = da.ones((10, 10), chunks=5).to_delayed().flatten()
+    xs = [delayed(inc)(x) for x in X]
+
+    _check_dsk(xs[0].dask)

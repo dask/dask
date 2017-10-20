@@ -1,11 +1,17 @@
 from __future__ import print_function, absolute_import, division
 
+import warnings
+
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_categorical_dtype
-from pandas.types.concat import union_categoricals
 from toolz import partition
 
+from .utils import PANDAS_VERSION
+if PANDAS_VERSION >= '0.20.0':
+    from pandas.api.types import union_categoricals
+else:
+    from pandas.types.concat import union_categoricals
 
 # ---------------------------------
 # indexing
@@ -61,10 +67,16 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
         # If the index is monotonic, `df.loc[start:stop]` is fine.
         # If it's not, `df.loc[start:stop]` raises when `start` is missing
         if start is not None:
-            df = df[df.index >= start]
+            if left_boundary:
+                df = df[df.index >= start]
+            else:
+                df = df[df.index > start]
         if stop is not None:
-            df = df[df.index <= stop]
-        result = df
+            if right_boundary:
+                df = df[df.index <= stop]
+            else:
+                df = df[df.index < stop]
+        return df
     else:
         result = getattr(df, kind)[start:stop]
     if not right_boundary:
@@ -194,6 +206,14 @@ def pivot_count(df, index, columns, values):
 # concat
 # ---------------------------------
 
+if PANDAS_VERSION < '0.20.0':
+    def _get_level_values(x, n):
+        return x.get_level_values(n)
+else:
+    def _get_level_values(x, n):
+        return x._get_level_values(n)
+
+
 def concat(dfs, axis=0, join='outer', uniform=False):
     """Concatenate, handling some edge cases:
 
@@ -221,10 +241,27 @@ def concat(dfs, axis=0, join='outer', uniform=False):
         if isinstance(dfs[0], pd.CategoricalIndex):
             return pd.CategoricalIndex(union_categoricals(dfs),
                                        name=dfs[0].name)
+        elif isinstance(dfs[0], pd.MultiIndex):
+            first, rest = dfs[0], dfs[1:]
+            if all((isinstance(o, pd.MultiIndex) and o.nlevels >= first.nlevels)
+                    for o in rest):
+                arrays = [concat([_get_level_values(i, n) for i in dfs])
+                          for n in range(first.nlevels)]
+                return pd.MultiIndex.from_arrays(arrays, names=first.names)
+
+            to_concat = (first.values, ) + tuple(k._values for k in rest)
+            new_tuples = np.concatenate(to_concat)
+            try:
+                return pd.MultiIndex.from_tuples(new_tuples, names=first.names)
+            except Exception:
+                return pd.Index(new_tuples)
         return dfs[0].append(dfs[1:])
 
     # Handle categorical index separately
-    if isinstance(dfs[0].index, pd.CategoricalIndex):
+    dfs0_index = dfs[0].index
+    if (isinstance(dfs0_index, pd.CategoricalIndex) or
+            (isinstance(dfs0_index, pd.MultiIndex) and
+             any(isinstance(i, pd.CategoricalIndex) for i in dfs0_index.levels))):
         dfs2 = [df.reset_index(drop=True) for df in dfs]
         ind = concat([df.index for df in dfs])
     else:
@@ -242,9 +279,12 @@ def concat(dfs, axis=0, join='outer', uniform=False):
             # converts series to dataframes with a single column named 0, then
             # concatenates.
             dfs3 = [df if isinstance(df, pd.DataFrame) else
-                    df.rename(0).to_frame() for df in dfs2]
-            cat_mask = pd.concat([(df.dtypes == 'category').to_frame().T
-                                  for df in dfs3], join=join).any()
+                    df.to_frame().rename(columns={df.name: 0}) for df in dfs2]
+            # pandas may raise a RuntimeWarning for comparing ints and strs
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                cat_mask = pd.concat([(df.dtypes == 'category').to_frame().T
+                                      for df in dfs3], join=join).any()
 
         if cat_mask.any():
             not_cat = cat_mask[~cat_mask].index
@@ -270,7 +310,10 @@ def concat(dfs, axis=0, join='outer', uniform=False):
                 out[col] = union_categoricals(parts)
             out = out.reindex_axis(cat_mask.index, axis=1)
         else:
-            out = pd.concat(dfs3, join=join)
+            # pandas may raise a RuntimeWarning for comparing ints and strs
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                out = pd.concat(dfs3, join=join)
     else:
         if is_categorical_dtype(dfs2[0].dtype):
             if ind is None:

@@ -1,14 +1,14 @@
 import os
-import threading
-import signal
-import subprocess
 import sys
+import signal
+import threading
 from multiprocessing.pool import ThreadPool
 from time import time, sleep
 
 import pytest
 
 from dask.context import set_options
+from dask.compatibility import PY2
 from dask.threaded import get
 from dask.utils_test import inc, add
 
@@ -105,61 +105,37 @@ def test_thread_safety():
     assert L == [1] * 20
 
 
-code = """
-import sys
-from dask.threaded import get
-
-def signal_started():
-    sys.stdout.write('started\\n')
-    sys.stdout.flush()
-
-def long_task(x):
-    out = 0
-    N = 100000
-    for i in range(N):
-        for j in range(N):
-            out += 1
-
-dsk = {('x', i): (long_task, 'started') for i in range(100)}
-dsk['started'] = (signal_started,)
-dsk['x'] = (sum, list(dsk.keys()))
-get(dsk, 'x')
-"""
-
-
-# TODO: this test passes locally on windows, but fails on appveyor
-# because the ctrl-c event also tears down their infrastructure.
-# There's probably a better way to test this, but for now we'll mark
-# it slow (slow tests are skipped on appveyor).
-@pytest.mark.slow
+@pytest.mark.xfail('xdist' in sys.modules,
+                   reason=("This test fails intermittently when using "
+                           "pytest-xdist (maybe)"))
 def test_interrupt():
+    # Python 2 and windows 2 & 3 both implement `queue.get` using polling,
+    # which means we can set an exception to interrupt the call to `get`.
+    # Python 3 on other platforms requires sending SIGINT to the main thread.
+    if PY2:
+        from thread import interrupt_main
+    elif os.name == 'nt':
+        from _thread import interrupt_main
+    else:
+        main_thread = threading.get_ident()
+
+        def interrupt_main():
+            signal.pthread_kill(main_thread, signal.SIGINT)
+
+    def long_task():
+        sleep(5)
+
+    dsk = {('x', i): (long_task,) for i in range(20)}
+    dsk['x'] = (len, list(dsk.keys()))
     try:
-        proc = subprocess.Popen([sys.executable, '-c', code],
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE)
-        # Wait for scheduler to start
-        msg = proc.stdout.readline()
-        if msg != 'started\n' and proc.poll() is not None:
-            assert False, "subprocess failed"
-        # Scheduler has started, send an interrupt
-        sigint = signal.CTRL_C_EVENT if os.name == 'nt' else signal.SIGINT
-        try:
-            proc.send_signal(sigint)
-            # Wait a bit for it to die
-            start = time()
-            while time() - start < 2.0:
-                if proc.poll() is not None:
-                    break
-                sleep(0.05)
-            else:
-                assert False, "KeyboardInterrupt Failed"
-        except KeyboardInterrupt:
-            # On windows the interrupt is also raised in this process.
-            # That's silly, ignore it.
-            pass
-        # Ensure KeyboardInterrupt in traceback
-        stderr = proc.stderr.read()
-        assert "KeyboardInterrupt" in stderr.decode()
-    except:
-        proc.terminate()
-        raise
+        interrupter = threading.Timer(0.5, interrupt_main)
+        interrupter.start()
+        start = time()
+        get(dsk, 'x')
+    except KeyboardInterrupt:
+        pass
+    except Exception:
+        assert False, "Failed to interrupt"
+    stop = time()
+    if stop - start > 4:
+        assert False, "Failed to interrupt"

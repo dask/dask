@@ -161,9 +161,9 @@ def daily_stock(symbol, start, stop, freq=pd.Timedelta(seconds=1),
 
     Examples
     --------
-    >>> import dask.dataframe as dd
-    >>> df = dd.demo.daily_stock('GOOG', '2010', '2011', freq='1s')
-    >>> df  # doctest: +NORMALIZE_WHITESPACE
+    >>> import dask.dataframe as dd  # doctest: +SKIP
+    >>> df = dd.demo.daily_stock('GOOG', '2010', '2011', freq='1s')  # doctest: +SKIP
+    >>> df  # doctest: +SKIP
     Dask DataFrame Structure:
                            close     high      low     open
     npartitions=252
@@ -190,6 +190,8 @@ def daily_stock(symbol, start, stop, freq=pd.Timedelta(seconds=1),
     divisions = []
     for i, seed in zip(range(len(df)), seeds):
         s = df.iloc[i]
+        if s.isnull().any():
+            continue
         part = delayed(generate_day)(s.name, s.loc['Open'], s.loc['High'], s.loc['Low'],
                                      s.loc['Close'], s.loc['Volume'],
                                      freq=freq, random_state=seed)

@@ -199,11 +199,18 @@ docstrings with pytest as follows::
 
    py.test dask --doctest-modules
 
+Docstring testing requires graphviz to be installed. This can be done via::
+
+   conda install -y graphviz
+
 
 Style
 ~~~~~
 
-Dask adheres loosely to PEP8 with rule-breaking allowed.
+Dask verifies style uniformity with the ``flake8`` tool.::
+
+   pip install flake8
+   flake8 dask
 
 
 Changelog

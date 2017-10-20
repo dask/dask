@@ -54,6 +54,11 @@ if PY3:
     def _getargspec(func):
         return inspect.getfullargspec(func)
 
+    def reraise(exc, tb=None):
+        if exc.__traceback__ is not tb:
+            raise exc.with_traceback(tb)
+        raise exc
+
 else:
     import __builtin__ as builtins
     from Queue import Queue, Empty
@@ -72,6 +77,16 @@ else:
     reduce = reduce
     operator_div = operator.div
     FileNotFoundError = IOError
+
+    def _make_reraise():
+        _code = ("def reraise(exc, tb=None):"
+                "    raise type(exc), exc, tb")
+        namespace = {}
+        exec("exec _code in namespace")
+        return namespace['reraise']
+
+    reraise = _make_reraise()
+    del _make_reraise
 
     def _getargspec(func):
         return inspect.getargspec(func)
@@ -226,9 +241,6 @@ def getargspec(func):
             return _getargspec(func.__init__)
         else:
             return _getargspec(func)
-
-def skip(func):
-    return
 
 
 def bind_method(cls, name, func):

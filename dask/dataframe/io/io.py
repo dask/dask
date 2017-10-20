@@ -4,7 +4,6 @@ from math import ceil
 from operator import getitem
 import os
 from threading import Lock
-from warnings import warn
 
 import pandas as pd
 import numpy as np
@@ -17,7 +16,7 @@ from ...delayed import delayed
 
 from ..core import DataFrame, Series, new_dd_object
 from ..shuffle import set_partition
-from ..utils import insert_meta_param_description
+from ..utils import insert_meta_param_description, check_meta, make_meta
 
 from ...utils import M, ensure_dict
 
@@ -123,7 +122,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
         the size and index of the dataframe, the output may have fewer
         partitions than requested.
     chunksize : int, optional
-        The size of the partitions of the index.
+        The number of rows per index partition to use.
     sort: bool
         Sort input first to obtain cleanly divided partitions or don't sort and
         don't get cleanly divided partitions
@@ -210,7 +209,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
     ----------
     x : bcolz.ctable
     chunksize : int, optional
-        The size of blocks to pull out from ctable.
+        The size(rows) of blocks to pull out from ctable.
     categorize : bool, defaults to True
         Automatically categorize all string dtypes
     index : string, optional
@@ -241,7 +240,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
                     np.issubdtype(x.dtype[name], np.unicode_) or
                     np.issubdtype(x.dtype[name], np.object_)):
                 a = da.from_array(x[name], chunks=(chunksize * len(x.names),))
-                categories[name] = da.unique(a)
+                categories[name] = da.unique(a).compute()
 
     columns = tuple(x.dtype.names)
     divisions = tuple(range(0, len(x), chunksize))
@@ -344,7 +343,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
 
 
 def from_dask_array(x, columns=None):
-    """ Create Dask Array from a Dask DataFrame
+    """ Create a Dask DataFrame from a Dask Array.
 
     Converts a 2d array into a DataFrame and a 1d array into a Series.
 
@@ -391,7 +390,7 @@ def from_dask_array(x, columns=None):
         divisions[-1] -= 1
 
     dsk = {}
-    for i, (chunk, ind) in enumerate(zip(x._keys(), index)):
+    for i, (chunk, ind) in enumerate(zip(x.__dask_keys__(), index)):
         if x.ndim == 2:
             chunk = chunk[0]
         if isinstance(meta, pd.Series):
@@ -436,8 +435,8 @@ def to_bag(df, index=False):
         raise TypeError("df must be either DataFrame or Series")
     name = 'to_bag-' + tokenize(df, index)
     dsk = dict(((name, i), (_df_to_bag, block, index))
-               for (i, block) in enumerate(df._keys()))
-    dsk.update(df._optimize(df.dask, df._keys()))
+               for (i, block) in enumerate(df.__dask_keys__()))
+    dsk.update(df.__dask_optimize__(df.__dask_graph__(), df.__dask_keys__()))
     return Bag(dsk, name, df.npartitions)
 
 
@@ -463,15 +462,14 @@ def to_records(df):
         raise TypeError("df must be either DataFrame or Series")
     name = 'to-records-' + tokenize(df)
     dsk = {(name, i): (M.to_records, key)
-           for (i, key) in enumerate(df._keys())}
+           for (i, key) in enumerate(df.__dask_keys__())}
     x = df._meta.to_records()
     chunks = ((np.nan,) * df.npartitions,)
     return Array(merge(df.dask, dsk), name, chunks, x.dtype)
 
 
 @insert_meta_param_description
-def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
-                 metadata=None):
+def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed'):
     """ Create Dask DataFrame from many Dask Delayed objects
 
     Parameters
@@ -490,9 +488,6 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
     prefix : str, optional
         Prefix to prepend to the keys.
     """
-    if metadata is not None and meta is None:
-        warn("Deprecation warning: Use meta keyword, not metadata")
-        meta = metadata
     from dask.delayed import Delayed
     if isinstance(dfs, Delayed):
         dfs = [dfs]
@@ -504,20 +499,15 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
         if not isinstance(df, Delayed):
             raise TypeError("Expected Delayed object, got %s" %
                             type(df).__name__)
-    dsk = merge(df.dask for df in dfs)
-
-    name = prefix + '-' + tokenize(*dfs)
-    names = [(name, i) for i in range(len(dfs))]
-    values = [df.key for df in dfs]
-    dsk2 = dict(zip(names, values))
-    dsk3 = merge(dsk, dsk2)
 
     if meta is None:
         meta = dfs[0].compute()
-    if isinstance(meta, (str, pd.Series)):
-        Frame = Series
-    else:
-        Frame = DataFrame
+    meta = make_meta(meta)
+
+    name = prefix + '-' + tokenize(*dfs)
+    dsk = merge(df.dask for df in dfs)
+    dsk.update({(name, i): (check_meta, df.key, meta, 'from_delayed')
+                for (i, df) in enumerate(dfs)})
 
     if divisions is None or divisions == 'sorted':
         divs = [None] * (len(dfs) + 1)
@@ -526,7 +516,7 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed',
         if len(divs) != len(dfs) + 1:
             raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
-    df = Frame(dsk3, name, meta, divs)
+    df = new_dd_object(dsk, name, meta, divs)
 
     if divisions == 'sorted':
         from ..shuffle import compute_divisions

@@ -3,7 +3,8 @@ import pandas as pd
 import pandas.util.testing as tm
 import dask.dataframe as dd
 from dask.dataframe.utils import (shard_df_on_index, meta_nonempty, make_meta,
-                                  raise_on_meta_error, UNKNOWN_CATEGORIES)
+                                  raise_on_meta_error, check_meta,
+                                  UNKNOWN_CATEGORIES, PANDAS_VERSION)
 
 import pytest
 
@@ -162,7 +163,8 @@ def test_meta_nonempty_empty_categories():
         # Series
         s = idx.to_series()
         res = meta_nonempty(s)
-        assert res.dtype == s.dtype
+        assert res.dtype == 'category'
+        assert s.dtype == 'category'
         assert type(res.cat.categories) is type(s.cat.categories)
         assert res.cat.ordered == s.cat.ordered
         assert res.name == s.name
@@ -228,6 +230,15 @@ def test_meta_nonempty_index():
     assert res.names == idx.names
 
 
+@pytest.mark.skipif(PANDAS_VERSION < '0.20.0',
+                    reason="Pandas < 0.20.0 doesn't support UInt64Index")
+def test_meta_nonempty_uint64index():
+    idx = pd.UInt64Index([1], name='foo')
+    res = meta_nonempty(idx)
+    assert type(res) is pd.UInt64Index
+    assert res.name == idx.name
+
+
 def test_meta_nonempty_scalar():
     meta = meta_nonempty(np.float64(1.0))
     assert isinstance(meta, np.float64)
@@ -255,3 +266,67 @@ def test_raise_on_meta_error():
         assert 'RuntimeError' in e.args[0]
     else:
         assert False, "should have errored"
+
+
+def test_check_meta():
+    df = pd.DataFrame({'a': ['x', 'y', 'z'],
+                       'b': [True, False, True],
+                       'c': [1, 2.5, 3.5],
+                       'd': [1, 2, 3],
+                       'e': pd.Categorical(['x', 'y', 'z'])})
+    meta = df.iloc[:0]
+
+    # DataFrame metadata passthrough if correct
+    assert check_meta(df, meta) is df
+    # Series metadata passthrough if correct
+    e = df.e
+    assert check_meta(e, meta.e) is e
+    # numeric_equal means floats and ints are equivalent
+    d = df.d
+    assert check_meta(d, meta.d.astype('f8'), numeric_equal=True) is d
+
+    # Series metadata error
+    with pytest.raises(ValueError) as err:
+        check_meta(d, meta.d.astype('f8'), numeric_equal=False)
+    assert str(err.value) == ('Metadata mismatch found.\n'
+                              '\n'
+                              'Partition type: `Series`\n'
+                              '+----------+---------+\n'
+                              '|          | dtype   |\n'
+                              '+----------+---------+\n'
+                              '| Found    | int64   |\n'
+                              '| Expected | float64 |\n'
+                              '+----------+---------+')
+
+    # DataFrame metadata error
+    meta2 = meta.astype({'a': 'category', 'd': 'f8'})[['a', 'b', 'c', 'd']]
+    df2 = df[['a', 'b', 'd', 'e']]
+    with pytest.raises(ValueError) as err:
+        check_meta(df2, meta2, funcname='from_delayed')
+
+    if PANDAS_VERSION >= '0.21.0':
+        exp = (
+            'Metadata mismatch found in `from_delayed`.\n'
+            '\n'
+            'Partition type: `DataFrame`\n'
+            '+--------+-------------------------------------------------------------+------------------------------------------------+\n'  # noqa
+            '| Column | Found                                                       | Expected                                       |\n'  # noqa
+            '+--------+-------------------------------------------------------------+------------------------------------------------+\n'  # noqa
+            '| a      | object                                                      | CategoricalDtype(categories=[], ordered=False) |\n'  # noqa
+            '| c      | -                                                           | float64                                        |\n'  # noqa
+            "| e      | CategoricalDtype(categories=['x', 'y', 'z'], ordered=False) | -                                              |\n"  # noqa
+            '+--------+-------------------------------------------------------------+------------------------------------------------+'    # noqa
+        )
+    else:
+        exp = (
+            'Metadata mismatch found in `from_delayed`.\n'
+            '\n'
+            'Partition type: `DataFrame`\n'
+            '+--------+----------+----------+\n'
+            '| Column | Found    | Expected |\n'
+            '+--------+----------+----------+\n'
+            '| a      | object   | category |\n'
+            '| c      | -        | float64  |\n'
+            '| e      | category | -        |\n'
+            '+--------+----------+----------+')
+    assert str(err.value) == exp

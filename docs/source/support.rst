@@ -15,6 +15,11 @@ and Github issues respectively over Gitter chat.  Github and StackOverflow are
 more easily searchable by future users and so is more efficient for everyone's
 time.  Gitter chat is strictly reserved for developer and community discussion.
 
+When asking questions it is ideal to create `minimal, complete, verifiable
+examples <https://stackoverflow.com/help/mcve>`_.  This significantly reduces
+the time that answerers spend understanding your situation and so usually
+results in higher quality answers much more quickly.
+
 .. _`StackOverflow #dask tag`: http://stackoverflow.com/questions/tagged/dask
 .. _`Github Issue Tracker`: https://github.com/dask/dask/issues/
 .. _`Gitter chat`: https://gitter.im/dask/dask
@@ -23,10 +28,6 @@ time.  Gitter chat is strictly reserved for developer and community discussion.
 Paid support
 ------------
 
-Dask is an open source project that originated at `Continuum Analytics, Inc. <https://www.continuum.io/>`_.
-In addition to the previous options, Continuum offers paid training and support:  https://www.continuum.io/support
-
-Give us feedback
-----------------
-
-Help us make the documentation better! Please send feedback about the dask documentation to documentation@continuum.io.
+Dask is an open source project that originated at `Anaconda Inc.
+<https://www.anaconda.com/>`_.  In addition to the previous options, Anaconda
+offers paid training and support:  `<https://www.anaconda.com/support>`_

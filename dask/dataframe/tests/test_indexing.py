@@ -34,6 +34,8 @@ def test_loc():
     assert_eq(d.loc[3:], full.loc[3:])
     assert_eq(d.loc[[5]], full.loc[[5]])
     assert_eq(d.loc[[3, 4, 1, 8]], full.loc[[3, 4, 1, 8]])
+    assert_eq(d.loc[[3, 4, 1, 9]], full.loc[[3, 4, 1, 9]])
+    assert_eq(d.loc[np.array([3, 4, 1, 9])], full.loc[np.array([3, 4, 1, 9])])
 
     assert_eq(d.a.loc[5], full.a.loc[5:5])
     assert_eq(d.a.loc[3:8], full.a.loc[3:8])
@@ -41,6 +43,10 @@ def test_loc():
     assert_eq(d.a.loc[3:], full.a.loc[3:])
     assert_eq(d.a.loc[[5]], full.a.loc[[5]])
     assert_eq(d.a.loc[[3, 4, 1, 8]], full.a.loc[[3, 4, 1, 8]])
+    assert_eq(d.a.loc[[3, 4, 1, 9]], full.a.loc[[3, 4, 1, 9]])
+    assert_eq(d.a.loc[np.array([3, 4, 1, 9])], full.a.loc[np.array([3, 4, 1, 9])])
+    assert_eq(d.a.loc[[]], full.a.loc[[]])
+    assert_eq(d.a.loc[np.array([])], full.a.loc[np.array([])])
 
     pytest.raises(KeyError, lambda: d.loc[1000])
     assert_eq(d.loc[1000:], full.loc[1000:])
@@ -112,17 +118,17 @@ def test_loc2d():
     assert_eq(d.loc[[3, 4, 3], ['a']], full.loc[[3, 4, 3], ['a']])
 
     # 3d
-    with tm.assertRaises(pd.core.indexing.IndexingError):
+    with pytest.raises(pd.core.indexing.IndexingError):
         d.loc[3, 3, 3]
 
     # Series should raise
-    with tm.assertRaises(pd.core.indexing.IndexingError):
+    with pytest.raises(pd.core.indexing.IndexingError):
         d.a.loc[3, 3]
 
-    with tm.assertRaises(pd.core.indexing.IndexingError):
+    with pytest.raises(pd.core.indexing.IndexingError):
         d.a.loc[3:, 3]
 
-    with tm.assertRaises(pd.core.indexing.IndexingError):
+    with pytest.raises(pd.core.indexing.IndexingError):
         d.a.loc[d.a % 2 == 0, 3]
 
 
@@ -242,6 +248,20 @@ def test_loc_on_pandas_datetimes():
     a.divisions = list(map(pd.Timestamp, a.divisions))
 
     assert_eq(a.loc['2014': '2015'], a.loc['2014': '2015'])
+
+
+def test_loc_datetime_no_freq():
+    # https://github.com/dask/dask/issues/2389
+
+    datetime_index = pd.date_range('2016-01-01', '2016-01-31', freq='12h')
+    datetime_index.freq = None  # FORGET FREQUENCY
+    df = pd.DataFrame({'num': range(len(datetime_index))}, index=datetime_index)
+
+    ddf = dd.from_pandas(df, npartitions=1)
+    slice_ = slice('2016-01-03', '2016-01-05')
+    result = ddf.loc[slice_, :]
+    expected = df.loc[slice_, :]
+    assert_eq(result, expected)
 
 
 def test_coerce_loc_index():

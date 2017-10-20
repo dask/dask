@@ -279,7 +279,7 @@ def test_to_hdf_lock_delays():
 
     # saving to multiple hdf nodes
     with tmpfile() as fn:
-        a = a.apply(delayed_nop, axis=1, columns=a.columns)
+        a = a.apply(delayed_nop, axis=1, meta=a)
         a.to_hdf(fn, '/data*')
         out = dd.read_hdf(fn, '/data*')
         assert_eq(df16, out)
@@ -288,7 +288,7 @@ def test_to_hdf_lock_delays():
     # adding artifichial delays to make sure last tasks finish first
     with tmpdir() as dn:
         fn = os.path.join(dn, 'data*')
-        a = a.apply(delayed_nop, axis=1, columns=a.columns)
+        a = a.apply(delayed_nop, axis=1, meta=a)
         a.to_hdf(fn, '/data')
         out = dd.read_hdf(fn, '/data')
         assert_eq(df16, out)
@@ -313,7 +313,7 @@ def test_to_hdf_exceptions():
                 a.to_hdf(hdf, '/data_*_*')
 
 
-@pytest.mark.parametrize('get', [dask.async.get_sync,
+@pytest.mark.parametrize('get', [dask.get,
                                  dask.threaded.get,
                                  dask.multiprocessing.get])
 @pytest.mark.parametrize('npartitions', [1, 4, 10])
@@ -495,6 +495,21 @@ def test_hdf_globbing():
             tm.assert_frame_equal(res.compute(), pd.concat([df] * 3))
 
 
+def test_hdf_file_list():
+    pytest.importorskip('tables')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+
+    with tmpdir() as tdir:
+        df.iloc[:2].to_hdf(os.path.join(tdir, 'one.h5'), 'dataframe', format='table')
+        df.iloc[2:].to_hdf(os.path.join(tdir, 'two.h5'), 'dataframe', format='table')
+
+        with dask.set_options(get=dask.get):
+            input_files = [os.path.join(tdir, 'one.h5'), os.path.join(tdir, 'two.h5')]
+            res = dd.read_hdf(input_files, 'dataframe')
+            tm.assert_frame_equal(res.compute(), df)
+
+
 def test_read_hdf_doesnt_segfault():
     pytest.importorskip('tables')
     with tmpfile('h5') as fn:
@@ -505,3 +520,12 @@ def test_read_hdf_doesnt_segfault():
 
         ddf = dd.read_hdf(fn, '/x', chunksize=2)
         assert len(ddf) == N
+
+
+def test_hdf_filenames():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert ddf.to_hdf("foo*.hdf5", "key") == ["foo0.hdf5", "foo1.hdf5"]
+    os.remove("foo0.hdf5")
+    os.remove("foo1.hdf5")

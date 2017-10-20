@@ -4,7 +4,7 @@ import pytest
 pytest.importorskip('numpy')
 
 import dask.array as da
-from dask.array.utils import assert_eq as _assert_eq
+from dask.array.utils import assert_eq as _assert_eq, same_keys
 from dask.core import get_deps
 from dask.context import set_options
 
@@ -19,15 +19,6 @@ except ImportError:  # pragma: no cover
 
 def assert_eq(a, b):
     _assert_eq(a, b, equal_nan=True)
-
-
-def same_keys(a, b):
-    def key(k):
-        if isinstance(k, str):
-            return (k, -1, -1, -1)
-        else:
-            return k
-    return sorted(a.dask, key=key) == sorted(b.dask, key=key)
 
 
 def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
@@ -116,13 +107,14 @@ def test_reduction_errors():
         x.sum(axis=-3)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('dtype', ['f4', 'i4'])
 def test_reductions_2D(dtype):
     x = np.arange(1, 122).reshape((11, 11)).astype(dtype)
     a = da.from_array(x, chunks=(4, 4))
 
     b = a.sum(keepdims=True)
-    assert b._keys() == [[(b.name, 0, 0)]]
+    assert b.__dask_keys__() == [[(b.name, 0, 0)]]
 
     reduction_2d_test(da.sum, a, np.sum, x)
     reduction_2d_test(da.prod, a, np.prod, x)
@@ -175,21 +167,25 @@ def test_arg_reductions(dfunc, func):
                          [(da.nanargmin, np.nanargmin),
                           (da.nanargmax, np.nanargmax)])
 def test_nanarg_reductions(dfunc, func):
+
     x = np.random.random((10, 10, 10))
     x[5] = np.nan
     a = da.from_array(x, chunks=(3, 4, 5))
     assert_eq(dfunc(a), func(x))
     assert_eq(dfunc(a, 0), func(x, 0))
     with pytest.raises(ValueError):
-        dfunc(a, 1).compute()
+        with pytest.warns(None):  # All NaN axis
+            dfunc(a, 1).compute()
 
     with pytest.raises(ValueError):
-        dfunc(a, 2).compute()
+        with pytest.warns(None):  # All NaN axis
+            dfunc(a, 2).compute()
 
     x[:] = np.nan
     a = da.from_array(x, chunks=(3, 4, 5))
     with pytest.raises(ValueError):
-        dfunc(a).compute()
+        with pytest.warns(None):  # All NaN axis
+            dfunc(a).compute()
 
 
 def test_reductions_2D_nans():
@@ -213,23 +209,33 @@ def test_reductions_2D_nans():
     reduction_2d_test(da.nansum, a, np.nansum, x, False, False)
     reduction_2d_test(da.nanprod, a, nanprod, x, False, False)
     reduction_2d_test(da.nanmean, a, np.nanmean, x, False, False)
-    reduction_2d_test(da.nanvar, a, np.nanvar, x, False, False)
-    reduction_2d_test(da.nanstd, a, np.nanstd, x, False, False)
-    reduction_2d_test(da.nanmin, a, np.nanmin, x, False, False)
-    reduction_2d_test(da.nanmax, a, np.nanmax, x, False, False)
+    with pytest.warns(None):  # division by 0 warning
+        reduction_2d_test(da.nanvar, a, np.nanvar, x, False, False)
+    with pytest.warns(None):  # division by 0 warning
+        reduction_2d_test(da.nanstd, a, np.nanstd, x, False, False)
+    with pytest.warns(None):  # all NaN axis warning
+        reduction_2d_test(da.nanmin, a, np.nanmin, x, False, False)
+    with pytest.warns(None):  # all NaN axis warning
+        reduction_2d_test(da.nanmax, a, np.nanmax, x, False, False)
 
     assert_eq(da.argmax(a), np.argmax(x))
     assert_eq(da.argmin(a), np.argmin(x))
-    assert_eq(da.nanargmax(a), np.nanargmax(x))
-    assert_eq(da.nanargmin(a), np.nanargmin(x))
+    with pytest.warns(None):  # all NaN axis warning
+        assert_eq(da.nanargmax(a), np.nanargmax(x))
+    with pytest.warns(None):  # all NaN axis warning
+        assert_eq(da.nanargmin(a), np.nanargmin(x))
     assert_eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
     assert_eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
-    assert_eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
-    assert_eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
+    with pytest.warns(None):  # all NaN axis warning
+        assert_eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
+    with pytest.warns(None):  # all NaN axis warning
+        assert_eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
     assert_eq(da.argmax(a, axis=1), np.argmax(x, axis=1))
     assert_eq(da.argmin(a, axis=1), np.argmin(x, axis=1))
-    assert_eq(da.nanargmax(a, axis=1), np.nanargmax(x, axis=1))
-    assert_eq(da.nanargmin(a, axis=1), np.nanargmin(x, axis=1))
+    with pytest.warns(None):  # all NaN axis warning
+        assert_eq(da.nanargmax(a, axis=1), np.nanargmax(x, axis=1))
+    with pytest.warns(None):  # all NaN axis warning
+        assert_eq(da.nanargmin(a, axis=1), np.nanargmin(x, axis=1))
 
 
 def test_moment():
@@ -299,6 +305,20 @@ def test_reduction_on_scalar():
     assert (x == x).all()
 
 
+def test_reductions_with_empty_array():
+    dx1 = da.ones((10, 0, 5), chunks=4)
+    x1 = dx1.compute()
+    dx2 = da.ones((0, 0, 0), chunks=4)
+    x2 = dx2.compute()
+
+    for dx, x in [(dx1, x1), (dx2, x2)]:
+        with pytest.warns(None):  # empty slice warning
+            assert_eq(dx.mean(), x.mean())
+            assert_eq(dx.mean(axis=0), x.mean(axis=0))
+            assert_eq(dx.mean(axis=1), x.mean(axis=1))
+            assert_eq(dx.mean(axis=2), x.mean(axis=2))
+
+
 def assert_max_deps(x, n, eq=True):
     dependencies, dependents = get_deps(x.dask)
     if eq:
@@ -355,3 +375,36 @@ def test_reduction_names():
     assert x.all().name.startswith('all')
     assert any(k[0].startswith('nansum') for k in da.nansum(x).dask)
     assert x.mean().name.startswith('mean')
+
+
+@pytest.mark.skipif(np.__version__ < '1.12.0', reason='argmax out parameter')
+@pytest.mark.parametrize('func', [np.sum,
+                                  np.argmax])
+def test_array_reduction_out(func):
+    x = da.arange(10, chunks=(5,))
+    y = da.ones((10, 10), chunks=(4, 4))
+    func(y, axis=0, out=x)
+    assert_eq(x, func(np.ones((10, 10)), axis=0))
+
+
+@pytest.mark.parametrize("func", ["cumsum", "cumprod"])
+@pytest.mark.parametrize("axis", [None, 0, 1, -1])
+def test_array_cumreduction_axis(func, axis):
+    np_func = getattr(np, func)
+    da_func = getattr(da, func)
+
+    s = (10, 11, 12)
+    a = np.arange(np.prod(s)).reshape(s)
+    d = da.from_array(a, chunks=(4, 5, 6))
+
+    a_r = np_func(a, axis=axis)
+    d_r = da_func(d, axis=axis)
+
+    assert_eq(a_r, d_r)
+
+
+@pytest.mark.parametrize('func', [np.cumsum, np.cumprod])
+def test_array_cumreduction_out(func):
+    x = da.ones((10, 10), chunks=(4, 4))
+    func(x, axis=0, out=x)
+    assert_eq(x, func(np.ones((10, 10)), axis=0))

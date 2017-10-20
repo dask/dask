@@ -25,7 +25,7 @@ def read_text(urlpath, blocksize=None, compression='infer',
         Absolute or relative filepath, URL (may include protocols like
         ``s3://``), globstring, or a list of beforementioned strings.
     blocksize: None or int
-        Size to cut up larger files.  Streams by default.
+        Size (in bytes) to cut up larger files.  Streams by default.
     compression: string
         Compression format like 'gzip' or 'xz'.  Defaults to 'infer'
     encoding: string

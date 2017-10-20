@@ -9,6 +9,7 @@ from .core import Array
 from ..base import tokenize
 from ..core import flatten
 from ..compatibility import reduce
+from ..utils import M
 from .. import sharedict
 
 
@@ -169,8 +170,8 @@ def reshape(x, shape):
     name = 'reshape-' + tokenize(x, shape)
 
     if x.npartitions == 1:
-        key = next(flatten(x._keys()))
-        dsk = {(name,) + (0,) * len(shape): (np.reshape, key, shape)}
+        key = next(flatten(x.__dask_keys__()))
+        dsk = {(name,) + (0,) * len(shape): (M.reshape, key, shape)}
         chunks = tuple((d,) for d in shape)
         return Array(sharedict.merge((name, dsk), x.dask), name, chunks,
                      dtype=x.dtype)
@@ -183,7 +184,7 @@ def reshape(x, shape):
     in_keys = list(product([x2.name], *[range(len(c)) for c in inchunks]))
     out_keys = list(product([name], *[range(len(c)) for c in outchunks]))
     shapes = list(product(*outchunks))
-    dsk = {a: (np.reshape, b, shape) for a, b, shape in zip(out_keys, in_keys, shapes)}
+    dsk = {a: (M.reshape, b, shape) for a, b, shape in zip(out_keys, in_keys, shapes)}
 
     return Array(sharedict.merge((name, dsk), x2.dask), name, outchunks,
                  dtype=x.dtype)

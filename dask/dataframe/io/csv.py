@@ -10,17 +10,22 @@ except ImportError:
     psutil = None
 
 import pandas as pd
-from pandas.types.common import is_integer_dtype, is_float_dtype
 
 from ...bytes import read_bytes
 from ...bytes.core import write_bytes
 from ...bytes.compression import seekable_files, files as cfiles
 from ...compatibility import PY2, PY3
 from ...delayed import delayed
+from ...utils import asciitable
 
-from ..utils import clear_known_categories
+from ..utils import clear_known_categories, PANDAS_VERSION
 
 from .io import from_delayed
+
+if PANDAS_VERSION >= '0.20.0':
+    from pandas.api.types import is_integer_dtype, is_float_dtype
+else:
+    from pandas.types.common import is_integer_dtype, is_float_dtype
 
 
 delayed = delayed(pure=True)
@@ -73,30 +78,51 @@ def coerce_dtypes(df, dtypes):
     df: Pandas DataFrame
     dtypes: dict like {'x': float}
     """
+    bad = []
+    errors = []
     for c in df.columns:
         if c in dtypes and df.dtypes[c] != dtypes[c]:
-            if is_float_dtype(df.dtypes[c]) and is_integer_dtype(dtypes[c]):
-                # There is a mismatch between floating and integer columns.
-                # Determine all mismatched and error.
-                mismatched = sorted(c for c in df.columns if
-                                    is_float_dtype(df.dtypes[c]) and
-                                    is_integer_dtype(dtypes[c]))
+            actual = df.dtypes[c]
+            desired = dtypes[c]
+            if is_float_dtype(actual) and is_integer_dtype(desired):
+                bad.append((c, actual, desired))
+            else:
+                try:
+                    df[c] = df[c].astype(dtypes[c])
+                except Exception as e:
+                    bad.append((c, actual, desired))
+                    errors.append((c, e))
 
-                msg = ("Mismatched dtypes found.\n"
-                       "Expected integers, but found floats for columns:\n"
-                       "%s\n\n"
-                       "To fix, specify dtypes manually by adding:\n\n"
-                       "%s\n\n"
-                       "to the call to `read_csv`/`read_table`.\n\n"
-                       "Alternatively, provide `assume_missing=True` to "
-                       "interpret all unspecified integer columns as floats.")
+    if bad:
+        if errors:
+            ex = '\n'.join("- %s\n  %r" % (c, e) for c, e in
+                           sorted(errors, key=lambda x: str(x[0])))
+            exceptions = ("The following columns also raised exceptions on "
+                          "conversion:\n\n%s\n\n") % ex
+            extra = ""
+        else:
+            exceptions = ""
+            # All mismatches are int->float, also suggest `assume_missing=True`
+            extra = ("\n\nAlternatively, provide `assume_missing=True` "
+                     "to interpret\n"
+                     "all unspecified integer columns as floats.")
 
-                missing_list = '\n'.join('- %r' % c for c in mismatched)
-                dtype_list = ('%r: float' % c for c in mismatched)
-                missing_dict = 'dtype={%s}' % ',\n       '.join(dtype_list)
-                raise ValueError(msg % (missing_list, missing_dict))
+        bad = sorted(bad, key=lambda x: str(x[0]))
+        table = asciitable(['Column', 'Found', 'Expected'], bad)
+        dtype_kw = ('dtype={%s}' % ',\n'
+                    '       '.join("%r: '%s'" % (k, v) for (k, v, _) in bad))
 
-            df[c] = df[c].astype(dtypes[c])
+        msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
+               "\n"
+               "{table}\n"
+               "\n{exceptions}"
+               "Usually this is due to dask's dtype inference failing, and\n"
+               "*may* be fixed by specifying dtypes manually by adding:\n\n"
+               "{dtype_kw}\n\n"
+               "to the call to `read_csv`/`read_table`."
+               "{extra}").format(table=table, exceptions=exceptions,
+                                 dtype_kw=dtype_kw, extra=extra)
+        raise ValueError(msg)
 
 
 def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
@@ -209,22 +235,34 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                                   compression)
 
     b_lineterminator = lineterminator.encode()
-    sample, values = read_bytes(urlpath, delimiter=b_lineterminator,
-                                blocksize=blocksize,
-                                sample=sample,
-                                compression=compression,
-                                **(storage_options or {}))
+    b_sample, values = read_bytes(urlpath, delimiter=b_lineterminator,
+                                  blocksize=blocksize,
+                                  sample=sample,
+                                  compression=compression,
+                                  **(storage_options or {}))
 
     if not isinstance(values[0], (tuple, list)):
         values = [values]
 
-    if kwargs.get('header', 'infer') is None:
-        header = b''
-    else:
-        header_row = kwargs.get('skiprows', 0)
-        header = sample.split(b_lineterminator)[header_row] + b_lineterminator
+    # Get header row, and check that sample is long enough. If the file
+    # contains a header row, we need at least 2 nonempty rows + the number of
+    # rows to skip.
+    skiprows = kwargs.get('skiprows', 0)
+    header = kwargs.get('header', 'infer')
+    need = 1 if header is None else 2
+    parts = b_sample.split(b_lineterminator, skiprows + need)
+    # If the last partition is empty, don't count it
+    nparts = 0 if not parts else len(parts) - int(not parts[-1])
 
-    head = reader(BytesIO(sample), **kwargs)
+    if nparts < skiprows + need and len(b_sample) >= sample:
+        raise ValueError("Sample is not large enough to include at least one "
+                         "row of data. Please increase the number of bytes "
+                         "in `sample` in the call to `read_csv`/`read_table`")
+
+    header = b'' if header is None else parts[skiprows] + b_lineterminator
+
+    # Use sample to infer dtypes
+    head = reader(BytesIO(b_sample), **kwargs)
 
     specified_dtypes = kwargs.get('dtype', {})
     if specified_dtypes is None:
@@ -243,53 +281,70 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
 READ_DOC_TEMPLATE = """
 Read {file_type} files into a Dask.DataFrame
 
-This parallelizes the ``pandas.{reader}`` file in the following ways:
+This parallelizes the ``pandas.{reader}`` function in the following ways:
 
-1.  It supports loading many files at once using globstrings as follows:
+- It supports loading many files at once using globstrings:
 
     >>> df = dd.{reader}('myfiles.*.csv')  # doctest: +SKIP
 
-2.  In some cases it can break up large files as follows:
+- In some cases it can break up large files:
 
     >>> df = dd.{reader}('largefile.csv', blocksize=25e6)  # 25MB chunks  # doctest: +SKIP
 
-3.  You can read CSV files from external resources (e.g. S3, HDFS)
-    providing a URL:
+- It can read CSV files from external resources (e.g. S3, HDFS) by
+  providing a URL:
 
     >>> df = dd.{reader}('s3://bucket/myfiles.*.csv')  # doctest: +SKIP
     >>> df = dd.{reader}('hdfs:///myfiles.*.csv')  # doctest: +SKIP
     >>> df = dd.{reader}('hdfs://namenode.example.com/myfiles.*.csv')  # doctest: +SKIP
 
-Internally ``dd.{reader}`` uses ``pandas.{reader}`` and so supports many
-of the same keyword arguments with the same performance guarantees.
-
-See the docstring for ``pandas.{reader}`` for more information on available
-keyword arguments.
-
-Note that this function may fail if a {file_type} file includes quoted strings
-that contain the line terminator.
+Internally ``dd.{reader}`` uses ``pandas.{reader}`` and supports many of the
+same keyword arguments with the same performance guarantees. See the docstring
+for ``pandas.{reader}`` for more information on available keyword arguments.
 
 Parameters
 ----------
 urlpath : string
     Absolute or relative filepath, URL (may include protocols like
     ``s3://``), or globstring for {file_type} files.
-blocksize : int or None
+blocksize : int or None, optional
     Number of bytes by which to cut up larger files. Default value is
     computed based on available physical memory and the number of cores.
     If ``None``, use a single block for each file.
-collection : boolean
+collection : boolean, optional
     Return a dask.dataframe if True or list of dask.delayed objects if False
-sample : int
+sample : int, optional
     Number of bytes to use when determining dtypes
 assume_missing : bool, optional
     If True, all integer columns that aren't specified in ``dtype`` are assumed
     to contain missing values, and are converted to floats. Default is False.
-storage_options : dict
-    Extra options that make sense to a particular storage connection, e.g.
+storage_options : dict, optional
+    Extra options that make sense for a particular storage connection, e.g.
     host, port, username, password, etc.
-**kwargs : dict
-    Options to pass down to ``pandas.{reader}``
+**kwargs
+    Extra keyword arguments to forward to ``pandas.{reader}``.
+
+Notes
+-----
+Dask dataframe tries to infer the ``dtype`` of each column by reading a sample
+from the start of the file (or of the first file if it's a glob). Usually this
+works fine, but if the ``dtype`` is different later in the file (or in other
+files) this can cause issues. For example, if all the rows in the sample had
+integer dtypes, but later on there was a ``NaN``, then this would error at
+compute time. To fix this, you have a few options:
+
+- Provide explicit dtypes for the offending columns using the ``dtype``
+  keyword. This is the recommended solution.
+
+- Use the ``assume_missing`` keyword to assume that all columns inferred as
+  integers contain missing values, and convert them to floats.
+
+- Increase the size of the sample using the ``sample`` keyword.
+
+It should also be noted that this function may fail if a {file_type} file
+includes quoted strings that contain the line terminator. To get around this
+you can specify ``blocksize=None`` to not split files into multiple partitions,
+at the cost of reduced parallelism.
 """
 
 
@@ -331,7 +386,7 @@ def _to_csv_chunk(df, **kwargs):
 
 
 def to_csv(df, filename, name_function=None, compression=None, compute=True,
-           get=None, **kwargs):
+           get=None, storage_options=None, **kwargs):
     """
     Store Dask DataFrame to CSV files
 
@@ -439,13 +494,20 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
     decimal: string, default '.'
         Character recognized as decimal separator. E.g. use ',' for
         European data
+    storage_options: dict
+        Parameters passed on to the backend filesystem class.
+    Returns
+    -------
+    The names of the file written if they were computed right away
+    If not, the delayed tasks associated to the writing of the files
     """
     values = [_to_csv_chunk(d, **kwargs) for d in df.to_delayed()]
-    values = write_bytes(values, filename, name_function, compression,
-                         encoding=None)
+    (values, names) = write_bytes(values, filename, name_function, compression,
+                                  encoding=None, **(storage_options or {}))
 
     if compute:
         delayed(values).compute(get=get)
+        return names
     else:
         return values
 

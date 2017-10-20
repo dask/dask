@@ -15,18 +15,6 @@ from .core import Array, normalize_chunks
 from .numpy_compat import full
 
 
-def dims_from_size(size, blocksize):
-    """
-
-    >>> list(dims_from_size(30, 8))
-    [8, 8, 8, 6]
-    """
-    result = (blocksize,) * (size // blocksize)
-    if size % blocksize:
-        result = result + (size % blocksize,)
-    return result
-
-
 def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     """
     Transform np creation function into blocked version

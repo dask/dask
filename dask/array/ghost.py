@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from operator import getitem
 from itertools import product
+from numbers import Integral
 
 from toolz import merge, pipe, concat, partial
 from toolz.curried import map
@@ -99,8 +100,8 @@ def ghost_internal(x, axes):
     """
     dims = list(map(len, x.chunks))
     expand_key2 = partial(expand_key, dims=dims)
-    interior_keys = pipe(x._keys(), flatten, map(expand_key2), map(flatten),
-                         concat, list)
+    interior_keys = pipe(x.__dask_keys__(), flatten, map(expand_key2),
+                         map(flatten), concat, list)
 
     token = tokenize(x, axes)
     name = 'ghost-' + token
@@ -111,8 +112,9 @@ def ghost_internal(x, axes):
         if k != frac_slice:
             interior_slices[k] = frac_slice
 
-        ghost_blocks[(name,) + k[1:]] = (concatenate3,
-                                         (concrete, expand_key2(k)))
+        else:
+            ghost_blocks[(name,) + k[1:]] = (concatenate3,
+                                             (concrete, expand_key2(k)))
 
     chunks = []
     for i, bds in enumerate(x.chunks):
@@ -359,9 +361,8 @@ def add_dummy_padding(x, depth, boundary):
     array([..., 0, 1, 2, 3, 4, 5, ...])
     """
     for k, v in boundary.items():
-        if v == 'none':
-            d = depth[k]
-
+        d = depth[k]
+        if v == 'none' and d > 0:
             empty_shape = list(x.shape)
             empty_shape[k] = d
 
@@ -374,7 +375,7 @@ def add_dummy_padding(x, depth, boundary):
             ax_chunks = list(out_chunks[k])
             ax_chunks[0] += d
             ax_chunks[-1] += d
-            out_chunks[k] = ax_chunks
+            out_chunks[k] = tuple(ax_chunks)
 
             x = concatenate([empty, x, empty], axis=k)
             x = x.rechunk(out_chunks)
@@ -395,10 +396,11 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
 
 
 def coerce_depth(ndim, depth):
-    if isinstance(depth, int):
+    if isinstance(depth, Integral):
         depth = (depth,) * ndim
     if isinstance(depth, tuple):
         depth = dict(zip(range(ndim), depth))
+
     return depth
 
 

@@ -5,11 +5,10 @@ import re
 from operator import getitem
 
 from .compatibility import unicode
-
 from .context import _globals
-from .core import add, inc  # noqa: F401
 from .core import (istask, get_dependencies, subs, toposort, flatten,
                    reverse_dict, ishashable)
+from .utils_test import add, inc  # noqa: F401
 
 
 def cull(dsk, keys):
@@ -594,12 +593,11 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
                     parent = child
                     child = children_stack[-1]
                     children = reducible & deps[child]
-                else:
-                    children_stack_pop()
-                    # This is a leaf node in the reduction region
-                    # key, task, fused_keys, height, width, number of nodes, fudge, set of edges
-                    info_stack_append((child, rv[child], None if key_renamer is None else [child],
-                                       1, 1, 1, 0, deps[child] - reducible))
+                children_stack_pop()
+                # This is a leaf node in the reduction region
+                # key, task, fused_keys, height, width, number of nodes, fudge, set of edges
+                info_stack_append((child, rv[child], None if key_renamer is None else [child],
+                                   1, 1, 1, 0, deps[child] - reducible))
             else:
                 children_stack_pop()
                 # Calculate metrics and fuse as appropriate

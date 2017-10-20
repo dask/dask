@@ -16,8 +16,8 @@ Briefly, the current options are as follows:
     bound code that needs multiple interpreters to accelerate.  There are some
     costs to sharing data back and forth between processes.  The default
     scheduler for ``dask.bag`` and sometimes useful with ``dask.dataframe``.
-*   ``dask.async.get_sync``: Uses the single main thread.  Good for profiling
-    and debugging because all code is run sequentially
+*   ``dask.get``: Uses the single main thread.  Good for profiling and
+    debugging because all code is run sequentially
 *   ``distributed.Client.get``:  Uses multiple machines connected over
     sockets.  Good for larger work but also a viable alternative to
     ``dask.multiprocessing`` on a single machine.  Also sometimes used for its
@@ -45,11 +45,10 @@ Single Threaded Scheduler
 Debugging, profiling, and general comprehension of code is hard when computing
 in parallel.  Standard tools like ``pdb`` or ``cProfile`` fail to operate well
 when running under multiple threads or processes.  To resolve this problem
-there is a dask scheduler, ``dask.async.get_sync`` that doesn't actually run in
-parallel, but instead steps through your graph in the main thread.  It
-otherwise operates exactly like the threaded and multiprocessing schedulers,
-and so is a faithful proxy when tracking down difficult issues.
-
+there is a dask scheduler, ``dask.get`` that doesn't actually run in parallel,
+but instead steps through your graph in the main thread.  It otherwise operates
+exactly like the threaded and multiprocessing schedulers, and so is a faithful
+proxy when tracking down difficult issues.
 
 Distributed Scheduler on a Cluster
 ----------------------------------
@@ -71,14 +70,38 @@ Distributed Scheduler on a Single Machine
 -----------------------------------------
 
 It is also reasonable to use the `distributed scheduler`_ on a single machine.
-The algorithms, reporting, and diagnostics in this scheduler are more effective
-in some cases.  You can create a local "cluster" and use this scheduler by
-default by creating a ``dask.distributed.Client`` with no arguments.
+This is often recommended over the multiprocessing scheduler for the following
+reasons:
+
+1.  The multiprocessing scheduler brings intermediate values back to the main
+    process before sending them out again for new tasks.  For embarrassingly
+    parallel workloads, such as are common in :doc:`dask.bag <bag>`, this is
+    rarely a problem because repeated tasks are fused together and outputs are
+    typically small, like counts, sums, or filenames to which we have written
+    results.  However for more complex workloads like a blocked matrix multiply
+    this can be troublesome.  The distributed scheduler is sophisticated enough
+    to track which data is in which process and so can avoid costly
+    interprocess communication.
+2.  The distributed scheduler supports a set of rich real-time diagnostics
+    which can help provide feedback and diagnose performance issues.
+3.  The distributed scheduler supports a larger API, including asynchronous
+    operations and computing in the background.
+
+You can create a local "cluster" and use this scheduler by default by creating
+a ``dask.distributed.Client`` with no arguments.
 
 .. code-block:: python
 
    from dask.distributed import Client
-   client = Client(set_as_default=True)
+   client = Client()
+
+You may prefer to use the multiprocessing scheduler over the distributed
+scheduler if the following hold:
+
+1.  Your computations don't involve complex graphs that share data to multiple
+    tasks
+2.  You want to avoid depending on Tornado, the technology that backs the
+    distributed scheduler
 
 .. _`distributed scheduler`: https://distributed.readthedocs.io/en/latest/
 

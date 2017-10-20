@@ -4,11 +4,16 @@ import warnings
 
 import pandas as pd
 import numpy as np
-from pandas.tseries.resample import Resampler as pd_Resampler
 
 from ..core import DataFrame, Series
+from ..utils import PANDAS_VERSION
 from ...base import tokenize
 from ...utils import derived_from
+
+if PANDAS_VERSION >= '0.20.0':
+    from pandas.core.resample import Resampler as pd_Resampler
+else:
+    from pandas.tseries.resample import Resampler as pd_Resampler
 
 
 def getnanos(rule):
@@ -39,7 +44,7 @@ def _resample_series(series, start, end, reindex_closed, rule,
 
 def _resample_bin_and_out_divs(divisions, rule, closed='left', label='left'):
     rule = pd.tseries.frequencies.to_offset(rule)
-    g = pd.TimeGrouper(rule, how='count', closed=closed, label=label)
+    g = pd.Grouper(freq=rule, how='count', closed=closed, label=label)
 
     # Determine bins to apply `how` to. Disregard labeling scheme.
     divs = pd.Series(range(len(divisions)), index=divisions)
@@ -107,7 +112,7 @@ class Resampler(object):
         # Repartition divs into bins. These won't match labels after mapping
         partitioned = self.obj.repartition(newdivs, force=True)
 
-        keys = partitioned._keys()
+        keys = partitioned.__dask_keys__()
         dsk = partitioned.dask
 
         args = zip(keys, outdivs, outdivs[1:], ['left'] * (len(keys) - 1) + [None])

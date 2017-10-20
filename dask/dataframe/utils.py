@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import re
 import textwrap
 from distutils.version import LooseVersion
 
@@ -7,17 +8,20 @@ from collections import Iterator
 import sys
 import traceback
 from contextlib import contextmanager
-import warnings
 
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
-from pandas.core.common import is_datetime64tz_dtype
 from pandas.api.types import is_categorical_dtype, is_scalar
-import toolz
+try:
+    from pandas.api.types import is_datetime64tz_dtype
+except ImportError:
+    # pandas < 0.19.2
+    from pandas.core.common import is_datetime64tz_dtype
 
 from ..core import get_deps
-from ..async import get_sync
+from ..local import get_sync
+from ..utils import asciitable
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
@@ -79,30 +83,6 @@ def shard_df_on_index(df, divisions):
         yield df.iloc[indices[-1]:]
 
 
-def unique(divisions):
-    """ Polymorphic unique function
-
-    >>> list(unique([1, 2, 3, 1, 2, 3]))
-    [1, 2, 3]
-
-    >>> unique(np.array([1, 2, 3, 1, 2, 3]))
-    array([1, 2, 3])
-
-    >>> unique(pd.Categorical(['Alice', 'Bob', 'Alice'], ordered=False))
-    [Alice, Bob]
-    Categories (2, object): [Alice, Bob]
-    """
-    if isinstance(divisions, np.ndarray):
-        return np.unique(divisions)
-    if isinstance(divisions, pd.Categorical):
-        return pd.Categorical.from_codes(np.unique(divisions.codes),
-                                         divisions.categories,
-                                         divisions.ordered)
-    if isinstance(divisions, (tuple, list, Iterator)):
-        return tuple(toolz.unique(divisions))
-    raise NotImplementedError()
-
-
 _META_TYPES = "meta : pd.DataFrame, pd.Series, dict, iterable, tuple, optional"
 _META_DESCRIPTION = """\
 An empty ``pd.DataFrame`` or ``pd.Series`` that matches the dtypes and
@@ -125,12 +105,21 @@ def insert_meta_param_description(*args, **kwargs):
     if not args:
         return lambda f: insert_meta_param_description(f, **kwargs)
     f = args[0]
+    indent = " " * kwargs.get('pad', 8)
+    body = textwrap.wrap(_META_DESCRIPTION, initial_indent=indent,
+                         subsequent_indent=indent, width=78)
+    descr = '{0}\n{1}'.format(_META_TYPES, '\n'.join(body))
     if f.__doc__:
-        indent = " " * kwargs.get('pad', 8)
-        body = textwrap.wrap(_META_DESCRIPTION, initial_indent=indent,
-                             subsequent_indent=indent, width=78)
-        descr = '{0}\n{1}'.format(_META_TYPES, '\n'.join(body))
-        f.__doc__ = f.__doc__.replace('$META', descr)
+        if '$META' in f.__doc__:
+            f.__doc__ = f.__doc__.replace('$META', descr)
+        else:
+            # Put it at the end of the parameters section
+            parameter_header = 'Parameters\n%s----------' % indent[4:]
+            first, last = re.split('Parameters\\n[ ]*----------', f.__doc__)
+            parameters, rest = last.split('\n\n', 1)
+            f.__doc__ = '{0}{1}{2}\n{3}{4}\n\n{5}'.format(first, parameter_header,
+                                                          parameters, indent[4:],
+                                                          descr, rest)
     return f
 
 
@@ -296,7 +285,7 @@ def make_meta(x, index=None):
         try:
             dtype = np.dtype(x)
             return _scalar_from_dtype(dtype)
-        except:
+        except Exception:
             # Continue on to next check
             pass
 
@@ -306,17 +295,28 @@ def make_meta(x, index=None):
     raise TypeError("Don't know how to create metadata from {0}".format(x))
 
 
+if PANDAS_VERSION >= "0.20.0":
+    _numeric_index_types = (pd.Int64Index, pd.Float64Index, pd.UInt64Index)
+else:
+    _numeric_index_types = (pd.Int64Index, pd.Float64Index)
+
+
 def _nonempty_index(idx):
     typ = type(idx)
     if typ is pd.RangeIndex:
         return pd.RangeIndex(2, name=idx.name)
-    elif typ in (pd.Int64Index, pd.Float64Index):
+    elif typ in _numeric_index_types:
         return typ([1, 2], name=idx.name)
     elif typ is pd.Index:
         return pd.Index(['a', 'b'], name=idx.name)
     elif typ is pd.DatetimeIndex:
         start = '1970-01-01'
-        data = [start, start] if idx.freq is None else None
+        # Need a non-monotonic decreasing index to avoid issues with
+        # partial string indexing see https://github.com/dask/dask/issues/2389
+        # and https://github.com/pandas-dev/pandas/issues/16515
+        # This doesn't mean `_meta_nonempty` should ever rely on
+        # `self.monotonic_increasing` or `self.monotonic_decreasing`
+        data = [start, '1970-01-02'] if idx.freq is None else None
         return pd.DatetimeIndex(data, start=start, periods=2, freq=idx.freq,
                                 tz=idx.tz, name=idx.name)
     elif typ is pd.PeriodIndex:
@@ -427,46 +427,112 @@ def meta_nonempty(x):
                         "got {0}".format(type(x).__name__))
 
 
+def check_meta(x, meta, funcname=None, numeric_equal=True):
+    """Check that the dask metadata matches the result.
+
+    If metadata matches, ``x`` is passed through unchanged. A nice error is
+    raised if metadata doesn't match.
+
+    Parameters
+    ----------
+    x : DataFrame, Series, or Index
+    meta : DataFrame, Series, or Index
+        The expected metadata that ``x`` should match
+    funcname : str, optional
+        The name of the function in which the metadata was specified. If
+        provided, the function name will be included in the error message to be
+        more helpful to users.
+    numeric_equal : bool, optionl
+        If True, integer and floating dtypes compare equal. This is useful due
+        to panda's implicit conversion of integer to floating upon encountering
+        missingness, which is hard to infer statically.
+    """
+    eq_types = {'i', 'f'} if numeric_equal else {}
+
+    def equal_dtypes(a, b):
+        if is_categorical_dtype(a) != is_categorical_dtype(b):
+            return False
+        if (a is '-' or b is '-'):
+            return False
+        if is_categorical_dtype(a) and is_categorical_dtype(b):
+            # Pandas 0.21 CategoricalDtype compat
+            if (PANDAS_VERSION >= '0.21.0' and
+                    (UNKNOWN_CATEGORIES in a.categories or
+                     UNKNOWN_CATEGORIES in b.categories)):
+                return True
+            return a == b
+        return (a.kind in eq_types and b.kind in eq_types) or (a == b)
+
+    if not isinstance(meta, (pd.Series, pd.Index, pd.DataFrame)):
+        raise TypeError("Expected partition to be DataFrame, Series, or "
+                        "Index, got `%s`" % type(meta).__name__)
+
+    if type(x) != type(meta):
+        errmsg = ("Expected partition of type `%s` but got "
+                  "`%s`" % (type(meta).__name__, type(x).__name__))
+    elif isinstance(meta, pd.DataFrame):
+        dtypes = pd.concat([x.dtypes, meta.dtypes], axis=1)
+        bad = [(col, a, b) for col, a, b in dtypes.fillna('-').itertuples()
+               if not equal_dtypes(a, b)]
+        if not bad:
+            return x
+        errmsg = ("Partition type: `%s`\n%s" %
+                  (type(meta).__name__,
+                   asciitable(['Column', 'Found', 'Expected'], bad)))
+    else:
+        if equal_dtypes(x.dtype, meta.dtype):
+            return x
+        errmsg = ("Partition type: `%s`\n%s" %
+                  (type(meta).__name__,
+                   asciitable(['', 'dtype'], [('Found', x.dtype),
+                                              ('Expected', meta.dtype)])))
+
+    raise ValueError("Metadata mismatch found%s.\n\n"
+                     "%s" % ((" in `%s`" % funcname if funcname else ""),
+                             errmsg))
+
+
 ###############################################################
 # Testing
 ###############################################################
 
 
-def _check_dask(dsk, check_names=True, check_dtypes=True):
+def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
     import dask.dataframe as dd
     if hasattr(dsk, 'dask'):
-        result = dsk.compute(get=get_sync)
+        if result is None:
+            result = dsk.compute(get=get_sync)
         if isinstance(dsk, dd.Index):
             assert isinstance(result, pd.Index), type(result)
-            if check_names:
-                assert dsk.name == result.name
-            # cache
             assert isinstance(dsk._meta, pd.Index), type(dsk._meta)
             if check_names:
+                assert dsk.name == result.name
                 assert dsk._meta.name == result.name
+                if isinstance(result, pd.MultiIndex):
+                    assert result.names == dsk._meta.names
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
         elif isinstance(dsk, dd.Series):
             assert isinstance(result, pd.Series), type(result)
-            if check_names:
-                assert dsk.name == result.name, (dsk.name, result.name)
-            # cache
             assert isinstance(dsk._meta, pd.Series), type(dsk._meta)
             if check_names:
+                assert dsk.name == result.name, (dsk.name, result.name)
                 assert dsk._meta.name == result.name
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
+            _check_dask(dsk.index, check_names=check_names,
+                        check_dtypes=check_dtypes, result=result.index)
         elif isinstance(dsk, dd.DataFrame):
             assert isinstance(result, pd.DataFrame), type(result)
             assert isinstance(dsk.columns, pd.Index), type(dsk.columns)
-            if check_names:
-                tm.assert_index_equal(dsk.columns, result.columns)
-            # cache
             assert isinstance(dsk._meta, pd.DataFrame), type(dsk._meta)
             if check_names:
+                tm.assert_index_equal(dsk.columns, result.columns)
                 tm.assert_index_equal(dsk._meta.columns, result.columns)
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
+            _check_dask(dsk.index, check_names=check_names,
+                        check_dtypes=check_dtypes, result=result.index)
         elif isinstance(dsk, dd.core.Scalar):
             assert (np.isscalar(result) or
                     isinstance(result, (pd.Timestamp, pd.Timedelta)))
@@ -528,11 +594,6 @@ def assert_eq(a, b, check_names=True, check_dtypes=True,
     return True
 
 
-def eq(*args, **kwargs):
-    warnings.warn('eq is deprecated. Use assert_frame instead', UserWarning)
-    assert_eq(*args, **kwargs)
-
-
 def assert_dask_graph(dask, label):
     if hasattr(dask, 'dask'):
         dask = dask.dask
@@ -542,9 +603,8 @@ def assert_dask_graph(dask, label):
             k = k[0]
         if k.startswith(label):
             return True
-    else:
-        msg = "given dask graph doesn't contan label: {0}"
-        raise AssertionError(msg.format(label))
+    raise AssertionError("given dask graph doesn't contain label: {label}"
+                         .format(label=label))
 
 
 def assert_divisions(ddf):
@@ -555,9 +615,11 @@ def assert_divisions(ddf):
     if not ddf.known_divisions:
         return
 
-    index = lambda x: x if isinstance(x, pd.Index) else x.index
+    def index(x):
+        return (x if isinstance(x, pd.Index)
+                else x.index.get_level_values(0))
 
-    results = get_sync(ddf.dask, ddf._keys())
+    results = get_sync(ddf.dask, ddf.__dask_keys__())
     for i, df in enumerate(results[:-1]):
         if len(df):
             assert index(df).min() >= ddf.divisions[i]

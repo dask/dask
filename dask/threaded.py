@@ -1,16 +1,17 @@
 """
 A threaded shared-memory scheduler
 
-See async.py
+See scheduler.py
 """
 from __future__ import absolute_import, division, print_function
 
+import sys
 from collections import defaultdict
 from multiprocessing.pool import ThreadPool
 import threading
 from threading import current_thread, Lock
 
-from .async import get_async
+from .local import get_async
 from .context import _globals
 from .utils_test import inc, add  # noqa: F401
 
@@ -19,16 +20,14 @@ def _thread_get_id():
     return current_thread().ident
 
 
-default_pool = None
-
-
-default_thread = _thread_get_id()
-
-
 main_thread = current_thread()
-
+default_pool = None
 pools = defaultdict(dict)
 pools_lock = Lock()
+
+
+def pack_exception(e, dumps):
+    return e, sys.exc_info()[2]
 
 
 def get(dsk, result, cache=None, num_workers=None, **kwargs):
@@ -73,7 +72,7 @@ def get(dsk, result, cache=None, num_workers=None, **kwargs):
 
     results = get_async(pool.apply_async, len(pool._pool), dsk, result,
                         cache=cache, get_id=_thread_get_id,
-                        **kwargs)
+                        pack_exception=pack_exception, **kwargs)
 
     # Cleanup pools associated to dead threads
     with pools_lock:

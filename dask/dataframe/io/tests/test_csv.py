@@ -14,9 +14,8 @@ from toolz import partition_all, valmap
 import pandas.util.testing as tm
 
 import dask
-from dask.async import get_sync
-
 import dask.dataframe as dd
+from dask.base import compute_as_if_collection
 from dask.dataframe.io.csv import (text_blocks_to_pandas, pandas_read_text,
                                    auto_blocksize)
 from dask.dataframe.utils import assert_eq, has_known_categories, PANDAS_VERSION
@@ -157,7 +156,7 @@ def test_text_blocks_to_pandas_simple(reader, files):
     assert len(values) == 3
     assert all(hasattr(item, 'dask') for item in values)
 
-    result = df.amount.sum().compute(get=get_sync)
+    result = df.amount.sum().compute(get=dask.get)
     assert result == (100 + 200 + 300 + 400 + 500 + 600)
 
 
@@ -222,7 +221,7 @@ def test_enforce_dtypes(reader, blocks):
     header = blocks[0][0].split(b'\n')[0] + b'\n'
     dfs = text_blocks_to_pandas(reader, blocks, header, head, {},
                                 collection=False)
-    dfs = dask.compute(*dfs, get=get_sync)
+    dfs = dask.compute(*dfs, get=dask.get)
     assert all(df.dtypes.to_dict() == head.dtypes.to_dict() for df in dfs)
 
 
@@ -236,7 +235,7 @@ def test_enforce_columns(reader, blocks):
     with pytest.raises(ValueError):
         dfs = text_blocks_to_pandas(reader, blocks, header, head, {},
                                     collection=False, enforce=True)
-        dask.compute(*dfs, get=get_sync)
+        dask.compute(*dfs, get=dask.get)
 
 
 #############################
@@ -278,10 +277,12 @@ def test_read_csv_files(dd_read, pd_read, files):
 def test_read_csv_index():
     with filetext(csv_text) as fn:
         f = dd.read_csv(fn, blocksize=20).set_index('amount')
-        result = f.compute(get=get_sync)
+        result = f.compute(get=dask.get)
         assert result.index.name == 'amount'
 
-        blocks = dd.DataFrame._get(f.dask, f._keys(), get=get_sync)
+        blocks = compute_as_if_collection(dd.DataFrame, f.dask,
+                                          f.__dask_keys__(),
+                                          get=dask.get)
         for i, block in enumerate(blocks):
             if i < len(f.divisions) - 2:
                 assert (block.index < f.divisions[i + 1]).all()
@@ -420,27 +421,31 @@ def test_read_csv_compression(fmt, blocksize):
     files2 = valmap(compress[fmt], csv_files)
     with filetexts(files2, mode='b'):
         df = dd.read_csv('2014-01-*.csv', compression=fmt, blocksize=blocksize)
-        assert_eq(df.compute(get=get_sync).reset_index(drop=True),
+        assert_eq(df.compute(get=dask.get).reset_index(drop=True),
                   expected.reset_index(drop=True), check_dtype=False)
 
 
-def test_warn_non_seekable_files(capsys):
+def test_warn_non_seekable_files():
     files2 = valmap(compress['gzip'], csv_files)
     with filetexts(files2, mode='b'):
 
-        # with tm.assert_produces_warning(UserWarning):
-        df = dd.read_csv('2014-01-*.csv', compression='gzip')
-        assert df.npartitions == 3
-        out, err = capsys.readouterr()
-        assert 'gzip' in err
-        assert 'blocksize=None' in err
+        with pytest.warns(UserWarning) as w:
+            df = dd.read_csv('2014-01-*.csv', compression='gzip')
+            assert df.npartitions == 3
 
-        df = dd.read_csv('2014-01-*.csv', compression='gzip', blocksize=None)
-        out, err = capsys.readouterr()
-        assert not err and not out
+        assert len(w) == 1
+        msg = str(w[0].message)
+        assert 'gzip' in msg
+        assert 'blocksize=None' in msg
+
+        with pytest.warns(None) as w:
+            df = dd.read_csv('2014-01-*.csv', compression='gzip',
+                             blocksize=None)
+        assert len(w) == 0
 
         with pytest.raises(NotImplementedError):
-            df = dd.read_csv('2014-01-*.csv', compression='foo')
+            with pytest.warns(UserWarning):  # needed for pytest
+                df = dd.read_csv('2014-01-*.csv', compression='foo')
 
 
 def test_windows_line_terminator():
@@ -561,33 +566,67 @@ def test_read_csv_of_modified_file_has_different_name():
 def test_late_dtypes():
     text = 'numbers,names,more_numbers,integers\n'
     for i in range(1000):
-        text += '1,foo,2,3\n'
+        text += '1,,2,3\n'
     text += '1.5,bar,2.5,3\n'
     with filetext(text) as fn:
         sol = pd.read_csv(fn)
         with pytest.raises(ValueError) as e:
-            dd.read_csv(fn, sample=50).compute(get=get_sync)
+            dd.read_csv(fn, sample=50).compute(get=dask.get)
 
-        msg = ("Mismatched dtypes found.\n"
-               "Expected integers, but found floats for columns:\n"
-               "- 'more_numbers'\n"
-               "- 'numbers'\n"
+        msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
                "\n"
-               "To fix, specify dtypes manually by adding:\n"
+               "+--------------+---------+----------+\n"
+               "| Column       | Found   | Expected |\n"
+               "+--------------+---------+----------+\n"
+               "| more_numbers | float64 | int64    |\n"
+               "| names        | object  | float64  |\n"
+               "| numbers      | float64 | int64    |\n"
+               "+--------------+---------+----------+\n"
                "\n"
-               "dtype={'more_numbers': float,\n"
-               "       'numbers': float}\n"
+               "- names\n"
+               "  ValueError(.*)\n"
+               "\n"
+               "Usually this is due to dask's dtype inference failing, and\n"
+               "*may* be fixed by specifying dtypes manually by adding:\n"
+               "\n"
+               "dtype={'more_numbers': 'float64',\n"
+               "       'names': 'object',\n"
+               "       'numbers': 'float64'}\n"
+               "\n"
+               "to the call to `read_csv`/`read_table`.\n")
+
+        e.match(msg)
+
+        with pytest.raises(ValueError) as e:
+            dd.read_csv(fn, sample=50,
+                        dtype={'names': 'O'}).compute(get=dask.get)
+
+        msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
+               "\n"
+               "+--------------+---------+----------+\n"
+               "| Column       | Found   | Expected |\n"
+               "+--------------+---------+----------+\n"
+               "| more_numbers | float64 | int64    |\n"
+               "| numbers      | float64 | int64    |\n"
+               "+--------------+---------+----------+\n"
+               "\n"
+               "Usually this is due to dask's dtype inference failing, and\n"
+               "*may* be fixed by specifying dtypes manually by adding:\n"
+               "\n"
+               "dtype={'more_numbers': 'float64',\n"
+               "       'numbers': 'float64'}\n"
                "\n"
                "to the call to `read_csv`/`read_table`.\n"
                "\n"
-               "Alternatively, provide `assume_missing=True` to interpret "
+               "Alternatively, provide `assume_missing=True` to interpret\n"
                "all unspecified integer columns as floats.")
 
         assert str(e.value) == msg
 
         # Specifying dtypes works
         res = dd.read_csv(fn, sample=50,
-                          dtype={'more_numbers': float, 'numbers': float})
+                          dtype={'more_numbers': float, 'names': object,
+                                 'numbers': float})
         assert_eq(res, sol)
 
 
@@ -729,8 +768,8 @@ def test_read_csv_sep():
     charlie###300""")
 
     with filetext(sep_text) as fn:
-        ddf = dd.read_csv(fn, sep="###")
-        df = pd.read_csv(fn, sep="###")
+        ddf = dd.read_csv(fn, sep="###", engine="python")
+        df = pd.read_csv(fn, sep="###", engine="python")
 
         assert (df.columns == ddf.columns).all()
         assert len(df) == len(ddf)
@@ -761,6 +800,37 @@ def test_robust_column_mismatch():
         assert_eq(ddf, ddf)
 
 
+def test_error_if_sample_is_too_small():
+    text = ('AAAAA,BBBBB,CCCCC,DDDDD,EEEEE\n'
+            '1,2,3,4,5\n'
+            '6,7,8,9,10\n'
+            '11,12,13,14,15')
+    with filetext(text) as fn:
+        # Sample size stops mid header row
+        sample = 20
+        with pytest.raises(ValueError):
+            dd.read_csv(fn, sample=sample)
+
+        # Saying no header means this is fine
+        assert_eq(dd.read_csv(fn, sample=sample, header=None),
+                  pd.read_csv(fn, header=None))
+
+    skiptext = ('# skip\n'
+                '# these\n'
+                '# lines\n')
+
+    text = skiptext + text
+    with filetext(text) as fn:
+        # Sample size stops mid header row
+        sample = 20 + len(skiptext)
+        with pytest.raises(ValueError):
+            dd.read_csv(fn, sample=sample, skiprows=3)
+
+        # Saying no header means this is fine
+        assert_eq(dd.read_csv(fn, sample=sample, header=None, skiprows=3),
+                  pd.read_csv(fn, header=None, skiprows=3))
+
+
 ############
 #  to_csv  #
 ############
@@ -778,7 +848,7 @@ def test_to_csv():
 
         with tmpdir() as dn:
             r = a.to_csv(dn, index=False, compute=False)
-            dask.compute(*r, get=get_sync)
+            dask.compute(*r, get=dask.get)
             result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
             assert_eq(result, df)
 
@@ -882,3 +952,11 @@ def test_to_csv_with_get():
         assert flag[0]
         result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
         assert_eq(result, df)
+
+
+def test_to_csv_paths():
+    df = pd.DataFrame({"A": range(10)})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert ddf.to_csv("foo*.csv") == ['foo0.csv', 'foo1.csv']
+    os.remove('foo0.csv')
+    os.remove('foo1.csv')

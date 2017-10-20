@@ -11,17 +11,24 @@ from toolz import merge
 from .methods import drop_columns
 from .core import DataFrame, Series, _Frame, _concat, map_partitions
 from .hashing import hash_pandas_object
+from .utils import PANDAS_VERSION
 
 from .. import base
-from ..base import tokenize, compute
+from ..base import tokenize, compute, compute_as_if_collection
 from ..context import _globals
 from ..delayed import delayed
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
 
+if PANDAS_VERSION >= '0.20.0':
+    from pandas._libs.algos import groupsort_indexer
+else:
+    from pandas.algos import groupsort_indexer
+
 
 def set_index(df, index, npartitions=None, shuffle=None, compute=False,
-              drop=True, upsample=1.0, divisions=None, **kwargs):
+              drop=True, upsample=1.0, divisions=None,
+              partition_size=128e6, **kwargs):
     """ See _Frame.set_index for docstring """
     if (isinstance(index, Series) and index._name == df.index._name):
         return df
@@ -59,7 +66,7 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
 
         if repartition:
             total = sum(sizes)
-            npartitions = max(math.ceil(total / 128e6), 1)
+            npartitions = max(math.ceil(total / partition_size), 1)
             npartitions = min(npartitions, df.npartitions)
             n = len(divisions)
             try:
@@ -70,13 +77,39 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
                 indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
                 divisions = [divisions[i] for i in indexes]
 
+        mins = remove_nans(mins)
+        maxes = remove_nans(maxes)
+
         if (mins == sorted(mins) and maxes == sorted(maxes) and
                 all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))):
             divisions = mins + [maxes[-1]]
-            return set_sorted_index(df, index, drop=drop, divisions=divisions)
+            result = set_sorted_index(df, index, drop=drop, divisions=divisions)
+            # There are cases where this still may not be sorted
+            # so sort_index to be sure. https://github.com/dask/dask/issues/2288
+            return result.map_partitions(M.sort_index)
 
     return set_partition(df, index, divisions, shuffle=shuffle, drop=drop,
                          compute=compute, **kwargs)
+
+
+def remove_nans(divisions):
+    """ Remove nans from divisions
+
+    These sometime pop up when we call min/max on an empty partition
+
+    Examples
+    --------
+    >>> remove_nans((np.nan, 1, 2))
+    [1, 1, 2]
+    >>> remove_nans((1, np.nan, 2))
+    [1, 2, 2]
+    """
+    divisions = list(divisions)
+    for i in range(len(divisions) - 2, -1, -1):
+        d = divisions[i]
+        if isinstance(d, float) and math.isnan(d):
+            divisions[i] = divisions[i + 1]
+    return divisions
 
 
 def set_partition(df, index, divisions, max_branch=32, drop=True, shuffle=None,
@@ -179,7 +212,6 @@ def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None)
     df2 = df.assign(_partitions=partitions)
     df3 = rearrange_by_column(df2, '_partitions', max_branch=max_branch,
                               npartitions=len(divisions) - 1, shuffle=shuffle)
-    df4 = df3.drop('_partitions', axis=1)
     df4 = df3.map_partitions(drop_columns, '_partitions', df.columns.dtype)
     return df4
 
@@ -234,12 +266,12 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     # Partition data on disk
     name = 'shuffle-partition-' + always_new_token
     dsk2 = {(name, i): (shuffle_group_3, key, column, npartitions, p)
-            for i, key in enumerate(df._keys())}
+            for i, key in enumerate(df.__dask_keys__())}
 
     dsk = merge(df.dask, dsk1, dsk2)
     if compute:
         keys = [p, sorted(dsk2)]
-        pp, values = (_globals.get('get') or DataFrame._get)(dsk, keys)
+        pp, values = compute_as_if_collection(DataFrame, dsk, keys)
         dsk1 = {p: pp}
         dsk = dict(zip(sorted(dsk2), values))
 
@@ -322,7 +354,7 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
         parts = [i % df.npartitions for i in range(npartitions)]
         token = tokenize(df2, npartitions)
         dsk = {('repartition-group-' + token, i): (shuffle_group_2, k, column)
-               for i, k in enumerate(df2._keys())}
+               for i, k in enumerate(df2.__dask_keys__())}
         for p in range(npartitions):
             dsk[('repartition-get-' + token, p)] = \
                 (shuffle_group_get, ('repartition-group-' + token, parts[p]), p)
@@ -383,7 +415,7 @@ def shuffle_group_2(df, col):
         return {}, df
     ind = df[col]._values.astype(np.int64)
     n = ind.max() + 1
-    indexer, locations = pd.algos.groupsort_indexer(ind.view(np.int64), n)
+    indexer, locations = groupsort_indexer(ind.view(np.int64), n)
     df2 = df.take(indexer)
     locations = locations.cumsum()
     parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
@@ -416,7 +448,7 @@ def shuffle_group(df, col, stage, k, npartitions):
     c = np.floor_divide(c, k ** stage, out=c)
     c = np.mod(c, k, out=c)
 
-    indexer, locations = pd.algos.groupsort_indexer(c.astype(np.int64), k)
+    indexer, locations = groupsort_indexer(c.astype(np.int64), k)
     df2 = df.take(indexer)
     locations = locations.cumsum()
     parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
@@ -453,6 +485,15 @@ def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
 
     if not divisions:
         divisions = compute_divisions(result, **kwargs)
+    elif len(divisions) != len(df.divisions):
+        msg = ("When doing `df.set_index(col, sorted=True, divisions=...)`, "
+               "divisions indicates known splits in the index column. In this "
+               "case divisions must be the same length as the existing "
+               "divisions in `df`\n\n"
+               "If the intent is to repartition into new divisions after "
+               "setting the index, you probably want:\n\n"
+               "`df.set_index(col, sorted=True).repartition(divisions=divisions)`")
+        raise ValueError(msg)
 
     result.divisions = tuple(divisions)
     return result

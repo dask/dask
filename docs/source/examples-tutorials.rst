@@ -16,6 +16,7 @@ Array
 
 *  `Blogpost: Distributed NumPy and Image Analysis on a Cluster, January 2017 <http://matthewrocklin.com/blog/work/2017/01/17/dask-images>`_
 *  `Use Dask.array to generate task graphs <https://gist.github.com/mrocklin/b61f795004ec0a70e43de350e453e97e>`_
+*  `Alternating Least Squares for collaborative filtering <https://gist.github.com/mrocklin/017f78ce52d265b6d72828fb29e5619c>`_
 
 Bag
 ---
@@ -70,6 +71,7 @@ Distributed Concurrent.futures
 
 *  `Custom workflows <https://gist.github.com/mrocklin/ef9ccd29a6ec5f4de84d6192be95042a>`_
 *  `Ad Hoc Distributed Random Forests <https://gist.github.com/mrocklin/9f5720d8658e5f2f66666815b1f03f00>`_
+*  `Web Servers and Asynchronous task scheduling <https://gist.github.com/mrocklin/5e69b270d2a06aea7c288513709d921d>`_
 
 
 Tutorial

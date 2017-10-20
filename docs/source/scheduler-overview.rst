@@ -6,7 +6,7 @@ implements a few different schedulers:
 
 - ``dask.threaded.get``: a scheduler backed by a thread pool
 - ``dask.multiprocessing.get``: a scheduler backed by a process pool
-- ``dask.async.get_sync``: a synchronous scheduler, good for debugging
+- ``dask.get``: a synchronous scheduler, good for debugging
 - ``distributed.Client.get``: a distributed scheduler for executing graphs
    on multiple machines.  This lives in the external distributed_ project.
 
@@ -155,12 +155,12 @@ Debugging the schedulers
 Debugging parallel code can be difficult, as conventional tools such as ``pdb``
 don't work well with multiple threads or processes. To get around this when
 debugging, we recommend using the synchronous scheduler found at
-``dask.async.get_sync``. This runs everything serially, allowing it to work
+``dask.get``. This runs everything serially, allowing it to work
 well with ``pdb``:
 
 .. code-block:: python
 
-    >>> dask.set_options(get=dask.async.get_sync)
+    >>> dask.set_options(get=dask.get)
     >>> x.sum().compute()    # This computation runs serially instead of in parallel
 
 

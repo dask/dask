@@ -3,25 +3,16 @@ from __future__ import print_function, division, absolute_import
 import io
 import os
 
-from toolz import merge, partial
+from toolz import merge
 from warnings import warn
 
 from .compression import seekable_files, files as compress_files
-from .utils import SeekableFile, read_block
+from .utils import (SeekableFile, read_block, infer_compression,
+                    infer_storage_options, build_name_function)
 from ..compatibility import PY2, unicode
-from ..base import tokenize, normalize_token
+from ..base import tokenize
 from ..delayed import delayed
-from ..utils import (build_name_function, infer_compression, import_required,
-                     ensure_bytes, ensure_unicode, infer_storage_options)
-
-# delayed = delayed(pure=True)
-
-# Global registration dictionaries for backend storage functions
-# See docstrings to functions below for more information
-_read_bytes = dict()
-_open_files_write = dict()
-_open_files = dict()
-_open_text_files = dict()
+from ..utils import import_required, ensure_bytes, ensure_unicode, is_integer
 
 
 def write_block_to_file(data, lazy_file):
@@ -93,8 +84,9 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
                                             num=len(data), encoding=encoding,
                                             **kwargs)
 
-    return [delayed(write_block_to_file, pure=False)(d, myopen(f, mode='wb'))
-            for d, f in zip(data, names)]
+    values = [delayed(write_block_to_file, pure=False)(d, myopen(f, mode='wb'))
+              for d, f in zip(data, names)]
+    return values, names
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
@@ -121,7 +113,7 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     not_zero: bool
         Force seek of start-of-file delimiter, discarding header.
     blocksize: int (=128MB)
-        Chunk size
+        Chunk size in bytes
     compression: string or None
         String like 'gzip' or 'xz'.  Must support efficient random access.
     sample: bool or int
@@ -146,6 +138,11 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     client = None
     if len(paths) == 0:
         raise IOError("%s resolved to no files" % urlpath)
+
+    if blocksize is not None:
+        if not is_integer(blocksize):
+            raise TypeError("blocksize must be an integer")
+        blocksize = int(blocksize)
 
     blocks, lengths, machines = fs.get_block_locations(paths)
     if blocks:
@@ -254,7 +251,8 @@ class OpenFileCreator(object):
         self.text = text
         self.encoding = encoding
         self.errors = errors
-        self.storage_options = infer_storage_options(urlpath, inherit_storage_options=kwargs)
+        self.storage_options = infer_storage_options(
+            urlpath, inherit_storage_options=kwargs)
         self.protocol = self.storage_options.pop('protocol')
         ensure_protocol(self.protocol)
         try:
@@ -268,10 +266,9 @@ class OpenFileCreator(object):
         return OpenFile(self.fs.open, path, self.compression, mode,
                         self.text, self.encoding, self.errors)
 
-
-@partial(normalize_token.register, OpenFileCreator)
-def normalize_OpenFileCreator(ofc):
-    return ofc.compression, ofc.text, ofc.encoding, ofc.protocol, ofc.storage_options
+    def __dask_tokenize__(self):
+        return (self.compression, self.text, self.encoding,
+                self.protocol, self.storage_options)
 
 
 class OpenFile(object):
@@ -385,9 +382,17 @@ def open_files(urlpath, compression=None, mode='rb', encoding='utf8',
 
 def get_fs_paths_myopen(urlpath, compression, mode, encoding='utf8',
                         errors='strict', num=1, name_function=None, **kwargs):
+    if hasattr(urlpath, 'name'):
+        # deal with pathlib.Path objects - must be local
+        urlpath = str(urlpath)
+        ispath = True
+    else:
+        ispath = False
     if isinstance(urlpath, (str, unicode)):
         myopen = OpenFileCreator(urlpath, compression, text='b' not in mode,
                                  encoding=encoding, errors=errors, **kwargs)
+        if ispath and myopen.protocol != 'file':
+            raise ValueError("Only use pathlib.Path with local files.")
         if 'w' in mode:
             paths = _expand_paths(urlpath, name_function, num)
         elif "*" in urlpath:
@@ -395,8 +400,16 @@ def get_fs_paths_myopen(urlpath, compression, mode, encoding='utf8',
         else:
             paths = [urlpath]
     elif isinstance(urlpath, (list, set, tuple, dict)):
+        if hasattr(urlpath[0], 'name'):
+            # deal with pathlib.Path objects - must be local
+            urlpath = [str(u) for u in urlpath]
+            ispath = True
+        else:
+            ispath = False
         myopen = OpenFileCreator(urlpath[0], compression, text='b' not in mode,
                                  encoding=encoding, **kwargs)
+        if ispath and myopen.protocol != 'file':
+            raise ValueError("Only use pathlib.Path with local files.")
         paths = urlpath
     else:
         raise ValueError('url type not understood: %s' % urlpath)
@@ -462,10 +475,6 @@ def _expand_paths(path, name_function, num):
 
 
 def ensure_protocol(protocol):
-    if (protocol not in ('s3', 'hdfs') and ((protocol in _read_bytes) or
-       (protocol in _filesystems))):
-        return
-
     if protocol == 's3':
         import_required('s3fs',
                         "Need to install `s3fs` library for s3 support\n"
@@ -473,12 +482,22 @@ def ensure_protocol(protocol):
                         "    or\n"
                         "    pip install s3fs")
 
+    elif protocol in ('gs', 'gcs'):
+        import_required('gcsfs',
+                        "Need to install `gcsfs` library for Google Cloud Storage support\n"
+                        "    conda install gcsfs -c conda-forge\n"
+                        "    or\n"
+                        "    pip install gcsfs")
+
     elif protocol == 'hdfs':
         msg = ("Need to install `distributed` and `hdfs3` "
                "for HDFS support\n"
                "    conda install distributed hdfs3 -c conda-forge")
         import_required('distributed.hdfs', msg)
         import_required('hdfs3', msg)
+
+    elif protocol in _filesystems:
+        return
 
     else:
         raise ValueError("Unknown protocol %s" % protocol)

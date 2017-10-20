@@ -10,10 +10,10 @@ Top level user functions:
     Bag.all
     Bag.any
     Bag.compute
-    Bag.concat
     Bag.count
     Bag.distinct
     Bag.filter
+    Bag.flatten
     Bag.fold
     Bag.foldby
     Bag.frequencies
@@ -30,6 +30,7 @@ Top level user functions:
     Bag.random_sample
     Bag.remove
     Bag.repartition
+    Bag.starmap
     Bag.std
     Bag.sum
     Bag.take
@@ -49,7 +50,14 @@ Create Bags
    read_text
    from_url
    range
+
+Top-level functions
+-------------------
+
+.. autosummary::
    concat
+   map
+   map_partitions
    zip
 
 Turn Bags into other things
@@ -58,6 +66,7 @@ Turn Bags into other things
 .. autosummary::
    Bag.to_textfiles
    Bag.to_dataframe
+   Bag.to_delayed
 
 Bag methods
 -----------
@@ -74,4 +83,6 @@ Other functions
 .. autofunction:: from_url
 .. autofunction:: range
 .. autofunction:: concat
+.. autofunction:: map_partitions
+.. autofunction:: map
 .. autofunction:: zip
