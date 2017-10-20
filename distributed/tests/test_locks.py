@@ -12,7 +12,7 @@ from distributed.utils_test import (gen_cluster, inc, cluster, slow, div)
 from distributed.utils_test import loop # flake8: noqa
 
 
-@gen_cluster(client=True)
+@gen_cluster(client=True, ncores=[('127.0.0.1', 8)] * 2)
 def test_lock(c, s, a, b):
     c.set_metadata('locked', False)
     def f(x):
@@ -24,7 +24,7 @@ def test_lock(c, s, a, b):
             assert client.get_metadata('locked') == True
             client.set_metadata('locked', False)
 
-    futures = c.map(f, range(10))
+    futures = c.map(f, range(20))
     results = yield futures
     assert not s.extensions['locks'].events
     assert not s.extensions['locks'].ids

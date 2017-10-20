@@ -37,23 +37,25 @@ class LockExtension(object):
     @gen.coroutine
     def acquire(self, stream=None, name=None, id=None, timeout=None):
         with log_errors():
-            if name in self.ids:
-                event = tornado.locks.Event()
-                self.events[name].append(event)
-                future = event.wait()
-                if timeout is not None:
-                    future = gen.with_timeout(timedelta(seconds=timeout), future)
-                try:
-                    yield future
-                except gen.TimeoutError:
-                    result = False
-                else:
-                    result = True
-                finally:
-                    event2 = self.events[name].popleft()
-                    assert event is event2
-            else:
+            if name not in self.ids:
                 result = True
+            else:
+                while name in self.ids:
+                    event = tornado.locks.Event()
+                    self.events[name].append(event)
+                    future = event.wait()
+                    if timeout is not None:
+                        future = gen.with_timeout(timedelta(seconds=timeout), future)
+                    try:
+                        yield future
+                    except gen.TimeoutError:
+                        result = False
+                        break
+                    else:
+                        result = True
+                    finally:
+                        event2 = self.events[name].popleft()
+                        assert event is event2
             if result:
                 assert name not in self.ids
                 self.ids[name] = id
