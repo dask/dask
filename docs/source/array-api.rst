@@ -94,6 +94,7 @@ Top level user functions:
    logical_not
    logical_or
    logical_xor
+   map_blocks
    max
    maximum
    mean
@@ -309,7 +310,6 @@ Internal functions
 .. currentmodule:: dask.array.core
 
 .. autosummary::
-   map_blocks
    atop
    top
 
