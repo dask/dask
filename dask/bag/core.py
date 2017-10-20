@@ -985,7 +985,7 @@ class Bag(Base):
         operation.
 
         **split_every**
-        
+
         Group partitions into groups of this size while performing reduction.
         Defaults to 8.
 
