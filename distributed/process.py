@@ -8,7 +8,7 @@ import sys
 import threading
 import weakref
 
-from .compatibility import finalize, Queue as PyQueue
+from .compatibility import finalize, Queue as PyQueue, PY2
 from .utils import mp_context
 
 from tornado import gen
@@ -135,12 +135,25 @@ class AsyncProcess(object):
         t.daemon = True
         t.start()
 
+    @staticmethod
+    def reset_logger_locks():
+        """ Python 2's logger's locks don't survive a fork event
+
+        https://github.com/dask/distributed/issues/1491
+        """
+        if PY2:
+            for name in logging.Logger.manager.loggerDict.keys():
+                for handler in logging.getLogger(name).handlers:
+                    handler.createLock()
+
     @classmethod
     def _run(cls, target, args, kwargs, parent_alive_pipe, _keep_child_alive):
         # On Python 2 with the fork method, we inherit the _keep_child_alive fd,
         # whether it is passed or not. Therefore, pass it unconditionally and
         # close it here, so that there are no other references to the pipe lying
         # around.
+        cls.reset_logger_locks()
+
         _keep_child_alive.close()
 
         # Child process entry point
