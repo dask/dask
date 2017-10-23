@@ -31,6 +31,9 @@ DataFrame
   of the partitions was empty (:pr:`2831`)
 - Do not raise exception when calling ``DataFrame.set_index`` on empty dataframe
   (:pr:`2827`)
+- Fixed bug in ``Dataframe.fillna`` when filling with a ``Series`` value
+  (:pr:`2810`)
+-
 
 Bag
 +++
