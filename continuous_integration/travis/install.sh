@@ -28,7 +28,6 @@ echo "pandas $PANDAS" >> $CONDA_PREFIX/conda-meta/pinned
 # Install dependencies.
 conda install -q -c conda-forge \
     numpy \
-    pandas \
     bcolz \
     blosc \
     bokeh \
@@ -50,6 +49,8 @@ conda install -q -c conda-forge \
     scipy \
     sqlalchemy \
     toolz
+
+conda install -c conda-forge/label/rc pandas
 
 pip install -q git+https://github.com/dask/partd --upgrade --no-deps
 pip install -q git+https://github.com/dask/zict --upgrade --no-deps
