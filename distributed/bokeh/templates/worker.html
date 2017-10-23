@@ -1,0 +1,51 @@
+{% extends main.html %}
+{% block content %}
+    <h1 class="title"> Worker: {{Worker}} </h1>
+      {% set workers = [Worker] %}
+      {% include "worker-table.html" %}
+
+    <div class="columns">
+      <div class="column">
+        <div class="content">
+          <h2 class="subtitle"> In Memory </h2>
+          <ul>
+            {% for task in has_what[Worker] %}
+            <li> <a href="/info/task/{{ url_escape(task) }}.html">{{task}}</a></li>
+            {% end %}
+          </ul>
+        </div>
+      </div>
+
+      <div class="column">
+        <div class="content">
+          <h2 class="subtitle"> Processing </h2>
+          <ul>
+            {% for task in processing[Worker] %}
+            <li> <a href="/info/task/{{ url_escape(task) }}.html">{{task}}</a></li>
+            {% end %}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    {% if worker in worker_resources %}
+    <div class="content">
+      <h2 class="subtitle"> Resources </h2>
+      <table class="table is-striped is-hoverable">>
+        <tr>
+            <th> Resource </th>
+            <th> Consumed </th>
+            <th> Total </th>
+        </tr>
+
+        {% for resource in worker_resources.get(Worker, []) %}
+        <tr>
+            <td> {{ resource }} </td>
+            <td> {{ used_resources[Worker][resource] }} </td>
+            <td> {{ worker_resources[Worker][resource] }} </td>
+        </tr>
+        {% end %}
+      </table>
+    </div>
+    {% end %}
+{% end %}

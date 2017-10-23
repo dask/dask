@@ -644,3 +644,7 @@ class BokehWorker(BokehServer):
 
         self.loop = io_loop or worker.loop
         self.server = None
+
+    @property
+    def my_server(self):
+        return self.worker

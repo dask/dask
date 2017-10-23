@@ -1,0 +1,9 @@
+{% extends main.html %}
+{% block content %}
+
+  <a class="button is-primary" href="/info/logs.html">Logs</a>
+  <a class="button is-primary" href="/status">Bokeh</a>
+
+  {% include "worker-table.html" %}
+
+{% end %}

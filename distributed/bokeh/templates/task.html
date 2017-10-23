@@ -1,0 +1,123 @@
+{% extends main.html %}
+{% block content %}
+  <h1 class="title"> Task: {{ Task }} </h1>
+
+      <table class="table">
+          <tr>
+              <th> status </th>
+              <td> {{ task_state[Task] }} </td>
+          </tr>
+          {% if Task in rprocessing %}
+          <tr>
+              <th> processing on </th>
+              <td> {{ rprocessing.get(Task) }} </td>
+          </tr>
+          {% end %}
+          {% if Task in nbytes %}
+          <tr>
+              <th> bytes in memory </th>
+              <td> {{ nbytes.get(Task) }} </td>
+          </tr>
+          {% end %}
+          {% if task_state[Task] == 'waiting' %}
+          {% for dep in waiting[dep] %}
+          <tr>
+              <td> waiting on </td>
+              <td><a href="/info/task/{{ url_escape(dep) }}.html">{{dep}}</a> </td>
+          </tr>
+          {% end %}
+          {% end %}
+      </table>
+
+    <div id="dependencies-dependents" class="columns">
+      <div id="dependencies" class="column">
+        <h3 class="title is-5"> Dependencies </h3>
+        <table class="table is-striped is-hoverable">
+          <thead>
+            <th> Key </th>
+            <th> State </th>
+          </thead>
+          {% for dep in dependencies.get(Task, ()) %}
+          <tr>
+            <td> <a href="/info/task/{{ url_escape(dep) }}.html">{{dep}}</a> </td>
+            <td> {{ task_state[dep] }} </td>
+          </tr>
+          {% end %}
+        </table>
+      </div><!-- #dependencies -->
+
+      <div id="dependents" class="column">
+        <h3 class="title is-5"> Dependents </h3>
+        <table class="table is-striped is-hoverable">
+          <thead>
+            <th> Key </th>
+            <th> State </th>
+          </thead>
+          {% for dep in dependents.get(Task, ()) %}
+          <tr>
+            <td> <a href="/info/task/{{ url_escape(dep) }}.html">{{dep}}</a> </td>
+            <td> {{ task_state[dep] }} </td>
+          </tr>
+          {% end %}
+        </table>
+      </div><!-- #dependents -->
+    </div><!-- #dependencies-dependents -->
+
+    <div id="workers-clients" class="columns">
+      {% if task_state[Task] == 'memory' %}
+      <div id="workers" class="column">
+        <h3 class="title is-5"> Workers with data </h3>
+          {% set workers = who_has[Task] %}
+          {% include "worker-table.html" %}
+      </div><!-- #workers -->
+      {% end %}
+
+      {% if Task in who_wants %}
+      <div id="clients" class="column">
+        <h3 class="title is-5"> Clients with future </h3>
+        <div class="content">
+          <ul>
+            {% for client in who_wants.get(Task, ()) %}
+            <li> <a href="/info/client/{{ url_escape(client) }}.html">{{client}}</a></li>
+            {% end %}
+          </ul>
+        </div>
+      </div><!-- #clients -->
+      {% end %}
+    </div><!-- #workers-clients -->
+
+      <div id="transition-log" class="section">
+        <h3 class="title is-5"> Transition Log </h3>
+          <table class="table is-bordered is-striped is-hoverable">
+              <thead>
+                  <th> Time </th>
+                  <th> Key </th>
+                  <th> Start </th>
+                  <th> Finish </th>
+                  <th> Recommended Key </th>
+                  <th> Recommended Action </th>
+              </thead>
+
+              {% for key, start, finish, recommendations, time in server.story(Task) %}
+              <tr>
+                  <td> {{ fromtimestamp(time) }} </td>
+                  <td> <a href="/info/task/{{ url_escape(key) }}.html">{{key}}</a> </td>
+                  <td> {{ start }} </td>
+                  <td> {{ finish }} </td>
+                  <td> </td>
+                  <td> </td>
+              </tr>
+                {% for key2, rec in recommendations.items() %}
+              <tr>
+                  <td> </td>
+                  <td> </td>
+                  <td> </td>
+                  <td> </td>
+                  <td> <a href="/info/task/{{ url_escape(key2) }}.html">{{key2}}</a> </td>
+                  <td> {{ rec }} </td>
+              </tr>
+                {% end %}
+              {% end %}
+          </table>
+      </div><!-- #transition-log -->
+{% end %}

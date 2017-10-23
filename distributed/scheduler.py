@@ -314,7 +314,7 @@ class Scheduler(ServerNode):
         self.plugins = []
         self.transition_log = deque(maxlen=config.get('transition-log-length',
                                                       100000))
-        self._transition_counter = 0
+        self.log = deque(maxlen=config.get('transition-log-length', 100000))
 
         self.worker_handlers = {'task-finished': self.handle_task_finished,
                                 'task-erred': self.handle_task_erred,
@@ -1358,7 +1358,7 @@ class Scheduler(ServerNode):
 
     def handle_missing_data(self, key=None, errant_worker=None, **kwargs):
         logger.debug("handle missing data key=%s worker=%s", key, errant_worker)
-        self.transition_log.append((key, 'missing', errant_worker, ()))
+        self.log.append(('missing', key, errant_worker))
         if key not in self.who_has:
             return
         if errant_worker in self.who_has[key]:
@@ -1761,10 +1761,7 @@ class Scheduler(ServerNode):
                 self.has_what[recipient].add(key)
                 self.worker_bytes[recipient] += self.nbytes.get(key,
                                                                 DEFAULT_DATA_SIZE)
-                self.transition_log.append((key, 'memory', 'memory', {},
-                                            self._transition_counter, sender,
-                                            recipient))
-            self._transition_counter += 1
+                self.log.append(('rebalance', key, time(), sender, recipient))
 
             result = yield {r: self.rpc(addr=r).delete_data(keys=v, report=False)
                             for r, v in to_senders.items()}
@@ -3067,8 +3064,7 @@ class Scheduler(ServerNode):
                 start = 'released'
             finish2 = self.task_state.get(key, 'forgotten')
             self.transition_log.append((key, start, finish2, recommendations,
-                                        self._transition_counter))
-            self._transition_counter += 1
+                                        time()))
             if self.validate:
                 logger.debug("Transition %s->%s: %s New: %s",
                              start, finish2, key, recommendations)

@@ -1,0 +1,30 @@
+  <table class="table is-striped is-hoverable">
+    <tr>
+        <th> Worker </th>
+        <th> Cores </th>
+        <th> Memory </th>
+        <th> Memory use </th>
+        <th> Occupancy </th>
+        <th> Processing </th>
+        <th> In-memory </th>
+        <th> Services</th>
+        <th> Logs </th>
+    </tr>
+    {% for worker in workers %}
+    <tr>
+        <td><a href="/info/worker/{{ url_escape(worker) }}.html">{{worker}}</a></td>
+        <td> {{ ncores[worker] }} </td>
+        <td> {{ format_bytes(worker_info[worker]['memory_limit']) }} </td>
+        <td> <progress class="progress" value="{{ worker_info[worker].get('memory-rss') }}" max="{{ worker_info[worker]['memory_limit'] }}"></progress> </td>
+        <td> {{ format_time(occupancy[worker]) }} </td>
+        <td> {{ len(processing[worker]) }} </td>
+        <td> {{ len(has_what[worker]) }} </td>
+        {% if 'bokeh' in worker_info[worker]['services'] %}
+        <td> <a href="http://{{ worker_info[worker]['host'] }}:{{ worker_info[worker]['services']['bokeh'] }}">bokeh</a> </td>
+        {% else %}
+        <td> </td>
+        {% end %}
+        <td> <a href="/info/logs/{{ url_escape(worker) }}.html">logs</a></td>
+    </tr>
+    {% end %}
+  </table>

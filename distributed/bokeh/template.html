@@ -105,6 +105,7 @@
           {% for page in pages %}
           <li{% if page == active_page %} class="active"{% endif %}><a href="{{ prefix }}/{{ page }}">{{ page|title }}</a></li>
           {% endfor %}
+          <li><a href="/info/workers.html">Info</a></li>
       </ul>
     </div>
     <div class="dashboard">
