@@ -28,7 +28,6 @@ echo "pandas $PANDAS" >> $CONDA_PREFIX/conda-meta/pinned
 # Install dependencies.
 conda install -q -c conda-forge \
     numpy \
-    pandas \
     bcolz \
     blosc \
     bokeh \
@@ -50,6 +49,7 @@ conda install -q -c conda-forge \
     sqlalchemy \
     toolz
 
+conda install -c conda-forge/label/rc pandas
 # install pytables from defaults for now
 conda install -q pytables
 
