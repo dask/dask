@@ -18,7 +18,7 @@ from ..base import tokenize
 from . import numpy_compat, chunk
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
-                   concatenate, stack, atop, broadcast_shapes,
+                   asanyarray, concatenate, stack, atop, broadcast_shapes,
                    is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
 
 
@@ -37,24 +37,58 @@ def result_type(*args):
     return np.result_type(*args)
 
 
-def atleast_3d(x):
-    if x.ndim == 1:
-        return x[None, :, None]
-    elif x.ndim == 2:
-        return x[:, :, None]
-    elif x.ndim > 2:
-        return x
+@wraps(np.atleast_3d)
+def atleast_3d(*arys):
+    new_arys = []
+    for x in arys:
+        x = asanyarray(x)
+        if x.ndim == 0:
+            x = x[None, None, None]
+        elif x.ndim == 1:
+            x = x[None, :, None]
+        elif x.ndim == 2:
+            x = x[:, :, None]
+
+        new_arys.append(x)
+
+    if len(new_arys) == 1:
+        return new_arys[0]
     else:
-        raise NotImplementedError()
+        return new_arys
 
 
-def atleast_2d(x):
-    if x.ndim == 1:
-        return x[None, :]
-    elif x.ndim > 1:
-        return x
+@wraps(np.atleast_2d)
+def atleast_2d(*arys):
+    new_arys = []
+    for x in arys:
+        x = asanyarray(x)
+        if x.ndim == 0:
+            x = x[None, None]
+        elif x.ndim == 1:
+            x = x[None, :]
+
+        new_arys.append(x)
+
+    if len(new_arys) == 1:
+        return new_arys[0]
     else:
-        raise NotImplementedError()
+        return new_arys
+
+
+@wraps(np.atleast_1d)
+def atleast_1d(*arys):
+    new_arys = []
+    for x in arys:
+        x = asanyarray(x)
+        if x.ndim == 0:
+            x = x[None]
+
+        new_arys.append(x)
+
+    if len(new_arys) == 1:
+        return new_arys[0]
+    else:
+        return new_arys
 
 
 @wraps(np.vstack)
@@ -297,13 +331,12 @@ def bincount(x, weights=None, minlength=None):
     token = tokenize(x, weights, minlength)
     name = 'bincount-' + token
     if weights is not None:
-        dsk = dict(((name, i),
-                   (np.bincount, (x.name, i), (weights.name, i), minlength))
-                   for i, _ in enumerate(x._keys()))
+        dsk = {(name, i): (np.bincount, (x.name, i), (weights.name, i), minlength)
+               for i, _ in enumerate(x.__dask_keys__())}
         dtype = np.bincount([1], weights=[1]).dtype
     else:
-        dsk = dict(((name, i), (np.bincount, (x.name, i), None, minlength))
-                   for i, _ in enumerate(x._keys()))
+        dsk = {(name, i): (np.bincount, (x.name, i), None, minlength)
+               for i, _ in enumerate(x.__dask_keys__())}
         dtype = np.bincount([]).dtype
 
     # Sum up all of the intermediate bincounts per block
@@ -383,7 +416,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         bin_token = bins
     token = tokenize(a, bin_token, range, normed, weights, density)
 
-    nchunks = len(list(flatten(a._keys())))
+    nchunks = len(list(flatten(a.__dask_keys__())))
     chunks = ((1,) * nchunks, (len(bins) - 1,))
 
     name = 'histogram-sum-' + token
@@ -393,14 +426,14 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         return np.histogram(x, bins, weights=weights)[0][np.newaxis]
 
     if weights is None:
-        dsk = dict(((name, i, 0), (block_hist, k))
-                   for i, k in enumerate(flatten(a._keys())))
+        dsk = {(name, i, 0): (block_hist, k)
+               for i, k in enumerate(flatten(a.__dask_keys__()))}
         dtype = np.histogram([])[0].dtype
     else:
-        a_keys = flatten(a._keys())
-        w_keys = flatten(weights._keys())
-        dsk = dict(((name, i, 0), (block_hist, k, w))
-                   for i, (k, w) in enumerate(zip(a_keys, w_keys)))
+        a_keys = flatten(a.__dask_keys__())
+        w_keys = flatten(weights.__dask_keys__())
+        dsk = {(name, i, 0): (block_hist, k, w)
+               for i, (k, w) in enumerate(zip(a_keys, w_keys))}
         dtype = weights.dtype
 
     all_dsk = sharedict.merge(a.dask, (name, dsk))
@@ -497,10 +530,18 @@ def round(a, decimals=0):
 
 @wraps(np.unique)
 def unique(x):
-    name = 'unique-' + x.name
-    dsk = dict(((name, i), (np.unique, key)) for i, key in enumerate(x._keys()))
-    parts = Array._get(sharedict.merge((name, dsk), x.dask), list(dsk.keys()))
-    return np.unique(np.concatenate(parts))
+    x = x.ravel()
+
+    out = atop(np.unique, "i", x, "i", dtype=x.dtype)
+    out._chunks = tuple((np.nan,) * len(c) for c in out.chunks)
+
+    name = 'unique-aggregate-' + out.name
+    dsk = {(name, 0): (np.unique, (np.concatenate, out._keys()))}
+    out = Array(
+        sharedict.merge((name, dsk), out.dask), name, ((np.nan,),), out.dtype
+    )
+
+    return out
 
 
 @wraps(np.roll)
@@ -596,8 +637,8 @@ def topk(k, x):
 
     token = tokenize(k, x)
     name = 'chunk.topk-' + token
-    dsk = dict(((name, i), (chunk.topk, k, key))
-               for i, key in enumerate(x._keys()))
+    dsk = {(name, i): (chunk.topk, k, key)
+           for i, key in enumerate(x.__dask_keys__())}
     name2 = 'topk-' + token
     dsk[(name2, 0)] = (getitem, (np.sort, (np.concatenate, list(dsk))),
                        slice(-1, -k - 1, -1))
@@ -692,6 +733,11 @@ def notnull(values):
 def isclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
     func = partial(numpy_compat.isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
     return elemwise(func, arr1, arr2, dtype='bool')
+
+
+@wraps(np.allclose)
+def allclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
+    return isclose(arr1, arr2, rtol=rtol, atol=atol, equal_nan=equal_nan).all()
 
 
 def variadic_choose(a, *choices):
@@ -792,9 +838,8 @@ def coarsen(reduction, x, axes, trim_excess=False):
         reduction = getattr(np, reduction.__name__)
 
     name = 'coarsen-' + tokenize(reduction, x, axes, trim_excess)
-    dsk = dict(((name,) + key[1:], (chunk.coarsen, reduction, key, axes,
-                                    trim_excess))
-               for key in flatten(x._keys()))
+    dsk = {(name,) + key[1:]: (chunk.coarsen, reduction, key, axes, trim_excess)
+           for key in flatten(x.__dask_keys__())}
     chunks = tuple(tuple(int(bd // axes.get(i, 1)) for bd in bds)
                    for i, bds in enumerate(x.chunks))
 

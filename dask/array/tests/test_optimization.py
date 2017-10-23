@@ -178,7 +178,7 @@ def test_dont_fuse_numpy_arrays():
     for chunks in [(5,), (10,)]:
         y = da.from_array(x, chunks=(10,))
 
-        dsk = y._optimize(y.dask, y._keys())
+        dsk = y.__dask_optimize__(y.dask, y.__dask_keys__())
         assert sum(isinstance(v, np.ndarray) for v in dsk.values()) == 1
 
 
@@ -186,7 +186,7 @@ def test_minimize_data_transfer():
     x = np.ones(100)
     y = da.from_array(x, chunks=25)
     z = y + 1
-    dsk = z._optimize(z.dask, z._keys())
+    dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
 
     keys = list(dsk)
     results = dask.get(dsk, keys)
@@ -226,7 +226,7 @@ def test_fuse_getter_with_asarray(chunks):
     x = np.ones(10) * 1234567890
     y = da.ones(10, chunks=chunks)
     z = x + y
-    dsk = z._optimize(z.dask, z._keys())
+    dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
     assert any(v is x for v in dsk.values())
     for v in dsk.values():
         s = str(v)
@@ -246,10 +246,10 @@ def test_turn_off_fusion():
     x = da.ones(10, chunks=(5,))
     y = da.sum(x + 1 + 2 + 3)
 
-    a = y._optimize(y.dask, y._keys())
+    a = y.__dask_optimize__(y.dask, y.__dask_keys__())
 
     with dask.set_options(fuse_ave_width=0):
-        b = y._optimize(y.dask, y._keys())
+        b = y.__dask_optimize__(y.dask, y.__dask_keys__())
 
-    assert dask.get(a, y._keys()) == dask.get(b, y._keys())
+    assert dask.get(a, y.__dask_keys__()) == dask.get(b, y.__dask_keys__())
     assert len(a) < len(b)

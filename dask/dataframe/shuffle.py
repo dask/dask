@@ -14,7 +14,7 @@ from .hashing import hash_pandas_object
 from .utils import PANDAS_VERSION
 
 from .. import base
-from ..base import tokenize, compute
+from ..base import tokenize, compute, compute_as_if_collection
 from ..context import _globals
 from ..delayed import delayed
 from ..sizeof import sizeof
@@ -27,7 +27,8 @@ else:
 
 
 def set_index(df, index, npartitions=None, shuffle=None, compute=False,
-              drop=True, upsample=1.0, divisions=None, **kwargs):
+              drop=True, upsample=1.0, divisions=None,
+              partition_size=128e6, **kwargs):
     """ See _Frame.set_index for docstring """
     if (isinstance(index, Series) and index._name == df.index._name):
         return df
@@ -65,7 +66,7 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
 
         if repartition:
             total = sum(sizes)
-            npartitions = max(math.ceil(total / 128e6), 1)
+            npartitions = max(math.ceil(total / partition_size), 1)
             npartitions = min(npartitions, df.npartitions)
             n = len(divisions)
             try:
@@ -265,12 +266,12 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     # Partition data on disk
     name = 'shuffle-partition-' + always_new_token
     dsk2 = {(name, i): (shuffle_group_3, key, column, npartitions, p)
-            for i, key in enumerate(df._keys())}
+            for i, key in enumerate(df.__dask_keys__())}
 
     dsk = merge(df.dask, dsk1, dsk2)
     if compute:
         keys = [p, sorted(dsk2)]
-        pp, values = (_globals.get('get') or DataFrame._get)(dsk, keys)
+        pp, values = compute_as_if_collection(DataFrame, dsk, keys)
         dsk1 = {p: pp}
         dsk = dict(zip(sorted(dsk2), values))
 
@@ -353,7 +354,7 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
         parts = [i % df.npartitions for i in range(npartitions)]
         token = tokenize(df2, npartitions)
         dsk = {('repartition-group-' + token, i): (shuffle_group_2, k, column)
-               for i, k in enumerate(df2._keys())}
+               for i, k in enumerate(df2.__dask_keys__())}
         for p in range(npartitions):
             dsk[('repartition-get-' + token, p)] = \
                 (shuffle_group_get, ('repartition-group-' + token, parts[p]), p)

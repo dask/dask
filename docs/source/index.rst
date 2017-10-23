@@ -244,6 +244,7 @@ often a better choice.  If you are a *core developer*, then you should start her
 * :doc:`caching`
 * :doc:`bytes`
 * :doc:`remote-data-services`
+* :doc:`custom-collections`
 * :doc:`cite`
 
 .. toctree::
@@ -261,6 +262,7 @@ often a better choice.  If you are a *core developer*, then you should start her
    caching.rst
    bytes.rst
    remote-data-services.rst
+   custom-collections.rst
    cite.rst
    funding.rst
 

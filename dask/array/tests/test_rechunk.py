@@ -198,6 +198,13 @@ def test_rechunk_same():
     assert x is y
 
 
+def test_rechunk_minus_one():
+    x = da.ones((24, 24), chunks=(4, 8))
+    y = x.rechunk((-1, 8))
+    assert y.chunks == ((24,), (8, 8, 8))
+    assert_eq(x, y)
+
+
 def test_rechunk_intermediates():
     x = da.random.normal(10, 0.1, (10, 10), chunks=(10, 1))
     y = x.rechunk((1, 10))
@@ -579,3 +586,10 @@ def test_old_to_new_known():
                 [(2, slice(5, 10, None))],
                 [(3, slice(0, 10, None)), (4, slice(0, 10, None))]]]
     assert result == expected
+
+
+def test_rechunk_zero_dim():
+    da = pytest.importorskip('dask.array')
+
+    x = da.ones((0, 10, 100), chunks=(0, 10, 10)).rechunk((0, 10, 50))
+    assert len(x.compute()) == 0

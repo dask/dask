@@ -4,6 +4,7 @@ import pandas as pd
 import pandas.util.testing as tm
 
 from dask.local import get_sync
+from dask.base import compute_as_if_collection
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
@@ -798,6 +799,17 @@ def test_errors_for_merge_on_frame_columns():
         dd.merge(aa, bb, left_on=aa.x, right_on=bb.y)
 
 
+def test_concat_one_series():
+    a = pd.Series([1, 2, 3, 4])
+    aa = dd.from_pandas(a, npartitions=2, sort=False)
+
+    c = dd.concat([aa], axis=0)
+    assert isinstance(c, dd.Series)
+
+    c = dd.concat([aa], axis=1)
+    assert isinstance(c, dd.DataFrame)
+
+
 def test_concat_unknown_divisions():
     a = pd.Series([1, 2, 3, 4])
     b = pd.Series([4, 3, 2, 1])
@@ -1030,7 +1042,9 @@ def test_concat_categorical(known, cat_index, divisions):
         res = dd.concat(ddfs, join=join, interleave_partitions=divisions)
         assert_eq(res, sol)
         if known:
-            for p in [i.iloc[:0] for i in res._get(res.dask, res._keys())]:
+            parts = compute_as_if_collection(dd.DataFrame, res.dask,
+                                             res.__dask_keys__())
+            for p in [i.iloc[:0] for i in parts]:
                 res._meta == p  # will error if schemas don't align
         assert not cat_index or has_known_categories(res.index) == known
         return res

@@ -17,7 +17,7 @@ def _percentile(a, q, interpolation='linear'):
         return None
     if isinstance(q, Iterator):
         q = list(q)
-    if str(a.dtype) == 'category':
+    if a.dtype.name == 'category':
         result = np.percentile(a.codes, q, interpolation=interpolation)
         import pandas as pd
         return pd.Categorical.from_codes(result, a.categories, a.ordered)
@@ -42,7 +42,7 @@ def percentile(a, q, interpolation='linear'):
     token = tokenize(a, list(q), interpolation)
     name = 'percentile_chunk-' + token
     dsk = dict(((name, i), (_percentile, (key), q, interpolation))
-               for i, key in enumerate(a._keys()))
+               for i, key in enumerate(a.__dask_keys__()))
 
     name2 = 'percentile-' + token
     dsk2 = {(name2, 0): (merge_percentiles, q, [q] * len(a.chunks[0]),
@@ -100,7 +100,7 @@ def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
 
     # TODO: Perform this check above in percentile once dtype checking is easy
     #       Here we silently change meaning
-    if str(vals[0].dtype) == 'category':
+    if vals[0].dtype.name == 'category':
         result = merge_percentiles(finalq, qs, [v.codes for v in vals], Ns, interpolation)
         import pandas as pd
         return pd.Categorical.from_codes(result, vals[0].categories, vals[0].ordered)

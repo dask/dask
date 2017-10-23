@@ -170,7 +170,7 @@ def reshape(x, shape):
     name = 'reshape-' + tokenize(x, shape)
 
     if x.npartitions == 1:
-        key = next(flatten(x._keys()))
+        key = next(flatten(x.__dask_keys__()))
         dsk = {(name,) + (0,) * len(shape): (M.reshape, key, shape)}
         chunks = tuple((d,) for d in shape)
         return Array(sharedict.merge((name, dsk), x.dask), name, chunks,

@@ -1,5 +1,7 @@
 from __future__ import division, print_function, absolute_import
 
+import itertools
+
 import pytest
 from distutils.version import LooseVersion
 
@@ -15,6 +17,92 @@ def test_array():
     d = da.ones(5, chunks=3, dtype='i4')
     assert_eq(da.array(d, ndmin=3, dtype='i8'),
               np.array(x, ndmin=3, dtype='i8'))
+
+    # regression #1847 this shall not raise an exception.
+    x = da.ones((100,3), chunks=10)
+    y = da.array(x)
+    assert isinstance(y, da.Array)
+
+
+@pytest.mark.parametrize("funcname", [
+    "atleast_1d",
+    "atleast_2d",
+    "atleast_3d",
+])
+def test_atleast_nd_no_args(funcname):
+    np_func = getattr(np, funcname)
+    da_func = getattr(da, funcname)
+
+    np_r_n = np_func()
+    da_r_n = da_func()
+
+    assert np_r_n == da_r_n
+
+
+@pytest.mark.parametrize("funcname", [
+    "atleast_1d",
+    "atleast_2d",
+    "atleast_3d",
+])
+@pytest.mark.parametrize("shape, chunks", [
+    (tuple(), tuple()),
+    ((4,), (2,)),
+    ((4, 6), (2, 3)),
+    ((4, 6, 8), (2, 3, 4)),
+    ((4, 6, 8, 10), (2, 3, 4, 5)),
+])
+def test_atleast_nd_one_arg(funcname, shape, chunks):
+    np_a = np.random.random(shape)
+    da_a = da.from_array(np_a, chunks=chunks)
+
+    np_func = getattr(np, funcname)
+    da_func = getattr(da, funcname)
+
+    np_r = np_func(np_a)
+    da_r = da_func(da_a)
+
+    assert_eq(np_r, da_r)
+
+
+@pytest.mark.parametrize("funcname", [
+    "atleast_1d",
+    "atleast_2d",
+    "atleast_3d",
+])
+@pytest.mark.parametrize("shape1, shape2", list(
+    itertools.combinations_with_replacement(
+        [
+            tuple(),
+            (4,),
+            (4, 6),
+            (4, 6, 8),
+            (4, 6, 8, 10),
+        ],
+        2
+    )
+))
+def test_atleast_nd_two_args(funcname, shape1, shape2):
+    np_a_1 = np.random.random(shape1)
+    da_a_1 = da.from_array(np_a_1, chunks=tuple(c // 2 for c in shape1))
+
+    np_a_2 = np.random.random(shape2)
+    da_a_2 = da.from_array(np_a_2, chunks=tuple(c // 2 for c in shape2))
+
+    np_a_n = [np_a_1, np_a_2]
+    da_a_n = [da_a_1, da_a_2]
+
+    np_func = getattr(np, funcname)
+    da_func = getattr(da, funcname)
+
+    np_r_n = np_func(*np_a_n)
+    da_r_n = da_func(*da_a_n)
+
+    assert type(np_r_n) is type(da_r_n)
+
+    assert len(np_r_n) == len(da_r_n)
+
+    for np_r, da_r in zip(np_r_n, da_r_n):
+        assert_eq(np_r, da_r)
 
 
 def test_transpose():
@@ -385,9 +473,15 @@ def test_round():
 
 
 def test_unique():
-    x = np.array([1, 2, 4, 4, 5, 2])
-    d = da.from_array(x, chunks=(3,))
-    assert_eq(da.unique(d), np.unique(x))
+    a = np.array([1, 2, 4, 4, 5, 2])
+    d = da.from_array(a, chunks=(3,))
+
+    r_a = np.unique(a)
+    r_d = da.unique(d)
+
+    assert isinstance(r_d, da.Array)
+
+    assert_eq(r_d, r_a)
 
 
 def _maybe_len(l):
@@ -570,6 +664,19 @@ def test_isclose():
     b = da.from_array(y, chunks=(2,))
     assert_eq(da.isclose(a, b, equal_nan=True),
               np.isclose(x, y, equal_nan=True))
+
+
+def test_allclose():
+    n_a = np.array([0, np.nan, 1, 1.5])
+    n_b = np.array([1e-9, np.nan, 1, 2])
+
+    d_a = da.from_array(n_a, chunks=(2,))
+    d_b = da.from_array(n_b, chunks=(2,))
+
+    n_r = np.allclose(n_a, n_b, equal_nan=True)
+    d_r = da.allclose(d_a, d_b, equal_nan=True)
+
+    assert_eq(np.array(n_r)[()], d_r)
 
 
 def test_choose():

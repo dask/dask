@@ -5,11 +5,13 @@ import pytest
 from operator import add, mul
 import subprocess
 import sys
+from toolz import merge
 
 import dask
 from dask import delayed
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
-                       visualize, persist, function_cache)
+                       visualize, persist, function_cache, is_dask_collection,
+                       DaskMethodsMixin)
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
@@ -207,6 +209,25 @@ def test_tokenize_same_repr():
     assert tokenize(Foo(1)) != tokenize(Foo(2))
 
 
+def test_tokenize_method():
+    class Foo(object):
+        def __init__(self, x):
+            self.x = x
+
+        def __dask_tokenize__(self):
+            return self.x
+
+    a, b = Foo(1), Foo(2)
+    assert tokenize(a) == tokenize(a)
+    assert tokenize(a) != tokenize(b)
+
+    # dispatch takes precedence
+    before = tokenize(a)
+    normalize_token.register(Foo, lambda self: self.x + 1)
+    after = tokenize(a)
+    assert before != after
+
+
 @pytest.mark.skipif('not np')
 def test_tokenize_sequences():
     assert tokenize([1]) != tokenize([2])
@@ -248,6 +269,91 @@ def test_tokenize_object_array_with_nans():
                                [], (), {}, None, str, int])
 def test_tokenize_base_types(x):
     assert tokenize(x) == tokenize(x), x
+
+
+def test_is_dask_collection():
+    class DummyCollection(object):
+        def __init__(self, dsk=None):
+            self.dask = dsk
+
+        def __dask_graph__(self):
+            return self.dask
+
+    x = delayed(1) + 2
+    assert is_dask_collection(x)
+    assert not is_dask_collection(2)
+    assert is_dask_collection(DummyCollection({}))
+    assert not is_dask_collection(DummyCollection())
+
+
+class Tuple(DaskMethodsMixin):
+    __slots__ = ('_dask', '_keys')
+    __dask_scheduler__ = staticmethod(dask.threaded.get)
+
+    def __init__(self, dsk, keys):
+        self._dask = dsk
+        self._keys = keys
+
+    def __add__(self, other):
+        if isinstance(other, Tuple):
+            return Tuple(merge(self._dask, other._dask),
+                         self._keys + other._keys)
+        return NotImplemented
+
+    def __dask_graph__(self):
+        return self._dask
+
+    def __dask_keys__(self):
+        return self._keys
+
+    def __dask_tokenize__(self):
+        return self._keys
+
+    def __dask_postcompute__(self):
+        return tuple, ()
+
+    def __dask_postpersist__(self):
+        return Tuple, (self._keys,)
+
+
+def test_custom_collection():
+    dsk = {'a': 1, 'b': 2}
+    dsk2 = {'c': (add, 'a', 'b'),
+            'd': (add, 'c', 1)}
+    dsk2.update(dsk)
+    dsk3 = {'e': (add, 'a', 4),
+            'f': (inc, 'e')}
+    dsk3.update(dsk)
+
+    x = Tuple(dsk, ['a', 'b'])
+    y = Tuple(dsk2, ['c', 'd'])
+    z = Tuple(dsk3, ['e', 'f'])
+
+    # __slots__ defined on base mixin class propogates
+    with pytest.raises(AttributeError):
+        x.foo = 1
+
+    # is_dask_collection
+    assert is_dask_collection(x)
+
+    # tokenize
+    assert tokenize(x) == tokenize(x)
+    assert tokenize(x) != tokenize(y)
+
+    # compute
+    assert x.compute() == (1, 2)
+    assert dask.compute(x, [y, z]) == ((1, 2), [(3, 4), (5, 6)])
+    t = x + y + z
+    assert t.compute() == (1, 2, 3, 4, 5, 6)
+
+    # persist
+    t2 = t.persist()
+    assert isinstance(t2, Tuple)
+    assert t2._dask == dict(zip('abcdef', range(1, 7)))
+    assert t2.compute() == (1, 2, 3, 4, 5, 6)
+    x2, y2, z2 = dask.persist(x, y, z)
+    t3 = x2 + y2 + z2
+    assert t2._dask == t3._dask
 
 
 @pytest.mark.skipif('not db')
@@ -369,12 +475,19 @@ def test_visualize():
         x = da.arange(5, chunks=2)
         x.visualize(filename=os.path.join(d, 'mydask'))
         assert os.path.exists(os.path.join(d, 'mydask.png'))
+
         x.visualize(filename=os.path.join(d, 'mydask.pdf'))
         assert os.path.exists(os.path.join(d, 'mydask.pdf'))
+
         visualize(x, 1, 2, filename=os.path.join(d, 'mydask.png'))
         assert os.path.exists(os.path.join(d, 'mydask.png'))
+
         dsk = {'a': 1, 'b': (add, 'a', 2), 'c': (mul, 'a', 1)}
         visualize(x, dsk, filename=os.path.join(d, 'mydask.png'))
+        assert os.path.exists(os.path.join(d, 'mydask.png'))
+
+        x = Tuple(dsk, ['a', 'b', 'c'])
+        visualize(x, filename=os.path.join(d, 'mydask.png'))
         assert os.path.exists(os.path.join(d, 'mydask.png'))
 
 
@@ -514,20 +627,3 @@ def test_optimize_None():
 
     with dask.set_options(array_optimize=None, get=my_get):
         y.compute()
-
-
-def test_array_nondim():
-    # regression #1847 this shall not raise an exception.
-    x = da.ones((100,3), chunks=10)
-    y = da.array(x)
-    assert isinstance(y, da.Array)
-
-
-def test_setitem_triggering_realign():
-    import pandas as pd
-    import dask.dataframe as dd
-
-    a = dd.from_pandas(pd.DataFrame({"A": range(12)}), npartitions=3)
-    b = dd.from_pandas(pd.Series(range(12), name='B'), npartitions=4)
-    a['C'] = b
-    assert len(a) == 12
