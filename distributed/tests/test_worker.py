@@ -1013,7 +1013,7 @@ def test_pause_executor(c, s, a):
         assert a.paused
         out = logger.getvalue()
         assert 'memory' in out.lower()
-        assert 'stop' in out.lower()
+        assert 'pausing' in out.lower()
 
     assert sum(f.status == 'finished' for f in futures) < 4
 

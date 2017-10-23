@@ -22,6 +22,7 @@ import tblib.pickling_support
 import tempfile
 import threading
 import warnings
+import gc
 
 from .compatibility import cache_from_source, getargspec, invalidate_caches, reload
 
@@ -44,7 +45,7 @@ try:
 except ImportError:
     thread_state = threading.local()
 
-logger = logging.getLogger(__name__)
+logger = _logger = logging.getLogger(__name__)
 
 
 no_default = '__no_default__'
@@ -1000,3 +1001,50 @@ class DequeHandler(logging.Handler):
 
     def emit(self, record):
         self.deque.append(record)
+
+
+class ThrottledGC(object):
+    """Wrap gc.collect to protect against excessively repeated calls.
+
+    Allows to run throttled garbage collection in the workers as a
+    countermeasure to e.g.: https://github.com/dask/zict/issues/19
+
+    collect() does nothing when repeated calls are so costly and so frequent
+    that the thread would spend more than max_in_gc_frac doing GC.
+
+    warn_if_longer is a duration in seconds (10s by default) that can be used
+    to log a warning level message whenever an actual call to gc.collect()
+    lasts too long.
+    """
+    def __init__(self, max_in_gc_frac=0.05, warn_if_longer=10, logger=None):
+        self.max_in_gc_frac = max_in_gc_frac
+        self.warn_if_longer = 10
+        self.last_collect = time()
+        self.last_gc_duration = 0
+        self.logger = logger if logger is not None else _logger
+
+    def collect(self):
+        # In case of non-monotonicity in the clock, assume that any Python
+        # operation lasts at least 1e-6 second.
+        collect_start = time()
+        elapsed = max(collect_start - self.last_collect, 1e-6)
+        if self.last_gc_duration / elapsed < self.max_in_gc_frac:
+            self.logger.debug("Calling gc.collect(). %0.3fs elapsed since "
+                              "previous call.", elapsed)
+            gc.collect()
+            self.last_collect = collect_start
+            self.last_gc_duration = max(time() - collect_start, 1e-6)
+            if self.last_gc_duration > self.warn_if_longer:
+                self.logger.warning("gc.collect() took %0.3fs. This is usually"
+                                    " a sign that the some tasks handle too"
+                                    " many Python objects at the same time."
+                                    " Rechunking the work into smaller tasks"
+                                    " might help.",
+                                    self.last_gc_duration)
+            else:
+                self.logger.debug("gc.collect() took %0.3fs",
+                                  self.last_gc_duration)
+        else:
+            self.logger.debug("gc.collect() lasts %0.3fs but only %0.3fs "
+                              "elapsed since last call: throttling.",
+                              self.last_gc_duration, elapsed)
