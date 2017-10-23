@@ -64,7 +64,7 @@ import pandas as pd
 
 from ..base import tokenize
 from ..compatibility import apply
-from .core import (_Frame, DataFrame, map_partitions, Index,
+from .core import (_Frame, DataFrame, Series, map_partitions, Index,
                    _maybe_from_pandas, new_dd_object, is_broadcastable)
 from .io import from_pandas
 from . import methods
@@ -550,7 +550,10 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
     if len(dfs) == 0:
         raise ValueError('No objects to concatenate')
     if len(dfs) == 1:
-        return dfs[0]
+        if axis == 1 and isinstance(dfs[0], Series):
+            return dfs[0].to_frame()
+        else:
+            return dfs[0]
 
     if join not in ('inner', 'outer'):
         raise ValueError("'join' must be 'inner' or 'outer'")

@@ -17,7 +17,8 @@ Array
 DataFrame
 +++++++++
 
--
+- Fixed ``dd.concat`` return a ``dask.Dataframe`` when concatenating a single
+  series along the columns, matching pandas' behavior (:pr:`2800`)
 
 Bag
 +++

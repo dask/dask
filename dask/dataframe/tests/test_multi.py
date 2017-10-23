@@ -799,6 +799,17 @@ def test_errors_for_merge_on_frame_columns():
         dd.merge(aa, bb, left_on=aa.x, right_on=bb.y)
 
 
+def test_concat_one_series():
+    a = pd.Series([1, 2, 3, 4])
+    aa = dd.from_pandas(a, npartitions=2, sort=False)
+
+    c = dd.concat([aa], axis=0)
+    assert isinstance(c, dd.Series)
+
+    c = dd.concat([aa], axis=1)
+    assert isinstance(c, dd.DataFrame)
+
+
 def test_concat_unknown_divisions():
     a = pd.Series([1, 2, 3, 4])
     b = pd.Series([4, 3, 2, 1])
