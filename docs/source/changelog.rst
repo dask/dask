@@ -13,6 +13,7 @@ Array
 - Deprecate ``vnorm`` in favor of ``dask.array.linalg.norm`` (:pr:`2773`)
 - Reimplement ``unique`` to be lazy (:pr:`2775`)
 - Support broadcasting of Dask Arrays with 0-length dimensions (:pr:`2784`)
+- Add ``asarray`` and ``asanyarray`` to Dask Array API docs (:pr:`2787`)
 
 DataFrame
 +++++++++
