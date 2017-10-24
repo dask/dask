@@ -456,26 +456,15 @@ Dask Name: from_pandas, 6 tasks"""
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8],
                   index=pd.CategoricalIndex([1, 2, 3, 4, 5, 6, 7, 8], name='YYY'))
     ds = dd.from_pandas(s, 3)
-    if PANDAS_VERSION >= '0.21.0':
-        exp = dedent("""\
-        Dask Index Structure:
-        npartitions=3
-        1    category[known]
-        4                ...
-        7                ...
-        8                ...
-        Name: YYY, dtype: CategoricalDtype(categories=[1, 2, 3, 4, 5, 6, 7, 8], ordered=False)
-        Dask Name: from_pandas, 6 tasks""")
-    else:
-        exp = dedent("""\
-        Dask Index Structure:
-        npartitions=3
-        1    category[known]
-        4                ...
-        7                ...
-        8                ...
-        Name: YYY, dtype: category
-        Dask Name: from_pandas, 6 tasks""")
+    exp = dedent("""\
+    Dask Index Structure:
+    npartitions=3
+    1    category[known]
+    4                ...
+    7                ...
+    8                ...
+    Name: YYY, dtype: category
+    Dask Name: from_pandas, 6 tasks""")
     assert repr(ds.index) == exp
     assert str(ds.index) == exp
 
@@ -484,36 +473,17 @@ def test_categorical_format():
     s = pd.Series(['a', 'b', 'c']).astype('category')
     known = dd.from_pandas(s, npartitions=1)
     unknown = known.cat.as_unknown()
-    if PANDAS_VERSION >= '0.21.0':
-        exp = dedent("""\
-        Dask Series Structure:
-        npartitions=1
-        0    category[known]
-        2                ...
-        dtype: CategoricalDtype(categories=['a', 'b', 'c'], ordered=False)
-        Dask Name: from_pandas, 1 tasks""")
-    else:
-        exp = ("Dask Series Structure:\n"
-               "npartitions=1\n"
-               "0    category[known]\n"
-               "2                ...\n"
-               "dtype: category\n"
-               "Dask Name: from_pandas, 1 tasks")
+    exp = ("Dask Series Structure:\n"
+           "npartitions=1\n"
+           "0    category[known]\n"
+           "2                ...\n"
+           "dtype: category\n"
+           "Dask Name: from_pandas, 1 tasks")
     assert repr(known) == exp
-    if PANDAS_VERSION >= '0.21.0':
-        exp = dedent("""\
-        Dask Series Structure:
-        npartitions=1
-        0    category[unknown]
-        2                  ...
-        dtype: CategoricalDtype(categories=['__UNKNOWN_CATEGORIES__'], ordered=False)
-        Dask Name: from_pandas, 1 tasks""")
-
-    else:
-        exp = ("Dask Series Structure:\n"
-               "npartitions=1\n"
-               "0    category[unknown]\n"
-               "2                  ...\n"
-               "dtype: category\n"
-               "Dask Name: from_pandas, 1 tasks")
+    exp = ("Dask Series Structure:\n"
+           "npartitions=1\n"
+           "0    category[unknown]\n"
+           "2                  ...\n"
+           "dtype: category\n"
+           "Dask Name: from_pandas, 1 tasks")
     assert repr(unknown) == exp
