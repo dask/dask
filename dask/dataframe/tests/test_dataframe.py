@@ -2727,3 +2727,17 @@ def test_better_errors_object_reductions():
     with pytest.raises(ValueError) as err:
         ds.mean()
     assert str(err.value) == "`mean` not supported with object series"
+
+def test_sample_from_query():
+    def _mk_df(key, n_row = 100, n_col = 10):
+        ret = pd.DataFrame(np.zeros((n_row, n_col)), columns = ['c_%d' % j for j in range(n_col) ])
+        ret['key'] = key
+        return ret
+    ddf = dd.from_delayed([ dask.delayed(_mk_df)(k) for k in range(100) ])
+    ddf = ddf.repartition(npartitions=4)
+    assert ddf.npartitions == 4
+
+    # most of the partitions don't have key > 90
+    ddf1 = ddf.query("key > 90").sample(frac=0.1)
+    df = ddf1.compute()
+    assert np.all(df['key'] > 90)
