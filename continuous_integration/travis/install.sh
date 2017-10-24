@@ -75,14 +75,13 @@ pip install -q \
     pyarrow \
     --upgrade --no-deps
 
-pip install -q \
+pip install -U -q \
     cityhash \
     flake8 \
     mmh3 \
     pandas_datareader \
     pytest-xdist \
-    xxhash \
-    pycodestyle
+    xxhash
 
 # Install dask
 pip install -q --no-deps -e .[complete]
