@@ -50,7 +50,8 @@ jobs:
     - env: &py36_env
       - PYTHON=3.6
       - NUMPY=1.13.0
-      - PANDAS=0.20.2
+      - PANDAS=0.20.3  # overridden later in install.sh
+      - PANDAS_DEV=1
       - *no_coverage
       - *no_optimize
       - *imports

@@ -22,8 +22,10 @@ source activate test-environment
 # Pin matrix items
 # Please see PR ( https://github.com/dask/dask/pull/2185 ) for details.
 touch $CONDA_PREFIX/conda-meta/pinned
-echo "numpy $NUMPY" >> $CONDA_PREFIX/conda-meta/pinned
-echo "pandas $PANDAS" >> $CONDA_PREFIX/conda-meta/pinned
+if ! [[ ${PANDAS_DEV} ]]; then
+    echo "numpy $NUMPY" >> $CONDA_PREFIX/conda-meta/pinned
+    echo "pandas $PANDAS" >> $CONDA_PREFIX/conda-meta/pinned
+fi;
 
 # Install dependencies.
 conda install -q -c conda-forge \
@@ -49,6 +51,14 @@ conda install -q -c conda-forge \
     scipy \
     sqlalchemy \
     toolz
+
+# Install pandas dev
+conda uninstall -y --force numpy pandas
+
+if [[ ${PANDAS_DEV} ]]; then
+    PRE_WHEELS="https://7933911d6844c6c53a7d-47bd50c35cd79bd838daf386af554a83.ssl.cf2.rackcdn.com"
+    pip install --pre --no-deps --upgrade --timeout=60 -f $PRE_WHEELS numpy pandas
+fi;
 
 # install pytables from defaults for now
 conda install -q pytables
