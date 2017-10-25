@@ -71,7 +71,7 @@ def invalid_python_script(tmpdir_factory):
     return local_file
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def loop():
     IOLoop.clear_instance()
     IOLoop.clear_current()
@@ -93,7 +93,7 @@ def loop():
     IOLoop.clear_current()
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def zmq_ctx():
     import zmq
     ctx = zmq.Context.instance()
