@@ -14,7 +14,7 @@ from distributed.utils_test import loop, zmq_ctx  # flake8: noqa
 def test_start_ipython_workers(loop, zmq_ctx):
     from jupyter_client import BlockingKernelClient
 
-    with cluster(1, should_check_state=False) as (s, [a]):
+    with cluster(1) as (s, [a]):
         with Client(s['address'], loop=loop) as e:
             info_dict = e.start_ipython_workers()
             info = first(info_dict.values())
@@ -34,7 +34,7 @@ def test_start_ipython_workers(loop, zmq_ctx):
 def test_start_ipython_scheduler(loop, zmq_ctx):
     from jupyter_client import BlockingKernelClient
 
-    with cluster(1, should_check_state=False) as (s, [a]):
+    with cluster(1) as (s, [a]):
         with Client(s['address'], loop=loop) as e:
             info = e.start_ipython_scheduler()
             key = info.pop('key')
@@ -48,7 +48,7 @@ def test_start_ipython_scheduler(loop, zmq_ctx):
 
 @pytest.mark.ipython
 def test_start_ipython_scheduler_magic(loop, zmq_ctx):
-    with cluster(1, should_check_state=False) as (s, [a]):
+    with cluster(1) as (s, [a]):
         with Client(s['address'], loop=loop) as e, mock_ipython() as ip:
             info = e.start_ipython_scheduler()
 
@@ -65,7 +65,7 @@ def test_start_ipython_scheduler_magic(loop, zmq_ctx):
 
 @pytest.mark.ipython
 def test_start_ipython_workers_magic(loop, zmq_ctx):
-    with cluster(2, should_check_state=False) as (s, [a, b]):
+    with cluster(2) as (s, [a, b]):
 
         with Client(s['address'], loop=loop) as e, mock_ipython() as ip:
             workers = list(e.ncores())[:2]
@@ -90,7 +90,7 @@ def test_start_ipython_workers_magic(loop, zmq_ctx):
 
 @pytest.mark.ipython
 def test_start_ipython_workers_magic_asterix(loop, zmq_ctx):
-    with cluster(2, should_check_state=False) as (s, [a, b]):
+    with cluster(2) as (s, [a, b]):
 
         with Client(s['address'], loop=loop) as e, mock_ipython() as ip:
             workers = list(e.ncores())[:2]
@@ -115,7 +115,7 @@ def test_start_ipython_workers_magic_asterix(loop, zmq_ctx):
 @pytest.mark.ipython
 def test_start_ipython_remote(loop, zmq_ctx):
     from distributed._ipython_utils import remote_magic
-    with cluster(1, should_check_state=False) as (s, [a]):
+    with cluster(1) as (s, [a]):
         with Client(s['address'], loop=loop) as e, mock_ipython() as ip:
             worker = first(e.ncores())
             ip.user_ns['info'] = e.start_ipython_workers(worker)[worker]
@@ -133,7 +133,7 @@ def test_start_ipython_remote(loop, zmq_ctx):
 @pytest.mark.ipython
 def test_start_ipython_qtconsole(loop):
     Popen = mock.Mock()
-    with cluster(should_check_state=False) as (s, [a, b]):
+    with cluster() as (s, [a, b]):
         with mock.patch('distributed._ipython_utils.Popen', Popen), Client(s['address'], loop=loop) as e:
             worker = first(e.ncores())
             e.start_ipython_workers(worker, qtconsole=True)

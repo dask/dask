@@ -155,6 +155,13 @@ def test_is_kernel():
     assert is_kernel() is False
 
 
+#@pytest.mark.leaking('fds')
+#def test_zzz_leaks(l=[]):
+    #import os
+    #l.append(b"x" * (17 * 1024**2))
+    #os.open(__file__, os.O_RDONLY)
+
+
 def test_ensure_ip():
     assert ensure_ip('localhost') in ('127.0.0.1', '::1')
     assert ensure_ip('123.123.123.123') == '123.123.123.123'

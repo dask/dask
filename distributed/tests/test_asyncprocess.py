@@ -49,7 +49,7 @@ def threads_info(q):
     q.put(threading.current_thread().name)
 
 
-@gen_test(should_check_state=False)
+@gen_test()
 def test_simple():
     to_child = mp_context.Queue()
     from_child = mp_context.Queue()
@@ -128,7 +128,7 @@ def test_simple():
         assert dt < 2.0
 
 
-@gen_test(should_check_state=False)
+@gen_test()
 def test_exitcode():
     q = mp_context.Queue()
 
@@ -249,7 +249,7 @@ def test_exit_callback():
     assert evt.is_set()
 
 
-@gen_test(should_check_state=False)
+@gen_test()
 def test_child_main_thread():
     """
     The main thread in the child should be called "MainThread".
@@ -296,7 +296,7 @@ def test_num_fds():
         assert time() < start + 10
 
 
-@gen_test(should_check_state=False)
+@gen_test()
 def test_terminate_after_stop():
     proc = AsyncProcess(target=sleep, args=(0,))
     yield proc.start()

@@ -245,7 +245,7 @@ def test_blocks_until_full(loop):
         assert len(c.ncores()) > 0
 
 
-@gen_test(should_check_state=False)
+@gen_test()
 def test_scale_up_and_down():
     loop = IOLoop.current()
     cluster = LocalCluster(0, scheduler_port=0, processes=False, silence_logs=False,

@@ -12,7 +12,7 @@ from distributed.utils_test import loop  # flake8: noqa
 
 
 def test_text_progressbar(capsys, loop):
-    with cluster(nanny=True, should_check_state=False) as (s, [a, b]):
+    with cluster(nanny=True) as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             futures = c.map(inc, range(10))
             p = TextProgressBar(futures, interval=0.01, complete=True)
@@ -79,7 +79,7 @@ def check_bar_completed(capsys, width=40):
 
 
 def test_progress_function(loop, capsys):
-    with cluster(should_check_state=False) as (s, [a, b]):
+    with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             f = c.submit(lambda: 1)
             g = c.submit(lambda: 2)
