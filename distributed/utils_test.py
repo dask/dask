@@ -568,43 +568,49 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
     worker_kwargs = merge({'memory_limit': TOTAL_MEMORY}, worker_kwargs)
 
     def _(func):
-        cor = func
         if not iscoroutinefunction(func):
-            cor = gen.coroutine(func)
+            func = gen.coroutine(func)
 
         def test_func():
             result = None
+            workers = []
+
             with pristine_loop() as loop:
                 with check_active_rpc(loop, active_rpc_timeout):
-                    s, workers = loop.run_sync(lambda: start_cluster(ncores,
-                                                                     scheduler, loop, security=security,
-                                                                     Worker=Worker,
-                                                                     scheduler_kwargs=scheduler_kwargs,
-                                                                     worker_kwargs=worker_kwargs))
-                    args = [s] + workers
-
-                    if client:
-                        c = []
-
-                        @gen.coroutine
-                        def f():
-                            c2 = yield Client(s.address, loop=loop, security=security,
-                                              asynchronous=True)
-                            c.append(c2)
-                        loop.run_sync(f)
-                        args = c + args
-                    try:
-                        result = loop.run_sync(lambda: cor(*args), timeout=timeout)
-                    finally:
+                    @gen.coroutine
+                    def coro():
+                        s, ws = yield start_cluster(
+                            ncores, scheduler, loop, security=security,
+                            Worker=Worker, scheduler_kwargs=scheduler_kwargs,
+                            worker_kwargs=worker_kwargs)
+                        workers[:] = ws
+                        args = [s] + workers
                         if client:
-                            loop.run_sync(c[0]._close)
-                        loop.run_sync(lambda: end_cluster(s, workers))
+                            c = yield Client(s.address, loop=loop, security=security,
+                                             asynchronous=True)
+                            args = [c] + args
+                        try:
+                            result = yield func(*args)
+                            # for w in workers:
+                            #     assert not w._comms
+                        finally:
+                            if client:
+                                yield c._close()
+                            yield end_cluster(s, workers)
 
-                    # for w in workers:
-                    #     assert not w._comms
+                        raise gen.Return(result)
+
+                    result = loop.run_sync(coro, timeout=timeout)
+
             for w in workers:
-                if hasattr(w, 'data'):
-                    w.data.clear()
+                if getattr(w, 'data', None):
+                    try:
+                        w.data.clear()
+                    except EnvironmentError:
+                        # zict backends can fail if their storage directory
+                        # was already removed
+                        pass
+                    del w.data
             return result
 
         return test_func

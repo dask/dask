@@ -325,6 +325,7 @@ def test_death_timeout_raises(loop):
 
 @pytest.mark.parametrize('processes', [True, False])
 def test_diagnostics_available_at_localhost(loop, processes):
+    pytest.importorskip('bokeh')
     import requests
     import random
     for i in range(3):
