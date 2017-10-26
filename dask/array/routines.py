@@ -536,7 +536,7 @@ def unique(x):
     out._chunks = tuple((np.nan,) * len(c) for c in out.chunks)
 
     name = 'unique-aggregate-' + out.name
-    dsk = {(name, 0): (np.unique, (np.concatenate, out._keys()))}
+    dsk = {(name, 0): (np.unique, (np.concatenate, out.__dask_keys__()))}
     out = Array(
         sharedict.merge((name, dsk), out.dask), name, ((np.nan,),), out.dtype
     )

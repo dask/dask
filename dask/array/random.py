@@ -188,7 +188,7 @@ class RandomState(object):
                     raise ValueError("a must be one dimensional")
                 len_a = len(a)
                 dsks.append(a.dask)
-                a = a._keys()[0]
+                a = a.__dask_keys__()[0]
 
             # Normalize and validate `p`
             if p is not None:
@@ -208,7 +208,7 @@ class RandomState(object):
                     raise ValueError("a and p must have the same size")
 
                 dsks.append(p.dask)
-                p = p._keys()[0]
+                p = p.__dask_keys__()[0]
 
             if size is None:
                 size = ()
