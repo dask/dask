@@ -70,8 +70,8 @@ def test_local(engine):
             assert (data[column] == out[column]).all()
 
 
-def test_index(fn):
-    ddf = read_parquet(fn)
+def test_index(fn, engine):
+    ddf = read_parquet(fn, engine=engine)
     assert_eq(df, ddf)
 
 
@@ -85,21 +85,21 @@ def test_empty_index():
         assert read_df.index.name == 'a'
 
 
-def test_glob(fn):
+def test_glob(fn, engine):
     os.unlink(os.path.join(fn, '_metadata'))
     files = os.listdir(fn)
     assert '_metadata' not in files
-    ddf = read_parquet(os.path.join(fn, '*'))
+    ddf = read_parquet(os.path.join(fn, '*'), engine=engine)
     assert_eq(df, ddf)
 
 
-def test_auto_add_index(fn):
-    ddf = read_parquet(fn, columns=['x'], index='myindex')
+def test_auto_add_index(fn, engine):
+    ddf = read_parquet(fn, columns=['x'], index='myindex', engine=engine)
     assert_eq(df[['x']], ddf)
 
 
 def test_index_column(fn, engine):
-    ddf = read_parquet(fn, columns=['myindex'], index='myindex')
+    ddf = read_parquet(fn, columns=['myindex'], index='myindex', engine=engine)
     assert_eq(df[[]], ddf)
 
 
@@ -108,26 +108,26 @@ def test_index_column_no_index(fn, engine):
     assert_eq(df[[]], ddf)
 
 
-def test_index_column_false_index(fn):
-    ddf = read_parquet(fn, columns=['myindex'], index=False)
+def test_index_column_false_index(fn, engine):
+    ddf = read_parquet(fn, columns=['myindex'], index=False, engine=engine)
     assert_eq(pd.DataFrame(df.index), ddf, check_index=False)
 
 
-def test_no_columns_yes_index(fn):
-    ddf = read_parquet(fn, columns=[], index='myindex')
+def test_no_columns_yes_index(fn, engine):
+    ddf = read_parquet(fn, columns=[], index='myindex', engine=engine)
     assert_eq(df[[]], ddf)
 
 
-def test_no_columns_no_index(fn):
-    ddf = read_parquet(fn, columns=[])
+def test_no_columns_no_index(fn, engine):
+    ddf = read_parquet(fn, columns=[], engine=engine)
     assert_eq(df[[]], ddf)
 
 
-def test_series(fn):
-    ddf = read_parquet(fn, columns=['x'])
+def test_series(fn, engine):
+    ddf = read_parquet(fn, columns=['x'], engine=engine)
     assert_eq(df[['x']], ddf)
 
-    ddf = read_parquet(fn, columns='x', index='myindex')
+    ddf = read_parquet(fn, columns='x', index='myindex', engine=engine)
     assert_eq(df.x, ddf)
 
 
@@ -188,7 +188,7 @@ def test_categorical():
         assert (df.x == ddf2.x).all()
 
 
-def test_append():
+def test_append(engine):
     """Test that appended parquet equal to the original one."""
     with tmpdir() as tmp:
         df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
@@ -204,7 +204,7 @@ def test_append():
         ddf1.to_parquet(tmp)
         ddf2.to_parquet(tmp, append=True)
 
-        ddf3 = read_parquet(tmp)
+        ddf3 = read_parquet(tmp, engine=engine)
         assert_eq(df, ddf3)
 
 
