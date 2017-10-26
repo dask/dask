@@ -307,6 +307,9 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
     aren't enough unique values in the column.  Increasing ``upsample``
     keyword argument in ``df.set_index`` may help.
     """
+    if not vals_and_weights:
+        return np.array(None, dtype=np.dtype(None))
+
     vals, weights = vals_and_weights
     vals = np.array(vals)
     weights = np.array(weights)

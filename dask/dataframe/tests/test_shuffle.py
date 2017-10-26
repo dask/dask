@@ -618,6 +618,20 @@ def test_set_index_empty_partition():
         assert assert_eq(ddf.set_index('x'), df.set_index('x'))
 
 
+def test_set_index_on_empty():
+    test_vals = [1, 2, 3, 4]
+    converters = [int, float, str, lambda x: pd.to_datetime(x, unit='ns')]
+
+    for converter in converters:
+        df = pd.DataFrame({'x': [converter(x) for x in test_vals]})
+        ddf = dd.from_pandas(df, npartitions=1)
+        ddf = ddf[ddf.x > df.x.max()]
+        ddf = ddf.set_index('x')
+        assert ddf.index.name == 'x'
+        assert ddf.index.dtype == df.x.dtype
+        assert len(ddf.index.compute()) == 0
+
+
 def test_compute_divisions():
     from dask.dataframe.shuffle import compute_divisions
     df = pd.DataFrame({'x': [1, 2, 3, 4],
