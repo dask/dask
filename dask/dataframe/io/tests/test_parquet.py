@@ -75,13 +75,13 @@ def test_index(fn, engine):
     assert_eq(df, ddf)
 
 
-def test_empty_index():
+def test_empty_index(engine):
     with tmpdir() as tmp:
         df = pd.DataFrame(columns=['a', 'b'])
         df.set_index('a', inplace=True, drop=True)
         ddf = dd.from_pandas(df, npartitions=2)
         ddf.to_parquet(tmp, write_index=True)
-        read_df = dd.read_parquet(tmp)
+        read_df = dd.read_parquet(tmp, engine=engine)
         assert read_df.index.name == 'a'
 
 
