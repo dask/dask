@@ -1407,6 +1407,30 @@ def test_from_array_with_lock():
     assert_eq(e + f, x + x)
 
 
+class MyArray(object):
+    def __init__(self, x):
+        self.x = x
+        self.dtype = x.dtype
+        self.shape = x.shape
+
+    def __getitem__(self, i):
+        return self.x[i]
+
+
+def test_from_array_tasks_always_call_getter():
+    x1 = np.arange(25).reshape((5, 5))
+    x2 = np.array([[1]])
+    x3 = np.array(1)[()]
+
+    dx1a = da.from_array(MyArray(x1), chunks=(5, 5), asarray=False)
+    dx1b = da.from_array(MyArray(x1), chunks=x1.shape, asarray=False)
+    dx2 = da.from_array(MyArray(x2), chunks=1, asarray=False)
+    dx3 = da.from_array(MyArray(x3), chunks=1, asarray=False)
+
+    for res, sol in [(dx1a, x1), (dx1b, x1), (dx2, x2), (dx3, x3)]:
+        assert_eq(res, sol)
+
+
 def test_from_array_no_asarray():
 
     def assert_chunks_are_of_type(x, cls):
