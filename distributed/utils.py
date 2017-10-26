@@ -1016,9 +1016,9 @@ class ThrottledGC(object):
     to log a warning level message whenever an actual call to gc.collect()
     lasts too long.
     """
-    def __init__(self, max_in_gc_frac=0.05, warn_if_longer=10, logger=None):
+    def __init__(self, max_in_gc_frac=0.05, warn_if_longer=1, logger=None):
         self.max_in_gc_frac = max_in_gc_frac
-        self.warn_if_longer = 10
+        self.warn_if_longer = warn_if_longer
         self.last_collect = time()
         self.last_gc_duration = 0
         self.logger = logger if logger is not None else _logger
