@@ -80,7 +80,11 @@ class MemoryFileSystem(core.FileSystem):
         path = self._trim_filename(path)
         if path not in self.store:
             raise FileNotFoundError(path)
-        return len(self.store[path].getbuffer())
+        b = self.store[path]
+        loc = b.tell()
+        size = b.seek(0, 2)
+        b.seek(loc)
+        return size
 
 
 core._filesystems['memory'] = MemoryFileSystem
