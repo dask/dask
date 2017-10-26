@@ -1750,20 +1750,16 @@ class Array(Base):
         mult = self.dtype.itemsize / dtype.itemsize
 
         if order == 'C':
-            ascontiguousarray = np.ascontiguousarray
             chunks = self.chunks[:-1] + (tuple(ensure_int(c * mult)
                                          for c in self.chunks[-1]),)
         elif order == 'F':
-            ascontiguousarray = np.asfortranarray
             chunks = ((tuple(ensure_int(c * mult) for c in self.chunks[0]), ) +
                       self.chunks[1:])
         else:
             raise ValueError("Order must be one of 'C' or 'F'")
 
-        out = elemwise(ascontiguousarray, self, dtype=self.dtype)
-        out = elemwise(np.ndarray.view, out, dtype, dtype=dtype)
-        out._chunks = chunks
-        return out
+        return self.map_blocks(chunk.view, dtype, order=order,
+                               dtype=dtype, chunks=chunks)
 
     @derived_from(np.ndarray)
     def swapaxes(self, axis1, axis2):

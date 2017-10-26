@@ -1788,9 +1788,8 @@ def test_view():
 def test_view_fortran():
     x = np.asfortranarray(np.arange(64).reshape((8, 8)))
     d = da.from_array(x, chunks=(2, 3))
-    # TODO: DeprecationWarning: Changing the shape of non-C contiguous array by
-    assert_eq(x.view('i4'), d.view('i4', order='F'))
-    assert_eq(x.view('i2'), d.view('i2', order='F'))
+    assert_eq(x.T.view('i4').T, d.view('i4', order='F'))
+    assert_eq(x.T.view('i2').T, d.view('i2', order='F'))
 
 
 def test_h5py_tokenize():
