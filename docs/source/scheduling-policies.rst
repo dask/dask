@@ -7,6 +7,8 @@ more information on how this these policies are enacted efficiently see
 :doc:`Scheduling State<scheduling-state>`.
 
 
+.. _decide-worker:
+
 Choosing Workers
 ----------------
 
