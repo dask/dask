@@ -1,4 +1,5 @@
-from __future__ import print_function, division, absolute_import
+from __future__ import (print_function, division, absolute_import,
+                        unicode_literals)
 
 import pytest
 from toolz import concat
