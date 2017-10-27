@@ -18,8 +18,13 @@ Array
 DataFrame
 +++++++++
 
+- Fixed ``DataFrame.quantile`` and ``Series.quantile`` returning ``nan`` when
+  missing values are present (:pr:`2791`:)
+- Fixed ``DataFrame.quantile`` losing the result ``.name`` when ``q`` is a
+  scalar (:pr:`2791`:)
 - Fixed ``dd.concat`` return a ``dask.Dataframe`` when concatenating a single
   series along the columns, matching pandas' behavior (:pr:`2800`)
+-
 
 Bag
 +++
