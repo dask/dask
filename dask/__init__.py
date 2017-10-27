@@ -12,10 +12,6 @@ try:
 except ImportError:
     pass
 
-# dask.async is deprecated. For now we import it to the top namespace to be
-# compatible with prior releases. This should be removed in a future release:
-import dask.async
-
 from ._version import get_versions
 versions = get_versions()
 __version__ = versions['version']
