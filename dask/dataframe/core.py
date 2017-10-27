@@ -1418,8 +1418,24 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @derived_from(pd.DataFrame)
     def astype(self, dtype):
-        meta = self._meta.astype(dtype)
-        meta = clear_known_categories(meta)
+        # XXX: Pandas will segfault for empty dataframes when setting
+        # categorical dtypes. This operation isn't allowed currently anyway. We
+        # get the metadata with a non-empty frame to throw the error instead of
+        # segfaulting.
+        if isinstance(self._meta, pd.DataFrame) and is_categorical_dtype(dtype):
+            meta = self._meta_nonempty.astype(dtype)
+        else:
+            meta = self._meta.astype(dtype)
+        if hasattr(dtype, 'items'):
+            # Pandas < 0.21.0, no `categories` attribute, so unknown
+            # Pandas >= 0.21.0, known if `categories` attribute is not None
+            set_unknown = [k for k, v in dtype.items()
+                           if (is_categorical_dtype(v) and
+                               getattr(v, 'categories', None) is None)]
+            meta = clear_known_categories(meta, cols=set_unknown)
+        elif (is_categorical_dtype(dtype) and
+              getattr(dtype, 'categories', None) is None):
+            meta = clear_known_categories(meta)
         return self.map_partitions(M.astype, dtype=dtype, meta=meta)
 
     @derived_from(pd.Series)

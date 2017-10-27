@@ -2075,11 +2075,15 @@ def test_astype():
 
 def test_astype_categoricals():
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'b', 'c'],
-                       'y': [1, 2, 3, 4, 5]})
+                       'y': ['x', 'y', 'z', 'x', 'y'],
+                       'z': [1, 2, 3, 4, 5]})
+    df = df.astype({'y': 'category'})
     ddf = dd.from_pandas(df, 2)
+    assert ddf.y.cat.known
 
     ddf2 = ddf.astype({'x': 'category'})
     assert not ddf2.x.cat.known
+    assert ddf2.y.cat.known
     assert ddf2.x.dtype == 'category'
     assert ddf2.compute().x.dtype == 'category'
 
@@ -2087,6 +2091,36 @@ def test_astype_categoricals():
     assert not dx.cat.known
     assert dx.dtype == 'category'
     assert dx.compute().dtype == 'category'
+
+
+@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
+                    reason="No CategoricalDtype with categories")
+def test_astype_categoricals_known():
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'b', 'c'],
+                       'y': ['x', 'y', 'z', 'y', 'z'],
+                       'z': ['b', 'b', 'b', 'c', 'b'],
+                       'other': [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, 2)
+
+    abc = pd.api.types.CategoricalDtype(['a', 'b', 'c'])
+    category = pd.api.types.CategoricalDtype()
+
+    # DataFrame
+    ddf2 = ddf.astype({'x': abc,
+                       'y': category,
+                       'z': 'category',
+                       'other': 'f8'})
+
+    for col, known in [('x', True), ('y', False), ('z', False)]:
+        x = getattr(ddf2, col)
+        assert pd.api.types.is_categorical_dtype(x.dtype)
+        assert x.cat.known == known
+
+    # Series
+    for dtype, known in [('category', False), (category, False), (abc, True)]:
+        dx2 = ddf.x.astype(dtype)
+        assert pd.api.types.is_categorical_dtype(dx2.dtype)
+        assert dx2.cat.known == known
 
 
 def test_groupby_callable():
