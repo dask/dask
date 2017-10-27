@@ -13,10 +13,17 @@ Array
 - Deprecate ``vnorm`` in favor of ``dask.array.linalg.norm`` (:pr:`2773`)
 - Reimplement ``unique`` to be lazy (:pr:`2775`)
 - Support broadcasting of Dask Arrays with 0-length dimensions (:pr:`2784`)
+- Add ``asarray`` and ``asanyarray`` to Dask Array API docs (:pr:`2787`)
 
 DataFrame
 +++++++++
 
+- Fixed ``DataFrame.quantile`` and ``Series.quantile`` returning ``nan`` when
+  missing values are present (:pr:`2791`:)
+- Fixed ``DataFrame.quantile`` losing the result ``.name`` when ``q`` is a
+  scalar (:pr:`2791`:)
+- Fixed ``dd.concat`` return a ``dask.Dataframe`` when concatenating a single
+  series along the columns, matching pandas' behavior (:pr:`2800`)
 -
 
 Bag
@@ -32,6 +39,7 @@ Core
 -  Calling compute within a dask.distributed task defaults to distributed
    scheduler (:pr:`2762`)
 -  Auto-import gcsfs when gcs:// protocol is used (:pr:`2776`)
+-  Fully remove dask.async module, use dask.local instead
 
 0.15.4 / 2017-10-06
 -------------------
@@ -39,6 +47,7 @@ Core
 Array
 +++++
 
+-  ``da.random.choice`` now works with array arguments (:pr:`2781`)
 -  Support indexing in arrays with np.int (fixes regression) (:pr:`2719`)
 -  Handle zero dimension with rechunking (:pr:`2747`)
 -  Support -1 as an alias for "size of the dimension" in ``chunks`` (:pr:`2749`)

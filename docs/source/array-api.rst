@@ -25,6 +25,8 @@ Top level user functions:
    argwhere
    around
    array
+   asanyarray
+   asarray
    atleast_1d
    atleast_2d
    atleast_3d
@@ -94,6 +96,7 @@ Top level user functions:
    logical_not
    logical_or
    logical_xor
+   map_blocks
    max
    maximum
    mean
@@ -228,6 +231,7 @@ Random
    random.beta
    random.binomial
    random.chisquare
+   random.choice
    random.exponential
    random.f
    random.gamma
@@ -308,7 +312,6 @@ Internal functions
 .. currentmodule:: dask.array.core
 
 .. autosummary::
-   map_blocks
    atop
    top
 
@@ -345,6 +348,8 @@ Other functions
 .. autofunction:: argwhere
 .. autofunction:: around
 .. autofunction:: array
+.. autofunction:: asanyarray
+.. autofunction:: asarray
 .. autofunction:: atleast_1d
 .. autofunction:: atleast_2d
 .. autofunction:: atleast_3d

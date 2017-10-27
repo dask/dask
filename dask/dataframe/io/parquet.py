@@ -247,7 +247,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     columns: list or None
         List of column names to load
     filters: list
-        List of filters to apply, like ``[('x', '>' 0), ...]``. This implements
+        List of filters to apply, like ``[('x', '>', 0), ...]``. This implements
         row-group (partition) -level filtering only, i.e., to prevent the
         loading of some chunks of the data, and only if relevant statistics
         have been included in the metadata.

@@ -690,16 +690,26 @@ def test_quantile():
     assert 4 < result < 6
 
 
+def test_quantile_missing():
+    df = pd.DataFrame({"A": [0, np.nan, 2]})
+    ddf = dd.from_pandas(df, 2)
+    expected = df.quantile()
+    result = ddf.quantile()
+    assert_eq(result, expected)
+
+    expected = df.A.quantile()
+    result = ddf.A.quantile()
+    assert_eq(result, expected)
+
+
 def test_empty_quantile():
     result = d.b.quantile([])
     exp = full.b.quantile([])
     assert result.divisions == (None, None)
 
-    # because of a pandas bug, name is not preserved
-    # https://github.com/pydata/pandas/pull/10881
     assert result.name == 'b'
     assert result.compute().name == 'b'
-    assert_eq(result, exp, check_names=False)
+    assert_eq(result, exp)
 
 
 def test_dataframe_quantile():
@@ -717,6 +727,7 @@ def test_dataframe_quantile():
 
     result = result.compute()
     assert isinstance(result, pd.Series)
+    assert result.name == 0.5
     tm.assert_index_equal(result.index, pd.Index(['A', 'X', 'B']))
     assert (result > pd.Series([16, 36, 26], index=['A', 'X', 'B'])).all()
     assert (result < pd.Series([17, 37, 27], index=['A', 'X', 'B'])).all()
