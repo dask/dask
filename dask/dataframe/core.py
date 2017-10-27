@@ -2367,7 +2367,7 @@ class DataFrame(_Frame):
             raise ValueError("Cannot rename index.")
 
         # *args here is index, columns but columns arg is already used
-        return self.map_partitions(M.rename, None, columns)
+        return self.map_partitions(M.rename, None, columns=columns)
 
     def query(self, expr, **kwargs):
         """ Filter dataframe with complex expression

@@ -308,7 +308,7 @@ def concat(dfs, axis=0, join='outer', uniform=False):
                                                          sample.cat.ordered)
                         parts.append(data)
                 out[col] = union_categoricals(parts)
-            out = out.reindex_axis(cat_mask.index, axis=1)
+            out = out.reindex(columns=cat_mask.index)
         else:
             # pandas may raise a RuntimeWarning for comparing ints and strs
             with warnings.catch_warnings():
