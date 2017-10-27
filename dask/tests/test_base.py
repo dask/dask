@@ -505,7 +505,7 @@ def test_use_cloudpickle_to_tokenize_functions_in__main__():
     f = __main__.inc
 
     t = normalize_token(f)
-    assert b'__main__' not in t
+    assert b'cloudpickle' in t
 
 
 def test_optimizations_keyword():
