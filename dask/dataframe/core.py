@@ -2403,7 +2403,7 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def eval(self, expr, inplace=None, **kwargs):
         if inplace is None:
-            if PANDAS_VERSION > '0.21.0':
+            if PANDAS_VERSION >= '0.21.0':
                 inplace = False
         if '=' in expr and inplace in (True, None):
             raise NotImplementedError("Inplace eval not supported."
