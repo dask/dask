@@ -689,5 +689,4 @@ def test_remove_nans():
         for inputs, expected in tests:
             params = [x_val if x is X else conv(x) for x in inputs]
             expected = [conv(x) for x in expected]
-            print(f'{params} : {expected}')
             assert remove_nans(params) == expected
