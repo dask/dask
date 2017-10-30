@@ -17,7 +17,8 @@ from dask.dataframe.shuffle import (shuffle,
                                     rearrange_by_column,
                                     rearrange_by_divisions,
                                     maybe_buffered_partd,
-                                    remove_nans)
+                                    remove_nans,
+                                    is_float_and_nan)
 from dask.dataframe.utils import assert_eq, make_meta
 
 
@@ -605,9 +606,7 @@ def test_set_index_text_column_empty_partition():
     ])
 
     assert any(ddf.get_partition(p).compute().empty for p in range(ddf.npartitions))
-
-    ddf = ddf.set_index('x')
-    assert assert_eq(ddf.index.compute(), pd.Index(['0', '1', '2'], dtype='object', name='x'))
+    assert assert_eq(ddf.set_index('x'), df.set_index('x'))
 
 
 def test_compute_divisions():
@@ -657,7 +656,19 @@ def test_empty_partitions():
 
 
 def test_remove_nans():
-    assert remove_nans((np.nan, 1, 2)) == [1, 1, 2]
-    assert remove_nans((1, np.nan, 2)) == [1, 2, 2]
-    assert remove_nans((1, 2, np.nan)) == [1, 2, 2]
-    assert remove_nans((1, 2, np.nan, np.nan)) == [1, 2, 2, 2]
+    tests = [
+        ((np.nan, 1, 2), (1, 1, 2)),
+        ((1, np.nan, 2), (1, 2, 2)),
+        ((1, 2, np.nan), (1, 2, 2)),
+        ((1, 2, np.nan, np.nan), (1, 2, 2, 2)),
+        ((np.nan, np.nan, 1, 2), (1, 1, 1, 2)),
+        ((1, np.nan, np.nan, 2), (1, 2, 2, 2)),
+        ((np.nan, 1, np.nan, 2, np.nan, 3, np.nan), (1, 1, 2, 2, 3, 3, 3)),
+    ]
+    converters = [int, float, str, lambda x: pd.to_datetime(x, unit='ns')]
+
+    for conv in converters:
+        for inputs, expected in tests:
+            params = [np.nan if is_float_and_nan(x) else conv(x) for x in inputs]
+            expected = [conv(x) for x in expected]
+            assert remove_nans(params) == expected

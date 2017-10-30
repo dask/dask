@@ -112,9 +112,11 @@ def remove_nans(divisions):
         if is_float_and_nan(divisions[i]):
             divisions[i] = divisions[i + 1]
 
-    for i in range(1, len(divisions)):
-        if is_float_and_nan(divisions[i]):
-            divisions[i] = divisions[i - 1]
+    for i in range(len(divisions) - 1, -1, -1):
+        if not is_float_and_nan(divisions[i]):
+            for j in range(i + 1, len(divisions)):
+                divisions[j] = divisions[i]
+            break
 
     return divisions
 
