@@ -32,6 +32,7 @@ functions = [
     lambda x: da.tensordot(x, np.ones(x.shape[:2]), axes=[(0, 1), (0, 1)]),
     lambda x: x.sum(axis=0),
     lambda x: x.max(axis=0),
+    lambda x: x.mean(axis=0),
     lambda x: x.sum(axis=(1, 2)),
     lambda x: x.astype(np.complex128),
     lambda x: x.map_blocks(lambda x: x * 2),
