@@ -657,6 +657,7 @@ def test_empty_partitions():
 
 def test_remove_nans():
     tests = [
+        ((1, 1, 2), (1, 1, 2)),
         ((np.nan, 1, 2), (1, 1, 2)),
         ((1, np.nan, 2), (1, 2, 2)),
         ((1, 2, np.nan), (1, 2, 2)),
