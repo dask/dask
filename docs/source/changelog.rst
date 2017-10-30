@@ -24,7 +24,8 @@ DataFrame
   scalar (:pr:`2791`:)
 - Fixed ``dd.concat`` return a ``dask.Dataframe`` when concatenating a single
   series along the columns, matching pandas' behavior (:pr:`2800`)
-- Fixed default ``DataFrame.eval`` to match for pandas >= 0.21.0 (:pr:`2838`)
+- Fixed default inplace parameter for ``DataFrame.eval`` to match the pandas
+  defualt for pandas >= 0.21.0 (:pr:`2838`)
 
 Bag
 +++
