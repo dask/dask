@@ -665,17 +665,15 @@ def test_empty_partitions():
 
 
 def test_remove_nans():
-    X = object()
-
     tests = [
         ((1, 1, 2), (1, 1, 2)),
-        ((X, 1, 2), (1, 1, 2)),
-        ((1, X, 2), (1, 2, 2)),
-        ((1, 2, X), (1, 2, 2)),
-        ((1, 2, X, X), (1, 2, 2, 2)),
-        ((X, X, 1, 2), (1, 1, 1, 2)),
-        ((1, X, X, 2), (1, 2, 2, 2)),
-        ((X, 1, X, 2, X, 3, X), (1, 1, 2, 2, 3, 3, 3)),
+        ((None, 1, 2), (1, 1, 2)),
+        ((1, None, 2), (1, 2, 2)),
+        ((1, 2, None), (1, 2, 2)),
+        ((1, 2, None, None), (1, 2, 2, 2)),
+        ((None, None, 1, 2), (1, 1, 1, 2)),
+        ((1, None, None, 2), (1, 2, 2, 2)),
+        ((None, 1, None, 2, None, 3, None), (1, 1, 2, 2, 3, 3, 3)),
     ]
 
     converters = [
@@ -685,8 +683,8 @@ def test_remove_nans():
         (lambda x: pd.to_datetime(x, unit='ns'), np.datetime64('NaT')),
     ]
 
-    for conv, x_val in converters:
+    for conv, none_val in converters:
         for inputs, expected in tests:
-            params = [x_val if x is X else conv(x) for x in inputs]
+            params = [none_val if x is None else conv(x) for x in inputs]
             expected = [conv(x) for x in expected]
             assert remove_nans(params) == expected
