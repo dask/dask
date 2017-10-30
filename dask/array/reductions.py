@@ -231,7 +231,7 @@ def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
 
 def numel(x, **kwargs):
     """ A reduction to count the number of elements """
-    return chunk.sum(np.ones_like(x), **kwargs)
+    return chunk.sum(np.ones(x.shape, dtype='u8'), **kwargs)
 
 
 def nannumel(x, **kwargs):
@@ -242,6 +242,8 @@ def nannumel(x, **kwargs):
 def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     n = numel(x, dtype=dtype, **kwargs)
     total = sum(x, dtype=dtype, **kwargs)
+    if hasattr(total, 'todense'):
+        total = total.todense()
     empty = empty_lookup.dispatch(type(n))
     result = empty(n.shape, dtype=[('total', total.dtype), ('n', n.dtype)])
     result['n'] = n
