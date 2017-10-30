@@ -17,8 +17,7 @@ from dask.dataframe.shuffle import (shuffle,
                                     rearrange_by_column,
                                     rearrange_by_divisions,
                                     maybe_buffered_partd,
-                                    remove_nans,
-                                    is_float_and_nan)
+                                    remove_nans)
 from dask.dataframe.utils import assert_eq, make_meta
 
 
@@ -598,15 +597,25 @@ def test_set_index_sorted_min_max_same():
     assert df2.divisions == (0, 1, 1)
 
 
-def test_set_index_text_column_empty_partition():
-    df = pd.DataFrame([{'x': str(i), 'y': i} for i in range(3)], columns=['x', 'y'])
-    ddf = dd.concat([
-        dd.from_pandas(df, npartitions=1),
-        dd.from_pandas(df[df.y > df.y.max()], npartitions=1),
-    ])
+def test_set_index_empty_partition():
+    test_vals = [1, 2, 3]
 
-    assert any(ddf.get_partition(p).compute().empty for p in range(ddf.npartitions))
-    assert assert_eq(ddf.set_index('x'), df.set_index('x'))
+    converters = [
+        int,
+        float,
+        str,
+        lambda x: pd.to_datetime(x, unit='ns'),
+    ]
+
+    for conv in converters:
+        df = pd.DataFrame([{'x': conv(i), 'y': i} for i in test_vals], columns=['x', 'y'])
+        ddf = dd.concat([
+            dd.from_pandas(df, npartitions=1),
+            dd.from_pandas(df[df.y > df.y.max()], npartitions=1),
+        ])
+
+        assert any(ddf.get_partition(p).compute().empty for p in range(ddf.npartitions))
+        assert assert_eq(ddf.set_index('x'), df.set_index('x'))
 
 
 def test_compute_divisions():
@@ -656,20 +665,29 @@ def test_empty_partitions():
 
 
 def test_remove_nans():
+    X = object()
+
     tests = [
         ((1, 1, 2), (1, 1, 2)),
-        ((np.nan, 1, 2), (1, 1, 2)),
-        ((1, np.nan, 2), (1, 2, 2)),
-        ((1, 2, np.nan), (1, 2, 2)),
-        ((1, 2, np.nan, np.nan), (1, 2, 2, 2)),
-        ((np.nan, np.nan, 1, 2), (1, 1, 1, 2)),
-        ((1, np.nan, np.nan, 2), (1, 2, 2, 2)),
-        ((np.nan, 1, np.nan, 2, np.nan, 3, np.nan), (1, 1, 2, 2, 3, 3, 3)),
+        ((X, 1, 2), (1, 1, 2)),
+        ((1, X, 2), (1, 2, 2)),
+        ((1, 2, X), (1, 2, 2)),
+        ((1, 2, X, X), (1, 2, 2, 2)),
+        ((X, X, 1, 2), (1, 1, 1, 2)),
+        ((1, X, X, 2), (1, 2, 2, 2)),
+        ((X, 1, X, 2, X, 3, X), (1, 1, 2, 2, 3, 3, 3)),
     ]
-    converters = [int, float, str, lambda x: pd.to_datetime(x, unit='ns')]
 
-    for conv in converters:
+    converters = [
+        (int, np.nan),
+        (float, np.nan),
+        (str, np.nan),
+        (lambda x: pd.to_datetime(x, unit='ns'), np.datetime64('NaT')),
+    ]
+
+    for conv, x_val in converters:
         for inputs, expected in tests:
-            params = [np.nan if is_float_and_nan(x) else conv(x) for x in inputs]
+            params = [x_val if x is X else conv(x) for x in inputs]
             expected = [conv(x) for x in expected]
+            print(f'{params} : {expected}')
             assert remove_nans(params) == expected

@@ -109,11 +109,11 @@ def remove_nans(divisions):
     divisions = list(divisions)
 
     for i in range(len(divisions) - 2, -1, -1):
-        if is_float_and_nan(divisions[i]):
+        if pd.isnull(divisions[i]):
             divisions[i] = divisions[i + 1]
 
     for i in range(len(divisions) - 1, -1, -1):
-        if not is_float_and_nan(divisions[i]):
+        if not pd.isnull(divisions[i]):
             for j in range(i + 1, len(divisions)):
                 divisions[j] = divisions[i]
             break
@@ -521,7 +521,3 @@ def compute_divisions(df, **kwargs):
 
     divisions = tuple(mins) + (list(maxes)[-1],)
     return divisions
-
-
-def is_float_and_nan(f):
-    return isinstance(f, float) and math.isnan(f)
