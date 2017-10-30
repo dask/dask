@@ -626,10 +626,8 @@ def test_set_index_on_empty():
         df = pd.DataFrame({'x': [converter(x) for x in test_vals]})
         ddf = dd.from_pandas(df, npartitions=1)
         ddf = ddf[ddf.x > df.x.max()]
-        ddf = ddf.set_index('x')
-        assert ddf.index.name == 'x'
-        assert ddf.index.dtype == df.x.dtype
-        assert len(ddf.index.compute()) == 0
+
+        assert assert_eq(ddf.set_index('x'), df[df.x > df.x.max()].set_index('x'))
 
 
 def test_compute_divisions():
