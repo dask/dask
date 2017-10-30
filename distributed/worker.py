@@ -122,9 +122,18 @@ class WorkerBase(ServerNode):
         self.memory_limit = memory_limit
         self.paused = False
 
-        self.memory_target_fraction = config.get('worker-memory-target', 0.6)
-        self.memory_spill_fraction = config.get('worker-memory-spill', 0.7)
-        self.memory_pause_fraction = config.get('worker-memory-pause', 0.8)
+        if 'memory_target_fraction' in kwargs:
+            self.memory_target_fraction = kwargs.pop('memory_target_fraction')
+        else:
+            self.memory_target_fraction = config.get('worker-memory-target', 0.6)
+        if 'memory_spill_fraction' in kwargs:
+            self.memory_spill_fraction = kwargs.pop('memory_spill_fraction')
+        else:
+            self.memory_spill_fraction = config.get('worker-memory-spill', 0.7)
+        if 'memory_pause_fraction' in kwargs:
+            self.memory_pause_fraction = kwargs.pop('memory_pause_fraction')
+        else:
+            self.memory_pause_fraction = config.get('worker-memory-pause', 0.8)
 
         if self.memory_limit:
             try:
@@ -1013,6 +1022,12 @@ class Worker(WorkerBase):
         Milliseconds between heartbeats to scheduler
     memory_limit: int
         Number of bytes of memory that this worker should use
+    memory_target_fraction: float
+        Fraction of memory to try to stay beneath
+    memory_spill_fraction: float
+        Fraction of memory at which we start spilling to disk
+    memory_pause_fraction: float
+        Fraction of memory at which we stop running new tasks
     executor: concurrent.futures.Executor
     resources: dict
         Resources that thiw worker has like ``{'GPU': 2}``
