@@ -949,7 +949,6 @@ def test_statistical_profiling(c, s, a, b):
 
     profile = a.profile_keys['slowinc']
     assert profile['count']
-    assert 'threading' not in str(profile)
 
 
 @gen_cluster(client=True)
@@ -961,9 +960,7 @@ def test_statistical_profiling_2(c, s, a, b):
         yield wait(y)
     profile = a.get_profile()
     assert profile['count']
-    assert 'threading' not in str(profile)
-    assert 'sum' in str(profile)
-    assert 'random' in str(profile)
+    assert 'sum' in str(profile) or 'random' in str(profile)
 
 
 @gen_cluster(ncores=[('127.0.0.1', 1)], client=True, worker_kwargs={'memory_monitor_interval': 10})
