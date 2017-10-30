@@ -620,14 +620,24 @@ def test_set_index_empty_partition():
 
 def test_set_index_on_empty():
     test_vals = [1, 2, 3, 4]
-    converters = [int, float, str, lambda x: pd.to_datetime(x, unit='ns')]
+    converters = [
+        int,
+        float,
+        str,
+        lambda x: pd.to_datetime(x, unit='ns'),
+    ]
 
     for converter in converters:
-        df = pd.DataFrame({'x': [converter(x) for x in test_vals]})
-        ddf = dd.from_pandas(df, npartitions=1)
-        ddf = ddf[ddf.x > df.x.max()]
+        df = pd.DataFrame([{'x': converter(x), 'y': x} for x in test_vals])
+        ddf = dd.from_pandas(df, npartitions=4)
 
-        assert assert_eq(ddf.set_index('x'), df[df.x > df.x.max()].set_index('x'))
+        assert ddf.npartitions > 1
+
+        ddf = ddf[ddf.y > df.y.max()].set_index('x')
+        expected_df = df[df.y > df.y.max()].set_index('x')
+
+        assert assert_eq(ddf, expected_df)
+        assert ddf.npartitions == 1
 
 
 def test_compute_divisions():

@@ -307,13 +307,18 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
     aren't enough unique values in the column.  Increasing ``upsample``
     keyword argument in ``df.set_index`` may help.
     """
+    dtype, info = dtype_info
+
     if not vals_and_weights:
-        return np.array(None, dtype=np.dtype(None))
+        if not (np.can_cast(np.nan, dtype) or np.can_cast(np.datetime64('NaT'), dtype)):
+            # dtype does not support None value so allow it to change
+            dtype = np.dtype(None)
+
+        return np.array(None, dtype=dtype)
 
     vals, weights = vals_and_weights
     vals = np.array(vals)
     weights = np.array(weights)
-    dtype, info = dtype_info
 
     # We want to create exactly `npartition` number of groups of `vals` that
     # are approximately the same weight and non-empty if possible.  We use a

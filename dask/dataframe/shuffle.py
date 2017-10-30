@@ -64,7 +64,9 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
         divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes)
         divisions = divisions.tolist()
 
-        if repartition:
+        empty_partitions_detected = all(pd.isnull(d) for d in divisions)
+
+        if repartition or empty_partitions_detected:
             total = sum(sizes)
             npartitions = max(math.ceil(total / partition_size), 1)
             npartitions = min(npartitions, df.npartitions)
