@@ -162,6 +162,16 @@ def test_files(mem):
             assert data == files[path]
 
 
+def test_csv_roundtrip(mem):
+    dd = pytest.importorskip('dask.dataframe')
+    import pandas as pd
+    df = dd.from_pandas(pd.DataFrame({'a': range(10)}), 2)
+    df.to_csv('memory://file*.csv')
+    df2 = dd.read_csv('memory://file*.csv').compute()
+    assert len(df2) == 10
+    assert df2.a.tolist() == list(range(10))
+
+
 def test_parquet(mem):
     dd = pytest.importorskip('dask.dataframe')
     pytest.importorskip('fastparquet')
