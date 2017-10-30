@@ -3118,7 +3118,7 @@ class as_completed(object):
         self.lock = threading.Lock()
         self.loop = loop or default_client().loop
         self.condition = Condition()
-        self.th_condition = threading.Condition()
+        self.thread_condition = threading.Condition()
         self.with_results = with_results
 
         if futures:
@@ -3126,8 +3126,8 @@ class as_completed(object):
 
     def _notify(self):
         self.condition.notify()
-        with self.th_condition:
-            self.th_condition.notify()
+        with self.thread_condition:
+            self.thread_condition.notify()
 
     @gen.coroutine
     def track_future(self, future):
@@ -3181,10 +3181,10 @@ class as_completed(object):
 
     def __next__(self):
         while self.queue.empty():
-            if not self.futures:
+            if self.is_empty():
                 raise StopIteration()
-            with self.th_condition:
-                self.th_condition.wait()
+            with self.thread_condition:
+                self.thread_condition.wait(timeout=0.100)
         return self.queue.get()
 
     @gen.coroutine
