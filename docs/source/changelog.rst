@@ -41,6 +41,7 @@ Core
    scheduler (:pr:`2762`)
 -  Auto-import gcsfs when gcs:// protocol is used (:pr:`2776`)
 -  Fully remove dask.async module, use dask.local instead
+- Compatability with bokeh 0.12.10 (:pr:`:2844`)
 
 0.15.4 / 2017-10-06
 -------------------
