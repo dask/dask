@@ -16,6 +16,8 @@ from .. import sharedict
 from ..core import flatten
 from ..base import tokenize
 from . import numpy_compat, chunk
+from .creation import arange
+from .wrap import ones
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    asanyarray, concatenate, stack, atop, broadcast_shapes,
@@ -528,20 +530,118 @@ def round(a, decimals=0):
     return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
 
 
-@wraps(np.unique)
-def unique(x):
-    x = x.ravel()
+def _unique_internal(ar, indices, counts, return_inverse=False):
+    return_index = (indices is not None)
+    return_counts = (counts is not None)
 
-    out = atop(np.unique, "i", x, "i", dtype=x.dtype)
+    t = np.unique(
+        ar,
+        return_index=return_index
+    )
+    if not isinstance(t, tuple):
+        t = (t,)
+
+    dt = [("values", t[0].dtype)]
+    if return_index:
+        dt.append(("indices", np.int64))
+    if return_inverse:
+        dt.append(("inverse", np.int64))
+    if return_counts:
+        dt.append(("counts", np.int64))
+
+    r = np.empty(t[0].shape, dtype=dt)
+    r["values"] = t[0]
+    if return_inverse:
+        r["inverse"] = np.arange(len(r))
+    for i, v in np.ndenumerate(t[0]):
+        if return_index:
+            r["indices"][i] = indices[ar == v].min()
+        if return_counts:
+            r["counts"][i] = counts[ar == v].sum()
+
+    return r
+
+
+@wraps(np.unique)
+def unique(ar, return_index=False, return_inverse=False, return_counts=False):
+    ar = ar.ravel()
+
+    args = [ar, "i"]
+    out_dtype = [("values", ar.dtype)]
+    if return_index:
+        args.extend([arange(ar.shape[0], chunks=ar.chunks[0]), "i"])
+        out_dtype.append(("indices", np.int64))
+    else:
+        args.extend([None, None])
+    if return_counts:
+        args.extend([ones((ar.shape[0],), chunks=ar.chunks[0]), "i"])
+        out_dtype.append(("counts", np.int64))
+    else:
+        args.extend([None, None])
+
+    out = atop(
+        _unique_internal, "i",
+        *args,
+        dtype=out_dtype,
+        return_inverse=False
+    )
     out._chunks = tuple((np.nan,) * len(c) for c in out.chunks)
 
+    out_parts = [out["values"]]
+    if return_index:
+        out_parts.append(out["indices"])
+    else:
+        out_parts.append(None)
+    if return_counts:
+        out_parts.append(out["counts"])
+    else:
+        out_parts.append(None)
+
     name = 'unique-aggregate-' + out.name
-    dsk = {(name, 0): (np.unique, (np.concatenate, out.__dask_keys__()))}
+    dsk = {
+        (name, 0): (
+            (_unique_internal,) +
+            tuple(
+                (np.concatenate, o. __dask_keys__())
+                if hasattr(o, "__dask_keys__") else o
+                for o in out_parts
+            ) +
+            (return_inverse,)
+        )
+    }
+    out_dtype = [("values", ar.dtype)]
+    if return_index:
+        out_dtype.append(("indices", np.int64))
+    if return_inverse:
+        out_dtype.append(("inverse", np.int64))
+    if return_counts:
+        out_dtype.append(("counts", np.int64))
+
     out = Array(
-        sharedict.merge((name, dsk), out.dask), name, ((np.nan,),), out.dtype
+        sharedict.merge(*(
+            [(name, dsk)] +
+            [o.dask for o in out_parts if hasattr(o, "__dask_keys__")]
+        )),
+        name,
+        ((np.nan,),),
+        out_dtype
     )
 
-    return out
+    result = [out["values"]]
+    if return_index:
+        result.append(out["indices"])
+    if return_inverse:
+        mtches = (ar[:, None] == out["values"][None, :]).astype(np.int64)
+        result.append((mtches * out["inverse"]).sum(axis=1))
+    if return_counts:
+        result.append(out["counts"])
+
+    if len(result) == 1:
+        result = result[0]
+    else:
+        result = tuple(result)
+
+    return result
 
 
 @wraps(np.roll)
