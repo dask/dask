@@ -391,7 +391,7 @@ def find_merge_rechunk(old_chunks, new_chunks, block_size_limit):
         bse = block_size_effect[k]
         if bse == 1:
             bse = 1 + 1e-9
-        return np.log(gse) / np.log(bse)
+        return (np.log(gse) / np.log(bse)) if bse > 0 else 0
 
     sorted_candidates = sorted(merge_candidates, key=key)
 

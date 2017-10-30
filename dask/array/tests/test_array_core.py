@@ -558,17 +558,19 @@ def test_norm():
     a = a + (a.max() - a) * 1j
     b = from_array(a, chunks=(5, 5))
 
-    assert_eq(b.vnorm(), np.linalg.norm(a))
-    assert_eq(b.vnorm(ord=1), np.linalg.norm(a.flatten(), ord=1))
-    assert_eq(b.vnorm(ord=4, axis=0), np.linalg.norm(a, ord=4, axis=0))
-    assert b.vnorm(ord=4, axis=0, keepdims=True).ndim == b.ndim
-    split_every = {0: 3, 1: 3}
-    assert_eq(b.vnorm(ord=1, axis=0, split_every=split_every),
-              np.linalg.norm(a, ord=1, axis=0))
-    assert_eq(b.vnorm(ord=np.inf, axis=0, split_every=split_every),
-              np.linalg.norm(a, ord=np.inf, axis=0))
-    assert_eq(b.vnorm(ord=np.inf, split_every=split_every),
-              np.linalg.norm(a.flatten(), ord=np.inf))
+    # TODO: Deprecated method, remove test when method removed
+    with pytest.warns(UserWarning):
+        assert_eq(b.vnorm(), np.linalg.norm(a))
+        assert_eq(b.vnorm(ord=1), np.linalg.norm(a.flatten(), ord=1))
+        assert_eq(b.vnorm(ord=4, axis=0), np.linalg.norm(a, ord=4, axis=0))
+        assert b.vnorm(ord=4, axis=0, keepdims=True).ndim == b.ndim
+        split_every = {0: 3, 1: 3}
+        assert_eq(b.vnorm(ord=1, axis=0, split_every=split_every),
+                  np.linalg.norm(a, ord=1, axis=0))
+        assert_eq(b.vnorm(ord=np.inf, axis=0, split_every=split_every),
+                  np.linalg.norm(a, ord=np.inf, axis=0))
+        assert_eq(b.vnorm(ord=np.inf, split_every=split_every),
+                  np.linalg.norm(a.flatten(), ord=np.inf))
 
 
 def test_broadcast_to():
@@ -1812,9 +1814,8 @@ def test_view():
 def test_view_fortran():
     x = np.asfortranarray(np.arange(64).reshape((8, 8)))
     d = da.from_array(x, chunks=(2, 3))
-    # TODO: DeprecationWarning: Changing the shape of non-C contiguous array by
-    assert_eq(x.view('i4'), d.view('i4', order='F'))
-    assert_eq(x.view('i2'), d.view('i2', order='F'))
+    assert_eq(x.T.view('i4').T, d.view('i4', order='F'))
+    assert_eq(x.T.view('i2').T, d.view('i2', order='F'))
 
 
 def test_h5py_tokenize():

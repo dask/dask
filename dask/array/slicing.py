@@ -771,7 +771,8 @@ def normalize_index(idx, shape):
             none_shape.append(None)
 
     for i, d in zip(idx, none_shape):
-        check_index(i, d)
+        if d is not None:
+            check_index(i, d)
     idx = tuple(map(sanitize_index, idx))
     idx = tuple(map(normalize_slice, idx, none_shape))
     idx = posify_index(none_shape, idx)
@@ -808,7 +809,10 @@ def check_index(ind, dimension):
 
     >>> check_index(slice(0, 3), 5)
     """
-    if isinstance(ind, (list, np.ndarray)):
+    # unknown dimension, assumed to be in bounds
+    if np.isnan(dimension):
+        return
+    elif isinstance(ind, (list, np.ndarray)):
         x = np.asanyarray(ind)
         if (x >= dimension).any() or (x < -dimension).any():
             raise IndexError("Index out of bounds %s" % dimension)

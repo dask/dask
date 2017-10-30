@@ -195,3 +195,12 @@ def arange(start, stop, step, length, dtype):
 
 def astype(x, astype_dtype=None, **kwargs):
     return x.astype(astype_dtype, **kwargs)
+
+
+def view(x, dtype, order='C'):
+    if order == 'C':
+        x = np.ascontiguousarray(x)
+        return x.view(dtype)
+    else:
+        x = np.asfortranarray(x)
+        return x.T.view(dtype).T
