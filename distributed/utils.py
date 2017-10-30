@@ -52,7 +52,7 @@ no_default = '__no_default__'
 
 
 def _initialize_mp_context():
-    if PY3 and not sys.platform.startswith('win'):
+    if PY3 and not sys.platform.startswith('win') and 'PyPy' not in sys.version:
         method = config.get('multiprocessing-method', 'forkserver')
         ctx = multiprocessing.get_context(method)
         # Makes the test suite much faster
