@@ -171,7 +171,7 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
     bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
     import bokeh
 
-    if bokeh.__version__ >= LooseVersion("0.12.10"):
+    if LooseVersion(bokeh.__version__) >= "0.12.10":
         from bokeh.io import state
         in_notebook = state.curstate().notebook
     else:
