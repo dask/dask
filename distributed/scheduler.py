@@ -1151,8 +1151,11 @@ class Scheduler(ServerNode):
 
         assert all(self.who_has.values())
 
-        for worker, occ in self.occupancy.items():
-            assert abs(sum(self.processing[worker].values()) - occ) < 1e-8
+        # for worker, occ in self.occupancy.items():
+        #     for d in self.extensions['stealing'].in_flight.values():
+        #         if worker in (d['thief'], d['victim']):
+        #             continue
+        #     assert abs(sum(self.processing[worker].values()) - occ) < 1e-8
 
     ###################
     # Manage Messages #
@@ -1577,6 +1580,13 @@ class Scheduler(ServerNode):
                                'count': len(keys)})
         raise gen.Return(result)
 
+    def clear_task_state(self):
+        logger.info("Clear task state")
+        for collection in self._task_collections:
+            collection.clear()
+        for collection in self._worker_collections:
+            collection.clear()
+
     @gen.coroutine
     def restart(self, client=None, timeout=3):
         """ Restart all workers.  Reset local state. """
@@ -1600,11 +1610,7 @@ class Scheduler(ServerNode):
                     logger.info("Exception while restarting.  This is normal",
                                 exc_info=True)
 
-            logger.info("Clear task state")
-            for collection in self._task_collections:
-                collection.clear()
-            for collection in self._worker_collections:
-                collection.clear()
+            self.clear_task_state()
 
             for plugin in self.plugins[:]:
                 try:
@@ -2530,16 +2536,10 @@ class Scheduler(ServerNode):
                 self.occupancy[w] -= duration
             self.check_idle_saturated(w)
             if w != worker:
-                logger.debug("Unexpected worker completed task, likely due to"
+                logger.error("Unexpected worker completed task, likely due to"
                              " work stealing.  Expected: %s, Got: %s, Key: %s",
                              w, worker, key)
-                msg = {'op': 'release-task', 'key': key, 'reason': 'stolen'}
-                try:
-                    self.worker_comms[w].send(msg)
-                except CommClosedError:
-                    # Don't try to resolve this now.  Proceed normally and
-                    # let normal resiliency mechanisms handle it later
-                    logger.info("Worker comm closed unexpectedly")
+                raise Exception()
 
             recommendations = OrderedDict()
 

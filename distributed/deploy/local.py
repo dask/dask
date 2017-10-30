@@ -239,6 +239,8 @@ class LocalCluster(object):
         if self.status == 'closed':
             return
 
+        self.scheduler.clear_task_state()
+
         for w in self.workers:
             self.loop.add_callback(self._stop_worker, w)
         for i in range(10):

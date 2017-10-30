@@ -487,7 +487,7 @@ class StealingEvents(DashboardComponent):
         with log_errors():
             log = self.steal.log
             n = self.steal.count - self.last
-            log = [log[-i] for i in range(1, n + 1)]
+            log = [log[-i] for i in range(1, n + 1) if isinstance(log[-i], list)]
             self.last = self.steal.count
 
             if log:
