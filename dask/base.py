@@ -36,6 +36,8 @@ def is_dask_collection(x):
         return x.__dask_graph__() is not None
     except AttributeError:
         return False
+    except TypeError:
+        return False
 
 
 class DaskMethodsMixin(object):

@@ -627,3 +627,8 @@ def test_optimize_None():
 
     with dask.set_options(array_optimize=None, get=my_get):
         y.compute()
+
+
+def test_class_is_not_collection():
+    da = pytest.importorskip('dask.array')
+    assert not is_dask_collection(da.Array)
