@@ -6,12 +6,10 @@ from math import log
 import os
 from time import time
 
-from tornado.ioloop import PeriodicCallback
-
 from .config import config
 from .core import CommClosedError
 from .diagnostics.plugin import SchedulerPlugin
-from .utils import key_split, log_errors
+from .utils import key_split, log_errors, PeriodicCallback
 
 try:
     from cytoolz import topk
@@ -43,8 +41,7 @@ class WorkStealing(SchedulerPlugin):
             self.add_worker(worker=worker)
 
         pc = PeriodicCallback(callback=self.balance,
-                              callback_time=100,
-                              io_loop=self.scheduler.loop)
+                              callback_time=100)
         self._pc = pc
         self.scheduler.loop.add_callback(pc.start)
         self.scheduler.plugins.append(self)

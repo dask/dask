@@ -2,7 +2,10 @@ from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
 
-from tornado.ioloop import PeriodicCallback, IOLoop
+from tornado.ioloop import IOLoop
+
+from .utils import PeriodicCallback
+
 
 try:
     from crick import TDigest
@@ -15,8 +18,7 @@ else:
             self.components = [TDigest() for i in self.intervals]
 
             self.loop = loop or IOLoop.current()
-            self._pc = PeriodicCallback(self.shift, self.intervals[0] * 1000,
-                                        io_loop=self.loop)
+            self._pc = PeriodicCallback(self.shift, self.intervals[0] * 1000)
             self.loop.add_callback(self._pc.start)
 
         def add(self, item):
@@ -44,8 +46,7 @@ class Counter(object):
         self.components = [defaultdict(lambda: 0) for i in self.intervals]
 
         self.loop = loop or IOLoop.current()
-        self._pc = PeriodicCallback(self.shift, self.intervals[0] * 1000,
-                                    io_loop=self.loop)
+        self._pc = PeriodicCallback(self.shift, self.intervals[0] * 1000)
         self.loop.add_callback(self._pc.start)
 
     def add(self, item):

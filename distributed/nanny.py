@@ -9,7 +9,7 @@ import shutil
 import threading
 
 from tornado import gen
-from tornado.ioloop import IOLoop, TimeoutError, PeriodicCallback
+from tornado.ioloop import IOLoop, TimeoutError
 from tornado.locks import Event
 
 from .comm import get_address_host, get_local_address_for, unparse_host_port
@@ -20,7 +20,7 @@ from .node import ServerNode
 from .process import AsyncProcess
 from .security import Security
 from .utils import (get_ip, mp_context, silence_logging, json_load_robust,
-        ignoring)
+        ignoring, PeriodicCallback)
 from .worker import _ncores, run, TOTAL_MEMORY
 
 
@@ -97,7 +97,7 @@ class Nanny(ServerNode):
                                     connection_args=self.connection_args,
                                     **kwargs)
 
-        pc = PeriodicCallback(self.memory_monitor, 100, io_loop=self.loop)
+        pc = PeriodicCallback(self.memory_monitor, 100)
         self.periodic_callbacks['memory'] = pc
 
         self._listen_address = listen_address

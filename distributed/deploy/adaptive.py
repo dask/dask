@@ -1,10 +1,10 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
-from ..utils import log_errors
 
 from tornado import gen
-from tornado.ioloop import PeriodicCallback
+
+from ..utils import log_errors, PeriodicCallback
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +52,7 @@ class Adaptive(object):
         self.cluster = cluster
         self.startup_cost = startup_cost
         self.scale_factor = scale_factor
-        self._adapt_callback = PeriodicCallback(self._adapt, interval,
-                                                self.scheduler.loop)
+        self._adapt_callback = PeriodicCallback(self._adapt, interval)
         self.scheduler.loop.add_callback(self._adapt_callback.start)
         self._adapting = False
 

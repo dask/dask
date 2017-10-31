@@ -264,13 +264,10 @@ def readone(comm):
 
 def run_scheduler(q, nputs, **kwargs):
     from distributed import Scheduler
-    from tornado.ioloop import PeriodicCallback
 
     # On Python 2.7 and Unix, fork() is used to spawn child processes,
     # so avoid inheriting the parent's IO loop.
     with pristine_loop() as loop:
-        PeriodicCallback(lambda: None, 500).start()
-
         scheduler = Scheduler(validate=True, **kwargs)
         done = scheduler.start('127.0.0.1')
 
@@ -284,12 +281,9 @@ def run_scheduler(q, nputs, **kwargs):
 
 def run_worker(q, scheduler_q, **kwargs):
     from distributed import Worker
-    from tornado.ioloop import PeriodicCallback
 
     with log_errors():
         with pristine_loop() as loop:
-            PeriodicCallback(lambda: None, 500).start()
-
             scheduler_addr = scheduler_q.get()
             worker = Worker(scheduler_addr, validate=True, **kwargs)
             loop.run_sync(lambda: worker._start(0))
@@ -306,12 +300,9 @@ def run_worker(q, scheduler_q, **kwargs):
 
 def run_nanny(q, scheduler_q, **kwargs):
     from distributed import Nanny
-    from tornado.ioloop import PeriodicCallback
 
     with log_errors():
         with pristine_loop() as loop:
-            PeriodicCallback(lambda: None, 500).start()
-
             scheduler_addr = scheduler_q.get()
             worker = Nanny(scheduler_addr, validate=True, **kwargs)
             loop.run_sync(lambda: worker._start(0))
