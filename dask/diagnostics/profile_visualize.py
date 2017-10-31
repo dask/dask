@@ -168,9 +168,9 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
     The completed bokeh plot object.
     """
     bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
-    from bokeh.io import state
+    from bokeh.io.state import curstate
 
-    if not state.curstate().notebook:
+    if not curstate().notebook:
         file_path = file_path or "profile.html"
         bp.output_file(file_path)
 
