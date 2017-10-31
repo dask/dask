@@ -475,7 +475,7 @@ def test_round():
 @pytest.mark.parametrize("return_index", [False, True])
 @pytest.mark.parametrize("return_inverse", [False, True])
 @pytest.mark.parametrize("return_counts", [False, True])
-def test_unique(return_index, return_inverse, return_counts):
+def test_unique_kwargs(return_index, return_inverse, return_counts):
     kwargs = dict(
         return_index=return_index,
         return_inverse=return_inverse,
@@ -494,6 +494,37 @@ def test_unique(return_index, return_inverse, return_counts):
 
         r_a = (r_a,)
         r_d = (r_d,)
+
+    assert len(r_a) == len(r_d)
+
+    for e_r_a, e_r_d in zip(r_a, r_d):
+        assert_eq(e_r_d, e_r_a)
+
+
+@pytest.mark.parametrize("seed", [23, 796])
+@pytest.mark.parametrize("low, high", [
+    [0, 10]
+])
+@pytest.mark.parametrize("shape, chunks", [
+    [(10,), (5,)],
+    [(10,), (3,)],
+    [(4, 5), (3, 2)],
+    [(20, 20), (4, 5)],
+])
+def test_unique_rand(seed, low, high, shape, chunks):
+    np.random.seed(seed)
+
+    a = np.random.randint(low, high, size=shape)
+    d = da.from_array(a, chunks=chunks)
+
+    kwargs = dict(
+        return_index=True,
+        return_inverse=True,
+        return_counts=True
+    )
+
+    r_a = np.unique(a, **kwargs)
+    r_d = da.unique(d, **kwargs)
 
     assert len(r_a) == len(r_d)
 
