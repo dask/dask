@@ -29,6 +29,8 @@ DataFrame
   defualt for pandas >= 0.21.0 (:pr:`2838`)
 - Fix exception when calling ``DataFrame.set_index`` on text column where one
   of the partitions was empty (:pr:`2831`)
+- Do not raise exception when calling ``DataFrame.set_index`` on empty dataframe
+  (:pr:`2827`)
 
 Bag
 +++
