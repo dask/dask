@@ -2728,16 +2728,12 @@ def test_better_errors_object_reductions():
         ds.mean()
     assert str(err.value) == "`mean` not supported with object series"
 
-def test_sample_from_query():
-    def _mk_df(key, n_row = 100, n_col = 10):
-        ret = pd.DataFrame(np.zeros((n_row, n_col)), columns = ['c_%d' % j for j in range(n_col) ])
-        ret['key'] = key
-        return ret
-    ddf = dd.from_delayed([ dask.delayed(_mk_df)(k) for k in range(100) ])
-    ddf = ddf.repartition(npartitions=4)
-    assert ddf.npartitions == 4
-
-    # most of the partitions don't have key > 90
-    ddf1 = ddf.query("key > 90").sample(frac=0.1)
-    df = ddf1.compute()
-    assert np.all(df['key'] > 90)
+def test_sample_empty_partitions():
+    @dask.delayed
+    def make_df(n):
+        return pd.DataFrame(np.zeros((n, 4)), columns=list('abcd'))
+    ddf = dd.from_delayed([make_df(0), make_df(100), make_df(0)])
+    ddf2 = ddf.sample(frac=0.2)
+    # smoke test sample on empty partitions
+    res = ddf2.compute()
+    assert res.dtypes.equals(ddf2.dtypes)
