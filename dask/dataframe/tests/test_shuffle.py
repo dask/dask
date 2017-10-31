@@ -16,7 +16,8 @@ from dask.dataframe.shuffle import (shuffle,
                                     partitioning_index,
                                     rearrange_by_column,
                                     rearrange_by_divisions,
-                                    maybe_buffered_partd)
+                                    maybe_buffered_partd,
+                                    remove_nans)
 from dask.dataframe.utils import assert_eq, make_meta
 
 
@@ -596,6 +597,27 @@ def test_set_index_sorted_min_max_same():
     assert df2.divisions == (0, 1, 1)
 
 
+def test_set_index_empty_partition():
+    test_vals = [1, 2, 3]
+
+    converters = [
+        int,
+        float,
+        str,
+        lambda x: pd.to_datetime(x, unit='ns'),
+    ]
+
+    for conv in converters:
+        df = pd.DataFrame([{'x': conv(i), 'y': i} for i in test_vals], columns=['x', 'y'])
+        ddf = dd.concat([
+            dd.from_pandas(df, npartitions=1),
+            dd.from_pandas(df[df.y > df.y.max()], npartitions=1),
+        ])
+
+        assert any(ddf.get_partition(p).compute().empty for p in range(ddf.npartitions))
+        assert assert_eq(ddf.set_index('x'), df.set_index('x'))
+
+
 def test_compute_divisions():
     from dask.dataframe.shuffle import compute_divisions
     df = pd.DataFrame({'x': [1, 2, 3, 4],
@@ -640,3 +662,29 @@ def test_empty_partitions():
 
     ddf = ddf.set_index('c')
     assert_eq(ddf, df.set_index('b').set_index('c'))
+
+
+def test_remove_nans():
+    tests = [
+        ((1, 1, 2), (1, 1, 2)),
+        ((None, 1, 2), (1, 1, 2)),
+        ((1, None, 2), (1, 2, 2)),
+        ((1, 2, None), (1, 2, 2)),
+        ((1, 2, None, None), (1, 2, 2, 2)),
+        ((None, None, 1, 2), (1, 1, 1, 2)),
+        ((1, None, None, 2), (1, 2, 2, 2)),
+        ((None, 1, None, 2, None, 3, None), (1, 1, 2, 2, 3, 3, 3)),
+    ]
+
+    converters = [
+        (int, np.nan),
+        (float, np.nan),
+        (str, np.nan),
+        (lambda x: pd.to_datetime(x, unit='ns'), np.datetime64('NaT')),
+    ]
+
+    for conv, none_val in converters:
+        for inputs, expected in tests:
+            params = [none_val if x is None else conv(x) for x in inputs]
+            expected = [conv(x) for x in expected]
+            assert remove_nans(params) == expected

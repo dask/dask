@@ -103,12 +103,21 @@ def remove_nans(divisions):
     [1, 1, 2]
     >>> remove_nans((1, np.nan, 2))
     [1, 2, 2]
+    >>> remove_nans((1, 2, np.nan))
+    [1, 2, 2]
     """
     divisions = list(divisions)
+
     for i in range(len(divisions) - 2, -1, -1):
-        d = divisions[i]
-        if isinstance(d, float) and math.isnan(d):
+        if pd.isnull(divisions[i]):
             divisions[i] = divisions[i + 1]
+
+    for i in range(len(divisions) - 1, -1, -1):
+        if not pd.isnull(divisions[i]):
+            for j in range(i + 1, len(divisions)):
+                divisions[j] = divisions[i]
+            break
+
     return divisions
 
 
