@@ -534,14 +534,9 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
     return_index = (indices is not None)
     return_counts = (counts is not None)
 
-    t = np.unique(
-        ar,
-        return_index=return_index
-    )
-    if not isinstance(t, tuple):
-        t = (t,)
+    t = np.unique(ar)
 
-    dt = [("values", t[0].dtype)]
+    dt = [("values", t.dtype)]
     if return_index:
         dt.append(("indices", np.int64))
     if return_inverse:
@@ -549,11 +544,11 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
     if return_counts:
         dt.append(("counts", np.int64))
 
-    r = np.empty(t[0].shape, dtype=dt)
-    r["values"] = t[0]
+    r = np.empty(t.shape, dtype=dt)
+    r["values"] = t
     if return_inverse:
         r["inverse"] = np.arange(len(r))
-    for i, v in np.ndenumerate(t[0]):
+    for i, v in np.ndenumerate(t):
         if return_index:
             r["indices"][i] = indices[ar == v].min()
         if return_counts:
