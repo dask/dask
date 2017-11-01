@@ -534,14 +534,9 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
     return_index = (indices is not None)
     return_counts = (counts is not None)
 
-    t = np.unique(
-        ar,
-        return_index=return_index
-    )
-    if not isinstance(t, tuple):
-        t = (t,)
+    u = np.unique(ar)
 
-    dt = [("values", t[0].dtype)]
+    dt = [("values", u.dtype)]
     if return_index:
         dt.append(("indices", np.int64))
     if return_inverse:
@@ -549,11 +544,11 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
     if return_counts:
         dt.append(("counts", np.int64))
 
-    r = np.empty(t[0].shape, dtype=dt)
-    r["values"] = t[0]
+    r = np.empty(u.shape, dtype=dt)
+    r["values"] = u
     if return_inverse:
-        r["inverse"] = np.arange(len(r))
-    for i, v in np.ndenumerate(t[0]):
+        r["inverse"] = np.arange(len(r), dtype=np.int64)
+    for i, v in np.ndenumerate(r["values"]):
         if return_index:
             r["indices"][i] = indices[ar == v].min()
         if return_counts:
@@ -569,12 +564,18 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     args = [ar, "i"]
     out_dtype = [("values", ar.dtype)]
     if return_index:
-        args.extend([arange(ar.shape[0], chunks=ar.chunks[0]), "i"])
+        args.extend([
+            arange(ar.shape[0], dtype=np.int64, chunks=ar.chunks[0]),
+            "i"
+        ])
         out_dtype.append(("indices", np.int64))
     else:
         args.extend([None, None])
     if return_counts:
-        args.extend([ones((ar.shape[0],), chunks=ar.chunks[0]), "i"])
+        args.extend([
+            ones((ar.shape[0],), dtype=np.int64, chunks=ar.chunks[0]),
+            "i"
+        ])
         out_dtype.append(("counts", np.int64))
     else:
         args.extend([None, None])
