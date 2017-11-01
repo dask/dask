@@ -284,6 +284,7 @@ def test_is_dask_collection():
     assert not is_dask_collection(2)
     assert is_dask_collection(DummyCollection({}))
     assert not is_dask_collection(DummyCollection())
+    assert not is_dask_collection(DummyCollection)
 
 
 class Tuple(DaskMethodsMixin):
@@ -627,8 +628,3 @@ def test_optimize_None():
 
     with dask.set_options(array_optimize=None, get=my_get):
         y.compute()
-
-
-def test_class_is_not_collection():
-    da = pytest.importorskip('dask.array')
-    assert not is_dask_collection(da.Array)
