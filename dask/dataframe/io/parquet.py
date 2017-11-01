@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import json
 import numpy as np
 import pandas as pd
 
@@ -174,7 +175,16 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
 
     dataset = api.ParquetDataset(paths)
     schema = dataset.schema.to_arrow_schema()
+    has_pandas_metadata = schema.metadata is not None and b'pandas' in schema.metadata
     task_name = 'read-parquet-' + tokenize(dataset, columns)
+
+    if index is False:
+        index_col = None
+    elif index is None and has_pandas_metadata:
+        pandas_metadata = json.loads(schema.metadata[b'pandas'].decode('utf8'))
+        index_col = pandas_metadata.get('index_columns', None)
+    else:
+        index_col = index
 
     if columns is None:
         all_columns = schema.names
@@ -187,16 +197,29 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
     else:
         out_type = DataFrame
 
+    if index_col and index_col not in all_columns:
+        if isinstance(index_col, list):
+            all_columns = all_columns + index_col
+        else:
+            all_columns.append(index_col)
+
     divisions = (None,) * (len(dataset.pieces) + 1)
 
     dtypes = _get_pyarrow_dtypes(schema)
 
     meta = _meta_from_dtypes(all_columns, schema.names, dtypes)
+    if index_col:
+        meta = meta.set_index(index_col)
+
+    if out_type == Series:
+        assert len(meta.columns) == 1
+        meta = meta[meta.columns[0]]
 
     task_plan = {
         (task_name, i): (_read_arrow_parquet_piece,
                          file_opener,
                          piece, all_columns,
+                         index_col,
                          out_type == Series,
                          dataset.partitions)
         for i, piece in enumerate(dataset.pieces)
@@ -215,12 +238,16 @@ def _get_pyarrow_dtypes(schema):
     return dtypes
 
 
-def _read_arrow_parquet_piece(open_file_func, piece, columns, is_series,
-                              partitions):
+def _read_arrow_parquet_piece(open_file_func, piece, columns, index_col,
+                              is_series, partitions):
     with open_file_func(piece.path, mode='rb') as f:
         table = piece.read(columns=columns,  partitions=partitions,
+                           use_pandas_metadata=True,
                            file=f)
     df = table.to_pandas()
+    if index_col is not None:
+        if not df.index.name == index_col[0]:
+            df = df.set_index(index_col)
 
     if is_series:
         return df[df.columns[0]]
