@@ -1002,3 +1002,13 @@ def test_reductions_frame_nan(split_every):
               ddf.sem(axis=1, skipna=False, ddof=0, split_every=split_every))
     assert_eq(df.mean(axis=1, skipna=False),
               ddf.mean(axis=1, skipna=False, split_every=split_every))
+
+
+def test_binop_no_sort():
+    # https://github.com/dask/dask/issues/2840
+    df = pd.DataFrame(np.random.uniform(size=(5, 11))).rename(columns=str)
+    ddf = dd.from_pandas(df, 2)
+
+    result = ddf / ddf.mean(0).compute()
+    expected = df / df.mean(0)
+    assert_eq(result, expected)
