@@ -72,6 +72,24 @@ of important and commonly used datasets beyond a single session.  Published
 datasets continue to reside in distributed memory even after all clients
 requesting them have disconnected.
 
+
+Dictionary interface
+--------------------
+
+Alternatively you can use the ``.datasets`` mapping on the client to publish,
+list, get, and delete global datasets.
+
+.. code-block:: python
+
+   >>> client.datasets['negative_accounts'] = df
+
+   >>> list(client.datasets)
+   ['negative_accounts']
+   >>> df = client.datasets['negative_accounts']
+
+This mapping is globally shared among all clients connected to the same
+scheduler.
+
 Notes
 -----
 

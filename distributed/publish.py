@@ -1,3 +1,4 @@
+from collections import MutableMapping
 from distributed.utils import log_errors
 
 
@@ -45,3 +46,34 @@ class PublishExtension(object):
                 return self.datasets[name]
             else:
                 raise KeyError("Dataset '%s' not found" % name)
+
+
+class Datasets(MutableMapping):
+    """A dict-like wrapper around :class:`Client` dataset methods.
+
+    Parameters
+    ----------
+    client : distributed.client.Client
+
+    """
+    def __init__(self, client):
+        self.__client = client
+
+    def __getitem__(self, key):
+        return self.__client.get_dataset(key)
+
+    def __setitem__(self, key, value):
+        self.__client.publish_dataset(**{key: value})
+
+    def __delitem__(self, key):
+        self.__client.unpublish_dataset(key)
+
+    def __contains__(self, key):
+        return key in self.__client.list_datasets()
+
+    def __iter__(self):
+        for key in self.__client.list_datasets():
+            yield key
+
+    def __len__(self):
+        return len(self.__client.list_datasets())

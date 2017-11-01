@@ -160,3 +160,53 @@ def test_publish_bag(s, a, b):
     assert out == [0, 1, 2]
     yield c.close()
     yield f.close()
+
+
+def test_datasets_setitem(loop):
+    with cluster() as (s, _):
+        with Client(s['address'], loop=loop) as client:
+            key, value = 'key', 'value'
+            client.datasets[key] = value
+            assert client.get_dataset('key') == value
+
+
+def test_datasets_getitem(loop):
+    with cluster() as (s, _):
+        with Client(s['address'], loop=loop) as client:
+            key, value = 'key', 'value'
+            client.publish_dataset(key=value)
+            assert client.datasets[key] == value
+
+
+def test_datasets_delitem(loop):
+    with cluster() as (s, _):
+        with Client(s['address'], loop=loop) as client:
+            key, value = 'key', 'value'
+            client.publish_dataset(key=value)
+            del client.datasets[key]
+            assert key not in client.list_datasets()
+
+
+def test_datasets_keys(loop):
+    with cluster() as (s, _):
+        with Client(s['address'], loop=loop) as client:
+            client.publish_dataset(**{str(n): n for n in range(10)})
+            keys = list(client.datasets.keys())
+            assert keys == [str(n) for n in range(10)]
+
+
+def test_datasets_contains(loop):
+    with cluster() as (s, _):
+        with Client(s['address'], loop=loop) as client:
+            key, value = 'key', 'value'
+            client.publish_dataset(key=value)
+            assert key in client.datasets
+
+
+def test_datasets_iter(loop):
+    with cluster() as (s, _):
+        with Client(s['address'], loop=loop) as client:
+            keys = [n for n in range(10)]
+            client.publish_dataset(**{str(key): key for key in keys})
+            for n, key in enumerate(client.datasets):
+                assert key == str(n)

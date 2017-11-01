@@ -46,6 +46,7 @@ from .metrics import time
 from .node import Node
 from .protocol import to_serialize
 from .protocol.pickle import dumps, loads
+from .publish import Datasets
 from .security import Security
 from .sizeof import sizeof
 from .threadpoolexecutor import rejoin
@@ -472,6 +473,7 @@ class Client(Node):
         self.scheduler = None
         self._lock = threading.Lock()
         self._refcount_lock = threading.Lock()
+        self.datasets = Datasets(self)
 
         if loop is None:
             self._should_close_loop = None
