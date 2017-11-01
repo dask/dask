@@ -564,12 +564,18 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     args = [ar, "i"]
     out_dtype = [("values", ar.dtype)]
     if return_index:
-        args.extend([arange(ar.shape[0], chunks=ar.chunks[0]), "i"])
+        args.extend([
+            arange(ar.shape[0], dtype=np.int64, chunks=ar.chunks[0]),
+            "i"
+        ])
         out_dtype.append(("indices", np.int64))
     else:
         args.extend([None, None])
     if return_counts:
-        args.extend([ones((ar.shape[0],), chunks=ar.chunks[0]), "i"])
+        args.extend([
+            ones((ar.shape[0],), dtype=np.int64, chunks=ar.chunks[0]),
+            "i"
+        ])
         out_dtype.append(("counts", np.int64))
     else:
         args.extend([None, None])
