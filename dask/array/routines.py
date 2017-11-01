@@ -547,7 +547,7 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
     r = np.empty(u.shape, dtype=dt)
     r["values"] = u
     if return_inverse:
-        r["inverse"] = np.arange(len(r))
+        r["inverse"] = np.arange(len(r), dtype=np.int64)
     for i, v in np.ndenumerate(u):
         if return_index:
             r["indices"][i] = indices[ar == v].min()
