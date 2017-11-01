@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import threading
 from time import sleep
 import uuid
 import warnings
@@ -73,24 +74,32 @@ def invalid_python_script(tmpdir_factory):
 
 @pytest.fixture
 def loop():
-    IOLoop.clear_instance()
-    IOLoop.clear_current()
-    loop = IOLoop()
-    loop.make_current()
-    yield loop
-    if loop._running:
-        sync(loop, loop.stop)
-    for i in range(5):
+    with pristine_loop() as loop:
+        yield loop
+        if getattr(loop, '_running', False):
+            # XXX should warn?
+            pass
+        # Stop the loop in case it's still running
         try:
-            loop.close(all_fds=True)
-            IOLoop.clear_instance()
-            break
-        except Exception as e:
-            f = e
-    else:
-        print(f)
-    IOLoop.clear_instance()
-    IOLoop.clear_current()
+            sync(loop, loop.stop)
+        except RuntimeError as e:
+            if not "IO loop is closed" in str(e):
+                raise
+
+
+@pytest.fixture
+def loop_in_thread():
+    with pristine_loop() as loop:
+        thread = threading.Thread(target=loop.start,
+                                  name="test IOLoop")
+        thread.daemon = True
+        thread.start()
+        loop_started = threading.Event()
+        loop.add_callback(loop_started.set)
+        loop_started.wait()
+        yield loop
+        loop.add_callback(loop.stop)
+        thread.join(timeout=5)
 
 
 @pytest.fixture

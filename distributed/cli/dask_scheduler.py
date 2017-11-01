@@ -136,6 +136,9 @@ def main(host, port, http_port, bokeh_port, bokeh_internal_port, show, _bokeh,
 
     logger.info('Local Directory: %26s', local_directory)
     logger.info('-' * 47)
+
+    install_signal_handlers(loop)
+
     try:
         loop.start()
         loop.close()
@@ -148,7 +151,6 @@ def main(host, port, http_port, bokeh_port, bokeh_internal_port, show, _bokeh,
 
 
 def go():
-    install_signal_handlers()
     check_python_3()
     main()
 

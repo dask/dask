@@ -3,16 +3,14 @@ from __future__ import print_function, division, absolute_import
 import atexit
 import logging
 import math
-from threading import Thread
 from time import sleep
 import warnings
 import weakref
 
 from tornado import gen
-from tornado.ioloop import IOLoop
 
 from ..core import CommClosedError
-from ..utils import sync, ignoring, All, silence_logging
+from ..utils import sync, ignoring, All, silence_logging, LoopRunner
 from ..nanny import Nanny
 from ..scheduler import Scheduler
 from ..worker import Worker, _ncores
@@ -84,14 +82,10 @@ class LocalCluster(object):
             # Overcommit threads per worker, rather than undercommit
             threads_per_worker = max(1, int(math.ceil(_ncores / n_workers)))
 
-        self.loop = loop or IOLoop()
-        if start and not self.loop._running:
-            self._thread = Thread(target=self.loop.start,
-                                  name="LocalCluster loop")
-            self._thread.daemon = True
-            self._thread.start()
-            while not self.loop._running:
-                sleep(0.001)
+        self._loop_runner = LoopRunner(loop=loop)
+        self.loop = self._loop_runner.loop
+        if start:
+            self._loop_runner.start()
 
         if diagnostics_port is not None:
             try:
@@ -248,19 +242,8 @@ class LocalCluster(object):
                 break
             else:
                 sleep(0.01)
-        if self.loop._running:
-            sync(self.loop, self._close)
-        if hasattr(self, '_thread'):
-            if self.loop._running:
-                self.loop.add_callback(self.loop.stop)
-            try:
-                self._thread.join(timeout=1)
-            finally:
-                try:
-                    self.loop.close()
-                except ValueError:
-                    pass
-            del self._thread
+        sync(self.loop, self._close)
+        self._loop_runner.stop()
 
     @gen.coroutine
     def scale_up(self, n, **kwargs):

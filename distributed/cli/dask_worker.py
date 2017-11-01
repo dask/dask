@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 import atexit
 import logging
 import os
-import signal
 from sys import exit
 
 import click
@@ -12,7 +11,8 @@ from distributed.utils import get_ip_interface
 from distributed.worker import _ncores
 from distributed.http import HTTPWorker
 from distributed.security import Security
-from distributed.cli.utils import check_python_3, uri_from_host_port
+from distributed.cli.utils import (check_python_3, uri_from_host_port,
+                                   install_signal_handlers)
 from distributed.comm import get_address_host_port
 
 from toolz import valmap
@@ -216,23 +216,13 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
 
     @gen.coroutine
     def close_all():
-        try:
-            if nanny:
-                yield [n._close(timeout=2) for n in nannies]
-        finally:
-            loop.stop()
+        # Unregister all workers from scheduler
+        if nanny:
+            yield [n._close(timeout=2) for n in nannies]
 
-    def handle_signal(signum, frame):
+    def on_signal(signum):
         logger.info("Exiting on signal %d", signum)
-        if loop._running:
-            loop.add_callback_from_signal(loop.stop)
-        else:
-            exit(0)
-
-    # NOTE: We can't use the generic install_signal_handlers() function from
-    # distributed.cli.utils because we're handling the signal differently.
-    signal.signal(signal.SIGINT, handle_signal)
-    signal.signal(signal.SIGTERM, handle_signal)
+        close_all()
 
     @gen.coroutine
     def run():
@@ -240,15 +230,14 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
         while all(n.status != 'closed' for n in nannies):
             yield gen.sleep(0.2)
 
+    install_signal_handlers(loop, cleanup=on_signal)
+
     try:
         loop.run_sync(run)
     except (KeyboardInterrupt, TimeoutError):
         pass
     finally:
         logger.info("End worker")
-
-    # Clean exit: unregister all workers from scheduler
-    loop.run_sync(close_all)
 
 
 def go():

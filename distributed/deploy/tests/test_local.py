@@ -35,7 +35,7 @@ def test_simple(loop):
             assert any(w.data == {x.key: 2} for w in c.workers)
 
 
-def test_close_twice(loop):
+def test_close_twice():
     cluster = LocalCluster()
     with Client(cluster.scheduler_address) as client:
         f = client.map(inc, range(100))
@@ -50,12 +50,12 @@ def test_close_twice(loop):
 
 
 @pytest.mark.skipif('sys.version_info[0] == 2', reason='multi-loop')
-def test_procs(loop):
+def test_procs():
     with LocalCluster(2, scheduler_port=0, processes=False, threads_per_worker=3,
                       diagnostics_port=None, silence_logs=False) as c:
         assert len(c.workers) == 2
         assert all(isinstance(w, Worker) for w in c.workers)
-        with Client(c.scheduler.address, loop=loop) as e:
+        with Client(c.scheduler.address) as e:
             assert all(w.ncores == 3 for w in c.workers)
             assert all(isinstance(w, Worker) for w in c.workers)
         repr(c)
@@ -64,7 +64,7 @@ def test_procs(loop):
                       diagnostics_port=None, silence_logs=False) as c:
         assert len(c.workers) == 2
         assert all(isinstance(w, Nanny) for w in c.workers)
-        with Client(c.scheduler.address, loop=loop) as e:
+        with Client(c.scheduler.address) as e:
             assert all(v == 3 for v in e.ncores().values())
 
             c.start_worker()

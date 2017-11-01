@@ -223,6 +223,9 @@ def sync(loop, func, *args, **kwargs):
             return loop.run_sync(make_coro)
         except RuntimeError:  # loop already running
             pass
+        except TypeError:
+            # TypeError: object of type 'NoneType' has no len()
+            raise RuntimeError("IO loop is closed")
 
     e = threading.Event()
     main_tid = get_thread_identity()
@@ -251,6 +254,109 @@ def sync(loop, func, *args, **kwargs):
         six.reraise(*error[0])
     else:
         return result[0]
+
+
+class LoopRunner(object):
+    """
+    A helper to start and stop an IO loop.
+
+    Parameters
+    ----------
+    loop: IOLoop (optional)
+        If given, this loop will be re-used, otherwise an appropriate one
+        will be looked up or created.
+    asynchronous: boolean (optional, default False)
+        If false (the default), the loop is meant to run in a separate
+        thread and will be started if necessary.
+        If true, the loop is meant to run in the thread this
+        object is instantiated from, and will not be started automatically.
+    """
+    def __init__(self, loop=None, asynchronous=False):
+        if loop is None:
+            if asynchronous:
+                self._loop = IOLoop.current()
+            else:
+                # We're expecting the loop to run in another thread,
+                # avoid re-using this thread's assigned loop
+                self._loop = IOLoop()
+            self._should_close_loop = True
+        else:
+            self._loop = loop
+            self._should_close_loop = False
+        self._asynchronous = asynchronous
+        self._loop_thread = None
+        self._started = False
+
+    def start(self):
+        """
+        Start the IO loop if required.  The loop is run in a dedicated
+        thread.
+
+        If the loop is already running, this method does nothing.
+        """
+        if self._asynchronous or self._loop_thread is not None:
+            self._started = True
+            return
+
+        loop_evt = threading.Event()
+        done_evt = threading.Event()
+        in_thread = [None]
+        start_exc = [None]
+
+        def loop_cb():
+            in_thread[0] = threading.current_thread()
+            loop_evt.set()
+
+        def run_loop(loop=self._loop):
+            loop.add_callback(loop_cb)
+            try:
+                loop.start()
+            except Exception as e:
+                start_exc[0] = e
+            finally:
+                done_evt.set()
+
+        thread = threading.Thread(target=run_loop,
+                                  name="IO loop")
+        thread.daemon = True
+        thread.start()
+
+        loop_evt.wait(timeout=1000)
+        self._started = True
+
+        actual_thread = in_thread[0]
+        if actual_thread is not thread:
+            # Loop already running in other thread (user-launched)
+            done_evt.wait(5)
+            if not isinstance(start_exc[0], RuntimeError):
+                raise start_exc[0]
+        else:
+            assert start_exc[0] is None, start_exc
+            self._loop_thread = thread
+
+    def stop(self, timeout=10):
+        """
+        Stop and close the loop if it was created by us.
+        Otherwise, just mark this object "stopped".
+        """
+        self._started = False
+        if self._loop_thread is not None:
+            try:
+                self._loop.add_callback(self._loop.stop)
+                self._loop_thread.join(timeout=timeout)
+                self._loop.close()
+            finally:
+                self._loop_thread = None
+
+    def is_started(self):
+        """
+        Return True between start() and stop() calls, False otherwise.
+        """
+        return self._started
+
+    @property
+    def loop(self):
+        return self._loop
 
 
 @contextmanager

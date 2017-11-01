@@ -53,7 +53,7 @@ from .threadpoolexecutor import rejoin
 from .worker import dumps_task, get_client, get_worker, secede
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator,
                     tokey, log_errors, str_graph, key_split, format_bytes, asciitable,
-                    thread_state, no_default, PeriodicCallback)
+                    thread_state, no_default, PeriodicCallback, LoopRunner)
 from .versions import get_versions
 
 
@@ -469,21 +469,13 @@ class Client(Node):
         self.connection_args = self.security.get_connection_args('client')
         self._connecting_to_scheduler = False
         self._asynchronous = asynchronous
-        self._loop_thread = None
         self.scheduler = None
         self._lock = threading.Lock()
         self._refcount_lock = threading.Lock()
         self.datasets = Datasets(self)
 
-        if loop is None:
-            self._should_close_loop = None
-            if asynchronous:
-                self.loop = IOLoop.current()
-            else:
-                self.loop = IOLoop()
-        else:
-            self._should_close_loop = False
-            self.loop = loop
+        self._loop_runner = LoopRunner(loop=loop, asynchronous=asynchronous)
+        self.loop = self._loop_runner.loop
 
         if hasattr(address, "scheduler_address"):
             # It's a LocalCluster or LocalCluster-compatible object
@@ -561,7 +553,7 @@ class Client(Node):
             return sync(self.loop, func, *args, **kwargs)
 
     def __str__(self):
-        if self._loop_thread is not None:
+        if self._loop_runner.is_started():
             n = sync(self.loop, self.scheduler.ncores)
             return '<%s: scheduler=%r processes=%d cores=%d>' % (
                 self.__class__.__name__,
@@ -575,7 +567,7 @@ class Client(Node):
     __repr__ = __str__
 
     def _repr_html_(self):
-        if self._loop_thread is not None:
+        if self._loop_runner.is_started():
             info = sync(self.loop, self.scheduler.identity)
         else:
             info = False
@@ -623,18 +615,10 @@ class Client(Node):
 
     def start(self, **kwargs):
         """ Start scheduler running in separate thread """
-        if self._loop_thread is not None:
+        if self.status != 'newly-created':
             return
 
-        if not self.asynchronous and not self.loop._running:
-            self._loop_thread = threading.Thread(target=self.loop.start,
-                                                 name="Client loop")
-            self._loop_thread.daemon = True
-            self._loop_thread.start()
-            if self._should_close_loop is None:
-                self._should_close_loop = True
-            while not self.loop._running:
-                sleep(0.001)
+        self._loop_runner.start()
 
         pc = PeriodicCallback(lambda: None, 1000)
         self.loop.add_callback(pc.start)
@@ -776,7 +760,7 @@ class Client(Node):
         logger.debug("Started scheduling coroutines. Synchronized")
 
     def __enter__(self):
-        if not self.loop._running:
+        if not self._loop_runner.is_started():
             self.start()
         return self
 
@@ -967,13 +951,8 @@ class Client(Node):
         sync(self.loop, self._close, fast=True)
         assert self.status == 'closed'
 
-        if self._should_close_loop:
-            self.loop.add_callback(self.loop.stop)
-            try:
-                self._loop_thread.join(timeout=timeout)
-            finally:
-                self.loop.close()
-        self._loop_thread = None
+        self._loop_runner.stop()
+
         with ignoring(AttributeError):
             dask.set_options(get=self._previous_get)
         with ignoring(AttributeError):

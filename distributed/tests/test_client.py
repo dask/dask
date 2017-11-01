@@ -45,7 +45,7 @@ from distributed.utils_test import (cluster, slow, slowinc, slowadd, slowdec,
                                     randominc, inc, dec, div, throws, geninc, asyncinc,
                                     gen_cluster, gen_test, double, deep, popen,
                                     captured_logger)
-from distributed.utils_test import loop # flake8: noqa
+from distributed.utils_test import loop, loop_in_thread  # flake8: noqa
 
 
 @gen_cluster(client=True, timeout=None)
@@ -930,14 +930,14 @@ def test_get_releases_data(c, s, a, b):
     assert c.refcount['x'] == 0
 
 
-def test_Current(loop):
+def test_Current():
     with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            Client.current() is c
+        with Client(s['address']) as c:
+            assert Client.current() is c
         with pytest.raises(ValueError):
             Client.current()
-        with Client(s['address'], loop=loop) as c:
-            Client.current() is c
+        with Client(s['address']) as c:
+            assert Client.current() is c
 
 
 def test_global_clients(loop):
@@ -2674,7 +2674,7 @@ def test_startup_close_startup_sync(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             sleep(0.1)
-        with Client(s['address'], loop=loop) as c:
+        with Client(s['address']) as c:
             pass
         with Client(s['address']) as c:
             pass
@@ -3088,33 +3088,33 @@ def test_cancel_clears_processing(c, s, *workers):
     s.validate_state()
 
 
-def test_default_get(loop):
+def test_default_get():
     with cluster() as (s, [a, b]):
         pre_get = _globals.get('get')
         pre_shuffle = _globals.get('shuffle')
-        with Client(s['address'], loop=loop, set_as_default=True) as c:
+        with Client(s['address'], set_as_default=True) as c:
             assert _globals['get'] == c.get
             assert _globals['shuffle'] == 'tasks'
 
         assert _globals['get'] is pre_get
         assert _globals['shuffle'] == pre_shuffle
 
-        c = Client(s['address'], loop=loop, set_as_default=False)
+        c = Client(s['address'], set_as_default=False)
         assert _globals['get'] is pre_get
         assert _globals['shuffle'] == pre_shuffle
         c.close()
 
-        c = Client(s['address'], loop=loop, set_as_default=True)
+        c = Client(s['address'], set_as_default=True)
         assert _globals['shuffle'] == 'tasks'
         assert _globals['get'] == c.get
         c.close()
         assert _globals['get'] is pre_get
         assert _globals['shuffle'] == pre_shuffle
 
-        with Client(s['address'], loop=loop) as c:
+        with Client(s['address']) as c:
             assert _globals['get'] == c.get
 
-        with Client(s['address'], loop=loop, set_as_default=False) as c:
+        with Client(s['address'], set_as_default=False) as c:
             assert _globals['get'] != c.get
             dask.set_options(get=c.get)
             assert _globals['get'] == c.get
@@ -3404,8 +3404,8 @@ def test_reconnect(loop):
         assert time() < start + 5
         sleep(0.1)
 
-    c.close()
     sync(loop, w._close)
+    c.close()
 
 
 # On Python 2, heavy process spawning can deadlock (e.g. on a logging IO lock)
@@ -4633,15 +4633,10 @@ def test_use_synchronous_client_in_async_context(loop):
             assert z == 124
 
 
-def test_quiet_quit_when_cluster_leaves(loop):
+def test_quiet_quit_when_cluster_leaves(loop_in_thread):
     from distributed import LocalCluster
-    thread = Thread(target=loop.start,
-                    name="LocalCluster loop")
-    thread.daemon = True
-    thread.start()
-    while not loop._running:
-        sleep(0.001)
 
+    loop = loop_in_thread
     cluster = LocalCluster(loop=loop, scheduler_port=0, diagnostics_port=None,
                            silence_logs=False)
     with captured_logger('distributed.comm') as sio:
@@ -4653,9 +4648,6 @@ def test_quiet_quit_when_cluster_leaves(loop):
 
     text = sio.getvalue()
     assert not text
-
-    loop.add_callback(loop.stop)
-    thread.join(timeout=1)
 
 
 def test_warn_executor(loop):

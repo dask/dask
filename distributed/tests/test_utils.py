@@ -13,18 +13,19 @@ import traceback
 import numpy as np
 import pytest
 from tornado import gen
+from tornado.ioloop import IOLoop
 from tornado.locks import Event
 
 import dask
-from distributed.compatibility import Queue, isqueue, PY2
+from distributed.compatibility import Queue, Empty, isqueue, PY2
 from distributed.metrics import time
 from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
                                truncate_exception, get_traceback, queue_to_iterator,
                                iterator_to_queue, _maybe_complex, read_block, seek_delimiter,
                                funcname, ensure_bytes, open_port, get_ip_interface, nbytes,
-                               set_thread_state, thread_state)
-from distributed.utils_test import loop # flake8: noqa
-from distributed.utils_test import div, has_ipv6, inc, throws
+                               set_thread_state, thread_state, LoopRunner)
+from distributed.utils_test import loop, loop_in_thread  # flake8: noqa
+from distributed.utils_test import div, has_ipv6, inc, throws, gen_test
 
 
 def test_All(loop):
@@ -59,40 +60,14 @@ def test_All(loop):
     loop.run_sync(f)
 
 
-def test_sync(loop):
-    e = Event()
-    e2 = threading.Event()
-
-    @gen.coroutine
-    def wait_until_event():
-        e2.set()
-        yield e.wait()
-
-    thread = Thread(target=loop.run_sync, args=(wait_until_event,))
-    thread.daemon = True
-    thread.start()
-
-    e2.wait()
+def test_sync(loop_in_thread):
+    loop = loop_in_thread
     result = sync(loop, inc, 1)
     assert result == 2
 
-    loop.add_callback(e.set)
-    thread.join()
 
-
-def test_sync_error(loop):
-    e = Event()
-
-    @gen.coroutine
-    def wait_until_event():
-        yield e.wait()
-
-    thread = Thread(target=loop.run_sync, args=(wait_until_event,))
-    thread.daemon = True
-    thread.start()
-    while not loop._running:
-        sleep(0.01)
-
+def test_sync_error(loop_in_thread):
+    loop = loop_in_thread
     try:
         result = sync(loop, throws, 1)
     except Exception as exc:
@@ -117,9 +92,6 @@ def test_sync_error(loop):
         assert any('function1' in line for line in L)
         assert any('function2' in line for line in L)
 
-    loop.add_callback(e.set)
-    thread.join()
-
 
 def test_sync_inactive_loop(loop):
     @gen.coroutine
@@ -130,24 +102,21 @@ def test_sync_inactive_loop(loop):
     assert y == 2
 
 
-def test_sync_timeout(loop):
-    e = Event()
-
-    @gen.coroutine
-    def wait_until_event():
-        yield e.wait()
-
-    thread = Thread(target=loop.run_sync, args=(wait_until_event,))
-    thread.daemon = True
-    thread.start()
-    while not loop._running:
-        sleep(0.01)
-
+def test_sync_timeout(loop_in_thread):
+    loop = loop_in_thread
     with pytest.raises(gen.TimeoutError):
-        sync(loop, gen.sleep, 0.5, callback_timeout=0.05)
+        sync(loop_in_thread, gen.sleep, 0.5, callback_timeout=0.05)
 
-    loop.add_callback(e.set)
-    thread.join()
+
+def test_sync_closed_loop():
+    loop = IOLoop.current()
+    loop.close()
+    IOLoop.clear_current()
+    IOLoop.clear_instance()
+
+    with pytest.raises(RuntimeError) as exc_info:
+        sync(loop, inc, 1)
+    exc_info.match("IO loop is closed")
 
 
 def test_is_kernel():
@@ -357,3 +326,102 @@ def test_set_thread_state():
         assert thread_state.x == 1
 
     assert not hasattr(thread_state, 'x')
+
+
+def assert_running(loop):
+    """
+    Raise if the given IOLoop is not running.
+    """
+    q = Queue()
+    loop.add_callback(q.put, 42)
+    assert q.get(timeout=1) == 42
+
+def assert_not_running(loop):
+    """
+    Raise if the given IOLoop is running.
+    """
+    q = Queue()
+    loop.add_callback(q.put, 42)
+    with pytest.raises(Empty):
+        q.get(timeout=0.02)
+
+
+def test_loop_runner(loop_in_thread):
+    # Implicit loop
+    loop = IOLoop()
+    loop.make_current()
+    runner = LoopRunner()
+    assert runner.loop not in (loop, loop_in_thread)
+    assert not runner.is_started()
+    assert_not_running(runner.loop)
+    runner.start()
+    assert runner.is_started()
+    assert_running(runner.loop)
+    runner.stop()
+    assert not runner.is_started()
+    assert_not_running(runner.loop)
+
+    # Explicit loop
+    loop = IOLoop()
+    runner = LoopRunner(loop=loop)
+    assert runner.loop is loop
+    assert not runner.is_started()
+    assert_not_running(loop)
+    runner.start()
+    assert runner.is_started()
+    assert_running(loop)
+    runner.stop()
+    assert not runner.is_started()
+    assert_not_running(loop)
+
+    # Explicit loop, already started
+    runner = LoopRunner(loop=loop_in_thread)
+    assert not runner.is_started()
+    assert_running(loop_in_thread)
+    runner.start()
+    assert runner.is_started()
+    assert_running(loop_in_thread)
+    runner.stop()
+    assert not runner.is_started()
+    assert_running(loop_in_thread)
+
+    # Implicit loop, asynchronous=True
+    loop = IOLoop()
+    loop.make_current()
+    runner = LoopRunner(asynchronous=True)
+    assert runner.loop is loop
+    assert not runner.is_started()
+    assert_not_running(runner.loop)
+    runner.start()
+    assert runner.is_started()
+    assert_not_running(runner.loop)
+    runner.stop()
+    assert not runner.is_started()
+    assert_not_running(runner.loop)
+
+    # Explicit loop, asynchronous=True
+    loop = IOLoop()
+    runner = LoopRunner(loop=loop, asynchronous=True)
+    assert runner.loop is loop
+    assert not runner.is_started()
+    assert_not_running(runner.loop)
+    runner.start()
+    assert runner.is_started()
+    assert_not_running(runner.loop)
+    runner.stop()
+    assert not runner.is_started()
+    assert_not_running(runner.loop)
+
+
+@gen_test()
+def test_loop_runner_gen():
+    runner = LoopRunner(asynchronous=True)
+    assert runner.loop is IOLoop.current()
+    assert not runner.is_started()
+    yield gen.sleep(0.01)
+    runner.start()
+    assert runner.is_started()
+    yield gen.sleep(0.01)
+    runner.stop()
+    assert not runner.is_started()
+    yield gen.sleep(0.01)
