@@ -764,7 +764,7 @@ def test_aggregate__dask():
         'sum', 'mean', 'min', 'max', 'count', 'std', 'var',
 
         # NOTE: the 'size' spec is special since it bypasses aggregate
-        #'size'
+        # 'size'
     ]
 
     pdf = pd.DataFrame({'a': [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
@@ -781,19 +781,12 @@ def test_aggregate__dask():
         agg_dask1 = get_agg_dask(result1)
         agg_dask2 = get_agg_dask(result2)
 
-        core_agg_dask1 = {k: v for (k, v) in agg_dask1.dask.items()
-                          if not k[0].startswith('aggregate-finalize')}
-
-        core_agg_dask2 = {k: v for (k, v) in agg_dask2.dask.items()
-                          if not k[0].startswith('aggregate-finalize')}
-
-        # check that the number of paritions used is fixed by split_every
+        # check that the number of partitions used is fixed by split_every
         assert_max_deps(agg_dask1, 2)
         assert_max_deps(agg_dask2, 2)
 
-        # check for deterministic key names
-        # not finalize passes the meta object, which cannot tested with ==
-        assert core_agg_dask1 == core_agg_dask2
+        # check for deterministic key names and values
+        assert agg_dask1 == agg_dask2
 
         # the length of the dask does not depend on the passed spec
         for other_spec in specs:
@@ -1306,3 +1299,40 @@ def test_groupby_agg_custom__name_clash_with_internal_different_column():
     expected = d.groupby('g').aggregate({'b': 'mean', 'c': 'sum'})
 
     assert_eq(result, expected, check_dtype=False)
+
+
+def test_groupby_agg_custom__mode():
+    # mode function passing intermediates as pure python objects around. to protect
+    # results from pandas in apply use return results as single-item lists
+    def agg_mode(s):
+        def impl(s):
+            res, = s.iloc[0]
+
+            for i, in s.iloc[1:]:
+                res = res.add(i, fill_value=0)
+
+            return [res]
+
+        return s.apply(impl)
+
+    agg_func = dd.Aggregation(
+        'custom_mode',
+        lambda s: s.apply(lambda s: [s.value_counts()]),
+        agg_mode,
+        lambda s: s.map(lambda i: i[0].argmax()),
+    )
+
+    d = pd.DataFrame({
+        'g0': [0, 0, 0, 1, 1] * 3,
+        'g1': [0, 0, 0, 1, 1] * 3,
+        'cc': [4, 5, 4, 6, 6] * 3,
+    })
+    a = dd.from_pandas(d, npartitions=5)
+
+    actual = a['cc'].groupby([a['g0'], a['g1']]).agg(agg_func)
+
+    # cheat to get the correct index
+    expected = pd.DataFrame({'g0': [0, 1], 'g1': [0, 1], 'cc': [4, 6]})
+    expected = expected['cc'].groupby([expected['g0'], expected['g1']]).agg('sum')
+
+    assert_eq(actual, expected)

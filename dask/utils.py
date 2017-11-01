@@ -714,6 +714,9 @@ class itemgetter(object):
     def __reduce__(self):
         return (itemgetter, (self.index,))
 
+    def __eq__(self, other):
+        return type(self) is type(other) and self.index == other.index
+
 
 class MethodCache(object):
     """Attribute access on this object returns a methodcaller for that
