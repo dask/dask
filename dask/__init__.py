@@ -8,7 +8,7 @@ try:
 except ImportError:
     pass
 try:
-    from .base import visualize, compute, persist, thread_state
+    from .base import visualize, compute, persist, thread_state, is_dask_collection
 except ImportError:
     pass
 

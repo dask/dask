@@ -34,7 +34,7 @@ def is_dask_collection(x):
     """Returns ``True`` if ``x`` is a dask collection"""
     try:
         return x.__dask_graph__() is not None
-    except AttributeError:
+    except (AttributeError, TypeError):
         return False
 
 
