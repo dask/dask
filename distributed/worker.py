@@ -203,6 +203,7 @@ class WorkerBase(ServerNode):
         pc = PeriodicCallback(self.memory_monitor,
                               self.memory_monitor_interval)
         self.periodic_callbacks['memory'] = pc
+        self._throttled_gc = ThrottledGC(logger=logger)
 
     @property
     def worker_address(self):
@@ -1101,7 +1102,6 @@ class Worker(WorkerBase):
 
         self.log = deque(maxlen=100000)
         self.validate = kwargs.pop('validate', False)
-        self.gc = ThrottledGC(logger=logger)
 
         self._transitions = {
             ('waiting', 'ready'): self.transition_waiting_ready,
@@ -2201,6 +2201,8 @@ class Worker(WorkerBase):
 
         # Pause worker threads if above 80% memory use
         if self.memory_pause_fraction and frac > self.memory_pause_fraction:
+            # Try to free some memory while in paused state
+            self._throttled_gc.collect()
             if not self.paused:
                 logger.warn("Worker is at %d%% memory usage. Pausing worker.  "
                             "Process memory: %s -- Worker memory limit: %s",
@@ -2241,7 +2243,7 @@ class Worker(WorkerBase):
                     # Issue a GC to ensure that the evicted data is actually
                     # freed from memory and taken into account by the monitor
                     # before trying to evict even more data.
-                    self.gc.collect()
+                    self._throttled_gc.collect()
                     memory = proc.memory_info().rss
             if count:
                 logger.debug("Moved %d pieces of data data and %s to disk",
