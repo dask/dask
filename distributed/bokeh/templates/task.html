@@ -12,6 +12,10 @@
               <th> processing on </th>
               <td> {{ rprocessing.get(Task) }} </td>
           </tr>
+          <tr>
+              <th> call stack </th>
+              <td><a class="button is-primary" href="/info/call-stack/{{ url_escape(Task) }}.html">Call Stack</a></td>
+          </tr>
           {% end %}
           {% if Task in nbytes %}
           <tr>

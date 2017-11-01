@@ -229,7 +229,7 @@ def test_shutdown(loop):
             t1 = time.time()
             e.shutdown(wait=False)
             dt = time.time() - t1
-            assert dt < 0.3
+            assert dt < 0.5
             time.sleep(0.1)  # wait for future outcome to propagate
             assert fut.cancelled()
 

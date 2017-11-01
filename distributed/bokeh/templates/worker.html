@@ -19,6 +19,7 @@
       <div class="column">
         <div class="content">
           <h2 class="subtitle"> Processing </h2>
+          <a class="button is-primary" href="/info/call-stacks/{{ url_escape(worker) }}.html">Call Stacks</a>
           <ul>
             {% for task in processing[Worker] %}
             <li> <a href="/info/task/{{ url_escape(task) }}.html">{{task}}</a></li>

@@ -66,11 +66,38 @@ class WorkerLogs(RequestHandler):
             self.render('logs.html', title="Logs: " + worker, logs=logs)
 
 
+class WorkerCallStacks(RequestHandler):
+    @gen.coroutine
+    def get(self, worker):
+        with log_errors():
+            worker = escape.url_unescape(worker)
+            keys = self.server.processing[worker]
+            call_stack = yield self.server.get_call_stack(keys=keys)
+            self.render('call-stack.html', title="Call Stacks: " + worker,
+                        call_stack=call_stack)
+
+
+class TaskCallStack(RequestHandler):
+    @gen.coroutine
+    def get(self, key):
+        with log_errors():
+            key = escape.url_unescape(key)
+            call_stack = yield self.server.get_call_stack(keys=[key])
+            if not call_stack:
+                self.write("<p>Task not actively running. "
+                           "It may be finished or not yet started</p>")
+            else:
+                self.render('call-stack.html', title="Call Stack: " + key,
+                            call_stack=call_stack)
+
+
 def get_handlers(server):
     return [
             (r'/info/workers.html', Workers, {'server': server}),
             (r'/info/worker/(.*).html', Worker, {'server': server}),
             (r'/info/task/(.*).html', Task, {'server': server}),
             (r'/info/logs.html', Logs, {'server': server}),
+            (r'/info/call-stacks/(.*).html', WorkerCallStacks, {'server': server}),
+            (r'/info/call-stack/(.*).html', TaskCallStack, {'server': server}),
             (r'/info/logs/(.*).html', WorkerLogs, {'server': server}),
     ]
