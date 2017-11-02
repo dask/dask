@@ -550,11 +550,18 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
         r["inverse"] = np.arange(len(r), dtype=np.int64)
     if return_index or return_counts:
         m_ar = (r["values"][:, None] == ar[None, :])
-        for i, m in enumerate(m_ar):
-            if return_index:
-                indices[m].min(keepdims=True, out=r["indices"][i:i + 1])
-            if return_counts:
-                counts[m].sum(keepdims=True, out=r["counts"][i:i + 1])
+        if return_index:
+            np.where(
+                m_ar,
+                indices[None, :],
+                np.iinfo(r.dtype["indices"]).max
+            ).min(axis=1, out=r["indices"])
+        if return_counts:
+            np.where(
+                m_ar,
+                counts[None, :],
+                0
+            ).sum(axis=1, out=r["counts"])
 
     return r
 
