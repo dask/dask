@@ -102,6 +102,7 @@ class Workers(RequestHandler):
 
 
 def HTTPScheduler(scheduler, **kwargs):
+    kwargs.pop('io_loop', None)  # not supported on Tornado 5
     application = MyApp(web.Application([
         (r'/info.json', Info, {'server': scheduler}),
         (r'/resources.json', Resources, {'server': scheduler}),

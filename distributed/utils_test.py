@@ -8,6 +8,7 @@ import inspect
 import logging
 import logging.config
 import os
+import re
 import shutil
 import signal
 import socket
@@ -76,14 +77,11 @@ def invalid_python_script(tmpdir_factory):
 def loop():
     with pristine_loop() as loop:
         yield loop
-        if getattr(loop, '_running', False):
-            # XXX should warn?
-            pass
         # Stop the loop in case it's still running
         try:
             sync(loop, loop.stop)
         except RuntimeError as e:
-            if not "IO loop is closed" in str(e):
+            if not re.match("IOLoop is clos(ed|ing)", str(e)):
                 raise
 
 
@@ -116,6 +114,7 @@ def pristine_loop():
     IOLoop.clear_current()
     loop = IOLoop()
     loop.make_current()
+    assert IOLoop.current() is loop
     try:
         yield loop
     finally:

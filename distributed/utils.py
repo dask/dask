@@ -205,6 +205,22 @@ def All(*args):
     raise gen.Return(results)
 
 
+def is_loop_running(loop):
+    """
+    Return whether an IOLoop is running.
+    """
+    # Tornado < 5.0
+    r = getattr(loop, '_running', None)
+    if r is not None:
+        return r
+    try:
+        # Tornado 5.0 with AsyncIOLoop (default setting)
+        return loop.asyncio_loop.is_running()
+    except AttributeError:
+        raise TypeError("don't know how to query the running state of %s"
+                        % (type(loop),))
+
+
 def sync(loop, func, *args, **kwargs):
     """
     Run coroutine in loop running in separate thread.
@@ -218,14 +234,14 @@ def sync(loop, func, *args, **kwargs):
         else:
             return gen.with_timeout(timedelta(seconds=timeout), coro)
 
-    if not loop._running:
+    if not is_loop_running(loop):
         try:
             return loop.run_sync(make_coro)
         except RuntimeError:  # loop already running
             pass
         except TypeError:
             # TypeError: object of type 'NoneType' has no len()
-            raise RuntimeError("IO loop is closed")
+            raise RuntimeError("IOLoop is closed")
 
     e = threading.Event()
     main_tid = get_thread_identity()
@@ -1168,3 +1184,30 @@ class ThrottledGC(object):
             self.logger.debug("gc.collect() lasts %0.3fs but only %0.3fs "
                               "elapsed since last call: throttling.",
                               self.last_gc_duration, elapsed)
+
+
+def fix_asyncio_event_loop_policy(asyncio):
+    """
+    Work around https://github.com/tornadoweb/tornado/issues/2183
+    """
+    class PatchedDefaultEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
+
+        def get_event_loop(self):
+            """Get the event loop.
+
+            This may be None or an instance of EventLoop.
+            """
+            try:
+                return super().get_event_loop()
+            except RuntimeError:
+                # "There is no current event loop in thread"
+                loop = self.new_event_loop()
+                self.set_event_loop(loop)
+                return loop
+
+    asyncio.set_event_loop_policy(PatchedDefaultEventLoopPolicy())
+
+
+# Only bother if asyncio has been loaded by Tornado
+if 'asyncio' in sys.modules:
+    fix_asyncio_event_loop_policy(sys.modules['asyncio'])

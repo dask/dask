@@ -532,13 +532,7 @@ class Client(Node):
         though the client was originally created in asynchronous mode we may
         find ourselves in contexts when it is better to operate synchronously.
         """
-        result = self._asynchronous
-        try:
-            if self.loop._thread_ident and get_thread_identity() != self.loop._thread_ident:
-                result = False
-        except AttributeError:  # AsyncIOLoop doesn't have _thread_ident
-            pass
-        return result
+        return self._asynchronous and self.loop is IOLoop.current()
 
     def sync(self, func, *args, **kwargs):
         asynchronous = kwargs.pop('asynchronous', None)

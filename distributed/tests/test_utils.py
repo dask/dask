@@ -116,7 +116,7 @@ def test_sync_closed_loop():
 
     with pytest.raises(RuntimeError) as exc_info:
         sync(loop, inc, 1)
-    exc_info.match("IO loop is closed")
+    exc_info.match("IOLoop is clos(ed|ing)")
 
 
 def test_is_kernel():
@@ -341,9 +341,14 @@ def assert_not_running(loop):
     Raise if the given IOLoop is running.
     """
     q = Queue()
-    loop.add_callback(q.put, 42)
-    with pytest.raises(Empty):
-        q.get(timeout=0.02)
+    try:
+        loop.add_callback(q.put, 42)
+    except RuntimeError:
+        # On AsyncIOLoop, can't add_callback() after the loop is closed
+        pass
+    else:
+        with pytest.raises(Empty):
+            q.get(timeout=0.02)
 
 
 def test_loop_runner(loop_in_thread):

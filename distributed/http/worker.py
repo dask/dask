@@ -59,6 +59,7 @@ class LocalFiles(RequestHandler):
 
 
 def HTTPWorker(worker, **kwargs):
+    kwargs.pop('io_loop', None)  # not supported on Tornado 5
     application = MyApp(web.Application([
         (r'/info.json', Info, {'server': worker}),
         (r'/processing.json', Processing, {'server': worker}),

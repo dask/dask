@@ -2521,7 +2521,7 @@ class Worker(WorkerBase):
 
         if not self._client:
             from .client import Client
-            asynchronous = get_thread_identity() == self.loop._thread_ident
+            asynchronous = self.loop is IOLoop.current()
             self._client = Client(self.scheduler.address, loop=self.loop,
                                   security=self.security,
                                   set_as_default=True,
