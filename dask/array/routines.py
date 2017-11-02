@@ -680,6 +680,12 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     if return_index:
         result.append(out["indices"])
     if return_inverse:
+        # Using the returned unique values and arange of unknown length, find
+        # each value matching a unique value and replace it with its
+        # corresponding index or `0`. There should be only one entry for this
+        # index in axis `1` (the one of unknown length). Reduce axis `1`
+        # through summing to get an array with known dimensionality and the
+        # mapping of the original values.
         mtches = (ar[:, None] == out["values"][None, :]).astype(np.int64)
         result.append((mtches * out["inverse"]).sum(axis=1))
     if return_counts:
