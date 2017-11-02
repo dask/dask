@@ -625,6 +625,12 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     )
     out._chunks = tuple((np.nan,) * len(c) for c in out.chunks)
 
+    # Take the results from the unique chunks and do the following.
+    #
+    # 1. Collect all results as arguments.
+    # 2. Concatenate each result into one big array.
+    # 3. Pass all results as arguments to the internal unique again.
+
     out_parts = [out["values"]]
     if return_index:
         out_parts.append(out["indices"])
