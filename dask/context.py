@@ -3,11 +3,15 @@ Control global computation context
 """
 from __future__ import absolute_import, division, print_function
 
+import threading
 from functools import partial
 from collections import defaultdict
 
 _globals = defaultdict(lambda: None)
 _globals['callbacks'] = set()
+
+
+thread_state = threading.local()
 
 
 class set_options(object):

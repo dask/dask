@@ -15,7 +15,7 @@ from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
 from .compatibility import long, unicode
-from .context import _globals
+from .context import _globals, thread_state
 from .core import flatten
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict
@@ -25,9 +25,6 @@ __all__ = ("DaskMethodsMixin",
            "is_dask_collection",
            "compute", "persist", "visualize",
            "tokenize", "normalize_token")
-
-
-thread_state = threading.local()
 
 
 def is_dask_collection(x):
