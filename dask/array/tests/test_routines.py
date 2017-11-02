@@ -497,6 +497,10 @@ def test_unique_kwargs(return_index, return_inverse, return_counts):
 
     assert len(r_a) == len(r_d)
 
+    if return_inverse:
+        i = 1 + int(return_index)
+        assert (d.size,) == r_d[i].shape
+
     for e_r_a, e_r_d in zip(r_a, r_d):
         assert_eq(e_r_d, e_r_a)
 
@@ -527,6 +531,8 @@ def test_unique_rand(seed, low, high, shape, chunks):
     r_d = da.unique(d, **kwargs)
 
     assert len(r_a) == len(r_d)
+
+    assert (d.size,) == r_d[2].shape
 
     for e_r_a, e_r_d in zip(r_a, r_d):
         assert_eq(e_r_d, e_r_a)
