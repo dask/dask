@@ -548,11 +548,13 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
     r["values"] = u
     if return_inverse:
         r["inverse"] = np.arange(len(r), dtype=np.int64)
-    for i, v in np.ndenumerate(r["values"]):
-        if return_index:
-            r["indices"][i] = indices[ar == v].min()
-        if return_counts:
-            r["counts"][i] = counts[ar == v].sum()
+    if return_index or return_counts:
+        for i, v in enumerate(r["values"]):
+            m = (ar == v)
+            if return_index:
+                indices[m].min(keepdims=True, out=r["indices"][i:i + 1])
+            if return_counts:
+                counts[m].sum(keepdims=True, out=r["counts"][i:i + 1])
 
     return r
 
