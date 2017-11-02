@@ -674,6 +674,8 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
         out_dtype
     )
 
+    # Split out all results to return to the user.
+
     result = [out["values"]]
     if return_index:
         result.append(out["indices"])
