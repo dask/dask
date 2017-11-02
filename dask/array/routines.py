@@ -595,6 +595,9 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
 def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     ar = ar.ravel()
 
+    # Run unique on each chunk and collect results in a Dask Array of
+    # unknown size.
+
     args = [ar, "i"]
     out_dtype = [("values", ar.dtype)]
     if return_index:
