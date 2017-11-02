@@ -44,7 +44,7 @@ from .metrics import time
 
 
 try:
-    from dask import thread_state
+    from dask.context import thread_state
 except ImportError:
     thread_state = threading.local()
 
