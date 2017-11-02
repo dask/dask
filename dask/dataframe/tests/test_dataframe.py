@@ -2763,3 +2763,14 @@ def test_better_errors_object_reductions():
     with pytest.raises(ValueError) as err:
         ds.mean()
     assert str(err.value) == "`mean` not supported with object series"
+
+
+def test_sample_empty_partitions():
+    @dask.delayed
+    def make_df(n):
+        return pd.DataFrame(np.zeros((n, 4)), columns=list('abcd'))
+    ddf = dd.from_delayed([make_df(0), make_df(100), make_df(0)])
+    ddf2 = ddf.sample(frac=0.2)
+    # smoke test sample on empty partitions
+    res = ddf2.compute()
+    assert res.dtypes.equals(ddf2.dtypes)
