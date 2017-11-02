@@ -630,6 +630,9 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     # 1. Collect all results as arguments.
     # 2. Concatenate each result into one big array.
     # 3. Pass all results as arguments to the internal unique again.
+    #
+    # TODO: This should be replaced with a tree reduction using this strategy.
+    # xref: https://github.com/dask/dask/issues/2851
 
     out_parts = [out["values"]]
     if return_index:
