@@ -531,6 +531,38 @@ def round(a, decimals=0):
 
 
 def _unique_internal(ar, indices, counts, return_inverse=False):
+    """
+    Helper/wrapper function for NumPy's ``unique``.
+
+    Uses NumPy's ``unique`` to find the unique values for the array chunk.
+    Given this chunk may not represent the whole array, also take the
+    ``indices`` and ``counts`` that are in 1-to-1 correspondence to ``ar``
+    and reduce them in the same fashion as ``ar`` is reduced. Namely sum
+    any counts that correspond to the same value and take the smallest
+    index that corresponds to the same value.
+
+    To handle the inverse mapping from the unique values to the original
+    array, simply return a NumPy array created with ``arange`` with enough
+    values to correspond 1-to-1 to the unique values. While there is more
+    work needed to be done to create the full inverse mapping for the
+    original array, this provides enough information to generate the
+    inverse mapping in Dask.
+
+    Given Dask likes to have one array returned from functions like
+    ``atop``, some formatting is done to stuff all of the resulting arrays
+    into one big NumPy structured array. Dask is then able to handle this
+    object and can split it apart into the separate results on the Dask
+    side, which then can be passed back to this function in concatenated
+    chunks for further reduction or can be return to the user to perform
+    other forms of analysis.
+
+    By handling the problem in this way, it does not matter where a chunk
+    is in a larger array or how big it is. The chunk can still be computed
+    on the same way. Also it does not matter if the chunk is the result of
+    other chunks being run through this function multiple times. The end
+    result will still be just as accurate using this strategy.
+    """
+
     return_index = (indices is not None)
     return_counts = (counts is not None)
 
@@ -563,6 +595,9 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
 def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     ar = ar.ravel()
 
+    # Run unique on each chunk and collect results in a Dask Array of
+    # unknown size.
+
     args = [ar, "i"]
     out_dtype = [("values", ar.dtype)]
     if return_index:
@@ -589,6 +624,15 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
         return_inverse=False
     )
     out._chunks = tuple((np.nan,) * len(c) for c in out.chunks)
+
+    # Take the results from the unique chunks and do the following.
+    #
+    # 1. Collect all results as arguments.
+    # 2. Concatenate each result into one big array.
+    # 3. Pass all results as arguments to the internal unique again.
+    #
+    # TODO: This should be replaced with a tree reduction using this strategy.
+    # xref: https://github.com/dask/dask/issues/2851
 
     out_parts = [out["values"]]
     if return_index:
@@ -630,10 +674,18 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
         out_dtype
     )
 
+    # Split out all results to return to the user.
+
     result = [out["values"]]
     if return_index:
         result.append(out["indices"])
     if return_inverse:
+        # Using the returned unique values and arange of unknown length, find
+        # each value matching a unique value and replace it with its
+        # corresponding index or `0`. There should be only one entry for this
+        # index in axis `1` (the one of unknown length). Reduce axis `1`
+        # through summing to get an array with known dimensionality and the
+        # mapping of the original values.
         mtches = (ar[:, None] == out["values"][None, :]).astype(np.int64)
         result.append((mtches * out["inverse"]).sum(axis=1))
     if return_counts:
