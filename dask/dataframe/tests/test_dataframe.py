@@ -2728,6 +2728,7 @@ def test_better_errors_object_reductions():
         ds.mean()
     assert str(err.value) == "`mean` not supported with object series"
 
+
 def test_sample_empty_partitions():
     @dask.delayed
     def make_df(n):
