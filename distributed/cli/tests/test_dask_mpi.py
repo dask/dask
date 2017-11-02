@@ -15,9 +15,10 @@ from distributed.utils_test import popen
 from distributed.utils_test import loop  # flake8: noqa
 
 
-def test_basic(loop):
+@pytest.mark.parametrize('nanny', ['--nanny', '--no-nanny'])
+def test_basic(loop, nanny):
     with tmpfile() as fn:
-        with popen(['mpirun', '--np', '4', 'dask-mpi', '--scheduler-file', fn],
+        with popen(['mpirun', '--np', '4', 'dask-mpi', '--scheduler-file', fn, nanny],
                    stdin=subprocess.DEVNULL):
             with Client(scheduler_file=fn) as c:
 
