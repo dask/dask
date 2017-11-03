@@ -564,15 +564,26 @@ def test_read_csv_of_modified_file_has_different_name():
 
 
 def test_late_dtypes():
-    text = 'numbers,names,more_numbers,integers\n'
+    text = 'numbers,names,more_numbers,integers,dates\n'
     for i in range(1000):
-        text += '1,,2,3\n'
-    text += '1.5,bar,2.5,3\n'
+        text += '1,,2,3,2017-10-31 00:00:00\n'
+    text += '1.5,bar,2.5,3,4998-01-01 00:00:00\n'
+
+    date_msg = ("\n"
+                "\n"
+                "-------------------------------------------------------------\n"
+                "\n"
+                "The following columns also failed to properly parse as dates:\n"
+                "\n"
+                "- dates\n"
+                "\n"
+                "This is usually due to an invalid value in that column. To\n"
+                "diagnose and fix it's recommended to drop these columns from the\n"
+                "`parse_dates` keyword, and manually convert them to dates later\n"
+                "using `dd.to_datetime`.")
+
     with filetext(text) as fn:
         sol = pd.read_csv(fn)
-        with pytest.raises(ValueError) as e:
-            dd.read_csv(fn, sample=50).compute(get=dask.get)
-
         msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
                "\n"
                "+--------------+---------+----------+\n"
@@ -593,13 +604,16 @@ def test_late_dtypes():
                "       'names': 'object',\n"
                "       'numbers': 'float64'}\n"
                "\n"
-               "to the call to `read_csv`/`read_table`.\n")
-
-        e.match(msg)
+               "to the call to `read_csv`/`read_table`.")
 
         with pytest.raises(ValueError) as e:
             dd.read_csv(fn, sample=50,
-                        dtype={'names': 'O'}).compute(get=dask.get)
+                        parse_dates=['dates']).compute(get=dask.get)
+        assert e.match(msg + date_msg)
+
+        with pytest.raises(ValueError) as e:
+            dd.read_csv(fn, sample=50).compute(get=dask.get)
+        assert e.match(msg)
 
         msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
                "\n"
@@ -621,6 +635,31 @@ def test_late_dtypes():
                "Alternatively, provide `assume_missing=True` to interpret\n"
                "all unspecified integer columns as floats.")
 
+        with pytest.raises(ValueError) as e:
+            dd.read_csv(fn, sample=50,
+                        dtype={'names': 'O'}).compute(get=dask.get)
+        assert str(e.value) == msg
+
+        with pytest.raises(ValueError) as e:
+            dd.read_csv(fn, sample=50, parse_dates=['dates'],
+                        dtype={'names': 'O'}).compute(get=dask.get)
+        assert str(e.value) == msg + date_msg
+
+        msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
+               "\n"
+               "The following columns failed to properly parse as dates:\n"
+               "\n"
+               "- dates\n"
+               "\n"
+               "This is usually due to an invalid value in that column. To\n"
+               "diagnose and fix it's recommended to drop these columns from the\n"
+               "`parse_dates` keyword, and manually convert them to dates later\n"
+               "using `dd.to_datetime`.")
+
+        with pytest.raises(ValueError) as e:
+            dd.read_csv(fn, sample=50, parse_dates=['dates'],
+                        dtype={'more_numbers': float, 'names': object,
+                               'numbers': float}).compute(get=dask.get)
         assert str(e.value) == msg
 
         # Specifying dtypes works

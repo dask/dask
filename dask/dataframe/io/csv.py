@@ -23,9 +23,11 @@ from ..utils import clear_known_categories, PANDAS_VERSION
 from .io import from_delayed
 
 if PANDAS_VERSION >= '0.20.0':
-    from pandas.api.types import is_integer_dtype, is_float_dtype
+    from pandas.api.types import (is_integer_dtype, is_float_dtype,
+                                  is_object_dtype, is_datetime64_any_dtype)
 else:
-    from pandas.types.common import is_integer_dtype, is_float_dtype
+    from pandas.types.common import (is_integer_dtype, is_float_dtype,
+                                     is_object_dtype, is_datetime64_any_dtype)
 
 
 delayed = delayed(pure=True)
@@ -78,22 +80,29 @@ def coerce_dtypes(df, dtypes):
     df: Pandas DataFrame
     dtypes: dict like {'x': float}
     """
-    bad = []
+    bad_dtypes = []
+    bad_dates = []
     errors = []
     for c in df.columns:
         if c in dtypes and df.dtypes[c] != dtypes[c]:
             actual = df.dtypes[c]
             desired = dtypes[c]
             if is_float_dtype(actual) and is_integer_dtype(desired):
-                bad.append((c, actual, desired))
+                bad_dtypes.append((c, actual, desired))
+            elif is_object_dtype(actual) and is_datetime64_any_dtype(desired):
+                # This can only occur when parse_dates is specified, but an
+                # invalid date is encountered. Pandas then silently falls back
+                # to object dtype. Since `object_array.astype(datetime)` will
+                # silently overflow, error here and report.
+                bad_dates.append(c)
             else:
                 try:
                     df[c] = df[c].astype(dtypes[c])
                 except Exception as e:
-                    bad.append((c, actual, desired))
+                    bad_dtypes.append((c, actual, desired))
                     errors.append((c, e))
 
-    if bad:
+    if bad_dtypes:
         if errors:
             ex = '\n'.join("- %s\n  %r" % (c, e) for c, e in
                            sorted(errors, key=lambda x: str(x[0])))
@@ -107,21 +116,41 @@ def coerce_dtypes(df, dtypes):
                      "to interpret\n"
                      "all unspecified integer columns as floats.")
 
-        bad = sorted(bad, key=lambda x: str(x[0]))
-        table = asciitable(['Column', 'Found', 'Expected'], bad)
+        bad_dtypes = sorted(bad_dtypes, key=lambda x: str(x[0]))
+        table = asciitable(['Column', 'Found', 'Expected'], bad_dtypes)
         dtype_kw = ('dtype={%s}' % ',\n'
-                    '       '.join("%r: '%s'" % (k, v) for (k, v, _) in bad))
+                    '       '.join("%r: '%s'" % (k, v)
+                                   for (k, v, _) in bad_dtypes))
 
-        msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
-               "\n"
-               "{table}\n"
-               "\n{exceptions}"
-               "Usually this is due to dask's dtype inference failing, and\n"
-               "*may* be fixed by specifying dtypes manually by adding:\n\n"
-               "{dtype_kw}\n\n"
-               "to the call to `read_csv`/`read_table`."
-               "{extra}").format(table=table, exceptions=exceptions,
-                                 dtype_kw=dtype_kw, extra=extra)
+        dtype_msg = (
+            "{table}\n\n"
+            "{exceptions}"
+            "Usually this is due to dask's dtype inference failing, and\n"
+            "*may* be fixed by specifying dtypes manually by adding:\n\n"
+            "{dtype_kw}\n\n"
+            "to the call to `read_csv`/`read_table`."
+            "{extra}").format(table=table, exceptions=exceptions,
+                              dtype_kw=dtype_kw, extra=extra)
+    else:
+        dtype_msg = None
+
+    if bad_dates:
+        also = " also " if bad_dtypes else " "
+        cols = '\n'.join("- %s" % c for c in bad_dates)
+        date_msg = (
+            "The following columns{also}failed to properly parse as dates:\n\n"
+            "{cols}\n\n"
+            "This is usually due to an invalid value in that column. To\n"
+            "diagnose and fix it's recommended to drop these columns from the\n"
+            "`parse_dates` keyword, and manually convert them to dates later\n"
+            "using `dd.to_datetime`.").format(also=also, cols=cols)
+    else:
+        date_msg = None
+
+    if bad_dtypes or bad_dates:
+        rule = "\n\n%s\n\n" % ('-' * 61)
+        msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n\n"
+               "%s" % (rule.join(filter(None, [dtype_msg, date_msg]))))
         raise ValueError(msg)
 
 
