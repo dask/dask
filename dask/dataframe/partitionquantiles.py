@@ -310,11 +310,11 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
     dtype, info = dtype_info
 
     if not vals_and_weights:
-        if not (np.can_cast(np.nan, dtype) or np.can_cast(np.datetime64('NaT'), dtype)):
+        try:
+            return np.array(None, dtype=dtype)
+        except Exception:
             # dtype does not support None value so allow it to change
-            dtype = np.dtype(None)
-
-        return np.array(None, dtype=dtype)
+            return np.array(None, dtype=np.float_)
 
     vals, weights = vals_and_weights
     vals = np.array(vals)
