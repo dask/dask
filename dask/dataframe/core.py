@@ -36,6 +36,12 @@ from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
 
 no_default = '__no_default__'
 
+_OPERATOR_METHODS = ['add', 'sub', 'mul', 'div',
+                     'truediv', 'floordiv', 'mod', 'pow',
+                     'radd', 'rsub', 'rmul', 'rdiv',
+                     'rtruediv', 'rfloordiv', 'rmod', 'rpow']
+
+
 if PANDAS_VERSION >= '0.20.0':
     from pandas.util import cache_readonly
     pd.set_option('compute.use_numexpr', False)
@@ -1890,8 +1896,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @classmethod
     def _bind_operator_method(cls, name, op):
-        """ bind operator method like DataFrame.add to this class """
-
+        """ bind operator method like Series.add to this class """
         def meth(self, other, level=None, fill_value=None, axis=0):
             if level is not None:
                 raise NotImplementedError('level must be None')
@@ -1904,7 +1909,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison):
-        """ bind comparison method like DataFrame.add to this class """
+        """ bind comparison method like Series.eq to this class """
 
         def meth(self, other, level=None, axis=0):
             if level is not None:
@@ -2542,11 +2547,7 @@ class DataFrame(_Frame):
                 yield row
 
     @classmethod
-    def _bind_operator_method(cls, name, op):
-        """ bind operator method like DataFrame.add to this class """
-
-        # name must be explicitly passed for div method whose name is truediv
-
+    def _get_operator_method(cls, name, op):
         def meth(self, other, axis='columns', level=None, fill_value=None):
             if level is not None:
                 raise NotImplementedError('level must be None')
@@ -2572,11 +2573,19 @@ class DataFrame(_Frame):
             return map_partitions(op, self, other, meta=meta,
                                   axis=axis, fill_value=fill_value)
         meth.__doc__ = op.__doc__
+        return meth
+
+    @classmethod
+    def _bind_operator_method(cls, name, op):
+        """ bind operator method like DataFrame.__add__ to this class """
+
+        # name must be explicitly passed for div method whose name is truediv
+        meth = cls._get_operator_method(name, op)
         bind_method(cls, name, meth)
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison):
-        """ bind comparison method like DataFrame.add to this class """
+        """ bind comparison method like DataFrame.eq to this class """
 
         def meth(self, other, axis='columns', level=None):
             if level is not None:
@@ -2586,6 +2595,19 @@ class DataFrame(_Frame):
 
         meth.__doc__ = comparison.__doc__
         bind_method(cls, name, meth)
+
+    @classmethod
+    def _bind_operator(cls, op):
+        # We override DataFrame._bind_operator to avoid unwantedly sorting
+        # the columns in binops between a dask.Dataframe and a pandas.Series
+        # For these binops, like __add__, we just call `DataFrame.add`
+        name = op.__name__
+        meth = '__{}__'.format(name)
+        if name in set(_OPERATOR_METHODS):
+            new_op = getattr(pd.DataFrame, name)
+            bind_method(cls, meth, cls._get_operator_method(name, new_op))
+        else:
+            super()._bind_operator(op)
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, axis=0, args=(), meta=no_default, **kwds):
@@ -2860,19 +2882,7 @@ class DataFrame(_Frame):
                     not self._is_column_label(columns_or_index))
 
 
-# bind operators
-for op in [operator.abs, operator.add, operator.and_, operator_div,
-           operator.eq, operator.gt, operator.ge, operator.inv,
-           operator.lt, operator.le, operator.mod, operator.mul,
-           operator.ne, operator.neg, operator.or_, operator.pow,
-           operator.sub, operator.truediv, operator.floordiv, operator.xor]:
-    _Frame._bind_operator(op)
-    Scalar._bind_operator(op)
-
-for name in ['add', 'sub', 'mul', 'div',
-             'truediv', 'floordiv', 'mod', 'pow',
-             'radd', 'rsub', 'rmul', 'rdiv',
-             'rtruediv', 'rfloordiv', 'rmod', 'rpow']:
+for name in _OPERATOR_METHODS:
     meth = getattr(pd.DataFrame, name)
     DataFrame._bind_operator_method(name, meth)
 
@@ -2885,6 +2895,17 @@ for name in ['lt', 'gt', 'le', 'ge', 'ne', 'eq']:
 
     meth = getattr(pd.Series, name)
     Series._bind_comparison_method(name, meth)
+
+
+# bind operators
+for op in [operator.abs, operator.add, operator.and_, operator_div,
+           operator.eq, operator.gt, operator.ge, operator.inv,
+           operator.lt, operator.le, operator.mod, operator.mul,
+           operator.ne, operator.neg, operator.or_, operator.pow,
+           operator.sub, operator.truediv, operator.floordiv, operator.xor]:
+    _Frame._bind_operator(op)
+    DataFrame._bind_operator(op)
+    Scalar._bind_operator(op)
 
 
 def is_broadcastable(dfs, s):

@@ -1,3 +1,4 @@
+import operator
 from datetime import datetime
 
 import pytest
@@ -1002,3 +1003,21 @@ def test_reductions_frame_nan(split_every):
               ddf.sem(axis=1, skipna=False, ddof=0, split_every=split_every))
     assert_eq(df.mean(axis=1, skipna=False),
               ddf.mean(axis=1, skipna=False, split_every=split_every))
+
+
+@pytest.mark.parametrize('op', [
+    operator.add, operator.sub, operator.mul, operator.truediv,
+    operator.floordiv, operator.mod, operator.pow
+])
+def test_binop(op):
+    # https://github.com/dask/dask/issues/2840
+    import dask
+
+    dask.set_options(get=dask.get)
+    df = pd.DataFrame(np.random.uniform(size=(5, 11))).rename(columns=str)
+    ddf = dd.from_pandas(df, 2)
+    other = df.mean(0)
+
+    result = op(ddf, other)
+    expected = op(df, other)
+    assert_eq(result, expected)
