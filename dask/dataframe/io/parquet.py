@@ -35,6 +35,26 @@ else:
         return (type(ds), ds.paths)
 
 
+def get_engine(engine):
+    if engine == 'auto':
+        if fastparquet:
+            engine = 'fastparquet'
+        elif pyarrow_parquet:
+            engine = 'arrow'
+        else:
+            raise ImportError("Please install either fastparquet or pyarrow")
+    elif engine == 'fastparquet':
+        if not fastparquet:
+            raise ImportError("fastparquet not installed")
+    elif engine == 'arrow':
+        if not pyarrow_parquet:
+            raise ImportError("pyarrow not installed")
+    else:
+        raise ValueError('Unsupported engine type: {0}'.format(engine))
+
+    return engine
+
+
 def _meta_from_dtypes(to_read_columns, file_columns, file_dtypes):
     meta = pd.DataFrame({c: pd.Series([], dtype=d)
                         for (c, d) in file_dtypes.items()},
@@ -307,21 +327,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     fs, paths, file_opener = get_fs_paths_myopen(path, None, 'rb',
                                                  **(storage_options or {}))
 
-    if engine == 'auto':
-        if fastparquet:
-            engine = 'fastparquet'
-        elif pyarrow_parquet:
-            engine = 'arrow'
-        else:
-            raise ImportError("Please install either fastparquet or pyarrow")
-    elif engine == 'fastparquet':
-        if not fastparquet:
-            raise ImportError("fastparquet not installed")
-    elif engine == 'arrow':
-        if not pyarrow_parquet:
-            raise ImportError("pyarrow not installed")
-    else:
-        raise ValueError('Unsupported engine type: {0}'.format(engine))
+    engine = get_engine(engine)
 
     if engine == 'fastparquet':
         return _read_fastparquet(fs, paths, file_opener, columns=columns,
@@ -333,10 +339,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                              categories=categories, index=index)
 
 
-def to_parquet(df, path, compression=None, write_index=None, has_nulls=True,
-               fixed_text=None, object_encoding=None, storage_options=None,
+def to_parquet(df, path, engine='auto', compression=None, write_index=None,
                append=False, ignore_divisions=False, partition_on=None,
-               compute=True, times='int64'):
+               storage_options=None, compute=True, **kwargs):
     """Store Dask.dataframe to Parquet files
 
     Notes
@@ -349,46 +354,33 @@ def to_parquet(df, path, compression=None, write_index=None, has_nulls=True,
     path : string
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
+    engine : {'auto', 'fastparquet', 'arrow'}, default 'auto'
+        Parquet library to use. If only one library is installed, it will use
+        that one; if both, it will use 'fastparquet'
     compression : string or dict
         Either a string like "SNAPPY" or a dictionary mapping column names to
         compressors like ``{"name": "GZIP", "values": "SNAPPY"}``
     write_index : boolean
         Whether or not to write the index.  Defaults to True *if* divisions are
         known.
-    has_nulls : bool, list or 'infer'
-        Specifies whether to write NULLs information for columns. If bools,
-        apply to all columns, if list, use for only the named columns, if
-        'infer', use only for columns which don't have a sentinel NULL marker
-        (currently object columns only).
-    fixed_text : dict {col: int}
-        For column types that are written as bytes (bytes, utf8 strings, or
-        json and bson-encoded objects), if a column is included here, the
-        data will be written in fixed-length format, which should be faster
-        but can potentially result in truncation.
-    object_encoding : dict {col: bytes|utf8|json|bson} or str
-        For object columns, specify how to encode to bytes. If a str, same
-        encoding is applied to all object columns.
-    storage_options : dict
-        Key/value pairs to be passed on to the file-system backend, if any.
-    append: bool (False)
+    append : bool (False)
         If False, construct data-set from scratch; if True, add new
         row-group(s) to existing data-set. In the latter case, the data-set
         must exist, and the schema must match the input data.
-    ignore_divisions: bool (False)
+    ignore_divisions : bool (False)
         If False raises error when previous divisions overlap with the new
         appended divisions. Ignored if append=False.
-    partition_on: list
+    partition_on : list
         Construct directory-based partitioning by splitting on these fields'
         values. Each dask partition will result in one or more datafiles,
         there will be no global groupby.
-    times: 'int64' (default), or 'int96':
-        In "int64" mode, datetimes are written as 8-byte integers, us
-        resolution; in "int96" mode, they are written as 12-byte blocks, with
-        the first 8 bytes as ns within the day, the next 4 bytes the julian day.
-        'int96' mode is included only for compatibility.
-    compute: bool (True)
+    storage_options : dict
+        Key/value pairs to be passed on to the file-system backend, if any.
+    compute : bool (True)
         If true (default) then we compute immediately.
         If False then we return a dask.delayed object for future computation.
+    **kwargs
+        Extra options to be passed on to the specific backend.
 
     This uses the fastparquet project:
     http://fastparquet.readthedocs.io/en/latest
@@ -402,45 +394,71 @@ def to_parquet(df, path, compression=None, write_index=None, has_nulls=True,
     --------
     read_parquet: Read parquet data to dask.dataframe
     """
-    import fastparquet
-    partition_on = partition_on or []
-
     # TODO: remove once deprecation cycle is finished
     if isinstance(path, DataFrame):
         warnings.warn("DeprecationWarning: The order of `df` and `path` in "
                       "`dd.to_parquet` has switched, please update your code")
         df, path = path, df
 
-    fs, paths, myopen = get_fs_paths_myopen(path, None, 'wb',
-                                            **(storage_options or {}))
-    fs.mkdirs(path)
-    sep = fs.sep
-
+    divisions = df.divisions
     if write_index is True or write_index is None and df.known_divisions:
-        new_divisions = df.divisions
         df = df.reset_index()
         index_col = df.columns[0]
     else:
         ignore_divisions = True
         index_col = None
 
-    object_encoding = object_encoding or 'utf8'
+    partition_on = partition_on or []
+
+    if set(partition_on) - set(df.columns):
+        raise ValueError('Partitioning on non-existent column')
+
+    engine = get_engine(engine)
+
+    if engine == 'fastparquet':
+        write = _write_fastparquet
+    else:
+        write = _write_pyarrow
+
+    out = write(df, path, compression=compression, append=append,
+                ignore_divisions=ignore_divisions, divisions=divisions,
+                partition_on=partition_on, storage_options=storage_options,
+                index_col=index_col, **kwargs)
+
+    if compute:
+        out.compute()
+        return None
+    return out
+
+
+def _write_pyarrow(*args, **kwargs):
+    raise NotImplementedError("todo")
+
+
+def _write_fastparquet(df, path, compression=None, append=False,
+                       ignore_divisions=False, partition_on=None,
+                       storage_options=None, index_col=None,
+                       divisions=None, **kwargs):
+
+    fs, paths, open_with = get_fs_paths_myopen(path, None, 'wb',
+                                               **(storage_options or {}))
+    fs.mkdirs(path)
+    sep = fs.sep
+
+    object_encoding = kwargs.pop('object_encoding', 'utf8')
     if object_encoding == 'infer' or (isinstance(object_encoding, dict) and
                                       'infer' in object_encoding.values()):
         raise ValueError('"infer" not allowed as object encoding, '
                          'because this required data in memory.')
-    if set(partition_on) - set(df.columns):
-        raise ValueError('Partitioning on non-existent column')
+
     fmd = fastparquet.writer.make_metadata(df._meta,
-                                           has_nulls=has_nulls,
-                                           fixed_text=fixed_text,
                                            object_encoding=object_encoding,
                                            index_cols=[index_col],
                                            ignore_columns=partition_on,
-                                           times=times)
+                                           **kwargs)
 
     if append:
-        pf = fastparquet.api.ParquetFile(path, open_with=myopen, sep=sep)
+        pf = fastparquet.api.ParquetFile(path, open_with=open_with, sep=sep)
         if pf.file_scheme not in ['hive', 'empty', 'flat']:
             raise ValueError('Requested file scheme is hive, '
                              'but existing file scheme is not.')
@@ -461,16 +479,11 @@ def to_parquet(df, path, compression=None, write_index=None, has_nulls=True,
 
         if not ignore_divisions:
             minmax = fastparquet.api.sorted_partitioned_columns(pf)
-            if index_col in minmax:
-
-                divisions = list(minmax[index_col]['min']) + [
-                    minmax[index_col]['max'][-1]]
-
-                if new_divisions[0] < divisions[-1]:
-                    raise ValueError(
-                        'Appended divisions overlapping with the previous ones.'
-                        '\nNew: {} | Previous: {}'
-                        .format(divisions[-1], new_divisions[0]))
+            old_end = minmax[index_col]['max'][-1]
+            if divisions[0] < old_end:
+                raise ValueError(
+                    'Appended divisions overlapping with the previous ones.\n'
+                    'New: {} | Previous: {}'.format(old_end, divisions[0]))
     else:
         i_offset = 0
 
@@ -484,18 +497,14 @@ def to_parquet(df, path, compression=None, write_index=None, has_nulls=True,
                   for filename, partition in zip(filenames, df.to_delayed())]
     else:
         write = delayed(fastparquet.writer.make_part_file)
-        writes = [write(myopen(sep.join([path, filename]), 'wb'), partition,
+        writes = [write(open_with(sep.join([path, filename]), 'wb'), partition,
                         fmd.schema, compression=compression)
                   for filename, partition in zip(filenames, df.to_delayed())]
 
-    out = delayed(_write_metadata)(writes, filenames, fmd, path, myopen, sep)
-    if compute:
-        out.compute()
-        return None
-    return out
+    return delayed(_write_metadata)(writes, filenames, fmd, path, open_with, sep)
 
 
-def _write_metadata(writes, filenames, fmd, path, myopen, sep):
+def _write_metadata(writes, filenames, fmd, path, open_with, sep):
     """ Write Parquet metadata after writing all row groups
 
     See Also
@@ -513,11 +522,11 @@ def _write_metadata(writes, filenames, fmd, path, myopen, sep):
                 fmd.row_groups.append(rg)
 
     fn = sep.join([path, '_metadata'])
-    fastparquet.writer.write_common_metadata(fn, fmd, open_with=myopen,
+    fastparquet.writer.write_common_metadata(fn, fmd, open_with=open_with,
                                              no_row_groups=False)
 
     fn = sep.join([path, '_common_metadata'])
-    fastparquet.writer.write_common_metadata(fn, fmd, open_with=myopen)
+    fastparquet.writer.write_common_metadata(fn, fmd, open_with=open_with)
 
 
 if PY3:
