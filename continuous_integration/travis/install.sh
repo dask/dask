@@ -49,6 +49,7 @@ conda install -q -c conda-forge \
     pytest=3.1 \
     pytest-faulthandler \
     pytest-timeout \
+    python=$PYTHON \
     requests \
     tblib \
     toolz \
