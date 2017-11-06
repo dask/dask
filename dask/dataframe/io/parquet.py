@@ -13,47 +13,6 @@ from ...compatibility import PY3
 from ...delayed import delayed
 from ...bytes.core import get_fs_paths_myopen
 
-try:
-    import fastparquet
-    from fastparquet.core import read_row_group_file
-    from fastparquet.api import _pre_allocate
-    from fastparquet.util import check_column_names
-except ImportError:
-    fastparquet = False
-else:
-    @normalize_token.register(fastparquet.ParquetFile)
-    def normalize_ParquetFile(pf):
-        return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
-
-try:
-    import pyarrow.parquet as pyarrow_parquet
-except ImportError:
-    pyarrow_parquet = False
-else:
-    @normalize_token.register(pyarrow_parquet.ParquetDataset)
-    def normalize_PyArrowParquetDataset(ds):
-        return (type(ds), ds.paths)
-
-
-def get_engine(engine):
-    if engine == 'auto':
-        if fastparquet:
-            engine = 'fastparquet'
-        elif pyarrow_parquet:
-            engine = 'arrow'
-        else:
-            raise ImportError("Please install either fastparquet or pyarrow")
-    elif engine == 'fastparquet':
-        if not fastparquet:
-            raise ImportError("fastparquet not installed")
-    elif engine == 'arrow':
-        if not pyarrow_parquet:
-            raise ImportError("pyarrow not installed")
-    else:
-        raise ValueError('Unsupported engine type: {0}'.format(engine))
-
-    return engine
-
 
 def _meta_from_dtypes(to_read_columns, file_columns, file_dtypes):
     meta = pd.DataFrame({c: pd.Series([], dtype=d)
@@ -68,6 +27,8 @@ def _meta_from_dtypes(to_read_columns, file_columns, file_dtypes):
 
 def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
                       categories=None, index=None, storage_options=None):
+    import fastparquet
+    from fastparquet.util import check_column_names
     if filters is None:
         filters = []
 
@@ -161,6 +122,8 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
 
 def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
                             schema, cs, dt, scheme, *args):
+    from fastparquet.api import _pre_allocate
+    from fastparquet.core import read_row_group_file
     if not isinstance(columns, (tuple, list)):
         columns = (columns,)
         series = True
@@ -180,6 +143,7 @@ def _write_fastparquet(df, path, compression=None, append=False,
                        ignore_divisions=False, partition_on=None,
                        storage_options=None, index_col=None,
                        divisions=None, **kwargs):
+    import fastparquet
 
     fs, paths, open_with = get_fs_paths_myopen(path, None, 'wb',
                                                **(storage_options or {}))
@@ -252,6 +216,7 @@ def _write_metadata(writes, filenames, fmd, path, open_with, sep):
     --------
     to_parquet
     """
+    import fastparquet
     for fn, rg in zip(filenames, writes):
         if rg is not None:
             if isinstance(rg, list):
@@ -273,9 +238,10 @@ def _write_metadata(writes, filenames, fmd, path, open_with, sep):
 # ----------------------------------------------------------------------
 # PyArrow interface
 
+
 def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
                   categories=None, index=None):
-    api = pyarrow_parquet
+    import pyarrow.parquet as api
 
     if filters is not None:
         raise NotImplementedError("Predicate pushdown not implemented")
@@ -378,6 +344,66 @@ def _write_pyarrow(*args, **kwargs):
 # ----------------------------------------------------------------------
 # User API
 
+
+_ENGINES = {}
+
+
+def get_engine(engine):
+    """Get the parquet engine backend implementation.
+
+    Parameters
+    ----------
+    engine : {'auto', 'fastparquet', 'arrow'}, default 'auto'
+        Parquet reader library to use. Default is first installed in this list.
+
+    Returns
+    -------
+    A dict containing a ``'read'`` and ``'write'`` function.
+    """
+    if engine in _ENGINES:
+        return _ENGINES[engine]
+
+    if engine == 'auto':
+        for eng in ['fastparquet', 'arrow']:
+            try:
+                return get_engine(eng)
+            except ImportError:
+                pass
+        else:
+            raise ImportError("Please install either fastparquet or pyarrow")
+
+    elif engine == 'fastparquet':
+        try:
+            import fastparquet
+        except ImportError:
+            raise ImportError("fastparquet not installed")
+
+        @normalize_token.register(fastparquet.ParquetFile)
+        def normalize_ParquetFile(pf):
+            return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
+
+        _ENGINES['fastparquet'] = eng = {'read': _read_fastparquet,
+                                         'write': _write_fastparquet}
+        return eng
+
+    elif engine == 'arrow':
+        try:
+            import pyarrow.parquet as api
+        except ImportError:
+            raise ImportError("pyarrow not installed")
+
+        @normalize_token.register(api.ParquetDataset)
+        def normalize_PyArrowParquetDataset(ds):
+            return (type(ds), ds.paths)
+
+        _ENGINES['arrow'] = eng = {'read': _read_pyarrow,
+                                   'write': _write_pyarrow}
+        return eng
+
+    else:
+        raise ValueError('Unsupported engine type: {0}'.format(engine))
+
+
 def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                  storage_options=None, engine='auto'):
     """
@@ -425,16 +451,10 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     fs, paths, file_opener = get_fs_paths_myopen(path, None, 'rb',
                                                  **(storage_options or {}))
 
-    engine = get_engine(engine)
+    read = get_engine(engine)['read']
 
-    if engine == 'fastparquet':
-        return _read_fastparquet(fs, paths, file_opener, columns=columns,
-                                 filters=filters,
-                                 categories=categories, index=index)
-    else:
-        return _read_pyarrow(fs, paths, file_opener, columns=columns,
-                             filters=filters,
-                             categories=categories, index=index)
+    return read(fs, paths, file_opener, columns=columns, filters=filters,
+                categories=categories, index=index)
 
 
 def to_parquet(df, path, engine='auto', compression=None, write_index=None,
@@ -511,12 +531,7 @@ def to_parquet(df, path, engine='auto', compression=None, write_index=None,
     if set(partition_on) - set(df.columns):
         raise ValueError('Partitioning on non-existent column')
 
-    engine = get_engine(engine)
-
-    if engine == 'fastparquet':
-        write = _write_fastparquet
-    else:
-        write = _write_pyarrow
+    write = get_engine(engine)['write']
 
     out = write(df, path, compression=compression, append=append,
                 ignore_divisions=ignore_divisions, divisions=divisions,
