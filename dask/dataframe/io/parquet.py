@@ -5,6 +5,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
+from toolz import unique
 
 from ..core import DataFrame, Series
 from ..utils import UNKNOWN_CATEGORIES
@@ -142,10 +143,9 @@ def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
         return df
 
 
-def _write_fastparquet(df, path, compression=None, append=False,
-                       ignore_divisions=False, partition_on=None,
-                       storage_options=None, index_col=None,
-                       divisions=None, **kwargs):
+def _write_fastparquet(df, path, compression=None, write_index=None,
+                       append=False, ignore_divisions=False, partition_on=None,
+                       storage_options=None, **kwargs):
     import fastparquet
 
     fs, paths, open_with = get_fs_paths_myopen(path, None, 'wb',
@@ -158,6 +158,14 @@ def _write_fastparquet(df, path, compression=None, append=False,
                                       'infer' in object_encoding.values()):
         raise ValueError('"infer" not allowed as object encoding, '
                          'because this required data in memory.')
+
+    divisions = df.divisions
+    if write_index is True or write_index is None and df.known_divisions:
+        df = df.reset_index()
+        index_col = df.columns[0]
+    else:
+        ignore_divisions = True
+        index_col = None
 
     fmd = fastparquet.writer.make_metadata(df._meta,
                                            object_encoding=object_encoding,
@@ -282,10 +290,10 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
     else:
         out_type = DataFrame
 
-    if index_col and index_col not in all_columns:
+    if index_col:
         if isinstance(index_col, list):
-            all_columns = all_columns + index_col
-        else:
+            all_columns = list(unique(all_columns + index_col))
+        elif index_col not in all_columns:
             all_columns.append(index_col)
 
     divisions = (None,) * (len(dataset.pieces) + 1)
@@ -340,8 +348,47 @@ def _read_arrow_parquet_piece(open_file_func, piece, columns, index_col,
         return df
 
 
-def _write_pyarrow(*args, **kwargs):
-    raise NotImplementedError("todo")
+def _write_pyarrow(df, path, write_index=None, append=False,
+                   ignore_divisions=False, partition_on=None,
+                   storage_options=None, **kwargs):
+    if append:
+        raise NotImplementedError("`append` not implemented for "
+                                  "`engine='arrow'`")
+
+    if partition_on:
+        raise NotImplementedError("`partition_on` not implemented for "
+                                  "`engine='arrow'`")
+
+    if write_index is None and df.known_divisions:
+        write_index = True
+
+    fs, paths, open_with = get_fs_paths_myopen(path, None, 'wb',
+                                               **(storage_options or {}))
+    fs.mkdirs(path)
+
+    template = fs.sep.join([path, 'part.%i.parquet'])
+
+    write = delayed(_write_partition_arrow)
+    first_kwargs = kwargs.copy()
+    first_kwargs['metadata_path'] = fs.sep.join([path, '_metadata'])
+    writes = [write(part, open_with, template % i, write_index,
+                    **(kwargs if i else first_kwargs))
+              for i, part in enumerate(df.to_delayed())]
+    return delayed(writes)
+
+
+def _write_partition_arrow(df, open_with, filename, write_index,
+                           compression=None, metadata_path=None, **kwargs):
+    import pyarrow as pa
+    from pyarrow import parquet
+    t = pa.Table.from_pandas(df, preserve_index=write_index)
+
+    with open_with(filename, 'wb') as fil:
+        parquet.write_table(t, fil, compression=compression, **kwargs)
+
+    if metadata_path is not None:
+        with open_with(metadata_path, 'wb') as fil:
+            parquet.write_metadata(t.schema, fil, **kwargs)
 
 
 # ----------------------------------------------------------------------
@@ -521,14 +568,6 @@ def to_parquet(df, path, engine='auto', compression=None, write_index=None,
                       "`dd.to_parquet` has switched, please update your code")
         df, path = path, df
 
-    divisions = df.divisions
-    if write_index is True or write_index is None and df.known_divisions:
-        df = df.reset_index()
-        index_col = df.columns[0]
-    else:
-        ignore_divisions = True
-        index_col = None
-
     partition_on = partition_on or []
 
     if set(partition_on) - set(df.columns):
@@ -536,10 +575,10 @@ def to_parquet(df, path, engine='auto', compression=None, write_index=None,
 
     write = get_engine(engine)['write']
 
-    out = write(df, path, compression=compression, append=append,
-                ignore_divisions=ignore_divisions, divisions=divisions,
+    out = write(df, path, compression=compression, write_index=write_index,
+                append=append, ignore_divisions=ignore_divisions,
                 partition_on=partition_on, storage_options=storage_options,
-                index_col=index_col, **kwargs)
+                **kwargs)
 
     if compute:
         out.compute()
