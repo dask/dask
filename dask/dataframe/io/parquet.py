@@ -13,14 +13,11 @@ from ...bytes.core import get_fs_paths_myopen
 
 try:
     import fastparquet
-    from fastparquet import parquet_thrift
     from fastparquet.core import read_row_group_file
     from fastparquet.api import _pre_allocate
     from fastparquet.util import check_column_names
-    default_encoding = parquet_thrift.Encoding.PLAIN
 except ImportError:
     fastparquet = False
-    default_encoding = None
 else:
     @normalize_token.register(fastparquet.ParquetFile)
     def normalize_ParquetFile(pf):
@@ -407,7 +404,6 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
                                             **(storage_options or {}))
     fs.mkdirs(path)
     sep = fs.sep
-    metadata_fn = sep.join([path, '_metadata'])
 
     if write_index is True or write_index is None and df.known_divisions:
         new_divisions = df.divisions
@@ -424,10 +420,13 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
                          'because this required data in memory.')
     if set(partition_on) - set(df.columns):
         raise ValueError('Partitioning on non-existent column')
-    fmd = fastparquet.writer.make_metadata(
-        df._meta, has_nulls=has_nulls, fixed_text=fixed_text,
-        object_encoding=object_encoding, index_cols=[index_col],
-        ignore_columns=partition_on, times=times)
+    fmd = fastparquet.writer.make_metadata(df._meta,
+                                           has_nulls=has_nulls,
+                                           fixed_text=fixed_text,
+                                           object_encoding=object_encoding,
+                                           index_cols=[index_col],
+                                           ignore_columns=partition_on,
+                                           times=times)
 
     if append:
         pf = fastparquet.api.ParquetFile(path, open_with=myopen, sep=sep)
@@ -443,8 +442,6 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
             raise ValueError('Appended dtypes differ.\n{}'
                              .format(set(pf.dtypes.items()) ^
                                      set(df.dtypes.iteritems())))
-        # elif fmd.schema != pf.fmd.schema:
-        #    raise ValueError('Appended schema differs.')
         else:
             df = df[pf.columns + partition_on]
 
@@ -466,32 +463,28 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
     else:
         i_offset = 0
 
-    partitions = df.to_delayed()
-    filenames = ['part.%i.parquet' % i
-                 for i in range(i_offset, len(partitions) + i_offset)]
-    outfiles = [sep.join([path, fn]) for fn in filenames]
+    filenames = ['part.%i.parquet' % (i + i_offset)
+                 for i in range(df.npartitions)]
 
     if partition_on:
-        writes = [delayed(fastparquet.writer.partition_on_columns)(
-            partition, partition_on, path, filename, fmd, sep,
-            compression, fs.open, fs.mkdirs)
-            for filename, partition in zip(filenames, partitions)]
+        write = delayed(fastparquet.writer.partition_on_columns)
+        writes = [write(partition, partition_on, path, filename, fmd, sep,
+                        compression, fs.open, fs.mkdirs)
+                  for filename, partition in zip(filenames, df.to_delayed())]
     else:
-        writes = [delayed(fastparquet.writer.make_part_file)(
-                  myopen(outfile, 'wb'), partition, fmd.schema,
-                  compression=compression)
-                  for outfile, partition in zip(outfiles, partitions)]
+        write = delayed(fastparquet.writer.make_part_file)
+        writes = [write(myopen(sep.join([path, filename]), 'wb'), partition,
+                        fmd.schema, compression=compression)
+                  for filename, partition in zip(filenames, df.to_delayed())]
 
+    out = delayed(_write_metadata)(writes, filenames, fmd, path, myopen, sep)
     if compute:
-        writes = delayed(writes).compute()
-        _write_metadata(writes, filenames, fmd, path, metadata_fn, myopen, sep)
-    else:
-        out = delayed(_write_metadata)(writes, filenames, fmd, path, metadata_fn,
-                                       myopen, sep)
-        return out
+        out.compute()
+        return None
+    return out
 
 
-def _write_metadata(writes, filenames, fmd, path, metadata_fn, myopen, sep):
+def _write_metadata(writes, filenames, fmd, path, myopen, sep):
     """ Write Parquet metadata after writing all row groups
 
     See Also
@@ -508,7 +501,8 @@ def _write_metadata(writes, filenames, fmd, path, metadata_fn, myopen, sep):
                     chunk.file_path = fn
                 fmd.row_groups.append(rg)
 
-    fastparquet.writer.write_common_metadata(metadata_fn, fmd, open_with=myopen,
+    fn = sep.join([path, '_metadata'])
+    fastparquet.writer.write_common_metadata(fn, fmd, open_with=myopen,
                                              no_row_groups=False)
 
     fn = sep.join([path, '_common_metadata'])
