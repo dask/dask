@@ -176,6 +176,100 @@ def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
         return df
 
 
+def _write_fastparquet(df, path, compression=None, append=False,
+                       ignore_divisions=False, partition_on=None,
+                       storage_options=None, index_col=None,
+                       divisions=None, **kwargs):
+
+    fs, paths, open_with = get_fs_paths_myopen(path, None, 'wb',
+                                               **(storage_options or {}))
+    fs.mkdirs(path)
+    sep = fs.sep
+
+    object_encoding = kwargs.pop('object_encoding', 'utf8')
+    if object_encoding == 'infer' or (isinstance(object_encoding, dict) and
+                                      'infer' in object_encoding.values()):
+        raise ValueError('"infer" not allowed as object encoding, '
+                         'because this required data in memory.')
+
+    fmd = fastparquet.writer.make_metadata(df._meta,
+                                           object_encoding=object_encoding,
+                                           index_cols=[index_col],
+                                           ignore_columns=partition_on,
+                                           **kwargs)
+
+    if append:
+        pf = fastparquet.api.ParquetFile(path, open_with=open_with, sep=sep)
+        if pf.file_scheme not in ['hive', 'empty', 'flat']:
+            raise ValueError('Requested file scheme is hive, '
+                             'but existing file scheme is not.')
+        elif ((set(pf.columns) != set(df.columns) - set(partition_on)) or
+              (set(partition_on) != set(pf.cats))):
+            raise ValueError('Appended columns not the same.\n'
+                             'New: {} | Previous: {}'
+                             .format(pf.columns, list(df.columns)))
+        elif set(pf.dtypes[c] for c in pf.columns) != set(df[pf.columns].dtypes):
+            raise ValueError('Appended dtypes differ.\n{}'
+                             .format(set(pf.dtypes.items()) ^
+                                     set(df.dtypes.iteritems())))
+        else:
+            df = df[pf.columns + partition_on]
+
+        fmd = pf.fmd
+        i_offset = fastparquet.writer.find_max_part(fmd.row_groups)
+
+        if not ignore_divisions:
+            minmax = fastparquet.api.sorted_partitioned_columns(pf)
+            old_end = minmax[index_col]['max'][-1]
+            if divisions[0] < old_end:
+                raise ValueError(
+                    'Appended divisions overlapping with the previous ones.\n'
+                    'New: {} | Previous: {}'.format(old_end, divisions[0]))
+    else:
+        i_offset = 0
+
+    filenames = ['part.%i.parquet' % (i + i_offset)
+                 for i in range(df.npartitions)]
+
+    if partition_on:
+        write = delayed(fastparquet.writer.partition_on_columns)
+        writes = [write(partition, partition_on, path, filename, fmd, sep,
+                        compression, fs.open, fs.mkdirs)
+                  for filename, partition in zip(filenames, df.to_delayed())]
+    else:
+        write = delayed(fastparquet.writer.make_part_file)
+        writes = [write(open_with(sep.join([path, filename]), 'wb'), partition,
+                        fmd.schema, compression=compression)
+                  for filename, partition in zip(filenames, df.to_delayed())]
+
+    return delayed(_write_metadata)(writes, filenames, fmd, path, open_with, sep)
+
+
+def _write_metadata(writes, filenames, fmd, path, open_with, sep):
+    """ Write Parquet metadata after writing all row groups
+
+    See Also
+    --------
+    to_parquet
+    """
+    for fn, rg in zip(filenames, writes):
+        if rg is not None:
+            if isinstance(rg, list):
+                for r in rg:
+                    fmd.row_groups.append(r)
+            else:
+                for chunk in rg.columns:
+                    chunk.file_path = fn
+                fmd.row_groups.append(rg)
+
+    fn = sep.join([path, '_metadata'])
+    fastparquet.writer.write_common_metadata(fn, fmd, open_with=open_with,
+                                             no_row_groups=False)
+
+    fn = sep.join([path, '_common_metadata'])
+    fastparquet.writer.write_common_metadata(fn, fmd, open_with=open_with)
+
+
 # ----------------------------------------------------------------------
 # PyArrow interface
 
@@ -277,8 +371,12 @@ def _read_arrow_parquet_piece(open_file_func, piece, columns, index_col,
         return df
 
 
+def _write_pyarrow(*args, **kwargs):
+    raise NotImplementedError("todo")
+
+
 # ----------------------------------------------------------------------
-# User read API
+# User API
 
 def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                  storage_options=None, engine='auto'):
@@ -429,104 +527,6 @@ def to_parquet(df, path, engine='auto', compression=None, write_index=None,
         out.compute()
         return None
     return out
-
-
-def _write_pyarrow(*args, **kwargs):
-    raise NotImplementedError("todo")
-
-
-def _write_fastparquet(df, path, compression=None, append=False,
-                       ignore_divisions=False, partition_on=None,
-                       storage_options=None, index_col=None,
-                       divisions=None, **kwargs):
-
-    fs, paths, open_with = get_fs_paths_myopen(path, None, 'wb',
-                                               **(storage_options or {}))
-    fs.mkdirs(path)
-    sep = fs.sep
-
-    object_encoding = kwargs.pop('object_encoding', 'utf8')
-    if object_encoding == 'infer' or (isinstance(object_encoding, dict) and
-                                      'infer' in object_encoding.values()):
-        raise ValueError('"infer" not allowed as object encoding, '
-                         'because this required data in memory.')
-
-    fmd = fastparquet.writer.make_metadata(df._meta,
-                                           object_encoding=object_encoding,
-                                           index_cols=[index_col],
-                                           ignore_columns=partition_on,
-                                           **kwargs)
-
-    if append:
-        pf = fastparquet.api.ParquetFile(path, open_with=open_with, sep=sep)
-        if pf.file_scheme not in ['hive', 'empty', 'flat']:
-            raise ValueError('Requested file scheme is hive, '
-                             'but existing file scheme is not.')
-        elif ((set(pf.columns) != set(df.columns) - set(partition_on)) or
-              (set(partition_on) != set(pf.cats))):
-            raise ValueError('Appended columns not the same.\n'
-                             'New: {} | Previous: {}'
-                             .format(pf.columns, list(df.columns)))
-        elif set(pf.dtypes[c] for c in pf.columns) != set(df[pf.columns].dtypes):
-            raise ValueError('Appended dtypes differ.\n{}'
-                             .format(set(pf.dtypes.items()) ^
-                                     set(df.dtypes.iteritems())))
-        else:
-            df = df[pf.columns + partition_on]
-
-        fmd = pf.fmd
-        i_offset = fastparquet.writer.find_max_part(fmd.row_groups)
-
-        if not ignore_divisions:
-            minmax = fastparquet.api.sorted_partitioned_columns(pf)
-            old_end = minmax[index_col]['max'][-1]
-            if divisions[0] < old_end:
-                raise ValueError(
-                    'Appended divisions overlapping with the previous ones.\n'
-                    'New: {} | Previous: {}'.format(old_end, divisions[0]))
-    else:
-        i_offset = 0
-
-    filenames = ['part.%i.parquet' % (i + i_offset)
-                 for i in range(df.npartitions)]
-
-    if partition_on:
-        write = delayed(fastparquet.writer.partition_on_columns)
-        writes = [write(partition, partition_on, path, filename, fmd, sep,
-                        compression, fs.open, fs.mkdirs)
-                  for filename, partition in zip(filenames, df.to_delayed())]
-    else:
-        write = delayed(fastparquet.writer.make_part_file)
-        writes = [write(open_with(sep.join([path, filename]), 'wb'), partition,
-                        fmd.schema, compression=compression)
-                  for filename, partition in zip(filenames, df.to_delayed())]
-
-    return delayed(_write_metadata)(writes, filenames, fmd, path, open_with, sep)
-
-
-def _write_metadata(writes, filenames, fmd, path, open_with, sep):
-    """ Write Parquet metadata after writing all row groups
-
-    See Also
-    --------
-    to_parquet
-    """
-    for fn, rg in zip(filenames, writes):
-        if rg is not None:
-            if isinstance(rg, list):
-                for r in rg:
-                    fmd.row_groups.append(r)
-            else:
-                for chunk in rg.columns:
-                    chunk.file_path = fn
-                fmd.row_groups.append(rg)
-
-    fn = sep.join([path, '_metadata'])
-    fastparquet.writer.write_common_metadata(fn, fmd, open_with=open_with,
-                                             no_row_groups=False)
-
-    fn = sep.join([path, '_common_metadata'])
-    fastparquet.writer.write_common_metadata(fn, fmd, open_with=open_with)
 
 
 if PY3:
