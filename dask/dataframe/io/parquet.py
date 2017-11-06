@@ -1,6 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
 import json
+import warnings
+
 import numpy as np
 import pandas as pd
 
@@ -328,7 +330,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                              categories=categories, index=index)
 
 
-def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
+def to_parquet(df, path, compression=None, write_index=None, has_nulls=True,
                fixed_text=None, object_encoding=None, storage_options=None,
                append=False, ignore_divisions=False, partition_on=None,
                compute=True, times='int64'):
@@ -340,10 +342,10 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
 
     Parameters
     ----------
+    df : Dask.dataframe
     path : string
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
-    df : Dask.dataframe
     compression : string or dict
         Either a string like "SNAPPY" or a dictionary mapping column names to
         compressors like ``{"name": "GZIP", "values": "SNAPPY"}``
@@ -399,6 +401,12 @@ def to_parquet(path, df, compression=None, write_index=None, has_nulls=True,
     """
     import fastparquet
     partition_on = partition_on or []
+
+    # TODO: remove once deprecation cycle is finished
+    if isinstance(path, DataFrame):
+        warnings.warn("DeprecationWarning: The order of `df` and `path` in "
+                      "`dd.to_parquet` has switched, please update your code")
+        df, path = path, df
 
     fs, paths, myopen = get_fs_paths_myopen(path, None, 'wb',
                                             **(storage_options or {}))
