@@ -14,6 +14,9 @@ from ...delayed import delayed
 from ...bytes.core import get_fs_paths_myopen
 
 
+__all__ = ('read_parquet', 'to_parquet')
+
+
 def _meta_from_dtypes(to_read_columns, file_columns, file_dtypes):
     meta = pd.DataFrame({c: pd.Series([], dtype=d)
                         for (c, d) in file_dtypes.items()},
