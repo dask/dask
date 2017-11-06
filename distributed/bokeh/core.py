@@ -5,6 +5,9 @@ from distutils.version import LooseVersion
 import bokeh
 from bokeh.server.server import Server
 
+if LooseVersion(bokeh.__version__) < LooseVersion('0.12.6'):
+    raise ImportError("Dask needs bokeh >= 0.12.6")
+
 
 class BokehServer(object):
     server_kwargs = {}
@@ -19,23 +22,12 @@ class BokehServer(object):
             ip = None
         for i in range(5):
             try:
-                if LooseVersion(bokeh.__version__) <= '0.12.4':
-                    kwargs = {'host': ['*']}
-                else:
-                    kwargs = {}
-
-                kwargs.update(self.server_kwargs)
-
                 self.server = Server(self.apps, io_loop=self.loop,
                                      port=port, address=ip,
                                      check_unused_sessions_milliseconds=500,
                                      allow_websocket_origin=["*"],
-                                     **kwargs)
-                if LooseVersion(bokeh.__version__) <= '0.12.3':
-                    self.server.start(start_loop=False)
-                else:
-                    self.server.start()
-                break
+                                     **self.server_kwargs)
+                self.server.start()
             except (SystemExit, EnvironmentError):
                 port = 0
                 if i == 4:
