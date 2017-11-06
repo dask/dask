@@ -2254,8 +2254,8 @@ def test_async_persist(c, s, a, b):
     assert len(yy.dask) == 1
     assert len(ww.dask) == 1
     assert len(w.dask) > 1
-    assert y._keys() == yy._keys()
-    assert w._keys() == ww._keys()
+    assert y.__dask_keys__() == yy.__dask_keys__()
+    assert w.__dask_keys__() == ww.__dask_keys__()
 
     while y.key not in s.tasks and w.key not in s.tasks:
         yield gen.sleep(0.01)
@@ -2285,7 +2285,7 @@ def test__persist(c, s, a, b):
     assert len(y.dask) == 6
     assert len(yy.dask) == 2
     assert all(isinstance(v, Future) for v in yy.dask.values())
-    assert yy._keys() == y._keys()
+    assert yy.__dask_keys__() == y.__dask_keys__()
 
     g, h = c.compute([y, yy])
 
@@ -2305,7 +2305,7 @@ def test_persist(loop):
             assert len(y.dask) == 6
             assert len(yy.dask) == 2
             assert all(isinstance(v, Future) for v in yy.dask.values())
-            assert yy._keys() == y._keys()
+            assert yy.__dask_keys__() == y.__dask_keys__()
 
             zz = yy.compute(get=c.get)
             z = y.compute(get=c.get)
@@ -2634,7 +2634,7 @@ def test_persist_get(c, s, a, b):
     xxyy3 = delayed(add)(xxyy2, 10)
 
     yield gen.sleep(0.5)
-    result = yield c.get(xxyy3.dask, xxyy3._keys(), sync=False)
+    result = yield c.get(xxyy3.dask, xxyy3.__dask_keys__(), sync=False)
     assert result[0] == ((1 + 1) + (2 + 2)) + 10
 
     result = yield c.compute(xxyy3)
@@ -3331,7 +3331,7 @@ def test_persist_optimize_graph(c, s, a, b):
         b4 = method(b3, optimize_graph=False)
         yield wait(b4)
 
-        assert set(map(tokey, b3._keys())).issubset(s.tasks)
+        assert set(map(tokey, b3.__dask_keys__())).issubset(s.tasks)
 
         b = db.range(i, npartitions=2)
         i += 1
@@ -3341,7 +3341,7 @@ def test_persist_optimize_graph(c, s, a, b):
         b4 = method(b3, optimize_graph=True)
         yield wait(b4)
 
-        assert not any(tokey(k) in s.tasks for k in b2._keys())
+        assert not any(tokey(k) in s.tasks for k in b2.__dask_keys__())
 
 
 @gen_cluster(client=True, ncores=[])

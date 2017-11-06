@@ -24,7 +24,7 @@ import warnings
 import weakref
 
 import dask
-from dask.base import tokenize, normalize_token, Base, collections_to_dsk
+from dask.base import tokenize, normalize_token, collections_to_dsk
 from dask.core import flatten, get_dependencies
 from dask.compatibility import apply, unicode
 from dask.context import _globals
@@ -891,6 +891,12 @@ class Client(Node):
     def _close(self, fast=False):
         """ Send close signal and wait until scheduler completes """
         with log_errors():
+            with ignoring(AttributeError):
+                dask.set_options(get=self._previous_get)
+            with ignoring(AttributeError):
+                dask.set_options(shuffle=self._previous_shuffle)
+            if self.get == _globals.get('get'):
+                del _globals['get']
             if self.status == 'closed':
                 raise gen.Return()
             if self.scheduler_comm and self.scheduler_comm.comm and not self.scheduler_comm.comm.closed():
@@ -1963,13 +1969,13 @@ class Client(Node):
 
         Examples
         --------
-        >>> len(x.dask)  # x is a dask collection with 100 tasks  # doctest: +SKIP
+        >>> len(x.__dask_graph__())  # x is a dask collection with 100 tasks  # doctest: +SKIP
         100
-        >>> set(client.futures).intersection(x.dask)  # some overlap exists  # doctest: +SKIP
+        >>> set(client.futures).intersection(x.__dask_graph__())  # some overlap exists  # doctest: +SKIP
         10
 
         >>> x = client.normalize_collection(x)  # doctest: +SKIP
-        >>> len(x.dask)  # smaller computational graph  # doctest: +SKIP
+        >>> len(x.__dask_graph__())  # smaller computational graph  # doctest: +SKIP
         20
 
         See Also
@@ -1977,9 +1983,11 @@ class Client(Node):
         Client.persist: trigger computation of collection's tasks
         """
         with self._lock:
-            dsk = self._optimize_insert_futures(collection.dask, collection._keys())
+            dsk = self._optimize_insert_futures(
+                    collection.__dask_graph__(),
+                    collection.__dask_keys__())
 
-            if dsk is collection.dask:
+            if dsk is collection.__dask_graph__():
                 return collection
             else:
                 return redict_collection(collection, dsk)
@@ -2047,11 +2055,14 @@ class Client(Node):
                                 if isinstance(a, (list, set, tuple, dict, Iterator))
                                 else a for a in collections)
 
-        variables = [a for a in collections if isinstance(a, Base)]
+        variables = [a for a in collections if dask.is_dask_collection(a)]
 
         dsk = self.collections_to_dsk(variables, optimize_graph, **kwargs)
         names = ['finalize-%s' % tokenize(v) for v in variables]
-        dsk2 = {name: (v._finalize, v._keys()) for name, v in zip(names, variables)}
+        dsk2 = {}
+        for name, v in zip(names, variables):
+            func, extra_args = v.__dask_postcompute__()
+            dsk2[name] = (func, v.__dask_keys__()) + extra_args
 
         restrictions, loose_restrictions = self.get_restrictions(collections,
                                                                  workers, allow_other_workers)
@@ -2066,7 +2077,7 @@ class Client(Node):
         i = 0
         futures = []
         for arg in collections:
-            if isinstance(arg, Base):
+            if dask.is_dask_collection(arg):
                 futures.append(futures_dict[names[i]])
                 i += 1
             else:
@@ -2127,11 +2138,11 @@ class Client(Node):
             singleton = True
             collections = [collections]
 
-        assert all(isinstance(c, Base) for c in collections)
+        assert all(map(dask.is_dask_collection, collections))
 
         dsk = self.collections_to_dsk(collections, optimize_graph, **kwargs)
 
-        names = {k for c in collections for k in flatten(c._keys())}
+        names = {k for c in collections for k in flatten(c.__dask_keys__())}
 
         restrictions, loose_restrictions = self.get_restrictions(collections,
                                                                  workers, allow_other_workers)
@@ -2142,9 +2153,10 @@ class Client(Node):
         futures = self._graph_to_futures(dsk, names, restrictions,
                                          loose_restrictions, resources=resources)
 
-        result = [redict_collection(c, {k: futures[k]
-                                        for k in flatten(c._keys())})
-                  for c in collections]
+        postpersists = [c.__dask_postpersist__() for c in collections]
+        result = [func({k: futures[k] for k in flatten(c.__dask_keys__())}, *args)
+                  for (func, args), c in zip(postpersists, collections)]
+
         if singleton:
             return first(result)
         else:
@@ -2913,8 +2925,8 @@ class Client(Node):
             if not isinstance(k, tuple):
                 k = (k,)
             for kk in k:
-                if hasattr(kk, '_keys'):
-                    for kkk in kk._keys():
+                if dask.is_dask_collection(kk):
+                    for kkk in kk.__dask_keys__():
                         out[tokey(kkk)] = v
                 else:
                     out[tokey(kk)] = v
@@ -2930,11 +2942,11 @@ class Client(Node):
             for colls, ws in workers.items():
                 if isinstance(ws, str):
                     ws = [ws]
-                if hasattr(colls, '._keys'):
-                    keys = flatten(colls._keys())
+                if dask.is_dask_collection(colls):
+                    keys = flatten(colls.__dask_keys__())
                 else:
                     keys = list({k for c in flatten(colls)
-                                 for k in flatten(c._keys())})
+                                 for k in flatten(c.__dask_keys__())})
                 restrictions.update({k: ws for k in keys})
         else:
             restrictions = {}
@@ -2943,7 +2955,7 @@ class Client(Node):
             loose_restrictions = list(restrictions)
         elif allow_other_workers:
             loose_restrictions = list({k for c in flatten(allow_other_workers)
-                                       for k in c._keys()})
+                                       for k in c.__dask_keys__()})
         else:
             loose_restrictions = []
 
@@ -3275,8 +3287,8 @@ def futures_of(o, client=None):
             stack.extend(x.values())
         if isinstance(x, Future):
             futures.add(x)
-        if hasattr(x, 'dask') and isinstance(x.dask, Mapping):
-            stack.extend(x.dask.values())
+        if dask.is_dask_collection(x):
+            stack.extend(x.__dask_graph__().values())
 
     if client is not None:
         bad = {f for f in futures if f.cancelled()}

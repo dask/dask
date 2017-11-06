@@ -230,11 +230,11 @@ def test_persist_collections(c, s, a, b):
     z = y.map_blocks(lambda x: 2 * x)
     w = z.sum()
 
-    ww, yy = c.persist([w, y], resources={tuple(y._keys()): {'A': 1}})
+    ww, yy = c.persist([w, y], resources={tuple(y.__dask_keys__()): {'A': 1}})
 
     yield wait([ww, yy])
 
-    assert all(tokey(key) in a.data for key in y._keys())
+    assert all(tokey(key) in a.data for key in y.__dask_keys__())
 
 
 @pytest.mark.xfail(reason="Should protect resource keys from optimization")
@@ -247,7 +247,7 @@ def test_dont_optimize_out(c, s, a, b):
     z = y.map_blocks(lambda x: 2 * x)
     w = z.sum()
 
-    yield c.compute(w, resources={tuple(y._keys()): {'A': 1}},)
+    yield c.compute(w, resources={tuple(y.__dask_keys__()): {'A': 1}},)
 
-    for key in map(tokey, y._keys()):
+    for key in map(tokey, y.__dask_keys__()):
         assert 'executing' in str(a.story(key))

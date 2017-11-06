@@ -25,6 +25,7 @@ import weakref
 
 import six
 
+from dask.context import _globals
 from toolz import merge, memoize
 from tornado import gen, queues
 from tornado.gen import TimeoutError
@@ -354,6 +355,8 @@ def check_active_rpc(loop, active_rpc_timeout=1):
 def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
             scheduler_kwargs={}):
     ws = weakref.WeakSet()
+    old_globals = _globals.copy()
+
     for name, level in logging_levels.items():
         logging.getLogger(name).setLevel(level)
 
@@ -438,6 +441,9 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
 
                 for fn in glob('_test_worker-*'):
                     shutil.rmtree(fn)
+
+                _globals.clear()
+                _globals.update(old_globals)
     assert not ws
 
 
@@ -571,6 +577,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
             func = gen.coroutine(func)
 
         def test_func():
+            old_globals = _globals.copy()
             result = None
             workers = []
 
@@ -596,6 +603,8 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                             if client:
                                 yield c._close()
                             yield end_cluster(s, workers)
+                            _globals.clear()
+                            _globals.update(old_globals)
 
                         raise gen.Return(result)
 

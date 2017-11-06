@@ -12,7 +12,7 @@ from tornado import gen
 from distributed import Scheduler, Worker, Client, config
 from distributed.core import rpc
 from distributed.metrics import time
-from distributed.utils_test import (cluster, gen_cluster,
+from distributed.utils_test import (cluster, gen_cluster, inc,
                                     gen_test, wait_for_port, new_config,
                                     tls_only_security)
 from distributed.utils_test import loop # flake8: noqa
@@ -39,6 +39,21 @@ def test_gen_cluster(c, s, a, b):
     for w in [a, b]:
         assert isinstance(w, Worker)
     assert s.ncores == {w.address: w.ncores for w in [a, b]}
+
+
+@pytest.mark.skip(reason="This hangs on travis")
+def test_gen_cluster_cleans_up_client(loop):
+    import dask.context
+    assert not dask.context._globals.get('get')
+
+    @gen_cluster(client=True)
+    def f(c, s, a, b):
+        assert dask.context._globals.get('get')
+        yield c.submit(inc, 1)
+
+    f()
+
+    assert not dask.context._globals.get('get')
 
 
 @gen_cluster(client=False)

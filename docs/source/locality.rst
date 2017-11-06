@@ -189,7 +189,7 @@ run elsewhere if necessary:
                            allow_other_workers=[x])
 
 This works fine with ``persist`` and with any dask collection (any object with
-a ``._keys()`` method):
+a ``.__dask_graph__()`` method):
 
 .. code-block:: python
 
