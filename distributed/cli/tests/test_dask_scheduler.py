@@ -31,17 +31,12 @@ def test_defaults(loop):
             # Default behaviour is to listen on all addresses
             yield [
                 assert_can_connect_from_everywhere_4_6(8786, 2.0),  # main port
-                assert_can_connect_from_everywhere_4_6(9786, 2.0),  # HTTP port
             ]
 
         loop.run_sync(f)
 
         with Client('127.0.0.1:%d' % Scheduler.default_port, loop=loop) as c:
             pass
-
-        response = requests.get('http://127.0.0.1:9786/info.json')
-        assert response.ok
-        assert response.json()['status'] == 'running'
 
     with pytest.raises(Exception):
         requests.get('http://127.0.0.1:8787/status/')
@@ -50,14 +45,12 @@ def test_defaults(loop):
 
 
 def test_hostport(loop):
-    with popen(['dask-scheduler', '--no-bokeh', '--host', '127.0.0.1:8978',
-                '--http-port', '8979']):
+    with popen(['dask-scheduler', '--no-bokeh', '--host', '127.0.0.1:8978']):
         @gen.coroutine
         def f():
             yield [
                 # The scheduler's main port can't be contacted from the outside
                 assert_can_connect_locally_4(8978, 2.0),
-                assert_can_connect_locally_4(8979, 2.0),
                 ]
 
         loop.run_sync(f)
@@ -111,7 +104,6 @@ def test_bokeh_non_standard_ports(loop):
 
     with popen(['dask-scheduler',
                 '--port', '3448',
-                '--http-port', '4824',
                 '--bokeh-port', '4832']) as proc:
         with Client('127.0.0.1:3448', loop=loop) as c:
             pass

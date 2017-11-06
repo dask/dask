@@ -9,7 +9,6 @@ import click
 from distributed import Nanny, Worker
 from distributed.utils import get_ip_interface
 from distributed.worker import _ncores
-from distributed.http import HTTPWorker
 from distributed.security import Security
 from distributed.cli.utils import (check_python_3, uri_from_host_port,
                                    install_signal_handlers)
@@ -35,8 +34,6 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help="private key file for TLS (in PEM format)")
 @click.option('--worker-port', type=int, default=0,
               help="Serving computation port, defaults to random")
-@click.option('--http-port', type=int, default=0,
-              help="Serving http port, defaults to random")
 @click.option('--nanny-port', type=int, default=0,
               help="Serving nanny port, defaults to random")
 @click.option('--bokeh-port', type=int, default=8789,
@@ -90,7 +87,7 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help='Module that should be loaded by each worker process '
                    'like "foo.bar" or "/path/to/foo.py"')
 def main(scheduler, host, worker_port, listen_address, contact_address,
-         http_port, nanny_port, nthreads, nprocs, nanny, name,
+         nanny_port, nthreads, nprocs, nanny, name,
          memory_limit, pid_file, reconnect, resources, bokeh,
          bokeh_port, local_directory, scheduler_file, interface,
          death_timeout, preload, bokeh_prefix, tls_ca_file,
@@ -158,7 +155,7 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
                 os.remove(pid_file)
         atexit.register(del_pid_file)
 
-    services = {('http', http_port): HTTPWorker}
+    services = {}
 
     if bokeh:
         try:

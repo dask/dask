@@ -192,7 +192,7 @@ class Scheduler(ServerNode):
         Expected runtime for all tasks currently processing on a worker
 
     * **services:** ``{str: port}``:
-        Other services running on this scheduler, like HTTP
+        Other services running on this scheduler, like Bokeh
     * **loop:** ``IOLoop``:
         The running Tornado IOLoop
     * **comms:** ``[Comm]``:

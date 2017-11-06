@@ -38,8 +38,7 @@ setup(name='distributed',
                 'distributed.cli',
                 'distributed.deploy',
                 'distributed.diagnostics',
-                'distributed.protocol',
-                'distributed.http'],
+                'distributed.protocol'],
       long_description=(open('README.rst').read() if os.path.exists('README.rst')
                         else ''),
       classifiers=[

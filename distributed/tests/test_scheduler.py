@@ -716,20 +716,6 @@ def test_story(c, s, a, b):
     assert len(s.story(x.key, y.key)) > len(story)
 
 
-@gen_test()
-def test_launch_without_blocked_services():
-    from distributed.http import HTTPScheduler
-    s = Scheduler(services={('http', 3849): HTTPScheduler})
-    s.start(0)
-
-    s2 = Scheduler(services={('http', 3849): HTTPScheduler})
-    s2.start(0)
-
-    assert not s2.services
-
-    yield [s.close(), s2.close()]
-
-
 @gen_cluster(ncores=[], client=True)
 def test_scatter_no_workers(c, s):
     with pytest.raises(gen.TimeoutError):
@@ -1126,13 +1112,13 @@ def test_correct_bad_time_estimate(c, s, *workers):
                     reason="Need 127.0.0.2 to mean localhost")
 @gen_test(timeout=None)
 def test_service_hosts_match_scheduler():
-    from distributed.http.scheduler import HTTPScheduler
-    services = {('http', 0): HTTPScheduler}
+    from distributed.bokeh.scheduler import BokehScheduler
+    services = {('bokeh', 0): BokehScheduler}
 
     s = Scheduler(services=services)
     yield s.start('tcp://0.0.0.0')
 
-    sock = first(s.services['http']._sockets.values())
+    sock = first(s.services['bokeh'].server._http._sockets.values())
     assert sock.getsockname()[0] in ('::', '0.0.0.0')
     yield s.close()
 
@@ -1140,7 +1126,7 @@ def test_service_hosts_match_scheduler():
         s = Scheduler(services=services)
         yield s.start(host)
 
-        sock = first(s.services['http']._sockets.values())
+        sock = first(s.services['bokeh'].server._http._sockets.values())
         assert sock.getsockname()[0] == '127.0.0.2'
         yield s.close()
 

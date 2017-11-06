@@ -211,16 +211,6 @@ def test_repeated():
         pass
 
 
-def test_http(loop):
-    from distributed.http import HTTPScheduler
-    import requests
-    with LocalCluster(scheduler_port=0, silence_logs=False,
-                      services={('http', 3485): HTTPScheduler}, diagnostics_port=None,
-                      loop=loop) as c:
-        response = requests.get('http://127.0.0.1:3485/info.json')
-        assert response.ok
-
-
 def test_bokeh(loop):
     pytest.importorskip('bokeh')
     import requests

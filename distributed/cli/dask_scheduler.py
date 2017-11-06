@@ -13,7 +13,6 @@ import click
 from distributed import Scheduler
 from distributed.security import Security
 from distributed.utils import get_ip_interface, ignoring
-from distributed.http import HTTPScheduler
 from distributed.cli.utils import (check_python_3, install_signal_handlers,
                                    uri_from_host_port)
 from distributed.preloading import preload_modules
@@ -38,8 +37,6 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 @click.option('--tls-key', type=pem_file_option_type, default=None,
               help="private key file for TLS (in PEM format)")
 # XXX default port (or URI) values should be centralized somewhere
-@click.option('--http-port', type=int, default=9786,
-              help="HTTP port for JSON API diagnostics")
 @click.option('--bokeh-port', type=int, default=8787,
               help="Bokeh port for visual diagnostics")
 @click.option('--bokeh-internal-port', type=int, default=None,
@@ -65,7 +62,7 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help="Directory to place scheduler files")
 @click.option('--preload', type=str, multiple=True,
               help='Module that should be loaded by each worker process like "foo.bar" or "/path/to/foo.py"')
-def main(host, port, http_port, bokeh_port, bokeh_internal_port, show, _bokeh,
+def main(host, port, bokeh_port, bokeh_internal_port, show, _bokeh,
          bokeh_whitelist, bokeh_prefix, use_xheaders, pid_file, scheduler_file,
          interface, local_directory, preload, prefix, tls_ca_file, tls_cert,
          tls_key):
@@ -122,7 +119,7 @@ def main(host, port, http_port, bokeh_port, bokeh_internal_port, show, _bokeh,
     loop = IOLoop.current()
     logger.info('-' * 47)
 
-    services = {('http', http_port): HTTPScheduler}
+    services = {}
     if _bokeh:
         with ignoring(ImportError):
             from distributed.bokeh.scheduler import BokehScheduler

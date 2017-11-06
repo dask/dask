@@ -910,13 +910,13 @@ def test_worker_fds(s):
                     reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster(ncores=[])
 def test_service_hosts_match_worker(s):
-    from distributed.http.worker import HTTPWorker
-    services = {('http', 0): HTTPWorker}
+    from distributed.bokeh.worker import BokehWorker
+    services = {('bokeh', 0): BokehWorker}
     for host in ['tcp://0.0.0.0', 'tcp://127.0.0.2']:
         w = Worker(s.address, services=services)
         yield w._start(host)
 
-        sock = first(w.services['http']._sockets.values())
+        sock = first(w.services['bokeh'].server._http._sockets.values())
         assert sock.getsockname()[0] == host.split('://')[1]
         yield w._close()
 
