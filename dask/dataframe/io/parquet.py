@@ -275,7 +275,7 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
         index_col = None
     elif index is None and has_pandas_metadata:
         pandas_metadata = json.loads(schema.metadata[b'pandas'].decode('utf8'))
-        index_col = pandas_metadata.get('index_columns', None)
+        index_col = pandas_metadata.get('index_columns')
     else:
         index_col = index
 
@@ -338,9 +338,8 @@ def _read_arrow_parquet_piece(open_file_func, piece, columns, index_col,
                            use_pandas_metadata=True,
                            file=f)
     df = table.to_pandas()
-    if index_col is not None:
-        if not df.index.name == index_col[0]:
-            df = df.set_index(index_col)
+    if df.index.name is None and index_col is not None:
+        df = df.set_index(index_col)
 
     if is_series:
         return df[df.columns[0]]
