@@ -11,7 +11,7 @@ import pytest
 import dask
 import dask.multiprocessing
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq, PANDAS_VERSION
+from dask.dataframe.utils import assert_eq
 
 try:
     import fastparquet
@@ -202,7 +202,8 @@ def test_optimize(tmpdir, c):
     assert all(v[4] == c for v in dsk.values())
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.21.0', reason="no to_parquet method")
+@pytest.mark.skipif(not hasattr(pd.DataFrame, 'to_parquet'),
+                    reason="no to_parquet method")
 @write_read_engines(False)
 def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
     fn = str(tmpdir.join('test.parquet'))

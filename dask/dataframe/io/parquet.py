@@ -348,8 +348,8 @@ def _read_arrow_parquet_piece(open_file_func, piece, columns, index_cols,
                            use_pandas_metadata=True,
                            file=f)
     df = table.to_pandas()
-    if (index_cols and df.index.name is None and not
-            df.columns.intersection(index_cols).empty):
+    if (index_cols and df.index.name is None and
+            len(df.columns.intersection(index_cols))):
         # Index should be set, but it isn't
         df = df.set_index(index_cols)
     elif not index_cols and df.index.name is not None:
