@@ -54,18 +54,19 @@ def test_no_scheduler(loop):
 def test_bokeh(loop):
     with tmpfile() as fn:
         with popen(['mpirun', '--np', '2', 'dask-mpi', '--scheduler-file', fn,
-                    '--bokeh-port', '59583'],
+                    '--bokeh-port', '59583', '--bokeh-worker-port', '59584'],
                    stdin=subprocess.DEVNULL):
 
-            start = time()
-            while True:
-                try:
-                    response = requests.get('http://localhost:59583/status/')
-                    assert response.ok
-                    break
-                except Exception:
-                    sleep(0.1)
-                    assert time() < start + 20
+            for port in [59853, 59584]:
+                start = time()
+                while True:
+                    try:
+                        response = requests.get('http://localhost:%d/status/' % port)
+                        assert response.ok
+                        break
+                    except Exception:
+                        sleep(0.1)
+                        assert time() < start + 20
 
     with pytest.raises(Exception):
         requests.get('http://localhost:59583/status/')

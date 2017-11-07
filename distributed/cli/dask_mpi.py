@@ -37,10 +37,12 @@ loop = IOLoop()
               help="Start workers in nanny process for management")
 @click.option('--bokeh-port', type=int, default=8787,
               help="Bokeh port for visual diagnostics")
+@click.option('--bokeh-worker-port', type=int, default=8789,
+              help="Worker's Bokeh port for visual diagnostics")
 @click.option('--bokeh-prefix', type=str, default=None,
               help="Prefix for the bokeh app")
 def main(scheduler_file, interface, nthreads, local_directory, memory_limit,
-         scheduler, bokeh_port, bokeh_prefix, nanny):
+         scheduler, bokeh_port, bokeh_prefix, nanny, bokeh_worker_port):
     if interface:
         host = get_ip_interface(interface)
     else:
@@ -71,7 +73,7 @@ def main(scheduler_file, interface, nthreads, local_directory, memory_limit,
                    name=rank if scheduler else None,
                    ncores=nthreads,
                    local_dir=local_directory,
-                   services={'bokeh': BokehWorker},
+                   services={('bokeh', bokeh_worker_port): BokehWorker},
                    memory_limit=memory_limit)
         addr = uri_from_host_port(host, None, 0)
 
