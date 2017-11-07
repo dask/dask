@@ -1112,6 +1112,7 @@ def test_correct_bad_time_estimate(c, s, *workers):
                     reason="Need 127.0.0.2 to mean localhost")
 @gen_test(timeout=None)
 def test_service_hosts_match_scheduler():
+    pytest.importorskip('bokeh')
     from distributed.bokeh.scheduler import BokehScheduler
     services = {('bokeh', 0): BokehScheduler}
 

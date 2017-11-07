@@ -103,10 +103,8 @@ class Nanny(ServerNode):
         self._listen_address = listen_address
         self.status = 'init'
 
-    def __str__(self):
+    def __repr__(self):
         return "<Nanny: %s, threads: %d>" % (self.worker_address, self.ncores)
-
-    __repr__ = __str__
 
     @gen.coroutine
     def _unregister(self, timeout=10):

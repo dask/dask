@@ -570,11 +570,9 @@ class ConnectionPool(object):
         self.connection_args = connection_args
         self.event = Event()
 
-    def __str__(self):
+    def __repr__(self):
         return "<ConnectionPool: open=%d, active=%d>" % (self.open,
                                                          self.active)
-
-    __repr__ = __str__
 
     def __call__(self, addr=None, ip=None, port=None):
         """ Cached rpc objects """

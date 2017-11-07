@@ -910,6 +910,7 @@ def test_worker_fds(s):
                     reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster(ncores=[])
 def test_service_hosts_match_worker(s):
+    pytest.importorskip('bokeh')
     from distributed.bokeh.worker import BokehWorker
     services = {('bokeh', 0): BokehWorker}
     for host in ['tcp://0.0.0.0', 'tcp://127.0.0.2']:

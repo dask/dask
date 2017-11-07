@@ -1694,7 +1694,7 @@ def test_repr(loop):
             for func in funcs:
                 text = func(c)
                 assert c.scheduler.address in text
-                assert '2' in text
+                assert '3' in text
 
         for func in funcs:
             text = func(c)

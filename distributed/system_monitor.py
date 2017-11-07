@@ -76,12 +76,10 @@ class SystemMonitor(object):
 
         return result
 
-    def __str__(self):
+    def __repr__(self):
         return '<SystemMonitor: cpu: %d memory: %d MB fds: %d>' % (
             self.cpu[-1], self.memory[-1] / 1e6,
             -1 if WINDOWS else self.num_fds[-1])
-
-    __repr__ = __str__
 
     def range_query(self, start):
         if start == self.count:

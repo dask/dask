@@ -112,13 +112,11 @@ class LocalCluster(object):
 
         clusters_to_close.add(self)
 
-    def __str__(self):
+    def __repr__(self):
         return ('LocalCluster(%r, workers=%d, ncores=%d)' %
                 (self.scheduler_address, len(self.workers),
                  sum(w.ncores for w in self.workers))
                 )
-
-    __repr__ = __str__
 
     @gen.coroutine
     def _start(self, ip=None):

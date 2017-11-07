@@ -175,10 +175,8 @@ class Serialize(object):
     def __init__(self, data):
         self.data = data
 
-    def __str__(self):
+    def __repr__(self):
         return "<Serialize: %s>" % str(self.data)
-
-    __repr__ = __str__
 
     def __eq__(self, other):
         return (isinstance(other, Serialize) and

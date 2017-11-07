@@ -306,7 +306,7 @@ class Future(WrappedKey):
             except RuntimeError:  # closed event loop
                 pass
 
-    def __str__(self):
+    def __repr__(self):
         if self.type:
             try:
                 typ = self.type.__name__
@@ -316,8 +316,6 @@ class Future(WrappedKey):
                                                                 typ, self.key)
         else:
             return '<Future: status: %s, key: %s>' % (self.status, self.key)
-
-    __repr__ = __str__
 
     def _repr_html_(self):
         text = '<b>Future: %s</b> ' % html_escape(key_split(self.key))
@@ -370,10 +368,8 @@ class FutureState(object):
         self.traceback = traceback
         self.event.set()
 
-    def __str__(self):
+    def __repr__(self):
         return '<%s: %s>' % (self.__class__.__name__, self.status)
-
-    __repr__ = __str__
 
 
 @gen.coroutine
@@ -464,18 +460,24 @@ class Client(Node):
         self.extensions = {}
         self.scheduler_file = scheduler_file
         self._startup_kwargs = kwargs
+        self.scheduler = None
+        self._scheduler_identity = {}
+        self._lock = threading.Lock()
+        self._refcount_lock = threading.Lock()
+        self.datasets = Datasets(self)
+
+        # Communication
         self.security = security or Security()
         assert isinstance(self.security, Security)
         self.connection_args = self.security.get_connection_args('client')
         self._connecting_to_scheduler = False
         self._asynchronous = asynchronous
-        self.scheduler = None
-        self._lock = threading.Lock()
-        self._refcount_lock = threading.Lock()
-        self.datasets = Datasets(self)
-
         self._loop_runner = LoopRunner(loop=loop, asynchronous=asynchronous)
         self.loop = self._loop_runner.loop
+
+        self._periodic_callbacks = []
+        pc = PeriodicCallback(self._update_scheduler_info, 2000, io_loop=self.loop)
+        self._periodic_callbacks.append(pc)
 
         if hasattr(address, "scheduler_address"):
             # It's a LocalCluster or LocalCluster-compatible object
@@ -546,19 +548,21 @@ class Client(Node):
         else:
             return sync(self.loop, func, *args, **kwargs)
 
-    def __str__(self):
-        if self._loop_runner.is_started():
-            n = sync(self.loop, self.scheduler.ncores)
+    def __repr__(self):
+        # Note: avoid doing I/O here...
+        info = self._scheduler_identity
+        addr = info.get('address')
+        if addr:
+            workers = info.get('workers', {})
+            nworkers = len(workers)
+            ncores = sum(w['ncores'] for w in workers.values())
             return '<%s: scheduler=%r processes=%d cores=%d>' % (
-                self.__class__.__name__,
-                self.scheduler.address, len(n), sum(n.values()))
+                self.__class__.__name__, addr, nworkers, ncores)
         elif self.scheduler is not None:
             return '<%s: scheduler=%r>' % (
                 self.__class__.__name__, self.scheduler.address)
         else:
             return '<%s: not connected>' % (self.__class__.__name__,)
-
-    __repr__ = __str__
 
     def _repr_html_(self):
         if self._loop_runner.is_started():
@@ -614,8 +618,6 @@ class Client(Node):
 
         self._loop_runner.start()
 
-        pc = PeriodicCallback(lambda: None, 1000)
-        self.loop.add_callback(pc.start)
         _set_global_client(self)
         self.status = 'connecting'
 
@@ -695,6 +697,9 @@ class Client(Node):
 
         yield self._ensure_connected(timeout=timeout)
 
+        for pc in self._periodic_callbacks:
+            pc.start()
+
         self.coroutines.append(self._handle_report())
 
         raise gen.Return(self)
@@ -728,9 +733,7 @@ class Client(Node):
         try:
             comm = yield connect(self.scheduler.address, timeout=timeout,
                                  connection_args=self.connection_args)
-
-            yield self.scheduler.identity()
-
+            yield self._update_scheduler_info()
             yield comm.write({'op': 'register-client',
                               'client': self.id,
                               'reply': False})
@@ -752,6 +755,10 @@ class Client(Node):
         del self._pending_msg_buffer[:]
 
         logger.debug("Started scheduling coroutines. Synchronized")
+
+    @gen.coroutine
+    def _update_scheduler_info(self):
+        self._scheduler_identity = yield self.scheduler.identity()
 
     def __enter__(self):
         if not self._loop_runner.is_started():
@@ -891,6 +898,9 @@ class Client(Node):
     def _close(self, fast=False):
         """ Send close signal and wait until scheduler completes """
         with log_errors():
+            for pc in self._periodic_callbacks:
+                pc.stop()
+            self._scheduler_identity = {}
             with ignoring(AttributeError):
                 dask.set_options(get=self._previous_get)
             with ignoring(AttributeError):
@@ -2611,7 +2621,8 @@ class Client(Node):
                                          'stored': 0,
                                          'time-delay': 0.0061032772064208984}}}
         """
-        return self.sync(self.scheduler.identity, **kwargs)
+        self.sync(self._update_scheduler_info)
+        return self._scheduler_identity
 
     def get_metadata(self, keys, default=no_default):
         """ Get arbitrary metadata from scheduler

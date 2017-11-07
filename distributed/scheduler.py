@@ -397,11 +397,9 @@ class Scheduler(ServerNode):
     # Administration #
     ##################
 
-    def __str__(self):
+    def __repr__(self):
         return '<Scheduler: "%s" processes: %d cores: %d>' % (
             self.address, len(self.workers), self.total_ncores)
-
-    __repr__ = __str__
 
     def identity(self, comm=None):
         """ Basic information about ourselves and our cluster """

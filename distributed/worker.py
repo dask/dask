@@ -1148,14 +1148,12 @@ class Worker(WorkerBase):
 
         _global_workers.append(weakref.ref(self))
 
-    def __str__(self):
+    def __repr__(self):
         return "<%s: %s, %s, stored: %d, running: %d/%d, ready: %d, comm: %d, waiting: %d>" % (
             self.__class__.__name__, self.address, self.status,
             len(self.data), len(self.executing), self.ncores,
             len(self.ready), len(self.in_flight_tasks),
             len(self.waiting_for_data))
-
-    __repr__ = __str__
 
     ################
     # Update Graph #
