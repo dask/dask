@@ -499,6 +499,7 @@ def _write_metadata(writes, filenames, fmd, path, myopen, sep):
     --------
     to_parquet
     """
+    import fastparquet
     for fn, rg in zip(filenames, writes):
         if rg is not None:
             if isinstance(rg, list):
