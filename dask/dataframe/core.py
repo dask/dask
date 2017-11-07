@@ -982,7 +982,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     def to_parquet(self, path, *args, **kwargs):
         """ See dd.to_parquet docstring for more information """
         from .io import to_parquet
-        return to_parquet(path, self, *args, **kwargs)
+        return to_parquet(self, path, *args, **kwargs)
 
     def to_csv(self, filename, **kwargs):
         """ See dd.to_csv docstring for more information """

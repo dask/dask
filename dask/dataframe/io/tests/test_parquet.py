@@ -11,7 +11,6 @@ import dask
 import dask.multiprocessing
 from dask.utils import tmpdir, tmpfile
 import dask.dataframe as dd
-from dask.dataframe.io.parquet import read_parquet, to_parquet
 from dask.dataframe.utils import assert_eq
 
 fastparquet = pytest.importorskip('fastparquet')
@@ -30,7 +29,7 @@ df = pd.DataFrame({'x': [6, 2, 3, 4, 5],
 @pytest.fixture
 def fn(tmpdir):
     ddf = dd.from_pandas(df, npartitions=3)
-    to_parquet(str(tmpdir), ddf)
+    dd.to_parquet(ddf, str(tmpdir))
 
     return str(tmpdir)
 
@@ -60,7 +59,7 @@ def test_local(engine):
         assert '_metadata' in files
         assert 'part.0.parquet' in files
 
-        df2 = read_parquet(tmp, index=False, engine=engine)
+        df2 = dd.read_parquet(tmp, index=False, engine=engine)
 
         assert len(df2.divisions) > 1
 
@@ -71,7 +70,7 @@ def test_local(engine):
 
 
 def test_index(fn, engine):
-    ddf = read_parquet(fn, engine=engine)
+    ddf = dd.read_parquet(fn, engine=engine)
     assert_eq(df, ddf)
 
 
@@ -89,51 +88,51 @@ def test_glob(fn, engine):
     os.unlink(os.path.join(fn, '_metadata'))
     files = os.listdir(fn)
     assert '_metadata' not in files
-    ddf = read_parquet(os.path.join(fn, '*'), engine=engine)
+    ddf = dd.read_parquet(os.path.join(fn, '*'), engine=engine)
     assert_eq(df, ddf)
 
 
 def test_auto_add_index(fn, engine):
-    ddf = read_parquet(fn, columns=['x'], index='myindex', engine=engine)
+    ddf = dd.read_parquet(fn, columns=['x'], index='myindex', engine=engine)
     assert_eq(df[['x']], ddf)
 
 
 def test_index_column(fn, engine):
-    ddf = read_parquet(fn, columns=['myindex'], index='myindex', engine=engine)
+    ddf = dd.read_parquet(fn, columns=['myindex'], index='myindex', engine=engine)
     assert_eq(df[[]], ddf)
 
 
 def test_index_column_no_index(fn, engine):
-    ddf = read_parquet(fn, columns=['myindex'])
+    ddf = dd.read_parquet(fn, columns=['myindex'])
     assert_eq(df[[]], ddf)
 
 
 def test_index_column_false_index(fn, engine):
-    ddf = read_parquet(fn, columns=['myindex'], index=False, engine=engine)
+    ddf = dd.read_parquet(fn, columns=['myindex'], index=False, engine=engine)
     assert_eq(pd.DataFrame(df.index), ddf, check_index=False)
 
 
 def test_no_columns_yes_index(fn, engine):
-    ddf = read_parquet(fn, columns=[], index='myindex', engine=engine)
+    ddf = dd.read_parquet(fn, columns=[], index='myindex', engine=engine)
     assert_eq(df[[]], ddf)
 
 
 def test_no_columns_no_index(fn, engine):
-    ddf = read_parquet(fn, columns=[], engine=engine)
+    ddf = dd.read_parquet(fn, columns=[], engine=engine)
     assert_eq(df[[]], ddf)
 
 
 def test_series(fn, engine):
-    ddf = read_parquet(fn, columns=['x'], engine=engine)
+    ddf = dd.read_parquet(fn, columns=['x'], engine=engine)
     assert_eq(df[['x']], ddf)
 
-    ddf = read_parquet(fn, columns='x', index='myindex', engine=engine)
+    ddf = dd.read_parquet(fn, columns='x', index='myindex', engine=engine)
     assert_eq(df.x, ddf)
 
 
 def test_names(fn, engine):
     def read(fn, **kwargs):
-        return read_parquet(fn, engine=engine, **kwargs)
+        return dd.read_parquet(fn, engine=engine, **kwargs)
 
     assert (set(read(fn).dask) == set(read(fn).dask))
 
@@ -146,7 +145,7 @@ def test_names(fn, engine):
 
 @pytest.mark.parametrize('c', [['x'], 'x', ['x', 'y'], []])
 def test_optimize(fn, c):
-    ddf = read_parquet(fn)
+    ddf = dd.read_parquet(fn)
     assert_eq(df[c], ddf[c])
     x = ddf[c]
 
@@ -168,13 +167,13 @@ def test_categorical():
         df = pd.DataFrame({'x': ['a', 'b', 'c'] * 100},
                           dtype='category')
         ddf = dd.from_pandas(df, npartitions=3)
-        to_parquet(tmp, ddf)
+        dd.to_parquet(ddf, tmp)
 
-        ddf2 = read_parquet(tmp, categories=['x'])
+        ddf2 = dd.read_parquet(tmp, categories=['x'])
         assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
 
         # autocat
-        ddf2 = read_parquet(tmp)
+        ddf2 = dd.read_parquet(tmp)
         assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
 
         ddf2.loc[:1000].compute()
@@ -182,7 +181,7 @@ def test_categorical():
         assert assert_eq(df, ddf2)
 
         # dereference cats
-        ddf2 = read_parquet(tmp, categories=[])
+        ddf2 = dd.read_parquet(tmp, categories=[])
 
         ddf2.loc[:1000].compute()
         assert (df.x == ddf2.x).all()
@@ -204,7 +203,7 @@ def test_append(engine):
         ddf1.to_parquet(tmp)
         ddf2.to_parquet(tmp, append=True)
 
-        ddf3 = read_parquet(tmp, engine=engine)
+        ddf3 = dd.read_parquet(tmp, engine=engine)
         assert_eq(df, ddf3)
 
 
@@ -218,8 +217,8 @@ def test_append_with_partition():
         df1.index.name = 'index'
         dd_df0 = dd.from_pandas(df0, npartitions=1)
         dd_df1 = dd.from_pandas(df1, npartitions=1)
-        dd.to_parquet(tmp, dd_df0, partition_on=['lon'])
-        dd.to_parquet(tmp, dd_df1, partition_on=['lon'], append=True,
+        dd.to_parquet(dd_df0, tmp, partition_on=['lon'])
+        dd.to_parquet(dd_df1, tmp, partition_on=['lon'], append=True,
                       ignore_divisions=True)
 
         out = dd.read_parquet(tmp).compute()
@@ -250,7 +249,7 @@ def test_append_wo_index():
         ddf1.to_parquet(tmp, write_index=False)
         ddf2.to_parquet(tmp, write_index=False, append=True)
 
-        ddf3 = read_parquet(tmp, index='f')
+        ddf3 = dd.read_parquet(tmp, index='f')
         assert_eq(df.set_index('f'), ddf3)
 
 
@@ -307,12 +306,12 @@ def test_ordering():
                           index=pd.Index([-1, -2, -3], name='myindex'),
                           columns=['c', 'a', 'b'])
         ddf = dd.from_pandas(df, npartitions=2)
-        to_parquet(tmp, ddf)
+        dd.to_parquet(ddf, tmp)
 
         pf = fastparquet.ParquetFile(tmp)
         assert pf.columns == ['myindex', 'c', 'a', 'b']
 
-        ddf2 = read_parquet(tmp, index='myindex')
+        ddf2 = dd.read_parquet(tmp, index='myindex')
         assert_eq(ddf, ddf2)
 
 
@@ -324,10 +323,10 @@ def test_read_parquet_custom_columns(engine):
         df = dd.from_pandas(data, chunksize=50)
         df.to_parquet(tmp)
 
-        df2 = read_parquet(tmp, columns=['i32', 'f'], engine=engine)
+        df2 = dd.read_parquet(tmp, columns=['i32', 'f'], engine=engine)
         assert_eq(df2, df2, check_index=False)
 
-        df3 = read_parquet(tmp, columns=['f', 'i32'], engine=engine)
+        df3 = dd.read_parquet(tmp, columns=['f', 'i32'], engine=engine)
         assert_eq(df3, df3, check_index=False)
 
 
@@ -366,8 +365,8 @@ def test_roundtrip(df, write_kwargs, read_kwargs):
             df.index.name = 'index'
         ddf = dd.from_pandas(df, npartitions=2)
 
-        to_parquet(tmp, ddf, **write_kwargs)
-        ddf2 = read_parquet(tmp, index=df.index.name, **read_kwargs)
+        dd.to_parquet(ddf, tmp, **write_kwargs)
+        ddf2 = dd.read_parquet(tmp, index=df.index.name, **read_kwargs)
         assert_eq(ddf, ddf2)
 
 
