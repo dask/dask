@@ -18,12 +18,22 @@ from ...bytes.core import get_fs_paths_myopen
 __all__ = ('read_parquet', 'to_parquet')
 
 
-def _meta_from_dtypes(to_read_columns, file_columns, file_dtypes):
+def _meta_from_dtypes(to_read_columns, file_columns, file_dtypes, index_cols):
     meta = pd.DataFrame({c: pd.Series([], dtype=d)
                         for (c, d) in file_dtypes.items()},
                         columns=[c for c in file_columns
                                  if c in file_dtypes])
-    return meta[list(to_read_columns)]
+    df = meta[list(to_read_columns)]
+
+    if not index_cols:
+        return df
+    if not isinstance(index_cols, list):
+        index_cols = [index_cols]
+    df = df.set_index(index_cols)
+    if len(index_cols) == 1 and index_cols[0] == '__index_level_0__':
+        df.index.name = None
+    return df
+
 
 # ----------------------------------------------------------------------
 # Fastparquet interface
@@ -80,15 +90,13 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
     dtypes = pf._dtypes(categories)
 
     meta = _meta_from_dtypes(all_columns, tuple(pf.columns + list(pf.cats)),
-                             dtypes)
+                             dtypes, index_col)
 
     for cat in categories:
         if cat in meta:
             meta[cat] = pd.Series(pd.Categorical([],
-                                  categories=[UNKNOWN_CATEGORIES]))
-
-    if index_col:
-        meta = meta.set_index(index_col)
+                                  categories=[UNKNOWN_CATEGORIES]),
+                                  index=meta.index)
 
     if out_type == Series:
         assert len(meta.columns) == 1
@@ -162,14 +170,14 @@ def _write_fastparquet(df, path, compression=None, write_index=None,
     divisions = df.divisions
     if write_index is True or write_index is None and df.known_divisions:
         df = df.reset_index()
-        index_col = df.columns[0]
+        index_cols = [df.columns[0]]
     else:
         ignore_divisions = True
-        index_col = None
+        index_cols = []
 
     fmd = fastparquet.writer.make_metadata(df._meta,
                                            object_encoding=object_encoding,
-                                           index_cols=[index_col],
+                                           index_cols=index_cols,
                                            ignore_columns=partition_on,
                                            **kwargs)
 
@@ -195,7 +203,7 @@ def _write_fastparquet(df, path, compression=None, write_index=None,
 
         if not ignore_divisions:
             minmax = fastparquet.api.sorted_partitioned_columns(pf)
-            old_end = minmax[index_col]['max'][-1]
+            old_end = minmax[index_cols[0]]['max'][-1]
             if divisions[0] < old_end:
                 raise ValueError(
                     'Appended divisions overlapping with the previous ones.\n'
@@ -271,14 +279,6 @@ def _read_arrow(fs, paths, file_opener, columns=None, filters=None,
     has_pandas_metadata = schema.metadata is not None and b'pandas' in schema.metadata
     task_name = 'read-parquet-' + tokenize(dataset, columns)
 
-    if index is False:
-        index_col = None
-    elif index is None and has_pandas_metadata:
-        pandas_metadata = json.loads(schema.metadata[b'pandas'].decode('utf8'))
-        index_col = pandas_metadata.get('index_columns')
-    else:
-        index_col = index
-
     if columns is None:
         all_columns = schema.names
     else:
@@ -290,33 +290,43 @@ def _read_arrow(fs, paths, file_opener, columns=None, filters=None,
     else:
         out_type = DataFrame
 
-    if index_col:
-        if isinstance(index_col, list):
-            all_columns = list(unique(all_columns + index_col))
-        elif index_col not in all_columns:
-            all_columns.append(index_col)
+    if index is False:
+        index_cols = []
+    elif index is None:
+        if has_pandas_metadata:
+            pandas_metadata = json.loads(schema.metadata[b'pandas'].decode('utf8'))
+            index_cols = pandas_metadata.get('index_columns', [])
+        else:
+            index_cols = []
+    else:
+        index_cols = index if isinstance(index, list) else [index]
 
-    divisions = (None,) * (len(dataset.pieces) + 1)
+    if index_cols:
+        all_columns = list(unique(all_columns + index_cols))
 
     dtypes = _get_pyarrow_dtypes(schema)
 
-    meta = _meta_from_dtypes(all_columns, schema.names, dtypes)
-    if index_col:
-        meta = meta.set_index(index_col)
+    meta = _meta_from_dtypes(all_columns, schema.names, dtypes, index_cols)
 
     if out_type == Series:
         assert len(meta.columns) == 1
         meta = meta[meta.columns[0]]
 
-    task_plan = {
-        (task_name, i): (_read_arrow_parquet_piece,
-                         file_opener,
-                         piece, all_columns,
-                         index_col,
-                         out_type == Series,
-                         dataset.partitions)
-        for i, piece in enumerate(dataset.pieces)
-    }
+    if dataset.pieces:
+        divisions = (None,) * (len(dataset.pieces) + 1)
+        task_plan = {
+            (task_name, i): (_read_arrow_parquet_piece,
+                             file_opener,
+                             piece,
+                             all_columns,
+                             index_cols,
+                             out_type == Series,
+                             dataset.partitions)
+            for i, piece in enumerate(dataset.pieces)
+        }
+    else:
+        divisions = (None, None)
+        task_plan = {(task_name, 0): meta}
 
     return out_type(task_plan, task_name, meta, divisions)
 
@@ -331,15 +341,20 @@ def _get_pyarrow_dtypes(schema):
     return dtypes
 
 
-def _read_arrow_parquet_piece(open_file_func, piece, columns, index_col,
+def _read_arrow_parquet_piece(open_file_func, piece, columns, index_cols,
                               is_series, partitions):
     with open_file_func(piece.path, mode='rb') as f:
         table = piece.read(columns=columns,  partitions=partitions,
                            use_pandas_metadata=True,
                            file=f)
     df = table.to_pandas()
-    if df.index.name is None and index_col is not None:
-        df = df.set_index(index_col)
+    if (index_cols and df.index.name is None and not
+            df.columns.intersection(index_cols).empty):
+        # Index should be set, but it isn't
+        df = df.set_index(index_cols)
+    elif not index_cols and df.index.name is not None:
+        # Index shouldn't be set, but it is
+        df = df.reset_index(drop=False)
 
     if is_series:
         return df[df.columns[0]]
@@ -352,11 +367,11 @@ def _write_arrow(df, path, write_index=None, append=False,
                  storage_options=None, **kwargs):
     if append:
         raise NotImplementedError("`append` not implemented for "
-                                  "`engine='arrow'`")
+                                  "`engine='pyarrow'`")
 
     if partition_on:
         raise NotImplementedError("`partition_on` not implemented for "
-                                  "`engine='arrow'`")
+                                  "`engine='pyarrow'`")
 
     if write_index is None and df.known_divisions:
         write_index = True
@@ -402,7 +417,7 @@ def get_engine(engine):
 
     Parameters
     ----------
-    engine : {'auto', 'fastparquet', 'arrow'}, default 'auto'
+    engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
         Parquet reader library to use. Default is first installed in this list.
 
     Returns
@@ -413,7 +428,7 @@ def get_engine(engine):
         return _ENGINES[engine]
 
     if engine == 'auto':
-        for eng in ['fastparquet', 'arrow']:
+        for eng in ['fastparquet', 'pyarrow']:
             try:
                 return get_engine(eng)
             except ImportError:
@@ -435,7 +450,7 @@ def get_engine(engine):
                                          'write': _write_fastparquet}
         return eng
 
-    elif engine == 'arrow':
+    elif engine == 'pyarrow':
         try:
             import pyarrow.parquet as api
         except ImportError:
@@ -445,9 +460,14 @@ def get_engine(engine):
         def normalize_PyArrowParquetDataset(ds):
             return (type(ds), ds.paths)
 
-        _ENGINES['arrow'] = eng = {'read': _read_arrow,
-                                   'write': _write_arrow}
+        _ENGINES['pyarrow'] = eng = {'read': _read_arrow,
+                                     'write': _write_arrow}
         return eng
+
+    elif engine == 'arrow':
+        warnings.warn("parquet with `engine='arrow'` is deprecated, "
+                      "use `engine='pyarrow'` instead")
+        return get_engine('pyarrow')
 
     else:
         raise ValueError('Unsupported engine type: {0}'.format(engine))
@@ -485,7 +505,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         data written by dask/fastparquet, not otherwise.
     storage_options : dict
         Key/value pairs to be passed on to the file-system backend, if any.
-    engine : {'auto', 'fastparquet', 'arrow'}, default 'auto'
+    engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
         Parquet reader library to use. If only one library is installed, it
         will use that one; if both, it will use 'fastparquet'
 
@@ -521,7 +541,7 @@ def to_parquet(df, path, engine='auto', compression=None, write_index=None,
     path : string
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
-    engine : {'auto', 'fastparquet', 'arrow'}, default 'auto'
+    engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
         Parquet library to use. If only one library is installed, it will use
         that one; if both, it will use 'fastparquet'
     compression : string or dict
