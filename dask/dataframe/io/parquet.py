@@ -250,8 +250,8 @@ def _write_metadata(writes, filenames, fmd, path, open_with, sep):
 # PyArrow interface
 
 
-def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
-                  categories=None, index=None):
+def _read_arrow(fs, paths, file_opener, columns=None, filters=None,
+                categories=None, index=None):
     import pyarrow.parquet as api
 
     if filters is not None:
@@ -347,9 +347,9 @@ def _read_arrow_parquet_piece(open_file_func, piece, columns, index_col,
         return df
 
 
-def _write_pyarrow(df, path, write_index=None, append=False,
-                   ignore_divisions=False, partition_on=None,
-                   storage_options=None, **kwargs):
+def _write_arrow(df, path, write_index=None, append=False,
+                 ignore_divisions=False, partition_on=None,
+                 storage_options=None, **kwargs):
     if append:
         raise NotImplementedError("`append` not implemented for "
                                   "`engine='arrow'`")
@@ -445,8 +445,8 @@ def get_engine(engine):
         def normalize_PyArrowParquetDataset(ds):
             return (type(ds), ds.paths)
 
-        _ENGINES['arrow'] = eng = {'read': _read_pyarrow,
-                                   'write': _write_pyarrow}
+        _ENGINES['arrow'] = eng = {'read': _read_arrow,
+                                   'write': _write_arrow}
         return eng
 
     else:
