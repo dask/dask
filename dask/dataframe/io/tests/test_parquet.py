@@ -10,16 +10,18 @@ import pytest
 
 import dask
 import dask.multiprocessing
-from dask.utils import tmpdir, tmpfile
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 
-fastparquet = pytest.importorskip('fastparquet')
+try:
+    import fastparquet
+except ImportError:
+    fastparquet = False
 
 try:
-    import pyarrow.parquet as pyarrow  # noqa
+    import pyarrow.parquet as pa_parquet
 except ImportError:
-    pyarrow = False
+    pa_parquet = False
 
 
 df = pd.DataFrame({'x': [6, 2, 3, 4, 5],
@@ -31,10 +33,20 @@ ddf = dd.from_pandas(df, npartitions=3)
 
 @pytest.fixture(params=[pytest.mark.skipif(not fastparquet, 'fastparquet',
                                            reason='fastparquet not found'),
-                        pytest.mark.skipif(not pyarrow, 'pyarrow',
+                        pytest.mark.skipif(not pa_parquet, 'pyarrow',
                                            reason='pyarrow not found')])
 def engine(request):
     return request.param
+
+
+def check_fastparquet():
+    if not fastparquet:
+        pytest.skip('fastparquet not found')
+
+
+def check_pyarrow():
+    if not pa_parquet:
+        pytest.skip('pyarrow not found')
 
 
 def write_read_engines(xfail_arrow_to_fastparquet=True):
@@ -43,7 +55,7 @@ def write_read_engines(xfail_arrow_to_fastparquet=True):
     else:
         xfail = ()
     ff = () if fastparquet else (pytest.mark.skip(reason='fastparquet not found'),)
-    aa = () if pyarrow else (pytest.mark.skip(reason='pyarrow not found'),)
+    aa = () if pa_parquet else (pytest.mark.skip(reason='pyarrow not found'),)
     engines = [pytest.param('fastparquet', 'fastparquet', marks=ff),
                pytest.param('pyarrow', 'pyarrow', marks=aa),
                pytest.param('fastparquet', 'pyarrow', marks=ff + aa),
@@ -140,6 +152,16 @@ def test_columns_index(tmpdir, write_engine, read_engine, columns, index):
     assert_eq(df[[]], ddf2)
 
 
+@write_read_engines_xfail
+def test_no_index(tmpdir, write_engine, read_engine):
+    fn = str(tmpdir)
+    df = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(fn, write_index=False, engine=write_engine)
+    ddf2 = dd.read_parquet(fn, engine=read_engine)
+    assert_eq(df, ddf2, check_index=False)
+
+
 def test_read_series(tmpdir, engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=engine)
@@ -168,6 +190,7 @@ def test_names(tmpdir, engine):
 
 @pytest.mark.parametrize('c', [['x'], 'x', ['x', 'y'], []])
 def test_optimize(tmpdir, c):
+    check_fastparquet()
     fn = str(tmpdir)
     ddf.to_parquet(fn)
     ddf2 = dd.read_parquet(fn)
@@ -190,6 +213,7 @@ def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
 
 
 def test_categorical(tmpdir):
+    check_fastparquet()
     tmp = str(tmpdir)
     df = pd.DataFrame({'x': ['a', 'b', 'c'] * 100}, dtype='category')
     ddf = dd.from_pandas(df, npartitions=3)
@@ -213,147 +237,149 @@ def test_categorical(tmpdir):
     assert (df.x == ddf2.x).all()
 
 
-def test_append(engine):
+def test_append(tmpdir, engine):
     """Test that appended parquet equal to the original one."""
-    with tmpdir() as tmp:
-        df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
-                           'i64': np.arange(1000, dtype=np.int64),
-                           'f': np.arange(1000, dtype=np.float64),
-                           'bhello': np.random.choice(['hello', 'yo', 'people'],
-                                                      size=1000).astype("O")})
-        df.index.name = 'index'
+    check_fastparquet()
+    tmp = str(tmpdir)
+    df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
+                       'i64': np.arange(1000, dtype=np.int64),
+                       'f': np.arange(1000, dtype=np.float64),
+                       'bhello': np.random.choice(['hello', 'yo', 'people'],
+                                                  size=1000).astype("O")})
+    df.index.name = 'index'
 
-        half = len(df) // 2
-        ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
-        ddf2 = dd.from_pandas(df.iloc[half:], chunksize=100)
-        ddf1.to_parquet(tmp)
-        ddf2.to_parquet(tmp, append=True)
+    half = len(df) // 2
+    ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
+    ddf2 = dd.from_pandas(df.iloc[half:], chunksize=100)
+    ddf1.to_parquet(tmp)
+    ddf2.to_parquet(tmp, append=True)
 
-        ddf3 = dd.read_parquet(tmp, engine=engine)
-        assert_eq(df, ddf3)
+    ddf3 = dd.read_parquet(tmp, engine=engine)
+    assert_eq(df, ddf3)
 
 
-def test_append_with_partition():
-    with tmpdir() as tmp:
-        df0 = pd.DataFrame({'lat': np.arange(0, 10), 'lon': np.arange(10, 20),
-                            'value': np.arange(100, 110)})
-        df0.index.name = 'index'
-        df1 = pd.DataFrame({'lat': np.arange(10, 20), 'lon': np.arange(10, 20),
-                            'value': np.arange(120, 130)})
-        df1.index.name = 'index'
-        dd_df0 = dd.from_pandas(df0, npartitions=1)
-        dd_df1 = dd.from_pandas(df1, npartitions=1)
-        dd.to_parquet(dd_df0, tmp, partition_on=['lon'])
-        dd.to_parquet(dd_df1, tmp, partition_on=['lon'], append=True,
-                      ignore_divisions=True)
+def test_append_with_partition(tmpdir):
+    check_fastparquet()
+    tmp = str(tmpdir)
+    df0 = pd.DataFrame({'lat': np.arange(0, 10), 'lon': np.arange(10, 20),
+                        'value': np.arange(100, 110)})
+    df0.index.name = 'index'
+    df1 = pd.DataFrame({'lat': np.arange(10, 20), 'lon': np.arange(10, 20),
+                        'value': np.arange(120, 130)})
+    df1.index.name = 'index'
+    dd_df0 = dd.from_pandas(df0, npartitions=1)
+    dd_df1 = dd.from_pandas(df1, npartitions=1)
+    dd.to_parquet(dd_df0, tmp, partition_on=['lon'])
+    dd.to_parquet(dd_df1, tmp, partition_on=['lon'], append=True,
+                  ignore_divisions=True)
 
-        out = dd.read_parquet(tmp).compute()
+    out = dd.read_parquet(tmp).compute()
     out['lon'] = out.lon.astype('int64')  # just to pass assert
     # sort required since partitioning breaks index order
     assert_eq(out.sort_values('value'), pd.concat([df0, df1])[out.columns],
               check_index=False)
 
 
-def test_append_wo_index():
+def test_append_wo_index(tmpdir):
     """Test append with write_index=False."""
-    with tmpdir() as tmp:
-        df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
-                           'i64': np.arange(1000, dtype=np.int64),
-                           'f': np.arange(1000, dtype=np.float64),
-                           'bhello': np.random.choice(['hello', 'yo', 'people'],
-                                                      size=1000).astype("O")})
-        half = len(df) // 2
-        ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
-        ddf2 = dd.from_pandas(df.iloc[half:], chunksize=100)
-        ddf1.to_parquet(tmp)
-        with pytest.raises(ValueError) as excinfo:
-            ddf2.to_parquet(tmp, write_index=False, append=True)
+    check_fastparquet()
+    tmp = str(tmpdir.join('tmp1.parquet'))
+    df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
+                       'i64': np.arange(1000, dtype=np.int64),
+                       'f': np.arange(1000, dtype=np.float64),
+                       'bhello': np.random.choice(['hello', 'yo', 'people'],
+                                                  size=1000).astype("O")})
+    half = len(df) // 2
+    ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
+    ddf2 = dd.from_pandas(df.iloc[half:], chunksize=100)
+    ddf1.to_parquet(tmp)
 
-        assert 'Appended columns' in str(excinfo.value)
-
-    with tmpdir() as tmp:
-        ddf1.to_parquet(tmp, write_index=False)
+    with pytest.raises(ValueError) as excinfo:
         ddf2.to_parquet(tmp, write_index=False, append=True)
+    assert 'Appended columns' in str(excinfo.value)
 
-        ddf3 = dd.read_parquet(tmp, index='f')
-        assert_eq(df.set_index('f'), ddf3)
+    tmp = str(tmpdir.join('tmp2.parquet'))
+    ddf1.to_parquet(tmp, write_index=False)
+    ddf2.to_parquet(tmp, write_index=False, append=True)
+
+    ddf3 = dd.read_parquet(tmp, index='f')
+    assert_eq(df.set_index('f'), ddf3)
 
 
-def test_append_overlapping_divisions():
+def test_append_overlapping_divisions(tmpdir):
     """Test raising of error when divisions overlapping."""
-    with tmpdir() as tmp:
-        df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
-                           'i64': np.arange(1000, dtype=np.int64),
-                           'f': np.arange(1000, dtype=np.float64),
-                           'bhello': np.random.choice(
-                               ['hello', 'yo', 'people'],
-                               size=1000).astype("O")})
-        half = len(df) // 2
-        ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
-        ddf2 = dd.from_pandas(df.iloc[half - 10:], chunksize=100)
-        ddf1.to_parquet(tmp)
+    check_fastparquet()
+    tmp = str(tmpdir)
+    df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
+                       'i64': np.arange(1000, dtype=np.int64),
+                       'f': np.arange(1000, dtype=np.float64),
+                       'bhello': np.random.choice(['hello', 'yo', 'people'],
+                                                  size=1000).astype("O")})
+    half = len(df) // 2
+    ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
+    ddf2 = dd.from_pandas(df.iloc[half - 10:], chunksize=100)
+    ddf1.to_parquet(tmp)
 
-        with pytest.raises(ValueError) as excinfo:
-            ddf2.to_parquet(tmp, append=True)
+    with pytest.raises(ValueError) as excinfo:
+        ddf2.to_parquet(tmp, append=True)
+    assert 'Appended divisions' in str(excinfo.value)
 
-        assert 'Appended divisions' in str(excinfo.value)
-
-        ddf2.to_parquet(tmp, append=True, ignore_divisions=True)
+    ddf2.to_parquet(tmp, append=True, ignore_divisions=True)
 
 
-def test_append_different_columns():
+def test_append_different_columns(tmpdir):
     """Test raising of error when non equal columns."""
-    with tmpdir() as tmp:
-        df1 = pd.DataFrame({'i32': np.arange(100, dtype=np.int32)})
-        df2 = pd.DataFrame({'i64': np.arange(100, dtype=np.int64)})
-        df3 = pd.DataFrame({'i32': np.arange(100, dtype=np.int64)})
+    check_fastparquet()
+    tmp = str(tmpdir)
+    df1 = pd.DataFrame({'i32': np.arange(100, dtype=np.int32)})
+    df2 = pd.DataFrame({'i64': np.arange(100, dtype=np.int64)})
+    df3 = pd.DataFrame({'i32': np.arange(100, dtype=np.int64)})
 
-        ddf1 = dd.from_pandas(df1, chunksize=2)
-        ddf2 = dd.from_pandas(df2, chunksize=2)
-        ddf3 = dd.from_pandas(df3, chunksize=2)
+    ddf1 = dd.from_pandas(df1, chunksize=2)
+    ddf2 = dd.from_pandas(df2, chunksize=2)
+    ddf3 = dd.from_pandas(df3, chunksize=2)
 
-        ddf1.to_parquet(tmp)
+    ddf1.to_parquet(tmp)
 
-        with pytest.raises(ValueError) as excinfo:
-            ddf2.to_parquet(tmp, append=True)
-        assert 'Appended columns' in str(excinfo.value)
+    with pytest.raises(ValueError) as excinfo:
+        ddf2.to_parquet(tmp, append=True)
+    assert 'Appended columns' in str(excinfo.value)
 
-        with pytest.raises(ValueError) as excinfo:
-            ddf3.to_parquet(tmp, append=True)
-        assert 'Appended dtypes' in str(excinfo.value)
-
-
-def test_ordering():
-    with tmpdir() as tmp:
-        tmp = str(tmp)
-        df = pd.DataFrame({'a': [1, 2, 3],
-                           'b': [10, 20, 30],
-                           'c': [100, 200, 300]},
-                          index=pd.Index([-1, -2, -3], name='myindex'),
-                          columns=['c', 'a', 'b'])
-        ddf = dd.from_pandas(df, npartitions=2)
-        dd.to_parquet(ddf, tmp)
-
-        pf = fastparquet.ParquetFile(tmp)
-        assert pf.columns == ['myindex', 'c', 'a', 'b']
-
-        ddf2 = dd.read_parquet(tmp, index='myindex')
-        assert_eq(ddf, ddf2)
+    with pytest.raises(ValueError) as excinfo:
+        ddf3.to_parquet(tmp, append=True)
+    assert 'Appended dtypes' in str(excinfo.value)
 
 
-def test_read_parquet_custom_columns(engine):
-    with tmpdir() as tmp:
-        tmp = str(tmp)
-        data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
-                             'f': np.arange(1000, dtype=np.float64)})
-        df = dd.from_pandas(data, chunksize=50)
-        df.to_parquet(tmp)
+def test_ordering(tmpdir):
+    check_fastparquet()
+    tmp = str(tmpdir)
+    df = pd.DataFrame({'a': [1, 2, 3],
+                       'b': [10, 20, 30],
+                       'c': [100, 200, 300]},
+                      index=pd.Index([-1, -2, -3], name='myindex'),
+                      columns=['c', 'a', 'b'])
+    ddf = dd.from_pandas(df, npartitions=2)
+    dd.to_parquet(ddf, tmp)
 
-        df2 = dd.read_parquet(tmp, columns=['i32', 'f'], engine=engine)
-        assert_eq(df2, df2, check_index=False)
+    pf = fastparquet.ParquetFile(tmp)
+    assert pf.columns == ['myindex', 'c', 'a', 'b']
 
-        df3 = dd.read_parquet(tmp, columns=['f', 'i32'], engine=engine)
-        assert_eq(df3, df3, check_index=False)
+    ddf2 = dd.read_parquet(tmp, index='myindex')
+    assert_eq(ddf, ddf2)
+
+
+def test_read_parquet_custom_columns(tmpdir, engine):
+    tmp = str(tmpdir)
+    data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
+                         'f': np.arange(1000, dtype=np.float64)})
+    df = dd.from_pandas(data, chunksize=50)
+    df.to_parquet(tmp)
+
+    df2 = dd.read_parquet(tmp, columns=['i32', 'f'], engine=engine)
+    assert_eq(df2, df2, check_index=False)
+
+    df3 = dd.read_parquet(tmp, columns=['f', 'i32'], engine=engine)
+    assert_eq(df3, df3, check_index=False)
 
 
 @pytest.mark.parametrize('df,write_kwargs,read_kwargs', [
@@ -384,19 +410,20 @@ def test_read_parquet_custom_columns(engine):
     (pd.DataFrame({'.': [3., 2., None]}), {}, {}),
     (pd.DataFrame({' ': [3., 2., None]}), {}, {}),
 ])
-def test_roundtrip(df, write_kwargs, read_kwargs):
-    with tmpdir() as tmp:
-        tmp = str(tmp)
-        if df.index.name is None:
-            df.index.name = 'index'
-        ddf = dd.from_pandas(df, npartitions=2)
+def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs):
+    check_fastparquet()
+    tmp = str(tmpdir)
+    if df.index.name is None:
+        df.index.name = 'index'
+    ddf = dd.from_pandas(df, npartitions=2)
 
-        dd.to_parquet(ddf, tmp, **write_kwargs)
-        ddf2 = dd.read_parquet(tmp, index=df.index.name, **read_kwargs)
-        assert_eq(ddf, ddf2)
+    dd.to_parquet(ddf, tmp, **write_kwargs)
+    ddf2 = dd.read_parquet(tmp, index=df.index.name, **read_kwargs)
+    assert_eq(ddf, ddf2)
 
 
 def test_categories(tmpdir):
+    check_fastparquet()
     fn = str(tmpdir)
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
                        'y': list('caaab')})
@@ -432,30 +459,31 @@ def test_empty_partition(tmpdir, engine):
     assert_eq(sol, ddf3, check_names=False, check_index=False)
 
 
-def test_timestamp_index():
-    with tmpfile() as fn:
-        df = tm.makeTimeDataFrame()
-        df.index.name = 'foo'
-        ddf = dd.from_pandas(df, npartitions=5)
-        ddf.to_parquet(fn)
-        ddf2 = dd.read_parquet(fn)
-        assert_eq(ddf, ddf2)
+def test_timestamp_index(tmpdir, engine):
+    fn = str(tmpdir)
+    df = tm.makeTimeDataFrame()
+    df.index.name = 'foo'
+    ddf = dd.from_pandas(df, npartitions=5)
+    ddf.to_parquet(fn, engine=engine)
+    ddf2 = dd.read_parquet(fn, engine=engine)
+    assert_eq(df, ddf2)
 
 
-@pytest.mark.skipif(not pyarrow, reason='pyarrow not found')
-def test_to_parquet_default_writes_nulls():
-    import pyarrow.parquet as pq
+def test_to_parquet_default_writes_nulls(tmpdir):
+    check_fastparquet()
+    check_pyarrow()
+    fn = str(tmpdir.join('test.parquet'))
 
     df = pd.DataFrame({'c1': [1., np.nan, 2, np.nan, 3]})
     ddf = dd.from_pandas(df, npartitions=1)
 
-    with tmpfile() as fn:
-        ddf.to_parquet(fn)
-        table = pq.read_table(fn)
-        assert table[1].null_count == 2
+    ddf.to_parquet(fn)
+    table = pa_parquet.read_table(fn)
+    assert table[1].null_count == 2
 
 
 def test_partition_on(tmpdir):
+    check_fastparquet()
     tmpdir = str(tmpdir)
     df = pd.DataFrame({'a': np.random.choice(['A', 'B', 'C'], size=100),
                        'b': np.random.random(size=100),
@@ -468,6 +496,7 @@ def test_partition_on(tmpdir):
 
 
 def test_filters(tmpdir):
+    check_fastparquet()
     fn = str(tmpdir)
 
     df = pd.DataFrame({'at': ['ab', 'aa', 'ba', 'da', 'bb']})
@@ -495,16 +524,9 @@ def test_filters(tmpdir):
     assert len(ddf2) > 0
 
 
-def test_no_index(tmpdir):
-    fn = str(tmpdir)
-    df = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
-    ddf = dd.from_pandas(df, npartitions=2)
-    ddf.to_parquet(fn, write_index=False)
-    dd.read_parquet(fn).compute()
-
-
 @pytest.mark.parametrize('get', [dask.threaded.get, dask.multiprocessing.get])
 def test_to_parquet_lazy(tmpdir, get):
+    check_fastparquet()
     tmpdir = str(tmpdir)
     df = pd.DataFrame({'a': [1, 2, 3, 4],
                        'b': [1., 2., 3., 4.]})
@@ -513,7 +535,6 @@ def test_to_parquet_lazy(tmpdir, get):
     value = ddf.to_parquet(tmpdir, compute=False)
 
     assert hasattr(value, 'dask')
-    # assert not os.path.exists(tmpdir)
     value.compute(get=get)
     assert os.path.exists(tmpdir)
 
@@ -523,6 +544,7 @@ def test_to_parquet_lazy(tmpdir, get):
 
 
 def test_timestamp96(tmpdir):
+    check_fastparquet()
     fn = str(tmpdir)
     df = pd.DataFrame({'a': ['now']}, dtype='M8[ns]')
     ddf = dd.from_pandas(df, 1)
@@ -534,6 +556,7 @@ def test_timestamp96(tmpdir):
 
 
 def test_drill_scheme(tmpdir):
+    check_fastparquet()
     fn = str(tmpdir)
     N = 5
     df1 = pd.DataFrame({c: np.random.random(N)
@@ -558,6 +581,7 @@ def test_drill_scheme(tmpdir):
 
 
 def test_parquet_select_cats(tmpdir):
+    check_fastparquet()
     fn = str(tmpdir)
     df = pd.DataFrame({
         'categories': pd.Series(
