@@ -33,7 +33,8 @@ DataFrame
   (:pr:`2827`)
 - Fixed bug in ``Dataframe.fillna`` when filling with a ``Series`` value
   (:pr:`2810`)
--
+- Deprecate old argument ordering in ``dd.to_parquet`` to better match
+  convention of putting the dataframe first (:pr:`2867`)
 
 Bag
 +++
