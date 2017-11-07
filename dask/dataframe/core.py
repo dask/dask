@@ -900,8 +900,18 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                           limit=limit, axis=axis)
 
         if axis == 1 or method is None:
-            return self.map_partitions(M.fillna, value, method=method,
-                                       limit=limit, axis=axis, meta=meta)
+            # Control whether or not dask's partition alignment happens.
+            # We don't want for a pandas Series.
+            # We do want it for a dask Series
+            if isinstance(value, pd.Series):
+                args = ()
+                kwargs = {'value': value}
+            else:
+                args = (value,)
+                kwargs = {}
+            return self.map_partitions(M.fillna, *args, method=method,
+                                       limit=limit, axis=axis, meta=meta,
+                                       **kwargs)
 
         if method in ('pad', 'ffill'):
             method = 'ffill'

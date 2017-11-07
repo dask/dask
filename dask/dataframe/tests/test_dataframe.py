@@ -1307,6 +1307,14 @@ def test_ffill_bfill():
     assert_eq(ddf.bfill(axis=1), df.bfill(axis=1))
 
 
+def test_fillna_series_types():
+    # https://github.com/dask/dask/issues/2809
+    df = pd.DataFrame({"A": [1, np.nan, 3], "B": [1, np.nan, 3]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    fill_value = pd.Series([1, 10], index=['A', 'C'])
+    assert_eq(ddf.fillna(fill_value), df.fillna(fill_value))
+
+
 def test_sample():
     df = pd.DataFrame({'x': [1, 2, 3, 4, None, 6], 'y': list('abdabd')},
                       index=[10, 20, 30, 40, 50, 60])
