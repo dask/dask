@@ -83,15 +83,20 @@ def test_resource_profiler():
     assert len(results) > 0
     assert all(isinstance(i, tuple) and len(i) == 3 for i in results)
 
+    # Tracker stopped on exit
+    assert not rprof._is_running()
+
     rprof.clear()
     assert rprof.results == []
 
+    # Close is idempotent
     rprof.close()
-    assert not rprof._tracker.is_alive()
+    assert not rprof._is_running()
 
-    with pytest.raises(AssertionError):
-        with rprof:
-            get(dsk, 'e')
+    # Restarts tracker if already closed
+    with rprof:
+        get(dsk2, 'c')
+    assert len(rprof.results) > 0
 
 
 @pytest.mark.skipif("not psutil")
@@ -114,7 +119,7 @@ def test_resource_profiler_multiple_gets():
     assert all(isinstance(i, tuple) and len(i) == 3 for i in results)
 
     rprof.close()
-    assert not rprof._tracker.is_alive()
+    assert not rprof._is_running()
 
 
 def test_cache_profiler():
