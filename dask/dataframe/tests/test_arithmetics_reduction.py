@@ -577,8 +577,6 @@ def test_frame_series_arithmetic_methods():
         assert_eq(l.rmod(r, axis=0), el.rmod(er, axis=0))
         assert_eq(l.rpow(r, axis=0), el.rpow(er, axis=0))
 
-        pytest.raises(ValueError, lambda: l.add(r, axis=1))
-
     for l, r, el, er in [(ddf1, pdf2, pdf1, pdf2), (ddf1, ps3, pdf1, ps3)]:
         assert_eq(l, el)
         assert_eq(r, er)

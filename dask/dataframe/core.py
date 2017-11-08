@@ -2556,11 +2556,9 @@ class DataFrame(_Frame):
 
             if axis in (1, 'columns'):
                 # When axis=1 and other is a series, `other` is transposed
-                # and the operator is applied broadcast across rows. This
-                # isn't supported with dd.Series.
+                # and the operator is applied broadcast across rows.
                 if isinstance(other, Series):
-                    msg = 'Unable to {0} dd.Series with axis=1'.format(name)
-                    raise ValueError(msg)
+                    return elemwise(op, self, other)
                 elif isinstance(other, pd.Series):
                     # Special case for pd.Series to avoid unwanted partitioning
                     # of other. We pass it in as a kwarg to prevent this.
@@ -2607,7 +2605,7 @@ class DataFrame(_Frame):
             new_op = getattr(pd.DataFrame, name)
             bind_method(cls, meth, cls._get_operator_method(name, new_op))
         else:
-            super()._bind_operator(op)
+            super(DataFrame, cls)._bind_operator(op)
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, axis=0, args=(), meta=no_default, **kwds):
