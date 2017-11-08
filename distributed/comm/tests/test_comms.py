@@ -324,6 +324,8 @@ def check_inproc_specific(run_client):
             msg = yield comm.read()
         assert msg == {'op': 'pong', 'data': key}
         l.append(key)
+        with pytest.raises(CommClosedError):
+            yield comm.read()
         yield comm.close()
 
     client_communicate = partial(run_client, client_communicate)
@@ -649,29 +651,26 @@ def test_inproc_comm_closed_implicit():
 
 @gen.coroutine
 def check_comm_closed_explicit(addr, listen_args=None, connect_args=None):
-    @gen.coroutine
-    def handle_comm(comm):
-        # Wait
-        try:
-            yield comm.read()
-        except CommClosedError:
-            pass
-
-    listener = listen(addr, handle_comm, connection_args=listen_args)
-    listener.start()
-    contact_addr = listener.contact_address
-
-    comm = yield connect(contact_addr, connection_args=connect_args)
-    comm.close()
+    a, b = yield get_comm_pair(addr, listen_args=listen_args, connect_args=connect_args)
+    a_read = a.read()
+    b_read = b.read()
+    yield a.close()
+    # In-flight reads should abort with CommClosedError
     with pytest.raises(CommClosedError):
-        yield comm.write({})
-
-    comm = yield connect(contact_addr, connection_args=connect_args)
-    comm.close()
+        yield a_read
     with pytest.raises(CommClosedError):
-        yield comm.read()
-
-    yield gen.moment
+        yield b_read
+    # New reads as well
+    with pytest.raises(CommClosedError):
+        yield a.read()
+    with pytest.raises(CommClosedError):
+        yield b.read()
+    # And writes
+    with pytest.raises(CommClosedError):
+        yield a.write({})
+    with pytest.raises(CommClosedError):
+        yield b.write({})
+    yield b.close()
 
 
 @gen_test()

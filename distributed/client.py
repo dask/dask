@@ -806,41 +806,44 @@ class Client(Node):
     def _handle_report(self):
         """ Listen to scheduler """
         with log_errors():
-            while True:
-                try:
-                    msgs = yield self.scheduler_comm.comm.read()
-                except CommClosedError:
-                    if self.status == 'running':
-                        logger.warning("Client report stream closed to scheduler")
-                        logger.info("Reconnecting...")
-                        self.status = 'connecting'
-                        yield self._reconnect()
-                        continue
-                    else:
-                        break
-                if not isinstance(msgs, list):
-                    msgs = [msgs]
-
-                breakout = False
-                for msg in msgs:
-                    logger.debug("Client receives message %s", msg)
-
-                    if 'status' in msg and 'error' in msg['status']:
-                        six.reraise(*clean_exception(**msg))
-
-                    op = msg.pop('op')
-
-                    if op == 'close' or op == 'stream-closed':
-                        breakout = True
-                        break
-
+            try:
+                while True:
                     try:
-                        handler = self._handlers[op]
-                        handler(**msg)
-                    except Exception as e:
-                        logger.exception(e)
-                if breakout:
-                    break
+                        msgs = yield self.scheduler_comm.comm.read()
+                    except CommClosedError:
+                        if self.status == 'running':
+                            logger.warning("Client report stream closed to scheduler")
+                            logger.info("Reconnecting...")
+                            self.status = 'connecting'
+                            yield self._reconnect()
+                            continue
+                        else:
+                            break
+                    if not isinstance(msgs, list):
+                        msgs = [msgs]
+
+                    breakout = False
+                    for msg in msgs:
+                        logger.debug("Client receives message %s", msg)
+
+                        if 'status' in msg and 'error' in msg['status']:
+                            six.reraise(*clean_exception(**msg))
+
+                        op = msg.pop('op')
+
+                        if op == 'close' or op == 'stream-closed':
+                            breakout = True
+                            break
+
+                        try:
+                            handler = self._handlers[op]
+                            handler(**msg)
+                        except Exception as e:
+                            logger.exception(e)
+                    if breakout:
+                        break
+            except CancelledError:
+                pass
 
     def _handle_key_in_memory(self, key=None, type=None, workers=None):
         state = self.futures.get(key)
@@ -897,6 +900,8 @@ class Client(Node):
     @gen.coroutine
     def _close(self, fast=False):
         """ Send close signal and wait until scheduler completes """
+        self.status = 'closing'
+
         with log_errors():
             for pc in self._periodic_callbacks:
                 pc.stop()
@@ -922,13 +927,23 @@ class Client(Node):
             self.status = 'closed'
             if _get_global_client() is self:
                 _set_global_client(None)
+            coroutines = set(self.coroutines)
+            for f in self.coroutines:
+                # cancel() works on asyncio futures (Tornado 5)
+                # but is a no-op on Tornado futures
+                f.cancel()
+                if f.cancelled():
+                    coroutines.remove(f)
+            del self.coroutines[:]
             if not fast:
                 with ignoring(TimeoutError):
-                    yield [gen.with_timeout(timedelta(seconds=2), f)
-                           for f in self.coroutines]
+                    yield gen.with_timeout(timedelta(seconds=2),
+                                           list(coroutines))
             with ignoring(AttributeError):
                 self.scheduler.close_rpc()
             self.scheduler = None
+
+        self.status = 'closed'
 
     _shutdown = _close
 
@@ -944,16 +959,17 @@ class Client(Node):
         --------
         Client.restart
         """
+        # XXX handling of self.status here is not thread-safe
+        if self.status == 'closed':
+            return
+        self.status = 'closing'
+
         if self.asynchronous:
             future = self._close()
             if timeout:
                 future = gen.with_timeout(timedelta(seconds=timeout), future)
             return future
-        # XXX handling of self.status here is not thread-safe
-        if self.status == 'closed':
-            return
 
-        self.status = 'closing'
         if self._start_arg is None:
             with ignoring(AttributeError):
                 self.cluster.close()

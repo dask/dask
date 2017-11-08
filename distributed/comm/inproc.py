@@ -209,6 +209,7 @@ class InProc(Comm):
         if not self.closed():
             # Putting EOF is cheap enough that we do it on abort() too
             self._write_loop.add_callback(self._write_q.put_nowait, _EOF)
+            self._read_q.put_nowait(_EOF)
             self._write_q = self._read_q = None
             self._closed = True
             self._finalizer.detach()
