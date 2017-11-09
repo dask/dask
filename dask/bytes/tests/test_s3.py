@@ -282,12 +282,10 @@ def test_read_text_passes_through_options():
         assert df.count().compute(get=get) == 3
 
 
-@pytest.mark.parametrize("engine", ['arrow', 'fastparquet'])
+@pytest.mark.parametrize("engine", ['pyarrow', 'fastparquet'])
 def test_parquet(s3, engine):
     dd = pytest.importorskip('dask.dataframe')
-    pytest.importorskip('fastparquet')
-    if engine == 'arrow':
-        pytest.importorskip('pyarrow')
+    pytest.importorskip(engine)
     import pandas as pd
     import numpy as np
 
@@ -301,7 +299,7 @@ def test_parquet(s3, engine):
                              size=1000).astype("O")},
                         index=pd.Index(np.arange(1000), name='foo'))
     df = dd.from_pandas(data, chunksize=500)
-    df.to_parquet(url, object_encoding='utf8')
+    df.to_parquet(url, engine=engine)
 
     files = [f.split('/')[-1] for f in s3.ls(url)]
     assert '_metadata' in files
