@@ -95,10 +95,6 @@ def test_with_paths():
         # relative path doesn't work
         url = pathlib.Path('file://.test.accounts.*')
         read_bytes(url, blocksize=None)
-    pytest.importorskip("s3fs")
-    with pytest.raises(ValueError):
-        url = pathlib.Path('s3://bucket/test.accounts.*')
-        sample, values = read_bytes(url, blocksize=None)
 
 
 def test_read_bytes_block():

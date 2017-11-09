@@ -1,16 +1,15 @@
 from __future__ import print_function, division, absolute_import
 
+import sys
 from contextlib import contextmanager
 
 import pytest
-pytest.importorskip('s3fs')
-pytest.importorskip('boto3')
-pytest.importorskip('moto')
 
-import boto3
-import moto
+s3fs = pytest.importorskip('s3fs')
+boto3 = pytest.importorskip('boto3')
+moto = pytest.importorskip('moto')
+
 from toolz import concat, valmap, partial
-from s3fs import S3FileSystem
 
 from dask import compute, get, delayed
 from dask.bytes.s3 import DaskS3FileSystem
@@ -40,7 +39,7 @@ def s3():
         client.create_bucket(Bucket=test_bucket_name, ACL='public-read-write')
         for f, data in files.items():
             client.put_object(Bucket=test_bucket_name, Key=f, Body=data)
-        yield S3FileSystem(anon=True)
+        yield s3fs.S3FileSystem(anon=True)
 
 
 @contextmanager
@@ -301,7 +300,7 @@ def test_parquet(s3):
                              size=1000).astype("O")},
                         index=pd.Index(np.arange(1000), name='foo'))
     df = dd.from_pandas(data, chunksize=500)
-    to_parquet(url, df, object_encoding='utf8')
+    to_parquet(df, url, object_encoding='utf8')
 
     files = [f.split('/')[-1] for f in s3.ls(url)]
     assert '_metadata' in files
@@ -325,7 +324,7 @@ def test_parquet_wstoragepars(s3):
 
     data = pd.DataFrame({'i32': np.array([0, 5, 2, 5])})
     df = dd.from_pandas(data, chunksize=500)
-    to_parquet(url, df, write_index=False)
+    to_parquet(df, url, write_index=False)
 
     read_parquet(url, storage_options={'default_fill_cache': False})
     assert s3.current().default_fill_cache is False
@@ -336,3 +335,12 @@ def test_parquet_wstoragepars(s3):
     assert s3.current().default_block_size == 2**20
     with s3.current().open(url + '/_metadata') as f:
         assert f.blocksize == 2**20
+
+
+@pytest.mark.skipif(sys.platform == 'win32',
+                    reason="pathlib and moto clash on windows")
+def test_pathlib_s3(s3):
+    pathlib = pytest.importorskip("pathlib")
+    with pytest.raises(ValueError):
+        url = pathlib.Path('s3://bucket/test.accounts.*')
+        sample, values = read_bytes(url, blocksize=None)
