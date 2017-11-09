@@ -301,7 +301,7 @@ def test_parquet(s3):
                              size=1000).astype("O")},
                         index=pd.Index(np.arange(1000), name='foo'))
     df = dd.from_pandas(data, chunksize=500)
-    to_parquet(url, df, object_encoding='utf8')
+    to_parquet(df, url, object_encoding='utf8')
 
     files = [f.split('/')[-1] for f in s3.ls(url)]
     assert '_metadata' in files
@@ -325,7 +325,7 @@ def test_parquet_wstoragepars(s3):
 
     data = pd.DataFrame({'i32': np.array([0, 5, 2, 5])})
     df = dd.from_pandas(data, chunksize=500)
-    to_parquet(url, df, write_index=False)
+    to_parquet(df, url, write_index=False)
 
     read_parquet(url, storage_options={'default_fill_cache': False})
     assert s3.current().default_fill_cache is False
