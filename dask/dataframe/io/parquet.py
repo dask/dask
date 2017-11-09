@@ -258,9 +258,9 @@ def _write_metadata(writes, filenames, fmd, path, open_with, sep):
 # PyArrow interface
 
 
-def _read_arrow(fs, paths, file_opener, columns=None, filters=None,
-                categories=None, index=None):
-    import pyarrow.parquet as api
+def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
+                  categories=None, index=None):
+    import pyarrow.parquet as pq
 
     if filters is not None:
         raise NotImplementedError("Predicate pushdown not implemented")
@@ -271,10 +271,7 @@ def _read_arrow(fs, paths, file_opener, columns=None, filters=None,
     if isinstance(columns, tuple):
         columns = list(columns)
 
-    dataset = api.ParquetDataset(
-        path_or_paths=paths,
-        filesystem=fs
-    )
+    dataset = pq.ParquetDataset(paths, filesystem=fs)
     schema = dataset.schema.to_arrow_schema()
     has_pandas_metadata = schema.metadata is not None and b'pandas' in schema.metadata
     task_name = 'read-parquet-' + tokenize(dataset, columns)
@@ -315,7 +312,7 @@ def _read_arrow(fs, paths, file_opener, columns=None, filters=None,
     if dataset.pieces:
         divisions = (None,) * (len(dataset.pieces) + 1)
         task_plan = {
-            (task_name, i): (_read_arrow_parquet_piece,
+            (task_name, i): (_read_pyarrow_parquet_piece,
                              file_opener,
                              piece,
                              all_columns,
@@ -341,8 +338,8 @@ def _get_pyarrow_dtypes(schema):
     return dtypes
 
 
-def _read_arrow_parquet_piece(open_file_func, piece, columns, index_cols,
-                              is_series, partitions):
+def _read_pyarrow_parquet_piece(open_file_func, piece, columns, index_cols,
+                                is_series, partitions):
     with open_file_func(piece.path, mode='rb') as f:
         table = piece.read(columns=columns,  partitions=partitions,
                            use_pandas_metadata=True,
@@ -362,9 +359,9 @@ def _read_arrow_parquet_piece(open_file_func, piece, columns, index_cols,
         return df
 
 
-def _write_arrow(df, path, write_index=None, append=False,
-                 ignore_divisions=False, partition_on=None,
-                 storage_options=None, **kwargs):
+def _write_pyarrow(df, path, write_index=None, append=False,
+                   ignore_divisions=False, partition_on=None,
+                   storage_options=None, **kwargs):
     if append:
         raise NotImplementedError("`append` not implemented for "
                                   "`engine='pyarrow'`")
@@ -382,7 +379,7 @@ def _write_arrow(df, path, write_index=None, append=False,
 
     template = fs.sep.join([path, 'part.%i.parquet'])
 
-    write = delayed(_write_partition_arrow)
+    write = delayed(_write_partition_pyarrow)
     first_kwargs = kwargs.copy()
     first_kwargs['metadata_path'] = fs.sep.join([path, '_metadata'])
     writes = [write(part, open_with, template % i, write_index,
@@ -391,8 +388,8 @@ def _write_arrow(df, path, write_index=None, append=False,
     return delayed(writes)
 
 
-def _write_partition_arrow(df, open_with, filename, write_index,
-                           compression=None, metadata_path=None, **kwargs):
+def _write_partition_pyarrow(df, open_with, filename, write_index,
+                             compression=None, metadata_path=None, **kwargs):
     import pyarrow as pa
     from pyarrow import parquet
     t = pa.Table.from_pandas(df, preserve_index=write_index)
@@ -452,16 +449,16 @@ def get_engine(engine):
 
     elif engine == 'pyarrow':
         try:
-            import pyarrow.parquet as api
+            import pyarrow.parquet as pq
         except ImportError:
             raise ImportError("pyarrow not installed")
 
-        @normalize_token.register(api.ParquetDataset)
+        @normalize_token.register(pq.ParquetDataset)
         def normalize_PyArrowParquetDataset(ds):
             return (type(ds), ds.paths)
 
-        _ENGINES['pyarrow'] = eng = {'read': _read_arrow,
-                                     'write': _write_arrow}
+        _ENGINES['pyarrow'] = eng = {'read': _read_pyarrow,
+                                     'write': _write_pyarrow}
         return eng
 
     elif engine == 'arrow':

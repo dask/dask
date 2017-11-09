@@ -19,9 +19,9 @@ except ImportError:
     fastparquet = False
 
 try:
-    import pyarrow.parquet as pa_parquet
+    import pyarrow.parquet as pq
 except ImportError:
-    pa_parquet = False
+    pq = False
 
 
 df = pd.DataFrame({'x': [6, 2, 3, 4, 5],
@@ -33,7 +33,7 @@ ddf = dd.from_pandas(df, npartitions=3)
 
 @pytest.fixture(params=[pytest.mark.skipif(not fastparquet, 'fastparquet',
                                            reason='fastparquet not found'),
-                        pytest.mark.skipif(not pa_parquet, 'pyarrow',
+                        pytest.mark.skipif(not pq, 'pyarrow',
                                            reason='pyarrow not found')])
 def engine(request):
     return request.param
@@ -45,7 +45,7 @@ def check_fastparquet():
 
 
 def check_pyarrow():
-    if not pa_parquet:
+    if not pq:
         pytest.skip('pyarrow not found')
 
 
@@ -55,7 +55,7 @@ def write_read_engines(xfail_arrow_to_fastparquet=True):
     else:
         xfail = ()
     ff = () if fastparquet else (pytest.mark.skip(reason='fastparquet not found'),)
-    aa = () if pa_parquet else (pytest.mark.skip(reason='pyarrow not found'),)
+    aa = () if pq else (pytest.mark.skip(reason='pyarrow not found'),)
     engines = [pytest.param('fastparquet', 'fastparquet', marks=ff),
                pytest.param('pyarrow', 'pyarrow', marks=aa),
                pytest.param('fastparquet', 'pyarrow', marks=ff + aa),
@@ -479,7 +479,7 @@ def test_to_parquet_default_writes_nulls(tmpdir):
     ddf = dd.from_pandas(df, npartitions=1)
 
     ddf.to_parquet(fn)
-    table = pa_parquet.read_table(fn)
+    table = pq.read_table(fn)
     assert table[1].null_count == 2
 
 
