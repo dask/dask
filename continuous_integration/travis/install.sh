@@ -44,6 +44,7 @@ conda install -q -c conda-forge \
     graphviz \
     h5py \
     ipython \
+    moto \
     partd \
     psutil \
     "pytest<=3.1.1" \
@@ -81,7 +82,6 @@ fi
 pip install -q --upgrade --no-deps \
     cachey \
     graphviz \
-    moto \
     pyarrow \
     pandas_datareader
 
