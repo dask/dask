@@ -2602,8 +2602,7 @@ class DataFrame(_Frame):
         name = op.__name__
         meth = '__{}__'.format(name)
         if name in set(_OPERATOR_METHODS):
-            new_op = getattr(pd.DataFrame, name)
-            bind_method(cls, meth, cls._get_operator_method(name, new_op))
+            bind_method(cls, meth, cls._get_operator_method(name, getattr(M, name)))
         else:
             super(DataFrame, cls)._bind_operator(op)
 
