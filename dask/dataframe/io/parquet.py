@@ -222,7 +222,7 @@ def _write_fastparquet(df, path, compression=None, write_index=None,
     else:
         write = delayed(fastparquet.writer.make_part_file)
         writes = [write(open_with(sep.join([path, filename]), 'wb'), partition,
-                        fmd.schema, compression=compression)
+                        fmd.schema, compression=compression, fmd=fmd)
                   for filename, partition in zip(filenames, df.to_delayed())]
 
     return delayed(_write_metadata)(writes, filenames, fmd, path, open_with, sep)
