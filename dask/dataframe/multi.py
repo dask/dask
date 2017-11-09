@@ -545,6 +545,8 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
     >>> dd.concat([a, b])                               # doctest: +SKIP
     dd.DataFrame<concat-..., divisions=(None, None, None, None)>
     """
+    from .core import AlignMe
+
     if not isinstance(dfs, list):
         raise TypeError("dfs must be a list of DataFrames/Series objects")
     if len(dfs) == 0:
@@ -560,7 +562,7 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
 
     axis = DataFrame._validate_axis(axis)
     dasks = [df for df in dfs if isinstance(df, _Frame)]
-    dfs = _maybe_from_pandas(dfs)
+    dfs = _maybe_from_pandas([AlignMe(df) for df in dfs])
 
     if axis == 1:
         if all(df.known_divisions for df in dasks):

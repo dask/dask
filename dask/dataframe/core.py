@@ -1486,12 +1486,15 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @derived_from(pd.DataFrame)
     def combine(self, other, func, fill_value=None, overwrite=True):
-        return self.map_partitions(M.combine, other, func,
-                                   fill_value=fill_value, overwrite=overwrite)
+        meta = self._meta
+        return self.map_partitions(M.combine, AlignMe(other), func,
+                                   fill_value=fill_value, overwrite=overwrite,
+                                   meta=meta)
 
     @derived_from(pd.DataFrame)
     def combine_first(self, other):
-        return self.map_partitions(M.combine_first, other)
+        meta = self._meta
+        return self.map_partitions(M.combine_first, AlignMe(other), meta=meta)
 
     @classmethod
     def _bind_operator_method(cls, name, op):
@@ -1866,12 +1869,18 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @derived_from(pd.Series)
     def combine(self, other, func, fill_value=None):
+        meta = self._meta
+        if isinstance(other, pd.Series):
+            other = AlignMe(other)
         return self.map_partitions(M.combine, other, func,
-                                   fill_value=fill_value)
+                                   fill_value=fill_value,
+                                   meta=meta)
 
     @derived_from(pd.Series)
     def combine_first(self, other):
-        return self.map_partitions(M.combine_first, other)
+        meta = self._meta
+        other = AlignMe(other)
+        return self.map_partitions(M.combine_first, other, meta=meta)
 
     def to_bag(self, index=False):
         """ Craeate a Dask Bag from a Series """
@@ -1897,6 +1906,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 raise NotImplementedError('level must be None')
             axis = self._validate_axis(axis)
             meta = _emulate(op, self, other, axis=axis, fill_value=fill_value)
+            if axis == 0 and isinstance(other, (pd.Series, pd.DataFrame)):
+                other = AlignMe(other)
             return map_partitions(op, self, other, meta=meta,
                                   axis=axis, fill_value=fill_value)
         meth.__doc__ = op.__doc__
@@ -1910,6 +1921,12 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             if level is not None:
                 raise NotImplementedError('level must be None')
             axis = self._validate_axis(axis)
+            if axis == 0 and isinstance(other, (pd.Series, pd.DataFrame)):
+                other = AlignMe(other)
+            elif axis == 1 and isinstance(other, pd.DataFrame):
+                # XXX: is this required?
+                other = AlignMe(other)
+
             return elemwise(comparison, self, other, axis=axis)
 
         meth.__doc__ = comparison.__doc__
@@ -2365,10 +2382,13 @@ class DataFrame(_Frame):
                     callable(v) or np.isscalar(v)):
                 raise TypeError("Column assignment doesn't support type "
                                 "{0}".format(type(v).__name__))
+        df2 = self._meta.assign(**_extract_meta(kwargs))
         pairs = list(sum(kwargs.items(), ()))
+        pairs = [AlignMe(x) if isinstance(x, (Series, pd.Series)) else x
+                 for x in pairs]
 
         # Figure out columns of the output
-        df2 = self._meta.assign(**_extract_meta(kwargs))
+
         return elemwise(methods.assign, self, *pairs, meta=df2)
 
     @derived_from(pd.DataFrame)
@@ -2560,15 +2580,13 @@ class DataFrame(_Frame):
                 if isinstance(other, Series):
                     msg = 'Unable to {0} dd.Series with axis=1'.format(name)
                     raise ValueError(msg)
-                elif isinstance(other, pd.Series):
-                    # Special case for pd.Series to avoid unwanted partitioning
-                    # of other. We pass it in as a kwarg to prevent this.
-                    meta = _emulate(op, self, other=other, axis=axis,
-                                    fill_value=fill_value)
-                    return map_partitions(op, self, other=other, meta=meta,
-                                          axis=axis, fill_value=fill_value)
-
             meta = _emulate(op, self, other, axis=axis, fill_value=fill_value)
+
+            if axis == 0 and isinstance(other, (pd.Series, pd.DataFrame)):
+                other = AlignMe(other)
+            elif axis == 1 and isinstance(other, pd.DataFrame):
+                other = AlignMe(other)
+
             return map_partitions(op, self, other, meta=meta,
                                   axis=axis, fill_value=fill_value)
         meth.__doc__ = op.__doc__
@@ -2944,9 +2962,19 @@ def elemwise(op, *args, **kwargs):
 
 def _maybe_from_pandas(dfs):
     from .io import from_pandas
-    dfs = [from_pandas(df, 1) if isinstance(df, (pd.Series, pd.DataFrame))
-           else df for df in dfs]
-    return dfs
+    out = []
+    for df in dfs:
+        if isinstance(df, AlignMe):
+            if isinstance(df.value, _Frame):
+                out.append(df.value)
+            elif isinstance(df.value, (pd.Series, pd.DataFrame)):
+                out.append(from_pandas(df.value, 1))
+            else:
+                raise TypeError("Can't wrap type '{}' in 'AlignMe'".format(
+                    type(df.value)))
+        else:
+            out.append(df)
+    return out
 
 
 def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
@@ -3173,6 +3201,11 @@ def _emulate(func, *args, **kwargs):
     """
     with raise_on_meta_error(funcname(func)):
         return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
+
+
+class AlignMe:
+    def __init__(self, value):
+        self.value = value
 
 
 @insert_meta_param_description
