@@ -282,11 +282,12 @@ def test_read_text_passes_through_options():
         assert df.count().compute(get=get) == 3
 
 
-def test_parquet(s3):
+@pytest.mark.parametrize("engine", ['arrow', 'fastparquet'])
+def test_parquet(s3, engine):
     dd = pytest.importorskip('dask.dataframe')
     pytest.importorskip('fastparquet')
-    from dask.dataframe.io.parquet import to_parquet, read_parquet
-
+    if engine == 'arrow':
+        pytest.importorskip('pyarrow')
     import pandas as pd
     import numpy as np
 
@@ -300,13 +301,13 @@ def test_parquet(s3):
                              size=1000).astype("O")},
                         index=pd.Index(np.arange(1000), name='foo'))
     df = dd.from_pandas(data, chunksize=500)
-    to_parquet(df, url, object_encoding='utf8')
+    df.to_parquet(url, object_encoding='utf8')
 
     files = [f.split('/')[-1] for f in s3.ls(url)]
     assert '_metadata' in files
     assert 'part.0.parquet' in files
 
-    df2 = read_parquet(url, index='foo')
+    df2 = dd.read_parquet(url, index='foo', engine=engine)
     assert len(df2.divisions) > 1
 
     pd.util.testing.assert_frame_equal(data, df2.compute())
@@ -315,7 +316,6 @@ def test_parquet(s3):
 def test_parquet_wstoragepars(s3):
     dd = pytest.importorskip('dask.dataframe')
     pytest.importorskip('fastparquet')
-    from dask.dataframe.io.parquet import to_parquet, read_parquet
 
     import pandas as pd
     import numpy as np
@@ -324,14 +324,14 @@ def test_parquet_wstoragepars(s3):
 
     data = pd.DataFrame({'i32': np.array([0, 5, 2, 5])})
     df = dd.from_pandas(data, chunksize=500)
-    to_parquet(df, url, write_index=False)
+    df.to_parquet(url, write_index=False)
 
-    read_parquet(url, storage_options={'default_fill_cache': False})
+    dd.read_parquet(url, storage_options={'default_fill_cache': False})
     assert s3.current().default_fill_cache is False
-    read_parquet(url, storage_options={'default_fill_cache': True})
+    dd.read_parquet(url, storage_options={'default_fill_cache': True})
     assert s3.current().default_fill_cache is True
 
-    read_parquet(url, storage_options={'default_block_size': 2**20})
+    dd.read_parquet(url, storage_options={'default_block_size': 2**20})
     assert s3.current().default_block_size == 2**20
     with s3.current().open(url + '/_metadata') as f:
         assert f.blocksize == 2**20
