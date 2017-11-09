@@ -282,17 +282,13 @@ def test_read_text_passes_through_options():
         assert df.count().compute(get=get) == 3
 
 
-@pytest.mark.parametrize("engine", [
-    'auto',
-    'pyarrow',
-    'fastparquet'
+@pytest.mark.parametrize("import_name,engine", [
+    ('pyarrow', 'arrow'),
+    ('fastparquet', 'fastparquet'),
 ])
-def test_parquet(s3, engine):
+def test_parquet(s3, import_name, engine):
     dd = pytest.importorskip('dask.dataframe')
-    if engine is not 'auto':
-        pytest.importorskip(engine)
-    else:
-        pytest.importorskip('fastparquet')
+    pytest.importorskip(import_name)
     from dask.dataframe.io.parquet import to_parquet, read_parquet
 
     import pandas as pd
