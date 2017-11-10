@@ -276,6 +276,7 @@ def _write_metadata(writes, filenames, fmd, path, open_with, sep):
 
 def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
                   categories=None, index=None):
+    from ...bytes.core import get_pyarrow_filesystem
     import pyarrow.parquet as pq
 
     if filters is not None:
@@ -287,7 +288,7 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
     if isinstance(columns, tuple):
         columns = list(columns)
 
-    dataset = pq.ParquetDataset(paths, filesystem=fs)
+    dataset = pq.ParquetDataset(paths, filesystem=get_pyarrow_filesystem(fs))
     schema = dataset.schema.to_arrow_schema()
     has_pandas_metadata = schema.metadata is not None and b'pandas' in schema.metadata
     task_name = 'read-parquet-' + tokenize(dataset, columns)

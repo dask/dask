@@ -57,5 +57,10 @@ class DaskS3FileSystem(S3FileSystem, core.FileSystem):
         s3_path = self._trim_filename(path)
         return self.info(s3_path)['Size']
 
+    def _get_pyarrow_filesystem(self):
+        """Get an equivalent pyarrow fileystem"""
+        import pyarrow as pa
+        return pa.filesystem.S3FSWrapper(self)
+
 
 core._filesystems['s3'] = DaskS3FileSystem

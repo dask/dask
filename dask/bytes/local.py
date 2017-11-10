@@ -70,5 +70,10 @@ class LocalFileSystem(core.FileSystem):
         path = self._trim_filename(path)
         return os.stat(path).st_size
 
+    def _get_pyarrow_filesystem(self):
+        """Get an equivalent pyarrow filesystem"""
+        import pyarrow as pa
+        return pa.filesystem.LocalFileSystem.get_instance()
+
 
 core._filesystems['file'] = LocalFileSystem
