@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import copy
 import json
 import warnings
 
@@ -151,9 +152,31 @@ def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
         return df
 
 
-def _write_fastparquet(df, path, compression=None, write_index=None,
-                       append=False, ignore_divisions=False, partition_on=None,
-                       storage_options=None, **kwargs):
+def _write_partition_fastparquet(df, fs, path, filename, fmd, compression,
+                                 partition_on):
+    from fastparquet.writer import partition_on_columns, make_part_file
+    # Fastparquet mutates this in a non-threadsafe manner. For now we just copy
+    # it before forwarding to fastparquet.
+    fmd = copy.copy(fmd)
+    if not len(df):
+        # Write nothing for empty partitions
+        rgs = None
+    elif partition_on:
+        rgs = partition_on_columns(df, partition_on, path, filename, fmd,
+                                   fs.sep, compression, fs.open, fs.mkdirs)
+    else:
+        # Fastparquet current doesn't properly set `num_rows` in the output
+        # metadata. Set it here to fix that.
+        fmd.num_rows = len(df)
+        with fs.open(fs.sep.join([path, filename]), 'wb') as fil:
+            rgs = make_part_file(fil, df, fmd.schema, compression=compression,
+                                 fmd=fmd)
+    return rgs
+
+
+def _write_fastparquet(df, path, write_index=None, append=False,
+                       ignore_divisions=False, partition_on=None,
+                       storage_options=None, compression=None, **kwargs):
     import fastparquet
 
     fs, paths, open_with = get_fs_paths_myopen(path, None, 'wb',
@@ -174,12 +197,6 @@ def _write_fastparquet(df, path, compression=None, write_index=None,
     else:
         ignore_divisions = True
         index_cols = []
-
-    fmd = fastparquet.writer.make_metadata(df._meta,
-                                           object_encoding=object_encoding,
-                                           index_cols=index_cols,
-                                           ignore_columns=partition_on,
-                                           **kwargs)
 
     if append:
         pf = fastparquet.api.ParquetFile(path, open_with=open_with, sep=sep)
@@ -209,21 +226,19 @@ def _write_fastparquet(df, path, compression=None, write_index=None,
                     'Appended divisions overlapping with the previous ones.\n'
                     'New: {} | Previous: {}'.format(old_end, divisions[0]))
     else:
+        fmd = fastparquet.writer.make_metadata(df._meta,
+                                               object_encoding=object_encoding,
+                                               index_cols=index_cols,
+                                               ignore_columns=partition_on,
+                                               **kwargs)
         i_offset = 0
 
     filenames = ['part.%i.parquet' % (i + i_offset)
                  for i in range(df.npartitions)]
 
-    if partition_on:
-        write = delayed(fastparquet.writer.partition_on_columns)
-        writes = [write(partition, partition_on, path, filename, fmd, sep,
-                        compression, fs.open, fs.mkdirs)
-                  for filename, partition in zip(filenames, df.to_delayed())]
-    else:
-        write = delayed(fastparquet.writer.make_part_file)
-        writes = [write(open_with(sep.join([path, filename]), 'wb'), partition,
-                        fmd.schema, compression=compression, fmd=fmd)
-                  for filename, partition in zip(filenames, df.to_delayed())]
+    write = delayed(_write_partition_fastparquet)
+    writes = [write(part, fs, path, filename, fmd, compression, partition_on)
+              for filename, part in zip(filenames, df.to_delayed())]
 
     return delayed(_write_metadata)(writes, filenames, fmd, path, open_with, sep)
 
@@ -236,6 +251,7 @@ def _write_metadata(writes, filenames, fmd, path, open_with, sep):
     to_parquet
     """
     import fastparquet
+    fmd = copy.copy(fmd)
     for fn, rg in zip(filenames, writes):
         if rg is not None:
             if isinstance(rg, list):
@@ -389,13 +405,13 @@ def _write_pyarrow(df, path, write_index=None, append=False,
 
 
 def _write_partition_pyarrow(df, open_with, filename, write_index,
-                             compression=None, metadata_path=None, **kwargs):
+                             metadata_path=None, **kwargs):
     import pyarrow as pa
     from pyarrow import parquet
     t = pa.Table.from_pandas(df, preserve_index=write_index)
 
     with open_with(filename, 'wb') as fil:
-        parquet.write_table(t, fil, compression=compression, **kwargs)
+        parquet.write_table(t, fil, **kwargs)
 
     if metadata_path is not None:
         with open_with(metadata_path, 'wb') as fil:
@@ -523,7 +539,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                 categories=categories, index=index)
 
 
-def to_parquet(df, path, engine='auto', compression=None, write_index=None,
+def to_parquet(df, path, engine='auto', compression='default', write_index=None,
                append=False, ignore_divisions=False, partition_on=None,
                storage_options=None, compute=True, **kwargs):
     """Store Dask.dataframe to Parquet files
@@ -534,45 +550,44 @@ def to_parquet(df, path, engine='auto', compression=None, write_index=None,
 
     Parameters
     ----------
-    df : Dask.dataframe
+    df : dask.dataframe.DataFrame
     path : string
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
     engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
         Parquet library to use. If only one library is installed, it will use
-        that one; if both, it will use 'fastparquet'
-    compression : string or dict
-        Either a string like "SNAPPY" or a dictionary mapping column names to
-        compressors like ``{"name": "GZIP", "values": "SNAPPY"}``
-    write_index : boolean
-        Whether or not to write the index.  Defaults to True *if* divisions are
+        that one; if both, it will use 'fastparquet'.
+    compression : string or dict, optional
+        Either a string like ``"snappy"`` or a dictionary mapping column names
+        to compressors like ``{"name": "gzip", "values": "snappy"}``. The
+        default is ``"default"``, which uses the default compression for
+        whichever engine is selected.
+    write_index : boolean, optional
+        Whether or not to write the index. Defaults to True *if* divisions are
         known.
-    append : bool (False)
-        If False, construct data-set from scratch; if True, add new
-        row-group(s) to existing data-set. In the latter case, the data-set
+    append : bool, optional
+        If False (default), construct data-set from scratch. If True, add new
+        row-group(s) to an existing data-set. In the latter case, the data-set
         must exist, and the schema must match the input data.
-    ignore_divisions : bool (False)
-        If False raises error when previous divisions overlap with the new
-        appended divisions. Ignored if append=False.
-    partition_on : list
+    ignore_divisions : bool, optional
+        If False (default) raises error when previous divisions overlap with
+        the new appended divisions. Ignored if append=False.
+    partition_on : list, optional
         Construct directory-based partitioning by splitting on these fields'
         values. Each dask partition will result in one or more datafiles,
         there will be no global groupby.
-    storage_options : dict
+    storage_options : dict, optional
         Key/value pairs to be passed on to the file-system backend, if any.
-    compute : bool (True)
-        If true (default) then we compute immediately.
-        If False then we return a dask.delayed object for future computation.
+    compute : bool, optional
+        If True (default) then the result is computed immediately. If False
+        then a ``dask.delayed`` object is returned for future computation.
     **kwargs
         Extra options to be passed on to the specific backend.
-
-    This uses the fastparquet project:
-    http://fastparquet.readthedocs.io/en/latest
 
     Examples
     --------
     >>> df = dd.read_csv(...)  # doctest: +SKIP
-    >>> to_parquet('/path/to/output/', df, compression='SNAPPY')  # doctest: +SKIP
+    >>> to_parquet('/path/to/output/', df, compression='snappy')  # doctest: +SKIP
 
     See Also
     --------
@@ -589,12 +604,14 @@ def to_parquet(df, path, engine='auto', compression=None, write_index=None,
     if set(partition_on) - set(df.columns):
         raise ValueError('Partitioning on non-existent column')
 
+    if compression != 'default':
+        kwargs['compression'] = compression
+
     write = get_engine(engine)['write']
 
-    out = write(df, path, compression=compression, write_index=write_index,
-                append=append, ignore_divisions=ignore_divisions,
-                partition_on=partition_on, storage_options=storage_options,
-                **kwargs)
+    out = write(df, path, write_index=write_index, append=append,
+                ignore_divisions=ignore_divisions, partition_on=partition_on,
+                storage_options=storage_options, **kwargs)
 
     if compute:
         out.compute()
