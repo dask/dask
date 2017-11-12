@@ -72,7 +72,7 @@ There are a couple of older projects that often get mentioned
 *   Pyro_:  Remote objects / RPC
 
 .. _Luigi: https://luigi.readthedocs.io/en/latest/
-.. _MPI4Py: http://pythonhosted.org/mpi4py/
+.. _MPI4Py: http://mpi4py.readthedocs.io/en/stable/
 .. _PyZMQ: https://github.com/zeromq/pyzmq
 .. _Celery: http://www.celeryproject.org/
 .. _`IPython Parallel`: https://ipyparallel.readthedocs.io/en/latest/
