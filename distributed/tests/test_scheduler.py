@@ -20,11 +20,11 @@ from distributed.client import wait
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.worker import dumps_function, dumps_task
-from distributed.utils_test import (inc, dec, gen_cluster, gen_test, readone,
-                                    slowinc, slowadd, slowdec, cluster, div)
-from distributed.utils_test import loop, nodebug  # flake8: noqa
 from distributed.utils import tmpfile
-from distributed.utils_test import slow
+from distributed.utils_test import (inc, dec, gen_cluster, gen_test, readone,
+                                    slowinc, slowadd, slowdec, cluster, div,
+                                    varying, slow)
+from distributed.utils_test import loop, nodebug  # flake8: noqa
 from dask.compatibility import apply
 
 
@@ -1221,3 +1221,30 @@ def test_deque_handler():
     msg = deque_handler.deque[-1]
     assert 'distributed.scheduler' in deque_handler.format(msg)
     assert any(msg.msg == 'foo123' for msg in deque_handler.deque)
+
+
+@gen_cluster(client=True)
+def test_retries(c, s, a, b):
+    args = [ZeroDivisionError("one"), ZeroDivisionError("two"), 42]
+
+    future = c.submit(varying(args), retries=3)
+    result = yield future
+    assert result == 42
+    assert s.retries[future.key] == 1
+    assert future.key not in s.exceptions
+
+    future = c.submit(varying(args), retries=2, pure=False)
+    result = yield future
+    assert result == 42
+    assert s.retries[future.key] == 0
+    assert future.key not in s.exceptions
+
+    future = c.submit(varying(args), retries=1, pure=False)
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        res = yield future
+    exc_info.match("two")
+
+    future = c.submit(varying(args), retries=0, pure=False)
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        res = yield future
+    exc_info.match("one")

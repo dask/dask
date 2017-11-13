@@ -227,6 +227,12 @@ get updated at each state transition.
    in three failures (or some other fixed constant) then we mark the task as
    ``erred``.
 
+* **retries:** ``{key: int}``
+
+   Number of times a task is automatically retried in case of failure.
+   If present, this is decremented each time a task's execution failed,
+   until it reaches 0.
+
 * **nbytes:** ``{key: int}``:
 
    The number of bytes, as determined by ``sizeof``, of the result of each
@@ -392,6 +398,7 @@ nbytes *(1)*            ?        ?       ?         ?          ✓      ?
 exceptions                                                           ✓
 tracebacks                                                           ✓
 exceptions_blame                                                     ✓
+retries                 ?        ?       ?         ?          ?      ?
 suspicious_tasks        ?        ?       ?         ?          ?      ?
 ======================= ======== ======= ========= ========== ====== =====
 

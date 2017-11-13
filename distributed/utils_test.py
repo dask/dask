@@ -5,6 +5,7 @@ from datetime import timedelta
 import functools
 import gc
 from glob import glob
+import itertools
 import inspect
 import logging
 import logging.config
@@ -268,6 +269,59 @@ def slowidentity(*args, **kwargs):
         return args[0]
     else:
         return args
+
+
+# This dict grows at every varying() invocation
+_varying_dict = {}
+_varying_key_gen = itertools.count()
+
+class _ModuleSlot(object):
+    def __init__(self, modname, slotname):
+        self.modname = modname
+        self.slotname = slotname
+
+    def get(self):
+        return getattr(sys.modules[self.modname], self.slotname)
+
+
+def varying(items):
+    """
+    Return a function that returns a result (or raises an exception)
+    from *items* at each call.
+    """
+    # cloudpickle would serialize the *values* of all globals
+    # used by *func* below, so we can't use `global <something>`.
+    # Instead look up the module by name to get the original namespace
+    # and not a copy.
+    slot = _ModuleSlot(__name__, '_varying_dict')
+    key = next(_varying_key_gen)
+    _varying_dict[key] = 0
+
+    def func():
+        dct = slot.get()
+        i = dct[key]
+        if i == len(items):
+            raise IndexError
+        else:
+            x = items[i]
+            dct[key] = i + 1
+            if isinstance(x, Exception):
+                raise x
+            else:
+                return x
+
+    return func
+
+
+def map_varying(itemslists):
+    """
+    Like *varying*, but return the full specification for a map() call
+    on multiple items lists.
+    """
+    def apply(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    return apply, map(varying, itemslists)
 
 
 @gen.coroutine

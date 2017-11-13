@@ -10,9 +10,10 @@ from datetime import timedelta
 import errno
 from functools import partial
 from glob import glob
+import itertools
 import json
 import logging
-from numbers import Number
+from numbers import Number, Integral
 import os
 import sys
 from time import sleep
@@ -1049,6 +1050,8 @@ class Client(Node):
         allow_other_workers: bool (defaults to False)
             Used with `workers`. Inidicates whether or not the computations
             may be performed on workers that are not in the `workers` set(s).
+        retries: int (default to 0)
+            Number of allowed automatic retries if the task fails
 
         Examples
         --------
@@ -1069,6 +1072,7 @@ class Client(Node):
         pure = kwargs.pop('pure', True)
         workers = kwargs.pop('workers', None)
         resources = kwargs.pop('resources', None)
+        retries = kwargs.pop('retries', None)
         allow_other_workers = kwargs.pop('allow_other_workers', False)
 
         if allow_other_workers not in (True, False, None):
@@ -1105,7 +1109,8 @@ class Client(Node):
 
         futures = self._graph_to_futures(dsk, [skey], restrictions,
                                          loose_restrictions, priority={skey: 0},
-                                         resources={skey: resources} if resources else None)
+                                         resources={skey: resources} if resources else None,
+                                         retries={skey: retries} if retries else None)
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
 
@@ -1146,6 +1151,8 @@ class Client(Node):
         workers: set, iterable of sets
             A set of worker hostnames on which computations may be performed.
             Leave empty to default to all workers (common case)
+        retries: int (default to 0)
+            Number of allowed automatic retries if a task fails
 
         Examples
         --------
@@ -1182,6 +1189,7 @@ class Client(Node):
         key = key or funcname(func)
         pure = kwargs.pop('pure', True)
         workers = kwargs.pop('workers', None)
+        retries = kwargs.pop('retries', None)
         resources = kwargs.pop('resources', None)
         allow_other_workers = kwargs.pop('allow_other_workers', False)
 
@@ -1228,6 +1236,11 @@ class Client(Node):
         else:
             loose_restrictions = set()
 
+        if retries:
+            retries = {k: retries for k in keys}
+        else:
+            retries = None
+
         priority = dict(zip(keys, range(len(keys))))
 
         if resources:
@@ -1236,7 +1249,8 @@ class Client(Node):
             resources = None
 
         futures = self._graph_to_futures(dsk, keys, restrictions,
-                                         loose_restrictions, priority=priority, resources=resources)
+                                         loose_restrictions, priority=priority,
+                                         resources=resources, retries=retries)
         logger.debug("map(%s, ...)", funcname(func))
 
         return [futures[tokey(k)] for k in keys]
@@ -1889,8 +1903,8 @@ class Client(Node):
         return self.sync(self._run_coroutine, function, *args, **kwargs)
 
     def _graph_to_futures(self, dsk, keys, restrictions=None,
-                          loose_restrictions=None, allow_other_workers=True, priority=None,
-                          resources=None):
+                          loose_restrictions=None, priority=None,
+                          resources=None, retries=None):
         with self._lock:
             keyset = set(keys)
             flatkeys = list(map(tokey, keys))
@@ -1936,7 +1950,9 @@ class Client(Node):
                                      'loose_restrictions': loose_restrictions,
                                      'priority': priority,
                                      'resources': resources,
-                                     'submitting_task': getattr(thread_state, 'key', None)})
+                                     'submitting_task': getattr(thread_state, 'key', None),
+                                     'retries': retries,
+                                     })
             return futures
 
     def get(self, dsk, keys, restrictions=None, loose_restrictions=None,
@@ -2039,7 +2055,7 @@ class Client(Node):
 
     def compute(self, collections, sync=False, optimize_graph=True,
                 workers=None, allow_other_workers=False, resources=None,
-                **kwargs):
+                retries=0, **kwargs):
         """ Compute dask collections on cluster
 
         Parameters
@@ -2059,6 +2075,8 @@ class Client(Node):
         allow_other_workers: bool, list
             If True then all restrictions in workers= are considered loose
             If a list then only the keys for the listed collections are loose
+        retries: int (default to 0)
+            Number of allowed automatic retries if computing a result fails
         **kwargs:
             Options to pass to the graph optimize calls
 
@@ -2113,11 +2131,19 @@ class Client(Node):
                                                                  workers, allow_other_workers)
 
         if resources:
-            resources = self.expand_resources(resources)
+            resources = self._expand_resources(resources,
+                                               all_keys=itertools.chain(dsk, dsk2))
+
+        if retries:
+            retries = self._expand_retries(retries,
+                                           all_keys=itertools.chain(dsk, dsk2))
+        else:
+            retries = None
 
         futures_dict = self._graph_to_futures(merge(dsk2, dsk), names,
                                               restrictions, loose_restrictions,
-                                              resources=resources)
+                                              resources=resources,
+                                              retries=retries)
 
         i = 0
         futures = []
@@ -2139,7 +2165,8 @@ class Client(Node):
             return result
 
     def persist(self, collections, optimize_graph=True, workers=None,
-                allow_other_workers=None, resources=None, **kwargs):
+                allow_other_workers=None, resources=None, retries=None,
+                **kwargs):
         """ Persist dask collections on cluster
 
         Starts computation of the collection on the cluster in the background.
@@ -2161,6 +2188,8 @@ class Client(Node):
         allow_other_workers: bool, list
             If True then all restrictions in workers= are considered loose
             If a list then only the keys for the listed collections are loose
+        retries: int (default to 0)
+            Number of allowed automatic retries if computing a result fails
         kwargs:
             Options to pass to the graph optimize calls
 
@@ -2193,10 +2222,18 @@ class Client(Node):
                                                                  workers, allow_other_workers)
 
         if resources:
-            resources = self.expand_resources(resources)
+            resources = self._expand_resources(resources,
+                                               all_keys=itertools.chain(dsk, names))
+
+        if retries:
+            retries = self._expand_retries(retries,
+                                           all_keys=itertools.chain(dsk, names))
+        else:
+            retries = None
 
         futures = self._graph_to_futures(dsk, names, restrictions,
-                                         loose_restrictions, resources=resources)
+                                         loose_restrictions,
+                                         resources=resources, retries=retries)
 
         postpersists = [c.__dask_postpersist__() for c in collections]
         result = [func({k: futures[k] for k in flatten(c.__dask_keys__())}, *args)
@@ -2963,23 +3000,70 @@ class Client(Node):
                               extra_args=qtconsole_args,)
         return info
 
-    @staticmethod
-    def expand_resources(resources):
-        assert isinstance(resources, dict)
-        out = {}
-        for k, v in resources.items():
-            if not isinstance(k, tuple):
-                k = (k,)
-            for kk in k:
-                if dask.is_dask_collection(kk):
-                    for kkk in kk.__dask_keys__():
-                        out[tokey(kkk)] = v
-                else:
-                    out[tokey(kk)] = v
-        return out
+    @classmethod
+    def _expand_key(cls, k):
+        """
+        Expand a user-provided task key specification, e.g. in a resources
+        or retries dictionary.
+        """
+        if not isinstance(k, tuple):
+            k = (k,)
+        for kk in k:
+            if dask.is_dask_collection(kk):
+                for kkk in kk.__dask_keys__():
+                    yield tokey(kkk)
+            else:
+                yield tokey(kk)
 
-    @staticmethod
-    def get_restrictions(collections, workers, allow_other_workers):
+    @classmethod
+    def _expand_retries(cls, retries, all_keys):
+        """
+        Expand the user-provided "retries" specification
+        to a {task key: Integral} dictionary.
+        """
+        if retries and isinstance(retries, dict):
+            return {name: value
+                    for key, value in retries.items()
+                    for name in cls._expand_key(key)}
+        elif isinstance(retries, Integral):
+            # Each task unit may potentially fail, allow retrying all of them
+            return {name: retries for name in all_keys}
+        else:
+            raise TypeError("`retries` should be an integer or dict, got %r"
+                            % (type(retries,)))
+
+    def _expand_resources(cls, resources, all_keys):
+        """
+        Expand the user-provided "resources" specification
+        to a {task key: {resource name: Number}} dictionary.
+        """
+        # Resources can either be a single dict such as {'GPU': 2},
+        # indicating a requirement for all keys, or a nested dict
+        # such as {'x': {'GPU': 1}, 'y': {'SSD': 4}} indicating
+        # per-key requirements
+        if not isinstance(resources, dict):
+            raise TypeError("`retries` should be a dict, got %r"
+                            % (type(retries,)))
+
+        per_key_reqs = {}
+        global_reqs = {}
+        all_keys = list(all_keys)
+        for k, v in resources.items():
+            if isinstance(v, dict):
+                # It's a per-key requirement
+                per_key_reqs.update((kk, v) for kk in cls._expand_key(k))
+            else:
+                # It's a global requirement
+                global_reqs.update((kk, {k: v}) for kk in all_keys)
+
+        if global_reqs and per_key_reqs:
+            raise ValueError("cannot have both per-key and all-key requirements "
+                             "in resources dict %r" % (resources,))
+        return global_reqs or per_key_reqs
+
+
+    @classmethod
+    def get_restrictions(cls, collections, workers, allow_other_workers):
         """ Get restrictions from inputs to compute/persist """
         if isinstance(workers, (str, tuple, list)):
             workers = {tuple(collections): workers}

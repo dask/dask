@@ -323,7 +323,7 @@ def test_diagnostics_available_at_localhost(loop, processes):
         try:
             with LocalCluster(2, scheduler_port=0, processes=processes,
                               silence_logs=False, diagnostics_port=port, loop=loop) as c:
-                requests.get('http://localhost:%d/status/' % port, timeout=1)
+                requests.get('http://localhost:%d/status/' % port, timeout=3)
                 requests.get('http://127.0.0.1:%d/status/' % port, timeout=1)
         except OSError:
             pass

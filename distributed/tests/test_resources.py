@@ -118,7 +118,7 @@ def test_persist(c, s, a, b):
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1, {'resources': {'A': 1}}),
-                                  ('127.0.0.1', 1, {'resources': {'B': 1}})])
+                                  ('127.0.0.1', 1, {'resources': {'B': 11}})])
 def test_compute(c, s, a, b):
     x = delayed(inc)(1)
     y = delayed(inc)(x)
@@ -127,6 +127,12 @@ def test_compute(c, s, a, b):
     yield wait(yy)
 
     assert b.data
+
+    xs = [delayed(inc)(i) for i in range(10, 20)]
+    xxs = c.compute(xs, resources={'B': 1})
+    yield wait(xxs)
+
+    assert len(b.data) > 10
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1, {'resources': {'A': 1}}),

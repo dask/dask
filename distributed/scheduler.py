@@ -170,6 +170,8 @@ class Scheduler(ServerNode):
         A dict mapping a key to another key on which it depends that has failed
     * **suspicious_tasks:** ``{key: int}``
         Number of times a task has been involved in a worker failure
+    * **retries:** ``{key: int}``
+        Number of times a task may be automatically retried after failing
     * **deleted_keys:** ``{key: {workers}}``
         Locations of workers that have keys that should be deleted
     * **wants_what:** ``{client: {key}}``:
@@ -261,6 +263,7 @@ class Scheduler(ServerNode):
         self.worker_restrictions = dict()
         self.resource_restrictions = dict()
         self.loose_restrictions = set()
+        self.retries = dict()
         self.suspicious_tasks = defaultdict(lambda: 0)
         self.waiting = dict()
         self.waiting_data = dict()
@@ -287,7 +290,7 @@ class Scheduler(ServerNode):
                                   self.host_restrictions, self.worker_restrictions,
                                   self.loose_restrictions, self.ready, self.who_wants,
                                   self.wants_what, self.unknown_durations, self.rprocessing,
-                                  self.resource_restrictions]
+                                  self.resource_restrictions, self.retries]
 
         # Worker state
         self.ncores = dict()
@@ -691,7 +694,7 @@ class Scheduler(ServerNode):
     def update_graph(self, client=None, tasks=None, keys=None,
                      dependencies=None, restrictions=None, priority=None,
                      loose_restrictions=None, resources=None,
-                     submitting_task=None):
+                     submitting_task=None, retries=None):
         """
         Add new computations to the internal dask graph
 
@@ -786,6 +789,9 @@ class Scheduler(ServerNode):
         if resources:
             self.resource_restrictions.update(resources)
 
+        if retries:
+            self.retries.update(retries)
+
         for key in sorted(touched | keys, key=self.priority.get):
             if self.task_state[key] == 'released':
                 recommendations[key] = 'waiting'
@@ -854,9 +860,17 @@ class Scheduler(ServerNode):
             return {}
 
         if self.task_state[key] == 'processing':
-            recommendations = self.transition(key, 'erred', cause=key,
-                                              exception=exception, traceback=traceback, worker=worker,
-                                              **kwargs)
+            retries = self.retries.get(key, 0)
+            if retries > 0:
+                self.retries[key] = retries - 1
+                recommendations = self.transition(key, 'waiting')
+            else:
+                recommendations = self.transition(key, 'erred',
+                                                  cause=key,
+                                                  exception=exception,
+                                                  traceback=traceback,
+                                                  worker=worker,
+                                                  **kwargs)
         else:
             recommendations = {}
 
@@ -2868,12 +2882,16 @@ class Scheduler(ServerNode):
             del self.exceptions[key]
         if key in self.exceptions_blame:
             del self.exceptions_blame[key]
+        if key in self.tracebacks:
+            del self.tracebacks[key]
         if key in self.released:
             self.released.remove(key)
         if key in self.waiting_data:
             del self.waiting_data[key]
         if key in self.suspicious_tasks:
             del self.suspicious_tasks[key]
+        if key in self.retries:
+            del self.retries[key]
         if key in self.nbytes:
             del self.nbytes[key]
         if key in self.resource_restrictions:

@@ -44,7 +44,8 @@ from distributed.utils import ignoring, mp_context, sync, tmp_text, tokey
 from distributed.utils_test import (cluster, slow, slowinc, slowadd, slowdec,
                                     randominc, inc, dec, div, throws, geninc, asyncinc,
                                     gen_cluster, gen_test, double, deep, popen,
-                                    captured_logger, wait_for, async_wait_for)
+                                    captured_logger, varying, map_varying,
+                                    wait_for, async_wait_for)
 from distributed.utils_test import loop, loop_in_thread, nodebug  # flake8: noqa
 
 
@@ -133,6 +134,139 @@ def test_map_keynames(c, s, a, b):
     keys = ['inc-1', 'inc-2', 'inc-3', 'inc-4']
     futures = c.map(inc, range(4), key=keys)
     assert [f.key for f in futures] == keys
+
+
+@gen_cluster(client=True)
+def test_map_retries(c, s, a, b):
+    args = [[ZeroDivisionError("one"), 2, 3],
+            [4, 5, 6],
+            [ZeroDivisionError("seven"), ZeroDivisionError("eight"), 9]]
+
+    x, y, z = c.map(*map_varying(args), retries=2)
+    assert (yield x) == 2
+    assert (yield y) == 4
+    assert (yield z) == 9
+
+    x, y, z = c.map(*map_varying(args), retries=1, pure=False)
+    assert (yield x) == 2
+    assert (yield y) == 4
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        yield z
+    exc_info.match("eight")
+
+    x, y, z = c.map(*map_varying(args), retries=0, pure=False)
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        yield x
+    exc_info.match("one")
+    assert (yield y) == 4
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        yield z
+    exc_info.match("seven")
+
+
+@gen_cluster(client=True)
+def test_compute_retries(c, s, a, b):
+    args = [ZeroDivisionError("one"), ZeroDivisionError("two"), 3]
+
+    # Sanity check for varying() use
+    x = c.compute(delayed(varying(args))())
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        yield x
+    exc_info.match("one")
+
+    # Same retries for all
+    x = c.compute(delayed(varying(args))(), retries=1)
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        yield x
+    exc_info.match("two")
+
+    x = c.compute(delayed(varying(args))(), retries=2)
+    assert (yield x) == 3
+
+    args.append(4)
+    x = c.compute(delayed(varying(args))(), retries=2)
+    assert (yield x) == 3
+
+    # Per-future retries
+    xargs = [ZeroDivisionError("one"), ZeroDivisionError("two"), 30, 40]
+    yargs = [ZeroDivisionError("five"), ZeroDivisionError("six"), 70]
+    zargs = [80, 90, 100]
+
+    x, y = [delayed(varying(args))() for args in (xargs, yargs)]
+    x, y = c.compute([x, y], retries={x: 2})
+    gc.collect()
+
+    assert (yield x) == 30
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        yield y
+    exc_info.match("five")
+
+    x, y, z = [delayed(varying(args))() for args in (xargs, yargs, zargs)]
+    x, y, z = c.compute([x, y, z], retries={(y, z): 2})
+
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        yield x
+    exc_info.match("one")
+    assert (yield y) == 70
+    assert (yield z) == 80
+
+
+@gen_cluster(client=True)
+def test_compute_persisted_retries(c, s, a, b):
+    args = [ZeroDivisionError("one"), ZeroDivisionError("two"), 3]
+
+    # Sanity check
+    x = c.persist(delayed(varying(args))())
+    fut = c.compute(x)
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        yield fut
+    exc_info.match("one")
+
+    x = c.persist(delayed(varying(args))())
+    fut = c.compute(x, retries=1)
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        yield fut
+    exc_info.match("two")
+
+    x = c.persist(delayed(varying(args))())
+    fut = c.compute(x, retries=2)
+    assert (yield fut) == 3
+
+    args.append(4)
+    x = c.persist(delayed(varying(args))())
+    fut = c.compute(x, retries=3)
+    assert (yield fut) == 3
+
+
+@gen_cluster(client=True)
+def test_persist_retries(c, s, a, b):
+    # Same retries for all
+    args = [ZeroDivisionError("one"), ZeroDivisionError("two"), 3]
+
+    x = c.persist(delayed(varying(args))(), retries=1)
+    x = c.compute(x)
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        yield x
+    exc_info.match("two")
+
+    x = c.persist(delayed(varying(args))(), retries=2)
+    x = c.compute(x)
+    assert (yield x) == 3
+
+    # Per-key retries
+    xargs = [ZeroDivisionError("one"), ZeroDivisionError("two"), 30, 40]
+    yargs = [ZeroDivisionError("five"), ZeroDivisionError("six"), 70]
+    zargs = [80, 90, 100]
+
+    x, y, z = [delayed(varying(args))() for args in (xargs, yargs, zargs)]
+    x, y, z = c.persist([x, y, z], retries={(y, z): 2})
+    x, y, z = c.compute([x, y, z])
+
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        yield x
+    exc_info.match("one")
+    assert (yield y) == 70
+    assert (yield z) == 80
 
 
 @gen_cluster(client=True)
@@ -1738,7 +1872,7 @@ def test_repr(loop):
 
 @gen_cluster(client=True)
 def test_forget_simple(c, s, a, b):
-    x = c.submit(inc, 1)
+    x = c.submit(inc, 1, retries=2)
     y = c.submit(inc, 2)
     z = c.submit(add, x, y, workers=[a.ip], allow_other_workers=True)
 
@@ -1754,8 +1888,9 @@ def test_forget_simple(c, s, a, b):
     for coll in [s.tasks, s.dependencies, s.dependents, s.waiting,
                  s.waiting_data, s.who_has, s.worker_restrictions,
                  s.host_restrictions, s.loose_restrictions,
-                 s.released, s.priority, s.exceptions, s.who_wants,
-                 s.exceptions_blame, s.nbytes, s.task_state]:
+                 s.released, s.priority, s.exceptions, s.tracebacks,
+                 s.who_wants, s.exceptions_blame, s.nbytes, s.task_state,
+                 s.retries]:
         assert x.key not in coll
         assert z.key not in coll
 
