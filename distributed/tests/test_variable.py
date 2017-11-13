@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import random
 from time import sleep
 import sys
 
@@ -144,15 +145,17 @@ def test_timeout_get(c, s, a, b):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 2)] * 5, Worker=Nanny,
              timeout=None)
 def test_race(c, s, *workers):
+    NITERS = 50
+
     def f(i):
         with worker_client() as c:
             v = Variable('x', client=c)
-            for _ in range(100):
+            for _ in range(NITERS):
                 future = v.get()
                 x = future.result()
                 y = c.submit(inc, x)
                 v.set(y)
-                sleep(0.01)
+                sleep(0.01 * random.random())
             result = v.get().result()
             sleep(0.1)  # allow fire-and-forget messages to clear
             return result
@@ -161,16 +164,14 @@ def test_race(c, s, *workers):
     x = yield c.scatter(1)
     yield v.set(x)
 
-    futures = c.map(f, range(10))
+    futures = c.map(f, range(15))
     results = yield c.gather(futures)
-    assert all(r > 80 for r in results)
+    assert all(r > NITERS * 0.8 for r in results)
 
     start = time()
     while len(s.wants_what['variable-x']) != 1:
         yield gen.sleep(0.01)
-        if not time() - start < 2:
-            import pdb
-            pdb.set_trace()
+        assert time() - start < 2
 
 
 @gen_cluster(client=True)

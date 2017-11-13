@@ -54,23 +54,24 @@ def test_stress_gc(loop, func, n):
 
 @pytest.mark.skipif(sys.platform.startswith('win'),
                     reason="test can leave dangling RPC objects")
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 4, timeout=None)
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 8, timeout=None)
 def test_cancel_stress(c, s, *workers):
     da = pytest.importorskip('dask.array')
-    x = da.random.random((40, 40), chunks=(1, 1))
+    x = da.random.random((50, 50), chunks=(2, 2))
     x = c.persist(x)
     yield wait([x])
     y = (x.sum(axis=0) + x.sum(axis=1) + 1).std()
+    n_todo = len(y.dask) - len(x.dask)
     for i in range(5):
         f = c.compute(y)
-        while len(s.waiting) > (len(y.dask) - len(x.dask)) / 2:
+        while len(s.waiting) > (random.random() + 1) * 0.5 * n_todo:
             yield gen.sleep(0.01)
         yield c._cancel(f)
 
 
 def test_cancel_stress_sync(loop):
     da = pytest.importorskip('dask.array')
-    x = da.random.random((40, 40), chunks=(1, 1))
+    x = da.random.random((50, 50), chunks=(2, 2))
     with cluster(active_rpc_timeout=10) as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
             x = c.persist(x)
@@ -78,7 +79,7 @@ def test_cancel_stress_sync(loop):
             wait(x)
             for i in range(5):
                 f = c.compute(y)
-                sleep(1)
+                sleep(random.random())
                 c.cancel(f)
 
 
@@ -96,8 +97,8 @@ def test_stress_creation_and_deletion(c, s):
     @gen.coroutine
     def create_and_destroy_worker(delay):
         start = time()
-        while time() < start + 10:
-            n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
+        while time() < start + 5:
+            n = Nanny(s.address, ncores=2, loop=s.loop)
             n.start(0)
 
             yield gen.sleep(delay)
@@ -107,7 +108,7 @@ def test_stress_creation_and_deletion(c, s):
 
     yield gen.with_timeout(timedelta(minutes=1),
                            All([create_and_destroy_worker(0.1 * i) for i in
-                                range(10)]))
+                                range(20)]))
 
 
 @gen_cluster(ncores=[('127.0.0.1', 1)] * 10, client=True, timeout=60)
