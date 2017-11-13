@@ -56,6 +56,8 @@ conda install -q -c conda-forge \
     tornado=4.5 \
     $PACKAGES
 
+pip install -q pytest-repeat
+
 if [[ $HDFS == true ]]; then
     conda install -q libxml2 krb5 boost
     conda install -q -c conda-forge libhdfs3 libgsasl libntlm

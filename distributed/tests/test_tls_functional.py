@@ -105,15 +105,14 @@ def test_rebalance(c, s, a, b):
     assert len(b.data) == 1
 
 
-@gen_tls_cluster(client=True, ncores=[('tls://127.0.0.1', 1)] * 2)
+@gen_tls_cluster(client=True, ncores=[('tls://127.0.0.1', 2)] * 2)
 def test_work_stealing(c, s, a, b):
     [x] = yield c._scatter([1], workers=a.address)
-    futures = c.map(slowadd, range(50), [x] * 50)
+    futures = c.map(slowadd, range(50), [x] * 50, delay=0.1)
     yield gen.sleep(0.1)
     yield wait(futures)
     assert len(a.data) > 10
     assert len(b.data) > 10
-    assert len(a.data) > len(b.data) - 5
 
 
 @gen_tls_cluster(client=True)
