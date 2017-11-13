@@ -7,7 +7,7 @@ import threading
 
 import pytest
 
-from tornado import gen, ioloop, queues
+from tornado import gen, ioloop, locks, queues
 from tornado.concurrent import Future
 
 from distributed.metrics import time
@@ -808,27 +808,27 @@ def check_listener_deserialize(addr, deserialize, in_value, check_out):
         comm = yield connect(listener.contact_address)
 
     yield comm.write(in_value)
-    yield comm.close()
 
     out_value = yield q.get()
     check_out(out_value)
+    yield comm.close()
 
 
 @gen.coroutine
 def check_connector_deserialize(addr, deserialize, in_value, check_out):
-    q = queues.Queue()
+    done = locks.Event()
 
     @gen.coroutine
     def handle_comm(comm):
-        msg = yield q.get()
-        yield comm.write(msg)
+        yield comm.write(in_value)
+        yield done.wait()
         yield comm.close()
 
     with listen(addr, handle_comm) as listener:
         comm = yield connect(listener.contact_address, deserialize=deserialize)
 
-    q.put_nowait(in_value)
     out_value = yield comm.read()
+    done.set()
     yield comm.close()
     check_out(out_value)
 

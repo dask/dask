@@ -28,6 +28,7 @@ class BokehServer(object):
                                      allow_websocket_origin=["*"],
                                      **self.server_kwargs)
                 self.server.start()
+                return
             except (SystemExit, EnvironmentError):
                 port = 0
                 if i == 4:
