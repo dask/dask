@@ -781,7 +781,7 @@ def test_file_descriptors(c, s):
     num_fds_3 = proc.num_fds()
     assert num_fds_3 == num_fds_2
 
-    x = da.random.normal(10, 1, size=(1000, 1000), chunks=(10, 10))
+    x = da.random.random(size=(1000, 1000), chunks=(25, 25))
     x = c.persist(x)
     yield wait(x)
 
