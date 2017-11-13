@@ -31,5 +31,5 @@ if [[ $HDFS == true ]]; then
 elif [[ $COVERAGE == true ]]; then
     coverage run $(which py.test) distributed -m "not avoid_travis" $PYTEST_OPTIONS;
 else
-    py.test -m "not avoid_travis" distributed/tests/test_tls_functional.py $PYTEST_OPTIONS -x --count=10;
+    py.test -m "not avoid_travis" distributed $PYTEST_OPTIONS;
 fi;
