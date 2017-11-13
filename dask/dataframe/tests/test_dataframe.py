@@ -1191,9 +1191,9 @@ def test_repartition_object_index():
 
 @pytest.mark.slow
 @pytest.mark.parametrize('npartitions', [1, 20, 243])
-@pytest.mark.parametrize('freq', ['1D', '7D', '28h'])
-@pytest.mark.parametrize('end', ['2000-04-15', '2000-04-15 12:37:01'])
-@pytest.mark.parametrize('start', ['2000-01-01', '2000-01-01 12:30:00'])
+@pytest.mark.parametrize('freq', ['1D', '7D', '28h', '1h'])
+@pytest.mark.parametrize('end', ['2000-04-15', '2000-04-15 12:37:01', '2000-01-01 12:37:00'])
+@pytest.mark.parametrize('start', ['2000-01-01', '2000-01-01 12:30:00', '2000-01-01 12:30:00'])
 def test_repartition_freq(npartitions, freq, start, end):
     start = pd.Timestamp(start)
     end = pd.Timestamp(end)
