@@ -4,13 +4,28 @@ import mock
 
 import pytest
 from toolz import first
+import tornado
 
 from distributed import Client
 from distributed.utils_test import cluster, mock_ipython
 from distributed.utils_test import loop, zmq_ctx  # flake8: noqa
 
 
+def need_functional_ipython(func):
+    try:
+        import ipykernel
+        import jupyter_client
+    except ImportError:
+        return pytest.mark.skip("need ipykernel and jupyter_client installed")(func)
+    if tornado.version_info >= (5,):
+        # https://github.com/ipython/ipykernel/issues/277
+        return pytest.mark.skip("IPython kernel broken with Tornado 5")(func)
+    else:
+        return func
+
+
 @pytest.mark.ipython
+@need_functional_ipython
 def test_start_ipython_workers(loop, zmq_ctx):
     from jupyter_client import BlockingKernelClient
 
@@ -31,6 +46,7 @@ def test_start_ipython_workers(loop, zmq_ctx):
 
 
 @pytest.mark.ipython
+@need_functional_ipython
 def test_start_ipython_scheduler(loop, zmq_ctx):
     from jupyter_client import BlockingKernelClient
 
@@ -47,6 +63,7 @@ def test_start_ipython_scheduler(loop, zmq_ctx):
 
 
 @pytest.mark.ipython
+@need_functional_ipython
 def test_start_ipython_scheduler_magic(loop, zmq_ctx):
     with cluster(1) as (s, [a]):
         with Client(s['address'], loop=loop) as e, mock_ipython() as ip:
@@ -64,6 +81,7 @@ def test_start_ipython_scheduler_magic(loop, zmq_ctx):
 
 
 @pytest.mark.ipython
+@need_functional_ipython
 def test_start_ipython_workers_magic(loop, zmq_ctx):
     with cluster(2) as (s, [a, b]):
 
@@ -89,6 +107,7 @@ def test_start_ipython_workers_magic(loop, zmq_ctx):
 
 
 @pytest.mark.ipython
+@need_functional_ipython
 def test_start_ipython_workers_magic_asterix(loop, zmq_ctx):
     with cluster(2) as (s, [a, b]):
 
@@ -113,6 +132,7 @@ def test_start_ipython_workers_magic_asterix(loop, zmq_ctx):
 
 
 @pytest.mark.ipython
+@need_functional_ipython
 def test_start_ipython_remote(loop, zmq_ctx):
     from distributed._ipython_utils import remote_magic
     with cluster(1) as (s, [a]):
@@ -131,6 +151,7 @@ def test_start_ipython_remote(loop, zmq_ctx):
 
 
 @pytest.mark.ipython
+@need_functional_ipython
 def test_start_ipython_qtconsole(loop):
     Popen = mock.Mock()
     with cluster() as (s, [a, b]):

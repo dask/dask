@@ -22,7 +22,7 @@ from distributed.protocol.pickle import dumps
 from distributed.worker import dumps_function, dumps_task
 from distributed.utils_test import (inc, dec, gen_cluster, gen_test, readone,
                                     slowinc, slowadd, slowdec, cluster, div)
-from distributed.utils_test import loop # flake8: noqa
+from distributed.utils_test import loop, nodebug  # flake8: noqa
 from distributed.utils import tmpfile
 from distributed.utils_test import slow
 from dask.compatibility import apply
@@ -802,6 +802,7 @@ def test_file_descriptors(c, s):
     yield [n._close() for n in nannies]
 
 
+@nodebug
 @gen_cluster(client=True)
 def test_learn_occupancy(c, s, a, b):
     futures = c.map(slowinc, range(1000), delay=0.01)
@@ -813,6 +814,7 @@ def test_learn_occupancy(c, s, a, b):
         assert 1 < s.occupancy[w.address] < 20
 
 
+@nodebug
 @gen_cluster(client=True)
 def test_learn_occupancy_2(c, s, a, b):
     future = c.map(slowinc, range(1000), delay=0.1)
@@ -822,6 +824,7 @@ def test_learn_occupancy_2(c, s, a, b):
     assert 50 < s.total_occupancy < 200
 
 
+@nodebug
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 30)
 def test_balance_many_workers(c, s, *workers):
     futures = c.map(slowinc, range(20), delay=0.2)
@@ -829,6 +832,7 @@ def test_balance_many_workers(c, s, *workers):
     assert set(map(len, s.has_what.values())) == {0, 1}
 
 
+@nodebug
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 30)
 def test_balance_many_workers_2(c, s, *workers):
     s.extensions['stealing']._pc.callback_time = 100000000

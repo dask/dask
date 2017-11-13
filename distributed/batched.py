@@ -91,6 +91,8 @@ class BatchedSend(object):
             except Exception:
                 logger.exception("Error in batched write")
                 break
+            finally:
+                payload = None  # lose ref
 
         self.stopped.set()
 

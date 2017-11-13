@@ -16,7 +16,7 @@ from tornado.locks import Event
 from distributed.metrics import time
 from distributed.process import AsyncProcess
 from distributed.utils import mp_context
-from distributed.utils_test import gen_test, pristine_loop
+from distributed.utils_test import gen_test, pristine_loop, nodebug
 
 
 def feed(in_q, out_q):
@@ -49,6 +49,7 @@ def threads_info(q):
     q.put(threading.current_thread().name)
 
 
+@nodebug
 @gen_test()
 def test_simple():
     to_child = mp_context.Queue()

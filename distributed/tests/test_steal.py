@@ -17,10 +17,16 @@ from distributed.metrics import time
 from distributed.scheduler import BANDWIDTH, key_split
 from distributed.utils_test import (slowinc, slowadd, inc, gen_cluster,
                                     slowidentity)
-from distributed.utils_test import loop # flake8: noqa
+from distributed.utils_test import (loop, nodebug_setup_module,
+                                    nodebug_teardown_module)  # flake8: noqa
 from distributed.worker import TOTAL_MEMORY
 
 import pytest
+
+
+# Most tests here are timing-dependent
+setup_module = nodebug_setup_module
+teardown_module = nodebug_teardown_module
 
 
 @pytest.mark.skipif(not sys.platform.startswith('linux'),
@@ -516,14 +522,19 @@ def test_steal_twice(c, s, a, b):
     while len(s.task_state) < 100:  # tasks are all allocated
         yield gen.sleep(0.01)
 
-    workers = [Worker(s.ip, s.port, loop=s.loop) for _ in range(30)]
+    workers = [Worker(s.ip, s.port, loop=s.loop) for _ in range(20)]
     yield [w._start() for w in workers]  # army of new workers arrives to help
 
     yield wait(futures)
 
-    assert all(s.has_what.values())
-    assert max(map(len, s.has_what.values())) < 30
+    has_what = dict(s.has_what)  # take snapshot
+    empty_workers = [w for w, keys in has_what.items() if not len(keys)]
+    if len(empty_workers) > 2:
+        pytest.fail("Too many workers without keys (%d out of %d)"
+                    % (len(empty_workers), len(has_what)))
+    assert max(map(len, has_what.values())) < 30
 
+    yield c._close()
     yield [w._close() for w in workers]
 
 

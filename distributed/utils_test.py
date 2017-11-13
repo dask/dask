@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from contextlib import contextmanager
 from datetime import timedelta
+import functools
 import gc
 from glob import glob
 import inspect
@@ -23,6 +24,8 @@ import uuid
 import warnings
 import weakref
 
+import psutil
+import pytest
 import six
 
 from dask.context import _globals
@@ -31,7 +34,7 @@ from tornado import gen, queues
 from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 
-from .compatibility import WINDOWS
+from .compatibility import WINDOWS, PY3
 from .config import config, initialize_logging
 from .core import connect, rpc, CommClosedError
 from .metrics import time
@@ -39,8 +42,6 @@ from .nanny import Nanny
 from .security import Security
 from .utils import ignoring, log_errors, sync, mp_context, get_ip, get_ipv6
 from .worker import Worker, TOTAL_MEMORY
-import pytest
-import psutil
 
 
 logger = logging.getLogger(__name__)
@@ -77,13 +78,27 @@ def invalid_python_script(tmpdir_factory):
 @pytest.fixture
 def loop():
     with pristine_loop() as loop:
+        # Monkey-patch IOLoop.start to wait for loop stop
+        orig_start = loop.start
+        is_stopped = threading.Event()
+        is_stopped.set()
+        def start():
+            is_stopped.clear()
+            try:
+                orig_start()
+            finally:
+                is_stopped.set()
+        loop.start = start
+
         yield loop
         # Stop the loop in case it's still running
         try:
-            sync(loop, loop.stop)
+            loop.add_callback(loop.stop)
         except RuntimeError as e:
             if not re.match("IOLoop is clos(ed|ing)", str(e)):
                 raise
+        else:
+            is_stopped.wait()
 
 
 @pytest.fixture
@@ -138,6 +153,50 @@ def mock_ipython():
     with mock.patch('IPython.get_ipython', get_ip), \
             mock.patch('distributed._ipython_utils.get_ipython', get_ip):
         yield ip
+
+
+def nodebug(func):
+    """
+    A decorator to disable debug facilities during timing-sensitive tests.
+    Warning: this doesn't affect already created IOLoops.
+    """
+    if not PY3:
+        # py.test's runner magic breaks horridly on Python 2
+        # when a test function is wrapped, so avoid it
+        # (incidently, asyncio is irrelevant anyway)
+        return func
+
+    @functools.wraps(func)
+    def wrapped(*args, **kwargs):
+        old_asyncio_debug = os.environ.get("PYTHONASYNCIODEBUG")
+        if old_asyncio_debug is not None:
+            del os.environ["PYTHONASYNCIODEBUG"]
+        try:
+            return func(*args, **kwargs)
+        finally:
+            if old_asyncio_debug is not None:
+                os.environ["PYTHONASYNCIODEBUG"] = old_asyncio_debug
+
+    return wrapped
+
+
+def nodebug_setup_module(module):
+    """
+    A setup_module() that you can install in a test module to disable
+    debug facilities.
+    """
+    module._old_asyncio_debug = os.environ.get("PYTHONASYNCIODEBUG")
+    if module._old_asyncio_debug is not None:
+        del os.environ["PYTHONASYNCIODEBUG"]
+
+
+def nodebug_teardown_module(module):
+    """
+    A teardown_module() that you can install in a test module to reenable
+    debug facilities.
+    """
+    if module._old_asyncio_debug is not None:
+        os.environ["PYTHONASYNCIODEBUG"] = module._old_asyncio_debug
 
 
 def inc(x):
@@ -464,18 +523,15 @@ def disconnect_all(addresses, timeout=3):
     yield [disconnect(addr, timeout) for addr in addresses]
 
 
-import pytest
-try:
-    slow = pytest.mark.skipif(
-        not pytest.config.getoption("--runslow"),
-        reason="need --runslow option to run")
-except (AttributeError, ValueError):
-    def slow(*args):
+def slow(func):
+    try:
+        if not pytest.config.getoption("--runslow"):
+            func = pytest.mark.skip("need --runslow option to run")(func)
+    except AttributeError:
+        # AttributeError: module 'pytest' has no attribute 'config'
         pass
 
-
-from tornado import gen
-from tornado.ioloop import IOLoop
+    return nodebug(func)
 
 
 def gen_test(timeout=10):
@@ -713,6 +769,27 @@ def wait_for_port(address, timeout=5):
         else:
             sock.close()
             break
+
+
+def wait_for(predicate, timeout, fail_func=None):
+    start = time()
+    while not predicate():
+        sleep(0.001)
+        if time() > start + timeout:
+            if fail_func is not None:
+                fail_func()
+            pytest.fail("condition not reached until %s seconds" % (timeout,))
+
+
+@gen.coroutine
+def async_wait_for(predicate, timeout, fail_func=None):
+    start = time()
+    while not predicate():
+        yield gen.sleep(0.001)
+        if time() > start + timeout:
+            if fail_func is not None:
+                fail_func()
+            pytest.fail("condition not reached until %s seconds" % (timeout,))
 
 
 @memoize

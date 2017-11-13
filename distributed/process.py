@@ -4,6 +4,7 @@ import atexit
 from datetime import timedelta
 import logging
 import os
+import re
 import sys
 import threading
 import weakref
@@ -19,15 +20,26 @@ from tornado.ioloop import IOLoop
 logger = logging.getLogger(__name__)
 
 
+def _loop_add_callback(loop, func, *args):
+    """
+    Helper to silence "IOLoop is closing" exception on IOLoop.add_callback.
+    """
+    try:
+        loop.add_callback(func, *args)
+    except RuntimeError as exc:
+        if not re.search("IOLoop is clos(ed|ing)", str(exc)):
+            raise
+
+
 def _call_and_set_future(loop, future, func, *args, **kwargs):
     try:
         res = func(*args, **kwargs)
     except Exception:
         # Tornado futures are not thread-safe, need to
         # set_result() / set_exc_info() from the loop's thread
-        loop.add_callback(future.set_exc_info, sys.exc_info())
+        _loop_add_callback(loop, future.set_exc_info, sys.exc_info())
     else:
-        loop.add_callback(future.set_result, res)
+        _loop_add_callback(loop, future.set_result, res)
 
 
 class _ProcessState(object):
@@ -213,7 +225,7 @@ class AsyncProcess(object):
         self = selfref()  # only keep self alive when required
         try:
             if self is not None:
-                self._loop.add_callback(self._on_exit, exitcode)
+                _loop_add_callback(self._loop, self._on_exit, exitcode)
         finally:
             self = None  # lose reference
 

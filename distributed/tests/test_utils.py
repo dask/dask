@@ -93,15 +93,6 @@ def test_sync_error(loop_in_thread):
         assert any('function2' in line for line in L)
 
 
-def test_sync_inactive_loop(loop):
-    @gen.coroutine
-    def f(x):
-        raise gen.Return(x + 1)
-
-    y = sync(loop, f, 1)
-    assert y == 2
-
-
 def test_sync_timeout(loop_in_thread):
     loop = loop_in_thread
     with pytest.raises(gen.TimeoutError):
@@ -416,6 +407,61 @@ def test_loop_runner(loop_in_thread):
     runner.stop()
     assert not runner.is_started()
     assert_not_running(runner.loop)
+
+
+def test_two_loop_runners(loop_in_thread):
+    # Loop runners tied to the same loop should cooperate
+
+    # ABCCBA
+    loop = IOLoop()
+    a = LoopRunner(loop=loop)
+    b = LoopRunner(loop=loop)
+    assert_not_running(loop)
+    a.start()
+    assert_running(loop)
+    c = LoopRunner(loop=loop)
+    b.start()
+    assert_running(loop)
+    c.start()
+    assert_running(loop)
+    c.stop()
+    assert_running(loop)
+    b.stop()
+    assert_running(loop)
+    a.stop()
+    assert_not_running(loop)
+
+    # ABCABC
+    loop = IOLoop()
+    a = LoopRunner(loop=loop)
+    b = LoopRunner(loop=loop)
+    assert_not_running(loop)
+    a.start()
+    assert_running(loop)
+    b.start()
+    assert_running(loop)
+    c = LoopRunner(loop=loop)
+    c.start()
+    assert_running(loop)
+    a.stop()
+    assert_running(loop)
+    b.stop()
+    assert_running(loop)
+    c.stop()
+    assert_not_running(loop)
+
+    # Explicit loop, already started
+    a = LoopRunner(loop=loop_in_thread)
+    b = LoopRunner(loop=loop_in_thread)
+    assert_running(loop_in_thread)
+    a.start()
+    assert_running(loop_in_thread)
+    b.start()
+    assert_running(loop_in_thread)
+    a.stop()
+    assert_running(loop_in_thread)
+    b.stop()
+    assert_running(loop_in_thread)
 
 
 @gen_test()

@@ -5,6 +5,7 @@ from collections import Iterable, deque
 from contextlib import contextmanager
 from datetime import timedelta
 import functools
+import gc
 import json
 import logging
 import math
@@ -20,7 +21,7 @@ import sys
 import tempfile
 import threading
 import warnings
-import gc
+import weakref
 
 import six
 import tblib.pickling_support
@@ -36,7 +37,7 @@ from dask import istask
 from toolz import memoize, valmap
 import tornado
 from tornado import gen
-from tornado.ioloop import IOLoop
+from tornado.ioloop import IOLoop, PollIOLoop
 
 from .compatibility import Queue, PY3, PY2, get_thread_identity, unicode
 from .config import config
@@ -205,26 +206,14 @@ def All(*args):
     raise gen.Return(results)
 
 
-def is_loop_running(loop):
-    """
-    Return whether an IOLoop is running.
-    """
-    # Tornado < 5.0
-    r = getattr(loop, '_running', None)
-    if r is not None:
-        return r
-    try:
-        # Tornado 5.0 with AsyncIOLoop (default setting)
-        return loop.asyncio_loop.is_running()
-    except AttributeError:
-        raise TypeError("don't know how to query the running state of %s"
-                        % (type(loop),))
-
-
 def sync(loop, func, *args, **kwargs):
     """
     Run coroutine in loop running in separate thread.
     """
+    # Tornado's PollIOLoop doesn't raise when using closed, do it ourselves
+    if isinstance(loop, PollIOLoop) and getattr(loop, '_closing', False):
+        raise RuntimeError("IOLoop is closed")
+
     timeout = kwargs.pop('callback_timeout', None)
 
     def make_coro():
@@ -233,15 +222,6 @@ def sync(loop, func, *args, **kwargs):
             return coro
         else:
             return gen.with_timeout(timedelta(seconds=timeout), coro)
-
-    if not is_loop_running(loop):
-        try:
-            return loop.run_sync(make_coro)
-        except RuntimeError:  # loop already running
-            pass
-        except TypeError:
-            # TypeError: object of type 'NoneType' has no len()
-            raise RuntimeError("IOLoop is closed")
 
     e = threading.Event()
     main_tid = get_thread_identity()
@@ -264,8 +244,12 @@ def sync(loop, func, *args, **kwargs):
             e.set()
 
     loop.add_callback(f)
-    while not e.is_set():
-        e.wait(1000000)
+    if timeout is not None:
+        if not e.wait(timeout):
+            raise gen.TimeoutError("timed out after %s s." % (timeout,))
+    else:
+        while not e.is_set():
+            e.wait(1000000)
     if error[0]:
         six.reraise(*error[0])
     else:
@@ -274,7 +258,8 @@ def sync(loop, func, *args, **kwargs):
 
 class LoopRunner(object):
     """
-    A helper to start and stop an IO loop.
+    A helper to start and stop an IO loop in a controlled way.
+    Several loop runners can associate safely to the same IO loop.
 
     Parameters
     ----------
@@ -287,6 +272,10 @@ class LoopRunner(object):
         If true, the loop is meant to run in the thread this
         object is instantiated from, and will not be started automatically.
     """
+    # All loops currently associated to loop runners
+    _all_loops = weakref.WeakKeyDictionary()
+    _lock = threading.Lock()
+
     def __init__(self, loop=None, asynchronous=False):
         if loop is None:
             if asynchronous:
@@ -302,6 +291,8 @@ class LoopRunner(object):
         self._asynchronous = asynchronous
         self._loop_thread = None
         self._started = False
+        with self._lock:
+            self._all_loops.setdefault(self._loop, (0, None))
 
     def start(self):
         """
@@ -310,9 +301,20 @@ class LoopRunner(object):
 
         If the loop is already running, this method does nothing.
         """
-        if self._asynchronous or self._loop_thread is not None:
+        with self._lock:
+            self._start_unlocked()
+
+    def _start_unlocked(self):
+        assert not self._started
+
+        count, real_runner = self._all_loops[self._loop]
+        if (self._asynchronous or real_runner is not None or count > 0):
+            self._all_loops[self._loop] = count + 1, real_runner
             self._started = True
             return
+
+        assert self._loop_thread is None
+        assert count == 0
 
         loop_evt = threading.Event()
         done_evt = threading.Event()
@@ -346,16 +348,37 @@ class LoopRunner(object):
             done_evt.wait(5)
             if not isinstance(start_exc[0], RuntimeError):
                 raise start_exc[0]
+            self._all_loops[self._loop] = count + 1, None
         else:
             assert start_exc[0] is None, start_exc
             self._loop_thread = thread
+            self._all_loops[self._loop] = count + 1, self
 
     def stop(self, timeout=10):
         """
         Stop and close the loop if it was created by us.
         Otherwise, just mark this object "stopped".
         """
+        with self._lock:
+            self._stop_unlocked(timeout)
+
+    def _stop_unlocked(self, timeout):
+        if not self._started:
+            return
+
         self._started = False
+
+        count, real_runner = self._all_loops[self._loop]
+        if count > 1:
+            self._all_loops[self._loop] = count - 1, real_runner
+        else:
+            assert count == 1
+            del self._all_loops[self._loop]
+            if real_runner is not None:
+                real_runner._real_stop(timeout)
+
+    def _real_stop(self, timeout):
+        assert self._loop_thread is not None
         if self._loop_thread is not None:
             try:
                 self._loop.add_callback(self._loop.stop)
@@ -369,6 +392,20 @@ class LoopRunner(object):
         Return True between start() and stop() calls, False otherwise.
         """
         return self._started
+
+    def run_sync(self, func, *args, **kwargs):
+        """
+        Convenience helper: start the loop if needed,
+        run sync(func, *args, **kwargs), then stop the loop again.
+        """
+        if self._started:
+            return sync(self.loop, func, *args, **kwargs)
+        else:
+            self.start()
+            try:
+                return sync(self.loop, func, *args, **kwargs)
+            finally:
+                self.stop()
 
     @property
     def loop(self):

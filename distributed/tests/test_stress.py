@@ -17,9 +17,15 @@ from distributed.metrics import time
 from distributed.utils import All
 from distributed.utils_test import (gen_cluster, cluster, inc, slowinc,
                                     slowadd, slow, slowsum, bump_rlimit)
-from distributed.utils_test import loop # flake8: noqa
+from distributed.utils_test import (loop, nodebug_setup_module,
+                                    nodebug_teardown_module)  # flake8: noqa
 from distributed.client import wait
 from tornado import gen
+
+
+# All tests here are slow in some way
+setup_module = nodebug_setup_module
+teardown_module = nodebug_teardown_module
 
 
 @gen_cluster(client=True)
@@ -256,6 +262,8 @@ def test_no_delay_during_large_transfer(c, s, w):
     with ResourceProfiler(dt=0.01) as rprof:
         future = yield c.scatter(x, direct=True, hash=False)
         yield gen.sleep(0.5)
+
+    rprof.close()
 
     for server in [s, w]:
         assert server.digests['tick-duration'].components[0].max() < 0.5

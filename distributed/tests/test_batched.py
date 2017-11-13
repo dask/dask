@@ -1,7 +1,9 @@
 
 from contextlib import contextmanager
 from datetime import timedelta
+import gc
 import random
+import sys
 import weakref
 
 import pytest
@@ -246,9 +248,21 @@ def test_dont_hold_on_to_large_messages(c, s, a, b):
     d = d.persist()
     del x
 
-    c.submit(lambda: 1)  # push one more message down the comm
-
     start = time()
     while xr() is not None:
+        if time() > start + 1:
+            # Help diagnosing
+            from types import FrameType
+            x = xr()
+            if x is not None:
+                del x
+                rc = sys.getrefcount(xr())
+                refs = gc.get_referrers(xr())
+                print("refs to x:", rc, refs, gc.isenabled())
+                frames = [r for r in refs if isinstance(r, FrameType)]
+                for i, f in enumerate(frames):
+                    print("frames #%d:" % i,
+                          f.f_code.co_name, f.f_code.co_filename, sorted(f.f_locals))
+            pytest.fail("array should have been destroyed")
+
         yield gen.sleep(0.05)
-        assert time() < start + 1

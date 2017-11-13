@@ -9,7 +9,7 @@ from dask.core import get_deps
 from distributed import Nanny
 from distributed.client import wait
 from distributed.metrics import time
-from distributed.utils_test import gen_cluster, inc, dec, div
+from distributed.utils_test import gen_cluster, inc, dec, div, nodebug
 from distributed.diagnostics.progress import (Progress, SchedulerPlugin,
                                               AllProgress, GroupProgress, MultiProgress, dependent_keys)
 
@@ -41,6 +41,7 @@ def h(*args):
     pass
 
 
+@nodebug
 @gen_cluster(client=True)
 def test_many_Progress(c, s, a, b):
     x = c.submit(f, 1)

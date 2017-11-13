@@ -185,10 +185,14 @@ def test_prefer_constrained(c, s, a):
     futures = c.map(slowinc, range(1000), delay=0.1)
     constrained = c.map(inc, range(10), resources={'A': 1})
 
+    import traceback, sys
     start = time()
     yield wait(constrained)
     end = time()
-    assert end - start < 1
+    assert end - start < 4
+    has_what = dict(s.has_what)
+    processing = dict(s.processing)
+    assert len(has_what) < len(constrained) + 2  # at most two slowinc's finished
     assert s.processing[a.address]
 
 

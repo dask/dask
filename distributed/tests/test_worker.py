@@ -30,7 +30,7 @@ from distributed.utils import tmpfile
 from distributed.utils_test import (inc, mul, gen_cluster, div, dec,
                                     slow, slowinc, gen_test, cluster,
                                     captured_logger)
-from distributed.utils_test import loop # flake8: noqa
+from distributed.utils_test import loop, nodebug # flake8: noqa
 
 
 def test_worker_ncores():
@@ -953,6 +953,7 @@ def test_statistical_profiling(c, s, a, b):
     assert profile['count']
 
 
+@nodebug
 @gen_cluster(client=True)
 def test_statistical_profiling_2(c, s, a, b):
     da = pytest.importorskip('dask.array')

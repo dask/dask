@@ -8,7 +8,7 @@ from tornado.ioloop import IOLoop
 from distributed import Client
 from distributed.deploy import Adaptive, LocalCluster
 from distributed.utils_test import gen_test, slowinc
-from distributed.utils_test import loop  # flake8: noqa
+from distributed.utils_test import loop, nodebug  # flake8: noqa
 from distributed.metrics import time
 
 
@@ -50,6 +50,7 @@ def test_adaptive_local_cluster(loop):
             assert not c.ncores()
 
 
+@nodebug
 @gen_test(timeout=30)
 def test_adaptive_local_cluster_multi_workers():
     loop = IOLoop.current()
