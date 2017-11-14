@@ -24,10 +24,11 @@ Release per project:
 
     *  Update conda-smithy and run conda-smithy rerender
 
-            git clone git@github.com:conda-forge/distributed-feedstock
-            cd distributed-feedstock
+            git clone git@github.com:conda-forge/dask-feedstock
+            cd dask-feedstock
             conda install conda-smithy
             conda-smithy rerender
 
     *  Get sha256 hash from pypi.org
     *  Update version number and hash in recipe
+    *  Check dependencies

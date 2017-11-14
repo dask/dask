@@ -1,56 +1,65 @@
 Changelog
 =========
 
-X.Y.Z / YYYY-MM-DD
+0.16.0 / 2017-11-17
 -------------------
+
+This is a major release.  It includes breaking changes, new protocols, and a
+large number of bug fixes.
 
 Array
 +++++
 
-- Add ``atleast_1d``, ``atleast_2d``, and ``atleast_3d`` (:pr:`2760`)
-- Add ``allclose`` (:pr:`2771`)
-- Remove ``random.different_seeds`` from Dask Array API docs (:pr:`2772`)
-- Deprecate ``vnorm`` in favor of ``dask.array.linalg.norm`` (:pr:`2773`)
-- Reimplement ``unique`` to be lazy (:pr:`2775`)
-- Support broadcasting of Dask Arrays with 0-length dimensions (:pr:`2784`)
-- Add ``asarray`` and ``asanyarray`` to Dask Array API docs (:pr:`2787`)
-- Support ``unique``'s ``return_*`` arguments (:pr:`2779`)
+- Add ``atleast_1d``, ``atleast_2d``, and ``atleast_3d`` (:pr:`2760`) (:pr:`2765`) `John A Kirkham`_
+- Add ``allclose`` (:pr:`2771`) by `John A Kirkham`_
+- Remove ``random.different_seeds`` from Dask Array API docs (:pr:`2772`) `John A Kirkham`_
+- Deprecate ``vnorm`` in favor of ``dask.array.linalg.norm`` (:pr:`2773`) `John A Kirkham`_
+- Reimplement ``unique`` to be lazy (:pr:`2775`) `John A Kirkham`_
+- Support broadcasting of Dask Arrays with 0-length dimensions (:pr:`2784`) `John A Kirkham`_
+- Add ``asarray`` and ``asanyarray`` to Dask Array API docs (:pr:`2787`) `James Bourbeau`_
+- Support ``unique``'s ``return_*`` arguments (:pr:`2779`) `John A Kirkham`_
+- Simplify ``_unique_interlal`` (:pr:`2850`) (:pr:`2855`) `John A Kirkham`_
+- Avoid removing some getter calls in array optimizations (:pr:`2826`) `Jim Crist`_
 
 DataFrame
 +++++++++
 
-- Fixed ``DataFrame.quantile`` and ``Series.quantile`` returning ``nan`` when
-  missing values are present (:pr:`2791`:)
-- Fixed ``DataFrame.quantile`` losing the result ``.name`` when ``q`` is a
-  scalar (:pr:`2791`:)
-- Fixed ``dd.concat`` return a ``dask.Dataframe`` when concatenating a single
-  series along the columns, matching pandas' behavior (:pr:`2800`)
-- Fixed default inplace parameter for ``DataFrame.eval`` to match the pandas
-  defualt for pandas >= 0.21.0 (:pr:`2838`)
-- Fix exception when calling ``DataFrame.set_index`` on text column where one
-  of the partitions was empty (:pr:`2831`)
-- Do not raise exception when calling ``DataFrame.set_index`` on empty dataframe
-  (:pr:`2827`)
-- Fixed bug in ``Dataframe.fillna`` when filling with a ``Series`` value
-  (:pr:`2810`)
-- Deprecate old argument ordering in ``dd.to_parquet`` to better match
-  convention of putting the dataframe first (:pr:`2867`)
-
-Bag
-+++
-
--
+- Support ``pyarrow`` in ``dd.to_parquet`` (:pr:`2868`) `Jim Crist`_
+- Fixed ``DataFrame.quantile`` and ``Series.quantile`` returning ``nan`` when missing values are present (:pr:`2791`:) `Tom Augspurger`_
+- Fixed ``DataFrame.quantile`` losing the result ``.name`` when ``q`` is a scalar (:pr:`2791`:) `Tom Augspurger`_
+- Fixed ``dd.concat`` return a ``dask.Dataframe`` when concatenating a single series along the columns, matching pandas' behavior (:pr:`2800`) `James Munroe`_
+- Fixed default inplace parameter for ``DataFrame.eval`` to match the pandas defualt for pandas >= 0.21.0 (:pr:`2838`) `Tom Augspurger`_
+- Fix exception when calling ``DataFrame.set_index`` on text column where one of the partitions was empty (:pr:`2831`) `Jesse Vogt`_
+- Do not raise exception when calling ``DataFrame.set_index`` on empty dataframe (:pr:`2827`) `Jess Vogt`_
+- Fixed bug in ``Dataframe.fillna`` when filling with a ``Series`` value (:pr:`2810`) `Tom Augspurger`_
+- Deprecate old argument ordering in ``dd.to_parquet`` to better match convention of putting the dataframe first (:pr:`2867`) `Jim Crist`_
+- df.astype(categorical_dtype -> known categoricals (:pr:`2835`) `Jim Crist`_
+- Test against Pandas release candidate (:pr:`2814`) `Tom Augspurger`_
+- Add more tests for read_parquet(engine='pyarrow') (:pr:`2822`) `Uwe Korn`_
+- Remove unnecessary map_partitions in aggregate (:pr:`2712`) `Christopher Prohm`_
+- Fix bug calling sample on empty partitions (:pr:`2818`) `@xwang777`_
+- Error nicely when parsing dates in read_csv (:pr:`2863`) `Jim Crist`_
+- Cleanup handling of passing filesystem objects to PyArrow readers (:pr:`2527`) `@fjetter`_
+- Support repartitioning even if there are no divisions (:pr:`2873`) `@Ced4`_
+- Support reading/writing to hdfs using ``pyarrow`` in ``dd.to_parquet`` (:pr:`2894`:, :pr:`2881`:) `Jim Crist`_
 
 
 Core
 ++++
 
--  Allow tuples as sharedict keys (:pr:`2763`)
--  Calling compute within a dask.distributed task defaults to distributed
-   scheduler (:pr:`2762`)
--  Auto-import gcsfs when gcs:// protocol is used (:pr:`2776`)
--  Fully remove dask.async module, use dask.local instead
-- Compatability with bokeh 0.12.10 (:pr:`:2844`)
+-  Allow tuples as sharedict keys (:pr:`2763`) `Matthew Rocklin`_
+-  Calling compute within a dask.distributed task defaults to distributed scheduler (:pr:`2762`) `Matthew Rocklin`_
+-  Auto-import gcsfs when gcs:// protocol is used (:pr:`2776`) `Matthew Rocklin`_
+-  Fully remove dask.async module, use dask.local instead (:pr:`2828`) `Thomas Caswell`_
+-  Compatability with bokeh 0.12.10 (:pr:`:2844`) `Tom Augspurger`_
+-  Reduce test memory usage (:pr:`2782`) `Jim Crist`_
+-  Add Dask collection interface (:pr:`2748`) `Jim Crist`_
+-  Update Dask collection interface during XArray integration (:pr:`2847`) `Matthew Rocklin`_
+-  Close resource profiler process on __exit__ (:pr:`2871`) `Jim Crist`_
+-  Fix S3 tests (:pr:`2875`) `Jim Crist`_
+-  Fix port for bokeh dashboard in docs (:pr:`2889`) `Ian Hopkinson`_
+-  Wrap Dask filesystems for PyArrow compatibility (:pr:`2881`) `Jim Crist`_
+
 
 0.15.4 / 2017-10-06
 -------------------
@@ -817,3 +826,19 @@ Other
   normal python code
 - Traded pydot for graphviz library for graph printing to support Python3
 - There is also a gitter chat room and a stackoverflow tag
+
+
+.. _`John A Kirkham`: https://github.com/jakirkham
+.. _`Matthew Rocklin`: https://github.com/mrocklin
+.. _`Jim Crist`: https://github.com/jcrist
+.. _`James Bourbeau`: https://github.com/jrbourbeau
+.. _`James Munroe`: https://github.com/jmunroe
+.. _`Thomas Caswell`: https://github.com/tacaswell
+.. _`Tom Augspurger`: https://github.com/tomaugspurger
+.. _`Jesse Vogt`: https://github.com/jessevogt
+.. _`Uwe Korn`: https://github.com/xhochy
+.. _`Christopher Prohm`: https://github.com/chmp
+.. _`@xwang777`: https://github.com/xwang777
+.. _`@fjetter`: https://github.com/fjetter
+.. _`@Ced4`: https://github.com/Ced4
+.. _`Ian Hopkinson`: https://https://github.com/IanHopkinson
