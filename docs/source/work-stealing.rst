@@ -14,7 +14,7 @@ we steal the wrong tasks and reduce performance.
 
 
 Criteria for stealing
---------------------------
+---------------------
 
 Computation to Communication Ratio
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -107,3 +107,21 @@ This approach is fast, optimizes to steal the tasks with the best
 computation-to-communication cost ratio (up to a factor of two) and tends to
 steal from the workers that have the largest backlogs, just by nature that
 random selection tends to draw from the largest population.
+
+
+Transactional Work Stealing
+---------------------------
+
+To avoid running the same task twice, Dask implements transactional work
+stealing.  When the scheduler identifies a task that should be moved it first
+sends a request to the busy worker.  The worker inspects its current state of
+the task and sends a response to the scheduler:
+
+1.  If the task is not yet running, then the worker cancels the task and
+    informs the scheduler that it can reroute the ask elsewhere.
+2.  If the task is already running or complete then the worker tells the
+    scheduler that it should not replicate the task elsewhere.
+
+This avoids redundant work, and also the duplication of side effects for more
+exotic tasks.  However, concurrent or repeated execution of the same task *is
+still possible* in the event of worker death or a disrupted network connection.

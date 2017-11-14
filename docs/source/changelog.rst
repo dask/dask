@@ -1,6 +1,38 @@
 Changelog
 =========
 
+1.20.0 - 2017-11-17
+-------------------
+
+-  Drop use of pandas.msgpack (:pr:`1473`) `Matthew Rocklin`_
+-  Add methods to get/set scheduler metadata `Matthew Rocklin`_
+-  Add distributed lock `Matthew Rocklin`_
+-  Add reschedule exception for worker tasks `Matthew Rocklin`_
+-  Fix ``nbytes()`` for ``bytearrays`` `Matthew Rocklin`_
+-  Capture scheduler and worker logs `Matthew Rocklin`_
+-  Garbage collect after data eviction on high worker memory usage (:pr:`1488`) `Olivier Grisel`_
+-  Add scheduler HTML routes to bokeh server (:pr:`1478`) (:pr:`1514`) `Matthew Rocklin`_
+-  Add pytest plugin to test for resource leaks (:pr:`1499`) `Antoine Pitrou`_
+-  Improve documentation for scheduler states (:pr:`1498`) `Antoine Pitrou`_
+-  Correct warn_if_longer timeout in ThrottledGC (:pr:`1496`) `Fabian Keller`_
+-  Catch race condition in as_completed on cancelled futures (:pr:`1507`) `Matthew Rocklin`_
+-  Transactional work stealing (:pr:`1489`) (:pr:`1528`) `Matthew Rocklin`_
+-  Avoid forkserver in PyPy (:pr:`1509`) `Matthew Rocklin`_
+-  Add dict access to get/set datasets (:pr:`1508`) `Mike DePalatis`_
+-  Support Tornado 5 (:pr:`1509`) (:pr:`1512`) (:pr:`1518`) (:pr:`1534`) `Antoine Pitrou`_
+-  Move thread_state in Dask (:pr:`1523`) `Jim Crist`_
+-  Use new Dask collections interface (:pr:`1513`) `Matthew Rocklin`_
+-  Add nanny flag to dask-mpi `Matthew Rocklin`_
+-  Remove JSON-based HTTP servers `Matthew Rocklin`_
+-  Avoid doing I/O in repr/str (:pr:`1536`) `Matthew Rocklin`_
+-  Fix URL for MPI4Py project (:pr:`1546`) `Ian Hopkinson`_
+-  Allow automatic retries of a failed task (:pr:`1524`) `Antoine Pitrou`_
+-  Clean and accelerate tests (:pr:`1548`) (:pr:`1549`) (:pr:`1552`)
+   (:pr:`1553`) (:pr:`1560`) (:pr:`1564`) `Antoine Pitrou`_
+- Move HDFS functionality to the hdfs3 library (:pr:`1561`) `Jim Crist`_
+-  Fix bug when using events page with no events (:pr:`1562`) `@rbubley`_
+-  Improve diagnostic naming of tasks within tuples (:pr:`1566`) `Kelvyn Yang`_
+
 1.19.3 - 2017-10-16
 -------------------
 
@@ -371,3 +403,13 @@ significantly without many new features.
 *  Refactor HDFS writing to align with changes in the dask library
 *  Executor reconnects to scheduler on broken connection or failed scheduler
 *  Support sklearn.external.joblib as well as normal joblib
+
+.. _`Antoine Pitrou`: https://github.com/pitrou
+.. _`Olivier Grisel`: https://github.com/ogrisel
+.. _`Fabian Keller`: https://github.com/bluenote10
+.. _`Mike DePalatis`: https://github.com/mivade
+.. _`Matthew Rocklin`: https://github.com/mrocklin
+.. _`Jim Crist`: https://github.com/jcrist
+.. _`Ian Hopkinson`: https://https://github.com/IanHopkinson
+.. _`@rbubley`: https://https://github.com/rbubley
+.. _`Kelvyn Yang`: https://https://github.com/kelvynyang
