@@ -13,7 +13,8 @@ from toolz import concat, valmap, partial
 
 from dask import compute, get, delayed
 from dask.bytes.s3 import DaskS3FileSystem
-from dask.bytes.core import read_bytes, open_files, open_text_files
+from dask.bytes.core import (read_bytes, open_files, open_text_files,
+                             get_pyarrow_filesystem)
 from dask.bytes import core
 
 
@@ -342,3 +343,9 @@ def test_pathlib_s3(s3):
     with pytest.raises(ValueError):
         url = pathlib.Path('s3://bucket/test.accounts.*')
         sample, values = read_bytes(url, blocksize=None)
+
+
+def test_get_pyarrow_fs_s3(s3):
+    pa = pytest.importorskip('pyarrow')
+    fs = DaskS3FileSystem(anon=True)
+    assert isinstance(get_pyarrow_filesystem(fs), pa.filesystem.S3FSWrapper)

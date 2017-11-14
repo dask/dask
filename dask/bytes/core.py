@@ -524,3 +524,15 @@ class FileSystem(object):
 
     def get_block_locations(self, path):
         return None, None, None
+
+
+def get_pyarrow_filesystem(fs):
+    """Get an equivalent pyarrow filesystem.
+
+    Not for public use, will be removed once a consistent filesystem api
+    is defined."""
+    try:
+        return fs._get_pyarrow_filesystem()
+    except AttributeError:
+        raise NotImplementedError("Using pyarrow with a %r "
+                                  "filesystem object" % type(fs).__name__)

@@ -14,7 +14,8 @@ from dask.utils import filetexts
 from dask.bytes import compression
 from dask.bytes.local import LocalFileSystem
 from dask.bytes.core import (open_text_files, write_bytes, read_bytes,
-                             open_files, OpenFileCreator)
+                             open_files, OpenFileCreator, FileSystem,
+                             get_pyarrow_filesystem)
 
 compute = partial(compute, get=get)
 
@@ -26,6 +27,21 @@ files = {'.test.accounts.1.json': (b'{"amount": 100, "name": "Alice"}\n'
                                    b'{"amount": 600, "name": "Bob"}\n'
                                    b'{"amount": 700, "name": "Charlie"}\n'
                                    b'{"amount": 800, "name": "Dennis"}\n')}
+
+
+try:
+    # used only in test_with_urls - may be more generally useful
+    import pathlib
+
+    def to_uri(path):
+        return pathlib.Path(os.path.abspath(path)).as_uri()
+
+except (ImportError, NameError):
+    import urlparse, urllib
+
+    def to_uri(path):
+        return urlparse.urljoin(
+            'file:', urllib.pathname2url(os.path.abspath(path)))
 
 
 def test_read_bytes():
@@ -362,16 +378,15 @@ def test_abs_paths(tmpdir):
     assert fs.open('tmp', 'r').read() == 'hi'
 
 
-try:
-    # used only in test_with_urls - may be more generally useful
-    import pathlib
+class UnknownFileSystem(FileSystem):
+    pass
 
-    def to_uri(path):
-        return pathlib.Path(os.path.abspath(path)).as_uri()
 
-except (ImportError, NameError):
-    import urlparse, urllib
+def test_get_pyarrow_filesystem():
+    pa = pytest.importorskip('pyarrow')
 
-    def to_uri(path):
-        return urlparse.urljoin(
-            'file:', urllib.pathname2url(os.path.abspath(path)))
+    fs = LocalFileSystem()
+    assert isinstance(get_pyarrow_filesystem(fs), pa.filesystem.LocalFileSystem)
+
+    with pytest.raises(NotImplementedError):
+        get_pyarrow_filesystem(UnknownFileSystem())
