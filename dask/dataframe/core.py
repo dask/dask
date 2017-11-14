@@ -3714,10 +3714,13 @@ def repartition_freq(df, freq=None):
     divisions = pd.DatetimeIndex(start=df.divisions[0].ceil(freq),
                                  end=df.divisions[-1],
                                  freq=freq).tolist()
-    if divisions[-1] != df.divisions[-1]:
-        divisions.append(df.divisions[-1])
-    if divisions[0] != df.divisions[0]:
-        divisions = [df.divisions[0]] + divisions
+    if not len(divisions):
+        divisions = [df.divisions[0], df.divisions[-1]]
+    else:
+        if divisions[-1] != df.divisions[-1]:
+            divisions.append(df.divisions[-1])
+        if divisions[0] != df.divisions[0]:
+            divisions = [df.divisions[0]] + divisions
 
     return df.repartition(divisions=divisions)
 
