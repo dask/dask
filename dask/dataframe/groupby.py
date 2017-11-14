@@ -130,6 +130,11 @@ def _groupby_raise_unaligned(df, **kwargs):
                "\n"
                "For more information see dask GH issue #1876.")
         raise ValueError(msg)
+    elif by is not None and len(by):
+        # since we're coming through apply, `by` will be a tuple.
+        # Pandas treats tuples as a single key, and lists as multiple keys
+        # We want multiple keys
+        kwargs.update(by=list(by))
     return df.groupby(**kwargs)
 
 
@@ -608,6 +613,9 @@ def _groupby_apply_funcs(df, *index, **kwargs):
         the aggregated dataframe.
     """
     if len(index):
+        # since we're coming through apply, `by` will be a tuple.
+        # Pandas treats tuples as a single key, and lists as multiple keys
+        # We want multiple keys
         kwargs.update(by=list(index))
 
     funcs = kwargs.pop('funcs')
