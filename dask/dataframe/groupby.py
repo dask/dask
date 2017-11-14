@@ -130,6 +130,8 @@ def _groupby_raise_unaligned(df, **kwargs):
                "\n"
                "For more information see dask GH issue #1876.")
         raise ValueError(msg)
+    elif by is not None and len(by):
+        kwargs.update(by=list(by))
     return df.groupby(**kwargs)
 
 
