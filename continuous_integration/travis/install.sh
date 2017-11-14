@@ -45,7 +45,6 @@ conda install -q -c conda-forge \
     netcdf4 \
     paramiko \
     psutil \
-    pycodestyle \
     pytest=3.1 \
     pytest-faulthandler \
     pytest-timeout \
