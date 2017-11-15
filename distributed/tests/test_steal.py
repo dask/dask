@@ -410,7 +410,7 @@ def assert_balanced(inp, expected, c, s, *workers):
 
         if result2 == expected2:
             return
-    raise Exception()
+    raise Exception('Expected: {}; got: {}'.format(str(expected2), str(result2)))
 
 
 @pytest.mark.parametrize('inp,expected', [

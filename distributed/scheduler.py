@@ -651,6 +651,7 @@ class Scheduler(ServerNode):
                 self.worker_bytes[address] = 0
                 self.processing[address] = dict()
                 self.occupancy[address] = 0
+                # Do not need to adjust self.total_occupancy as self.occupancy[address] cannot exist before this.
                 self.check_idle_saturated(address)
 
             # for key in keys:  # TODO
@@ -1145,7 +1146,8 @@ class Scheduler(ServerNode):
                 set(self.has_what) ==
                 set(self.processing) ==
                 set(self.worker_info) ==
-                set(self.worker_comms)):
+                set(self.worker_comms) ==
+                set(self.occupancy)):
             raise ValueError("Workers not the same in all collections")
 
         a = self.worker_bytes
@@ -1163,11 +1165,13 @@ class Scheduler(ServerNode):
 
         assert all(self.who_has.values())
 
-        # for worker, occ in self.occupancy.items():
+        for worker, occ in self.occupancy.items():
         #     for d in self.extensions['stealing'].in_flight.values():
         #         if worker in (d['thief'], d['victim']):
         #             continue
-        #     assert abs(sum(self.processing[worker].values()) - occ) < 1e-8
+            assert abs(sum(self.processing[worker].values()) - occ) < 1e-8
+
+        assert abs(sum(self.occupancy.values()) - self.total_occupancy) < 1e-8
 
     ###################
     # Manage Messages #
@@ -1425,6 +1429,7 @@ class Scheduler(ServerNode):
 
         worker = self.rprocessing[key]
         self.occupancy[actual_worker] -= self.processing[actual_worker][key]
+        self.total_occupancy -= self.processing[actual_worker][key]
         self.processing[actual_worker][key] = 0
 
     @gen.coroutine
@@ -2763,8 +2768,12 @@ class Scheduler(ServerNode):
             w = self.rprocessing.pop(key)
             if w in self.workers:
                 duration = self.processing[w].pop(key)
-                self.occupancy[w] -= duration
-                self.total_occupancy -= duration
+                if not self.processing[w]:
+                    self.total_occupancy -= self.occupancy[w]
+                    self.occupancy[w] = 0
+                else:
+                    self.total_occupancy -= duration
+                    self.occupancy[w] -= duration
                 self.check_idle_saturated(w)
                 self.release_resources(key, w)
                 self.worker_send(w, {'op': 'release-task', 'key': key})
@@ -2836,8 +2845,12 @@ class Scheduler(ServerNode):
             w = self.rprocessing.pop(key)
             if w in self.processing:
                 duration = self.processing[w].pop(key)
-                self.occupancy[w] -= duration
-                self.total_occupancy -= duration
+                if not self.processing[w]:
+                    self.total_occupancy -= self.occupancy[w]
+                    self.occupancy[w] = 0
+                else:
+                    self.total_occupancy -= duration
+                    self.occupancy[w] -= duration
                 self.check_idle_saturated(w)
                 self.release_resources(key, w)
 
@@ -3148,8 +3161,9 @@ class Scheduler(ServerNode):
     # Assigning Tasks to Workers #
     ##############################
 
-    def check_idle_saturated(self, worker):
-        occ = self.occupancy[worker]
+    def check_idle_saturated(self, worker, occ=None):
+        if occ is None:
+            occ = self.occupancy[worker]
         nc = self.ncores[worker]
         p = len(self.processing[worker])
 
