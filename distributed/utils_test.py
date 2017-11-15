@@ -438,30 +438,28 @@ def run_nanny(q, scheduler_q, **kwargs):
 
 @contextmanager
 def check_active_rpc(loop, active_rpc_timeout=1):
-    if rpc.active > 0:
-        # Streams from a previous test dangling around?
+    active_before = set(rpc.active)
+    if active_before and not PY3:
+        # On Python 2, try to avoid dangling comms before forking workers
         gc.collect()
-    rpc_active = rpc.active
+        active_before = set(rpc.active)
     yield
-    if rpc.active > rpc_active and active_rpc_timeout:
-        # Some streams can take a bit of time to notice their peer
-        # has closed, and keep a coroutine (*) waiting for a CommClosedError
-        # before calling close_rpc() after a CommClosedError.
-        # This would happen especially if a non-localhost address is used,
-        # as Nanny does.
-        # (*) (example: gather_from_workers())
-        deadline = loop.time() + active_rpc_timeout
+    # Some streams can take a bit of time to notice their peer
+    # has closed, and keep a coroutine (*) waiting for a CommClosedError
+    # before calling close_rpc() after a CommClosedError.
+    # This would happen especially if a non-localhost address is used,
+    # as Nanny does.
+    # (*) (example: gather_from_workers())
+    def fail():
+        pytest.fail("some RPCs left active by test: %s"
+                    % (sorted(set(rpc.active) - active_before)))
 
-        @gen.coroutine
-        def wait_a_bit():
-            yield gen.sleep(0.01)
+    @gen.coroutine
+    def wait():
+        yield async_wait_for(lambda: len(set(rpc.active) - active_before) == 0,
+                             timeout=active_rpc_timeout, fail_func=fail)
 
-        logger.info("Waiting for active RPC count to drop down")
-        while rpc.active > rpc_active and loop.time() < deadline:
-            loop.run_sync(wait_a_bit)
-        logger.info("... Finished waiting for active RPC count to drop down")
-
-    assert rpc.active == rpc_active
+    loop.run_sync(wait)
 
 
 @contextmanager
@@ -825,22 +823,22 @@ def wait_for_port(address, timeout=5):
             break
 
 
-def wait_for(predicate, timeout, fail_func=None):
-    start = time()
+def wait_for(predicate, timeout, fail_func=None, period=0.001):
+    deadline = time() + timeout
     while not predicate():
-        sleep(0.001)
-        if time() > start + timeout:
+        sleep(period)
+        if time() > deadline:
             if fail_func is not None:
                 fail_func()
             pytest.fail("condition not reached until %s seconds" % (timeout,))
 
 
 @gen.coroutine
-def async_wait_for(predicate, timeout, fail_func=None):
-    start = time()
+def async_wait_for(predicate, timeout, fail_func=None, period=0.001):
+    deadline = time() + timeout
     while not predicate():
-        yield gen.sleep(0.001)
-        if time() > start + timeout:
+        yield gen.sleep(period)
+        if time() > deadline:
             if fail_func is not None:
                 fail_func()
             pytest.fail("condition not reached until %s seconds" % (timeout,))

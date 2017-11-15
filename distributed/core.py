@@ -379,7 +379,7 @@ class rpc(object):
 
     >>> remote.close_comms()  # doctest: +SKIP
     """
-    active = 0
+    active = weakref.WeakSet()
     comms = ()
     address = None
 
@@ -391,7 +391,7 @@ class rpc(object):
         self.status = 'running'
         self.deserialize = deserialize
         self.connection_args = connection_args
-        rpc.active += 1
+        rpc.active.add(self)
 
     @gen.coroutine
     def live_comm(self):
@@ -462,7 +462,7 @@ class rpc(object):
 
     def close_rpc(self):
         if self.status != 'closed':
-            rpc.active -= 1
+            rpc.active.discard(self)
         self.status = 'closed'
         self.close_comms()
 
@@ -474,7 +474,7 @@ class rpc(object):
 
     def __del__(self):
         if self.status != 'closed':
-            rpc.active -= 1
+            rpc.active.discard(self)
             self.status = 'closed'
             still_open = [comm for comm in self.comms if not comm.closed()]
             if still_open:
