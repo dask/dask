@@ -58,32 +58,34 @@ tls_kwargs = dict(listen_args={'ssl_context': get_server_ssl_context()},
 
 
 @gen.coroutine
-def get_comm_pair(listen_addr, listen_args=None, connect_args=None):
+def get_comm_pair(listen_addr, listen_args=None, connect_args=None,
+                  **kwargs):
     q = queues.Queue()
 
     def handle_comm(comm):
         q.put(comm)
 
     listener = listen(listen_addr, handle_comm,
-                      connection_args=listen_args)
+                      connection_args=listen_args, **kwargs)
     listener.start()
 
     comm = yield connect(listener.contact_address,
-                         connection_args=connect_args)
+                         connection_args=connect_args, **kwargs)
     serv_comm = yield q.get()
     raise gen.Return((comm, serv_comm))
 
 
-def get_tcp_comm_pair():
-    return get_comm_pair('tcp://')
+def get_tcp_comm_pair(**kwargs):
+    return get_comm_pair('tcp://', **kwargs)
 
 
-def get_tls_comm_pair():
-    return get_comm_pair('tls://', **tls_kwargs)
+def get_tls_comm_pair(**kwargs):
+    kwargs.update(tls_kwargs)
+    return get_comm_pair('tls://', **kwargs)
 
 
-def get_inproc_comm_pair():
-    return get_comm_pair('inproc://')
+def get_inproc_comm_pair(**kwargs):
+    return get_comm_pair('inproc://', **kwargs)
 
 
 @gen.coroutine
@@ -835,6 +837,9 @@ def check_connector_deserialize(addr, deserialize, in_value, check_out):
 
 @gen.coroutine
 def check_deserialize(addr):
+    """
+    Check the "deserialize" flag on connect() and listen().
+    """
     # Test with Serialize and Serialized objects
 
     msg = {'op': 'update',
@@ -879,22 +884,49 @@ def check_deserialize(addr):
     yield check_listener_deserialize(addr, True, msg, check_out_true)
     yield check_connector_deserialize(addr, True, msg, check_out_true)
 
-    # Test with a long bytestring
+    # Test with long bytestrings, large enough to be transferred
+    # as a separate payload
+
+    _uncompressible = os.urandom(1024 ** 2) * 4  # end size: 8 MB
 
     msg = {'op': 'update',
-           'x': b'abc',
-           'y': b'def\n' * (3 * 1024 ** 2),  # end size: 12 MB
+           'x': _uncompressible,
+           'to_ser': [to_serialize(_uncompressible)],
+           'ser': Serialized(*serialize(_uncompressible)),
            }
     msg_orig = msg.copy()
 
-    def check_out(out_value):
-        assert out_value == msg_orig
+    def check_out(deserialize_flag, out_value):
+        # Check output with deserialize=False
+        assert sorted(out_value) == sorted(msg_orig)
+        out_value = out_value.copy()  # in case transport passed the object as-is
+        to_ser = out_value.pop('to_ser')
+        ser = out_value.pop('ser')
+        expected_msg = msg_orig.copy()
+        del expected_msg['ser']
+        del expected_msg['to_ser']
+        assert out_value == expected_msg
 
-    yield check_listener_deserialize(addr, False, msg, check_out)
-    yield check_connector_deserialize(addr, False, msg, check_out)
+        if deserialize_flag:
+            assert isinstance(ser, (bytes, bytearray))
+            assert bytes(ser) == _uncompressible
+        else:
+            assert isinstance(ser, Serialized)
+            assert deserialize(ser.header, ser.frames) == _uncompressible
+            assert isinstance(to_ser, list)
+            to_ser, = to_ser
+            # The to_serialize() value could have been actually serialized
+            # or not (it's a transport-specific optimization)
+            if isinstance(to_ser, Serialized):
+                assert deserialize(to_ser.header, to_ser.frames) == _uncompressible
+            else:
+                assert to_ser == to_serialize(_uncompressible)
 
-    yield check_listener_deserialize(addr, True, msg, check_out)
-    yield check_connector_deserialize(addr, True, msg, check_out)
+    yield check_listener_deserialize(addr, False, msg, partial(check_out, False))
+    yield check_connector_deserialize(addr, False, msg, partial(check_out, False))
+
+    yield check_listener_deserialize(addr, True, msg, partial(check_out, True))
+    yield check_connector_deserialize(addr, True, msg, partial(check_out, True))
 
 
 @gen_test()
@@ -905,6 +937,49 @@ def test_tcp_deserialize():
 @gen_test()
 def test_inproc_deserialize():
     yield check_deserialize('inproc://')
+
+
+@gen.coroutine
+def check_deserialize_roundtrip(addr):
+    """
+    Sanity check round-tripping with "deserialize" on and off.
+    """
+    # Test with long bytestrings, large enough to be transferred
+    # as a separate payload
+    _uncompressible = os.urandom(1024 ** 2) * 4  # end size: 4 MB
+
+    msg = {'op': 'update',
+           'x': _uncompressible,
+           'to_ser': [to_serialize(_uncompressible)],
+           'ser': Serialized(*serialize(_uncompressible)),
+           }
+
+    for deserialize in (True, False):
+        a, b = yield get_comm_pair(addr, deserialize=deserialize)
+        yield a.write(msg)
+        got = yield b.read()
+        yield b.write(got)
+        got = yield a.read()
+
+        assert sorted(got) == sorted(msg)
+        for k in ('op', 'x'):
+            assert got[k] == msg[k]
+        if deserialize:
+            assert isinstance(got['to_ser'][0], (bytes, bytearray))
+            assert isinstance(got['ser'], (bytes, bytearray))
+        else:
+            assert isinstance(got['to_ser'][0], (to_serialize, Serialized))
+            assert isinstance(got['ser'], Serialized)
+
+
+@gen_test()
+def test_inproc_deserialize_roundtrip():
+    yield check_deserialize_roundtrip('inproc://')
+
+
+@gen_test()
+def test_tcp_deserialize_roundtrip():
+    yield check_deserialize_roundtrip('tcp://')
 
 
 def _raise_eoferror():
