@@ -494,7 +494,7 @@ def ensure_protocol(protocol):
         msg = ("Need to install `hdfs3 > 0.2.0` for HDFS support\n"
                "    conda install hdfs3 -c conda-forge")
         hdfs3 = import_required('hdfs3', msg)
-        if not LooseVersion(hdfs3) > '0.2.0':
+        if not LooseVersion(hdfs3.__version__) > '0.2.0':
             raise RuntimeError(msg)
         import hdfs3.dask  # register dask filesystem
 
