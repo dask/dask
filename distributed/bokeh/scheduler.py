@@ -536,7 +536,8 @@ class Events(DashboardComponent):
         with log_errors():
             log = self.scheduler.events[self.name]
             n = self.scheduler.event_counts[self.name] - self.last
-            log = [log[-i] for i in range(1, n + 1)]
+            if log:
+                log = [log[-i] for i in range(1, n + 1)]
             self.last = self.scheduler.event_counts[self.name]
 
             if log:
