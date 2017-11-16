@@ -2,9 +2,10 @@ from __future__ import print_function, division, absolute_import
 
 import io
 import os
+from distutils.version import LooseVersion
+from warnings import warn
 
 from toolz import merge
-from warnings import warn
 
 from .compression import seekable_files, files as compress_files
 from .utils import (SeekableFile, read_block, infer_compression,
@@ -490,11 +491,12 @@ def ensure_protocol(protocol):
                         "    pip install gcsfs")
 
     elif protocol == 'hdfs':
-        msg = ("Need to install `distributed` and `hdfs3` "
-               "for HDFS support\n"
-               "    conda install distributed hdfs3 -c conda-forge")
-        import_required('distributed.hdfs', msg)
-        import_required('hdfs3', msg)
+        msg = ("Need to install `hdfs3 > 0.2.0` for HDFS support\n"
+               "    conda install hdfs3 -c conda-forge")
+        hdfs3 = import_required('hdfs3', msg)
+        if not LooseVersion(hdfs3) > '0.2.0':
+            raise RuntimeError(msg)
+        import hdfs3.dask  # register dask filesystem
 
     elif protocol in _filesystems:
         return
