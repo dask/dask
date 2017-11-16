@@ -1,16 +1,14 @@
 language: generic
-sudo: false
+# sudo shouldn't be required, but currently tests fail when run in a container
+# on travis instead of a vm. See https://github.com/dask/distributed/pull/1563.
+sudo: required
 dist: trusty
-services:
-  - docker
 
 env:
   matrix:
     - PYTHON=2.7 PACKAGES="python-blosc futures faulthandler"
     - PYTHON=3.5.4 COVERAGE=true PACKAGES=python-blosc CRICK=true
     - PYTHON=3.6
-    - HDFS=true PYTHON=2.7
-    - HDFS=true PYTHON=3.5.4 PACKAGES=python-blosc
 
 matrix:
   fast_finish: true
@@ -25,22 +23,6 @@ matrix:
   - os: osx
     # This needs to be the exact same line as above
     env: PYTHON=3.6 RUNSLOW=false
-
-addons:
-  hosts:
-    # Need to make the container's hostname resolvable, since the HDFS
-    # client will contact it back.
-    - hdfs-container
-
-before_install:
-  - |
-    if [[ $HDFS == true ]]; then
-        pushd continuous_integration
-        docker build -t distributed-hdfs-test .
-        # Run HDFS
-        ./run-hdfs.sh || exit 1
-        popd
-    fi;
 
 install:
   - source continuous_integration/travis/install.sh
