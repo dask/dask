@@ -461,12 +461,8 @@ class Client(Node):
     """
     def __init__(self, address=None, loop=None, timeout=5,
                  set_as_default=True, scheduler_file=None,
-                 security=None, start=None, asynchronous=False,
+                 security=None, asynchronous=False,
                  name=None, **kwargs):
-        if start is not None:
-            raise ValueError("The start= keyword has been deprecated. "
-                             "Starting happens automatically. "
-                             "For asynchronous= use use the keyword instead")
 
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
@@ -1024,12 +1020,6 @@ class Client(Node):
         API.
         """
         return ClientExecutor(self, **kwargs)
-
-    def channel(self, *args, **kwargs):
-        """ Deprecated: see dask.distributed.Queue instead """
-        msg = ("Channels have been removed.  Consider using Queues instead. "
-               "http://distributed.readthedocs.io/en/latest/api.html#distributed.Queue")
-        raise NotImplementedError(msg)
 
     def submit(self, func, *args, **kwargs):
         """ Submit a function application to the scheduler

@@ -4,7 +4,6 @@ import atexit
 import logging
 import math
 from time import sleep
-import warnings
 import weakref
 
 from tornado import gen
@@ -60,10 +59,7 @@ class LocalCluster(object):
     def __init__(self, n_workers=None, threads_per_worker=None, processes=True,
                  loop=None, start=True, ip=None, scheduler_port=0,
                  silence_logs=logging.CRITICAL, diagnostics_port=8787,
-                 services={}, worker_services={}, nanny=None, **worker_kwargs):
-        if nanny is not None:
-            warnings.warning("nanny has been deprecated, used processes=")
-            processes = nanny
+                 services={}, worker_services={}, **worker_kwargs):
         self.status = None
         self.processes = processes
         self.silence_logs = silence_logs
