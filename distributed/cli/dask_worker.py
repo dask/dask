@@ -63,9 +63,9 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help="A unique name for this worker like 'worker-1'")
 @click.option('--memory-limit', default='auto',
               help="Bytes of memory that the worker can use. "
-                   "This can be an integer (bytes) "
-                   "float (fraction of total system memory) "
-                   "or 'auto'")
+                   "This can be an integer (bytes), "
+                   "float (fraction of total system memory), "
+                   "'auto', or zero for no memory management")
 @click.option('--reconnect/--no-reconnect', default=True,
               help="Reconnect to scheduler if disconnected")
 @click.option('--nanny/--no-nanny', default=True,

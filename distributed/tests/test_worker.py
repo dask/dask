@@ -1070,3 +1070,20 @@ def test_deque_handler():
     msg = deque_handler.deque[-1]
     assert 'distributed.worker' in deque_handler.format(msg)
     assert any(msg.msg == 'foo456' for msg in deque_handler.deque)
+
+
+@gen_cluster(ncores=[], client=True)
+def test_avoid_memory_monitor_if_zero_limit(c, s):
+    worker = Worker(s.address, loop=s.loop, memory_limit=0,
+                    memory_monitor_interval=10)
+    yield worker._start()
+    assert type(worker.data) is dict
+    assert 'memory' not in worker.periodic_callbacks
+
+    future = c.submit(inc, 1)
+    assert (yield future) == 2
+    yield gen.sleep(worker.memory_monitor_interval / 1000)
+
+    yield c.submit(inc, 2)  # worker doesn't pause
+
+    yield worker._close()

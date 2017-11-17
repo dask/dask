@@ -199,10 +199,11 @@ class WorkerBase(ServerNode):
         self.periodic_callbacks['heartbeat'] = pc
         self._address = contact_address
 
-        self._memory_monitoring = False
-        pc = PeriodicCallback(self.memory_monitor,
-                              self.memory_monitor_interval)
-        self.periodic_callbacks['memory'] = pc
+        if self.memory_limit:
+            self._memory_monitoring = False
+            pc = PeriodicCallback(self.memory_monitor,
+                                  self.memory_monitor_interval)
+            self.periodic_callbacks['memory'] = pc
         self._throttled_gc = ThrottledGC(logger=logger)
 
     @property
@@ -1019,7 +1020,8 @@ class Worker(WorkerBase):
     heartbeat_interval: int
         Milliseconds between heartbeats to scheduler
     memory_limit: int
-        Number of bytes of memory that this worker should use
+        Number of bytes of memory that this worker should use.
+        Set to zero for no limit
     memory_target_fraction: float
         Fraction of memory to try to stay beneath
     memory_spill_fraction: float
