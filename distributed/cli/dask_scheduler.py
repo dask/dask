@@ -39,8 +39,6 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 # XXX default port (or URI) values should be centralized somewhere
 @click.option('--bokeh-port', type=int, default=8787,
               help="Bokeh port for visual diagnostics")
-@click.option('--bokeh-internal-port', type=int, default=None,
-              help="Deprecated. Use --bokeh-port instead")
 @click.option('--bokeh/--no-bokeh', '_bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
 @click.option('--show/--no-show', default=False, help="Show web UI")
@@ -48,8 +46,6 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help="IP addresses to whitelist for bokeh.")
 @click.option('--bokeh-prefix', type=str, default=None,
               help="Prefix for the bokeh app")
-@click.option('--prefix', type=str, default=None,
-              help="Deprecated, see --bokeh-prefix")
 @click.option('--use-xheaders', type=bool, default=False, show_default=True,
               help="User xheaders in bokeh app for ssl termination in header")
 @click.option('--pid-file', type=str, default='',
@@ -62,20 +58,10 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help="Directory to place scheduler files")
 @click.option('--preload', type=str, multiple=True,
               help='Module that should be loaded by each worker process like "foo.bar" or "/path/to/foo.py"')
-def main(host, port, bokeh_port, bokeh_internal_port, show, _bokeh,
+def main(host, port, bokeh_port, show, _bokeh,
          bokeh_whitelist, bokeh_prefix, use_xheaders, pid_file, scheduler_file,
-         interface, local_directory, preload, prefix, tls_ca_file, tls_cert,
+         interface, local_directory, preload, tls_ca_file, tls_cert,
          tls_key):
-
-    if bokeh_internal_port:
-        print("The --bokeh-internal-port keyword has been removed.\n"
-              "The internal bokeh server is now the default bokeh server.\n"
-              "Use --bokeh-port %d instead" % bokeh_internal_port)
-        sys.exit(1)
-
-    if prefix:
-        print("The --prefix keyword has moved to --bokeh-prefix")
-        sys.exit(1)
 
     sec = Security(tls_ca_file=tls_ca_file,
                    tls_scheduler_cert=tls_cert,

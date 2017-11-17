@@ -9,7 +9,7 @@ from distributed.bokeh import messages
 from distributed.utils_test import slowinc
 
 from distributed.bokeh.components import (
-    TaskStream, TaskProgress, MemoryUsage, ResourceProfiles, WorkerTable,
+    TaskStream, TaskProgress, MemoryUsage, WorkerTable,
     Processing, ProfilePlot, ProfileTimePlot
 )
 
@@ -17,7 +17,6 @@ from distributed.bokeh.components import (
 @pytest.mark.parametrize('Component', [TaskStream,
                                        TaskProgress,
                                        MemoryUsage,
-                                       ResourceProfiles,
                                        WorkerTable,
                                        Processing])
 def test_basic(Component):

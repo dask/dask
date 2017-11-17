@@ -6,18 +6,14 @@ from time import time
 import weakref
 
 from bokeh.layouts import row, column
-from bokeh.models import (
-    ColumnDataSource, Plot, DataRange1d, LinearAxis,
-    DatetimeAxis, HoverTool, BoxZoomTool, ResetTool,
-    PanTool, WheelZoomTool, Title, Range1d, Quad, Text, value, Line,
-    NumeralTickFormatter, ToolbarBox, Legend, BoxSelectTool, TapTool,
-    Circle, OpenURL,
-)
+from bokeh.models import ( ColumnDataSource, Plot, DataRange1d, LinearAxis,
+        HoverTool, BoxZoomTool, ResetTool, PanTool, WheelZoomTool, Title,
+        Range1d, Quad, Text, value, BoxSelectTool, TapTool, Circle, OpenURL,)
+
 from bokeh.models.widgets import (DataTable, TableColumn, NumberFormatter,
         Button, Select)
 from bokeh.palettes import Spectral9
 from bokeh.plotting import figure
-from toolz import valmap
 from tornado import gen
 
 from ..config import config
@@ -281,108 +277,6 @@ class MemoryUsage(DashboardComponent):
             self.source.data.update(nb)
             self.root.title.text = \
                 "Memory Use: %0.2f MB" % (sum(msg['nbytes'].values()) / 1e6)
-
-
-class ResourceProfiles(DashboardComponent):
-    """ Time plots of the current resource usage on the cluster
-
-    This is two plots, one for CPU and Memory and another for Network I/O
-    """
-
-    def __init__(self, **kwargs):
-        self.source = ColumnDataSource(data={'time': [], 'cpu': [],
-                                             'memory_percent': [], 'network-send': [], 'network-recv': []}
-                                       )
-
-        x_range = DataRange1d(follow='end', follow_interval=30000, range_padding=0)
-
-        resource_plot = Plot(
-            x_range=x_range, y_range=Range1d(start=0, end=1),
-            toolbar_location=None, min_border_bottom=10, **kwargs
-        )
-
-        line_opts = dict(line_width=2, line_alpha=0.8)
-        g1 = resource_plot.add_glyph(
-            self.source,
-            Line(x='time', y='memory_percent', line_color="#33a02c", **line_opts)
-        )
-        g2 = resource_plot.add_glyph(
-            self.source,
-            Line(x='time', y='cpu', line_color="#1f78b4", **line_opts)
-        )
-
-        resource_plot.add_layout(
-            LinearAxis(formatter=NumeralTickFormatter(format="0 %")),
-            'left'
-        )
-
-        legend_opts = dict(
-            location='top_left', orientation='horizontal', padding=5, margin=5,
-            label_height=5)
-
-        resource_plot.add_layout(
-            Legend(items=[('Memory', [g1]), ('CPU', [g2])], **legend_opts)
-        )
-
-        network_plot = Plot(
-            x_range=x_range, y_range=DataRange1d(start=0),
-            toolbar_location=None, **kwargs
-        )
-        g1 = network_plot.add_glyph(
-            self.source,
-            Line(x='time', y='network-send', line_color="#a6cee3", **line_opts)
-        )
-        g2 = network_plot.add_glyph(
-            self.source,
-            Line(x='time', y='network-recv', line_color="#b2df8a", **line_opts)
-        )
-
-        network_plot.add_layout(DatetimeAxis(axis_label="Time"), "below")
-        network_plot.add_layout(LinearAxis(axis_label="MB/s"), 'left')
-        network_plot.add_layout(
-            Legend(items=[('Network Send', [g1]), ('Network Recv', [g2])], **legend_opts)
-        )
-
-        tools = [
-            PanTool(dimensions='width'), WheelZoomTool(dimensions='width'),
-            BoxZoomTool(), ResetTool()
-        ]
-
-        if 'sizing_mode' in kwargs:
-            sizing_mode = {'sizing_mode': kwargs['sizing_mode']}
-        else:
-            sizing_mode = {}
-
-        combo_toolbar = ToolbarBox(
-            tools=tools, logo=None, toolbar_location='right', **sizing_mode
-        )
-
-        self.root = row(
-            column(resource_plot, network_plot, **sizing_mode),
-            column(combo_toolbar, **sizing_mode),
-            id='bk-resource-profiles-plot',
-            **sizing_mode
-        )
-
-        # Required for update callback
-        self.resource_index = [0]
-
-    def update(self, messages):
-        with log_errors():
-            index = messages['workers']['index']
-            data = messages['workers']['plot-data']
-
-            if not index or index[-1] == self.resource_index[0]:
-                return
-
-            if self.resource_index == [0]:
-                data = valmap(list, data)
-
-            ind = bisect(index, self.resource_index[0])
-            indexes = list(range(ind, len(index)))
-            data = {k: [v[i] for i in indexes] for k, v in data.items()}
-            self.resource_index[0] = index[-1]
-            self.source.stream(data, 1000)
 
 
 class WorkerTable(DashboardComponent):
