@@ -18,7 +18,7 @@ Array
 - Support broadcasting of Dask Arrays with 0-length dimensions (:pr:`2784`) `John A Kirkham`_
 - Add ``asarray`` and ``asanyarray`` to Dask Array API docs (:pr:`2787`) `James Bourbeau`_
 - Support ``unique``'s ``return_*`` arguments (:pr:`2779`) `John A Kirkham`_
-- Simplify ``_unique_interlal`` (:pr:`2850`) (:pr:`2855`) `John A Kirkham`_
+- Simplify ``_unique_internal`` (:pr:`2850`) (:pr:`2855`) `John A Kirkham`_
 - Avoid removing some getter calls in array optimizations (:pr:`2826`) `Jim Crist`_
 
 DataFrame
