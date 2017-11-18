@@ -1,8 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
 from contextlib import contextmanager
-import ssl
 import sys
+
+try:
+    import ssl
+except ImportError:
+    ssl = None
 
 import pytest
 from tornado import gen

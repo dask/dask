@@ -14,7 +14,6 @@ import re
 import shutil
 import signal
 import socket
-import ssl
 import subprocess
 import sys
 import tempfile
@@ -24,6 +23,11 @@ from time import sleep
 import uuid
 import warnings
 import weakref
+
+try:
+    import ssl
+except ImportError:
+    ssl = None
 
 import psutil
 import pytest

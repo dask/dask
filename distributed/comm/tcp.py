@@ -3,9 +3,13 @@ from __future__ import print_function, division, absolute_import
 import errno
 import logging
 import socket
-import ssl
 import struct
 import sys
+
+try:
+    import ssl
+except ImportError:
+    ssl = None
 
 import tornado
 from tornado import gen, netutil

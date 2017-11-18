@@ -1,6 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
-import ssl
+try:
+    import ssl
+except ImportError:
+    ssl = None
 
 from . import config
 
