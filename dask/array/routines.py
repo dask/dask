@@ -207,6 +207,16 @@ def _inner_apply_along_axis(arr,
     )
 
 
+@wraps(np.matmul)
+def matmul(a, b):
+    a = asanyarray(a)
+    b = asanyarray(b)
+    try:
+        return a.__matmul__(b)
+    except Exception:
+        return b.__rmatmul__(a)
+
+
 @wraps(np.apply_along_axis)
 def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     arr = asarray(arr)
