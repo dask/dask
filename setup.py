@@ -25,7 +25,7 @@ tests = [p + '.tests' for p in packages]
 
 # Only include pytest-runner in setup_requires if we're invoking tests
 if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
-    setup_requires = ['pytest-runner']
+    setup_requires = ['pytest-runner', 'fastparquet', 'pyarrow']
 else:
     setup_requires = []
 
