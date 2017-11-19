@@ -1486,8 +1486,7 @@ class Array(Base):
 
     def __matmul__(self, other):
         from .routines import tensordot
-        if not hasattr(other, 'ndim'):
-            other = np.asarray(other)  # account for array-like RHS
+        other = asanyarray(other)
         if other.ndim > 2:
             msg = ('The matrix multiplication operator (@) is not yet '
                    'implemented for higher-dimensional Dask arrays. Try '
@@ -1499,8 +1498,7 @@ class Array(Base):
 
     def __rmatmul__(self, other):
         from .routines import tensordot
-        if not hasattr(other, 'ndim'):
-            other = np.asarray(other)  # account for array-like on LHS
+        other = asanyarray(other)
         if self.ndim > 2:
             msg = ('The matrix multiplication operator (@) is not yet '
                    'implemented for higher-dimensional Dask arrays. Try '
