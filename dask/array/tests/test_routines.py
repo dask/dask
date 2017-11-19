@@ -148,6 +148,29 @@ def test_swapaxes():
     assert d.swapaxes(0, 1).name != d.swapaxes(1, 0).name
 
 
+def test_matmul():
+    x = np.random.random((5, 5))
+    y = np.random.random((5, 2))
+
+    a = da.from_array(x, chunks=(1, 5))
+    b = da.from_array(y, chunks=(5, 1))
+
+    assert_eq(np.matmul(x, y), da.matmul(a, b))
+    assert_eq(np.matmul(a, y), da.matmul(x, b))
+    assert_eq(np.matmul(x, b), da.matmul(a, y))
+
+    list_vec = list(range(1, 6))
+    assert_eq(np.matmul(x, list_vec), da.matmul(a, list_vec))
+    assert_eq(np.matmul(list_vec, y), da.matmul(list_vec, b))
+
+    z = np.random.random((5, 5, 5))
+    c = da.from_array(z, chunks=(1, 5, 1))
+    with pytest.raises(NotImplementedError):
+        da.matmul(a, z)
+
+    assert_eq(np.matmul(z, x), da.matmul(c, a))
+
+
 def test_tensordot():
     x = np.arange(400).reshape((20, 20))
     a = da.from_array(x, chunks=(5, 4))
