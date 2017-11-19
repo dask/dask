@@ -413,8 +413,7 @@ def _write_partition_pyarrow(df, open_with, filename, write_index,
 
     if metadata_path is not None:
         with open_with(metadata_path, 'wb') as fil:
-            if 'compression' in kwargs:
-                kwargs.pop('compression')
+            kwargs.pop('compression', None)
             parquet.write_metadata(t.schema, fil, **kwargs)
 
 
