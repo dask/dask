@@ -97,6 +97,7 @@ Top level user functions:
    logical_or
    logical_xor
    map_blocks
+   matmul
    max
    maximum
    mean
@@ -419,6 +420,7 @@ Other functions
 .. autofunction:: logical_not
 .. autofunction:: logical_or
 .. autofunction:: logical_xor
+.. autofunction:: matmul
 .. autofunction:: max
 .. autofunction:: maximum
 .. autofunction:: mean
