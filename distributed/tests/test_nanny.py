@@ -17,7 +17,7 @@ from distributed.core import CommClosedError
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
 from distributed.utils import ignoring, tmpfile
-from distributed.utils_test import (gen_cluster, gen_test, slow,
+from distributed.utils_test import (gen_cluster, gen_test, slow, inc,
         captured_logger)
 
 
@@ -264,3 +264,22 @@ def test_nanny_terminate(c, s, a):
         out = logger.getvalue()
         assert 'restart' in out.lower()
         assert 'memory' in out.lower()
+
+
+@gen_cluster(ncores=[], client=True)
+def test_avoid_memory_monitor_if_zero_limit(c, s):
+    nanny = Nanny(s.address, loop=s.loop, memory_limit=0)
+    yield nanny._start()
+    typ = yield c.run(lambda dask_worker: type(dask_worker.data))
+    assert typ == {nanny.worker_address: dict}
+    pcs = yield c.run(lambda dask_worker: list(dask_worker.periodic_callbacks))
+    assert 'memory' not in pcs
+    assert 'memory' not in nanny.periodic_callbacks
+
+    future = c.submit(inc, 1)
+    assert (yield future) == 2
+    yield gen.sleep(0.02)
+
+    yield c.submit(inc, 2)  # worker doesn't pause
+
+    yield nanny._close()

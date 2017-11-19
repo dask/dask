@@ -97,8 +97,9 @@ class Nanny(ServerNode):
                                     connection_args=self.connection_args,
                                     **kwargs)
 
-        pc = PeriodicCallback(self.memory_monitor, 100)
-        self.periodic_callbacks['memory'] = pc
+        if self.memory_limit:
+            pc = PeriodicCallback(self.memory_monitor, 100)
+            self.periodic_callbacks['memory'] = pc
 
         self._listen_address = listen_address
         self.status = 'init'
