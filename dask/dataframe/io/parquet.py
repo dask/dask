@@ -374,7 +374,7 @@ def _read_pyarrow_parquet_piece(open_file_func, piece, columns, index_cols,
 
 
 def _write_pyarrow(df, path, write_index=None, append=False,
-                   ignore_divisions=False, compression=None, partition_on=None,
+                   ignore_divisions=False, partition_on=None,
                    storage_options=None, **kwargs):
     if append:
         raise NotImplementedError("`append` not implemented for "
@@ -394,26 +394,27 @@ def _write_pyarrow(df, path, write_index=None, append=False,
     template = fs.sep.join([path, 'part.%i.parquet'])
 
     write = delayed(_write_partition_pyarrow)
-    metadata_path = fs.sep.join([path, '_metadata'])
-    writes = [write(part, open_with, template % i, write_index, compression, metadata_path,
-                    **kwargs)
+    first_kwargs = kwargs.copy()
+    first_kwargs['metadata_path'] = fs.sep.join([path, '_metadata'])
+    writes = [write(part, open_with, template % i, write_index,
+                    **(kwargs if i else first_kwargs))
               for i, part in enumerate(df.to_delayed())]
     return delayed(writes)
 
 
-def _write_partition_pyarrow(df, open_with, filename, write_index, compression=None,
+def _write_partition_pyarrow(df, open_with, filename, write_index,
                              metadata_path=None, **kwargs):
     import pyarrow as pa
     from pyarrow import parquet
     t = pa.Table.from_pandas(df, preserve_index=write_index)
 
     with open_with(filename, 'wb') as fil:
-        kwargs_copy = kwargs.copy()
-        kwargs_copy['compression'] = compression
-        parquet.write_table(t, fil, **kwargs_copy)
+        parquet.write_table(t, fil, **kwargs)
 
     if metadata_path is not None:
         with open_with(metadata_path, 'wb') as fil:
+            if 'compression' in kwargs:
+                kwargs.pop('compression')
             parquet.write_metadata(t.schema, fil, **kwargs)
 
 
@@ -538,7 +539,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                 categories=categories, index=index)
 
 
-def to_parquet(df, path, engine='auto', compression=None, write_index=None,
+def to_parquet(df, path, engine='auto', compression='default', write_index=None,
                append=False, ignore_divisions=False, partition_on=None,
                storage_options=None, compute=True, **kwargs):
     """Store Dask.dataframe to Parquet files
@@ -603,11 +604,14 @@ def to_parquet(df, path, engine='auto', compression=None, write_index=None,
     if set(partition_on) - set(df.columns):
         raise ValueError('Partitioning on non-existent column')
 
+    if compression != 'default':
+        kwargs['compression'] = compression
+
     write = get_engine(engine)['write']
 
     out = write(df, path, write_index=write_index, append=append,
                 ignore_divisions=ignore_divisions, partition_on=partition_on,
-                storage_options=storage_options, compression=compression, **kwargs)
+                storage_options=storage_options, **kwargs)
 
     if compute:
         out.compute()
