@@ -10,7 +10,7 @@ from .routines import (take, choose, argwhere, where, coarsen, insert,
                        vstack, hstack, compress, extract, round, count_nonzero,
                        flatnonzero, nonzero, around, isnull, notnull, isclose,
                        allclose, corrcoef, swapaxes, tensordot, transpose, dot,
-                       apply_along_axis, apply_over_axes, result_type,
+                       matmul, apply_along_axis, apply_over_axes, result_type,
                        atleast_1d, atleast_2d, atleast_3d)
 from .reshape import reshape
 from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
