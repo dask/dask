@@ -184,8 +184,7 @@ def _write_fastparquet(df, path, write_index=None, append=False,
     sep = fs.sep
 
     object_encoding = kwargs.pop('object_encoding', 'utf8')
-    if object_encoding == 'infer' or (isinstance(object_encoding, dict) and
-                                              'infer' in object_encoding.values()):
+    if object_encoding == 'infer' or (isinstance(object_encoding, dict) and 'infer' in object_encoding.values()):
         raise ValueError('"infer" not allowed as object encoding, '
                          'because this required data in memory.')
 
@@ -202,8 +201,7 @@ def _write_fastparquet(df, path, write_index=None, append=False,
         if pf.file_scheme not in ['hive', 'empty', 'flat']:
             raise ValueError('Requested file scheme is hive, '
                              'but existing file scheme is not.')
-        elif ((set(pf.columns) != set(df.columns) - set(partition_on)) or
-                  (set(partition_on) != set(pf.cats))):
+        elif ((set(pf.columns) != set(df.columns) - set(partition_on)) or (set(partition_on) != set(pf.cats))):
             raise ValueError('Appended columns not the same.\n'
                              'New: {} | Previous: {}'
                              .format(pf.columns, list(df.columns)))
