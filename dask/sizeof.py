@@ -42,26 +42,18 @@ def register_pandas():
 
     @sizeof.register(pd.DataFrame)
     def sizeof_pandas_dataframe(df):
-        p = int(df.memory_usage(index=True).sum())
-        obj = int((df.dtypes == object).sum() * len(df) * 100)
-        if df.index.dtype == object:
-            obj += len(df) * 100
-        return int(p + obj) + 1000
+        p = int(df.memory_usage(index=True, deep=True).sum())
+        return p + 1000
 
     @sizeof.register(pd.Series)
     def sizeof_pandas_series(s):
-        p = int(s.memory_usage(index=True))
-        if s.dtype == object:
-            p += len(s) * 100
-        if s.index.dtype == object:
-            p += len(s) * 100
-        return int(p) + 1000
+        p = int(s.memory_usage(index=True, deep=True))
+        return p + 1000
 
     @sizeof.register(pd.Index)
     def sizeof_pandas_index(i):
-        p = int(i.memory_usage())
-        obj = len(i) * 100 if i.dtype == object else 0
-        return int(p + obj) + 1000
+        p = int(i.memory_usage(deep=True))
+        return p + 1000
 
 
 @sizeof.register_lazy("scipy")
