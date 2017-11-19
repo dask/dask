@@ -15,13 +15,12 @@ from ...compatibility import PY3
 from ...delayed import delayed
 from ...bytes.core import get_fs_paths_myopen
 
-
 __all__ = ('read_parquet', 'to_parquet')
 
 
 def _meta_from_dtypes(to_read_columns, file_columns, file_dtypes, index_cols):
     meta = pd.DataFrame({c: pd.Series([], dtype=d)
-                        for (c, d) in file_dtypes.items()},
+                         for (c, d) in file_dtypes.items()},
                         columns=[c for c in file_columns
                                  if c in file_dtypes])
     df = meta[list(to_read_columns)]
@@ -64,8 +63,8 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
     name = 'read-parquet-' + tokenize(pf, columns, categories)
 
     rgs = [rg for rg in pf.row_groups if
-           not(fastparquet.api.filter_out_stats(rg, filters, pf.schema)) and
-           not(fastparquet.api.filter_out_cats(rg, filters))]
+           not (fastparquet.api.filter_out_stats(rg, filters, pf.schema)) and
+           not (fastparquet.api.filter_out_cats(rg, filters))]
 
     if index is False:
         index_col = None
@@ -96,7 +95,7 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
     for cat in categories:
         if cat in meta:
             meta[cat] = pd.Series(pd.Categorical([],
-                                  categories=[UNKNOWN_CATEGORIES]),
+                                                 categories=[UNKNOWN_CATEGORIES]),
                                   index=meta.index)
 
     if out_type == Series:
@@ -186,7 +185,7 @@ def _write_fastparquet(df, path, write_index=None, append=False,
 
     object_encoding = kwargs.pop('object_encoding', 'utf8')
     if object_encoding == 'infer' or (isinstance(object_encoding, dict) and
-                                      'infer' in object_encoding.values()):
+                                              'infer' in object_encoding.values()):
         raise ValueError('"infer" not allowed as object encoding, '
                          'because this required data in memory.')
 
@@ -204,7 +203,7 @@ def _write_fastparquet(df, path, write_index=None, append=False,
             raise ValueError('Requested file scheme is hive, '
                              'but existing file scheme is not.')
         elif ((set(pf.columns) != set(df.columns) - set(partition_on)) or
-              (set(partition_on) != set(pf.cats))):
+                  (set(partition_on) != set(pf.cats))):
             raise ValueError('Appended columns not the same.\n'
                              'New: {} | Previous: {}'
                              .format(pf.columns, list(df.columns)))
@@ -358,7 +357,7 @@ def _get_pyarrow_dtypes(schema):
 def _read_pyarrow_parquet_piece(open_file_func, piece, columns, index_cols,
                                 is_series, partitions):
     with open_file_func(piece.path, mode='rb') as f:
-        table = piece.read(columns=columns,  partitions=partitions,
+        table = piece.read(columns=columns, partitions=partitions,
                            use_pandas_metadata=True,
                            file=f)
     df = table.to_pandas()
@@ -377,7 +376,7 @@ def _read_pyarrow_parquet_piece(open_file_func, piece, columns, index_cols,
 
 
 def _write_pyarrow(df, path, write_index=None, append=False,
-                   ignore_divisions=False, partition_on=None,
+                   ignore_divisions=False, compression=None, partition_on=None,
                    storage_options=None, **kwargs):
     if append:
         raise NotImplementedError("`append` not implemented for "
@@ -397,22 +396,23 @@ def _write_pyarrow(df, path, write_index=None, append=False,
     template = fs.sep.join([path, 'part.%i.parquet'])
 
     write = delayed(_write_partition_pyarrow)
-    first_kwargs = kwargs.copy()
-    first_kwargs['metadata_path'] = fs.sep.join([path, '_metadata'])
-    writes = [write(part, open_with, template % i, write_index,
-                    **(kwargs if i else first_kwargs))
+    metadata_path = fs.sep.join([path, '_metadata'])
+    writes = [write(part, open_with, template % i, write_index, compression, metadata_path,
+                    **kwargs)
               for i, part in enumerate(df.to_delayed())]
     return delayed(writes)
 
 
-def _write_partition_pyarrow(df, open_with, filename, write_index,
+def _write_partition_pyarrow(df, open_with, filename, write_index, compression=None,
                              metadata_path=None, **kwargs):
     import pyarrow as pa
     from pyarrow import parquet
     t = pa.Table.from_pandas(df, preserve_index=write_index)
 
     with open_with(filename, 'wb') as fil:
-        parquet.write_table(t, fil, **kwargs)
+        kwargs_copy = kwargs.copy()
+        kwargs_copy['compression'] = compression
+        parquet.write_table(t, fil, **kwargs_copy)
 
     if metadata_path is not None:
         with open_with(metadata_path, 'wb') as fil:
@@ -540,7 +540,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                 categories=categories, index=index)
 
 
-def to_parquet(df, path, engine='auto', compression='default', write_index=None,
+def to_parquet(df, path, engine='auto', compression=None, write_index=None,
                append=False, ignore_divisions=False, partition_on=None,
                storage_options=None, compute=True, **kwargs):
     """Store Dask.dataframe to Parquet files
@@ -605,14 +605,11 @@ def to_parquet(df, path, engine='auto', compression='default', write_index=None,
     if set(partition_on) - set(df.columns):
         raise ValueError('Partitioning on non-existent column')
 
-    if compression != 'default':
-        kwargs['compression'] = compression
-
     write = get_engine(engine)['write']
 
     out = write(df, path, write_index=write_index, append=append,
                 ignore_divisions=ignore_divisions, partition_on=partition_on,
-                storage_options=storage_options, **kwargs)
+                storage_options=storage_options, compression=compression, **kwargs)
 
     if compute:
         out.compute()
