@@ -607,10 +607,10 @@ def test_writing_parquet_with_compression(tmpdir, compression):
 
     check_fastparquet()
     ddf.to_parquet(fn, compression=compression, engine='fastparquet')
-    out = dd.read_parquet(fn)
+    out = dd.read_parquet(fn, engine='fastparquet')
     assert_eq(out, ddf)
 
     check_pyarrow()
     ddf.to_parquet(fn, compression=compression, engine='pyarrow')
-    out = dd.read_parquet(fn)
+    out = dd.read_parquet(fn, engine='pyarrow')
     assert_eq(out, ddf)
