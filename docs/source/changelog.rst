@@ -8,6 +8,7 @@ Array
 +++++
 
 - Add ``matmul`` (:pr:`2904`) `John A Kirkham`_
+- Add ``vdot`` (:pr:`2910`) `John A Kirkham`_
 
 DataFrame
 +++++++++
