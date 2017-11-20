@@ -505,6 +505,7 @@ class Scheduler(ServerNode):
             finalize(self, del_scheduler_file)
 
         self.loop.add_callback(self.reevaluate_occupancy)
+        self.start_periodic_callbacks()
 
         return self.finished()
 

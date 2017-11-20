@@ -158,8 +158,7 @@ class Nanny(ServerNode):
             assert self.worker_address
             self.status = 'running'
 
-        for pc in self.periodic_callbacks.values():
-            pc.start()
+        self.start_periodic_callbacks()
 
     def start(self, addr_or_port=0):
         self.loop.add_callback(self._start, addr_or_port)

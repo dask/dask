@@ -116,15 +116,25 @@ class Server(object):
         self.periodic_callbacks = dict()
 
         pc = PeriodicCallback(self.monitor.update, 500)
-        self.io_loop.add_callback(pc.start)
         self.periodic_callbacks['monitor'] = pc
 
         self._last_tick = time()
         pc = PeriodicCallback(self._measure_tick, config.get('tick-time', 20))
-        self.io_loop.add_callback(pc.start)
         self.periodic_callbacks['tick'] = pc
 
         self.__stopped = False
+
+    def start_periodic_callbacks(self):
+        """ Start Periodic Callbacks consistently
+
+        This starts all PeriodicCallbacks stored in self.periodic_callbacks if
+        they are not yet running.  It does this safely on the IOLoop.
+        """
+        def start_pcs():
+            for pc in self.periodic_callbacks.values():
+                if not pc.is_running():
+                    pc.start()
+        self.loop.add_callback(start_pcs)
 
     def stop(self):
         if not self.__stopped:
