@@ -540,9 +540,7 @@ def test_matmul():
     assert_eq(operator.matmul(x, list_vec), operator.matmul(a, list_vec))
     z = np.random.random((5, 5, 5))
     c = from_array(z, chunks=(1, 5, 1))
-    with pytest.raises(NotImplementedError):
-        operator.matmul(a, z)
-
+    assert_eq(operator.matmul(a, z), operator.matmul(x, c))
     assert_eq(operator.matmul(z, a), operator.matmul(c, x))
 
 
