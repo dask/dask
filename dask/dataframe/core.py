@@ -3438,7 +3438,7 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
 
 def cov_corr_chunk(df, corr=False):
     """Chunk part of a covariance or correlation computation"""
-    mat = df.values
+    mat = df.astype('float64', copy=False).values
     mask = np.isfinite(mat)
     keep = np.bitwise_and(mask[:, None, :], mask[:, :, None])
 
@@ -3472,10 +3472,10 @@ def cov_corr_combine(data, corr=False):
     s2 = sums[1:]
     n1 = cum_counts[:-1]
     n2 = counts[1:]
-    d = (s2 / n2) - (s1 / n1)
-
-    C = (np.nansum((n1 * n2) / (n1 + n2) * (d * d.transpose((0, 2, 1))), 0) +
-         np.nansum(data['cov'], 0))
+    with np.errstate(invalid='ignore'):
+        d = (s2 / n2) - (s1 / n1)
+        C = (np.nansum((n1 * n2) / (n1 + n2) * (d * d.transpose((0, 2, 1))), 0) +
+             np.nansum(data['cov'], 0))
 
     out = np.empty(C.shape, dtype=data.dtype)
     out['sum'] = cum_sums[-1]
@@ -3502,7 +3502,8 @@ def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False):
         den = np.sqrt(m2 * m2.T)
     else:
         den = np.where(counts, counts, np.nan) - 1
-    mat = C / den
+    with np.errstate(invalid='ignore', divide='ignore'):
+        mat = C / den
     if scalar:
         return mat[0, 1]
     return pd.DataFrame(mat, columns=cols, index=cols)

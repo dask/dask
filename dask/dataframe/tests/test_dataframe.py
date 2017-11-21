@@ -1938,6 +1938,30 @@ def test_cov_corr_stable():
     assert_eq(ddf.corr(split_every=8), df.corr())
 
 
+def test_cov_corr_mixed():
+    size = 1000
+    d = {'dates' : pd.date_range('2015-01-01', periods=size, frequency='1T'),
+         'unique_id' : np.arange(0, size),
+         'ints' : np.random.randint(0, size, size=size),
+         'floats' : np.random.randn(size),
+         'bools' : np.random.choice([0, 1], size=size),
+         'int_nans' : np.random.choice([0, 1, np.nan], size=size),
+         'float_nans' : np.random.choice([0.0, 1.0, np.nan], size=size),
+         'constant' : 1,
+         'int_categorical' : np.random.choice([10, 20, 30, 40, 50], size=size) ,
+         'categorical_binary' : np.random.choice(['a', 'b'], size=size),
+         'categorical_nans' : np.random.choice(['a', 'b', 'c'], size=size)}
+    df = pd.DataFrame(d)
+    df['hardbools'] = df['bools'] == 1
+    df['categorical_nans'] = df['categorical_nans'].replace('c', np.nan)
+    df['categorical_binary'] = df['categorical_binary'].astype('category')
+    df['unique_id'] = df['unique_id'].astype(str)
+
+    ddf = dd.from_pandas(df, npartitions=20)
+    assert_eq(ddf.corr(split_every=4), df.corr(), check_divisions=False)
+    assert_eq(ddf.cov(split_every=4), df.cov(), check_divisions=False)
+
+
 def test_autocorr():
     x = pd.Series(np.random.random(100))
     dx = dd.from_pandas(x, npartitions=10)
