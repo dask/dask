@@ -610,4 +610,4 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
 
     ddf.to_parquet(fn, compression=compression, engine=engine)
     out = dd.read_parquet(fn, engine=engine)
-    assert_eq(out, ddf)
+    assert_eq(out, df)
