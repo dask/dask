@@ -216,10 +216,16 @@ def _inner_apply_along_axis(arr,
 def matmul(a, b):
     a = asanyarray(a)
     b = asanyarray(b)
-    try:
-        return a.__matmul__(b)
-    except Exception:
-        return b.__rmatmul__(a)
+
+    if b.ndim > 2:
+        msg = ('The matrix multiplication operator (@) is not yet '
+               'implemented for higher-dimensional Dask arrays. Try '
+               '`dask.array.tensordot` and see the discussion at '
+               'https://github.com/dask/dask/pull/2349 for details.')
+        raise NotImplementedError(msg)
+
+    return tensordot(a, b, axes=((a.ndim - 1,),
+                                 (b.ndim - 2,)))
 
 
 @wraps(np.apply_along_axis)
