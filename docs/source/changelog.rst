@@ -8,6 +8,7 @@ Array
 +++++
 
 - Add ``matmul`` (:pr:`2904`) `John A Kirkham`_
+- Support N-D arrays with ``matmul`` (:pr:`2909`) `John A Kirkham`_
 - Add ``vdot`` (:pr:`2910`) `John A Kirkham`_
 
 DataFrame
