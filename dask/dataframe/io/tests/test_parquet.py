@@ -605,9 +605,10 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     if engine == 'fastparquet' and compression == 'snappy':
         pytest.importorskip('snappy')
 
-    df = pd.DataFrame({'x': ['a', 'b', 'c'] * 10, 'y': [1, 2, 3] * 10})
+    df = pd.DataFrame({'x': ['a', 'b', 'c'] * 10,
+                       'y': [1, 2, 3] * 10})
     ddf = dd.from_pandas(df, npartitions=3)
 
     ddf.to_parquet(fn, compression=compression, engine=engine)
     out = dd.read_parquet(fn, engine=engine)
-    assert_eq(out, df)
+    assert_eq(out, df, check_index=(engine != 'fastparquet'))
