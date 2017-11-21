@@ -197,6 +197,11 @@ def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
 
+@wraps(np.vdot)
+def vdot(a, b):
+    return dot(a.conj().ravel(), b.ravel())
+
+
 def _inner_apply_along_axis(arr,
                             func1d,
                             func1d_axis,

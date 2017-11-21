@@ -157,6 +157,7 @@ Top level user functions:
    trunc
    unique
    var
+   vdot
    vnorm
    vstack
    where
@@ -480,6 +481,7 @@ Other functions
 .. autofunction:: trunc
 .. autofunction:: unique
 .. autofunction:: var
+.. autofunction:: vdot
 .. autofunction:: vnorm
 .. autofunction:: vstack
 .. autofunction:: where
