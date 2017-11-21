@@ -5,9 +5,9 @@ import operator
 import uuid
 
 try:
-    from cytoolz import curry, first, pluck
+    from cytoolz import curry, pluck
 except ImportError:
-    from toolz import curry, first, pluck
+    from toolz import curry, pluck
 
 from . import threaded
 from .base import Base, is_dask_collection, dont_optimize
@@ -367,7 +367,7 @@ class Delayed(Base, OperatorMethodMixin):
     __dask_optimize__ = globalmethod(dont_optimize, key='delayed_optimize')
 
     def __dask_postcompute__(self):
-        return first, ()
+        return single_key, ()
 
     def __dask_postpersist__(self):
         return rebuild, (self._key, getattr(self, '_length', None))
@@ -516,3 +516,8 @@ for op in [operator.abs, operator.neg, operator.pos, operator.invert,
            operator.eq, operator.ge, operator.gt, operator.ne, operator.le,
            operator.lt, operator.getitem]:
     Delayed._bind_operator(op)
+
+
+def single_key(seq):
+    """ Pick out the only element of this list, a list of keys """
+    return seq[0]
