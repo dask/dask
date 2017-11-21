@@ -23,7 +23,6 @@ try:
 except ImportError:
     pq = False
 
-
 df = pd.DataFrame({'x': [6, 2, 3, 4, 5],
                    'y': [1.0, 2.0, 1.0, 2.0, 1.0]},
                   index=pd.Index([10, 20, 30, 40, 50], name='myindex'))
@@ -402,9 +401,9 @@ def test_read_parquet_custom_columns(tmpdir, engine):
     (pd.DataFrame({'x': [3, 1, 2]}, index=[3, 2, 1]), {}, {}),
     (pd.DataFrame({'x': [3, 1, 5]}, index=pd.Index([1, 2, 3], name='foo')), {}, {}),
     (pd.DataFrame({'x': [1, 2, 3],
-                  'y': [3, 2, 1]}), {}, {}),
+                   'y': [3, 2, 1]}), {}, {}),
     (pd.DataFrame({'x': [1, 2, 3],
-                  'y': [3, 2, 1]}, columns=['y', 'x']), {}, {}),
+                   'y': [3, 2, 1]}, columns=['y', 'x']), {}, {}),
     (pd.DataFrame({'0': [3, 2, 1]}), {}, {}),
     (pd.DataFrame({'x': [3, 2, None]}), {}, {}),
     (pd.DataFrame({'-': [3., 2., None]}), {}, {}),
@@ -597,3 +596,19 @@ def test_parquet_select_cats(tmpdir):
     assert list(rddf.columns) == ['ints']
     rddf = dd.read_parquet(fn)
     assert list(rddf.columns) == list(df)
+
+
+@pytest.mark.parametrize('compression,', ['default', None, 'gzip', 'snappy'])
+def test_writing_parquet_with_compression(tmpdir, compression, engine):
+    fn = str(tmpdir)
+
+    if engine == 'fastparquet' and compression == 'snappy':
+        pytest.importorskip('snappy')
+
+    df = pd.DataFrame({'x': ['a', 'b', 'c'] * 10,
+                       'y': [1, 2, 3] * 10})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    ddf.to_parquet(fn, compression=compression, engine=engine)
+    out = dd.read_parquet(fn, engine=engine)
+    assert_eq(out, df, check_index=(engine != 'fastparquet'))
