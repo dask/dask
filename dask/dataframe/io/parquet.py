@@ -239,7 +239,7 @@ def _write_fastparquet(df, path, write_index=None, append=False,
 
     write_metadata = delayed(_write_metadata)(writes, filenames, fmd, path, fs, sep)
 
-    delayed(_commit_write)(fs, writes, write_metadata)
+    return delayed(_commit_write)(fs, writes, write_metadata)
 
 
 def _write_metadata(writes, filenames, fmd, path, fs, sep):
@@ -273,9 +273,11 @@ def _write_metadata(writes, filenames, fmd, path, fs, sep):
 
 def _commit_write(fs, writes, write_metadata):
     for _, md in writes:
-        fs.commit_write(md)
+        assert isinstance(md, list)
+        for entry in md:
+            fs.commit(entry)
     for _, md in write_metadata:
-        fs.commit_write(md)
+        fs.commit(md)
 
 
 # ----------------------------------------------------------------------

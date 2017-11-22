@@ -2,10 +2,75 @@ from __future__ import print_function, division, absolute_import
 
 from contextlib import contextmanager
 
-from s3fs import S3FileSystem
+from s3fs import S3FileSystem, S3File
 
 from . import core
 from .utils import infer_storage_options
+
+
+class DaskS3WrappedFile(object):
+
+    def __init__(self, fo, fs):
+        self.fo = fo
+        self.fs = fs
+
+    def close(self):
+        if (self.fo.mode in {'wb', 'ab'}) and len(self.fo.parts):
+            if not self.fo.forced:
+                # Perform the partial write.
+                self.fo.flush(True)
+                self.fs._written_metadata.append({
+                    'Bucket': self.fo.bucket,
+                    'Key': self.fo.key,
+                    'UploadId': self.fo.mpu['UploadId'],
+                    'MultipartUpload': {
+                        'Parts': self.fo.parts
+                    }
+                })
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+    def tell(self):
+        return self.fo.tell()
+
+    def seek(self, loc, whence=0):
+        return self.fo.seek(loc, whence=whence)
+
+    def write(self, data):
+        return self.fo.write(data)
+
+    def flush(self, force=True, retries=10):
+        return self.fo.flush(force=force, retries=retries)
+
+    def read(self, length=-1):
+        return self.fo.read(length=length)
+
+    def readline(self, length=-1):
+        return self.fo.readline(length=length)
+
+    def readlines(self):
+        return self.fo.readlines()
+
+    def readable(self):
+        return self.fo.readable()
+
+    def writable(self):
+        return self.fo.writable()
+
+    def seekable(self):
+        return self.fo.seekable()
+
+    @property
+    def closed(self):
+        return self.fo.closed
+
+    @property
+    def blocksize(self):
+        return self.fo.blocksize
 
 
 class DaskS3FileSystem(S3FileSystem, core.FileSystem):
@@ -42,24 +107,8 @@ class DaskS3FileSystem(S3FileSystem, core.FileSystem):
 
     def open(self, path, mode='rb'):
         s3_path = self._trim_filename(path)
-
-        @contextmanager
-        def _open(s3_path, mode=mode):
-            f = S3FileSystem.open(self, s3_path, mode=mode)
-            yield f
-            if mode in {'wb', 'ab'}:
-                f.flush(True)
-                self._written_metadata.append({
-                        'Bucket': f.bucket,
-                        'Key': f.key,
-                        'UploadId': f.mpu['UploadId'],
-                        'MultipartUpload': {
-                            'Parts': f.parts
-                        }
-                    })
-
-        with _open(s3_path, mode=mode) as fo:
-            return fo
+        f = S3FileSystem.open(self, s3_path, mode=mode)
+        return DaskS3WrappedFile(f, self)
 
     def get_appended_metadata(self):
         md = self._written_metadata.copy()
