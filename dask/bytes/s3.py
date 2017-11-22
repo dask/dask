@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+from contextlib import contextmanager
+
 from s3fs import S3FileSystem
 
 from . import core
@@ -32,6 +34,7 @@ class DaskS3FileSystem(S3FileSystem, core.FileSystem):
             kwargs['secret'] = secret
         # S3FileSystem.__init__(self, kwargs)  # not sure what do do here
         S3FileSystem.__init__(self, **kwargs)
+        self._written_metadata = []
 
     def _trim_filename(self, fn):
         so = infer_storage_options(fn)
@@ -39,8 +42,29 @@ class DaskS3FileSystem(S3FileSystem, core.FileSystem):
 
     def open(self, path, mode='rb'):
         s3_path = self._trim_filename(path)
-        f = S3FileSystem.open(self, s3_path, mode=mode)
-        return f
+
+        @contextmanager
+        def _open(s3_path, mode=mode):
+            f = S3FileSystem.open(self, s3_path, mode=mode)
+            yield f
+            if mode in {'wb', 'ab'}:
+                f.flush(True)
+                self._written_metadata.append({
+                        'Bucket': f.bucket,
+                        'Key': f.key,
+                        'UploadId': f.mpu['UploadId'],
+                        'MultipartUpload': {
+                            'Parts': f.parts
+                        }
+                    })
+
+        with _open(s3_path, mode=mode) as fo:
+            return fo
+
+    def get_appended_metadata(self):
+        md = self._written_metadata.copy()
+        self._written_metadata = []
+        return md
 
     def glob(self, path):
         s3_path = self._trim_filename(path)
@@ -61,6 +85,11 @@ class DaskS3FileSystem(S3FileSystem, core.FileSystem):
         """Get an equivalent pyarrow fileystem"""
         import pyarrow as pa
         return pa.filesystem.S3FSWrapper(self)
+
+    def commit(self, metadata):
+        self._call_s3(
+            self.s3.complete_multipart_upload,
+            **metadata)
 
 
 core._filesystems['s3'] = DaskS3FileSystem

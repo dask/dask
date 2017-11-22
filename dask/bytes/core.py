@@ -527,6 +527,13 @@ class FileSystem(object):
     def get_block_locations(self, path):
         return None, None, None
 
+    def get_appended_metadata(self):
+        return None
+
+    def commit(self, metadata):
+        """Commit the changes to a filesystem."""
+        pass
+
 
 def get_pyarrow_filesystem(fs):
     """Get an equivalent pyarrow filesystem.

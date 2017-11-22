@@ -170,7 +170,7 @@ def _write_partition_fastparquet(df, fs, path, filename, fmd, compression,
         with fs.open(fs.sep.join([path, filename]), 'wb') as fil:
             rgs = make_part_file(fil, df, fmd.schema, compression=compression,
                                  fmd=fmd)
-    return rgs
+    return rgs, fs.get_appended_metadata()
 
 
 def _write_fastparquet(df, path, write_index=None, append=False,
@@ -237,10 +237,12 @@ def _write_fastparquet(df, path, write_index=None, append=False,
     writes = [write(part, fs, path, filename, fmd, compression, partition_on)
               for filename, part in zip(filenames, df.to_delayed())]
 
-    return delayed(_write_metadata)(writes, filenames, fmd, path, open_with, sep)
+    write_metadata = delayed(_write_metadata)(writes, filenames, fmd, path, fs, sep)
+
+    delayed(_commit_write)(fs, writes, write_metadata)
 
 
-def _write_metadata(writes, filenames, fmd, path, open_with, sep):
+def _write_metadata(writes, filenames, fmd, path, fs, sep):
     """ Write Parquet metadata after writing all row groups
 
     See Also
@@ -249,7 +251,7 @@ def _write_metadata(writes, filenames, fmd, path, open_with, sep):
     """
     import fastparquet
     fmd = copy.copy(fmd)
-    for fn, rg in zip(filenames, writes):
+    for fn, (rg, _) in zip(filenames, writes):
         if rg is not None:
             if isinstance(rg, list):
                 for r in rg:
@@ -260,11 +262,20 @@ def _write_metadata(writes, filenames, fmd, path, open_with, sep):
                 fmd.row_groups.append(rg)
 
     fn = sep.join([path, '_metadata'])
-    fastparquet.writer.write_common_metadata(fn, fmd, open_with=open_with,
+    fastparquet.writer.write_common_metadata(fn, fmd, open_with=fs.open,
                                              no_row_groups=False)
 
     fn = sep.join([path, '_common_metadata'])
-    fastparquet.writer.write_common_metadata(fn, fmd, open_with=open_with)
+    fastparquet.writer.write_common_metadata(fn, fmd, open_with=fs.open)
+
+    return fs.get_appended_metadata()
+
+
+def _commit_write(fs, writes, write_metadata):
+    for _, md in writes:
+        fs.commit_write(md)
+    for _, md in write_metadata:
+        fs.commit_write(md)
 
 
 # ----------------------------------------------------------------------
