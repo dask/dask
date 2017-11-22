@@ -223,7 +223,7 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
 
     @gen.coroutine
     def run():
-        yield [n.start(addr) for n in nannies]
+        yield [n._start(addr) for n in nannies]
         while all(n.status != 'closed' for n in nannies):
             yield gen.sleep(0.2)
 
