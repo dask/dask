@@ -5039,5 +5039,14 @@ def test_logs(c, s, a, b):
             assert 'distributed.worker' in msg
 
 
+@gen_cluster(client=True)
+def test_avoid_delayed_finalize(c, s, a, b):
+    x = delayed(inc)(1)
+    future = c.compute(x)
+    result = yield future
+    assert result == 2
+    assert list(s.tasks) == [future.key] == [x.key]
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # flake8: noqa

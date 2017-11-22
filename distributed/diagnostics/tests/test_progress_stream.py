@@ -63,10 +63,10 @@ def test_progress_stream(c, s, a, b):
     comm = yield progress_stream(s.address, interval=0.010)
     msg = yield comm.read()
     nbytes = msg.pop('nbytes')
-    assert msg == {'all': {'div': 10, 'inc': 5, 'finalize': 1},
+    assert msg == {'all': {'div': 10, 'inc': 5},
                    'erred': {'div': 1},
-                   'memory': {'div': 9, 'finalize': 1},
-                   'released': {'inc': 5}}
+                   'memory': {'div': 9, 'inc': 1},
+                   'released': {'inc': 4}}
     assert set(nbytes) == set(msg['all'])
     assert all(v > 0 for v in nbytes.values())
 

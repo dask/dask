@@ -29,7 +29,14 @@ from dask.base import tokenize, normalize_token, collections_to_dsk
 from dask.core import flatten, get_dependencies
 from dask.compatibility import apply, unicode
 from dask.context import _globals
-from toolz import first, groupby, merge, valmap, keymap
+try:
+    from cytoolz import first, groupby, merge, valmap, keymap
+except ImportError:
+    from toolz import first, groupby, merge, valmap, keymap
+try:
+    from dask.delayed import single_key
+except ImportError:
+    single_key = first
 from tornado import gen
 from tornado.gen import TimeoutError
 from tornado.locks import Event, Condition
@@ -2113,9 +2120,13 @@ class Client(Node):
         dsk = self.collections_to_dsk(variables, optimize_graph, **kwargs)
         names = ['finalize-%s' % tokenize(v) for v in variables]
         dsk2 = {}
-        for name, v in zip(names, variables):
+        for i, (name, v) in enumerate(zip(names, variables)):
             func, extra_args = v.__dask_postcompute__()
-            dsk2[name] = (func, v.__dask_keys__()) + extra_args
+            keys = v.__dask_keys__()
+            if func is single_key and len(keys) == 1 and not extra_args:
+                names[i] = keys[0]
+            else:
+                dsk2[name] = (func, keys) + extra_args
 
         restrictions, loose_restrictions = self.get_restrictions(collections,
                                                                  workers, allow_other_workers)
@@ -2813,7 +2824,8 @@ class Client(Node):
 
         if check:
             # we care about the required & optional packages matching
-            def to_packages(d): return merge(d['packages'].values())
+            def to_packages(d):
+                return dict(sum(d['packages'].values(), []))
             client_versions = to_packages(result['client'])
             versions = [('scheduler', to_packages(result['scheduler']))]
             versions.extend((w, to_packages(d))
