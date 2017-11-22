@@ -17,6 +17,7 @@ work-stealing: True     # workers should steal tasks from each other
 
 # Worker options
 multiprocessing-method: forkserver
+use-file-locking: True
 
 # Communication options
 connect-timeout: 3      # seconds delay before connecting fails
