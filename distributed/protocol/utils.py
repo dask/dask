@@ -27,7 +27,7 @@ def frame_split_size(frames, n=BIG_BYTES_SHARD_SIZE):
     out = []
     for frame in frames:
         if nbytes(frame) > n:
-            if isinstance(frame, bytes):
+            if isinstance(frame, (bytes, bytearray)):
                 frame = memoryview(frame)
             try:
                 itemsize = frame.itemsize

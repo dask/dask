@@ -254,7 +254,7 @@ def extract_serialize(x):
 
     bytestrings = set()
     for k, v in ser.items():
-        if type(v) is bytes:
+        if type(v) in (bytes, bytearray):
             ser[k] = to_serialize(v)
             bytestrings.add(k)
     return x, ser, bytestrings
@@ -267,7 +267,7 @@ def _extract_serialize(x, ser, path=()):
             if typ is list or typ is dict:
                 _extract_serialize(v, ser, path + (k,))
             elif (typ is Serialize or typ is Serialized
-                  or typ is bytes and len(v) > 2**16):
+                  or typ in (bytes, bytearray) and len(v) > 2**16):
                 ser[path + (k,)] = v
     elif type(x) is list:
         for k, v in enumerate(x):
@@ -275,7 +275,7 @@ def _extract_serialize(x, ser, path=()):
             if typ is list or typ is dict:
                 _extract_serialize(v, ser, path + (k,))
             elif (typ is Serialize or typ is Serialized
-                  or typ is bytes and len(v) > 2**16):
+                  or typ in (bytes, bytearray) and len(v) > 2**16):
                 ser[path + (k,)] = v
 
 
@@ -333,6 +333,7 @@ def _deserialize_bytes(header, frames):
 
 
 register_serialization(bytes, _serialize_bytes, _deserialize_bytes)
+register_serialization(bytearray, _serialize_bytes, _deserialize_bytes)
 
 
 def serialize_bytelist(x):
