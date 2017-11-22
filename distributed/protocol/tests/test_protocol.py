@@ -103,13 +103,14 @@ def test_maybe_compress_sample():
 
 
 def test_large_bytes():
-    msg = {'x': b'0' * 1000000, 'y': 1}
-    frames = dumps(msg)
-    assert loads(frames) == msg
-    assert len(frames[0]) < 1000
-    assert len(frames[1]) < 1000
+    for tp in (bytes, bytearray):
+        msg = {'x': tp(b'0' * 1000000), 'y': 1}
+        frames = dumps(msg)
+        assert loads(frames) == msg
+        assert len(frames[0]) < 1000
+        assert len(frames[1]) < 1000
 
-    assert loads(frames, deserialize=False) == msg
+        assert loads(frames, deserialize=False) == msg
 
 
 @slow

@@ -332,6 +332,9 @@ def _deserialize_bytes(header, frames):
     return frames[0]
 
 
+# NOTE: using the same exact serialization means a bytes object may be
+# deserialized as bytearray or vice-versa...  Not sure this is a problem
+# in practice.
 register_serialization(bytes, _serialize_bytes, _deserialize_bytes)
 register_serialization(bytearray, _serialize_bytes, _deserialize_bytes)
 

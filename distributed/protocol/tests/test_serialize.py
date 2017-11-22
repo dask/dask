@@ -52,9 +52,11 @@ def test_dumps_serialize():
 
 
 def test_serialize_bytestrings():
-    b = b'123'
-    header, frames = serialize(b)
-    assert frames[0] is b
+    for b in (b'123', bytearray(b'4567')):
+        header, frames = serialize(b)
+        assert frames[0] is b
+        bb = deserialize(header, frames)
+        assert bb == b
 
 
 def test_Serialize():
@@ -88,14 +90,14 @@ def test_nested_deserialize():
     x = {'op': 'update',
          'x': [to_serialize(123), to_serialize(456), 789],
          'y': {'a': ['abc', Serialized(*serialize('def'))],
-               'b': 'ghi'}
+               'b': b'ghi'}
          }
     x_orig = copy.deepcopy(x)
 
     assert nested_deserialize(x) == {'op': 'update',
                                      'x': [123, 456, 789],
                                      'y': {'a': ['abc', 'def'],
-                                           'b': 'ghi'}
+                                           'b': b'ghi'}
                                      }
     assert x == x_orig  # x wasn't mutated
 
