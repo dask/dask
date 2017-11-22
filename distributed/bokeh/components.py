@@ -66,7 +66,7 @@ class TaskStream(DashboardComponent):
 
         self.source = ColumnDataSource(data=dict(
             start=[time() - clear_interval], duration=[0.1], key=['start'],
-            name=['start'], color=['white'],
+            name=['start'], color=['white'], duration_text=['100 ms'],
             worker=['foo'], y=[0], worker_thread=[1], alpha=[0.0])
         )
 
@@ -94,8 +94,7 @@ class TaskStream(DashboardComponent):
             tooltips="""
                 <div>
                     <span style="font-size: 12px; font-weight: bold;">@name:</span>&nbsp;
-                    <span style="font-size: 10px; font-family: Monaco, monospace;">@duration</span>
-                    <span style="font-size: 10px;">ms</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@duration_text</span>
                 </div>
                 """
         )
