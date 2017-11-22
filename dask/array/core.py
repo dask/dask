@@ -1485,28 +1485,12 @@ class Array(Base):
         return elemwise(operator.xor, other, self)
 
     def __matmul__(self, other):
-        from .routines import tensordot
-        other = asanyarray(other)
-        if other.ndim > 2:
-            msg = ('The matrix multiplication operator (@) is not yet '
-                   'implemented for higher-dimensional Dask arrays. Try '
-                   '`dask.array.tensordot` and see the discussion at '
-                   'https://github.com/dask/dask/pull/2349 for details.')
-            raise NotImplementedError(msg)
-        return tensordot(self, other, axes=((self.ndim - 1,),
-                                            (other.ndim - 2,)))
+        from .routines import matmul
+        return matmul(self, other)
 
     def __rmatmul__(self, other):
-        from .routines import tensordot
-        other = asanyarray(other)
-        if self.ndim > 2:
-            msg = ('The matrix multiplication operator (@) is not yet '
-                   'implemented for higher-dimensional Dask arrays. Try '
-                   '`dask.array.tensordot` and see the discussion at '
-                   'https://github.com/dask/dask/pull/2349 for details.')
-            raise NotImplementedError(msg)
-        return tensordot(other, self, axes=((other.ndim - 1,),
-                                            (self.ndim - 2,)))
+        from .routines import matmul
+        return matmul(other, self)
 
     @derived_from(np.ndarray)
     def any(self, axis=None, keepdims=False, split_every=None, out=None):
