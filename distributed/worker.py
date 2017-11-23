@@ -2625,7 +2625,10 @@ def secede():
     """
     Have this task secede from the worker's thread pool
 
-    This opens up a new scheduling slot and a new thread for a new task.
+    This opens up a new scheduling slot and a new thread for a new task. This
+    enables the client to schedule tasks on this node, which is
+    especially useful while waiting for other jobs to finish (e.g., with
+    ``client.gather``).
 
     Examples
     --------
