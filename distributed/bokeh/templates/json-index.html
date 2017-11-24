@@ -1,0 +1,11 @@
+<html>
+  <body>
+    <h2> Index of JSON routes </h2>
+    <p> These are typically used by automated services to query the state of the scheduler </p>
+    <ul>
+      {% for url in routes %}
+      <li><a href="{{url}}">{{url}}</a></li>
+      {% end %}
+    </ul>
+  </body>
+</html>

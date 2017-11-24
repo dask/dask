@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import json
 import xml.etree.ElementTree
 
 import pytest
@@ -26,9 +27,15 @@ def test_connect(c, s, a, b):
                    'info/logs/' + url_escape(a.address) + '.html',
                    'info/call-stack/' + url_escape(x.key) + '.html',
                    'info/call-stacks/' + url_escape(a.address) + '.html',
+                   'json/counts.json',
+                   'json/identity.json',
+                   'json/index.html',
                    ]:
         response = yield http_client.fetch('http://localhost:%d/%s'
                                            % (s.services['bokeh'].port, suffix))
         assert response.code == 200
         body = response.body.decode()
-        assert xml.etree.ElementTree.fromstring(body) is not None
+        if suffix.endswith('.json'):
+            json.loads(body)
+        else:
+            assert xml.etree.ElementTree.fromstring(body) is not None

@@ -91,13 +91,54 @@ class TaskCallStack(RequestHandler):
                             call_stack=call_stack)
 
 
+class CountsJSON(RequestHandler):
+    def get(self):
+        response = {
+            'bytes': sum(self.server.nbytes.values()),
+            'clients': len(self.server.wants_what),
+            'cores': sum(self.server.ncores.values()),
+            'erred': len(self.server.exceptions_blame),
+            'hosts': len(self.server.host_info),
+            'idle': len(self.server.idle),
+            'memory': len(self.server.who_has),
+            'processing': len(self.server.rprocessing),
+            'ready': len(self.server.ready),
+            'released': len(self.server.released),
+            'saturated': len(self.server.saturated),
+            'tasks': len(self.server.tasks),
+            'unrunnable': len(self.server.unrunnable),
+            'waiting': len(self.server.waiting),
+            'waiting_data': len(self.server.waiting_data),
+            'workers': len(self.server.workers),
+        }
+        self.write(response)
+
+
+class IdentityJSON(RequestHandler):
+    def get(self):
+        self.write(self.server.identity())
+
+
+class IndexJSON(RequestHandler):
+    def get(self):
+        with log_errors():
+            r = [url for url, _ in routes if url.endswith('.json')]
+            self.render('json-index.html', routes=r, title='Index of JSON routes')
+
+
+routes = [
+        (r'/info/workers.html', Workers),
+        (r'/info/worker/(.*).html', Worker),
+        (r'/info/task/(.*).html', Task),
+        (r'/info/logs.html', Logs),
+        (r'/info/call-stacks/(.*).html', WorkerCallStacks),
+        (r'/info/call-stack/(.*).html', TaskCallStack),
+        (r'/info/logs/(.*).html', WorkerLogs),
+        (r'/json/counts.json', CountsJSON),
+        (r'/json/identity.json', IdentityJSON),
+        (r'/json/index.html', IndexJSON),
+]
+
+
 def get_handlers(server):
-    return [
-            (r'/info/workers.html', Workers, {'server': server}),
-            (r'/info/worker/(.*).html', Worker, {'server': server}),
-            (r'/info/task/(.*).html', Task, {'server': server}),
-            (r'/info/logs.html', Logs, {'server': server}),
-            (r'/info/call-stacks/(.*).html', WorkerCallStacks, {'server': server}),
-            (r'/info/call-stack/(.*).html', TaskCallStack, {'server': server}),
-            (r'/info/logs/(.*).html', WorkerLogs, {'server': server}),
-    ]
+    return [(url, cls, {'server': server}) for url, cls in routes]
