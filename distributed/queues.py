@@ -7,11 +7,6 @@ import uuid
 from tornado import gen
 import tornado.queues
 
-try:
-    from cytoolz import assoc
-except ImportError:
-    from toolz import assoc
-
 from .client import Future, _get_global_client, Client
 from .utils import tokey, sync
 from .worker import get_client
@@ -86,13 +81,19 @@ class QueueExtension(object):
         def process(record):
             """ Add task status if known """
             if record['type'] == 'Future':
+                record = record.copy()
+                key = record['value']
                 try:
-                    state = self.scheduler.task_state[record['value']]
+                    state = self.scheduler.task_state[key]
                 except KeyError:
                     state = 'lost'
-                return assoc(record, 'state', state)
-            else:
-                return record
+
+                record['state'] = state
+                if state == 'erred':
+                    record['exception'] = self.scheduler.exceptions[self.scheduler.exceptions_blame[key]]
+                    record['traceback'] = self.scheduler.tracebacks[self.scheduler.exceptions_blame[key]]
+
+            return record
 
         if batch:
             q = self.queues[name]
@@ -211,6 +212,8 @@ class Queue(object):
             if d['type'] == 'Future':
                 value = Future(d['value'], self.client, inform=True,
                                state=d['state'])
+                if d['state'] == 'erred':
+                    value._state.set_error(d['exception'], d['traceback'])
                 self.client._send_to_scheduler({'op': 'queue-future-release',
                                                 'name': self.name,
                                                 'key': d['value']})

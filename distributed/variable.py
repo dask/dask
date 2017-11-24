@@ -95,7 +95,11 @@ class VariableExtension(object):
                 state = self.scheduler.task_state[key]
             except KeyError:
                 state = 'lost'
-            record = merge(record, {'token': token, 'state': state})
+            msg = {'token': token, 'state': state}
+            if state == 'erred':
+                msg['exception'] = self.scheduler.exceptions[self.scheduler.exceptions_blame[key]]
+                msg['traceback'] = self.scheduler.tracebacks[self.scheduler.exceptions_blame[key]]
+            record = merge(record, msg)
             self.waiting[key, name].add(token)
         raise gen.Return(record)
 
@@ -175,6 +179,8 @@ class Variable(object):
                                                      client=self.client.id)
         if d['type'] == 'Future':
             value = Future(d['value'], self.client, inform=True, state=d['state'])
+            if d['state'] == 'erred':
+                value._state.set_error(d['exception'], d['traceback'])
             self.client._send_to_scheduler({'op': 'variable-future-release',
                                             'name': self.name,
                                             'key': d['value'],

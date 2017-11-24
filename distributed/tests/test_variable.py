@@ -205,3 +205,14 @@ def test_Future_knows_status_immediately(c, s, a, b):
             yield gen.sleep(0.05)
 
     yield c2.close()
+
+
+@gen_cluster(client=True)
+def test_erred_future(c, s, a, b):
+    future = c.submit(div, 1, 0)
+    var = Variable()
+    yield var.set(future)
+    yield gen.sleep(0.1)
+    future2 = yield var.get()
+    with pytest.raises(ZeroDivisionError):
+        yield future2.result()
