@@ -1,6 +1,21 @@
 Changelog
 =========
 
+1.20.1 - 2017-11-26
+-------------------
+
+- Wrap ``import ssl`` statements with try-except block for ssl-crippled environments, (:pr:`1570`) `Xander Johnson`_
+- Support zero memory-limit in Nanny (:pr:`1571`) `Matthew Rocklin`_
+- Avoid PeriodicCallback double starts (:pr:`1573`) `Matthew Rocklin`_
+- Add disposable workspace facility (:pr:`1543`) `Antoine Pitrou`_
+- Use format_time in task_stream plots (:pr:`1575`) `Matthew Rocklin`_
+- Avoid delayed finalize calls in compute (:pr:`1577`) `Matthew Rocklin`_
+- Doc fix about secede (:pr:`1583`) `Scott Sievert`_
+- Add tracemalloc option when tracking test leaks (:pr:`1585`) `Antoine Pitrou`_
+- Add JSON routes to Bokeh server (:pr:`1584`) `Matthew Rocklin`_
+- Handle exceptions cleanly in Variables and Queues (:pr:`1580`) `Matthew Rocklin`_
+
+
 1.20.0 - 2017-11-17
 -------------------
 
@@ -413,3 +428,5 @@ significantly without many new features.
 .. _`Ian Hopkinson`: https://https://github.com/IanHopkinson
 .. _`@rbubley`: https://https://github.com/rbubley
 .. _`Kelvyn Yang`: https://https://github.com/kelvynyang
+.. _`Scott Sievert`: https://https://github.com/stsievert
+.. _`Xander Johnson`: https://https://github.com/metasyn
