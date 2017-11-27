@@ -1,6 +1,7 @@
 from distributed.protocol.pickle import dumps, loads
 
 import pytest
+import weakref
 
 from operator import add
 from functools import partial
@@ -22,10 +23,23 @@ def test_pickle_numpy():
 
 
 def test_pickle_functions():
-    value = 1
+    def make_closure():
+        value = 1
 
-    def f(x):  # closure
-        return x + value
+        def f(x):  # closure
+            return x + value
+        return f
 
-    for func in [f, lambda x: x + 1, partial(add, 1)]:
-        assert loads(dumps(func))(1) == func(1)
+    def funcs():
+        yield make_closure()
+        yield (lambda x: x + 1)
+        yield partial(add, 1)
+
+    for func in funcs():
+        wr = weakref.ref(func)
+        func2 = loads(dumps(func))
+        wr2 = weakref.ref(func2)
+        assert func2(1) == func(1)
+        del func, func2
+        assert wr() is None
+        assert wr2() is None

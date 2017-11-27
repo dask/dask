@@ -1064,7 +1064,9 @@ def test_reschedule(c, s, a, b):
 
 
 def test_deque_handler():
-    from distributed.worker import deque_handler, logger
+    from distributed.worker import logger
+    w = Worker('127.0.0.1', 8019)
+    deque_handler = w._deque_handler
     logger.info('foo456')
     assert deque_handler.deque
     msg = deque_handler.deque[-1]

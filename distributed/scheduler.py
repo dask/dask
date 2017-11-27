@@ -49,9 +49,6 @@ from .variable import VariableExtension
 
 
 logger = logging.getLogger(__name__)
-deque_handler = DequeHandler(n=config.get('log-length', 10000))
-deque_handler.setFormatter(logging.Formatter(log_format))
-logger.addHandler(deque_handler)
 
 
 BANDWIDTH = config.get('bandwidth', 100e6)
@@ -220,6 +217,8 @@ class Scheduler(ServerNode):
             scheduler_file=None,
             security=None,
             **kwargs):
+
+        self._setup_logging()
 
         # Attributes
         self.allowed_failures = allowed_failures
@@ -585,6 +584,12 @@ class Scheduler(ServerNode):
 
         for future in futures:
             yield future
+
+    def _setup_logging(self):
+        self._deque_handler = DequeHandler(n=config.get('log-length', 10000))
+        self._deque_handler.setFormatter(logging.Formatter(log_format))
+        logger.addHandler(self._deque_handler)
+        finalize(self, logger.removeHandler, self._deque_handler)
 
     ###########
     # Stimuli #
@@ -3382,6 +3387,7 @@ class Scheduler(ServerNode):
         raise gen.Return({'counts': counts, 'keys': keys})
 
     def get_logs(self, comm=None, n=None):
+        deque_handler = self._deque_handler
         if n is None:
             L = list(deque_handler.deque)
         else:

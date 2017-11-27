@@ -28,7 +28,7 @@ from .batched import BatchedSend
 from .comm import get_address_host, get_local_address_for
 from .comm.utils import offload
 from .config import config, log_format
-from .compatibility import unicode, get_thread_identity
+from .compatibility import unicode, get_thread_identity, finalize
 from .core import (error_message, CommClosedError,
                    rpc, pingpong, coerce_to_address)
 from .diskutils import WorkSpace
@@ -49,9 +49,6 @@ from .utils_comm import pack_data, gather_from_workers
 _ncores = mp_context.cpu_count()
 
 logger = logging.getLogger(__name__)
-deque_handler = DequeHandler(n=config.get('log-length', 10000))
-deque_handler.setFormatter(logging.Formatter(log_format))
-logger.addHandler(deque_handler)
 
 LOG_PDB = config.get('pdb-on-err')
 
@@ -83,6 +80,9 @@ class WorkerBase(ServerNode):
                  executor=None, resources=None, silence_logs=None,
                  death_timeout=None, preload=(), security=None,
                  contact_address=None, memory_monitor_interval=200, **kwargs):
+
+        self._setup_logging()
+
         if scheduler_file:
             cfg = json_load_robust(scheduler_file)
             scheduler_addr = cfg['address']
@@ -206,6 +206,12 @@ class WorkerBase(ServerNode):
                                   self.memory_monitor_interval)
             self.periodic_callbacks['memory'] = pc
         self._throttled_gc = ThrottledGC(logger=logger)
+
+    def _setup_logging(self):
+        self._deque_handler = DequeHandler(n=config.get('log-length', 10000))
+        self._deque_handler.setFormatter(logging.Formatter(log_format))
+        logger.addHandler(self._deque_handler)
+        finalize(self, logger.removeHandler, self._deque_handler)
 
     @property
     def worker_address(self):
@@ -2351,6 +2357,7 @@ class Worker(WorkerBase):
         return result
 
     def get_logs(self, comm=None, n=None):
+        deque_handler = self._deque_handler
         if n is None:
             L = list(deque_handler.deque)
         else:

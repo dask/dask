@@ -489,6 +489,7 @@ class Client(Node):
 
         # Communication
         self.security = security or Security()
+        self.scheduler_comm = None
         assert isinstance(self.security, Security)
         self.connection_args = self.security.get_connection_args('client')
         self._connecting_to_scheduler = False

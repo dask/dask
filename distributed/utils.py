@@ -1169,13 +1169,30 @@ def format_time(n):
 
 class DequeHandler(logging.Handler):
     """ A logging.Handler that records records into a deque """
+    _instances = weakref.WeakSet()
+
     def __init__(self, *args, **kwargs):
         n = kwargs.pop('n', 10000)
         self.deque = deque(maxlen=n)
         super(DequeHandler, self).__init__(*args, **kwargs)
+        self._instances.add(self)
 
     def emit(self, record):
         self.deque.append(record)
+
+    def clear(self):
+        """
+        Clear internal storage.
+        """
+        self.deque.clear()
+
+    @classmethod
+    def clear_all_instances(cls):
+        """
+        Clear the internal storage of all live DequeHandlers.
+        """
+        for inst in list(cls._instances):
+            inst.clear()
 
 
 class ThrottledGC(object):

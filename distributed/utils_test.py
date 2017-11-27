@@ -45,7 +45,8 @@ from .core import connect, rpc, CommClosedError
 from .metrics import time
 from .nanny import Nanny
 from .security import Security
-from .utils import ignoring, log_errors, sync, mp_context, get_ip, get_ipv6
+from .utils import (ignoring, log_errors, sync, mp_context, get_ip, get_ipv6,
+                    DequeHandler)
 from .worker import Worker, TOTAL_MEMORY
 
 
@@ -673,9 +674,6 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
         start
         end
     """
-    for name, level in logging_levels.items():
-        logging.getLogger(name).setLevel(level)
-
     worker_kwargs = merge({'memory_limit': TOTAL_MEMORY}, worker_kwargs)
 
     def _(func):
@@ -683,6 +681,11 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
             func = gen.coroutine(func)
 
         def test_func():
+            # Restore default logging levels
+            # XXX use pytest hooks/fixtures instead?
+            for name, level in logging_levels.items():
+                logging.getLogger(name).setLevel(level)
+
             old_globals = _globals.copy()
             result = None
             workers = []
@@ -725,6 +728,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                         # was already removed
                         pass
                     del w.data
+            DequeHandler.clear_all_instances()
             return result
 
         return test_func

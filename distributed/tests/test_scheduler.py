@@ -1230,9 +1230,11 @@ def test_get_task_status(c, s, a, b):
 
 
 def test_deque_handler():
-    from distributed.scheduler import deque_handler, logger
+    from distributed.scheduler import logger
+    s = Scheduler()
+    deque_handler = s._deque_handler
     logger.info('foo123')
-    assert deque_handler.deque
+    assert len(deque_handler.deque) >= 1
     msg = deque_handler.deque[-1]
     assert 'distributed.scheduler' in deque_handler.format(msg)
     assert any(msg.msg == 'foo123' for msg in deque_handler.deque)

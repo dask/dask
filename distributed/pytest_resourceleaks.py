@@ -194,8 +194,8 @@ class TracemallocMemoryChecker(ResourceChecker):
             if size_diff < min_size_diff:
                 break
             count = stat.count_diff or stat.count
-            lines += [".. leaked %.1f MB in %d calls at:" % (size_diff / 1e6, count)]
-            lines += ["   " + line for line in stat.traceback.format()]
+            lines += ["  - leaked %.1f MB in %d calls at:" % (size_diff / 1e6, count)]
+            lines += ["    " + line for line in stat.traceback.format()]
 
         return "\n".join(lines)
 
