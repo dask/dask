@@ -201,6 +201,15 @@ See the :doc:`EC2 quickstart <ec2>` for information on the ``dask-ec2`` easy
 setup script to launch a canned cluster on EC2.
 
 
+Using Google Cloud
+------------------
+
+See the dask-kubernetes_ project to easily launch clusters on `Google Kubernetes
+Engine`_.
+
+.. _dask-kubernetes: https://github.com/dask/dask-kubernetes
+.. _`Google Kubernetes Engine`: https://cloud.google.com/kubernetes-engine/
+
 Cluster Resource Managers
 -------------------------
 

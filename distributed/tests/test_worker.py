@@ -937,8 +937,8 @@ def test_scheduler_file():
 @gen_cluster(client=True, worker_kwargs={'heartbeat_interval': 50})
 def test_scheduler_delay(c, s, a, b):
     old = a.scheduler_delay
-    assert abs(a.scheduler_delay) < 0.01
-    assert abs(b.scheduler_delay) < 0.01
+    assert abs(a.scheduler_delay) < 0.1
+    assert abs(b.scheduler_delay) < 0.1
 
     yield gen.sleep(0.100)
     assert a.scheduler_delay != old
