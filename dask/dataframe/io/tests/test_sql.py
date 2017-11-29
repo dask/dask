@@ -25,11 +25,6 @@ Garreth,6,20,0
 """
 
 df = pd.read_csv(io.StringIO(data), index_col='number')
-create_empty_table = """ 
-                        CREATE TABLE IF NOT EXISTS empty (
-                            id integer PRIMARY KEY,
-                            name text NOT NULL); 
-                        """
 empty_df = pd.DataFrame({'col1': pd.Series(name='col1', dtype='int64'),
                          'col2': pd.Series(name='col2', dtype='int64')})
 
