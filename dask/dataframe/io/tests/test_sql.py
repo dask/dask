@@ -25,6 +25,13 @@ Garreth,6,20,0
 """
 
 df = pd.read_csv(io.StringIO(data), index_col='number')
+create_empty_table = """ 
+                        CREATE TABLE IF NOT EXISTS empty (
+                            id integer PRIMARY KEY,
+                            name text NOT NULL); 
+                        """
+empty_df = pd.DataFrame({'col1': pd.Series(name='col1', dtype='int64'),
+                         'col2': pd.Series(name='col2', dtype='int64')})
 
 
 @pytest.yield_fixture
@@ -32,7 +39,15 @@ def db():
     with tmpfile() as f:
         uri = 'sqlite:///%s' % f
         df.to_sql('test', uri, index=True, if_exists='replace')
+        empty_df.to_sql('empty', uri,  if_exists='replace')
+
         yield uri
+
+
+def test_empty(db):
+    dask_data = read_sql_table('empty', db, index_col='col2',
+                               npartitions=6).compute()
+    assert dask_data.empty is True
 
 
 def test_simple(db):
