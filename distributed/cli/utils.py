@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from tornado import gen
+from tornado.ioloop import IOLoop
 
 from distributed.comm import (parse_address, unparse_address,
                               parse_host_port, unparse_host_port)
@@ -30,13 +31,15 @@ def check_python_3():
         sys.exit(1)
 
 
-def install_signal_handlers(loop, cleanup=None):
+def install_signal_handlers(loop=None, cleanup=None):
     """
     Install global signal handlers to halt the Tornado IOLoop in case of
     a SIGINT or SIGTERM.  *cleanup* is an optional callback called,
     before the loop stops, with a single signal number argument.
     """
     import signal
+
+    loop = loop or IOLoop.current()
 
     old_handlers = {}
 
