@@ -992,7 +992,7 @@ def test_count_nonzero_obj_axis(axis):
         #                                                     #
         # xref: https://github.com/numpy/numpy/issues/9468    #
         #######################################################
-        assert_eq(x_c.astype(np.int64), d_c)
+        assert_eq(x_c.astype(np.intp), d_c)
 
 
 def test_count_nonzero_str():
