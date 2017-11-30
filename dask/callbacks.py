@@ -136,4 +136,5 @@ class add_callbacks(object):
         return
 
     def __exit__(self, type, value, traceback):
-        _globals['callbacks'] = self.old
+        _globals['callbacks'].clear()
+        _globals['callbacks'].update(self.old)
