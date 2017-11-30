@@ -614,16 +614,16 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
 
     dt = [("values", u.dtype)]
     if return_index:
-        dt.append(("indices", np.int64))
+        dt.append(("indices", np.intp))
     if return_inverse:
-        dt.append(("inverse", np.int64))
+        dt.append(("inverse", np.intp))
     if return_counts:
-        dt.append(("counts", np.int64))
+        dt.append(("counts", np.intp))
 
     r = np.empty(u.shape, dtype=dt)
     r["values"] = u
     if return_inverse:
-        r["inverse"] = np.arange(len(r), dtype=np.int64)
+        r["inverse"] = np.arange(len(r), dtype=np.intp)
     if return_index or return_counts:
         for i, v in enumerate(r["values"]):
             m = (ar == v)
@@ -646,18 +646,18 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     out_dtype = [("values", ar.dtype)]
     if return_index:
         args.extend([
-            arange(ar.shape[0], dtype=np.int64, chunks=ar.chunks[0]),
+            arange(ar.shape[0], dtype=np.intp, chunks=ar.chunks[0]),
             "i"
         ])
-        out_dtype.append(("indices", np.int64))
+        out_dtype.append(("indices", np.intp))
     else:
         args.extend([None, None])
     if return_counts:
         args.extend([
-            ones((ar.shape[0],), dtype=np.int64, chunks=ar.chunks[0]),
+            ones((ar.shape[0],), dtype=np.intp, chunks=ar.chunks[0]),
             "i"
         ])
-        out_dtype.append(("counts", np.int64))
+        out_dtype.append(("counts", np.intp))
     else:
         args.extend([None, None])
 
@@ -702,11 +702,11 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     }
     out_dtype = [("values", ar.dtype)]
     if return_index:
-        out_dtype.append(("indices", np.int64))
+        out_dtype.append(("indices", np.intp))
     if return_inverse:
-        out_dtype.append(("inverse", np.int64))
+        out_dtype.append(("inverse", np.intp))
     if return_counts:
-        out_dtype.append(("counts", np.int64))
+        out_dtype.append(("counts", np.intp))
 
     out = Array(
         sharedict.merge(*(
@@ -730,7 +730,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
         # index in axis `1` (the one of unknown length). Reduce axis `1`
         # through summing to get an array with known dimensionality and the
         # mapping of the original values.
-        mtches = (ar[:, None] == out["values"][None, :]).astype(np.int64)
+        mtches = (ar[:, None] == out["values"][None, :]).astype(np.intp)
         result.append((mtches * out["inverse"]).sum(axis=1))
     if return_counts:
         result.append(out["counts"])
@@ -978,7 +978,7 @@ def argwhere(a):
 
     nz = isnonzero(a).flatten()
 
-    ind = indices(a.shape, dtype=np.int64, chunks=a.chunks)
+    ind = indices(a.shape, dtype=np.intp, chunks=a.chunks)
     if ind.ndim > 1:
         ind = stack([ind[i].ravel() for i in range(len(ind))], axis=1)
     ind = compress(nz, ind, axis=0)
@@ -1008,7 +1008,7 @@ def where(condition, x=None, y=None):
 
 @wraps(np.count_nonzero)
 def count_nonzero(a, axis=None):
-    return isnonzero(asarray(a)).astype(np.int64).sum(axis=axis)
+    return isnonzero(asarray(a)).astype(np.intp).sum(axis=axis)
 
 
 @wraps(np.flatnonzero)

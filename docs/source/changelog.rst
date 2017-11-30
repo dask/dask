@@ -20,7 +20,7 @@ DataFrame
 Core
 ++++
 
--
+- Improve 32-bit compatibility (:pr:`2937`) `Matthew Rocklin`_
 
 
 0.16.0 / 2017-11-17
