@@ -1,4 +1,4 @@
-language: generic
+language: python
 # sudo shouldn't be required, but currently tests fail when run in a container
 # on travis instead of a vm. See https://github.com/dask/distributed/pull/1563.
 sudo: required
@@ -6,13 +6,17 @@ dist: trusty
 
 env:
   matrix:
-    - PYTHON=2.7 PACKAGES="python-blosc futures faulthandler"
-    - PYTHON=3.5.4 COVERAGE=true PACKAGES=python-blosc CRICK=true
-    - PYTHON=3.6
+    - PYTHON=2.7 TESTS=true PACKAGES="python-blosc futures faulthandler"
+    - PYTHON=3.5.4 TESTS=true COVERAGE=true PACKAGES=python-blosc CRICK=true
+    - PYTHON=3.6 TESTS=true
 
 matrix:
   fast_finish: true
   include:
+  - os: linux
+    # Using Travis-CI's python makes job faster by not downloading miniconda
+    python: 3.6
+    env: LINT=true
   - os: osx
     env: PYTHON=3.6 RUNSLOW=false
   # Tornado dev builds disabled, as Bokeh and IPython choke on it
@@ -25,11 +29,11 @@ matrix:
     env: PYTHON=3.6 RUNSLOW=false
 
 install:
-  - source continuous_integration/travis/install.sh
+  - if [[ $TESTS == true ]]; then source continuous_integration/travis/install.sh ; fi
 
 script:
-  - source continuous_integration/travis/run_tests.sh
-  - flake8 distributed
+  - if [[ $TESTS == true ]]; then source continuous_integration/travis/run_tests.sh ; fi
+  - if [[ $LINT == true ]]; then pip install flake8 ; flake8 distributed ; fi
 
 after_success:
   - if [[ $COVERAGE == true ]]; then coverage report; pip install -q coveralls ; coveralls ; fi
