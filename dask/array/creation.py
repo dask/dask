@@ -298,6 +298,47 @@ def arange(*args, **kwargs):
     return Array(dsk, name, chunks, dtype=dtype)
 
 
+@wraps(np.meshgrid)
+def meshgrid(*xi, **kwargs):
+    indexing = kwargs.pop("indexing", "xy")
+    sparse = bool(kwargs.pop("sparse", False))
+
+    if "copy" in kwargs:
+        raise NotImplementedError("`copy` not supported")
+
+    if kwargs:
+        raise TypeError("unsupported keyword argument(s) provided")
+
+    if indexing not in ("ij", "xy"):
+        raise ValueError("`indexing` must be `'ij'` or `'xy'`")
+
+    xi = [e.flatten() for e in xi]
+    dimensions = [xi[i].size for i in range(len(xi))]
+
+    if indexing == "xy" and len(xi) > 1:
+        xi[0], xi[1] = xi[1], xi[0]
+        dimensions[0], dimensions[1] = dimensions[1], dimensions[0]
+
+    grid = []
+    for i in range(len(xi)):
+        s = len(dimensions) * [None]
+        s[i] = slice(None)
+        s = tuple(s)
+
+        r = xi[i][s]
+
+        if not sparse:
+            for j in chain(range(i), range(i + 1, len(dimensions))):
+                r = r.repeat(dimensions[j], axis=j)
+
+        grid.append(r)
+
+    if indexing == "xy" and len(xi) > 1:
+        grid[0], grid[1] = grid[1], grid[0]
+
+    return grid
+
+
 def indices(dimensions, dtype=int, chunks=None):
     """
     Implements NumPy's ``indices`` for Dask Arrays.
