@@ -37,6 +37,7 @@ from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict, Dispatch)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
+from ..core import quote
 from ..delayed import to_task_dask
 from .. import threaded, core
 from .. import sharedict
@@ -1850,6 +1851,19 @@ def normalize_chunks(chunks, shape=None):
     return tuple(tuple(int(x) if not math.isnan(x) else x for x in c) for c in chunks)
 
 
+def normalize_and_check_chunks(chunks, shape):
+    """Normalize chunks and check them for consistency."""
+    chunks = normalize_chunks(chunks, shape)
+    if len(chunks) != len(shape):
+        raise ValueError("Input array has %d dimensions but the supplied "
+                         "chunks has only %d dimensions" %
+                         (len(shape), len(chunks)))
+    if tuple(map(sum, chunks)) != shape:
+        raise ValueError("Chunks do not add up to shape. "
+                         "Got chunks=%s, shape=%s" % (chunks, shape))
+    return chunks
+
+
 def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
                getitem=None):
     """ Create dask array from something that looks like an array
@@ -2650,12 +2664,34 @@ def _enforce_dtype(*args, **kwargs):
     return result
 
 
-@wraps(chunk.broadcast_to)
-def broadcast_to(x, shape):
+def broadcast_to(x, shape, chunks=None):
+    """Broadcast an array to a new shape.
+
+    Parameters
+    ----------
+    x : array_like
+        The array to broadcast.
+    shape : tuple
+        The shape of the desired array.
+    chunks : tuple, optional
+        If provided, then the result will use these chunks instead of the same
+        chunks as the source array. Setting chunks explicitly as part of
+        broadcast_to is much more efficient than rechunking afterwards.
+        Chunks are only allowed to differ from the original shape along
+        dimensions that are new on the result or have size 1 the input array.
+
+    Returns
+    -------
+    broadcast : dask array
+
+    See Also
+    --------
+    numpy.broadcast_to
+    """
     x = asarray(x)
     shape = tuple(shape)
 
-    if x.shape == shape:
+    if x.shape == shape and (chunks is None or chunks == x.chunks):
         return x
 
     ndim_new = len(shape) - x.ndim
@@ -2665,15 +2701,32 @@ def broadcast_to(x, shape):
         raise ValueError('cannot broadcast shape %s to shape %s'
                          % (x.shape, shape))
 
-    name = 'broadcast_to-' + tokenize(x, shape)
-    chunks = (tuple((s,) for s in shape[:ndim_new]) +
-              tuple(bd if old > 1 else (new,)
-              for bd, old, new in zip(x.chunks, x.shape, shape[ndim_new:])))
-    dsk = {(name,) + (0,) * ndim_new + key[1:]:
-           (chunk.broadcast_to, key, shape[:ndim_new] +
-            tuple(bd[i] for i, bd in zip(key[1:], chunks[ndim_new:])))
-           for key in core.flatten(x.__dask_keys__())}
-    return Array(sharedict.merge((name, dsk), x.dask), name, chunks, dtype=x.dtype)
+    if chunks is None:
+        chunks = (tuple((s,) for s in shape[:ndim_new]) +
+                  tuple(bd if old > 1 else (new,)
+                  for bd, old, new in zip(x.chunks, x.shape, shape[ndim_new:])))
+    else:
+        chunks = normalize_and_check_chunks(chunks, shape)
+        for old_bd, new_bd in zip(x.chunks, chunks[ndim_new:]):
+            if old_bd != new_bd and old_bd != (1,):
+                raise ValueError('cannot broadcast chunks %s to chunks %s: '
+                                 'new chunks must either be along a new '
+                                 'dimension or a dimension of size 1'
+                                 % (x.chunks, chunks))
+
+    name = 'broadcast_to-' + tokenize(x, shape, chunks)
+    dsk = {}
+
+    enumerated_chunks = product(*(enumerate(bds) for bds in chunks))
+    for new_index, chunk_shape in (zip(*ec) for ec in enumerated_chunks):
+        old_index = tuple(0 if bd == (1,) else i
+                          for bd, i in zip(x.chunks, new_index[ndim_new:]))
+        old_key = (x.name,) + old_index
+        new_key = (name,) + new_index
+        dsk[new_key] = (chunk.broadcast_to, old_key, quote(chunk_shape))
+
+    return Array(sharedict.merge((name, dsk), x.dask), name, chunks,
+                 dtype=x.dtype)
 
 
 def offset_func(func, offset, *args):
