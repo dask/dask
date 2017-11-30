@@ -13,6 +13,8 @@ from distributed.security import Security
 from distributed.cli.utils import (check_python_3, uri_from_host_port,
                                    install_signal_handlers)
 from distributed.comm import get_address_host_port
+from distributed.proctitle import (enable_proctitle_on_children,
+                                   enable_proctitle_on_current)
 
 from toolz import valmap
 from tornado.ioloop import IOLoop, TimeoutError
@@ -92,6 +94,9 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
          bokeh_port, local_directory, scheduler_file, interface,
          death_timeout, preload, bokeh_prefix, tls_ca_file,
          tls_cert, tls_key):
+    enable_proctitle_on_current()
+    enable_proctitle_on_children()
+
     sec = Security(tls_ca_file=tls_ca_file,
                    tls_worker_cert=tls_cert,
                    tls_worker_key=tls_key,

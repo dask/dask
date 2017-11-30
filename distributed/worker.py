@@ -35,6 +35,7 @@ from .diskutils import WorkSpace
 from .metrics import time
 from .node import ServerNode
 from .preloading import preload_modules
+from .proctitle import setproctitle
 from .protocol import (pickle, to_serialize, deserialize_bytes,
                        serialize_bytelist)
 from .security import Security
@@ -207,6 +208,8 @@ class WorkerBase(ServerNode):
             self.periodic_callbacks['memory'] = pc
         self._throttled_gc = ThrottledGC(logger=logger)
 
+        setproctitle("dask-worker [not started]")
+
     def _setup_logging(self):
         self._deque_handler = DequeHandler(n=config.get('log-length', 10000))
         self._deque_handler.setFormatter(logging.Formatter(log_format))
@@ -369,6 +372,8 @@ class WorkerBase(ServerNode):
         logger.info('      Local Directory: %26s', self.local_dir)
         logger.info('-' * 49)
 
+        setproctitle("dask-worker [%s]" % self.address)
+
         yield self._register_with_scheduler()
 
         if self.status == 'running':
@@ -393,6 +398,8 @@ class WorkerBase(ServerNode):
             return
         logger.info("Stopping worker at %s", self.address)
         self.status = 'closing'
+        setproctitle("dask-worker [closing]")
+
         self.stop()
         for pc in self.periodic_callbacks.values():
             pc.stop()
@@ -420,6 +427,8 @@ class WorkerBase(ServerNode):
         self._closed.set()
         self._remove_from_global_workers()
         yield super(WorkerBase, self).close()
+
+        setproctitle("dask-worker [closed]")
 
     def __del__(self):
         self._remove_from_global_workers()

@@ -10,13 +10,16 @@ import tempfile
 
 import click
 
+from tornado.ioloop import IOLoop
+
 from distributed import Scheduler
 from distributed.security import Security
 from distributed.utils import get_ip_interface, ignoring
 from distributed.cli.utils import (check_python_3, install_signal_handlers,
                                    uri_from_host_port)
 from distributed.preloading import preload_modules
-from tornado.ioloop import IOLoop
+from distributed.proctitle import (enable_proctitle_on_children,
+                                   enable_proctitle_on_current)
 
 logger = logging.getLogger('distributed.scheduler')
 
@@ -62,6 +65,8 @@ def main(host, port, bokeh_port, show, _bokeh,
          bokeh_whitelist, bokeh_prefix, use_xheaders, pid_file, scheduler_file,
          interface, local_directory, preload, tls_ca_file, tls_cert,
          tls_key):
+    enable_proctitle_on_current()
+    enable_proctitle_on_children()
 
     sec = Security(tls_ca_file=tls_ca_file,
                    tls_scheduler_cert=tls_cert,

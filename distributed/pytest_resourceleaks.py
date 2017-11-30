@@ -170,7 +170,7 @@ class _ChildProcess(collections.namedtuple('_ChildProcess',
 class ChildProcessesChecker(ResourceChecker):
 
     def measure(self):
-        import psutil, time
+        import psutil
         # We use pid and creation time as keys to disambiguate between
         # processes (and protect against pid reuse)
         # Other properties such as cmdline may change for a given process

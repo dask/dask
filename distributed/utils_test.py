@@ -44,6 +44,7 @@ from .config import config, initialize_logging
 from .core import connect, rpc, CommClosedError
 from .metrics import time
 from .nanny import Nanny
+from .proctitle import enable_proctitle_on_children
 from .security import Security
 from .utils import (ignoring, log_errors, sync, mp_context, get_ip, get_ipv6,
                     DequeHandler)
@@ -475,6 +476,8 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
 
     for name, level in logging_levels.items():
         logging.getLogger(name).setLevel(level)
+
+    enable_proctitle_on_children()
 
     with pristine_loop() as loop:
         with check_active_rpc(loop, active_rpc_timeout):

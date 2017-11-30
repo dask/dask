@@ -18,6 +18,7 @@ from .core import rpc, RPCClosed, CommClosedError, coerce_to_address
 from .metrics import time
 from .node import ServerNode
 from .process import AsyncProcess
+from .proctitle import enable_proctitle_on_children
 from .security import Security
 from .utils import (get_ip, mp_context, silence_logging, json_load_robust,
         ignoring, PeriodicCallback)
@@ -325,6 +326,7 @@ class WorkerProcess(object):
         """
         Ensure the worker process is started.
         """
+        enable_proctitle_on_children()
         if self.status == 'running':
             return
         if self.status == 'starting':

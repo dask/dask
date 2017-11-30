@@ -244,7 +244,7 @@ def test_nanny_timeout(c, s, a):
 
 
 @gen_cluster(ncores=[('127.0.0.1', 1)], client=True, Worker=Nanny,
-             worker_kwargs={'memory_limit': 1e9}, timeout=20)
+             worker_kwargs={'memory_limit': 1e8}, timeout=20)
 def test_nanny_terminate(c, s, a):
     from time import sleep
 
@@ -252,7 +252,7 @@ def test_nanny_terminate(c, s, a):
         L = []
         while True:
             L.append(b'0' * 5000000)
-            sleep(0.001)
+            sleep(0.01)
 
     proc = a.process.pid
     with captured_logger(logging.getLogger('distributed.nanny')) as logger:
