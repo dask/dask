@@ -117,9 +117,10 @@ def test_is_kernel():
 
 #@pytest.mark.leaking('fds')
 #def test_zzz_leaks(l=[]):
-    #import os
+    #import os, subprocess
     #l.append(b"x" * (17 * 1024**2))
     #os.open(__file__, os.O_RDONLY)
+    #subprocess.Popen('sleep 100', shell=True, stdin=subprocess.DEVNULL)
 
 
 def test_ensure_ip():
