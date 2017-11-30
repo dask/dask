@@ -216,3 +216,21 @@ def test_erred_future(c, s, a, b):
     future2 = yield var.get()
     with pytest.raises(ZeroDivisionError):
         yield future2.result()
+
+    exc = yield future2.exception()
+    assert isinstance(exc, ZeroDivisionError)
+
+
+def test_future_erred_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address']) as c:
+            future = c.submit(div, 1, 0)
+            var = Variable()
+            var.set(future)
+
+            sleep(0.1)
+
+            future2 = var.get()
+
+            with pytest.raises(ZeroDivisionError):
+                future2.result()

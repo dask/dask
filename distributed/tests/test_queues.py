@@ -236,3 +236,6 @@ def test_erred_future(c, s, a, b):
     future2 = yield q.get()
     with pytest.raises(ZeroDivisionError):
         yield future2.result()
+
+    exc = yield future2.exception()
+    assert isinstance(exc, ZeroDivisionError)

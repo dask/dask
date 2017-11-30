@@ -376,6 +376,20 @@ class FutureState(object):
         self._get_event().clear()
 
     def set_error(self, exception, traceback):
+        if isinstance(exception, bytes):
+            try:
+                exception = loads(exception)
+            except TypeError:
+                exception = Exception("Undeserializable exception", exception)
+        if traceback:
+            if isinstance(traceback, bytes):
+                try:
+                    traceback = loads(traceback)
+                except (TypeError, AttributeError):
+                    traceback = None
+        else:
+            traceback = None
+
         self.status = 'error'
         self.exception = exception
         self.traceback = traceback
@@ -896,17 +910,6 @@ class Client(Node):
     def _handle_task_erred(self, key=None, exception=None, traceback=None):
         state = self.futures.get(key)
         if state is not None:
-            try:
-                exception = loads(exception)
-            except TypeError:
-                exception = Exception("Undeserializable exception", exception)
-            if traceback:
-                try:
-                    traceback = loads(traceback)
-                except AttributeError:
-                    traceback = None
-            else:
-                traceback = None
             state.set_error(exception, traceback)
 
     def _handle_restart(self):
