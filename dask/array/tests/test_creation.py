@@ -198,6 +198,39 @@ def test_indicies():
     assert_eq(darr, nparr)
 
 
+@pytest.mark.parametrize("shapes", [
+    [()],
+    [(0,)],
+    [(2,), (3,)],
+    [(2,), (3,), (4,)],
+    [(2,), (3,), (4,), (5,)],
+    [(2, 3), (4,)],
+])
+@pytest.mark.parametrize("indexing", [
+    "ij",
+    "xy",
+])
+@pytest.mark.parametrize("sparse", [
+    False,
+    True,
+])
+def test_meshgrid(shapes, indexing, sparse):
+    xi_a = []
+    xi_d = []
+    for each_shape in shapes:
+        xi_a.append(np.random.random(each_shape))
+        xi_d.append(da.from_array(xi_a[-1], chunks=1))
+
+    r_a = np.meshgrid(*xi_a, indexing=indexing, sparse=sparse)
+    r_d = da.meshgrid(*xi_d, indexing=indexing, sparse=sparse)
+
+    assert isinstance(r_d, list)
+    assert len(r_a) == len(r_d)
+
+    for e_r_a, e_r_d in zip(r_a, r_d):
+        assert_eq(e_r_a, e_r_d)
+
+
 def test_tril_triu():
     A = np.random.randn(20, 20)
     for chk in [5, 4]:
