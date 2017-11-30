@@ -373,20 +373,13 @@ def indices(dimensions, dtype=int, chunks=None):
     if len(dimensions) != len(chunks):
         raise ValueError("Need same number of chunks as dimensions.")
 
+    xi = []
+    for i in range(len(dimensions)):
+        xi.append(arange(dimensions[i], dtype=dtype, chunks=chunks[i]))
+
     grid = []
     if np.prod(dimensions):
-        for i in range(len(dimensions)):
-            s = len(dimensions) * [None]
-            s[i] = slice(None)
-            s = tuple(s)
-
-            r = arange(dimensions[i], dtype=dtype, chunks=chunks[i])
-            r = r[s]
-
-            for j in chain(range(i), range(i + 1, len(dimensions))):
-                r = r.repeat(dimensions[j], axis=j)
-
-            grid.append(r)
+        grid = meshgrid(*xi, indexing="ij")
 
     if grid:
         grid = stack(grid)
