@@ -231,15 +231,29 @@ def test_rfftfreq(n, d, c):
     (0, 2),
     (0, 1, 2),
 ])
-def test_fftshift(funcname, axes):
+@pytest.mark.parametrize("shape, chunks", [
+    [(5, 6, 7), (2, 3, 4)],
+    [(5, 6, 7), (2, 6, 4)],
+    [(5, 6, 7), (5, 6, 7)],
+])
+def test_fftshift(funcname, shape, chunks, axes):
     np_func = getattr(np.fft, funcname)
     da_func = getattr(da.fft, funcname)
 
-    s = (5, 6, 7)
-    a = np.arange(np.prod(s)).reshape(s)
-    d = da.from_array(a, chunks=(2, 3, 4))
+    a = np.arange(np.prod(shape)).reshape(shape)
+    d = da.from_array(a, chunks=chunks)
 
-    assert_eq(da_func(d, axes), np_func(a, axes))
+    a_r = np_func(a, axes)
+    d_r = da_func(d, axes)
+
+    for each_d_chunks, each_d_r_chunks in zip(d.chunks, d_r.chunks):
+        if len(each_d_chunks) == 1:
+            assert len(each_d_r_chunks) == 1
+            assert each_d_r_chunks == each_d_chunks
+        else:
+            assert len(each_d_r_chunks) != 1
+
+    assert_eq(d_r, a_r)
 
 
 @pytest.mark.parametrize("funcname1, funcname2", [
@@ -256,12 +270,25 @@ def test_fftshift(funcname, axes):
     (0, 2),
     (0, 1, 2),
 ])
-def test_fftshift_identity(funcname1, funcname2, axes):
+@pytest.mark.parametrize("shape, chunks", [
+    [(5, 6, 7), (2, 3, 4)],
+    [(5, 6, 7), (2, 6, 4)],
+    [(5, 6, 7), (5, 6, 7)],
+])
+def test_fftshift_identity(funcname1, funcname2, shape, chunks, axes):
     da_func1 = getattr(da.fft, funcname1)
     da_func2 = getattr(da.fft, funcname2)
 
-    s = (5, 6, 7)
-    a = np.arange(np.prod(s)).reshape(s)
-    d = da.from_array(a, chunks=(2, 3, 4))
+    a = np.arange(np.prod(shape)).reshape(shape)
+    d = da.from_array(a, chunks=chunks)
 
-    assert_eq(d, da_func1(da_func2(d, axes), axes))
+    d_r = da_func1(da_func2(d, axes), axes)
+
+    for each_d_chunks, each_d_r_chunks in zip(d.chunks, d_r.chunks):
+        if len(each_d_chunks) == 1:
+            assert len(each_d_r_chunks) == 1
+            assert each_d_r_chunks == each_d_chunks
+        else:
+            assert len(each_d_r_chunks) != 1
+
+    assert_eq(d_r, d)
