@@ -16,7 +16,7 @@ Array
 DataFrame
 +++++++++
 
--
+- ``DataFrame.read_sql()`` (:pr:`2928`) to an empty database tables returns an empty dask dataframe `Apostolos Vlachopoulos`_
 
 
 Core

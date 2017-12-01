@@ -3,7 +3,7 @@ import pandas as pd
 import six
 
 from ... import delayed
-from .io import from_delayed
+from .io import from_delayed, from_pandas
 
 
 def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
@@ -96,6 +96,11 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
 
     q = sql.select(columns).limit(5).select_from(table)
     head = pd.read_sql(q, engine, **kwargs)
+
+    if head.empty:
+        name = table.name
+        head = pd.read_sql_table(name, uri, index_col=index_col)
+        return from_pandas(head, npartitions=1)
 
     if divisions is None:
         if limits is None:
