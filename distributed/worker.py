@@ -77,7 +77,7 @@ class WorkerBase(ServerNode):
     def __init__(self, scheduler_ip=None, scheduler_port=None,
                  scheduler_file=None, ncores=None, loop=None, local_dir=None,
                  services=None, service_ports=None, name=None,
-                 heartbeat_interval=5000, reconnect=True, memory_limit='auto',
+                 reconnect=True, memory_limit='auto',
                  executor=None, resources=None, silence_logs=None,
                  death_timeout=None, preload=(), security=None,
                  contact_address=None, memory_monitor_interval=200, **kwargs):
@@ -156,13 +156,10 @@ class WorkerBase(ServerNode):
         self.scheduler = rpc(scheduler_addr, connection_args=self.connection_args)
         self.name = name
         self.scheduler_delay = 0
-        self.heartbeat_interval = heartbeat_interval
         self.heartbeat_active = False
         self.execution_state = {'scheduler': self.scheduler.address,
                                 'ioloop': self.loop,
                                 'worker': self}
-        self._last_disk_io = None
-        self._last_net_io = None
         self._ipython_kernel = None
 
         if self.local_dir not in sys.path:
@@ -182,7 +179,6 @@ class WorkerBase(ServerNode):
             'delete_data': self.delete_data,
             'terminate': self.terminate,
             'ping': pingpong,
-            'health': self.host_health,
             'upload_file': self.upload_file,
             'start_ipython': self.start_ipython,
             'call_stack': self.get_call_stack,
@@ -196,8 +192,7 @@ class WorkerBase(ServerNode):
                                          connection_args=self.connection_args,
                                          **kwargs)
 
-        pc = PeriodicCallback(self.heartbeat,
-                              self.heartbeat_interval)
+        pc = PeriodicCallback(self.heartbeat, 1000)
         self.periodic_callbacks['heartbeat'] = pc
         self._address = contact_address
 
@@ -227,31 +222,23 @@ class WorkerBase(ServerNode):
             self.heartbeat_active = True
             logger.debug("Heartbeat: %s" % self.address)
             try:
-                if psutil:
-                    memory_info = psutil.Process().memory_info()
-                    kwargs = {'memory': memory_info.vms,
-                              'memory-vms': memory_info.vms,
-                              'memory-rss': memory_info.rss}
-                else:
-                    kwargs = {}
-
                 start = time()
                 response = yield self.scheduler.register(
                     address=self.contact_address,
                     name=self.name,
                     ncores=self.ncores,
                     now=time(),
-                    host_info=self.host_health(),
                     services=self.service_ports,
                     memory_limit=self.memory_limit,
                     executing=len(self.executing),
                     in_memory=len(self.data),
                     ready=len(self.ready),
                     in_flight=len(self.in_flight_tasks),
-                    **kwargs)
+                    **self.monitor.recent())
                 end = time()
                 middle = (start + end) / 2
                 self.scheduler_delay = response['time'] - middle
+                self.periodic_callbacks['heartbeat'].callback_time = response['heartbeat-interval'] * 1000
             finally:
                 self.heartbeat_active = False
         else:
@@ -278,12 +265,12 @@ class WorkerBase(ServerNode):
                         name=self.name,
                         nbytes=self.nbytes,
                         now=time(),
-                        host_info=self.host_health(),
                         services=self.service_ports,
                         memory_limit=self.memory_limit,
                         local_directory=self.local_dir,
                         resources=self.total_resources,
-                        pid=os.getpid())
+                        pid=os.getpid(),
+                        **self.monitor.recent())
                 if self.death_timeout:
                     diff = self.death_timeout - (time() - start)
                     future = gen.with_timeout(timedelta(seconds=diff), future)
@@ -615,43 +602,6 @@ class WorkerBase(ServerNode):
                                   'exception': pickle.dumps(e)})
 
         raise gen.Return({'status': 'OK', 'nbytes': len(data)})
-
-    def host_health(self, comm=None):
-        """ Information about worker """
-        d = {'time': time()}
-        try:
-            import psutil
-            mem = psutil.virtual_memory()
-            d.update({'cpu': psutil.cpu_percent(),
-                      'memory': mem.total,
-                      'memory_percent': mem.percent})
-
-            net_io = psutil.net_io_counters()
-            if self._last_net_io:
-                d['network-send'] = net_io.bytes_sent - self._last_net_io.bytes_sent
-                d['network-recv'] = net_io.bytes_recv - self._last_net_io.bytes_recv
-            else:
-                d['network-send'] = 0
-                d['network-recv'] = 0
-            self._last_net_io = net_io
-
-            try:
-                disk_io = psutil.disk_io_counters()
-            except RuntimeError:
-                # This happens when there is no physical disk in worker
-                pass
-            else:
-                if self._last_disk_io:
-                    d['disk-read'] = disk_io.read_bytes - self._last_disk_io.read_bytes
-                    d['disk-write'] = disk_io.write_bytes - self._last_disk_io.write_bytes
-                else:
-                    d['disk-read'] = 0
-                    d['disk-write'] = 0
-                self._last_disk_io = disk_io
-
-        except ImportError:
-            pass
-        return d
 
     def keys(self, comm=None):
         return list(self.data)

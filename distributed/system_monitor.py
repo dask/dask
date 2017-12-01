@@ -37,6 +37,14 @@ class SystemMonitor(object):
             self.num_fds = deque(maxlen=n)
             self.quantities['num_fds'] = self.num_fds
 
+        self.update()
+
+    def recent(self):
+        try:
+            return {k: v[-1] for k, v in self.quantities.items()}
+        except IndexError:
+            return {k: None for k, v in self.quantities.items()}
+
     def update(self):
         cpu = self.proc.cpu_percent()
         memory = self.proc.memory_info().rss

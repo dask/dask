@@ -640,7 +640,9 @@ class Scheduler(ServerNode):
 
             if address in self.workers:
                 self.log_event(address, merge({'action': 'heartbeat'}, info))
-                return {'status': 'OK', 'time': time()}
+                return {'status': 'OK',
+                        'time': time(),
+                        'heartbeat-interval': heartbeat_interval(len(self.workers))}
 
             name = name or address
             if name in self.aliases:
@@ -705,7 +707,9 @@ class Scheduler(ServerNode):
             self.log_event('all', {'action': 'add-worker',
                                    'worker': address})
             logger.info("Register %s", str(address))
-            return {'status': 'OK', 'time': time()}
+            return {'status': 'OK',
+                    'time': time(),
+                    'heartbeat-interval': heartbeat_interval(len(self.workers))}
 
     def update_graph(self, client=None, tasks=None, keys=None,
                      dependencies=None, restrictions=None, priority=None,
@@ -3663,6 +3667,20 @@ _round_robin = [0]
 
 
 fast_tasks = {'rechunk-split', 'shuffle-split'}
+
+
+def heartbeat_interval(n):
+    """
+    Interval in seconds that we desire heartbeats based on number of workers
+    """
+    if n <= 10:
+        return 0.5
+    elif n < 50:
+        return 1
+    elif n < 200:
+        return 2
+    else:
+        return 5
 
 
 class KilledWorker(Exception):

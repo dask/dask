@@ -646,46 +646,6 @@ def test_update_graph_culls(s, a, b):
     assert 'z' not in s.dependencies
 
 
-@pytest.mark.skipif(not sys.platform.startswith('linux'),
-                    reason="Need 127.0.0.2 to mean localhost")
-@gen_cluster(ncores=[('127.0.0.1', 2), ('127.0.0.2', 2), ('127.0.0.1', 1)])
-def test_host_health(s, a, b, c):
-    start = time()
-
-    for w in [a, b, c]:
-        assert w.ip in s.host_info
-        assert 0 <= s.host_info[w.ip]['cpu'] <= 100
-        assert 0 < s.host_info[w.ip]['memory']
-        assert 0 < s.host_info[w.ip]['memory_percent'] < 100
-
-        assert isinstance(s.host_info[w.ip]['last-seen'], (int, float))
-        assert -1 < s.worker_info[w.address]['time-delay'] < 1
-
-    assert set(s.host_info) == {'127.0.0.1', '127.0.0.2'}
-    assert s.host_info['127.0.0.1']['cores'] == 3
-    assert s.host_info['127.0.0.1']['addresses'] == {a.address, c.address}
-    assert s.host_info['127.0.0.2']['cores'] == 2
-    assert s.host_info['127.0.0.2']['addresses'] == {b.address}
-
-    s.remove_worker(address=a.address)
-
-    assert set(s.host_info) == {'127.0.0.1', '127.0.0.2'}
-    assert s.host_info['127.0.0.1']['cores'] == 1
-    assert s.host_info['127.0.0.1']['addresses'] == {c.address}
-    assert s.host_info['127.0.0.2']['cores'] == 2
-    assert s.host_info['127.0.0.2']['addresses'] == {b.address}
-
-    s.remove_worker(address=b.address)
-
-    assert set(s.host_info) == {'127.0.0.1'}
-    assert s.host_info['127.0.0.1']['cores'] == 1
-    assert s.host_info['127.0.0.1']['addresses'] == {c.address}
-
-    s.remove_worker(address=c.address)
-
-    assert not s.host_info
-
-
 @gen_cluster(ncores=[])
 def test_add_worker_is_idempotent(s):
     s.add_worker(address=alice, ncores=1, resolve_address=False)

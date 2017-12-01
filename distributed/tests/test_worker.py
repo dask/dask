@@ -60,27 +60,6 @@ def test_identity():
     assert isinstance(ident['memory_limit'], Number)
 
 
-def test_health():
-    w = Worker('127.0.0.1', 8019)
-    d = w.host_health()
-    assert isinstance(d, dict)
-    d = w.host_health()
-    try:
-        import psutil
-    except ImportError:
-        pass
-    else:
-        try:
-            psutil.disk_io_counters()
-        except RuntimeError:
-            pass
-        else:
-            assert 'disk-read' in d
-            assert 'disk-write' in d
-        assert 'network-recv' in d
-        assert 'network-send' in d
-
-
 @gen_cluster(client=True)
 def test_worker_bad_args(c, s, a, b):
     class NoReprObj(object):
@@ -714,13 +693,13 @@ def test_priorities_2(c, s, w):
     assert any(key.startswith('b1') for key in log[:len(log) // 2])
 
 
-@gen_cluster(client=True, worker_kwargs={'heartbeat_interval': 0.020})
+@gen_cluster(client=True)
 def test_heartbeats(c, s, a, b):
-    pytest.importorskip('psutil')
-    start = time()
-    while not all(s.worker_info[w].get('memory-rss') for w in s.workers):
-        yield gen.sleep(0.01)
-        assert time() < start + 2
+    x = s.worker_info[a.address]['last-seen']
+    yield gen.sleep(a.periodic_callbacks['heartbeat'].callback_time / 1000 + 0.1)
+    y = s.worker_info[a.address]['last-seen']
+    assert x != y
+    assert a.periodic_callbacks['heartbeat'].callback_time < 1000
 
 
 @pytest.mark.parametrize('worker', [Worker, Nanny])
@@ -934,13 +913,12 @@ def test_scheduler_file():
         s.stop()
 
 
-@gen_cluster(client=True, worker_kwargs={'heartbeat_interval': 50})
+@gen_cluster(client=True)
 def test_scheduler_delay(c, s, a, b):
     old = a.scheduler_delay
     assert abs(a.scheduler_delay) < 0.1
     assert abs(b.scheduler_delay) < 0.1
-
-    yield gen.sleep(0.100)
+    yield gen.sleep(a.periodic_callbacks['heartbeat'].callback_time / 1000 + .3)
     assert a.scheduler_delay != old
 
 

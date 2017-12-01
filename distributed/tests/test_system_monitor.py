@@ -16,21 +16,21 @@ def test_SystemMonitor():
     assert set(a) == set(b)
     assert all(rb >= 0 for rb in sm.read_bytes)
     assert all(wb >= 0 for wb in sm.write_bytes)
-    assert all(len(q) == 2 for q in sm.quantities.values())
+    assert all(len(q) == 3 for q in sm.quantities.values())
 
     assert 'cpu' in repr(sm)
 
 
 def test_count():
     sm = SystemMonitor(n=5)
-    assert sm.count == 0
-    sm.update()
     assert sm.count == 1
+    sm.update()
+    assert sm.count == 2
 
     for i in range(10):
         sm.update()
 
-    assert sm.count == 11
+    assert sm.count == 12
     for v in sm.quantities.values():
         assert len(v) == 5
 
@@ -38,18 +38,18 @@ def test_count():
 def test_range_query():
     sm = SystemMonitor(n=5)
 
-    assert all(len(v) == 0 for v in sm.range_query(0).values())
+    assert all(len(v) == 1 for v in sm.range_query(0).values())
     assert all(len(v) == 0 for v in sm.range_query(123).values())
 
     sm.update()
     sm.update()
     sm.update()
 
-    assert all(len(v) == 3 for v in sm.range_query(0).values())
-    assert all(len(v) == 2 for v in sm.range_query(1).values())
+    assert all(len(v) == 4 for v in sm.range_query(0).values())
+    assert all(len(v) == 3 for v in sm.range_query(1).values())
 
     for i in range(10):
         sm.update()
 
-    assert all(len(v) == 3 for v in sm.range_query(10).values())
+    assert all(len(v) == 4 for v in sm.range_query(10).values())
     assert all(len(v) == 5 for v in sm.range_query(0).values())

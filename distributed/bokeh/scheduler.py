@@ -800,37 +800,34 @@ class WorkerTable(DashboardComponent):
     plot laying out hosts by their current memory use.
     """
 
-    def __init__(self, scheduler, **kwargs):
+    def __init__(self, scheduler, width=800, **kwargs):
         self.scheduler = scheduler
-        self.names = ['disk-read', 'cores', 'cpu', 'disk-write',
-                      'memory', 'last-seen', 'memory_percent', 'host',
-                      'network-send', 'network-recv']
+        self.names = ['worker', 'ncores', 'cpu', 'memory', 'memory_limit',
+                      'memory_percent', 'num_fds', 'read_bytes', 'write_bytes']
+
         self.source = ColumnDataSource({k: [] for k in self.names})
 
         columns = {name: TableColumn(field=name,
                                      title=name.replace('_percent', ' %'))
                    for name in self.names}
 
-        cnames = ['host', 'cores', 'memory', 'cpu', 'memory_percent',
-                  'network-send', 'network-recv']
-
         formatters = {'cpu': NumberFormatter(format='0.0 %'),
                       'memory_percent': NumberFormatter(format='0.0 %'),
                       'memory': NumberFormatter(format='0 b'),
-                      'latency': NumberFormatter(format='0.00000'),
-                      'last-seen': NumberFormatter(format='0.000'),
-                      'disk-read': NumberFormatter(format='0 b'),
-                      'disk-write': NumberFormatter(format='0 b'),
-                      'network-send': NumberFormatter(format='0 b'),
-                      'network-recv': NumberFormatter(format='0 b')}
+                      'memory_limit': NumberFormatter(format='0 b'),
+                      'read_bytes': NumberFormatter(format='0 b'),
+                      'write_bytes': NumberFormatter(format='0 b'),
+                      'num_fds': NumberFormatter(format='0'),
+                      'ncores': NumberFormatter(format='0')}
 
         table = DataTable(
-            source=self.source, columns=[columns[n] for n in cnames],
+            source=self.source, columns=[columns[n] for n in self.names],
+            row_headers=False, reorderable=True, sortable=True, width=width,
         )
 
-        for name in cnames:
+        for name in self.names:
             if name in formatters:
-                table.columns[cnames.index(name)].formatter = formatters[name]
+                table.columns[self.names.index(name)].formatter = formatters[name]
 
         hover = HoverTool(
             point_policy="follow_mouse",
@@ -844,7 +841,7 @@ class WorkerTable(DashboardComponent):
 
         mem_plot = figure(title='Memory Use (%)', toolbar_location=None,
                           x_range=(0, 1), y_range=(-0.1, 0.1), height=80,
-                          tools='', **kwargs)
+                          width=width, tools='', **kwargs)
         mem_plot.circle(source=self.source, x='memory_percent', y=0,
                         size=10, fill_alpha=0.5)
         mem_plot.ygrid.visible = False
@@ -856,7 +853,7 @@ class WorkerTable(DashboardComponent):
             point_policy="follow_mouse",
             tooltips="""
                 <div>
-                  <span style="font-size: 10px; font-family: Monaco, monospace;">@host: </span>
+                  <span style="font-size: 10px; font-family: Monaco, monospace;">@worker: </span>
                   <span style="font-size: 10px; font-family: Monaco, monospace;">@cpu</span>
                 </div>
                 """
@@ -864,7 +861,7 @@ class WorkerTable(DashboardComponent):
 
         cpu_plot = figure(title='CPU Use (%)', toolbar_location=None,
                           x_range=(0, 1), y_range=(-0.1, 0.1), height=80,
-                          tools='', **kwargs)
+                          width=width, tools='', **kwargs)
         cpu_plot.circle(source=self.source, x='cpu', y=0,
                         size=10, fill_alpha=0.5)
         cpu_plot.ygrid.visible = False
@@ -881,14 +878,12 @@ class WorkerTable(DashboardComponent):
 
     def update(self):
         data = {name: [] for name in self.names}
-        for host in sorted(self.scheduler.host_info):
-            info = self.scheduler.host_info[host]
+        for worker, info in sorted(self.scheduler.worker_info.items()):
             for name in self.names:
                 data[name].append(info.get(name, None))
-            data['host'][-1] = host
-
-        for name in ['cpu', 'memory_percent']:
-            data[name] = [x / 100 for x in data[name]]
+            data['worker'][-1] = worker
+            data['memory_percent'][-1] = info['memory'] / info['memory_limit']
+            data['cpu'][-1] = info['cpu'] / 100.0
 
         self.source.data.update(data)
 

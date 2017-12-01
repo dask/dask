@@ -4,12 +4,13 @@ import pytest
 pytest.importorskip('bokeh')
 
 from bokeh.models import ColumnDataSource, Model
+from tornado import gen
 
 from distributed.bokeh import messages
-from distributed.utils_test import slowinc
+from distributed.utils_test import slowinc, gen_cluster
 
 from distributed.bokeh.components import (
-    TaskStream, TaskProgress, MemoryUsage, WorkerTable,
+    TaskStream, TaskProgress, MemoryUsage,
     Processing, ProfilePlot, ProfileTimePlot
 )
 
@@ -17,31 +18,12 @@ from distributed.bokeh.components import (
 @pytest.mark.parametrize('Component', [TaskStream,
                                        TaskProgress,
                                        MemoryUsage,
-                                       WorkerTable,
                                        Processing])
 def test_basic(Component):
     c = Component()
     assert isinstance(c.source, ColumnDataSource)
     assert isinstance(c.root, Model)
     c.update(messages)
-
-
-from distributed.utils_test import gen_cluster
-from tornado import gen
-from distributed.diagnostics.scheduler import workers
-
-
-@gen_cluster()
-def test_worker_table(s, a, b):
-    while any('last-seen' not in v for v in s.host_info.values()):
-        yield gen.sleep(0.01)
-    data = workers(s)
-
-    messages = {'workers': {'deque': [data]}}
-
-    c = WorkerTable()
-    c.update(messages)
-    assert c.source.data['host'] == ['127.0.0.1']
 
 
 @gen_cluster(client=True)

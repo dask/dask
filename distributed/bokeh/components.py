@@ -7,11 +7,8 @@ import weakref
 
 from bokeh.layouts import row, column
 from bokeh.models import ( ColumnDataSource, Plot, DataRange1d, LinearAxis,
-        HoverTool, BoxZoomTool, ResetTool, PanTool, WheelZoomTool, Title,
-        Range1d, Quad, Text, value, BoxSelectTool, TapTool, Circle, OpenURL,)
-
-from bokeh.models.widgets import (DataTable, TableColumn, NumberFormatter,
-        Button, Select)
+        HoverTool, BoxZoomTool, ResetTool, PanTool, WheelZoomTool, Range1d,
+        Quad, Text, value, TapTool, OpenURL, Button, Select)
 from bokeh.palettes import Spectral9
 from bokeh.plotting import figure
 from tornado import gen
@@ -276,100 +273,6 @@ class MemoryUsage(DashboardComponent):
             self.source.data.update(nb)
             self.root.title.text = \
                 "Memory Use: %0.2f MB" % (sum(msg['nbytes'].values()) / 1e6)
-
-
-class WorkerTable(DashboardComponent):
-    """ Status of the current workers
-
-    This is two plots, a text-based table for each host and a thin horizontal
-    plot laying out hosts by their current memory use.
-    """
-
-    def __init__(self, **kwargs):
-        names = ['processes', 'disk-read', 'cores', 'cpu', 'disk-write',
-                 'memory', 'last-seen', 'memory_percent', 'host']
-        self.source = ColumnDataSource({k: [] for k in names})
-
-        columns = {name: TableColumn(field=name,
-                                     title=name.replace('_percent', ' %'))
-                   for name in names}
-
-        cnames = ['host', 'cores', 'processes', 'memory', 'cpu', 'memory_percent']
-
-        formatters = {'cpu': NumberFormatter(format='0.0 %'),
-                      'memory_percent': NumberFormatter(format='0.0 %'),
-                      'memory': NumberFormatter(format='0 b'),
-                      'latency': NumberFormatter(format='0.00000'),
-                      'last-seen': NumberFormatter(format='0.000'),
-                      'disk-read': NumberFormatter(format='0 b'),
-                      'disk-write': NumberFormatter(format='0 b'),
-                      'net-send': NumberFormatter(format='0 b'),
-                      'net-recv': NumberFormatter(format='0 b')}
-
-        table = DataTable(
-            source=self.source, columns=[columns[n] for n in cnames],
-        )
-
-        for name in cnames:
-            if name in formatters:
-                table.columns[cnames.index(name)].formatter = formatters[name]
-
-        mem_plot = Plot(
-            title=Title(text="Memory Usage (%)"), toolbar_location=None,
-            x_range=Range1d(start=0, end=1), y_range=Range1d(start=-0.1, end=0.1),
-            **kwargs
-        )
-
-        mem_plot.add_glyph(
-            self.source,
-            Circle(x='memory_percent', y=0, size=10, fill_alpha=0.5)
-        )
-
-        mem_plot.add_layout(LinearAxis(), 'below')
-
-        hover = HoverTool(
-            point_policy="follow_mouse",
-            tooltips="""
-                <div>
-                  <span style="font-size: 10px; font-family: Monaco, monospace;">@host: </span>
-                  <span style="font-size: 10px; font-family: Monaco, monospace;">@memory_percent</span>
-                </div>
-                """
-        )
-        mem_plot.add_tools(hover, BoxSelectTool())
-
-        if 'sizing_mode' in kwargs:
-            sizing_mode = {'sizing_mode': kwargs['sizing_mode']}
-        else:
-            sizing_mode = {}
-
-        self.root = column(mem_plot, table, id='bk-worker-table', **sizing_mode)
-
-    def update(self, messages):
-        with log_errors():
-            try:
-                d = messages['workers']['deque'][-1]
-            except IndexError:
-                return
-
-            workers = sorted(d)
-
-            data = {}
-            data['host'] = workers
-            for name in ['cores', 'cpu', 'memory_percent', 'latency', 'last-seen',
-                         'memory', 'disk-read', 'disk-write', 'net-send',
-                         'net-recv']:
-                try:
-                    if name in ('cpu', 'memory_percent'):
-                        data[name] = [d[w][name] / 100 for w in workers]
-                    else:
-                        data[name] = [d[w][name] for w in workers]
-                except KeyError:
-                    pass
-
-            data['processing'] = [sorted(d[w]['processing']) for w in workers]
-            data['processes'] = [len(d[w]['addresses']) for w in workers]
-            self.source.data.update(data)
 
 
 class Processing(DashboardComponent):
