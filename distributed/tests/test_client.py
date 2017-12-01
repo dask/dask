@@ -4612,6 +4612,17 @@ def test_get_client(c, s, a, b):
         del distributed.tmp_client
 
 
+def test_get_client_no_cluster():
+    # Clean up any global workers added by other tests. This test requires that
+    # there are no global workers.
+    from distributed.worker import _global_workers
+    del _global_workers[:]
+
+    msg = 'No global client found and no address provided'
+    with pytest.raises(ValueError, match=r'^{}$'.format(msg)):
+        get_client()
+
+
 @gen_cluster(client=True)
 def test_serialize_collections(c, s, a, b):
     da = pytest.importorskip('dask.array')

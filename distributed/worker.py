@@ -2628,7 +2628,7 @@ def get_client(address=None, timeout=3):
 
     from .client import _get_global_client
     client = _get_global_client()  # TODO: assumes the same scheduler
-    if client and not address or client.scheduler.address == address:
+    if client and (not address or client.scheduler.address == address):
         return client
     elif address:
         from .client import Client
