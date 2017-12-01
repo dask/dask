@@ -98,6 +98,8 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
     head = pd.read_sql(q, engine, **kwargs)
 
     if head.empty:
+        name = table.name
+        head = pd.read_sql_table(name, uri, index_col=index_col)
         return from_pandas(head, npartitions=1)
 
     if divisions is None:
