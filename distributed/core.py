@@ -78,7 +78,7 @@ class Server(object):
     So in the example above the following would be good messages.
 
     *  ``{'op': 'ping'}``
-    *  ``{'op': 'add': 'x': 10, 'y': 20}``
+    *  ``{'op': 'add', 'x': 10, 'y': 20}``
 
     """
     default_ip = ''
