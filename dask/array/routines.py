@@ -169,6 +169,11 @@ def flip(m, axis):
     return m[sl]
 
 
+@wraps(np.flipud)
+def flipud(m):
+    return flip(m, 0)
+
+
 alphabet = 'abcdefghijklmnopqrstuvwxyz'
 ALPHABET = alphabet.upper()
 
