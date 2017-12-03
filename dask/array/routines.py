@@ -174,6 +174,11 @@ def flipud(m):
     return flip(m, 0)
 
 
+@wraps(np.fliplr)
+def fliplr(m):
+    return flip(m, 1)
+
+
 alphabet = 'abcdefghijklmnopqrstuvwxyz'
 ALPHABET = alphabet.upper()
 
