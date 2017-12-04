@@ -2819,8 +2819,7 @@ def test_coerce():
 def test_bool():
     df = pd.DataFrame(np.arange(100).reshape((10,10)))
     ddf = dd.from_pandas(df, npartitions=2)
-    with pytest.raises(ValueError):
-        bool(ddf)
-        bool(ddf[0])
-        bool(ddf == ddf)
-        bool(ddf[0] == ddf[0])
+    conditions = [ddf, ddf[0], ddf == ddf, ddf[0] == ddf[0]]
+    for cond in conditions:
+        with pytest.raises(ValueError):
+            bool(cond)

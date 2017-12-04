@@ -884,10 +884,8 @@ def test_coerce():
 
     a2 = np.arange(2)
     d2 = da.from_array(a2, chunks=(2,))
-    with pytest.raises(TypeError):
-        int(d2)
-        float(d2)
-        complex(d2)
+    for func in (int, float, complex):
+        pytest.raises(TypeError, lambda :func(d2))
 
 
 def test_bool():
