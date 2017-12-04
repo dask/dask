@@ -7,10 +7,12 @@ import pytest
 from dask.dataframe.io.sql import read_sql_table
 from dask.utils import tmpfile
 from dask.dataframe.utils import assert_eq
+
 pd = pytest.importorskip('pandas')
 dd = pytest.importorskip('dask.dataframe')
 pytest.importorskip('sqlalchemy')
 pytest.importorskip('sqlite3')
+np = pytest.importorskip('numpy')
 
 
 data = """
@@ -33,6 +35,24 @@ def db():
         uri = 'sqlite:///%s' % f
         df.to_sql('test', uri, index=True, if_exists='replace')
         yield uri
+
+
+def test_empty(db):
+    from sqlalchemy import create_engine, MetaData, Table, Column, Integer
+    with tmpfile() as f:
+        uri = 'sqlite:///%s' % f
+        metadata = MetaData()
+        engine = create_engine(uri)
+        table = Table('empty_table', metadata,
+                      Column('id', Integer, primary_key=True),
+                      Column('col2', Integer))
+        metadata.create_all(engine)
+
+        dask_df = read_sql_table(table.name, uri, index_col='id', npartitions=1)
+        assert dask_df.index.name == 'id'
+        assert dask_df.col2.dtype == np.dtype('int64')
+        pd_dataframe = dask_df.compute()
+        assert pd_dataframe.empty is True
 
 
 def test_simple(db):

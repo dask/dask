@@ -11,11 +11,13 @@ Array
 - Support N-D arrays with ``matmul`` (:pr:`2909`) `John A Kirkham`_
 - Add ``vdot`` (:pr:`2910`) `John A Kirkham`_
 - Explicit ``chunks`` argument for ``broadcast_to`` (:pr:`2943`) `Stephan Hoyer`_
+- Add ``meshgrid`` (:pr:`2938`) `John A Kirkham`_
+- Preserve singleton chunks in ``fftshift``/``ifftshift`` (:pr:`2733`) `John A Kirkham`_
 
 DataFrame
 +++++++++
 
--
+- ``DataFrame.read_sql()`` (:pr:`2928`) to an empty database tables returns an empty dask dataframe `Apostolos Vlachopoulos`_
 
 
 Core

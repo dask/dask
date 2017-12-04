@@ -101,6 +101,7 @@ Top level user functions:
    max
    maximum
    mean
+   meshgrid
    min
    minimum
    modf
@@ -425,6 +426,7 @@ Other functions
 .. autofunction:: max
 .. autofunction:: maximum
 .. autofunction:: mean
+.. autofunction:: meshgrid
 .. autofunction:: min
 .. autofunction:: minimum
 .. autofunction:: modf
