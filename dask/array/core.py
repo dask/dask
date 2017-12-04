@@ -1848,20 +1848,17 @@ def normalize_chunks(chunks, shape=None):
             raise ValueError("Empty tuples are not allowed in chunks. Express "
                              "zero length dimensions with 0(s) in chunks")
 
+    if shape is not None:
+        if len(chunks) != len(shape):
+            raise ValueError("Input array has %d dimensions but the supplied "
+                             "chunks has only %d dimensions" %
+                             (len(shape), len(chunks)))
+        if not all(c == s or (math.isnan(c) and math.isnan(s))
+                   for c, s in zip(map(sum, chunks), shape)):
+            raise ValueError("Chunks do not add up to shape. "
+                             "Got chunks=%s, shape=%s" % (chunks, shape))
+
     return tuple(tuple(int(x) if not math.isnan(x) else x for x in c) for c in chunks)
-
-
-def normalize_and_check_chunks(chunks, shape):
-    """Normalize chunks and check them for consistency."""
-    chunks = normalize_chunks(chunks, shape)
-    if len(chunks) != len(shape):
-        raise ValueError("Input array has %d dimensions but the supplied "
-                         "chunks has only %d dimensions" %
-                         (len(shape), len(chunks)))
-    if tuple(map(sum, chunks)) != shape:
-        raise ValueError("Chunks do not add up to shape. "
-                         "Got chunks=%s, shape=%s" % (chunks, shape))
-    return chunks
 
 
 def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
@@ -1907,13 +1904,6 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
     """
     chunks = normalize_chunks(chunks, x.shape)
-    if len(chunks) != len(x.shape):
-        raise ValueError("Input array has %d dimensions but the supplied "
-                         "chunks has only %d dimensions" %
-                         (len(x.shape), len(chunks)))
-    if tuple(map(sum, chunks)) != x.shape:
-        raise ValueError("Chunks do not add up to shape. "
-                         "Got chunks=%s, shape=%s" % (chunks, x.shape))
     if name in (None, True):
         token = tokenize(x, chunks)
         original_name = 'array-original-' + token
@@ -2676,9 +2666,9 @@ def broadcast_to(x, shape, chunks=None):
     chunks : tuple, optional
         If provided, then the result will use these chunks instead of the same
         chunks as the source array. Setting chunks explicitly as part of
-        broadcast_to is much more efficient than rechunking afterwards.
-        Chunks are only allowed to differ from the original shape along
-        dimensions that are new on the result or have size 1 the input array.
+        broadcast_to is more efficient than rechunking afterwards. Chunks are
+        only allowed to differ from the original shape along dimensions that
+        are new on the result or have size 1 the input array.
 
     Returns
     -------
@@ -2706,7 +2696,7 @@ def broadcast_to(x, shape, chunks=None):
                   tuple(bd if old > 1 else (new,)
                   for bd, old, new in zip(x.chunks, x.shape, shape[ndim_new:])))
     else:
-        chunks = normalize_and_check_chunks(chunks, shape)
+        chunks = normalize_chunks(chunks, shape)
         for old_bd, new_bd in zip(x.chunks, chunks[ndim_new:]):
             if old_bd != new_bd and old_bd != (1,):
                 raise ValueError('cannot broadcast chunks %s to chunks %s: '
