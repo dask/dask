@@ -7,6 +7,7 @@ Changelog
 Array
 +++++
 
+- Prevent ``bool()`` coercion from calling compute (:pr:`2958`) `Albert DeFusco`_
 - Add ``matmul`` (:pr:`2904`) `John A Kirkham`_
 - Support N-D arrays with ``matmul`` (:pr:`2909`) `John A Kirkham`_
 - Add ``vdot`` (:pr:`2910`) `John A Kirkham`_
@@ -16,7 +17,7 @@ Array
 DataFrame
 +++++++++
 
--
+- Prevent ``bool()`` coercion from calling compute (:pr:`2958`) `Albert DeFusco`_
 
 
 Core
@@ -866,3 +867,4 @@ Other
 .. _`@fjetter`: https://github.com/fjetter
 .. _`@Ced4`: https://github.com/Ced4
 .. _`Ian Hopkinson`: https://https://github.com/IanHopkinson
+.. _`Albert DeFusco`: https://github.com/AlbertDeFusco
