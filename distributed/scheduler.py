@@ -554,7 +554,7 @@ class Scheduler(ServerNode):
         setproctitle("dask-scheduler [closed]")
 
     @gen.coroutine
-    def close_worker(self, stream=None, worker=None):
+    def close_worker(self, stream=None, worker=None, safe=None):
         """ Remove a worker from the cluster
 
         This both removes the worker from our local state and also sends a
@@ -567,7 +567,7 @@ class Scheduler(ServerNode):
             nanny_addr = self.get_worker_service_addr(worker, 'nanny')
             address = nanny_addr or worker
 
-            self.remove_worker(address=worker)
+            self.remove_worker(address=worker, safe=safe)
 
             with rpc(address, connection_args=self.connection_args) as r:
                 try:
@@ -575,7 +575,7 @@ class Scheduler(ServerNode):
                 except EnvironmentError as e:
                     logger.info("Exception from worker while closing: %s", e)
 
-            self.remove_worker(address=worker)
+            self.remove_worker(address=worker, safe=safe)
 
     @gen.coroutine
     def cleanup(self):
@@ -1995,7 +1995,7 @@ class Scheduler(ServerNode):
                     raise gen.Return([])
 
             if close_workers and workers:
-                yield [self.close_worker(worker=w) for w in workers]
+                yield [self.close_worker(worker=w, safe=True) for w in workers]
             if remove:
                 for w in workers:
                     self.remove_worker(address=w, safe=True)

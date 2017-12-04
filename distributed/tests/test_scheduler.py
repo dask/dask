@@ -717,6 +717,15 @@ def test_retire_workers(c, s, a, b):
     assert not workers
 
 
+@gen_cluster(client=True)
+def test_retire_workers_no_suspicious_tasks(c, s, a, b):
+    future = c.submit(slowinc, 100, delay=0.5, workers=a.address, allow_other_workers=True)
+    yield gen.sleep(0.2)
+    yield s.retire_workers(workers=[a.address])
+
+    assert all(v==0 for v in s.suspicious_tasks.values())
+
+
 @slow
 @pytest.mark.skipif(sys.platform.startswith('win'),
                     reason="file descriptors not really a thing")
