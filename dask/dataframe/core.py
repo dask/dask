@@ -412,15 +412,15 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     def __bool__(self):
         raise ValueError("The truth value of a {0} is ambiguous. "
-                         "Use a.empty, a.bool(), a.item(), a.any() or a.all()."
+                         "Use a.any() or a.all()."
                          .format(self.__class__.__name__))
 
     __nonzero__ = __bool__  # python 2
 
-    def _scalarfunc(self, func):
+    def _scalarfunc(self, cast_type):
         def wrapper():
             raise TypeError("cannot convert the series to "
-                            "{0}".format(str(func)))
+                            "{0}".format(str(cast_type)))
 
         return wrapper
 
