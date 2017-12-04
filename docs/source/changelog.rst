@@ -17,7 +17,7 @@ DataFrame
 +++++++++
 
 - ``DataFrame.read_sql()`` (:pr:`2928`) to an empty database tables returns an empty dask dataframe `Apostolos Vlachopoulos`_
-
+- ``DataFrame.merge()`` (:pr:`2960`) now supports merging on a combination of columns and the index `Jon Mease`_
 
 Core
 ++++
