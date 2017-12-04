@@ -103,3 +103,14 @@ def test_nested_schedulers():
     assert outer_callback.dsk == outer_dsk
     assert inner_callback.dsk == inner_dsk
     assert not _globals['callbacks']
+
+
+def test_add_remove_mutates_not_replaces():
+    g = _globals.copy()
+
+    assert not g['callbacks']
+
+    with Callback():
+        pass
+
+    assert not g['callbacks']
