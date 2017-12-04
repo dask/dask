@@ -1184,19 +1184,19 @@ class Array(Base):
     def __bool__(self):
         if self.size > 1:
             raise ValueError("The truth value of a {0} is ambiguous. "
-                             "Use a.empty, a.bool(), a.item(), a.any() or a.all()."
+                             "Use a.any() or a.all()."
                              .format(self.__class__.__name__))
         else:
             return bool(self.compute())
 
     __nonzero__ = __bool__  # python 2
 
-    def _scalarfunc(self, func):
+    def _scalarfunc(self, cast_type):
         if self.size > 1:
             raise TypeError("Only length-1 arrays can be converted "
                             "to Python scalars")
         else:
-            return func(self.compute())
+            return cast_type(self.compute())
 
     def __int__(self):
         return self._scalarfunc(int)
