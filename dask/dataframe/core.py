@@ -420,7 +420,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     def _scalarfunc(self, func):
         def wrapper():
             raise TypeError("cannot convert the series to "
-                            "{0}".format(str(converter)))
+                            "{0}".format(str(func)))
 
         return wrapper
 

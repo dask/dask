@@ -877,10 +877,10 @@ def test_coerce():
     d1 = da.from_array(np.array([1]), chunks=(1,))
     with dask.set_options(get=dask.get):
         for d in d0, d1:
-            assert bool(d) == True
+            assert bool(d) is True
             assert int(d) == 1
             assert float(d) == 1.0
-            assert complex(d) == (1+0j)
+            assert complex(d) == complex(1)
 
     a2 = np.arange(2)
     d2 = da.from_array(a2, chunks=(2,))
