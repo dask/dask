@@ -84,6 +84,7 @@ def test_merge_known_to_known(df_left, df_right, ddf_left, ddf_right, on, how):
     # Assertions
     assert_eq(result, expected)
     assert_eq(result.divisions, (1, 2, 3, 4))
+    assert len(result.__dask_graph__()) <= 20
 
 
 @pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
@@ -99,6 +100,7 @@ def test_merge_known_to_single(df_left, df_right, ddf_left, ddf_right_single, on
     # Assertions
     assert_eq(result, expected)
     assert_eq(result.divisions, ddf_left.divisions)
+    assert len(result.__dask_graph__()) <= 5
 
 
 @pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
@@ -114,6 +116,7 @@ def test_merge_single_to_known(df_left, df_right, ddf_left_single, ddf_right, on
     # Assertions
     assert_eq(result, expected)
     assert_eq(result.divisions, ddf_right.divisions)
+    assert len(result.__dask_graph__()) <= 5
 
 
 @pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
@@ -126,6 +129,7 @@ def test_merge_known_to_unknown(df_left, df_right, ddf_left, ddf_right_unknown, 
     result = ddf_left.merge(ddf_right_unknown, on=on, how=how)
     assert_eq(result, expected)
     assert_eq(result.divisions, (None, None, None))
+    assert len(result.__dask_graph__()) >= 40
 
 
 @pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
@@ -140,6 +144,7 @@ def test_merge_unknown_to_known(df_left, df_right, ddf_left_unknown, ddf_right, 
     # Assertions
     assert_eq(result, expected)
     assert_eq(result.divisions, (None, None, None))
+    assert len(result.__dask_graph__()) >= 40
 
 
 @pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
@@ -152,3 +157,4 @@ def test_merge_unknown_to_unknown(df_left, df_right, ddf_left_unknown, ddf_right
     result = ddf_left_unknown.merge(ddf_right_unknown, on=on, how=how)
     assert_eq(result, expected)
     assert_eq(result.divisions, (None, None, None))
+    assert len(result.__dask_graph__()) >= 40
