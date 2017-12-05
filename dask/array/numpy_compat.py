@@ -372,7 +372,6 @@ def _make_sliced_dtype(dtype, index):
 
 def _make_sliced_dtype_new(dtype, index):
     # For https://github.com/numpy/numpy/pull/6053
-    # TODO: handle either positional or named indexing
     new = {
         'names': index,
         'formats': [dtype.fields[name][0] for name in index],
