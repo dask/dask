@@ -309,6 +309,7 @@ def concat(dfs, axis=0, join='outer', uniform=False):
                         parts.append(data)
                 out[col] = union_categoricals(parts)
             out = out.reindex(columns=cat_mask.index)
+            ind = concat([df.index for df in dfs2])
         else:
             # pandas may raise a RuntimeWarning for comparing ints and strs
             with warnings.catch_warnings():
