@@ -410,6 +410,31 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return self.reduction(len, np.sum, token='len', meta=int,
                               split_every=False).compute()
 
+    def __bool__(self):
+        raise ValueError("The truth value of a {0} is ambiguous. "
+                         "Use a.any() or a.all()."
+                         .format(self.__class__.__name__))
+
+    __nonzero__ = __bool__  # python 2
+
+    def _scalarfunc(self, cast_type):
+        def wrapper():
+            raise TypeError("cannot convert the series to "
+                            "{0}".format(str(cast_type)))
+
+        return wrapper
+
+    def __float__(self):
+        return self._scalarfunc(float)
+
+    def __int__(self):
+        return self._scalarfunc(int)
+
+    __long__ = __int__  # python 2
+
+    def __complex__(self):
+        return self._scalarfunc(complex)
+
     @insert_meta_param_description(pad=12)
     def map_partitions(self, func, *args, **kwargs):
         """ Apply Python function on each DataFrame partition.

@@ -2806,3 +2806,20 @@ def test_sample_empty_partitions():
     # smoke test sample on empty partitions
     res = ddf2.compute()
     assert res.dtypes.equals(ddf2.dtypes)
+
+
+def test_coerce():
+    df = pd.DataFrame(np.arange(100).reshape((10,10)))
+    ddf = dd.from_pandas(df, npartitions=2)
+    funcs = (int, float, complex)
+    for d,t in product(funcs,(ddf, ddf[0])):
+        pytest.raises(TypeError, lambda: t(d))
+
+
+def test_bool():
+    df = pd.DataFrame(np.arange(100).reshape((10,10)))
+    ddf = dd.from_pandas(df, npartitions=2)
+    conditions = [ddf, ddf[0], ddf == ddf, ddf[0] == ddf[0]]
+    for cond in conditions:
+        with pytest.raises(ValueError):
+            bool(cond)

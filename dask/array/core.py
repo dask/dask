@@ -1181,19 +1181,33 @@ class Array(Base):
         from ..dataframe import from_dask_array
         return from_dask_array(self, columns=columns)
 
-    def __int__(self):
-        return int(self.compute())
-
     def __bool__(self):
-        return bool(self.compute())
+        if self.size > 1:
+            raise ValueError("The truth value of a {0} is ambiguous. "
+                             "Use a.any() or a.all()."
+                             .format(self.__class__.__name__))
+        else:
+            return bool(self.compute())
 
     __nonzero__ = __bool__  # python 2
 
+    def _scalarfunc(self, cast_type):
+        if self.size > 1:
+            raise TypeError("Only length-1 arrays can be converted "
+                            "to Python scalars")
+        else:
+            return cast_type(self.compute())
+
+    def __int__(self):
+        return self._scalarfunc(int)
+
+    __long__ = __int__  # python 2
+
     def __float__(self):
-        return float(self.compute())
+        return self._scalarfunc(float)
 
     def __complex__(self):
-        return complex(self.compute())
+        return self._scalarfunc(complex)
 
     def __setitem__(self, key, value):
         from .routines import where
