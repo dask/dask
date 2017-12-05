@@ -1918,7 +1918,7 @@ class Scheduler(ServerNode):
         Find workers that we can close with low cost
 
         This returns a list of workers that are good candidates to retire.
-        These workers are idle (not running anything) and are storing
+        These workers are not running anything and are storing
         relatively little data relative to their peers.  If all workers are
         idle then we still maintain enough workers to have enough RAM to store
         our data, with a comfortable buffer.
@@ -1946,8 +1946,8 @@ class Scheduler(ServerNode):
 
             limit = sum(limit_bytes.values())
             total = sum(worker_bytes.values())
-            idle = sorted(self.idle, key=worker_bytes.get, reverse=True)
-
+            idle = sorted([worker for worker in self.idle if not self.processing[worker]], 
+                          key=worker_bytes.get, reverse=True)
             to_close = []
 
             while idle:
