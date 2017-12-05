@@ -30,6 +30,7 @@ from toolz import pipe, map, reduce
 import numpy as np
 
 from . import chunk
+from .numpy_compat import _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
 from ..base import Base, tokenize, dont_optimize, compute_as_if_collection
 from ..context import _globals, globalmethod
@@ -1218,7 +1219,7 @@ class Array(Base):
             if isinstance(index, (str, unicode)):
                 dt = self.dtype[index]
             else:
-                dt = np.dtype([(name, self.dtype[name]) for name in index])
+                dt = _make_sliced_dtype(self.dtype, index)
 
             if dt.shape:
                 new_axis = list(range(self.ndim, self.ndim + len(dt.shape)))

@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+from distutils.version import LooseVersion
+
 from ..compatibility import builtins
 import numpy as np
 import warnings
@@ -359,3 +361,27 @@ except ImportError:  # pragma: no cover
         """
         a, mask = _replace_nan(a, 1)
         return np.cumprod(a, axis=axis, dtype=dtype, out=out)
+
+
+def _make_sliced_dtype(dtype, index):
+    if LooseVersion(np.__version__) >= LooseVersion("1.14.0"):
+        return _make_sliced_dtype_new(dtype, index)
+    else:
+        return _make_sliced_dtype_old(dtype, index)
+
+
+def _make_sliced_dtype_new(dtype, index):
+    # For https://github.com/numpy/numpy/pull/6053
+    # TODO: handle either positional or named indexing
+    new = {
+        'names': index,
+        'formats': [dtype.fields[name][0] for name in index],
+        'offsets': [dtype.fields[name][1] for name in index],
+        'itemsize': dtype.itemsize,  # is this true?
+    }
+    return np.dtype(new)
+
+
+def _make_sliced_dtype_old(dtype, index):
+    dt = np.dtype([(name, dtype[name]) for name in index])
+    return dt
