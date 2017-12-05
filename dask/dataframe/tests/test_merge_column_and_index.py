@@ -10,25 +10,41 @@ from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 # ========
 @pytest.fixture
 def df_left():
+    # Create frame with 10 partitions
+    # Frame has 11 distinct idx values
+    partition_sizes = np.array([3, 4, 2, 5, 3, 2, 5, 9, 4, 7, 4])
+    idx = [i for i, s in enumerate(partition_sizes) for _ in range(s)]
+    k = [i for s in partition_sizes for i in range(s)]
+    vi = range(len(k))
+
     return pd.DataFrame(dict(
-        idx=[1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4],
-        k=[1, 2, 3, 1, 2, 3, 4, 1, 2, 1, 2],
-        v1=np.linspace(0, 1, 11)
+        idx=idx,
+        k=k,
+        v1=vi
     )).set_index(['idx'])
 
 
 @pytest.fixture
 def df_right():
+    # Create frame with 10 partitions
+    # Frame has 11 distinct idx values
+    partition_sizes = np.array([4, 2, 5, 3, 2, 5, 9, 4, 7, 4, 8])
+    idx = [i for i, s in enumerate(partition_sizes) for _ in range(s)]
+    k = [i for s in partition_sizes for i in range(s)]
+    vi = range(len(k))
+
     return pd.DataFrame(dict(
-        idx=[1, 1, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3],
-        k=[1, 2, 2, 3, 3, 4, 2, 3, 1, 1, 2, 3],
-        v2=np.linspace(10, 11, 12)
+        idx=idx,
+        k=k,
+        v1=vi
     )).set_index(['idx'])
 
 
 @pytest.fixture
 def ddf_left(df_left):
-    return dd.repartition(df_left, [1, 3, 4])
+    # Create frame with 10 partitions
+    # Skip division on 2 so there is one mismatch with ddf_right
+    return dd.repartition(df_left, [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11])
 
 
 @pytest.fixture
@@ -43,7 +59,9 @@ def ddf_left_single(df_left):
 
 @pytest.fixture
 def ddf_right(df_right):
-    return dd.repartition(df_right, [1, 2, 4])
+    # Create frame with 10 partitions
+    # Skip division on 3 so there is one mismatch with ddf_left
+    return dd.repartition(df_right, [0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11])
 
 
 @pytest.fixture
@@ -79,12 +97,12 @@ def test_merge_known_to_known(df_left, df_right, ddf_left, ddf_right, on, how):
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left.merge(ddf_right, on=on, how=how)
+    result = ddf_left.merge(ddf_right, on=on, how=how, shuffle='tasks')
 
     # Assertions
     assert_eq(result, expected)
-    assert_eq(result.divisions, (1, 2, 3, 4))
-    assert len(result.__dask_graph__()) <= 20
+    assert_eq(result.divisions, tuple(range(12)))
+    assert len(result.__dask_graph__()) < 80
 
 
 @pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
@@ -95,12 +113,12 @@ def test_merge_known_to_single(df_left, df_right, ddf_left, ddf_right_single, on
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left.merge(ddf_right_single, on=on, how=how)
+    result = ddf_left.merge(ddf_right_single, on=on, how=how, shuffle='tasks')
 
     # Assertions
     assert_eq(result, expected)
     assert_eq(result.divisions, ddf_left.divisions)
-    assert len(result.__dask_graph__()) <= 5
+    assert len(result.__dask_graph__()) < 30
 
 
 @pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
@@ -111,12 +129,12 @@ def test_merge_single_to_known(df_left, df_right, ddf_left_single, ddf_right, on
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left_single.merge(ddf_right, on=on, how=how)
+    result = ddf_left_single.merge(ddf_right, on=on, how=how, shuffle='tasks')
 
     # Assertions
     assert_eq(result, expected)
     assert_eq(result.divisions, ddf_right.divisions)
-    assert len(result.__dask_graph__()) <= 5
+    assert len(result.__dask_graph__()) < 30
 
 
 @pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
@@ -126,10 +144,12 @@ def test_merge_known_to_unknown(df_left, df_right, ddf_left, ddf_right_unknown, 
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left.merge(ddf_right_unknown, on=on, how=how)
+    result = ddf_left.merge(ddf_right_unknown, on=on, how=how, shuffle='tasks')
+
+    # Assertions
     assert_eq(result, expected)
-    assert_eq(result.divisions, (None, None, None))
-    assert len(result.__dask_graph__()) >= 40
+    assert_eq(result.divisions, tuple(None for _ in range(11)))
+    assert len(result.__dask_graph__()) >= 400
 
 
 @pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
@@ -139,12 +159,12 @@ def test_merge_unknown_to_known(df_left, df_right, ddf_left_unknown, ddf_right, 
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left_unknown.merge(ddf_right, on=on, how=how)
+    result = ddf_left_unknown.merge(ddf_right, on=on, how=how, shuffle='tasks')
 
     # Assertions
     assert_eq(result, expected)
-    assert_eq(result.divisions, (None, None, None))
-    assert len(result.__dask_graph__()) >= 40
+    assert_eq(result.divisions, tuple(None for _ in range(11)))
+    assert len(result.__dask_graph__()) > 400
 
 
 @pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
@@ -154,7 +174,9 @@ def test_merge_unknown_to_unknown(df_left, df_right, ddf_left_unknown, ddf_right
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Merge unknown to unknown
-    result = ddf_left_unknown.merge(ddf_right_unknown, on=on, how=how)
+    result = ddf_left_unknown.merge(ddf_right_unknown, on=on, how=how, shuffle='tasks')
+
+    # Assertions
     assert_eq(result, expected)
-    assert_eq(result.divisions, (None, None, None))
-    assert len(result.__dask_graph__()) >= 40
+    assert_eq(result.divisions, tuple(None for _ in range(11)))
+    assert len(result.__dask_graph__()) > 400
