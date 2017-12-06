@@ -3046,7 +3046,7 @@ def _vindex(x, *indexes):
     array_indexes = {}
     for i, (ind, size) in enumerate(zip(indexes, x.shape)):
         if not isinstance(ind, slice):
-            ind = np.array(ind)
+            ind = np.array(ind, copy=True)
             if ind.dtype.kind == 'b':
                 raise IndexError('vindex does not support indexing with '
                                  'boolean arrays')
