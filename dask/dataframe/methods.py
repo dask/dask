@@ -259,14 +259,18 @@ def concat(dfs, axis=0, join='outer', uniform=False):
 
     # Handle categorical index separately
     dfs0_index = dfs[0].index
-    if (isinstance(dfs0_index, pd.CategoricalIndex) or
-            (isinstance(dfs0_index, pd.MultiIndex) and
-             any(isinstance(i, pd.CategoricalIndex) for i in dfs0_index.levels))):
+
+    has_categoricalindex = (
+        isinstance(dfs0_index, pd.CategoricalIndex) or
+        (isinstance(dfs0_index, pd.MultiIndex) and
+         any(isinstance(i, pd.CategoricalIndex) for i in dfs0_index.levels)))
+
+    if has_categoricalindex:
         dfs2 = [df.reset_index(drop=True) for df in dfs]
         ind = concat([df.index for df in dfs])
     else:
         dfs2 = dfs
-        ind = None
+        ind = concat([df.index for df in dfs2])
 
     # Concatenate the partitions together, handling categories as needed
     if (isinstance(dfs2[0], pd.DataFrame) if uniform else
@@ -309,7 +313,6 @@ def concat(dfs, axis=0, join='outer', uniform=False):
                         parts.append(data)
                 out[col] = union_categoricals(parts)
             out = out.reindex(columns=cat_mask.index)
-            ind = concat([df.index for df in dfs2])
         else:
             # pandas may raise a RuntimeWarning for comparing ints and strs
             with warnings.catch_warnings():
@@ -317,13 +320,12 @@ def concat(dfs, axis=0, join='outer', uniform=False):
                 out = pd.concat(dfs3, join=join)
     else:
         if is_categorical_dtype(dfs2[0].dtype):
-            if ind is None:
-                ind = concat([df.index for df in dfs2])
             return pd.Series(union_categoricals(dfs2), index=ind,
                              name=dfs2[0].name)
         out = pd.concat(dfs2, join=join)
     # Re-add the index if needed
     if ind is not None:
+        # This occurs when there's *not* a CategoricalIndex and....
         out.index = ind
     return out
 
