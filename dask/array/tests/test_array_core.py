@@ -873,12 +873,27 @@ def test_blockdims_from_blockshape():
 
 
 def test_coerce():
-    d = da.from_array(np.array([1]), chunks=(1,))
+    d0 = da.from_array(np.array(1), chunks=(1,))
+    d1 = da.from_array(np.array([1]), chunks=(1,))
     with dask.set_options(get=dask.get):
-        assert bool(d)
-        assert int(d)
-        assert float(d)
-        assert complex(d)
+        for d in d0, d1:
+            assert bool(d) is True
+            assert int(d) == 1
+            assert float(d) == 1.0
+            assert complex(d) == complex(1)
+
+    a2 = np.arange(2)
+    d2 = da.from_array(a2, chunks=(2,))
+    for func in (int, float, complex):
+        pytest.raises(TypeError, lambda :func(d2))
+
+
+def test_bool():
+    arr = np.arange(100).reshape((10,10))
+    darr = da.from_array(arr, chunks=(10,10))
+    with pytest.raises(ValueError):
+        bool(darr)
+        bool(darr == darr)
 
 
 def test_store_delayed_target():

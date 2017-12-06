@@ -63,6 +63,9 @@ Top level user functions:
    fabs
    fix
    flatnonzero
+   flip
+   flipud
+   fliplr
    floor
    fmax
    fmin
@@ -389,6 +392,9 @@ Other functions
 .. autofunction:: fabs
 .. autofunction:: fix
 .. autofunction:: flatnonzero
+.. autofunction:: flip
+.. autofunction:: flipud
+.. autofunction:: fliplr
 .. autofunction:: floor
 .. autofunction:: fmax
 .. autofunction:: fmin

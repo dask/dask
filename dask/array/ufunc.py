@@ -122,6 +122,7 @@ true_divide = ufunc(np.true_divide)
 floor_divide = ufunc(np.floor_divide)
 negative = ufunc(np.negative)
 power = ufunc(np.power)
+float_power = ufunc(np.float_power)
 remainder = ufunc(np.remainder)
 mod = ufunc(np.mod)
 # fmod: see below
