@@ -376,7 +376,7 @@ def _make_sliced_dtype_new(dtype, index):
         'names': index,
         'formats': [dtype.fields[name][0] for name in index],
         'offsets': [dtype.fields[name][1] for name in index],
-        'itemsize': dtype.itemsize,  # is this true?
+        'itemsize': dtype.itemsize,
     }
     return np.dtype(new)
 
