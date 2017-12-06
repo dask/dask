@@ -12,6 +12,8 @@ Array
 - Add ``vdot`` (:pr:`2910`) `John A Kirkham`_
 - Add ``meshgrid`` (:pr:`2938`) `John A Kirkham`_
 - Preserve singleton chunks in ``fftshift``/``ifftshift`` (:pr:`2733`) `John A Kirkham`_
+- Fix handling of negative indexes in ``vindex`` and raise errors for out of
+bounds indexes (:pr:`TBD`) `Stephan Hoyer`_
 
 DataFrame
 +++++++++

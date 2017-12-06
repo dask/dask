@@ -3029,10 +3029,19 @@ def _vindex(x, *indexes):
                     for i in range(len(indexes)))
         x = x[key]
 
-    array_indexes = {i: np.asarray(ind) for i, ind in enumerate(indexes)
-                     if not isinstance(ind, slice)}
-    if any(ind.dtype.kind == 'b' for ind in array_indexes.values()):
-        raise IndexError('vindex does not support indexing with boolean arrays')
+    array_indexes = {}
+    for i, (ind, size) in enumerate(zip(indexes, x.shape)):
+        if not isinstance(ind, slice):
+            ind = np.array(ind)
+            if ind.dtype.kind == 'b':
+                raise IndexError('vindex does not support indexing with '
+                                 'boolean arrays')
+            if ((ind >= size) | (ind < -size)).any():
+                raise IndexError('vindex key has entries out of bounds for '
+                                 'indexing along axis %s of size %s: %r'
+                                 % (i, size, ind))
+            ind %= size
+            array_indexes[i] = ind
 
     try:
         broadcast_indexes = np.broadcast_arrays(*array_indexes.values())
