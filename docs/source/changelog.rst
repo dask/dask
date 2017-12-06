@@ -7,17 +7,21 @@ Changelog
 Array
 +++++
 
+- Prevent ``bool()`` coercion from calling compute (:pr:`2958`) `Albert DeFusco`_
 - Add ``matmul`` (:pr:`2904`) `John A Kirkham`_
 - Support N-D arrays with ``matmul`` (:pr:`2909`) `John A Kirkham`_
 - Add ``vdot`` (:pr:`2910`) `John A Kirkham`_
 - Add ``meshgrid`` (:pr:`2938`) `John A Kirkham`_
 - Preserve singleton chunks in ``fftshift``/``ifftshift`` (:pr:`2733`) `John A Kirkham`_
 - Fix handling of negative indexes in ``vindex`` and raise errors for out of
-bounds indexes (:pr:`TBD`) `Stephan Hoyer`_
+bounds indexes (:pr:`2967`) `Stephan Hoyer`_
+- Add ``flip``, ``flipud``, ``fliplr`` (:pr:`2954`) `John A Kirkham`_
+- Add ``float_power`` ufunc (:pr:`2962`) `John A Kirkham`_
 
 DataFrame
 +++++++++
 
+- Prevent ``bool()`` coercion from calling compute (:pr:`2958`) `Albert DeFusco`_
 - ``DataFrame.read_sql()`` (:pr:`2928`) to an empty database tables returns an empty dask dataframe `Apostolos Vlachopoulos`_
 
 
@@ -868,3 +872,4 @@ Other
 .. _`@fjetter`: https://github.com/fjetter
 .. _`@Ced4`: https://github.com/Ced4
 .. _`Ian Hopkinson`: https://https://github.com/IanHopkinson
+.. _`Albert DeFusco`: https://github.com/AlbertDeFusco
