@@ -16,7 +16,8 @@ skip_if_np_lt_114 = pytest.mark.skipif(not NP_LE_114,
 
 
 @pytest.fixture(params=[
-    [('A', ('f4', (3, 2))), ('B', ('f4', 3)), ('C', ('f8', 3))]
+    [('A', ('f4', (3, 2))), ('B', ('f4', 3)), ('C', ('f8', 3))],
+    [('A', ('i4', (3, 2))), ('B', ('f4', 3)), ('C', ('S4', 3))],
 ])
 def dtype(request):
     return np.dtype(request.param)
