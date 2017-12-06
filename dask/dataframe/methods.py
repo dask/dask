@@ -325,7 +325,6 @@ def concat(dfs, axis=0, join='outer', uniform=False):
         out = pd.concat(dfs2, join=join)
     # Re-add the index if needed
     if ind is not None:
-        # This occurs when there's *not* a CategoricalIndex and....
         out.index = ind
     return out
 
