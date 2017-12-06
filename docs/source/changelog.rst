@@ -14,6 +14,7 @@ Array
 - Add ``meshgrid`` (:pr:`2938`) `John A Kirkham`_
 - Preserve singleton chunks in ``fftshift``/``ifftshift`` (:pr:`2733`) `John A Kirkham`_
 - Add ``flip``, ``flipud``, ``fliplr`` (:pr:`2954`) `John A Kirkham`_
+- Compatability for the upcoming NumPy 1.14 release (:pr:`2964`) `Tom Augspurger`_
 
 DataFrame
 +++++++++
