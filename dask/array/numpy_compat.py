@@ -365,13 +365,13 @@ except ImportError:  # pragma: no cover
 
 def _make_sliced_dtype(dtype, index):
     if LooseVersion(np.__version__) >= LooseVersion("1.14.0"):
-        return _make_sliced_dtype_new(dtype, index)
+        return _make_sliced_dtype_np_ge_14(dtype, index)
     else:
-        return _make_sliced_dtype_old(dtype, index)
+        return _make_sliced_dtype_np_lt_14(dtype, index)
 
 
-def _make_sliced_dtype_new(dtype, index):
-    # For https://github.com/numpy/numpy/pull/6053
+def _make_sliced_dtype_np_ge_14(dtype, index):
+    # For https://github.com/numpy/numpy/pull/6053, NumPy >= 1.14
     new = {
         'names': index,
         'formats': [dtype.fields[name][0] for name in index],
@@ -381,6 +381,7 @@ def _make_sliced_dtype_new(dtype, index):
     return np.dtype(new)
 
 
-def _make_sliced_dtype_old(dtype, index):
+def _make_sliced_dtype_np_lt_14(dtype, index):
+    # For numpy < 1.14
     dt = np.dtype([(name, dtype[name]) for name in index])
     return dt
