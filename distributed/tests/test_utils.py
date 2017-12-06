@@ -23,7 +23,8 @@ from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
                                truncate_exception, get_traceback, queue_to_iterator,
                                iterator_to_queue, _maybe_complex, read_block, seek_delimiter,
                                funcname, ensure_bytes, open_port, get_ip_interface, nbytes,
-                               set_thread_state, thread_state, LoopRunner)
+                               set_thread_state, thread_state, LoopRunner,
+                               parse_bytes)
 from distributed.utils_test import loop, loop_in_thread  # flake8: noqa
 from distributed.utils_test import div, has_ipv6, inc, throws, gen_test
 
@@ -477,3 +478,16 @@ def test_loop_runner_gen():
     runner.stop()
     assert not runner.is_started()
     yield gen.sleep(0.01)
+
+
+def test_parse_bytes():
+    assert parse_bytes('100') == 100
+    assert parse_bytes('100 MB') == 100000000
+    assert parse_bytes('100M') == 100000000
+    assert parse_bytes('5kB') == 5000
+    assert parse_bytes('5.4 kB') == 5400
+    assert parse_bytes('1kiB') == 1024
+    assert parse_bytes('1Mi') == 2**20
+    assert parse_bytes('1e6') == 1000000
+    assert parse_bytes('1e6 kB') == 1000000000
+    assert parse_bytes('MB') == 1000000

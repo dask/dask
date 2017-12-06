@@ -44,7 +44,8 @@ from .threadpoolexecutor import ThreadPoolExecutor, secede as tpe_secede
 from .utils import (funcname, get_ip, has_arg, _maybe_complex, log_errors,
                     ignoring, validate_key, mp_context, import_file,
                     silence_logging, thread_state, json_load_robust, key_split,
-                    format_bytes, DequeHandler, ThrottledGC, PeriodicCallback)
+                    format_bytes, DequeHandler, ThrottledGC, PeriodicCallback,
+                    parse_bytes)
 from .utils_comm import pack_data, gather_from_workers
 
 _ncores = mp_context.cpu_count()
@@ -115,13 +116,8 @@ class WorkerBase(ServerNode):
         self.connection_args = self.security.get_connection_args('worker')
         self.listen_args = self.security.get_listen_args('worker')
 
-        if memory_limit == 'auto':
-            memory_limit = int(TOTAL_MEMORY * min(1, self.ncores / _ncores))
-        with ignoring(TypeError):
-            memory_limit = float(memory_limit)
-        if isinstance(memory_limit, float) and memory_limit <= 1:
-            memory_limit = memory_limit * TOTAL_MEMORY
-        self.memory_limit = memory_limit
+        self.memory_limit = parse_memory_limit(memory_limit, self.ncores)
+
         self.paused = False
 
         if 'memory_target_fraction' in kwargs:
@@ -983,9 +979,10 @@ class Worker(WorkerBase):
     name: str, optional
     heartbeat_interval: int
         Milliseconds between heartbeats to scheduler
-    memory_limit: int
+    memory_limit: int, float, string
         Number of bytes of memory that this worker should use.
-        Set to zero for no limit
+        Set to zero for no limit.  Set to 'auto' for 60% of memory use.
+        Use strings or numbers like 5GB or 5e9
     memory_target_fraction: float
         Fraction of memory to try to stay beneath
     memory_spill_fraction: float
@@ -2630,3 +2627,17 @@ class Reschedule(Exception):
     the task.
     """
     pass
+
+
+def parse_memory_limit(memory_limit, ncores):
+    if memory_limit == 'auto':
+        memory_limit = int(TOTAL_MEMORY * min(1, ncores / _ncores))
+    with ignoring(ValueError, TypeError):
+        x = float(memory_limit)
+        if isinstance(x, float) and x <= 1:
+            return int(x * TOTAL_MEMORY)
+
+    if isinstance(memory_limit, (unicode, str)):
+        return parse_bytes(memory_limit)
+    else:
+        return int(memory_limit)

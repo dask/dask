@@ -67,6 +67,7 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help="Bytes of memory that the worker can use. "
                    "This can be an integer (bytes), "
                    "float (fraction of total system memory), "
+                   "string (like 5GB or 5000M), "
                    "'auto', or zero for no memory management")
 @click.option('--reconnect/--no-reconnect', default=True,
               help="Reconnect to scheduler if disconnected")

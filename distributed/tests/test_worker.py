@@ -1067,3 +1067,9 @@ def test_avoid_memory_monitor_if_zero_limit(c, s):
     yield c.submit(inc, 2)  # worker doesn't pause
 
     yield worker._close()
+
+
+@gen_cluster(ncores=[('127.0.0.1', 1)],
+        worker_kwargs={'memory_limit': '2e3 MB'})
+def test_parse_memory_limit(s, w):
+    assert w.memory_limit == 2e9

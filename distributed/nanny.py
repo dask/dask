@@ -21,8 +21,8 @@ from .process import AsyncProcess
 from .proctitle import enable_proctitle_on_children
 from .security import Security
 from .utils import (get_ip, mp_context, silence_logging, json_load_robust,
-        ignoring, PeriodicCallback)
-from .worker import _ncores, run, TOTAL_MEMORY
+        PeriodicCallback)
+from .worker import _ncores, run, parse_memory_limit
 
 
 logger = logging.getLogger(__name__)
@@ -75,13 +75,7 @@ class Nanny(ServerNode):
         self.quiet = quiet
         self.auto_restart = True
 
-        if memory_limit == 'auto':
-            memory_limit = int(TOTAL_MEMORY * min(1, self.ncores / _ncores))
-        with ignoring(TypeError):
-            memory_limit = float(memory_limit)
-        if isinstance(memory_limit, float) and memory_limit <= 1:
-            memory_limit = memory_limit * TOTAL_MEMORY
-        self.memory_limit = memory_limit
+        self.memory_limit = parse_memory_limit(memory_limit, self.ncores)
 
         if silence_logs:
             silence_logging(level=silence_logs)
