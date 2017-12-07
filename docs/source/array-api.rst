@@ -31,6 +31,7 @@ Top level user functions:
    atleast_2d
    atleast_3d
    bincount
+   block
    broadcast_to
    coarsen
    ceil
@@ -360,6 +361,7 @@ Other functions
 .. autofunction:: atleast_2d
 .. autofunction:: atleast_3d
 .. autofunction:: bincount
+.. autofunction:: block
 .. autofunction:: broadcast_to
 .. autofunction:: coarsen
 .. autofunction:: ceil
