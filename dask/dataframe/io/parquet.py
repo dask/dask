@@ -380,10 +380,6 @@ def _write_pyarrow(df, path, write_index=None, append=False,
         raise NotImplementedError("`append` not implemented for "
                                   "`engine='pyarrow'`")
 
-    if partition_on:
-        raise NotImplementedError("`partition_on` not implemented for "
-                                  "`engine='pyarrow'`")
-
     if write_index is None and df.known_divisions:
         write_index = True
 
@@ -396,20 +392,23 @@ def _write_pyarrow(df, path, write_index=None, append=False,
     write = delayed(_write_partition_pyarrow)
     first_kwargs = kwargs.copy()
     first_kwargs['metadata_path'] = fs.sep.join([path, '_common_metadata'])
-    writes = [write(part, open_with, template % i, write_index,
+    writes = [write(part, open_with, path, fs, template % i, write_index, partition_on,
                     **(kwargs if i else first_kwargs))
               for i, part in enumerate(df.to_delayed())]
     return delayed(writes)
 
 
-def _write_partition_pyarrow(df, open_with, filename, write_index,
-                             metadata_path=None, **kwargs):
+def _write_partition_pyarrow(df, open_with, path, fs, filename, write_index,
+                             partition_on, metadata_path=None, **kwargs):
     import pyarrow as pa
     from pyarrow import parquet
     t = pa.Table.from_pandas(df, preserve_index=write_index)
 
-    with open_with(filename, 'wb') as fil:
-        parquet.write_table(t, fil, **kwargs)
+    if partition_on:
+        parquet.write_to_dataset(t, path, partition_cols=partition_on, filesystem=fs)
+    else:
+        with open_with(filename, 'wb') as fil:
+            parquet.write_table(t, fil, **kwargs)
 
     if metadata_path is not None:
         with open_with(metadata_path, 'wb') as fil:
