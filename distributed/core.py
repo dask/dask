@@ -154,11 +154,11 @@ class Server(object):
         diff = now - self._last_tick
         self._last_tick = now
         if diff > config.get('tick-maximum-delay', 1000) / 1000:
-            logger.warn("Event loop was unresponsive for %.2fs.  "
-                        "This is often caused by long-running GIL-holding "
-                        "functions or moving large chunks of data. "
-                        "This can cause timeouts and instability.",
-                        diff)
+            logger.warning("Event loop was unresponsive for %.2fs.  "
+                           "This is often caused by long-running GIL-holding "
+                           "functions or moving large chunks of data. "
+                           "This can cause timeouts and instability.",
+                           diff)
         if self.digests is not None:
             self.digests['tick-duration'].add(diff)
 

@@ -2164,18 +2164,18 @@ class Worker(WorkerBase):
             # Try to free some memory while in paused state
             self._throttled_gc.collect()
             if not self.paused:
-                logger.warn("Worker is at %d%% memory usage. Pausing worker.  "
-                            "Process memory: %s -- Worker memory limit: %s",
-                            int(frac * 100),
-                            format_bytes(proc.memory_info().rss),
-                            format_bytes(self.memory_limit))
+                logger.warning("Worker is at %d%% memory usage. Pausing worker.  "
+                               "Process memory: %s -- Worker memory limit: %s",
+                               int(frac * 100),
+                               format_bytes(proc.memory_info().rss),
+                               format_bytes(self.memory_limit))
                 self.paused = True
         elif self.paused:
-            logger.warn("Worker is at %d%% memory usage. Resuming worker. "
-                        "Process memory: %s -- Worker memory limit: %s",
-                        int(frac * 100),
-                        format_bytes(proc.memory_info().rss),
-                        format_bytes(self.memory_limit))
+            logger.warning("Worker is at %d%% memory usage. Resuming worker. "
+                           "Process memory: %s -- Worker memory limit: %s",
+                           int(frac * 100),
+                           format_bytes(proc.memory_info().rss),
+                           format_bytes(self.memory_limit))
             self.paused = False
             self.ensure_computing()
 
@@ -2186,12 +2186,12 @@ class Worker(WorkerBase):
             need = memory - target
             while memory > target:
                 if not self.data.fast:
-                    logger.warn("Memory use is high but worker has no data "
-                                "to store to disk.  Perhaps some other process "
-                                "is leaking memory?  Process memory: %s -- "
-                                "Worker memory limit: %s",
-                                format_bytes(proc.memory_info().rss),
-                                format_bytes(self.memory_limit))
+                    logger.warning("Memory use is high but worker has no data "
+                                   "to store to disk.  Perhaps some other process "
+                                   "is leaking memory?  Process memory: %s -- "
+                                   "Worker memory limit: %s",
+                                   format_bytes(proc.memory_info().rss),
+                                   format_bytes(self.memory_limit))
                     break
                 k, v, weight = self.data.fast.evict()
                 del k, v

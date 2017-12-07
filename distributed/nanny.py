@@ -245,7 +245,7 @@ class Nanny(ServerNode):
         memory = psutil.Process(self.process.pid).memory_info().rss
         frac = memory / self.memory_limit
         if self.memory_terminate_fraction and frac > self.memory_terminate_fraction:
-            logger.warn("Worker exceeded 95% memory budget.  Restarting")
+            logger.warning("Worker exceeded 95% memory budget.  Restarting")
             self.process.process.terminate()
 
     def is_alive(self):
