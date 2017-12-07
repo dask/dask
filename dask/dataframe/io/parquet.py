@@ -6,7 +6,6 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from toolz import unique
 
 from ..core import DataFrame, Series
 from ..utils import UNKNOWN_CATEGORIES
@@ -18,11 +17,56 @@ from ...bytes.core import get_fs_paths_myopen
 __all__ = ('read_parquet', 'to_parquet')
 
 
-def _meta_from_dtypes(to_read_columns, file_columns, file_dtypes, index_cols):
+def _parse_pandas_metadata(pandas_metadata):
+    """Get the actual index and column names from `pandas_metadata`.
+
+    """
+    index_storage_names = pandas_metadata['index_columns']
+    # older metadatas will not have 'field_name'
+    pairs = [(x.get('field_name', x['name']), x['name'])
+             for x in pandas_metadata['columns']]
+    index_names = [real_name for (storage_name, real_name) in pairs
+                   if real_name != storage_name]
+    # Now, how do we disambiguate between columns and index names.
+    # For pyarrow files, it'll be '__index_level_d__' and they'll come at the end
+    # though I'd like to avoid that.
+    if not index_names:
+        # Old pyarrow, any fastparquet
+        index_names = index_storage_names.copy()
+        index_storage_names2 = set(index_storage_names)
+        column_names = [real_name for (storage_name, real_name)
+                        in pairs if real_name not in index_storage_names2]
+    else:
+        column_names = [real_name for (storage_name, real_name) in pairs
+                        if real_name == storage_name]
+
+    storage_name_mapping = dict(pairs)
+
+    return index_names, column_names, storage_name_mapping
+
+
+def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols):
+    """Get the final metadata for the dask.dataframe
+
+    Parameters
+    ----------
+    to_read_columns : list
+        All the columns to end up with, including index names
+    file_dtypes : dict
+        Mapping from column name to dtype for every element
+        of ``to_read_columns``.
+    index_cols : list
+        Subset of to_read_columns that should move
+        to the idnex
+
+    Returns
+    -------
+    meta : Series or DataFrame
+    """
+
     meta = pd.DataFrame({c: pd.Series([], dtype=d)
                          for (c, d) in file_dtypes.items()},
-                        columns=[c for c in file_columns
-                                 if c in file_dtypes])
+                        columns=to_read_columns)
     df = meta[list(to_read_columns)]
 
     if not index_cols:
@@ -89,8 +133,7 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
         categories = pf.categories
     dtypes = pf._dtypes(categories)
 
-    meta = _meta_from_dtypes(all_columns, tuple(pf.columns + list(pf.cats)),
-                             dtypes, index_col)
+    meta = _meta_from_dtypes(all_columns, dtypes, index_col)
 
     for cat in categories:
         if cat in meta:
@@ -270,11 +313,16 @@ def _write_metadata(writes, filenames, fmd, path, open_with, sep):
 # ----------------------------------------------------------------------
 # PyArrow interface
 
-
 def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
                   categories=None, index=None):
     from ...bytes.core import get_pyarrow_filesystem
     import pyarrow.parquet as pq
+
+    # In pyarrow, the physical storage field names may differ from
+    # the actual dataframe names. This is true for Index names when
+    # PyArrow >= 0.8.
+    # We would like to resolve these to the correct dataframe names
+    # as soon as possible.
 
     if filters is not None:
         raise NotImplementedError("Predicate pushdown not implemented")
@@ -288,36 +336,48 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
     dataset = pq.ParquetDataset(paths, filesystem=get_pyarrow_filesystem(fs))
     schema = dataset.schema.to_arrow_schema()
     has_pandas_metadata = schema.metadata is not None and b'pandas' in schema.metadata
+
+    if has_pandas_metadata:
+        pandas_metadata = json.loads(schema.metadata[b'pandas'].decode('utf8'))
+        index_names, column_names, storage_name_mapping = (
+            _parse_pandas_metadata(pandas_metadata)
+        )
+    else:
+        index_names = []
+        columns = column_names = schema.names
+        storage_name_mapping = {k: k for k in columns}
+
     task_name = 'read-parquet-' + tokenize(dataset, columns)
 
-    if columns is None:
-        all_columns = schema.names
-    else:
-        all_columns = columns
-
-    if not isinstance(all_columns, list):
-        out_type = Series
-        all_columns = [all_columns]
-    else:
-        out_type = DataFrame
+    out_type = DataFrame  # maybe overridden later
+    if columns is not None:
+        if not isinstance(columns, list):
+            columns = [columns]
+            out_type = Series
+        column_names = columns
 
     if index is False:
-        index_cols = []
-    elif index is None:
-        if has_pandas_metadata:
-            pandas_metadata = json.loads(schema.metadata[b'pandas'].decode('utf8'))
-            index_cols = pandas_metadata.get('index_columns', [])
-        else:
-            index_cols = []
-    else:
-        index_cols = index if isinstance(index, list) else [index]
+        index_names = []
 
-    if index_cols:
-        all_columns = list(unique(all_columns + index_cols))
+    all_columns = index_names + column_names
+
+    # if index is False:
+    #     index_cols = []
+    # elif index is None:
+    #     if has_pandas_metadata:
+    #         index_cols = pandas_metadata.get('index_columns', [])
+    #     else:
+    #         index_cols = []
+    # else:
+    #     index_cols = index if isinstance(index, list) else [index]
+
+    # if index_cols:
+    #     all_columns = list(unique(all_columns + index_cols))
 
     dtypes = _get_pyarrow_dtypes(schema)
+    dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
-    meta = _meta_from_dtypes(all_columns, schema.names, dtypes, index_cols)
+    meta = _meta_from_dtypes(all_columns, dtypes, index_names)
 
     if out_type == Series:
         assert len(meta.columns) == 1
@@ -330,7 +390,7 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
                              file_opener,
                              piece,
                              all_columns,
-                             index_cols,
+                             index_names,
                              out_type == Series,
                              dataset.partitions)
             for i, piece in enumerate(dataset.pieces)

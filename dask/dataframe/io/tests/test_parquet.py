@@ -12,6 +12,7 @@ import dask
 import dask.multiprocessing
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
+from dask.dataframe.io.parquet import _parse_pandas_metadata
 
 try:
     import fastparquet
@@ -613,6 +614,74 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     ddf.to_parquet(fn, compression=compression, engine=engine)
     out = dd.read_parquet(fn, engine=engine)
     assert_eq(out, df, check_index=(engine != 'fastparquet'))
+
+
+@pytest.fixture(params=[
+    # fastparquet 0.1.3
+    {'columns': [{'metadata': None,
+                  'name': 'idx',
+                  'numpy_type': 'int64',
+                  'pandas_type': 'int64'},
+                 {'metadata': None,
+                  'name': 'A',
+                  'numpy_type': 'int64',
+                  'pandas_type': 'int64'}],
+     'index_columns': ['idx'],
+     'pandas_version': '0.21.0'},
+
+    # pyarrow 0.7.1
+    {'columns': [{'metadata': None,
+                  'name': 'A',
+                  'numpy_type': 'int64',
+                  'pandas_type': 'int64'},
+                 {'metadata': None,
+                  'name': 'idx',
+                  'numpy_type': 'int64',
+                  'pandas_type': 'int64'}],
+     'index_columns': ['idx'],
+     'pandas_version': '0.21.0'},
+
+    # pyarrow 0.8.0
+    {'column_indexes': [{'field_name': None,
+                         'metadata': {'encoding': 'UTF-8'},
+                         'name': None,
+                         'numpy_type': 'object',
+                         'pandas_type': 'unicode'}],
+     'columns': [{'field_name': 'A',
+                  'metadata': None,
+                  'name': 'A',
+                  'numpy_type': 'int64',
+                  'pandas_type': 'int64'},
+                 {'field_name': '__index_level_0__',
+                  'metadata': None,
+                  'name': 'idx',
+                  'numpy_type': 'int64',
+                  'pandas_type': 'int64'}],
+     'index_columns': ['__index_level_0__'],
+     'pandas_version': '0.21.0'},
+
+    # TODO: fastparquet update
+])
+def pandas_metadata(request):
+    return request.param
+
+
+def test_parse_pandas_metadata(pandas_metadata):
+    index_names, column_names, mapping = _parse_pandas_metadata(pandas_metadata)
+    expected = (
+        ['idx'], ['A']
+    )
+    assert index_names, column_names == expected
+
+    # for new pyarrow
+    if pandas_metadata['index_columns'] == ['__index_level_0__']:
+        assert mapping == {'__index_level_0__': 'idx', 'A': 'A'}
+    else:
+        assert mapping == {'idx': 'idx', 'A': 'A'}
+
+    assert isinstance(mapping, dict)
+
+
 def test_pyarrow_raises_filters_categoricals(tmpdir):
     check_pyarrow()
     tmp = str(tmpdir)
