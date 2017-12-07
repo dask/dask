@@ -613,3 +613,34 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     ddf.to_parquet(fn, compression=compression, engine=engine)
     out = dd.read_parquet(fn, engine=engine)
     assert_eq(out, df, check_index=(engine != 'fastparquet'))
+def test_pyarrow_raises_filters_categoricals(tmpdir):
+    check_pyarrow()
+    tmp = str(tmpdir)
+    data = pd.DataFrame({"A": [1, 2]})
+    df = dd.from_pandas(data, npartitions=2)
+
+    df.to_parquet(tmp, write_index=False, engine="pyarrow")
+
+    with pytest.raises(NotImplementedError) as m:
+        dd.read_parquet(tmp, engine="pyarrow", filters=["A>1"])
+
+    with pytest.raises(NotImplementedError) as m:
+        dd.read_parquet(tmp, engine="pyarrow", categories=['A'])
+
+    assert m.match("Categorical reads not yet ")
+
+
+def test_read_no_metadata(tmpdir, engine):
+    # use pyarrow.parquet to create a parquet file without
+    # pandas metadata
+    pa = pytest.importorskip("pyarrow")
+    import pyarrow.parquet as pq
+    tmp = str(tmpdir) + "table.parq"
+
+    table = pa.Table.from_arrays([pa.array([1, 2, 3]),
+                                  pa.array([3, 4, 5])],
+                                 names=['A', 'B'])
+    pq.write_table(table, tmp)
+    result = dd.read_parquet(tmp, engine=engine)
+    expected = pd.DataFrame({"A": [1, 2, 3], "B": [3, 4, 5]})
+    assert_eq(result, expected)
