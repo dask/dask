@@ -49,6 +49,7 @@ from .utils_comm import (WrappedKey, unpack_remotedata, pack_data,
 from .cfexecutor import ClientExecutor
 from .compatibility import (Queue as pyQueue, Empty, isqueue,
                             get_thread_identity, html_escape)
+from .config import config
 from .core import connect, rpc, clean_exception, CommClosedError
 from .metrics import time
 from .node import Node
@@ -514,6 +515,12 @@ class Client(Node):
         self._periodic_callbacks = []
         pc = PeriodicCallback(self._update_scheduler_info, 2000, io_loop=self.loop)
         self._periodic_callbacks.append(pc)
+
+        if address is None and 'scheduler-address' in config:
+            address = config['scheduler-address']
+            if address:
+                logger.info("Config value `scheduler-address` found: %s",
+                            address)
 
         if hasattr(address, "scheduler_address"):
             # It's a LocalCluster or LocalCluster-compatible object

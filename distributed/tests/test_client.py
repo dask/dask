@@ -5059,5 +5059,20 @@ def test_avoid_delayed_finalize(c, s, a, b):
     assert list(s.tasks) == [future.key] == [x.key]
 
 
+@gen_cluster()
+def test_config_scheduler_address(s, a, b):
+    from distributed import config
+    config['scheduler-address'] = s.address
+    with captured_logger('distributed.client') as sio:
+        c = yield Client(asynchronous=True)
+        assert c.scheduler.address == s.address
+
+    text = sio.getvalue()
+    assert s.address in text
+
+    del config['scheduler-address']
+    yield c.close()
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # flake8: noqa
