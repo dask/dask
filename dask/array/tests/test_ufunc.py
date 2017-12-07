@@ -38,8 +38,15 @@ binary_ufuncs = ['add', 'arctan2', 'copysign', 'divide', 'equal',
                  'greater_equal', 'hypot', 'ldexp', 'less', 'less_equal',
                  'logaddexp', 'logaddexp2', 'logical_and', 'logical_or',
                  'logical_xor', 'maximum', 'minimum', 'mod', 'multiply',
-                 'nextafter', 'not_equal', 'power', 'float_power', 'remainder',
-                 'subtract', 'true_divide']
+                 'nextafter', 'not_equal', 'power', 'remainder', 'subtract',
+                 'true_divide']
+
+try:
+    da.float_power
+    binary_ufuncs += ['float_power']
+except AttributeError:
+    # Absent for NumPy versions prior to 1.12.
+    pass
 
 unary_ufuncs = ['absolute', 'arccos', 'arccosh', 'arcsin', 'arcsinh', 'arctan',
                 'arctanh', 'cbrt', 'ceil', 'conj', 'cos', 'cosh', 'deg2rad',
