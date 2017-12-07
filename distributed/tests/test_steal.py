@@ -36,7 +36,6 @@ teardown_module = nodebug_teardown_module
 def test_work_stealing(c, s, a, b):
     [x] = yield c._scatter([1], workers=a.address)
     futures = c.map(slowadd, range(50), [x] * 50)
-    yield gen.sleep(0.1)
     yield wait(futures)
     assert len(a.data) > 10
     assert len(b.data) > 10
@@ -224,7 +223,8 @@ def test_dont_steal_host_restrictions(c, s, a, b):
     yield future
 
     futures = c.map(slowinc, range(100), delay=0.1, workers='127.0.0.1')
-    yield gen.sleep(0.1)
+    while len(a.task_state) < 10:
+        yield gen.sleep(0.01)
     assert len(a.task_state) == 100
     assert len(b.task_state) == 0
 
@@ -242,7 +242,8 @@ def test_dont_steal_resource_restrictions(c, s, a, b):
     yield future
 
     futures = c.map(slowinc, range(100), delay=0.1, resources={'A': 1})
-    yield gen.sleep(0.1)
+    while len(a.task_state) < 10:
+        yield gen.sleep(0.01)
     assert len(a.task_state) == 100
     assert len(b.task_state) == 0
 
@@ -474,7 +475,8 @@ def test_balance(inp, expected):
     test()
 
 
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2, Worker=Nanny)
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2, Worker=Nanny,
+             timeout=20)
 def test_restart(c, s, a, b):
     futures = c.map(slowinc, range(100), delay=0.1, workers=a.address,
                     allow_other_workers=True)
@@ -485,7 +487,7 @@ def test_restart(c, s, a, b):
     assert any(st for st in steal.stealable_all)
     assert any(x for L in steal.stealable.values() for x in L)
 
-    yield c._restart()
+    yield c.restart(timeout=10)
 
     assert not any(x for x in steal.stealable_all)
     assert not any(x for L in steal.stealable.values() for x in L)

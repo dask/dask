@@ -89,7 +89,7 @@ def test_timeout(c, s, a, b):
     start = time()
     with pytest.raises(gen.TimeoutError):
         yield v.get(timeout=0.1)
-    assert time() - start < 0.5
+    assert 0.05 < time() - start < 2.0
 
 
 @gen_cluster(client=True)
