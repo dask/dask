@@ -1,6 +1,26 @@
 Changelog
 =========
 
+1.20.2 - 2017-12-07
+-------------------
+
+-  Clear deque handlers after each test (:pr:`1586`) `Antoine Pitrou`_
+-  Handle deserialization in FutureState.set_error (:pr:`1592`) `Matthew Rocklin`_
+-  Add process leak checker to tests (:pr:`1596`) `Antoine Pitrou`_
+-  Customize process title for subprocess (:pr:`1590`) `Antoine Pitrou`_
+-  Make linting a separate CI job (:pr:`1599`) `Antoine Pitrou`_
+-  Fix error from get_client() with no global client (:pr:`1595`) `Daniel Li`_
+-  Remove Worker.host_health, correct WorkerTable metrics (:pr:`1600`) `Matthew Rocklin`_
+-  Don't mark tasks as suspicious when retire_workers called. Addresses (:pr:`1607`) `Russ Bubley`_
+-  Do not include processing workers in workers_to_close (:pr:`1609`) `Russ Bubley`_
+-  Disallow simultaneous scale up and down in Adaptive (:pr:`1608`) `Russ Bubley`_
+-  Parse bytestrings in --memory-limit (:pr:`1615`) `Matthew Rocklin`_
+-  Use environment variable for scheduler address if present (:pr:`1610`) `Matthew Rocklin`_
+-  Fix deprecation warning from logger.warn (:pr:`1616`) `Brett Naul`_
+
+
+
+
 1.20.1 - 2017-11-26
 -------------------
 
@@ -425,8 +445,10 @@ significantly without many new features.
 .. _`Mike DePalatis`: https://github.com/mivade
 .. _`Matthew Rocklin`: https://github.com/mrocklin
 .. _`Jim Crist`: https://github.com/jcrist
-.. _`Ian Hopkinson`: https://https://github.com/IanHopkinson
-.. _`@rbubley`: https://https://github.com/rbubley
-.. _`Kelvyn Yang`: https://https://github.com/kelvynyang
-.. _`Scott Sievert`: https://https://github.com/stsievert
-.. _`Xander Johnson`: https://https://github.com/metasyn
+.. _`Ian Hopkinson`: https://github.com/IanHopkinson
+.. _`@rbubley`: https://github.com/rbubley
+.. _`Kelvyn Yang`: https://github.com/kelvynyang
+.. _`Scott Sievert`: https://github.com/stsievert
+.. _`Xander Johnson`: https://github.com/metasyn
+.. _`Daniel Li`: https://github.com/li-dan
+.. _`Brett Naul`: https://github.com/bnaul
