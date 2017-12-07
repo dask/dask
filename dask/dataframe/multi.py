@@ -522,8 +522,6 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
 
     If all divisions are known and ordered, divisions are kept.
 
-    >>> import dask.dataframe as dd
-    >>> import pandas as pd
     >>> a                                               # doctest: +SKIP
     dd.DataFrame<x, divisions=(1, 3, 5)>
     >>> b                                               # doctest: +SKIP
@@ -557,9 +555,10 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
 
     Different categoricals are unioned
 
-    >>> a = dd.from_pandas(pd.Series(['a', 'b'], dtype='category'), 1)
-    >>> b = dd.from_pandas(pd.Series(['a', 'c'], dtype='category'), 1)
-    >>> dd.concat([a, b], interleave_partitions=True).dtype
+    >> dd.concat([                                     # doctest: +SKIP
+    ...     dd.from_pandas(pd.Series(['a', 'b'], dtype='category'), 1),
+    ...     dd.from_pandas(pd.Series(['a', 'c'], dtype='category'), 1),
+    ... ], interleave_partitions=True).dtype
     CategoricalDtype(categories=['a', 'b', 'c'], ordered=False)
     """
     if not isinstance(dfs, list):
