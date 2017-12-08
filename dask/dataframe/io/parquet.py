@@ -371,6 +371,9 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
     task_name = 'read-parquet-' + tokenize(dataset, columns)
 
     out_type = DataFrame  # maybe overridden later
+
+    # Resolve user-provided columns and index. Goal is to filter down
+    # all_columns to just the desired subset
     if columns is not None:
         if not isinstance(columns, list):
             columns = [columns]
@@ -381,19 +384,6 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
         index_names = []
 
     all_columns = index_names + column_names
-
-    # if index is False:
-    #     index_cols = []
-    # elif index is None:
-    #     if has_pandas_metadata:
-    #         index_cols = pandas_metadata.get('index_columns', [])
-    #     else:
-    #         index_cols = []
-    # else:
-    #     index_cols = index if isinstance(index, list) else [index]
-
-    # if index_cols:
-    #     all_columns = list(unique(all_columns + index_cols))
 
     dtypes = _get_pyarrow_dtypes(schema)
     dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
