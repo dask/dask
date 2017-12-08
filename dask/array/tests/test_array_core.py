@@ -1748,12 +1748,22 @@ def test_vindex_nd():
     assert_eq(result, x.T)
 
 
+def test_vindex_negative():
+    x = np.arange(10)
+    d = da.from_array(x, chunks=(5, 5))
+
+    result = d.vindex[np.array([0, -1])]
+    assert_eq(result, x[np.array([0, -1])])
+
+
 def test_vindex_errors():
     d = da.ones((5, 5, 5), chunks=(3, 3, 3))
     pytest.raises(IndexError, lambda: d.vindex[np.newaxis])
     pytest.raises(IndexError, lambda: d.vindex[:5])
     pytest.raises(IndexError, lambda: d.vindex[[1, 2], [1, 2, 3]])
     pytest.raises(IndexError, lambda: d.vindex[[True] * 5])
+    pytest.raises(IndexError, lambda: d.vindex[[0], [5]])
+    pytest.raises(IndexError, lambda: d.vindex[[0], [-6]])
 
 
 def test_vindex_merge():
