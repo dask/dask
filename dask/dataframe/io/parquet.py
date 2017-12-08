@@ -51,7 +51,7 @@ def _parse_pandas_metadata(pandas_metadata):
         # 2. Those versions did not allow for duplicate index / column names
         # So we know that if a name is in index_storage_names, it must be an
         # index name
-        index_names = index_storage_names.copy()
+        index_names = list(index_storage_names)  # make a copy
         index_storage_names2 = set(index_storage_names)
         column_names = [real_name for (storage_name, real_name)
                         in pairs if real_name not in index_storage_names2]
