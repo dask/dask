@@ -49,17 +49,27 @@ def check_pyarrow():
         pytest.skip('pyarrow not found')
 
 
-def write_read_engines(xfail_arrow_to_fastparquet=True):
+def write_read_engines(xfail_arrow_to_fastparquet=True,
+                       xfail_fastparquet_to_pyarrow=False):
+    xfail = []
     if xfail_arrow_to_fastparquet:
-        xfail = (pytest.mark.xfail(reason="Can't read arrow directories with fastparquet"),)
+        a2f = (pytest.mark.xfail(reason=("Can't read arrow directories "
+                                         "with fastparquet")),)
     else:
-        xfail = ()
+        a2f = ()
+    if xfail_fastparquet_to_pyarrow:
+        f2a = (pytest.mark.xfail(reason=("Can't read this fastparquet "
+                                         "file with pyarrow")),)
+    else:
+        f2a = ()
+
+    xfail = tuple(xfail)
     ff = () if fastparquet else (pytest.mark.skip(reason='fastparquet not found'),)
     aa = () if pq else (pytest.mark.skip(reason='pyarrow not found'),)
     engines = [pytest.param('fastparquet', 'fastparquet', marks=ff),
                pytest.param('pyarrow', 'pyarrow', marks=aa),
-               pytest.param('fastparquet', 'pyarrow', marks=ff + aa),
-               pytest.param('pyarrow', 'fastparquet', marks=ff + aa + xfail)]
+               pytest.param('fastparquet', 'pyarrow', marks=ff + aa + f2a),
+               pytest.param('pyarrow', 'fastparquet', marks=ff + aa + a2f)]
     return pytest.mark.parametrize(('write_engine', 'read_engine'), engines)
 
 
@@ -600,6 +610,22 @@ def test_parquet_select_cats(tmpdir):
     assert list(rddf.columns) == list(df)
 
 
+@write_read_engines(
+    xfail_arrow_to_fastparquet=False,
+    xfail_fastparquet_to_pyarrow=True,  # fastparquet-251
+)
+def test_columns_name(tmpdir, write_engine, read_engine):
+    df = pd.DataFrame({"A": [1, 2]}, index=pd.Index(['a', 'b'], name='idx'))
+    df.columns.name = "cols"
+    ddf = dd.from_pandas(df, 2)
+
+    tmp = str(tmpdir)
+
+    ddf.to_parquet(tmp, engine=write_engine)
+    result = dd.read_parquet(tmp, engine=read_engine)
+    assert_eq(result, df)
+
+
 @pytest.mark.parametrize('compression,', ['default', None, 'gzip', 'snappy'])
 def test_writing_parquet_with_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
@@ -667,11 +693,12 @@ def pandas_metadata(request):
 
 
 def test_parse_pandas_metadata(pandas_metadata):
-    index_names, column_names, mapping = _parse_pandas_metadata(pandas_metadata)
-    expected = (
-        ['idx'], ['A']
+    index_names, column_names, mapping, column_index_names = (
+        _parse_pandas_metadata(pandas_metadata)
     )
-    assert index_names, column_names == expected
+    assert index_names == ['idx']
+    assert column_names == ['A']
+    assert column_index_names == [None]
 
     # for new pyarrow
     if pandas_metadata['index_columns'] == ['__index_level_0__']:

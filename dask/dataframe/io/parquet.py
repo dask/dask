@@ -35,6 +35,13 @@ def _parse_pandas_metadata(pandas_metadata):
         Mapping from storage names (e.g. the field names for
         PyArrow) to actual names. The storage and field names will
         differ for index names for certain writers (pyarrow > 0.8)
+
+    Notes
+    -----
+    This should support metadata written by at least
+
+    * fastparquet>=0.1.3
+    * pyarrow>=0.7.0
     """
     index_storage_names = pandas_metadata['index_columns']
     # older metadatas will not have 'field_name'
@@ -42,6 +49,11 @@ def _parse_pandas_metadata(pandas_metadata):
              for x in pandas_metadata['columns']]
     index_names = [real_name for (storage_name, real_name) in pairs
                    if real_name != storage_name]
+    # This controls df.columns.name
+    # It was added to the spec after pandas 0.21.0+, and implemented
+    # in PyArrow 0.8
+    column_index_names = pandas_metadata.get("column_indexes", [{'name': None}])
+    column_index_names = [x['name'] for x in column_index_names]
     # Now, how do we disambiguate between columns and index names?
     # For pyarrow files, it'll be '__index_level_d__' and they'll come at the end
     # though I'd like to avoid relying on that.
@@ -64,10 +76,11 @@ def _parse_pandas_metadata(pandas_metadata):
 
     storage_name_mapping = dict(pairs)
 
-    return index_names, column_names, storage_name_mapping
+    return index_names, column_names, storage_name_mapping, column_index_names
 
 
-def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols):
+def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols,
+                      column_index_names):
     """Get the final metadata for the dask.dataframe
 
     Parameters
@@ -80,6 +93,9 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols):
     index_cols : list
         Subset of ``to_read_columns`` that should move to the
         index
+    column_index_names : list
+        The values for df.columns.name for a MultiIndex in the
+        columns, or df.index.name for a regular Index in the columns
 
     Returns
     -------
@@ -97,6 +113,11 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols):
     df = df.set_index(index_cols)
     if len(index_cols) == 1 and index_cols[0] == '__index_level_0__':
         df.index.name = None
+
+    if len(column_index_names) == 1:
+        df.columns.name = column_index_names[0]
+    else:
+        df.columns.names = column_index_names
     return df
 
 
@@ -154,7 +175,7 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
         categories = pf.categories
     dtypes = pf._dtypes(categories)
 
-    meta = _meta_from_dtypes(all_columns, dtypes, index_col)
+    meta = _meta_from_dtypes(all_columns, dtypes, index_col, [None])
 
     for cat in categories:
         if cat in meta:
@@ -360,13 +381,14 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
 
     if has_pandas_metadata:
         pandas_metadata = json.loads(schema.metadata[b'pandas'].decode('utf8'))
-        index_names, column_names, storage_name_mapping = (
+        index_names, column_names, storage_name_mapping, column_index_names = (
             _parse_pandas_metadata(pandas_metadata)
         )
     else:
         index_names = []
         columns = column_names = schema.names
         storage_name_mapping = {k: k for k in columns}
+        column_index_names = [None]
 
     task_name = 'read-parquet-' + tokenize(dataset, columns)
 
@@ -388,7 +410,7 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
     dtypes = _get_pyarrow_dtypes(schema)
     dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
-    meta = _meta_from_dtypes(all_columns, dtypes, index_names)
+    meta = _meta_from_dtypes(all_columns, dtypes, index_names, column_index_names)
 
     if out_type == Series:
         assert len(meta.columns) == 1
