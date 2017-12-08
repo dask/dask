@@ -92,6 +92,14 @@ pip install -q --upgrade \
     pytest-xdist \
     xxhash
 
+if [[ ${UPSTREAM_DEV} ]]; then
+    echo "Installing PyArrow dev"
+    conda install -c twosigma \
+          arrow-cpp \
+          parquet-cpp \
+          pyarrow
+fi;
+
 # Install dask
 pip install -q --no-deps -e .[complete]
 echo conda list
