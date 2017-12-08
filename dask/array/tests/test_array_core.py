@@ -390,6 +390,285 @@ def test_concatenate_fixlen_strings():
               da.concatenate([a, b]))
 
 
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="NumPy doesn't support `block` yet")
+def test_block_simple_row_wise():
+    a1 = np.ones((2, 2))
+    a2 = 2 * a1
+
+    d1 = da.asarray(a1)
+    d2 = da.asarray(a2)
+
+    expected = np.block([a1, a2])
+    result = da.block([d1, d2])
+
+    assert_eq(expected, result)
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="NumPy doesn't support `block` yet")
+def test_block_simple_column_wise():
+    a1 = np.ones((2, 2))
+    a2 = 2 * a1
+
+    d1 = da.asarray(a1)
+    d2 = da.asarray(a2)
+
+    expected = np.block([[a1], [a2]])
+    result = da.block([[d1], [d2]])
+
+    assert_eq(expected, result)
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="NumPy doesn't support `block` yet")
+def test_block_with_1d_arrays_row_wise():
+    # # # 1-D vectors are treated as row arrays
+    a1 = np.array([1, 2, 3])
+    a2 = np.array([2, 3, 4])
+
+    d1 = da.asarray(a1)
+    d2 = da.asarray(a2)
+
+    expected = np.block([a1, a2])
+    result = da.block([d1, d2])
+
+    assert_eq(expected, result)
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="NumPy doesn't support `block` yet")
+def test_block_with_1d_arrays_multiple_rows():
+    a1 = np.array([1, 2, 3])
+    a2 = np.array([2, 3, 4])
+
+    d1 = da.asarray(a1)
+    d2 = da.asarray(a2)
+
+    expected = np.block([[a1, a2], [a1, a2]])
+    result = da.block([[d1, d2], [d1, d2]])
+
+    assert_eq(expected, result)
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="NumPy doesn't support `block` yet")
+def test_block_with_1d_arrays_column_wise():
+    # # # 1-D vectors are treated as row arrays
+    a1 = np.array([1, 2, 3])
+    a2 = np.array([2, 3, 4])
+
+    d1 = da.asarray(a1)
+    d2 = da.asarray(a2)
+
+    expected = np.block([[a1], [a2]])
+    result = da.block([[d1], [d2]])
+
+    assert_eq(expected, result)
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="NumPy doesn't support `block` yet")
+def test_block_mixed_1d_and_2d():
+    a1 = np.ones((2, 2))
+    a2 = np.array([2, 2])
+
+    d1 = da.asarray(a1)
+    d2 = da.asarray(a2)
+
+    expected = np.block([[d1], [d2]])
+    result = da.block([[a1], [a2]])
+
+    assert_eq(expected, result)
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="NumPy doesn't support `block` yet")
+def test_block_complicated():
+    # a bit more complicated
+    a1 = np.array([[1, 1, 1]])
+    a2 = np.array([[2, 2, 2]])
+    a3 = np.array([[3, 3, 3, 3, 3, 3]])
+    a4 = np.array([4, 4, 4, 4, 4, 4])
+    a5 = np.array(5)
+    a6 = np.array([6, 6, 6, 6, 6])
+    a7 = np.zeros((2, 6))
+
+    d1 = da.asarray(a1)
+    d2 = da.asarray(a2)
+    d3 = da.asarray(a3)
+    d4 = da.asarray(a4)
+    d5 = da.asarray(a5)
+    d6 = da.asarray(a6)
+    d7 = da.asarray(a7)
+
+    expected = np.block([[a1, a2],
+                         [a3],
+                         [a4],
+                         [a5, a6],
+                         [a7]])
+    result = da.block([[d1, d2],
+                       [d3],
+                       [d4],
+                       [d5, d6],
+                       [d7]])
+
+    assert_eq(expected, result)
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="NumPy doesn't support `block` yet")
+def test_block_nested():
+    a1 = np.array([1, 1, 1])
+    a2 = np.array([[2, 2, 2], [2, 2, 2], [2, 2, 2]])
+    a3 = np.array([3, 3, 3])
+    a4 = np.array([4, 4, 4])
+    a5 = np.array(5)
+    a6 = np.array([6, 6, 6, 6, 6])
+    a7 = np.zeros((2, 6))
+
+    d1 = da.asarray(a1)
+    d2 = da.asarray(a2)
+    d3 = da.asarray(a3)
+    d4 = da.asarray(a4)
+    d5 = da.asarray(a5)
+    d6 = da.asarray(a6)
+    d7 = da.asarray(a7)
+
+    expected = np.block([
+        [
+            np.block([
+                [a1],
+                [a3],
+                [a4]
+            ]),
+            a2
+        ],
+        [a5, a6],
+        [a7]
+    ])
+    result = da.block([
+        [
+            da.block([
+                [d1],
+                [d3],
+                [d4]
+            ]),
+            d2
+        ],
+        [d5, d6],
+        [d7]
+    ])
+
+    assert_eq(expected, result)
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="NumPy doesn't support `block` yet")
+def test_block_3d():
+    a000 = np.ones((2, 2, 2), int) * 1
+
+    a100 = np.ones((3, 2, 2), int) * 2
+    a010 = np.ones((2, 3, 2), int) * 3
+    a001 = np.ones((2, 2, 3), int) * 4
+
+    a011 = np.ones((2, 3, 3), int) * 5
+    a101 = np.ones((3, 2, 3), int) * 6
+    a110 = np.ones((3, 3, 2), int) * 7
+
+    a111 = np.ones((3, 3, 3), int) * 8
+
+    d000 = da.asarray(a000)
+
+    d100 = da.asarray(a100)
+    d010 = da.asarray(a010)
+    d001 = da.asarray(a001)
+
+    d011 = da.asarray(a011)
+    d101 = da.asarray(a101)
+    d110 = da.asarray(a110)
+
+    d111 = da.asarray(a111)
+
+    expected = np.block([
+        [
+            [a000, a001],
+            [a010, a011],
+        ],
+        [
+            [a100, a101],
+            [a110, a111],
+        ]
+    ])
+    result = da.block([
+        [
+            [d000, d001],
+            [d010, d011],
+        ],
+        [
+            [d100, d101],
+            [d110, d111],
+        ]
+    ])
+
+    assert_eq(expected, result)
+
+
+def test_block_with_mismatched_shape():
+    a = np.array([0, 0])
+    b = np.eye(2)
+
+    for arrays in [[a, b],
+                   [b, a]]:
+        with pytest.raises(ValueError):
+            da.block(arrays)
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="NumPy doesn't support `block` yet")
+def test_block_no_lists():
+    assert_eq(da.block(1),         np.block(1))
+    assert_eq(da.block(np.eye(3)), np.block(np.eye(3)))
+
+
+def test_block_invalid_nesting():
+    for arrays in [
+            [1, [2]],
+            [1, []],
+            [[1], 2],
+            [[], 2],
+            [
+                [[1], [2]],
+                [[3, 4]],
+                [5]  # missing brackets
+            ],
+    ]:
+        with pytest.raises(ValueError) as e:
+            da.block(arrays)
+        e.match(r'depths are mismatched')
+
+
+def test_block_empty_lists():
+    for arrays in [
+            [],
+            [[]],
+            [[1], []],
+    ]:
+        with pytest.raises(ValueError) as e:
+            da.block(arrays)
+        e.match(r'empty')
+
+
+def test_block_tuple():
+    for arrays in [
+            ([1, 2], [3, 4]),
+            [(1, 2), (3, 4)],
+    ]:
+        with pytest.raises(TypeError) as e:
+            da.block(arrays)
+        e.match(r'tuple')
+
+
 def test_binops():
     a = Array(dict((('a', i), np.array([0])) for i in range(3)),
               'a', chunks=((1, 1, 1),), dtype='i8')
@@ -873,12 +1152,27 @@ def test_blockdims_from_blockshape():
 
 
 def test_coerce():
-    d = da.from_array(np.array([1]), chunks=(1,))
+    d0 = da.from_array(np.array(1), chunks=(1,))
+    d1 = da.from_array(np.array([1]), chunks=(1,))
     with dask.set_options(get=dask.get):
-        assert bool(d)
-        assert int(d)
-        assert float(d)
-        assert complex(d)
+        for d in d0, d1:
+            assert bool(d) is True
+            assert int(d) == 1
+            assert float(d) == 1.0
+            assert complex(d) == complex(1)
+
+    a2 = np.arange(2)
+    d2 = da.from_array(a2, chunks=(2,))
+    for func in (int, float, complex):
+        pytest.raises(TypeError, lambda :func(d2))
+
+
+def test_bool():
+    arr = np.arange(100).reshape((10,10))
+    darr = da.from_array(arr, chunks=(10,10))
+    with pytest.raises(ValueError):
+        bool(darr)
+        bool(darr == darr)
 
 
 def test_store_delayed_target():
@@ -1733,12 +2027,22 @@ def test_vindex_nd():
     assert_eq(result, x.T)
 
 
+def test_vindex_negative():
+    x = np.arange(10)
+    d = da.from_array(x, chunks=(5, 5))
+
+    result = d.vindex[np.array([0, -1])]
+    assert_eq(result, x[np.array([0, -1])])
+
+
 def test_vindex_errors():
     d = da.ones((5, 5, 5), chunks=(3, 3, 3))
     pytest.raises(IndexError, lambda: d.vindex[np.newaxis])
     pytest.raises(IndexError, lambda: d.vindex[:5])
     pytest.raises(IndexError, lambda: d.vindex[[1, 2], [1, 2, 3]])
     pytest.raises(IndexError, lambda: d.vindex[[True] * 5])
+    pytest.raises(IndexError, lambda: d.vindex[[0], [5]])
+    pytest.raises(IndexError, lambda: d.vindex[[0], [-6]])
 
 
 def test_vindex_merge():

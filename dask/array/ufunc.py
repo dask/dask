@@ -122,6 +122,11 @@ true_divide = ufunc(np.true_divide)
 floor_divide = ufunc(np.floor_divide)
 negative = ufunc(np.negative)
 power = ufunc(np.power)
+try:
+    float_power = ufunc(np.float_power)
+except AttributeError:
+    # Absent for NumPy versions prior to 1.12.
+    pass
 remainder = ufunc(np.remainder)
 mod = ufunc(np.mod)
 # fmod: see below

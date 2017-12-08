@@ -31,6 +31,7 @@ Top level user functions:
    atleast_2d
    atleast_3d
    bincount
+   block
    broadcast_to
    coarsen
    ceil
@@ -63,6 +64,9 @@ Top level user functions:
    fabs
    fix
    flatnonzero
+   flip
+   flipud
+   fliplr
    floor
    fmax
    fmin
@@ -357,6 +361,7 @@ Other functions
 .. autofunction:: atleast_2d
 .. autofunction:: atleast_3d
 .. autofunction:: bincount
+.. autofunction:: block
 .. autofunction:: broadcast_to
 .. autofunction:: coarsen
 .. autofunction:: ceil
@@ -389,6 +394,9 @@ Other functions
 .. autofunction:: fabs
 .. autofunction:: fix
 .. autofunction:: flatnonzero
+.. autofunction:: flip
+.. autofunction:: flipud
+.. autofunction:: fliplr
 .. autofunction:: floor
 .. autofunction:: fmax
 .. autofunction:: fmin

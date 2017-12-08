@@ -128,12 +128,13 @@ class add_callbacks(object):
     >>> with add_callbacks(callbacks):    # doctest: +SKIP
     ...     res.compute()
     """
-    def __init__(self, *args):
-        self.old = _globals['callbacks'].copy()
-        _globals['callbacks'].update([normalize_callback(a) for a in args])
+    def __init__(self, *callbacks):
+        self.callbacks = [normalize_callback(c) for c in callbacks]
+        _globals['callbacks'].update(self.callbacks)
 
     def __enter__(self):
         return
 
     def __exit__(self, type, value, traceback):
-        _globals['callbacks'] = self.old
+        for c in self.callbacks:
+            _globals['callbacks'].discard(c)
