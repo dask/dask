@@ -615,6 +615,9 @@ def test_parquet_select_cats(tmpdir):
     xfail_fastparquet_to_pyarrow=True,  # fastparquet-251
 )
 def test_columns_name(tmpdir, write_engine, read_engine):
+    if write_engine == read_engine == 'fastparquet':
+        pytest.skip('Fastparquet does not write column_indexes')
+
     df = pd.DataFrame({"A": [1, 2]}, index=pd.Index(['a', 'b'], name='idx'))
     df.columns.name = "cols"
     ddf = dd.from_pandas(df, 2)
@@ -707,6 +710,10 @@ def test_parse_pandas_metadata(pandas_metadata):
         assert mapping == {'idx': 'idx', 'A': 'A'}
 
     assert isinstance(mapping, dict)
+
+
+def test_parse_pandas_metadata_duplicate_columns(pandas_metadata):
+    pass
 
 
 def test_pyarrow_raises_filters_categoricals(tmpdir):
