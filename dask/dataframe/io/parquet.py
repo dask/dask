@@ -18,8 +18,23 @@ __all__ = ('read_parquet', 'to_parquet')
 
 
 def _parse_pandas_metadata(pandas_metadata):
-    """Get the actual index and column names from `pandas_metadata`.
+    """Get the set of names from the pandas metadata section
 
+    Parameters
+    ----------
+    pandas_metadata : dict
+        Should conform to the pandas parquet metadata spec
+
+    Returns
+    -------
+    index_names : list
+        List of strings indicating the actual index names
+    column_names : list
+        List of strings indicating the actual column names
+    storage_name_mapping : dict
+        Mapping from storage names (e.g. the field names for
+        PyArrow) to actual names. The storage and field names will
+        differ for index names for certain writers (pyarrow > 0.8)
     """
     index_storage_names = pandas_metadata['index_columns']
     # older metadatas will not have 'field_name'
@@ -27,16 +42,23 @@ def _parse_pandas_metadata(pandas_metadata):
              for x in pandas_metadata['columns']]
     index_names = [real_name for (storage_name, real_name) in pairs
                    if real_name != storage_name]
-    # Now, how do we disambiguate between columns and index names.
+    # Now, how do we disambiguate between columns and index names?
     # For pyarrow files, it'll be '__index_level_d__' and they'll come at the end
-    # though I'd like to avoid that.
+    # though I'd like to avoid relying on that.
     if not index_names:
-        # Old pyarrow, any fastparquet
+        # For PyArrow < 0.8, Any fastparquet. This relies on the facts that
+        # 1. Those versions used the real index name as the index storage name
+        # 2. Those versions did not allow for duplicate index / column names
+        # So we know that if a name is in index_storage_names, it must be an
+        # index name
         index_names = index_storage_names.copy()
         index_storage_names2 = set(index_storage_names)
         column_names = [real_name for (storage_name, real_name)
                         in pairs if real_name not in index_storage_names2]
     else:
+        # For newer PyArrows the storage names differ from the index names
+        # iff it's an index level. Though this is a fragile assumption for
+        # other systems...
         column_names = [real_name for (storage_name, real_name) in pairs
                         if real_name == storage_name]
 
@@ -54,16 +76,15 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols):
         All the columns to end up with, including index names
     file_dtypes : dict
         Mapping from column name to dtype for every element
-        of ``to_read_columns``.
+        of ``to_read_columns``
     index_cols : list
-        Subset of to_read_columns that should move
-        to the idnex
+        Subset of ``to_read_columns`` that should move to the
+        index
 
     Returns
     -------
-    meta : Series or DataFrame
+    meta : DataFrame
     """
-
     meta = pd.DataFrame({c: pd.Series([], dtype=d)
                          for (c, d) in file_dtypes.items()},
                         columns=to_read_columns)
