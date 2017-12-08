@@ -17,6 +17,7 @@ Array
 bounds indexes (:pr:`2967`) `Stephan Hoyer`_
 - Add ``flip``, ``flipud``, ``fliplr`` (:pr:`2954`) `John A Kirkham`_
 - Add ``float_power`` ufunc (:pr:`2962`) (:pr:`2969`) `John A Kirkham`_
+- Add ``block`` (:pr:`2650`) `John A Kirkham`_
 
 DataFrame
 +++++++++
