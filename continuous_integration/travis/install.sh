@@ -81,7 +81,6 @@ fi
 pip install -q --upgrade --no-deps \
     cachey \
     graphviz \
-    pyarrow \
     pandas_datareader
 
 pip install -q --upgrade \
@@ -94,7 +93,13 @@ pip install -q --upgrade \
 
 if [[ ${UPSTREAM_DEV} ]]; then
     echo "Installing PyArrow dev"
-    conda install -c twosigma \
+    conda install -q -c twosigma \
+          arrow-cpp \
+          parquet-cpp \
+          pyarrow
+else
+    echo "Installing PyArrow"
+    conda install -c conda-forge \
           arrow-cpp \
           parquet-cpp \
           pyarrow
