@@ -1236,7 +1236,7 @@ def test_store_regions():
     v.compute()
     assert (at[region] == 2).all() and (bt[region] == 3).all()
     assert not (bt == 3).all() and not ( bt == 0 ).all()
-    assert not (at == 3).all() and not ( at == 0 ).all()
+    assert not (at == 2).all() and not ( at == 0 ).all()
 
     # Multiple regions:
     at = np.zeros(shape=(8, 4, 6))
@@ -1246,7 +1246,7 @@ def test_store_regions():
     v.compute()
     assert (at[region] == 2).all() and (bt[region] == 3).all()
     assert not (bt == 3).all() and not ( bt == 0 ).all()
-    assert not (at == 3).all() and not ( at == 0 ).all()
+    assert not (at == 2).all() and not ( at == 0 ).all()
 
 
 def test_store_compute_false():
