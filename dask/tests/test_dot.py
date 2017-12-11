@@ -19,13 +19,19 @@ from IPython.display import Image, SVG
 
 
 # Since graphviz doesn't store a graph, we need to parse the output
-label_re = re.compile('.*\[label=(.*?) shape=.*\]')
+label_re = re.compile('.*\[label=(.*?) shape=(.*?)\]')
 
 
 def get_label(line):
     m = label_re.match(line)
     if m:
         return m.group(1)
+
+
+def get_shape(line):
+    m = label_re.match(line)
+    if m:
+        return m.group(2)
 
 
 dsk = {'a': 1,
@@ -73,6 +79,22 @@ def test_to_graphviz():
     funcs = set(('add', 'sum', 'neg'))
     assert set(labels).difference(dsk) == funcs
     assert set(labels).difference(funcs) == set(dsk)
+    shapes = list(filter(None, map(get_shape, g.body)))
+    assert set(shapes) == set(('box', 'circle'))
+
+
+def test_to_graphviz_custom():
+    g = to_graphviz(
+        dsk,
+        data_attributes={'a': {'shape': 'square'}},
+        function_attributes={'c': {'label': 'neg_c', 'shape': 'ellipse'}},
+    )
+    labels = list(filter(None, map(get_label, g.body)))
+    funcs = set(('add', 'sum', 'neg', 'neg_c'))
+    assert set(labels).difference(dsk) == funcs
+    assert set(labels).difference(funcs) == set(dsk)
+    shapes = list(filter(None, map(get_shape, g.body)))
+    assert set(shapes) == set(('box', 'circle', 'square', 'ellipse'))
 
 
 def test_to_graphviz_attributes():
