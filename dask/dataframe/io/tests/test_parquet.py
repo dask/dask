@@ -77,7 +77,7 @@ def test_local(tmpdir, write_engine, read_engine):
     df.to_parquet(tmp, write_index=False, engine=write_engine)
 
     files = os.listdir(tmp)
-    assert '_metadata' in files
+    assert '_common_metadata' in files
     assert 'part.0.parquet' in files
 
     df2 = dd.read_parquet(tmp, index=False, engine=read_engine)
@@ -116,7 +116,8 @@ def test_empty(tmpdir, write_engine, read_engine, index):
 def test_read_glob(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
-    os.unlink(os.path.join(fn, '_metadata'))
+    if os.path.exists(os.path.join(fn, '_metadata')):
+        os.unlink(os.path.join(fn, '_metadata'))
 
     files = os.listdir(fn)
     assert '_metadata' not in files

@@ -31,6 +31,8 @@ time.
    >>> df.groupby(columns).known_reduction()             # Fast and common case
    >>> df.groupby(columns_with_index).apply(user_fn)     # Fast and common case
    >>> dask_df.join(pandas_df, on=column)                # Fast and common case
+   >>> lhs.join(rhs)                                     # Fast and common case
+   >>> lhs.merge(rhs, on=columns_with_index)             # Fast and common case
 
 Difficult Cases
 ---------------
@@ -43,7 +45,7 @@ trigger a full dataset shuffle
 .. code-block:: python
 
    >>> df.groupby(columns_no_index).apply(user_fn)   # Requires shuffle
-   >>> lhs.join(rhs, on=column)                      # Requires shuffle
+   >>> lhs.join(rhs, on=columns_no_index)            # Requires shuffle
    >>> df.set_index(column)                          # Requires shuffle
 
 A shuffle is necessary when we need to re-sort our data along a new index.  For

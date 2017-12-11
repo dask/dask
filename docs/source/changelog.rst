@@ -7,18 +7,26 @@ Changelog
 Array
 +++++
 
+- Prevent ``bool()`` coercion from calling compute (:pr:`2958`) `Albert DeFusco`_
 - Add ``matmul`` (:pr:`2904`) `John A Kirkham`_
 - Support N-D arrays with ``matmul`` (:pr:`2909`) `John A Kirkham`_
 - Add ``vdot`` (:pr:`2910`) `John A Kirkham`_
 - Explicit ``chunks`` argument for ``broadcast_to`` (:pr:`2943`) `Stephan Hoyer`_
 - Add ``meshgrid`` (:pr:`2938`) `John A Kirkham`_
 - Preserve singleton chunks in ``fftshift``/``ifftshift`` (:pr:`2733`) `John A Kirkham`_
+- Fix handling of negative indexes in ``vindex`` and raise errors for out of
+bounds indexes (:pr:`2967`) `Stephan Hoyer`_
+- Add ``flip``, ``flipud``, ``fliplr`` (:pr:`2954`) `John A Kirkham`_
+- Add ``float_power`` ufunc (:pr:`2962`) (:pr:`2969`) `John A Kirkham`_
+- Compatability for changes to structured arrays in the upcoming NumPy 1.14 release (:pr:`2964`) `Tom Augspurger`_
+- Add ``block`` (:pr:`2650`) `John A Kirkham`_
 
 DataFrame
 +++++++++
 
+- Prevent ``bool()`` coercion from calling compute (:pr:`2958`) `Albert DeFusco`_
 - ``DataFrame.read_sql()`` (:pr:`2928`) to an empty database tables returns an empty dask dataframe `Apostolos Vlachopoulos`_
-
+- ``DataFrame.merge()`` (:pr:`2960`) now supports merging on a combination of columns and the index `Jon Mease`_
 
 Core
 ++++
@@ -868,3 +876,4 @@ Other
 .. _`@Ced4`: https://github.com/Ced4
 .. _`Ian Hopkinson`: https://https://github.com/IanHopkinson
 .. _`Stephan Hoyer`: https://github.com/shoyer
+.. _`Albert DeFusco`: https://github.com/AlbertDeFusco
