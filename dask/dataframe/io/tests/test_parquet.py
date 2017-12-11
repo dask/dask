@@ -613,3 +613,15 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     ddf.to_parquet(fn, compression=compression, engine=engine)
     out = dd.read_parquet(fn, engine=engine)
     assert_eq(out, df, check_index=(engine != 'fastparquet'))
+
+
+def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
+    fn = str(tmpdir)
+
+    df = pd.DataFrame({'x': ['a', 'b', 'c'] * 10,
+                       'y': [1, 2, 3] * 10})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    ddf.to_parquet(fn,  engine=engine, unknown_key='unknown_value')
+    out = dd.read_parquet(fn, engine=engine)
+    assert_eq(out, df, check_index=(engine != 'fastparquet'))
