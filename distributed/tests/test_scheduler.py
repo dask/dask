@@ -15,7 +15,7 @@ import pytest
 
 from distributed import Nanny, Worker, Client, wait, fire_and_forget
 from distributed.core import connect, rpc, CommClosedError
-from distributed.scheduler import validate_state, Scheduler, BANDWIDTH
+from distributed.scheduler import Scheduler, BANDWIDTH
 from distributed.client import wait
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
@@ -49,13 +49,13 @@ def test_respect_data_in_memory(c, s, a):
     f = c.persist(y)
     yield wait([f])
 
-    assert s.released == {x.key}
-    assert s.who_has == {y.key: {a.address}}
+
+    assert s.tasks[y.key].who_has == {s.workers[a.address]}
 
     z = delayed(add)(x, y)
     f2 = c.persist(z)
-    while f2.key not in s.who_has:
-        assert y.key in s.who_has
+    while f2.key not in s.tasks or not s.tasks[f2.key]:
+        assert s.tasks[y.key].who_has
         yield gen.sleep(0.0001)
 
 
@@ -67,7 +67,7 @@ def test_recompute_released_results(c, s, a, b):
     yy = c.persist(y)
     yield wait(yy)
 
-    while x.key in s.who_has or x.key in a.data or x.key in b.data:  # let x go away
+    while s.tasks[x.key].who_has or x.key in a.data or x.key in b.data:  # let x go away
         yield gen.sleep(0.01)
 
     z = delayed(dec)(x)
@@ -114,7 +114,7 @@ def test_balance_with_restrictions(client, s, a, b, c):
     z = client.submit(inc, 1, workers=[a.address, c.address])
     yield wait(z)
 
-    assert s.who_has[z.key] == {c.address}
+    assert s.tasks[z.key].who_has == {s.workers[c.address]}
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)
@@ -123,7 +123,7 @@ def test_no_valid_workers(client, s, a, b, c):
     while not s.tasks:
         yield gen.sleep(0.01)
 
-    assert x.key in s.unrunnable
+    assert s.tasks[x.key] in s.unrunnable
 
     with pytest.raises(gen.TimeoutError):
         yield gen.with_timeout(timedelta(milliseconds=50), x)
@@ -144,7 +144,7 @@ def test_no_workers(client, s):
     while not s.tasks:
         yield gen.sleep(0.01)
 
-    assert x.key in s.unrunnable
+    assert s.tasks[x.key] in s.unrunnable
 
     with pytest.raises(gen.TimeoutError):
         yield gen.with_timeout(timedelta(milliseconds=50), x)
@@ -153,74 +153,6 @@ def test_no_workers(client, s):
 @gen_cluster(ncores=[])
 def test_retire_workers_empty(s):
     yield s.retire_workers(workers=[])
-
-
-@pytest.mark.skip
-def test_validate_state():
-    dsk = {'x': 1, 'y': (inc, 'x')}
-    dependencies = {'x': set(), 'y': {'x'}}
-    waiting = {'y': {'x'}}
-    ready = deque(['x'])
-    dependents = {'x': {'y'}, 'y': set()}
-    waiting_data = {'x': {'y'}}
-    who_has = dict()
-    stacks = {alice: [], bob: []}
-    processing = {alice: dict(), bob: dict()}
-    finished_results = set()
-    released = set()
-    in_play = {'x', 'y'}
-    who_wants = {'y': {'client'}}
-    wants_what = {'client': {'y'}}
-    erred = {}
-
-    validate_state(**locals())
-
-    who_has['x'] = {alice}
-    with pytest.raises(Exception):
-        validate_state(**locals())
-
-    ready.remove('x')
-    with pytest.raises(Exception):
-        validate_state(**locals())
-
-    waiting['y'].remove('x')
-    with pytest.raises(Exception):
-        validate_state(**locals())
-
-    del waiting['y']
-    ready.appendleft('y')
-    validate_state(**locals())
-
-    stacks[alice].append('y')
-    with pytest.raises(Exception):
-        validate_state(**locals())
-
-    ready.remove('y')
-    validate_state(**locals())
-
-    stacks[alice].pop()
-    with pytest.raises(Exception):
-        validate_state(**locals())
-
-    processing[alice]['y'] = 1
-    validate_state(**locals())
-
-    del processing[alice]['y']
-    with pytest.raises(Exception):
-        validate_state(**locals())
-
-    who_has['y'] = {alice}
-    with pytest.raises(Exception):
-        validate_state(**locals())
-
-    finished_results.add('y')
-    with pytest.raises(Exception):
-        validate_state(**locals())
-
-    waiting_data.pop('x')
-    who_has.pop('x')
-    released.add('x')
-    validate_state(**locals())
 
 
 @gen_cluster()
@@ -281,7 +213,7 @@ def test_remove_worker_from_scheduler(s, a, b):
     assert a.address in s.worker_comms
     s.remove_worker(address=a.address)
     assert a.address not in s.ncores
-    assert len(s.processing[b.address]) == len(dsk)  # b owns everything
+    assert len(s.workers[b.address].processing) == len(dsk)  # b owns everything
     s.validate_state()
 
 
@@ -309,7 +241,7 @@ def test_add_worker(s, a, b):
 @gen_cluster()
 def test_feed(s, a, b):
     def func(scheduler):
-        return dumps(scheduler.processing)
+        return dumps(dict(scheduler.worker_info))
 
     comm = yield connect(s.address)
     yield comm.write({'op': 'feed',
@@ -318,7 +250,7 @@ def test_feed(s, a, b):
 
     for i in range(5):
         response = yield comm.read()
-        expected = s.processing
+        expected = dict(s.worker_info)
         assert cloudpickle.loads(response) == expected
 
     yield comm.close()
@@ -376,42 +308,11 @@ def test_feed_large_bytestring(s, a, b):
     yield comm.close()
 
 
-@gen_test(timeout=None)
-def test_scheduler_as_center():
-    s = Scheduler(validate=True)
-    done = s.start(0)
-    a = Worker(s.address, ncores=1)
-    a.data.update({'x': 1, 'y': 2})
-    b = Worker(s.address, ncores=2)
-    b.data.update({'y': 2, 'z': 3})
-    c = Worker(s.address, ncores=3)
-    yield [w._start(0) for w in [a, b, c]]
-
-    assert s.ncores == {w.address: w.ncores for w in [a, b, c]}
-    assert not s.who_has
-
-    s.update_graph(tasks={'a': dumps_task((inc, 1))},
-                   keys=['a'],
-                   dependencies={'a': []})
-    start = time()
-    while 'a' not in s.who_has:
-        assert time() - start < 5
-        yield gen.sleep(0.01)
-    assert 'a' in a.data or 'a' in b.data or 'a' in c.data
-
-    yield [w._close() for w in [a, b, c]]
-
-    assert s.ncores == {}
-    assert s.who_has == {}
-
-    yield s.close()
-
-
 @gen_cluster(client=True)
 def test_delete_data(c, s, a, b):
-    d = yield c._scatter({'x': 1, 'y': 2, 'z': 3})
+    d = yield c.scatter({'x': 1, 'y': 2, 'z': 3})
 
-    assert set(s.who_has) == {'x', 'y', 'z'}
+    assert {ts.key for ts in s.tasks.values() if ts.who_has} == {'x', 'y', 'z'}
     assert set(a.data) | set(b.data) == {'x', 'y', 'z'}
     assert merge(a.data, b.data) == {'x': 1, 'y': 2, 'z': 3}
 
@@ -447,7 +348,7 @@ def test_filtered_communication(s, a, b):
     yield c.read()
     yield f.read()
 
-    assert set(s.comms) == {'c', 'f'}
+    assert set(s.client_comms) == {'c', 'f'}
 
     yield c.write({'op': 'update-graph',
                    'tasks': {'x': dumps_task((inc, 1)),
@@ -505,16 +406,12 @@ def test_ready_remove_worker(s, a, b):
                    client='client',
                    dependencies={'x-%d' % i: [] for i in range(20)})
 
-    assert all(len(s.processing[w]) >= s.ncores[w]
-               for w in s.ncores)
+    assert all(len(w.processing) > w.ncores for w in s.workers.values())
 
     s.remove_worker(address=a.address)
 
-    for collection in [s.ncores, s.processing]:
-        assert set(collection) == {b.address}
-    assert all(len(s.processing[w]) >= s.ncores[w]
-               for w in s.ncores)
-    assert set(s.processing) == {b.address}
+    assert set(s.workers) == {b.address}
+    assert all(len(w.processing) > w.ncores for w in s.workers.values())
 
 
 @gen_cluster(client=True, Worker=Nanny)
@@ -524,11 +421,11 @@ def test_restart(c, s, a, b):
 
     yield s.restart()
 
-    for c in [s.processing, s.ncores, s.occupancy]:
-        assert len(c) == 2
+    assert len(s.workers) == 2
 
-    for c in [s.processing, s.occupancy]:
-        assert not any(v for v in c.values())
+    for ws in s.workers.values():
+        assert not ws.occupancy
+        assert not ws.processing
 
     assert not s.tasks
     assert not s.dependencies
@@ -649,7 +546,7 @@ def test_update_graph_culls(s, a, b):
 @gen_cluster(ncores=[])
 def test_add_worker_is_idempotent(s):
     s.add_worker(address=alice, ncores=1, resolve_address=False)
-    ncores = s.ncores.copy()
+    ncores = dict(s.ncores)
     s.add_worker(address=alice, resolve_address=False)
     assert s.ncores == s.ncores
 
@@ -711,7 +608,8 @@ def test_retire_workers(c, s, a, b):
 
     assert s.workers_to_close() == []
 
-    assert s.has_what[b.address] == {x.key, y.key}
+    assert s.workers[b.address].has_what == {s.tasks[x.key],
+                                             s.tasks[y.key]}
 
     workers = yield s.retire_workers()
     assert not workers
@@ -724,21 +622,21 @@ def test_workers_to_close(cl, s, *workers):
     s.task_duration['c'] = 1
 
     cl.map(slowinc, [1, 1, 1], key=['a-4','b-4','c-1'])
-    while len(s.rprocessing) < 3:
+    while sum(len(w.processing) for w in s.workers.values()) < 3:
         yield gen.sleep(0.001)
 
     wtc = s.workers_to_close()
-    assert all(not s.processing[w] for w in wtc)
+    assert all(not s.workers[w].processing for w in wtc)
     assert len(wtc) == 1
 
-    
+
 @gen_cluster(client=True)
 def test_retire_workers_no_suspicious_tasks(c, s, a, b):
     future = c.submit(slowinc, 100, delay=0.5, workers=a.address, allow_other_workers=True)
     yield gen.sleep(0.2)
     yield s.retire_workers(workers=[a.address])
 
-    assert all(v==0 for v in s.suspicious_tasks.values())
+    assert all(ts.suspicious == 0 for ts in s.tasks.values())
 
 
 @slow
@@ -790,19 +688,19 @@ def test_file_descriptors(c, s):
 @gen_cluster(client=True)
 def test_learn_occupancy(c, s, a, b):
     futures = c.map(slowinc, range(1000), delay=0.01)
-    while not any(s.who_has):
+    while not any(ts.who_has for ts in s.tasks.values()):
         yield gen.sleep(0.01)
 
     assert 1 < s.total_occupancy < 40
     for w in [a, b]:
-        assert 1 < s.occupancy[w.address] < 20
+        assert 1 < s.workers[w.address].occupancy < 20
 
 
 @nodebug
 @gen_cluster(client=True)
 def test_learn_occupancy_2(c, s, a, b):
     future = c.map(slowinc, range(1000), delay=0.1)
-    while not any(s.who_has):
+    while not any(ts.who_has for ts in s.tasks.values()):
         yield gen.sleep(0.01)
 
     assert 50 < s.total_occupancy < 200
@@ -813,14 +711,14 @@ def test_occupancy_cleardown(c, s, a, b):
     s.validate = False
 
     # Inject excess values in s.occupancy
-    s.occupancy[a.address] = 2
+    s.workers[a.address].occupancy = 2
     s.total_occupancy += 2
     futures = c.map(slowinc, range(100), delay=0.01)
     yield wait(futures)
 
     # Verify that occupancy values have been zeroed out
     assert abs(s.total_occupancy) < 0.01
-    assert all(v == 0 for v in s.occupancy.values())
+    assert all(ws.occupancy == 0 for ws in s.workers.values())
 
 
 @nodebug
@@ -828,7 +726,7 @@ def test_occupancy_cleardown(c, s, a, b):
 def test_balance_many_workers(c, s, *workers):
     futures = c.map(slowinc, range(20), delay=0.2)
     yield wait(futures)
-    assert set(map(len, s.has_what.values())) == {0, 1}
+    assert {len(w.has_what) for w in s.workers.values()} == {0, 1}
 
 
 @nodebug
@@ -837,7 +735,7 @@ def test_balance_many_workers_2(c, s, *workers):
     s.extensions['stealing']._pc.callback_time = 100000000
     futures = c.map(slowinc, range(90), delay=0.2)
     yield wait(futures)
-    assert set(map(len, s.has_what.values())) == {3}
+    assert {len(w.has_what) for w in s.workers.values()} == {3}
 
 
 @gen_cluster(client=True)
@@ -848,7 +746,8 @@ def test_learn_occupancy_multiple_workers(c, s, a, b):
 
     yield wait(x)
 
-    assert not any(v == 0.5 for vv in s.processing.values() for v in vv)
+    assert not any(v == 0.5 for w in s.workers.values()
+                   for v in w.processing.values())
     s.validate_state()
 
 
@@ -859,18 +758,12 @@ def test_include_communication_in_occupancy(c, s, a, b):
     y = c.submit(mul, b'1', int(BANDWIDTH * 1.5), workers=b.address)
 
     z = c.submit(slowadd, x, y, delay=1)
-    while z.key not in s.rprocessing:
+    while z.key not in s.tasks or not s.tasks[z.key].processing_on:
         yield gen.sleep(0.01)
 
-    try:
-        assert s.processing[b.address][z.key] > 1
-    except Exception:
-        print("processing:", s.processing)
-        print("rprocessing:", s.rprocessing)
-        print("task_duration:", s.task_duration)
-        print("nbytes:", s.nbytes)
-        raise
-
+    ts = s.tasks[z.key]
+    assert ts.processing_on == s.workers[b.address]
+    assert s.workers[b.address].processing[ts] > 1
     yield wait(z)
     del z
 
@@ -883,7 +776,7 @@ def test_worker_arrives_with_processing_data(c, s, a, b):
 
     yy, zz = c.persist([y, z])
 
-    while not s.processing:
+    while not any(w.processing for w in s.workers.values()):
         yield gen.sleep(0.01)
 
     w = Worker(s.ip, s.port, ncores=1)
@@ -896,9 +789,11 @@ def test_worker_arrives_with_processing_data(c, s, a, b):
     while len(s.workers) < 3:
         yield gen.sleep(0.01)
 
-    assert s.task_state[y.key] == 'memory'
-    assert s.task_state[x.key] == 'released'
-    assert s.task_state[z.key] == 'processing'
+    assert s.get_task_status(keys={x.key, y.key, z.key}) == {
+        x.key: 'released',
+        y.key: 'memory',
+        z.key: 'processing',
+    }
 
     yield w._close()
 
@@ -920,7 +815,8 @@ def test_worker_breaks_and_returns(c, s, a):
 
     assert end - start < 1
 
-    assert frequencies(s.task_state.values()) == {'memory': 1, 'released': 10}
+    states = frequencies(ts.state for ts in s.tasks.values())
+    assert states == {'memory': 1, 'released': 10}
 
 
 @gen_cluster(client=True, ncores=[])
@@ -931,7 +827,7 @@ def test_no_workers_to_memory(c, s):
 
     yy, zz = c.persist([y, z])
 
-    while not s.task_state:
+    while not s.tasks:
         yield gen.sleep(0.01)
 
     w = Worker(s.ip, s.port, ncores=1)
@@ -944,9 +840,11 @@ def test_no_workers_to_memory(c, s):
     while not s.workers:
         yield gen.sleep(0.01)
 
-    assert s.task_state[y.key] == 'memory'
-    assert s.task_state[x.key] == 'released'
-    assert s.task_state[z.key] == 'processing'
+    assert s.get_task_status(keys={x.key, y.key, z.key}) == {
+        x.key: 'released',
+        y.key: 'memory',
+        z.key: 'processing',
+    }
 
     yield w._close()
 
@@ -959,7 +857,7 @@ def test_no_worker_to_memory_restrictions(c, s, a, b):
 
     yy, zz = c.persist([y, z], workers={(x, y, z): 'alice'})
 
-    while not s.task_state:
+    while not s.tasks:
         yield gen.sleep(0.01)
 
     w = Worker(s.ip, s.port, ncores=1, name='alice')
@@ -971,9 +869,11 @@ def test_no_worker_to_memory_restrictions(c, s, a, b):
         yield gen.sleep(0.01)
     yield gen.sleep(0.3)
 
-    assert s.task_state[y.key] == 'memory'
-    assert s.task_state[x.key] == 'released'
-    assert s.task_state[z.key] == 'processing'
+    assert s.get_task_status(keys={x.key, y.key, z.key}) == {
+        x.key: 'released',
+        y.key: 'memory',
+        z.key: 'processing',
+    }
 
     yield w._close()
 
@@ -1093,7 +993,7 @@ def test_non_existent_worker(c, s):
     futures = c.map(inc, range(10))
     yield gen.sleep(4)
     assert not s.workers
-    assert all(v == 'no-worker' for v in s.task_state.values())
+    assert all(ts.state == 'no-worker' for ts in s.tasks.values())
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)
@@ -1108,7 +1008,7 @@ def test_correct_bad_time_estimate(c, s, *workers):
 
     yield wait(futures)
 
-    assert all(w.data for w in workers)
+    assert all(w.data for w in workers), [sorted(w.data) for w in workers]
 
 
 @pytest.mark.skipif(not sys.platform.startswith('linux'),
@@ -1174,7 +1074,7 @@ def test_cancel_fire_and_forget(c, s, a, b):
     yield gen.sleep(0.05)
     yield future.cancel(force=True)
     assert future.status == 'cancelled'
-    assert not s.task_state
+    assert not s.tasks
 
 
 @gen_cluster(client=True, Worker=Nanny)
@@ -1192,7 +1092,7 @@ def test_reschedule(c, s, a, b):
     # add much more work onto worker a
     futures = c.map(slowinc, range(10, 20), delay=0.1, workers=a.address)
 
-    while len(s.task_state) < len(x) + len(futures):
+    while len(s.tasks) < len(x) + len(futures):
         yield gen.sleep(0.001)
 
     for future in x:
@@ -1231,13 +1131,13 @@ def test_retries(c, s, a, b):
     future = c.submit(varying(args), retries=3)
     result = yield future
     assert result == 42
-    assert s.retries[future.key] == 1
+    assert s.tasks[future.key].retries == 1
     assert future.key not in s.exceptions
 
     future = c.submit(varying(args), retries=2, pure=False)
     result = yield future
     assert result == 42
-    assert s.retries[future.key] == 0
+    assert s.tasks[future.key].retries == 0
     assert future.key not in s.exceptions
 
     future = c.submit(varying(args), retries=1, pure=False)

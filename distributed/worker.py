@@ -1379,15 +1379,10 @@ class Worker(WorkerBase):
     def transition_dep_waiting_memory(self, dep, value=None):
         try:
             if self.validate:
-                try:
-                    assert dep in self.data
-                    assert dep in self.nbytes
-                    assert dep in self.types
-                    assert self.task_state[dep] == 'memory'
-                except Exception as e:
-                    logger.exception(e)
-                    import pdb
-                    pdb.set_trace()
+                assert dep in self.data
+                assert dep in self.nbytes
+                assert dep in self.types
+                assert self.task_state[dep] == 'memory'
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
@@ -2360,8 +2355,9 @@ class Worker(WorkerBase):
                 self.validate_key_executing(key)
         except Exception as e:
             logger.exception(e)
-            import pdb
-            pdb.set_trace()
+            if LOG_PDB:
+                import pdb
+                pdb.set_trace()
             raise
 
     def validate_dep_waiting(self, dep):
@@ -2397,8 +2393,9 @@ class Worker(WorkerBase):
                 raise ValueError("Unknown dependent state", state)
         except Exception as e:
             logger.exception(e)
-            import pdb
-            pdb.set_trace()
+            if LOG_PDB:
+                import pdb
+                pdb.set_trace()
             raise
 
     def validate_state(self):

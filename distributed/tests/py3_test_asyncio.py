@@ -359,11 +359,11 @@ async def test_asyncio_variable():
     del future, future2
 
     await asyncio.sleep(0.1)
-    assert s.task_state  # future still present
+    assert s.tasks  # future still present
 
     x.delete()
 
     start = time()
-    while s.task_state:
+    while s.tasks:
         await asyncio.sleep(0.01)
         assert time() < start + 5

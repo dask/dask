@@ -13,9 +13,12 @@ from distributed.client import wait
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec, slowinc
 from distributed.bokeh.worker import Counters, BokehWorker
-from distributed.bokeh.scheduler import (BokehScheduler, StateTable,
-                                         SystemMonitor, Occupancy, StealingTimeSeries, StealingEvents, Events,
-                                         TaskStream, TaskProgress, MemoryUse, CurrentLoad, ProcessingHistogram,
+from distributed.bokeh.scheduler import (BokehScheduler, SystemMonitor,
+                                         Occupancy, StealingTimeSeries,
+                                         StealingEvents, Events,
+                                         TaskStream, TaskProgress,
+                                         MemoryUse, CurrentLoad,
+                                         ProcessingHistogram,
                                          NBytesHistogram, WorkerTable)
 
 from distributed.bokeh import scheduler
@@ -42,7 +45,7 @@ def test_simple(c, s, a, b):
 
 @gen_cluster(client=True, worker_kwargs=dict(services={'bokeh': BokehWorker}))
 def test_basic(c, s, a, b):
-    for component in [SystemMonitor, StateTable, Occupancy, StealingTimeSeries]:
+    for component in [SystemMonitor, Occupancy, StealingTimeSeries]:
         ss = component(s)
 
         ss.update()
@@ -193,7 +196,7 @@ def test_TaskProgress(c, s, a, b):
 
     del futures, futures2
 
-    while s.task_state:
+    while s.tasks:
         yield gen.sleep(0.01)
 
     tp.update()

@@ -87,39 +87,6 @@ def update(source, data):
         source.data.update(d)
 
 
-class StateTable(DashboardComponent):
-    """ Currently running tasks """
-
-    def __init__(self, scheduler):
-        self.scheduler = scheduler
-
-        names = ['Tasks', 'Stored', 'Processing', 'Waiting', 'No Worker',
-                 'Erred', 'Released']
-        self.source = ColumnDataSource({name: [] for name in names})
-
-        columns = {name: TableColumn(field=name, title=name)
-                   for name in names}
-
-        table = DataTable(
-            source=self.source, columns=[columns[n] for n in names],
-            height=70,
-        )
-        self.root = table
-
-    def update(self):
-        with log_errors():
-            s = self.scheduler
-            d = {'Tasks': [len(s.tasks)],
-                 'Stored': [len(s.who_has)],
-                 'Processing': ['%d / %d' % (len(s.rprocessing), s.total_ncores)],
-                 'Waiting': [len(s.waiting)],
-                 'No Worker': [len(s.unrunnable)],
-                 'Erred': [len(s.exceptions)],
-                 'Released': [len(s.released)]}
-
-            update(self.source, d)
-
-
 class Occupancy(DashboardComponent):
     """ Occupancy (in time) per worker """
 
@@ -157,24 +124,23 @@ class Occupancy(DashboardComponent):
 
     def update(self):
         with log_errors():
-            o = self.scheduler.occupancy
-            workers = list(self.scheduler.workers)
+            workers = list(self.scheduler.workers.values())
 
             bokeh_addresses = []
-            for worker in workers:
-                addr = self.scheduler.get_worker_service_addr(worker, 'bokeh')
+            for ws in workers:
+                addr = self.scheduler.get_worker_service_addr(ws.worker_key, 'bokeh')
                 bokeh_addresses.append('%s:%d' % addr if addr is not None else '')
 
             y = list(range(len(workers)))
-            occupancy = [o[w] for w in workers]
+            occupancy = [ws.occupancy for ws in workers]
             ms = [occ * 1000 for occ in occupancy]
             x = [occ / 500 for occ in occupancy]
             total = sum(occupancy)
             color = []
-            for w in workers:
-                if w in self.scheduler.idle:
+            for ws in workers:
+                if ws in self.scheduler.idle:
                     color.append('red')
-                elif w in self.scheduler.saturated:
+                elif ws in self.scheduler.saturated:
                     color.append('green')
                 else:
                     color.append('blue')
@@ -188,7 +154,7 @@ class Occupancy(DashboardComponent):
 
             if occupancy:
                 result = {'occupancy': occupancy,
-                          'worker': workers,
+                          'worker': [ws.worker_key for ws in workers],
                           'ms': ms,
                           'color': color,
                           'bokeh_address': bokeh_addresses,
@@ -223,7 +189,7 @@ class ProcessingHistogram(DashboardComponent):
                            color='blue')
 
     def update(self):
-        L = list(map(len, self.scheduler.processing.values()))
+        L = [len(ws.processing) for ws in self.scheduler.workers.values()]
         counts, x = np.histogram(L, bins=40)
         self.source.data.update({'left': x[:-1],
                                  'right': x[1:],
@@ -258,7 +224,7 @@ class NBytesHistogram(DashboardComponent):
                            color='blue')
 
     def update(self):
-        nbytes = np.asarray(list(self.scheduler.worker_bytes.values()))
+        nbytes = np.asarray([ws.nbytes for ws in self.scheduler.workers.values()])
         counts, x = np.histogram(nbytes, bins=40)
         d = {'left': x[:-1], 'right': x[1:], 'top': counts}
         self.source.data.update(d)
@@ -337,32 +303,31 @@ class CurrentLoad(DashboardComponent):
 
     def update(self):
         with log_errors():
-            processing = valmap(len, self.scheduler.processing)
-            workers = list(self.scheduler.workers)
+            workers = list(self.scheduler.workers.values())
 
             bokeh_addresses = []
-            for worker in workers:
-                addr = self.scheduler.get_worker_service_addr(worker, 'bokeh')
+            for ws in workers:
+                addr = self.scheduler.get_worker_service_addr(ws.worker_key, 'bokeh')
                 bokeh_addresses.append('%s:%d' % addr if addr is not None else '')
 
             y = list(range(len(workers)))
-            nprocessing = [processing[w] for w in workers]
+            nprocessing = [len(ws.processing) for ws in workers]
             processing_color = []
-            for w in workers:
-                if w in self.scheduler.idle:
+            for ws in workers:
+                if ws in self.scheduler.idle:
                     processing_color.append('red')
-                elif w in self.scheduler.saturated:
+                elif ws in self.scheduler.saturated:
                     processing_color.append('green')
                 else:
                     processing_color.append('blue')
 
-            nbytes = [self.scheduler.worker_bytes[w] for w in workers]
+            nbytes = [ws.nbytes for ws in workers]
             nbytes_text = [format_bytes(nb) for nb in nbytes]
             nbytes_color = []
             max_limit = 0
-            for w, nb in zip(workers, nbytes):
+            for ws, nb in zip(workers, nbytes):
                 try:
-                    limit = self.scheduler.worker_info[w]['memory_limit']
+                    limit = self.scheduler.worker_info[ws.worker_key]['memory_limit']
                 except KeyError:
                     limit = 16e9
                 if limit > max_limit:
@@ -386,7 +351,7 @@ class CurrentLoad(DashboardComponent):
                           'nbytes-color': nbytes_color,
                           'nbytes_text': nbytes_text,
                           'bokeh_address': bokeh_addresses,
-                          'worker': workers,
+                          'worker': [ws.worker_key for ws in workers],
                           'y': y}
 
                 self.nbytes_figure.title.text = 'Bytes stored: ' + format_bytes(sum(nbytes))
@@ -890,14 +855,11 @@ class WorkerTable(DashboardComponent):
 
 def systemmonitor_doc(scheduler, extra, doc):
     with log_errors():
-        table = StateTable(scheduler)
         sysmon = SystemMonitor(scheduler, sizing_mode='scale_width')
         doc.title = "Dask Scheduler Internal Monitor"
-        doc.add_periodic_callback(table.update, 500)
         doc.add_periodic_callback(sysmon.update, 500)
 
-        doc.add_root(column(table.root, sysmon.root,
-                            sizing_mode='scale_width'))
+        doc.add_root(column(sysmon.root, sizing_mode='scale_width'))
         doc.template = template
         doc.template_variables['active_page'] = 'system'
         doc.template_variables.update(extra)
@@ -905,18 +867,16 @@ def systemmonitor_doc(scheduler, extra, doc):
 
 def stealing_doc(scheduler, extra, doc):
     with log_errors():
-        table = StateTable(scheduler)
         occupancy = Occupancy(scheduler, height=200, sizing_mode='scale_width')
         stealing_ts = StealingTimeSeries(scheduler, sizing_mode='scale_width')
         stealing_events = StealingEvents(scheduler, sizing_mode='scale_width')
         stealing_events.root.x_range = stealing_ts.root.x_range
         doc.title = "Dask Workers Monitor"
-        doc.add_periodic_callback(table.update, 500)
         doc.add_periodic_callback(occupancy.update, 500)
         doc.add_periodic_callback(stealing_ts.update, 500)
         doc.add_periodic_callback(stealing_events.update, 500)
 
-        doc.add_root(column(table.root, occupancy.root, stealing_ts.root,
+        doc.add_root(column(occupancy.root, stealing_ts.root,
                             stealing_events.root,
                             sizing_mode='scale_width'))
 

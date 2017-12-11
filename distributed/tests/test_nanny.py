@@ -222,7 +222,7 @@ def test_scheduler_file():
         s.start(8008)
         w = Nanny(scheduler_file=fn)
         yield w._start()
-        assert s.workers == {w.worker_address}
+        assert set(s.workers) == {w.worker_address}
         yield w._close()
         s.stop()
 

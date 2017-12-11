@@ -93,23 +93,47 @@ class TaskCallStack(RequestHandler):
 
 class CountsJSON(RequestHandler):
     def get(self):
+        scheduler = self.server
+        erred = 0
+        nbytes = 0
+        ncores = 0
+        memory = 0
+        processing = 0
+        released = 0
+        waiting = 0
+        waiting_data = 0
+
+        for ts in scheduler.tasks.values():
+            if ts.exception_blame is not None:
+                erred += 1
+            elif ts.state == 'released':
+                released += 1
+            if ts.waiting_on:
+                waiting += 1
+            if ts.waiters:
+                waiting_data += 1
+        for ws in scheduler.workers.values():
+            ncores += ws.ncores
+            memory += len(ws.has_what)
+            nbytes += ws.nbytes
+            processing += len(ws.processing)
+
         response = {
-            'bytes': sum(self.server.nbytes.values()),
-            'clients': len(self.server.wants_what),
-            'cores': sum(self.server.ncores.values()),
-            'erred': len(self.server.exceptions_blame),
-            'hosts': len(self.server.host_info),
-            'idle': len(self.server.idle),
-            'memory': len(self.server.who_has),
-            'processing': len(self.server.rprocessing),
-            'ready': len(self.server.ready),
-            'released': len(self.server.released),
-            'saturated': len(self.server.saturated),
-            'tasks': len(self.server.tasks),
-            'unrunnable': len(self.server.unrunnable),
-            'waiting': len(self.server.waiting),
-            'waiting_data': len(self.server.waiting_data),
-            'workers': len(self.server.workers),
+            'bytes': nbytes,
+            'clients': len(scheduler.clients),
+            'cores': ncores,
+            'erred': erred,
+            'hosts': len(scheduler.host_info),
+            'idle': len(scheduler.idle),
+            'memory': memory,
+            'processing': processing,
+            'released': released,
+            'saturated': len(scheduler.saturated),
+            'tasks': len(scheduler.tasks),
+            'unrunnable': len(scheduler.unrunnable),
+            'waiting': waiting,
+            'waiting_data': waiting_data,
+            'workers': len(scheduler.workers),
         }
         self.write(response)
 

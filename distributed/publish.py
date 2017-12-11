@@ -27,7 +27,7 @@ class PublishExtension(object):
         with log_errors():
             if name in self.datasets:
                 raise KeyError("Dataset %s already exists" % name)
-            self.scheduler.client_wants_keys(keys, 'published-%s' % name)
+            self.scheduler.client_desires_keys(keys, 'published-%s' % name)
             self.datasets[name] = {'data': data, 'keys': keys}
             return {'status':  'OK', 'name': name}
 

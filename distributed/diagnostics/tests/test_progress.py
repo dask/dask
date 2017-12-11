@@ -1,32 +1,15 @@
 from __future__ import print_function, division, absolute_import
 
-from operator import add
 import pytest
 
 from tornado import gen
 
-from dask.core import get_deps
 from distributed import Nanny
 from distributed.client import wait
 from distributed.metrics import time
 from distributed.utils_test import gen_cluster, inc, dec, div, nodebug
 from distributed.diagnostics.progress import (Progress, SchedulerPlugin,
-                                              AllProgress, GroupProgress, MultiProgress, dependent_keys)
-
-
-def test_dependent_keys():
-    a, b, c, d, e, f, g = 'abcdefg'
-    who_has = {a: [1], b: [1]}
-    processing = {'alice': {c}}
-    exceptions = {}
-    dsk = {a: 1, b: 2, c: (add, a, b), d: (inc, a), e: (add, c, d), f: (inc, e)}
-    dependencies, dependents = get_deps(dsk)
-
-    assert dependent_keys(f, who_has, processing, dependencies,
-                          exceptions, complete=False)[0] == {f, e, c, d}
-
-    assert dependent_keys(f, who_has, processing, dependencies,
-                          exceptions, complete=True)[0] == {a, b, c, d, e, f}
+                                              AllProgress, GroupProgress, MultiProgress)
 
 
 def f(*args):
@@ -155,7 +138,7 @@ def test_AllProgress(c, s, a, b):
     import gc
     gc.collect()
 
-    while tkey in s.task_state:
+    while tkey in s.tasks:
         yield gen.sleep(0.01)
 
     for coll in [p.all, p.nbytes] + list(p.state.values()):

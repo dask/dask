@@ -91,14 +91,12 @@ class VariableExtension(object):
         if record['type'] == 'Future':
             key = record['value']
             token = uuid.uuid4().hex
-            try:
-                state = self.scheduler.task_state[key]
-            except KeyError:
-                state = 'lost'
+            ts = self.scheduler.tasks.get(key)
+            state = ts.state if ts is not None else 'lost'
             msg = {'token': token, 'state': state}
             if state == 'erred':
-                msg['exception'] = self.scheduler.exceptions[self.scheduler.exceptions_blame[key]]
-                msg['traceback'] = self.scheduler.tracebacks[self.scheduler.exceptions_blame[key]]
+                msg['exception'] = ts.exception_blame.exception
+                msg['traceback'] = ts.exception_blame.traceback
             record = merge(record, msg)
             self.waiting[key, name].add(token)
         raise gen.Return(record)

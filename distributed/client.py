@@ -677,9 +677,6 @@ class Client(Node):
             self.scheduler_comm.send(msg)
         elif self.status in ('connecting', 'newly-created'):
             self._pending_msg_buffer.append(msg)
-        else:
-            raise Exception("Tried sending message after closing.  Status: %s\n"
-                            "Message: %s" % (self.status, msg))
 
     def _send_to_scheduler(self, msg):
         if self.status in ('running', 'closing', 'connecting', 'newly-created'):
@@ -728,8 +725,9 @@ class Client(Node):
                 yield self.cluster._start()
 
             # Wait for all workers to be ready
+            # XXX should be a LocalCluster method instead
             while (not self.cluster.workers or
-                   len(self.cluster.scheduler.ncores) < len(self.cluster.workers)):
+                   len(self.cluster.scheduler.workers) < len(self.cluster.workers)):
                 yield gen.sleep(0.01)
 
             address = self.cluster.scheduler_address
@@ -949,12 +947,10 @@ class Client(Node):
             if self.status == 'closed':
                 raise gen.Return()
             if self.scheduler_comm and self.scheduler_comm.comm and not self.scheduler_comm.comm.closed():
-                for key in list(self.futures):
-                    self._release_key(key=key)
-                if self.status == 'running':
-                    self._send_to_scheduler({'op': 'close-stream'})
-            if self.scheduler_comm:
+                self._send_to_scheduler({'op': 'close-stream'})
                 yield self.scheduler_comm.close()
+            for key in list(self.futures):
+                self._release_key(key=key)
             if self._start_arg is None:
                 with ignoring(AttributeError):
                     yield self.cluster._close()
@@ -1791,7 +1787,7 @@ class Client(Node):
         --------
 
         >>> def get_number_of_tasks(dask_scheduler=None):
-        ...     return len(dask_scheduler.task_state)
+        ...     return len(dask_scheduler.tasks)
 
         >>> client.run_on_scheduler(get_number_of_tasks)  # doctest: +SKIP
         100

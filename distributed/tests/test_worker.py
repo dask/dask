@@ -908,7 +908,7 @@ def test_scheduler_file():
         s.start(8009)
         w = Worker(scheduler_file=fn)
         yield w._start()
-        assert s.workers == {w.address}
+        assert set(s.workers) == {w.address}
         yield w._close()
         s.stop()
 

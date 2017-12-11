@@ -121,13 +121,16 @@ def test_stress_scatter_death(c, s, *workers):
 
     adds = [delayed(slowadd, pure=True)(random.choice(L),
                                         random.choice(L),
-                                        delay=0.05)
+                                        delay=0.05,
+                                        dask_key_name='slowadd-1-%d' % i)
             for i in range(50)]
 
-    adds = [delayed(slowadd, pure=True)(a, b, delay=0.02)
-            for a, b in sliding_window(2, adds)]
+    adds = [delayed(slowadd, pure=True)(a, b, delay=0.02,
+                                        dask_key_name='slowadd-2-%d' % i)
+            for i, (a, b) in enumerate(sliding_window(2, adds))]
 
     futures = c.compute(adds)
+    L = adds = None
 
     alive = list(workers)
 
@@ -166,6 +169,8 @@ def test_stress_scatter_death(c, s, *workers):
             raise
     except CancelledError:
         pass
+    finally:
+        futures = None
 
 
 def vsum(*args):
@@ -235,7 +240,7 @@ def test_close_connections(c, s, *workers):
         worker = random.choice(list(workers))
         for comm in worker._comms:
             comm.abort()
-        # print(frequencies(s.task_state.values()))
+        # print(frequencies(ts.state for ts in s.tasks.values()))
         # for w in workers:
         #     print(w)
 
@@ -249,6 +254,7 @@ def test_no_delay_during_large_transfer(c, s, w):
     pytest.importorskip('crick')
     np = pytest.importorskip('numpy')
     x = np.random.random(100000000)
+    x_nbytes = x.nbytes
 
     # Reset digests
     from distributed.counter import Digest
@@ -265,11 +271,12 @@ def test_no_delay_during_large_transfer(c, s, w):
         yield gen.sleep(0.5)
 
     rprof.close()
+    x = None  # lose ref
 
     for server in [s, w]:
         assert server.digests['tick-duration'].components[0].max() < 0.5
 
     nbytes = np.array([t.mem for t in rprof.results])
     nbytes -= nbytes[0]
-    assert nbytes.max() < (x.nbytes * 2) / 1e6
-    assert nbytes[-1] < (x.nbytes * 1.2) / 1e6
+    assert nbytes.max() < (x_nbytes * 2) / 1e6
+    assert nbytes[-1] < (x_nbytes * 1.2) / 1e6

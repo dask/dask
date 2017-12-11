@@ -14,26 +14,30 @@ from ..utils import key_split, key_split_group, log_errors, tokey
 logger = logging.getLogger(__name__)
 
 
-def dependent_keys(keys, who_has, processing, dependencies, exceptions,
-                   complete=False):
-    """ All keys that need to compute for these keys to finish """
+def dependent_keys(tasks, complete=False):
+    """
+    All keys that need to compute for these keys to finish.
+
+    If *complete* is false, omit tasks that are busy processing or
+    have finished executing.
+    """
     out = set()
     errors = set()
-    stack = list(keys)
+    stack = list(tasks)
     while stack:
-        key = stack.pop()
+        ts = stack.pop()
+        key = ts.key
         if key in out:
             continue
-        if not complete and (who_has.get(key) or
-                             key in processing):
+        if not complete and ts.who_has:
             continue
-        if key in exceptions:
+        if ts.exception is not None:
             errors.add(key)
             if not complete:
                 continue
 
         out.add(key)
-        stack.extend(dependencies.get(key, []))
+        stack.extend(ts.dependencies)
     return out, errors
 
 
@@ -73,23 +77,19 @@ class Progress(SchedulerPlugin):
     def setup(self):
         keys = self.keys
 
-        while not keys.issubset(self.scheduler.task_state):
+        while not keys.issubset(self.scheduler.tasks):
             yield gen.sleep(0.05)
+
+        tasks = [self.scheduler.tasks[k] for k in keys]
 
         self.keys = None
 
         self.scheduler.add_plugin(self)  # subtle race condition here
-        self.all_keys, errors = dependent_keys(keys, self.scheduler.who_has,
-                                               self.scheduler.processing,
-                                               self.scheduler.dependencies, self.scheduler.exceptions,
-                                               complete=self.complete)
+        self.all_keys, errors = dependent_keys(tasks, complete=self.complete)
         if not self.complete:
             self.keys = self.all_keys.copy()
         else:
-            self.keys, _ = dependent_keys(keys, self.scheduler.who_has,
-                                          self.scheduler.processing,
-                                          self.scheduler.dependencies, self.scheduler.exceptions,
-                                          complete=False)
+            self.keys, _ = dependent_keys(tasks, complete=False)
         self.all_keys.update(keys)
         self.keys |= errors & self.all_keys
 
@@ -166,20 +166,16 @@ class MultiProgress(Progress):
         while not keys.issubset(self.scheduler.tasks):
             yield gen.sleep(0.05)
 
+        tasks = [self.scheduler.tasks[k] for k in keys]
+
         self.keys = None
 
         self.scheduler.add_plugin(self)  # subtle race condition here
-        self.all_keys, errors = dependent_keys(keys, self.scheduler.who_has,
-                                               self.scheduler.processing,
-                                               self.scheduler.dependencies, self.scheduler.exceptions,
-                                               complete=self.complete)
+        self.all_keys, errors = dependent_keys(tasks, complete=self.complete)
         if not self.complete:
             self.keys = self.all_keys.copy()
         else:
-            self.keys, _ = dependent_keys(keys, self.scheduler.who_has,
-                                          self.scheduler.processing,
-                                          self.scheduler.dependencies, self.scheduler.exceptions,
-                                          complete=False)
+            self.keys, _ = dependent_keys(tasks, complete=False)
         self.all_keys.update(keys)
         self.keys |= errors & self.all_keys
 
@@ -248,42 +244,41 @@ class AllProgress(SchedulerPlugin):
         self.state = defaultdict(lambda: defaultdict(set))
         self.scheduler = scheduler
 
-        for key, state in self.scheduler.task_state.items():
-            k = key_split(key)
-            self.all[k].add(key)
-            self.state[state][k].add(key)
-            if key in self.scheduler.nbytes:
-                self.nbytes[k] += self.scheduler.nbytes[key]
+        for ts in self.scheduler.tasks.values():
+            key = ts.key
+            prefix = ts.prefix
+            self.all[prefix].add(key)
+            self.state[ts.state][prefix].add(key)
+            if ts.nbytes is not None:
+                self.nbytes[prefix] += ts.nbytes
 
         scheduler.add_plugin(self)
 
     def transition(self, key, start, finish, *args, **kwargs):
-        k = key_split(key)
-        self.all[k].add(key)
+        ts = self.scheduler.tasks[key]
+        prefix = ts.prefix
+        self.all[prefix].add(key)
         try:
-            self.state[start][k].remove(key)
+            self.state[start][prefix].remove(key)
         except KeyError:  # TODO: remove me once we have a new or clean state
             pass
-        if finish != 'forgotten':
-            self.state[finish][k].add(key)
-        else:
-            self.all[k].remove(key)
-            if not self.all[k]:
-                del self.all[k]
-                try:
-                    del self.nbytes[k]
-                except KeyError:
-                    pass
-                for v in self.state.values():
-                    try:
-                        del v[k]
-                    except KeyError:
-                        pass
 
         if start == 'memory':
-            self.nbytes[k] -= self.scheduler.nbytes.get(key, 0)
+            # XXX why not respect DEFAULT_DATA_SIZE?
+            self.nbytes[prefix] -= ts.nbytes or 0
         if finish == 'memory':
-            self.nbytes[k] += self.scheduler.nbytes.get(key, 0)
+            self.nbytes[prefix] += ts.nbytes or 0
+
+        if finish != 'forgotten':
+            self.state[finish][prefix].add(key)
+        else:
+            s = self.all[prefix]
+            s.remove(key)
+            if not s:
+                del self.all[prefix]
+                self.nbytes.pop(prefix, None)
+                for v in self.state.values():
+                    v.pop(prefix, None)
 
     def restart(self, scheduler):
         self.all.clear()
@@ -302,35 +297,37 @@ class GroupProgress(SchedulerPlugin):
         self.dependencies = dict()
         self.dependents = dict()
 
-        for key, state in self.scheduler.task_state.items():
+        for key, ts in self.scheduler.tasks.items():
             k = key_split_group(key)
             if k not in self.groups:
                 self.create(key, k)
             self.keys[k].add(key)
-            self.groups[k][state] += 1
-            if state == 'memory' and key in self.scheduler.nbytes:
-                self.nbytes[k] += self.scheduler.nbytes[key]
+            self.groups[k][ts.state] += 1
+            if ts.state == 'memory' and ts.nbytes is not None:
+                self.nbytes[k] += ts.nbytes
 
         scheduler.add_plugin(self)
 
     def create(self, key, k):
-        with log_errors(pdb=True):
+        with log_errors():
+            ts = self.scheduler.tasks[key]
             g = {'memory': 0, 'erred': 0, 'waiting': 0,
                  'released': 0, 'processing': 0}
             self.keys[k] = set()
             self.groups[k] = g
             self.nbytes[k] = 0
             self.durations[k] = 0
-            self.dependents[k] = {key_split_group(dep) for dep in
-                                  self.scheduler.dependents[key]}
+            self.dependents[k] = {key_split_group(dts.key)
+                                  for dts in ts.dependents}
             self.dependencies[k] = set()
-            for dep in self.scheduler.dependencies[key]:
-                d = key_split_group(dep)
+            for dts in ts.dependencies:
+                d = key_split_group(dts.key)
                 self.dependents[d].add(k)
                 self.dependencies[k].add(d)
 
     def transition(self, key, start, finish, *args, **kwargs):
         with log_errors():
+            ts = self.scheduler.tasks[key]
             k = key_split_group(key)
             if k not in self.groups:
                 self.create(key, k)
@@ -352,10 +349,10 @@ class GroupProgress(SchedulerPlugin):
                     for dep in self.dependencies.pop(k):
                         self.dependents[key_split_group(dep)].remove(k)
 
-            if start == 'memory':
-                self.nbytes[k] -= self.scheduler.nbytes[key]
-            if finish == 'memory':
-                self.nbytes[k] += self.scheduler.nbytes[key]
+            if start == 'memory' and ts.nbytes is not None:
+                self.nbytes[k] -= ts.nbytes
+            if finish == 'memory' and ts.nbytes is not None:
+                self.nbytes[k] += ts.nbytes
 
     def restart(self, scheduler):
         self.keys.clear()

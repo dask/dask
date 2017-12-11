@@ -50,7 +50,7 @@ def test_resource_submit(c, s, a, b):
     yield wait(y)
     assert y.key in b.data
 
-    assert z.key in s.unrunnable
+    assert s.get_task_status(keys=[z.key]) == {z.key: 'no-worker'}
 
     d = Worker(s.ip, s.port, loop=s.loop, resources={'C': 10})
     yield d._start()

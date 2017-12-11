@@ -10,21 +10,22 @@
         <th> Services</th>
         <th> Logs </th>
     </tr>
-    {% for worker in workers %}
+    {% for ws in worker_list %}
+    {% set wi = worker_info[ws.worker_key] %}
     <tr>
-        <td><a href="/info/worker/{{ url_escape(worker) }}.html">{{worker}}</a></td>
-        <td> {{ ncores[worker] }} </td>
-        <td> {{ format_bytes(worker_info[worker]['memory_limit']) }} </td>
-        <td> <progress class="progress" value="{{ worker_info[worker].get('memory-rss') }}" max="{{ worker_info[worker]['memory_limit'] }}"></progress> </td>
-        <td> {{ format_time(occupancy[worker]) }} </td>
-        <td> {{ len(processing[worker]) }} </td>
-        <td> {{ len(has_what[worker]) }} </td>
-        {% if 'bokeh' in worker_info[worker]['services'] %}
-        <td> <a href="http://{{ worker_info[worker]['host'] }}:{{ worker_info[worker]['services']['bokeh'] }}">bokeh</a> </td>
+        <td><a href="/info/worker/{{ url_escape(ws.worker_key) }}.html">{{ws.worker_key}}</a></td>
+        <td> {{ ws.ncores }} </td>
+        <td> {{ format_bytes(wi['memory_limit']) }} </td>
+        <td> <progress class="progress" value="{{ wi.get('memory-rss') }}" max="{{ wi['memory_limit'] }}"></progress> </td>
+        <td> {{ format_time(ws.occupancy) }} </td>
+        <td> {{ len(ws.processing) }} </td>
+        <td> {{ len(ws.has_what) }} </td>
+        {% if 'bokeh' in wi['services'] %}
+        <td> <a href="http://{{ wi['host'] }}:{{ wi['services']['bokeh'] }}">bokeh</a> </td>
         {% else %}
         <td> </td>
         {% end %}
-        <td> <a href="/info/logs/{{ url_escape(worker) }}.html">logs</a></td>
+        <td> <a href="/info/logs/{{ url_escape(ws.worker_key) }}.html">logs</a></td>
     </tr>
     {% end %}
   </table>

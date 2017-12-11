@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from concurrent.futures import CancelledError
 from operator import add
 import os
+import random
 from time import sleep
 
 import pytest
@@ -116,7 +117,7 @@ def test_failed_worker_without_warning(c, s, a, b):
     L2 = c.map(inc, range(10, 20))
     yield wait(L2)
     assert all(len(keys) > 0 for keys in s.has_what.values())
-    ncores2 = s.ncores.copy()
+    ncores2 = dict(s.ncores)
 
     yield c._restart()
 
@@ -141,9 +142,8 @@ def test_restart(c, s, a, b):
     f = yield c._restart()
     assert f is c
 
-    assert len(s.processing) == 2
-    assert len(s.occupancy) == 2
-    assert not any(s.occupancy.values())
+    assert len(s.workers) == 2
+    assert not any(ws.occupancy for ws in s.workers.values())
 
     assert not s.who_has
 
@@ -153,7 +153,7 @@ def test_restart(c, s, a, b):
     assert z.key not in s.exceptions
 
     assert not s.who_wants
-    assert not s.wants_what
+    assert not any(cs.wants_what for cs in s.clients.values())
 
 
 @gen_cluster(Worker=Nanny, client=True)
@@ -161,15 +161,10 @@ def test_restart_cleared(c, s, a, b):
     x = 2 * delayed(1) + 1
     f = c.compute(x)
     yield wait([f])
-    assert s.released
 
     yield c._restart()
 
-    for coll in [s.tasks, s.dependencies, s.dependents, s.waiting,
-                 s.waiting_data, s.who_has, s.host_restrictions,
-                 s.worker_restrictions, s.loose_restrictions,
-                 s.released, s.priority, s.exceptions, s.who_wants,
-                 s.exceptions_blame]:
+    for coll in [s.tasks, s.unrunnable]:
         assert not coll
 
 
@@ -306,20 +301,30 @@ def test_broken_worker_during_computation(c, s, a, b):
         yield gen.sleep(0.01)
         assert time() < start + 5
 
-    L = c.map(inc, range(256))
-    for i in range(8):
-        L = c.map(add, *zip(*partition_all(2, L)))
+    N = 256
+    expected_result = N * (N + 1) // 2
+    i = 0
+    L = c.map(inc, range(N),
+              key=['inc-%d-%d' % (i, j) for j in range(N)])
+    while len(L) > 1:
+        i += 1
+        L = c.map(slowadd, *zip(*partition_all(2, L)),
+                  key=['add-%d-%d' % (i, j) for j in range(len(L) // 2)])
 
-    from random import random
-    yield gen.sleep(random() / 2)
+    yield gen.sleep(random.random() / 20)
     with ignoring(CommClosedError):  # comm will be closed abrupty
         yield c._run(os._exit, 1, workers=[n.worker_address])
-    yield gen.sleep(random() / 2)
+
+    yield gen.sleep(random.random() / 20)
+    while len(s.workers) < 3:
+        yield gen.sleep(0.01)
+
     with ignoring(CommClosedError, EnvironmentError):  # perhaps new worker can't be contacted yet
         yield c._run(os._exit, 1, workers=[n.worker_address])
 
-    result = yield c.gather(L)
-    assert isinstance(result[0], int)
+    [result] = yield c.gather(L)
+    assert isinstance(result, int)
+    assert result == expected_result
 
     yield n._close()
 
@@ -338,7 +343,7 @@ def test_restart_during_computation(c, s, a, b):
     assert not s.rprocessing
 
     assert len(s.ncores) == 2
-    assert not s.task_state
+    assert not s.tasks
 
 
 @gen_cluster(client=True, timeout=None)
@@ -351,7 +356,8 @@ def test_worker_who_has_clears_after_failed_connection(c, s, a, b):
         yield gen.sleep(0.01)
         assert time() < start + 5
 
-    futures = c.map(slowinc, range(20), delay=0.01)
+    futures = c.map(slowinc, range(20), delay=0.01,
+                    key=['f%d' % i for i in range(20)])
     yield wait(futures)
 
     result = yield c.submit(sum, futures, workers=a.address)

@@ -20,7 +20,7 @@ class TaskStreamPlugin(SchedulerPlugin):
 
     def transition(self, key, start, finish, *args, **kwargs):
         if start == 'processing':
-            if key not in self.scheduler.task_state:
+            if key not in self.scheduler.tasks:
                 return
             kwargs['key'] = key
             if finish == 'memory' or finish == 'erred':

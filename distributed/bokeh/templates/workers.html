@@ -4,6 +4,7 @@
   <a class="button is-primary" href="/info/logs.html">Logs</a>
   <a class="button is-primary" href="/status">Bokeh</a>
 
+  {% set worker_list = list(workers.values()) %}
   {% include "worker-table.html" %}
 
 {% end %}

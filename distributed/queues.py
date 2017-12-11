@@ -83,15 +83,13 @@ class QueueExtension(object):
             if record['type'] == 'Future':
                 record = record.copy()
                 key = record['value']
-                try:
-                    state = self.scheduler.task_state[key]
-                except KeyError:
-                    state = 'lost'
+                ts = self.scheduler.tasks.get(key)
+                state = ts.state if ts is not None else 'lost'
 
                 record['state'] = state
                 if state == 'erred':
-                    record['exception'] = self.scheduler.exceptions[self.scheduler.exceptions_blame[key]]
-                    record['traceback'] = self.scheduler.tracebacks[self.scheduler.exceptions_blame[key]]
+                    record['exception'] = ts.exception_blame.exception
+                    record['traceback'] = ts.exception_blame.traceback
 
             return record
 

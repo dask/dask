@@ -1,7 +1,8 @@
 {% extends main.html %}
 {% block content %}
     <h1 class="title"> Worker: {{Worker}} </h1>
-      {% set workers = [Worker] %}
+      {% set ws = workers[Worker] %}
+      {% set worker_list = [ws] %}
       {% include "worker-table.html" %}
 
     <div class="columns">
@@ -9,8 +10,8 @@
         <div class="content">
           <h2 class="subtitle"> In Memory </h2>
           <ul>
-            {% for task in has_what[Worker] %}
-            <li> <a href="/info/task/{{ url_escape(task) }}.html">{{task}}</a></li>
+            {% for ts in ws.has_what %}
+            <li> <a href="/info/task/{{ url_escape(ts.key) }}.html">{{ts.key}}</a></li>
             {% end %}
           </ul>
         </div>
@@ -19,17 +20,17 @@
       <div class="column">
         <div class="content">
           <h2 class="subtitle"> Processing </h2>
-          <a class="button is-primary" href="/info/call-stacks/{{ url_escape(worker) }}.html">Call Stacks</a>
+          <a class="button is-primary" href="/info/call-stacks/{{ url_escape(ws.worker_key) }}.html">Call Stacks</a>
           <ul>
-            {% for task in processing[Worker] %}
-            <li> <a href="/info/task/{{ url_escape(task) }}.html">{{task}}</a></li>
+            {% for ts in ws.processing %}
+            <li> <a href="/info/task/{{ url_escape(ts.key) }}.html">{{ts.key}}</a></li>
             {% end %}
           </ul>
         </div>
       </div>
     </div>
 
-    {% if worker in worker_resources %}
+    {% if ws.resources %}
     <div class="content">
       <h2 class="subtitle"> Resources </h2>
       <table class="table is-striped is-hoverable">>
@@ -39,11 +40,11 @@
             <th> Total </th>
         </tr>
 
-        {% for resource in worker_resources.get(Worker, []) %}
+        {% for resource in ws.resources %}
         <tr>
             <td> {{ resource }} </td>
-            <td> {{ used_resources[Worker][resource] }} </td>
-            <td> {{ worker_resources[Worker][resource] }} </td>
+            <td> {{ ws.used_resources[resource] }} </td>
+            <td> {{ ws.resources[resource] }} </td>
         </tr>
         {% end %}
       </table>

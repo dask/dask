@@ -66,7 +66,7 @@ class Adaptive(object):
         than ``startup_cost``.
         """
         total_occupancy = self.scheduler.total_occupancy
-        total_cores = sum(self.scheduler.ncores.values())
+        total_cores = sum([ws.ncores for ws in self.scheduler.workers.values()])
 
         if total_occupancy / (total_cores + 1e-9) > self.startup_cost * 2:
             logger.info("CPU limit exceeded [%d occupancy / %d cores]",
@@ -86,10 +86,10 @@ class Adaptive(object):
         """
         limit_bytes = {w: self.scheduler.worker_info[w]['memory_limit']
                         for w in self.scheduler.worker_info}
-        worker_bytes = self.scheduler.worker_bytes
+        worker_bytes = [ws.nbytes for ws in self.scheduler.workers.values()]
 
         limit = sum(limit_bytes.values())
-        total = sum(worker_bytes.values())
+        total = sum(worker_bytes)
         if total > 0.6 * limit:
             logger.info("Ram limit exceeded [%d/%d]", limit, total)
             return True
@@ -118,7 +118,7 @@ class Adaptive(object):
         needs_memory
         """
         with log_errors():
-            if self.scheduler.unrunnable and not self.scheduler.ncores:
+            if self.scheduler.unrunnable and not self.scheduler.workers:
                 return True
 
             needs_cpu = self.needs_cpu()
@@ -177,7 +177,7 @@ class Adaptive(object):
         --------
         LocalCluster.scale_up
         """
-        instances = max(1, len(self.scheduler.ncores) * self.scale_factor)
+        instances = max(1, len(self.scheduler.workers) * self.scale_factor)
         logger.info("Scaling up to %d workers", instances)
         return {'n': instances}
 

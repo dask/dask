@@ -1,33 +1,35 @@
 {% extends main.html %}
 {% block content %}
-  <h1 class="title"> Task: {{ Task }} </h1>
+
+  {% set ts = tasks[Task] %}
+  <h1 class="title"> Task: {{ ts.key }} </h1>
 
       <table class="table">
           <tr>
               <th> status </th>
-              <td> {{ task_state[Task] }} </td>
+              <td> {{ ts.state }} </td>
           </tr>
-          {% if Task in rprocessing %}
+          {% if ts.processing_on %}
           <tr>
               <th> processing on </th>
-              <td> {{ rprocessing.get(Task) }} </td>
+              <td> {{ ts.processing_on.worker_key }} </td>
           </tr>
           <tr>
               <th> call stack </th>
               <td><a class="button is-primary" href="/info/call-stack/{{ url_escape(Task) }}.html">Call Stack</a></td>
           </tr>
           {% end %}
-          {% if Task in nbytes %}
+          {% if ts.nbytes %}
           <tr>
               <th> bytes in memory </th>
-              <td> {{ nbytes.get(Task) }} </td>
+              <td> {{ ts.nbytes }} </td>
           </tr>
           {% end %}
-          {% if task_state[Task] == 'waiting' %}
-          {% for dep in waiting[dep] %}
+          {% if ts.state == 'waiting' %}
+          {% for dts in ts.waiting_on %}
           <tr>
               <td> waiting on </td>
-              <td><a href="/info/task/{{ url_escape(dep) }}.html">{{dep}}</a> </td>
+              <td><a href="/info/task/{{ url_escape(dts.key) }}.html">{{dts.key}}</a> </td>
           </tr>
           {% end %}
           {% end %}
@@ -41,10 +43,10 @@
             <th> Key </th>
             <th> State </th>
           </thead>
-          {% for dep in dependencies.get(Task, ()) %}
+          {% for dts in ts.dependencies %}
           <tr>
-            <td> <a href="/info/task/{{ url_escape(dep) }}.html">{{dep}}</a> </td>
-            <td> {{ task_state[dep] }} </td>
+            <td> <a href="/info/task/{{ url_escape(dts.key) }}.html">{{dts.key}}</a> </td>
+            <td> {{ dts.state }} </td>
           </tr>
           {% end %}
         </table>
@@ -57,10 +59,10 @@
             <th> Key </th>
             <th> State </th>
           </thead>
-          {% for dep in dependents.get(Task, ()) %}
+          {% for dts in ts.dependents %}
           <tr>
-            <td> <a href="/info/task/{{ url_escape(dep) }}.html">{{dep}}</a> </td>
-            <td> {{ task_state[dep] }} </td>
+            <td> <a href="/info/task/{{ url_escape(dts.key) }}.html">{{dts.key}}</a> </td>
+            <td> {{ dts.state }} </td>
           </tr>
           {% end %}
         </table>
@@ -68,21 +70,21 @@
     </div><!-- #dependencies-dependents -->
 
     <div id="workers-clients" class="columns">
-      {% if task_state[Task] == 'memory' %}
+      {% if ts.state == 'memory' %}
       <div id="workers" class="column">
         <h3 class="title is-5"> Workers with data </h3>
-          {% set workers = who_has[Task] %}
+          {% set worker_list = ts.who_has %}
           {% include "worker-table.html" %}
       </div><!-- #workers -->
       {% end %}
 
-      {% if Task in who_wants %}
+      {% if ts.who_wants %}
       <div id="clients" class="column">
         <h3 class="title is-5"> Clients with future </h3>
         <div class="content">
           <ul>
-            {% for client in who_wants.get(Task, ()) %}
-            <li> <a href="/info/client/{{ url_escape(client) }}.html">{{client}}</a></li>
+            {% for cs in ts.who_wants %}
+            <li> <a href="/info/client/{{ url_escape(cs.client_key) }}.html">{{cs.client_key}}</a></li>
             {% end %}
           </ul>
         </div>

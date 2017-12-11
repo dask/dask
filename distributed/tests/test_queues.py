@@ -33,11 +33,11 @@ def test_queue(c, s, a, b):
     del future, future2
 
     yield gen.sleep(0.1)
-    assert s.task_state  # future still present in y's queue
+    assert s.tasks  # future still present in y's queue
     yield y.get()  # burn future
 
     start = time()
-    while s.task_state:
+    while s.tasks:
         yield gen.sleep(0.01)
         assert time() < start + 5
 

@@ -635,7 +635,7 @@ def start_cluster(ncores, scheduler_addr, loop, security=None,
     yield [w._start(ncore[0]) for ncore, w in zip(ncores, workers)]
 
     start = time()
-    while len(s.ncores) < len(ncores):
+    while len(s.workers) < len(ncores):
         yield gen.sleep(0.01)
         if time() - start > 5:
             raise Exception("Cluster creation timeout")
@@ -709,8 +709,8 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                             args = [c] + args
                         try:
                             result = yield func(*args)
-                            # for w in workers:
-                            #     assert not w._comms
+                            if s.validate:
+                                s.validate_state()
                         finally:
                             if client:
                                 yield c._close()
