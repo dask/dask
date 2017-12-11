@@ -17,6 +17,8 @@ Array
 bounds indexes (:pr:`2967`) `Stephan Hoyer`_
 - Add ``flip``, ``flipud``, ``fliplr`` (:pr:`2954`) `John A Kirkham`_
 - Add ``float_power`` ufunc (:pr:`2962`) (:pr:`2969`) `John A Kirkham`_
+- Compatability for changes to structured arrays in the upcoming NumPy 1.14 release (:pr:`2964`) `Tom Augspurger`_
+- Add ``block`` (:pr:`2650`) `John A Kirkham`_
 
 DataFrame
 +++++++++
@@ -25,6 +27,7 @@ DataFrame
 - ``DataFrame.read_sql()`` (:pr:`2928`) to an empty database tables returns an empty dask dataframe `Apostolos Vlachopoulos`_
 - Compatability for reading Parquet files written by PyArrow 0.8.0 (:pr:`2973`) `Tom Augspurger`_
 - Correctly handle the column name (`df.columns.name`) when reading in ``dd.read_parquet`` (:pr:2973`) `Tom Augspurger`_
+- ``DataFrame.merge()`` (:pr:`2960`) now supports merging on a combination of columns and the index `Jon Mease`_
 
 
 Core

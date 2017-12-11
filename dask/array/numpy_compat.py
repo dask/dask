@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+from distutils.version import LooseVersion
+
 from ..compatibility import builtins
 import numpy as np
 import warnings
@@ -359,3 +361,108 @@ except ImportError:  # pragma: no cover
         """
         a, mask = _replace_nan(a, 1)
         return np.cumprod(a, axis=axis, dtype=dtype, out=out)
+
+
+def _make_sliced_dtype(dtype, index):
+    if LooseVersion(np.__version__) >= LooseVersion("1.14.0"):
+        return _make_sliced_dtype_np_ge_14(dtype, index)
+    else:
+        return _make_sliced_dtype_np_lt_14(dtype, index)
+
+
+def _make_sliced_dtype_np_ge_14(dtype, index):
+    # For https://github.com/numpy/numpy/pull/6053, NumPy >= 1.14
+    new = {
+        'names': index,
+        'formats': [dtype.fields[name][0] for name in index],
+        'offsets': [dtype.fields[name][1] for name in index],
+        'itemsize': dtype.itemsize,
+    }
+    return np.dtype(new)
+
+
+def _make_sliced_dtype_np_lt_14(dtype, index):
+    # For numpy < 1.14
+    dt = np.dtype([(name, dtype[name]) for name in index])
+    return dt
+
+
+class _Recurser(object):
+    """
+    Utility class for recursing over nested iterables
+    """
+
+    # This was copied almost verbatim from numpy.core.shape_base._Recurser
+    # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
+    # or NUMPY_LICENSE.txt within this directory
+
+    def __init__(self, recurse_if):
+        self.recurse_if = recurse_if
+
+    def map_reduce(self,
+                   x,
+                   f_map=lambda x, **kwargs: x,
+                   f_reduce=lambda x, **kwargs: x,
+                   f_kwargs=lambda **kwargs: kwargs,
+                   **kwargs):
+        """
+        Iterate over the nested list, applying:
+        * ``f_map`` (T -> U) to items
+        * ``f_reduce`` (Iterable[U] -> U) to mapped items
+
+        For instance, ``map_reduce([[1, 2], 3, 4])`` is::
+
+            f_reduce([
+              f_reduce([
+                f_map(1),
+                f_map(2)
+              ]),
+              f_map(3),
+              f_map(4)
+            ]])
+
+
+        State can be passed down through the calls with `f_kwargs`,
+        to iterables of mapped items. When kwargs are passed, as in
+        ``map_reduce([[1, 2], 3, 4], **kw)``, this becomes::
+
+            kw1 = f_kwargs(**kw)
+            kw2 = f_kwargs(**kw1)
+            f_reduce([
+              f_reduce([
+                f_map(1), **kw2)
+                f_map(2,  **kw2)
+              ],      **kw1),
+              f_map(3, **kw1),
+              f_map(4, **kw1)
+            ]],     **kw)
+        """
+        def f(x, **kwargs):
+            if not self.recurse_if(x):
+                return f_map(x, **kwargs)
+            else:
+                next_kwargs = f_kwargs(**kwargs)
+                return f_reduce((
+                    f(xi, **next_kwargs)
+                    for xi in x
+                ), **kwargs)
+        return f(x, **kwargs)
+
+    def walk(self, x, index=()):
+        """
+        Iterate over x, yielding (index, value, entering), where
+
+        * ``index``: a tuple of indices up to this point
+        * ``value``: equal to ``x[index[0]][...][index[-1]]``. On the first iteration, is
+                     ``x`` itself
+        * ``entering``: bool. The result of ``recurse_if(value)``
+        """
+        do_recurse = self.recurse_if(x)
+        yield index, x, do_recurse
+
+        if not do_recurse:
+            return
+        for i, xi in enumerate(x):
+            # yield from ...
+            for v in self.walk(xi, index + (i,)):
+                yield v
