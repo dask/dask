@@ -747,3 +747,75 @@ def test_read_no_metadata(tmpdir, engine):
     result = dd.read_parquet(tmp, engine=engine)
     expected = pd.DataFrame({"A": [1, 2, 3], "B": [3, 4, 5]})
     assert_eq(result, expected)
+
+
+def test_parse_pandas_metadata_duplicate_index_columns():
+    md = {
+        'column_indexes': [{
+            'field_name': None,
+            'metadata': {
+                'encoding': 'UTF-8'
+            },
+            'name': None,
+            'numpy_type': 'object',
+            'pandas_type': 'unicode'
+        }],
+        'columns': [{
+            'field_name': 'A',
+            'metadata': None,
+            'name': 'A',
+            'numpy_type': 'int64',
+            'pandas_type': 'int64'
+        }, {
+            'field_name': '__index_level_0__',
+            'metadata': None,
+            'name': 'A',
+            'numpy_type': 'object',
+            'pandas_type': 'unicode'
+        }],
+        'index_columns': ['__index_level_0__'],
+        'pandas_version': '0.21.0'
+    }
+    index_names, column_names, storage_name_mapping, column_index_names = (
+        _parse_pandas_metadata(md)
+    )
+    assert index_names == ['A']
+    assert column_names == ['A']
+    assert storage_name_mapping == {'__index_level_0__': 'A', 'A': 'A'}
+    assert column_index_names == [None]
+
+
+def test_parse_pandas_metadata_column_with_index_name():
+    md = {
+        'column_indexes': [{
+            'field_name': None,
+            'metadata': {
+                'encoding': 'UTF-8'
+            },
+            'name': None,
+            'numpy_type': 'object',
+            'pandas_type': 'unicode'
+        }],
+        'columns': [{
+            'field_name': 'A',
+            'metadata': None,
+            'name': 'A',
+            'numpy_type': 'int64',
+            'pandas_type': 'int64'
+        }, {
+            'field_name': '__index_level_0__',
+            'metadata': None,
+            'name': 'A',
+            'numpy_type': 'object',
+            'pandas_type': 'unicode'
+        }],
+        'index_columns': ['__index_level_0__'],
+        'pandas_version': '0.21.0'
+    }
+    index_names, column_names, storage_name_mapping, column_index_names = (
+        _parse_pandas_metadata(md)
+    )
+    assert index_names == ['A']
+    assert column_names == ['A']
+    assert storage_name_mapping == {'__index_level_0__': 'A', 'A': 'A'}
+    assert column_index_names == [None]

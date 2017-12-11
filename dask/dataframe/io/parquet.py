@@ -32,9 +32,9 @@ def _parse_pandas_metadata(pandas_metadata):
     column_names : list
         List of strings indicating the actual column names
     storage_name_mapping : dict
-        Mapping from storage names (e.g. the field names for
-        PyArrow) to actual names. The storage and field names will
-        differ for index names for certain writers (pyarrow > 0.8)
+        Pairs of storage names (e.g. the field names for
+        PyArrow) and actual names. The storage and field names will
+        differ for index names for certain writers (pyarrow > 0.8).
 
     Notes
     -----
@@ -75,6 +75,20 @@ def _parse_pandas_metadata(pandas_metadata):
                         if real_name == storage_name]
 
     storage_name_mapping = dict(pairs)
+    # check for duplicates
+    # n_fields = len(pairs)
+
+    # if len(storage_name_mapping) != n_fields:
+    #     n_duplicates = len(storage_name_mapping)
+    #     duplicates = (
+    #         pd.Series([x[0] for x in pairs]).value_counts()
+    #         [:n_duplicates].to_dict())
+    #     msg = ("Cannot read parquet file with duplicate field names. "
+    #            "File contains {} fields, but only {} distinct names. "
+    #            "The duplicates names are {!r}".format(n_fields,
+    #                                                   len(storage_name_mapping),
+    #                                                   duplicates))
+    #     raise ValueError(msg)
 
     return index_names, column_names, storage_name_mapping, column_index_names
 
