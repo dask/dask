@@ -35,6 +35,9 @@ def _parse_pandas_metadata(pandas_metadata):
         Pairs of storage names (e.g. the field names for
         PyArrow) and actual names. The storage and field names will
         differ for index names for certain writers (pyarrow > 0.8).
+    column_indexes_names : list
+        The names for ``df.columns.name`` or ``df.columns.names`` for
+        a MultiIndex in the columns
 
     Notes
     -----
@@ -162,34 +165,55 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
     check_column_names(pf.columns, categories)
     name = 'read-parquet-' + tokenize(pf, columns, categories)
 
+    pandas_md = [x.value for x in pf.fmd.key_value_metadata if x.key == 'pandas']
+    if len(pandas_md) == 0:
+        index_names = pf._get_index()
+        if not isinstance(index_names, list):
+            index_names = [index_names]
+        column_names = pf.columns + list(pf.cats)
+        storage_name_mapping = {k: k for k in columns}
+        column_index_names = [None]
+
+    elif len(pandas_md) == 1:
+        index_names, column_names, storage_name_mapping, column_index_names = (
+            _parse_pandas_metadata(json.loads(pandas_md[0]))
+        )
+
+    else:
+        raise ValueError("Too many")
+
     rgs = [rg for rg in pf.row_groups if
            not (fastparquet.api.filter_out_stats(rg, filters, pf.schema)) and
            not (fastparquet.api.filter_out_cats(rg, filters))]
 
     if index is False:
-        index_col = None
-    elif index is None:
-        index_col = pf._get_index()
-    else:
-        index_col = index
+        index_names = []
+    elif index is not None:
+        index_names = index
+        if not isinstance(index_names, list):
+            index_names = [index_names]
+    # else, use what's in the file
 
-    if columns is None:
-        all_columns = tuple(pf.columns + list(pf.cats))
-    else:
-        all_columns = columns
-    if not isinstance(all_columns, tuple):
-        out_type = Series
-        all_columns = (all_columns,)
-    else:
-        out_type = DataFrame
-    if index_col and index_col not in all_columns:
-        all_columns = all_columns + (index_col,)
+    out_type = DataFrame
+    if columns is not None:
+        if not isinstance(columns, list):
+            columns = [columns]
+            out_type = Series
+        column_names = columns
+
+    all_columns = index_names + column_names
 
     if categories is None:
         categories = pf.categories
     dtypes = pf._dtypes(categories)
+    dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
-    meta = _meta_from_dtypes(all_columns, dtypes, index_col, [None])
+    meta = _meta_from_dtypes(all_columns, dtypes, index_names, [None])
+    # fastparquet / dask don't handle multiindex
+    if len(index_names) > 1:
+        raise ValueError
+    else:
+        index_names = index_names[0]
 
     for cat in categories:
         if cat in meta:
@@ -202,9 +226,9 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
         meta = meta[meta.columns[0]]
 
     dsk = {(name, i): (_read_parquet_row_group, myopen, pf.row_group_filename(rg),
-                       index_col, all_columns, rg, out_type == Series,
+                       index_names, all_columns, rg, out_type == Series,
                        categories, pf.schema, pf.cats, pf.dtypes,
-                       pf.file_scheme)
+                       pf.file_scheme, storage_name_mapping)
            for i, rg in enumerate(rgs)}
 
     if not dsk:
@@ -213,11 +237,12 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
         divisions = (None, None)
         return out_type(dsk, name, meta, divisions)
 
-    if index_col:
+    if index_names:
+        index_name = meta.index.name
         minmax = fastparquet.api.sorted_partitioned_columns(pf)
-        if index_col in minmax:
-            divisions = (list(minmax[index_col]['min']) +
-                         [minmax[index_col]['max'][-1]])
+        if index_name in minmax:
+            divisions = (list(minmax[index_name]['min']) +
+                         [minmax[index_name]['max'][-1]])
             divisions = [divisions[i] for i, rg in enumerate(pf.row_groups)
                          if rg in rgs] + [divisions[-1]]
         else:
@@ -232,17 +257,34 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
 
 
 def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
-                            schema, cs, dt, scheme, *args):
+                            schema, cs, dt, scheme, storage_name_mapping, *args):
     from fastparquet.api import _pre_allocate
     from fastparquet.core import read_row_group_file
+    name_storage_mapping = {v: k for k, v in storage_name_mapping.items()}
     if not isinstance(columns, (tuple, list)):
         columns = (columns,)
         series = True
     if index and index not in columns:
         columns = columns + type(columns)([index])
+
+    columns = [name_storage_mapping.get(col, col) for col in columns]
+    index = name_storage_mapping.get(index, index)
+
     df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt)
+    # now back from storage to names
     read_row_group_file(fn, rg, columns, categories, schema, cs,
                         open=open, assign=views, scheme=scheme)
+
+    if df.index.nlevels == 1:
+        if index:
+            df.index.name = storage_name_mapping.get(index, index)
+    else:
+        if index:
+            df.index.names = [storage_name_mapping.get(name, name)
+                              for name in index]
+    df.columns = [storage_name_mapping.get(col, col)
+                  for col in columns
+                  if col != index]
 
     if series:
         return df[df.columns[0]]
