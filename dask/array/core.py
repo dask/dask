@@ -1804,7 +1804,7 @@ def normalize_chunks(chunks, shape=None):
     >>> normalize_chunks((2, 2), shape=(5, 6))
     ((2, 2, 1), (2, 2, 2))
 
-    >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(4, 6))  # Idempotent
+    >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(5, 6))  # Idempotent
     ((2, 2, 1), (2, 2, 2))
 
     >>> normalize_chunks([[2, 2], [3, 3]])  # Cleans up lists to tuples
