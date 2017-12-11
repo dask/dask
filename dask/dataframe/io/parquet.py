@@ -223,9 +223,12 @@ def _write_fastparquet(df, path, write_index=None, append=False,
                     'Appended divisions overlapping with the previous ones.\n'
                     'New: {} | Previous: {}'.format(old_end, divisions[0]))
     else:
-        import inspect
         # Get only arguments specified in the function
-        spec = inspect.getfullargspec(fastparquet.writer.make_metadata)
+        try:
+            from inspect import getfullargspec as getargspec
+        except ImportError:
+            from inspect import getargspec
+        spec = getargspec(fastparquet.writer.make_metadata)
         safe_kwargs = {k: v for k, v in kwargs.items() if k in spec.args}
         safe_kwargs['data'] = df._meta
         safe_kwargs['object_encoding'] = object_encoding
@@ -416,10 +419,13 @@ def _write_partition_pyarrow(df, open_with, filename, write_index,
         parquet.write_table(t, fil, **kwargs)
 
     if metadata_path is not None:
-        import inspect
         with open_with(metadata_path, 'wb') as fil:
             # Get only arguments specified in the function
-            spec = inspect.getfullargspec(parquet.write_metadata)
+            try:
+                from inspect import getfullargspec as getargspec
+            except ImportError:
+                from inspect import getargspec
+            spec = getargspec(parquet.write_metadata)
             safe_kwargs = {k: v for k, v in kwargs.items() if k in spec.args}
             safe_kwargs['schema'] = t.schema
             safe_kwargs['where'] = fil
