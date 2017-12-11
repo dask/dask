@@ -77,21 +77,7 @@ def _parse_pandas_metadata(pandas_metadata):
         column_names = [real_name for (storage_name, real_name) in pairs
                         if real_name == storage_name]
 
-    storage_name_mapping = dict(pairs)
-    # check for duplicates
-    # n_fields = len(pairs)
-
-    # if len(storage_name_mapping) != n_fields:
-    #     n_duplicates = len(storage_name_mapping)
-    #     duplicates = (
-    #         pd.Series([x[0] for x in pairs]).value_counts()
-    #         [:n_duplicates].to_dict())
-    #     msg = ("Cannot read parquet file with duplicate field names. "
-    #            "File contains {} fields, but only {} distinct names. "
-    #            "The duplicates names are {!r}".format(n_fields,
-    #                                                   len(storage_name_mapping),
-    #                                                   duplicates))
-    #     raise ValueError(msg)
+    storage_name_mapping = dict(pairs)   # TODO: handle duplicates gracefully
 
     return index_names, column_names, storage_name_mapping, column_index_names
 
