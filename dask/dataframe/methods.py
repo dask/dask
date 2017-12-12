@@ -270,7 +270,7 @@ def concat(dfs, axis=0, join='outer', uniform=False):
         ind = concat([df.index for df in dfs])
     else:
         dfs2 = dfs
-        ind = concat([df.index for df in dfs2])
+        ind = None
 
     # Concatenate the partitions together, handling categories as needed
     if (isinstance(dfs2[0], pd.DataFrame) if uniform else
@@ -294,6 +294,7 @@ def concat(dfs, axis=0, join='outer', uniform=False):
             not_cat = cat_mask[~cat_mask].index
             out = pd.concat([df[df.columns.intersection(not_cat)]
                              for df in dfs3], join=join)
+            temp_ind = out.index
             for col in cat_mask.index.difference(not_cat):
                 # Find an example of categoricals in this column
                 for df in dfs3:
@@ -312,6 +313,10 @@ def concat(dfs, axis=0, join='outer', uniform=False):
                                                          sample.cat.ordered)
                         parts.append(data)
                 out[col] = union_categoricals(parts)
+                # Pandas resets index type on assignment if frame is empty
+                # https://github.com/pandas-dev/pandas/issues/17101
+                if not len(temp_ind):
+                    out.index = temp_ind
             out = out.reindex(columns=cat_mask.index)
         else:
             # pandas may raise a RuntimeWarning for comparing ints and strs
@@ -320,6 +325,8 @@ def concat(dfs, axis=0, join='outer', uniform=False):
                 out = pd.concat(dfs3, join=join)
     else:
         if is_categorical_dtype(dfs2[0].dtype):
+            if ind is None:
+                ind = concat([df.index for df in dfs2])
             return pd.Series(union_categoricals(dfs2), index=ind,
                              name=dfs2[0].name)
         out = pd.concat(dfs2, join=join)
