@@ -343,6 +343,21 @@ def test_slicing_and_chunks():
     assert t.chunks == ((8, 8), (6, 6))
 
 
+def test_slicing_identities():
+    a = da.ones((24, 16), chunks=((4, 8, 8, 4), (2, 6, 6, 2)))
+
+    assert a is a[slice(None)]
+    assert a is a[:]
+    assert a is a[::]
+    assert a is a[...]
+    assert a is a[0:]
+    assert a is a[0::]
+    assert a is a[::1]
+    assert a is a[0:len(a)]
+    assert a is a[0::1]
+    assert a is a[0:len(a):1]
+
+
 def test_slice_stop_0():
     # from gh-125
     a = da.ones(10, chunks=(10,))[:0].compute()

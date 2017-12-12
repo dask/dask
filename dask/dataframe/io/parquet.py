@@ -395,7 +395,7 @@ def _write_pyarrow(df, path, write_index=None, append=False,
 
     write = delayed(_write_partition_pyarrow)
     first_kwargs = kwargs.copy()
-    first_kwargs['metadata_path'] = fs.sep.join([path, '_metadata'])
+    first_kwargs['metadata_path'] = fs.sep.join([path, '_common_metadata'])
     writes = [write(part, open_with, template % i, write_index,
                     **(kwargs if i else first_kwargs))
               for i, part in enumerate(df.to_delayed())]

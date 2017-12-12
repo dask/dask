@@ -303,7 +303,7 @@ def test_parquet(s3, engine):
     df.to_parquet(url, engine=engine)
 
     files = [f.split('/')[-1] for f in s3.ls(url)]
-    assert '_metadata' in files
+    assert '_common_metadata' in files
     assert 'part.0.parquet' in files
 
     df2 = dd.read_parquet(url, index='foo', engine=engine)
