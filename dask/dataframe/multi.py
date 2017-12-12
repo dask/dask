@@ -523,6 +523,14 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
         Whether to concatenate DataFrames ignoring its order. If True, every
         divisions are concatenated each by each.
 
+    Notes
+    -----
+    This differs in from ``pd.concat`` in the when concatenating Categoricals
+    with different categories. Pandas currently coerces those to objects
+    before concatenating. Coercing to objects is very expensive for large
+    arrays, so dask preserves the Categoricals by taking the union of
+    the categories.
+
     Examples
     --------
 
@@ -558,6 +566,14 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
     dd.DataFrame<y, divisions=(1, 4, 10)>
     >>> dd.concat([a, b])                               # doctest: +SKIP
     dd.DataFrame<concat-..., divisions=(None, None, None, None)>
+
+    Different categoricals are unioned
+
+    >> dd.concat([                                     # doctest: +SKIP
+    ...     dd.from_pandas(pd.Series(['a', 'b'], dtype='category'), 1),
+    ...     dd.from_pandas(pd.Series(['a', 'c'], dtype='category'), 1),
+    ... ], interleave_partitions=True).dtype
+    CategoricalDtype(categories=['a', 'b', 'c'], ordered=False)
     """
     if not isinstance(dfs, list):
         raise TypeError("dfs must be a list of DataFrames/Series objects")

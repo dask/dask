@@ -26,6 +26,7 @@ DataFrame
 
 - Prevent ``bool()`` coercion from calling compute (:pr:`2958`) `Albert DeFusco`_
 - ``DataFrame.read_sql()`` (:pr:`2928`) to an empty database tables returns an empty dask dataframe `Apostolos Vlachopoulos`_
+- Fixed ``dd.concat`` losing the index dtype when the data contained a categorical (:issue:`2932`) `Tom Augspurger`_
 - ``DataFrame.merge()`` (:pr:`2960`) now supports merging on a combination of columns and the index `Jon Mease`_
 
 Core
