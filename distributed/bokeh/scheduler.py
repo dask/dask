@@ -768,13 +768,18 @@ class WorkerTable(DashboardComponent):
     def __init__(self, scheduler, width=800, **kwargs):
         self.scheduler = scheduler
         self.names = ['worker', 'ncores', 'cpu', 'memory', 'memory_limit',
-                      'memory_percent', 'num_fds', 'read_bytes', 'write_bytes']
+                      'memory_percent', 'num_fds', 'read_bytes', 'write_bytes',
+                      'cpu_fraction']
+
+        table_names = ['worker', 'ncores', 'cpu', 'memory', 'memory_limit',
+                       'memory_percent', 'num_fds', 'read_bytes',
+                       'write_bytes']
 
         self.source = ColumnDataSource({k: [] for k in self.names})
 
         columns = {name: TableColumn(field=name,
                                      title=name.replace('_percent', ' %'))
-                   for name in self.names}
+                   for name in table_names}
 
         formatters = {'cpu': NumberFormatter(format='0.0 %'),
                       'memory_percent': NumberFormatter(format='0.0 %'),
@@ -786,13 +791,13 @@ class WorkerTable(DashboardComponent):
                       'ncores': NumberFormatter(format='0')}
 
         table = DataTable(
-            source=self.source, columns=[columns[n] for n in self.names],
+            source=self.source, columns=[columns[n] for n in table_names],
             row_headers=False, reorderable=True, sortable=True, width=width,
         )
 
-        for name in self.names:
+        for name in table_names:
             if name in formatters:
-                table.columns[self.names.index(name)].formatter = formatters[name]
+                table.columns[table_names.index(name)].formatter = formatters[name]
 
         hover = HoverTool(
             point_policy="follow_mouse",
@@ -805,12 +810,13 @@ class WorkerTable(DashboardComponent):
         )
 
         mem_plot = figure(title='Memory Use (%)', toolbar_location=None,
-                          x_range=(0, 1), y_range=(-0.1, 0.1), height=80,
+                          x_range=(0, 1), y_range=(-0.1, 0.1), height=60,
                           width=width, tools='', **kwargs)
         mem_plot.circle(source=self.source, x='memory_percent', y=0,
                         size=10, fill_alpha=0.5)
         mem_plot.ygrid.visible = False
         mem_plot.yaxis.minor_tick_line_alpha = 0
+        mem_plot.xaxis.visible = False
         mem_plot.yaxis.visible = False
         mem_plot.add_tools(hover, BoxSelectTool())
 
@@ -825,14 +831,16 @@ class WorkerTable(DashboardComponent):
         )
 
         cpu_plot = figure(title='CPU Use (%)', toolbar_location=None,
-                          x_range=(0, 1), y_range=(-0.1, 0.1), height=80,
+                          x_range=(0, 1), y_range=(-0.1, 0.1), height=60,
                           width=width, tools='', **kwargs)
-        cpu_plot.circle(source=self.source, x='cpu', y=0,
+        cpu_plot.circle(source=self.source, x='cpu_fraction', y=0,
                         size=10, fill_alpha=0.5)
         cpu_plot.ygrid.visible = False
         cpu_plot.yaxis.minor_tick_line_alpha = 0
+        cpu_plot.xaxis.visible = False
         cpu_plot.yaxis.visible = False
         cpu_plot.add_tools(hover, BoxSelectTool())
+        self.cpu_plot = cpu_plot
 
         if 'sizing_mode' in kwargs:
             sizing_mode = {'sizing_mode': kwargs['sizing_mode']}
@@ -849,6 +857,7 @@ class WorkerTable(DashboardComponent):
             data['worker'][-1] = worker
             data['memory_percent'][-1] = info['memory'] / info['memory_limit']
             data['cpu'][-1] = info['cpu'] / 100.0
+            data['cpu_fraction'][-1] = info['cpu'] / 100.0 / info['ncores']
 
         self.source.data.update(data)
 
