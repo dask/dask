@@ -1087,7 +1087,7 @@ def test_concat_datetimeindex():
     db2 = dd.from_pandas(b2, 1)
     db3 = dd.from_pandas(b3, 1)
 
-    result = concat([db2._meta, db3._meta])
+    result = concat([b2.iloc[:0], b3.iloc[:0]])
     assert result.index.dtype == '<M8[ns]'
 
     result = dd.concat([db2, db3])
