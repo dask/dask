@@ -211,11 +211,12 @@ def test_repeated():
         pass
 
 
-def test_bokeh(loop):
+@pytest.mark.parametrize('processes', [True, False])
+def test_bokeh(loop, processes):
     pytest.importorskip('bokeh')
     import requests
     with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
-                      diagnostics_port=0) as c:
+                      processes=processes, diagnostics_port=0) as c:
         bokeh_port = c.scheduler.services['bokeh'].port
         url = 'http://127.0.0.1:%d/status/' % bokeh_port
         start = time()
@@ -225,6 +226,9 @@ def test_bokeh(loop):
                 break
             assert time() < start + 20
             sleep(0.01)
+        # 'localhost' also works
+        response = requests.get('http://localhost:%d/status/' % bokeh_port)
+        assert response.ok
 
     with pytest.raises(requests.RequestException):
         requests.get(url, timeout=0.2)
@@ -311,21 +315,3 @@ def test_death_timeout_raises(loop):
                           death_timeout=1e-10, diagnostics_port=None,
                           loop=loop) as cluster:
             pass
-
-
-@pytest.mark.parametrize('processes', [True, False])
-def test_diagnostics_available_at_localhost(loop, processes):
-    pytest.importorskip('bokeh')
-    import requests
-    import random
-    for i in range(3):
-        port = random.randint(10000, 60000)
-        try:
-            with LocalCluster(2, scheduler_port=0, processes=processes,
-                              silence_logs=False, diagnostics_port=port, loop=loop) as c:
-                requests.get('http://localhost:%d/status/' % port, timeout=3)
-                requests.get('http://127.0.0.1:%d/status/' % port, timeout=1)
-        except OSError:
-            pass
-        else:
-            break
