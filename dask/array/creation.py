@@ -12,7 +12,7 @@ from .. import sharedict
 from ..base import tokenize
 from ..utils import ignoring
 from . import chunk
-from .core import Array, asarray, normalize_chunks, stack, concatenate
+from .core import Array, asarray, normalize_chunks, stack, concatenate, broadcast_to
 from .wrap import empty, ones, zeros, full
 
 
@@ -314,10 +314,12 @@ def meshgrid(*xi, **kwargs):
 
     xi = [e.flatten() for e in xi]
     dimensions = [xi[i].size for i in range(len(xi))]
+    chunks = [xi[i].chunks[0] for i in range(len(xi))]
 
     if indexing == "xy" and len(xi) > 1:
         xi[0], xi[1] = xi[1], xi[0]
         dimensions[0], dimensions[1] = dimensions[1], dimensions[0]
+        chunks[0], chunks[1] = chunks[1], chunks[0]
 
     grid = []
     for i in range(len(xi)):
@@ -328,8 +330,7 @@ def meshgrid(*xi, **kwargs):
         r = xi[i][s]
 
         if not sparse:
-            for j in chain(range(i), range(i + 1, len(dimensions))):
-                r = r.repeat(dimensions[j], axis=j)
+            r = broadcast_to(r, shape=dimensions, chunks=chunks)
 
         grid.append(r)
 
