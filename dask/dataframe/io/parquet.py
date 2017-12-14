@@ -223,18 +223,11 @@ def _write_fastparquet(df, path, write_index=None, append=False,
                     'Appended divisions overlapping with the previous ones.\n'
                     'New: {} | Previous: {}'.format(old_end, divisions[0]))
     else:
-        # Get only arguments specified in the function
-        try:
-            from inspect import getfullargspec as getargspec
-        except ImportError:
-            from inspect import getargspec
-        spec = getargspec(fastparquet.writer.make_metadata)
-        safe_kwargs = {k: v for k, v in kwargs.items() if k in spec.args}
-        safe_kwargs['data'] = df._meta
-        safe_kwargs['object_encoding'] = object_encoding
-        safe_kwargs['index_cols'] = index_cols
-        safe_kwargs['ignore_columns'] = partition_on
-        fmd = fastparquet.writer.make_metadata(**safe_kwargs)
+        fmd = fastparquet.writer.make_metadata(df._meta,
+                                               object_encoding=object_encoding,
+                                               index_cols=index_cols,
+                                               ignore_columns=partition_on,
+                                               **kwargs)
         i_offset = 0
 
     filenames = ['part.%i.parquet' % (i + i_offset)
@@ -380,6 +373,14 @@ def _read_pyarrow_parquet_piece(open_file_func, piece, columns, index_cols,
         return df
 
 
+_pyarrow_write_table_kwargs = {'row_group_size', 'version', 'use_dictionary',
+                               'compression', 'use_deprecated_int96_timestamps',
+                               'coerce_timestamps', 'flavor', 'chunk_size'}
+
+_pyarrow_write_metadata_kwargs = {'version', 'use_deprecated_int96_timestamps',
+                                  'coerce_timestamps'}
+
+
 def _write_pyarrow(df, path, write_index=None, append=False,
                    ignore_divisions=False, partition_on=None,
                    storage_options=None, **kwargs):
@@ -390,6 +391,16 @@ def _write_pyarrow(df, path, write_index=None, append=False,
     if partition_on:
         raise NotImplementedError("`partition_on` not implemented for "
                                   "`engine='pyarrow'`")
+
+    if ignore_divisions:
+        raise NotImplementedError("`ignore_divisions` not implemented for "
+                                  "`engine='pyarrow'`")
+
+    # We can check only write_table kwargs, as it is a superset of kwargs for write functions
+    if set(kwargs).difference(_pyarrow_write_table_kwargs):
+        msg = ("Unexpected keyword arguments: " +
+               "%r" % list(set(kwargs).difference(_pyarrow_write_table_kwargs)))
+        raise TypeError(msg)
 
     if write_index is None and df.known_divisions:
         write_index = True
@@ -421,15 +432,9 @@ def _write_partition_pyarrow(df, open_with, filename, write_index,
     if metadata_path is not None:
         with open_with(metadata_path, 'wb') as fil:
             # Get only arguments specified in the function
-            try:
-                from inspect import getfullargspec as getargspec
-            except ImportError:
-                from inspect import getargspec
-            spec = getargspec(parquet.write_metadata)
-            safe_kwargs = {k: v for k, v in kwargs.items() if k in spec.args}
-            safe_kwargs['schema'] = t.schema
-            safe_kwargs['where'] = fil
-            parquet.write_metadata(**safe_kwargs)
+            kwargs_meta = {k: v for k, v in kwargs.items()
+                           if k in _pyarrow_write_metadata_kwargs}
+            parquet.write_metadata(t.schema, fil, **kwargs_meta)
 
 
 # ----------------------------------------------------------------------
