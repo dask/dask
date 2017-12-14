@@ -12,7 +12,7 @@ Array
 - Support N-D arrays with ``matmul`` (:pr:`2909`) `John A Kirkham`_
 - Add ``vdot`` (:pr:`2910`) `John A Kirkham`_
 - Explicit ``chunks`` argument for ``broadcast_to`` (:pr:`2943`) `Stephan Hoyer`_
-- Add ``meshgrid`` (:pr:`2938`) `John A Kirkham`_ and (:pr:``) `Markus Gonser`_
+- Add ``meshgrid`` (:pr:`2938`) `John A Kirkham`_ and (:pr:`3001`) `Markus Gonser`_
 - Preserve singleton chunks in ``fftshift``/``ifftshift`` (:pr:`2733`) `John A Kirkham`_
 - Fix handling of negative indexes in ``vindex`` and raise errors for out of
 bounds indexes (:pr:`2967`) `Stephan Hoyer`_
