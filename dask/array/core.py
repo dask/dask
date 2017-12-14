@@ -2571,13 +2571,14 @@ def insert_to_ooc(arr, out, lock=True, region=None):
         lock = Lock()
 
     def store(x, out, index, lock, region):
+        subindex = index
+        if region is not None:
+            subindex = fuse_slice(region, index)
+
         if lock:
             lock.acquire()
         try:
-            if region is None:
-                out[index] = np.asanyarray(x)
-            else:
-                out[fuse_slice(region, index)] = np.asanyarray(x)
+            out[subindex] = np.asanyarray(x)
         finally:
             if lock:
                 lock.release()
