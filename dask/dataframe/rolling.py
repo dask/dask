@@ -1,8 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import datetime
-import warnings
-from functools import wraps
 
 import pandas as pd
 from pandas.core.window import Rolling as pd_Rolling
