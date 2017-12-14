@@ -239,8 +239,6 @@ def test_meshgrid(shapes, chunks, indexing, sparse):
     for e_r_a, e_r_d, i in zip(r_a, r_d, do):
         assert_eq(e_r_a, e_r_d)
         if sparse:
-            print("3", e_r_d, e_r_d.chunks)
-            print("4", e_r_d.chunks[i], xi_dc[i])
             assert e_r_d.chunks[i] == xi_dc[i]
         else:
             assert e_r_d.chunks == xi_dc
