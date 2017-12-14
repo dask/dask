@@ -175,9 +175,7 @@ def _write_partition_fastparquet(df, fs, path, filename, fmd, compression,
 
 def _write_fastparquet(df, path, write_index=None, append=False,
                        ignore_divisions=False, partition_on=None,
-                       storage_options=None, compression=None,
-                       has_nulls=True, fixed_text=None,
-                       object_encoding='utf8', times='int64'):
+                       storage_options=None, compression=None, **kwargs):
     import fastparquet
 
     fs, paths, open_with = get_fs_paths_myopen(path, None, 'wb',
@@ -185,6 +183,7 @@ def _write_fastparquet(df, path, write_index=None, append=False,
     fs.mkdirs(path)
     sep = fs.sep
 
+    object_encoding = kwargs.pop('object_encoding', 'utf8')
     if object_encoding == 'infer' or (isinstance(object_encoding, dict) and 'infer' in object_encoding.values()):
         raise ValueError('"infer" not allowed as object encoding, '
                          'because this required data in memory.')
@@ -224,8 +223,18 @@ def _write_fastparquet(df, path, write_index=None, append=False,
                     'Appended divisions overlapping with the previous ones.\n'
                     'New: {} | Previous: {}'.format(old_end, divisions[0]))
     else:
-        fmd = fastparquet.writer.make_metadata(df._meta, has_nulls, partition_on, fixed_text,
-                                               object_encoding, times, index_cols)
+        # Get only arguments specified in the function
+        try:
+            from inspect import getfullargspec as getargspec
+        except ImportError:
+            from inspect import getargspec
+        spec = getargspec(fastparquet.writer.make_metadata)
+        safe_kwargs = {k: v for k, v in kwargs.items() if k in spec.args}
+        safe_kwargs['data'] = df._meta
+        safe_kwargs['object_encoding'] = object_encoding
+        safe_kwargs['index_cols'] = index_cols
+        safe_kwargs['ignore_columns'] = partition_on
+        fmd = fastparquet.writer.make_metadata(**safe_kwargs)
         i_offset = 0
 
     filenames = ['part.%i.parquet' % (i + i_offset)
@@ -373,22 +382,13 @@ def _read_pyarrow_parquet_piece(open_file_func, piece, columns, index_cols,
 
 def _write_pyarrow(df, path, write_index=None, append=False,
                    ignore_divisions=False, partition_on=None,
-                   storage_options=None,
-                   row_group_size=None, version='1.0',
-                   use_dictionary=True, compression='snappy',
-                   use_deprecated_int96_timestamps=None,
-                   coerce_timestamps=None,
-                   flavor=None, chunk_size=None):
+                   storage_options=None, **kwargs):
     if append:
         raise NotImplementedError("`append` not implemented for "
                                   "`engine='pyarrow'`")
 
     if partition_on:
-            raise NotImplementedError("`partition_on` not implemented for "
-                                      "`engine='pyarrow'`")
-
-    if ignore_divisions:
-        raise NotImplementedError("`ignore_divisions` not implemented for "
+        raise NotImplementedError("`partition_on` not implemented for "
                                   "`engine='pyarrow'`")
 
     if write_index is None and df.known_divisions:
@@ -401,45 +401,36 @@ def _write_pyarrow(df, path, write_index=None, append=False,
     template = fs.sep.join([path, 'part.%i.parquet'])
 
     write = delayed(_write_partition_pyarrow)
-    metadata_path = fs.sep.join([path, '_common_metadata'])
+    first_kwargs = kwargs.copy()
+    first_kwargs['metadata_path'] = fs.sep.join([path, '_common_metadata'])
     writes = [write(part, open_with, template % i, write_index,
-                    (None if i else metadata_path),
-                    row_group_size, version,
-                    use_dictionary, compression,
-                    use_deprecated_int96_timestamps,
-                    coerce_timestamps,
-                    flavor, chunk_size)
+                    **(kwargs if i else first_kwargs))
               for i, part in enumerate(df.to_delayed())]
     return delayed(writes)
 
 
 def _write_partition_pyarrow(df, open_with, filename, write_index,
-                             metadata_path=None,
-                             row_group_size=None, version='1.0',
-                             use_dictionary=True, compression='snappy',
-                             use_deprecated_int96_timestamps=None,
-                             coerce_timestamps=None,
-                             flavor=None, chunk_size=None):
+                             metadata_path=None, **kwargs):
     import pyarrow as pa
     from pyarrow import parquet
     t = pa.Table.from_pandas(df, preserve_index=write_index)
 
-    # Only kwargs key expected by write_table
-    if not chunk_size:
-        chunk_size = row_group_size
-
     with open_with(filename, 'wb') as fil:
-        parquet.write_table(t, fil, row_group_size, version,
-                            use_dictionary, compression,
-                            use_deprecated_int96_timestamps,
-                            coerce_timestamps,
-                            flavor, chunk_size=chunk_size)
+        parquet.write_table(t, fil, **kwargs)
 
     if metadata_path is not None:
         with open_with(metadata_path, 'wb') as fil:
-            parquet.write_metadata(t.schema, fil, version,
-                                   use_deprecated_int96_timestamps,
-                                   coerce_timestamps)
+            # Get only arguments specified in the function
+            try:
+                from inspect import getfullargspec as getargspec
+            except ImportError:
+                from inspect import getargspec
+            spec = getargspec(parquet.write_metadata)
+            safe_kwargs = {k: v for k, v in kwargs.items() if k in spec.args}
+            safe_kwargs['schema'] = t.schema
+            safe_kwargs['where'] = fil
+            parquet.write_metadata(**safe_kwargs)
+
 
 # ----------------------------------------------------------------------
 # User API
