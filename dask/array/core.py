@@ -891,7 +891,7 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
         except AttributeError:
             dsk = {}
 
-        update = insert_to_ooc(tgt, src, lock=lock, region=reg)
+        update = insert_to_ooc(src, tgt, lock=lock, region=reg)
         keys.extend(update)
 
         update.update(dsk)
@@ -2566,11 +2566,11 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     return Array(dsk2, name, chunks, dtype=dt)
 
 
-def insert_to_ooc(out, arr, lock=True, region=None):
+def insert_to_ooc(arr, out, lock=True, region=None):
     if lock is True:
         lock = Lock()
 
-    def store(out, x, index, lock, region):
+    def store(x, out, index, lock, region):
         if lock:
             lock.acquire()
         try:
@@ -2587,7 +2587,7 @@ def insert_to_ooc(out, arr, lock=True, region=None):
     slices = slices_from_chunks(arr.chunks)
 
     name = 'store-%s' % arr.name
-    dsk = {(name,) + t[1:]: (store, out, t, slc, lock, region)
+    dsk = {(name,) + t[1:]: (store, t, out, slc, lock, region)
            for t, slc in zip(core.flatten(arr.__dask_keys__()), slices)}
 
     return dsk
