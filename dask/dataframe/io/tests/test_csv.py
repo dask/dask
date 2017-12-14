@@ -384,7 +384,7 @@ def test_categorical_dtypes():
                 ['apple', 'banana', 'orange', 'pear'])
 
 
-@pytest.mark.skipif(PANDAS_VERSION < '0.20.0',
+@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
                     reason="Uses CategoricalDtype")
 def test_categorical_ordered():
     text1 = normalize_text("""
