@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
+import collections
 import sys
 
 try:
@@ -10,6 +11,12 @@ except ImportError:
     psutil = None
 
 import pandas as pd
+try:
+    from pandas.api.types import CategoricalDtype
+    _HAS_CDT = True
+except ImportError:
+    _HAS_CDT = False
+
 
 from ...bytes import read_bytes
 from ...bytes.core import write_bytes
@@ -24,12 +31,10 @@ from .io import from_delayed
 
 if PANDAS_VERSION >= '0.20.0':
     from pandas.api.types import (is_integer_dtype, is_float_dtype,
-                                  is_object_dtype, is_datetime64_any_dtype,
-                                  is_categorical_dtype)
+                                  is_object_dtype, is_datetime64_any_dtype)
 else:
     from pandas.types.common import (is_integer_dtype, is_float_dtype,
-                                     is_object_dtype, is_datetime64_any_dtype,
-                                     is_categorical_dtype)
+                                     is_object_dtype, is_datetime64_any_dtype)
 
 
 delayed = delayed(pure=True)
@@ -72,31 +77,6 @@ def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
     return df
 
 
-def _union_categorical_dtypes(previous, new):
-    """Union the dtypes from two blocks of categoricals
-
-    Parameters
-    ----------
-    previous : Index
-        The values in ``df[c].cat.categories``
-    new : str or CategoricalDtype
-        For old pandas, only the str 'category' is allowed.
-        For newer pandas, ``new`` may be a ``CategoricalDtype``
-
-    Returns
-    -------
-    unioned : str or CategoricalDtype
-    """
-    if isinstance(new, str):
-        # Should just be 'category'
-        return new
-    old_categories = previous.tolist()
-    new_categoires = new.categories.tolist()
-    # Index.union sorts, so we just append and then unique
-    unioned = pd.Index(old_categories + new_categoires).unique()
-    return pd.api.types.CategoricalDtype(unioned, ordered=new.ordered)
-
-
 def coerce_dtypes(df, dtypes):
     """ Coerce dataframe to dtypes safely
 
@@ -124,11 +104,7 @@ def coerce_dtypes(df, dtypes):
                 bad_dates.append(c)
             else:
                 try:
-                    if is_categorical_dtype(df[c]):
-                        dtype = _union_categorical_dtypes(df[c].cat.categories, dtypes[c])
-                        df[c] = df[c].astype(dtype)
-                    else:
-                        df[c] = df[c].astype(dtypes[c])
+                    df[c] = df[c].astype(dtypes[c])
                 except Exception as e:
                     bad_dtypes.append((c, actual, desired))
                     errors.append((c, e))
@@ -186,7 +162,8 @@ def coerce_dtypes(df, dtypes):
 
 
 def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
-                          collection=True, enforce=False):
+                          collection=True, enforce=False,
+                          specified_dtypes=None):
     """ Convert blocks of bytes to a dask.dataframe or other high-level object
 
     This accepts a list of lists of values of bytes where each list corresponds
@@ -214,6 +191,38 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
     A dask.dataframe or list of delayed values
     """
     dtypes = head.dtypes.to_dict()
+    # dtypes contains only instances of CategoricalDtype, which causes issues
+    # in coerce_dtypes for non-uniform categories accross partitions.
+    # We will modify `dtype` (which is inferred) to
+    # 1. contain instances of CategoricalDtypes for user-provided types
+    # 2. contain 'category' for data inferred types
+    categoricals = head.select_dtypes(include=['category']).columns
+
+    if isinstance(specified_dtypes, collections.Mapping):
+        known_categoricals = [
+            k for k in categoricals
+            if _HAS_CDT and
+            isinstance(specified_dtypes.get(k), CategoricalDtype) and
+            specified_dtypes.get(k).categories is not None
+        ]
+        unknown_categoricals = categoricals.difference(known_categoricals)
+    elif isinstance(specified_dtypes, CategoricalDtype):
+        if _HAS_CDT and isinstance(specified_dtypes, CategoricalDtype):
+            if specified_dtypes.categories is None:
+                known_categoricals = []
+                unknown_categoricals = categoricals
+            else:
+                known_categoricals = categoricals
+                unknown_categoricals = []
+    else:
+        known_categoricals = []
+        unknown_categoricals = categoricals
+
+    # Fixup the dtypes
+    for k in dtypes:
+        if k in unknown_categoricals:
+            dtypes[k] = 'category'
+
     columns = list(head.columns)
     delayed_pandas_read_text = delayed(pandas_read_text)
     dfs = []
@@ -232,7 +241,8 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
                                                 enforce=enforce))
 
     if collection:
-        head = clear_known_categories(head)
+        if len(unknown_categoricals):
+            head = clear_known_categories(head, cols=unknown_categoricals)
         return from_delayed(dfs, head)
     else:
         return dfs
@@ -335,7 +345,8 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                 head[c] = head[c].astype(float)
 
     return text_blocks_to_pandas(reader, values, header, head, kwargs,
-                                 collection=collection, enforce=enforce)
+                                 collection=collection, enforce=enforce,
+                                 specified_dtypes=specified_dtypes)
 
 
 READ_DOC_TEMPLATE = """
