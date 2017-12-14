@@ -206,14 +206,13 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
             specified_dtypes.get(k).categories is not None
         ]
         unknown_categoricals = categoricals.difference(known_categoricals)
-    elif isinstance(specified_dtypes, CategoricalDtype):
-        if _HAS_CDT and isinstance(specified_dtypes, CategoricalDtype):
-            if specified_dtypes.categories is None:
-                known_categoricals = []
-                unknown_categoricals = categoricals
-            else:
-                known_categoricals = categoricals
-                unknown_categoricals = []
+    elif _HAS_CDT and isinstance(specified_dtypes, CategoricalDtype):
+        if specified_dtypes.categories is None:
+            known_categoricals = []
+            unknown_categoricals = categoricals
+        else:
+            known_categoricals = categoricals
+            unknown_categoricals = []
     else:
         known_categoricals = []
         unknown_categoricals = categoricals
