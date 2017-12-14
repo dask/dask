@@ -218,9 +218,8 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
         unknown_categoricals = categoricals
 
     # Fixup the dtypes
-    for k in dtypes:
-        if k in unknown_categoricals:
-            dtypes[k] = 'category'
+    for k in unknown_categoricals:
+        dtypes[k] = 'category'
 
     columns = list(head.columns)
     delayed_pandas_read_text = delayed(pandas_read_text)
