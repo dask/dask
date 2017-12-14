@@ -24,6 +24,7 @@ bounds indexes (:pr:`2967`) `Stephan Hoyer`_
 DataFrame
 +++++++++
 
+- Fixed ``dd.read_csv`` so that passing instances of ``CategoricalDtype`` in ``dtype`` will result in known categoricals (:pr:`2996`) `Tom Augspurger`_
 - Compatability with pandas 0.22.0 (:issue:`2996`) `Tom Augspurger`_
 - Prevent ``bool()`` coercion from calling compute (:pr:`2958`) `Albert DeFusco`_
 - ``DataFrame.read_sql()`` (:pr:`2928`) to an empty database tables returns an empty dask dataframe `Apostolos Vlachopoulos`_
