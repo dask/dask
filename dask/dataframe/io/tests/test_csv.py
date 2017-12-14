@@ -384,6 +384,40 @@ def test_categorical_dtypes():
                 ['apple', 'banana', 'orange', 'pear'])
 
 
+@pytest.mark.skipif(PANDAS_VERSION < '0.20.0',
+                    reason="Uses CategoricalDtype")
+def test_categorical_ordered():
+    text1 = normalize_text("""
+    A
+    a
+    b
+    a
+    """)
+    text2 = normalize_text("""
+    A
+    a
+    b
+    c
+    """)
+    dtype = pd.api.types.CategoricalDtype(['a', 'b', 'c'])
+    with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
+        result = dd.read_csv("foo.*.csv", dtype={"A": 'category'})
+        expected = pd.DataFrame({
+            "A": pd.Categorical(['a', 'b', 'a', 'a', 'b', 'c'],
+                                categories=dtype.categories)},
+                                index=[0, 1, 2, 0, 1, 2])
+        assert_eq(result, expected)
+
+        result = dd.read_csv("foo.*.csv", dtype=dtype)
+        assert_eq(result, expected)
+
+        # ordered
+        dtype = pd.api.types.CategoricalDtype(['a', 'b', 'c'], ordered=True)
+        result = dd.read_csv("foo.*.csv", dtype=dtype)
+        expected['A'] = expected['A'].cat.as_ordered()
+        assert_eq(result, expected)
+
+
 @pytest.mark.slow
 def test_compression_multiple_files():
     with tmpdir() as tdir:

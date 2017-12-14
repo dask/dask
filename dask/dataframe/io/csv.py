@@ -24,10 +24,12 @@ from .io import from_delayed
 
 if PANDAS_VERSION >= '0.20.0':
     from pandas.api.types import (is_integer_dtype, is_float_dtype,
-                                  is_object_dtype, is_datetime64_any_dtype)
+                                  is_object_dtype, is_datetime64_any_dtype,
+                                  is_categorical_dtype)
 else:
     from pandas.types.common import (is_integer_dtype, is_float_dtype,
-                                     is_object_dtype, is_datetime64_any_dtype)
+                                     is_object_dtype, is_datetime64_any_dtype,
+                                     is_categorical_dtype)
 
 
 delayed = delayed(pure=True)
@@ -70,6 +72,31 @@ def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
     return df
 
 
+def _union_categorical_dtypes(previous, new):
+    """Union the dtypes from two blocks of categoricals
+
+    Parameters
+    ----------
+    previous : Index
+        The values in ``df[c].cat.categories``
+    new : str or CategoricalDtype
+        For old pandas, only the str 'category' is allowed.
+        For newer pandas, ``new`` may be a ``CategoricalDtype``
+
+    Returns
+    -------
+    unioned : str or CategoricalDtype
+    """
+    if isinstance(new, str):
+        # Should just be 'category'
+        return new
+    old_categories = previous.tolist()
+    new_categoires = new.categories.tolist()
+    # Index.union sorts, so we just append and then unique
+    unioned = pd.Index(old_categories + new_categoires).unique()
+    return pd.api.types.CategoricalDtype(unioned, ordered=new.ordered)
+
+
 def coerce_dtypes(df, dtypes):
     """ Coerce dataframe to dtypes safely
 
@@ -97,7 +124,11 @@ def coerce_dtypes(df, dtypes):
                 bad_dates.append(c)
             else:
                 try:
-                    df[c] = df[c].astype(dtypes[c])
+                    if is_categorical_dtype(df[c]):
+                        dtype = _union_categorical_dtypes(df[c].cat.categories, dtypes[c])
+                        df[c] = df[c].astype(dtype)
+                    else:
+                        df[c] = df[c].astype(dtypes[c])
                 except Exception as e:
                     bad_dtypes.append((c, actual, desired))
                     errors.append((c, e))
