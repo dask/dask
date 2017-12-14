@@ -198,7 +198,7 @@ def test_indicies():
     assert_eq(darr, nparr)
 
 
-@pytest.mark.parametrize("shapes,chunks", [
+@pytest.mark.parametrize("shapes, chunks", [
     ([()], [()]),
     ([(0,)], [(0,)]),
     ([(2,), (3,)], [(1,), (2,)]),
