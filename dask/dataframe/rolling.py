@@ -142,27 +142,6 @@ def map_overlap(func, df, before, after, *args, **kwargs):
     return df._constructor(dsk, name, meta, df.divisions)
 
 
-def wrap_rolling(func, method_name):
-    """Create a chunked version of a pandas.rolling_* function"""
-    @wraps(func)
-    def rolling(arg, window, *args, **kwargs):
-        # pd.rolling_* functions are deprecated
-        warnings.warn(("DeprecationWarning: dd.rolling_{0} is deprecated and "
-                       "will be removed in a future version, replace with "
-                       "df.rolling(...).{0}(...)").format(method_name))
-
-        rolling_kwargs = {}
-        method_kwargs = {}
-        for k, v in kwargs.items():
-            if k in {'min_periods', 'center', 'win_type', 'axis', 'freq'}:
-                rolling_kwargs[k] = v
-            else:
-                method_kwargs[k] = v
-        rolling = arg.rolling(window, **rolling_kwargs)
-        return getattr(rolling, method_name)(*args, **method_kwargs)
-    return rolling
-
-
 def _head_timedelta(current, next_, after):
     """Return rows of ``next_`` whose index is before the last
     observation in ``current`` + ``after``.
@@ -195,27 +174,6 @@ def _tail_timedelta(prev, current, before):
     overlapped : DataFrame
     """
     return prev[prev.index > (current.index.min() - before)]
-
-
-rolling_count = wrap_rolling(pd.rolling_count, 'count')
-rolling_sum = wrap_rolling(pd.rolling_sum, 'sum')
-rolling_mean = wrap_rolling(pd.rolling_mean, 'mean')
-rolling_median = wrap_rolling(pd.rolling_median, 'median')
-rolling_min = wrap_rolling(pd.rolling_min, 'min')
-rolling_max = wrap_rolling(pd.rolling_max, 'max')
-rolling_std = wrap_rolling(pd.rolling_std, 'std')
-rolling_var = wrap_rolling(pd.rolling_var, 'var')
-rolling_skew = wrap_rolling(pd.rolling_skew, 'skew')
-rolling_kurt = wrap_rolling(pd.rolling_kurt, 'kurt')
-rolling_quantile = wrap_rolling(pd.rolling_quantile, 'quantile')
-rolling_apply = wrap_rolling(pd.rolling_apply, 'apply')
-
-
-@wraps(pd.rolling_window)
-def rolling_window(arg, window, **kwargs):
-    if kwargs.pop('mean', True):
-        return rolling_mean(arg, window, **kwargs)
-    return rolling_sum(arg, window, **kwargs)
 
 
 def pandas_rolling_method(df, rolling_kwargs, name, *args, **kwargs):
