@@ -198,24 +198,21 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
     # 2. contain 'category' for data inferred types
     categoricals = head.select_dtypes(include=['category']).columns
 
-    if isinstance(specified_dtypes, collections.Mapping):
-        known_categoricals = [
-            k for k in categoricals
-            if _HAS_CDT and
-            isinstance(specified_dtypes.get(k), CategoricalDtype) and
-            specified_dtypes.get(k).categories is not None
-        ]
-        unknown_categoricals = categoricals.difference(known_categoricals)
-    elif _HAS_CDT and isinstance(specified_dtypes, CategoricalDtype):
-        if specified_dtypes.categories is None:
-            known_categoricals = []
-            unknown_categoricals = categoricals
-        else:
-            known_categoricals = categoricals
-            unknown_categoricals = []
-    else:
-        known_categoricals = []
-        unknown_categoricals = categoricals
+    known_categoricals = []
+    unknown_categoricals = categoricals
+
+    if _HAS_CDT:
+        if isinstance(specified_dtypes, collections.Mapping):
+            known_categoricals = [
+                k for k in categoricals
+                if isinstance(specified_dtypes.get(k), CategoricalDtype) and
+                specified_dtypes.get(k).categories is not None
+            ]
+            unknown_categoricals = categoricals.difference(known_categoricals)
+        elif isinstance(specified_dtypes, CategoricalDtype):
+            if specified_dtypes.categories is None:
+                known_categoricals = []
+                unknown_categoricals = categoricals
 
     # Fixup the dtypes
     for k in unknown_categoricals:

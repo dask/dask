@@ -431,9 +431,12 @@ def test_categorical_known():
 
         assert_eq(result, expected)
 
-        # Specify "uknown" categories
+        # Specify "unknown" categories
         result = dd.read_csv("foo.*.csv",
                              dtype=pd.api.types.CategoricalDtype())
+        assert result.A.cat.known is False
+
+        result = dd.read_csv("foo.*.csv", dtype="category")
         assert result.A.cat.known is False
 
 
