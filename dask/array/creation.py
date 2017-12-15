@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from functools import partial, wraps
-from itertools import chain, product
+from itertools import product
 from operator import add
 from numbers import Integral
 
