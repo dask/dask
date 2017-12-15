@@ -859,6 +859,8 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
 
     >>> store([x, y, z], [dset1, dset2, dset3])  # doctest: +SKIP
     """
+    from ..delayed import Delayed
+
     if isinstance(sources, Array):
         sources = [sources]
         targets = [targets]
@@ -894,17 +896,17 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
         update = insert_to_ooc(src, tgt, lock=lock, region=reg)
         keys.extend(update)
 
+        update.update(src.dask)
         update.update(dsk)
         updates.update(update)
 
     name = 'store-' + tokenize(*keys)
-    dsk = sharedict.merge((name, updates), *[src.dask for src in sources])
+    dsk = sharedict.merge({name: keys}, updates)
+    result = Delayed(name, dsk)
     if compute:
-        compute_as_if_collection(Array, dsk, keys, **kwargs)
+        result.compute()
     else:
-        from ..delayed import Delayed
-        dsk.update({name: keys})
-        return Delayed(name, dsk)
+        return result
 
 
 def blockdims_from_blockshape(shape, chunks):
