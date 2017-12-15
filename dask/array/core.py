@@ -859,6 +859,8 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
 
     >>> store([x, y, z], [dset1, dset2, dset3])  # doctest: +SKIP
     """
+    from ..delayed import Delayed
+
     if isinstance(sources, Array):
         sources = [sources]
         targets = [targets]
@@ -894,17 +896,17 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
         update = insert_to_ooc(src, tgt, lock=lock, region=reg)
         keys.extend(update)
 
+        update.update(src.dask)
         update.update(dsk)
         updates.update(update)
 
     name = 'store-' + tokenize(*keys)
-    dsk = sharedict.merge((name, updates), *[src.dask for src in sources])
+    dsk = sharedict.merge({name: keys}, updates)
+    result = Delayed(name, dsk)
     if compute:
-        compute_as_if_collection(Array, dsk, keys, **kwargs)
+        result.compute()
     else:
-        from ..delayed import Delayed
-        dsk.update({name: keys})
-        return Delayed(name, dsk)
+        return result
 
 
 def blockdims_from_blockshape(shape, chunks):
@@ -2571,13 +2573,14 @@ def insert_to_ooc(arr, out, lock=True, region=None):
         lock = Lock()
 
     def store(x, out, index, lock, region):
+        subindex = index
+        if region is not None:
+            subindex = fuse_slice(region, index)
+
         if lock:
             lock.acquire()
         try:
-            if region is None:
-                out[index] = np.asanyarray(x)
-            else:
-                out[fuse_slice(region, index)] = np.asanyarray(x)
+            out[subindex] = np.asanyarray(x)
         finally:
             if lock:
                 lock.release()
@@ -2587,8 +2590,10 @@ def insert_to_ooc(arr, out, lock=True, region=None):
     slices = slices_from_chunks(arr.chunks)
 
     name = 'store-%s' % arr.name
-    dsk = {(name,) + t[1:]: (store, t, out, slc, lock, region)
-           for t, slc in zip(core.flatten(arr.__dask_keys__()), slices)}
+    dsk = dict()
+    for t, slc in zip(core.flatten(arr.__dask_keys__()), slices):
+        store_key = (name,) + t[1:]
+        dsk[store_key] = (store, t, out, slc, lock, region)
 
     return dsk
 

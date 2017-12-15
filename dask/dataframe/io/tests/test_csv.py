@@ -384,6 +384,62 @@ def test_categorical_dtypes():
                 ['apple', 'banana', 'orange', 'pear'])
 
 
+@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
+                    reason="Uses CategoricalDtype")
+def test_categorical_known():
+    text1 = normalize_text("""
+    A,B
+    a,a
+    b,b
+    a,a
+    """)
+    text2 = normalize_text("""
+    A,B
+    a,a
+    b,b
+    c,c
+    """)
+    dtype = pd.api.types.CategoricalDtype(['a', 'b', 'c'])
+    with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
+        result = dd.read_csv("foo.*.csv", dtype={"A": 'category',
+                                                 "B": 'category'})
+        assert result.A.cat.known is False
+        assert result.B.cat.known is False
+        expected = pd.DataFrame({
+            "A": pd.Categorical(['a', 'b', 'a', 'a', 'b', 'c'],
+                                categories=dtype.categories),
+            "B": pd.Categorical(['a', 'b', 'a', 'a', 'b', 'c'],
+                                categories=dtype.categories)},
+                                index=[0, 1, 2, 0, 1, 2])
+        assert_eq(result, expected)
+
+        # Specify a dtype
+        result = dd.read_csv("foo.*.csv", dtype={'A': dtype, 'B': 'category'})
+        assert result.A.cat.known is True
+        assert result.B.cat.known is False
+        tm.assert_index_equal(result.A.cat.categories, dtype.categories)
+        assert result.A.cat.ordered is False
+        assert_eq(result, expected)
+
+        # ordered
+        dtype = pd.api.types.CategoricalDtype(['a', 'b', 'c'], ordered=True)
+        result = dd.read_csv("foo.*.csv", dtype={'A': dtype, 'B': 'category'})
+        expected['A'] = expected['A'].cat.as_ordered()
+        assert result.A.cat.known is True
+        assert result.B.cat.known is False
+        assert result.A.cat.ordered is True
+
+        assert_eq(result, expected)
+
+        # Specify "unknown" categories
+        result = dd.read_csv("foo.*.csv",
+                             dtype=pd.api.types.CategoricalDtype())
+        assert result.A.cat.known is False
+
+        result = dd.read_csv("foo.*.csv", dtype="category")
+        assert result.A.cat.known is False
+
+
 @pytest.mark.slow
 def test_compression_multiple_files():
     with tmpdir() as tdir:
