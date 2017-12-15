@@ -312,6 +312,7 @@ def meshgrid(*xi, **kwargs):
     if indexing not in ("ij", "xy"):
         raise ValueError("`indexing` must be `'ij'` or `'xy'`")
 
+    xi = [asarray(e) for e in xi]
     xi = [e.flatten() for e in xi]
     dimensions = [xi[i].size for i in range(len(xi))]
     chunks = [xi[i].chunks[0] for i in range(len(xi))]
