@@ -178,11 +178,14 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
     if filters is None:
         filters = []
     
+    out_type = DataFrame
     if columns is not None:
         if isinstance(columns, string_types):
-            columns = string_types
+            columns = [columns]
+            out_type = Series
         else:
             columns = list(columns)
+        column_names = columns
 
     if index is not None:
         if index is False:
@@ -191,16 +194,6 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
             index_names = [index]
         else:
             index_names = list(index)
-
-    out_type = DataFrame
-    if columns is not None:
-        if isinstance(columns, collections.Iterable):
-            if isinstance(columns, str):
-                columns = [columns]
-                out_type = Series
-            else:
-                columns = list(columns)
-        column_names = columns
 
     if categories is None:
         categories = pf.categories
@@ -216,7 +209,6 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
         all_columns.extend(list(file_cats))
 
     assert len(all_columns) == len(set(all_columns))
-
     assert set(index_names).issubset(all_columns)
 
     rgs = [rg for rg in pf.row_groups if
