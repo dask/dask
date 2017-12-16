@@ -611,7 +611,7 @@ def test_parquet_select_cats(tmpdir):
 
 
 @write_read_engines(
-    xfail_arrow_to_fastparquet=False,
+    xfail_arrow_to_fastparquet=True,
     xfail_fastparquet_to_pyarrow=True,  # fastparquet-251
 )
 def test_columns_name(tmpdir, write_engine, read_engine):
@@ -710,10 +710,6 @@ def test_parse_pandas_metadata(pandas_metadata):
         assert mapping == {'idx': 'idx', 'A': 'A'}
 
     assert isinstance(mapping, dict)
-
-
-def test_parse_pandas_metadata_duplicate_columns(pandas_metadata):
-    pass
 
 
 def test_pyarrow_raises_filters_categoricals(tmpdir):
