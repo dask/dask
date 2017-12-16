@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import collections
 import copy
 import json
 import warnings
@@ -10,7 +11,7 @@ import pandas as pd
 from ..core import DataFrame, Series
 from ..utils import UNKNOWN_CATEGORIES
 from ...base import tokenize, normalize_token
-from ...compatibility import PY3
+from ...compatibility import PY3, string_types
 from ...delayed import delayed
 from ...bytes.core import get_fs_paths_myopen
 
@@ -132,11 +133,6 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
                       categories=None, index=None, storage_options=None):
     import fastparquet
     from fastparquet.util import check_column_names
-    if filters is None:
-        filters = []
-
-    if isinstance(columns, list):
-        columns = tuple(columns)
 
     if len(paths) > 1:
         pf = fastparquet.ParquetFile(paths, open_with=myopen, sep=myopen.fs.sep)
@@ -149,48 +145,84 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
             pf = fastparquet.ParquetFile(paths[0], open_with=myopen, sep=fs.sep)
 
     check_column_names(pf.columns, categories)
+    if isinstance(columns, tuple):
+        # ensure they tokenize the same
+        columns = list(columns)
     name = 'read-parquet-' + tokenize(pf, columns, categories)
 
-    pandas_md = [x.value for x in pf.fmd.key_value_metadata if x.key == 'pandas']
+    # Get the column and index information from the written file
+    # We'll the lists construct index_names, column_names, column_index_names
+    # and storage_name_mapping, a dict
+    if pf.fmd.key_value_metadata:
+        pandas_md = [x.value for x in pf.fmd.key_value_metadata if x.key == 'pandas']
+    else:
+        pandas_md = []
+
     if len(pandas_md) == 0:
+        # Fall back to the storage information
         index_names = pf._get_index()
         if not isinstance(index_names, list):
             index_names = [index_names]
         column_names = pf.columns + list(pf.cats)
-        storage_name_mapping = {k: k for k in columns}
+        storage_name_mapping = {k: k for k in column_names}
         column_index_names = [None]
-
     elif len(pandas_md) == 1:
         index_names, column_names, storage_name_mapping, column_index_names = (
             _parse_pandas_metadata(json.loads(pandas_md[0]))
         )
-
     else:
-        raise ValueError("Too many")
+        raise ValueError("File has multiple entries for 'pandas' metadata")
+    
+    # Normalize user inputs
+
+    if filters is None:
+        filters = []
+    
+    if columns is not None:
+        if isinstance(columns, string_types):
+            columns = string_types
+        else:
+            columns = list(columns)
+
+    if index is not None:
+        if index is False:
+            index_names = []
+        elif isinstance(index, string_types):
+            index_names = [index]
+        else:
+            index_names = list(index)
+
+    out_type = DataFrame
+    if columns is not None:
+        if isinstance(columns, collections.Iterable):
+            if isinstance(columns, str):
+                columns = [columns]
+                out_type = Series
+            else:
+                columns = list(columns)
+        column_names = columns
+
+    if categories is None:
+        categories = pf.categories
+    else:
+        categories = list(categories)
+
+    # TODO: write partition_on to pandas metadata...
+    # TODO: figure out if partition_on <-> categories. I suspect not...
+    all_columns = list(column_names)
+    all_columns.extend(x for x in index_names if x not in column_names)
+    file_cats = pf.cats
+    if file_cats:
+        all_columns.extend(list(file_cats))
+
+    assert len(all_columns) == len(set(all_columns))
+
+    assert set(index_names).issubset(all_columns)
 
     rgs = [rg for rg in pf.row_groups if
            not (fastparquet.api.filter_out_stats(rg, filters, pf.schema)) and
            not (fastparquet.api.filter_out_cats(rg, filters))]
 
-    if index is False:
-        index_names = []
-    elif index is not None:
-        index_names = index
-        if not isinstance(index_names, list):
-            index_names = [index_names]
-    # else, use what's in the file
-
-    out_type = DataFrame
-    if columns is not None:
-        if not isinstance(columns, list):
-            columns = [columns]
-            out_type = Series
-        column_names = columns
-
-    all_columns = index_names + column_names
-
-    if categories is None:
-        categories = pf.categories
     dtypes = pf._dtypes(categories)
     dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
@@ -198,8 +230,8 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
     # fastparquet / dask don't handle multiindex
     if len(index_names) > 1:
         raise ValueError
-    else:
-        index_names = index_names[0]
+    elif len(index_names) == 0:
+        index_names = None
 
     for cat in categories:
         if cat in meta:
@@ -248,10 +280,12 @@ def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
     from fastparquet.core import read_row_group_file
     name_storage_mapping = {v: k for k, v in storage_name_mapping.items()}
     if not isinstance(columns, (tuple, list)):
-        columns = (columns,)
+        columns = [columns,]
         series = True
-    if index and index not in columns:
-        columns = columns + type(columns)([index])
+    if index:
+        index, = index
+        if index not in columns:
+            columns = columns + [index]
 
     columns = [name_storage_mapping.get(col, col) for col in columns]
     index = name_storage_mapping.get(index, index)
