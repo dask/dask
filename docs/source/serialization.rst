@@ -20,7 +20,7 @@ Example
 
 Here is how we special case handling raw Python bytes objects.  In this case
 there is no need to call ``pickle.dumps`` on the object.  The object is
-already a sequnce of bytes.
+already a sequence of bytes.
 
 .. code-block:: python
 
