@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import collections
 import copy
 import json
 import warnings
@@ -172,12 +171,12 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
         )
     else:
         raise ValueError("File has multiple entries for 'pandas' metadata")
-    
+
     # Normalize user inputs
 
     if filters is None:
         filters = []
-    
+
     out_type = DataFrame
     if columns is not None:
         if isinstance(columns, string_types):
