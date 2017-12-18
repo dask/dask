@@ -2,6 +2,7 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import os
+from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
@@ -617,6 +618,11 @@ def test_parquet_select_cats(tmpdir):
 def test_columns_name(tmpdir, write_engine, read_engine):
     if write_engine == read_engine == 'fastparquet':
         pytest.skip('Fastparquet does not write column_indexes')
+
+    if write_engine == 'pyarrow':
+        import pyarrow as pa
+        if pa.__version__ < LooseVersion('0.8.0'):
+            pytest.skip("pyarrow<0.8.0 did not write column_indexes")
 
     df = pd.DataFrame({"A": [1, 2]}, index=pd.Index(['a', 'b'], name='idx'))
     df.columns.name = "cols"
