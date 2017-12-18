@@ -198,13 +198,13 @@ def test_indicies():
     assert_eq(darr, nparr)
 
 
-@pytest.mark.parametrize("shapes", [
-    [()],
-    [(0,)],
-    [(2,), (3,)],
-    [(2,), (3,), (4,)],
-    [(2,), (3,), (4,), (5,)],
-    [(2, 3), (4,)],
+@pytest.mark.parametrize("shapes, chunks", [
+    ([()], [()]),
+    ([(0,)], [(0,)]),
+    ([(2,), (3,)], [(1,), (2,)]),
+    ([(2,), (3,), (4,)], [(1,), (2,), (3,)]),
+    ([(2,), (3,), (4,), (5,)], [(1,), (2,), (3,), (4,)]),
+    ([(2, 3), (4,)], [(1, 2), (3,)]),
 ])
 @pytest.mark.parametrize("indexing", [
     "ij",
@@ -214,12 +214,21 @@ def test_indicies():
     False,
     True,
 ])
-def test_meshgrid(shapes, indexing, sparse):
+def test_meshgrid(shapes, chunks, indexing, sparse):
     xi_a = []
     xi_d = []
-    for each_shape in shapes:
+    xi_dc = []
+    for each_shape, each_chunk in zip(shapes, chunks):
         xi_a.append(np.random.random(each_shape))
-        xi_d.append(da.from_array(xi_a[-1], chunks=1))
+        xi_d_e = da.from_array(xi_a[-1], chunks=each_chunk)
+        xi_d.append(xi_d_e)
+        xi_d_ef = xi_d_e.flatten()
+        xi_dc.append(xi_d_ef.chunks[0])
+    do = list(range(len(xi_dc)))
+    if indexing == "xy" and len(xi_dc) > 1:
+        do[0], do[1] = do[1], do[0]
+        xi_dc[0], xi_dc[1] = xi_dc[1], xi_dc[0]
+    xi_dc = tuple(xi_dc)
 
     r_a = np.meshgrid(*xi_a, indexing=indexing, sparse=sparse)
     r_d = da.meshgrid(*xi_d, indexing=indexing, sparse=sparse)
@@ -227,8 +236,25 @@ def test_meshgrid(shapes, indexing, sparse):
     assert isinstance(r_d, list)
     assert len(r_a) == len(r_d)
 
-    for e_r_a, e_r_d in zip(r_a, r_d):
+    for e_r_a, e_r_d, i in zip(r_a, r_d, do):
         assert_eq(e_r_a, e_r_d)
+        if sparse:
+            assert e_r_d.chunks[i] == xi_dc[i]
+        else:
+            assert e_r_d.chunks == xi_dc
+
+
+def test_meshgrid_inputcoercion():
+    a = [1, 2, 3]
+    b = np.array([4, 5, 6, 7])
+    x, y = np.meshgrid(a, b, indexing='ij')
+    z = x * y
+
+    x_d, y_d = da.meshgrid(a, b, indexing='ij')
+    z_d = x_d * y_d
+
+    assert z_d.shape == (len(a), len(b))
+    assert_eq(z, z_d)
 
 
 def test_tril_triu():
