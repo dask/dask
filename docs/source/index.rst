@@ -132,6 +132,7 @@ Index
 **Getting Started**
 
 * :doc:`install`
+* :doc:`setup`
 * :doc:`use-cases`
 * :doc:`examples-tutorials`
 * :doc:`cheatsheet`
@@ -142,6 +143,7 @@ Index
    :caption: Getting Started
 
    install.rst
+   setup.rst
    use-cases.rst
    examples-tutorials.rst
    cheatsheet.rst
@@ -178,7 +180,6 @@ distributed memory clusters.
 
 * :doc:`distributed`
 * :doc:`scheduler-overview`
-* :doc:`scheduler-choice`
 * :doc:`Single machine scheduler<shared>`
 * :doc:`scheduling-policy`
 
@@ -189,7 +190,6 @@ distributed memory clusters.
 
    distributed.rst
    scheduler-overview.rst
-   scheduler-choice.rst
    shared.rst
    scheduling-policy.rst
 
