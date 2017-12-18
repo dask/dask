@@ -38,6 +38,7 @@ from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict, Dispatch)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
+from ..core import quote
 from ..delayed import to_task_dask
 from .. import threaded, core
 from .. import sharedict
@@ -858,6 +859,8 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
 
     >>> store([x, y, z], [dset1, dset2, dset3])  # doctest: +SKIP
     """
+    from ..delayed import Delayed
+
     if isinstance(sources, Array):
         sources = [sources]
         targets = [targets]
@@ -890,20 +893,20 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
         except AttributeError:
             dsk = {}
 
-        update = insert_to_ooc(tgt, src, lock=lock, region=reg)
+        update = insert_to_ooc(src, tgt, lock=lock, region=reg)
         keys.extend(update)
 
+        update.update(src.dask)
         update.update(dsk)
         updates.update(update)
 
     name = 'store-' + tokenize(*keys)
-    dsk = sharedict.merge((name, updates), *[src.dask for src in sources])
+    dsk = sharedict.merge({name: keys}, updates)
+    result = Delayed(name, dsk)
     if compute:
-        compute_as_if_collection(Array, dsk, keys, **kwargs)
+        result.compute()
     else:
-        from ..delayed import Delayed
-        dsk.update({name: keys})
-        return Delayed(name, dsk)
+        return result
 
 
 def blockdims_from_blockshape(shape, chunks):
@@ -1819,7 +1822,7 @@ def normalize_chunks(chunks, shape=None):
     >>> normalize_chunks((2, 2), shape=(5, 6))
     ((2, 2, 1), (2, 2, 2))
 
-    >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(4, 6))  # Idempotent
+    >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(5, 6))  # Idempotent
     ((2, 2, 1), (2, 2, 2))
 
     >>> normalize_chunks([[2, 2], [3, 3]])  # Cleans up lists to tuples
@@ -1862,6 +1865,16 @@ def normalize_chunks(chunks, shape=None):
         if not c:
             raise ValueError("Empty tuples are not allowed in chunks. Express "
                              "zero length dimensions with 0(s) in chunks")
+
+    if shape is not None:
+        if len(chunks) != len(shape):
+            raise ValueError("Input array has %d dimensions but the supplied "
+                             "chunks has only %d dimensions" %
+                             (len(shape), len(chunks)))
+        if not all(c == s or (math.isnan(c) and math.isnan(s))
+                   for c, s in zip(map(sum, chunks), shape)):
+            raise ValueError("Chunks do not add up to shape. "
+                             "Got chunks=%s, shape=%s" % (chunks, shape))
 
     return tuple(tuple(int(x) if not math.isnan(x) else x for x in c) for c in chunks)
 
@@ -1909,13 +1922,6 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
     """
     chunks = normalize_chunks(chunks, x.shape)
-    if len(chunks) != len(x.shape):
-        raise ValueError("Input array has %d dimensions but the supplied "
-                         "chunks has only %d dimensions" %
-                         (len(x.shape), len(chunks)))
-    if tuple(map(sum, chunks)) != x.shape:
-        raise ValueError("Chunks do not add up to shape. "
-                         "Got chunks=%s, shape=%s" % (chunks, x.shape))
     if name in (None, True):
         token = tokenize(x, chunks)
         original_name = 'array-original-' + token
@@ -2562,18 +2568,19 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     return Array(dsk2, name, chunks, dtype=dt)
 
 
-def insert_to_ooc(out, arr, lock=True, region=None):
+def insert_to_ooc(arr, out, lock=True, region=None):
     if lock is True:
         lock = Lock()
 
-    def store(out, x, index, lock, region):
+    def store(x, out, index, lock, region):
+        subindex = index
+        if region is not None:
+            subindex = fuse_slice(region, index)
+
         if lock:
             lock.acquire()
         try:
-            if region is None:
-                out[index] = np.asanyarray(x)
-            else:
-                out[fuse_slice(region, index)] = np.asanyarray(x)
+            out[subindex] = np.asanyarray(x)
         finally:
             if lock:
                 lock.release()
@@ -2583,8 +2590,10 @@ def insert_to_ooc(out, arr, lock=True, region=None):
     slices = slices_from_chunks(arr.chunks)
 
     name = 'store-%s' % arr.name
-    dsk = {(name,) + t[1:]: (store, out, t, slc, lock, region)
-           for t, slc in zip(core.flatten(arr.__dask_keys__()), slices)}
+    dsk = dict()
+    for t, slc in zip(core.flatten(arr.__dask_keys__()), slices):
+        store_key = (name,) + t[1:]
+        dsk[store_key] = (store, t, out, slc, lock, region)
 
     return dsk
 
@@ -2847,12 +2856,34 @@ def _enforce_dtype(*args, **kwargs):
     return result
 
 
-@wraps(chunk.broadcast_to)
-def broadcast_to(x, shape):
+def broadcast_to(x, shape, chunks=None):
+    """Broadcast an array to a new shape.
+
+    Parameters
+    ----------
+    x : array_like
+        The array to broadcast.
+    shape : tuple
+        The shape of the desired array.
+    chunks : tuple, optional
+        If provided, then the result will use these chunks instead of the same
+        chunks as the source array. Setting chunks explicitly as part of
+        broadcast_to is more efficient than rechunking afterwards. Chunks are
+        only allowed to differ from the original shape along dimensions that
+        are new on the result or have size 1 the input array.
+
+    Returns
+    -------
+    broadcast : dask array
+
+    See Also
+    --------
+    numpy.broadcast_to
+    """
     x = asarray(x)
     shape = tuple(shape)
 
-    if x.shape == shape:
+    if x.shape == shape and (chunks is None or chunks == x.chunks):
         return x
 
     ndim_new = len(shape) - x.ndim
@@ -2862,15 +2893,32 @@ def broadcast_to(x, shape):
         raise ValueError('cannot broadcast shape %s to shape %s'
                          % (x.shape, shape))
 
-    name = 'broadcast_to-' + tokenize(x, shape)
-    chunks = (tuple((s,) for s in shape[:ndim_new]) +
-              tuple(bd if old > 1 else (new,)
-              for bd, old, new in zip(x.chunks, x.shape, shape[ndim_new:])))
-    dsk = {(name,) + (0,) * ndim_new + key[1:]:
-           (chunk.broadcast_to, key, shape[:ndim_new] +
-            tuple(bd[i] for i, bd in zip(key[1:], chunks[ndim_new:])))
-           for key in core.flatten(x.__dask_keys__())}
-    return Array(sharedict.merge((name, dsk), x.dask), name, chunks, dtype=x.dtype)
+    if chunks is None:
+        chunks = (tuple((s,) for s in shape[:ndim_new]) +
+                  tuple(bd if old > 1 else (new,)
+                  for bd, old, new in zip(x.chunks, x.shape, shape[ndim_new:])))
+    else:
+        chunks = normalize_chunks(chunks, shape)
+        for old_bd, new_bd in zip(x.chunks, chunks[ndim_new:]):
+            if old_bd != new_bd and old_bd != (1,):
+                raise ValueError('cannot broadcast chunks %s to chunks %s: '
+                                 'new chunks must either be along a new '
+                                 'dimension or a dimension of size 1'
+                                 % (x.chunks, chunks))
+
+    name = 'broadcast_to-' + tokenize(x, shape, chunks)
+    dsk = {}
+
+    enumerated_chunks = product(*(enumerate(bds) for bds in chunks))
+    for new_index, chunk_shape in (zip(*ec) for ec in enumerated_chunks):
+        old_index = tuple(0 if bd == (1,) else i
+                          for bd, i in zip(x.chunks, new_index[ndim_new:]))
+        old_key = (x.name,) + old_index
+        new_key = (name,) + new_index
+        dsk[new_key] = (chunk.broadcast_to, old_key, quote(chunk_shape))
+
+    return Array(sharedict.merge((name, dsk), x.dask), name, chunks,
+                 dtype=x.dtype)
 
 
 def offset_func(func, offset, *args):

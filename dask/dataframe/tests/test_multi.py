@@ -1072,6 +1072,29 @@ def test_concat_categorical(known, cat_index, divisions):
         assert has_known_categories(res.y) == known
 
 
+def test_concat_datetimeindex():
+    # https://github.com/dask/dask/issues/2932
+    b2 = pd.DataFrame({'x': ['a']},
+                      index=pd.DatetimeIndex(['2015-03-24 00:00:16'],
+                                             dtype='datetime64[ns]'))
+    b3 = pd.DataFrame({'x': ['c']},
+                      index=pd.DatetimeIndex(['2015-03-29 00:00:44'],
+                                             dtype='datetime64[ns]'))
+
+    b2['x'] = b2.x.astype('category').cat.set_categories(['a', 'c'])
+    b3['x'] = b3.x.astype('category').cat.set_categories(['a', 'c'])
+
+    db2 = dd.from_pandas(b2, 1)
+    db3 = dd.from_pandas(b3, 1)
+
+    result = concat([b2.iloc[:0], b3.iloc[:0]])
+    assert result.index.dtype == '<M8[ns]'
+
+    result = dd.concat([db2, db3])
+    expected = pd.concat([b2, b3])
+    assert_eq(result, expected)
+
+
 def test_append():
     df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
                        'b': [1, 2, 3, 4, 5, 6]})

@@ -11,7 +11,8 @@ Array
 - Add ``matmul`` (:pr:`2904`) `John A Kirkham`_
 - Support N-D arrays with ``matmul`` (:pr:`2909`) `John A Kirkham`_
 - Add ``vdot`` (:pr:`2910`) `John A Kirkham`_
-- Add ``meshgrid`` (:pr:`2938`) `John A Kirkham`_
+- Explicit ``chunks`` argument for ``broadcast_to`` (:pr:`2943`) `Stephan Hoyer`_
+- Add ``meshgrid`` (:pr:`2938`) `John A Kirkham`_ and (:pr:`3001`) `Markus Gonser`_
 - Preserve singleton chunks in ``fftshift``/``ifftshift`` (:pr:`2733`) `John A Kirkham`_
 - Fix handling of negative indexes in ``vindex`` and raise errors for out of
 bounds indexes (:pr:`2967`) `Stephan Hoyer`_
@@ -23,8 +24,10 @@ bounds indexes (:pr:`2967`) `Stephan Hoyer`_
 DataFrame
 +++++++++
 
+- Fixed ``dd.read_csv`` so that passing instances of ``CategoricalDtype`` in ``dtype`` will result in known categoricals (:pr:`2997`) `Tom Augspurger`_
 - Prevent ``bool()`` coercion from calling compute (:pr:`2958`) `Albert DeFusco`_
 - ``DataFrame.read_sql()`` (:pr:`2928`) to an empty database tables returns an empty dask dataframe `Apostolos Vlachopoulos`_
+- Fixed ``dd.concat`` losing the index dtype when the data contained a categorical (:issue:`2932`) `Tom Augspurger`_
 - ``DataFrame.merge()`` (:pr:`2960`) now supports merging on a combination of columns and the index `Jon Mease`_
 
 Core
@@ -874,4 +877,6 @@ Other
 .. _`@fjetter`: https://github.com/fjetter
 .. _`@Ced4`: https://github.com/Ced4
 .. _`Ian Hopkinson`: https://https://github.com/IanHopkinson
+.. _`Stephan Hoyer`: https://github.com/shoyer
 .. _`Albert DeFusco`: https://github.com/AlbertDeFusco
+.. _`Markus Gonser`: https://github.com/magonser

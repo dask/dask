@@ -613,3 +613,31 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     ddf.to_parquet(fn, compression=compression, engine=engine)
     out = dd.read_parquet(fn, engine=engine)
     assert_eq(out, df, check_index=(engine != 'fastparquet'))
+
+
+def test_writing_parquet_with_kwargs(tmpdir, engine):
+    fn = str(tmpdir)
+
+    engine_kwargs = {
+        'pyarrow': {
+            'compression': 'snappy',
+            'coerce_timestamps': None,
+            'use_dictionary': True
+        },
+        'fastparquet': {
+            'compression': 'snappy',
+            'times': 'int64',
+            'fixed_text': None
+        }
+    }
+
+    ddf.to_parquet(fn,  engine=engine, **engine_kwargs[engine])
+    out = dd.read_parquet(fn, engine=engine)
+    assert_eq(out, df, check_index=(engine != 'fastparquet'))
+
+
+def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
+    fn = str(tmpdir)
+
+    with pytest.raises(TypeError):
+        ddf.to_parquet(fn,  engine=engine, unknown_key='unknown_value')
