@@ -78,12 +78,13 @@ def order(dsk, dependencies=None):
     dependents = reverse_dict(dependencies)
 
     ndeps = ndependents(dependencies, dependents)
-    maxes = child_max(dependencies, dependents, ndeps)
 
     def key(x):
-        return -maxes.get(x, 0), str(x)
+        return ndeps.get(x, 0), str(x)
 
-    return dfs(dependencies, dependents, key=key)
+    result = dfs(dependencies, dependents, key=key)
+
+    return result
 
 
 def ndependents(dependencies, dependents):

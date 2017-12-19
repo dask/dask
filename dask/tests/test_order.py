@@ -33,7 +33,7 @@ def test_ordering_keeps_groups_together():
     assert abs(o[(a, 1)] - o[(a, 3)]) == 1
 
 
-def test_prefer_broker_nodes():
+def test_avoid_broker_nodes():
     """
 
     b0    b1  b2
@@ -48,15 +48,15 @@ def test_prefer_broker_nodes():
 
     o = order(dsk)
 
-    assert o[(a, 1)] < o[(a, 0)]
+    assert o[(a, 0)] < o[(a, 1)]
 
     # Switch name of 0, 1 to ensure that this isn't due to string comparison
-    dsk = {(a, 0): (f,), (a, 1): (f,),
-           (b, 0): (f, (a, 0)), (b, 1): (f, (a, 1)), (b, 2): (f, (a, 0))}
+    dsk = {(a, 1): (f,), (a, 0): (f,),
+           (b, 0): (f, (a, 1)), (b, 1): (f, (a, 0)), (b, 2): (f, (a, 0))}
 
     o = order(dsk)
 
-    assert o[(a, 1)] > o[(a, 0)]
+    assert o[(a, 0)] > o[(a, 1)]
 
 
 def test_base_of_reduce_preferred():
@@ -148,7 +148,7 @@ def test_avoid_upwards_branching_complex():
            (c, 1): (f, (c, 2)),
            (c, 2): (f, (c, 3)),
            (d, 1): (f, (c, 1)),
-           (d, 2): (f, (d, 1))
+           (d, 2): (f, (d, 1)),
            (d, 3): (f, (d, 1)),
            (e, 1): (f, (b, 1)),
            (e, 2): (f, (e, 1))}
@@ -160,7 +160,11 @@ def test_avoid_upwards_branching_complex():
 
 def test_deep_bases_win_over_dependents():
     """
-    d should come before e and probably before one of b and c
+    It's not clear who should run first, e or d
+
+    1.  d is nicer because it exposes parallelism
+    2.  e is nicer (hypothetically) because it will be sooner released
+        (though in this we need d to run first regardless)
 
             a
           / | \   .
@@ -168,11 +172,10 @@ def test_deep_bases_win_over_dependents():
         / \ | /
        e    d
     """
-    dsk = {a: (f, b, c, d), b: (f, d, e), c: (f, d), d: 1,
-           e: 2}
+    dsk = {a: (f, b, c, d), b: (f, d, e), c: (f, d), d: 1, e: 2}
 
     o = order(dsk)
-    assert o[d] < o[e]
+    assert o[e] < o[d]
     assert o[d] < o[b] or o[d] < o[c]
 
 
