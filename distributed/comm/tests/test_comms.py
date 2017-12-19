@@ -747,7 +747,7 @@ def check_connect_timeout(addr):
     with pytest.raises(IOError):
         yield connect(addr, timeout=0.15)
     dt = time() - t1
-    assert 0.5 >= dt >= 0.1
+    assert 1 >= dt >= 0.1
 
 
 @gen_test()
