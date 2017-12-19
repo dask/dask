@@ -6,7 +6,7 @@ from .deploy import LocalCluster
 from .diagnostics import progress
 from .client import (Client, Executor, CompatibleExecutor,
                      wait, as_completed, default_client, fire_and_forget,
-                     Future)
+                     Future, futures_of)
 from .lock import Lock
 from .nanny import Nanny
 from .queues import Queue

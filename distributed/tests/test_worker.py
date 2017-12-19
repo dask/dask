@@ -1003,6 +1003,7 @@ def test_statistical_profiling_cycle(c, s, a, b):
     futures = c.map(slowinc, range(20), delay=0.05)
     yield wait(futures)
     yield gen.sleep(0.01)
+    end = time()
     assert len(a.profile_history) > 3
 
     x = a.get_profile(start=time() + 10, stop=time() + 20)
@@ -1011,7 +1012,7 @@ def test_statistical_profiling_cycle(c, s, a, b):
     x = a.get_profile(start=0, stop=time())
     assert x['count'] == sum(p['count'] for _, p in a.profile_history) + a.profile_recent['count']
 
-    y = a.get_profile(start=time() - 0.300, stop=time())
+    y = a.get_profile(start=end - 0.300, stop=time())
     assert 0 < y['count'] < x['count']
 
 
