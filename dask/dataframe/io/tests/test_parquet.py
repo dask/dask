@@ -718,6 +718,58 @@ def test_parse_pandas_metadata(pandas_metadata):
     assert isinstance(mapping, dict)
 
 
+def test_parse_pandas_metadata_null_index():
+    # pyarrow 0.7.1 None for index
+    e_index_names = [None]
+    e_column_names = ['x']
+    e_mapping = {'__index_level_0__': None, 'x': 'x'}
+    e_column_index_names = [None]
+
+    md = {'columns': [{'metadata': None,
+                       'name': 'x',
+                       'numpy_type': 'int64',
+                       'pandas_type': 'int64'},
+                      {'metadata': None,
+                       'name': '__index_level_0__',
+                       'numpy_type': 'int64',
+                       'pandas_type': 'int64'}],
+          'index_columns': ['__index_level_0__'],
+          'pandas_version': '0.21.0'}
+    index_names, column_names, mapping, column_index_names = (
+        _parse_pandas_metadata(md)
+    )
+    assert index_names == e_index_names
+    assert column_names == e_column_names
+    assert mapping == e_mapping
+    assert column_index_names == e_column_index_names
+
+    # pyarrow 0.8.0 None for index
+    md = {'column_indexes': [{'field_name': None,
+                              'metadata': {'encoding': 'UTF-8'},
+                              'name': None,
+                              'numpy_type': 'object',
+                              'pandas_type': 'unicode'}],
+          'columns': [{'field_name': 'x',
+                       'metadata': None,
+                       'name': 'x',
+                       'numpy_type': 'int64',
+                       'pandas_type': 'int64'},
+                      {'field_name': '__index_level_0__',
+                       'metadata': None,
+                       'name': None,
+                       'numpy_type': 'int64',
+                       'pandas_type': 'int64'}],
+          'index_columns': ['__index_level_0__'],
+          'pandas_version': '0.21.0'}
+    index_names, column_names, mapping, column_index_names = (
+        _parse_pandas_metadata(md)
+    )
+    assert index_names == e_index_names
+    assert column_names == e_column_names
+    assert mapping == e_mapping
+    assert column_index_names == e_column_index_names
+
+
 def test_pyarrow_raises_filters_categoricals(tmpdir):
     check_pyarrow()
     tmp = str(tmpdir)

@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import re
 import copy
 import json
 import warnings
@@ -48,9 +49,15 @@ def _parse_pandas_metadata(pandas_metadata):
     """
     index_storage_names = pandas_metadata['index_columns']
     # older metadatas will not have 'field_name'
+    index_name_xpr = re.compile('__index_level_\d+__')
     pairs = [(x.get('field_name', x['name']), x['name'])
              for x in pandas_metadata['columns']]
-    index_names = [real_name for (storage_name, real_name) in pairs
+    pairs2 = []
+    for storage_name, real_name in pairs:
+        if real_name and index_name_xpr.match(real_name):
+            real_name = None
+        pairs2.append((storage_name, real_name))
+    index_names = [real_name for (storage_name, real_name) in pairs2
                    if real_name != storage_name]
     # This controls df.columns.name
     # It was added to the spec after pandas 0.21.0+, and implemented
@@ -74,10 +81,10 @@ def _parse_pandas_metadata(pandas_metadata):
         # For newer PyArrows the storage names differ from the index names
         # iff it's an index level. Though this is a fragile assumption for
         # other systems...
-        column_names = [real_name for (storage_name, real_name) in pairs
+        column_names = [real_name for (storage_name, real_name) in pairs2
                         if real_name == storage_name]
 
-    storage_name_mapping = dict(pairs)   # TODO: handle duplicates gracefully
+    storage_name_mapping = dict(pairs2)   # TODO: handle duplicates gracefully
 
     return index_names, column_names, storage_name_mapping, column_index_names
 
