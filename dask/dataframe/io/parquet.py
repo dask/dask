@@ -216,9 +216,6 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
         columns = list(columns)
     name = 'read-parquet-' + tokenize(pf, columns, categories)
 
-    # Get the column and index information from the written file
-    # We'll the lists construct index_names, column_names, column_index_names
-    # and storage_name_mapping, a dict
     if pf.fmd.key_value_metadata:
         pandas_md = [x.value for x in pf.fmd.key_value_metadata if x.key == 'pandas']
     else:
@@ -249,6 +246,8 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
 
     if categories is None:
         categories = pf.categories
+    elif isinstance(categories, string_types):
+        categories = [categories]
     else:
         categories = list(categories)
 
@@ -332,7 +331,6 @@ def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
     index = name_storage_mapping.get(index, index)
 
     df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt)
-    # now back from storage to names
     read_row_group_file(fn, rg, columns, categories, schema, cs,
                         open=open, assign=views, scheme=scheme)
 
@@ -504,8 +502,8 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
         )
     else:
         index_names = []
-        columns = column_names = schema.names
-        storage_name_mapping = {k: k for k in columns}
+        column_names = schema.names
+        storage_name_mapping = {k: k for k in column_names}
         column_index_names = [None]
 
     if pa.__version__ < distutils.version.LooseVersion('0.8.0'):
@@ -519,10 +517,6 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
 
     task_name = 'read-parquet-' + tokenize(dataset, columns)
 
-    out_type = DataFrame  # maybe overridden later
-
-    # Resolve user-provided columns and index. Goal is to filter down
-    # all_columns to just the desired subset
     column_names, out_type = _normalize_columns(columns, column_names)
     index_names = _normalize_index(index, index_names)
 

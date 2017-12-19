@@ -51,14 +51,14 @@ def check_pyarrow():
 
 
 def write_read_engines(xfail_arrow_to_fastparquet=True,
-                       xfail_fastparquet_to_pyarrow=False):
+                       xfail_fastparquet_to_arrow=False):
     xfail = []
     if xfail_arrow_to_fastparquet:
         a2f = (pytest.mark.xfail(reason=("Can't read arrow directories "
                                          "with fastparquet")),)
     else:
         a2f = ()
-    if xfail_fastparquet_to_pyarrow:
+    if xfail_fastparquet_to_arrow:
         f2a = (pytest.mark.xfail(reason=("Can't read this fastparquet "
                                          "file with pyarrow")),)
     else:
@@ -231,6 +231,9 @@ def test_categorical(tmpdir):
     df = pd.DataFrame({'x': ['a', 'b', 'c'] * 100}, dtype='category')
     ddf = dd.from_pandas(df, npartitions=3)
     dd.to_parquet(ddf, tmp)
+
+    ddf2 = dd.read_parquet(tmp, categories='x')
+    assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
 
     ddf2 = dd.read_parquet(tmp, categories=['x'])
     assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
@@ -613,7 +616,7 @@ def test_parquet_select_cats(tmpdir):
 
 @write_read_engines(
     xfail_arrow_to_fastparquet=True,
-    xfail_fastparquet_to_pyarrow=True,  # fastparquet-251
+    xfail_fastparquet_to_arrow=True,  # fastparquet-251
 )
 def test_columns_name(tmpdir, write_engine, read_engine):
     if write_engine == read_engine == 'fastparquet':
