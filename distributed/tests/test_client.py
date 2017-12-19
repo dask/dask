@@ -271,11 +271,21 @@ def test_persist_retries(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_future_repr(c, s, a, b):
+    x = c.submit(inc, 10)
     for func in [repr, lambda x: x._repr_html_()]:
-        x = c.submit(inc, 10)
         assert str(x.key) in func(x)
         assert str(x.status) in func(x)
         assert str(x.status) in repr(c.futures[x.key])
+
+
+@gen_cluster(client=True)
+def test_future_tuple_repr(c, s, a, b):
+    da = pytest.importorskip('dask.array')
+    y = da.arange(10, chunks=(5,)).persist()
+    f = futures_of(y)[0]
+    for func in [repr, lambda x: x._repr_html_()]:
+        for k in f.key:
+            assert str(k) in func(f)
 
 
 @gen_cluster(client=True)

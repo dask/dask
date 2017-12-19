@@ -334,7 +334,7 @@ class Future(WrappedKey):
             except AttributeError:
                 typ = str(self.type)
             text += '<font color="gray">type: </font>%s, ' % typ
-        text += '<font color="gray">key: </font>%s' % html_escape(self.key)
+        text += '<font color="gray">key: </font>%s' % html_escape(str(self.key))
         return text
 
     def __await__(self):
