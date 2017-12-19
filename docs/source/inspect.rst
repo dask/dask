@@ -19,7 +19,7 @@ The first step is to look at the ``.dask`` attribute of an array
 
    >>> import dask.array as da
    >>> x = da.ones((5, 15), chunks=(5, 5))
-   >>> x.dask
+   >>> dict(x.dask)
    {('wrapped_1', 0, 0): (ones, (5, 5)),
     ('wrapped_1', 0, 1): (ones, (5, 5)),
     ('wrapped_1', 0, 2): (ones, (5, 5))}
@@ -29,7 +29,7 @@ objects
 
 .. code-block:: python
 
-   >>> (x + 1).dask
+   >>> dict((x + 1).dask)
    {('wrapped_1', 0, 0): (ones, (5, 5)),
     ('wrapped_1', 0, 1): (ones, (5, 5)),
     ('wrapped_1', 0, 2): (ones, (5, 5))
@@ -37,6 +37,8 @@ objects
     ('x_1', 0, 1): (add, ('wrapped_1', 0, 1), 1),
     ('x_1', 0, 2): (add, ('wrapped_1', 0, 2), 1)}
 
+.. note:: In practice keynames will include complex hashes.  Here we've kept the
+  names, like ``x_1``, simple for demonstration purposes.
 
 Visualize graphs with DOT
 -------------------------
