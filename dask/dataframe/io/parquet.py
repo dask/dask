@@ -4,6 +4,7 @@ import re
 import copy
 import json
 import warnings
+import distutils
 
 import numpy as np
 import pandas as pd
@@ -433,6 +434,7 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
                   categories=None, index=None):
     from ...bytes.core import get_pyarrow_filesystem
     import pyarrow.parquet as pq
+    import pyarrow as pa
 
     # In pyarrow, the physical storage field names may differ from
     # the actual dataframe names. This is true for Index names when
@@ -463,6 +465,14 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
         columns = column_names = schema.names
         storage_name_mapping = {k: k for k in columns}
         column_index_names = [None]
+
+    if pa.__version__ < distutils.version.LooseVersion('0.8.0'):
+        # teh pyarrow 0.7.0 reader expects the storage names
+        if any(x is None for x in index_names):
+            name_storage_mapping = {v: k for
+                                    k, v in storage_name_mapping.items()}
+            index_names = [name_storage_mapping.get(name, name)
+                           for name in index_names]
 
     task_name = 'read-parquet-' + tokenize(dataset, columns)
 
