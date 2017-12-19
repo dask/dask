@@ -49,10 +49,16 @@ def _parse_pandas_metadata(pandas_metadata):
     * pyarrow>=0.7.0
     """
     index_storage_names = pandas_metadata['index_columns']
-    # older metadatas will not have 'field_name'
     index_name_xpr = re.compile('__index_level_\d+__')
+
+    # older metadatas will not have a 'field_name' field so we fall back
+    # to the 'name' field
     pairs = [(x.get('field_name', x['name']), x['name'])
              for x in pandas_metadata['columns']]
+
+    # Need to reconcile storage and real names. These will differ for
+    # pyarrow, which uses __index_leveL_d__ for the storage name of indexes.
+    # The real name may be None (e.g. `df.index.name` is None).
     pairs2 = []
     for storage_name, real_name in pairs:
         if real_name and index_name_xpr.match(real_name):
@@ -60,14 +66,15 @@ def _parse_pandas_metadata(pandas_metadata):
         pairs2.append((storage_name, real_name))
     index_names = [name for (storage_name, name) in pairs2
                    if name != storage_name]
-    # This controls df.columns.name
+
+    # column_indexes represents df.columns.name
     # It was added to the spec after pandas 0.21.0+, and implemented
-    # in PyArrow 0.8
+    # in PyArrow 0.8. It's not currently impelmented in fastparquet.
     column_index_names = pandas_metadata.get("column_indexes", [{'name': None}])
     column_index_names = [x['name'] for x in column_index_names]
-    # Now, how do we disambiguate between columns and index names?
-    # For pyarrow files, it'll be '__index_level_d__' and they'll come at the end
-    # though I'd like to avoid relying on that.
+
+    # Now we need to disambiguate between columns and index names. PyArrow
+    # 0.8.0+ allows for duplicates between df.index.names and df.columns
     if not index_names:
         # For PyArrow < 0.8, Any fastparquet. This relies on the facts that
         # 1. Those versions used the real index name as the index storage name
@@ -122,6 +129,8 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols,
     if not isinstance(index_cols, list):
         index_cols = [index_cols]
     df = df.set_index(index_cols)
+    # XXX: this means we can't roundtrip dataframes where the index names
+    # is actually __index_level_0__
     if len(index_cols) == 1 and index_cols[0] == '__index_level_0__':
         df.index.name = None
 
@@ -131,6 +140,30 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols,
         df.columns.names = column_index_names
     return df
 
+
+def _normalize_columns(user_columns, data_columns):
+    """Normalize user- and file-provided column names
+
+    Parameters
+    ----------
+    user_columns : str or list of str
+    data_columns : list of str
+    Returns
+    -------
+    column_names : list of str
+    out_type : {pd.Series, pd.DataFrame}
+    """
+    out_type = DataFrame
+    if user_columns is not None:
+        if isinstance(user_columns, string_types):
+            columns = [user_columns]
+            out_type = Series
+        else:
+            columns = list(user_columns)
+        column_names = columns
+    else:
+        column_names = list(data_columns)
+    return column_names, out_type
 
 # ----------------------------------------------------------------------
 # Fastparquet interface
@@ -185,14 +218,7 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
     if filters is None:
         filters = []
 
-    out_type = DataFrame
-    if columns is not None:
-        if isinstance(columns, string_types):
-            columns = [columns]
-            out_type = Series
-        else:
-            columns = list(columns)
-        column_names = columns
+    column_names, out_type = _normalize_columns(columns, column_names)
 
     if index is not None:
         if index is False:
@@ -467,7 +493,8 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
         column_index_names = [None]
 
     if pa.__version__ < distutils.version.LooseVersion('0.8.0'):
-        # teh pyarrow 0.7.0 reader expects the storage names
+        # the pyarrow 0.7.0 *reader* expects the storage names for index names
+        # that are None.
         if any(x is None for x in index_names):
             name_storage_mapping = {v: k for
                                     k, v in storage_name_mapping.items()}
@@ -480,11 +507,7 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
 
     # Resolve user-provided columns and index. Goal is to filter down
     # all_columns to just the desired subset
-    if columns is not None:
-        if not isinstance(columns, list):
-            columns = [columns]
-            out_type = Series
-        column_names = columns
+    column_names, out_type = _normalize_columns(columns, column_names)
 
     if index is False:
         index_names = []
