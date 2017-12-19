@@ -901,3 +901,78 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
 
     with pytest.raises(TypeError):
         ddf.to_parquet(fn,  engine=engine, unknown_key='unknown_value')
+
+
+# Historical tests
+@pytest.fixture(params=[1, 2, 3],
+                ids=['unnamed', 'named_index', 'named_columns'])
+def df_number(request):
+    return request.param
+
+
+@pytest.fixture(params=[False, True], ids=['module_writer', 'dask_writer'])
+def dask_writer(request):
+    return request.param
+
+
+@pytest.fixture(params=['pyarrow=0.7.1', "fastparquet=0.1.3"])
+def writer_module(request):
+    return request.param
+
+
+def test_historical(df_number, writer_module, dask_writer, engine):
+    parquet_data = pytest.importorskip("dask_parquet_integration")
+    DATA = os.path.join(os.path.dirname(parquet_data.__file__), "data")
+    writer, version = writer_module.split('=')
+
+    # skips
+    # PyArrow cann't read anything genrated by fastparuqet
+    # PyArrow 0.8.0 fails with
+    # error.pxi:79: pyarrow.lib.ArrowIOError: Unexpected end of stream.
+    if (writer == 'fastparquet' and LooseVersion(version) <= '0.1.3' and
+            engine == 'pyarrow'):
+        import pyarrow as pa
+        if LooseVersion(pa.__version__) <= '0.8.0':
+            pytest.skip("TODO: JIRA")
+
+    if (writer == "pyarrow" and LooseVersion(version) <= '0.7.1' and
+            engine == 'fastparquet'):
+        import fastparquet as fp
+        if LooseVersion(fp.__version__) <= '0.1.3':
+            pytest.skip("TODO: GH-Issue")
+
+    # modifications
+    name = os.path.join(DATA, '-'.join([writer, version, str(df_number), str(dask_writer)])) + ".parq"
+    df1 = pd.DataFrame({
+        "A": [1, 2, 3, 4],
+        "B": [1.1, 2, 3, 4],
+        "C": ['a', 'b', 'c', 'd'],
+        "D": pd.Categorical(['a', 'b', 'c', 'd']),
+        "E": pd.to_datetime(['2017', '2018', '2019', '2020']),
+    })
+    df2 = df1.copy()
+    df2.index.name = 'idx'
+    df3 = df2.copy()
+    df3.columns.name = 'cidx'
+
+    dfs = {'1': df1, '2': df2, '3': df3}
+    expected = dfs[str(df_number)]
+    result = dd.read_parquet(name, engine=engine)
+
+    if writer == 'pyarrow' and LooseVersion(version) <= '0.8.0':
+        # Can't handle categorical dtype
+        expected = expected.drop("D", axis=1)
+        result = result.drop("D", axis=1)
+
+    if writer == 'fastparquet' and LooseVersion(version) <= '0.1.3':
+        if expected.index.name is None and (dask_writer or df_number > 1):
+            # defaulted to index
+            expected.index.name = 'index'
+        # didn't write columns index names
+        expected.columns.name = None
+
+    if writer == 'pyarrow' and LooseVersion(version) <= '0.7.1':
+        # Didn't write colum index names
+        expected.columns.name = None
+
+    assert_eq(result, expected)
