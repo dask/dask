@@ -4,6 +4,8 @@ from dask.order import child_max, ndependents, order
 from dask.core import get_deps
 from dask.utils_test import add, inc
 
+a, b, c, d, e= 'abcde'
+
 
 def issorted(L, reverse=False):
     return sorted(L, reverse=reverse) == L
@@ -14,7 +16,6 @@ def f(*args):
 
 
 def test_ordering_keeps_groups_together():
-    a, b, c = 'abc'
     d = dict(((a, i), (f,)) for i in range(4))
     d.update({(b, 0): (f, (a, 0), (a, 1)),
               (b, 1): (f, (a, 2), (a, 3))})
@@ -74,25 +75,87 @@ def test_base_of_reduce_preferred():
 
     We really want to run b0 quickly
     """
-    dsk = dict((('a', i), (f, ('a', i - 1), ('b', i))) for i in [1, 2, 3])
-    dsk[('a', 0)] = (f, ('b', 0))
-    dsk.update(dict((('b', i), (f, 'c', 1)) for i in [0, 1, 2, 3]))
-    dsk['c'] = 1
+    dsk = dict(((a, i), (f, (a, i - 1), (b, i))) for i in [1, 2, 3])
+    dsk[(a, 0)] = (f, (b, 0))
+    dsk.update(dict(((b, i), (f, c, 1)) for i in [0, 1, 2, 3]))
+    dsk[c] = 1
 
     o = order(dsk)
 
-    assert o == {('a', 3): 0,
-                 ('a', 2): 1,
-                 ('a', 1): 2,
-                 ('a', 0): 3,
-                 ('b', 0): 4,
-                 'c': 5,
-                 ('b', 1): 6,
-                 ('b', 2): 7,
-                 ('b', 3): 8}
+    assert o == {(a, 3): 0,
+                 (a, 2): 1,
+                 (a, 1): 2,
+                 (a, 0): 3,
+                 (b, 0): 4,
+                 c: 5,
+                 (b, 1): 6,
+                 (b, 2): 7,
+                 (b, 3): 8}
 
-    # ('b', 0) is the most important out of ('b', i)
-    assert min([('b', i) for i in [0, 1, 2, 3]], key=o.get) == ('b', 0)
+    # (b, 0) is the most important out of (b, i)
+    assert min([(b, i) for i in [0, 1, 2, 3]], key=o.get) == (b, 0)
+
+
+def test_avoid_upwards_branching():
+    """
+         a1
+         |
+         a2
+         |
+         a3    d1
+        /  \  /
+      b1    c1
+      |     |
+      b2    c2
+            |
+            c3
+
+    Prefer b1 over c1 because it won't stick around waiting for d1 to complete
+    """
+    dsk = {(a, 1): (f, (a, 2)),
+           (a, 2): (f, (a, 3)),
+           (a, 3): (f, (b, 1), (c, 1)),
+           (b, 1): (f, (b, 2)),
+           (c, 1): (f, (c, 2)),
+           (c, 2): (f, (c, 3)),
+           (d, 1): (f, (c, 1))}
+
+    o = order(dsk)
+
+    assert o[(b, 1)] < o[(c, 1)]
+
+
+def test_avoid_upwards_branching_complex():
+    """
+         a1
+         |
+    e2   a2  d2  d3
+    |    |    \  /
+    e1   a3    d1
+     \  /  \  /
+      b1    c1
+      |     |
+      b2    c2
+            |
+            c3
+
+    Prefer b1 over c1 because it will be easier to finish its dependents
+    """
+    dsk = {(a, 1): (f, (a, 2)),
+           (a, 2): (f, (a, 3)),
+           (a, 3): (f, (b, 1), (c, 1)),
+           (b, 1): (f, (b, 2)),
+           (c, 1): (f, (c, 2)),
+           (c, 2): (f, (c, 3)),
+           (d, 1): (f, (c, 1)),
+           (d, 2): (f, (d, 1))
+           (d, 3): (f, (d, 1)),
+           (e, 1): (f, (b, 1)),
+           (e, 2): (f, (e, 1))}
+
+    o = order(dsk)
+
+    assert o[(b, 1)] < o[(c, 1)]
 
 
 def test_deep_bases_win_over_dependents():
@@ -105,12 +168,12 @@ def test_deep_bases_win_over_dependents():
         / \ | /
        e    d
     """
-    dsk = {'a': (f, 'b', 'c', 'd'), 'b': (f, 'd', 'e'), 'c': (f, 'd'), 'd': 1,
-           'e': 2}
+    dsk = {a: (f, b, c, d), b: (f, d, e), c: (f, d), d: 1,
+           e: 2}
 
     o = order(dsk)
-    assert o['d'] < o['e']
-    assert o['d'] < o['b'] or o['d'] < o['c']
+    assert o[d] < o[e]
+    assert o[d] < o[b] or o[d] < o[c]
 
 
 def test_prefer_deep():
@@ -123,11 +186,11 @@ def test_prefer_deep():
 
     Prefer longer chains first so we should start with c
     """
-    dsk = {'a': 1, 'b': (f, 'a'), 'c': (f, 'b'),
+    dsk = {a: 1, b: (f, a), c: (f, b),
            'x': 1, 'y': (f, 'x')}
 
     o = order(dsk)
-    assert o == {'c': 0, 'b': 1, 'a': 2, 'y': 3, 'x': 4}
+    assert o == {c: 0, b: 1, a: 2, 'y': 3, 'x': 4}
 
 
 def test_stacklimit():
