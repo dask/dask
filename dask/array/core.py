@@ -2569,6 +2569,30 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
 
 def store_chunk(x, out, index, lock, region):
+    """
+    A function inserted in a Dask graph for storing a chunk.
+
+    Parameters
+    ----------
+    x: array-like
+        An array (potentially a NumPy one)
+    out: array-like
+        Where to store results too.
+    index: slice-like
+        Where to store result from ``x`` in ``out``.
+    lock: Lock-like or False
+        Lock to use before writing to ``out``.
+    region: slice-like or None
+        Where relative to ``out`` to store ``x``.
+
+    Examples
+    --------
+
+    >>> a = np.ones((5, 6))
+    >>> b = np.empty(a.shape)
+    >>> store_chunk(a, b, (slice(None), slice(None)), False, None)
+    """
+
     subindex = index
     if region is not None:
         subindex = fuse_slice(region, index)
