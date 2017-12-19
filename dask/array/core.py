@@ -2568,6 +2568,22 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     return Array(dsk2, name, chunks, dtype=dt)
 
 
+def store_chunk(x, out, index, lock, region):
+    subindex = index
+    if region is not None:
+        subindex = fuse_slice(region, index)
+
+    if lock:
+        lock.acquire()
+    try:
+        out[subindex] = np.asanyarray(x)
+    finally:
+        if lock:
+            lock.release()
+
+    return None
+
+
 def insert_to_ooc(arr, out, lock=True, region=None):
     """
     Creates a Dask graph for storing chunks from ``arr`` in ``out``.
@@ -2596,28 +2612,15 @@ def insert_to_ooc(arr, out, lock=True, region=None):
     if lock is True:
         lock = Lock()
 
-    def store(x, out, index, lock, region):
-        subindex = index
-        if region is not None:
-            subindex = fuse_slice(region, index)
-
-        if lock:
-            lock.acquire()
-        try:
-            out[subindex] = np.asanyarray(x)
-        finally:
-            if lock:
-                lock.release()
-
-        return None
-
     slices = slices_from_chunks(arr.chunks)
 
     name = 'store-%s' % arr.name
     dsk = dict()
     for t, slc in zip(core.flatten(arr.__dask_keys__()), slices):
         store_key = (name,) + t[1:]
-        dsk[store_key] = (store, t, out, slc, lock, region)
+        dsk[store_key] = (
+            store_chunk, t, out, slc, lock, region
+        )
 
     return dsk
 
