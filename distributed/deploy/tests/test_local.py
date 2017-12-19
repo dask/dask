@@ -192,6 +192,14 @@ def test_worker_params():
         assert [w.memory_limit for w in c.workers] == [500] * 2
 
 
+def test_memory_limit_none():
+    with LocalCluster(n_workers=2, scheduler_port=0, silence_logs=False,
+                      processes=False,  diagnostics_port=None, memory_limit=None) as c:
+        w = c.workers[0]
+        assert type(w.data) is dict
+        assert w.memory_limit is None
+
+
 def test_cleanup():
     c = LocalCluster(2, scheduler_port=0, silence_logs=False,
                      diagnostics_port=None)

@@ -2628,6 +2628,8 @@ class Reschedule(Exception):
 
 
 def parse_memory_limit(memory_limit, ncores):
+    if memory_limit is None:
+        return None
     if memory_limit == 'auto':
         memory_limit = int(TOTAL_MEMORY * min(1, ncores / _ncores))
     with ignoring(ValueError, TypeError):
