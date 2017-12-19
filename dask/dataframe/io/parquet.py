@@ -58,8 +58,8 @@ def _parse_pandas_metadata(pandas_metadata):
         if real_name and index_name_xpr.match(real_name):
             real_name = None
         pairs2.append((storage_name, real_name))
-    index_names = [real_name for (storage_name, real_name) in pairs2
-                   if real_name != storage_name]
+    index_names = [name for (storage_name, name) in pairs2
+                   if name != storage_name]
     # This controls df.columns.name
     # It was added to the spec after pandas 0.21.0+, and implemented
     # in PyArrow 0.8
