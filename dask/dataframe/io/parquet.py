@@ -146,8 +146,9 @@ def _normalize_columns(user_columns, data_columns):
 
     Parameters
     ----------
-    user_columns : str or list of str
+    user_columns : None, str or list of str
     data_columns : list of str
+
     Returns
     -------
     column_names : list of str
@@ -164,6 +165,31 @@ def _normalize_columns(user_columns, data_columns):
     else:
         column_names = list(data_columns)
     return column_names, out_type
+
+
+def _normalize_index(user_index, data_index):
+    """Normalize user- and file-provided index names
+
+    Parameters
+    ----------
+    user_index : None, str, or list of str
+    data_index : list of str
+
+    Returns
+    -------
+    index_names : list of str
+    """
+    if user_index is not None:
+        if user_index is False:
+            index_names = []
+        elif isinstance(user_index, string_types):
+            index_names = [user_index]
+        else:
+            index_names = list(user_index)
+    else:
+        index_names = data_index
+    return index_names
+
 
 # ----------------------------------------------------------------------
 # Fastparquet interface
@@ -219,14 +245,7 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
         filters = []
 
     column_names, out_type = _normalize_columns(columns, column_names)
-
-    if index is not None:
-        if index is False:
-            index_names = []
-        elif isinstance(index, string_types):
-            index_names = [index]
-        else:
-            index_names = list(index)
+    index_names = _normalize_index(index, index_names)
 
     if categories is None:
         categories = pf.categories
@@ -241,9 +260,6 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
     if file_cats:
         all_columns.extend(list(file_cats))
 
-    assert len(all_columns) == len(set(all_columns))
-    assert set(index_names).issubset(all_columns)
-
     rgs = [rg for rg in pf.row_groups if
            not (fastparquet.api.filter_out_stats(rg, filters, pf.schema)) and
            not (fastparquet.api.filter_out_cats(rg, filters))]
@@ -254,7 +270,7 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
     meta = _meta_from_dtypes(all_columns, dtypes, index_names, [None])
     # fastparquet / dask don't handle multiindex
     if len(index_names) > 1:
-        raise ValueError
+        raise ValueError("Cannot read DataFrame with MultiIndex.")
     elif len(index_names) == 0:
         index_names = None
 
@@ -508,9 +524,7 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
     # Resolve user-provided columns and index. Goal is to filter down
     # all_columns to just the desired subset
     column_names, out_type = _normalize_columns(columns, column_names)
-
-    if index is False:
-        index_names = []
+    index_names = _normalize_index(index, index_names)
 
     all_columns = index_names + column_names
 
