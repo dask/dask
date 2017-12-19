@@ -90,8 +90,8 @@ keyword to the ``dask-worker``, ``dask-scheduler``, or ``dask-mpi`` commands
    mpirun --np 4 dask-mpi --scheduler-file /home/$USER/scheduler.json --interface ib0
 
 In the code example above we have assumed that your cluster has an Infiniband
-network interface called ``ib0``. You can check this by asking your IT department
-or by inspecting the output of ``ifconfig``
+network interface called ``ib0``. You can check this by asking your system
+administrator or by inspecting the output of ``ifconfig``
 
 .. code-block:: bash
 
@@ -113,7 +113,7 @@ No Local Storage
 
 Users often exceed memory limits available to a specific Dask deployment.  In
 normal operation Dask spills excess data to disk.  However, in HPC systems the
-individual compute nodes often lack locally attached hard drives, preferring
+individual compute nodes often lack locally attached storage, preferring
 instead to store data in a robust high performance network storage solution.
 As a result when a Dask cluster starts to exceed memory limits its workers can
 start making many small writes to the remote network file system.  This is both

@@ -1,5 +1,5 @@
-Kubernetes
-==========
+Kubernetes (Cloud)
+==================
 
 It is easy to launch a Dask cluster and Jupyter notebook server on cloud
 resources using Kubernetes_ and Helm_.
@@ -16,9 +16,9 @@ Launch Kubernetes Cluster
 
 This document assumes that you have a Kubernetes cluster and Helm installed.
 
-If this is not the case, you might consider setting up a Kubernetes cluster
-either on one of the common cloud providers like
-Google, Amazon, or Microsoft's.  We recommend the first part of the documentation in the guide
+If this is not the case then you might consider setting up a Kubernetes cluster
+either on one of the common cloud providers like Google, Amazon, or
+Microsoft's.  We recommend the first part of the documentation in the guide
 `Zero to JupyterHub <http://zero-to-jupyterhub.readthedocs.io/en/latest/>`_
 that focuses on Kubernetes and Helm.  You do not need to follow all of these
 instructions.  JupyterHub is not necessary to deploy Dask:
@@ -34,7 +34,8 @@ Helm Install Dask
 ~~~~~~~~~~~~~~~~~
 
 Dask maintains a Helm repository at https://dask.github.io/helm-chart . You can
-add this to your local helm installation as follows::
+add this to your local helm installation as follows (you should have installed
+Helm as part of the instructions above)::
 
    helm repo add dask https://dask.github.io/helm-chart
    helm repo update
@@ -135,11 +136,13 @@ pip packages to install on the both the workers and Jupyter server (these two
 environments should be matched).
 
 .. code-block:: yaml
+   # config.yaml
+
    worker:
      replicas: 8
      limits:
        cpu: 2
-       memory: 7500000000
+       memory: 7.5 GiB
      pipPackages: >-
        git+https://github.com/gcsfs/gcsfs.git
        git+https://github.com/xarray/xarray.git
@@ -232,7 +235,10 @@ Avoid the Jupyter Server
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 Sometimes you do not need to run a Jupyter server alongside your Dask cluster.
-A simple way to avoid the extra pod is to set ``jupyter.replicas=0``, either in
-your ``config.yaml`` file, or explicitly in the command line::
+A simple way to avoid the extra pod is to set ``replicas: 0`` within your
+config.yaml file under the ``jupyter`` section.
 
-   helm upgrade bald-eel --set jupyter.replicas=0 -f config.yaml
+.. code-block:: yaml
+
+   jupyter:
+     replicas: 0

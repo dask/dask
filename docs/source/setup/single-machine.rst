@@ -4,12 +4,12 @@ Single-Machine Scheduler
 The default Dask scheduler provides parallelism on a single machine by using
 either threads or processes.  It is the default choice used by Dask because it
 requires no setup.  You don't need to make any choices or set anything up to
-use this scheduler, however you do have a few options.
+use this scheduler, however you do have a choice between threads and processes:
 
 1.  **Threads**: Use multiple threads in the same process.  This option is good
     for numeric code that releases the GIL_ (like NumPy, Pandas, Scikit-Learn,
     Numba, ...) because data is free to share.  This is the default scheduler for
-    ``dask.array``, ``dask.dataframe`` and ``dask.delayed``
+    ``dask.array``, ``dask.dataframe``, and ``dask.delayed``
 
 2.  **Processes**: Send data to separate processes for processing.  This option
     is good when operating on pure Python objects like strings or JSON-like
@@ -17,7 +17,7 @@ use this scheduler, however you do have a few options.
     on numeric data like Pandas dataframes or NumPy arrays.  Using processes
     avoids GIL issues but can also result in a lot of inter-process
     communication, which can be slow.  This is the default scheduler for
-    ``dask.bag`` and sometimes useful with ``dask.dataframe``.
+    ``dask.bag`` and is sometimes useful with ``dask.dataframe``.
 
     Note that the dask.distributed scheduler is often a better choice when
     working with GIL-bound code.  See :doc:`Dask.distributed on a single
@@ -62,3 +62,11 @@ You can specify these functions in any of the following ways:
     .. code-block:: python
 
        dask.set_options(get=dask.threaded.get)
+
+
+Use the Distributed Scheduler
+-----------------------------
+
+The newer dask.distributed scheduler also works well on a single machine and
+offers more features and diagnostics.  See :doc:`this page
+<single-distributed>` for more information.
