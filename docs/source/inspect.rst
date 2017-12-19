@@ -37,8 +37,9 @@ objects
     ('x_1', 0, 1): (add, ('wrapped_1', 0, 1), 1),
     ('x_1', 0, 2): (add, ('wrapped_1', 0, 2), 1)}
 
-.. note:: In practice keynames will include complex hashes.  Here we've kept the
-  names, like ``x_1``, simple for demonstration purposes.
+.. note:: In this example we use simple names like ``x_1``, ``ones``, and
+  ``add`` for demonstration purposes.  However in practice these names may be
+  more complex and include long hashed names.
 
 Visualize graphs with DOT
 -------------------------
