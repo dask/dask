@@ -2569,6 +2569,30 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
 
 def insert_to_ooc(arr, out, lock=True, region=None):
+    """
+    Creates a Dask graph for storing chunks from ``arr`` in ``out``.
+
+    Parameters
+    ----------
+    arr: da.Array
+        A dask array
+    out: array-like
+        Where to store results too.
+    lock: Lock-like or bool, optional
+        Whether to lock or with what (default is ``True``,
+        which means a ``threading.Lock`` instance).
+    region: slice-like, optional
+        Where in ``out`` to store ``arr``'s results
+        (default is ``None``, meaning all of ``out``).
+
+    Examples
+    --------
+
+    >>> d = da.ones((5, 6), chunks=(2, 3))
+    >>> a = np.empty(d.shape)
+    >>> insert_to_ooc(d, a)
+    """
+
     if lock is True:
         lock = Lock()
 
