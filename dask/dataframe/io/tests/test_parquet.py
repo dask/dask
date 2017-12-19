@@ -922,9 +922,9 @@ def writer_module(request):
 
 def test_historical(df_number, writer_module, dask_writer, engine):
     parquet_data = pytest.importorskip("dask_parquet_integration")
+
     DATA = os.path.join(os.path.dirname(parquet_data.__file__), "data")
     writer, version = writer_module.split('=')
-
     # skips
     # PyArrow cann't read anything genrated by fastparuqet
     # PyArrow 0.8.0 fails with
@@ -942,7 +942,10 @@ def test_historical(df_number, writer_module, dask_writer, engine):
             pytest.skip("TODO: GH-Issue")
 
     # modifications
-    name = os.path.join(DATA, '-'.join([writer, version, str(df_number), str(dask_writer)])) + ".parq"
+    # Some readers / writers don't have full fideleity. Let's at least
+    # test the parts that are possible
+    name = os.path.join(DATA, '-'.join([writer, version, str(df_number),
+                                        str(dask_writer)])) + ".parq"
     df1 = pd.DataFrame({
         "A": [1, 2, 3, 4],
         "B": [1.1, 2, 3, 4],

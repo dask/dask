@@ -61,6 +61,7 @@ pip install -q --upgrade --no-deps git+https://github.com/dask/zict
 pip install -q --upgrade --no-deps git+https://github.com/dask/distributed
 pip install -q --upgrade --no-deps git+https://github.com/mrocklin/sparse
 pip install -q --upgrade --no-deps git+https://github.com/dask/s3fs
+pip install -q --upgrade --no-deps git+https://github.com/dask/parquet-integration
 
 if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]]; then
     conda install -q -c conda-forge fastparquet python-snappy
