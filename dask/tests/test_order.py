@@ -4,7 +4,7 @@ from dask.order import child_max, ndependents, order
 from dask.core import get_deps
 from dask.utils_test import add, inc
 
-a, b, c, d, e= 'abcde'
+a, b, c, d, e = 'abcde'
 
 
 def issorted(L, reverse=False):
