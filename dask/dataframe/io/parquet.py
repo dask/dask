@@ -83,14 +83,14 @@ def _parse_pandas_metadata(pandas_metadata):
         # index name
         index_names = list(index_storage_names)  # make a copy
         index_storage_names2 = set(index_storage_names)
-        column_names = [real_name for (storage_name, real_name)
-                        in pairs if real_name not in index_storage_names2]
+        column_names = [name for (storage_name, name)
+                        in pairs if name not in index_storage_names2]
     else:
         # For newer PyArrows the storage names differ from the index names
         # iff it's an index level. Though this is a fragile assumption for
         # other systems...
-        column_names = [real_name for (storage_name, real_name) in pairs2
-                        if real_name == storage_name]
+        column_names = [name for (storage_name, name) in pairs2
+                        if name == storage_name]
 
     storage_name_mapping = dict(pairs2)   # TODO: handle duplicates gracefully
 
