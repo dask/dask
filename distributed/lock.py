@@ -37,6 +37,8 @@ class LockExtension(object):
     @gen.coroutine
     def acquire(self, stream=None, name=None, id=None, timeout=None):
         with log_errors():
+            if isinstance(name, list):
+                name = tuple(name)
             if name not in self.ids:
                 result = True
             else:
@@ -63,6 +65,8 @@ class LockExtension(object):
 
     def release(self, stream=None, name=None, id=None):
         with log_errors():
+            if isinstance(name, list):
+                name = tuple(name)
             if self.ids.get(name) != id:
                 raise ValueError("This lock has not yet been acquired")
             del self.ids[name]
@@ -90,7 +94,7 @@ class Lock(object):
     """
     def __init__(self, name=None, client=None):
         self.client = client or _get_global_client() or get_worker().client
-        self.name = name or 'variable-' + uuid.uuid4().hex
+        self.name = name or 'lock-' + uuid.uuid4().hex
         self.id = uuid.uuid4().hex
         self._locked = False
 

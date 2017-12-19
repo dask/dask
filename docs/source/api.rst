@@ -77,9 +77,10 @@ API
 
 .. currentmodule:: distributed
 
-.. autosummary:: Lock
-.. autosummary:: Queue
-.. autosummary:: Variable
+.. autosummary::
+   Lock
+   Queue
+   Variable
 
 
 **Other**
@@ -157,6 +158,8 @@ Other
 .. autofunction:: distributed.secede
 .. autofunction:: distributed.rejoin
 
+.. autoclass:: Lock
+   :members:
 .. autoclass:: Queue
    :members:
 .. autoclass:: Variable

@@ -93,3 +93,14 @@ def test_lock_sync(loop):
             c.set_metadata('locked', False)
             futures = c.map(f, range(10))
             c.gather(futures)
+
+
+@gen_cluster(client=True)
+def test_lock_types(c, s, a, b):
+    for name in [1, ('a', 1), ['a', 1], b'123', '123']:
+        lock = Lock(name)
+        assert lock.name == name
+
+        yield lock.acquire()
+        yield lock.release()
+    assert not s.extensions['locks'].events
