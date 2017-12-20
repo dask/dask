@@ -1,11 +1,8 @@
-Comparison to PySpark
-=====================
+Comparison to Spark
+===================
 
-Spark_ is a popular distributed computing tool with a decent Python API
-PySpark_.  Spark is growing to become a dominant name today in Big Data
-analysis alongside Hadoop, for which MRJob_ is possibly the dominant
-Python layer.
-
+`Apache Spark <https://spark.apache.org/>`_ is a popular distributed computing tool for tabular datasets
+that is growing to become a dominant name today in Big Data analysis today.
 Dask has several elements that appear to intersect this space and we are often
 asked, "How does Dask compare with Spark?"
 
@@ -16,103 +13,110 @@ tries to do this; we welcome any corrections.
 Summary
 -------
 
-Apache Spark is an all-inclusive framework combining distributed computing,
-SQL queries, machine learning, and more that runs on the JVM and is commonly
-co-deployed with other Big Data frameworks like Hadoop.  It was originally
-optimized for bulk data ingest and querying common in data engineering and
-business analytics but has since broadened out.  Spark is typically used on
-small to medium sized cluster but also runs well on a single machine.
-
-Dask is a parallel programming library that combines with the Numeric Python
-ecosystem to provide parallel arrays, dataframes, machine learning, and custom
-algorithms.  It is based on Python and the foundational C/Fortran stack.  Dask
-was originally designed to complement other libraries with parallelism,
-particular for numeric computing and advanced analytics, but has since
-broadened out.  Dask is typically used on a single machine, but also runs well
-on a distributed cluster.
-
 Generally Dask is smaller and lighter weight than Spark.  This means that it
 has fewer features and instead is intended to be used in conjunction with other
-libraries, particularly those in the numeric Python ecosystem.
+libraries, particularly those in the numeric Python ecosystem.  It couples with
+other libraries like Pandas or Scikit-Learn to achieve high-level
+functionality.
+
+- Language
+    - Spark is written in Scala with some support for Python and R.  It
+      interoperates well with other JVM code.
+    - Dask is written in Python and only really supports Python.  It
+      interoperates well with C/C++/Fortran/LLVM or other natively compiled
+      code linked through Python.
+- Ecosystem
+    - Spark is an all-in-one project that has inspired its own ecosystem.  It
+      integrates well with many other Apache projects.
+    - Dask is a component of the larger Python ecosystem.  It couples with and
+      enhances other libraries like NumPy, Pandas, and Scikit-Learn.
+- Age and Trust
+    - Spark is older (since 2010) and has become a dominant and
+      well-trusted tool in the Big Data enterprise world.
+    - Dask is younger (since 2014) and is an extension of the
+      well trusted NumPy/Pandas/Scikit-learn/Jupyter stack.
+- Scope
+    - Spark is more focused on traditional business intelligence
+      operations like SQL and lightweight machine learning.
+    - Dask is applied more generally both to business intelligence
+      applications, as well as a number of scientific and custom business
+      situations
+- Internal Design
+    - Spark's internal model is higher level, providing good high level
+      optimizations on uniformly applied computations, but lacking flexibility
+      for more complex algorithms or ad-hoc systems.  It is fundamentally an
+      extension of the Map-Shuffle-Reduce paradigm.
+    - Dask's internal model is lower level, and so lacks high level
+      optimizations, but is able to implement more sophisticated algorithms and
+      build more complex bespoke systems.  It is fundamentally based on generic
+      task scheduling.
+- Scale
+    - Spark scales from a single node to thousand-node clusters
+    - Dask scalse from a single node to thousand-node clusters
+- APIs
+    - Dataframes
+        - Spark dataframe has its own API and memory model.  It also
+          implements a large subset of the SQL language.  Spark includes a
+          high-level query optimizer for complex queries.
+        - Dask.dataframe reuses the Pandas API and memory model.  It implements
+          neither SQL nor a query optimizer.  It is able to do random access,
+          efficient time series operations, and other Pandas-style indexed
+          operations
+    - Machine Learning
+        - Spark MLLib is a cohesive project with support for common operations
+          that are easy to implement with Spark's Map-Shuffle-Reduce style
+          system.  People considering MLLib might also want to consider *other*
+          JVM-based machine learning libraries like H2O, which may have better
+          performance.
+        - Dask relies on and interoperates with existing libraries like
+          Scikit-Learn and XGBoost.  These can be more familiar or higher
+          performance, but generally results in a less-cohesive whole.  See the
+          `dask-ml`_ project for integrations.
+    - Arrays
+        - Spark does not include support for multi-dimensional arrays natively
+          (this would be challenging given their computation model) although
+          some support for two-dimensional matrices may be found in MLLib.
+          People may also want to look at the `Thunder
+          <https://github.com/thunder-project/thunder>`_ project.
+        - Dask fully supports the NumPy model for :doc:`scalable multi-dimensional
+          arrays <array>`.
+    - Streaming
+        - Spark's support for streaming data is first-class and integrates well
+          into their other APIs.  It follows a mini-batch approach.  This
+          provides decent performance on large uniform streaming operations
+        - Dask provides a real-time futures interface that is lower-level than
+          Spark streaming.  This enables more creative and complex use-cases,
+          but requires more work than Spark streaming.
+    - Graphs / complex networks
+        - Spark provides GraphX, a library for graph processing
+        - Dask provides no such library
+    - Bespoke parallelism
+        - Spark provides no mechanism for generic task scheduling beyond
+        - Dask allows you to specify
+
+.. _dask-ml: https://dask-ml.readthedocs.org/en/latest
 
 
-User-Facing Differences
------------------------
+Reasons you might choose Spark
+------------------------------
 
-Scale
-~~~~~
-
-Spark began its life aimed at the thousand node cluster case.  As
-such it thinks well about worker failures and integration with data-local
-file systems like the Hadoop FileSystem (HDFS).  That being said, Spark can
-run in standalone mode on a single machine.
-
-Dask began its life building out parallel algorithms for numerical array
-computations on a single computer.  As such it thinks well about low-latency
-scheduling, low memory footprints, shared memory, and efficient use of local
-disk.  That being said dask can run on a distributed_ cluster, making use of
-HDFS and other Big Data technologies.
-
-.. _distributed: https://distributed.readthedocs.io/
+-  You prefer Scala or the SQL language
+-  You have mostly JVM infrastructure and legacy systems
+-  You want an established and trusted solution for business
+-  You are mostly doing business analytics with some lightweight machine learning
+-  You want an all-in-one solution
 
 
-Java Python Performance
-~~~~~~~~~~~~~~~~~~~~~~~
+Reasons you might choose Dask
+-----------------------------
 
-Spark is written in Scala, a multi-paradigm language built on top of the Java
-Virtual Machine (JVM).  Since the rise of Hadoop, Java based languages have
-steadily gained traction on data warehousing tasks and are good at managing
-large amounts of heterogeneous data such as you might find in JSON blobs.  The
-Spark development team is now focusing more on binary and native data formats
-with their new effort, Tungsten.
-
-Dask is written in Python, a multi-paradigm language built on top of the
-C/Fortran native stack.  This stack benefits from decades of scientific research
-optimizing very fast computation on numeric data.  As such, dask is already
-very good on analytic computations on data such as you might find in HDF5 files
-or analytic databases.  It can also handle JSON blob type data using Python
-data structures (which are `surprisingly fast`_) using the cytoolz_ library in
-parallel.
-
-
-Java Python Disconnect
-~~~~~~~~~~~~~~~~~~~~~~
-
-Python users on Spark sometimes express frustration by how far separated they
-are from computations.  Some of this is inevitable; distributed debugging is a
-hard problem.  Some of it however is due to having to hop over the JVM.  Spark
-workers spin up JVMs which in turn spin up Python processes.  Data moving back
-and forth makes extra trips both through a distributed cluster and also through
-extra serialization layers (see py4j_) and computation layers.  Limitations
-like the Java heap size and large Java stack traces come as a surprise to users
-accustomed to native code execution.
-
-Dask has an advantage for Python users because it is itself a Python library,
-so serialization and debugging when things go wrong happens more smoothly.
-
-However, Dask only benefits Python users while Spark is useful in a
-variety of JVM languages (Scala, Java, Clojure) and also has limited support in
-Python and R.  New Spark projects like the DataFrame skip serialization and
-boxed execution issues by forgoing the Python process entirely and instead have
-Python code drive native Scala code.  APIs for these libraries tend to lag a
-bit behind their Scala counterparts.
-
-
-Scope
-~~~~~
-
-Spark was originally built around the RDD, an unordered collection allowing
-repeats.  Most spark add-ons were built on top of this construct, inheriting
-both its abilities and limitations.
-
-Dask is built on a lower-level and more general construct of a generic task
-graph with arbitrary data dependencies.  This allows more general computations
-to be built by users within the dask framework.  This is probably the largest
-fundamental difference between the two projects.  Dask gives up high-level
-understanding to allow users to express more complex parallel algorithms.  This
-ended up being essential when writing complex projects like ``dask.array``,
-datetime algorithms in ``dask.dataframe`` or non-trivial algorithms in machine
-learning.
+-  You prefer Python or native code, or have large legacy code bases that you
+   do not want to entirely rewrite
+-  Your use case is complex or does not cleanly fit the Spark computing model
+-  You want a lighter-weight transition from single-machine computing to
+   cluster computing
+-  You want to interoperate with other technologies and don't mind installing
+   multiple packages
 
 
 Developer-Facing Differences
@@ -142,10 +146,6 @@ can because Dask schedulers do not have a top-down picture of the computation
 they were asked to perform.  However, dask is able to easily represent far more
 `complex algorithms`_ and expose the creation of these algorithms to normal users.
 
-Dask.bag, the equivalent of the Spark.RDD, is just one abstraction built on top
-of dask.  Others exist.  Alternatively power-users can forego high-level
-collections entirely and jump straight to direct low-level task scheduling.
-
 
 Coding Styles
 ~~~~~~~~~~~~~
@@ -174,11 +174,6 @@ then you should forget both Spark and Dask and use Postgres_ or MongoDB_.
 
 .. _Spark: https://spark.apache.org/
 .. _PySpark: https://spark.apache.org/docs/latest/api/python/
-.. _Hadoop: https://hadoop.apache.org/
-.. _MRJob: https://mrjob.readthedocs.io
-.. _`surprisingly fast`: https://www.youtube.com/watch?v=PpBK4zIaFLE
-.. _cytoolz: https://toolz.readthedocs.io
-.. _py4j: http://py4j.sourceforge.net/
 .. _Postgres: http://www.postgresql.org/
 .. _MongoDB: https://www.mongodb.org/
 .. _`complex algorithms`: http://matthewrocklin.com/blog/work/2015/06/26/Complex-Graphs
