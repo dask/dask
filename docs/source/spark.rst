@@ -1,10 +1,10 @@
 Comparison to Spark
 ===================
 
-`Apache Spark <https://spark.apache.org/>`_ is a popular distributed computing tool for tabular datasets
-that is growing to become a dominant name today in Big Data analysis today.
-Dask has several elements that appear to intersect this space and we are often
-asked, "How does Dask compare with Spark?"
+`Apache Spark <https://spark.apache.org/>`_ is a popular distributed computing
+tool for tabular datasets that is growing to become a dominant name in Big Data
+analysis today.  Dask has several elements that appear to intersect this space
+and we are often asked, "How does Dask compare with Spark?"
 
 Answering such comparison questions in an unbiased and informed way is hard,
 particularly when the differences can be somewhat technical.  This document
@@ -52,7 +52,7 @@ functionality.
       task scheduling.
 - Scale
     - Spark scales from a single node to thousand-node clusters
-    - Dask scalse from a single node to thousand-node clusters
+    - Dask scales from a single node to thousand-node clusters
 - APIs
     - Dataframes
         - Spark dataframe has its own API and memory model.  It also
@@ -61,7 +61,7 @@ functionality.
         - Dask.dataframe reuses the Pandas API and memory model.  It implements
           neither SQL nor a query optimizer.  It is able to do random access,
           efficient time series operations, and other Pandas-style indexed
-          operations
+          operations.
     - Machine Learning
         - Spark MLLib is a cohesive project with support for common operations
           that are easy to implement with Spark's Map-Shuffle-Reduce style
@@ -90,9 +90,13 @@ functionality.
     - Graphs / complex networks
         - Spark provides GraphX, a library for graph processing
         - Dask provides no such library
-    - Bespoke parallelism
-        - Spark provides no mechanism for generic task scheduling beyond
-        - Dask allows you to specify
+    - Custom parallelism
+        - Spark generally expects users to compose computations out of their
+          high-level primitives (map, reduce, groupby, join, ...).  It is also
+          possible to extend Spark through subclassing RDDs, although this is
+          rarely done.
+        - Dask allows you to specify arbitrary task graphs for more complex and
+          custom systems that are not part of the standard set of collections.
 
 .. _dask-ml: https://dask-ml.readthedocs.org/en/latest
 
