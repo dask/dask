@@ -45,7 +45,7 @@ The scheduler and workers both need to accept TCP connections on an open port.
 By default the scheduler binds to port ``8786`` and the worker binds to a
 random open port.  If you are behind a firewall then you may have to open
 particular ports or tell Dask to listen on particular ports with the ``--port``
-and ``-worker-port`` keywords.::
+and ``--worker-port`` keywords.::
 
    dask-scheduler --port 8000
    dask-worker --bokeh-port 8000 --nanny-port 8001
@@ -65,7 +65,7 @@ Additionally Dask schedulers and workers host interactive diagnostic web
 servers using `Bokeh <https://bokeh.pydata.org>`_.  These are optional, but
 generally useful to users.  The diagnostic server on the scheduler is
 particularly valuable, and is served on port ``8787`` by default (configurable
-with the ``-bokeh-port`` keyword).
+with the ``--bokeh-port`` keyword).
 
   - More information about relevant ports is available by looking at the help
     pages with ``dask-scheduler --help`` and ``dask-worker --help``
