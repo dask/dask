@@ -1,28 +1,127 @@
 from __future__ import absolute_import, division, print_function
 
+import re
 import copy
 import json
 import warnings
+import distutils
 
 import numpy as np
 import pandas as pd
-from toolz import unique
 
 from ..core import DataFrame, Series
 from ..utils import UNKNOWN_CATEGORIES
 from ...base import tokenize, normalize_token
-from ...compatibility import PY3
+from ...compatibility import PY3, string_types
 from ...delayed import delayed
 from ...bytes.core import get_fs_paths_myopen
 
 __all__ = ('read_parquet', 'to_parquet')
 
 
-def _meta_from_dtypes(to_read_columns, file_columns, file_dtypes, index_cols):
+def _parse_pandas_metadata(pandas_metadata):
+    """Get the set of names from the pandas metadata section
+
+    Parameters
+    ----------
+    pandas_metadata : dict
+        Should conform to the pandas parquet metadata spec
+
+    Returns
+    -------
+    index_names : list
+        List of strings indicating the actual index names
+    column_names : list
+        List of strings indicating the actual column names
+    storage_name_mapping : dict
+        Pairs of storage names (e.g. the field names for
+        PyArrow) and actual names. The storage and field names will
+        differ for index names for certain writers (pyarrow > 0.8).
+    column_indexes_names : list
+        The names for ``df.columns.name`` or ``df.columns.names`` for
+        a MultiIndex in the columns
+
+    Notes
+    -----
+    This should support metadata written by at least
+
+    * fastparquet>=0.1.3
+    * pyarrow>=0.7.0
+    """
+    index_storage_names = pandas_metadata['index_columns']
+    index_name_xpr = re.compile('__index_level_\d+__')
+
+    # older metadatas will not have a 'field_name' field so we fall back
+    # to the 'name' field
+    pairs = [(x.get('field_name', x['name']), x['name'])
+             for x in pandas_metadata['columns']]
+
+    # Need to reconcile storage and real names. These will differ for
+    # pyarrow, which uses __index_leveL_d__ for the storage name of indexes.
+    # The real name may be None (e.g. `df.index.name` is None).
+    pairs2 = []
+    for storage_name, real_name in pairs:
+        if real_name and index_name_xpr.match(real_name):
+            real_name = None
+        pairs2.append((storage_name, real_name))
+    index_names = [name for (storage_name, name) in pairs2
+                   if name != storage_name]
+
+    # column_indexes represents df.columns.name
+    # It was added to the spec after pandas 0.21.0+, and implemented
+    # in PyArrow 0.8. It's not currently impelmented in fastparquet.
+    column_index_names = pandas_metadata.get("column_indexes", [{'name': None}])
+    column_index_names = [x['name'] for x in column_index_names]
+
+    # Now we need to disambiguate between columns and index names. PyArrow
+    # 0.8.0+ allows for duplicates between df.index.names and df.columns
+    if not index_names:
+        # For PyArrow < 0.8, Any fastparquet. This relies on the facts that
+        # 1. Those versions used the real index name as the index storage name
+        # 2. Those versions did not allow for duplicate index / column names
+        # So we know that if a name is in index_storage_names, it must be an
+        # index name
+        index_names = list(index_storage_names)  # make a copy
+        index_storage_names2 = set(index_storage_names)
+        column_names = [name for (storage_name, name)
+                        in pairs if name not in index_storage_names2]
+    else:
+        # For newer PyArrows the storage names differ from the index names
+        # iff it's an index level. Though this is a fragile assumption for
+        # other systems...
+        column_names = [name for (storage_name, name) in pairs2
+                        if name == storage_name]
+
+    storage_name_mapping = dict(pairs2)   # TODO: handle duplicates gracefully
+
+    return index_names, column_names, storage_name_mapping, column_index_names
+
+
+def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols,
+                      column_index_names):
+    """Get the final metadata for the dask.dataframe
+
+    Parameters
+    ----------
+    to_read_columns : list
+        All the columns to end up with, including index names
+    file_dtypes : dict
+        Mapping from column name to dtype for every element
+        of ``to_read_columns``
+    index_cols : list
+        Subset of ``to_read_columns`` that should move to the
+        index
+    column_index_names : list
+        The values for df.columns.name for a MultiIndex in the
+        columns, or df.index.name for a regular Index in the columns
+
+    Returns
+    -------
+    meta : DataFrame
+    """
     meta = pd.DataFrame({c: pd.Series([], dtype=d)
                          for (c, d) in file_dtypes.items()},
-                        columns=[c for c in file_columns
-                                 if c in file_dtypes])
+                        columns=to_read_columns)
     df = meta[list(to_read_columns)]
 
     if not index_cols:
@@ -30,9 +129,66 @@ def _meta_from_dtypes(to_read_columns, file_columns, file_dtypes, index_cols):
     if not isinstance(index_cols, list):
         index_cols = [index_cols]
     df = df.set_index(index_cols)
+    # XXX: this means we can't roundtrip dataframes where the index names
+    # is actually __index_level_0__
     if len(index_cols) == 1 and index_cols[0] == '__index_level_0__':
         df.index.name = None
+
+    if len(column_index_names) == 1:
+        df.columns.name = column_index_names[0]
+    else:
+        df.columns.names = column_index_names
     return df
+
+
+def _normalize_columns(user_columns, data_columns):
+    """Normalize user- and file-provided column names
+
+    Parameters
+    ----------
+    user_columns : None, str or list of str
+    data_columns : list of str
+
+    Returns
+    -------
+    column_names : list of str
+    out_type : {pd.Series, pd.DataFrame}
+    """
+    out_type = DataFrame
+    if user_columns is not None:
+        if isinstance(user_columns, string_types):
+            columns = [user_columns]
+            out_type = Series
+        else:
+            columns = list(user_columns)
+        column_names = columns
+    else:
+        column_names = list(data_columns)
+    return column_names, out_type
+
+
+def _normalize_index(user_index, data_index):
+    """Normalize user- and file-provided index names
+
+    Parameters
+    ----------
+    user_index : None, str, or list of str
+    data_index : list of str
+
+    Returns
+    -------
+    index_names : list of str
+    """
+    if user_index is not None:
+        if user_index is False:
+            index_names = []
+        elif isinstance(user_index, string_types):
+            index_names = [user_index]
+        else:
+            index_names = list(user_index)
+    else:
+        index_names = data_index
+    return index_names
 
 
 # ----------------------------------------------------------------------
@@ -43,11 +199,6 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
                       categories=None, index=None, storage_options=None):
     import fastparquet
     from fastparquet.util import check_column_names
-    if filters is None:
-        filters = []
-
-    if isinstance(columns, list):
-        columns = tuple(columns)
 
     if len(paths) > 1:
         pf = fastparquet.ParquetFile(paths, open_with=myopen, sep=myopen.fs.sep)
@@ -60,37 +211,67 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
             pf = fastparquet.ParquetFile(paths[0], open_with=myopen, sep=fs.sep)
 
     check_column_names(pf.columns, categories)
+    if isinstance(columns, tuple):
+        # ensure they tokenize the same
+        columns = list(columns)
     name = 'read-parquet-' + tokenize(pf, columns, categories)
+
+    if pf.fmd.key_value_metadata:
+        pandas_md = [x.value for x in pf.fmd.key_value_metadata if x.key == 'pandas']
+    else:
+        pandas_md = []
+
+    if len(pandas_md) == 0:
+        # Fall back to the storage information
+        index_names = pf._get_index()
+        if not isinstance(index_names, list):
+            index_names = [index_names]
+        column_names = pf.columns + list(pf.cats)
+        storage_name_mapping = {k: k for k in column_names}
+        column_index_names = [None]
+    elif len(pandas_md) == 1:
+        index_names, column_names, storage_name_mapping, column_index_names = (
+            _parse_pandas_metadata(json.loads(pandas_md[0]))
+        )
+    else:
+        raise ValueError("File has multiple entries for 'pandas' metadata")
+
+    # Normalize user inputs
+
+    if filters is None:
+        filters = []
+
+    column_names, out_type = _normalize_columns(columns, column_names)
+    index_names = _normalize_index(index, index_names)
+
+    if categories is None:
+        categories = pf.categories
+    elif isinstance(categories, string_types):
+        categories = [categories]
+    else:
+        categories = list(categories)
+
+    # TODO: write partition_on to pandas metadata...
+    # TODO: figure out if partition_on <-> categories. I suspect not...
+    all_columns = list(column_names)
+    all_columns.extend(x for x in index_names if x not in column_names)
+    file_cats = pf.cats
+    if file_cats:
+        all_columns.extend(list(file_cats))
 
     rgs = [rg for rg in pf.row_groups if
            not (fastparquet.api.filter_out_stats(rg, filters, pf.schema)) and
            not (fastparquet.api.filter_out_cats(rg, filters))]
 
-    if index is False:
-        index_col = None
-    elif index is None:
-        index_col = pf._get_index()
-    else:
-        index_col = index
-
-    if columns is None:
-        all_columns = tuple(pf.columns + list(pf.cats))
-    else:
-        all_columns = columns
-    if not isinstance(all_columns, tuple):
-        out_type = Series
-        all_columns = (all_columns,)
-    else:
-        out_type = DataFrame
-    if index_col and index_col not in all_columns:
-        all_columns = all_columns + (index_col,)
-
-    if categories is None:
-        categories = pf.categories
     dtypes = pf._dtypes(categories)
+    dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
-    meta = _meta_from_dtypes(all_columns, tuple(pf.columns + list(pf.cats)),
-                             dtypes, index_col)
+    meta = _meta_from_dtypes(all_columns, dtypes, index_names, [None])
+    # fastparquet / dask don't handle multiindex
+    if len(index_names) > 1:
+        raise ValueError("Cannot read DataFrame with MultiIndex.")
+    elif len(index_names) == 0:
+        index_names = None
 
     for cat in categories:
         if cat in meta:
@@ -103,9 +284,9 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
         meta = meta[meta.columns[0]]
 
     dsk = {(name, i): (_read_parquet_row_group, myopen, pf.row_group_filename(rg),
-                       index_col, all_columns, rg, out_type == Series,
+                       index_names, all_columns, rg, out_type == Series,
                        categories, pf.schema, pf.cats, pf.dtypes,
-                       pf.file_scheme)
+                       pf.file_scheme, storage_name_mapping)
            for i, rg in enumerate(rgs)}
 
     if not dsk:
@@ -114,11 +295,12 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
         divisions = (None, None)
         return out_type(dsk, name, meta, divisions)
 
-    if index_col:
+    if index_names:
+        index_name = meta.index.name
         minmax = fastparquet.api.sorted_partitioned_columns(pf)
-        if index_col in minmax:
-            divisions = (list(minmax[index_col]['min']) +
-                         [minmax[index_col]['max'][-1]])
+        if index_name in minmax:
+            divisions = (list(minmax[index_name]['min']) +
+                         [minmax[index_name]['max'][-1]])
             divisions = [divisions[i] for i, rg in enumerate(pf.row_groups)
                          if rg in rgs] + [divisions[-1]]
         else:
@@ -133,17 +315,35 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
 
 
 def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
-                            schema, cs, dt, scheme, *args):
+                            schema, cs, dt, scheme, storage_name_mapping, *args):
     from fastparquet.api import _pre_allocate
     from fastparquet.core import read_row_group_file
+    name_storage_mapping = {v: k for k, v in storage_name_mapping.items()}
     if not isinstance(columns, (tuple, list)):
-        columns = (columns,)
+        columns = [columns,]
         series = True
-    if index and index not in columns:
-        columns = columns + type(columns)([index])
+    if index:
+        index, = index
+        if index not in columns:
+            columns = columns + [index]
+
+    columns = [name_storage_mapping.get(col, col) for col in columns]
+    index = name_storage_mapping.get(index, index)
+
     df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt)
     read_row_group_file(fn, rg, columns, categories, schema, cs,
                         open=open, assign=views, scheme=scheme)
+
+    if df.index.nlevels == 1:
+        if index:
+            df.index.name = storage_name_mapping.get(index, index)
+    else:
+        if index:
+            df.index.names = [storage_name_mapping.get(name, name)
+                              for name in index]
+    df.columns = [storage_name_mapping.get(col, col)
+                  for col in columns
+                  if col != index]
 
     if series:
         return df[df.columns[0]]
@@ -270,11 +470,17 @@ def _write_metadata(writes, filenames, fmd, path, open_with, sep):
 # ----------------------------------------------------------------------
 # PyArrow interface
 
-
 def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
                   categories=None, index=None):
     from ...bytes.core import get_pyarrow_filesystem
     import pyarrow.parquet as pq
+    import pyarrow as pa
+
+    # In pyarrow, the physical storage field names may differ from
+    # the actual dataframe names. This is true for Index names when
+    # PyArrow >= 0.8.
+    # We would like to resolve these to the correct dataframe names
+    # as soon as possible.
 
     if filters is not None:
         raise NotImplementedError("Predicate pushdown not implemented")
@@ -288,36 +494,38 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
     dataset = pq.ParquetDataset(paths, filesystem=get_pyarrow_filesystem(fs))
     schema = dataset.schema.to_arrow_schema()
     has_pandas_metadata = schema.metadata is not None and b'pandas' in schema.metadata
+
+    if has_pandas_metadata:
+        pandas_metadata = json.loads(schema.metadata[b'pandas'].decode('utf8'))
+        index_names, column_names, storage_name_mapping, column_index_names = (
+            _parse_pandas_metadata(pandas_metadata)
+        )
+    else:
+        index_names = []
+        column_names = schema.names
+        storage_name_mapping = {k: k for k in column_names}
+        column_index_names = [None]
+
+    if pa.__version__ < distutils.version.LooseVersion('0.8.0'):
+        # the pyarrow 0.7.0 *reader* expects the storage names for index names
+        # that are None.
+        if any(x is None for x in index_names):
+            name_storage_mapping = {v: k for
+                                    k, v in storage_name_mapping.items()}
+            index_names = [name_storage_mapping.get(name, name)
+                           for name in index_names]
+
     task_name = 'read-parquet-' + tokenize(dataset, columns)
 
-    if columns is None:
-        all_columns = schema.names
-    else:
-        all_columns = columns
+    column_names, out_type = _normalize_columns(columns, column_names)
+    index_names = _normalize_index(index, index_names)
 
-    if not isinstance(all_columns, list):
-        out_type = Series
-        all_columns = [all_columns]
-    else:
-        out_type = DataFrame
-
-    if index is False:
-        index_cols = []
-    elif index is None:
-        if has_pandas_metadata:
-            pandas_metadata = json.loads(schema.metadata[b'pandas'].decode('utf8'))
-            index_cols = pandas_metadata.get('index_columns', [])
-        else:
-            index_cols = []
-    else:
-        index_cols = index if isinstance(index, list) else [index]
-
-    if index_cols:
-        all_columns = list(unique(all_columns + index_cols))
+    all_columns = index_names + column_names
 
     dtypes = _get_pyarrow_dtypes(schema)
+    dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
-    meta = _meta_from_dtypes(all_columns, schema.names, dtypes, index_cols)
+    meta = _meta_from_dtypes(all_columns, dtypes, index_names, column_index_names)
 
     if out_type == Series:
         assert len(meta.columns) == 1
@@ -330,7 +538,7 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
                              file_opener,
                              piece,
                              all_columns,
-                             index_cols,
+                             index_names,
                              out_type == Series,
                              dataset.partitions)
             for i, piece in enumerate(dataset.pieces)
