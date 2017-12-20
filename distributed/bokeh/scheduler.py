@@ -291,7 +291,7 @@ class CurrentLoad(DashboardComponent):
             processing.add_tools(hover)
 
             hover = HoverTool()
-            hover.tooltips = "@worker : @nbytes_text bytes"
+            hover.tooltips = "@worker : @nbytes_text"
             hover.point_policy = 'follow_mouse'
             nbytes.add_tools(hover)
 
