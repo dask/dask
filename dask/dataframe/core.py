@@ -1742,6 +1742,13 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                           task=len(self.dask))
 
     @derived_from(pd.Series)
+    def rename(self, index=None, inplace=False):
+        if not inplace:
+            self = self.copy()
+        self.name = index
+        return self
+
+    @derived_from(pd.Series)
     def round(self, decimals=0):
         return elemwise(M.round, self, decimals)
 

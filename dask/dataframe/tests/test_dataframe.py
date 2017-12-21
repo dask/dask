@@ -231,6 +231,20 @@ def test_rename_series():
     assert_eq(dind, ind)
 
 
+def test_rename_series_method():
+    s = pd.Series([1, 2, 3, 4, 5, 6, 7], name='x')
+    ds = dd.from_pandas(s, 2)
+
+    assert_eq(ds.rename('y'), s.rename('y'))
+    assert ds.name == 'x'  # no mutation
+    assert_eq(ds.rename(), s.rename())
+
+    ds.rename('z', inplace=True)
+    s.rename('z', inplace=True)
+    assert ds.name == 'z'
+    assert_eq(ds, s)
+
+
 def test_describe():
     # prepare test case which approx quantiles will be the same as actuals
     s = pd.Series(list(range(20)) * 4)
