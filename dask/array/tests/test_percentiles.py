@@ -55,6 +55,6 @@ def test_percentiles_with_empty_arrays():
 
 def test_percentiles_with_scaler_percentile():
     # Regression test to ensure da.percentile works with scalar percentiles
-    # See #3020 
+    # See #3020
     d = da.ones((16,), chunks=(4,))
     assert_eq(da.percentile(d, 50), np.array([1], dtype=d.dtype))
