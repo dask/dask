@@ -925,6 +925,19 @@ def test_error_if_sample_is_too_small():
         assert_eq(dd.read_csv(fn, sample=sample, header=None, skiprows=3),
                   pd.read_csv(fn, header=None, skiprows=3))
 
+def test_read_csv_names_not_none():
+    text = ('Alice,100\n'
+            'Bob,-200\n'
+            'Charlie,300\n'
+            'Dennis,400\n'
+            'Edith,-500\n'
+            'Frank,600\n')
+    names = ['name', 'amount']
+    with filetext(text) as fn:
+        ddf = dd.read_csv(fn, names=names, blocksize=16).compute()
+        df = pd.read_csv(fn, names=names)
+        ddf.index = range(len(ddf.index))
+        assert_eq(df, ddf)
 
 ############
 #  to_csv  #
