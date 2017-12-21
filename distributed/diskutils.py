@@ -23,6 +23,15 @@ def is_locking_enabled():
     return config.get('use-file-locking', True)
 
 
+def safe_unlink(path):
+    try:
+        os.unlink(path)
+    except EnvironmentError as e:
+        # Perhaps it was removed by someone else?
+        if e.errno != errno.ENOENT:
+            logger.error("Failed to remove %r", str(e))
+
+
 class WorkDir(object):
     """
     A temporary work directory inside a WorkSpace.
@@ -74,7 +83,7 @@ class WorkDir(object):
                 lock_file.release()
             if lock_path is not None:
                 workspace._known_locks.remove(lock_path)
-                os.unlink(lock_path)
+                safe_unlink(lock_path)
 
 
 class WorkSpace(object):
@@ -189,12 +198,7 @@ class WorkSpace(object):
         finally:
             lock.release()
         # Clean up lock file after we released it
-        try:
-            os.unlink(lock_path)
-        except EnvironmentError as e:
-            # Perhaps it was removed by someone else?
-            if e.errno != errno.ENOENT:
-                logger.error("Failed to remove %r", str(e))
+        safe_unlink(lock_path)
         return True
 
     def _on_remove_error(self, func, path, exc_info):
