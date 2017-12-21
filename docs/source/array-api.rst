@@ -73,6 +73,7 @@ Top level user functions:
    fmod
    frexp
    fromfunction
+   frompyfunc
    full
    full_like
    histogram
@@ -403,6 +404,7 @@ Other functions
 .. autofunction:: fmod
 .. autofunction:: frexp
 .. autofunction:: fromfunction
+.. autofunction:: frompyfunc
 .. autofunction:: full
 .. autofunction:: full_like
 .. autofunction:: histogram

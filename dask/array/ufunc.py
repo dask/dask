@@ -1,15 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
 from operator import getitem
-from functools import partial
+from functools import partial, wraps
 
 import numpy as np
 from toolz import curry
 
 from .core import Array, elemwise, atop, apply_infer_dtype, asarray
-from ..base import is_dask_collection
+from ..base import is_dask_collection, normalize_function
 from .. import core, sharedict
-from ..utils import skip_doctest
+from ..utils import skip_doctest, funcname
 
 
 def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
@@ -42,14 +42,55 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False):
     return wrapped
 
 
+class da_frompyfunc(object):
+    """A serializable `frompyfunc` object"""
+    def __init__(self, func, nin, nout):
+        self._ufunc = np.frompyfunc(func, nin, nout)
+        self._func = func
+        self.nin = nin
+        self.nout = nout
+        self._name = funcname(func)
+        self.__name__ = 'frompyfunc-%s' % self._name
+
+    def __repr__(self):
+        return 'da.frompyfunc<%s, %d, %d>' % (self._name, self.nin, self.nout)
+
+    def __dask_tokenize__(self):
+        return (normalize_function(self._func), self.nin, self.nout)
+
+    def __reduce__(self):
+        return (da_frompyfunc, (self._func, self.nin, self.nout))
+
+    def __call__(self, *args, **kwargs):
+        return self._ufunc(*args, **kwargs)
+
+    def __getattr__(self, a):
+        if not a.startswith('_'):
+            return getattr(self._ufunc, a)
+        raise AttributeError("%r object has no attribute "
+                             "%r" % (type(self).__name__, a))
+
+    def __dir__(self):
+        o = set(dir(type(self)))
+        o.update(dir(self._ufunc))
+        return o
+
+
+@wraps(np.frompyfunc)
+def frompyfunc(func, nin, nout):
+    if nout > 1:
+        raise NotImplementedError("frompyfunc with more than one output")
+    return ufunc(da_frompyfunc(func, nin, nout))
+
+
 class ufunc(object):
     _forward_attrs = {'nin', 'nargs', 'nout', 'ntypes', 'identity',
                       'signature', 'types'}
 
     def __init__(self, ufunc):
-        if not isinstance(ufunc, np.ufunc):
-            raise TypeError("must be an instance of `ufunc`, "
-                            "got `%s" % type(ufunc).__name__)
+        if not isinstance(ufunc, (np.ufunc, da_frompyfunc)):
+            raise TypeError("must be an instance of `ufunc` or "
+                            "`da_frompyfunc`, got `%s" % type(ufunc).__name__)
         self._ufunc = ufunc
         self.__name__ = ufunc.__name__
         copy_docstring(self, ufunc)
