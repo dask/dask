@@ -55,6 +55,12 @@ if PY3:
     def _getargspec(func):
         return inspect.getfullargspec(func)
 
+    def get_named_args(func):
+        """Get all non ``*args/**kwargs`` arguments for a function"""
+        s = inspect.signature(func)
+        return [n for n, p in s.parameters.items()
+                if p.kind == p.POSITIONAL_OR_KEYWORD]
+
     def reraise(exc, tb=None):
         if exc.__traceback__ is not tb:
             raise exc.with_traceback(tb)
@@ -92,6 +98,14 @@ else:
 
     def _getargspec(func):
         return inspect.getargspec(func)
+
+    def get_named_args(func):
+        """Get all non ``*args/**kwargs`` arguments for a function"""
+        try:
+            return getargspec(func).args
+        except TypeError as e:
+            # Be consistent with py3
+            raise ValueError(*e.args)
 
     def gzip_decompress(b):
         f = gzip.GzipFile(fileobj=BytesIO(b))
@@ -238,8 +252,6 @@ def getargspec(func):
     """Version of inspect.getargspec that works for functools.partial objects"""
     if isinstance(func, functools.partial):
         return _getargspec(func.func)
-    elif hasattr(func, '__wrapped__'):
-        return getargspec(func.__wrapped__)
     else:
         if isinstance(func, type):
             return _getargspec(func.__init__)
