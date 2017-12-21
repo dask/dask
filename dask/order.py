@@ -71,7 +71,7 @@ def order(dsk, dependencies=None):
 
     >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
     >>> order(dsk)
-    {'a': 2, 'c': 1, 'b': 3, 'd': 0}
+    {'a': 3, 'c': 2, 'b': 1, 'd': 0}
     """
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
@@ -82,9 +82,7 @@ def order(dsk, dependencies=None):
     def key(x):
         return ndeps.get(x, 0), str(x)
 
-    result = dfs(dependencies, dependents, key=key)
-
-    return result
+    return dfs(dependencies, dependents, key=key)
 
 
 def ndependents(dependencies, dependents):
