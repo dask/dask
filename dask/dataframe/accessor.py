@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import Sequence
+
 import numpy as np
 import pandas as pd
 from toolz import partial
@@ -119,6 +121,15 @@ class StringAccessor(Accessor):
     def split(self, pat=None, n=-1):
         return self._function_map('split', pat=pat, n=n)
 
+    @derived_from(pd.core.strings.StringMethods)
+    def cat(self, others=None, sep=None, na_rep=None):
+        if others is None:
+            raise NotImplementedError("x.str.cat() with `others == None`")
+        elif not isinstance(others, Sequence):
+            others = [others]
+        return self._series.map_partitions(str_cat, *others, sep=sep,
+                                           na_rep=na_rep, meta=self._series._meta)
+
     def __getitem__(self, index):
         return self._series.map_partitions(str_get, index,
                                            meta=self._series._meta)
@@ -127,3 +138,7 @@ class StringAccessor(Accessor):
 def str_get(series, index):
     """ Implements series.str[index] """
     return series.str[index]
+
+
+def str_cat(self, *others, **kwargs):
+    return self.str.cat(others=others, **kwargs)
