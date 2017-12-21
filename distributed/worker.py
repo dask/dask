@@ -48,7 +48,7 @@ from .utils import (funcname, get_ip, has_arg, _maybe_complex, log_errors,
                     format_bytes, DequeHandler, PeriodicCallback,
                     parse_bytes)
 from .utils_comm import pack_data, gather_from_workers
-from .utils_perf import ThrottledGC
+from .utils_perf import ThrottledGC, enable_gc_diagnosis, disable_gc_diagnosis
 
 _ncores = mp_context.cpu_count()
 
@@ -308,6 +308,8 @@ class WorkerBase(ServerNode):
     def _start(self, addr_or_port=0):
         assert self.status is None
 
+        enable_gc_diagnosis()
+
         # XXX Factor this out
         if not addr_or_port:
             # Default address is the required one to reach the scheduler
@@ -381,6 +383,9 @@ class WorkerBase(ServerNode):
     def _close(self, report=True, timeout=10, nanny=True):
         if self.status in ('closed', 'closing'):
             return
+
+        disable_gc_diagnosis()
+
         logger.info("Stopping worker at %s", self.address)
         self.status = 'closing'
         setproctitle("dask-worker [closing]")

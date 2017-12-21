@@ -4,17 +4,9 @@ import sys
 import threading
 import time
 
-from distributed.compatibility import PY3
 from distributed import metrics
-
-
-def run_for(duration):
-    """
-    Burn CPU for *duration* seconds.
-    """
-    deadline = time.time() + duration
-    while time.time() <= deadline:
-        pass
+from distributed.compatibility import PY3
+from distributed.utils_test import run_for
 
 
 def test_wall_clock():

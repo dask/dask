@@ -277,6 +277,15 @@ def slowidentity(*args, **kwargs):
         return args
 
 
+def run_for(duration, timer=time):
+    """
+    Burn CPU for *duration* seconds.
+    """
+    deadline = timer() + duration
+    while timer() <= deadline:
+        pass
+
+
 # This dict grows at every varying() invocation
 _varying_dict = {}
 _varying_key_gen = itertools.count()

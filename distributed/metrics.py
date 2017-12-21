@@ -10,6 +10,11 @@ _empty_namedtuple = collections.namedtuple("_empty_namedtuple", ())
 
 
 def _psutil_caller(method_name, default=_empty_namedtuple):
+    """
+    Return a function calling the given psutil *method_name*,
+    or returning *default* if psutil is not present.
+    """
+    # Import only once to avoid the cost of a failing import at each wrapper() call
     try:
         import psutil
     except ImportError:

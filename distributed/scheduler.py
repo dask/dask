@@ -40,6 +40,7 @@ from .security import Security
 from .utils import (All, ignoring, get_ip, get_fileno_limit, log_errors,
                     key_split, validate_key, no_default, DequeHandler)
 from .utils_comm import (scatter_to_workers, gather_from_workers)
+from .utils_perf import enable_gc_diagnosis, disable_gc_diagnosis
 from .versions import get_versions
 
 from .publish import PublishExtension
@@ -972,6 +973,8 @@ class Scheduler(ServerNode):
 
     def start(self, addr_or_port=8786, start_queues=True):
         """ Clear out old state and restart all running coroutines """
+        enable_gc_diagnosis()
+
         self.clear_task_state()
 
         with ignoring(AttributeError):
@@ -1068,6 +1071,7 @@ class Scheduler(ServerNode):
         yield super(Scheduler, self).close()
 
         setproctitle("dask-scheduler [closed]")
+        disable_gc_diagnosis()
 
     @gen.coroutine
     def close_worker(self, stream=None, worker=None, safe=None):
