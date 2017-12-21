@@ -169,6 +169,7 @@ Series
    Series.rdiv
    Series.reduction
    Series.repartition
+   Series.rename
    Series.resample
    Series.reset_index
    Series.rolling
