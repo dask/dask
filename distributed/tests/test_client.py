@@ -5102,5 +5102,26 @@ def test_config_scheduler_address(s, a, b):
     yield c.close()
 
 
+@gen_cluster(client=True)
+def test_warn_when_submitting_large_values(c, s, a, b):
+    with warnings.catch_warnings(record=True) as record:
+        future = c.submit(lambda x: x + 1, b'0' * 2000000)
+
+    text = str(record[0].message)
+    assert '2.00 MB' in text
+    assert 'large' in text
+    assert '...' in text
+    assert "'000" in text
+    assert "000'" in text
+    assert len(text) < 2000
+
+    with warnings.catch_warnings(record=True) as record:
+        data = b'0' * 2000000
+        for i in range(10):
+            future = c.submit(lambda x, y: x, data, i)
+
+    assert len(record) < 2
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # flake8: noqa

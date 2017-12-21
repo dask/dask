@@ -10,6 +10,7 @@ from pickle import PicklingError
 import random
 import threading
 import sys
+import warnings
 import weakref
 
 from dask.core import istask
@@ -695,14 +696,37 @@ def dumps_task(task):
     if istask(task):
         if task[0] is apply and not any(map(_maybe_complex, task[2:])):
             d = {'function': dumps_function(task[1]),
-                 'args': pickle.dumps(task[2])}
+                 'args': warn_dumps(task[2])}
             if len(task) == 4:
-                d['kwargs'] = pickle.dumps(task[3])
+                d['kwargs'] = warn_dumps(task[3])
             return d
         elif not any(map(_maybe_complex, task[1:])):
             return {'function': dumps_function(task[0]),
-                    'args': pickle.dumps(task[1:])}
+                    'args': warn_dumps(task[1:])}
     return to_serialize(task)
+
+
+_warn_dumps_warned = [False]
+
+
+def warn_dumps(obj, dumps=pickle.dumps, limit=1e6):
+    """ Dump an object to bytes, warn if those bytes are large """
+    b = dumps(obj)
+    if not _warn_dumps_warned[0] and len(b) > limit:
+        _warn_dumps_warned[0] = True
+        s = str(obj)
+        if len(s) > 70:
+            s = s[:50] + ' ... ' + s[-15:]
+        warnings.warn("Large object of size %s detected in task graph: \n"
+                      "  %s\n"
+                      "Consider scattering large objects ahead of time\n"
+                      "with client.scatter to reduce scheduler burden and \n"
+                      "keep data on workers\n\n"
+                      "    future = client.submit(func, big_data)    # bad\n\n"
+                      "    big_future = client.scatter(big_data)     # good\n"
+                      "    future = client.submit(func, big_future)  # good"
+                      % (format_bytes(len(b)), s))
+    return b
 
 
 def apply_function(function, args, kwargs, execution_state, key,
