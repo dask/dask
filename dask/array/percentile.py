@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from functools import wraps
 from collections import Iterator
+from numbers import Number
 
 import numpy as np
 from toolz import merge, merge_sorted
@@ -38,7 +39,7 @@ def percentile(a, q, interpolation='linear'):
     if not a.ndim == 1:
         raise NotImplementedError(
             "Percentiles only implemented for 1-d arrays")
-    if isinstance(q, (int, float)):
+    if isinstance(q, Number):
         q = [q]
     q = np.array(q)
     token = tokenize(a, list(q), interpolation)
