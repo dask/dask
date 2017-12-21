@@ -935,10 +935,9 @@ def test_read_csv_names_not_none():
             'Frank,600\n')
     names = ['name', 'amount']
     with filetext(text) as fn:
-        ddf = dd.read_csv(fn, names=names, blocksize=16).compute()
+        ddf = dd.read_csv(fn, names=names, blocksize=16)
         df = pd.read_csv(fn, names=names)
-        ddf.index = range(len(ddf.index))
-        assert_eq(df, ddf)
+        assert_eq(df, ddf, check_index=False)
 
 
 ############
