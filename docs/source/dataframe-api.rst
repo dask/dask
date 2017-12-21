@@ -243,19 +243,6 @@ Rolling Operations
 
 .. autosummary::
    rolling.map_overlap
-   rolling.rolling_apply
-   rolling.rolling_count
-   rolling.rolling_kurt
-   rolling.rolling_max
-   rolling.rolling_mean
-   rolling.rolling_median
-   rolling.rolling_min
-   rolling.rolling_quantile
-   rolling.rolling_skew
-   rolling.rolling_std
-   rolling.rolling_sum
-   rolling.rolling_var
-   rolling.rolling_window
 
 Create DataFrames
 ~~~~~~~~~~~~~~~~~
