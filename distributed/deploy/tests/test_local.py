@@ -36,17 +36,17 @@ def test_simple(loop):
 
 
 def test_close_twice():
-    cluster = LocalCluster()
-    with Client(cluster.scheduler_address) as client:
-        f = client.map(inc, range(100))
-        client.gather(f)
-    with captured_logger('tornado.application') as log:
-        cluster.close()
-        cluster.close()
-        sleep(0.5)
-    log = log.getvalue()
-    print(log)
-    assert not log
+    with LocalCluster() as cluster:
+        with Client(cluster.scheduler_address) as client:
+            f = client.map(inc, range(100))
+            client.gather(f)
+        with captured_logger('tornado.application') as log:
+            cluster.close()
+            cluster.close()
+            sleep(0.5)
+        log = log.getvalue()
+        print(log)
+        assert not log
 
 
 @pytest.mark.skipif('sys.version_info[0] == 2', reason='multi-loop')

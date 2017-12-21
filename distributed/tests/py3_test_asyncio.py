@@ -49,18 +49,17 @@ async def test_coro_test():
 
 @coro_test
 async def test_asyncio_start_close():
-    c = await AioClient(processes=False)
+    async with AioClient(processes=False) as c:
+        assert c.status == 'running'
+        # AioClient has installed its AioLoop shim.
+        assert isinstance(IOLoop.current(instance=False), BaseAsyncIOLoop)
 
-    assert c.status == 'running'
-    # AioClient has installed its AioLoop shim.
-    assert isinstance(IOLoop.current(instance=False), BaseAsyncIOLoop)
+        result = await c.submit(inc, 10)
+        assert result == 11
 
-    result = await c.submit(inc, 10)
-    assert result == 11
-
-    await c.close()
-    assert c.status == 'closed'
-    # assert IOLoop.current(instance=False) is None
+        await c.close()
+        assert c.status == 'closed'
+        # assert IOLoop.current(instance=False) is None
 
 
 @coro_test
@@ -317,22 +316,20 @@ async def test_asyncio_run_coroutine():
 @slow
 @coro_test
 async def test_asyncio_restart():
-    c = await AioClient(processes=False)
+    async with AioClient(processes=False) as c:
+        assert c.status == 'running'
+        x = c.submit(inc, 1)
+        assert x.key in c.refcount
 
-    assert c.status == 'running'
-    x = c.submit(inc, 1)
-    assert x.key in c.refcount
+        await c.restart()
+        assert x.key not in c.refcount
 
-    await c.restart()
-    assert x.key not in c.refcount
+        key = x.key
+        del x
+        import gc
+        gc.collect()
 
-    key = x.key
-    del x
-    import gc
-    gc.collect()
-
-    assert key not in c.refcount
-    await c.shutdown()
+        assert key not in c.refcount
 
 
 @coro_test
@@ -343,27 +340,27 @@ async def test_asyncio_nanny_workers():
 
 @coro_test
 async def test_asyncio_variable():
-    c = await AioClient(processes=False)
-    s = c.cluster.scheduler
+    async with AioClient(processes=False) as c:
+        s = c.cluster.scheduler
 
-    x = Variable('x')
-    xx = Variable('x')
-    assert x.client is c
+        x = Variable('x')
+        xx = Variable('x')
+        assert x.client is c
 
-    future = c.submit(inc, 1)
+        future = c.submit(inc, 1)
 
-    await x.set(future)
-    future2 = await xx.get()
-    assert future.key == future2.key
+        await x.set(future)
+        future2 = await xx.get()
+        assert future.key == future2.key
 
-    del future, future2
+        del future, future2
 
-    await asyncio.sleep(0.1)
-    assert s.tasks  # future still present
+        await asyncio.sleep(0.1)
+        assert s.tasks  # future still present
 
-    x.delete()
+        x.delete()
 
-    start = time()
-    while s.tasks:
-        await asyncio.sleep(0.01)
-        assert time() < start + 5
+        start = time()
+        while s.tasks:
+            await asyncio.sleep(0.01)
+            assert time() < start + 5

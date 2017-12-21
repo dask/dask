@@ -435,22 +435,19 @@ def test_thread(loop):
 
 def test_sync_exceptions(loop):
     with cluster() as (s, [a, b]):
-        c = Client(s['address'], loop=loop)
+        with Client(s['address'], loop=loop) as c:
+            x = c.submit(div, 10, 2)
+            assert x.result() == 5
 
-        x = c.submit(div, 10, 2)
-        assert x.result() == 5
+            y = c.submit(div, 10, 0)
+            try:
+                y.result()
+                assert False
+            except ZeroDivisionError:
+                pass
 
-        y = c.submit(div, 10, 0)
-        try:
-            y.result()
-            assert False
-        except ZeroDivisionError:
-            pass
-
-        z = c.submit(div, 10, 5)
-        assert z.result() == 2
-
-        c.close()
+            z = c.submit(div, 10, 5)
+            assert z.result() == 2
 
 
 @gen_cluster(client=True)
@@ -4857,17 +4854,17 @@ def test_quiet_quit_when_cluster_leaves(loop_in_thread):
     from distributed import LocalCluster
 
     loop = loop_in_thread
-    cluster = LocalCluster(loop=loop, scheduler_port=0, diagnostics_port=None,
-                           silence_logs=False)
-    with captured_logger('distributed.comm') as sio:
-        with Client(cluster, loop=loop) as client:
-            futures = client.map(lambda x: x + 1, range(10))
-            sleep(0.05)
-            cluster.close()
-            sleep(0.05)
+    with LocalCluster(loop=loop, scheduler_port=0, diagnostics_port=None,
+                      silence_logs=False) as cluster:
+        with captured_logger('distributed.comm') as sio:
+            with Client(cluster, loop=loop) as client:
+                futures = client.map(lambda x: x + 1, range(10))
+                sleep(0.05)
+                cluster.close()
+                sleep(0.05)
 
-    text = sio.getvalue()
-    assert not text
+        text = sio.getvalue()
+        assert not text
 
 
 def test_warn_executor(loop):
