@@ -313,7 +313,8 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     # contains a header row, we need at least 2 nonempty rows + the number of
     # rows to skip.
     skiprows = kwargs.get('skiprows', 0)
-    header = kwargs.get('header', 'infer')
+    names = kwargs.get('names', None)
+    header = kwargs.get('header', 'infer' if names is None else None)
     need = 1 if header is None else 2
     parts = b_sample.split(b_lineterminator, skiprows + need)
     # If the last partition is empty, don't count it
