@@ -584,8 +584,10 @@ def _normalize_function(func):
         funcs = reversed((first,) + func.funcs) if first else func.funcs
         return tuple(normalize_function(f) for f in funcs)
     elif isinstance(func, partial):
-        kws = tuple(sorted(func.keywords.items())) if func.keywords else ()
-        return (normalize_function(func.func), func.args, kws)
+        args = tuple(normalize_token(i) for i in func.args)
+        kws = tuple((k, normalize_token(v))
+                    for k, v in sorted(func.keywords.items()))
+        return (normalize_function(func.func), args, kws)
     else:
         try:
             result = pickle.dumps(func, protocol=0)
