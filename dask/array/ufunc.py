@@ -72,8 +72,9 @@ class da_frompyfunc(object):
 
     def __dir__(self):
         o = set(dir(type(self)))
+        o.update(self.__dict__)
         o.update(dir(self._ufunc))
-        return o
+        return list(o)
 
 
 @wraps(np.frompyfunc)
