@@ -136,6 +136,7 @@ pip packages to install on the both the workers and Jupyter server (these two
 environments should be matched).
 
 .. code-block:: yaml
+
    # config.yaml
 
    worker:

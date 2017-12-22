@@ -243,6 +243,25 @@ Rolling Operations
 
 .. autosummary::
    rolling.map_overlap
+   Series.rolling
+   DataFrame.rolling
+
+.. currentmodule:: dask.dataframe.rolling
+
+.. autosummary::
+   Rolling.apply
+   Rolling.count
+   Rolling.kurt
+   Rolling.max
+   Rolling.mean
+   Rolling.median
+   Rolling.min
+   Rolling.quantile
+   Rolling.skew
+   Rolling.std
+   Rolling.sum
+   Rolling.var
+
 
 Create DataFrames
 ~~~~~~~~~~~~~~~~~
@@ -333,20 +352,7 @@ Rolling
 
 .. currentmodule:: dask.dataframe.rolling
 
-.. autofunction:: rolling_apply
 .. autofunction:: map_overlap
-.. autofunction:: rolling_count
-.. autofunction:: rolling_kurt
-.. autofunction:: rolling_max
-.. autofunction:: rolling_mean
-.. autofunction:: rolling_median
-.. autofunction:: rolling_min
-.. autofunction:: rolling_quantile
-.. autofunction:: rolling_skew
-.. autofunction:: rolling_std
-.. autofunction:: rolling_sum
-.. autofunction:: rolling_var
-.. autofunction:: rolling_window
 
 
 Other functions
