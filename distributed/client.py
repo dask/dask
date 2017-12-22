@@ -456,6 +456,8 @@ class Client(Node):
     name: string (optional)
         Gives the client a name that will be included in logs generated on
         the scheduler for matters relating to this client
+    heartbeat_interval: int
+        Time in milliseconds between heartbeats to scheduler
 
     Examples
     --------
@@ -484,7 +486,7 @@ class Client(Node):
     def __init__(self, address=None, loop=None, timeout=5,
                  set_as_default=True, scheduler_file=None,
                  security=None, asynchronous=False,
-                 name=None, **kwargs):
+                 name=None, heartbeat_interval=None, **kwargs):
 
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
@@ -512,9 +514,13 @@ class Client(Node):
         self._loop_runner = LoopRunner(loop=loop, asynchronous=asynchronous)
         self.loop = self._loop_runner.loop
 
-        self._periodic_callbacks = []
-        pc = PeriodicCallback(self._update_scheduler_info, 2000, io_loop=self.loop)
-        self._periodic_callbacks.append(pc)
+        self._periodic_callbacks = dict()
+        self._periodic_callbacks['scheduler-info'] = PeriodicCallback(
+                self._update_scheduler_info, 2000, io_loop=self.loop)
+        self._periodic_callbacks['heartbeat'] = PeriodicCallback(
+                self._heartbeat,
+                heartbeat_interval or config.get('client-heartbeat-interval', 5000),
+                io_loop=self.loop)
 
         if address is None and 'scheduler-address' in config:
             address = config['scheduler-address']
@@ -738,7 +744,7 @@ class Client(Node):
 
         yield self._ensure_connected(timeout=timeout)
 
-        for pc in self._periodic_callbacks:
+        for pc in self._periodic_callbacks.values():
             pc.start()
 
         self.coroutines.append(self._handle_report())
@@ -800,6 +806,9 @@ class Client(Node):
     @gen.coroutine
     def _update_scheduler_info(self):
         self._scheduler_identity = yield self.scheduler.identity()
+
+    def _heartbeat(self):
+        self.scheduler_comm.send({'op': 'heartbeat'})
 
     def __enter__(self):
         if not self._loop_runner.is_started():
@@ -935,7 +944,7 @@ class Client(Node):
         self.status = 'closing'
 
         with log_errors():
-            for pc in self._periodic_callbacks:
+            for pc in self._periodic_callbacks.values():
                 pc.stop()
             self._scheduler_identity = {}
             with ignoring(AttributeError):

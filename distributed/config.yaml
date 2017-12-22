@@ -1,4 +1,4 @@
-logging: 
+logging:
   distributed: info
   distributed.client: warning
   bokeh: critical
@@ -12,7 +12,7 @@ compression: auto
 bandwidth: 100000000    # 100 MB/s estimated worker-worker bandwidth
 allowed-failures: 3     # number of retries before a task is considered bad
 pdb-on-err: False       # enter debug mode on scheduling error
-transition-log-length: 100000 
+transition-log-length: 100000
 work-stealing: True     # workers should steal tasks from each other
 
 # Worker options
@@ -58,3 +58,5 @@ worker-memory-terminate: 0.95  # fraction at which we terminate the worker
 
 log-length: 10000  # default length of logs to keep in memory
 log-format: '%(name)s - %(levelname)s - %(message)s'
+
+client-heartbeat-interval: 5000  # milliseconds between client heartbeats

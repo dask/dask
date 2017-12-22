@@ -5123,5 +5123,18 @@ def test_warn_when_submitting_large_values(c, s, a, b):
     assert len(record) < 2
 
 
+@gen_cluster()
+def test_scatter_direct(s, a, b):
+    c = yield Client(s.address, asynchronous=True, heartbeat_interval=10)
+
+    last = s.clients[c.id].last_seen
+
+    start = time()
+    while s.clients[c.id].last_seen == last:
+        yield gen.sleep(0.10)
+        assert time() < start + 5
+
+    yield c._close()
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # flake8: noqa

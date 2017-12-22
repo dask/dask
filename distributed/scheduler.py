@@ -98,11 +98,13 @@ class ClientState(object):
     __slots__ = (
         'client_key',
         'wants_what',
+        'last_seen',
         )
 
     def __init__(self, client):
         self.client_key = client
         self.wants_what = set()
+        self.last_seen = time()
 
     def __repr__(self):
         return "<Client %r>" % (self.client_key,)
@@ -851,6 +853,7 @@ class Scheduler(ServerNode):
                                 'update-data': self.update_data,
                                 'report-key': self.report_on_key,
                                 'client-releases-keys': self.client_releases_keys,
+                                'heartbeat': self.client_heartbeat,
                                 'restart': self.restart}
 
         self.handlers = {'register-client': self.add_client,
@@ -1638,6 +1641,10 @@ class Scheduler(ServerNode):
                 recommendations[ts.key] = 'released'
 
         self.transitions(recommendations)
+
+    def client_heartbeat(self, client=None):
+        """ Handle heartbeats from Client """
+        self.clients[client].last_seen = time()
 
     ###################
     # Task Validation #
