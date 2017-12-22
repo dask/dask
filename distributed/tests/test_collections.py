@@ -136,7 +136,7 @@ def test_rolling_sync(loop):
         with Client(s['address'], loop=loop) as c:
             df = pd.util.testing.makeTimeDataFrame()
             ddf = dd.from_pandas(df, npartitions=10)
-            dd.rolling_mean(ddf.A, 2).compute(get=c.get)
+            ddf.A.rolling(2).mean().compute(get=c.get)
 
 
 @gen_cluster(client=True)
