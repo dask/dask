@@ -1743,10 +1743,27 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @derived_from(pd.Series)
     def rename(self, index=None, inplace=False):
-        if not inplace:
-            self = self.copy()
-        self.name = index
-        return self
+        from pandas.api.types import is_scalar, is_list_like, is_dict_like
+        if is_scalar(index) or (is_list_like(index) and not is_dict_like(index)):
+            res = self if inplace else self.copy()
+            res.name = index
+        else:
+            res = self.map_partitions(M.rename, index)
+            if self.known_divisions:
+                if callable(index) or is_dict_like(index):
+                    old = pd.Series(range(self.npartitions + 1),
+                                    index=self.divisions)
+                    new = tuple(old.rename(index).index.tolist())
+                    res.divisions = new
+                else:
+                    res = res.clear_divisions()
+            if inplace:
+                self.dask = res.dask
+                self._name = res._name
+                self.divisions = res.divisions
+                self._meta = res._meta
+                res = self
+        return res
 
     @derived_from(pd.Series)
     def round(self, decimals=0):

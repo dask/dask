@@ -232,6 +232,7 @@ def test_rename_series():
 
 
 def test_rename_series_method():
+    # Series name
     s = pd.Series([1, 2, 3, 4, 5, 6, 7], name='x')
     ds = dd.from_pandas(s, 2)
 
@@ -242,6 +243,32 @@ def test_rename_series_method():
     ds.rename('z', inplace=True)
     s.rename('z', inplace=True)
     assert ds.name == 'z'
+    assert_eq(ds, s)
+
+    # Series index
+    s = pd.Series(['a', 'b', 'c', 'd', 'e', 'f', 'g'], name='x')
+    ds = dd.from_pandas(s, 2)
+
+    res = ds.rename(lambda x: x ** 2)
+    assert_eq(res, s.rename(lambda x: x ** 2))
+    assert res.known_divisions
+
+    res = ds.rename(s)
+    assert_eq(res, s.rename(s))
+    assert res.known_divisions
+
+    res = ds.rename(ds)
+    assert_eq(res, s.rename(s))
+    assert not res.known_divisions
+
+    ds2 = ds.clear_divisions()
+    res = ds2.rename(lambda x: x**2)
+    assert_eq(res, s.rename(lambda x: x**2))
+    assert not res.known_divisions
+
+    res = ds.rename(lambda x: x**2, inplace=True)
+    assert res is ds
+    s.rename(lambda x: x**2, inplace=True)
     assert_eq(ds, s)
 
 
