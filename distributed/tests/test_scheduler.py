@@ -603,7 +603,8 @@ def test_retire_workers(c, s, a, b):
     assert s.workers_to_close() == [a.address]
 
     workers = yield s.retire_workers()
-    assert workers == [a.address]
+    assert list(workers) == [a.address]
+    assert workers[a.address]['ncores'] == a.ncores
     assert list(s.ncores) == [b.address]
 
     assert s.workers_to_close() == []

@@ -2594,6 +2594,26 @@ class Scheduler(ServerNode):
     @gen.coroutine
     def retire_workers(self, comm=None, workers=None, remove=True, close=False,
                        close_workers=False):
+        """ Gracefully retire workers from cluster
+
+        Parameters
+        ----------
+        workers: list (optional)
+            List of worker IDs to retire.
+            If not provided we call ``workers_to_close`` which finds a good set
+        remove: bool (defaults to True)
+            Whether or not to remove the worker metadata immediately or else
+            wait for the worker to contact us
+        close_workers: bool (defaults to False)
+            Whether or not to actually close the worker explicitly from here.
+            Otherwise we expect some external job scheduler to finish off the
+            worker.
+
+        Returns
+        -------
+        Dictionary mapping worker ID/address to dictionary of information about
+        that worker for each retired worker.
+        """
         if close:
             logger.warning("The keyword close= has been deprecated. "
                            "Use close_workers= instead")
@@ -2604,9 +2624,10 @@ class Scheduler(ServerNode):
                     try:
                         workers = self.workers_to_close()
                         if workers:
-                            yield self.retire_workers(workers=workers,
-                                                      remove=remove, close_workers=close_workers)
-                        raise gen.Return(list(workers))
+                            workers = yield self.retire_workers(workers=workers,
+                                                                remove=remove,
+                                                                close_workers=close_workers)
+                        raise gen.Return(workers)
                     except KeyError:  # keys left during replicate
                         pass
 
@@ -2627,7 +2648,8 @@ class Scheduler(ServerNode):
                 else:
                     raise gen.Return([])
 
-            worker_keys = [ws.worker_key for ws in workers]
+            worker_keys = {ws.worker_key: self.worker_info[ws.worker_key]
+                           for ws in workers}
             if close_workers and worker_keys:
                 yield [self.close_worker(worker=w, safe=True)
                        for w in worker_keys]
@@ -2638,7 +2660,7 @@ class Scheduler(ServerNode):
             self.log_event('all', {'action': 'retire-workers',
                                    'workers': worker_keys,
                                    'moved-keys': len(keys)})
-            self.log_event(worker_keys, {'action': 'retired'})
+            self.log_event(list(worker_keys), {'action': 'retired'})
 
             raise gen.Return(worker_keys)
 
