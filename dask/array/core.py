@@ -2159,7 +2159,9 @@ def atop(func, out_ind, *args, **kwargs):
     concatenate : bool, keyword only
         If true concatenate arrays along dummy indices, else provide lists
     adjust_chunks : dict
-        Dictionary mapping index to function to be applied to chunk sizes
+        Dictionary mapping index to information to adjust chunk sizes.  Can
+        either be a constant chunksize, a tuple of all chunksizes, or a
+        function that converts old chunksize to new chunksize
     new_axes : dict, keyword only
         New indexes and their dimension lengths
 
