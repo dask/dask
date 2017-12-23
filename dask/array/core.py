@@ -2627,10 +2627,10 @@ def insert_to_ooc(arr, out, lock=True, region=None):
 
     Examples
     --------
-
+    >>> import dask.array as da
     >>> d = da.ones((5, 6), chunks=(2, 3))
     >>> a = np.empty(d.shape)
-    >>> insert_to_ooc(d, a)
+    >>> insert_to_ooc(d, a)  # doctest: +SKIP
     """
 
     if lock is True:
