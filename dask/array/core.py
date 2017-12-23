@@ -2570,24 +2570,73 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     return Array(dsk2, name, chunks, dtype=dt)
 
 
+def store_chunk(x, out, index, lock, region):
+    """
+    A function inserted in a Dask graph for storing a chunk.
+
+    Parameters
+    ----------
+    x: array-like
+        An array (potentially a NumPy one)
+    out: array-like
+        Where to store results too.
+    index: slice-like
+        Where to store result from ``x`` in ``out``.
+    lock: Lock-like or False
+        Lock to use before writing to ``out``.
+    region: slice-like or None
+        Where relative to ``out`` to store ``x``.
+
+    Examples
+    --------
+
+    >>> a = np.ones((5, 6))
+    >>> b = np.empty(a.shape)
+    >>> store_chunk(a, b, (slice(None), slice(None)), False, None)
+    """
+
+    subindex = index
+    if region is not None:
+        subindex = fuse_slice(region, index)
+
+    if lock:
+        lock.acquire()
+    try:
+        out[subindex] = np.asanyarray(x)
+    finally:
+        if lock:
+            lock.release()
+
+    return None
+
+
 def insert_to_ooc(arr, out, lock=True, region=None):
+    """
+    Creates a Dask graph for storing chunks from ``arr`` in ``out``.
+
+    Parameters
+    ----------
+    arr: da.Array
+        A dask array
+    out: array-like
+        Where to store results too.
+    lock: Lock-like or bool, optional
+        Whether to lock or with what (default is ``True``,
+        which means a ``threading.Lock`` instance).
+    region: slice-like, optional
+        Where in ``out`` to store ``arr``'s results
+        (default is ``None``, meaning all of ``out``).
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> d = da.ones((5, 6), chunks=(2, 3))
+    >>> a = np.empty(d.shape)
+    >>> insert_to_ooc(d, a)  # doctest: +SKIP
+    """
+
     if lock is True:
         lock = Lock()
-
-    def store(x, out, index, lock, region):
-        subindex = index
-        if region is not None:
-            subindex = fuse_slice(region, index)
-
-        if lock:
-            lock.acquire()
-        try:
-            out[subindex] = np.asanyarray(x)
-        finally:
-            if lock:
-                lock.release()
-
-        return None
 
     slices = slices_from_chunks(arr.chunks)
 
@@ -2595,7 +2644,9 @@ def insert_to_ooc(arr, out, lock=True, region=None):
     dsk = dict()
     for t, slc in zip(core.flatten(arr.__dask_keys__()), slices):
         store_key = (name,) + t[1:]
-        dsk[store_key] = (store, t, out, slc, lock, region)
+        dsk[store_key] = (
+            store_chunk, t, out, slc, lock, region
+        )
 
     return dsk
 
