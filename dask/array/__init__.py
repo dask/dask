@@ -24,7 +24,7 @@ from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
         fmax, fmin, isreal, iscomplex, isfinite, isinf, isnan, signbit,
         copysign, nextafter, spacing, ldexp, fmod, floor, ceil, trunc, degrees,
         radians, rint, fix, angle, real, imag, clip, fabs, sign, absolute,
-        i0, sinc, nan_to_num, frexp, modf, divide)
+        i0, sinc, nan_to_num, frexp, modf, divide, frompyfunc)
 try:
     from .ufunc import float_power
 except ImportError:
