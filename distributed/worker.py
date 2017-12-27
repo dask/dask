@@ -669,13 +669,15 @@ cache = dict()
 
 def dumps_function(func):
     """ Dump a function to bytes, cache functions """
-    if func not in cache:
-        b = pickle.dumps(func)
-        if len(b) < 100000:
-            cache[func] = b
-        else:
-            return b
-    return cache[func]
+    try:
+        result = cache[func]
+    except KeyError:
+        result = pickle.dumps(func)
+        if len(result) < 100000:
+            cache[func] = result
+    except TypeError:
+        result = pickle.dumps(func)
+    return result
 
 
 def dumps_task(task):

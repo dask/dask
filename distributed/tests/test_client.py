@@ -5136,5 +5136,13 @@ def test_scatter_direct(s, a, b):
 
     yield c._close()
 
+
+@gen_cluster(client=True)
+def test_unhashable_function(c, s, a, b):
+    d = {'a': 1}
+    result = yield c.submit(d.get, 'a')
+    assert result == 1
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # flake8: noqa
