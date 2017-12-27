@@ -128,7 +128,7 @@ class Occupancy(DashboardComponent):
 
             bokeh_addresses = []
             for ws in workers:
-                addr = self.scheduler.get_worker_service_addr(ws.worker_key, 'bokeh')
+                addr = self.scheduler.get_worker_service_addr(ws.address, 'bokeh')
                 bokeh_addresses.append('%s:%d' % addr if addr is not None else '')
 
             y = list(range(len(workers)))
@@ -154,7 +154,7 @@ class Occupancy(DashboardComponent):
 
             if occupancy:
                 result = {'occupancy': occupancy,
-                          'worker': [ws.worker_key for ws in workers],
+                          'worker': [ws.address for ws in workers],
                           'ms': ms,
                           'color': color,
                           'bokeh_address': bokeh_addresses,
@@ -307,7 +307,7 @@ class CurrentLoad(DashboardComponent):
 
             bokeh_addresses = []
             for ws in workers:
-                addr = self.scheduler.get_worker_service_addr(ws.worker_key, 'bokeh')
+                addr = self.scheduler.get_worker_service_addr(ws.address, 'bokeh')
                 bokeh_addresses.append('%s:%d' % addr if addr is not None else '')
 
             y = list(range(len(workers)))
@@ -327,7 +327,7 @@ class CurrentLoad(DashboardComponent):
             max_limit = 0
             for ws, nb in zip(workers, nbytes):
                 try:
-                    limit = self.scheduler.worker_info[ws.worker_key]['memory_limit']
+                    limit = self.scheduler.worker_info[ws.address]['memory_limit']
                 except KeyError:
                     limit = 16e9
                 if limit > max_limit:
@@ -351,7 +351,7 @@ class CurrentLoad(DashboardComponent):
                           'nbytes-color': nbytes_color,
                           'nbytes_text': nbytes_text,
                           'bokeh_address': bokeh_addresses,
-                          'worker': [ws.worker_key for ws in workers],
+                          'worker': [ws.address for ws in workers],
                           'y': y}
 
                 self.nbytes_figure.title.text = 'Bytes stored: ' + format_bytes(sum(nbytes))

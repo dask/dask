@@ -89,7 +89,7 @@ class WorkStealing(SchedulerPlugin):
 
     def put_key_in_stealable(self, ts):
         ws = ts.processing_on
-        worker = ws.worker_key
+        worker = ws.address
         cost_multiplier, level = self.steal_time_ratio(ts)
         self.log.append(('add-stealable', ts.key, worker, level))
         if cost_multiplier is not None:
@@ -173,7 +173,7 @@ class WorkStealing(SchedulerPlugin):
                 self.scheduler.get_comm_cost(ts, thief)
             )
 
-            self.scheduler.worker_comms[victim.worker_key].send(
+            self.scheduler.worker_comms[victim.address].send(
                 {'op': 'steal-request', 'key': key})
 
             self.in_flight[ts] = {'victim': victim,
@@ -221,15 +221,15 @@ class WorkStealing(SchedulerPlugin):
                 return
 
             # One of the pair has left, punt and reschedule
-            if (thief.worker_key not in self.scheduler.workers or
-                victim.worker_key not in self.scheduler.workers):
+            if (thief.address not in self.scheduler.workers or
+                victim.address not in self.scheduler.workers):
                 self.scheduler.reschedule(key)
                 return
 
             # Victim had already started execution, reverse stealing
             if state in ('memory', 'executing', 'long-running', None):
                 self.log.append(('already-computing',
-                                 key, victim.worker_key, thief.worker_key))
+                                 key, victim.address, thief.address))
                 self.scheduler.check_idle_saturated(thief)
                 self.scheduler.check_idle_saturated(victim)
 
@@ -245,11 +245,11 @@ class WorkStealing(SchedulerPlugin):
                 self.put_key_in_stealable(ts)
 
                 try:
-                    self.scheduler.send_task_to_worker(thief.worker_key, key)
+                    self.scheduler.send_task_to_worker(thief.address, key)
                 except CommClosedError:
-                    self.scheduler.remove_worker(thief.worker_key)
+                    self.scheduler.remove_worker(thief.address)
                 self.log.append(('confirm',
-                                 key, victim.worker_key, thief.worker_key))
+                                 key, victim.address, thief.address))
             else:
                 raise ValueError("Unexpected task state: %s" % state)
         except Exception as e:
@@ -273,8 +273,8 @@ class WorkStealing(SchedulerPlugin):
                     <= occ_sat - duration / 2):
                 self.move_task_request(ts, sat, idl)
                 log.append((start, level, ts.key, duration,
-                            sat.worker_key, occ_sat,
-                            idl.worker_key, occ_idl))
+                            sat.address, occ_sat,
+                            idl.address, occ_idl))
                 s.check_idle_saturated(sat, occ=occ_sat)
                 s.check_idle_saturated(idl, occ=occ_idl)
 
@@ -302,7 +302,7 @@ class WorkStealing(SchedulerPlugin):
                 if not idle:
                     break
                 for sat in list(saturated):
-                    stealable = self.stealable[sat.worker_key][level]
+                    stealable = self.stealable[sat.address][level]
                     if not stealable or not idle:
                         continue
 
