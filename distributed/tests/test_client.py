@@ -28,7 +28,7 @@ from tornado.ioloop import IOLoop
 import dask
 from dask import delayed
 from dask.context import _globals
-from distributed import (Worker, Nanny, fire_and_forget,
+from distributed import (Worker, Nanny, fire_and_forget, config,
                          get_client, secede, get_worker, Executor, profile)
 from distributed.comm import CommClosedError
 from distributed.client import (Client, Future, wait, as_completed, tokenize,
@@ -5089,7 +5089,6 @@ def test_avoid_delayed_finalize(c, s, a, b):
 
 @gen_cluster()
 def test_config_scheduler_address(s, a, b):
-    from distributed import config
     config['scheduler-address'] = s.address
     with captured_logger('distributed.client') as sio:
         c = yield Client(asynchronous=True)
@@ -5142,6 +5141,18 @@ def test_unhashable_function(c, s, a, b):
     d = {'a': 1}
     result = yield c.submit(d.get, 'a')
     assert result == 1
+
+
+@gen_cluster()
+def test_client_name(s, a, b):
+    config['client-name'] = 'hello-world'
+    try:
+        c = yield Client(s.address, asynchronous=True)
+        assert any("hello-world" in name for name in list(s.clients))
+    finally:
+        del config['client-name']
+
+    yield c._close()
 
 
 if sys.version_info >= (3, 5):

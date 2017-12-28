@@ -1070,6 +1070,23 @@ def test_avoid_memory_monitor_if_zero_limit(c, s):
     yield worker._close()
 
 
+def test_get_worker_name(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            def f():
+                get_client().submit(inc, 1).result()
+
+            c.run(f)
+
+            def func(dask_scheduler):
+                return list(dask_scheduler.clients)
+
+            start = time()
+            while not any('worker' in n for n in c.run_on_scheduler(func)):
+                sleep(0.1)
+                assert time() < start + 10
+
+
 @gen_cluster(ncores=[('127.0.0.1', 1)],
         worker_kwargs={'memory_limit': '2e3 MB'})
 def test_parse_memory_limit(s, w):

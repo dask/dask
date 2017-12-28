@@ -2516,6 +2516,7 @@ class Worker(WorkerBase):
                                   security=self.security,
                                   set_as_default=True,
                                   asynchronous=asynchronous,
+                                  name='worker',
                                   timeout=timeout)
             if not asynchronous:
                 assert self._client.status == 'running'

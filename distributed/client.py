@@ -491,6 +491,8 @@ class Client(Node):
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
         self.coroutines = []
+        if name is None and 'client-name' in config:
+            name = config['client-name']
         self.id = type(self).__name__ + ('-' + name + '-' if name else '-') + str(uuid.uuid1(clock_seq=os.getpid()))
         self.generation = 0
         self.status = 'newly-created'
