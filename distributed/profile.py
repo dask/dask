@@ -86,8 +86,9 @@ def process(frame, child, state, stop=None):
      'description': 'root',
      'children': {'...'}}
     """
-    if frame.f_back is not None and (stop is None or not frame.f_back.f_code.co_filename.endswith(stop)):
-        state = process(frame.f_back, frame, state, stop=stop)
+    prev = frame.f_back
+    if prev is not None and (stop is None or not prev.f_code.co_filename.endswith(stop)):
+        state = process(prev, frame, state, stop=stop)
 
     ident = identifier(frame)
 
