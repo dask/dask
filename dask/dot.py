@@ -125,23 +125,29 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None,
         k_name = name(k)
         if k_name not in seen:
             seen.add(k_name)
-            g.node(k_name, label=label(k, cache=cache), shape='box',
-                   **data_attributes.get(k, {}))
+            attrs = data_attributes.get(k, {})
+            attrs.setdefault('label', label(k, cache=cache))
+            attrs.setdefault('shape', 'box')
+            g.node(k_name, **attrs)
 
         if istask(v):
             func_name = name((k, 'function'))
             if func_name not in seen:
                 seen.add(func_name)
-                g.node(func_name, label=task_label(v), shape='circle',
-                       **function_attributes.get(k, {}))
+                attrs = function_attributes.get(k, {})
+                attrs.setdefault('label', task_label(v))
+                attrs.setdefault('shape', 'circle')
+                g.node(func_name, **attrs)
             g.edge(func_name, k_name)
 
             for dep in get_dependencies(dsk, k):
                 dep_name = name(dep)
                 if dep_name not in seen:
                     seen.add(dep_name)
-                    g.node(dep_name, label=label(dep, cache=cache), shape='box',
-                           **data_attributes.get(dep, {}))
+                    attrs = data_attributes.get(dep, {})
+                    attrs.setdefault('label', label(dep, cache=cache))
+                    attrs.setdefault('shape', 'box')
+                    g.node(dep_name, **attrs)
                 g.edge(dep_name, func_name)
         elif ishashable(v) and v in dsk:
             g.edge(name(v), k_name)

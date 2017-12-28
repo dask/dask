@@ -31,6 +31,7 @@ Top level user functions:
    atleast_2d
    atleast_3d
    bincount
+   block
    broadcast_to
    coarsen
    ceil
@@ -72,6 +73,7 @@ Top level user functions:
    fmod
    frexp
    fromfunction
+   frompyfunc
    full
    full_like
    histogram
@@ -360,6 +362,7 @@ Other functions
 .. autofunction:: atleast_2d
 .. autofunction:: atleast_3d
 .. autofunction:: bincount
+.. autofunction:: block
 .. autofunction:: broadcast_to
 .. autofunction:: coarsen
 .. autofunction:: ceil
@@ -401,6 +404,7 @@ Other functions
 .. autofunction:: fmod
 .. autofunction:: frexp
 .. autofunction:: fromfunction
+.. autofunction:: frompyfunc
 .. autofunction:: full
 .. autofunction:: full_like
 .. autofunction:: histogram

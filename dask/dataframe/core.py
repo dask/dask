@@ -2846,7 +2846,7 @@ class DataFrame(_Frame):
                             if isinstance(columns_or_index, list)
                             else [columns_or_index])
 
-        column_names = [n for n in columns_or_index if self._is_column_label(n)]
+        column_names = [n for n in columns_or_index if self._is_column_label_reference(n)]
 
         selected_df = self[column_names]
         if self._contains_index_name(columns_or_index):
@@ -2855,34 +2855,38 @@ class DataFrame(_Frame):
 
         return selected_df
 
-    def _is_column_label(self, c):
+    def _is_column_label_reference(self, key):
         """
-        Test whether a value matches the label of a column in the DataFrame
-        """
-        return (not is_dask_collection(c) and
-                (np.isscalar(c) or isinstance(c, tuple)) and
-                c in self.columns)
+        Test whether a key is a column label reference
 
-    def _is_index_label(self, i):
+        To be considered a column label reference, `key` must match the name of at
+        least one column.
         """
-        Test whether a value matches the label of the index of the DataFrame
+        return (not is_dask_collection(key) and
+                (np.isscalar(key) or isinstance(key, tuple)) and
+                key in self.columns)
+
+    def _is_index_level_reference(self, key):
+        """
+        Test whether a key is an index level reference
+
+        To be considered an index level reference, `key` must match the index name
+        and must NOT match the name of any column.
         """
         return (self.index.name is not None and
-                not is_dask_collection(i) and
-                (np.isscalar(i) or isinstance(i, tuple)) and
-                i == self.index.name)
+                not is_dask_collection(key) and
+                (np.isscalar(key) or isinstance(key, tuple)) and
+                key == self.index.name and
+                key not in self.columns)
 
     def _contains_index_name(self, columns_or_index):
         """
-        Test whether the input contains the label of the index of the DataFrame
+        Test whether the input contains a reference to the index of the DataFrame
         """
         if isinstance(columns_or_index, list):
-            return (any(self._is_index_label(n) and
-                        not self._is_column_label(n)
-                        for n in columns_or_index))
+            return any(self._is_index_level_reference(n) for n in columns_or_index)
         else:
-            return (self._is_index_label(columns_or_index) and
-                    not self._is_column_label(columns_or_index))
+            return self._is_index_level_reference(columns_or_index)
 
 
 # bind operators

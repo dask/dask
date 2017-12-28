@@ -49,7 +49,7 @@ jobs:
 
     - env: &py36_env
       - PYTHON=3.6
-      - UPSTREAM_DEV=1  # Install nightly versions of NumPy and pandas
+      - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
       - NUMPY=1.13.0    # these are overridden later
       - PANDAS=0.20.3
       - *no_coverage

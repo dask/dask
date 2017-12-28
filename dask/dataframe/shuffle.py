@@ -202,7 +202,7 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32,
     shuffle_tasks
     """
     if not isinstance(index, _Frame):
-        index = df[index]
+        index = df._select_columns_or_index(index)
     partitions = index.map_partitions(partitioning_index,
                                       npartitions=npartitions or df.npartitions,
                                       meta=pd.Series([0]))

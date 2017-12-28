@@ -530,17 +530,23 @@ def test_take_npartitions():
         b.take(1, npartitions=5)
 
 
-@pytest.mark.skipif(sys.version_info[:2] == (3,3),
-                    reason="Python3.3 uses pytest2.7.2, w/o warns method")
 def test_take_npartitions_warn():
-    with pytest.warns(None):
-        b.take(100)
+    # Use single-threaded scheduler so warnings are properly captured in the
+    # same process
+    with dask.set_options(get=dask.get):
+        with pytest.warns(UserWarning):
+            b.take(100)
 
-    with pytest.warns(None):
-        b.take(7)
+        with pytest.warns(UserWarning):
+            b.take(7)
 
-    with pytest.warns(None):
-        b.take(7, npartitions=2)
+        with pytest.warns(None) as rec:
+            b.take(7, npartitions=2)
+        assert len(rec) == 0
+
+        with pytest.warns(None) as rec:
+            b.take(7, warn=False)
+        assert len(rec) == 0
 
 
 def test_map_is_lazy():
@@ -774,6 +780,11 @@ def test_to_dataframe():
     # Error to specify both columns and meta
     with pytest.raises(ValueError):
         b.to_dataframe(columns=['a', 'b'], meta=sol)
+
+    # Inference fails if empty first partition
+    b2 = b.filter(lambda x: x['a'] > 200)
+    with pytest.raises(ValueError):
+        b2.to_dataframe()
 
     # Single column
     b = b.pluck('a')

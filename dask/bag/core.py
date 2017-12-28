@@ -1,16 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Iterable, Iterator, defaultdict
-from functools import wraps, partial
 import itertools
 import math
-from operator import getitem
 import types
 import uuid
-from random import Random
-from warnings import warn
+import warnings
+from collections import Iterable, Iterator, defaultdict
 from distutils.version import LooseVersion
-
+from functools import wraps, partial
+from operator import getitem
+from random import Random
 
 from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
                    remove, compose, curry, first, second, accumulate, peek)
@@ -1050,7 +1049,7 @@ class Bag(Base):
 
         return type(self)(merge(self.dask, dsk), e, 1)
 
-    def take(self, k, npartitions=1, compute=True):
+    def take(self, k, npartitions=1, compute=True, warn=True):
         """ Take the first k elements.
 
         Parameters
@@ -1064,6 +1063,9 @@ class Bag(Base):
             returned. Pass -1 to use all partitions.
         compute : bool, optional
             Whether to compute the result, default is True.
+        warn : bool, optional
+            Whether to warn if the number of elements returned is less than
+            requested, default is True.
 
         >>> b = from_sequence(range(10))
         >>> b.take(3)  # doctest: +SKIP
@@ -1087,9 +1089,9 @@ class Bag(Base):
                 dsk[(name_p, i)] = (list, (take, k, (self.name, i)))
 
             concat = (toolz.concat, ([(name_p, i) for i in range(npartitions)]))
-            dsk[(name, 0)] = (safe_take, k, concat)
+            dsk[(name, 0)] = (safe_take, k, concat, warn)
         else:
-            dsk = {(name, 0): (safe_take, k, (self.name, 0))}
+            dsk = {(name, 0): (safe_take, k, (self.name, 0), warn)}
 
         b = Bag(merge(self.dask, dsk), name, 1)
 
@@ -1215,12 +1217,16 @@ class Bag(Base):
         import dask.dataframe as dd
         if meta is None:
             if isinstance(columns, pd.DataFrame):
-                warn("Passing metadata to `columns` is deprecated. Please "
-                     "use the `meta` keyword instead.")
+                warnings.warn("Passing metadata to `columns` is deprecated. "
+                              "Please use the `meta` keyword instead.")
                 meta = columns
             else:
-                head = self.take(1)[0]
-                meta = pd.DataFrame([head], columns=columns)
+                head = self.take(1, warn=False)
+                if len(head) == 0:
+                    raise ValueError("`dask.bag.Bag.to_dataframe` failed to "
+                                     "properly infer metadata, please pass in "
+                                     "metadata via the `meta` keyword")
+                meta = pd.DataFrame(list(head), columns=columns)
         elif columns is not None:
             raise ValueError("Can't specify both `meta` and `columns`")
         else:
@@ -1986,12 +1992,12 @@ def empty_safe_aggregate(func, parts, is_last):
     return empty_safe_apply(func, parts2, is_last)
 
 
-def safe_take(n, b):
+def safe_take(n, b, warn=True):
     r = list(take(n, b))
-    if len(r) != n:
-        warn("Insufficient elements for `take`. {0} elements requested, "
-             "only {1} elements available. Try passing larger `npartitions` "
-             "to `take`.".format(n, len(r)))
+    if len(r) != n and warn:
+        warnings.warn("Insufficient elements for `take`. {0} elements "
+                      "requested, only {1} elements available. Try passing "
+                      "larger `npartitions` to `take`.".format(n, len(r)))
     return r
 
 

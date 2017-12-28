@@ -32,16 +32,19 @@ np = import_or_none('numpy')
 pd = import_or_none('pandas')
 
 
+def f1(a, b, c=1):
+    pass
+
+
+def f2(a, b=1, c=2):
+    pass
+
+
+def f3(a):
+    pass
+
+
 def test_normalize_function():
-
-    def f1(a, b, c=1):
-        pass
-
-    def f2(a, b=1, c=2):
-        pass
-
-    def f3(a):
-        pass
 
     assert normalize_function(f2)
 
@@ -166,6 +169,15 @@ def test_tokenize_numpy_ufunc_consistent():
     # any found in other packages.
     inc = np.frompyfunc(lambda x: x + 1, 1, 1)
     assert tokenize(inc) == tokenize(inc)
+
+
+def test_tokenize_partial_func_args_kwargs_consistent():
+    f = tz.partial(f3, f2, c=f1)
+    res = normalize_token(f)
+    sol = (b'cdask.tests.test_base\nf3\np0\n.',
+           (b'cdask.tests.test_base\nf2\np0\n.',),
+           (('c', b'cdask.tests.test_base\nf1\np0\n.'),))
+    assert res == sol
 
 
 def test_normalize_base():

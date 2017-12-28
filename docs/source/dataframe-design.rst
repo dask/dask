@@ -144,6 +144,16 @@ dtype as ``'category'``:
 
 .. _`categorical data`: http://pandas.pydata.org/pandas-docs/stable/categorical.html
 
+With pandas 0.21.0 and up, ``dd.read_csv`` and ``dd.read_table`` can read
+data directly into *known* categoricals by specifying instances of
+``pd.api.types.CategoricalDtype``:
+
+.. code-block:: python
+
+    >>> dtype = {'col': pd.api.types.CategoricalDtype(['a', 'b', 'c'])}
+    >>> ddf = dd.read_csv(..., dtype=dtype)
+
+
 Partitions
 ----------
 

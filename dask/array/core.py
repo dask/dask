@@ -30,6 +30,7 @@ from toolz import pipe, map, reduce
 import numpy as np
 
 from . import chunk
+from .numpy_compat import _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
 from ..base import Base, tokenize, dont_optimize, compute_as_if_collection
 from ..context import _globals, globalmethod
@@ -37,10 +38,12 @@ from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict, Dispatch)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
+from ..core import quote
 from ..delayed import to_task_dask
 from .. import threaded, core
 from .. import sharedict
 from ..sharedict import ShareDict
+from .numpy_compat import _Recurser
 
 
 concatenate_lookup = Dispatch('concatenate')
@@ -888,7 +891,7 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
         except AttributeError:
             dsk = {}
 
-        update = insert_to_ooc(tgt, src, lock=lock, region=reg)
+        update = insert_to_ooc(src, tgt, lock=lock, region=reg)
         keys.extend(update)
 
         update.update(dsk)
@@ -1232,7 +1235,7 @@ class Array(Base):
             if isinstance(index, (str, unicode)):
                 dt = self.dtype[index]
             else:
-                dt = np.dtype([(name, self.dtype[name]) for name in index])
+                dt = _make_sliced_dtype(self.dtype, index)
 
             if dt.shape:
                 new_axis = list(range(self.ndim, self.ndim + len(dt.shape)))
@@ -1817,7 +1820,7 @@ def normalize_chunks(chunks, shape=None):
     >>> normalize_chunks((2, 2), shape=(5, 6))
     ((2, 2, 1), (2, 2, 2))
 
-    >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(4, 6))  # Idempotent
+    >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(5, 6))  # Idempotent
     ((2, 2, 1), (2, 2, 2))
 
     >>> normalize_chunks([[2, 2], [3, 3]])  # Cleans up lists to tuples
@@ -1860,6 +1863,16 @@ def normalize_chunks(chunks, shape=None):
         if not c:
             raise ValueError("Empty tuples are not allowed in chunks. Express "
                              "zero length dimensions with 0(s) in chunks")
+
+    if shape is not None:
+        if len(chunks) != len(shape):
+            raise ValueError("Input array has %d dimensions but the supplied "
+                             "chunks has only %d dimensions" %
+                             (len(shape), len(chunks)))
+        if not all(c == s or (math.isnan(c) and math.isnan(s))
+                   for c, s in zip(map(sum, chunks), shape)):
+            raise ValueError("Chunks do not add up to shape. "
+                             "Got chunks=%s, shape=%s" % (chunks, shape))
 
     return tuple(tuple(int(x) if not math.isnan(x) else x for x in c) for c in chunks)
 
@@ -1907,13 +1920,6 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
     """
     chunks = normalize_chunks(chunks, x.shape)
-    if len(chunks) != len(x.shape):
-        raise ValueError("Input array has %d dimensions but the supplied "
-                         "chunks has only %d dimensions" %
-                         (len(x.shape), len(chunks)))
-    if tuple(map(sum, chunks)) != x.shape:
-        raise ValueError("Chunks do not add up to shape. "
-                         "Got chunks=%s, shape=%s" % (chunks, x.shape))
     if name in (None, True):
         token = tokenize(x, chunks)
         original_name = 'array-original-' + token
@@ -2151,7 +2157,9 @@ def atop(func, out_ind, *args, **kwargs):
     concatenate : bool, keyword only
         If true concatenate arrays along dummy indices, else provide lists
     adjust_chunks : dict
-        Dictionary mapping index to function to be applied to chunk sizes
+        Dictionary mapping index to information to adjust chunk sizes.  Can
+        either be a constant chunksize, a tuple of all chunksizes, or a
+        function that converts old chunksize to new chunksize
     new_axes : dict, keyword only
         New indexes and their dimension lengths
 
@@ -2282,6 +2290,187 @@ def unpack_singleton(x):
     return x
 
 
+def block(arrays, allow_unknown_chunksizes=False):
+    """
+    Assemble an nd-array from nested lists of blocks.
+
+    Blocks in the innermost lists are `concatenate`d along the last
+    dimension (-1), then these are `concatenate`d along the second-last
+    dimension (-2), and so on until the outermost list is reached
+
+    Blocks can be of any dimension, but will not be broadcasted using the normal
+    rules. Instead, leading axes of size 1 are inserted, to make ``block.ndim``
+    the same for all blocks. This is primarily useful for working with scalars,
+    and means that code like ``block([v, 1])`` is valid, where
+    ``v.ndim == 1``.
+
+    When the nested list is two levels deep, this allows block matrices to be
+    constructed from their components.
+
+    Parameters
+    ----------
+    arrays : nested list of array_like or scalars (but not tuples)
+        If passed a single ndarray or scalar (a nested list of depth 0), this
+        is returned unmodified (and not copied).
+
+        Elements shapes must match along the appropriate axes (without
+        broadcasting), but leading 1s will be prepended to the shape as
+        necessary to make the dimensions match.
+
+    allow_unknown_chunksizes: bool
+        Allow unknown chunksizes, such as come from converting from dask
+        dataframes.  Dask.array is unable to verify that chunks line up.  If
+        data comes from differently aligned sources then this can cause
+        unexpected results.
+
+    Returns
+    -------
+    block_array : ndarray
+        The array assembled from the given blocks.
+
+        The dimensionality of the output is equal to the greatest of:
+        * the dimensionality of all the inputs
+        * the depth to which the input list is nested
+
+    Raises
+    ------
+    ValueError
+        * If list depths are mismatched - for instance, ``[[a, b], c]`` is
+          illegal, and should be spelt ``[[a, b], [c]]``
+        * If lists are empty - for instance, ``[[a, b], []]``
+
+    See Also
+    --------
+    concatenate : Join a sequence of arrays together.
+    stack : Stack arrays in sequence along a new dimension.
+    hstack : Stack arrays in sequence horizontally (column wise).
+    vstack : Stack arrays in sequence vertically (row wise).
+    dstack : Stack arrays in sequence depth wise (along third dimension).
+    vsplit : Split array into a list of multiple sub-arrays vertically.
+
+    Notes
+    -----
+
+    When called with only scalars, ``block`` is equivalent to an ndarray
+    call. So ``block([[1, 2], [3, 4]])`` is equivalent to
+    ``array([[1, 2], [3, 4]])``.
+
+    This function does not enforce that the blocks lie on a fixed grid.
+    ``block([[a, b], [c, d]])`` is not restricted to arrays of the form::
+
+        AAAbb
+        AAAbb
+        cccDD
+
+    But is also allowed to produce, for some ``a, b, c, d``::
+
+        AAAbb
+        AAAbb
+        cDDDD
+
+    Since concatenation happens along the last axis first, `block` is _not_
+    capable of producing the following directly::
+
+        AAAbb
+        cccbb
+        cccDD
+
+    Matlab's "square bracket stacking", ``[A, B, ...; p, q, ...]``, is
+    equivalent to ``block([[A, B, ...], [p, q, ...]])``.
+    """
+
+    # This was copied almost verbatim from numpy.core.shape_base.block
+    # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
+    # or NUMPY_LICENSE.txt within this directory
+
+    def atleast_nd(x, ndim):
+        x = asanyarray(x)
+        diff = max(ndim - x.ndim, 0)
+        return x[(None,) * diff + (Ellipsis,)]
+
+    def format_index(index):
+        return 'arrays' + ''.join('[{}]'.format(i) for i in index)
+
+    rec = _Recurser(recurse_if=lambda x: type(x) is list)
+
+    # ensure that the lists are all matched in depth
+    list_ndim = None
+    any_empty = False
+    for index, value, entering in rec.walk(arrays):
+        if type(value) is tuple:
+            # not strictly necessary, but saves us from:
+            #  - more than one way to do things - no point treating tuples like
+            #    lists
+            #  - horribly confusing behaviour that results when tuples are
+            #    treated like ndarray
+            raise TypeError(
+                '{} is a tuple. '
+                'Only lists can be used to arrange blocks, and np.block does '
+                'not allow implicit conversion from tuple to ndarray.'.format(
+                    format_index(index)
+                )
+            )
+        if not entering:
+            curr_depth = len(index)
+        elif len(value) == 0:
+            curr_depth = len(index) + 1
+            any_empty = True
+        else:
+            continue
+
+        if list_ndim is not None and list_ndim != curr_depth:
+            raise ValueError(
+                "List depths are mismatched. First element was at depth {}, "
+                "but there is an element at depth {} ({})".format(
+                    list_ndim,
+                    curr_depth,
+                    format_index(index)
+                )
+            )
+        list_ndim = curr_depth
+
+    # do this here so we catch depth mismatches first
+    if any_empty:
+        raise ValueError('Lists cannot be empty')
+
+    # convert all the arrays to ndarrays
+    arrays = rec.map_reduce(
+        arrays,
+        f_map=asanyarray,
+        f_reduce=list
+    )
+
+    # determine the maximum dimension of the elements
+    elem_ndim = rec.map_reduce(
+        arrays,
+        f_map=lambda xi: xi.ndim,
+        f_reduce=max
+    )
+    ndim = max(list_ndim, elem_ndim)
+
+    # first axis to concatenate along
+    first_axis = ndim - list_ndim
+
+    # Make all the elements the same dimension
+    arrays = rec.map_reduce(
+        arrays,
+        f_map=lambda xi: atleast_nd(xi, ndim),
+        f_reduce=list
+    )
+
+    # concatenate innermost lists on the right, outermost on the left
+    return rec.map_reduce(
+        arrays,
+        f_reduce=lambda xs, axis: concatenate(
+            list(xs),
+            axis=axis,
+            allow_unknown_chunksizes=allow_unknown_chunksizes
+        ),
+        f_kwargs=lambda axis: dict(axis=(axis + 1)),
+        axis=first_axis
+    )
+
+
 def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     """
     Concatenate arrays along an existing axis
@@ -2379,29 +2568,83 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     return Array(dsk2, name, chunks, dtype=dt)
 
 
-def insert_to_ooc(out, arr, lock=True, region=None):
+def store_chunk(x, out, index, lock, region):
+    """
+    A function inserted in a Dask graph for storing a chunk.
+
+    Parameters
+    ----------
+    x: array-like
+        An array (potentially a NumPy one)
+    out: array-like
+        Where to store results too.
+    index: slice-like
+        Where to store result from ``x`` in ``out``.
+    lock: Lock-like or False
+        Lock to use before writing to ``out``.
+    region: slice-like or None
+        Where relative to ``out`` to store ``x``.
+
+    Examples
+    --------
+
+    >>> a = np.ones((5, 6))
+    >>> b = np.empty(a.shape)
+    >>> store_chunk(a, b, (slice(None), slice(None)), False, None)
+    """
+
+    subindex = index
+    if region is not None:
+        subindex = fuse_slice(region, index)
+
+    if lock:
+        lock.acquire()
+    try:
+        out[subindex] = np.asanyarray(x)
+    finally:
+        if lock:
+            lock.release()
+
+    return None
+
+
+def insert_to_ooc(arr, out, lock=True, region=None):
+    """
+    Creates a Dask graph for storing chunks from ``arr`` in ``out``.
+
+    Parameters
+    ----------
+    arr: da.Array
+        A dask array
+    out: array-like
+        Where to store results too.
+    lock: Lock-like or bool, optional
+        Whether to lock or with what (default is ``True``,
+        which means a ``threading.Lock`` instance).
+    region: slice-like, optional
+        Where in ``out`` to store ``arr``'s results
+        (default is ``None``, meaning all of ``out``).
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> d = da.ones((5, 6), chunks=(2, 3))
+    >>> a = np.empty(d.shape)
+    >>> insert_to_ooc(d, a)  # doctest: +SKIP
+    """
+
     if lock is True:
         lock = Lock()
-
-    def store(out, x, index, lock, region):
-        if lock:
-            lock.acquire()
-        try:
-            if region is None:
-                out[index] = np.asanyarray(x)
-            else:
-                out[fuse_slice(region, index)] = np.asanyarray(x)
-        finally:
-            if lock:
-                lock.release()
-
-        return None
 
     slices = slices_from_chunks(arr.chunks)
 
     name = 'store-%s' % arr.name
-    dsk = {(name,) + t[1:]: (store, out, t, slc, lock, region)
-           for t, slc in zip(core.flatten(arr.__dask_keys__()), slices)}
+    dsk = dict()
+    for t, slc in zip(core.flatten(arr.__dask_keys__()), slices):
+        store_key = (name,) + t[1:]
+        dsk[store_key] = (
+            store_chunk, t, out, slc, lock, region
+        )
 
     return dsk
 
@@ -2664,12 +2907,34 @@ def _enforce_dtype(*args, **kwargs):
     return result
 
 
-@wraps(chunk.broadcast_to)
-def broadcast_to(x, shape):
+def broadcast_to(x, shape, chunks=None):
+    """Broadcast an array to a new shape.
+
+    Parameters
+    ----------
+    x : array_like
+        The array to broadcast.
+    shape : tuple
+        The shape of the desired array.
+    chunks : tuple, optional
+        If provided, then the result will use these chunks instead of the same
+        chunks as the source array. Setting chunks explicitly as part of
+        broadcast_to is more efficient than rechunking afterwards. Chunks are
+        only allowed to differ from the original shape along dimensions that
+        are new on the result or have size 1 the input array.
+
+    Returns
+    -------
+    broadcast : dask array
+
+    See Also
+    --------
+    numpy.broadcast_to
+    """
     x = asarray(x)
     shape = tuple(shape)
 
-    if x.shape == shape:
+    if x.shape == shape and (chunks is None or chunks == x.chunks):
         return x
 
     ndim_new = len(shape) - x.ndim
@@ -2679,15 +2944,32 @@ def broadcast_to(x, shape):
         raise ValueError('cannot broadcast shape %s to shape %s'
                          % (x.shape, shape))
 
-    name = 'broadcast_to-' + tokenize(x, shape)
-    chunks = (tuple((s,) for s in shape[:ndim_new]) +
-              tuple(bd if old > 1 else (new,)
-              for bd, old, new in zip(x.chunks, x.shape, shape[ndim_new:])))
-    dsk = {(name,) + (0,) * ndim_new + key[1:]:
-           (chunk.broadcast_to, key, shape[:ndim_new] +
-            tuple(bd[i] for i, bd in zip(key[1:], chunks[ndim_new:])))
-           for key in core.flatten(x.__dask_keys__())}
-    return Array(sharedict.merge((name, dsk), x.dask), name, chunks, dtype=x.dtype)
+    if chunks is None:
+        chunks = (tuple((s,) for s in shape[:ndim_new]) +
+                  tuple(bd if old > 1 else (new,)
+                  for bd, old, new in zip(x.chunks, x.shape, shape[ndim_new:])))
+    else:
+        chunks = normalize_chunks(chunks, shape)
+        for old_bd, new_bd in zip(x.chunks, chunks[ndim_new:]):
+            if old_bd != new_bd and old_bd != (1,):
+                raise ValueError('cannot broadcast chunks %s to chunks %s: '
+                                 'new chunks must either be along a new '
+                                 'dimension or a dimension of size 1'
+                                 % (x.chunks, chunks))
+
+    name = 'broadcast_to-' + tokenize(x, shape, chunks)
+    dsk = {}
+
+    enumerated_chunks = product(*(enumerate(bds) for bds in chunks))
+    for new_index, chunk_shape in (zip(*ec) for ec in enumerated_chunks):
+        old_index = tuple(0 if bd == (1,) else i
+                          for bd, i in zip(x.chunks, new_index[ndim_new:]))
+        old_key = (x.name,) + old_index
+        new_key = (name,) + new_index
+        dsk[new_key] = (chunk.broadcast_to, old_key, quote(chunk_shape))
+
+    return Array(sharedict.merge((name, dsk), x.dask), name, chunks,
+                 dtype=x.dtype)
 
 
 def offset_func(func, offset, *args):
@@ -3043,10 +3325,19 @@ def _vindex(x, *indexes):
                     for i in range(len(indexes)))
         x = x[key]
 
-    array_indexes = {i: np.asarray(ind) for i, ind in enumerate(indexes)
-                     if not isinstance(ind, slice)}
-    if any(ind.dtype.kind == 'b' for ind in array_indexes.values()):
-        raise IndexError('vindex does not support indexing with boolean arrays')
+    array_indexes = {}
+    for i, (ind, size) in enumerate(zip(indexes, x.shape)):
+        if not isinstance(ind, slice):
+            ind = np.array(ind, copy=True)
+            if ind.dtype.kind == 'b':
+                raise IndexError('vindex does not support indexing with '
+                                 'boolean arrays')
+            if ((ind >= size) | (ind < -size)).any():
+                raise IndexError('vindex key has entries out of bounds for '
+                                 'indexing along axis %s of size %s: %r'
+                                 % (i, size, ind))
+            ind %= size
+            array_indexes[i] = ind
 
     try:
         broadcast_indexes = np.broadcast_arrays(*array_indexes.values())

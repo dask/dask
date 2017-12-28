@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
+import collections
 import sys
 
 try:
@@ -10,6 +11,12 @@ except ImportError:
     psutil = None
 
 import pandas as pd
+try:
+    from pandas.api.types import CategoricalDtype
+    _HAS_CDT = True
+except ImportError:
+    _HAS_CDT = False
+
 
 from ...bytes import read_bytes
 from ...bytes.core import write_bytes
@@ -155,7 +162,8 @@ def coerce_dtypes(df, dtypes):
 
 
 def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
-                          collection=True, enforce=False):
+                          collection=True, enforce=False,
+                          specified_dtypes=None):
     """ Convert blocks of bytes to a dask.dataframe or other high-level object
 
     This accepts a list of lists of values of bytes where each list corresponds
@@ -183,6 +191,33 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
     A dask.dataframe or list of delayed values
     """
     dtypes = head.dtypes.to_dict()
+    # dtypes contains only instances of CategoricalDtype, which causes issues
+    # in coerce_dtypes for non-uniform categories accross partitions.
+    # We will modify `dtype` (which is inferred) to
+    # 1. contain instances of CategoricalDtypes for user-provided types
+    # 2. contain 'category' for data inferred types
+    categoricals = head.select_dtypes(include=['category']).columns
+
+    known_categoricals = []
+    unknown_categoricals = categoricals
+
+    if _HAS_CDT:
+        if isinstance(specified_dtypes, collections.Mapping):
+            known_categoricals = [
+                k for k in categoricals
+                if isinstance(specified_dtypes.get(k), CategoricalDtype) and
+                specified_dtypes.get(k).categories is not None
+            ]
+            unknown_categoricals = categoricals.difference(known_categoricals)
+        elif isinstance(specified_dtypes, CategoricalDtype):
+            if specified_dtypes.categories is None:
+                known_categoricals = []
+                unknown_categoricals = categoricals
+
+    # Fixup the dtypes
+    for k in unknown_categoricals:
+        dtypes[k] = 'category'
+
     columns = list(head.columns)
     delayed_pandas_read_text = delayed(pandas_read_text)
     dfs = []
@@ -201,7 +236,8 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
                                                 enforce=enforce))
 
     if collection:
-        head = clear_known_categories(head)
+        if len(unknown_categoricals):
+            head = clear_known_categories(head, cols=unknown_categoricals)
         return from_delayed(dfs, head)
     else:
         return dfs
@@ -277,7 +313,8 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     # contains a header row, we need at least 2 nonempty rows + the number of
     # rows to skip.
     skiprows = kwargs.get('skiprows', 0)
-    header = kwargs.get('header', 'infer')
+    names = kwargs.get('names', None)
+    header = kwargs.get('header', 'infer' if names is None else None)
     need = 1 if header is None else 2
     parts = b_sample.split(b_lineterminator, skiprows + need)
     # If the last partition is empty, don't count it
@@ -304,7 +341,8 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                 head[c] = head[c].astype(float)
 
     return text_blocks_to_pandas(reader, values, header, head, kwargs,
-                                 collection=collection, enforce=enforce)
+                                 collection=collection, enforce=enforce,
+                                 specified_dtypes=specified_dtypes)
 
 
 READ_DOC_TEMPLATE = """

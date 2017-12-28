@@ -2,6 +2,7 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import os
+from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
@@ -12,6 +13,7 @@ import dask
 import dask.multiprocessing
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
+from dask.dataframe.io.parquet import _parse_pandas_metadata
 
 try:
     import fastparquet
@@ -48,17 +50,27 @@ def check_pyarrow():
         pytest.skip('pyarrow not found')
 
 
-def write_read_engines(xfail_arrow_to_fastparquet=True):
+def write_read_engines(xfail_arrow_to_fastparquet=True,
+                       xfail_fastparquet_to_arrow=False):
+    xfail = []
     if xfail_arrow_to_fastparquet:
-        xfail = (pytest.mark.xfail(reason="Can't read arrow directories with fastparquet"),)
+        a2f = (pytest.mark.xfail(reason=("Can't read arrow directories "
+                                         "with fastparquet")),)
     else:
-        xfail = ()
+        a2f = ()
+    if xfail_fastparquet_to_arrow:
+        f2a = (pytest.mark.xfail(reason=("Can't read this fastparquet "
+                                         "file with pyarrow")),)
+    else:
+        f2a = ()
+
+    xfail = tuple(xfail)
     ff = () if fastparquet else (pytest.mark.skip(reason='fastparquet not found'),)
     aa = () if pq else (pytest.mark.skip(reason='pyarrow not found'),)
     engines = [pytest.param('fastparquet', 'fastparquet', marks=ff),
                pytest.param('pyarrow', 'pyarrow', marks=aa),
-               pytest.param('fastparquet', 'pyarrow', marks=ff + aa),
-               pytest.param('pyarrow', 'fastparquet', marks=ff + aa + xfail)]
+               pytest.param('fastparquet', 'pyarrow', marks=ff + aa + f2a),
+               pytest.param('pyarrow', 'fastparquet', marks=ff + aa + a2f)]
     return pytest.mark.parametrize(('write_engine', 'read_engine'), engines)
 
 
@@ -219,6 +231,9 @@ def test_categorical(tmpdir):
     df = pd.DataFrame({'x': ['a', 'b', 'c'] * 100}, dtype='category')
     ddf = dd.from_pandas(df, npartitions=3)
     dd.to_parquet(ddf, tmp)
+
+    ddf2 = dd.read_parquet(tmp, categories='x')
+    assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
 
     ddf2 = dd.read_parquet(tmp, categories=['x'])
     assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
@@ -599,6 +614,30 @@ def test_parquet_select_cats(tmpdir):
     assert list(rddf.columns) == list(df)
 
 
+@write_read_engines(
+    xfail_arrow_to_fastparquet=True,
+    xfail_fastparquet_to_arrow=True,  # fastparquet-251
+)
+def test_columns_name(tmpdir, write_engine, read_engine):
+    if write_engine == read_engine == 'fastparquet':
+        pytest.skip('Fastparquet does not write column_indexes')
+
+    if write_engine == 'pyarrow':
+        import pyarrow as pa
+        if pa.__version__ < LooseVersion('0.8.0'):
+            pytest.skip("pyarrow<0.8.0 did not write column_indexes")
+
+    df = pd.DataFrame({"A": [1, 2]}, index=pd.Index(['a', 'b'], name='idx'))
+    df.columns.name = "cols"
+    ddf = dd.from_pandas(df, 2)
+
+    tmp = str(tmpdir)
+
+    ddf.to_parquet(tmp, engine=write_engine)
+    result = dd.read_parquet(tmp, engine=read_engine)
+    assert_eq(result, df)
+
+
 @pytest.mark.parametrize('compression,', ['default', None, 'gzip', 'snappy'])
 def test_writing_parquet_with_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
@@ -613,3 +652,255 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     ddf.to_parquet(fn, compression=compression, engine=engine)
     out = dd.read_parquet(fn, engine=engine)
     assert_eq(out, df, check_index=(engine != 'fastparquet'))
+
+
+@pytest.fixture(params=[
+    # fastparquet 0.1.3
+    {'columns': [{'metadata': None,
+                  'name': 'idx',
+                  'numpy_type': 'int64',
+                  'pandas_type': 'int64'},
+                 {'metadata': None,
+                  'name': 'A',
+                  'numpy_type': 'int64',
+                  'pandas_type': 'int64'}],
+     'index_columns': ['idx'],
+     'pandas_version': '0.21.0'},
+
+    # pyarrow 0.7.1
+    {'columns': [{'metadata': None,
+                  'name': 'A',
+                  'numpy_type': 'int64',
+                  'pandas_type': 'int64'},
+                 {'metadata': None,
+                  'name': 'idx',
+                  'numpy_type': 'int64',
+                  'pandas_type': 'int64'}],
+     'index_columns': ['idx'],
+     'pandas_version': '0.21.0'},
+
+    # pyarrow 0.8.0
+    {'column_indexes': [{'field_name': None,
+                         'metadata': {'encoding': 'UTF-8'},
+                         'name': None,
+                         'numpy_type': 'object',
+                         'pandas_type': 'unicode'}],
+     'columns': [{'field_name': 'A',
+                  'metadata': None,
+                  'name': 'A',
+                  'numpy_type': 'int64',
+                  'pandas_type': 'int64'},
+                 {'field_name': '__index_level_0__',
+                  'metadata': None,
+                  'name': 'idx',
+                  'numpy_type': 'int64',
+                  'pandas_type': 'int64'}],
+     'index_columns': ['__index_level_0__'],
+     'pandas_version': '0.21.0'},
+
+    # TODO: fastparquet update
+])
+def pandas_metadata(request):
+    return request.param
+
+
+def test_parse_pandas_metadata(pandas_metadata):
+    index_names, column_names, mapping, column_index_names = (
+        _parse_pandas_metadata(pandas_metadata)
+    )
+    assert index_names == ['idx']
+    assert column_names == ['A']
+    assert column_index_names == [None]
+
+    # for new pyarrow
+    if pandas_metadata['index_columns'] == ['__index_level_0__']:
+        assert mapping == {'__index_level_0__': 'idx', 'A': 'A'}
+    else:
+        assert mapping == {'idx': 'idx', 'A': 'A'}
+
+    assert isinstance(mapping, dict)
+
+
+def test_parse_pandas_metadata_null_index():
+    # pyarrow 0.7.1 None for index
+    e_index_names = [None]
+    e_column_names = ['x']
+    e_mapping = {'__index_level_0__': None, 'x': 'x'}
+    e_column_index_names = [None]
+
+    md = {'columns': [{'metadata': None,
+                       'name': 'x',
+                       'numpy_type': 'int64',
+                       'pandas_type': 'int64'},
+                      {'metadata': None,
+                       'name': '__index_level_0__',
+                       'numpy_type': 'int64',
+                       'pandas_type': 'int64'}],
+          'index_columns': ['__index_level_0__'],
+          'pandas_version': '0.21.0'}
+    index_names, column_names, mapping, column_index_names = (
+        _parse_pandas_metadata(md)
+    )
+    assert index_names == e_index_names
+    assert column_names == e_column_names
+    assert mapping == e_mapping
+    assert column_index_names == e_column_index_names
+
+    # pyarrow 0.8.0 None for index
+    md = {'column_indexes': [{'field_name': None,
+                              'metadata': {'encoding': 'UTF-8'},
+                              'name': None,
+                              'numpy_type': 'object',
+                              'pandas_type': 'unicode'}],
+          'columns': [{'field_name': 'x',
+                       'metadata': None,
+                       'name': 'x',
+                       'numpy_type': 'int64',
+                       'pandas_type': 'int64'},
+                      {'field_name': '__index_level_0__',
+                       'metadata': None,
+                       'name': None,
+                       'numpy_type': 'int64',
+                       'pandas_type': 'int64'}],
+          'index_columns': ['__index_level_0__'],
+          'pandas_version': '0.21.0'}
+    index_names, column_names, mapping, column_index_names = (
+        _parse_pandas_metadata(md)
+    )
+    assert index_names == e_index_names
+    assert column_names == e_column_names
+    assert mapping == e_mapping
+    assert column_index_names == e_column_index_names
+
+
+def test_pyarrow_raises_filters_categoricals(tmpdir):
+    check_pyarrow()
+    tmp = str(tmpdir)
+    data = pd.DataFrame({"A": [1, 2]})
+    df = dd.from_pandas(data, npartitions=2)
+
+    df.to_parquet(tmp, write_index=False, engine="pyarrow")
+
+    with pytest.raises(NotImplementedError) as m:
+        dd.read_parquet(tmp, engine="pyarrow", filters=["A>1"])
+
+    with pytest.raises(NotImplementedError) as m:
+        dd.read_parquet(tmp, engine="pyarrow", categories=['A'])
+
+    assert m.match("Categorical reads not yet ")
+
+
+def test_read_no_metadata(tmpdir, engine):
+    # use pyarrow.parquet to create a parquet file without
+    # pandas metadata
+    pa = pytest.importorskip("pyarrow")
+    import pyarrow.parquet as pq
+    tmp = str(tmpdir) + "table.parq"
+
+    table = pa.Table.from_arrays([pa.array([1, 2, 3]),
+                                  pa.array([3, 4, 5])],
+                                 names=['A', 'B'])
+    pq.write_table(table, tmp)
+    result = dd.read_parquet(tmp, engine=engine)
+    expected = pd.DataFrame({"A": [1, 2, 3], "B": [3, 4, 5]})
+    assert_eq(result, expected)
+
+
+def test_parse_pandas_metadata_duplicate_index_columns():
+    md = {
+        'column_indexes': [{
+            'field_name': None,
+            'metadata': {
+                'encoding': 'UTF-8'
+            },
+            'name': None,
+            'numpy_type': 'object',
+            'pandas_type': 'unicode'
+        }],
+        'columns': [{
+            'field_name': 'A',
+            'metadata': None,
+            'name': 'A',
+            'numpy_type': 'int64',
+            'pandas_type': 'int64'
+        }, {
+            'field_name': '__index_level_0__',
+            'metadata': None,
+            'name': 'A',
+            'numpy_type': 'object',
+            'pandas_type': 'unicode'
+        }],
+        'index_columns': ['__index_level_0__'],
+        'pandas_version': '0.21.0'
+    }
+    index_names, column_names, storage_name_mapping, column_index_names = (
+        _parse_pandas_metadata(md)
+    )
+    assert index_names == ['A']
+    assert column_names == ['A']
+    assert storage_name_mapping == {'__index_level_0__': 'A', 'A': 'A'}
+    assert column_index_names == [None]
+
+
+def test_parse_pandas_metadata_column_with_index_name():
+    md = {
+        'column_indexes': [{
+            'field_name': None,
+            'metadata': {
+                'encoding': 'UTF-8'
+            },
+            'name': None,
+            'numpy_type': 'object',
+            'pandas_type': 'unicode'
+        }],
+        'columns': [{
+            'field_name': 'A',
+            'metadata': None,
+            'name': 'A',
+            'numpy_type': 'int64',
+            'pandas_type': 'int64'
+        }, {
+            'field_name': '__index_level_0__',
+            'metadata': None,
+            'name': 'A',
+            'numpy_type': 'object',
+            'pandas_type': 'unicode'
+        }],
+        'index_columns': ['__index_level_0__'],
+        'pandas_version': '0.21.0'
+    }
+    index_names, column_names, storage_name_mapping, column_index_names = (
+        _parse_pandas_metadata(md)
+    )
+    assert index_names == ['A']
+    assert column_names == ['A']
+    assert storage_name_mapping == {'__index_level_0__': 'A', 'A': 'A'}
+    assert column_index_names == [None]
+
+
+def test_writing_parquet_with_kwargs(tmpdir, engine):
+    fn = str(tmpdir)
+
+    engine_kwargs = {
+        'pyarrow': {
+            'compression': 'snappy',
+            'coerce_timestamps': None,
+            'use_dictionary': True
+        },
+        'fastparquet': {
+            'compression': 'snappy',
+            'times': 'int64',
+            'fixed_text': None
+        }
+    }
+
+    ddf.to_parquet(fn,  engine=engine, **engine_kwargs[engine])
+    out = dd.read_parquet(fn, engine=engine)
+    assert_eq(out, df, check_index=(engine != 'fastparquet'))
+
+
+def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
+    fn = str(tmpdir)
+
+    with pytest.raises(TypeError):
+        ddf.to_parquet(fn,  engine=engine, unknown_key='unknown_value')

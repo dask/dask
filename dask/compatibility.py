@@ -40,6 +40,7 @@ if PY3:
     from urllib.parse import urlparse, urlsplit, quote, unquote
     FileNotFoundError = FileNotFoundError
     unicode = str
+    string_types = (str,)
     long = int
     zip = zip
     def apply(func, args, kwargs=None):
@@ -71,6 +72,7 @@ else:
     from urlparse import urlparse, urlsplit
     from urllib import quote, unquote
     unicode = unicode
+    string_types = (basestring,)
     long = long
     apply = apply
     range = xrange
