@@ -5136,6 +5136,7 @@ def test_scatter_direct(s, a, b):
     yield c._close()
 
 
+@pytest.mark.skipif(sys.version_info[0] < 3, reason="cloudpickle Py27 issue")
 @gen_cluster(client=True)
 def test_unhashable_function(c, s, a, b):
     d = {'a': 1}
