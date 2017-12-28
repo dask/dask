@@ -62,7 +62,9 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 @click.option('--nprocs', type=int, default=1,
               help="Number of worker processes.  Defaults to one.")
 @click.option('--name', type=str, default='',
-              help="A unique name for this worker like 'worker-1'")
+              help="A unique name for this worker like 'worker-1'. "
+                   "If used with --nprocs then the process number "
+                   "will be appended like name-0, name-1, name-2, ...")
 @click.option('--memory-limit', default='auto',
               help="Bytes of memory that the worker can use. "
                    "This can be an integer (bytes), "
@@ -105,10 +107,6 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
 
     if nprocs > 1 and worker_port != 0:
         logger.error("Failed to launch worker.  You cannot use the --port argument when nprocs > 1.")
-        exit(1)
-
-    if nprocs > 1 and name:
-        logger.error("Failed to launch worker.  You cannot use the --name argument when nprocs > 1.")
         exit(1)
 
     if nprocs > 1 and not nanny:
@@ -210,10 +208,11 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
         addr = None
 
     nannies = [t(scheduler, scheduler_file=scheduler_file, ncores=nthreads,
-                 services=services, name=name, loop=loop, resources=resources,
+                 services=services, loop=loop, resources=resources,
                  memory_limit=memory_limit, reconnect=reconnect,
                  local_dir=local_directory, death_timeout=death_timeout,
                  preload=preload, security=sec, contact_address=contact_address,
+                 name=name if nprocs == 1 else name + '-' + str(i),
                  **kwargs)
                for i in range(nprocs)]
 
