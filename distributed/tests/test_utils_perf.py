@@ -68,13 +68,14 @@ def test_fractional_timer():
 
 
 @contextlib.contextmanager
-def enable_gc_diagnosis_and_log(diag):
+def enable_gc_diagnosis_and_log(diag, level='INFO'):
     disable_gc_diagnosis(force=True)  # just in case
     assert not gc.callbacks
 
-    with captured_logger('distributed.utils_perf', level='INFO',
+    with captured_logger('distributed.utils_perf', level=level,
                          propagate=False) as sio:
         gc.disable()
+        gc.collect()  # drain any leftover from previous tests
         diag.enable()
         try:
             yield sio
@@ -88,7 +89,7 @@ def test_gc_diagnosis_cpu_time():
     diag = GCDiagnosis(warn_over_frac=0.75)
     diag.N_SAMPLES = 3  # shorten tests
 
-    with enable_gc_diagnosis_and_log(diag) as sio:
+    with enable_gc_diagnosis_and_log(diag, level='WARN') as sio:
         # Spend some CPU time doing only full GCs
         for i in range(diag.N_SAMPLES):
             gc.collect()
@@ -100,7 +101,7 @@ def test_gc_diagnosis_cpu_time():
         assert re.match(r"full garbage collections took (100|[89][0-9])% "
                         r"CPU time recently", lines[0])
 
-    with enable_gc_diagnosis_and_log(diag) as sio:
+    with enable_gc_diagnosis_and_log(diag, level='WARN') as sio:
         # Spend half the CPU time doing full GCs
         for i in range(diag.N_SAMPLES + 1):
             t1 = thread_time()
