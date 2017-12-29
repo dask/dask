@@ -26,6 +26,7 @@ def test_get_scale_up_kwargs(loop):
             assert c.ncores()
             assert alc.get_scale_up_kwargs() == {'n': 3}
 
+
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 4)
 def test_simultaneous_scale_up_and_down(c, s, *workers):
     class TestAdaptive(Adaptive):
@@ -120,3 +121,34 @@ def test_adaptive_local_cluster_multi_workers():
         yield c._close()
         yield cluster._close()
 
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)
+def test_adaptive_scale_down_override(c, s, *workers):
+    class TestAdaptive(Adaptive):
+        def __init__(self, *args, **kwargs):
+            self.min_size = kwargs.pop("min_size", 0)
+            Adaptive.__init__(self, *args, **kwargs)
+
+        def workers_to_close(self):
+            num_workers = len(self.scheduler.workers)
+            to_close = self.scheduler.workers_to_close()
+            if num_workers - len(to_close) < self.min_size:
+                to_close = to_close[:num_workers - self.min_size]
+
+            return to_close
+
+    class TestCluster(object):
+        def scale_up(self, n, **kwargs):
+            assert False
+
+        def scale_down(self, workers):
+            assert False
+
+    assert len(s.workers) == 10
+
+    # Assert that adaptive cycle does not reduce cluster below minimum size
+    # as determined via override.
+    cluster = TestCluster()
+    ta = TestAdaptive(s, cluster, min_size=2, interval=.1, scale_factor=2)
+    yield gen.sleep(0.3)
+
+    assert len(s.workers) == 2

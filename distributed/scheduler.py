@@ -17,7 +17,7 @@ try:
     from cytoolz import frequencies, merge, pluck, merge_sorted, first
 except ImportError:
     from toolz import frequencies, merge, pluck, merge_sorted, first
-from toolz import memoize, valmap, first, second, concat, compose
+from toolz import memoize, valmap, first, second, concat, compose, groupby
 from tornado import gen
 from tornado.gen import Return
 from tornado.ioloop import IOLoop
@@ -2548,7 +2548,7 @@ class Scheduler(ServerNode):
                                'key-count': len(keys),
                                'branching-factor': branching_factor})
 
-    def workers_to_close(self, memory_ratio=2):
+    def workers_to_close(self, memory_ratio=2, key=None):
         """
         Find workers that we can close with low cost
 
@@ -2566,10 +2566,24 @@ class Scheduler(ServerNode):
             Amount of extra space we want to have for our stored data.
             Defaults two 2, or that we want to have twice as much memory as we
             currently have data.
+        key: Callable(WorkerState)
+            An optional callable mapping a WorkerState object to a group
+            affiliation.  Groups will be closed together.  This is useful when
+            closing workers must be done collectively, such as by hostname.
+
+        Examples
+        --------
+        >>> scheduler.workers_to_close()
+        ['tcp://192.168.0.1:1234', 'tcp://192.168.0.2:1234']
+
+        Group workers by hostname prior to closing
+
+        >>> scheduler.workers_to_close(key=lambda ws: ws.host)
+        ['tcp://192.168.0.1:1234', 'tcp://192.168.0.1:4567']
 
         Returns
         -------
-        to_close: list of workers that are OK to close
+        to_close: list of worker addresses that are OK to close
         """
         with log_errors():
             # XXX processing isn't used is the heuristics below
@@ -2584,17 +2598,36 @@ class Scheduler(ServerNode):
             idle = sorted([ws for ws in self.idle if not ws.processing],
                           key=operator.attrgetter('nbytes'), reverse=True)
 
+            if key is None:
+                key = lambda ws: ws.address
+
+            groups = groupby(key, self.workers.values())
+
+            limit_bytes = {k: sum(ws.memory_limit for ws in v)
+                           for k, v in groups.items()}
+            group_bytes = {k: sum(ws.nbytes for ws in v)
+                           for k, v in groups.items()}
+
+            limit = sum(limit_bytes.values())
+            total = sum(group_bytes.values())
+            idle = sorted([group for group, workers in groups.items()
+                           if not any(ws.processing for ws in workers)],
+                          key=group_bytes.get, reverse=True)
             to_close = []
 
             while idle:
-                w = idle.pop().address
+                w = idle.pop()
                 limit -= limit_bytes[w]
                 if limit >= memory_ratio * total:  # still plenty of space
                     to_close.append(w)
                 else:
                     break
 
-            return to_close
+            result = [ws.address for g in to_close for ws in groups[g]]
+            if result:
+                logger.info("Suggest closing workers: %s", result)
+
+            return result
 
     @gen.coroutine
     def retire_workers(self, comm=None, workers=None, remove=True, close=False,
