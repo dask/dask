@@ -4023,8 +4023,7 @@ class Scheduler(ServerNode):
     # Cleanup #
     ###########
 
-    @gen.coroutine
-    def reevaluate_occupancy(self):
+    def reevaluate_occupancy(self, worker_index=0):
         """ Periodically reassess task duration time
 
         The expected duration of a task can change over time.  Unfortunately we
@@ -4041,23 +4040,19 @@ class Scheduler(ServerNode):
         """
         DELAY = 0.1
         try:
+            if self.status == 'closed':
+                return
+
             import psutil
             proc = psutil.Process()
             last = time()
+            next_time = timedelta(seconds=DELAY)
 
-            while self.status != 'closed':
-                yield gen.sleep(DELAY)
-                last = time()
-
-                for w in list(self.workers):
-                    while proc.cpu_percent() > 50:
-                        yield gen.sleep(DELAY)
-                        last = time()
-
-                    if self.status == 'closed':
-                        return
-
-                    ws = self.workers.get(w)
+            if proc.cpu_percent() < 50:
+                workers = list(self.workers.values())
+                for i in range(len(workers)):
+                    ws = workers[worker_index % len(workers)]
+                    worker_index += 1
                     try:
                         if ws is None or not ws.processing:
                             continue
@@ -4067,8 +4062,12 @@ class Scheduler(ServerNode):
 
                     duration = time() - last
                     if duration > 0.005:  # 5ms since last release
-                        yield gen.sleep(duration * 5)  # 25ms gap
-                        last = time()
+                        next_time = timedelta(seconds=duration * 5)  # 25ms gap
+                        break
+
+            self.loop.add_timeout(next_time, self.reevaluate_occupancy,
+                                  worker_index=worker_index)
+
         except Exception:
             logger.error("Error in reevaluate occupancy", exc_info=True)
             raise
