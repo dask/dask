@@ -2512,7 +2512,7 @@ class Worker(WorkerBase):
         if not self._client:
             from .client import Client
             asynchronous = self.loop is IOLoop.current()
-            self._client = Client(self.scheduler.address, loop=self.loop,
+            self._client = Client(self.scheduler, loop=self.loop,
                                   security=self.security,
                                   set_as_default=True,
                                   asynchronous=asynchronous,

@@ -500,6 +500,7 @@ class Client(Node):
         self.extensions = {}
         self.scheduler_file = scheduler_file
         self._startup_kwargs = kwargs
+        self.cluster = None
         self.scheduler = None
         self._scheduler_identity = {}
         self._lock = threading.Lock()
@@ -530,11 +531,12 @@ class Client(Node):
                 logger.info("Config value `scheduler-address` found: %s",
                             address)
 
-        if hasattr(address, "scheduler_address"):
+        if isinstance(address, rpc):
+            self.scheduler = address
+        elif hasattr(address, "scheduler_address"):
             # It's a LocalCluster or LocalCluster-compatible object
             self.cluster = address
-        else:
-            self.cluster = None
+
         self._start_arg = address
         if set_as_default:
             self._previous_get = _globals.get('get')
@@ -740,8 +742,9 @@ class Client(Node):
 
             address = self.cluster.scheduler_address
 
-        self.scheduler = rpc(address, timeout=timeout,
-                             connection_args=self.connection_args)
+        if self.scheduler is None:
+            self.scheduler = rpc(address, timeout=timeout,
+                                 connection_args=self.connection_args)
         self.scheduler_comm = None
 
         yield self._ensure_connected(timeout=timeout)

@@ -5007,7 +5007,8 @@ def test_client_async_before_loop_starts():
 
 
 @slow
-@gen_cluster(client=True, Worker=Nanny if PY3 else Worker, timeout=60)
+@gen_cluster(client=True, Worker=Nanny if PY3 else Worker, timeout=60,
+             ncores=[('127.0.0.1', 3)] * 2)
 def test_nested_compute(c, s, a, b):
     def fib(x):
         assert get_worker().get_current_task()

@@ -1013,7 +1013,7 @@ def test_statistical_profiling_cycle(c, s, a, b):
     assert x['count'] == sum(p['count'] for _, p in a.profile_history) + a.profile_recent['count']
 
     y = a.get_profile(start=end - 0.300, stop=time())
-    assert 0 < y['count'] < x['count']
+    assert 0 < y['count'] <= x['count']
 
 
 @gen_cluster(client=True)
