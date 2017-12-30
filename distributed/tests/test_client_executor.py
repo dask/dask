@@ -12,8 +12,8 @@ from toolz import take
 
 from distributed.client import Client
 from distributed.utils_test import (slowinc, slowadd, slowdec,
-                                    inc, throws, cluster)
-from distributed.utils_test import loop # flake8: noqa
+                                    inc, throws, cluster, varying)
+from distributed.utils_test import loop  # flake8: noqa
 
 
 def number_of_processing_tasks(client):
@@ -204,6 +204,33 @@ def test_unsupported_arguments(loop):
                 c.get_executor(workers=[b['address']], foo=1, bar=2)
             assert ("unsupported arguments to ClientExecutor: ['bar', 'foo']"
                     in str(excinfo.value))
+
+
+def test_retries(loop):
+    args = [ZeroDivisionError("one"), ZeroDivisionError("two"), 42]
+
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            with c.get_executor(retries=3, pure=False) as e:
+                future = e.submit(varying(args))
+                assert future.result() == 42
+
+            with c.get_executor(retries=2) as e:
+                future = e.submit(varying(args))
+                result = future.result()
+                assert result == 42
+
+            with c.get_executor(retries=1) as e:
+                future = e.submit(varying(args))
+                with pytest.raises(ZeroDivisionError) as exc_info:
+                    res = future.result()
+                exc_info.match("two")
+
+            with c.get_executor(retries=0) as e:
+                future = e.submit(varying(args))
+                with pytest.raises(ZeroDivisionError) as exc_info:
+                    res = future.result()
+                exc_info.match("one")
 
 
 def test_shutdown(loop):

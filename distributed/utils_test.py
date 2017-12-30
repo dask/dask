@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import collections
 from contextlib import contextmanager
 from datetime import timedelta
 import functools
@@ -21,7 +22,6 @@ import textwrap
 import threading
 from time import sleep
 import uuid
-import warnings
 import weakref
 
 try:
@@ -287,8 +287,9 @@ def run_for(duration, timer=time):
 
 
 # This dict grows at every varying() invocation
-_varying_dict = {}
+_varying_dict = collections.defaultdict(int)
 _varying_key_gen = itertools.count()
+
 
 class _ModuleSlot(object):
     def __init__(self, modname, slotname):
@@ -310,7 +311,6 @@ def varying(items):
     # and not a copy.
     slot = _ModuleSlot(__name__, '_varying_dict')
     key = next(_varying_key_gen)
-    _varying_dict[key] = 0
 
     def func():
         dct = slot.get()

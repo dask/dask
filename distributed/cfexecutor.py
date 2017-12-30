@@ -48,7 +48,7 @@ class ClientExecutor(cf.Executor):
     A concurrent.futures Executor that executes tasks on a dask.distributed Client.
     """
 
-    _allowed_kwargs = frozenset(['pure', 'workers', 'resources', 'allow_other_workers'])
+    _allowed_kwargs = frozenset(['pure', 'workers', 'resources', 'allow_other_workers', 'retries'])
 
     def __init__(self, client, **kwargs):
         sk = set(kwargs)
