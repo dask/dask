@@ -24,7 +24,8 @@ decompress = {'gzip': gzip_decompress,
               None: identity}
 files = {'gzip': lambda f, **kwargs: GzipFile(fileobj=f, **kwargs),
          None: noop_file}
-seekable_files = {None: noop_file}
+seekable_files = {None: noop_file,
+                  'bz2': bz2.BZ2File}
 
 
 with ignoring(ImportError):
