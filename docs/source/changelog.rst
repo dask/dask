@@ -41,7 +41,7 @@ Core
 ++++
 
 - Improve 32-bit compatibility (:pr:`2937`) `Matthew Rocklin`_
-
+- Support seekable reads of bzip2 compressed files (:pr:`3040`) `Uwe Korn`_
 
 0.16.0 / 2017-11-17
 -------------------
