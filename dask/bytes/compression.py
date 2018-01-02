@@ -23,6 +23,7 @@ decompress = {'gzip': gzip_decompress,
               'bz2': bz2.decompress,
               None: identity}
 files = {'gzip': lambda f, **kwargs: GzipFile(fileobj=f, **kwargs),
+         'bz2': lambda f, **kwargs: bz2.BZ2File(fileobj=f, **kwargs),
          None: noop_file}
 seekable_files = {None: noop_file,
                   'bz2': bz2.BZ2File}
