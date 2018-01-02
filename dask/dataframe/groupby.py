@@ -289,8 +289,17 @@ def _nunique_df_chunk(df, *index, **kwargs):
     return grouped
 
 
+def _drop_duplicates_rename(df):
+    # Avoid duplicate index labels in a groupby().apply() context
+    # https://github.com/dask/dask/issues/3039
+    # https://github.com/pandas-dev/pandas/pull/18882
+    names = [None] * df.index.nlevels
+    return df.drop_duplicates().rename_axis(names, copy=False)
+
+
 def _nunique_df_combine(df, levels):
-    result = df.groupby(level=levels, sort=False).apply(pd.DataFrame.drop_duplicates)
+    result = df.groupby(level=levels,
+                        sort=False).apply(_drop_duplicates_rename)
 
     if isinstance(levels, list):
         result.index = pd.MultiIndex.from_arrays([
