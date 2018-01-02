@@ -39,7 +39,7 @@ from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      SerializableLock, ensure_dict, Dispatch)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..core import quote
-from ..delayed import to_task_dask
+from ..delayed import Delayed, to_task_dask
 from .. import threaded, core
 from .. import sharedict
 from ..sharedict import ShareDict
@@ -862,7 +862,6 @@ def store(sources, targets, lock=True, regions=None, compute=True,
 
     >>> store([x, y, z], [dset1, dset2, dset3])  # doctest: +SKIP
     """
-    from ..delayed import Delayed
 
     if isinstance(sources, Array):
         sources = [sources]
