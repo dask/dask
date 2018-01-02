@@ -160,6 +160,9 @@ def test_groupby_on_index(get):
     def func(df):
         return df.assign(b=df.b - df.b.mean())
 
+    def func2(df):
+        return df[['b']] - df[['b']].mean()
+
     with dask.set_options(get=get):
         with pytest.warns(None):
             assert_eq(ddf.groupby('a').apply(func),
@@ -168,8 +171,8 @@ def test_groupby_on_index(get):
             assert_eq(ddf.groupby('a').apply(func).set_index('a'),
                       pdf.groupby('a').apply(func).set_index('a'))
 
-            assert_eq(pdf2.groupby(pdf2.index).apply(func),
-                      ddf2.groupby(ddf2.index).apply(func))
+            assert_eq(pdf2.groupby(pdf2.index).apply(func2),
+                      ddf2.groupby(ddf2.index).apply(func2))
 
 
 def test_groupby_multilevel_getitem():
