@@ -907,12 +907,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         except AttributeError:
             each_tgt_dsk = {}
 
-        src = Array(
-            sources_dsk,
-            src.name,
-            src.chunks,
-            src.dtype
-        )
+        src = Array(sources_dsk, src.name, src.chunks, src.dtype)
 
         each_store_dsk = insert_to_ooc(
             src, tgt, lock=lock, region=reg, return_stored=return_stored
