@@ -1742,7 +1742,38 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                           task=len(self.dask))
 
     @derived_from(pd.Series)
-    def rename(self, index=None, inplace=False):
+    def rename(self, index=None, inplace=False, sorted_index=False):
+        """Alter Series index labels or name
+
+        Function / dict values must be unique (1-to-1). Labels not contained in
+        a dict / Series will be left as-is. Extra labels listed don't throw an
+        error.
+
+        Alternatively, change ``Series.name`` with a scalar value.
+
+        Parameters
+        ----------
+        index : scalar, hashable sequence, dict-like or function, optional
+            dict-like or functions are transformations to apply to
+            the index.
+            Scalar or hashable sequence-like will alter the ``Series.name``
+            attribute.
+        inplace : boolean, default False
+            Whether to return a new %(klass)s. If True then value of copy is
+            ignored.
+        sorted_index : bool, default False
+            In the case of a dict-like or function - if the input series has
+            known divisions, and the transformed index remains sorted, new
+            divisions will be inferred based on the transformation.
+
+        Returns
+        -------
+        renamed : Series (new object)
+
+        See Also
+        --------
+        pandas.Series.rename
+        """
         from pandas.api.types import is_scalar, is_list_like, is_dict_like
         if is_scalar(index) or (is_list_like(index) and not is_dict_like(index)):
             res = self if inplace else self.copy()
@@ -1750,11 +1781,15 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         else:
             res = self.map_partitions(M.rename, index)
             if self.known_divisions:
-                if callable(index) or is_dict_like(index):
+                if sorted_index and (callable(index) or is_dict_like(index)):
                     old = pd.Series(range(self.npartitions + 1),
                                     index=self.divisions)
-                    new = tuple(old.rename(index).index.tolist())
-                    res.divisions = new
+                    new = old.rename(index).index
+                    if not new.is_monotonic:
+                        msg = ("sorted_index=True, but the transformed index "
+                               "isn't monotonic_increasing")
+                        raise ValueError(msg)
+                    res.divisions = tuple(new.tolist())
                 else:
                     res = res.clear_divisions()
             if inplace:

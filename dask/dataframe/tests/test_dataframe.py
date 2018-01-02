@@ -249,24 +249,29 @@ def test_rename_series_method():
     s = pd.Series(['a', 'b', 'c', 'd', 'e', 'f', 'g'], name='x')
     ds = dd.from_pandas(s, 2)
 
-    res = ds.rename(lambda x: x ** 2)
-    assert_eq(res, s.rename(lambda x: x ** 2))
-    assert res.known_divisions
+    for is_sorted in [True, False]:
+        res = ds.rename(lambda x: x ** 2, sorted_index=is_sorted)
+        assert_eq(res, s.rename(lambda x: x ** 2))
+        assert res.known_divisions == is_sorted
 
-    res = ds.rename(s)
-    assert_eq(res, s.rename(s))
-    assert res.known_divisions
+        res = ds.rename(s, sorted_index=is_sorted)
+        assert_eq(res, s.rename(s))
+        assert res.known_divisions == is_sorted
+
+    with pytest.raises(ValueError):
+        ds.rename(lambda x: -x, sorted_index=True)
+    assert_eq(ds.rename(lambda x: -x), s.rename(lambda x: -x))
 
     res = ds.rename(ds)
     assert_eq(res, s.rename(s))
     assert not res.known_divisions
 
     ds2 = ds.clear_divisions()
-    res = ds2.rename(lambda x: x**2)
+    res = ds2.rename(lambda x: x**2, sorted_index=True)
     assert_eq(res, s.rename(lambda x: x**2))
     assert not res.known_divisions
 
-    res = ds.rename(lambda x: x**2, inplace=True)
+    res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
     assert res is ds
     s.rename(lambda x: x**2, inplace=True)
     assert_eq(ds, s)
