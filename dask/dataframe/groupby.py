@@ -294,8 +294,7 @@ def _drop_duplicates_rename(df):
     # https://github.com/dask/dask/issues/3039
     # https://github.com/pandas-dev/pandas/pull/18882
     names = [None] * df.index.nlevels
-    result = df.drop_duplicates().rename_axis(names)
-    return result
+    return df.drop_duplicates().rename_axis(names, copy=False)
 
 
 def _nunique_df_combine(df, levels):
