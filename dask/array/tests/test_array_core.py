@@ -19,7 +19,7 @@ from toolz.curried import identity
 import dask
 import dask.array as da
 from dask.base import tokenize, compute_as_if_collection
-from dask.delayed import delayed
+from dask.delayed import Delayed, delayed
 from dask.local import get_sync
 from dask.utils import ignoring, tmpfile, tmpdir
 from dask.utils_test import inc
@@ -1213,11 +1213,12 @@ def test_store_delayed_target():
     atd = delayed(make_target)('at')
     btd = delayed(make_target)('bt')
 
-    store([a, b], [atd, btd])
+    st = store([a, b], [atd, btd])
 
     at = targs['at']
     bt = targs['bt']
 
+    assert st is None
     assert_eq(at, a)
     assert_eq(bt, b)
 
@@ -1233,7 +1234,8 @@ def test_store():
     at = np.empty(shape=(4, 4))
     bt = np.empty(shape=(4, 4))
 
-    store([a, b], [at, bt])
+    st = store([a, b], [at, bt])
+    assert st is None
     assert (at == 2).all()
     assert (bt == 3).all()
 
@@ -1252,8 +1254,9 @@ def test_store_regions():
     at = np.zeros(shape=(8, 4, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = store([a, b], [at, bt], regions=region, compute=False)
+    assert isinstance(v, Delayed)
     assert (at == 0).all() and (bt[region] == 0).all()
-    v.compute()
+    assert all([ev is None for ev in v.compute()])
     assert (at[region] == 2).all() and (bt[region] == 3).all()
     assert not (bt == 3).all() and not ( bt == 0 ).all()
     assert not (at == 2).all() and not ( at == 0 ).all()
@@ -1262,8 +1265,9 @@ def test_store_regions():
     at = np.zeros(shape=(8, 4, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = store([a, b], [at, bt], regions=[region, region], compute=False)
+    assert isinstance(v, Delayed)
     assert (at == 0).all() and (bt[region] == 0).all()
-    v.compute()
+    assert all([ev is None for ev in v.compute()])
     assert (at[region] == 2).all() and (bt[region] == 3).all()
     assert not (bt == 3).all() and not ( bt == 0 ).all()
     assert not (at == 2).all() and not ( at == 0 ).all()
@@ -1277,8 +1281,9 @@ def test_store_compute_false():
     bt = np.zeros(shape=(4, 4))
 
     v = store([a, b], [at, bt], compute=False)
+    assert isinstance(v, Delayed)
     assert (at == 0).all() and (bt == 0).all()
-    v.compute()
+    assert all([ev is None for ev in v.compute()])
     assert (at == 2).all() and (bt == 3).all()
 
 
@@ -1320,6 +1325,7 @@ def test_store_locks():
 
     lock = Lock()
     v = store([a, b], [at, bt], compute=False, lock=lock)
+    assert isinstance(v, Delayed)
     dsk = v.dask
     locks = set(vv for v in dsk.values() for vv in v if isinstance(vv, _Lock))
     assert locks == set([lock])
@@ -1328,16 +1334,18 @@ def test_store_locks():
     at = NonthreadSafeStore()
     v = store([a, b], [at, at], lock=lock,
               get=dask.threaded.get, num_workers=10)
+    assert v is None
 
     # Don't assume thread safety by default
     at = NonthreadSafeStore()
-    store(a, at, get=dask.threaded.get, num_workers=10)
-    a.store(at, get=dask.threaded.get, num_workers=10)
+    assert store(a, at, get=dask.threaded.get, num_workers=10) is None
+    assert a.store(at, get=dask.threaded.get, num_workers=10) is None
 
     # Ensure locks can be removed
     at = ThreadSafeStore()
     for i in range(10):
-        a.store(at, lock=False, get=dask.threaded.get, num_workers=10)
+        st = a.store(at, lock=False, get=dask.threaded.get, num_workers=10)
+        assert st is None
         if at.max_concurrent_uses > 1:
             break
         if i == 9:
@@ -1350,7 +1358,8 @@ def test_store_multiprocessing_lock():
     a = d + 1
 
     at = np.zeros(shape=(10, 10))
-    a.store(at, get=dask.multiprocessing.get, num_workers=10)
+    st = a.store(at, get=dask.multiprocessing.get, num_workers=10)
+    assert st is None
 
 
 def test_to_hdf5():
