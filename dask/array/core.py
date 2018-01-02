@@ -933,23 +933,19 @@ def store(sources, targets, lock=True, regions=None, compute=True, keep=False, *
         store_dsks, tgt_dsks, [sources_dsk]
     ))
 
-    store_dlyds = []
-    for each_store_key in store_keys:
-        store_dlyds.append(Delayed(each_store_key, store_dsks_mrg))
-
     if keep:
         if compute:
             from ..base import persist
+            store_dlyds = [Delayed(k, store_dsks_mrg) for k in store_keys]
             store_dlyds = persist(*store_dlyds)
-
-        store_dsk = sharedict.merge(*[e.dask for e in store_dlyds])
+            store_dsks_mrg = sharedict.merge(*[e.dask for e in store_dlyds])
 
         results = []
         for each_load_name, each_load_dsk in zip(load_names, load_dsks):
             results.append(Array(
                 sharedict.merge(
                     (each_load_name, each_load_dsk),
-                    store_dsk,
+                    store_dsks_mrg,
                 ),
                 each_load_name,
                 src.chunks,
@@ -959,12 +955,8 @@ def store(sources, targets, lock=True, regions=None, compute=True, keep=False, *
 
         return results
     else:
-        keys = [e.key for e in store_dlyds]
-        name = 'store-' + tokenize(*keys)
-        dsk = sharedict.merge(
-            *[e.dask for e in store_dlyds]
-        )
-        dsk.update({name: keys})
+        name = 'store-' + tokenize(*store_keys)
+        dsk = sharedict.merge({name: store_keys}, store_dsks_mrg)
         result = Delayed(name, dsk)
 
         if compute:
