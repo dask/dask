@@ -2656,6 +2656,73 @@ def insert_to_ooc(arr, out, lock=True, region=None, keep=False):
     return dsk
 
 
+def load_chunk(x, index, lock, region):
+    """
+    A function inserted in a Dask graph for loading a chunk.
+
+    Parameters
+    ----------
+    x: array-like
+        An array (potentially a NumPy one)
+    index: slice-like
+        Where to store result from ``x`` in ``out``.
+    lock: Lock-like or False
+        Lock to use before writing to ``out``.
+    region: slice-like or None
+        Where relative to ``out`` to store ``x``.
+
+    Examples
+    --------
+
+    >>> a = np.ones((5, 6))
+    >>> load_chunk(a, (slice(None), slice(None)), False, None)  # doctest: +SKIP
+    """
+
+    result = None
+
+    subindex = index
+    if region is not None:
+        subindex = fuse_slice(region, index)
+
+    if lock:
+        lock.acquire()
+    try:
+        result = x[subindex]
+    finally:
+        if lock:
+            lock.release()
+
+    return result
+
+
+def retrieve_from_ooc(keys, dsk):
+    """
+    Creates a Dask graph for loading stored ``keys`` from ``dsk``.
+
+    Parameters
+    ----------
+    keys: Sequence
+        A sequence containing Dask graph keys to load
+    dsk: Mapping
+        A Dask graph corresponding to a Dask Array
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> d = da.ones((5, 6), chunks=(2, 3))
+    >>> a = np.empty(d.shape)
+    >>> g = insert_to_ooc(d, a)
+    >>> retrieve_from_ooc(g.keys(), g)  # doctest: +SKIP
+    """
+
+    load_dsk = dict()
+    for each_key in keys:
+        load_key = ('load-%s' % each_key[0],) + each_key[1:]
+        load_dsk[load_key] = (load_chunk, each_key,) + dsk[each_key][3:-1]
+
+    return load_dsk
+
+
 def asarray(a):
     """Convert the input to a dask array.
 
