@@ -2769,12 +2769,7 @@ def retrieve_from_ooc(keys, dsk):
     load_dsk = dict()
     for each_key in keys:
         load_key = ('load-%s' % each_key[0],) + each_key[1:]
-        # Reuse the arguments from `store_chunk` in `load_chunk`. Knowing that
-        # `dsk[each_key]` has the format below, we need to make a small change.
-        # `(store_chunk, t, out, slc, lock, region, return_stored)`
-        # Namely drop the first 3 arguments as they are the function and two
-        # arrays that were already used up by `store_chunk`. In their place use
-        # `load_chunk` and the result from `store_chunk` (i.e. `each_key`).
+        # Reuse the result and arguments from `store_chunk` in `load_chunk`.
         load_dsk[load_key] = (load_chunk, each_key,) + dsk[each_key][3:-1]
 
     return load_dsk
