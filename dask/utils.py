@@ -16,7 +16,7 @@ import multiprocessing as mp
 import uuid
 from weakref import WeakValueDictionary
 
-from .compatibility import getargspec, PY3, unicode, bind_method
+from .compatibility import get_named_args, getargspec, PY3, unicode, bind_method
 from .core import get_deps
 from .context import _globals
 from .optimize import key_split    # noqa: F401
@@ -485,10 +485,10 @@ def derived_from(original_klass, version=None, ua_args=[]):
                 doc = ''
 
             try:
-                method_args = getargspec(method).args
-                original_args = getargspec(original_method).args
+                method_args = get_named_args(method)
+                original_args = get_named_args(original_method)
                 not_supported = [m for m in original_args if m not in method_args]
-            except TypeError:
+            except ValueError:
                 not_supported = []
 
             if len(ua_args) > 0:
