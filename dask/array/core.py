@@ -18,12 +18,12 @@ import uuid
 import warnings
 
 try:
-    from cytoolz import (partition, concat, join, first,
+    from cytoolz import (partition, concat, concatv, join, first,
                          groupby, valmap, accumulate, assoc)
     from cytoolz.curried import filter, pluck
 
 except ImportError:
-    from toolz import (partition, concat, join, first,
+    from toolz import (partition, concat, concatv, join, first,
                        groupby, valmap, accumulate, assoc)
     from toolz.curried import filter, pluck
 from toolz import pipe, map, reduce
@@ -891,18 +891,20 @@ def store(sources, targets, lock=True, regions=None, compute=True, keep=False, *
         [e.__dask_keys__() for e in sources]
     )
 
-    store_dlyds = []
+    tgt_dsks = []
+    store_keys = []
+    store_dsks = []
     if keep:
         load_names = []
         load_dsks = []
     for tgt, src, reg in zip(targets, sources, regions):
         # if out is a delayed object update dictionary accordingly
         try:
-            dsk = {}
-            dsk.update(tgt.dask)
+            each_tgt_dsk = {}
+            each_tgt_dsk.update(tgt.dask)
             tgt = tgt.key
         except AttributeError:
-            dsk = {}
+            each_tgt_dsk = {}
 
         src = Array(
             sources_dsk,
@@ -922,9 +924,18 @@ def store(sources, targets, lock=True, regions=None, compute=True, keep=False, *
                 each_store_dsk
             ))
 
-        each_store_dsk_mrg = sharedict.merge(each_store_dsk, dsk, src.dask)
-        for each_store_key in each_store_dsk:
-            store_dlyds.append(Delayed(each_store_key, each_store_dsk_mrg))
+        tgt_dsks.append(each_tgt_dsk)
+
+        store_keys.extend(each_store_dsk.keys())
+        store_dsks.append(each_store_dsk)
+
+    store_dsks_mrg = sharedict.merge(*concatv(
+        store_dsks, tgt_dsks, [sources_dsk]
+    ))
+
+    store_dlyds = []
+    for each_store_key in store_keys:
+        store_dlyds.append(Delayed(each_store_key, store_dsks_mrg))
 
     if keep:
         if compute:
