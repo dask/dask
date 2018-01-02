@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Sequence
-
 import numpy as np
 import pandas as pd
 from toolz import partial
@@ -123,10 +121,16 @@ class StringAccessor(Accessor):
 
     @derived_from(pd.core.strings.StringMethods)
     def cat(self, others=None, sep=None, na_rep=None):
+        from .core import Series, Index
         if others is None:
             raise NotImplementedError("x.str.cat() with `others == None`")
-        elif not isinstance(others, Sequence):
+
+        valid_types = (Series, Index, pd.Series, pd.Index)
+        if isinstance(others, valid_types):
             others = [others]
+        elif not all(isinstance(a, valid_types) for a in others):
+            raise TypeError("others must be Series/Index")
+
         return self._series.map_partitions(str_cat, *others, sep=sep,
                                            na_rep=na_rep, meta=self._series._meta)
 

@@ -1378,9 +1378,9 @@ def test_datetime_accessor():
 
 def test_str_accessor():
     df = pd.DataFrame({'x': ['abc', 'bcd', 'cdef', 'DEFG'], 'y': [1, 2, 3, 4]},
-                      index=['e', 'f', 'g', 'H'])
+                      index=['E', 'f', 'g', 'h'])
 
-    ddf = dd.from_pandas(df, 2, sort=False)
+    ddf = dd.from_pandas(df, 2)
 
     # Check that str not in dir/hasattr for non-object columns
     assert 'str' not in dir(ddf.y)
@@ -1421,10 +1421,16 @@ def test_str_accessor():
     assert_eq(ddf.x.str[1], df.x.str[1])
 
     # str.cat
-    assert_eq(ddf.x.str.cat(ddf.x.str.upper(), sep=':'),
-              df.x.str.cat(df.x.str.upper(), sep=':'))
-    assert_eq(ddf.x.str.cat([ddf.x.str.upper(), ddf.x.str.lower()], sep=':'),
+    sol = df.x.str.cat(df.x.str.upper(), sep=':')
+    assert_eq(ddf.x.str.cat(ddf.x.str.upper(), sep=':'), sol)
+    assert_eq(ddf.x.str.cat(df.x.str.upper(), sep=':'), sol)
+    assert_eq(ddf.x.str.cat([ddf.x.str.upper(), df.x.str.lower()], sep=':'),
               df.x.str.cat([df.x.str.upper(), df.x.str.lower()], sep=':'))
+
+    for o in ['foo', ['foo']]:
+        with pytest.raises(TypeError):
+            ddf.x.str.cat(o)
+
     with pytest.raises(NotImplementedError):
         ddf.x.str.cat(sep=':')
 
