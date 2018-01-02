@@ -815,7 +815,8 @@ def broadcast_chunks(*chunkss):
     return tuple(result)
 
 
-def store(sources, targets, lock=True, regions=None, compute=True, keep=False, **kwargs):
+def store(sources, targets, lock=True, regions=None, compute=True,
+          return_stored=False, **kwargs):
     """ Store dask arrays in array-like objects, overwrite data in target
 
     This stores dask arrays into object that supports numpy-style setitem
@@ -842,7 +843,7 @@ def store(sources, targets, lock=True, regions=None, compute=True, keep=False, *
         for the corresponding source and target in sources and targets, respectively.
     compute: boolean, optional
         If true compute immediately, return ``dask.delayed.Delayed`` otherwise
-    keep: boolean, optional
+    return_stored: boolean, optional
         Optionally return the stored result (default False).
 
     Examples
@@ -894,7 +895,7 @@ def store(sources, targets, lock=True, regions=None, compute=True, keep=False, *
     tgt_dsks = []
     store_keys = []
     store_dsks = []
-    if keep:
+    if return_stored:
         load_names = []
         load_dsks = []
     for tgt, src, reg in zip(targets, sources, regions):
@@ -914,10 +915,10 @@ def store(sources, targets, lock=True, regions=None, compute=True, keep=False, *
         )
 
         each_store_dsk = insert_to_ooc(
-            src, tgt, lock=lock, region=reg, keep=keep
+            src, tgt, lock=lock, region=reg, return_stored=return_stored
         )
 
-        if keep:
+        if return_stored:
             load_names.append('load-store-%s' % src.name)
             load_dsks.append(retrieve_from_ooc(
                 each_store_dsk.keys(),
@@ -934,7 +935,7 @@ def store(sources, targets, lock=True, regions=None, compute=True, keep=False, *
     ))
 
     result = None
-    if keep:
+    if return_stored:
         if compute:
             from ..base import persist
             store_dlyds = [Delayed(k, store_dsks_mrg) for k in store_keys]
@@ -2624,7 +2625,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     return Array(dsk2, name, chunks, dtype=dt)
 
 
-def store_chunk(x, out, index, lock, region, keep):
+def store_chunk(x, out, index, lock, region, return_stored):
     """
     A function inserted in a Dask graph for storing a chunk.
 
@@ -2640,7 +2641,7 @@ def store_chunk(x, out, index, lock, region, keep):
         Lock to use before writing to ``out``.
     region: slice-like or None
         Where relative to ``out`` to store ``x``.
-    keep: bool
+    return_stored: bool
         Whether to return ``out``.
 
     Examples
@@ -2652,7 +2653,7 @@ def store_chunk(x, out, index, lock, region, keep):
     """
 
     result = None
-    if keep:
+    if return_stored:
         result = out
 
     subindex = index
@@ -2670,7 +2671,7 @@ def store_chunk(x, out, index, lock, region, keep):
     return result
 
 
-def insert_to_ooc(arr, out, lock=True, region=None, keep=False):
+def insert_to_ooc(arr, out, lock=True, region=None, return_stored=False):
     """
     Creates a Dask graph for storing chunks from ``arr`` in ``out``.
 
@@ -2686,7 +2687,7 @@ def insert_to_ooc(arr, out, lock=True, region=None, keep=False):
     region: slice-like, optional
         Where in ``out`` to store ``arr``'s results
         (default is ``None``, meaning all of ``out``).
-    keep: bool, optional
+    return_stored: bool, optional
         Whether to return ``out``
         (default is ``False``, meaning ``None`` is returned).
 
@@ -2707,7 +2708,7 @@ def insert_to_ooc(arr, out, lock=True, region=None, keep=False):
     dsk = dict()
     for t, slc in zip(core.flatten(arr.__dask_keys__()), slices):
         store_key = (name,) + t[1:]
-        dsk[store_key] = (store_chunk, t, out, slc, lock, region, keep)
+        dsk[store_key] = (store_chunk, t, out, slc, lock, region, return_stored)
 
     return dsk
 

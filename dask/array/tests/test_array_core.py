@@ -1224,7 +1224,7 @@ def test_store_delayed_target():
     assert_eq(bt, b)
 
     # test keeping result
-    st = store([a, b], [atd, btd], keep=True, compute=False)
+    st = store([a, b], [atd, btd], return_stored=True, compute=False)
     st = dask.compute(*st)
 
     at = targs['at']
@@ -1280,7 +1280,9 @@ def test_store_regions():
     # Single region (keep result):
     at = np.zeros(shape=(8, 4, 6))
     bt = np.zeros(shape=(8, 4, 6))
-    v = store([a, b], [at, bt], regions=region, compute=False, keep=True)
+    v = store(
+        [a, b], [at, bt], regions=region, compute=False, return_stored=True
+    )
     assert isinstance(v, tuple)
     assert all([isinstance(e, da.Array) for e in v])
     assert (at == 0).all() and (bt[region] == 0).all()
@@ -1314,7 +1316,12 @@ def test_store_regions():
     # Multiple regions (keep result):
     at = np.zeros(shape=(8, 4, 6))
     bt = np.zeros(shape=(8, 4, 6))
-    v = store([a, b], [at, bt], regions=[region, region], compute=False, keep=True)
+    v = store(
+        [a, b], [at, bt],
+        regions=[region, region],
+        compute=False,
+        return_stored=True
+    )
     assert isinstance(v, tuple)
     assert all([isinstance(e, da.Array) for e in v])
     assert (at == 0).all() and (bt[region] == 0).all()
@@ -1351,7 +1358,7 @@ def test_store_compute_false():
     at = np.zeros(shape=(4, 4))
     bt = np.zeros(shape=(4, 4))
 
-    dat, dbt = store([a, b], [at, bt], compute=False, keep=True)
+    dat, dbt = store([a, b], [at, bt], compute=False, return_stored=True)
     assert isinstance(dat, Array) and isinstance(dbt, Array)
     assert (at == 0).all() and (bt == 0).all()
     assert (dat.compute() == at).all() and (dbt.compute() == bt).all()
