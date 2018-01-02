@@ -929,7 +929,6 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         store_dsks, tgt_dsks, [sources_dsk]
     ))
 
-    result = None
     if return_stored:
         if compute:
             store_dlyds = [Delayed(k, store_dsks_mrg) for k in store_keys]
@@ -947,17 +946,18 @@ def store(sources, targets, lock=True, regions=None, compute=True,
                 src.dtype
             ))
         result = tuple(result)
+
+        return result
     else:
         name = 'store-' + tokenize(*store_keys)
         dsk = sharedict.merge({name: store_keys}, store_dsks_mrg)
-        dlyd = Delayed(name, dsk)
+        result = Delayed(name, dsk)
 
         if compute:
-            dlyd.compute()
+            result.compute()
+            return None
         else:
-            result = dlyd
-
-    return result
+            return result
 
 
 def blockdims_from_blockshape(shape, chunks):
