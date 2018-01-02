@@ -859,6 +859,8 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
 
     >>> store([x, y, z], [dset1, dset2, dset3])  # doctest: +SKIP
     """
+    from ..delayed import Delayed
+
     if isinstance(sources, Array):
         sources = [sources]
         targets = [targets]
@@ -894,17 +896,17 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
         update = insert_to_ooc(src, tgt, lock=lock, region=reg)
         keys.extend(update)
 
+        update.update(src.dask)
         update.update(dsk)
         updates.update(update)
 
     name = 'store-' + tokenize(*keys)
-    dsk = sharedict.merge((name, updates), *[src.dask for src in sources])
+    dsk = sharedict.merge({name: keys}, updates)
+    result = Delayed(name, dsk)
     if compute:
-        compute_as_if_collection(Array, dsk, keys, **kwargs)
+        result.compute()
     else:
-        from ..delayed import Delayed
-        dsk.update({name: keys})
-        return Delayed(name, dsk)
+        return result
 
 
 def blockdims_from_blockshape(shape, chunks):
@@ -2157,9 +2159,7 @@ def atop(func, out_ind, *args, **kwargs):
     concatenate : bool, keyword only
         If true concatenate arrays along dummy indices, else provide lists
     adjust_chunks : dict
-        Dictionary mapping index to information to adjust chunk sizes.  Can
-        either be a constant chunksize, a tuple of all chunksizes, or a
-        function that converts old chunksize to new chunksize
+        Dictionary mapping index to function to be applied to chunk sizes
     new_axes : dict, keyword only
         New indexes and their dimension lengths
 
@@ -2568,7 +2568,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     return Array(dsk2, name, chunks, dtype=dt)
 
 
-def store_chunk(x, out, index, lock, region):
+def store_chunk(x, out, index, lock, region, keep):
     """
     A function inserted in a Dask graph for storing a chunk.
 
@@ -2584,14 +2584,20 @@ def store_chunk(x, out, index, lock, region):
         Lock to use before writing to ``out``.
     region: slice-like or None
         Where relative to ``out`` to store ``x``.
+    keep: bool
+        Whether to return ``out``.
 
     Examples
     --------
 
     >>> a = np.ones((5, 6))
     >>> b = np.empty(a.shape)
-    >>> store_chunk(a, b, (slice(None), slice(None)), False, None)
+    >>> store_chunk(a, b, (slice(None), slice(None)), False, None, False)
     """
+
+    result = None
+    if keep:
+        result = out
 
     subindex = index
     if region is not None:
@@ -2605,10 +2611,10 @@ def store_chunk(x, out, index, lock, region):
         if lock:
             lock.release()
 
-    return None
+    return result
 
 
-def insert_to_ooc(arr, out, lock=True, region=None):
+def insert_to_ooc(arr, out, lock=True, region=None, keep=False):
     """
     Creates a Dask graph for storing chunks from ``arr`` in ``out``.
 
@@ -2624,6 +2630,9 @@ def insert_to_ooc(arr, out, lock=True, region=None):
     region: slice-like, optional
         Where in ``out`` to store ``arr``'s results
         (default is ``None``, meaning all of ``out``).
+    keep: bool, optional
+        Whether to return ``out``
+        (default is ``False``, meaning ``None`` is returned).
 
     Examples
     --------
@@ -2642,9 +2651,7 @@ def insert_to_ooc(arr, out, lock=True, region=None):
     dsk = dict()
     for t, slc in zip(core.flatten(arr.__dask_keys__()), slices):
         store_key = (name,) + t[1:]
-        dsk[store_key] = (
-            store_chunk, t, out, slc, lock, region
-        )
+        dsk[store_key] = (store_chunk, t, out, slc, lock, region, keep)
 
     return dsk
 
