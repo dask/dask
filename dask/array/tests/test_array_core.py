@@ -1213,6 +1213,7 @@ def test_store_delayed_target():
     atd = delayed(make_target)('at')
     btd = delayed(make_target)('bt')
 
+    # test not keeping result
     st = store([a, b], [atd, btd])
 
     at = targs['at']
@@ -1221,6 +1222,21 @@ def test_store_delayed_target():
     assert st is None
     assert_eq(at, a)
     assert_eq(bt, b)
+
+    # test keeping result
+    st = store([a, b], [atd, btd], keep=True, compute=False)
+    st = dask.compute(*st)
+
+    at = targs['at']
+    bt = targs['bt']
+
+    assert st is not None
+    assert isinstance(st, tuple)
+    assert all([isinstance(v, np.ndarray) for v in st])
+    assert_eq(at, a)
+    assert_eq(bt, b)
+    assert_eq(st[0], a)
+    assert_eq(st[1], b)
 
     pytest.raises(ValueError, lambda: store([a], [at, bt]))
     pytest.raises(ValueError, lambda: store(at, at))
@@ -1261,6 +1277,29 @@ def test_store_regions():
     assert not (bt == 3).all() and not ( bt == 0 ).all()
     assert not (at == 2).all() and not ( at == 0 ).all()
 
+    # Single region (keep result):
+    at = np.zeros(shape=(8, 4, 6))
+    bt = np.zeros(shape=(8, 4, 6))
+    v = store([a, b], [at, bt], regions=region, compute=False, keep=True)
+    assert isinstance(v, tuple)
+    assert all([isinstance(e, da.Array) for e in v])
+    assert (at == 0).all() and (bt[region] == 0).all()
+
+    ar, br = v
+    assert ar.dtype == a.dtype
+    assert br.dtype == b.dtype
+    assert ar.shape == a.shape
+    assert br.shape == b.shape
+    assert ar.chunks == a.chunks
+    assert br.chunks == b.chunks
+
+    ar, br = da.compute(ar, br)
+    assert (at[region] == 2).all() and (bt[region] == 3).all()
+    assert not (bt == 3).all() and not ( bt == 0 ).all()
+    assert not (at == 2).all() and not ( at == 0 ).all()
+    assert (br == 3).all()
+    assert (ar == 2).all()
+
     # Multiple regions:
     at = np.zeros(shape=(8, 4, 6))
     bt = np.zeros(shape=(8, 4, 6))
@@ -1271,6 +1310,29 @@ def test_store_regions():
     assert (at[region] == 2).all() and (bt[region] == 3).all()
     assert not (bt == 3).all() and not ( bt == 0 ).all()
     assert not (at == 2).all() and not ( at == 0 ).all()
+
+    # Multiple regions (keep result):
+    at = np.zeros(shape=(8, 4, 6))
+    bt = np.zeros(shape=(8, 4, 6))
+    v = store([a, b], [at, bt], regions=[region, region], compute=False, keep=True)
+    assert isinstance(v, tuple)
+    assert all([isinstance(e, da.Array) for e in v])
+    assert (at == 0).all() and (bt[region] == 0).all()
+
+    ar, br = v
+    assert ar.dtype == a.dtype
+    assert br.dtype == b.dtype
+    assert ar.shape == a.shape
+    assert br.shape == b.shape
+    assert ar.chunks == a.chunks
+    assert br.chunks == b.chunks
+
+    ar, br = da.compute(ar, br)
+    assert (at[region] == 2).all() and (bt[region] == 3).all()
+    assert not (bt == 3).all() and not ( bt == 0 ).all()
+    assert not (at == 2).all() and not ( at == 0 ).all()
+    assert (br == 3).all()
+    assert (ar == 2).all()
 
 
 def test_store_compute_false():
@@ -1284,6 +1346,15 @@ def test_store_compute_false():
     assert isinstance(v, Delayed)
     assert (at == 0).all() and (bt == 0).all()
     assert all([ev is None for ev in v.compute()])
+    assert (at == 2).all() and (bt == 3).all()
+
+    at = np.zeros(shape=(4, 4))
+    bt = np.zeros(shape=(4, 4))
+
+    dat, dbt = store([a, b], [at, bt], compute=False, keep=True)
+    assert isinstance(dat, Array) and isinstance(dbt, Array)
+    assert (at == 0).all() and (bt == 0).all()
+    assert (dat.compute() == at).all() and (dbt.compute() == bt).all()
     assert (at == 2).all() and (bt == 3).all()
 
 
