@@ -1379,8 +1379,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             cumlast = map_partitions(_take_last, cumpart, skipna,
                                      meta=pd.Series([]), token=name2)
 
-            name = '{0}{1}'.format(self._token_prefix, token)
-            cname = '{0}{1}-cum-last'.format(self._token_prefix, token)
+            suffix = tokenize(self)
+            name = '{0}{1}-{2}'.format(self._token_prefix, token, suffix)
+            cname = '{0}{1}-cum-last-{2}'.format(self._token_prefix, token,
+                                                 suffix)
 
             # aggregate cumulated partisions and its previous last element
             dask = {}
