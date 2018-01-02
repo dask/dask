@@ -913,6 +913,10 @@ def store(sources, targets, lock=True, regions=None, compute=True, keep=False, *
             store_dlyds.append(Delayed(each_store_key, each_store_dsk_mrg))
 
     if keep:
+        if compute:
+            from ..base import persist
+            store_dlyds = persist(*store_dlyds)
+
         store_dsk = sharedict.merge(*[e.dask for e in store_dlyds])
 
         results = []
