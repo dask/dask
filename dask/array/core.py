@@ -32,7 +32,8 @@ import numpy as np
 from . import chunk
 from .numpy_compat import _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
-from ..base import Base, tokenize, dont_optimize, compute_as_if_collection
+from ..base import (Base, tokenize, dont_optimize, compute_as_if_collection,
+                    persist)
 from ..context import _globals, globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
@@ -936,7 +937,6 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     result = None
     if return_stored:
         if compute:
-            from ..base import persist
             store_dlyds = [Delayed(k, store_dsks_mrg) for k in store_keys]
             store_dlyds = persist(*store_dlyds)
             store_dsks_mrg = sharedict.merge(*[e.dask for e in store_dlyds])
