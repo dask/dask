@@ -2966,7 +2966,11 @@ def elemwise(op, *args, **kwargs):
             # should not occur in current funcs
             msg = 'elemwise with 2 or more DataFrames and Scalar is not supported'
             raise NotImplementedError(msg)
-        meta = _emulate(op, *args, **kwargs)
+        # For broadcastable series, use no rows.
+        parts = [d._meta if _is_broadcastable(d)
+                 else d._meta_nonempty for d in dasks]
+        with raise_on_meta_error(funcname(op)):
+            meta = partial_by_order(*parts, function=op, other=other)
 
     return new_dd_object(dsk, _name, meta, divisions)
 
@@ -3152,9 +3156,9 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
             dsk[(b, j)] = (aggregate, conc)
 
     if meta is no_default:
-        meta_chunk = _emulate(apply, chunk, args, chunk_kwargs)
-        meta = _emulate(apply, aggregate, [_concat([meta_chunk])],
-                        aggregate_kwargs)
+        meta_chunk = _emulate(chunk, *args, **chunk_kwargs)
+        meta = _emulate(aggregate, _concat([meta_chunk]),
+                        **aggregate_kwargs)
     meta = make_meta(meta)
 
     for arg in args:
@@ -3173,15 +3177,8 @@ def _extract_meta(x, nonempty=False):
     """
     Extract internal cache data (``_meta``) from dd.DataFrame / dd.Series
     """
-    if isinstance(x, Scalar):
+    if isinstance(x, (Scalar, _Frame)):
         return x._meta_nonempty if nonempty else x._meta
-    elif isinstance(x, _Frame):
-        if (isinstance(x, Series) and
-                x.npartitions == 1 and
-                x.known_divisions):  # may be broadcastable
-            return x._meta
-        else:
-            return x._meta_nonempty if nonempty else x._meta
     elif isinstance(x, list):
         return [_extract_meta(_x, nonempty) for _x in x]
     elif isinstance(x, tuple):

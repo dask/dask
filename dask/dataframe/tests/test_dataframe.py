@@ -519,6 +519,22 @@ def test_map_partitions_keeps_kwargs_in_dict():
     assert a.x.map_partitions(f, x=5)._name != a.x.map_partitions(f, x=6)._name
 
 
+def test_metadata_inference_single_partition_aligned_args():
+    # https://github.com/dask/dask/issues/3034
+    # Previously broadcastable series functionality broke this
+
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    def check(df, df_x):
+        assert len(df) == len(df_x)
+        assert len(df) > 0
+        return df
+
+    res = dd.map_partitions(check, ddf, ddf.x)
+    assert_eq(res, ddf)
+
+
 def test_drop_duplicates():
     res = d.drop_duplicates()
     res2 = d.drop_duplicates(split_every=2)
