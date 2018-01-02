@@ -940,13 +940,12 @@ def store(sources, targets, lock=True, regions=None, compute=True, keep=False, *
             store_dlyds = persist(*store_dlyds)
             store_dsks_mrg = sharedict.merge(*[e.dask for e in store_dlyds])
 
+        load_dsks_mrg = sharedict.merge(store_dsks_mrg, *load_dsks)
+
         results = []
-        for each_load_name, each_load_dsk in zip(load_names, load_dsks):
+        for each_load_name in load_names:
             results.append(Array(
-                sharedict.merge(
-                    (each_load_name, each_load_dsk),
-                    store_dsks_mrg,
-                ),
+                load_dsks_mrg,
                 each_load_name,
                 src.chunks,
                 src.dtype
