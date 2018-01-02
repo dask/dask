@@ -884,6 +884,13 @@ def store(sources, targets, lock=True, regions=None, compute=True, keep=False, *
         raise ValueError("Different number of sources [%d] and targets [%d] than regions [%d]"
                          % (len(sources), len(targets), len(regions)))
 
+    # Optimize all sources together
+    sources_dsk = sharedict.merge(*[e.__dask_graph__() for e in sources])
+    sources_dsk = Array.__dask_optimize__(
+        sources_dsk,
+        [e.__dask_keys__() for e in sources]
+    )
+
     store_dlyds = []
     if keep:
         load_names = []
@@ -896,6 +903,13 @@ def store(sources, targets, lock=True, regions=None, compute=True, keep=False, *
             tgt = tgt.key
         except AttributeError:
             dsk = {}
+
+        src = Array(
+            sources_dsk,
+            src.name,
+            src.chunks,
+            src.dtype
+        )
 
         each_store_dsk = insert_to_ooc(
             src, tgt, lock=lock, region=reg, keep=keep
