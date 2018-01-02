@@ -17,7 +17,7 @@ downloads the data and converts it to a list on one of our worker machines:
 
 .. code-block:: python
 
-   future = e.submit(download_and_convert_to_list, uri)
+   future = client.submit(download_and_convert_to_list, uri)
 
 But now we need to submit new tasks for individual parts of this data.  We have
 three options.
@@ -58,14 +58,14 @@ on ``data`` remotely and then break up data into its various elements.
 
 .. code-block:: python
 
-   >>> n = e.submit(len, data)                 # compute number of elements
+   >>> n = client.submit(len, data)            # compute number of elements
    >>> n = n.result()                          # gather n (small) locally
 
    >>> from operator import getitem
-   >>> elements = [e.submit(getitem, data, i) for i in range(n)]  # split data
+   >>> elements = [client.submit(getitem, data, i) for i in range(n)]  # split data
 
-   >>> futures = e.map(process_element, elements)
-   >>> analysis = e.submit(aggregate, futures)
+   >>> futures = client.map(process_element, elements)
+   >>> analysis = client.submit(aggregate, futures)
 
 We compute the length remotely, gather back this very small result, and then
 use it to submit more tasks to break up the data and process on the cluster.
@@ -73,6 +73,26 @@ This is more complex because we had to go back and forth a couple of times
 between the cluster and the local process, but the data moved was very small,
 and so this only added a few milliseconds to our total processing time.
 
+Extended Example
+~~~~~~~~~~~~~~~~
+
+Computing the Fibonacci numbers creates involves a recursive function. When the
+function is run, it calls itself using values it computed. We will use this as
+an example throughout this documentation to illustrate different techniques of
+submitting tasks from tasks.
+
+.. code-block:: python
+
+   def fib(n):
+       if n < 2:
+           return n
+       a = fib(n - 1)
+       b = fib(n - 2)
+       return a + b
+
+   print(fib(10))  # prints "55"
+
+We will use this example to show the different interfaces.
 
 Submit tasks from worker
 ------------------------
@@ -84,73 +104,129 @@ We can submit tasks from other tasks.  This allows us to make decisions while
 on worker nodes.
 
 To submit new tasks from a worker that worker must first create a new client
-object that connects to the scheduler.  There is a convenience function to do
-this for you so that you don't have to pass around connection information.
-However you must use this function ``worker_client`` as a context manager to
-ensure proper cleanup on the worker.
+object that connects to the scheduler. There are three options for this:
+
+1. ``dask.delayed`` and ``dask.compute``
+2. ``get_client`` with ``secede`` and ``rejoin``
+3. ``worker_client``
+
+
+dask.delayed
+~~~~~~~~~~~~
+
+The Dask delayed behaves as normal: it submits the functions to the graph,
+optimizes for less bandwidth/computation and gathers the results.  For more
+detail, see `dask.delayed`_.
 
 .. code-block:: python
 
-   from distributed import worker_client
+    from distributed import Client
+    from dask import delayed, compute
 
-   def process_all(data):
-       with worker_client() as e:
-           elements = e.scatter(data)
-           futures = e.map(process_element, elements)
-           analysis = e.submit(aggregate, futures)
-           result = analysis.result()
-       return result
 
-    analysis = e.submit(process_all, data)  # spawns many tasks
+    @delayed
+    def fib(n):
+        if n < 2:
+            return n
+        # We can use dask.delayed and dask.compute to launch
+        # computation from within tasks
+        a = fib(n - 1)  # these calls are delayed
+        b = fib(n - 2)
+        a, b = compute(a, b)  # execute both in parallel
+        return a + b
 
-This approach is somewhat complex but very powerful.  It allows you to spawn
-tasks that themselves act as potentially long-running clients, managing their
-own independent workloads.
+    if __name__ == "__main__":
+        # these features require the dask.distributed scheduler
+        client = Client()
 
-Extended Example
-~~~~~~~~~~~~~~~~
+        result = fib(10).compute()
+        print(result)  # prints "55"
 
-This example computing the Fibonacci numbers creates tasks that submit tasks
-that submit tasks that submit other tasks, etc..
+.. _dask.delayed: https://dask.pydata.org/en/latest/delayed.html
+
+Getting the client on a worker
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The :py:func:`get_client <distributed.get_client>` function provides a normal
+Client object that gives full access to the dask cluster, including the ability
+to submit, scatter, and gather results.
 
 .. code-block:: python
 
-   In [1]: from distributed import Client, worker_client
+    from distributed import Client, get_client, secede, rejoin
 
-   In [2]: client = Client()
+    def fib(n):
+        if n < 2:
+            return n
+        client = get_client()
+        a_future = client.submit(fib, n - 1)
+        b_future = client.submit(fib, n - 2)
+        a, b = client.gather([a_future, b_future])
+        return a + b
 
-   In [3]: def fib(n):
-      ...:     if n < 2:
-      ...:         return n
-      ...:     else:
-      ...:         with worker_client() as c
-      ...:             a = c.submit(fib, n - 1)
-      ...:             b = c.submit(fib, n - 2)
-      ...:             a, b = c.gather([a, b])
-      ...:             return a + b
-      ...:
+    if __name__ == "__main__":
+        client = Client()
+        future = client.submit(fib, 10)
+        result = future.result()
+        print(result)  # prints "55"
 
-   In [4]: future = e.submit(fib, 100)
+However, this can deadlock the scheduler if too many tasks request jobs at
+once. Each task does not communicate to the scheduler that they are waiting on
+results and are free to compute other tasks. This can deadlock the cluster if
+every scheduling slot is running a task and they all request more tasks.
 
-   In [5]: future
-   Out[5]: <Future: status: finished, type: int, key: fib-7890e9f06d5f4e0a8fc7ec5c77590ace>
+To avoid this deadlocking issue we can use :py:func:`secede
+<distributed.secede>` and :py:func:`rejoin <distributed.rejoin>`. These
+functions will remove and rejoin the current task from the cluster
+respectively.
 
-   In [6]: future.result()
-   Out[6]: 354224848179261915075
+.. code-block:: python
 
-This example is a bit extreme and spends most of its time establishing client
-connections from the worker rather than doing actual work, but does demonstrate
-that even pathological cases function robustly.
+    def fib(n):
+        if n < 2:
+            return n
+        client = get_client()
+        a_future = client.submit(fib, n - 1)
+        b_future = client.submit(fib, n - 2)
+        secede()
+        a, b = client.gather([a_future, b_future])
+        rejoin()
+        return a + b
+
+Connection with context manager
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The :py:func:`worker_client <distributed.worker_client>` function performs the
+same task as :py:func:`get_client <distributed.get_client>`, but is implemented
+as a context manager.  Using :py:func:`worker_client
+<distributed.worker_client>` as a context manager ensures proper cleanup on the
+worker.
+
+.. code-block:: python
+
+    from dask.distributed import worker_client
 
 
-Technical details
-~~~~~~~~~~~~~~~~~
+    def fib(n):
+        if n < 2:
+            return n
+         with worker_client() as client:
+             a_future = client.submit(fib, n - 1)
+             b_future = client.submit(fib, n - 2)
+             a, b = client.gather([a_future, b_future])
+         return a + b
 
-Tasks that invoke ``worker_client`` are conservatively assumed to be *long
-running*.  They can take a long time blocking, waiting for other tasks to
-finish, gathering results, etc..  In order to avoid having them take up
-processing slots the following actions occur whenever a task invokes
-``worker_client``.
+    if __name__ == "__main__":
+        client = Client()
+        future = client.submit(fib, 10)
+        result = future.result()
+        print(result)  # prints "55"
+
+Tasks that invoke :py:func:`worker_client <distributed.worker_client>` are
+conservatively assumed to be *long running*.  They can take a long time,
+waiting for other tasks to finish, gathering results, etc. In order to avoid
+having them take up processing slots the following actions occur whenever a
+task invokes :py:func:`worker_client <distributed.worker_client>`.
 
 1.  The thread on the worker running this function *secedes* from the thread
     pool and goes off on its own.  This allows the thread pool to populate that
@@ -160,9 +236,6 @@ processing slots the following actions occur whenever a task invokes
     allowed number of tasks by one.  This likewise lets the scheduler allocate
     more tasks to this worker, not counting this long running task against it.
 
-Because of this behavior you can happily launch long running control tasks that
-manage worker-side clients happily, without fear of deadlocking the cluster.
-
-Establishing a connection to the scheduler takes on the order of 10-20 ms and
-so it is wise for computations that use this feature to be at least a few times
+Establishing a connection to the scheduler takes a few milliseconds and so it
+is wise for computations that use this feature to be at least a few times
 longer in duration than this.
