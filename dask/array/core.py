@@ -815,7 +815,7 @@ def broadcast_chunks(*chunkss):
     return tuple(result)
 
 
-def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
+def store(sources, targets, lock=True, regions=None, compute=True, keep=False, **kwargs):
     """ Store dask arrays in array-like objects, overwrite data in target
 
     This stores dask arrays into object that supports numpy-style setitem
@@ -842,6 +842,8 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
         for the corresponding source and target in sources and targets, respectively.
     compute: boolean, optional
         If true compute immediately, return ``dask.delayed.Delayed`` otherwise
+    keep: boolean, optional
+        Optionally return the stored result (default False).
 
     Examples
     --------
@@ -882,8 +884,10 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
         raise ValueError("Different number of sources [%d] and targets [%d] than regions [%d]"
                          % (len(sources), len(targets), len(regions)))
 
-    updates = {}
-    keys = []
+    store_dlyds = []
+    if keep:
+        load_names = []
+        load_dsks = []
     for tgt, src, reg in zip(targets, sources, regions):
         # if out is a delayed object update dictionary accordingly
         try:
@@ -893,20 +897,51 @@ def store(sources, targets, lock=True, regions=None, compute=True, **kwargs):
         except AttributeError:
             dsk = {}
 
-        update = insert_to_ooc(src, tgt, lock=lock, region=reg)
-        keys.extend(update)
+        each_store_dsk = insert_to_ooc(
+            src, tgt, lock=lock, region=reg, keep=keep
+        )
 
-        update.update(src.dask)
-        update.update(dsk)
-        updates.update(update)
+        if keep:
+            load_names.append('load-store-%s' % src.name)
+            load_dsks.append(retrieve_from_ooc(
+                each_store_dsk.keys(),
+                each_store_dsk
+            ))
 
-    name = 'store-' + tokenize(*keys)
-    dsk = sharedict.merge({name: keys}, updates)
-    result = Delayed(name, dsk)
-    if compute:
-        result.compute()
+        each_store_dsk_mrg = sharedict.merge(each_store_dsk, dsk, src.dask)
+        for each_store_key in each_store_dsk:
+            store_dlyds.append(Delayed(each_store_key, each_store_dsk_mrg))
+
+    if keep:
+        store_dsk = sharedict.merge(*[e.dask for e in store_dlyds])
+
+        results = []
+        for each_load_name, each_load_dsk in zip(load_names, load_dsks):
+            results.append(Array(
+                sharedict.merge(
+                    (each_load_name, each_load_dsk),
+                    store_dsk,
+                ),
+                each_load_name,
+                src.chunks,
+                src.dtype
+            ))
+        results = tuple(results)
+
+        return results
     else:
-        return result
+        keys = [e.key for e in store_dlyds]
+        name = 'store-' + tokenize(*keys)
+        dsk = sharedict.merge(
+            *[e.dask for e in store_dlyds]
+        )
+        dsk.update({name: keys})
+        result = Delayed(name, dsk)
+
+        if compute:
+            result.compute()
+        else:
+            return result
 
 
 def blockdims_from_blockshape(shape, chunks):
