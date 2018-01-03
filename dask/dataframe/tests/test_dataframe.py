@@ -1378,44 +1378,61 @@ def test_datetime_accessor():
 
 def test_str_accessor():
     df = pd.DataFrame({'x': ['abc', 'bcd', 'cdef', 'DEFG'], 'y': [1, 2, 3, 4]},
-                      index=['e', 'f', 'g', 'H'])
+                      index=['E', 'f', 'g', 'h'])
 
-    a = dd.from_pandas(df, 2, sort=False)
+    ddf = dd.from_pandas(df, 2)
 
     # Check that str not in dir/hasattr for non-object columns
-    assert 'str' not in dir(a.y)
-    assert not hasattr(a.y, 'str')
+    assert 'str' not in dir(ddf.y)
+    assert not hasattr(ddf.y, 'str')
 
     # not implemented methods don't show up
-    assert 'get_dummies' not in dir(a.x.str)
-    assert not hasattr(a.x.str, 'get_dummies')
+    assert 'get_dummies' not in dir(ddf.x.str)
+    assert not hasattr(ddf.x.str, 'get_dummies')
 
-    assert 'upper' in dir(a.x.str)
-    assert_eq(a.x.str.upper(), df.x.str.upper())
-    assert set(a.x.str.upper().dask) == set(a.x.str.upper().dask)
+    assert 'upper' in dir(ddf.x.str)
+    assert_eq(ddf.x.str.upper(), df.x.str.upper())
+    assert set(ddf.x.str.upper().dask) == set(ddf.x.str.upper().dask)
 
-    assert 'upper' in dir(a.index.str)
-    assert_eq(a.index.str.upper(), df.index.str.upper())
-    assert set(a.index.str.upper().dask) == set(a.index.str.upper().dask)
+    assert 'upper' in dir(ddf.index.str)
+    assert_eq(ddf.index.str.upper(), df.index.str.upper())
+    assert set(ddf.index.str.upper().dask) == set(ddf.index.str.upper().dask)
 
     # make sure to pass thru args & kwargs
-    assert 'contains' in dir(a.x.str)
-    assert_eq(a.x.str.contains('a'), df.x.str.contains('a'))
-    assert set(a.x.str.contains('a').dask) == set(a.x.str.contains('a').dask)
+    assert 'contains' in dir(ddf.x.str)
+    assert_eq(ddf.x.str.contains('a'), df.x.str.contains('a'))
+    assert set(ddf.x.str.contains('a').dask) == set(ddf.x.str.contains('a').dask)
 
-    assert_eq(a.x.str.contains('d', case=False), df.x.str.contains('d', case=False))
-    assert set(a.x.str.contains('d', case=False).dask) == set(a.x.str.contains('d', case=False).dask)
+    assert_eq(ddf.x.str.contains('d', case=False), df.x.str.contains('d', case=False))
+    assert (set(ddf.x.str.contains('d', case=False).dask) ==
+            set(ddf.x.str.contains('d', case=False).dask))
 
     for na in [True, False]:
-        assert_eq(a.x.str.contains('a', na=na), df.x.str.contains('a', na=na))
-        assert set(a.x.str.contains('a', na=na).dask) == set(a.x.str.contains('a', na=na).dask)
+        assert_eq(ddf.x.str.contains('a', na=na), df.x.str.contains('a', na=na))
+        assert (set(ddf.x.str.contains('a', na=na).dask) ==
+                set(ddf.x.str.contains('a', na=na).dask))
 
     for regex in [True, False]:
-        assert_eq(a.x.str.contains('a', regex=regex), df.x.str.contains('a', regex=regex))
-        assert set(a.x.str.contains('a', regex=regex).dask) == set(a.x.str.contains('a', regex=regex).dask)
+        assert_eq(ddf.x.str.contains('a', regex=regex), df.x.str.contains('a', regex=regex))
+        assert (set(ddf.x.str.contains('a', regex=regex).dask) ==
+                set(ddf.x.str.contains('a', regex=regex).dask))
 
-    assert_eq(df.x.str[:2], df.x.str[:2])
-    assert_eq(a.x.str[1], a.x.str[1])
+    assert_eq(ddf.x.str[:2], df.x.str[:2])
+    assert_eq(ddf.x.str[1], df.x.str[1])
+
+    # str.cat
+    sol = df.x.str.cat(df.x.str.upper(), sep=':')
+    assert_eq(ddf.x.str.cat(ddf.x.str.upper(), sep=':'), sol)
+    assert_eq(ddf.x.str.cat(df.x.str.upper(), sep=':'), sol)
+    assert_eq(ddf.x.str.cat([ddf.x.str.upper(), df.x.str.lower()], sep=':'),
+              df.x.str.cat([df.x.str.upper(), df.x.str.lower()], sep=':'))
+
+    for o in ['foo', ['foo']]:
+        with pytest.raises(TypeError):
+            ddf.x.str.cat(o)
+
+    with pytest.raises(NotImplementedError):
+        ddf.x.str.cat(sep=':')
 
 
 def test_empty_max():
