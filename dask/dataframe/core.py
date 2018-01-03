@@ -1360,28 +1360,28 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         return new_dd_object(dsk, name, num._meta, divisions=[None, None])
 
-    def _cum_agg(self, token, chunk, aggregate, axis, skipna=True,
+    def _cum_agg(self, op_name, chunk, aggregate, axis, skipna=True,
                  chunk_kwargs=None):
         """ Wrapper for cumulative operation """
 
         axis = self._validate_axis(axis)
 
         if axis == 1:
-            name = '{0}{1}(axis=1)'.format(self._token_prefix, token)
+            name = '{0}{1}(axis=1)'.format(self._token_prefix, op_name)
             return self.map_partitions(chunk, token=name, **chunk_kwargs)
         else:
             # cumulate each partitions
-            name1 = '{0}{1}-map'.format(self._token_prefix, token)
+            name1 = '{0}{1}-map'.format(self._token_prefix, op_name)
             cumpart = map_partitions(chunk, self, token=name1, meta=self,
                                      **chunk_kwargs)
 
-            name2 = '{0}{1}-take-last'.format(self._token_prefix, token)
+            name2 = '{0}{1}-take-last'.format(self._token_prefix, op_name)
             cumlast = map_partitions(_take_last, cumpart, skipna,
                                      meta=pd.Series([]), token=name2)
 
             suffix = tokenize(self)
-            name = '{0}{1}-{2}'.format(self._token_prefix, token, suffix)
-            cname = '{0}{1}-cum-last-{2}'.format(self._token_prefix, token,
+            name = '{0}{1}-{2}'.format(self._token_prefix, op_name, suffix)
+            cname = '{0}{1}-cum-last-{2}'.format(self._token_prefix, op_name,
                                                  suffix)
 
             # aggregate cumulated partisions and its previous last element
