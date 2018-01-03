@@ -1741,7 +1741,6 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                           name=key_split(self._name),
                                           task=len(self.dask))
 
-    @derived_from(pd.Series)
     def rename(self, index=None, inplace=False, sorted_index=False):
         """Alter Series index labels or name
 
@@ -1753,22 +1752,25 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         Parameters
         ----------
-        index : scalar, hashable sequence, dict-like or function, optional
-            dict-like or functions are transformations to apply to
-            the index.
-            Scalar or hashable sequence-like will alter the ``Series.name``
-            attribute.
+        index : scalar, hashable sequence, dict-like or callable, optional
+            If dict-like or callable, the transformation is applied to the
+            index. Scalar or hashable sequence-like will alter the
+            ``Series.name`` attribute.
         inplace : boolean, default False
-            Whether to return a new %(klass)s. If True then value of copy is
-            ignored.
+            Whether to return a new Series or modify this one inplace.
         sorted_index : bool, default False
-            In the case of a dict-like or function - if the input series has
-            known divisions, and the transformed index remains sorted, new
-            divisions will be inferred based on the transformation.
+            If true, the output ``Series`` will have known divisions inferred
+            from the input series and the transformation. Ignored for
+            non-callable/dict-like ``index`` or when the input series has
+            unknown divisions. Note that this may only be set to ``True`` if
+            you know that the transformed index is monotonicly increasing. Dask
+            will check that transformed divisions are monotonic, but cannot
+            check all the values between divisions, so incorrectly setting this
+            can result in bugs.
 
         Returns
         -------
-        renamed : Series (new object)
+        renamed : Series
 
         See Also
         --------
@@ -1785,7 +1787,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                     old = pd.Series(range(self.npartitions + 1),
                                     index=self.divisions)
                     new = old.rename(index).index
-                    if not new.is_monotonic:
+                    if not new.is_monotonic_increasing:
                         msg = ("sorted_index=True, but the transformed index "
                                "isn't monotonic_increasing")
                         raise ValueError(msg)
