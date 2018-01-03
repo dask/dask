@@ -1743,6 +1743,67 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                           name=key_split(self._name),
                                           task=len(self.dask))
 
+    def rename(self, index=None, inplace=False, sorted_index=False):
+        """Alter Series index labels or name
+
+        Function / dict values must be unique (1-to-1). Labels not contained in
+        a dict / Series will be left as-is. Extra labels listed don't throw an
+        error.
+
+        Alternatively, change ``Series.name`` with a scalar value.
+
+        Parameters
+        ----------
+        index : scalar, hashable sequence, dict-like or callable, optional
+            If dict-like or callable, the transformation is applied to the
+            index. Scalar or hashable sequence-like will alter the
+            ``Series.name`` attribute.
+        inplace : boolean, default False
+            Whether to return a new Series or modify this one inplace.
+        sorted_index : bool, default False
+            If true, the output ``Series`` will have known divisions inferred
+            from the input series and the transformation. Ignored for
+            non-callable/dict-like ``index`` or when the input series has
+            unknown divisions. Note that this may only be set to ``True`` if
+            you know that the transformed index is monotonicly increasing. Dask
+            will check that transformed divisions are monotonic, but cannot
+            check all the values between divisions, so incorrectly setting this
+            can result in bugs.
+
+        Returns
+        -------
+        renamed : Series
+
+        See Also
+        --------
+        pandas.Series.rename
+        """
+        from pandas.api.types import is_scalar, is_list_like, is_dict_like
+        if is_scalar(index) or (is_list_like(index) and not is_dict_like(index)):
+            res = self if inplace else self.copy()
+            res.name = index
+        else:
+            res = self.map_partitions(M.rename, index)
+            if self.known_divisions:
+                if sorted_index and (callable(index) or is_dict_like(index)):
+                    old = pd.Series(range(self.npartitions + 1),
+                                    index=self.divisions)
+                    new = old.rename(index).index
+                    if not new.is_monotonic_increasing:
+                        msg = ("sorted_index=True, but the transformed index "
+                               "isn't monotonic_increasing")
+                        raise ValueError(msg)
+                    res.divisions = tuple(new.tolist())
+                else:
+                    res = res.clear_divisions()
+            if inplace:
+                self.dask = res.dask
+                self._name = res._name
+                self.divisions = res.divisions
+                self._meta = res._meta
+                res = self
+        return res
+
     @derived_from(pd.Series)
     def round(self, decimals=0):
         return elemwise(M.round, self, decimals)

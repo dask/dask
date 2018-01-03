@@ -231,6 +231,52 @@ def test_rename_series():
     assert_eq(dind, ind)
 
 
+def test_rename_series_method():
+    # Series name
+    s = pd.Series([1, 2, 3, 4, 5, 6, 7], name='x')
+    ds = dd.from_pandas(s, 2)
+
+    assert_eq(ds.rename('y'), s.rename('y'))
+    assert ds.name == 'x'  # no mutation
+    assert_eq(ds.rename(), s.rename())
+
+    ds.rename('z', inplace=True)
+    s.rename('z', inplace=True)
+    assert ds.name == 'z'
+    assert_eq(ds, s)
+
+    # Series index
+    s = pd.Series(['a', 'b', 'c', 'd', 'e', 'f', 'g'], name='x')
+    ds = dd.from_pandas(s, 2)
+
+    for is_sorted in [True, False]:
+        res = ds.rename(lambda x: x ** 2, sorted_index=is_sorted)
+        assert_eq(res, s.rename(lambda x: x ** 2))
+        assert res.known_divisions == is_sorted
+
+        res = ds.rename(s, sorted_index=is_sorted)
+        assert_eq(res, s.rename(s))
+        assert res.known_divisions == is_sorted
+
+    with pytest.raises(ValueError):
+        ds.rename(lambda x: -x, sorted_index=True)
+    assert_eq(ds.rename(lambda x: -x), s.rename(lambda x: -x))
+
+    res = ds.rename(ds)
+    assert_eq(res, s.rename(s))
+    assert not res.known_divisions
+
+    ds2 = ds.clear_divisions()
+    res = ds2.rename(lambda x: x**2, sorted_index=True)
+    assert_eq(res, s.rename(lambda x: x**2))
+    assert not res.known_divisions
+
+    res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
+    assert res is ds
+    s.rename(lambda x: x**2, inplace=True)
+    assert_eq(ds, s)
+
+
 def test_describe():
     # prepare test case which approx quantiles will be the same as actuals
     s = pd.Series(list(range(20)) * 4)
