@@ -26,6 +26,7 @@ bounds indexes (:pr:`2967`) `Stephan Hoyer`_
 DataFrame
 +++++++++
 
+- Fixed naming bug in cumulative aggregations (:issue:`3037`) `Martijn Arts`_
 - Fixed ``dd.read_csv`` when ``names`` is given but ``header`` is not set to ``None`` (:issue:`2976`) `Martijn Arts`_
 - Fixed ``dd.read_csv`` so that passing instances of ``CategoricalDtype`` in ``dtype`` will result in known categoricals (:pr:`2997`) `Tom Augspurger`_
 - Prevent ``bool()`` coercion from calling compute (:pr:`2958`) `Albert DeFusco`_

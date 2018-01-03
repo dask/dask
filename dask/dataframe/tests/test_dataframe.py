@@ -2856,3 +2856,18 @@ def test_bool():
     for cond in conditions:
         with pytest.raises(ValueError):
             bool(cond)
+
+
+def test_cumulative_multiple_columns():
+    # GH 3037
+    df = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
+    ddf = dd.from_pandas(df, 5)
+
+    for d in [ddf, df]:
+        for c in df.columns:
+            d[c + 'cs'] = d[c].cumsum()
+            d[c + 'cmin'] = d[c].cummin()
+            d[c + 'cmax'] = d[c].cummax()
+            d[c + 'cp'] = d[c].cumprod()
+
+    assert_eq(ddf, df)
