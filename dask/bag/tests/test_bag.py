@@ -872,7 +872,9 @@ def test_to_textfiles_inputs():
         B.to_textfiles(dirname)
         assert os.path.exists(dirname)
         assert os.path.exists(os.path.join(dirname, '0.part'))
-    pytest.raises(ValueError, lambda: B.to_textfiles(5))
+
+    with pytest.raises(TypeError):
+        B.to_textfiles(5)
 
 
 def test_to_textfiles_endlines():

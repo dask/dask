@@ -14,8 +14,7 @@ from dask.utils import filetexts
 from dask.bytes import compression
 from dask.bytes.local import LocalFileSystem
 from dask.bytes.core import (open_text_files, write_bytes, read_bytes,
-                             open_files, OpenFileCreator, FileSystem,
-                             get_pyarrow_filesystem)
+                             open_files, FileSystem, get_pyarrow_filesystem)
 
 compute = partial(compute, get=get)
 
@@ -300,7 +299,9 @@ def test_simple_write(tmpdir):
     files = os.listdir(tmpdir)
     assert len(files) == 2
     assert '0.part' in files
-    d = open(os.path.join(tmpdir, files[0]), 'rb').read()
+
+    with open(os.path.join(tmpdir, files[0]), 'rb') as f:
+        d = f.read()
     assert d == b'000'
 
 
@@ -329,24 +330,18 @@ def test_open_files_write(tmpdir):
 
 
 def test_pickability_of_lazy_files(tmpdir):
+    tmpdir = str(tmpdir)
     cloudpickle = pytest.importorskip('cloudpickle')
-    fn = os.path.join(str(tmpdir), 'foo')
-    with open(fn, 'wb') as f:
-        f.write(b'1')
 
-    opener = OpenFileCreator('file://foo.py', open=open)
-    opener2 = cloudpickle.loads(cloudpickle.dumps(opener))
-    assert type(opener2.fs) == type(opener.fs)
+    with filetexts(files, mode='b'):
+        myfiles = open_files('.test.accounts.*')
+        myfiles2 = cloudpickle.loads(cloudpickle.dumps(myfiles))
 
-    lazy_file = opener(fn, mode='rt')
-    lazy_file2 = cloudpickle.loads(cloudpickle.dumps(lazy_file))
-    assert lazy_file.path == lazy_file2.path
-
-    with lazy_file as f:
-        pass
-
-    lazy_file3 = cloudpickle.loads(cloudpickle.dumps(lazy_file))
-    assert lazy_file.path == lazy_file3.path
+        for f, f2 in zip(myfiles, myfiles2):
+            assert f.path == f2.path
+            assert type(f.fs) == type(f2.fs)
+            with f as f_open, f2 as f2_open:
+                assert f_open.read() == f2_open.read()
 
 
 def test_py2_local_bytes(tmpdir):
@@ -354,11 +349,9 @@ def test_py2_local_bytes(tmpdir):
     with gzip.open(fn, mode='wb') as f:
         f.write(b'hello\nworld')
 
-    ofc = OpenFileCreator(fn, text=True, open=open, mode='rt',
-                          compression='gzip', encoding='utf-8')
-    lazy_file = ofc(fn)
+    files = open_files(fn, compression='gzip', mode='rt')
 
-    with lazy_file as f:
+    with files[0] as f:
         assert all(isinstance(line, unicode) for line in f)
 
 
@@ -375,7 +368,9 @@ def test_abs_paths(tmpdir):
 
     fs = LocalFileSystem()
     os.chdir(here)
-    assert fs.open('tmp', 'r').read() == 'hi'
+    with fs.open('tmp', 'r') as f:
+        res = f.read()
+    assert res == 'hi'
 
 
 class UnknownFileSystem(FileSystem):

@@ -105,8 +105,11 @@ def test_infer_storage_options():
     assert so.pop('username') == 'User-name'
     assert so.pop('host') == 'Node-name.com'
 
-    assert infer_storage_options('s3://Bucket-name.com/test.csv')['host'] == 'Bucket-name.com'
     assert infer_storage_options('http://127.0.0.1:8080/test.csv')['host'] == '127.0.0.1'
+
+    for protocol in ['s3', 'gcs', 'gs']:
+        options = infer_storage_options('%s://Bucket-name.com/test.csv' % protocol)
+        assert options['path'] == 'Bucket-name.com/test.csv'
 
     with pytest.raises(KeyError):
         infer_storage_options('file:///bucket/file.csv', {'path': 'collide'})
