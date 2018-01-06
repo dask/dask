@@ -7,6 +7,7 @@ from sys import exit
 
 import click
 from distributed import Nanny, Worker
+from distributed.config import config
 from distributed.utils import get_ip_interface
 from distributed.worker import _ncores
 from distributed.security import Security
@@ -191,7 +192,7 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
             kwargs['service_ports'] = {'nanny': nanny_port}
         t = Worker
 
-    if not scheduler and not scheduler_file:
+    if not scheduler and not scheduler_file and 'scheduler-address' not in config:
         raise ValueError("Need to provide scheduler address like\n"
                          "dask-worker SCHEDULER_ADDRESS:8786")
 

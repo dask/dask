@@ -47,6 +47,8 @@ class Nanny(ServerNode):
         if scheduler_file:
             cfg = json_load_robust(scheduler_file)
             self.scheduler_addr = cfg['address']
+        elif scheduler_ip is None and config.get('scheduler-address'):
+            self.scheduler_addr = config['scheduler-address']
         elif scheduler_port is None:
             self.scheduler_addr = coerce_to_address(scheduler_ip)
         else:

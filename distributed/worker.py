@@ -90,6 +90,8 @@ class WorkerBase(ServerNode):
         if scheduler_file:
             cfg = json_load_robust(scheduler_file)
             scheduler_addr = cfg['address']
+        elif scheduler_ip is None and config.get('scheduler-address'):
+            scheduler_addr = config['scheduler-address']
         elif scheduler_port is None:
             scheduler_addr = coerce_to_address(scheduler_ip)
         else:

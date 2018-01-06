@@ -21,6 +21,7 @@ from tornado.ioloop import TimeoutError
 from distributed import (Nanny, Client, get_client, wait, default_client,
         get_worker, Reschedule)
 from distributed.compatibility import WINDOWS
+from distributed.config import config
 from distributed.core import rpc
 from distributed.client import wait
 from distributed.scheduler import Scheduler
@@ -1091,3 +1092,15 @@ def test_get_worker_name(loop):
         worker_kwargs={'memory_limit': '2e3 MB'})
 def test_parse_memory_limit(s, w):
     assert w.memory_limit == 2e9
+
+
+@gen_cluster(ncores=[], client=True)
+def test_scheduler_address_config(c, s):
+    config['scheduler-address'] = s.address
+    try:
+        worker = Worker(loop=s.loop)
+        yield worker._start()
+        assert worker.scheduler.address == s.address
+    finally:
+        del config['scheduler-address']
+    yield worker._close()
