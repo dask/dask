@@ -40,6 +40,8 @@ class LocalCluster(object):
         IP address on which the scheduler will listen, defaults to only localhost
     kwargs: dict
         Extra worker arguments, will be passed to the Worker constructor.
+    service_kwargs: Dict[str, Dict]
+        Extra keywords to hand to the running services
 
     Examples
     --------
@@ -54,12 +56,14 @@ class LocalCluster(object):
 
     Shut down the extra worker
     >>> c.remove_worker(w)  # doctest: +SKIP
-    """
 
+    Pass extra keyword arguments to Bokeh
+    >>> LocalCluster(service_kwargs={'bokeh': {'prefix': '/foo'}})  # doctest: +SKIP
+    """
     def __init__(self, n_workers=None, threads_per_worker=None, processes=True,
                  loop=None, start=True, ip=None, scheduler_port=0,
                  silence_logs=logging.CRITICAL, diagnostics_port=8787,
-                 services={}, worker_services={}, **worker_kwargs):
+                 services={}, worker_services={}, service_kwargs=None, **worker_kwargs):
         self.status = None
         self.processes = processes
         self.silence_logs = silence_logs
@@ -90,7 +94,7 @@ class LocalCluster(object):
             except ImportError:
                 logger.debug("To start diagnostics web server please install Bokeh")
             else:
-                services[('bokeh', diagnostics_port)] = BokehScheduler
+                services[('bokeh', diagnostics_port)] = (BokehScheduler, (service_kwargs or {}).get('bokeh', {}))
                 worker_services[('bokeh', 0)] = BokehWorker
 
         self.scheduler = Scheduler(loop=self.loop,

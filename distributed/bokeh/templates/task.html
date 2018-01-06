@@ -16,7 +16,7 @@
           </tr>
           <tr>
               <th> call stack </th>
-              <td><a class="button is-primary" href="/info/call-stack/{{ url_escape(Task) }}.html">Call Stack</a></td>
+              <td><a class="button is-primary" href="{{prefix}}/info/call-stack/{{ url_escape(Task) }}.html">Call Stack</a></td>
           </tr>
           {% end %}
           {% if ts.nbytes %}
@@ -29,7 +29,7 @@
           {% for dts in ts.waiting_on %}
           <tr>
               <td> waiting on </td>
-              <td><a href="/info/task/{{ url_escape(dts.key) }}.html">{{dts.key}}</a> </td>
+              <td><a href="{{prefix}}/info/task/{{ url_escape(dts.key) }}.html">{{dts.key}}</a> </td>
           </tr>
           {% end %}
           {% end %}
@@ -45,7 +45,7 @@
           </thead>
           {% for dts in ts.dependencies %}
           <tr>
-            <td> <a href="/info/task/{{ url_escape(dts.key) }}.html">{{dts.key}}</a> </td>
+            <td> <a href="{{prefix}}/info/task/{{ url_escape(dts.key) }}.html">{{dts.key}}</a> </td>
             <td> {{ dts.state }} </td>
           </tr>
           {% end %}
@@ -61,7 +61,7 @@
           </thead>
           {% for dts in ts.dependents %}
           <tr>
-            <td> <a href="/info/task/{{ url_escape(dts.key) }}.html">{{dts.key}}</a> </td>
+            <td> <a href="{{prefix}}/info/task/{{ url_escape(dts.key) }}.html">{{dts.key}}</a> </td>
             <td> {{ dts.state }} </td>
           </tr>
           {% end %}
@@ -84,7 +84,7 @@
         <div class="content">
           <ul>
             {% for cs in ts.who_wants %}
-            <li> <a href="/info/client/{{ url_escape(cs.client_key) }}.html">{{cs.client_key}}</a></li>
+            <li> <a href="{{prefix}}/info/client/{{ url_escape(cs.client_key) }}.html">{{cs.client_key}}</a></li>
             {% end %}
           </ul>
         </div>
@@ -107,7 +107,7 @@
               {% for key, start, finish, recommendations, time in server.story(Task) %}
               <tr>
                   <td> {{ fromtimestamp(time) }} </td>
-                  <td> <a href="/info/task/{{ url_escape(key) }}.html">{{key}}</a> </td>
+                  <td> <a href="{{prefix}}/info/task/{{ url_escape(key) }}.html">{{key}}</a> </td>
                   <td> {{ start }} </td>
                   <td> {{ finish }} </td>
                   <td> </td>
@@ -119,7 +119,7 @@
                   <td> </td>
                   <td> </td>
                   <td> </td>
-                  <td> <a href="/info/task/{{ url_escape(key2) }}.html">{{key2}}</a> </td>
+                  <td> <a href="{{prefix}}/info/task/{{ url_escape(key2) }}.html">{{key2}}</a> </td>
                   <td> {{ rec }} </td>
               </tr>
                 {% end %}

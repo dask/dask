@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 import atexit
-from functools import partial
 import logging
 import os
 import shutil
@@ -61,10 +60,10 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help="Directory to place scheduler files")
 @click.option('--preload', type=str, multiple=True,
               help='Module that should be loaded by each worker process like "foo.bar" or "/path/to/foo.py"')
-def main(host, port, bokeh_port, show, _bokeh,
-         bokeh_whitelist, bokeh_prefix, use_xheaders, pid_file, scheduler_file,
-         interface, local_directory, preload, tls_ca_file, tls_cert,
-         tls_key):
+def main(host, port, bokeh_port, show, _bokeh, bokeh_whitelist, bokeh_prefix,
+         use_xheaders, pid_file, scheduler_file, interface,
+         local_directory, preload, tls_ca_file, tls_cert, tls_key):
+
     enable_proctitle_on_current()
     enable_proctitle_on_children()
 
@@ -114,8 +113,8 @@ def main(host, port, bokeh_port, show, _bokeh,
     if _bokeh:
         with ignoring(ImportError):
             from distributed.bokeh.scheduler import BokehScheduler
-            services[('bokeh', bokeh_port)] = partial(BokehScheduler,
-                                                      prefix=bokeh_prefix)
+            services[('bokeh', bokeh_port)] = (BokehScheduler,
+                                               {'prefix': bokeh_prefix})
     scheduler = Scheduler(loop=loop, services=services,
                           scheduler_file=scheduler_file,
                           security=sec)

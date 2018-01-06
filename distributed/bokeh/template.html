@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
+      <meta charset="utf-8"></meta>
     <title>Dask - Status dashboard</title>
     {{ bokeh_css }}
     {{ bokeh_js }}
@@ -101,11 +101,11 @@
   <body>
     <div class="navbar">
       <ul>
-          <li><a href="http://dask.pydata.org/en/latest/" style="padding:0px 0px;"><img src="https://dask.readthedocs.io/en/latest/_images/dask_horizontal.svg"></a></li>
+          <li><a href="http://dask.pydata.org/en/latest/" style="padding:0px 0px;"><img src="https://dask.readthedocs.io/en/latest/_images/dask_horizontal.svg"></img></a></li>
           {% for page in pages %}
           <li{% if page == active_page %} class="active"{% endif %}><a href="{{ prefix }}/{{ page }}">{{ page|title }}</a></li>
           {% endfor %}
-          <li><a href="/info/workers.html">Info</a></li>
+          <li><a href="{{ prefix }}/info/workers.html">Info</a></li>
       </ul>
     </div>
     <div class="dashboard">

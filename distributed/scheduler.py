@@ -972,11 +972,16 @@ class Scheduler(ServerNode):
             else:
                 port = 0
 
+            if isinstance(v, tuple):
+                v, kwargs = v
+            else:
+                kwargs = {}
+
             if listen_ip == '0.0.0.0':
                 listen_ip = ''  # for IPv6
 
             try:
-                service = v(self, io_loop=self.loop)
+                service = v(self, io_loop=self.loop, **kwargs)
                 service.listen((listen_ip, port))
                 self.services[k] = service
             except Exception as e:

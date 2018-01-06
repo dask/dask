@@ -19,7 +19,7 @@ from bokeh.models.widgets import DataTable, TableColumn
 from bokeh.plotting import figure
 from bokeh.palettes import Viridis11
 from bokeh.io import curdoc
-from toolz import pipe
+from toolz import pipe, merge
 try:
     import numpy as np
 except ImportError:
@@ -982,24 +982,23 @@ def profile_doc(scheduler, extra, doc):
 class BokehScheduler(BokehServer):
     def __init__(self, scheduler, io_loop=None, prefix='', **kwargs):
         self.scheduler = scheduler
-        self.server_kwargs = kwargs
-        self.server_kwargs['prefix'] = prefix or None
         prefix = prefix or ''
         prefix = prefix.rstrip('/')
         if prefix and not prefix.startswith('/'):
             prefix = '/' + prefix
+        self.prefix = prefix
 
-        extra = {'prefix': prefix}
-        extra.update(template_variables)
+        self.server_kwargs = kwargs
+        self.server_kwargs['prefix'] = prefix or None
 
-        systemmonitor = Application(FunctionHandler(partial(systemmonitor_doc, scheduler, extra)))
-        workers = Application(FunctionHandler(partial(workers_doc, scheduler, extra)))
-        stealing = Application(FunctionHandler(partial(stealing_doc, scheduler, extra)))
-        counters = Application(FunctionHandler(partial(counters_doc, scheduler, extra)))
-        events = Application(FunctionHandler(partial(events_doc, scheduler, extra)))
-        tasks = Application(FunctionHandler(partial(tasks_doc, scheduler, extra)))
-        status = Application(FunctionHandler(partial(status_doc, scheduler, extra)))
-        profile = Application(FunctionHandler(partial(profile_doc, scheduler, extra)))
+        systemmonitor = Application(FunctionHandler(partial(systemmonitor_doc, scheduler, self.extra)))
+        workers = Application(FunctionHandler(partial(workers_doc, scheduler, self.extra)))
+        stealing = Application(FunctionHandler(partial(stealing_doc, scheduler, self.extra)))
+        counters = Application(FunctionHandler(partial(counters_doc, scheduler, self.extra)))
+        events = Application(FunctionHandler(partial(events_doc, scheduler, self.extra)))
+        tasks = Application(FunctionHandler(partial(tasks_doc, scheduler, self.extra)))
+        status = Application(FunctionHandler(partial(status_doc, scheduler, self.extra)))
+        profile = Application(FunctionHandler(partial(profile_doc, scheduler, self.extra)))
 
         self.apps = {
             '/system': systemmonitor,
@@ -1016,11 +1015,17 @@ class BokehScheduler(BokehServer):
         self.server = None
 
     @property
+    def extra(self):
+        return merge({'prefix': self.prefix}, template_variables)
+
+    @property
     def my_server(self):
         return self.scheduler
 
     def listen(self, *args, **kwargs):
         super(BokehScheduler, self).listen(*args, **kwargs)
 
-        from .scheduler_html import get_handlers
-        self.server._tornado.add_handlers(r'.*', get_handlers(self.my_server))
+        from .scheduler_html import routes
+        handlers = [(self.prefix + '/' + url, cls, {'server': self.my_server, 'extra': self.extra})
+                    for url, cls in routes]
+        self.server._tornado.add_handlers(r'.*', handlers)
