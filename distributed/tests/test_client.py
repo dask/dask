@@ -270,6 +270,15 @@ def test_persist_retries(c, s, a, b):
 
 
 @gen_cluster(client=True)
+def test_retries_dask_array(c, s, a, b):
+    da = pytest.importorskip('dask.array')
+    x = da.ones((10, 10), chunks=(3, 3))
+    future = c.compute(x.sum(), retries=2)
+    y = yield future
+    assert y == 100
+
+
+@gen_cluster(client=True)
 def test_future_repr(c, s, a, b):
     x = c.submit(inc, 10)
     for func in [repr, lambda x: x._repr_html_()]:

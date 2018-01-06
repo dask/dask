@@ -3045,15 +3045,16 @@ class Client(Node):
         to a {task key: Integral} dictionary.
         """
         if retries and isinstance(retries, dict):
-            return {name: value
-                    for key, value in retries.items()
-                    for name in cls._expand_key(key)}
+            result = {name: value
+                      for key, value in retries.items()
+                      for name in cls._expand_key(key)}
         elif isinstance(retries, Integral):
             # Each task unit may potentially fail, allow retrying all of them
-            return {name: retries for name in all_keys}
+            result = {name: retries for name in all_keys}
         else:
             raise TypeError("`retries` should be an integer or dict, got %r"
                             % (type(retries,)))
+        return keymap(tokey, result)
 
     def _expand_resources(cls, resources, all_keys):
         """
