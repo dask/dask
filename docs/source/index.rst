@@ -135,7 +135,7 @@ Index
 * :doc:`setup`
 * :doc:`use-cases`
 * :doc:`examples-tutorials`
-* :doc:`cheatsheet`
+* :doc:`support`
 
 .. toctree::
    :maxdepth: 1
@@ -146,7 +146,7 @@ Index
    setup.rst
    use-cases.rst
    examples-tutorials.rst
-   cheatsheet.rst
+   support.rst
 
 **Collections**
 
@@ -235,8 +235,8 @@ often a better choice.  If you are a *core developer*, then you should start her
 **Help & reference**
 
 * :doc:`debugging`
-* :doc:`support`
 * :doc:`changelog`
+* :doc:`cheatsheet`
 * :doc:`presentations`
 * :doc:`develop`
 * :doc:`faq`
@@ -253,8 +253,8 @@ often a better choice.  If you are a *core developer*, then you should start her
    :caption: Help & reference
 
    debugging.rst
-   support.rst
    changelog.rst
+   cheatsheet.rst
    presentations.rst
    develop.rst
    faq.rst
