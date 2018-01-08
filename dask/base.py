@@ -112,7 +112,7 @@ class DaskMethodsMixin(object):
         """Compute this dask collection
 
         This turns a lazy Dask collection into its in-memory equivalent.
-        For example a Dask.array turns into a NumPy array and a Dask.dataframe
+        For example a Dask.array turns into a  :function:`numpy.array` and a Dask.dataframe
         turns into a Pandas dataframe.  The entire dataset must fit into memory
         before calling this operation.
 
@@ -398,8 +398,8 @@ def persist(*args, **kwargs):
 
     For example a lazy dask.array built up from many lazy calls will now be a
     dask.array of the same shape, dtype, chunks, etc., but now with all of
-    those previously lazy tasks either computed in memory as many small NumPy
-    arrays (in the single-machine case) or asynchronously running in the
+    those previously lazy tasks either computed in memory as many small :function:`numpy.array`
+    (in the single-machine case) or asynchronously running in the
     background on a cluster (in the distributed case).
 
     This function operates differently if a ``dask.distributed.Client`` exists
