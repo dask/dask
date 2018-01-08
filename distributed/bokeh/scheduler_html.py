@@ -153,10 +153,10 @@ class IndexJSON(RequestHandler):
 
 
 routes = [
-        (r'info/workers.html', Workers),
+        (r'info/main/workers.html', Workers),
         (r'info/worker/(.*).html', Worker),
         (r'info/task/(.*).html', Task),
-        (r'info/logs.html', Logs),
+        (r'info/main/logs.html', Logs),
         (r'info/call-stacks/(.*).html', WorkerCallStacks),
         (r'info/call-stack/(.*).html', TaskCallStack),
         (r'info/logs/(.*).html', WorkerLogs),

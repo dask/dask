@@ -20,10 +20,10 @@ def test_connect(c, s, a, b):
     x = c.submit(slowinc, 1, delay=1)
     yield future
     http_client = AsyncHTTPClient()
-    for suffix in ['info/workers.html',
+    for suffix in ['info/main/workers.html',
                    'info/worker/' + url_escape(a.address) + '.html',
                    'info/task/' + url_escape(future.key) + '.html',
-                   'info/logs.html',
+                   'info/main/logs.html',
                    'info/logs/' + url_escape(a.address) + '.html',
                    'info/call-stack/' + url_escape(x.key) + '.html',
                    'info/call-stacks/' + url_escape(a.address) + '.html',
@@ -46,7 +46,7 @@ def test_connect(c, s, a, b):
                  {'prefix': '/foo'})}})
 def test_prefix(c, s, a, b):
     http_client = AsyncHTTPClient()
-    for suffix in ['foo/info/workers.html',
+    for suffix in ['foo/info/main/workers.html',
                    'foo/json/index.html',
                    'foo/system']:
         response = yield http_client.fetch('http://localhost:%d/%s'

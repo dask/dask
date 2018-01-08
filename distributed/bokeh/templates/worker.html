@@ -11,7 +11,7 @@
           <h2 class="subtitle"> In Memory </h2>
           <ul>
             {% for ts in ws.has_what %}
-            <li> <a href="{{prefix}}/info/task/{{ url_escape(ts.key) }}.html">{{ts.key}}</a></li>
+            <li> <a href="../task/{{ url_escape(ts.key) }}.html">{{ts.key}}</a></li>
             {% end %}
           </ul>
         </div>
@@ -20,10 +20,10 @@
       <div class="column">
         <div class="content">
           <h2 class="subtitle"> Processing </h2>
-          <a class="button is-primary" href="{{prefix}}/info/call-stacks/{{ url_escape(ws.address) }}.html">Call Stacks</a>
+          <a class="button is-primary" href="../call-stacks/{{ url_escape(ws.address) }}.html">Call Stacks</a>
           <ul>
             {% for ts in ws.processing %}
-            <li> <a href="{{prefix}}/info/task/{{ url_escape(ts.key) }}.html">{{ts.key}}</a></li>
+            <li> <a href="../task/{{ url_escape(ts.key) }}.html">{{ts.key}}</a></li>
             {% end %}
           </ul>
         </div>

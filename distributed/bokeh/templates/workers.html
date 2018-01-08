@@ -1,8 +1,8 @@
 {% extends main.html %}
 {% block content %}
 
-  <a class="button is-primary" href="{{prefix}}/info/logs.html">Logs</a>
-  <a class="button is-primary" href="{{prefix}}/status">Bokeh</a>
+  <a class="button is-primary" href="logs.html">Logs</a>
+  <a class="button is-primary" href="../../status">Bokeh</a>
 
   {% set worker_list = list(workers.values()) %}
   {% include "worker-table.html" %}

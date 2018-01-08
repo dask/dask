@@ -13,7 +13,7 @@
     {% for ws in worker_list %}
     {% set wi = worker_info[ws.address] %}
     <tr>
-        <td><a href="{{prefix}}/info/worker/{{ url_escape(ws.address) }}.html">{{ws.address}}</a></td>
+        <td><a href="../worker/{{ url_escape(ws.address) }}.html">{{ws.address}}</a></td>
         <td> {{ ws.ncores }} </td>
         <td> {{ format_bytes(wi['memory_limit']) }} </td>
         <td> <progress class="progress" value="{{ wi.get('memory-rss') }}" max="{{ wi['memory_limit'] }}"></progress> </td>
@@ -25,7 +25,7 @@
         {% else %}
         <td> </td>
         {% end %}
-        <td> <a href="{{prefix}}/info/logs/{{ url_escape(ws.address) }}.html">logs</a></td>
+        <td> <a href="../logs/{{ url_escape(ws.address) }}.html">logs</a></td>
     </tr>
     {% end %}
   </table>
