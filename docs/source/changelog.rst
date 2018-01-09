@@ -45,6 +45,7 @@ Core
 ++++
 
 - Improve 32-bit compatibility (:pr:`2937`) `Matthew Rocklin`_
+- Change task prioritization to avoid upwards branching (:pr:`3017`) `Matthew Rocklin`_
 
 
 0.16.0 / 2017-11-17
