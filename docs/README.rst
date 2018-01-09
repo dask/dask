@@ -6,6 +6,5 @@ these commands suffice::
   cd dask/docs
   conda create -n daskdocs --file requirements-docs.txt
   source activate daskdocs
-  Update the conf.py file with the code path (e.g. sys.path.insert(0, os.path.abspath('../../')) )
   make html
   open build/html/index.html
