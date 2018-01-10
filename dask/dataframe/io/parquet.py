@@ -14,7 +14,7 @@ from ..utils import UNKNOWN_CATEGORIES
 from ...base import tokenize, normalize_token
 from ...compatibility import PY3, string_types
 from ...delayed import delayed
-from ...bytes.core import get_fs_paths_myopen
+from ...bytes.core import get_fs_paths
 
 __all__ = ('read_parquet', 'to_parquet')
 
@@ -378,8 +378,7 @@ def _write_fastparquet(df, path, write_index=None, append=False,
                        storage_options=None, compression=None, **kwargs):
     import fastparquet
 
-    fs, fs_token, paths, _ = get_fs_paths_myopen(path, None, 'wb',
-                                                 **(storage_options or {}))
+    fs, fs_token, paths = get_fs_paths(path, 'wb', **(storage_options or {}))
     fs.mkdirs(path)
     sep = fs.sep
 
@@ -609,8 +608,8 @@ def _write_pyarrow(df, path, write_index=None, append=False,
     if write_index is None and df.known_divisions:
         write_index = True
 
-    fs, fs_token, paths, _ = get_fs_paths_myopen(path, None, 'wb',
-                                                 **(storage_options or {}))
+    fs, fs_token, paths = get_fs_paths(path, 'wb', **(storage_options or {}))
+
     fs.mkdirs(path)
 
     template = fs.sep.join([path, 'part.%i.parquet'])
@@ -756,8 +755,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     --------
     to_parquet
     """
-    fs, fs_token, paths, _ = get_fs_paths_myopen(path, None, 'rb',
-                                                 **(storage_options or {}))
+    fs, fs_token, paths = get_fs_paths(path, 'rb', **(storage_options or {}))
 
     read = get_engine(engine)['read']
 

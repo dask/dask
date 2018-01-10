@@ -14,7 +14,8 @@ from dask.utils import filetexts
 from dask.bytes import compression
 from dask.bytes.local import LocalFileSystem
 from dask.bytes.core import (open_text_files, write_bytes, read_bytes,
-                             open_files, FileSystem, get_pyarrow_filesystem)
+                             open_files, FileSystem, get_pyarrow_filesystem,
+                             logical_size)
 
 compute = partial(compute, get=get)
 
@@ -250,7 +251,7 @@ def test_getsize(fmt):
     compress = compression.compress[fmt]
     with filetexts({'.tmp.getsize': compress(b'1234567890')}, mode='b'):
         fs = LocalFileSystem()
-        assert fs.logical_size('.tmp.getsize', fmt) == 10
+        assert logical_size(fs, '.tmp.getsize', fmt) == 10
 
 
 def test_bad_compression():
