@@ -80,7 +80,7 @@ def order(dsk, dependencies=None):
     ndeps = ndependents(dependencies, dependents)
 
     def key(x):
-        return ndeps.get(x, 0), str(x)
+        return ndeps.get(x, 0), id(type(x)), str(x)
 
     return dfs(dependencies, dependents, key=key)
 
