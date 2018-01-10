@@ -59,6 +59,11 @@ class DaskMethodsMixin(object):
         **kwargs
            Additional keyword arguments to forward to ``to_graphviz``.
 
+        Examples
+        --------
+        >>> x.visualize(filename='dask.pdf')  # doctest: +SKIP
+        >>> x.visualize(filename='dask.pdf', color='order')  # doctest: +SKIP
+
         Returns
         -------
         result : IPython.diplay.Image, IPython.display.SVG, or None
@@ -356,8 +361,16 @@ def visualize(*args, **kwargs):
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
+    color: False
+        Options to color nodes.  Current valid options include ['order']
+        Provide ``cmap=`` keyword for additional colormap
     **kwargs
        Additional keyword arguments to forward to ``to_graphviz``.
+
+    Examples
+    --------
+    >>> x.visualize(filename='dask.pdf')  # doctest: +SKIP
+    >>> x.visualize(filename='dask.pdf', color='order')  # doctest: +SKIP
 
     Returns
     -------
@@ -385,6 +398,25 @@ def visualize(*args, **kwargs):
     dsk = collections_to_dsk(args, optimize_graph=optimize_graph)
     for d in dsks:
         dsk.update(d)
+
+    color = kwargs.get('color')
+
+    if color == 'order':
+        from .order import order
+        o = order(dsk)
+        try:
+            cmap = kwargs.pop('cmap')
+        except KeyError:
+            import matplotlib.pyplot as plt
+            cmap = plt.cm.viridis
+        mx = max(o.values())
+        colors = {k: _colorize(cmap(v / mx, bytes=True)) for k, v in o.items()}
+
+        kwargs['function_attributes'] = {k: {'color': v, 'label': str(o[k])}
+                                         for k, v in colors.items()}
+        kwargs['data_attributes'] = {k: {'color': v} for k, v in colors.items()}
+    elif color:
+        raise NotImplementedError("Unknown value color=%s" % color)
 
     return dot_graph(dsk, filename=filename, **kwargs)
 
@@ -696,3 +728,9 @@ def register_scipy():
     @normalize_token.register(sp.dok_matrix)
     def normalize_dok_matrix(x):
         return type(x).__name__, normalize_token(sorted(x.items()))
+
+
+def _colorize(t):
+    t = t[:3]
+    i = sum(v * 256 ** (len(t) - i - 1) for i, v in enumerate(t))
+    return "#" + hex(int(i))[2:]
