@@ -4,6 +4,8 @@ from dask.order import child_max, ndependents, order
 from dask.core import get_deps
 from dask.utils_test import add, inc
 
+import pytest
+
 a, b, c, d, e = 'abcde'
 
 
@@ -243,3 +245,19 @@ def test_order_doesnt_fail_on_mixed_type_keys():
     order({'x': (inc, 1),
            ('y', 0): (inc, 2),
            'z': (add, 'x', ('y', 0))})
+
+
+def test_gh_TODO():
+    da = pytest.importorskip('dask.array')
+    A, B = 20, 99
+    x = da.random.normal(size=(A, B), chunks=(1, None))
+    for _ in range(2):
+        y = (x[:, None, :] * x[:, :, None]).cumsum(axis=0)
+        x = x.cumsum(axis=0)
+    w = (y * x[:, None]).sum(axis=(1,2))
+
+    dsk = dict(w.__dask_graph__())
+    o = order(dsk)
+    L = [o[k] for k in w.__dask_keys__()]
+    assert sorted(L[:10]) == L[:10]
+    assert sorted(L[10:]) == L[10:]
