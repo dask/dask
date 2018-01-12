@@ -22,6 +22,7 @@ Core
 
 -  Change default task ordering to prefer nodes with few dependents and then
    many downstream dependencies (:pr:`3056`) `Matthew Rocklin`_
+-  Add color= option to visualize to color by task order (:pr:`3057`) `Matthew Rocklin`_
 
 
 0.16.1 / 2018-01-09

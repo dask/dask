@@ -731,6 +731,15 @@ def register_scipy():
 
 
 def _colorize(t):
+    """ Convert (r, g, b) triple to "#RRGGBB" string
+
+    For use with ``visualize(color=...)``
+
+    Examples
+    --------
+    >>> _colorize((255, 255, 255))
+    '#FFFFFF'
+    """
     t = t[:3]
     i = sum(v * 256 ** (len(t) - i - 1) for i, v in enumerate(t))
-    return "#" + hex(int(i))[2:]
+    return "#" + hex(int(i))[2:].upper()
