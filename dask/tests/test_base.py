@@ -284,50 +284,46 @@ def test_tokenize_base_types(x):
     assert tokenize(x) == tokenize(x), x
 
 
-@pytest.mark.parametrize('cls_name',
-                         ('ndarray', 'matrix',
-                          'dia', 'bsr', 'coo', 'csc', 'csr', 'dok', 'lil'))
-def test_tokenize_dense_sparse_array(cls_name):
-    if np is None:
-        pytest.skip()
+@pytest.mark.skipif('not np')
+def test_tokenize_numpy_matrix():
     rng = np.random.RandomState(1234)
-    is_sparse = cls_name not in ('ndarray', 'matrix')
+    a = np.asmatrix(rng.rand(100))
+    b = a.copy()
+    assert tokenize(a) == tokenize(b)
 
-    if is_sparse:
-        if sp is None:
-            pytest.skip()
-        with pytest.warns(None):
-            # ignore scipy.sparse.SparseEfficiencyWarning
-            a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
-        b = a.copy()
-    else:
-        a = rng.rand(100)
-        if cls_name == 'matrix':
-            a = np.asmatrix(a)
-        b = a.copy()
+    b[:10] = 1
+    assert tokenize(a) != tokenize(b)
 
-    assert tokenize(a) == tokenize(a)
+
+@pytest.mark.skipif('not sp')
+@pytest.mark.parametrize('cls_name',
+                         ('dia', 'bsr', 'coo', 'csc', 'csr', 'dok', 'lil'))
+def test_tokenize_dense_sparse_array(cls_name):
+    rng = np.random.RandomState(1234)
+
+    with pytest.warns(None):
+        # ignore scipy.sparse.SparseEfficiencyWarning
+        a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
+    b = a.copy()
+
     assert tokenize(a) == tokenize(b)
 
     # modifying the data values
-    if is_sparse:
-        if hasattr(b, 'data'):
-            b.data[:10] = 1
-        elif cls_name == 'dok':
-            b[3, 3] = 1
-        else:
-            raise ValueError
+    if hasattr(b, 'data'):
+        b.data[:10] = 1
+    elif cls_name == 'dok':
+        b[3, 3] = 1
     else:
-        b[:10] = 1
+        raise ValueError
+
     assert tokenize(a) != tokenize(b)
 
     # modifying the data indices
-    if is_sparse:
-        with pytest.warns(None):
-            b = a.copy().asformat('coo')
-            b.row[:10] = np.arange(10)
-            b = b.asformat(cls_name)
-        assert tokenize(a) != tokenize(b)
+    with pytest.warns(None):
+        b = a.copy().asformat('coo')
+        b.row[:10] = np.arange(10)
+        b = b.asformat(cls_name)
+    assert tokenize(a) != tokenize(b)
 
 
 def test_is_dask_collection():
