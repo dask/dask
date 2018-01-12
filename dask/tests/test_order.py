@@ -160,13 +160,14 @@ def test_avoid_upwards_branching_complex():
     assert o[(b, 1)] < o[(c, 1)]
 
 
+@pytest.mark.xfail(reason="this case is ambiguous")
 def test_deep_bases_win_over_dependents():
     """
     It's not clear who should run first, e or d
 
     1.  d is nicer because it exposes parallelism
     2.  e is nicer (hypothetically) because it will be sooner released
-        (though in this we need d to run first regardless)
+        (though in this case we need d to run first regardless)
 
             a
           / | \   .
@@ -247,7 +248,7 @@ def test_order_doesnt_fail_on_mixed_type_keys():
            'z': (add, 'x', ('y', 0))})
 
 
-def test_gh_TODO():
+def test_gh_3055():
     da = pytest.importorskip('dask.array')
     A, B = 20, 99
     x = da.random.normal(size=(A, B), chunks=(1, None))
@@ -259,5 +260,9 @@ def test_gh_TODO():
     dsk = dict(w.__dask_graph__())
     o = order(dsk)
     L = [o[k] for k in w.__dask_keys__()]
-    assert sorted(L[:10]) == L[:10]
-    assert sorted(L[10:]) == L[10:]
+    assert sorted(L) == L or sorted(L) == L[::-1]
+
+
+def test_type_comparisions_ok():
+    dsk = {'a': 1, ('a', 1): 2, ('a', 'b', 1): 3}
+    order(dsk)  # this doesn't err
