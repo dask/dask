@@ -56,6 +56,9 @@ class DaskMethodsMixin(object):
         optimize_graph : bool, optional
             If True, the graph is optimized before rendering.  Otherwise,
             the graph is displayed as is. Default is False.
+        color: {None, 'order'}, optional
+            Options to color nodes.  Provide ``cmap=`` keyword for additional
+            colormap
         **kwargs
            Additional keyword arguments to forward to ``to_graphviz``.
 
@@ -361,9 +364,9 @@ def visualize(*args, **kwargs):
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
-    color: False
-        Options to color nodes.  Current valid options include ['order']
-        Provide ``cmap=`` keyword for additional colormap
+    color: {None, 'order'}, optional
+        Options to color nodes.  Provide ``cmap=`` keyword for additional
+        colormap
     **kwargs
        Additional keyword arguments to forward to ``to_graphviz``.
 
