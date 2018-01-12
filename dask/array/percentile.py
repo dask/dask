@@ -34,7 +34,7 @@ def _percentile(a, q, interpolation='linear'):
 def percentile(a, q, interpolation='linear'):
     """ Approximate percentile of 1-D array
 
-    See numpy.percentile for more information
+    See :func:`numpy.percentile` for more information
     """
     if not a.ndim == 1:
         raise NotImplementedError(
@@ -68,15 +68,15 @@ def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
 
     finalq : numpy.array
         Percentiles to compute (must use same scale as ``qs``).
-    qs : sequence of numpy.arrays
+    qs : sequence of :class:`numpy.array`s
         Percentiles calculated on different sets of data.
-    vals : sequence of numpy.arrays
+    vals : sequence of :class:`numpy.array`s
         Resulting values associated with percentiles ``qs``.
     Ns : sequence of integers
         The number of data elements associated with each data set.
     interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
         Specify the type of interpolation to use to calculate final
-        percentiles.  For more information, see numpy.percentile.
+        percentiles.  For more information, see :func:`numpy.percentile`.
 
     Examples
     --------

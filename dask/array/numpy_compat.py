@@ -209,7 +209,7 @@ except ImportError:  # pragma: no cover
 
         See Also
         --------
-        numpy.prod : Product across array propagating NaNs.
+        :func:`numpy.prod` : Product across array propagating NaNs.
         isnan : Show which elements are NaN.
 
         Notes
@@ -276,7 +276,7 @@ except ImportError:  # pragma: no cover
 
         See Also
         --------
-        numpy.cumsum : Cumulative sum across array propagating NaNs.
+        :func:`numpy.cumsum` : Cumulative sum across array propagating NaNs.
         isnan : Show which elements are NaN.
 
         Examples
@@ -337,7 +337,7 @@ except ImportError:  # pragma: no cover
 
         See Also
         --------
-        numpy.cumprod : Cumulative product across array propagating NaNs.
+        :func:`numpy.cumprod` : Cumulative product across array propagating NaNs.
         isnan : Show which elements are NaN.
 
         Examples
