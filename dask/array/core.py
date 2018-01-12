@@ -3049,7 +3049,7 @@ def broadcast_to(x, shape, chunks=None):
 
     See Also
     --------
-    numpy.broadcast_to
+    :func:`numpy.broadcast_to`
     """
     x = asarray(x)
     shape = tuple(shape)

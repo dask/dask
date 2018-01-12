@@ -2,7 +2,7 @@ Creating Dask arrays from NumPy arrays
 ======================================
 
 We can create Dask arrays from any object that implements NumPy slicing, like a
-``numpy.ndarray`` or on-disk formats like h5py or netCDF Dataset objects. This
+:class:`numpy.ndarray` or on-disk formats like h5py or netCDF Dataset objects. This
 is particularly useful with on disk arrays that don't fit in memory but, for
 simplicity's sake, we show how this works on a NumPy array.
 

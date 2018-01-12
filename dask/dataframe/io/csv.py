@@ -348,7 +348,7 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
 READ_DOC_TEMPLATE = """
 Read {file_type} files into a Dask.DataFrame
 
-This parallelizes the ``pandas.{reader}`` function in the following ways:
+This parallelizes the :func:`pandas.{reader}` function in the following ways:
 
 - It supports loading many files at once using globstrings:
 
@@ -365,9 +365,9 @@ This parallelizes the ``pandas.{reader}`` function in the following ways:
     >>> df = dd.{reader}('hdfs:///myfiles.*.csv')  # doctest: +SKIP
     >>> df = dd.{reader}('hdfs://namenode.example.com/myfiles.*.csv')  # doctest: +SKIP
 
-Internally ``dd.{reader}`` uses ``pandas.{reader}`` and supports many of the
+Internally ``dd.{reader}`` uses :func:`pandas.{reader}` and supports many of the
 same keyword arguments with the same performance guarantees. See the docstring
-for ``pandas.{reader}`` for more information on available keyword arguments.
+for :func:`pandas.{reader}` for more information on available keyword arguments.
 
 Parameters
 ----------
@@ -389,7 +389,7 @@ storage_options : dict, optional
     Extra options that make sense for a particular storage connection, e.g.
     host, port, username, password, etc.
 **kwargs
-    Extra keyword arguments to forward to ``pandas.{reader}``.
+    Extra keyword arguments to forward to :func:`pandas.{reader}`.
 
 Notes
 -----
