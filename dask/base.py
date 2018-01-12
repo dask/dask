@@ -633,6 +633,7 @@ def register_pandas():
 def register_numpy():
     import numpy as np
 
+    @normalize_token.register(np.ndarray)
     def normalize_array(x):
         if not x.shape:
             return (str(x), x.dtype)
@@ -661,7 +662,6 @@ def register_numpy():
     def normalize_matrix(x):
         return type(x).__name__, normalize_array(x.view(type=np.ndarray))
 
-    normalize_token.register(np.ndarray, normalize_array)
     normalize_token.register(np.dtype, repr)
     normalize_token.register(np.generic, repr)
 
