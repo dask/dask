@@ -1,12 +1,15 @@
-from itertools import chain
-
-from dask.order import child_max, ndependents, order
-from dask.core import get_deps
-from dask.utils_test import add, inc
+import random
 
 import pytest
 
-a, b, c, d, e = 'abcde'
+from dask.order import ndependencies, order
+from dask.core import get_deps
+from dask.utils_test import add, inc
+
+if random.random() < 0.5:
+    a, b, c, d, e = 'abcde'
+else:
+    a, b, c, d, e = 'abcde'[::-1]
 
 
 def issorted(L, reverse=False):
@@ -42,7 +45,7 @@ def test_avoid_broker_nodes():
     |      \  /
     a0      a1
 
-    a1 should be run before a0
+    a0 should be run before a1
     """
     a, b, c = 'abc'
     dsk = {(a, 0): (f,), (a, 1): (f,),
@@ -77,9 +80,9 @@ def test_base_of_reduce_preferred():
 
     We really want to run b0 quickly
     """
-    dsk = dict(((a, i), (f, (a, i - 1), (b, i))) for i in [1, 2, 3])
+    dsk = {(a, i): (f, (a, i - 1), (b, i)) for i in [1, 2, 3]}
     dsk[(a, 0)] = (f, (b, 0))
-    dsk.update(dict(((b, i), (f, c, 1)) for i in [0, 1, 2, 3]))
+    dsk.update({(b, i): (f, c, 1) for i in [0, 1, 2, 3]})
     dsk[c] = 1
 
     o = order(dsk)
@@ -141,7 +144,8 @@ def test_avoid_upwards_branching_complex():
             |
             c3
 
-    Prefer b1 over c1 because it will be easier to finish its dependents
+    Prefer c1 over b1 because c1 will stay in memory less long while b1
+    computes
     """
     dsk = {(a, 1): (f, (a, 2)),
            (a, 2): (f, (a, 3)),
@@ -157,7 +161,7 @@ def test_avoid_upwards_branching_complex():
 
     o = order(dsk)
 
-    assert o[(b, 1)] < o[(c, 1)]
+    assert o[(c, 1)] < o[(b, 1)]
 
 
 @pytest.mark.xfail(reason="this case is ambiguous")
@@ -202,32 +206,7 @@ def test_prefer_deep():
 def test_stacklimit():
     dsk = dict(('x%s' % (i + 1), (inc, 'x%s' % i)) for i in range(10000))
     dependencies, dependents = get_deps(dsk)
-    scores = dict.fromkeys(dsk, 1)
-    child_max(dependencies, dependents, scores)
-    ndependents(dependencies, dependents)
-
-
-def test_ndependents():
-    a, b, c = 'abc'
-    dsk = dict(chain((((a, i), i * 2) for i in range(5)),
-                     (((b, i), (add, i, (a, i))) for i in range(5)),
-                     (((c, i), (add, i, (b, i))) for i in range(5))))
-    result = ndependents(*get_deps(dsk))
-    expected = dict(chain((((a, i), 3) for i in range(5)),
-                          (((b, i), 2) for i in range(5)),
-                          (((c, i), 1) for i in range(5))))
-    assert result == expected
-
-    dsk = {a: 1, b: 1}
-    deps = get_deps(dsk)
-    assert ndependents(*deps) == dsk
-
-    dsk = {a: 1, b: (add, a, 1), c: (add, b, a)}
-    assert ndependents(*get_deps(dsk)) == {a: 4, b: 2, c: 1}
-
-    dsk = {a: 1, b: a, c: b}
-    deps = get_deps(dsk)
-    assert ndependents(*deps) == {a: 3, b: 2, c: 1}
+    ndependencies(dependencies, dependents)
 
 
 def test_break_ties_by_str():
