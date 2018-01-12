@@ -72,7 +72,7 @@ def order(dsk, dependencies=None):
     --------
     >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
     >>> order(dsk)
-    {'a': 3, 'c': 2, 'b': 1, 'd': 0}
+    {'a': 2, 'c': 1, 'b': 3, 'd': 0}
     """
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
@@ -128,7 +128,7 @@ def ndependencies(dependencies, dependents):
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
     >>> sorted(ndependencies(dependencies, dependents).items())
-    [('b', 1), ('c', 2)]
+    [('a', 1), ('b', 2), ('c', 3)]
     """
     result = dict()
     num_needed = {k: len(v) for k, v in dependencies.items()}
@@ -190,7 +190,7 @@ class StrComparable(object):
 
     When comparing two objects of different types Python fails
 
-    >>> 'a' < 1
+    >>> 'a' < 1  # doctest: +SKIP
     Traceback (most recent call last):
         ...
     TypeError: '<' not supported between instances of 'str' and 'int'
