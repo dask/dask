@@ -937,9 +937,15 @@ def store(sources, targets, lock=True, regions=None, compute=True,
 
         load_dsks_mrg = sharedict.merge(store_dsks_mrg, *load_dsks)
 
-        result = tuple(
-            Array(load_dsks_mrg, n, src.chunks, src.dtype) for n in load_names
-        )
+        result = []
+        for i, sources_i in enumerate(sources):
+            result.append(Array(
+                load_dsks_mrg,
+                load_names[i],
+                sources_i.chunks,
+                sources_i.dtype
+            ))
+        result = tuple(result)
 
         return result
     else:
