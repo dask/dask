@@ -29,6 +29,7 @@ da = import_or_none('dask.array')
 db = import_or_none('dask.bag')
 dd = import_or_none('dask.dataframe')
 np = import_or_none('numpy')
+sp = import_or_none('scipy.sparse')
 pd = import_or_none('pandas')
 
 
@@ -281,6 +282,48 @@ def test_tokenize_object_array_with_nans():
                                [], (), {}, None, str, int])
 def test_tokenize_base_types(x):
     assert tokenize(x) == tokenize(x), x
+
+
+@pytest.mark.skipif('not np')
+def test_tokenize_numpy_matrix():
+    rng = np.random.RandomState(1234)
+    a = np.asmatrix(rng.rand(100))
+    b = a.copy()
+    assert tokenize(a) == tokenize(b)
+
+    b[:10] = 1
+    assert tokenize(a) != tokenize(b)
+
+
+@pytest.mark.skipif('not sp')
+@pytest.mark.parametrize('cls_name',
+                         ('dia', 'bsr', 'coo', 'csc', 'csr', 'dok', 'lil'))
+def test_tokenize_dense_sparse_array(cls_name):
+    rng = np.random.RandomState(1234)
+
+    with pytest.warns(None):
+        # ignore scipy.sparse.SparseEfficiencyWarning
+        a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
+    b = a.copy()
+
+    assert tokenize(a) == tokenize(b)
+
+    # modifying the data values
+    if hasattr(b, 'data'):
+        b.data[:10] = 1
+    elif cls_name == 'dok':
+        b[3, 3] = 1
+    else:
+        raise ValueError
+
+    assert tokenize(a) != tokenize(b)
+
+    # modifying the data indices
+    with pytest.warns(None):
+        b = a.copy().asformat('coo')
+        b.row[:10] = np.arange(10)
+        b = b.asformat(cls_name)
+    assert tokenize(a) != tokenize(b)
 
 
 def test_is_dask_collection():

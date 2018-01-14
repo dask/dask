@@ -658,6 +658,10 @@ def register_numpy():
                 data = hash_buffer_hex(x.copy().ravel(order='K').view('i1'))
         return (data, x.dtype, x.shape, x.strides)
 
+    @normalize_token.register(np.matrix)
+    def normalize_matrix(x):
+        return type(x).__name__, normalize_array(x.view(type=np.ndarray))
+
     normalize_token.register(np.dtype, repr)
     normalize_token.register(np.generic, repr)
 
@@ -669,3 +673,26 @@ def register_numpy():
                 return 'np.' + name
         except AttributeError:
             return normalize_function(x)
+
+
+@normalize_token.register_lazy("scipy")
+def register_scipy():
+    import scipy.sparse as sp
+
+    def normalize_sparse_matrix(x, attrs):
+        return type(x).__name__, normalize_seq((normalize_token(getattr(x, key))
+                                                for key in attrs))
+
+    for cls, attrs in [(sp.dia_matrix, ('data', 'offsets', 'shape')),
+                       (sp.bsr_matrix, ('data', 'indices', 'indptr',
+                                        'blocksize', 'shape')),
+                       (sp.coo_matrix, ('data', 'row', 'col', 'shape')),
+                       (sp.csr_matrix, ('data', 'indices', 'indptr', 'shape')),
+                       (sp.csc_matrix, ('data', 'indices', 'indptr', 'shape')),
+                       (sp.lil_matrix, ('data', 'rows', 'shape'))]:
+        normalize_token.register(cls,
+                                 partial(normalize_sparse_matrix, attrs=attrs))
+
+    @normalize_token.register(sp.dok_matrix)
+    def normalize_dok_matrix(x):
+        return type(x).__name__, normalize_token(sorted(x.items()))
