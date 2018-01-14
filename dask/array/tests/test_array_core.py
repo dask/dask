@@ -3032,3 +3032,14 @@ def test_delayed_array_key_hygeine():
     d = delayed(identity)(a)
     b = da.from_delayed(d, shape=a.shape, dtype=a.dtype)
     assert_eq(a, b)
+
+
+def test_empty_chunks_in_array_len():
+    da = pytest.importorskip('dask.array')
+
+    x = da.ones((), chunks=())
+    with pytest.raises(ValueError) as exc_info:
+        len(x)
+
+    err_msg = 'Can not get length if chunks are empty'
+    assert err_msg in str(exc_info.value)
