@@ -547,6 +547,19 @@ def test_visualize():
         assert os.path.exists(os.path.join(d, 'mydask.png'))
 
 
+@pytest.mark.skipif('not da')
+@pytest.mark.skipif(sys.flags.optimize,
+                    reason="graphviz exception with Python -OO flag")
+def test_visualize_order():
+    pytest.importorskip('matplotlib')
+    x = da.arange(5, chunks=2)
+    with tmpfile(extension='dot') as fn:
+        x.visualize(color='order', filename=fn)
+        with open(fn) as f:
+            text = f.read()
+        assert 'color="#' in text
+
+
 def test_use_cloudpickle_to_tokenize_functions_in__main__():
     import sys
     from textwrap import dedent
