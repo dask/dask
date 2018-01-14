@@ -1,13 +1,13 @@
 """ Static order of nodes in dask graph
 
-We can make decisions on what tasks to run next both
+Dask makes decisions on what tasks to prioritize both
 
 *  Dynamically at runtime
 *  Statically before runtime
 
-Dask's async scheduler runs dynamically and prefers to run tasks that were just
-made available.  However when several tasks become available at the same time
-we have an opportunity to break ties in an intelligent way
+Dynamically we prefer to run tasks that were just made available.  However when
+several tasks become available at the same time we have an opportunity to break
+ties in an intelligent way
 
         d
         |
@@ -15,8 +15,9 @@ we have an opportunity to break ties in an intelligent way
      \ /
       a
 
-E.g. when we run ``a`` we can choose to run either ``b`` or ``c`` next.  In
-this case we may choose to start with ``c``, because it has other dependencies.
+For example after we finish ``a`` we can choose to run either ``b`` or ``c``
+next.  In this case we may prefer to start with ``c``, because it has other
+dependents.
 
 This is particularly important at the beginning of the computation when we
 often dump hundreds of leaf nodes onto the scheduler at once.  The order in
@@ -37,22 +38,23 @@ represent this ordering with a dictionary.  Lower scores have higher priority.
 There are several ways in which we might order our keys.  In practice we have
 found the following objectives important:
 
-1.  **Finish subtrees before starting new subtrees:** Often our computation
-    consists of many independent subtrees (e.g. reductions in an array).  We
-    want to work on and finish individual subtrees before moving on to others
-    in order to keep a low memory footprint.
-2.  **Run heavily depended-on tasks first**: Some tasks produce data that is
-    required by many other tasks, either in a deep linear chain (critical path)
-    or in a shallow but broad nexus (critical point).  By preferring these we
-    allow other computations to flow to completion more easily.
+1.  **Depth first**:  By traversing a tree deeply before broadly we encourage
+    the completion of cohesive parts of the computation before starting new
+    parts.  This helps to reduce memory footprint.
+2.  **Lean**: We avoid tasks that have multiple dependents.  These tend to
+    start new branches of computation that we would prefer to avoid until we
+    have finished our current work.
+3.  **Heavy-first**: When deciding between two possible dependencies we choose
+    the dependency that is likely to take the longest first.  That way after it
+    finishes it has to stay in memory only a short time while waiting for its
+    co-dependent task to finish
 
+So we perform a depth first search where we choose to traverse down children
+with the following priority:
 
-Approach: Depth First Search with Intelligent Tie-Breaking
-----------------------------------------------------------
-
-To satisfy concern (1) we perform a depth first search (``dfs``).  To satisfy
-concern (2) we prefer to traverse down children in the order of which child has
-the descendent on whose result the most tasks depend.
+1.  Number of dependents (smaller is better)
+2.  Number of total downstream dependencies (larger is better)
+3.  Name of the task itself, as a tie breaker
 """
 from __future__ import absolute_import, division, print_function
 
@@ -63,24 +65,24 @@ from .utils_test import add, inc  # noqa: F401
 def order(dsk, dependencies=None):
     """ Order nodes in dask graph
 
-    The ordering will be a toposort but will also have other convenient
-    properties
+    The ordering will be a topological sort but will also tend to produce
+    computations that have a small memory footprint.
 
-    1.  Depth first search
-    2.  DFS prefers nodes that enable the most data
-
+    Examples
+    --------
     >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
     >>> order(dsk)
-    {'a': 3, 'c': 2, 'b': 1, 'd': 0}
+    {'a': 2, 'c': 1, 'b': 3, 'd': 0}
     """
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
     dependents = reverse_dict(dependencies)
 
-    ndeps = ndependents(dependencies, dependents)
+    ndepts = {k: len(dependents[k]) for k in dependents}
+    ndepends = ndependencies(dependencies, dependents)
 
     def key(x):
-        return ndeps.get(x, 0), str(x)
+        return StrComparable((ndepts[x], -ndepends.get(x, 0), x))
 
     return dfs(dependencies, dependents, key=key)
 
@@ -102,8 +104,8 @@ def ndependents(dependencies, dependents):
     [('a', 3), ('b', 2), ('c', 1)]
     """
     result = dict()
-    num_needed = dict((k, len(v)) for k, v in dependents.items())
-    current = set(k for k, v in num_needed.items() if v == 0)
+    num_needed = {k: len(v) for k, v in dependents.items()}
+    current = {k for k, v in num_needed.items() if v == 0}
     while current:
         key = current.pop()
         result[key] = 1 + sum(result[parent] for parent in dependents[key])
@@ -114,36 +116,26 @@ def ndependents(dependencies, dependents):
     return result
 
 
-def child_max(dependencies, dependents, scores):
-    """ Maximum-ish of scores of children
+def ndependencies(dependencies, dependents):
+    """ Number of total data elements on which this key depends
 
-    This takes a dictionary of scores per key and returns a new set of scores
-    per key that is the maximum of the scores of all children of that node plus
-    its own score.  In some sense this ranks each node by the maximum
-    importance of their children plus their own value.
-
-    This is generally fed the result from ``ndependents``
+    For each key we return the number of tasks that must be run for us to run
+    this task.
 
     Examples
     --------
 
-    >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
-    >>> scores = {'a': 3, 'b': 2, 'c': 2, 'd': 1}
+    >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
-
-    >>> sorted(child_max(dependencies, dependents, scores).items())
-    [('a', 3), ('b', 2), ('c', 5), ('d', 6)]
+    >>> sorted(ndependencies(dependencies, dependents).items())
+    [('a', 1), ('b', 2), ('c', 3)]
     """
     result = dict()
-    num_needed = dict((k, len(v)) for k, v in dependencies.items())
-    current = set(k for k, v in num_needed.items() if v == 0)
+    num_needed = {k: len(v) for k, v in dependencies.items()}
+    current = {k for k, v in num_needed.items() if v == 0}
     while current:
         key = current.pop()
-        score = scores[key]
-        children = dependencies[key]
-        if children:
-            score += max(result[child] for child in children)
-        result[key] = score
+        result[key] = 1 + sum(result[child] for child in dependencies[key])
         for parent in dependents[key]:
             num_needed[parent] -= 1
             if num_needed[parent] == 0:
@@ -163,7 +155,6 @@ def dfs(dependencies, dependents, key=lambda x: x):
 
     Examples
     --------
-
     >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
     >>> dependencies, dependents = get_deps(dsk)
 
@@ -192,3 +183,31 @@ def dfs(dependencies, dependents, key=lambda x: x):
         i += 1
 
     return result
+
+
+class StrComparable(object):
+    """ Wrap object so that it defaults to string comparison
+
+    When comparing two objects of different types Python fails
+
+    >>> 'a' < 1  # doctest: +SKIP
+    Traceback (most recent call last):
+        ...
+    TypeError: '<' not supported between instances of 'str' and 'int'
+
+    This class wraps the object so that, when this would occur it instead
+    compares the string representation
+
+    >>> StrComparable('a') < StrComparable(1)
+    False
+    """
+    __slots__ = ('obj',)
+
+    def __init__(self, obj):
+        self.obj = obj
+
+    def __lt__(self, other):
+        try:
+            return self.obj < other.obj
+        except Exception:
+            return str(self.obj) < str(other.obj)
