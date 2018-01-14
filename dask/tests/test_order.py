@@ -251,3 +251,23 @@ def test_type_comparisions_ok(abcde):
     a, b, c, d, e = abcde
     dsk = {a: 1, (a, 1): 2, (a, b, 1): 3}
     order(dsk)  # this doesn't err
+
+
+def test_prefer_short_dependents(abcde):
+    """
+
+         a
+         |
+      d  b  e
+       \ | /
+         c
+
+    Prefer to finish d and e before starting b.  That way c can be released
+    during the long computations.
+    """
+    a, b, c, d, e = abcde
+    dsk = {c: (f,), d: (f, c), e: (f, c), b: (f, c), a: (f, b)}
+
+    o = order(dsk)
+    assert o[d] < o[b]
+    assert o[e] < o[b]
