@@ -7,7 +7,7 @@ Changelog
 
 Array
 +++++
-
+- Update error handling when len is called with empty chunks (:issue:`3058`) `Xander Johnson`_
 
 DataFrame
 +++++++++
@@ -918,3 +918,4 @@ Other
 .. _`Markus Gonser`: https://github.com/magonser
 .. _`Martijn Arts`: https://github.com/mfaafm
 .. _`Jon Mease`: https://github.com/jmmease
+.. _`Xander Johnson`: https://github.com/metasyn
