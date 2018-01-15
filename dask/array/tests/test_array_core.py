@@ -3035,11 +3035,9 @@ def test_delayed_array_key_hygeine():
 
 
 def test_empty_chunks_in_array_len():
-    da = pytest.importorskip('dask.array')
-
     x = da.ones((), chunks=())
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(TypeError) as exc_info:
         len(x)
 
-    err_msg = 'Can not get length if chunks are empty'
+    err_msg = 'len() of unsized object'
     assert err_msg in str(exc_info.value)

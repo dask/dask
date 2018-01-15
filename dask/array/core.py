@@ -1111,10 +1111,8 @@ class Array(Base):
     chunks = property(_get_chunks, _set_chunks, "chunks property")
 
     def __len__(self):
-        if len(self.chunks) == 0:
-            raise ValueError("Can not get length if chunks are empty. "
-                             "Please initalize with chunks or use"
-                             " rechunk method to set if needed.")
+        if not self.chunks:
+            raise TypeError("len() of unsized object")
         return sum(self.chunks[0])
 
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
