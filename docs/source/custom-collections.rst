@@ -169,6 +169,8 @@ common operations:
   counterparts
 - ``persist``: convert one or more dask collections into equivalent dask
   collections with their results already computed and cached in memory.
+- ``optimize``: convert one or more dask collections into equivalent dask
+  collections sharing one large optimized graph.
 - ``visualize``: given one or more dask collections, draw out the graph that
   would be passed to the scheduler during a call to ``compute`` or ``persist``
 
@@ -333,21 +335,60 @@ In pseudocode this looks like:
             keys = collection.__dask_keys__()
             # Get the computed graph for this collection.
             # Here flatten converts a nested list into a single list
-            graph = {k: r for (k, r) in zip(flatten(keys), flatten(res))}
+            subgraph = {k: r for (k, r) in zip(flatten(keys), flatten(res))}
 
             # Rebuild the output dask collection with the computed graph
             rebuild, extra_args = collection.__dask_postpersist__()
-            out = rebuild(graph, *extra_args)
+            out = rebuild(subgraph, *extra_args)
 
             output.append(out)
 
         # dask.persist always returns tuples
         return tuple(output)
 
+
+Optimize
+~~~~~~~~
+
+The operation of ``optimize`` can be broken into two stages:
+
+1. **Graph Merging & Optimization**
+
+   Same as in ``compute``.
+
+2. **Rebuilding**
+
+   Similar to ``persist``, the ``rebuild`` function and arguments from
+   ``__dask_postpersist__`` are used to reconstruct equivalent collections from
+   the optimized graph.
+
+In pseudocode this looks like:
+
+.. code:: python
+
+    def optimize(*collections, **kwargs):
+        # 1. Graph Merging & Optimization
+        # -------------------------------
+        # **Same as in compute**
+        graph = ...
+
+        # 2. Rebuilding
+        # -------------
+        # Rebuild each dask collection using the same large optimized graph
+        output = []
+        for collection in collections:
+            rebuild, extra_args = collection.__dask_postpersist__()
+            out = rebuild(graph, *extra_args)
+            output.append(out)
+
+        # dask.optimize always returns tuples
+        return tuple(output)
+
+
 Visualize
 ~~~~~~~~~
 
-Visualize is the simplest of the 3 core methods. It only has two stages:
+Visualize is the simplest of the 4 core functions. It only has two stages:
 
 1. **Graph Merging & Optimization**
 
@@ -367,7 +408,6 @@ In pseudocode this looks like:
         # -------------------------------
         # **Same as in compute**
         graph = ...
-        keys = ...
 
         # 2. Graph Drawing
         # ----------------
