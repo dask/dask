@@ -53,12 +53,12 @@ def test_urlpath_inference_strips_protocol(tmpdir):
             f.write(b'1,2,3\n' * 10)
 
     # globstring
-    urlpath = os.path.join(tmpdir, 'test.*.csv')
-    _, _, paths2 = get_fs_token_paths('file://' + urlpath)
+    urlpath = to_uri(os.path.join(tmpdir, 'test.')) + '*.csv'
+    _, _, paths2 = get_fs_token_paths(urlpath)
     assert paths2 == paths
 
     # list of paths
-    _, _, paths2 = get_fs_token_paths(['file://' + p for p in paths])
+    _, _, paths2 = get_fs_token_paths([to_uri(p) for p in paths])
     assert paths2 == paths
 
 
