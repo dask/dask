@@ -397,7 +397,7 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
         if 'w' in mode:
             paths = _expand_paths(urlpath, name_function, num)
         elif "*" in urlpath:
-            paths = fs.glob(urlpath)
+            paths = sorted(fs.glob(urlpath))
         else:
             paths = [urlpath]
 

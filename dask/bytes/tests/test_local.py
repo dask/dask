@@ -15,7 +15,7 @@ from dask.bytes import compression
 from dask.bytes.local import LocalFileSystem
 from dask.bytes.core import (open_text_files, write_bytes, read_bytes,
                              open_files, FileSystem, get_pyarrow_filesystem,
-                             logical_size)
+                             logical_size, get_fs_token_paths)
 
 compute = partial(compute, get=get)
 
@@ -42,6 +42,47 @@ except (ImportError, NameError):
     def to_uri(path):
         return urlparse.urljoin(
             'file:', urllib.pathname2url(os.path.abspath(path)))
+
+
+def test_urlpath_inference_strips_protocol(tmpdir):
+    tmpdir = str(tmpdir)
+    paths = [os.path.join(tmpdir, 'test.%02d.csv' % i) for i in range(20)]
+
+    for path in paths:
+        with open(path, 'wb') as f:
+            f.write(b'1,2,3\n' * 10)
+
+    # globstring
+    urlpath = os.path.join(tmpdir, 'test.*.csv')
+    _, _, paths2 = get_fs_token_paths('file://' + urlpath)
+    assert paths2 == paths
+
+    # list of paths
+    _, _, paths2 = get_fs_token_paths(['file://' + p for p in paths])
+    assert paths2 == paths
+
+
+def test_urlpath_inference_errors():
+    # Empty list
+    with pytest.raises(ValueError) as err:
+        get_fs_token_paths([])
+    assert 'empty' in str(err)
+
+    # Protocols differ
+    with pytest.raises(ValueError) as err:
+        get_fs_token_paths(['s3://test/path.csv', '/other/path.csv'])
+    assert 'same protocol and options' in str(err)
+
+    # Options differ
+    with pytest.raises(ValueError) as err:
+        get_fs_token_paths(['hdfs://myuser@node.com/test/path.csv',
+                            'hdfs://otheruser@node.com/other/path.csv'])
+    assert 'same protocol and options' in str(err)
+
+    # Unknown type
+    with pytest.raises(TypeError):
+        get_fs_token_paths({'sets/are.csv', 'unordered/so/they.csv',
+                            'should/not/be.csv' 'allowed.csv'})
 
 
 def test_read_bytes():
