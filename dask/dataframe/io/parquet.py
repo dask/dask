@@ -14,7 +14,7 @@ from ..utils import UNKNOWN_CATEGORIES
 from ...base import tokenize
 from ...compatibility import PY3, string_types
 from ...delayed import delayed
-from ...bytes.core import get_fs_paths
+from ...bytes.core import get_fs_token_paths
 from ...utils import import_required
 
 __all__ = ('read_parquet', 'to_parquet')
@@ -742,7 +742,8 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     """
     read = get_engine(engine)['read']
 
-    fs, fs_token, paths = get_fs_paths(path, 'rb', **(storage_options or {}))
+    fs, fs_token, paths = get_fs_token_paths(path, mode='rb',
+                                             storage_options=storage_options)
 
     return read(fs, fs_token, paths, columns=columns, filters=filters,
                 categories=categories, index=index)
@@ -818,7 +819,8 @@ def to_parquet(df, path, engine='auto', compression='default', write_index=None,
 
     write = get_engine(engine)['write']
 
-    fs, fs_token, _ = get_fs_paths(path, 'wb', **(storage_options or {}))
+    fs, fs_token, _ = get_fs_token_paths(path, mode='wb',
+                                         storage_options=storage_options)
 
     out = write(df, fs, fs_token, path, write_index=write_index, append=append,
                 ignore_divisions=ignore_divisions, partition_on=partition_on,

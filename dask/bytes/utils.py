@@ -89,7 +89,9 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
     return options
 
 
-def update_storage_options(options, inherited):
+def update_storage_options(options, inherited=None):
+    if not inherited:
+        inherited = {}
     collisions = set(options) & set(inherited)
     if collisions:
         collisions = '\n'.join('- %r' % k for k in collisions)

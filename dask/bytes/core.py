@@ -138,7 +138,8 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     A sample header and list of ``dask.Delayed`` objects or list of lists of
     delayed objects if ``fn`` is a globstring.
     """
-    fs, fs_token, paths = get_fs_paths(urlpath, mode='rb', **kwargs)
+    fs, fs_token, paths = get_fs_token_paths(urlpath, mode='rb',
+                                             storage_options=kwargs)
 
     if len(paths) == 0:
         raise IOError("%s resolved to no files" % urlpath)
@@ -317,9 +318,9 @@ def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
     -------
     List of ``dask.delayed`` objects that compute to file-like objects
     """
-    fs, fs_token, paths = get_fs_paths(urlpath, mode, num=num,
-                                       name_function=name_function,
-                                       **kwargs)
+    fs, fs_token, paths = get_fs_token_paths(urlpath, mode, num=num,
+                                             name_function=name_function,
+                                             storage_options=kwargs)
 
     return [OpenFile(fs, path, mode=mode, compression=compression,
                      encoding=encoding, errors=errors)
@@ -352,31 +353,44 @@ def infer_options(urlpath):
     return urlpath, protocol, options
 
 
-def all_equal(seq):
-    if not seq:
-        return True
-    x = seq[0]
-    return all(y == x for y in seq[1:])
+def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
+                       storage_options=None):
+    """Filesystem, deterministic token, and paths from a urlpath and options.
 
-
-def get_fs_paths(urlpath, mode='rb', num=1, name_function=None, **kwargs):
+    Parameters
+    ----------
+    urlpath : string
+        Absolute or relative filepath, URL (may include protocols like
+        ``s3://``), or globstring pointing to data.
+    mode : str, optional
+        Mode in which to open files.
+    num : int, optional
+        If opening in writing mode, number of files we expect to create.
+    name_function : callable, optional
+        If opening in writing mode, this callable is used to generate path
+        names. Names are generated for each partition by
+        ``urlpath.replace('*', name_function(partition_index))``.
+    storage_options : dict, optional
+        Additional keywords to pass to the filesystem class.
+    """
     if isinstance(urlpath, (list, tuple)):
         if not urlpath:
             raise ValueError("empty urlpath")
         paths, protocols, options_itbl = zip(*map(infer_options, urlpath))
-        if not all_equal(protocols) or not all_equal(options_itbl):
-            raise ValueError("When specifying a list of paths, all paths must "
-                             "share the same protocol and options")
         protocol = protocols[0]
         options = options_itbl[0]
-        update_storage_options(options, kwargs)
+        if not (all(p == protocol for p in protocols) and
+                all(o == options for o in options_itbl)):
+            raise ValueError("When specifying a list of paths, all paths must "
+                             "share the same protocol and options")
+        update_storage_options(options, storage_options)
         paths = list(paths)
 
         fs, fs_token = get_fs(protocol, options)
 
     elif isinstance(urlpath, (str, unicode)) or hasattr(urlpath, 'name'):
         urlpath, protocol, options = infer_options(urlpath)
-        update_storage_options(options, kwargs)
+        update_storage_options(options, storage_options)
 
         fs, fs_token = get_fs(protocol, options)
 
@@ -428,27 +442,24 @@ def _expand_paths(path, name_function, num):
     if isinstance(path, (str, unicode)):
         if path.count('*') > 1:
             raise ValueError("Output path spec must contain at most one '*'.")
+        elif '*' not in path:
+            path = os.path.join(path, '*.part')
+
         if name_function is None:
             name_function = build_name_function(num - 1)
 
-        if '*' not in path:
-            path = os.path.join(path, '*.part')
-
-        formatted_names = [name_function(i) for i in range(num)]
-        if formatted_names != sorted(formatted_names):
-            warn("In order to preserve order between partitions "
-                 "name_function must preserve the order of its input")
-
-        paths = [path.replace('*', name_function(i))
-                 for i in range(num)]
-    elif isinstance(path, (tuple, list, set)):
+        paths = [path.replace('*', name_function(i)) for i in range(num)]
+        if paths != sorted(paths):
+            warn("In order to preserve order between partitions paths created "
+                 "with ``name_function`` should sort to partition order")
+    elif isinstance(path, (tuple, list)):
         assert len(path) == num
-        paths = path
+        paths = list(path)
     else:
-        raise ValueError("""Path should be either"
-1.  A list of paths -- ['foo.json', 'bar.json', ...]
-2.  A directory -- 'foo/
-3.  A path with a * in it -- 'foo.*.json'""")
+        raise ValueError("Path should be either\n"
+                         "1. A list of paths: ['foo.json', 'bar.json', ...]\n"
+                         "2. A directory: 'foo/\n"
+                         "3. A path with a '*' in it: 'foo.*.json'")
     return paths
 
 
