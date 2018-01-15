@@ -855,7 +855,10 @@ class WorkerTable(DashboardComponent):
             for name in self.names:
                 data[name].append(info.get(name, None))
             data['worker'][-1] = worker
-            data['memory_percent'][-1] = info['memory'] / info['memory_limit']
+            if info['memory_limit']:
+                data['memory_percent'][-1] = info['memory'] / info['memory_limit']
+            else:
+                data['memory_percent'][-1] = ''
             data['cpu'][-1] = info['cpu'] / 100.0
             data['cpu_fraction'][-1] = info['cpu'] / 100.0 / info['ncores']
 

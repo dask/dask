@@ -1094,7 +1094,7 @@ class Worker(WorkerBase):
         self.long_running = set()
 
         self.batched_stream = None
-        self.recent_messages_log = deque(maxlen=10000)
+        self.recent_messages_log = deque(maxlen=config.get('recent-messages-log-length', 0))
         self.target_message_size = 50e6  # 50 MB
 
         self.log = deque(maxlen=100000)

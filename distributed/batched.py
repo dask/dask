@@ -6,6 +6,7 @@ import logging
 from tornado import gen, locks
 from tornado.ioloop import IOLoop
 
+from .config import config
 from .core import CommClosedError
 
 
@@ -50,7 +51,7 @@ class BatchedSend(object):
         self.batch_count = 0
         self.byte_count = 0
         self.next_deadline = None
-        self.recent_message_log = deque(maxlen=100)
+        self.recent_message_log = deque(maxlen=config.get('recent-messages-log-length', 0))
 
     def start(self, comm):
         self.comm = comm

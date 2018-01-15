@@ -25,6 +25,8 @@ tcp-timeout: 30         # seconds delay before calling an unresponsive connectio
 default-scheme: tcp
 require-encryption: False   # whether to require encryption on non-local comms
 socket-backlog: 2048
+recent-messages-log-length: 0  # number of messages to keep for debugging
+
 #tls:
     #ca-file: xxx.pem
     #scheduler:
