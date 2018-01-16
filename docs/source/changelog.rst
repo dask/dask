@@ -7,7 +7,9 @@ Changelog
 
 Array
 +++++
+
 - Update error handling when len is called with empty chunks (:issue:`3058`) `Xander Johnson`_
+- Fixes a metadata bug with ``store``'s ``return_stored`` option (:pr:`3064`) `John A Kirkham`_
 
 DataFrame
 +++++++++
@@ -46,6 +48,7 @@ bounds indexes (:pr:`2967`) `Stephan Hoyer`_
 - Compatability for changes to structured arrays in the upcoming NumPy 1.14 release (:pr:`2964`) `Tom Augspurger`_
 - Add ``block`` (:pr:`2650`) `John A Kirkham`_
 - Add ``frompyfunc`` (:pr:`3030`) `Jim Crist`_
+- Add the ``return_stored`` option to ``store`` for chaining stored results (:pr:`2980`) `John A Kirkham`_
 
 DataFrame
 +++++++++

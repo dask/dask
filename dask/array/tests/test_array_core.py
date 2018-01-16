@@ -1261,13 +1261,14 @@ def test_store():
 
 
 def test_store_regions():
-    d = da.ones((4, 4, 4), chunks=(2, 2, 2))
+    d = da.ones((4, 4, 4), dtype=int, chunks=(2, 2, 2))
     a, b = d + 1, d + 2
+    a = a[:, 1:, :].astype(float)
 
     region = (slice(None,None,2), slice(None), [1, 2, 4, 5])
 
     # Single region:
-    at = np.zeros(shape=(8, 4, 6))
+    at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = store([a, b], [at, bt], regions=region, compute=False)
     assert isinstance(v, Delayed)
@@ -1278,7 +1279,7 @@ def test_store_regions():
     assert not (at == 2).all() and not ( at == 0 ).all()
 
     # Single region (keep result):
-    at = np.zeros(shape=(8, 4, 6))
+    at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = store(
         [a, b], [at, bt], regions=region, compute=False, return_stored=True
@@ -1303,7 +1304,7 @@ def test_store_regions():
     assert (ar == 2).all()
 
     # Multiple regions:
-    at = np.zeros(shape=(8, 4, 6))
+    at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = store([a, b], [at, bt], regions=[region, region], compute=False)
     assert isinstance(v, Delayed)
@@ -1314,7 +1315,7 @@ def test_store_regions():
     assert not (at == 2).all() and not ( at == 0 ).all()
 
     # Multiple regions (keep result):
-    at = np.zeros(shape=(8, 4, 6))
+    at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = store(
         [a, b], [at, bt],
