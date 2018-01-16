@@ -26,7 +26,12 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         Column which becomes the index, and defines the partitioning. Should
         be a indexed column in the SQL server, and numerical.
         Could be a function to return a value, e.g.,
-        ``sql.func.abs(sql.column('value')).label('abs(value)')``.
+        ``index_col=sql.func.abs(sql.column('value')).label('abs(value)')``, or 
+        ``index_col=cast(sql.column("id"),types.BigInteger).label("id")`` to convert 
+        the textfield ``id`` to ``BigInteger``.
+        
+        Note ``sql``, ``cast``, ``types`` methods comes frome ``sqlalchemy`` module.
+        
         Labeling columns created by functions or arithmetic operations is
         required.
     divisions: sequence
