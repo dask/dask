@@ -8,6 +8,7 @@ Changelog
 Array
 +++++
 
+- Fixes a metadata bug with ``store``'s ``return_stored`` option (:pr:`3064`) `John A Kirkham`_
 
 DataFrame
 +++++++++
