@@ -42,6 +42,7 @@ bounds indexes (:pr:`2967`) `Stephan Hoyer`_
 - Compatability for changes to structured arrays in the upcoming NumPy 1.14 release (:pr:`2964`) `Tom Augspurger`_
 - Add ``block`` (:pr:`2650`) `John A Kirkham`_
 - Add ``frompyfunc`` (:pr:`3030`) `Jim Crist`_
+- Add the ``return_stored`` option to ``store`` for chaining stored results (:pr:`2980`) `John A Kirkham`_
 
 DataFrame
 +++++++++
