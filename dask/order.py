@@ -65,26 +65,63 @@ from .utils_test import add, inc  # noqa: F401
 def order(dsk, dependencies=None):
     """ Order nodes in dask graph
 
-    The ordering will be a topological sort but will also tend to produce
-    computations that have a small memory footprint.
+    This produces an ordering over our tasks that we use to break ties when
+    executing.  We do this ahead of time to reduce a bit of stress on the
+    scheduler and also to assist in static analysis.
+
+    This currently traverses the graph as a single-threaded scheduler would
+    traverse it.  It breaks ties in the following ways:
+
+    1.  Start from roots nodes that have the largest subgraphs
+    2.  When a node has dependencies that are not yet computed prefer
+        dependencies with large subtrees  (start hard things first)
+    2.  When we reach a node that can be computed we then traverse up and
+        prefer dependents that have small super-trees (few total dependents)
+        (finish existing work quickly)
 
     Examples
     --------
     >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
     >>> order(dsk)
-    {'a': 2, 'c': 1, 'b': 3, 'd': 0}
+    {'a': 0, 'c': 1, 'b': 2, 'd': 3}
     """
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
     dependents = reverse_dict(dependencies)
 
-    ndepts = {k: len(dependents[k]) for k in dependents}
-    ndepends = ndependencies(dependencies, dependents)
+    total_dependencies = ndependencies(dependencies, dependents)
+    total_dependents = ndependents(dependencies, dependents)
 
-    def key(x):
-        return StrComparable((ndepts[x], -ndepends.get(x, 0), x))
+    waiting = {k: set(v) for k, v in dependencies.items()}
 
-    return dfs(dependencies, dependents, key=key)
+    result = dict()
+    i = 0
+
+    stack = [k for k, v in dependents.items() if not v]
+    stack = sorted(stack, key=total_dependencies.get)
+
+    while stack:
+        item = stack.pop()
+
+        if item in result:
+            continue
+
+        if waiting[item]:
+            stack.append(item)
+            stack.extend(sorted(waiting[item],
+                                key=total_dependencies.get))
+            continue
+
+        result[item] = i
+        i += 1
+
+        for dep in dependents[item]:
+            waiting[dep].discard(item)
+
+        deps = [d for d in dependents[item] if d not in result]
+        stack.extend(sorted(deps, key=total_dependents.get, reverse=True))
+
+    return result
 
 
 def ndependents(dependencies, dependents):
