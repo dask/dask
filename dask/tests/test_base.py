@@ -29,6 +29,7 @@ da = import_or_none('dask.array')
 db = import_or_none('dask.bag')
 dd = import_or_none('dask.dataframe')
 np = import_or_none('numpy')
+sp = import_or_none('scipy.sparse')
 pd = import_or_none('pandas')
 
 
@@ -283,6 +284,48 @@ def test_tokenize_base_types(x):
     assert tokenize(x) == tokenize(x), x
 
 
+@pytest.mark.skipif('not np')
+def test_tokenize_numpy_matrix():
+    rng = np.random.RandomState(1234)
+    a = np.asmatrix(rng.rand(100))
+    b = a.copy()
+    assert tokenize(a) == tokenize(b)
+
+    b[:10] = 1
+    assert tokenize(a) != tokenize(b)
+
+
+@pytest.mark.skipif('not sp')
+@pytest.mark.parametrize('cls_name',
+                         ('dia', 'bsr', 'coo', 'csc', 'csr', 'dok', 'lil'))
+def test_tokenize_dense_sparse_array(cls_name):
+    rng = np.random.RandomState(1234)
+
+    with pytest.warns(None):
+        # ignore scipy.sparse.SparseEfficiencyWarning
+        a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
+    b = a.copy()
+
+    assert tokenize(a) == tokenize(b)
+
+    # modifying the data values
+    if hasattr(b, 'data'):
+        b.data[:10] = 1
+    elif cls_name == 'dok':
+        b[3, 3] = 1
+    else:
+        raise ValueError
+
+    assert tokenize(a) != tokenize(b)
+
+    # modifying the data indices
+    with pytest.warns(None):
+        b = a.copy().asformat('coo')
+        b.row[:10] = np.arange(10)
+        b = b.asformat(cls_name)
+    assert tokenize(a) != tokenize(b)
+
+
 def test_is_dask_collection():
     class DummyCollection(object):
         def __init__(self, dsk=None):
@@ -502,6 +545,19 @@ def test_visualize():
         x = Tuple(dsk, ['a', 'b', 'c'])
         visualize(x, filename=os.path.join(d, 'mydask.png'))
         assert os.path.exists(os.path.join(d, 'mydask.png'))
+
+
+@pytest.mark.skipif('not da')
+@pytest.mark.skipif(sys.flags.optimize,
+                    reason="graphviz exception with Python -OO flag")
+def test_visualize_order():
+    pytest.importorskip('matplotlib')
+    x = da.arange(5, chunks=2)
+    with tmpfile(extension='dot') as fn:
+        x.visualize(color='order', filename=fn)
+        with open(fn) as f:
+            text = f.read()
+        assert 'color="#' in text
 
 
 def test_use_cloudpickle_to_tokenize_functions_in__main__():

@@ -8,6 +8,7 @@ Changelog
 Array
 +++++
 
+- Update error handling when len is called with empty chunks (:issue:`3058`) `Xander Johnson`_
 - Fixes a metadata bug with ``store``'s ``return_stored`` option (:pr:`3064`) `John A Kirkham`_
 
 DataFrame
@@ -20,6 +21,10 @@ Bag
 
 Core
 ++++
+
+-  Change default task ordering to prefer nodes with few dependents and then
+   many downstream dependencies (:pr:`3056`) `Matthew Rocklin`_
+-  Add color= option to visualize to color by task order (:pr:`3057`) `Matthew Rocklin`_
 
 
 0.16.1 / 2018-01-09
@@ -916,3 +921,4 @@ Other
 .. _`Markus Gonser`: https://github.com/magonser
 .. _`Martijn Arts`: https://github.com/mfaafm
 .. _`Jon Mease`: https://github.com/jmmease
+.. _`Xander Johnson`: https://github.com/metasyn

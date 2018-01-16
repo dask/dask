@@ -56,8 +56,16 @@ class DaskMethodsMixin(object):
         optimize_graph : bool, optional
             If True, the graph is optimized before rendering.  Otherwise,
             the graph is displayed as is. Default is False.
+        color: {None, 'order'}, optional
+            Options to color nodes.  Provide ``cmap=`` keyword for additional
+            colormap
         **kwargs
            Additional keyword arguments to forward to ``to_graphviz``.
+
+        Examples
+        --------
+        >>> x.visualize(filename='dask.pdf')  # doctest: +SKIP
+        >>> x.visualize(filename='dask.pdf', color='order')  # doctest: +SKIP
 
         Returns
         -------
@@ -356,8 +364,16 @@ def visualize(*args, **kwargs):
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
+    color: {None, 'order'}, optional
+        Options to color nodes.  Provide ``cmap=`` keyword for additional
+        colormap
     **kwargs
        Additional keyword arguments to forward to ``to_graphviz``.
+
+    Examples
+    --------
+    >>> x.visualize(filename='dask.pdf')  # doctest: +SKIP
+    >>> x.visualize(filename='dask.pdf', color='order')  # doctest: +SKIP
 
     Returns
     -------
@@ -385,6 +401,25 @@ def visualize(*args, **kwargs):
     dsk = collections_to_dsk(args, optimize_graph=optimize_graph)
     for d in dsks:
         dsk.update(d)
+
+    color = kwargs.get('color')
+
+    if color == 'order':
+        from .order import order
+        o = order(dsk)
+        try:
+            cmap = kwargs.pop('cmap')
+        except KeyError:
+            import matplotlib.pyplot as plt
+            cmap = plt.cm.viridis
+        mx = max(o.values())
+        colors = {k: _colorize(cmap(v / mx, bytes=True)) for k, v in o.items()}
+
+        kwargs['function_attributes'] = {k: {'color': v, 'label': str(o[k])}
+                                         for k, v in colors.items()}
+        kwargs['data_attributes'] = {k: {'color': v} for k, v in colors.items()}
+    elif color:
+        raise NotImplementedError("Unknown value color=%s" % color)
 
     return dot_graph(dsk, filename=filename, **kwargs)
 
@@ -658,6 +693,10 @@ def register_numpy():
                 data = hash_buffer_hex(x.copy().ravel(order='K').view('i1'))
         return (data, x.dtype, x.shape, x.strides)
 
+    @normalize_token.register(np.matrix)
+    def normalize_matrix(x):
+        return type(x).__name__, normalize_array(x.view(type=np.ndarray))
+
     normalize_token.register(np.dtype, repr)
     normalize_token.register(np.generic, repr)
 
@@ -669,3 +708,41 @@ def register_numpy():
                 return 'np.' + name
         except AttributeError:
             return normalize_function(x)
+
+
+@normalize_token.register_lazy("scipy")
+def register_scipy():
+    import scipy.sparse as sp
+
+    def normalize_sparse_matrix(x, attrs):
+        return type(x).__name__, normalize_seq((normalize_token(getattr(x, key))
+                                                for key in attrs))
+
+    for cls, attrs in [(sp.dia_matrix, ('data', 'offsets', 'shape')),
+                       (sp.bsr_matrix, ('data', 'indices', 'indptr',
+                                        'blocksize', 'shape')),
+                       (sp.coo_matrix, ('data', 'row', 'col', 'shape')),
+                       (sp.csr_matrix, ('data', 'indices', 'indptr', 'shape')),
+                       (sp.csc_matrix, ('data', 'indices', 'indptr', 'shape')),
+                       (sp.lil_matrix, ('data', 'rows', 'shape'))]:
+        normalize_token.register(cls,
+                                 partial(normalize_sparse_matrix, attrs=attrs))
+
+    @normalize_token.register(sp.dok_matrix)
+    def normalize_dok_matrix(x):
+        return type(x).__name__, normalize_token(sorted(x.items()))
+
+
+def _colorize(t):
+    """ Convert (r, g, b) triple to "#RRGGBB" string
+
+    For use with ``visualize(color=...)``
+
+    Examples
+    --------
+    >>> _colorize((255, 255, 255))
+    '#FFFFFF'
+    """
+    t = t[:3]
+    i = sum(v * 256 ** (len(t) - i - 1) for i, v in enumerate(t))
+    return "#" + hex(int(i))[2:].upper()
