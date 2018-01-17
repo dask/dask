@@ -50,31 +50,44 @@ def check_pyarrow():
         pytest.skip('pyarrow not found')
 
 
-def write_read_engines(xfail_arrow_to_fastparquet=True,
-                       xfail_fastparquet_to_arrow=False):
-    xfail = []
-    if xfail_arrow_to_fastparquet:
-        a2f = (pytest.mark.xfail(reason=("Can't read arrow directories "
-                                         "with fastparquet")),)
-    else:
-        a2f = ()
-    if xfail_fastparquet_to_arrow:
-        f2a = (pytest.mark.xfail(reason=("Can't read this fastparquet "
-                                         "file with pyarrow")),)
-    else:
-        f2a = ()
+def write_read_engines(**kwargs):
+    """Product of both engines for write/read:
 
-    xfail = tuple(xfail)
-    ff = () if fastparquet else (pytest.mark.skip(reason='fastparquet not found'),)
-    aa = () if pq else (pytest.mark.skip(reason='pyarrow not found'),)
-    engines = [pytest.param('fastparquet', 'fastparquet', marks=ff),
-               pytest.param('pyarrow', 'pyarrow', marks=aa),
-               pytest.param('fastparquet', 'pyarrow', marks=ff + aa + f2a),
-               pytest.param('pyarrow', 'fastparquet', marks=ff + aa + a2f)]
-    return pytest.mark.parametrize(('write_engine', 'read_engine'), engines)
+    To add custom marks, pass keyword of the form: `mark_writer_reader=reason`,
+    or `mark_engine=reason` to apply to all parameters with that engine."""
+    backends = {'pyarrow', 'fastparquet'}
+    marks = {(w, r): [] for w in backends for r in backends}
+
+    # Skip if uninstalled
+    for name, exists in zip(backends, [pq, fastparquet]):
+        val = pytest.mark.skip(reason='%s not found' % name)
+        if not exists:
+            for k in marks:
+                if name in k:
+                    marks[k].append(val)
+
+    # Custom marks
+    for kw, val in kwargs.items():
+        kind, rest = kw.split('_', 1)
+        key = tuple(rest.split('_'))
+        if (kind not in ('xfail', 'skip') or len(key) > 2 or
+                set(key).difference(backends)):
+            raise ValueError("unknown keyword %r" % kw)
+        val = getattr(pytest.mark, kind)(reason=val)
+        if len(key) == 2:
+            marks[key].append(val)
+        else:
+            for k in marks:
+                if key in k:
+                    marks[k].append(val)
+
+    return pytest.mark.parametrize(('write_engine', 'read_engine'),
+                                   [pytest.param(*k, marks=tuple(v))
+                                    for (k, v) in sorted(marks.items())])
 
 
-write_read_engines_xfail = write_read_engines(xfail_arrow_to_fastparquet=True)
+pyarrow_fastparquet_msg = "fastparquet fails reading pyarrow written directories"
+write_read_engines_xfail = write_read_engines(xfail_pyarrow_fastparquet=pyarrow_fastparquet_msg)
 
 
 @write_read_engines_xfail
@@ -124,7 +137,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
     assert_eq(df, read_df)
 
 
-@write_read_engines(xfail_arrow_to_fastparquet=False)
+@write_read_engines()
 def test_read_glob(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
@@ -216,7 +229,7 @@ def test_optimize(tmpdir, c):
 
 @pytest.mark.skipif(not hasattr(pd.DataFrame, 'to_parquet'),
                     reason="no to_parquet method")
-@write_read_engines(False)
+@write_read_engines()
 def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
     fn = str(tmpdir.join('test.parquet'))
     df = pd.DataFrame({'x': [1, 2, 3]})
@@ -498,7 +511,11 @@ def test_to_parquet_default_writes_nulls(tmpdir):
     assert table[1].null_count == 2
 
 
-@write_read_engines_xfail
+@write_read_engines(
+    xfail_pyarrow_fastparquet=pyarrow_fastparquet_msg,
+    xfail_pyarrow_pyarrow=("Race condition writing using pyarrow with partition_on. "
+                           "Fixed on master, but not on pyarrow 0.7.0")
+)
 def test_partition_on(tmpdir, write_engine, read_engine):
     tmpdir = str(tmpdir)
     df = pd.DataFrame({'a': np.random.choice(['A', 'B', 'C'], size=100),
@@ -615,8 +632,8 @@ def test_parquet_select_cats(tmpdir):
 
 
 @write_read_engines(
-    xfail_arrow_to_fastparquet=True,
-    xfail_fastparquet_to_arrow=True,  # fastparquet-251
+    xfail_pyarrow_fastparquet=pyarrow_fastparquet_msg,
+    xfail_fastparquet_pyarrow="fastparquet gh#251"
 )
 def test_columns_name(tmpdir, write_engine, read_engine):
     if write_engine == read_engine == 'fastparquet':
