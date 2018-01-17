@@ -13,9 +13,9 @@ from dask.compatibility import FileNotFoundError, unicode
 from dask.utils import filetexts
 from dask.bytes import compression
 from dask.bytes.local import LocalFileSystem
-from dask.bytes.core import (open_text_files, write_bytes, read_bytes,
-                             open_files, FileSystem, get_pyarrow_filesystem,
-                             logical_size, get_fs_token_paths)
+from dask.bytes.core import (write_bytes, read_bytes, open_files, FileSystem,
+                             get_pyarrow_filesystem, logical_size,
+                             get_fs_token_paths)
 
 compute = partial(compute, get=get)
 
@@ -220,40 +220,6 @@ def test_compression(fmt, blocksize):
                 b''.join([files[k] for k in sorted(files)]))
 
 
-def test_registered_read_bytes():
-    from dask.bytes.core import read_bytes
-    with filetexts(files, mode='b'):
-        sample, values = read_bytes('.test.accounts.*')
-
-        results = compute(*concat(values))
-        assert set(results) == set(files.values())
-
-
-def test_registered_open_files():
-    with filetexts(files, mode='b'):
-        myfiles = open_files('.test.accounts.*')
-        assert len(myfiles) == len(files)
-        data = []
-        for file in myfiles:
-            with file as f:
-                data.append(f.read())
-        assert list(data) == [files[k] for k in sorted(files)]
-
-
-@pytest.mark.parametrize('encoding', ['utf-8', 'ascii'])
-def test_registered_open_text_files(encoding):
-    from dask.bytes.core import open_text_files
-    with filetexts(files, mode='b'):
-        myfiles = open_text_files('.test.accounts.*', encoding=encoding)
-        assert len(myfiles) == len(files)
-        data = []
-        for file in myfiles:
-            with file as f:
-                data.append(f.read())
-        assert list(data) == [files[k].decode(encoding)
-                              for k in sorted(files)]
-
-
 def test_open_files():
     with filetexts(files, mode='b'):
         myfiles = open_files('.test.accounts.*')
@@ -264,28 +230,33 @@ def test_open_files():
                 assert x == files[data_file]
 
 
-@pytest.mark.parametrize('fmt', list(compression.files))
-def test_compression_binary(fmt):
-    files2 = valmap(compression.compress[fmt], files)
-    with filetexts(files2, mode='b'):
-        myfiles = open_files('.test.accounts.*', compression=fmt)
+@pytest.mark.parametrize('encoding', ['utf-8', 'ascii'])
+def test_open_files_text_mode(encoding):
+    with filetexts(files, mode='b'):
+        myfiles = open_files('.test.accounts.*', mode='rt', encoding=encoding)
+        assert len(myfiles) == len(files)
         data = []
         for file in myfiles:
             with file as f:
                 data.append(f.read())
-        assert list(data) == [files[k] for k in sorted(files)]
+        assert list(data) == [files[k].decode(encoding)
+                              for k in sorted(files)]
 
 
+@pytest.mark.parametrize('mode', ['rt', 'rb'])
 @pytest.mark.parametrize('fmt', list(compression.files))
-def test_compression_text(fmt):
+def test_open_files_compression(mode, fmt):
     files2 = valmap(compression.compress[fmt], files)
     with filetexts(files2, mode='b'):
-        myfiles = open_text_files('.test.accounts.*', compression=fmt)
+        myfiles = open_files('.test.accounts.*', mode=mode, compression=fmt)
         data = []
         for file in myfiles:
             with file as f:
                 data.append(f.read())
-        assert list(data) == [files[k].decode() for k in sorted(files)]
+        sol = [files[k] for k in sorted(files)]
+        if mode == 'rt':
+            sol = [b.decode() for b in sol]
+        assert list(data) == sol
 
 
 @pytest.mark.parametrize('fmt', list(compression.seekable_files))
@@ -298,7 +269,7 @@ def test_getsize(fmt):
 
 def test_bad_compression():
     with filetexts(files, mode='b'):
-        for func in [read_bytes, open_files, open_text_files]:
+        for func in [read_bytes, open_files]:
             with pytest.raises(ValueError):
                 sample, values = func('.test.accounts.*',
                                       compression='not-found')
