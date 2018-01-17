@@ -139,6 +139,8 @@ def test_fuse_slice():
 
     with pytest.raises(NotImplementedError):
         fuse_slice(slice(10, 15, 2), -1)
+    with pytest.raises(NotImplementedError):
+        fuse_slice(None, np.array([0, 0]))
 
 
 def test_fuse_slice_with_lists():
