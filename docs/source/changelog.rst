@@ -31,7 +31,7 @@ Core
   re-added in a more robust manner later (:pr:`3079`) `Jim Crist`_
 - Add ``dask.base.optimize`` for optimizing multiple collections without
   computing. (:pr:`3071`) `Jim Crist`_
->>>>>>> Add to changelog
+- Rename ``dask.optimize`` module to ``dask.optimization`` (:pr:`3071`) `Jim Crist`_
 
 
 0.16.1 / 2018-01-09

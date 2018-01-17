@@ -4,7 +4,7 @@ pytest.importorskip('numpy')
 import numpy as np
 import dask
 import dask.array as da
-from dask.optimize import fuse
+from dask.optimization import fuse
 from dask.utils import SerializableLock
 from dask.array.core import getter, getter_nofancy
 from dask.array.optimization import (getitem, optimize, optimize_slices,

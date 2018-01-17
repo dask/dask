@@ -441,7 +441,7 @@ elements of ``dask.delayed``.
 
     # Saved as dask_tuple.py
     from dask.base import DaskMethodsMixin
-    from dask.optimize import cull
+    from dask.optimization import cull
 
     # We subclass from DaskMethodsMixin to add common dask methods to our
     # class. This is nice but not necessary for creating a dask collection.

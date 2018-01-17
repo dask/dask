@@ -19,7 +19,7 @@ from weakref import WeakValueDictionary
 from .compatibility import get_named_args, getargspec, PY3, unicode, bind_method
 from .core import get_deps
 from .context import _globals
-from .optimize import key_split    # noqa: F401
+from .optimization import key_split    # noqa: F401
 
 
 system_encoding = sys.getdefaultencoding()

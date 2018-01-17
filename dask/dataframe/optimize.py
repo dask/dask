@@ -1,7 +1,7 @@
 """ Dataframe optimizations """
 from __future__ import absolute_import, division, print_function
 
-from ..optimize import cull, fuse_getitem, fuse
+from ..optimization import cull, fuse_getitem, fuse
 from ..context import _globals
 from .. import core
 

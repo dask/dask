@@ -5,8 +5,9 @@ import pytest
 
 from dask.utils_test import add, inc
 from dask.core import get_dependencies
-from dask.optimize import (cull, fuse, inline, inline_functions, functions_of,
-                           fuse_getitem, fuse_selections, fuse_linear)
+from dask.optimization import (cull, fuse, inline, inline_functions,
+                               functions_of, fuse_getitem, fuse_selections,
+                               fuse_linear)
 
 
 def double(x):
