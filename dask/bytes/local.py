@@ -4,7 +4,6 @@ from glob import glob
 import os
 
 from . import core
-from .utils import infer_storage_options
 from ..base import tokenize
 
 
@@ -26,20 +25,19 @@ class LocalFileSystem(core.FileSystem):
         """
         self.cwd = os.getcwd()
 
-    def _trim_filename(self, fn):
-        path = infer_storage_options(fn)['path']
+    def _normalize_path(self, path):
+        """Ensure paths are absolute and normalized"""
         if not os.path.isabs(path):
-            path = os.path.normpath(os.path.join(self.cwd, path))
-        return path
+            return os.path.join(self.cwd, path)
+        return os.path.normpath(path)
 
     def glob(self, path):
         """For a template path, return matching files"""
-        path = self._trim_filename(path)
-        return sorted(glob(path))
+        return sorted(glob(self._normalize_path(path)))
 
     def mkdirs(self, path):
         """Make any intermediate directories to make path writable"""
-        path = self._trim_filename(path)
+        path = self._normalize_path(path)
         try:
             os.makedirs(path)
         except OSError:
@@ -57,18 +55,16 @@ class LocalFileSystem(core.FileSystem):
             these on the filesystem instance, to apply to all files created by
             it. Not used for local.
         """
-        path = self._trim_filename(path)
-        return open(path, mode=mode)
+        return open(self._normalize_path(path), mode=mode)
 
     def ukey(self, path):
         """Unique identifier, so we can tell if a file changed"""
-        path = self._trim_filename(path)
+        path = self._normalize_path(path)
         return tokenize(path, os.stat(path).st_mtime)
 
     def size(self, path):
         """Size in bytes of the file at path"""
-        path = self._trim_filename(path)
-        return os.stat(path).st_size
+        return os.stat(self._normalize_path(path)).st_size
 
     def _get_pyarrow_filesystem(self):
         """Get an equivalent pyarrow filesystem"""

@@ -11,10 +11,11 @@ import pandas as pd
 
 from ..core import DataFrame, Series
 from ..utils import UNKNOWN_CATEGORIES
-from ...base import tokenize, normalize_token
+from ...base import tokenize
 from ...compatibility import PY3, string_types
 from ...delayed import delayed
-from ...bytes.core import get_fs_paths_myopen
+from ...bytes.core import get_fs_token_paths
+from ...utils import import_required
 
 __all__ = ('read_parquet', 'to_parquet')
 
@@ -195,26 +196,25 @@ def _normalize_index(user_index, data_index):
 # Fastparquet interface
 
 
-def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
-                      categories=None, index=None, storage_options=None):
+def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
+                      categories=None, index=None):
     import fastparquet
     from fastparquet.util import check_column_names
 
     if len(paths) > 1:
-        pf = fastparquet.ParquetFile(paths, open_with=myopen, sep=myopen.fs.sep)
+        pf = fastparquet.ParquetFile(paths, open_with=fs.open, sep=fs.sep)
     else:
         try:
             pf = fastparquet.ParquetFile(paths[0] + fs.sep + '_metadata',
-                                         open_with=myopen,
+                                         open_with=fs.open,
                                          sep=fs.sep)
         except Exception:
-            pf = fastparquet.ParquetFile(paths[0], open_with=myopen, sep=fs.sep)
+            pf = fastparquet.ParquetFile(paths[0], open_with=fs.open, sep=fs.sep)
 
     check_column_names(pf.columns, categories)
     if isinstance(columns, tuple):
         # ensure they tokenize the same
         columns = list(columns)
-    name = 'read-parquet-' + tokenize(pf, columns, categories)
 
     if pf.fmd.key_value_metadata:
         pandas_md = [x.value for x in pf.fmd.key_value_metadata if x.key == 'pandas']
@@ -283,7 +283,10 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
         assert len(meta.columns) == 1
         meta = meta[meta.columns[0]]
 
-    dsk = {(name, i): (_read_parquet_row_group, myopen, pf.row_group_filename(rg),
+    name = 'read-parquet-' + tokenize(fs_token, paths, all_columns, filters,
+                                      categories)
+
+    dsk = {(name, i): (_read_parquet_row_group, fs, pf.row_group_filename(rg),
                        index_names, all_columns, rg, out_type == Series,
                        categories, pf.schema, pf.cats, pf.dtypes,
                        pf.file_scheme, storage_name_mapping)
@@ -314,7 +317,7 @@ def _read_fastparquet(fs, paths, myopen, columns=None, filters=None,
     return out_type(dsk, name, meta, divisions)
 
 
-def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
+def _read_parquet_row_group(fs, fn, index, columns, rg, series, categories,
                             schema, cs, dt, scheme, storage_name_mapping, *args):
     from fastparquet.api import _pre_allocate
     from fastparquet.core import read_row_group_file
@@ -332,7 +335,7 @@ def _read_parquet_row_group(open, fn, index, columns, rg, series, categories,
 
     df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt)
     read_row_group_file(fn, rg, columns, categories, schema, cs,
-                        open=open, assign=views, scheme=scheme)
+                        open=fs.open, assign=views, scheme=scheme)
 
     if df.index.nlevels == 1:
         if index:
@@ -373,13 +376,11 @@ def _write_partition_fastparquet(df, fs, path, filename, fmd, compression,
     return rgs
 
 
-def _write_fastparquet(df, path, write_index=None, append=False,
+def _write_fastparquet(df, fs, fs_token, path, write_index=None, append=False,
                        ignore_divisions=False, partition_on=None,
-                       storage_options=None, compression=None, **kwargs):
+                       compression=None, **kwargs):
     import fastparquet
 
-    fs, paths, open_with = get_fs_paths_myopen(path, None, 'wb',
-                                               **(storage_options or {}))
     fs.mkdirs(path)
     sep = fs.sep
 
@@ -397,7 +398,7 @@ def _write_fastparquet(df, path, write_index=None, append=False,
         index_cols = []
 
     if append:
-        pf = fastparquet.api.ParquetFile(path, open_with=open_with, sep=sep)
+        pf = fastparquet.api.ParquetFile(path, open_with=fs.open, sep=sep)
         if pf.file_scheme not in ['hive', 'empty', 'flat']:
             raise ValueError('Requested file scheme is hive, '
                              'but existing file scheme is not.')
@@ -433,14 +434,14 @@ def _write_fastparquet(df, path, write_index=None, append=False,
     filenames = ['part.%i.parquet' % (i + i_offset)
                  for i in range(df.npartitions)]
 
-    write = delayed(_write_partition_fastparquet)
+    write = delayed(_write_partition_fastparquet, pure=False)
     writes = [write(part, fs, path, filename, fmd, compression, partition_on)
               for filename, part in zip(filenames, df.to_delayed())]
 
-    return delayed(_write_metadata)(writes, filenames, fmd, path, open_with, sep)
+    return delayed(_write_metadata)(writes, filenames, fmd, path, fs, sep)
 
 
-def _write_metadata(writes, filenames, fmd, path, open_with, sep):
+def _write_metadata(writes, filenames, fmd, path, fs, sep):
     """ Write Parquet metadata after writing all row groups
 
     See Also
@@ -460,17 +461,17 @@ def _write_metadata(writes, filenames, fmd, path, open_with, sep):
                 fmd.row_groups.append(rg)
 
     fn = sep.join([path, '_metadata'])
-    fastparquet.writer.write_common_metadata(fn, fmd, open_with=open_with,
+    fastparquet.writer.write_common_metadata(fn, fmd, open_with=fs.open,
                                              no_row_groups=False)
 
     fn = sep.join([path, '_common_metadata'])
-    fastparquet.writer.write_common_metadata(fn, fmd, open_with=open_with)
+    fastparquet.writer.write_common_metadata(fn, fmd, open_with=fs.open)
 
 
 # ----------------------------------------------------------------------
 # PyArrow interface
 
-def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
+def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
                   categories=None, index=None):
     from ...bytes.core import get_pyarrow_filesystem
     import pyarrow.parquet as pq
@@ -515,8 +516,6 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
             index_names = [name_storage_mapping.get(name, name)
                            for name in index_names]
 
-    task_name = 'read-parquet-' + tokenize(dataset, columns)
-
     column_names, out_type = _normalize_columns(columns, column_names)
     index_names = _normalize_index(index, index_names)
 
@@ -531,11 +530,13 @@ def _read_pyarrow(fs, paths, file_opener, columns=None, filters=None,
         assert len(meta.columns) == 1
         meta = meta[meta.columns[0]]
 
+    task_name = 'read-parquet-' + tokenize(fs_token, paths, all_columns)
+
     if dataset.pieces:
         divisions = (None,) * (len(dataset.pieces) + 1)
         task_plan = {
             (task_name, i): (_read_pyarrow_parquet_piece,
-                             file_opener,
+                             fs,
                              piece,
                              all_columns,
                              index_names,
@@ -560,9 +561,9 @@ def _get_pyarrow_dtypes(schema):
     return dtypes
 
 
-def _read_pyarrow_parquet_piece(open_file_func, piece, columns, index_cols,
-                                is_series, partitions):
-    with open_file_func(piece.path, mode='rb') as f:
+def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
+                                partitions):
+    with fs.open(piece.path, mode='rb') as f:
         table = piece.read(columns=columns, partitions=partitions,
                            use_pandas_metadata=True,
                            file=f)
@@ -589,9 +590,8 @@ _pyarrow_write_metadata_kwargs = {'version', 'use_deprecated_int96_timestamps',
                                   'coerce_timestamps'}
 
 
-def _write_pyarrow(df, path, write_index=None, append=False,
-                   ignore_divisions=False, partition_on=None,
-                   storage_options=None, **kwargs):
+def _write_pyarrow(df, fs, fs_token, path, write_index=None, append=False,
+                   ignore_divisions=False, partition_on=None, **kwargs):
     if append:
         raise NotImplementedError("`append` not implemented for "
                                   "`engine='pyarrow'`")
@@ -609,22 +609,20 @@ def _write_pyarrow(df, path, write_index=None, append=False,
     if write_index is None and df.known_divisions:
         write_index = True
 
-    fs, paths, open_with = get_fs_paths_myopen(path, None, 'wb',
-                                               **(storage_options or {}))
     fs.mkdirs(path)
 
     template = fs.sep.join([path, 'part.%i.parquet'])
 
-    write = delayed(_write_partition_pyarrow)
+    write = delayed(_write_partition_pyarrow, pure=False)
     first_kwargs = kwargs.copy()
     first_kwargs['metadata_path'] = fs.sep.join([path, '_common_metadata'])
-    writes = [write(part, open_with, path, fs, template % i, write_index, partition_on,
+    writes = [write(part, path, fs, template % i, write_index, partition_on,
                     **(kwargs if i else first_kwargs))
               for i, part in enumerate(df.to_delayed())]
     return delayed(writes)
 
 
-def _write_partition_pyarrow(df, open_with, path, fs, filename, write_index,
+def _write_partition_pyarrow(df, path, fs, filename, write_index,
                              partition_on, metadata_path=None, **kwargs):
     import pyarrow as pa
     from pyarrow import parquet
@@ -633,11 +631,11 @@ def _write_partition_pyarrow(df, open_with, path, fs, filename, write_index,
     if partition_on:
         parquet.write_to_dataset(t, path, partition_cols=partition_on, filesystem=fs)
     else:
-        with open_with(filename, 'wb') as fil:
+        with fs.open(filename, 'wb') as fil:
             parquet.write_table(t, fil, **kwargs)
 
     if metadata_path is not None:
-        with open_with(metadata_path, 'wb') as fil:
+        with fs.open(metadata_path, 'wb') as fil:
             # Get only arguments specified in the function
             kwargs_meta = {k: v for k, v in kwargs.items()
                            if k in _pyarrow_write_metadata_kwargs}
@@ -670,34 +668,20 @@ def get_engine(engine):
         for eng in ['fastparquet', 'pyarrow']:
             try:
                 return get_engine(eng)
-            except ImportError:
+            except RuntimeError:
                 pass
         else:
-            raise ImportError("Please install either fastparquet or pyarrow")
+            raise RuntimeError("Please install either fastparquet or pyarrow")
 
     elif engine == 'fastparquet':
-        try:
-            import fastparquet
-        except ImportError:
-            raise ImportError("fastparquet not installed")
-
-        @normalize_token.register(fastparquet.ParquetFile)
-        def normalize_ParquetFile(pf):
-            return (type(pf), pf.fn, pf.sep) + normalize_token(pf.open)
+        import_required('fastparquet', "`fastparquet` not installed")
 
         _ENGINES['fastparquet'] = eng = {'read': _read_fastparquet,
                                          'write': _write_fastparquet}
         return eng
 
     elif engine == 'pyarrow':
-        try:
-            import pyarrow.parquet as pq
-        except ImportError:
-            raise ImportError("pyarrow not installed")
-
-        @normalize_token.register(pq.ParquetDataset)
-        def normalize_PyArrowParquetDataset(ds):
-            return (type(ds), ds.paths)
+        import_required('pyarrow', "`pyarrow` not installed")
 
         _ENGINES['pyarrow'] = eng = {'read': _read_pyarrow,
                                      'write': _write_pyarrow}
@@ -756,12 +740,12 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     --------
     to_parquet
     """
-    fs, paths, file_opener = get_fs_paths_myopen(path, None, 'rb',
-                                                 **(storage_options or {}))
-
     read = get_engine(engine)['read']
 
-    return read(fs, paths, file_opener, columns=columns, filters=filters,
+    fs, fs_token, paths = get_fs_token_paths(path, mode='rb',
+                                             storage_options=storage_options)
+
+    return read(fs, fs_token, paths, columns=columns, filters=filters,
                 categories=categories, index=index)
 
 
@@ -835,9 +819,12 @@ def to_parquet(df, path, engine='auto', compression='default', write_index=None,
 
     write = get_engine(engine)['write']
 
-    out = write(df, path, write_index=write_index, append=append,
+    fs, fs_token, _ = get_fs_token_paths(path, mode='wb',
+                                         storage_options=storage_options)
+
+    out = write(df, fs, fs_token, path, write_index=write_index, append=append,
                 ignore_divisions=ignore_divisions, partition_on=partition_on,
-                storage_options=storage_options, **kwargs)
+                **kwargs)
 
     if compute:
         out.compute()
