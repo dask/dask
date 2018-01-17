@@ -25,19 +25,19 @@ class LocalFileSystem(core.FileSystem):
         """
         self.cwd = os.getcwd()
 
-    def _normpath(self, path):
-        # ensure paths are absolute and normalized
+    def _normalize_path(self, path):
+        """Ensure paths are absolute and normalized"""
         if not os.path.isabs(path):
             return os.path.join(self.cwd, path)
         return os.path.normpath(path)
 
     def glob(self, path):
         """For a template path, return matching files"""
-        return sorted(glob(self._normpath(path)))
+        return sorted(glob(self._normalize_path(path)))
 
     def mkdirs(self, path):
         """Make any intermediate directories to make path writable"""
-        path = self._normpath(path)
+        path = self._normalize_path(path)
         try:
             os.makedirs(path)
         except OSError:
@@ -55,16 +55,16 @@ class LocalFileSystem(core.FileSystem):
             these on the filesystem instance, to apply to all files created by
             it. Not used for local.
         """
-        return open(self._normpath(path), mode=mode)
+        return open(self._normalize_path(path), mode=mode)
 
     def ukey(self, path):
         """Unique identifier, so we can tell if a file changed"""
-        path = self._normpath(path)
+        path = self._normalize_path(path)
         return tokenize(path, os.stat(path).st_mtime)
 
     def size(self, path):
         """Size in bytes of the file at path"""
-        return os.stat(self._normpath(path)).st_size
+        return os.stat(self._normalize_path(path)).st_size
 
     def _get_pyarrow_filesystem(self):
         """Get an equivalent pyarrow filesystem"""

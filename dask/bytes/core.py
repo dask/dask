@@ -224,7 +224,8 @@ class OpenFile(object):
     Parameters
     ----------
     fs : FileSystem
-        The file system to use for opening the file
+        The file system to use for opening the file. Should match the interface
+        of ``dask.bytes.local.LocalFileSystem``.
     path : str
         Location to open
     mode : str like 'rb', optional
@@ -375,12 +376,12 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
     """
     if isinstance(urlpath, (list, tuple)):
         if not urlpath:
-            raise ValueError("empty urlpath")
-        paths, protocols, options_itbl = zip(*map(infer_options, urlpath))
+            raise ValueError("empty urlpath sequence")
+        paths, protocols, options_list = zip(*map(infer_options, urlpath))
         protocol = protocols[0]
-        options = options_itbl[0]
+        options = options_list[0]
         if not (all(p == protocol for p in protocols) and
-                all(o == options for o in options_itbl)):
+                all(o == options for o in options_list)):
             raise ValueError("When specifying a list of paths, all paths must "
                              "share the same protocol and options")
         update_storage_options(options, storage_options)
@@ -511,6 +512,8 @@ _filesystems = dict()
 
 
 class FileSystem(object):
+    """Deprecated, do not use. Implement filesystems by matching the interface
+    of `dask.bytes.local.LocalFileSystem` instead of subclassing."""
     pass
 
 
