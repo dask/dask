@@ -637,9 +637,11 @@ def test_from_s3():
     e = db.read_text('s3://tip-data/t*.gz', storage_options=dict(anon=True))
     assert e.take(5) == five_tips
 
-    # test all keys in bucket
-    c = db.read_text('s3://tip-data/*', storage_options=dict(anon=True))
-    assert c.npartitions == 4
+    # test multiple keys in bucket
+    c = db.read_text(['s3://tip-data/tips.gz', 's3://tip-data/tips.json',
+                      's3://tip-data/tips.csv'],
+                     storage_options=dict(anon=True))
+    assert c.npartitions == 3
 
 
 def test_from_sequence():
@@ -872,7 +874,9 @@ def test_to_textfiles_inputs():
         B.to_textfiles(dirname)
         assert os.path.exists(dirname)
         assert os.path.exists(os.path.join(dirname, '0.part'))
-    pytest.raises(ValueError, lambda: B.to_textfiles(5))
+
+    with pytest.raises(TypeError):
+        B.to_textfiles(5)
 
 
 def test_to_textfiles_endlines():
