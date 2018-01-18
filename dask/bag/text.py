@@ -7,7 +7,7 @@ from toolz import concat
 
 from ..utils import system_encoding
 from ..delayed import delayed
-from ..bytes import open_text_files, read_bytes
+from ..bytes import open_files, read_bytes
 from .core import from_delayed
 
 delayed = delayed(pure=True)
@@ -67,9 +67,9 @@ def read_text(urlpath, blocksize=None, compression='infer',
                      for fn in urlpath], [])
     else:
         if blocksize is None:
-            files = open_text_files(urlpath, encoding=encoding, errors=errors,
-                                    compression=compression,
-                                    **(storage_options or {}))
+            files = open_files(urlpath, mode='rt', encoding=encoding,
+                               errors=errors, compression=compression,
+                               **(storage_options or {}))
             blocks = [delayed(list, pure=True)(delayed(file_to_blocks)(file))
                       for file in files]
 

@@ -12,17 +12,16 @@ users.*
 .. autosummary::
    read_bytes
    open_files
-   open_text_files
 
 These functions are extensible in their output formats (bytes, file objects),
 their input locations (file system, S3, HDFS), line delimiters, and compression
 formats.
 
 These functions provide data as ``dask.delayed`` objects.  These objects either
-point to blocks of bytes (``read_bytes``) or open file objects (``open_files``,
-``open_text_files``).  They can handle different compression formats by
-prepending protocols like ``s3://`` or ``hdfs://``.  They handle compression
-formats listed in the ``dask.bytes.compression`` module.
+point to blocks of bytes (``read_bytes``) or open file objects
+(``open_files``).  They can handle different compression formats by prepending
+protocols like ``s3://`` or ``hdfs://``.  They handle compression formats
+listed in the ``dask.bytes.compression`` module.
 
 These functions are not used for all data sources.  Some data sources like HDF5
 are quite particular and receive custom treatment.
@@ -74,4 +73,3 @@ Functions
 
 .. autofunction:: read_bytes
 .. autofunction:: open_files
-.. autofunction:: open_text_files
