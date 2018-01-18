@@ -285,7 +285,7 @@ class OpenFile(object):
 
 def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
                errors=None, name_function=None, num=1, **kwargs):
-    """ Given path return dask.delayed file-like objects
+    """ Given a path return file-like objects
 
     Parameters
     ----------
@@ -412,6 +412,8 @@ def open_text_files(urlpath, compression=None, mode='rt', encoding='utf8',
                     errors='strict', **kwargs):
     """ Given path return dask.delayed file-like objects in text mode
 
+    This function is deprecated, use ``open_files(path, mode='rt', ...)``.
+
     Parameters
     ----------
     urlpath: string
@@ -434,6 +436,8 @@ def open_text_files(urlpath, compression=None, mode='rt', encoding='utf8',
     -------
     List of ``dask.delayed`` objects that compute to text file-like objects
     """
+    warn("DeprecationWarning: open_text_files is deprecated, use `open_files` "
+         "with mode='rt' or mode='wt'")
     return open_files(urlpath, mode=mode.replace('b', 't'),
                       compression=compression, encoding=encoding,
                       errors=errors, **kwargs)

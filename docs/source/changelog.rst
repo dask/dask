@@ -22,6 +22,7 @@ Bag
 Core
 ++++
 
+- Deprecate ``dask.bytes.open_text_files`` (:pr:`3077`) `Jim Crist`_
 -  Change default task ordering to prefer nodes with few dependents and then
    many downstream dependencies (:pr:`3056`) `Matthew Rocklin`_
 -  Add color= option to visualize to color by task order (:pr:`3057`) `Matthew Rocklin`_
