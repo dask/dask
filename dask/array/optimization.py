@@ -220,7 +220,7 @@ def fuse_slice(a, b):
     None
     """
     # None only works if the second side is a full slice
-    if a is None and b == slice(None, None):
+    if a is None and isinstance(b, slice) and b == slice(None, None):
         return None
 
     # Replace None with 0 and one in start and step
