@@ -15,6 +15,7 @@ from ...base import tokenize
 from ...compatibility import PY3, string_types
 from ...delayed import delayed
 from ...bytes.core import get_fs_token_paths
+from ...bytes.utils import infer_storage_options
 from ...utils import import_required
 
 __all__ = ('read_parquet', 'to_parquet')
@@ -821,6 +822,8 @@ def to_parquet(df, path, engine='auto', compression='default', write_index=None,
 
     fs, fs_token, _ = get_fs_token_paths(path, mode='wb',
                                          storage_options=storage_options)
+    # Trim any protocol information from the path before forwarding
+    path = infer_storage_options(path)['path']
 
     out = write(df, fs, fs_token, path, write_index=write_index, append=append,
                 ignore_divisions=ignore_divisions, partition_on=partition_on,
