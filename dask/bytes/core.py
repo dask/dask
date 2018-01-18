@@ -96,7 +96,7 @@ def write_bytes(data, urlpath, name_function=None, compression=None,
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
                sample=True, compression=None, **kwargs):
-    """ Convert path to a list of delayed values
+    """Given a path or paths, return delayed objects that read from those paths.
 
     The path may be a filename like ``'2015-01-01.csv'`` or a globstring
     like ``'2015-*-*.csv'``.
@@ -109,22 +109,24 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
 
     Parameters
     ----------
-    urlpath: string
-        Absolute or relative filepath, URL (may include protocols like
-        ``s3://``), or globstring pointing to data.
-    delimiter: bytes
+    urlpath : string or list
+        Absolute or relative filepath(s). Prefix with a protocol like ``s3://``
+        to read from alternative filesystems. To read from multiple files you
+        can pass a globstring or a list of paths, with the caveat that they
+        must all have the same protocol.
+    delimiter : bytes
         An optional delimiter, like ``b'\\n'`` on which to split blocks of
         bytes.
-    not_zero: bool
+    not_zero : bool
         Force seek of start-of-file delimiter, discarding header.
-    blocksize: int (=128MB)
+    blocksize : int (=128MB)
         Chunk size in bytes
-    compression: string or None
+    compression : string or None
         String like 'gzip' or 'xz'.  Must support efficient random access.
-    sample: bool or int
+    sample : bool or int
         Whether or not to return a header sample. If an integer is given it is
         used as sample size, otherwise the default sample size is 10kB.
-    **kwargs: dict
+    **kwargs : dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
 
@@ -135,8 +137,11 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
 
     Returns
     -------
-    A sample header and list of ``dask.Delayed`` objects or list of lists of
-    delayed objects if ``fn`` is a globstring.
+    sample : bytes
+        The sample header
+    blocks : list of lists of ``dask.Delayed``
+        Each list corresponds to a file, and each delayed object computes to a
+        block of bytes from that file.
     """
     fs, fs_token, paths = get_fs_token_paths(urlpath, mode='rb',
                                              storage_options=kwargs)
@@ -285,28 +290,30 @@ class OpenFile(object):
 
 def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
                errors=None, name_function=None, num=1, **kwargs):
-    """ Given a path return file-like objects
+    """ Given a path or paths, return a list of ``OpenFile`` objects.
 
     Parameters
     ----------
-    urlpath: string
-        Absolute or relative filepath, URL (may include protocols like
-        ``s3://``), or globstring pointing to data.
-    mode: 'rb', 'wt', etc.
-    compression: string
+    urlpath : string or list
+        Absolute or relative filepath(s). Prefix with a protocol like ``s3://``
+        to read from alternative filesystems. To read from multiple files you
+        can pass a globstring or a list of paths, with the caveat that they
+        must all have the same protocol.
+    mode : 'rb', 'wt', etc.
+    compression : string
         Compression to use.  See ``dask.bytes.compression.files`` for options.
-    encoding: str
+    encoding : str
         For text mode only
-    errors: None or str
+    errors : None or str
         Passed to TextIOWrapper in text mode
-    name_function: function or None
+    name_function : function or None
         if opening a set of files for writing, those files do not yet exist,
         so we need to generate their names by formatting the urlpath for
         each sequence number
-    num: int [1]
+    num : int [1]
         if writing mode, number of files we expect to create (passed to
         name+function)
-    **kwargs: dict
+    **kwargs : dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
 
@@ -317,7 +324,7 @@ def open_files(urlpath, mode='rb', compression=None, encoding='utf8',
 
     Returns
     -------
-    List of ``dask.delayed`` objects that compute to file-like objects
+    List of ``OpenFile`` objects.
     """
     fs, fs_token, paths = get_fs_token_paths(urlpath, mode, num=num,
                                              name_function=name_function,
