@@ -10,6 +10,7 @@ Array
 
 - Update error handling when len is called with empty chunks (:issue:`3058`) `Xander Johnson`_
 - Fixes a metadata bug with ``store``'s ``return_stored`` option (:pr:`3064`) `John A Kirkham`_
+- Fix a bug in ``optimization.fuse_slice`` to properly handle when first input is ``None`` (:pr:`3076`) `James Bourbeau`_
 
 DataFrame
 +++++++++
