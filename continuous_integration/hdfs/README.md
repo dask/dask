@@ -1,4 +1,19 @@
-# Setting up hdfs testing using docker
+## HDFS testing on Travis CI
+
+Dask & HDFS testing relies on a docker container. The tests are setup to run on
+Travis CI, but only under the following conditions:
+
+- Merges to master
+- PRs where the branch name contains the string `"__TEST_HDFS__"`
+
+If you make a PR changing HDFS functionality it'd be good to have the HDFS
+tests run, please add `"__TEST_HDFS__"` to the end of your branch name.
+
+If you've already made a PR (and thus can't change the branch name), you can
+temporarily comment out the `if:` configuration in the `.travis.yml` for the
+HDFS tests.
+
+## Setting up HDFS testing locally using Docker
 
 Assumes docker is already installed and the docker-daemon is running.
 
@@ -20,6 +35,12 @@ docker build -t daskdev/dask-hdfs-testing continuous_integration/hdfs/
 source continuous_integration/hdfs/startup_hdfs.sh
 ```
 
+- Install dependencies and dask on the container
+
+```bash
+source continuous_integration/hdfs/install.sh
+```
+
 - Start a bash session in the running container:
 
 ```bash
@@ -30,10 +51,9 @@ export CONTAINER_ID=$(docker ps -l -q)
 docker exec -it $CONTAINER_ID bash
 ```
 
-- Install the library and run the tests
+- Run the tests
 
 ```bash
-python setup.py install
 # Test just the hdfs tests
 py.test dask/bytes/tests/test_hdfs.py -s -vv
 ```
