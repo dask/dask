@@ -269,6 +269,57 @@ def _extract_graph_and_keys(vals):
     return dsk, keys
 
 
+def optimize(*args, **kwargs):
+    """Optimize several dask collections at once.
+
+    Returns equivalent dask collections that all share the same merged and
+    optimized underlying graph. This can be useful if converting multiple
+    collections to delayed objects, or to manually apply the optimizations at
+    strategic points.
+
+    Note that in most cases you shouldn't need to call this method directly.
+
+    Parameters
+    ----------
+    *args : objects
+        Any number of objects. If a dask object, its graph is optimized and
+        merged with all those of all other dask objects before returning an
+        equivalent dask collection. Non-dask arguments are passed through
+        unchanged.
+    optimizations : list of callables, optional
+        Additional optimization passes to perform.
+    **kwargs
+        Extra keyword arguments to forward to the optimization passes.
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> a = da.arange(10, chunks=2).sum()
+    >>> b = da.arange(10, chunks=2).mean()
+    >>> a2, b2 = optimize(a, b)
+
+    >>> a2.compute() == a.compute()
+    True
+    >>> b2.compute() == b.compute()
+    True
+    """
+    variables = [a for a in args if is_dask_collection(a)]
+    if not variables:
+        return args
+
+    dsk = collections_to_dsk(variables, **kwargs)
+    postpersists = [a.__dask_postpersist__() if is_dask_collection(a)
+                    else (None, a) for a in args]
+
+    return tuple(a if f is None else f(dsk, *a) for f, a in postpersists)
+
+
+# TODO: remove after deprecation cycle of `dask.optimize` module completes
+from . import optimize as _deprecated_optimize
+for _m in _deprecated_optimize.__all__:
+    setattr(optimize, _m, getattr(_deprecated_optimize, _m))
+
+
 def compute(*args, **kwargs):
     """Compute several dask collections at once.
 

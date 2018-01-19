@@ -4,8 +4,8 @@ Optimization
 Performance can be significantly improved in different contexts by making
 small optimizations on the dask graph before calling the scheduler.
 
-The ``dask.optimize`` module contains several functions to transform graphs in
-a variety of useful ways. In most cases, users won't need to interact with
+The ``dask.optimization`` module contains several functions to transform graphs
+in a variety of useful ways. In most cases, users won't need to interact with
 these functions directly, as specialized subsets of these transforms are done
 automatically in the dask collections (``dask.array``, ``dask.bag``, and
 ``dask.dataframe``). However, users working with custom graphs or computations
@@ -92,7 +92,7 @@ later steps:
 
 .. code-block:: python
 
-    >>> from dask.optimize import cull
+    >>> from dask.optimization import cull
     >>> dsk1, dependencies = cull(dsk, outputs)
 
 .. image:: images/optimize_dask2.png
@@ -105,7 +105,7 @@ tasks to improve efficiency using the ``inline`` function. For example:
 
 .. code-block:: python
 
-    >>> from dask.optimize import inline
+    >>> from dask.optimization import inline
     >>> dsk2 = inline(dsk1, dependencies=dependencies)
     >>> results = get(dsk2, outputs)
     word list has 2 occurrences of apple, out of 7 words
@@ -124,7 +124,7 @@ can be used:
 
 .. code-block:: python
 
-    >>> from dask.optimize import inline_functions
+    >>> from dask.optimization import inline_functions
     >>> dsk3 = inline_functions(dsk2, outputs, [len, str.split],
     ...                         dependencies=dependencies)
     >>> results = get(dsk3, outputs)
@@ -142,7 +142,7 @@ One option is just to merge these linear chains into one big task using the
 
 .. code-block:: python
 
-    >>> from dask.optimize import fuse
+    >>> from dask.optimization import fuse
     >>> dsk4, dependencies = fuse(dsk3)
     >>> results = get(dsk4, outputs)
     word list has 2 occurrences of apple, out of 7 words
@@ -181,7 +181,7 @@ As stated previously, these optimizations are already performed automatically
 in the dask collections. Users not working with custom graphs or computations
 should rarely need to directly interact with them.
 
-These are just a few of the optimizations provided in ``dask.optimize``. For
+These are just a few of the optimizations provided in ``dask.optimization``. For
 more information, see the API below.
 
 
@@ -325,7 +325,7 @@ standard optimization scheme (which is usually a good choice).
 API
 ---
 
-.. currentmodule:: dask.optimize
+.. currentmodule:: dask.optimization
 
 **Top level optimizations**
 
@@ -352,7 +352,7 @@ API
 Definitions
 ~~~~~~~~~~~
 
-.. currentmodule:: dask.optimize
+.. currentmodule:: dask.optimization
 
 .. autofunction:: cull
 .. autofunction:: fuse
