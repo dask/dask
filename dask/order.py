@@ -87,6 +87,10 @@ def order(dsk, dependencies=None):
     """
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+
+    for k, deps in dependencies.items():
+        deps.discard(k)
+
     dependents = reverse_dict(dependencies)
 
     total_dependencies = ndependencies(dependencies, dependents)
