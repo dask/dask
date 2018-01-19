@@ -80,11 +80,7 @@ jobs:
 
 
 install:
-  - |
-    if [[ $TEST_HDFS == 'true' ]]; then
-      docker exec -it $CONTAINER_ID conda install -y -q dask hdfs3 pyarrow -c conda-forge
-      docker exec -it $CONTAINER_ID python setup.py install
-    fi;
+  - if [[ $TEST_HDFS == 'true' ]]; then source continuous_integration/hdfs/install.sh; fi
   - if [[ $TEST == 'true' ]]; then source continuous_integration/travis/install.sh; fi
 
 script:
