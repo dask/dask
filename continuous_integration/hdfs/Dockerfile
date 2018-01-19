@@ -32,6 +32,9 @@ RUN curl https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -
 
 ENV PATH /opt/conda/bin:$PATH
 
+# Notifies the dask tests to run
+ENV DASK_RUN_HDFS_TESTS true
+
 EXPOSE 8020 50070
 
 VOLUME /working
