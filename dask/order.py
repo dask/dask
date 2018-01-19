@@ -94,6 +94,12 @@ def order(dsk, dependencies=None):
 
     waiting = {k: set(v) for k, v in dependencies.items()}
 
+    def dependencies_key(x):
+        return total_dependencies.get(x, 0), StrComparable(x)
+
+    def dependents_key(x):
+        return total_dependents.get(x, 0), StrComparable(x)
+
     result = dict()
     i = 0
 
@@ -106,10 +112,10 @@ def order(dsk, dependencies=None):
         if item in result:
             continue
 
-        if waiting[item]:
+        deps = waiting[item]
+        if deps:
             stack.append(item)
-            stack.extend(sorted(waiting[item],
-                                key=total_dependencies.get))
+            stack.extend(sorted(deps, key=dependencies_key))
             continue
 
         result[item] = i
@@ -119,7 +125,7 @@ def order(dsk, dependencies=None):
             waiting[dep].discard(item)
 
         deps = [d for d in dependents[item] if d not in result]
-        stack.extend(sorted(deps, key=total_dependents.get, reverse=True))
+        stack.extend(sorted(deps, key=dependents_key, reverse=True))
 
     return result
 
@@ -176,3 +182,31 @@ def ndependencies(dependencies, dependents):
             if num_needed[parent] == 0:
                 current.add(parent)
     return result
+
+
+class StrComparable(object):
+    """ Wrap object so that it defaults to string comparison
+
+    When comparing two objects of different types Python fails
+
+    >>> 'a' < 1  # doctest: +SKIP
+    Traceback (most recent call last):
+        ...
+    TypeError: '<' not supported between instances of 'str' and 'int'
+
+    This class wraps the object so that, when this would occur it instead
+    compares the string representation
+
+    >>> StrComparable('a') < StrComparable(1)
+    False
+    """
+    __slots__ = ('obj',)
+
+    def __init__(self, obj):
+        self.obj = obj
+
+    def __lt__(self, other):
+        try:
+            return self.obj < other.obj
+        except Exception:
+            return str(self.obj) < str(other.obj)
