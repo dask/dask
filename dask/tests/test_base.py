@@ -11,7 +11,7 @@ import dask
 from dask import delayed
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
                        visualize, persist, function_cache, is_dask_collection,
-                       DaskMethodsMixin)
+                       DaskMethodsMixin, optimize)
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
@@ -577,13 +577,14 @@ def test_use_cloudpickle_to_tokenize_functions_in__main__():
     assert b'cloudpickle' in t
 
 
-def test_optimizations_keyword():
-    def inc_to_dec(dsk, keys):
-        for key in dsk:
-            if dsk[key][0] == inc:
-                dsk[key] = (dec,) + dsk[key][1:]
-        return dsk
+def inc_to_dec(dsk, keys):
+    for key in dsk:
+        if dsk[key][0] == inc:
+            dsk[key] = (dec,) + dsk[key][1:]
+    return dsk
 
+
+def test_optimizations_keyword():
     x = dask.delayed(inc)(1)
     assert x.compute() == 2
 
@@ -591,6 +592,45 @@ def test_optimizations_keyword():
         assert x.compute() == 0
 
     assert x.compute() == 2
+
+
+def test_optimize():
+    x = dask.delayed(inc)(1)
+    y = dask.delayed(inc)(x)
+    z = x + y
+
+    x2, y2, z2, constant = optimize(x, y, z, 1)
+    assert constant == 1
+
+    # Same graphs for each
+    dsk = dict(x2.dask)
+    assert dict(y2.dask) == dsk
+    assert dict(z2.dask) == dsk
+
+    # Computationally equivalent
+    assert dask.compute(x2, y2, z2) == dask.compute(x, y, z)
+
+    # Applying optimizations before compute and during compute gives
+    # same results. Shows optimizations are occurring.
+    sols = dask.compute(x, y, z, optimizations=[inc_to_dec])
+    x3, y3, z3 = optimize(x, y, z, optimizations=[inc_to_dec])
+    assert dask.compute(x3, y3, z3) == sols
+
+    # Optimize respects global optimizations as well
+    with dask.set_options(optimizations=[inc_to_dec]):
+        x4, y4, z4 = optimize(x, y, z)
+    for a, b in zip([x3, y3, z3], [x4, y4, z4]):
+        assert dict(a.dask) == dict(b.dask)
+
+
+# TODO: remove after deprecation cycle of `dask.optimize` module is completed
+def test_optimize_has_deprecated_module_functions_as_attributes():
+    import dask.optimize as deprecated_optimize
+    # Function has method attributes
+    assert dask.optimize.cull is deprecated_optimize.cull
+    assert dask.optimize.inline is deprecated_optimize.inline
+    with pytest.warns(UserWarning):
+        dask.optimize.cull({}, [])
 
 
 def test_default_imports():

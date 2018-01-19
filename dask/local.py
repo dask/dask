@@ -123,7 +123,7 @@ from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
 from .context import _globals
 from .order import order
 from .callbacks import unpack_callbacks, local_callbacks
-from .optimize import cull
+from .optimization import cull
 from .utils_test import add, inc  # noqa: F401
 
 

@@ -34,7 +34,7 @@ from ..context import _globals, globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict
 from ..delayed import Delayed
 from ..multiprocessing import get as mpget
-from ..optimize import fuse, cull, inline
+from ..optimization import fuse, cull, inline
 from ..utils import (system_encoding, takes_multiple_arguments, funcname,
                      digit, insert, ensure_dict)
 
