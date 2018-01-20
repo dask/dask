@@ -84,7 +84,7 @@ install:
   - if [[ $TEST == 'true' ]]; then source continuous_integration/travis/install.sh; fi
 
 script:
-  - if [[ $TEST_HDFS == 'true' ]]; then docker exec -it $CONTAINER_ID py.test dask/bytes/tests/test_hdfs.py -vv; fi
+  - if [[ $TEST_HDFS == 'true' ]]; then source continuous_integration/hdfs/run_tests.sh; fi
   - if [[ $TEST == 'true' ]]; then source continuous_integration/travis/run_tests.sh; fi
   - if [[ $LINT == 'true' ]]; then flake8 dask; fi
   - if [[ $TEST_IMPORTS == 'true' ]]; then source continuous_integration/travis/test_imports.sh; fi
