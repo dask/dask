@@ -45,6 +45,7 @@ from .. import threaded, core
 from .. import sharedict
 from ..sharedict import ShareDict
 from .numpy_compat import _Recurser
+from ..optimization import cull, inline
 
 
 concatenate_lookup = Dispatch('concatenate')
@@ -941,7 +942,6 @@ def store(sources, targets, lock=True, regions=None, compute=True,
 
         load_dsks_mrg = sharedict.merge(store_dsks_mrg, *load_dsks)
 
-        from ..optimization import cull, inline
         load_dsks_mrg = cull(inline(load_dsks_mrg, store_keys), load_keys)[0]
 
         result = tuple(
