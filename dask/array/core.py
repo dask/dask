@@ -2644,7 +2644,9 @@ def store_chunk(x, out, index, lock, region, return_stored):
 
     >>> a = np.ones((5, 6))
     >>> b = np.empty(a.shape)
-    >>> store_chunk(a, b, (slice(None), slice(None)), False, None, False)
+    >>> store_chunk(
+    ...     a, b, (slice(None), slice(None)), False, None, False
+    ... )
     """
 
     result = None
@@ -2727,7 +2729,9 @@ def load_chunk(x, index, lock, region):
     --------
 
     >>> a = np.ones((5, 6))
-    >>> load_chunk(a, (slice(None), slice(None)), False, None)  # doctest: +SKIP
+    >>> load_chunk(
+    ...     a, (slice(None), slice(None)), False, None
+    ... )  # doctest: +SKIP
     """
 
     result = None
