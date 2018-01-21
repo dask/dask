@@ -2620,7 +2620,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     return Array(dsk2, name, chunks, dtype=dt)
 
 
-def store_chunk(x, out, index, lock, region, return_stored):
+def store_chunk(x, out, index, lock, keep_lock, region, return_stored):
     """
     A function inserted in a Dask graph for storing a chunk.
 
@@ -2634,6 +2634,8 @@ def store_chunk(x, out, index, lock, region, return_stored):
         Where to store result from ``x`` in ``out``.
     lock: Lock-like or False
         Lock to use before writing to ``out``.
+    keep_lock: bool
+        Whether to keep the lock or release it.
     region: slice-like or None
         Where relative to ``out`` to store ``x``.
     return_stored: bool
@@ -2645,7 +2647,7 @@ def store_chunk(x, out, index, lock, region, return_stored):
     >>> a = np.ones((5, 6))
     >>> b = np.empty(a.shape)
     >>> store_chunk(
-    ...     a, b, (slice(None), slice(None)), False, None, False
+    ...     a, b, (slice(None), slice(None)), False, False, None, False
     ... )
     """
 
@@ -2661,14 +2663,19 @@ def store_chunk(x, out, index, lock, region, return_stored):
         lock.acquire()
     try:
         out[subindex] = np.asanyarray(x)
-    finally:
+    except:  # noqa: E722
         if lock:
+            lock.release()
+        raise
+    else:
+        if lock and not keep_lock:
             lock.release()
 
     return result
 
 
-def insert_to_ooc(arr, out, lock=True, region=None, return_stored=False):
+def insert_to_ooc(arr, out, lock=True, keep_lock=False, region=None,
+                  return_stored=False):
     """
     Creates a Dask graph for storing chunks from ``arr`` in ``out``.
 
@@ -2681,6 +2688,9 @@ def insert_to_ooc(arr, out, lock=True, region=None, return_stored=False):
     lock: Lock-like or bool, optional
         Whether to lock or with what (default is ``True``,
         which means a ``threading.Lock`` instance).
+    keep_lock: bool, optional
+        Whether to keep the lock or release it.
+        (default is ``False``, meaning ``lock`` is released).
     region: slice-like, optional
         Where in ``out`` to store ``arr``'s results
         (default is ``None``, meaning all of ``out``).
@@ -2705,12 +2715,14 @@ def insert_to_ooc(arr, out, lock=True, region=None, return_stored=False):
     dsk = dict()
     for t, slc in zip(core.flatten(arr.__dask_keys__()), slices):
         store_key = (name,) + t[1:]
-        dsk[store_key] = (store_chunk, t, out, slc, lock, region, return_stored)
+        dsk[store_key] = (
+            store_chunk, t, out, slc, lock, keep_lock, region, return_stored
+        )
 
     return dsk
 
 
-def load_chunk(x, index, lock, region):
+def load_chunk(x, index, lock, kept_lock, region):
     """
     A function inserted in a Dask graph for loading a chunk.
 
@@ -2722,6 +2734,8 @@ def load_chunk(x, index, lock, region):
         Where to store result from ``x`` in ``out``.
     lock: Lock-like or False
         Lock to use before writing to ``out``.
+    kept_lock: bool
+        Whether the lock was already acquired.
     region: slice-like or None
         Where relative to ``out`` to store ``x``.
 
@@ -2730,7 +2744,7 @@ def load_chunk(x, index, lock, region):
 
     >>> a = np.ones((5, 6))
     >>> load_chunk(
-    ...     a, (slice(None), slice(None)), False, None
+    ...     a, (slice(None), slice(None)), False, False, None
     ... )  # doctest: +SKIP
     """
 
@@ -2740,7 +2754,7 @@ def load_chunk(x, index, lock, region):
     if region is not None:
         subindex = fuse_slice(region, index)
 
-    if lock:
+    if lock and not kept_lock:
         lock.acquire()
     try:
         result = x[subindex]
