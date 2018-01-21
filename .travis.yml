@@ -61,6 +61,7 @@ jobs:
       os: osx
 
   allow_failures:
+    - env: *py36_env
     - os: osx
 
 
