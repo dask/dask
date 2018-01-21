@@ -897,6 +897,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     if return_stored and not compute:
         keep_lock = True
 
+    tgt_keys = []
     tgt_dsks = []
     store_keys = []
     store_dsks = []
@@ -909,6 +910,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         try:
             tgt_dsks.append(tgt.dask)
             tgt = tgt.key
+            tgt_keys.append(tgt)
         except AttributeError:
             pass
 
