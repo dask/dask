@@ -2727,7 +2727,7 @@ def insert_to_ooc(arr, out, lock=True, keep_lock=False, region=None,
     return dsk
 
 
-def load_chunk(x, index, lock, kept_lock, region):
+def load_store_chunk(x, index, lock, kept_lock, region):
     """
     A function inserted in a Dask graph for loading a chunk.
 
@@ -2748,7 +2748,7 @@ def load_chunk(x, index, lock, kept_lock, region):
     --------
 
     >>> a = np.ones((5, 6))
-    >>> load_chunk(
+    >>> load_store_chunk(
     ...     a, (slice(None), slice(None)), False, False, None
     ... )  # doctest: +SKIP
     """
@@ -2793,8 +2793,8 @@ def retrieve_from_ooc(keys, dsk):
     load_dsk = dict()
     for k in keys:
         load_key = ('load-%s' % k[0],) + k[1:]
-        # Reuse result and arguments from `store_chunk` in `load_chunk`.
-        load_dsk[load_key] = (load_chunk, k,) + dsk[k][3:-1]
+        # Reuse result and arguments from `store_chunk` in `load_store_chunk`.
+        load_dsk[load_key] = (load_store_chunk, k,) + dsk[k][3:-1]
 
     return load_dsk
 
