@@ -892,6 +892,10 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         [e.__dask_keys__() for e in sources]
     )
 
+    keep_lock = False
+    if return_stored and not compute:
+        keep_lock = True
+
     tgt_dsks = []
     store_keys = []
     store_dsks = []
@@ -910,7 +914,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         src = Array(sources_dsk, src.name, src.chunks, src.dtype)
 
         each_store_dsk = insert_to_ooc(
-            src, tgt, lock=lock, region=reg,
+            src, tgt, lock=lock, keep_lock=keep_lock, region=reg,
             return_stored=return_stored
         )
 
