@@ -897,6 +897,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     store_dsks = []
     if return_stored:
         load_names = []
+        load_keys = []
         load_dsks = []
     for tgt, src, reg in zip(targets, sources, regions):
         # if out is a delayed object update dictionary accordingly
@@ -913,11 +914,12 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         )
 
         if return_stored:
+            each_load_dsk = retrieve_from_ooc(
+                each_store_dsk.keys(), each_store_dsk
+            )
             load_names.append('load-store-%s' % src.name)
-            load_dsks.append(retrieve_from_ooc(
-                each_store_dsk.keys(),
-                each_store_dsk
-            ))
+            load_keys.extend(each_load_dsk.keys())
+            load_dsks.append(each_load_dsk)
 
         store_keys.extend(each_store_dsk.keys())
         store_dsks.append(each_store_dsk)
