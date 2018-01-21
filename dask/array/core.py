@@ -935,6 +935,8 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     tgt_dsks_mrg = sharedict.merge(*tgt_dsks)
     store_dsks_mrg = sharedict.merge(*store_dsks)
 
+    tgt_dsks_mrg = cull(tgt_dsks_mrg, tgt_keys)[0]
+
     store_dsks_mrg = sharedict.merge(
         store_dsks_mrg, tgt_dsks_mrg, sources_dsk
     )
