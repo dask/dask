@@ -930,8 +930,10 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         store_keys.extend(each_store_dsk.keys())
         store_dsks.append(each_store_dsk)
 
+    tgt_dsks_mrg = sharedict.merge(*tgt_dsks)
+
     store_dsks_mrg = sharedict.merge(*concatv(
-        store_dsks, tgt_dsks, [sources_dsk]
+        store_dsks, [tgt_dsks_mrg], [sources_dsk]
     ))
 
     if return_stored:
