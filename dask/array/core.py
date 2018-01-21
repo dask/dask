@@ -936,6 +936,9 @@ def store(sources, targets, lock=True, regions=None, compute=True,
 
         load_dsks_mrg = sharedict.merge(store_dsks_mrg, *load_dsks)
 
+        from ..optimization import cull, inline
+        load_dsks_mrg = cull(inline(load_dsks_mrg, store_keys), load_keys)[0]
+
         result = tuple(
             Array(load_dsks_mrg, ln, s.chunks, s.dtype)
             for ln, s in zip(load_names, sources)
