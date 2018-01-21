@@ -1224,6 +1224,7 @@ def test_store_delayed_target():
     assert_eq(bt, b)
 
     # test keeping result
+    targs.clear()
     st = store([a, b], [atd, btd], return_stored=True, compute=False)
     st = dask.compute(*st)
 
