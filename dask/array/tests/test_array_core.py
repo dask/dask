@@ -1279,6 +1279,17 @@ def test_store_regions():
     assert not (bt == 3).all() and not ( bt == 0 ).all()
     assert not (at == 2).all() and not ( at == 0 ).all()
 
+    # Multiple regions:
+    at = np.zeros(shape=(8, 3, 6))
+    bt = np.zeros(shape=(8, 4, 6))
+    v = store([a, b], [at, bt], regions=[region, region], compute=False)
+    assert isinstance(v, Delayed)
+    assert (at == 0).all() and (bt[region] == 0).all()
+    assert all([ev is None for ev in v.compute()])
+    assert (at[region] == 2).all() and (bt[region] == 3).all()
+    assert not (bt == 3).all() and not ( bt == 0 ).all()
+    assert not (at == 2).all() and not ( at == 0 ).all()
+
     # Single region (keep result):
     at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
@@ -1303,17 +1314,6 @@ def test_store_regions():
     assert not (at == 2).all() and not ( at == 0 ).all()
     assert (br == 3).all()
     assert (ar == 2).all()
-
-    # Multiple regions:
-    at = np.zeros(shape=(8, 3, 6))
-    bt = np.zeros(shape=(8, 4, 6))
-    v = store([a, b], [at, bt], regions=[region, region], compute=False)
-    assert isinstance(v, Delayed)
-    assert (at == 0).all() and (bt[region] == 0).all()
-    assert all([ev is None for ev in v.compute()])
-    assert (at[region] == 2).all() and (bt[region] == 3).all()
-    assert not (bt == 3).all() and not ( bt == 0 ).all()
-    assert not (at == 2).all() and not ( at == 0 ).all()
 
     # Multiple regions (keep result):
     at = np.zeros(shape=(8, 3, 6))
