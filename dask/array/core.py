@@ -901,11 +901,10 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     for tgt, src, reg in zip(targets, sources, regions):
         # if out is a delayed object update dictionary accordingly
         try:
-            each_tgt_dsk = {}
-            each_tgt_dsk.update(tgt.dask)
+            tgt_dsks.append(tgt.dask)
             tgt = tgt.key
         except AttributeError:
-            each_tgt_dsk = {}
+            pass
 
         src = Array(sources_dsk, src.name, src.chunks, src.dtype)
 
@@ -919,8 +918,6 @@ def store(sources, targets, lock=True, regions=None, compute=True,
                 each_store_dsk.keys(),
                 each_store_dsk
             ))
-
-        tgt_dsks.append(each_tgt_dsk)
 
         store_keys.extend(each_store_dsk.keys())
         store_dsks.append(each_store_dsk)
