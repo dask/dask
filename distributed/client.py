@@ -1030,7 +1030,14 @@ class Client(Node):
         if self.get == _globals.get('get'):
             del _globals['get']
 
-    shutdown = close
+    def shutdown(self, *args, **kwargs):
+        """ Deprecated, see close instead
+
+        This was deprecated because "shutdown" was sometimes confusingly
+        thought to refer to the cluster rather than the client
+        """
+        warnings.warn("Shutdown is deprecated.  Please use close instead")
+        return self.close(*args, **kwargs)
 
     def get_executor(self, **kwargs):
         """ Return a concurrent.futures Executor for submitting tasks
