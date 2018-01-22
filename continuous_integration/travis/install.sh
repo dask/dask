@@ -62,7 +62,7 @@ pip install -q --upgrade --no-deps git+https://github.com/dask/distributed
 pip install -q --upgrade --no-deps git+https://github.com/mrocklin/sparse
 pip install -q --upgrade --no-deps git+https://github.com/dask/s3fs
 
-if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]]; then
+if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]] && [[ $NUMPY < '1.14.0' ]]; then
     conda install -q -c conda-forge fastparquet python-snappy
     pip install -q --no-deps git+https://github.com/dask/fastparquet
 fi
