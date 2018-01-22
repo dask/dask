@@ -1,12 +1,11 @@
-import os
 import pytest
 
-# Files to skip doctests in
-SKIP_DOCTESTS = ['dask/bytes/hdfs.py',
-                 'dask/array/fft.py']
-
-curdir = os.path.dirname(__file__)
-skip_doctests = {os.path.join(curdir, p) for p in SKIP_DOCTESTS}
+# The doctests in these files fail due to either:
+# - Non-required dependencies not being installed
+# - Imported doctests due to pulling the docstrings from other packages
+#   (e.g. `numpy`). No need to run these doctests.
+collect_ignore = ['dask/bytes/hdfs.py',
+                  'dask/array/fft.py']
 
 
 def pytest_addoption(parser):
@@ -16,8 +15,3 @@ def pytest_addoption(parser):
 def pytest_runtest_setup(item):
     if 'slow' in item.keywords and not item.config.getoption("--runslow"):
         pytest.skip("need --runslow option to run")
-
-
-def pytest_ignore_collect(path, config):
-    path = str(path)
-    return 'run_test.py' in path or path in skip_doctests
