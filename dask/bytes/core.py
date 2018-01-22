@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 import io
 import os
-from distutils.version import LooseVersion
 from warnings import warn
 
 from toolz import merge
@@ -471,6 +470,7 @@ def get_fs(protocol, storage_options=None):
                         "    conda install s3fs -c conda-forge\n"
                         "    or\n"
                         "    pip install s3fs")
+        import dask.bytes.s3  # noqa, register the s3 backend
 
     elif protocol in ('gs', 'gcs'):
         import_required('gcsfs',
@@ -480,12 +480,10 @@ def get_fs(protocol, storage_options=None):
                         "    pip install gcsfs")
 
     elif protocol == 'hdfs':
-        msg = ("Need to install `hdfs3 > 0.2.0` for HDFS support\n"
-               "    conda install hdfs3 -c conda-forge")
-        hdfs3 = import_required('hdfs3', msg)
-        if not LooseVersion(hdfs3.__version__) > '0.2.0':
-            raise RuntimeError(msg)
-        import hdfs3.dask  # register dask filesystem
+        import_required('hdfs3',
+                        "Need to install `hdfs3` library for hdfs support\n"
+                        "    conda install s3fs -c conda-forge")
+        import dask.bytes.hdfs  # noqa, register the hdfs3 backend
 
     if protocol in _filesystems:
         cls = _filesystems[protocol]

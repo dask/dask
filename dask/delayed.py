@@ -312,7 +312,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
 
     if task is obj:
         if not (nout is None or (type(nout) is int and nout >= 0)):
-            raise ValueError("nout must be None or a positive integer,"
+            raise ValueError("nout must be None or a non-negative integer,"
                              " got %s" % nout)
         if not name:
             try:
