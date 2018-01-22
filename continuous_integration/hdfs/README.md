@@ -41,7 +41,14 @@ source continuous_integration/hdfs/startup_hdfs.sh
 source continuous_integration/hdfs/install.sh
 ```
 
-- Start a bash session in the running container:
+- Run the tests
+
+```bash
+source continuous_integration/hdfs/run_tests.sh
+```
+
+- Alternatively, you can start a terminal on the container and run the tests
+  manually. This can be nicer for debugging:
 
 ```bash
 # CONTAINER_ID should be defined from above, but if it isn't you can get it from
@@ -49,11 +56,7 @@ export CONTAINER_ID=$(docker ps -l -q)
 
 # Start the bash session
 docker exec -it $CONTAINER_ID bash
-```
 
-- Run the tests
-
-```bash
 # Test just the hdfs tests
 py.test dask/bytes/tests/test_hdfs.py -s -vv
 ```

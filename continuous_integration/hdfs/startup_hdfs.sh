@@ -8,7 +8,7 @@ rm -f $INIT_MARKER
 
 # Start the hdfs service
 echo "Starting Docker Container..."
-CONTAINER_ID=$(docker run -d -p 8020:8020 -p 50070:50070 -v $(pwd):/working daskdev/dask-hdfs-testing)
+CONTAINER_ID=$(docker run -d -v $(pwd):/working daskdev/dask-hdfs-testing)
 export CONTAINER_ID
 
 # Error immediately if this fails
