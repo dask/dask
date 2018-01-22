@@ -47,8 +47,15 @@ jobs:
       - *no_optimize
       - *no_imports
 
-    - env: &py36_env
+    - env:
       - PYTHON=3.6
+      - NUMPY=1.13.0
+      - PANDAS=0.20.3
+      - *no_coverage
+      - *no_optimize
+      - *imports
+
+    - env: &py36_dev
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
       - NUMPY=1.13.0    # these are overridden later
       - PANDAS=0.20.3
@@ -57,12 +64,12 @@ jobs:
       - *imports
       if: type != pull_request
 
-    - env: *py36_env
+    - env: *py36_dev
       if: type != pull_request
       os: osx
 
   allow_failures:
-    - env: *py36_env
+    - env: *py36_dev
     - os: osx
 
 
