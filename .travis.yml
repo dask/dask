@@ -49,8 +49,8 @@ jobs:
 
     - env:
       - PYTHON=3.6
-      - NUMPY=1.13.0
-      - PANDAS=0.20.3
+      - NUMPY=1.14.0
+      - PANDAS=0.22.0
       - *no_coverage
       - *no_optimize
       - *imports
