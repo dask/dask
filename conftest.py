@@ -1,7 +1,11 @@
 import pytest
 
-# The doctests in these files fail due to dependencies on travis
-collect_ignore = ['dask/bytes/hdfs.py', 'dask/array/fft.py']
+# The doctests in these files fail due to either:
+# - Non-required dependencies not being installed
+# - Imported doctests due to pulling the docstrings from other packages
+#   (e.g. `numpy`). No need to run these doctests.
+collect_ignore = ['dask/bytes/hdfs.py',
+                  'dask/array/fft.py']
 
 
 def pytest_addoption(parser):
