@@ -46,15 +46,13 @@ conda install -q -c conda-forge \
     ipython \
     partd \
     psutil \
+    pytables \
     "pytest<=3.1.1" \
     scikit-image \
     scikit-learn \
     scipy \
     sqlalchemy \
     toolz
-
-# install pytables from defaults for now
-conda install -q pytables
 
 pip install -q --upgrade --no-deps git+https://github.com/dask/partd
 pip install -q --upgrade --no-deps git+https://github.com/dask/zict
