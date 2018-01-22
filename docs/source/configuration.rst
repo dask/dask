@@ -17,6 +17,9 @@ User-wide configuration
 Dask accepts some configuration options in a configuration file, which by
 default is a ``.dask/config.yaml`` file located in your home directory.
 The file path can be overriden using the ``DASK_CONFIG`` environment variable.
+In order to parse this configuration file, the ``pyyaml`` module needs to be
+installed. If the ``pyyaml`` module is not installed, the configuration file
+is ignored.
 
 The file is written in the YAML format, which allows for a human-readable
 hierarchical key-value configuration.  All keys in the configuration file
