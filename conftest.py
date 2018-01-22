@@ -1,4 +1,12 @@
+import os
 import pytest
+
+# Files to skip doctests in
+SKIP_DOCTESTS = ['dask/bytes/hdfs.py',
+                 'dask/array/fft.py']
+
+curdir = os.path.dirname(__file__)
+skip_doctests = {os.path.join(curdir, p) for p in SKIP_DOCTESTS}
 
 
 def pytest_addoption(parser):
@@ -11,5 +19,5 @@ def pytest_runtest_setup(item):
 
 
 def pytest_ignore_collect(path, config):
-    if 'run_test.py' in str(path):
-        return True
+    path = str(path)
+    return 'run_test.py' in path or path in skip_doctests
