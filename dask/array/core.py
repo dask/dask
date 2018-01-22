@@ -942,13 +942,14 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     )
 
     if return_stored:
+        load_dsks_mrg = sharedict.merge(*load_dsks)
+
         if compute:
             store_dlyds = [Delayed(k, store_dsks_mrg) for k in store_keys]
             store_dlyds = persist(*store_dlyds)
             store_dsks_mrg = sharedict.merge(*[e.dask for e in store_dlyds])
 
-        load_dsks_mrg = sharedict.merge(store_dsks_mrg, *load_dsks)
-
+        load_dsks_mrg = sharedict.merge(load_dsks_mrg, store_dsks_mrg)
         load_dsks_mrg = cull(inline(load_dsks_mrg, store_keys), load_keys)[0]
 
         result = tuple(
