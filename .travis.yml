@@ -47,7 +47,7 @@ jobs:
       - *no_optimize
       - *no_imports
 
-    - env:
+    - env: &py36_env
       - PYTHON=3.6
       - NUMPY=1.14.0
       - PANDAS=0.22.0
@@ -64,7 +64,7 @@ jobs:
       - *imports
       if: type != pull_request
 
-    - env: *py36_dev
+    - env: *py36_env
       if: type != pull_request
       os: osx
 
