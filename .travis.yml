@@ -55,13 +55,13 @@ jobs:
       - *no_coverage
       - *no_optimize
       - *imports
+      if: type != pull_request
 
     - env: *py36_env
       if: type != pull_request
       os: osx
 
   allow_failures:
-    - env: *py36_env
     - os: osx
 
 
