@@ -4,6 +4,7 @@ dist: trusty
 os: linux
 
 _base_envs:
+  - &test_and_lint TEST='true' LINT='true'
   - &coverage COVERAGE='true' PARALLEL='false'
   - &no_coverage COVERAGE='false' PARALLEL='true'
   - &optimize PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
@@ -18,6 +19,7 @@ jobs:
       - PYTHON=2.7
       - NUMPY=1.12.1
       - PANDAS=0.19.2
+      - *test_and_lint
       - *coverage
       - *no_optimize
       - *no_imports
@@ -26,6 +28,7 @@ jobs:
       - PYTHON=2.7
       - NUMPY=1.13.0
       - PANDAS=0.20.2
+      - *test_and_lint
       - *no_coverage
       - *optimize
       - *no_imports
@@ -34,6 +37,7 @@ jobs:
       - PYTHON=3.4
       - NUMPY=1.10.4
       - PANDAS=0.19.1
+      - *test_and_lint
       - *no_coverage
       - *optimize
       - *no_imports
@@ -43,6 +47,7 @@ jobs:
       - PYTHON=3.5
       - NUMPY=1.12.1
       - PANDAS=0.19.2
+      - *test_and_lint
       - *no_coverage
       - *no_optimize
       - *no_imports
@@ -52,6 +57,7 @@ jobs:
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
       - NUMPY=1.13.0    # these are overridden later
       - PANDAS=0.20.3
+      - *test_and_lint
       - *no_coverage
       - *no_optimize
       - *imports
@@ -60,16 +66,27 @@ jobs:
       if: type != pull_request
       os: osx
 
+    - env:
+      - TEST_HDFS='true'
+      if: (type != pull_request) OR (branch =~ __TEST_HDFS__)  # Skip on PRS unless the branch contains __TEST_HDFS__
+      sudo: true
+      services:
+        - docker
+      before_install:
+        - source continuous_integration/hdfs/startup_hdfs.sh
+
   allow_failures:
     - os: osx
 
 
 install:
-  - source continuous_integration/travis/install.sh
+  - if [[ $TEST_HDFS == 'true' ]]; then source continuous_integration/hdfs/install.sh; fi
+  - if [[ $TEST == 'true' ]]; then source continuous_integration/travis/install.sh; fi
 
 script:
-  - source continuous_integration/travis/run_tests.sh
-  - flake8 dask
+  - if [[ $TEST_HDFS == 'true' ]]; then source continuous_integration/hdfs/run_tests.sh; fi
+  - if [[ $TEST == 'true' ]]; then source continuous_integration/travis/run_tests.sh; fi
+  - if [[ $LINT == 'true' ]]; then flake8 dask; fi
   - if [[ $TEST_IMPORTS == 'true' ]]; then source continuous_integration/travis/test_imports.sh; fi
 
 after_success:
