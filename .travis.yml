@@ -54,6 +54,15 @@ jobs:
 
     - env: &py36_env
       - PYTHON=3.6
+      - NUMPY=1.14.0
+      - PANDAS=0.22.0
+      - *test_and_lint
+      - COVERAGE='false'
+      - PARALLEL='false'
+      - *no_optimize
+      - *imports
+
+    - env: &py36_dev
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
       - NUMPY=1.13.0    # these are overridden later
       - PANDAS=0.20.3
@@ -61,6 +70,7 @@ jobs:
       - *no_coverage
       - *no_optimize
       - *imports
+      if: type != pull_request
 
     - env: *py36_env
       if: type != pull_request
@@ -76,6 +86,7 @@ jobs:
         - source continuous_integration/hdfs/startup_hdfs.sh
 
   allow_failures:
+    - env: *py36_dev
     - os: osx
 
 
