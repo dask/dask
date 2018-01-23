@@ -1,4 +1,6 @@
 from __future__ import print_function, division, absolute_import
+import os
+from distutils.version import LooseVersion
 
 import pytest
 from random import random
@@ -39,7 +41,7 @@ def test_simple(loop, joblib):
             seq = Parallel()(delayed(inc)(i) for i in range(10))
             assert seq == [inc(i) for i in range(10)]
 
-            ba.client.close()
+            ba.get_client().close()
 
 
 def random2():
@@ -59,7 +61,7 @@ def test_dont_assume_function_purity(loop, joblib):
             x, y = Parallel()(delayed(random2)() for i in range(2))
             assert x != y
 
-            ba.client.close()
+            ba.get_client().close()
 
 
 @pytest.mark.parametrize('joblib', joblibs)
@@ -67,7 +69,10 @@ def test_joblib_funcname(joblib):
     if joblib is None:
         pytest.skip()
     BatchedCalls = joblib.parallel.BatchedCalls
-    func = BatchedCalls([(random2,), (random2,)])
+    if LooseVersion(joblib.__version__) <= "0.11.0":
+        func = BatchedCalls([(random2,), (random2,)])
+    else:
+        func = BatchedCalls([(random2,), (random2,)], None)
     assert joblib_funcname(func) == 'random2'
     assert joblib_funcname(random2) == 'random2'
 
@@ -124,7 +129,7 @@ def test_joblib_scatter(loop, joblib):
             sols = [func(*args, **kwargs) for func, args, kwargs in tasks]
             results = Parallel()(tasks)
 
-            ba.client.close()
+            ba.get_client().close()
 
         # Scatter must take a list/tuple
         with pytest.raises(TypeError):
@@ -140,3 +145,38 @@ def test_joblib_scatter(loop, joblib):
     assert x.count == 1
     assert y.count == 1
     assert z.count == 4
+
+
+@pytest.mark.parametrize('joblib', joblibs)
+def test_nested_backend_context_manager(loop, joblib):
+    if joblib is None or LooseVersion(joblib.__version__) <= "0.11.0":
+        pytest.skip("Joblib >= 0.11.1 required.")
+    Parallel = joblib.Parallel
+    delayed = joblib.delayed
+
+    def get_nested_pids():
+        return Parallel(n_jobs=2)(delayed(os.getpid)() for _ in range(2))
+
+
+    with cluster() as (s, [a, b]):
+        with joblib.parallel_backend('dask.distributed', loop=loop,
+                                     scheduler_host=s['address']) as (ba, _):
+            pid_groups = Parallel(n_jobs=2)(
+                delayed(get_nested_pids, check_pickle=False)()
+                for _ in range(10)
+            )
+            for pid_group in pid_groups:
+                assert len(set(pid_group)) <= 2
+            ba.get_client().close()
+
+    # No deadlocks
+    with cluster(nworkers=1) as (s, [a]):
+        with joblib.parallel_backend('dask.distributed', loop=loop,
+                                     scheduler_host=s['address']) as (ba, _):
+            pid_groups = Parallel(n_jobs=2)(
+                delayed(get_nested_pids, check_pickle=False)()
+                for _ in range(10)
+            )
+            for pid_group in pid_groups:
+                assert len(set(pid_group)) <= 2
+            ba.get_client().close()
