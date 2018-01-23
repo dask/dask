@@ -57,7 +57,7 @@ jobs:
       - NUMPY=1.14.0
       - PANDAS=0.22.0
       - *test_and_lint
-      - *no_coverage
+      - *coverage
       - *no_optimize
       - *imports
 
