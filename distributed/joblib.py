@@ -9,7 +9,7 @@ from tornado import gen
 
 from .client import Client, _wait
 from .utils import ignoring, funcname, itemgetter
-from . import get_client, secede, rejoin
+from . import get_client, secede
 
 # A user could have installed joblib, sklearn, both, or neither. Further, only
 # joblib >= 0.10.0 supports backends, so we also need to check for that. This
@@ -174,24 +174,19 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
     def retrieval_context(self):
         """Override ParallelBackendBase.retrieval_context to avoid deadlocks.
 
-        This removes thread from the worker's thread pool (using 'secede'), and
-        rejoins when finished (using 'rejoin'). This allows nested parallelism
-        using joblib without deadlock.
+        This removes thread from the worker's thread pool (using 'secede').
+        Seceding avoids deadlock in nested parallelism settings.
         """
         # See 'joblib.Parallel.__call__' and 'joblib.Parallel.retrieve' for how
         # this is used.
-
         try:
             secede()
         except ValueError:
+            # We are not a worker, i.e. not in nested parallelism.
             pass
 
         yield
-
-        try:
-            rejoin()
-        except AttributeError:
-            pass
+        # No need to rejoin here
 
 
 for base in _bases:
