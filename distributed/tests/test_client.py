@@ -5166,5 +5166,13 @@ def test_client_name(s, a, b):
     yield c._close()
 
 
+def test_client_doesnt_close_given_loop(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            assert c.submit(inc, 1).result() == 2
+        with Client(s['address'], loop=loop) as c:
+            assert c.submit(inc, 2).result() == 3
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # flake8: noqa
