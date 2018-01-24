@@ -71,14 +71,24 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
     MIN_IDEAL_BATCH_DURATION = 0.2
     MAX_IDEAL_BATCH_DURATION = 1.0
 
-    def __init__(self, scheduler_host='127.0.0.1:8786', scatter=None,
-                 loop=None):
-        # We may have two types of callers:
-        #   1. The user, from a parallel_backend("dask.distributed", ...)
-        #   2. Joblib, from within joblib.Parallel
-        # We rely on the convention that 'scheduler_host=None' implies that
-        # joblib is calling.
-        self.scheduler_host = scheduler_host
+    def __init__(self, scheduler_host=None, scatter=None,
+                 client=None, loop=None):
+        if client is None:
+            if scheduler_host:
+                client = Client(scheduler_host, loop=loop, set_as_default=False)
+            else:
+                try:
+                    client = get_client()
+                except ValueError:
+                    msg = ("To use Joblib with Dask first create a Dask Client"
+                           "\n\n"
+                           "    from dask.distributed import Client\n"
+                           "    client = Client()\n"
+                           "or\n"
+                           "    client = Client('scheduler-address:8786')")
+                    raise ValueError(msg)
+
+        self.client = client
 
         if scatter is not None and not isinstance(scatter, (list, tuple)):
             raise TypeError("scatter must be a list/tuple, got "
@@ -87,33 +97,21 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
         if scatter is not None:
             # Keep a reference to the scattered data to keep the ids the same
             self._scatter = list(scatter)
-            scattered = self.get_client(loop=loop).scatter(scatter,
-                                                           broadcast=True)
+            scattered = self.client.scatter(scatter, broadcast=True)
             self.data_to_future = {id(x): f for (x, f) in zip(scatter, scattered)}
         else:
             self._scatter = []
             self.data_to_future = {}
         self.futures = set()
 
-    def get_client(self, loop=None):
-        """Get a client for our scheduler.
-
-        If this is being called by a worker, 'distributed.worker.get_client'
-        is used. Otherwise, a new client is created.
-        """
-        try:
-            return get_client()
-        except ValueError:
-            return Client(self.scheduler_host, loop=loop, set_as_default=False)
-
     def get_nested_backend(self):
-        return DaskDistributedBackend(scheduler_host=None)
+        return DaskDistributedBackend()
 
     def configure(self, n_jobs=1, parallel=None, **backend_args):
         return self.effective_n_jobs(n_jobs)
 
     def effective_n_jobs(self, n_jobs):
-        return sum(self.get_client().ncores().values())
+        return sum(self.client.ncores().values())
 
     def _to_func_args(self, func):
         if not self.data_to_future:
@@ -145,9 +143,8 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
     def apply_async(self, func, callback=None):
         key = '%s-batch-%s' % (joblib_funcname(func), uuid4().hex)
         func, args = self._to_func_args(func)
-        client = self.get_client()
 
-        future = client.submit(func, *args, key=key)
+        future = self.client.submit(func, *args, key=key)
         self.futures.add(future)
 
         @gen.coroutine
@@ -157,15 +154,17 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
             if callback is not None:
                 callback(result)  # gets called in separate thread
 
-        client.loop.add_callback(callback_wrapper)
+        self.client.loop.add_callback(callback_wrapper)
 
         future.get = future.result  # monkey patch to achieve AsyncResult API
         return future
 
     def abort_everything(self, ensure_ready=True):
-        # Tell the client to cancel any task submitted via this instance
-        # as joblib.Parallel will never access those results.
-        self.get_client().cancel(self.futures)
+        """ Tell the client to cancel any task submitted via this instance
+
+        joblib.Parallel will never access those results
+        """
+        self.client.cancel(self.futures)
         self.futures.clear()
 
     @contextlib.contextmanager
@@ -201,8 +200,10 @@ DistributedBackend = DaskDistributedBackend
 
 # Register the backend with any available versions of joblib
 if joblib:
+    joblib.register_parallel_backend('dask', DaskDistributedBackend)
     joblib.register_parallel_backend('distributed', DaskDistributedBackend)
     joblib.register_parallel_backend('dask.distributed', DaskDistributedBackend)
 if sk_joblib:
+    sk_joblib.register_parallel_backend('dask', DaskDistributedBackend)
     sk_joblib.register_parallel_backend('distributed', DaskDistributedBackend)
     sk_joblib.register_parallel_backend('dask.distributed', DaskDistributedBackend)

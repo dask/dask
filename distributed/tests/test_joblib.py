@@ -6,6 +6,7 @@ import pytest
 from random import random
 from time import sleep
 
+from distributed import Client
 from distributed.utils_test import cluster, inc
 from distributed.utils_test import loop # flake8: noqa
 
@@ -20,7 +21,6 @@ def slow_raise_value_error(condition, duration=0.05):
         raise ValueError("condition evaluated to True")
 
 
-@pytest.mark.skip(reason="intermittent blocking failures")
 @pytest.mark.parametrize('joblib', joblibs)
 def test_simple(loop, joblib):
     if joblib is None:
@@ -28,20 +28,17 @@ def test_simple(loop, joblib):
     Parallel = joblib.Parallel
     delayed = joblib.delayed
     with cluster() as (s, [a, b]):
-        with joblib.parallel_backend('dask.distributed', loop=loop,
-                                     scheduler_host=s['address']) as (ba, _):
+        with Client(s['address'], loop=loop) as client:
+            with joblib.parallel_backend('dask') as (ba, _):
+                seq = Parallel()(delayed(inc)(i) for i in range(10))
+                assert seq == [inc(i) for i in range(10)]
 
-            seq = Parallel()(delayed(inc)(i) for i in range(10))
-            assert seq == [inc(i) for i in range(10)]
+                with pytest.raises(ValueError):
+                    Parallel()(delayed(slow_raise_value_error)(i == 3)
+                               for i in range(10))
 
-            with pytest.raises(ValueError):
-                Parallel()(delayed(slow_raise_value_error)(i == 3)
-                           for i in range(10))
-
-            seq = Parallel()(delayed(inc)(i) for i in range(10))
-            assert seq == [inc(i) for i in range(10)]
-
-            ba.get_client().close()
+                seq = Parallel()(delayed(inc)(i) for i in range(10))
+                assert seq == [inc(i) for i in range(10)]
 
 
 def random2():
@@ -55,13 +52,10 @@ def test_dont_assume_function_purity(loop, joblib):
     Parallel = joblib.Parallel
     delayed = joblib.delayed
     with cluster() as (s, [a, b]):
-        with joblib.parallel_backend('dask.distributed', loop=loop,
-                                     scheduler_host=s['address']) as (ba, _):
-
-            x, y = Parallel()(delayed(random2)() for i in range(2))
-            assert x != y
-
-            ba.get_client().close()
+        with Client(s['address'], loop=loop) as client:
+            with joblib.parallel_backend('dask') as (ba, _):
+                x, y = Parallel()(delayed(random2)() for i in range(2))
+                assert x != y
 
 
 @pytest.mark.parametrize('joblib', joblibs)
@@ -118,25 +112,21 @@ def test_joblib_scatter(loop, joblib):
     z = CountSerialized(3)
 
     with cluster() as (s, [a, b]):
-        with joblib.parallel_backend('dask.distributed', loop=loop,
-                                     scheduler_host=s['address'],
-                                     scatter=[x, y]) as (ba, _):
-            f = delayed(add5)
-            tasks = [f(x, y, z, d=4, e=5),
-                     f(x, z, y, d=5, e=4),
-                     f(y, x, z, d=x, e=5),
-                     f(z, z, x, d=z, e=y)]
-            sols = [func(*args, **kwargs) for func, args, kwargs in tasks]
-            results = Parallel()(tasks)
+        with Client(s['address'], loop=loop) as client:
+            with joblib.parallel_backend('dask', scatter=[x, y]) as (ba, _):
+                f = delayed(add5)
+                tasks = [f(x, y, z, d=4, e=5),
+                         f(x, z, y, d=5, e=4),
+                         f(y, x, z, d=x, e=5),
+                         f(z, z, x, d=z, e=y)]
+                sols = [func(*args, **kwargs) for func, args, kwargs in tasks]
+                results = Parallel()(tasks)
 
-            ba.get_client().close()
-
-        # Scatter must take a list/tuple
-        with pytest.raises(TypeError):
-            with joblib.parallel_backend('dask.distributed', loop=loop,
-                                         scheduler_host=s['address'],
-                                         scatter=1):
-                pass
+            # Scatter must take a list/tuple
+            with pytest.raises(TypeError):
+                with joblib.parallel_backend('dask', loop=loop,
+                                             scatter=1):
+                    pass
 
     for l, r in zip(sols, results):
         assert l == r
@@ -159,24 +149,31 @@ def test_nested_backend_context_manager(loop, joblib):
 
 
     with cluster() as (s, [a, b]):
-        with joblib.parallel_backend('dask.distributed', loop=loop,
-                                     scheduler_host=s['address']) as (ba, _):
-            pid_groups = Parallel(n_jobs=2)(
-                delayed(get_nested_pids, check_pickle=False)()
-                for _ in range(10)
-            )
-            for pid_group in pid_groups:
-                assert len(set(pid_group)) <= 2
-            ba.get_client().close()
+        with Client(s['address'], loop=loop) as client:
+            with joblib.parallel_backend('dask') as (ba, _):
+                pid_groups = Parallel(n_jobs=2)(
+                    delayed(get_nested_pids, check_pickle=False)()
+                    for _ in range(10)
+                )
+                for pid_group in pid_groups:
+                    assert len(set(pid_group)) <= 2
 
     # No deadlocks
     with cluster(nworkers=1) as (s, [a]):
-        with joblib.parallel_backend('dask.distributed', loop=loop,
-                                     scheduler_host=s['address']) as (ba, _):
-            pid_groups = Parallel(n_jobs=2)(
-                delayed(get_nested_pids, check_pickle=False)()
-                for _ in range(10)
-            )
-            for pid_group in pid_groups:
-                assert len(set(pid_group)) <= 2
-            ba.get_client().close()
+        with Client(s['address'], loop=loop) as client:
+            with joblib.parallel_backend('dask') as (ba, _):
+                pid_groups = Parallel(n_jobs=2)(
+                    delayed(get_nested_pids, check_pickle=False)()
+                    for _ in range(10)
+                )
+                for pid_group in pid_groups:
+                    assert len(set(pid_group)) <= 2
+
+
+@pytest.mark.parametrize('joblib', joblibs)
+def test_errors(loop, joblib):
+    with pytest.raises(ValueError) as info:
+        with joblib.parallel_backend('dask'):
+            pass
+
+    assert "create a dask client" in str(info.value).lower()
