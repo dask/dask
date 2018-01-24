@@ -104,6 +104,9 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
             self.data_to_future = {}
         self.futures = set()
 
+    def __reduce__(self):
+        return (DaskDistributedBackend, ())
+
     def get_nested_backend(self):
         return DaskDistributedBackend()
 

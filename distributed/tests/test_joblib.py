@@ -147,7 +147,6 @@ def test_nested_backend_context_manager(loop, joblib):
     def get_nested_pids():
         return Parallel(n_jobs=2)(delayed(os.getpid)() for _ in range(2))
 
-
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as client:
             with joblib.parallel_backend('dask') as (ba, _):
@@ -158,8 +157,7 @@ def test_nested_backend_context_manager(loop, joblib):
                 for pid_group in pid_groups:
                     assert len(set(pid_group)) <= 2
 
-    # No deadlocks
-    with cluster(nworkers=1) as (s, [a]):
+        # No deadlocks
         with Client(s['address'], loop=loop) as client:
             with joblib.parallel_backend('dask') as (ba, _):
                 pid_groups = Parallel(n_jobs=2)(
@@ -172,6 +170,9 @@ def test_nested_backend_context_manager(loop, joblib):
 
 @pytest.mark.parametrize('joblib', joblibs)
 def test_errors(loop, joblib):
+    if joblib is None:
+        pytest.skip()
+
     with pytest.raises(ValueError) as info:
         with joblib.parallel_backend('dask'):
             pass
