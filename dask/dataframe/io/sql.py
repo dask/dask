@@ -8,7 +8,7 @@ from .io import from_delayed, from_pandas
 
 def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
                    limits=None, columns=None, bytes_per_chunk=256 * 2**20,
-                   **kwargs):
+                   head_rows=5, schema=None, meta=None, **kwargs):
     """
     Create dataframe from an SQL table.
 
@@ -48,6 +48,14 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
     bytes_per_chunk: int
         If both divisions and npartitions is None, this is the target size of
         each partition, in bytes
+    head_rows: int
+        How many rows to load for inferring the data-types, unless passing meta
+    meta: empty DataFrame or None
+        If provided, do not attempt to infer dtypes, but use these, coercing
+        all chunks on load
+    schema: str or None
+        If using a table name, pass this to sqlalchemy to select which DB
+        schema to use within the URI connection
     kwargs : dict
         Additional parameters to pass to `pd.read_sql()`
 
@@ -66,10 +74,9 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
     if index_col is None:
         raise ValueError("Must specify index column to partition on")
     engine = sa.create_engine(uri)
-    meta = sa.MetaData()
+    m = sa.MetaData()
     if isinstance(table, six.string_types):
-        schema = kwargs.pop('schema', None)
-        table = sa.Table(table, meta, autoload=True, autoload_with=engine,
+        table = sa.Table(table, m, autoload=True, autoload_with=engine,
                          schema=schema)
 
     index = (table.columns[index_col] if isinstance(index_col, six.string_types)
@@ -94,13 +101,24 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         # function names get pandas auto-named
         kwargs['index_col'] = index_col.name
 
-    q = sql.select(columns).limit(5).select_from(table)
-    head = pd.read_sql(q, engine, **kwargs)
+    if meta is None:
+        # derrive metadata from first few rows
+        q = sql.select(columns).limit(head_rows).select_from(table)
+        head = pd.read_sql(q, engine, **kwargs)
 
-    if head.empty:
-        name = table.name
-        head = pd.read_sql_table(name, uri, index_col=index_col)
-        return from_pandas(head, npartitions=1)
+        if head.empty:
+            # no results at all
+            name = table.name
+            head = pd.read_sql_table(name, uri, index_col=index_col)
+            return from_pandas(head, npartitions=1)
+
+        bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / 5
+        head = head[:0]
+    else:
+        if divisions is None and npartitions is None:
+            raise ValueError('Must provide divisions or npartitions when'
+                             'using explicit meta.')
+        head = meta
 
     if divisions is None:
         if limits is None:
@@ -116,11 +134,10 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         if npartitions is None:
             q = sql.select([sql.func.count(index)]).select_from(table)
             count = pd.read_sql(q, engine)['count_1'][0]
-            bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / 5
             npartitions = round(count * bytes_per_row / bytes_per_chunk) or 1
         if dtype.kind == "M":
             divisions = pd.date_range(
-                start=mini, end=maxi, freq='%iS' % (
+                start=mini, end=maxi, freq='%.6fS' % (
                     (maxi - mini) / npartitions).total_seconds()).tolist()
             divisions[0] = mini
             divisions[-1] = maxi
@@ -133,6 +150,14 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         cond = index <= upper if i == len(lowers) - 1 else index < upper
         q = sql.select(columns).where(sql.and_(index >= lower, cond)
                                       ).select_from(table)
-        parts.append(delayed(pd.read_sql)(q, uri, **kwargs))
+        parts.append(delayed(_rationalize_sql)(q, uri, head[:0], **kwargs))
 
     return from_delayed(parts, head, divisions=divisions)
+
+
+def _rationalize_sql(q, uri, meta, **kwargs):
+    df = pd.read_sql(q, uri, **kwargs)
+    if df.empty:
+        return meta
+    else:
+        return df.astype(meta.dtypes)
