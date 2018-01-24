@@ -32,7 +32,7 @@ basedir = '/tmp/test-dask'
 HDFSDriver = namedtuple('HDFSDriver', ['hdfs', 'name'])
 
 
-@pytest.fixture(params=[pytest.mark.skipif(True, 'hdfs3',
+@pytest.fixture(params=[pytest.mark.skipif(not hdfs3, 'hdfs3',
                                            reason='hdfs3 not found'),
                         pytest.mark.skipif(not pyarrow, 'pyarrow',
                                            reason='pyarrow not found')])
@@ -165,19 +165,19 @@ def test_read_text(driver):
     with driver.hdfs.open('%s/text.2.txt' % basedir, 'wb') as f:
         f.write('Dan 400\nEdith 500\nFrank 600'.encode())
 
+    with dask.set_options(hdfs_driver=driver.name, get=dask.get):
+        b = db.read_text('hdfs://%s/text.*.txt' % basedir)
+        result = b.str.strip().str.split().map(len).compute()
+
+    assert result == [2, 2, 2, 2, 2, 2]
+
     with driver.hdfs.open('%s/other.txt' % basedir, 'wb') as f:
         f.write('a b\nc d'.encode())
 
-    with dask.set_options(hdfs_driver=driver.name):
-        b = db.read_text('hdfs://%s/text.*.txt' % basedir)
-
-    result = b.str.strip().str.split().map(len).compute(get=dask.get)
-    assert result == [2, 2, 2, 2, 2, 2]
-
-    with dask.set_options(hdfs_driver=driver.name):
+    with dask.set_options(hdfs_driver=driver.name, get=dask.get):
         b = db.read_text('hdfs://%s/other.txt' % basedir)
+        result = b.str.split().flatten().compute()
 
-    result = b.str.split().flatten().compute(get=dask.get)
     assert result == ['a', 'b', 'c', 'd']
 
 

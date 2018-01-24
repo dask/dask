@@ -74,6 +74,12 @@ class PyArrowHDFSFileWrapper(object):
     def __getattr__(self, key):
         return getattr(self.file, key)
 
+    def __enter__(self):
+        return self.file.__enter__()
+
+    def __exit__(self, *args):
+        return self.file.__exit__(*args)
+
 
 class PyArrowHadoopFileSystem(object):
     sep = "/"
