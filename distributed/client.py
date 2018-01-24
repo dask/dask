@@ -810,7 +810,15 @@ class Client(Node):
 
     @gen.coroutine
     def _update_scheduler_info(self):
-        self._scheduler_identity = yield self.scheduler.identity()
+        if self.status not in ('running', 'connecting'):
+            return
+        try:
+            self._scheduler_identity = yield self.scheduler.identity()
+        except EnvironmentError:
+            if self.status not in ('running', 'connecting'):
+                return
+            else:
+                raise
 
     def _heartbeat(self):
         self.scheduler_comm.send({'op': 'heartbeat'})
