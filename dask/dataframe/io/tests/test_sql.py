@@ -61,8 +61,8 @@ def test_needs_rational(db):
     d = datetime.timedelta(seconds=1)
     df = pd.DataFrame({'a': list('ghjkl'), 'b': [now + i * d for i in range(5)],
                        'c': [True, True, False, True, True]})
-    df = df.append([{'a': 'x', 'b': now + d*1000, 'c': None},
-                    {'a': None, 'b': now + d*1001, 'c': None}])
+    df = df.append([{'a': 'x', 'b': now + d * 1000, 'c': None},
+                    {'a': None, 'b': now + d * 1001, 'c': None}])
     with tmpfile() as f:
         uri = 'sqlite:///%s' % f
         df.to_sql('test', uri, index=False, if_exists='replace')
