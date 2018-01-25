@@ -145,7 +145,9 @@ def test_nested_backend_context_manager(loop, joblib):
     delayed = joblib.delayed
 
     def get_nested_pids():
-        return Parallel(n_jobs=2)(delayed(os.getpid)() for _ in range(2))
+        pids = set(Parallel(n_jobs=2)(delayed(os.getpid)() for _ in range(2)))
+        pids |= set(Parallel(n_jobs=2)(delayed(os.getpid)() for _ in range(2)))
+        return pids
 
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as client:

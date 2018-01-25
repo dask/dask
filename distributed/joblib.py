@@ -9,7 +9,7 @@ from tornado import gen
 
 from .client import Client, _wait
 from .utils import ignoring, funcname, itemgetter
-from . import get_client, secede
+from . import get_client, secede, rejoin
 
 # A user could have installed joblib, sklearn, both, or neither. Further, only
 # joblib >= 0.10.0 supports backends, so we also need to check for that. This
@@ -186,7 +186,11 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
             pass
 
         yield
-        # No need to rejoin here
+
+        try:
+            rejoin()
+        except AttributeError:
+            pass
 
 
 for base in _bases:
