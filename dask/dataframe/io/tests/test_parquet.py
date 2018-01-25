@@ -287,6 +287,27 @@ def test_append(tmpdir, engine):
     assert_eq(df, ddf3)
 
 
+def test_append_create(tmpdir):
+    """Test that appended parquet equal to the original one."""
+    check_fastparquet()
+    tmp = str(tmpdir)
+    df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
+                       'i64': np.arange(1000, dtype=np.int64),
+                       'f': np.arange(1000, dtype=np.float64),
+                       'bhello': np.random.choice(['hello', 'yo', 'people'],
+                                                  size=1000).astype("O")})
+    df.index.name = 'index'
+
+    half = len(df) // 2
+    ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
+    ddf2 = dd.from_pandas(df.iloc[half:], chunksize=100)
+    ddf1.to_parquet(tmp, append=True)
+    ddf2.to_parquet(tmp, append=True)
+
+    ddf3 = dd.read_parquet(tmp, engine='fastparquet')
+    assert_eq(df, ddf3)
+
+
 def test_append_with_partition(tmpdir):
     check_fastparquet()
     tmp = str(tmpdir)

@@ -399,7 +399,12 @@ def _write_fastparquet(df, fs, fs_token, path, write_index=None, append=False,
         index_cols = []
 
     if append:
-        pf = fastparquet.api.ParquetFile(path, open_with=fs.open, sep=sep)
+        try:
+            pf = fastparquet.api.ParquetFile(path, open_with=fs.open, sep=sep)
+        except (IOError, ValueError):
+            # append for create
+            append = False
+    if append:
         if pf.file_scheme not in ['hive', 'empty', 'flat']:
             raise ValueError('Requested file scheme is hive, '
                              'but existing file scheme is not.')
