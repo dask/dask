@@ -382,7 +382,7 @@ class WorkerBase(ServerNode):
                 'memory_limit': self.memory_limit}
 
     @gen.coroutine
-    def _close(self, report=True, timeout=10, nanny=True):
+    def _close(self, report=True, timeout=10, nanny=True, executor_wait=True):
         if self.status in ('closed', 'closing'):
             return
 
@@ -401,7 +401,7 @@ class WorkerBase(ServerNode):
                                        self.scheduler.unregister(address=self.contact_address))
         self.scheduler.close_rpc()
         if isinstance(self.executor, ThreadPoolExecutor):
-            self.executor.shutdown(timeout=timeout)
+            self.executor.shutdown(wait=executor_wait, timeout=timeout)
         else:
             self.executor.shutdown(wait=False)
         self._workdir.release()

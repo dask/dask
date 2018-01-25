@@ -2291,10 +2291,13 @@ class Scheduler(ServerNode):
                        if nanny_address is not None]
 
             try:
-                resps = All([nanny.restart(close=True, timeout=timeout * 0.8)
+                resps = All([nanny.restart(close=True, timeout=timeout * 0.8,
+                                           executor_wait=False)
                              for nanny in nannies])
                 resps = yield gen.with_timeout(timedelta(seconds=timeout), resps)
-                assert all(resp == 'OK' for resp in resps)
+                if not all(resp == 'OK' for resp in resps):
+                    logger.error("Not all workers responded positively: %s",
+                                 resps, exc_info=True)
             except gen.TimeoutError:
                 logger.error("Nannies didn't report back restarted within "
                              "timeout.  Continuuing with restart process")

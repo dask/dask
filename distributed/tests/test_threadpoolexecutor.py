@@ -49,6 +49,17 @@ def test_shutdown_timeout_raises():
     assert end - start > 0.05
 
 
+def test_shutdown_wait():
+    e = ThreadPoolExecutor(1)
+    future = e.submit(sleep, 1)
+    sleep(0.01)
+
+    start = time()
+    e.shutdown(wait=False)
+    end = time()
+    assert end - start < 1
+
+
 def test_secede_rejoin_busy():
     with ThreadPoolExecutor(2) as e:
 

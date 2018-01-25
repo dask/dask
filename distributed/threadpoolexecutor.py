@@ -83,12 +83,13 @@ class ThreadPoolExecutor(thread.ThreadPoolExecutor):
                 self._work_queue.put(None)
             if timeout is not None:
                 deadline = time() + timeout
-            for t in self._threads:
-                if timeout is not None:
-                    timeout2 = max(deadline - time(), 0)
-                else:
-                    timeout2 = None
-                t.join(timeout=timeout2)
+            if wait:
+                for t in self._threads:
+                    if timeout is not None:
+                        timeout2 = max(deadline - time(), 0)
+                    else:
+                        timeout2 = None
+                    t.join(timeout=timeout2)
 
 
 def secede(adjust=True):

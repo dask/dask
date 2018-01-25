@@ -223,7 +223,7 @@ class Nanny(ServerNode):
         raise gen.Return('OK')
 
     @gen.coroutine
-    def restart(self, comm=None, timeout=2):
+    def restart(self, comm=None, timeout=2, executor_wait=True):
         start = time()
 
         @gen.coroutine
@@ -396,7 +396,7 @@ class WorkerProcess(object):
                 self.on_exit(r)
 
     @gen.coroutine
-    def kill(self, timeout=2):
+    def kill(self, timeout=2, executor_wait=True):
         """
         Ensure the worker process is stopped, waiting at most
         *timeout* seconds before terminating it abruptly.
@@ -415,6 +415,7 @@ class WorkerProcess(object):
         process = self.process
         self.child_stop_q.put({'op': 'stop',
                                'timeout': max(0, deadline - loop.time()) * 0.8,
+                               'executor_wait': executor_wait,
                                })
 
         while process.is_alive() and loop.time() < deadline:
@@ -472,9 +473,12 @@ class WorkerProcess(object):
         worker = Worker(*worker_args, **worker_kwargs)
 
         @gen.coroutine
-        def do_stop(timeout):
+        def do_stop(timeout=5, executor_wait=True):
             try:
-                yield worker._close(report=False, nanny=False)
+                yield worker._close(report=False,
+                                    nanny=False,
+                                    executor_wait=executor_wait,
+                                    timeout=timeout)
             finally:
                 loop.stop()
 
@@ -489,8 +493,8 @@ class WorkerProcess(object):
                 except Empty:
                     pass
                 else:
-                    assert msg['op'] == 'stop'
-                    loop.add_callback(do_stop, msg['timeout'])
+                    assert msg.pop('op') == 'stop'
+                    loop.add_callback(do_stop, **msg)
                     break
 
         t = threading.Thread(target=watch_stop_q, name="Nanny stop queue watch")

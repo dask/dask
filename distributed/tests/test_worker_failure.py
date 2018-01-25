@@ -214,6 +214,17 @@ def test_restart_fast(c, s, a, b):
     assert result == 2
 
 
+def test_worker_doesnt_await_task_completion(loop):
+    with cluster(nanny=True, nworkers=1) as (s, [w]):
+        with Client(s['address'], loop=loop) as c:
+            future = c.submit(sleep, 100)
+            sleep(0.1)
+            start = time()
+            c.restart()
+            stop = time()
+            assert stop - start < 5
+
+
 def test_restart_fast_sync(loop):
     with cluster(nanny=True) as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
