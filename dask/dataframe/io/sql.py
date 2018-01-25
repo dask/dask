@@ -137,7 +137,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
             npartitions = round(count * bytes_per_row / bytes_per_chunk) or 1
         if dtype.kind == "M":
             divisions = pd.date_range(
-                start=mini, end=maxi, freq='%.6fS' % (
+                start=mini, end=maxi, freq='%iS' % (
                     (maxi - mini) / npartitions).total_seconds()).tolist()
             divisions[0] = mini
             divisions[-1] = maxi
