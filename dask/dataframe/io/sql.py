@@ -13,7 +13,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
     Create dataframe from an SQL table.
 
     If neither divisions or npartitions is given, the memory footprint of the
-    first five rows will be determined, and partitions of size ~256MB will
+    first few rows will be determined, and partitions of size ~256MB will
     be used.
 
     Parameters
@@ -24,17 +24,25 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         Full sqlalchemy URI for the database connection
     index_col : string
         Column which becomes the index, and defines the partitioning. Should
-        be a indexed column in the SQL server, and numerical.
-        Could be a function to return a value, e.g.,
+        be a indexed column in the SQL server, and any orderable type. If the
+        type is number or time, then partition boundaries can be inferred from
+        npartitions or bytes_per_chunk; otherwide must supply explicit
+        ``divisions=``.
+        ``index_col`` could be a function to return a value, e.g.,
         ``sql.func.abs(sql.column('value')).label('abs(value)')``.
         Labeling columns created by functions or arithmetic operations is
         required.
     divisions: sequence
-        Values of the index column to split the table by.
+        Values of the index column to split the table by. If given, this will
+        override npartitions and bytes_per_chunk. The divisions are the value
+        boundaries of the index column used to define the partitions. For
+        example, ``divisions=list('acegikmoqsuwz')`` could be used to partition
+        a string column lexographically into 12 partitions, with the implicit
+        assumption that each partition contains similar numbers of records.
     npartitions : int
         Number of partitions, if divisions is not given. Will split the values
         of the index column linearly between limits, if given, or the column
-        max/min.
+        max/min. The index column must be numeric or time for this to work
     limits: 2-tuple or None
         Manually give upper and lower range of values for use with npartitions;
         if None, first fetches max/min from the DB. Upper limit, if
