@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+import contextlib
+
 from distutils.version import LooseVersion
 from uuid import uuid4
 
@@ -7,6 +9,7 @@ from tornado import gen
 
 from .client import Client, _wait
 from .utils import ignoring, funcname, itemgetter
+from . import get_client, secede, rejoin
 
 # A user could have installed joblib, sklearn, both, or neither. Further, only
 # joblib >= 0.10.0 supports backends, so we also need to check for that. This
@@ -68,12 +71,29 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
     MIN_IDEAL_BATCH_DURATION = 0.2
     MAX_IDEAL_BATCH_DURATION = 1.0
 
-    def __init__(self, scheduler_host='127.0.0.1:8786', scatter=None, loop=None):
+    def __init__(self, scheduler_host=None, scatter=None,
+                 client=None, loop=None):
+        if client is None:
+            if scheduler_host:
+                client = Client(scheduler_host, loop=loop, set_as_default=False)
+            else:
+                try:
+                    client = get_client()
+                except ValueError:
+                    msg = ("To use Joblib with Dask first create a Dask Client"
+                           "\n\n"
+                           "    from dask.distributed import Client\n"
+                           "    client = Client()\n"
+                           "or\n"
+                           "    client = Client('scheduler-address:8786')")
+                    raise ValueError(msg)
+
+        self.client = client
+
         if scatter is not None and not isinstance(scatter, (list, tuple)):
             raise TypeError("scatter must be a list/tuple, got "
                             "`%s`" % type(scatter).__name__)
 
-        self.client = Client(scheduler_host, loop=loop, set_as_default=False)
         if scatter is not None:
             # Keep a reference to the scattered data to keep the ids the same
             self._scatter = list(scatter)
@@ -83,6 +103,12 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
             self._scatter = []
             self.data_to_future = {}
         self.futures = set()
+
+    def __reduce__(self):
+        return (DaskDistributedBackend, ())
+
+    def get_nested_backend(self):
+        return DaskDistributedBackend()
 
     def configure(self, n_jobs=1, parallel=None, **backend_args):
         return self.effective_n_jobs(n_jobs)
@@ -120,6 +146,7 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
     def apply_async(self, func, callback=None):
         key = '%s-batch-%s' % (joblib_funcname(func), uuid4().hex)
         func, args = self._to_func_args(func)
+
         future = self.client.submit(func, *args, key=key)
         self.futures.add(future)
 
@@ -136,10 +163,34 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
         return future
 
     def abort_everything(self, ensure_ready=True):
-        # Tell the client to cancel any task submitted via this instance
-        # as joblib.Parallel will never access those results.
+        """ Tell the client to cancel any task submitted via this instance
+
+        joblib.Parallel will never access those results
+        """
         self.client.cancel(self.futures)
         self.futures.clear()
+
+    @contextlib.contextmanager
+    def retrieval_context(self):
+        """Override ParallelBackendBase.retrieval_context to avoid deadlocks.
+
+        This removes thread from the worker's thread pool (using 'secede').
+        Seceding avoids deadlock in nested parallelism settings.
+        """
+        # See 'joblib.Parallel.__call__' and 'joblib.Parallel.retrieve' for how
+        # this is used.
+        try:
+            secede()
+        except ValueError:
+            # We are not a worker, i.e. not in nested parallelism.
+            pass
+
+        yield
+
+        try:
+            rejoin()
+        except AttributeError:
+            pass
 
 
 for base in _bases:
@@ -151,8 +202,10 @@ DistributedBackend = DaskDistributedBackend
 
 # Register the backend with any available versions of joblib
 if joblib:
+    joblib.register_parallel_backend('dask', DaskDistributedBackend)
     joblib.register_parallel_backend('distributed', DaskDistributedBackend)
     joblib.register_parallel_backend('dask.distributed', DaskDistributedBackend)
 if sk_joblib:
+    sk_joblib.register_parallel_backend('dask', DaskDistributedBackend)
     sk_joblib.register_parallel_backend('distributed', DaskDistributedBackend)
     sk_joblib.register_parallel_backend('dask.distributed', DaskDistributedBackend)

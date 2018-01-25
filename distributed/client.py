@@ -514,6 +514,7 @@ class Client(Node):
         self.connection_args = self.security.get_connection_args('client')
         self._connecting_to_scheduler = False
         self._asynchronous = asynchronous
+        self._should_close_loop = not loop
         self._loop_runner = LoopRunner(loop=loop, asynchronous=asynchronous)
         self.loop = self._loop_runner.loop
 
@@ -618,7 +619,7 @@ class Client(Node):
             return '<%s: not connected>' % (self.__class__.__name__,)
 
     def _repr_html_(self):
-        if self._loop_runner.is_started():
+        if self._loop_runner.is_started() and self.scheduler:
             info = sync(self.loop, self.scheduler.identity)
         else:
             info = False
@@ -1029,7 +1030,8 @@ class Client(Node):
         sync(self.loop, self._close, fast=True)
         assert self.status == 'closed'
 
-        self._loop_runner.stop()
+        if self._should_close_loop:
+            self._loop_runner.stop()
 
         with ignoring(AttributeError):
             dask.set_options(get=self._previous_get)
