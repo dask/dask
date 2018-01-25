@@ -1,5 +1,19 @@
 Presentations On Dask
 =====================
+* AMS 2018, January 2018
+
+  * `Dask and Xarray on the Cloud with JupyterHub
+    <https://www.youtube.com/watch?v=rSOJKbfNBNk>`__
+    
+* PYCON.DE 2017, November 2017
+
+  * `Dask: Parallelism in Python
+    <https://www.youtube.com/watch?v=rZlshXJydgQ>`__
+    
+* PYCON 2017, May 2017
+
+  * `Dask: A Pythonic Distributed Data Science Framework
+    <https://www.youtube.com/watch?v=RA_2qdipVng>`__
 
 * PLOTCON 2016, December 2016
 
