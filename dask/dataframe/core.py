@@ -3446,14 +3446,12 @@ def quantile(df, q):
     name = 'quantiles-1-' + token
     val_dsk = {(name, i): (_percentile, (getattr, key, 'values'), qs)
                for i, key in enumerate(df.__dask_keys__())}
-    name2 = 'quantiles-2-' + token
-    len_dsk = {(name2, i): (len, key) for i, key in enumerate(df.__dask_keys__())}
 
     name3 = 'quantiles-3-' + token
     merge_dsk = {(name3, 0): finalize_tsk((merge_percentiles, qs,
                                            [qs] * df.npartitions,
-                                           sorted(val_dsk), sorted(len_dsk)))}
-    dsk = merge(df.dask, val_dsk, len_dsk, merge_dsk)
+                                           sorted(val_dsk)))}
+    dsk = merge(df.dask, val_dsk, merge_dsk)
     return return_type(dsk, name3, meta, new_divisions)
 
 
