@@ -28,4 +28,5 @@ def deserialize_sparse(header, frames):
     return sparse.COO(coords, data, shape=shape)
 
 
-register_serialization('sparse.core.COO', serialize_sparse, deserialize_sparse)
+register_serialization('sparse.core.COO', serialize_sparse, deserialize_sparse)  # version 0.1
+register_serialization('sparse.coo.COO', serialize_sparse, deserialize_sparse)  # version 0.2
