@@ -1,6 +1,13 @@
 Presentations On Dask
 =====================
     
+* AMS & ESIP, January 2018
+
+  * `Pangeo quick demo: Dask, XArray, Zarr on the cloud with JupyterHub (3 minutes)
+    <https://www.youtube.com/watch?v=rSOJKbfNBNk>`__
+  * `Pangeo talk: An open-source big data science platform with Dask, XArray, Zarr on the cloud with JupyterHub (43 minutes)
+    <https://www.youtube.com/watch?v=mDrjGxaXQT4>`__
+
 * PYCON.DE 2017, November 2017
 
   * `Dask: Parallelism in Python (1 hour, 2 minutes)
