@@ -314,6 +314,16 @@ Create and Store Arrays
    to_hdf5
    to_npy_stack
 
+Apply generalized ufuncs
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.array.gufunc
+
+.. autosummary::
+   apply_gufunc
+   gufunc
+
+
 Internal functions
 ~~~~~~~~~~~~~~~~~~
 
@@ -624,6 +634,11 @@ Other functions
 .. currentmodule:: dask.array.image
 
 .. autofunction:: imread
+
+.. currentmodule:: dask.array.gufunc
+
+.. autofunction:: apply_gufunc
+.. autofunction:: gufunc
 
 .. currentmodule:: dask.array.core
 
