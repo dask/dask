@@ -50,3 +50,4 @@ from ..base import compute
 from .optimization import optimize
 from .creation import (arange, linspace, meshgrid, indices, diag, eye,
                        triu, tril, fromfunction, tile, repeat)
+from .gufunc import apply_gufunc, gufunc
