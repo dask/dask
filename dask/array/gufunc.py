@@ -94,7 +94,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
 
     In other terms, this function is like np.vectorize, but for
     the blocks of dask arrays. If the function itself shall also
-    be vectorized, ``vectorize=True`` can be used for convenience..
+    be vectorized, ``vectorize=True`` can be used for convenience.
 
     Parameters
     ----------
@@ -104,8 +104,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
         arguments with non-matching dimensions are supplied, this function is
         expected to vectorize (broadcast) over axes of positional arguments in
         the style of NumPy universal functions [1]_ (if this is not the case,
-        set ``vectorize=True``). If this function returns multiple outputs,
-        ``output_core_dims`` has to be set as well.
+        set ``vectorize=True``).
     signature: String
         Specifies what core dimensions are consumed and produced by ``func``.
         According to the specification of numpy.gufunc signature [2]_
@@ -266,8 +265,7 @@ def gufunc(signature, func, **kwargs):
         arguments with non-matching dimensions are supplied, this function is
         expected to vectorize (broadcast) over axes of positional arguments in
         the style of NumPy universal functions [1]_ (if this is not the case,
-        set ``vectorize=True``). If this function returns multiple outputs,
-        ``output_core_dims`` has to be set as well.
+        set ``vectorize=True``).
     *args : numpy/dask arrays or scalars
         Arrays to which to apply the function. Core dimensions as specified in
         ``signature`` need to come last.
