@@ -87,7 +87,7 @@ def merge_percentiles(finalq, qs, vals, interpolation='lower', Ns=None):
     >>> vals = [np.array([1, 2, 3, 4]), np.array([10, 11, 12, 13])]
     >>> Ns = [100, 100]  # Both original arrays had 100 elements
 
-    >>> merge_percentiles(finalq, qs, vals, Ns)
+    >>> merge_percentiles(finalq, qs, vals, Ns=Ns)
     array([ 1,  2,  3,  4, 10, 11, 12, 13])
     """
     if isinstance(finalq, Iterator):
