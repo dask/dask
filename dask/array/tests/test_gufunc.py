@@ -206,3 +206,4 @@ def test_gufunc():
     def foo():
         return 1
     assert foo().compute() == 1
+    

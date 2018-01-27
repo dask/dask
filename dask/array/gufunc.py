@@ -22,7 +22,6 @@ _valid_name_re = re.compile("^[_a-zA-Z][_a-zA-Z0-9]*$")
 def _parse_dim(dim):
     if not dim:
         return None
-    #assert len(re.findall("^[_a-zA-Z][_a-zA-Z0-9]*$", dim)) == 1
     assert len(_valid_name_re.findall(dim)) == 1
     return dim
 
