@@ -7,7 +7,7 @@ import numpy as np
 
 from dask.array.gufunc import (_parse_dim, _parse_arg, _parse_args,
                                parse_signature, compile_signature,
-                               apply_gufunc)
+                               apply_gufunc, gufunc)
 
 
 @pytest.mark.parametrize("src, trg, raises", [
@@ -111,13 +111,11 @@ def test_apply_gufunc_02():
     assert c.compute().shape == (10, 20, 30, 40)
 
 
-# def test_apply_gufunc_scalar_output():
-#     def foo():
-#         return 1
-#
-#     x = apply_gufunc(foo, "->()", output_dtypes=int)
-#
-#     assert x.compute() == 1
+def test_apply_gufunc_scalar_output():
+    def foo():
+        return 1
+    x = apply_gufunc(foo, "->()", output_dtypes=int)
+    assert x.compute() == 1
 
 
 def test_apply_gufunc_elemwise_01():
@@ -140,15 +138,15 @@ def test_apply_gufunc_elemwise_02():
     assert_array_equal(z2.compute(), [1, 4, 9])
 
 
-# def test_gufunc_vector_output():
-#     def foo():
-#         return np.array([1, 2, 3], dtype=int)
-#     x = apply_gufunc(foo, "->(i_0)", dtype=int, new_axes={"i_0": 3}, output_dtypes=int)
-#     assert x.chunks == ((3,),)
-#     assert_array_equal( x.compute(), [1, 2, 3])
+def test_gufunc_vector_output():
+    def foo():
+        return np.array([1, 2, 3], dtype=int)
+    x = apply_gufunc(foo, "->(i_0)", output_dtypes=int, output_sizes={"i_0": 3})
+    assert x.chunks == ((3,),)
+    assert_array_equal( x.compute(), [1, 2, 3])
 
 
-def test_gufunc_elemenwise_loop():
+def test_apply_gufunc_elemwise_loop():
     def foo(x):
         assert x.shape in ((2,), (1,))
         return 2 * x
@@ -158,7 +156,7 @@ def test_gufunc_elemenwise_loop():
     assert_array_equal(z.compute(), [2, 4, 6])
 
 
-def test_gufunc_elemenwise_core():
+def test_apply_gufunc_elemwise_core():
     def foo(x):
         assert x.shape == (3,)
         return 2 * x
@@ -168,85 +166,43 @@ def test_gufunc_elemenwise_core():
     assert_array_equal(z.compute(), [2, 4, 6])
 
 
-# def test_gufunc_one_scalar_output():
-#     def foo():
-#         return 1,
-#
-#     x, = da.gufunc(foo, "->(),", dtype=(int,))
-#
-#     assert x.compute() == 1
-#
-#
-# def test_gufunc_two_scalar_output():
-#     def foo():
-#         return 1, 2
-#
-#     x, y = da.gufunc(foo, "->(),()", dtype=(int, int))
-#
-#     assert x.compute() == 1
-#     assert y.compute() == 2
-#
-#
-# def test_gufunc_two_mixed_outputs():
-#     def foo():
-#         return 1, np.ones(2, 3, dtype=float)
-#
-#     x, y = da.gufunc(foo, "->(),(i,j)", dtype=(int, float), new_axes={'i': 2, 'j': 3})
-#
-#     assert x.compute() == 1
-#     assert y.chunks == ((2,), (3,))
-#     assert_array_almost_equal(y.compute(), np.ones(2, 3, dtype=float))
-#
-#
-# def test_gufunc_two_inputs():
-#     def foo(x, y):
-#         return x*y
-#
-#     a = da.ones(2, 3, chunks=(1, 2), dtype=int)
-#     b = da.ones(3, 4, chunks=(2, 3), dtype=int)
-#
-#     x = da.gufunc(foo, "(i,j),(j,k)->(i,k)", dtype=int)
-#
-#     assert x.chunks == ((1, 1), (3, 1))
-#     assert_array_almost_equal(x.compute(), np.ones(2, 4, dtype=int))
-#
-#
-# def test_gufunc_reduce_autocoredim():
-#     def foo(x):
-#         assert len(x) == 3
-#         return np.mean(x)
-#
-#     a = da.array(np.arary([1, 2, 3]), chunks=2)
-#
-#     x = da.gufunc(foo, "(i)->()", a, dtype=float)
-#
-#     assert x.shape == tuple()
-#     assert x.compute() == 3
-#
-#
-# def test_gufunc_coredim():
-#     def foo(x):
-#         assert np.shape(x)[-1] == 3
-#         return x
-#
-#     a = da.array(np.arary([1, 2, 3]), chunks=2)
-#
-#     x = da.gufunc(foo, "(i)->(i)", a, dtype=float, coredim='i')
-#
-#     assert x.shape == (3,)
-#     assert_array_almost_equal(x.compute(), [1, 2, 3])
-#
-#
-# def test_gufunc_many_coredim():
-#     def foo(x):
-#         assert np.shape(x)[-2] == 4
-#         assert np.shape(x)[-1] == 5
-#         return x
-#
-#     a = da.ones(3, 4, 5, chunks=2)
-#
-#     x = da.gufunc(foo, "(i,j,k)->(i,j,k)", a, dtype=float, coredim=('i','k'))
-#
-#     assert x.shape == a.shape
-#     assert x.chunks == ((2, 1), (4,), (5,))
-#     assert_array_almost_equal(x.compute(), a.compute())
+def test_apply_gufunc_one_scalar_output():
+    def foo():
+        return 1,
+    x, = apply_gufunc(foo, "->(),", output_dtypes=(int,))
+    assert x.compute() == 1
+
+
+def test_apply_gufunc_two_scalar_output():
+    def foo():
+        return 1, 2
+    x, y = apply_gufunc(foo, "->(),()", output_dtypes=(int, int))
+    assert x.compute() == 1
+    assert y.compute() == 2
+
+
+def test_apply_gufunc_two_mixed_outputs():
+    def foo():
+        return 1, np.ones((2, 3), dtype=float)
+    x, y = apply_gufunc(foo, "->(),(i,j)",
+                        output_dtypes=(int, float),
+                        output_sizes={'i': 2, 'j': 3})
+    assert x.compute() == 1
+    assert y.chunks == ((2,), (3,))
+    assert_array_equal(y.compute(), np.ones((2, 3), dtype=float))
+
+
+def test_gufunc_two_inputs():
+    def foo(x, y):
+        return np.einsum('...ij,...jk->ik', x, y)
+    a = da.ones((2, 3), chunks=(1, 2), dtype=int)
+    b = da.ones((3, 4), chunks=(2, 3), dtype=int)
+    x = apply_gufunc(foo, "(i,j),(j,k)->(i,k)", a, b, output_dtypes=int)
+    assert_array_equal(x.compute(), 3*np.ones((2, 4), dtype=int))
+
+
+def test_gufunc():
+    @gufunc("->()", output_dtypes=int)
+    def foo():
+        return 1
+    assert foo().compute() == 1

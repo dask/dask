@@ -2147,6 +2147,9 @@ def unify_chunks(*args, **kwargs):
     --------
     common_blockdim
     """
+    if not args:
+        return {}, []
+
     arginds = [(asarray(a) if ind is not None else a, ind)
                for a, ind in partition(2, args)]  # [x, ij, y, jk]
     args = list(concat(arginds))  # [(x, ij), (y, jk)]
