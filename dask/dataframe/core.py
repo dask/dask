@@ -3798,19 +3798,20 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
 
 def repartition_freq(df, freq=None):
     """ Repartition a timeseries dataframe by a new frequency """
-    freq = pd.Timedelta(freq)
     if not isinstance(df.divisions[0], pd.Timestamp):
         raise TypeError("Can only repartition on frequency for timeseries")
-    divisions = pd.DatetimeIndex(start=df.divisions[0].ceil(freq),
+    try:
+        start = df.divisions[0].ceil(freq)
+    except ValueError:
+        start = df.divisions[0]
+    divisions = pd.DatetimeIndex(start=start,
                                  end=df.divisions[-1],
                                  freq=freq).tolist()
     if not len(divisions):
         divisions = [df.divisions[0], df.divisions[-1]]
     else:
-        if divisions[-1] != df.divisions[-1]:
-            divisions.append(df.divisions[-1])
-        if divisions[0] != df.divisions[0]:
-            divisions = [df.divisions[0]] + divisions
+        divisions[0] = df.divisions[0]
+        divisions[-1] = df.divisions[-1]
 
     return df.repartition(divisions=divisions)
 
