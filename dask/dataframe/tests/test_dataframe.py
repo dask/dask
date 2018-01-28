@@ -1291,9 +1291,9 @@ def test_repartition_freq_errors():
 
 
 def test_repartition_freq_month():
-    ts=pd.date_range("2015-01-01 00:00", " 2015-05-01 23:50", freq="10min")
+    ts = pd.date_range("2015-01-01 00:00", " 2015-05-01 23:50", freq="10min")
     df = pd.DataFrame(np.random.randint(0,100,size=(len(ts),4)),
-            columns=list('ABCD'), index=ts)
+                      columns=list('ABCD'), index=ts)
     ddf = dd.from_pandas(df,npartitions=1).repartition(freq='1M')
 
     assert_eq(df, ddf)

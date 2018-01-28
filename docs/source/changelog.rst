@@ -15,6 +15,7 @@ Array
 DataFrame
 +++++++++
 
+-  Support month timedeltas in repartition(freq=...) (:pr:`3110`) `Matthew Rocklin`_
 
 Bag
 +++
