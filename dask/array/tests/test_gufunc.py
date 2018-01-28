@@ -63,6 +63,7 @@ def test__parse_args(src, trg, raises):
     ("->(j)", ([], ("j",)), None),
     ("->(j),", ([], [("j",)]), None),
     ("(i, j)->(j)", ([("i", "j")], ("j",)), None),
+    ("(i),(i)->(i),", ([("i",), ("i",)], [("i",)]), None),
     ("(i),(i),()->(i),(i)", ([("i",), ("i",), tuple()], [("i",), ("i",)]), None),
 ])
 def test_parse_signature(src, trg, raises):
@@ -107,7 +108,6 @@ def test_apply_gufunc_02():
     b = da.random.normal(size=(10, 1, 40), chunks=10)
     c = apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b,
                      output_dtypes=a.dtype)
-    print(c.compute().shape)
     assert c.compute().shape == (10, 20, 30, 40)
 
 

@@ -129,8 +129,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ...     return np.mean(x, axis=-1), np.std(x, axis=-1)
     ... a = da.random.normal(size=(10,20,30), chunks=5)
     ... mean, std = da.apply_gufunc(stats, "(i)->(),()", a, output_dtypes=2*(a.dtype,))
-    ... mean.compute().shape
-    (10, 20)
+    ... mean.compute()  # doctest: +SKIP
 
     >>> import dask.array as da
     ... import numpy as np
@@ -139,8 +138,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ... a = da.random.normal(size=(   20,30), chunks=5)
     ... b = da.random.normal(size=(10, 1,40), chunks=10)
     ... c = da.apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b, output_dtypes=a.dtype)
-    ... c.compute().shape
-    (10, 20, 30, 40)
+    ... c.compute()  # doctest: +SKIP
 
     References
     ----------
@@ -165,8 +163,11 @@ def apply_gufunc(func, signature, *args, **kwargs):
     nout = None if not isinstance(core_output_dimss, list) else len(core_output_dimss)
 
     ## Assert output_dtypes
-    if nout is not None and not (isinstance(output_dtypes, tuple) or isinstance(output_dtypes, list)):
-        raise ValueError("Must specify tuple of dtypes for `output_dtypes` for function with multiple outputs")
+    if nout is not None:
+        if not (isinstance(output_dtypes, tuple) or isinstance(output_dtypes, list)):
+            raise ValueError("Must specify tuple of dtypes for `output_dtypes` for function with multiple outputs")
+        if len(output_dtypes) != nout:
+            raise ValueError("Must specify tuple of %d dtypes for `output_dtypes` for function with multiple outputs" % nout)
     if nout is None and (isinstance(output_dtypes, tuple) or isinstance(output_dtypes, list)):
         raise ValueError("Must specify single dtype for `output_dtypes` for function with one output")
 
@@ -184,7 +185,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
     args = [asarray(a) for a in args]
 
     if len(core_input_dimss) != len(args):
-        ValueError("According to `signature`, `func` requires %d arguments, but %s given" % (len(core_output_dimss), len(args)))
+        ValueError("According to `signature`, `func` requires %d arguments, but %s given"
+                   % (len(core_output_dimss), len(args)))
 
     ## Assess input args for loop dims
     input_shapes = [a.shape for a in args]
@@ -193,9 +195,10 @@ def apply_gufunc(func, signature, *args, **kwargs):
     _core_input_shapes = [dict(zip(cid, s[n:])) for s, n, cid in zip(input_shapes, num_loopdims, core_input_dimss)]
     core_shapes = merge(output_sizes, *_core_input_shapes)
 
-    loop_input_dimss = [tuple("__loopdim%d__"%d for d in range(max_loopdims-n, max_loopdims)) for n in num_loopdims]
+    loop_input_dimss = [tuple("__loopdim%d__" % d for d in range(max_loopdims - n, max_loopdims)) for n in num_loopdims]
+    loop_input_shapes = [s[:n] for s, n in zip(input_shapes, num_loopdims)]
 
-    input_dimss = [l+c for l, c in zip(loop_input_dimss, core_input_dimss)]
+    input_dimss = [l + c for l, c in zip(loop_input_dimss, core_input_dimss)]
 
     loop_output_dims = max(loop_input_dimss, key=len) if loop_input_dimss else set()
 
@@ -227,7 +230,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     leaf_arrs = []
     for i, cod, odt in zip(count(0), core_output_dimss, output_dtypes):
         core_output_shape = tuple(core_shapes[d] for d in cod)
-        core_chunkinds = len(cod)*(0,)
+        core_chunkinds = len(cod) * (0,)
         output_shape = loop_output_shape + core_output_shape
         output_chunks = loop_output_chunks + core_output_shape
         leaf_name = "%s_%d-%s" % (name, i, token)
@@ -252,7 +255,7 @@ def gufunc(signature, func, **kwargs):
 
     In other terms, this function is like np.vectorize, but for
     the blocks of dask arrays. If the function itself shall also
-    be vectorized, ``vectorize=True`` can be used for convenience..
+    be vectorized, ``vectorize=True`` can be used for convenience.
 
     Parameters
     ----------
@@ -291,8 +294,7 @@ def gufunc(signature, func, **kwargs):
     ...     return np.mean(x, axis=-1), np.std(x, axis=-1)
     ... a = da.random.normal(size=(10,20,30), chunks=5)
     ... mean, std = stats(a)
-    ... mean.compute().shape
-    (10, 20)
+    ... mean.compute()  # doctest: +SKIP
 
     >>> import dask.array as da
     ... import numpy as np
@@ -302,8 +304,7 @@ def gufunc(signature, func, **kwargs):
     ... a = da.random.normal(size=(   20,30), chunks=5)
     ... b = da.random.normal(size=(10, 1,40), chunks=10)
     ... c = outer_product(a, b)
-    ... c.compute().shape
-    (10, 20, 30, 40)
+    ... c.compute()  # doctest: +SKIP
 
     References
     ----------
