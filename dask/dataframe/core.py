@@ -3810,8 +3810,10 @@ def repartition_freq(df, freq=None):
     if not len(divisions):
         divisions = [df.divisions[0], df.divisions[-1]]
     else:
-        divisions[0] = df.divisions[0]
-        divisions[-1] = df.divisions[-1]
+        if divisions[-1] != df.divisions[-1]:
+            divisions.append(df.divisions[-1])
+        if divisions[0] != df.divisions[0]:
+            divisions = [df.divisions[0]] + divisions
 
     return df.repartition(divisions=divisions)
 
