@@ -206,4 +206,23 @@ def test_gufunc():
     def foo():
         return 1
     assert foo().compute() == 1
+
+
+@pytest.mark.parametrize("vectorize", [True, False])
+def test_apply_gufunc_broadcasting_loopdims(vectorize):
+    def foo(x, y):
+        if vectorize:
+            assert x.shape == (30,)
+        else:
+            assert len(x.shape) == 3
+        return x, y, x*y
+
+    a = da.random.normal(size=(   10, 30), chunks=8)
+    b = da.random.normal(size=(20, 1, 30), chunks=3)
+
+    x, y, z = apply_gufunc(foo, "(i),(i)->(i),(i),(i)", a, b, output_dtypes=3*(float,), vectorize=vectorize)
+
+    assert x.compute().shape == (20, 10, 30)
+    assert y.compute().shape == (20, 10, 30)
+    assert z.compute().shape == (20, 10, 30)
     

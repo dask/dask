@@ -4,6 +4,7 @@ from itertools import count
 from operator import getitem
 import re
 from numpy import vectorize as np_vectorize
+from numpy import broadcast_to as np_broadcast_to
 
 try:
     from cytoolz import concat, merge, curry
@@ -11,7 +12,7 @@ except ImportError:
     from toolz import concat, merge, curry
 from functools import partial
 
-from .core import (asarray, Array, atop)
+from .core import asarray, Array, atop, broadcast_shapes
 from ..core import flatten
 from .. import sharedict
 
@@ -171,10 +172,6 @@ def apply_gufunc(func, signature, *args, **kwargs):
     if nout is None and (isinstance(output_dtypes, tuple) or isinstance(output_dtypes, list)):
         raise ValueError("Must specify single dtype for `output_dtypes` for function with one output")
 
-    ## Use top to apply func
-    if vectorize:
-        signature = compile_signature(core_input_dimss, core_output_dimss)
-        func = np_vectorize(func, signature=signature)
 
     ## Miscellaneous
     if output_sizes is None:
@@ -201,6 +198,21 @@ def apply_gufunc(func, signature, *args, **kwargs):
     input_dimss = [l + c for l, c in zip(loop_input_dimss, core_input_dimss)]
 
     loop_output_dims = max(loop_input_dimss, key=len) if loop_input_dimss else set()
+    loop_output_shape = broadcast_shapes(*loop_input_shapes)
+
+    ## Prepare function
+    if vectorize:
+        signature = compile_signature(core_input_dimss, core_output_dimss)
+        ufunc = np_vectorize(func, signature=signature)
+    else:
+        # Wrapper that broadcasts only loop dims (as opposed to numpy.broadcast_arrays)
+        def ufunc(*args, **kwargs):
+            input_shapes = (a.shape for a in args)
+            loop_input_blockshapes = (s[:n] for s, n in zip(input_shapes, num_loopdims))
+            loop_output_blockshape = broadcast_shapes(*loop_input_blockshapes)
+            shapes = (loop_output_blockshape + a.shape[n:] for a, n in zip(args, num_loopdims))
+            bargs = (np_broadcast_to(a, s) for a, s in zip(args, shapes))
+            return func(*bargs, **kwargs)
 
     ## Apply function - use atop here
     arginds = list(concat(zip(args, input_dimss)))
@@ -213,13 +225,13 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ### Use existing `atop` but only with loopdims to enforce
     ### concatenation, for coredims, that appear also at the output
     ### Modifying `atop` could improve things here.
-    tmp = atop(func, loop_output_dims, *arginds,
+    tmp = atop(ufunc, loop_output_dims, *arginds,
                dtype=int,  # Only dummy dtype, anyone will do
                concatenate=concatenate,
                **kwargs)
 
     ## Prepare output shapes
-    loop_output_shape = tmp.shape
+    assert loop_output_shape == tmp.shape
     loop_output_chunks = tmp.chunks
     dsk = tmp.__dask_graph__()
     keys = list(flatten(tmp.__dask_keys__()))
