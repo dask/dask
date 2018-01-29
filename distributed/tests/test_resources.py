@@ -11,7 +11,7 @@ from distributed.client import wait
 from distributed.utils import tokey
 from distributed.utils_test import (inc, gen_cluster,
                                     slowinc, slowadd)
-from distributed.utils_test import loop # flake8: noqa
+from distributed.utils_test import loop # noqa: F401
 
 
 @gen_cluster(client=True, ncores=[])
@@ -191,7 +191,6 @@ def test_prefer_constrained(c, s, a):
     futures = c.map(slowinc, range(1000), delay=0.1)
     constrained = c.map(inc, range(10), resources={'A': 1})
 
-    import traceback, sys
     start = time()
     yield wait(constrained)
     end = time()

@@ -8,13 +8,13 @@ import tornado
 
 from distributed import Client
 from distributed.utils_test import cluster, mock_ipython
-from distributed.utils_test import loop, zmq_ctx  # flake8: noqa
+from distributed.utils_test import loop, zmq_ctx  # noqa F401
 
 
 def need_functional_ipython(func):
     try:
-        import ipykernel
-        import jupyter_client
+        import ipykernel  # noqa: F401
+        import jupyter_client  # noqa: F401
     except ImportError:
         return pytest.mark.skip("need ipykernel and jupyter_client installed")(func)
     if tornado.version_info >= (5,):

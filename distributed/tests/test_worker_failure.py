@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 from concurrent.futures import CancelledError
-from operator import add
 import os
 import random
 from time import sleep
@@ -18,7 +17,7 @@ from distributed.metrics import time
 from distributed.utils import sync, ignoring
 from distributed.utils_test import (gen_cluster, cluster, inc, slow, div,
                                     slowinc, slowadd, captured_logger)
-from distributed.utils_test import loop # flake8: noqa
+from distributed.utils_test import loop # noqa: F401
 
 
 def test_submit_after_failed_worker_sync(loop):

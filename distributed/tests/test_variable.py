@@ -10,7 +10,7 @@ from tornado import gen
 from distributed import Client, Variable, worker_client, Nanny, wait
 from distributed.metrics import time
 from distributed.utils_test import (gen_cluster, inc, cluster, slow, div)
-from distributed.utils_test import loop # flake8: noqa
+from distributed.utils_test import loop # noqa: F401
 
 
 @gen_cluster(client=True)

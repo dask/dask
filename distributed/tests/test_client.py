@@ -12,7 +12,7 @@ import pickle
 import random
 import sys
 import threading
-from threading import Thread, Semaphore
+from threading import Semaphore
 from time import sleep
 import traceback
 import warnings
@@ -46,7 +46,7 @@ from distributed.utils_test import (cluster, slow, slowinc, slowadd, slowdec,
                                     gen_cluster, gen_test, double, deep, popen,
                                     captured_logger, varying, map_varying,
                                     wait_for, async_wait_for)
-from distributed.utils_test import loop, loop_in_thread, nodebug  # flake8: noqa
+from distributed.utils_test import loop, loop_in_thread, nodebug  # noqa F401
 
 
 @gen_cluster(client=True, timeout=None)
@@ -370,7 +370,7 @@ def test_short_tracebacks(loop):
             tb = tblib.Traceback(tb).to_dict()
             n = 0
 
-            while tb != None:
+            while tb is not None:
                 n += 1
                 tb = tb['tb_next']
 
@@ -4691,6 +4691,7 @@ def test_secede_simple(c, s, a):
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2, timeout=60)
 def test_secede_balances(c, s, a, b):
     count = threading.active_count()
+
     def f(x):
         client = get_client()
         sleep(0.01)  # do some work
@@ -4990,6 +4991,7 @@ def test_future_defaults_to_default_client(c, s, a, b):
     future = Future(x.key)
     assert future.client is c
 
+
 @gen_cluster(client=True)
 def test_future_auto_inform(c, s, a, b):
     x = c.submit(inc, 1)
@@ -5175,4 +5177,4 @@ def test_client_doesnt_close_given_loop(loop):
 
 
 if sys.version_info >= (3, 5):
-    from distributed.tests.py3_test_client import *  # flake8: noqa
+    from distributed.tests.py3_test_client import *  # noqa F401

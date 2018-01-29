@@ -23,7 +23,7 @@ from distributed.utils_test import (
     assert_can_connect_from_everywhere_4_6, assert_can_connect_from_everywhere_6,
     assert_can_connect_locally_4, assert_can_connect_locally_6,
     tls_security, captured_logger)
-from distributed.utils_test import loop # flake8: noqa
+from distributed.utils_test import loop  # noqa F401
 
 
 EXTERNAL_IP4 = get_ip()

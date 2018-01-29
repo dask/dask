@@ -17,8 +17,7 @@ from distributed.metrics import time
 from distributed.utils import All
 from distributed.utils_test import (gen_cluster, cluster, inc, slowinc,
                                     slowadd, slow, slowsum, bump_rlimit)
-from distributed.utils_test import (loop, nodebug_setup_module,
-                                    nodebug_teardown_module)  # flake8: noqa
+from distributed.utils_test import (loop, nodebug_setup_module, nodebug_teardown_module)  # noqa: F401
 from distributed.client import wait
 from tornado import gen
 

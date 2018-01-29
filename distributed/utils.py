@@ -5,10 +5,8 @@ from collections import Iterable, deque
 from contextlib import contextmanager
 from datetime import timedelta
 import functools
-import gc
 import json
 import logging
-import math
 import multiprocessing
 import operator
 import os
@@ -639,7 +637,7 @@ def silence_logging(level, root='distributed'):
     (or keep the existing level if less verbose).
     """
     if isinstance(level, str):
-        level = logging_names[level.upper()]
+        level = getattr(logging, level.upper())
 
     for name, logger in logging.root.manager.loggerDict.items():
         if (isinstance(logger, logging.Logger)
@@ -907,7 +905,7 @@ def ensure_bytes(s):
         return s
     if isinstance(s, memoryview):
         return s.tobytes()
-    if isinstance(s, bytearray) or PY2 and isinstance(s, buffer):  # flake8: noqa
+    if isinstance(s, bytearray) or PY2 and isinstance(s, buffer):  # noqa: F821
         return bytes(s)
     if hasattr(s, 'encode'):
         return s.encode()
@@ -1153,7 +1151,7 @@ def asciitable(columns, rows):
 
 
 if PY2:
-    def nbytes(frame, _bytes_like=(bytes, bytearray, buffer)):
+    def nbytes(frame, _bytes_like=(bytes, bytearray, buffer)):  # noqa: F821
         """ Number of bytes of a frame or memoryview """
         if isinstance(frame, _bytes_like):
             return len(frame)

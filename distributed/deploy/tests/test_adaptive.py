@@ -8,7 +8,7 @@ from tornado.ioloop import IOLoop
 from distributed import Client
 from distributed.deploy import Adaptive, LocalCluster
 from distributed.utils_test import gen_cluster, gen_test, slowinc
-from distributed.utils_test import loop, nodebug  # flake8: noqa
+from distributed.utils_test import loop, nodebug  # noqa: F401
 from distributed.metrics import time
 
 
@@ -120,6 +120,7 @@ def test_adaptive_local_cluster_multi_workers():
     finally:
         yield c._close()
         yield cluster._close()
+
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)
 def test_adaptive_scale_down_override(c, s, *workers):

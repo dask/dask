@@ -5,7 +5,7 @@ import tempfile
 
 from distributed import Client
 from distributed.utils_test import cluster
-from distributed.utils_test import loop # flake8: noqa
+from distributed.utils_test import loop  # noqa F401
 
 
 PRELOAD_TEXT = """

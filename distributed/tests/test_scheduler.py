@@ -1,14 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
 import cloudpickle
-from collections import defaultdict, deque
+from collections import defaultdict
 from datetime import timedelta
 import json
 from operator import add, mul
 import sys
 
 from dask import delayed
-from toolz import merge, concat, valmap, first, frequencies, pluck
+from toolz import merge, concat, valmap, first, frequencies
 from tornado import gen
 
 import pytest
@@ -24,7 +24,7 @@ from distributed.utils import tmpfile
 from distributed.utils_test import (inc, dec, gen_cluster, gen_test, readone,
                                     slowinc, slowadd, slowdec, cluster, div,
                                     varying, slow)
-from distributed.utils_test import loop, nodebug  # flake8: noqa
+from distributed.utils_test import loop, nodebug  # noqa: F401
 from dask.compatibility import apply
 
 
@@ -48,7 +48,6 @@ def test_respect_data_in_memory(c, s, a):
     y = delayed(inc)(x)
     f = c.persist(y)
     yield wait([f])
-
 
     assert s.tasks[y.key].who_has == {s.workers[a.address]}
 

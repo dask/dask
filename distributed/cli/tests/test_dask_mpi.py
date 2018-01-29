@@ -12,7 +12,7 @@ from distributed import Client
 from distributed.utils import tmpfile
 from distributed.metrics import time
 from distributed.utils_test import popen
-from distributed.utils_test import loop  # flake8: noqa
+from distributed.utils_test import loop  # noqa: F401
 
 
 @pytest.mark.parametrize('nanny', ['--nanny', '--no-nanny'])

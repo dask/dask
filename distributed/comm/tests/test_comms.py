@@ -15,7 +15,7 @@ from distributed.utils import get_ip, get_ipv6
 from distributed.utils_test import (gen_test, requires_ipv6, has_ipv6,
                                     get_cert, get_server_ssl_context,
                                     get_client_ssl_context)
-from distributed.utils_test import loop  # flake8: noqa
+from distributed.utils_test import loop  # noqa: F401
 
 from distributed.protocol import (to_serialize, Serialized, serialize,
                                   deserialize)
@@ -954,8 +954,8 @@ def check_deserialize_roundtrip(addr):
            'ser': Serialized(*serialize(_uncompressible)),
            }
 
-    for deserialize in (True, False):
-        a, b = yield get_comm_pair(addr, deserialize=deserialize)
+    for should_deserialize in (True, False):
+        a, b = yield get_comm_pair(addr, deserialize=should_deserialize)
         yield a.write(msg)
         got = yield b.read()
         yield b.write(got)
@@ -964,7 +964,7 @@ def check_deserialize_roundtrip(addr):
         assert sorted(got) == sorted(msg)
         for k in ('op', 'x'):
             assert got[k] == msg[k]
-        if deserialize:
+        if should_deserialize:
             assert isinstance(got['to_ser'][0], (bytes, bytearray))
             assert isinstance(got['ser'], (bytes, bytearray))
         else:

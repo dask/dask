@@ -19,7 +19,7 @@ from distributed.utils_test import (popen,
                                     assert_can_connect_from_everywhere_4_6,
                                     assert_can_connect_locally_4,
                                     )
-from distributed.utils_test import loop  # flake8: noqa
+from distributed.utils_test import loop  # noqa: F401
 from distributed.metrics import time
 
 
@@ -51,7 +51,7 @@ def test_hostport(loop):
             yield [
                 # The scheduler's main port can't be contacted from the outside
                 assert_can_connect_locally_4(8978, 2.0),
-                ]
+            ]
 
         loop.run_sync(f)
 

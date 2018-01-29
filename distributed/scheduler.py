@@ -17,12 +17,11 @@ try:
     from cytoolz import frequencies, merge, pluck, merge_sorted, first
 except ImportError:
     from toolz import frequencies, merge, pluck, merge_sorted, first
-from toolz import memoize, valmap, first, second, concat, compose, groupby
+from toolz import valmap, first, second, compose, groupby
 from tornado import gen
 from tornado.gen import Return
 from tornado.ioloop import IOLoop
 
-from dask.core import reverse_dict
 from dask.order import order
 
 from .batched import BatchedSend
@@ -30,7 +29,7 @@ from .comm import (normalize_address, resolve_address,
                    get_address_host, unparse_host_port)
 from .compatibility import finalize, unicode
 from .config import config, log_format
-from .core import (rpc, connect, Server, send_recv,
+from .core import (rpc, connect, send_recv,
                    error_message, clean_exception, CommClosedError)
 from . import profile
 from .metrics import time
@@ -99,7 +98,7 @@ class ClientState(object):
         'client_key',
         'wants_what',
         'last_seen',
-        )
+    )
 
     def __init__(self, client):
         self.client_key = client
@@ -480,7 +479,7 @@ class TaskState(object):
         'suspicious',
         'retries',
         'nbytes',
-        )
+    )
 
     def __init__(self, key, run_spec):
         self.key = key
@@ -753,8 +752,7 @@ class Scheduler(ServerNode):
                 ('priority', 'priority', None),
                 ('dependencies', 'dependencies', _legacy_task_key_set),
                 ('dependents', 'dependents', _legacy_task_key_set),
-                ('retries', 'retries', None),
-                ]:
+                ('retries', 'retries', None)]:
             func = operator.attrgetter(new_attr)
             if wrap is not None:
                 func = compose(wrap, func)
@@ -774,17 +772,14 @@ class Scheduler(ServerNode):
                 ('suspicious_tasks', 'suspicious', None),
                 ('exceptions', 'exception', None),
                 ('tracebacks', 'traceback', None),
-                ('exceptions_blame', 'exception_blame', _task_key_or_none),
-                ]:
+                ('exceptions_blame', 'exception_blame', _task_key_or_none)]:
             func = operator.attrgetter(new_attr)
             if wrap is not None:
                 func = compose(wrap, func)
             setattr(self, old_attr,
                     _OptionalStateLegacyMapping(self.tasks, func))
 
-        for old_attr, new_attr, wrap in [
-                ('loose_restrictions', 'loose_restrictions', None),
-                ]:
+        for old_attr, new_attr, wrap in [('loose_restrictions', 'loose_restrictions', None)]:
             func = operator.attrgetter(new_attr)
             if wrap is not None:
                 func = compose(wrap, func)
@@ -804,9 +799,7 @@ class Scheduler(ServerNode):
 
         # Client state
         self.clients = dict()
-        for old_attr, new_attr, wrap in [
-                ('wants_what', 'wants_what', _legacy_task_key_set),
-                ]:
+        for old_attr, new_attr, wrap in [('wants_what', 'wants_what', _legacy_task_key_set)]:
             func = operator.attrgetter(new_attr)
             if wrap is not None:
                 func = compose(wrap, func)
@@ -824,8 +817,7 @@ class Scheduler(ServerNode):
                 ('occupancy', 'occupancy', None),
                 ('worker_info', 'info', None),
                 ('processing', 'processing', _legacy_task_key_dict),
-                ('has_what', 'has_what', _legacy_task_key_set),
-                ]:
+                ('has_what', 'has_what', _legacy_task_key_set)]:
             func = operator.attrgetter(new_attr)
             if wrap is not None:
                 func = compose(wrap, func)
@@ -1771,9 +1763,6 @@ class Scheduler(ServerNode):
 
         actual_total_occupancy = 0
         for worker, ws in self.workers.items():
-        #     for d in self.extensions['stealing'].in_flight.values():
-        #         if worker in (d['thief'], d['victim']):
-        #             continue
             assert abs(sum(ws.processing.values()) - ws.occupancy) < 1e-8
             actual_total_occupancy += ws.occupancy
 
@@ -2189,7 +2178,7 @@ class Scheduler(ServerNode):
         self.update_data(who_has=who_has, nbytes=nbytes, client=client)
 
         if broadcast:
-            if broadcast == True:  # flake8: noqa
+            if broadcast == True:  # noqa: E712
                 n = len(ncores)
             else:
                 n = broadcast
@@ -3146,9 +3135,7 @@ class Scheduler(ServerNode):
                 worker = min(self.workers.values(),
                              key=operator.attrgetter('occupancy'))
             else:  # dumb but fast in large case
-                worker = self.workers[
-                    self.workers.iloc[self.n_tasks % len(self.workers)]
-                    ]
+                worker = self.workers[self.workers.iloc[self.n_tasks % len(self.workers)]]
 
         assert worker is None or isinstance(worker, WorkerState), (type(worker), worker)
         return worker
@@ -4019,7 +4006,6 @@ class Scheduler(ServerNode):
             L = deque_handler.deque
             L = [L[-i] for i in range(min(n, len(L)))]
         return [(msg.levelname, deque_handler.format(msg)) for msg in L]
-
 
     @gen.coroutine
     def get_worker_logs(self, comm=None, n=None, workers=None):

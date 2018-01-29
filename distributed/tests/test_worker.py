@@ -31,7 +31,7 @@ from distributed.utils import tmpfile
 from distributed.utils_test import (inc, mul, gen_cluster, div, dec,
                                     slow, slowinc, gen_test, cluster,
                                     captured_logger)
-from distributed.utils_test import loop, nodebug # flake8: noqa
+from distributed.utils_test import loop, nodebug # noqa: F401
 
 
 def test_worker_ncores():
@@ -1031,6 +1031,7 @@ def test_get_current_task(c, s, a, b):
 def test_reschedule(c, s, a, b):
     s.extensions['stealing']._pc.stop()
     a_address = a.address
+
     def f(x):
         sleep(0.1)
         if get_worker().address == a_address:

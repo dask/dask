@@ -3,6 +3,8 @@ from __future__ import print_function, division, absolute_import
 import logging
 import sys
 
+# flake8: noqa
+
 if sys.version_info[0] == 2:
     from Queue import Queue, Empty
     from io import BytesIO
@@ -10,8 +12,8 @@ if sys.version_info[0] == 2:
     from inspect import getargspec
     from cgi import escape as html_escape
 
-    reload = reload  # flake8: noqa
-    unicode = unicode  # flake8: noqa
+    reload = reload
+    unicode = unicode
     PY2 = True
     PY3 = False
     ConnectionRefusedError = OSError
@@ -50,7 +52,7 @@ if sys.version_info[0] == 2:
     logging_names = logging._levelNames
 
 if sys.version_info[0] == 3:
-    from queue import Queue, Empty  # flake8: noqa
+    from queue import Queue, Empty
     from importlib import reload
     from threading import get_ident as get_thread_identity
     from importlib import invalidate_caches

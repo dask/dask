@@ -29,7 +29,6 @@ try:
 except ImportError:
     ssl = None
 
-import psutil
 import pytest
 import six
 
@@ -39,14 +38,13 @@ from tornado import gen, queues
 from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 
-from .compatibility import WINDOWS, PY3
+from .compatibility import PY3
 from .config import config, initialize_logging
 from .core import connect, rpc, CommClosedError
 from .metrics import time
-from .nanny import Nanny
 from .proctitle import enable_proctitle_on_children
 from .security import Security
-from .utils import (ignoring, log_errors, sync, mp_context, get_ip, get_ipv6,
+from .utils import (ignoring, log_errors, mp_context, get_ip, get_ipv6,
                     DequeHandler)
 from .worker import Worker, TOTAL_MEMORY
 
@@ -89,6 +87,7 @@ def loop():
         orig_start = loop.start
         is_stopped = threading.Event()
         is_stopped.set()
+
         def start():
             is_stopped.clear()
             try:
@@ -156,7 +155,9 @@ def mock_ipython():
     ip.user_ns = {}
     ip.kernel = None
 
-    def get_ip(): return ip
+    def get_ip():
+        return ip
+
     with mock.patch('IPython.get_ipython', get_ip), \
             mock.patch('distributed._ipython_utils.get_ipython', get_ip):
         yield ip
@@ -359,7 +360,7 @@ if sys.version_info >= (3, 5):
             await gen.sleep(delay)
             return x + 1
         """)
-    assert asyncinc  # flake8: noqa
+    assert asyncinc  # noqa: F821
 else:
     asyncinc = None
 
@@ -465,6 +466,7 @@ def check_active_rpc(loop, active_rpc_timeout=1):
     # This would happen especially if a non-localhost address is used,
     # as Nanny does.
     # (*) (example: gather_from_workers())
+
     def fail():
         pytest.fail("some RPCs left active by test: %s"
                     % (sorted(set(rpc.active) - active_before)))

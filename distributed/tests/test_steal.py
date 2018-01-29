@@ -17,8 +17,8 @@ from distributed.metrics import time
 from distributed.scheduler import BANDWIDTH, key_split
 from distributed.utils_test import (slowinc, slowadd, inc, gen_cluster,
                                     slowidentity)
-from distributed.utils_test import (loop, nodebug_setup_module,
-                                    nodebug_teardown_module)  # flake8: noqa
+from distributed.utils_test import (nodebug_setup_module,
+                                    nodebug_teardown_module)
 from distributed.worker import TOTAL_MEMORY
 
 import pytest
@@ -393,7 +393,6 @@ def assert_balanced(inp, expected, c, s, *workers):
 
     while len(s.rprocessing) < len(futures):
         yield gen.sleep(0.001)
-
 
     for i in range(10):
         steal.balance()

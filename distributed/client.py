@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import atexit
-from collections import Iterator, Mapping, defaultdict
+from collections import Iterator, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures._base import DoneAndNotDoneFutures, CancelledError
 from contextlib import contextmanager
@@ -16,7 +16,6 @@ import logging
 from numbers import Number, Integral
 import os
 import sys
-from time import sleep
 import uuid
 import threading
 import six
@@ -47,8 +46,7 @@ from .batched import BatchedSend
 from .utils_comm import (WrappedKey, unpack_remotedata, pack_data,
                          scatter_to_workers, gather_from_workers)
 from .cfexecutor import ClientExecutor
-from .compatibility import (Queue as pyQueue, Empty, isqueue,
-                            get_thread_identity, html_escape)
+from .compatibility import Queue as pyQueue, Empty, isqueue, html_escape
 from .config import config
 from .core import connect, rpc, clean_exception, CommClosedError
 from .metrics import time
@@ -3083,8 +3081,8 @@ class Client(Node):
         # such as {'x': {'GPU': 1}, 'y': {'SSD': 4}} indicating
         # per-key requirements
         if not isinstance(resources, dict):
-            raise TypeError("`retries` should be a dict, got %r"
-                            % (type(retries,)))
+            raise TypeError("`resources` should be a dict, got %r"
+                            % (type(resources,)))
 
         per_key_reqs = {}
         global_reqs = {}
@@ -3101,7 +3099,6 @@ class Client(Node):
             raise ValueError("cannot have both per-key and all-key requirements "
                              "in resources dict %r" % (resources,))
         return global_reqs or per_key_reqs
-
 
     @classmethod
     def get_restrictions(cls, collections, workers, allow_other_workers):
@@ -3348,10 +3345,10 @@ class as_completed(object):
     @gen.coroutine
     def __anext__(self):
         if not self.futures and self.queue.empty():
-            raise StopAsyncIteration  # flake8: noqa
+            raise StopAsyncIteration
         while self.queue.empty():
             if not self.futures:
-                raise StopAsyncIteration  # flake8: noqa
+                raise StopAsyncIteration
             yield self.condition.wait()
 
         raise gen.Return(self.queue.get())

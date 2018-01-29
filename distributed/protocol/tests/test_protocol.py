@@ -223,7 +223,7 @@ def test_maybe_compress_memoryviews():
     x = np.arange(1000000, dtype='int64')
     compression, payload = maybe_compress(x.data)
     try:
-        import blosc  # flake8: noqa
+        import blosc  # noqa: F401
     except ImportError:
         assert compression == 'lz4'
         assert len(payload) < x.nbytes * 0.75

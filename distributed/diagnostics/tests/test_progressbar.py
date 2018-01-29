@@ -8,7 +8,7 @@ from distributed import Client, Scheduler, Worker
 from distributed.diagnostics.progressbar import TextProgressBar, progress
 from distributed.metrics import time
 from distributed.utils_test import (cluster, inc, div, gen_cluster)
-from distributed.utils_test import loop  # flake8: noqa
+from distributed.utils_test import loop  # noqa: F401
 
 
 def test_text_progressbar(capsys, loop):

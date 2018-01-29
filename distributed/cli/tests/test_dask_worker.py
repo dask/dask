@@ -12,7 +12,7 @@ from distributed.metrics import time
 from distributed.utils import sync, tmpfile
 from distributed.utils_test import (popen, slow, terminate_process,
                                     wait_for_port)
-from distributed.utils_test import loop  # flake8: noqa
+from distributed.utils_test import loop  # noqa: F401
 
 
 def test_nanny_worker_ports(loop):

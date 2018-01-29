@@ -5,16 +5,12 @@ from functools import partial
 import io
 import socket
 import sys
-from time import sleep
-from threading import Thread
-import threading
 import traceback
 
 import numpy as np
 import pytest
 from tornado import gen
 from tornado.ioloop import IOLoop
-from tornado.locks import Event
 
 import dask
 from distributed.compatibility import Queue, Empty, isqueue, PY2
@@ -25,7 +21,7 @@ from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
                                funcname, ensure_bytes, open_port, get_ip_interface, nbytes,
                                set_thread_state, thread_state, LoopRunner,
                                parse_bytes)
-from distributed.utils_test import loop, loop_in_thread  # flake8: noqa
+from distributed.utils_test import loop, loop_in_thread  # noqa: F401
 from distributed.utils_test import div, has_ipv6, inc, throws, gen_test
 
 
@@ -285,7 +281,7 @@ def test_funcname():
 def test_ensure_bytes():
     data = [b'1', '1', memoryview(b'1'), bytearray(b'1')]
     if PY2:
-        data.append(buffer(b'1'))  # flake8: noqa
+        data.append(buffer(b'1'))  # noqa: F821
     for d in data:
         result = ensure_bytes(d)
         assert isinstance(result, bytes)
@@ -328,6 +324,7 @@ def assert_running(loop):
     q = Queue()
     loop.add_callback(q.put, 42)
     assert q.get(timeout=1) == 42
+
 
 def assert_not_running(loop):
     """

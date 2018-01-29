@@ -4,8 +4,7 @@ from mock import Mock
 from tornado import gen
 from tornado.ioloop import IOLoop
 from distributed.submit import RemoteClient, _submit, _remote
-from distributed.utils_test import (valid_python_script, invalid_python_script,
-                                    loop)  # flake8: noqa
+from distributed.utils_test import (valid_python_script, invalid_python_script, loop)  # noqa: F401
 
 
 def test_dask_submit_cli_writes_result_to_stdout(loop, tmpdir,

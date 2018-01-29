@@ -18,7 +18,7 @@ from distributed.utils_test import (inc, gen_test,
                                     assert_can_connect_locally_4,
                                     assert_can_connect_from_everywhere_4_6,
                                     captured_logger)
-from distributed.utils_test import loop  # flake8: noqa
+from distributed.utils_test import loop  # noqa: F401
 from distributed.utils import sync
 from distributed.worker import TOTAL_MEMORY
 

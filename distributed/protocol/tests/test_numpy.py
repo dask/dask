@@ -148,7 +148,7 @@ def test_compress_numpy():
 
     header = msgpack.loads(frames[2], encoding='utf8', use_list=False)
     try:
-        import blosc  # flake8: noqa
+        import blosc  # noqa: F401
     except ImportError:
         pass
     else:
