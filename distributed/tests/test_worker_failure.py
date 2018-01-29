@@ -48,7 +48,7 @@ def test_submit_after_failed_worker_async(c, s, a, b):
     yield n._close()
 
 
-@gen_cluster(client=True)
+@gen_cluster(client=True, timeout=60)
 def test_submit_after_failed_worker(c, s, a, b):
     L = c.map(inc, range(10))
     yield wait(L)
@@ -127,7 +127,7 @@ def test_failed_worker_without_warning(c, s, a, b):
     assert not (set(ncores2) & set(s.ncores))  # no overlap
 
 
-@gen_cluster(Worker=Nanny, client=True)
+@gen_cluster(Worker=Nanny, client=True, timeout=60)
 def test_restart(c, s, a, b):
     assert s.ncores == {a.worker_address: 1, b.worker_address: 2}
 
@@ -155,7 +155,7 @@ def test_restart(c, s, a, b):
     assert not any(cs.wants_what for cs in s.clients.values())
 
 
-@gen_cluster(Worker=Nanny, client=True)
+@gen_cluster(Worker=Nanny, client=True, timeout=60)
 def test_restart_cleared(c, s, a, b):
     x = 2 * delayed(1) + 1
     f = c.compute(x)
@@ -197,7 +197,7 @@ def test_restart_sync(loop):
             assert y.result() == 1 / 3
 
 
-@gen_cluster(Worker=Nanny, client=True, timeout=20)
+@gen_cluster(Worker=Nanny, client=True, timeout=60)
 def test_restart_fast(c, s, a, b):
     L = c.map(sleep, range(10))
 
@@ -240,7 +240,7 @@ def test_restart_fast_sync(loop):
             assert x.result() == 2
 
 
-@gen_cluster(Worker=Nanny, client=True, timeout=20)
+@gen_cluster(Worker=Nanny, client=True, timeout=60)
 def test_fast_kill(c, s, a, b):
     L = c.map(sleep, range(10))
 
@@ -255,7 +255,7 @@ def test_fast_kill(c, s, a, b):
     assert result == 2
 
 
-@gen_cluster(Worker=Nanny)
+@gen_cluster(Worker=Nanny, timeout=60)
 def test_multiple_clients_restart(s, a, b):
     e1 = yield Client((s.ip, s.port), asynchronous=True)
     e2 = yield Client((s.ip, s.port), asynchronous=True)
@@ -276,7 +276,7 @@ def test_multiple_clients_restart(s, a, b):
     yield e2._close(fast=True)
 
 
-@gen_cluster(Worker=Nanny)
+@gen_cluster(Worker=Nanny, timeout=60)
 def test_restart_scheduler(s, a, b):
     import gc
     gc.collect()
@@ -288,7 +288,7 @@ def test_restart_scheduler(s, a, b):
     assert addrs != addrs2
 
 
-@gen_cluster(Worker=Nanny, client=True)
+@gen_cluster(Worker=Nanny, client=True, timeout=60)
 def test_forgotten_futures_dont_clean_up_new_futures(c, s, a, b):
     x = c.submit(inc, 1)
     yield c._restart()
@@ -339,7 +339,7 @@ def test_broken_worker_during_computation(c, s, a, b):
     yield n._close()
 
 
-@gen_cluster(client=True, Worker=Nanny)
+@gen_cluster(client=True, Worker=Nanny, timeout=60)
 def test_restart_during_computation(c, s, a, b):
     xs = [delayed(slowinc)(i, delay=0.01) for i in range(50)]
     ys = [delayed(slowinc)(i, delay=0.01) for i in xs]
@@ -356,7 +356,7 @@ def test_restart_during_computation(c, s, a, b):
     assert not s.tasks
 
 
-@gen_cluster(client=True, timeout=None)
+@gen_cluster(client=True, timeout=60)
 def test_worker_who_has_clears_after_failed_connection(c, s, a, b):
     n = Nanny(s.ip, s.port, ncores=2, loop=s.loop)
     n.start(0)

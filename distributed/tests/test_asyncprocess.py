@@ -107,7 +107,8 @@ def test_simple():
 
     del proc
     gc.collect()
-    if wr1() is not None:
+    start = time()
+    while wr1() is not None and time() < start + 1:
         # Perhaps the GIL switched before _watch_process() exit,
         # help it a little
         sleep(0.001)

@@ -649,6 +649,8 @@ def start_cluster(ncores, scheduler_addr, loop, security=None,
     while len(s.workers) < len(ncores):
         yield gen.sleep(0.01)
         if time() - start > 5:
+            yield [w._close(timeout=1) for w in workers]
+            yield s.close(fast=True)
             raise Exception("Cluster creation timeout")
     raise gen.Return((s, workers))
 
@@ -688,7 +690,8 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
         start
         end
     """
-    worker_kwargs = merge({'memory_limit': TOTAL_MEMORY}, worker_kwargs)
+    worker_kwargs = merge({'memory_limit': TOTAL_MEMORY, 'death_timeout': 5},
+                          worker_kwargs)
 
     def _(func):
         if not iscoroutinefunction(func):
@@ -708,10 +711,16 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                 with check_active_rpc(loop, active_rpc_timeout):
                     @gen.coroutine
                     def coro():
-                        s, ws = yield start_cluster(
-                            ncores, scheduler, loop, security=security,
-                            Worker=Worker, scheduler_kwargs=scheduler_kwargs,
-                            worker_kwargs=worker_kwargs)
+                        for i in range(5):
+                            try:
+                                s, ws = yield start_cluster(
+                                    ncores, scheduler, loop, security=security,
+                                    Worker=Worker, scheduler_kwargs=scheduler_kwargs,
+                                    worker_kwargs=worker_kwargs)
+                            except Exception:
+                                logger.error("Failed to start gen_cluster, retryng")
+                            else:
+                                break
                         workers[:] = ws
                         args = [s] + workers
                         if client:

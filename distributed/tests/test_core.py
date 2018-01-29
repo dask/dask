@@ -567,3 +567,4 @@ def test_tick_logging(s, a, b):
 
     text = sio.getvalue()
     assert "unresponsive" in text
+    assert 'Scheduler' in text or 'Worker' in text
