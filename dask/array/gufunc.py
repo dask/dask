@@ -47,6 +47,30 @@ def _parse_args(sig):
 
 
 def parse_signature(signature):
+    """"
+    Parse gufunc signature into nested tuples/lists structures
+    of the dimension names.
+
+    Parameters
+    ----------
+    signature: str
+        According to the specification of numpy.gufunc signature [2]_
+
+    Returns
+    -------
+    Nested tuples/lists structures of the dimension names.
+
+    Examples
+    --------
+    >>> parse_signature('(i),(i,j)->(i,j)')
+    ([('i',), ('i', 'j')], ('i', 'j'))
+
+    >>> parse_signature('(i,j)->(i),(j)')
+    ([('i', 'j')], [('i',), ('j',)])
+
+    >>> parse_signature('->(i),')
+    ([], [('i',)])
+    """
     signature = signature.replace(' ', '')
     assert "->" in signature
     _in, _out = signature.split("->")
@@ -61,6 +85,34 @@ def parse_signature(signature):
 
 
 def compile_signature(ins, outs):
+    """"
+    Compile gufunc signature from nested tuples/lists structures
+    of the dimension names.
+
+    Parameters
+    ----------
+    ins: list of tuples of dimension names
+        Each input is a tuple of dimension names
+
+    outs: list of tuples of dimension names or tuple of dimension names
+        For one output tuple of dimension names, for many outputs list of
+        tuple of dimension names
+
+    Returns
+    -------
+    Signature according to the specification of numpy.gufunc signature [2]_
+
+    Examples
+    --------
+    >>> compile_signature([('i',), ('i', 'j')], ('i', 'j'))
+    '(i),(i,j)->(i,j)'
+
+    >>> compile_signature([('i', 'j')], [('i',), ('j',)])
+    '(i,j)->(i),(j)'
+
+    >>> compile_signature([], [('i',),])
+    '->(i),'
+    """
     for e in concat(ins):
         if len(_valid_name_re.findall(e)) != 1:
             raise ValueError('`"{0}"` is not a valid name.'.format(e))
