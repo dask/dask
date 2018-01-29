@@ -177,21 +177,21 @@ def apply_gufunc(func, signature, *args, **kwargs):
     Examples
     --------
     >>> import dask.array as da
-    ... import numpy as np
-    ... def stats(x):
+    >>> import numpy as np
+    >>> def stats(x):
     ...     return np.mean(x, axis=-1), np.std(x, axis=-1)
-    ... a = da.random.normal(size=(10,20,30), chunks=5)
-    ... mean, std = da.apply_gufunc(stats, "(i)->(),()", a, output_dtypes=2*(a.dtype,))
-    ... mean.compute()  # doctest: +SKIP
+    >>> a = da.random.normal(size=(10,20,30), chunks=5)
+    >>> mean, std = da.apply_gufunc(stats, "(i)->(),()", a, output_dtypes=2*(a.dtype,))
+    >>> mean.compute()  # doctest: +SKIP
 
     >>> import dask.array as da
-    ... import numpy as np
-    ... def outer_product(x, y):
+    >>> import numpy as np
+    >>> def outer_product(x, y):
     ...     return np.einsum("...i,...j->...ij", x, y)
-    ... a = da.random.normal(size=(   20,30), chunks=5)
-    ... b = da.random.normal(size=(10, 1,40), chunks=10)
-    ... c = da.apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b, output_dtypes=a.dtype)
-    ... c.compute()  # doctest: +SKIP
+    >>> a = da.random.normal(size=(   20,30), chunks=5)
+    >>> b = da.random.normal(size=(10, 1,40), chunks=10)
+    >>> c = da.apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b, output_dtypes=a.dtype)
+    >>> c.compute()  # doctest: +SKIP
 
     References
     ----------
@@ -220,10 +220,10 @@ def apply_gufunc(func, signature, *args, **kwargs):
         if not (isinstance(output_dtypes, tuple) or isinstance(output_dtypes, list)):
             raise ValueError("Must specify tuple of dtypes for `output_dtypes` for function with multiple outputs")
         if len(output_dtypes) != nout:
-            raise ValueError("Must specify tuple of %d dtypes for `output_dtypes` for function with multiple outputs" % nout)
+            raise ValueError("Must specify tuple of %d dtypes for `output_dtypes` for function with multiple outputs"
+                             % nout)
     if nout is None and (isinstance(output_dtypes, tuple) or isinstance(output_dtypes, list)):
         raise ValueError("Must specify single dtype for `output_dtypes` for function with one output")
-
 
     ## Miscellaneous
     if output_sizes is None:
@@ -351,23 +351,23 @@ def gufunc(signature, **kwargs):
     Examples
     --------
     >>> import dask.array as da
-    ... import numpy as np
-    ... @da.gufunc("(i)->(),()", output_dtypes=2*(a.dtype,))
+    >>> import numpy as np
+    >>> @da.gufunc("(i)->(),()", output_dtypes=(float, float))
     ... def stats(x):
     ...     return np.mean(x, axis=-1), np.std(x, axis=-1)
-    ... a = da.random.normal(size=(10,20,30), chunks=5)
-    ... mean, std = stats(a)
-    ... mean.compute()  # doctest: +SKIP
+    >>> a = da.random.normal(size=(10,20,30), chunks=5)
+    >>> mean, std = stats(a)
+    >>> mean.compute()  # doctest: +SKIP
 
     >>> import dask.array as da
-    ... import numpy as np
-    ... @da.gufunc("(i),(j)->(i,j)", output_dtypes=a.dtype)
+    >>> import numpy as np
+    >>> @da.gufunc("(i),(j)->(i,j)", output_dtypes=float)
     ... def outer_product(x, y):
     ...     return np.einsum("...i,...j->...ij", x, y)
-    ... a = da.random.normal(size=(   20,30), chunks=5)
-    ... b = da.random.normal(size=(10, 1,40), chunks=10)
-    ... c = outer_product(a, b)
-    ... c.compute()  # doctest: +SKIP
+    >>> a = da.random.normal(size=(   20,30), chunks=5)
+    >>> b = da.random.normal(size=(10, 1,40), chunks=10)
+    >>> c = outer_product(a, b)
+    >>> c.compute()  # doctest: +SKIP
 
     References
     ----------
