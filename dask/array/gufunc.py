@@ -7,9 +7,9 @@ from numpy import vectorize as np_vectorize
 from numpy import broadcast_to as np_broadcast_to
 
 try:
-    from cytoolz import concat, merge, curry
+    from cytoolz import concat, merge
 except ImportError:
-    from toolz import concat, merge, curry
+    from toolz import concat, merge
 from functools import partial
 
 from .core import asarray, Array, atop, broadcast_shapes
@@ -309,8 +309,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     return leaf_arrs if nout else leaf_arrs[0]
 
 
-@curry
-def gufunc(signature, func, **kwargs):
+def gufunc(signature, **kwargs):
     """
     Apply a generalized ufunc [2]_ to arrays. The ``signature``
     determines if the function consumes or produces core dimensions.
@@ -375,21 +374,23 @@ def gufunc(signature, func, **kwargs):
     .. [1] http://docs.scipy.org/doc/numpy/reference/ufuncs.html
     .. [2] http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
     """
-    _gufunc = partial(apply_gufunc, func, signature, **kwargs)
-    _gufunc.__doc__ = """
-        Bound ``dask.array.gufunc``
-        func: {func}
-        signature: '{signature}'
+    def _gufunc(func):
+        bound_gufunc = partial(apply_gufunc, func, signature, **kwargs)
+        bound_gufunc.__doc__ = """
+            Bound ``dask.array.gufunc``
+            func: {func}
+            signature: '{signature}'
 
-        Parameters
-        ----------
-        *args : numpy/dask arrays or scalars
-            Arrays to which to apply the function. Core dimensions as specified in
-            ``signature`` need to come last.
+            Parameters
+            ----------
+            *args : numpy/dask arrays or scalars
+                Arrays to which to apply the function. Core dimensions as specified in
+                ``signature`` need to come last.
 
-        Returns
-        -------
-        Single dask.array.Array or tuple of dask.array.Array
-        """.format(func=str(func), signature=signature)
+            Returns
+            -------
+            Single dask.array.Array or tuple of dask.array.Array
+            """.format(func=str(func), signature=signature)
+        return bound_gufunc
 
     return _gufunc
