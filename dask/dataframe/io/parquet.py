@@ -367,7 +367,7 @@ def _write_partition_fastparquet(df, fs, path, filename, fmd, compression,
         # Write nothing for empty partitions
         rgs = None
     elif partition_on:
-        if LooseVersion(fastparquet.__version__) >= LooseVersion('0.1.4'):
+        if LooseVersion(fastparquet.__version__) >= '0.1.4':
             rgs = partition_on_columns(df, partition_on, path, filename, fmd,
                                        compression, fs.open, fs.mkdirs)
         else:
