@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import io
 import itertools
 import math
 import types
@@ -28,7 +29,7 @@ except ImportError:
                        count, pluck, groupby, topk)
 
 from ..base import Base, tokenize, dont_optimize, is_dask_collection
-from ..bytes.core import write_bytes
+from ..bytes import open_files
 from ..compatibility import apply, urlopen
 from ..context import _globals, globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict
@@ -36,7 +37,7 @@ from ..delayed import Delayed
 from ..multiprocessing import get as mpget
 from ..optimization import fuse, cull, inline
 from ..utils import (system_encoding, takes_multiple_arguments, funcname,
-                     digit, insert, ensure_dict)
+                     digit, insert, ensure_dict, ensure_bytes, ensure_unicode)
 
 
 no_default = '__no__default__'
@@ -115,6 +116,23 @@ def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
     return dsk5
 
 
+def _to_textfiles_chunk(data, lazy_file):
+    with lazy_file as f:
+        if isinstance(f, io.TextIOWrapper):
+            endline = u'\n'
+            ensure = ensure_unicode
+        else:
+            endline = b'\n'
+            ensure = ensure_bytes
+        started = False
+        for d in data:
+            if started:
+                f.write(endline)
+            else:
+                started = True
+            f.write(ensure(d))
+
+
 def to_textfiles(b, path, name_function=None, compression='infer',
                  encoding=system_encoding, compute=True, get=None,
                  storage_options=None):
@@ -171,21 +189,21 @@ def to_textfiles(b, path, name_function=None, compression='infer',
 
     >>> b_dict.map(json.dumps).to_textfiles("/path/to/data/*.json")  # doctest: +SKIP
     """
-    from dask import delayed
-    (writes,names) = write_bytes(b.to_delayed(), path, name_function, compression,
-                                 encoding=encoding, **(storage_options or {}))
+    mode = 'wb' if encoding is None else 'wt'
+    files = open_files(path, compression=compression, mode=mode,
+                       encoding=encoding, name_function=name_function,
+                       num=b.npartitions, **(storage_options or {}))
 
-    # Use Bag optimizations on these delayed objects
-    dsk = ensure_dict(delayed(writes).dask)
-    dsk2 = Bag.__dask_optimize__(dsk, [w.key for w in writes])
-    out = [Delayed(w.key, dsk2) for w in writes]
+    name = 'to-textfiles-' + uuid.uuid4().hex
+    dsk = {(name, i): (_to_textfiles_chunk, (b.name, i), f)
+           for i, f in enumerate(files)}
+    out = type(b)(merge(dsk, b.dask), name, b.npartitions)
 
     if compute:
-        get = get or _globals.get('get', None) or Bag.__dask_scheduler__
-        delayed(out).compute(get=get)
-        return names
+        out.compute(get=get)
+        return [f.path for f in files]
     else:
-        return out
+        return out.to_delayed()
 
 
 def finalize(results):
