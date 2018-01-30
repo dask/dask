@@ -216,8 +216,6 @@ class OpenFile(object):
         Mode of the opened file
     compression : str or None, optional
         Compression to apply
-    text : bool, optional
-        Whether to wrap the file to be text-like
     encoding : str or None, optional
         The encoding to use if opened in text mode.
     errors : str or None, optional
