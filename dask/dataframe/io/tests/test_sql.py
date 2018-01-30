@@ -14,6 +14,8 @@ pytest.importorskip('sqlalchemy')
 pytest.importorskip('sqlite3')
 np = pytest.importorskip('numpy')
 
+import dask
+dask.set_options(get=dask.get)
 
 data = """
 name,number,age,negish

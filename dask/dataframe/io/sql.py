@@ -168,4 +168,4 @@ def _rationalize_sql(q, uri, meta, **kwargs):
     if df.empty:
         return meta
     else:
-        return df.astype(meta.dtypes)
+        return df.astype(meta.dtypes.to_dict())
