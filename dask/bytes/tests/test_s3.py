@@ -11,11 +11,10 @@ moto = pytest.importorskip('moto')
 
 from toolz import concat, valmap, partial
 
-from dask import compute, get, delayed
+from dask import compute, get
 from dask.bytes.s3 import DaskS3FileSystem
 from dask.bytes.core import read_bytes, open_files, get_pyarrow_filesystem
 from dask.bytes.compression import compress, files as compress_files, seekable_files
-from dask.bytes import core
 
 
 compute = partial(compute, get=get)
@@ -77,11 +76,12 @@ def test_get_s3():
         DaskS3FileSystem(secret='key', password='key')
 
 
-def test_write_bytes(s3):
+def test_open_files_write(s3):
     paths = ['s3://' + test_bucket_name + '/more/' + f for f in files]
-    values = [delayed(v) for v in files.values()]
-    out = core.write_bytes(values, paths)
-    compute(*out)
+    fils = open_files(paths, mode='wb')
+    for fil, data in zip(fils, files.values()):
+        with fil as f:
+            f.write(data)
     sample, values = read_bytes('s3://' + test_bucket_name + '/more/test/accounts.*')
     results = compute(*concat(values))
     assert set(list(files.values())) == set(results)

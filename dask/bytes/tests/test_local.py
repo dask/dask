@@ -8,12 +8,12 @@ import sys
 import pytest
 from toolz import concat, valmap, partial
 
-from dask import compute, get, delayed
+from dask import compute, get
 from dask.compatibility import FileNotFoundError, unicode
 from dask.utils import filetexts
 from dask.bytes import compression
 from dask.bytes.local import LocalFileSystem
-from dask.bytes.core import (write_bytes, read_bytes, open_files, FileSystem,
+from dask.bytes.core import (read_bytes, open_files, FileSystem,
                              get_pyarrow_filesystem, logical_size,
                              get_fs_token_paths)
 
@@ -302,45 +302,23 @@ def test_names():
         assert [aa._key for aa in a] != [cc._key for cc in c]
 
 
-def test_simple_write(tmpdir):
+@pytest.mark.parametrize('compression_opener',
+                         [(None, open), ('gzip', gzip.open)])
+def test_open_files_write(tmpdir, compression_opener):
+    compression, opener = compression_opener
     tmpdir = str(tmpdir)
-    make_bytes = lambda: b'000'
-    some_bytes = delayed(make_bytes)()
-    data = [some_bytes, some_bytes]
-    out = write_bytes(data, tmpdir)
-    assert len(out) == 2
-    compute(*out)
-    files = os.listdir(tmpdir)
+    files = open_files(tmpdir, num=2, mode='wb', compression=compression)
     assert len(files) == 2
-    assert '0.part' in files
+    assert {f.mode for f in files} == {'wb'}
+    for fil in files:
+        with fil as f:
+            f.write(b'000')
+    files = sorted(os.listdir(tmpdir))
+    assert files == ['0.part', '1.part']
 
-    with open(os.path.join(tmpdir, files[0]), 'rb') as f:
+    with opener(os.path.join(tmpdir, files[0]), 'rb') as f:
         d = f.read()
     assert d == b'000'
-
-
-def test_compressed_write(tmpdir):
-    tmpdir = str(tmpdir)
-    make_bytes = lambda: b'000'
-    some_bytes = delayed(make_bytes)()
-    data = [some_bytes, some_bytes]
-    out = write_bytes(data, os.path.join(tmpdir, 'bytes-*.gz'),
-                      compression='gzip')
-    compute(*out)
-    files = os.listdir(tmpdir)
-    assert len(files) == 2
-    assert 'bytes-0.gz' in files
-    import gzip
-    d = gzip.GzipFile(os.path.join(tmpdir, files[0])).read()
-    assert d == b'000'
-
-
-def test_open_files_write(tmpdir):
-    tmpdir = str(tmpdir)
-    files = open_files([os.path.join(tmpdir, 'test1'),
-                        os.path.join(tmpdir, 'test2')], mode='wb')
-    assert len(files) == 2
-    assert files[0].mode == 'wb'
 
 
 def test_pickability_of_lazy_files(tmpdir):
