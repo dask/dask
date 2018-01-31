@@ -22,7 +22,7 @@ class BokehServer(object):
             ip = None
         for i in range(5):
             try:
-                self.server = Server(self.apps, io_loop=self.loop,
+                self.server = Server(self.apps,
                                      port=port, address=ip,
                                      check_unused_sessions_milliseconds=500,
                                      allow_websocket_origin=["*"],

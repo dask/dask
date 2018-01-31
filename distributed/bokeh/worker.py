@@ -93,7 +93,7 @@ class CommunicatingStream(DashboardComponent):
             )
             fig.add_tools(
                 hover,
-                ResetTool(reset_size=False),
+                ResetTool(),
                 PanTool(dimensions="width"),
                 WheelZoomTool(dimensions="width")
             )
@@ -165,7 +165,7 @@ class CommunicatingTimeSeries(DashboardComponent):
         fig.line(source=self.source, x='x', y='out', color='blue')
 
         fig.add_tools(
-            ResetTool(reset_size=False),
+            ResetTool(),
             PanTool(dimensions="width"),
             WheelZoomTool(dimensions="width")
         )
@@ -193,7 +193,7 @@ class ExecutingTimeSeries(DashboardComponent):
         fig.line(source=self.source, x='x', y='y')
 
         fig.add_tools(
-            ResetTool(reset_size=False),
+            ResetTool(),
             PanTool(dimensions="width"),
             WheelZoomTool(dimensions="width")
         )
@@ -312,7 +312,7 @@ class CrossFilter(DashboardComponent):
 
             fig.add_tools(
                 # self.hover,
-                ResetTool(reset_size=False),
+                ResetTool(),
                 PanTool(),
                 WheelZoomTool(),
                 BoxZoomTool(),

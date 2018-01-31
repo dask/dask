@@ -101,7 +101,7 @@ class TaskStream(DashboardComponent):
         self.root.add_tools(
             hover, tap,
             BoxZoomTool(),
-            ResetTool(reset_size=False),
+            ResetTool(),
             PanTool(dimensions="width"),
             WheelZoomTool(dimensions="width")
         )

@@ -376,7 +376,7 @@ class StealingTimeSeries(DashboardComponent):
         fig.yaxis.minor_tick_line_color = None
 
         fig.add_tools(
-            ResetTool(reset_size=False),
+            ResetTool(),
             PanTool(dimensions="width"),
             WheelZoomTool(dimensions="width")
         )
@@ -421,7 +421,7 @@ class StealingEvents(DashboardComponent):
 
         fig.add_tools(
             hover,
-            ResetTool(reset_size=False),
+            ResetTool(),
             PanTool(dimensions="width"),
             WheelZoomTool(dimensions="width")
         )
@@ -490,7 +490,7 @@ class Events(DashboardComponent):
 
         fig.add_tools(
             hover,
-            ResetTool(reset_size=False),
+            ResetTool(),
             PanTool(dimensions="width"),
             WheelZoomTool(dimensions="width")
         )
