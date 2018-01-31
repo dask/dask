@@ -14,21 +14,22 @@ from .. import sharedict
 
 @wraps(np.percentile)
 def _percentile(a, q, interpolation='linear'):
+    n = len(a)
     if not len(a):
-        return None
+        return None, n
     if isinstance(q, Iterator):
         q = list(q)
     if a.dtype.name == 'category':
         result = np.percentile(a.codes, q, interpolation=interpolation)
         import pandas as pd
-        return pd.Categorical.from_codes(result, a.categories, a.ordered)
+        return pd.Categorical.from_codes(result, a.categories, a.ordered), n
     if np.issubdtype(a.dtype, np.datetime64):
         a2 = a.astype('i8')
         result = np.percentile(a2, q, interpolation=interpolation)
-        return result.astype(a.dtype)
+        return result.astype(a.dtype), n
     if not np.issubdtype(a.dtype, np.number):
         interpolation = 'nearest'
-    return np.percentile(a, q, interpolation=interpolation)
+    return np.percentile(a, q, interpolation=interpolation), n
 
 
 def percentile(a, q, interpolation='linear'):
@@ -49,7 +50,7 @@ def percentile(a, q, interpolation='linear'):
 
     name2 = 'percentile-' + token
     dsk2 = {(name2, 0): (merge_percentiles, q, [q] * len(a.chunks[0]),
-                         sorted(dsk), a.chunks[0], interpolation)}
+                         sorted(dsk), interpolation)}
 
     dtype = a.dtype
     if np.issubdtype(dtype, np.integer):
@@ -60,7 +61,7 @@ def percentile(a, q, interpolation='linear'):
     return Array(dsk, name2, chunks=((len(q),),), dtype=dtype)
 
 
-def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
+def merge_percentiles(finalq, qs, vals, interpolation='lower', Ns=None):
     """ Combine several percentile calculations of different data.
 
     Parameters
@@ -86,7 +87,7 @@ def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
     >>> vals = [np.array([1, 2, 3, 4]), np.array([10, 11, 12, 13])]
     >>> Ns = [100, 100]  # Both original arrays had 100 elements
 
-    >>> merge_percentiles(finalq, qs, vals, Ns)
+    >>> merge_percentiles(finalq, qs, vals, Ns=Ns)
     array([ 1,  2,  3,  4, 10, 11, 12, 13])
     """
     if isinstance(finalq, Iterator):
@@ -94,6 +95,8 @@ def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
     finalq = np.array(finalq)
     qs = list(map(list, qs))
     vals = list(vals)
+    if Ns is None:
+        vals, Ns = zip(*vals)
     Ns = list(Ns)
 
     L = list(zip(*[(q, val, N) for q, val, N in zip(qs, vals, Ns) if N]))
@@ -104,7 +107,7 @@ def merge_percentiles(finalq, qs, vals, Ns, interpolation='lower'):
     # TODO: Perform this check above in percentile once dtype checking is easy
     #       Here we silently change meaning
     if vals[0].dtype.name == 'category':
-        result = merge_percentiles(finalq, qs, [v.codes for v in vals], Ns, interpolation)
+        result = merge_percentiles(finalq, qs, [v.codes for v in vals], interpolation, Ns)
         import pandas as pd
         return pd.Categorical.from_codes(result, vals[0].categories, vals[0].ordered)
     if not np.issubdtype(vals[0].dtype, np.number):
