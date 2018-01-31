@@ -59,7 +59,7 @@ def write_read_engines(**kwargs):
     marks = {(w, r): [] for w in backends for r in backends}
 
     # Skip if uninstalled
-    for name, exists in zip(backends, [pq, fastparquet]):
+    for name, exists in [('fastparquet', fastparquet), ('pyarrow', pq)]:
         val = pytest.mark.skip(reason='%s not found' % name)
         if not exists:
             for k in marks:
