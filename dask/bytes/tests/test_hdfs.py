@@ -7,7 +7,7 @@ import pytest
 from toolz import concat
 
 import dask
-from dask.bytes.core import read_bytes, open_files
+from dask.bytes.core import read_bytes, open_files, get_fs
 from dask.compatibility import unicode
 
 try:
@@ -49,6 +49,26 @@ def driver(request):
 
     if hdfs.exists(basedir):
         hdfs.rm(basedir, recursive=True)
+
+
+@pytest.mark.skipif(not pyarrow, reason="pyarrow not installed")
+@pytest.mark.skipif(not hdfs3, reason="hdfs3 not installed")
+def test_fs_driver_backends():
+    from dask.bytes.hdfs3 import HDFS3HadoopFileSystem
+    from dask.bytes.pyarrow import PyArrowHadoopFileSystem
+
+    fs1, token1 = get_fs('hdfs')
+    assert isinstance(fs1, HDFS3HadoopFileSystem)
+
+    with dask.set_options(hdfs_driver='pyarrow'):
+        fs2, token2 = get_fs('hdfs')
+    assert isinstance(fs2, PyArrowHadoopFileSystem)
+
+    assert token1 != token2
+
+    with pytest.raises(ValueError):
+        with dask.set_options(hdfs_driver='not-a-valid-driver'):
+            get_fs('hdfs')
 
 
 def test_read_bytes(driver):
