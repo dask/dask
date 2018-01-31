@@ -121,12 +121,11 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
             return from_pandas(head, npartitions=1)
 
         bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / 5
-        head = head[:0]
+        meta = head[:0]
     else:
         if divisions is None and npartitions is None:
             raise ValueError('Must provide divisions or npartitions when'
                              'using explicit meta.')
-        head = meta
 
     if divisions is None:
         if limits is None:
@@ -158,14 +157,14 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         cond = index <= upper if i == len(lowers) - 1 else index < upper
         q = sql.select(columns).where(sql.and_(index >= lower, cond)
                                       ).select_from(table)
-        parts.append(delayed(_rationalize_sql)(q, uri, head[:0], **kwargs))
+        parts.append(delayed(_read_sql_chunk)(q, uri, meta, **kwargs))
 
-    return from_delayed(parts, head, divisions=divisions)
+    return from_delayed(parts, meta, divisions=divisions)
 
 
-def _rationalize_sql(q, uri, meta, **kwargs):
+def _read_sql_chunk(q, uri, meta, **kwargs):
     df = pd.read_sql(q, uri, **kwargs)
     if df.empty:
         return meta
     else:
-        return df.astype(meta.dtypes.to_dict())
+        return df.astype(meta.dtypes.to_dict(), copy=False)
