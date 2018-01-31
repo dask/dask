@@ -457,12 +457,15 @@ def visualize(*args, **kwargs):
 
     if color == 'order':
         from .order import order
+        import matplotlib.pyplot as plt
         o = order(dsk)
         try:
             cmap = kwargs.pop('cmap')
         except KeyError:
+            cmap = plt.cm.RdBu
+        if isinstance(cmap, str):
             import matplotlib.pyplot as plt
-            cmap = plt.cm.viridis
+            cmap = getattr(plt.cm, cmap)
         mx = max(o.values()) + 1
         colors = {k: _colorize(cmap(v / mx, bytes=True)) for k, v in o.items()}
 

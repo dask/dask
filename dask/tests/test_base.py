@@ -554,7 +554,7 @@ def test_visualize_order():
     pytest.importorskip('matplotlib')
     x = da.arange(5, chunks=2)
     with tmpfile(extension='dot') as fn:
-        x.visualize(color='order', filename=fn)
+        x.visualize(color='order', filename=fn, cmap='RdBu')
         with open(fn) as f:
             text = f.read()
         assert 'color="#' in text
