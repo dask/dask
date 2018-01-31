@@ -55,6 +55,46 @@ def test_empty(db):
         assert pd_dataframe.empty is True
 
 
+def test_needs_rational(db):
+    import datetime
+    now = datetime.datetime.now()
+    d = datetime.timedelta(seconds=1)
+    df = pd.DataFrame({'a': list('ghjkl'), 'b': [now + i * d for i in range(5)],
+                       'c': [True, True, False, True, True]})
+    df = df.append([{'a': 'x', 'b': now + d * 1000, 'c': None},
+                    {'a': None, 'b': now + d * 1001, 'c': None}])
+    with tmpfile() as f:
+        uri = 'sqlite:///%s' % f
+        df.to_sql('test', uri, index=False, if_exists='replace')
+
+        # one partition contains NULL
+        data = read_sql_table('test', uri, npartitions=2, index_col='b')
+        df2 = df.set_index('b')
+        assert_eq(data, df2.astype({'c': bool}))  # bools are coerced
+
+        # one partition contains NULL, but big enough head
+        data = read_sql_table('test', uri, npartitions=2, index_col='b',
+                              head_rows=12)
+        df2 = df.set_index('b')
+        assert_eq(data, df2)
+
+        # empty partitions
+        data = read_sql_table('test', uri, npartitions=20, index_col='b')
+        part = data.get_partition(12).compute()
+        assert part.dtypes.tolist() == ['O', bool]
+        assert part.empty
+        df2 = df.set_index('b')
+        assert_eq(data, df2.astype({'c': bool}))
+
+        # explicit meta
+        data = read_sql_table('test', uri, npartitions=2, index_col='b',
+                              meta=df2[:0])
+        part = data.get_partition(1).compute()
+        assert part.dtypes.tolist() == ['O', 'O']
+        df2 = df.set_index('b')
+        assert_eq(data, df2)
+
+
 def test_simple(db):
     # single chunk
     data = read_sql_table('test', db, npartitions=2, index_col='number'
