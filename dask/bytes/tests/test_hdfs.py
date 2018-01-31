@@ -8,7 +8,6 @@ from toolz import concat
 
 import dask
 from dask.bytes.core import read_bytes, open_files
-from dask.bytes.hdfs3 import HDFS3HadoopFileSystem
 from dask.compatibility import unicode
 
 try:
@@ -199,7 +198,9 @@ def test_read_text_unicode(driver):
 
 
 @pytest.mark.skipif(not pyarrow, reason="pyarrow not installed")
+@pytest.mark.skipif(not hdfs3, reason="hdfs3 not installed")
 def test_pyarrow_compat():
+    from dask.bytes.hdfs3 import HDFS3HadoopFileSystem
     dhdfs = HDFS3HadoopFileSystem()
     pa_hdfs = dhdfs._get_pyarrow_filesystem()
     assert isinstance(pa_hdfs, pyarrow.filesystem.FileSystem)
