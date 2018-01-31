@@ -120,11 +120,15 @@ def test_full_groupby():
     lambda df: [df['a'], df['b']],
     pytest.mark.xfail(reason="not yet supported")(lambda df: [df['a'] > 2, df['b'] > 1])
 ])
-def test_full_groupby_multilevel(grouper):
+@pytest.mark.parametrize('reverse', [True, False])
+def test_full_groupby_multilevel(grouper, reverse):
+    index = [0, 1, 3, 5, 6, 8, 9, 9, 9]
+    if reverse:
+        index = index[::-1]
     df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
                        'd': [1, 2, 3, 4, 5, 6, 7, 8, 9],
                        'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
-                      index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+                      index=index)
     ddf = dd.from_pandas(df, npartitions=3)
 
     def func(df):
@@ -133,9 +137,9 @@ def test_full_groupby_multilevel(grouper):
 
     # last one causes a DeprcationWarning from pandas.
     # See https://github.com/pandas-dev/pandas/issues/16481
+    meta = {"a": int, "d": int, "b": float}
     assert_eq(df.groupby(grouper(df)).apply(func),
-              ddf.groupby(grouper(ddf)).apply(func, meta={"a": int, "d": int,
-                                                          "b": float}))
+              ddf.groupby(grouper(ddf)).apply(func, meta=meta))
 
 
 def test_groupby_dir():
