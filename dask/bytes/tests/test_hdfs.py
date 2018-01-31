@@ -9,8 +9,7 @@ hdfs3 = pytest.importorskip('hdfs3')
 from toolz import concat
 
 import dask
-from dask import delayed
-from dask.bytes.core import read_bytes, write_bytes
+from dask.bytes.core import read_bytes, open_files
 from dask.bytes.hdfs import DaskHDFS3FileSystem
 from dask.compatibility import unicode
 
@@ -99,13 +98,13 @@ def test_deterministic_key_names(hdfs):
     assert [f.key for f in concat(x)] != [f.key for f in concat(z)]
 
 
-def test_write_bytes(hdfs):
+def test_open_files_write(hdfs):
     path = 'hdfs://%s/' % basedir
     data = [b'test data %i' % i for i in range(5)]
-    values = write_bytes([delayed(d) for d in data], path)
-    dask.compute(values)
-    assert len(hdfs.ls(basedir)) == 5
-
+    files = open_files(path, num=len(data), mode='wb')
+    for fil, b in zip(files, data):
+        with fil as f:
+            f.write(b)
     sample, vals = read_bytes('hdfs://%s/*.part' % basedir)
     (results,) = dask.compute(list(concat(vals)))
     assert data == results
