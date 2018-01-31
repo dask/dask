@@ -1,10 +1,10 @@
 # Install conda
 case "$(uname -s)" in
     'Darwin')
-        MINICONDA_FILENAME="Miniconda3-4.3.21-MacOSX-x86_64.sh"
+        MINICONDA_FILENAME="Miniconda3-latest-MacOSX-x86_64.sh"
         ;;
     'Linux')
-        MINICONDA_FILENAME="Miniconda3-4.3.21-Linux-x86_64.sh"
+        MINICONDA_FILENAME="Miniconda3-latest-Linux-x86_64.sh"
         ;;
     *)  ;;
 esac
