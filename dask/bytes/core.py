@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import io
 import os
+from distutils.version import LooseVersion
 from warnings import warn
 
 from toolz import merge
@@ -403,8 +404,12 @@ def get_hdfs_driver(driver="auto"):
         return cls
 
     elif driver == 'pyarrow':
-        import_required('pyarrow', "`pyarrow` not installed")
-        from dask.bytes.pyarrow import PyArrowHadoopFileSystem as cls
+        pa = import_required('pyarrow', "`pyarrow` not installed")
+        from dask.bytes.pyarrow import (_MIN_PYARROW_VERSION_SUPPORTED,
+                                        PyArrowHadoopFileSystem as cls)
+        if LooseVersion(pa.__version__) < _MIN_PYARROW_VERSION_SUPPORTED:
+            raise RuntimeError("pyarrow version >= %r required for hdfs driver "
+                               "support" % _MIN_PYARROW_VERSION_SUPPORTED)
         return cls
 
     else:
