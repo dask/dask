@@ -157,8 +157,8 @@ class Future(WrappedKey):
     def result(self, timeout=None):
         """ Wait until computation completes, gather result to local process.
 
-        If *timeout* seconds are elapsed before returning, a TimeoutError
-        is raised.
+        If *timeout* seconds are elapsed before returning, a
+        ``dask.distributed.TimeoutError`` is raised.
         """
         if self.client.asynchronous:
             return self.client.sync(self._result, callback_timeout=timeout)
@@ -204,8 +204,8 @@ class Future(WrappedKey):
     def exception(self, timeout=None, **kwargs):
         """ Return the exception of a failed task
 
-        If *timeout* seconds are elapsed before returning, a TimeoutError
-        is raised.
+        If *timeout* seconds are elapsed before returning, a
+        ``dask.distributed.TimeoutError`` is raised.
 
         See Also
         --------
@@ -265,8 +265,8 @@ class Future(WrappedKey):
         ``traceback`` module.  Alternatively if you call ``future.result()``
         this traceback will accompany the raised exception.
 
-        If *timeout* seconds are elapsed before returning, a TimeoutError
-        is raised.
+        If *timeout* seconds are elapsed before returning, a
+        ``dask.distributed.TimeoutError`` is raised.
 
         Examples
         --------
@@ -3180,9 +3180,7 @@ def wait(fs, timeout=None, return_when='ALL_COMPLETED'):
     ----------
     fs: list of futures
     timeout: number, optional
-        Time in seconds after which to raise a gen.TimeoutError
-
-    Returns
+        Time in seconds after which to raise a ``dask.distributed.TimeoutError``
     -------
     Named tuple of completed, not completed
     """

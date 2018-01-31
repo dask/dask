@@ -17,6 +17,8 @@ from .variable import Variable
 from .worker import Worker, get_worker, get_client, secede, Reschedule
 from .worker_client import local_client, worker_client
 
+from tornado.gen import TimeoutError
+
 from ._version import get_versions
 versions = get_versions()
 __version__ = versions['version']
