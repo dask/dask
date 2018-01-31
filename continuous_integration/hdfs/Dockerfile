@@ -35,6 +35,9 @@ ENV PATH /opt/conda/bin:$PATH
 # Notifies the dask tests to run
 ENV DASK_RUN_HDFS_TESTS true
 
+# Needed for libhdfs
+ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64/jre/
+
 EXPOSE 8020 50070
 
 VOLUME /working
