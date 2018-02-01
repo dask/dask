@@ -21,6 +21,8 @@ DataFrame
 - Avoid mutation in dataframe groupby tests (:pr:`3118`) `Matthew Rocklin`_
 - ``read_csv``, ``read_table``, and ``read_parquet`` accept iterables of paths
   (:pr:`3124`) `Jim Crist`_
+- Deprecates the ``dd.to_delayed`` *function* in favor of the existing method
+  (:pr:`3126`) `Jim Crist`_
 
 Bag
 +++
@@ -39,6 +41,8 @@ Core
   computing. (:pr:`3071`) `Jim Crist`_
 - Rename ``dask.optimize`` module to ``dask.optimization`` (:pr:`3071`) `Jim Crist`_
 - Change task ordering to do a full traversal (:pr:`3066`) `Matthew Rocklin`_
+- Adds an ``optimize_graph`` keyword to all ``to_delayed`` methods to allow
+  controlling whether optimizations occur on conversion. (:pr:`3126`) `Jim Crist`_
 
 
 0.16.1 / 2018-01-09
