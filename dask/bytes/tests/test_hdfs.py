@@ -173,7 +173,7 @@ def test_read_csv(hdfs):
     df = dd.read_csv('hdfs://%s/*.csv' % basedir)
 
     assert isinstance(df, dd.DataFrame)
-    assert df.id.sum() == 1 + 2 + 3 + 4
+    assert df.id.sum().compute() == 1 + 2 + 3 + 4
 
 
 @pytest.mark.skipif(PY2, reason=("pyarrow's hdfs isn't fork-safe, requires "
@@ -295,3 +295,18 @@ def test_glob(hdfs):
 
     assert (set(hdfs.glob(basedir + '/*')) ==
             {basedir + p for p in ['/a', '/a1', '/a2', '/a3', '/b1', '/c', '/c2']})
+
+
+def test_distributed(hdfs):
+    dist = pytest.importorskip('distributed')
+    dd = pytest.importorskip('dask.dataframe')
+
+    with hdfs.open('%s/1.csv' % basedir, 'wb') as f:
+        f.write(b'name,amount,id\nAlice,100,1\nBob,200,2')
+
+    with hdfs.open('%s/2.csv' % basedir, 'wb') as f:
+        f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
+
+    with dist.Client(n_workers=2, threads_per_worker=1):
+        df = dd.read_csv('hdfs://%s/*.csv' % basedir)
+        assert df.id.sum().compute() == 1 + 2 + 3 + 4
