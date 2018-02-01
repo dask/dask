@@ -53,8 +53,7 @@ with open(os.path.join(os.path.dirname(__file__), 'template.html')) as f:
 
 template = jinja2.Template(template_source)
 
-template_variables = {'pages': ['status', 'workers', 'tasks', 'system',
-                                'profile', 'counters']}
+template_variables = {'pages': ['status', 'workers', 'tasks', 'system', 'profile']}
 
 
 def update(source, data):
