@@ -124,7 +124,7 @@ The following additional options may be passed to the ``hdfs3`` driver via
     - ``ticket_cache``, ``token``: kerberos authentication
     - ``pars``: dictionary of further parameters (e.g., for `high availability`_)
 
-The ``hdfs3`` driver also relies on a few environment variables. For
+The ``hdfs3`` driver can also be affected by a few environment variables. For
 information on these see the `hdfs3 documentation`_.
 
 .. _high availability: http://hdfs3.readthedocs.io/en/latest/hdfs.html#high-availability-mode
@@ -139,8 +139,8 @@ The following additional options may be passed to the ``pyarrow`` driver via
     - ``host``, ``port``, ``user``: basic authentication
     - ``kerb_ticket``: path to kerberos ticket cache
 
-PyArrow's ``libhdfs`` driver also relies on a few environment variables. For
-information on these see the `pyarrow documentation`_.
+PyArrow's ``libhdfs`` driver can also be affected by a few environment
+variables. For information on these see the `pyarrow documentation`_.
 
 .. _pyarrow documentation: https://arrow.apache.org/docs/python/filesystems.html#hadoop-file-system-hdfs
 
@@ -214,22 +214,6 @@ In either case, gcsfs stores a cache of tokens in a local file, so subsequent
 authentication will not be necessary.
 
 .. _gcloud: https://cloud.google.com/sdk/docs/
-
-At the time of writing, ``gcsfs.GCSFileSystem`` instances pickle including the auth token, so sensitive
-information is passed between nodes of a dask distributed cluster. This will
-be changed to allow the use of either local JSON or pickle files for storing
-tokens and authenticating on each node automatically, instead of
-passing around an authentication token, similar to S3, above.
-
-Every use of GCS requires the specification of a project to run within - if the
-project is left empty, the user will not be able to perform any bucket-level
-operations. The project can be defined using the  variable
-GCSFS_DEFAULT_PROJECT in the environment of every worker, or by passing
-something like the following
-
-.. code-block:: python
-
-   dd.read_parquet('gs://bucket/path', storage_options={'project': 'myproject'}
 
 Possible additional storage options:
 
