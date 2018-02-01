@@ -239,7 +239,7 @@ def test_gh_3055():
     dsk = dict(w.__dask_graph__())
     o = order(dsk)
     L = [o[k] for k in w.__dask_keys__()]
-    assert sorted(L) == L[::-1] or sorted(L) == L
+    assert sorted(L) == L
 
 
 def test_type_comparisions_ok(abcde):
