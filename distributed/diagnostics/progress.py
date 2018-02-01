@@ -287,15 +287,14 @@ class AllProgress(SchedulerPlugin):
 
 class GroupProgress(SchedulerPlugin):
     """ Keep track of all keys, grouped by key_split """
-
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.keys = dict()
         self.groups = dict()
         self.nbytes = dict()
         self.durations = dict()
-        self.dependencies = dict()
-        self.dependents = dict()
+        self.dependencies = defaultdict(set)
+        self.dependents = defaultdict(set)
 
         for key, ts in self.scheduler.tasks.items():
             k = key_split_group(key)
@@ -319,7 +318,6 @@ class GroupProgress(SchedulerPlugin):
             self.durations[k] = 0
             self.dependents[k] = {key_split_group(dts.key)
                                   for dts in ts.dependents}
-            self.dependencies[k] = set()
             for dts in ts.dependencies:
                 d = key_split_group(dts.key)
                 self.dependents[d].add(k)
