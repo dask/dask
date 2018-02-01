@@ -10,7 +10,8 @@ import pyarrow as pa
 
 
 class HDFS3Wrapper(pa.filesystem.DaskFileSystem):
-    """Pyarrow compatibility wrapper class"""
+    """Wrapper around `hdfs3.HDFileSystem` that allows it to be passed to
+    pyarrow methods"""
     def isdir(self, path):
         return self.fs.isdir(path)
 
@@ -40,7 +41,7 @@ class PyArrowHadoopFileSystem(object):
         return sorted(_glob(self.fs, path))
 
     def mkdirs(self, path):
-        return self.fs.mkdir(path)
+        return self.fs.mkdir(path, create_parents=True)
 
     def ukey(self, path):
         return tokenize(path, self.fs.info(path)['last_modified'])
