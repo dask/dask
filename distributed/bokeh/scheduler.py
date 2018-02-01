@@ -603,7 +603,8 @@ class TaskProgress(DashboardComponent):
         else:
             self.plugin = AllProgress(scheduler)
 
-        data = progress_quads(dict(all={}, memory={}, erred={}, released={}))
+        data = progress_quads(dict(all={}, memory={}, erred={}, released={},
+                                   processing={}))
         self.source = ColumnDataSource(data=data)
 
         x_range = DataRange1d(range_padding=0)
@@ -633,8 +634,14 @@ class TaskProgress(DashboardComponent):
         )
         self.root.quad(
             source=self.source,
-            top='top', bottom='bottom', left='released-loc',
+            top='top', bottom='bottom', left='memory-loc',
             right='erred-loc', fill_color='black', line_color='#000000',
+            fill_alpha=0.5
+        )
+        self.root.quad(
+            source=self.source,
+            top='top', bottom='bottom', left='erred-loc',
+            right='processing-loc', fill_color='gray', line_color='#000000',
             fill_alpha=0.5
         )
         self.root.text(
@@ -673,6 +680,10 @@ class TaskProgress(DashboardComponent):
                     <span style="font-size: 14px; font-weight: bold;">Erred:</span>&nbsp;
                     <span style="font-size: 10px; font-family: Monaco, monospace;">@erred</span>
                 </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Ready:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@processing</span>
+                </div>
                 """
         )
         self.root.add_tools(hover)
@@ -681,7 +692,7 @@ class TaskProgress(DashboardComponent):
         with log_errors():
             state = {'all': valmap(len, self.plugin.all),
                      'nbytes': self.plugin.nbytes}
-            for k in ['memory', 'erred', 'released']:
+            for k in ['memory', 'erred', 'released', 'processing']:
                 state[k] = valmap(len, self.plugin.state[k])
             if not state['all'] and not len(self.source.data['all']):
                 return

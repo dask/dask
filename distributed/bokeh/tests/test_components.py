@@ -10,13 +10,12 @@ from distributed.bokeh import messages
 from distributed.utils_test import slowinc, gen_cluster
 
 from distributed.bokeh.components import (
-    TaskStream, TaskProgress, MemoryUsage,
+    TaskStream, MemoryUsage,
     Processing, ProfilePlot, ProfileTimePlot
 )
 
 
 @pytest.mark.parametrize('Component', [TaskStream,
-                                       TaskProgress,
                                        MemoryUsage,
                                        Processing])
 def test_basic(Component):

@@ -26,7 +26,7 @@ def counts(scheduler, allprogress):
     return merge({'all': valmap(len, allprogress.all),
                   'nbytes': allprogress.nbytes},
                  {state: valmap(len, allprogress.state[state])
-                     for state in ['memory', 'erred', 'released']})
+                     for state in ['memory', 'erred', 'released', 'processing']})
 
 
 counter = itertools.count()
@@ -122,7 +122,8 @@ def progress_quads(msg, nrows=8, ncols=3):
     >>> msg = {'all': {'inc': 5, 'dec': 1, 'add': 4},
     ...        'memory': {'inc': 2, 'dec': 0, 'add': 1},
     ...        'erred': {'inc': 0, 'dec': 1, 'add': 0},
-    ...        'released': {'inc': 1, 'dec': 0, 'add': 1}}
+    ...        'released': {'inc': 1, 'dec': 0, 'add': 1},
+    ...        'processing': {'inc': 1, 'dec': 0, 'add': 2}}
 
     >>> progress_quads(msg, nrows=2)  # doctest: +SKIP
     {'name': ['inc', 'add', 'dec'],
@@ -133,10 +134,12 @@ def progress_quads(msg, nrows=8, ncols=3):
      'released': [1, 1, 0],
      'memory': [2, 1, 0],
      'erred': [0, 0, 1],
+     'processing': [1, 0, 2],
      'done': ['3 / 5', '2 / 4', '1 / 1'],
      'released-loc': [.2/.9, .25 / 0.9, 1],
      'memory-loc': [3 / 5 / .9, .5 / 0.9, 1],
-     'erred-loc': [3 / 5 / .9, .5 / 0.9, 1.9]}
+     'erred-loc': [3 / 5 / .9, .5 / 0.9, 1.9],
+     'processing-loc': [4 / 5, 1 / 1, 1]}}
     """
     width = 0.9
     names = sorted(msg['all'], key=msg['all'].get, reverse=True)
@@ -156,16 +159,19 @@ def progress_quads(msg, nrows=8, ncols=3):
     d['released-loc'] = []
     d['memory-loc'] = []
     d['erred-loc'] = []
+    d['processing-loc'] = []
     d['done'] = []
-    for r, m, e, a, l in zip(d['released'], d['memory'],
-                             d['erred'], d['all'], d['left']):
+    for r, m, e, p, a, l in zip(d['released'], d['memory'], d['erred'],
+                                d['processing'], d['all'], d['left']):
         rl = width * r / a + l
         ml = width * (r + m) / a + l
         el = width * (r + m + e) / a + l
+        pl = width * (p + r + m + e) / a + l
         done = '%d / %d' % (r + m + e, a)
         d['released-loc'].append(rl)
         d['memory-loc'].append(ml)
         d['erred-loc'].append(el)
+        d['processing-loc'].append(pl)
         d['done'].append(done)
 
     return d

@@ -8,13 +8,13 @@ import weakref
 from bokeh.layouts import row, column
 from bokeh.models import ( ColumnDataSource, Plot, DataRange1d, LinearAxis,
         HoverTool, BoxZoomTool, ResetTool, PanTool, WheelZoomTool, Range1d,
-        Quad, Text, value, TapTool, OpenURL, Button, Select)
+        Quad, TapTool, OpenURL, Button, Select)
 from bokeh.palettes import Spectral9
 from bokeh.plotting import figure
 from tornado import gen
 
 from ..config import config
-from ..diagnostics.progress_stream import progress_quads, nbytes_bar
+from ..diagnostics.progress_stream import nbytes_bar
 from .. import profile
 from ..utils import log_errors
 
@@ -136,90 +136,6 @@ class TaskStream(DashboardComponent):
                         return
 
             self.source.stream(rectangles, self.n_rectangles)
-
-
-class TaskProgress(DashboardComponent):
-    """ Progress bars per task type """
-
-    def __init__(self, **kwargs):
-        data = progress_quads(dict(all={}, memory={}, erred={}, released={}))
-        self.source = ColumnDataSource(data=data)
-
-        x_range = DataRange1d()
-        y_range = Range1d(-8, 0)
-
-        self.root = Plot(
-            id='bk-task-progress-plot',
-            x_range=x_range, y_range=y_range, toolbar_location=None, **kwargs
-        )
-        self.root.add_glyph(
-            self.source,
-            Quad(top='top', bottom='bottom', left='left', right='right',
-                 fill_color="#aaaaaa", line_color="#aaaaaa", fill_alpha=0.2)
-        )
-        self.root.add_glyph(
-            self.source,
-            Quad(top='top', bottom='bottom', left='left', right='released-loc',
-                 fill_color="color", line_color="color", fill_alpha=0.6)
-        )
-        self.root.add_glyph(
-            self.source,
-            Quad(top='top', bottom='bottom', left='released-loc',
-                 right='memory-loc', fill_color="color", line_color="color",
-                 fill_alpha=1.0)
-        )
-        self.root.add_glyph(
-            self.source,
-            Quad(top='top', bottom='bottom', left='erred-loc',
-                 right='erred-loc', fill_color='#000000', line_color='#000000',
-                 fill_alpha=0.3)
-        )
-        self.root.add_glyph(
-            self.source,
-            Text(text='show-name', y='bottom', x='left', x_offset=5,
-                 text_font_size=value('10pt'))
-        )
-        self.root.add_glyph(
-            self.source,
-            Text(text='done', y='bottom', x='right', x_offset=-5,
-                 text_align='right', text_font_size=value('10pt'))
-        )
-
-        hover = HoverTool(
-            point_policy="follow_mouse",
-            tooltips="""
-                <div>
-                    <span style="font-size: 14px; font-weight: bold;">Name:</span>&nbsp;
-                    <span style="font-size: 10px; font-family: Monaco, monospace;">@name</span>
-                </div>
-                <div>
-                    <span style="font-size: 14px; font-weight: bold;">All:</span>&nbsp;
-                    <span style="font-size: 10px; font-family: Monaco, monospace;">@all</span>
-                </div>
-                <div>
-                    <span style="font-size: 14px; font-weight: bold;">Memory:</span>&nbsp;
-                    <span style="font-size: 10px; font-family: Monaco, monospace;">@memory</span>
-                </div>
-                <div>
-                    <span style="font-size: 14px; font-weight: bold;">Erred:</span>&nbsp;
-                    <span style="font-size: 10px; font-family: Monaco, monospace;">@erred</span>
-                </div>
-                """
-        )
-        self.root.add_tools(hover)
-
-    def update(self, messages):
-        with log_errors():
-            msg = messages['progress']
-            if not msg:
-                return
-            d = progress_quads(msg)
-            self.source.data.update(d)
-            if messages['tasks']['deque']:
-                self.root.title.text = ("Progress -- total: %(total)s, "
-                                        "in-memory: %(in-memory)s, processing: %(processing)s, "
-                                        "waiting: %(waiting)s, failed: %(failed)s"
-                                        % messages['tasks']['deque'][-1])
 
 
 class MemoryUsage(DashboardComponent):
