@@ -292,7 +292,6 @@ Store DataFrames
     to_hdf
     to_records
     to_bag
-    to_delayed
 
 DataFrame Methods
 ~~~~~~~~~~~~~~~~~
@@ -341,7 +340,6 @@ Storage and Conversion
 .. autofunction:: from_bcolz
 .. autofunction:: from_dask_array
 .. autofunction:: from_delayed
-.. autofunction:: to_delayed
 .. autofunction:: to_records
 .. autofunction:: to_csv
 .. autofunction:: to_bag

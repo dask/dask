@@ -1833,10 +1833,14 @@ class Array(Base):
         memo[id(self)] = c
         return c
 
-    def to_delayed(self):
-        """ Convert Array into dask Delayed objects
+    def to_delayed(self, optimize_graph=True):
+        """Convert into an array of ``dask.delayed`` objects, one per chunk.
 
-        Returns an array of values, one value per chunk.
+        Parameters
+        ----------
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            ``dask.delayed`` objects.
 
         See Also
         --------
@@ -1844,7 +1848,9 @@ class Array(Base):
         """
         from ..delayed import Delayed
         keys = self.__dask_keys__()
-        dsk = self.__dask_optimize__(self.__dask_graph__(), keys)
+        dsk = self.__dask_graph__()
+        if optimize_graph:
+            dsk = self.__dask_optimize__(dsk, keys)
         L = ndeepmap(self.ndim, lambda k: Delayed(k, dsk), keys)
         return np.array(L, dtype=object)
 
