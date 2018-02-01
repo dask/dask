@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import io
 import os
+from distutils.version import LooseVersion
 from warnings import warn
 
 from toolz import merge
@@ -11,6 +12,7 @@ from .utils import (SeekableFile, read_block, infer_compression,
                     infer_storage_options, build_name_function,
                     update_storage_options)
 from ..compatibility import unicode
+from ..context import _globals
 from ..base import tokenize
 from ..delayed import delayed
 from ..utils import import_required, is_integer
@@ -375,6 +377,45 @@ def _expand_paths(path, name_function, num):
     return paths
 
 
+def get_hdfs_driver(driver="auto"):
+    """Get the hdfs driver implementation.
+
+    Parameters
+    ----------
+    driver : {'auto', 'hdfs3', 'pyarrow'}, default 'auto'
+        HDFS library to use. Default is first installed in this list.
+
+    Returns
+    -------
+    A filesystem class
+    """
+    if driver == 'auto':
+        for d in ['hdfs3', 'pyarrow']:
+            try:
+                return get_hdfs_driver(d)
+            except RuntimeError:
+                pass
+        else:
+            raise RuntimeError("Please install either `hdfs3` or `pyarrow`")
+
+    elif driver == 'hdfs3':
+        import_required('hdfs3', "`hdfs3` not installed")
+        from dask.bytes.hdfs3 import HDFS3HadoopFileSystem as cls
+        return cls
+
+    elif driver == 'pyarrow':
+        pa = import_required('pyarrow', "`pyarrow` not installed")
+        from dask.bytes.pyarrow import (_MIN_PYARROW_VERSION_SUPPORTED,
+                                        PyArrowHadoopFileSystem as cls)
+        if LooseVersion(pa.__version__) < _MIN_PYARROW_VERSION_SUPPORTED:
+            raise RuntimeError("pyarrow version >= %r required for hdfs driver "
+                               "support" % _MIN_PYARROW_VERSION_SUPPORTED)
+        return cls
+
+    else:
+        raise ValueError('Unsupported hdfs driver: {0}'.format(driver))
+
+
 def get_fs(protocol, storage_options=None):
     """Create a filesystem object from a protocol and options.
 
@@ -385,13 +426,17 @@ def get_fs(protocol, storage_options=None):
     storage_options : dict, optional
         Keywords to pass to the filesystem class.
     """
-    if protocol == 's3':
+    if protocol in _filesystems:
+        cls = _filesystems[protocol]
+
+    elif protocol == 's3':
         import_required('s3fs',
                         "Need to install `s3fs` library for s3 support\n"
                         "    conda install s3fs -c conda-forge\n"
                         "    or\n"
                         "    pip install s3fs")
         import dask.bytes.s3  # noqa, register the s3 backend
+        cls = _filesystems[protocol]
 
     elif protocol in ('gs', 'gcs'):
         import_required('gcsfs',
@@ -399,15 +444,11 @@ def get_fs(protocol, storage_options=None):
                         "    conda install gcsfs -c conda-forge\n"
                         "    or\n"
                         "    pip install gcsfs")
+        cls = _filesystems[protocol]
 
     elif protocol == 'hdfs':
-        import_required('hdfs3',
-                        "Need to install `hdfs3` library for hdfs support\n"
-                        "    conda install s3fs -c conda-forge")
-        import dask.bytes.hdfs  # noqa, register the hdfs3 backend
+        cls = get_hdfs_driver(_globals.get("hdfs_driver", "auto"))
 
-    if protocol in _filesystems:
-        cls = _filesystems[protocol]
     else:
         raise ValueError("Unknown protocol %s" % protocol)
 

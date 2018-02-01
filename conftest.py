@@ -4,7 +4,9 @@ import pytest
 # - Non-required dependencies not being installed
 # - Imported doctests due to pulling the docstrings from other packages
 #   (e.g. `numpy`). No need to run these doctests.
-collect_ignore = ['dask/bytes/hdfs.py',
+collect_ignore = ['dask/bytes/hdfs3.py',
+                  'dask/bytes/pyarrow.py',
+                  'dask/bytes/s3.py',
                   'dask/array/fft.py']
 
 

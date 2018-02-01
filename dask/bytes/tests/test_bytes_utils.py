@@ -54,20 +54,6 @@ def test_seek_delimiter_endline():
     assert f.tell() == 7
 
 
-def test_ensure_protocol():
-    try:
-        import hdfs3  # noqa: F401
-        pytest.skip()
-    except ImportError:
-        pass
-
-    dd = pytest.importorskip('dask.dataframe')
-    try:
-        dd.read_csv('hdfs://data/*.csv')
-    except RuntimeError as e:
-        assert "hdfs3" in str(e)
-
-
 def test_infer_storage_options():
     so = infer_storage_options('/mnt/datasets/test.csv')
     assert so.pop('protocol') == 'file'
