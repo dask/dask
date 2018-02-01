@@ -38,6 +38,7 @@ Core
 - Add ``dask.base.optimize`` for optimizing multiple collections without
   computing. (:pr:`3071`) `Jim Crist`_
 - Rename ``dask.optimize`` module to ``dask.optimization`` (:pr:`3071`) `Jim Crist`_
+- Change task ordering to do a full traversal (:pr:`3066`) `Matthew Rocklin`_
 
 
 0.16.1 / 2018-01-09

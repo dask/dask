@@ -107,24 +107,9 @@ class GetFunctionTestMixin(object):
         assert self.get(d, 'z') == 4
 
     def test_get_stack_limit(self):
-        d = dict(('x%d' % (i + 1), (inc, 'x%d' % i)) for i in range(10000))
+        d = {'x%d' % (i + 1): (inc, 'x%d' % i) for i in range(10000)}
         d['x0'] = 0
         assert self.get(d, 'x10000') == 10000
-        # introduce cycle
-        d['x5000'] = (inc, 'x5001')
-
-        try:
-            self.get(d, 'x10000')
-        except (RuntimeError, ValueError) as e:
-            if isinstance(e, RuntimeError):
-                assert str(e) == 'Cycle detected in Dask: x5001->x5000->x5001'
-            elif isinstance(e, ValueError):
-                assert str(e).startswith('Found no accessible jobs in dask')
-        else:
-            msg = 'dask with infinite cycle should have raised an exception.'
-            assert False, msg
-
-        assert self.get(d, 'x4999') == 4999
 
     def test_with_sharedict(self):
         from .sharedict import ShareDict
