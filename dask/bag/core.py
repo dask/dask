@@ -339,14 +339,19 @@ class Item(Base):
 
     __int__ = __float__ = __complex__ = __bool__ = Base.compute
 
-    def to_delayed(self):
-        """ Convert bag item to dask.delayed.
+    def to_delayed(self, optimize_graph=True):
+        """Convert into a ``dask.delayed`` object.
 
-        Returns a single value.
+        Parameters
+        ----------
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            ``dask.delayed`` objects.
         """
         from dask.delayed import Delayed
-        dsk = self.__dask_optimize__(self.__dask_graph__(),
-                                     self.__dask_keys__())
+        dsk = self.__dask_graph__()
+        if optimize_graph:
+            dsk = self.__dask_optimize__(dsk, self.__dask_keys__())
         return Delayed(self.key, dsk)
 
 
@@ -1260,14 +1265,24 @@ class Bag(Base):
         divisions = [None] * (self.npartitions + 1)
         return dd.DataFrame(dsk, name, meta, divisions)
 
-    def to_delayed(self):
-        """ Convert bag to list of dask Delayed.
+    def to_delayed(self, optimize_graph=True):
+        """Convert into a list of ``dask.delayed`` objects, one per partition.
 
-        Returns list of Delayed, one per partition.
+        Parameters
+        ----------
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            ``dask.delayed`` objects.
+
+        See Also
+        --------
+        dask.bag.from_delayed
         """
         from dask.delayed import Delayed
         keys = self.__dask_keys__()
-        dsk = self.__dask_optimize__(self.__dask_graph__(), keys)
+        dsk = self.__dask_graph__()
+        if optimize_graph:
+            dsk = self.__dask_optimize__(dsk, keys)
         return [Delayed(k, dsk) for k in keys]
 
     def repartition(self, npartitions):

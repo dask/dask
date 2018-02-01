@@ -20,7 +20,7 @@ from .. import array as da
 from .. import core
 from ..utils import partial_by_order
 from .. import threaded
-from ..compatibility import apply, operator_div, bind_method, PY3
+from ..compatibility import apply, operator_div, bind_method
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin)
@@ -178,6 +178,21 @@ class Scalar(Base, OperatorMethodMixin):
     @classmethod
     def _get_binary_operator(cls, op, inv=False):
         return lambda self, other: _scalar_binary(op, self, other, inv=inv)
+
+    def to_delayed(self, optimize_graph=True):
+        """Convert into a ``dask.delayed`` object.
+
+        Parameters
+        ----------
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            ``dask.delayed`` objects.
+        """
+        from dask.delayed import Delayed
+        dsk = self.__dask_graph__()
+        if optimize_graph:
+            dsk = self.__dask_optimize__(dsk, self.__dask_keys__())
+        return Delayed(self.key, dsk)
 
 
 def _scalar_binary(op, self, other, inv=False):
@@ -1014,9 +1029,29 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
 
-    def to_delayed(self):
-        """ See dd.to_delayed docstring for more information """
-        return to_delayed(self)
+    def to_delayed(self, optimize_graph=True):
+        """Convert into a list of ``dask.delayed`` objects, one per partition.
+
+        Parameters
+        ----------
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            ``dask.delayed`` objects.
+
+        Examples
+        --------
+        >>> partitions = df.to_delayed()  # doctest: +SKIP
+
+        See Also
+        --------
+        dask.dataframe.from_delayed
+        """
+        from dask.delayed import Delayed
+        keys = self.__dask_keys__()
+        dsk = self.__dask_graph__()
+        if optimize_graph:
+            dsk = self.__dask_optimize__(dsk, keys)
+        return [Delayed(k, dsk) for k in keys]
 
     @classmethod
     def _get_unary_operator(cls, op):
@@ -4032,19 +4067,24 @@ def maybe_shift_divisions(df, periods, freq):
     return df
 
 
-def to_delayed(df):
-    """ Create Dask Delayed objects from a Dask Dataframe
+def to_delayed(df, optimize_graph=True):
+    """Convert into a list of ``dask.delayed`` objects, one per partition.
 
-    Returns a list of delayed values, one value per partition.
+    Deprecated, please use the equivalent ``df.to_delayed`` method instead.
 
-    Examples
+    Parameters
+    ----------
+    optimize_graph : bool, optional
+        If True [default], the graph is optimized before converting into
+        ``dask.delayed`` objects.
+
+    See Also
     --------
-    >>> partitions = df.to_delayed()  # doctest: +SKIP
+    dask.dataframe.from_delayed
     """
-    from dask.delayed import Delayed
-    keys = df.__dask_keys__()
-    dsk = df.__dask_optimize__(df.__dask_graph__(), keys)
-    return [Delayed(k, dsk) for k in keys]
+    warnings.warn("DeprecationWarning: The `dd.to_delayed` function is "
+                  "deprecated, please use the `.to_delayed()` method instead.")
+    return df.to_delayed(optimize_graph=optimize_graph)
 
 
 @wraps(pd.to_datetime)
@@ -4071,7 +4111,3 @@ def _repr_data_series(s, index):
     else:
         dtype = str(s.dtype)
     return pd.Series([dtype] + ['...'] * npartitions, index=index, name=s.name)
-
-
-if PY3:
-    _Frame.to_delayed.__doc__ = to_delayed.__doc__
