@@ -615,11 +615,11 @@ class TaskProgress(DashboardComponent):
             x_range=x_range, y_range=y_range, toolbar_location=None, **kwargs
         )
         self.root.line(  # just to define early ranges
-            x=[0, 1], y=[-1, 0], line_color="#FFFFFF", alpha=0.0)
+            x=[0, 0.9], y=[-1, 0], line_color="#FFFFFF", alpha=0.0)
         self.root.quad(
             source=self.source,
             top='top', bottom='bottom', left='left', right='right',
-            fill_color="#aaaaaa", line_color="#aaaaaa", fill_alpha=0.2
+            fill_color="#aaaaaa", line_color="#aaaaaa", fill_alpha=0.1
         )
         self.root.quad(
             source=self.source,
@@ -635,14 +635,14 @@ class TaskProgress(DashboardComponent):
         self.root.quad(
             source=self.source,
             top='top', bottom='bottom', left='memory-loc',
-            right='erred-loc', fill_color='black', line_color='#000000',
-            fill_alpha=0.5
+            right='erred-loc', fill_color='black',
+            fill_alpha=0.5, line_alpha=0,
         )
         self.root.quad(
             source=self.source,
             top='top', bottom='bottom', left='erred-loc',
-            right='processing-loc', fill_color='gray', line_color='#000000',
-            fill_alpha=0.5
+            right='processing-loc', fill_color='gray',
+            fill_alpha=0.35, line_alpha=0,
         )
         self.root.text(
             source=self.source,
