@@ -151,6 +151,17 @@ def test_read_glob(tmpdir, write_engine, read_engine):
     assert_eq(df, ddf2)
 
 
+@write_read_engines()
+def test_read_list(tmpdir, write_engine, read_engine):
+    tmpdir = str(tmpdir)
+    ddf.to_parquet(tmpdir, engine=write_engine)
+    files = sorted(os.path.join(tmpdir, f)
+                   for f in os.listdir(tmpdir)
+                   if not f.endswith('_metadata'))
+    ddf2 = dd.read_parquet(files, engine=read_engine)
+    assert_eq(df, ddf2)
+
+
 @write_read_engines_xfail
 def test_auto_add_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)

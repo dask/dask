@@ -718,9 +718,12 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
     Parameters
     ----------
-    path : string
-        Source directory for data. May be a glob string.
-        Prepend with protocol like ``s3://`` or ``hdfs://`` for remote data.
+    path : string or list
+        Source directory for data, or path(s) to individual parquet files.
+        Prefix with a protocol like ``s3://`` to read from alternative
+        filesystems. To read from multiple files you can pass a globstring or a
+        list of paths, with the caveat that they must all have the same
+        protocol.
     columns: list or None
         List of column names to load
     filters: list
