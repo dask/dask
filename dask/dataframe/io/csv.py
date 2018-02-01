@@ -366,9 +366,11 @@ for :func:`pandas.{reader}` for more information on available keyword arguments.
 
 Parameters
 ----------
-urlpath : string
-    Absolute or relative filepath, URL (may include protocols like
-    ``s3://``), or globstring for {file_type} files.
+urlpath : string or list
+    Absolute or relative filepath(s). Prefix with a protocol like ``s3://``
+    to read from alternative filesystems. To read from multiple files you
+    can pass a globstring or a list of paths, with the caveat that they
+    must all have the same protocol.
 blocksize : int or None, optional
     Number of bytes by which to cut up larger files. Default value is
     computed based on available physical memory and the number of cores.
