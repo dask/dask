@@ -44,8 +44,8 @@ to:
 
     - ``file:`` - the local file system, default in the absence of any protocol
 
-    - ``hdfs:`` - Hadoop Distributed File System, a for resilient, replicated
-      files within a cluster, using the library hdfs3_
+    - ``hdfs:`` - Hadoop Distributed File System, for resilient, replicated
+      files within a cluster. Can use either hdfs3_ or pyarrow_.
 
     - ``s3:`` - Amazon S3 remote binary store, often used with Amazon EC2,
       using the library s3fs_
@@ -60,7 +60,8 @@ to:
 .. _hdfs3: http://hdfs3.readthedocs.io/
 .. _s3fs: http://s3fs.readthedocs.io/
 .. .. _azure-data-lake-store-python: https://github.com/Azure/azure-data-lake-store-python
-.. _gcsfs: https://github.com/martindurant/gcsfs/
+.. _gcsfs: https://github.com/dask/gcsfs/
+.. _pyarrow: https://arrow.apache.org/docs/python/
 
 Local File System
 -----------------
@@ -87,36 +88,62 @@ The Hadoop File System (HDFS) is a widely deployed, distributed, data-local file
 system written in Java. This file system backs many clusters running Hadoop and
 Spark.
 
-Within dask, HDFS is only available when the module ``distributed.hdfs`` is
-explicitly imported, since the usage of HDFS usually only makes sense in a cluster
-setting. The distributed scheduler will prefer to allocate tasks
-which read from HDFS  to machines which have local copies of the
-blocks required for their work, where possible.
+HDFS support can be provided by either hdfs3_ or pyarrow_, defaulting to the
+first library installed in that order. To explicitly set which library to use,
+set ``hdfs_driver`` using ``dask.set_options``:
 
-By default, hdfs3 attempts to read the default server and port from local
-Hadoop configuration files on each node, so it may be that no configuration is
-required. However, the server, port and user can be passed as part of the
-url: ``hdfs://user:pass@server:port/path/to/data``.
+.. code-block:: python
 
-The following parameters may be passed to hdfs3 using ``storage_options``:
+   # Use first available option in [hdfs3, pyarrow]
+    dd.read_csv('hdfs:///path/to/*.csv')
 
-    - host, port, user: basic authentication
-    - ticket_cache, token: kerberos authentication
-    - pars: dictionary of further parameters (e.g., for `high availability`_)
+   # Use hdfs3 for HDFS I/O
+   with dask.set_options(hdfs_driver='hdfs3'):
+       dd.read_csv('hdfs:///path/to/*.csv')
+
+   # Use pyarrow for HDFS I/O
+   with dask.set_options(hdfs_driver='pyarrow'):
+       dd.read_csv('hdfs:///path/to/*.csv')
+
+   # Set pyarrow as the global hdfs driver
+   dask.set_options(hdfs_driver='pyarrow')
+
+
+By default, both libraries attempt to read the default server and port from
+local Hadoop configuration files on each node, so it may be that no
+configuration is required. However, the server, port and user can be passed as
+part of the url: ``hdfs://user:pass@server:port/path/to/data``.
+
+Extra Configuration for HDFS3
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The following additional options may be passed to the ``hdfs3`` driver via
+``storage_options``:
+
+    - ``host``, ``port``, ``user``: basic authentication
+    - ``ticket_cache``, ``token``: kerberos authentication
+    - ``pars``: dictionary of further parameters (e.g., for `high availability`_)
+
+The ``hdfs3`` driver can also be affected by a few environment variables. For
+information on these see the `hdfs3 documentation`_.
 
 .. _high availability: http://hdfs3.readthedocs.io/en/latest/hdfs.html#high-availability-mode
+.. _hdfs3 documentation: https://hdfs3.readthedocs.io/en/latest/hdfs.html#defaults
 
-Important environment variables:
+Extra Configuration for PyArrow
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    - HADOOP_CONF_DIR or HADOOP_INSTALL: directory containing ``core-site.xml``
-      and/or ``hdfs-site.xml``, containing configuration information
+The following additional options may be passed to the ``pyarrow`` driver via
+``storage_options``:
 
-    - LIBHDFS3_CONF: location of a specific xml file with configuration for
-      the `libhdfs3 client`_; this may be the same as one of the files above. `Short
-      circuit` reads should be defined in this file (`see here`_)
+    - ``host``, ``port``, ``user``: basic authentication
+    - ``kerb_ticket``: path to kerberos ticket cache
 
-.. _see here: http://hdfs3.readthedocs.io/en/latest/hdfs.html#short-circuit-reads-in-hdfs
-.. _libhdfs3 client: https://github.com/Pivotal-Data-Attic/pivotalrd-libhdfs3/wiki/Configure-Parameters
+PyArrow's ``libhdfs`` driver can also be affected by a few environment
+variables. For information on these see the `pyarrow documentation`_.
+
+.. _pyarrow documentation: https://arrow.apache.org/docs/python/filesystems.html#hadoop-file-system-hdfs
+
 
 S3
 -----
@@ -186,24 +213,7 @@ browser, or by using gcloud_ to produce a JSON token file and passing that.
 In either case, gcsfs stores a cache of tokens in a local file, so subsequent
 authentication will not be necessary.
 
-.. _gcsfs: https://github.com/martindurant/gcsfs/
 .. _gcloud: https://cloud.google.com/sdk/docs/
-
-At the time of writing, ``gcsfs.GCSFileSystem`` instances pickle including the auth token, so sensitive
-information is passed between nodes of a dask distributed cluster. This will
-be changed to allow the use of either local JSON or pickle files for storing
-tokens and authenticating on each node automatically, instead of
-passing around an authentication token, similar to S3, above.
-
-Every use of GCS requires the specification of a project to run within - if the
-project is left empty, the user will not be able to perform any bucket-level
-operations. The project can be defined using the  variable
-GCSFS_DEFAULT_PROJECT in the environment of every worker, or by passing
-something like the following
-
-.. code-block:: python
-
-   dd.read_parquet('gs://bucket/path', storage_options={'project': 'myproject'}
 
 Possible additional storage options:
 

@@ -43,6 +43,7 @@ Core
 - Change task ordering to do a full traversal (:pr:`3066`) `Matthew Rocklin`_
 - Adds an ``optimize_graph`` keyword to all ``to_delayed`` methods to allow
   controlling whether optimizations occur on conversion. (:pr:`3126`) `Jim Crist`_
+- Support using ``pyarrow`` for hdfs integration (:pr:`3123`) `Jim Crist`_
 
 
 0.16.1 / 2018-01-09
