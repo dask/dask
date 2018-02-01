@@ -275,9 +275,10 @@ class LoopRunner(object):
     _lock = threading.Lock()
 
     def __init__(self, loop=None, asynchronous=False):
+        current = IOLoop.current()
         if loop is None:
             if asynchronous:
-                self._loop = IOLoop.current()
+                self._loop = current
             else:
                 # We're expecting the loop to run in another thread,
                 # avoid re-using this thread's assigned loop
@@ -1274,6 +1275,16 @@ def fix_asyncio_event_loop_policy(asyncio):
                 return loop
 
     asyncio.set_event_loop_policy(PatchedDefaultEventLoopPolicy())
+
+
+def reset_logger_locks():
+    """ Python 2's logger's locks don't survive a fork event
+
+    https://github.com/dask/distributed/issues/1491
+    """
+    for name in logging.Logger.manager.loggerDict.keys():
+        for handler in logging.getLogger(name).handlers:
+            handler.createLock()
 
 
 # Only bother if asyncio has been loaded by Tornado

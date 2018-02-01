@@ -518,11 +518,13 @@ class Client(Node):
 
         self._periodic_callbacks = dict()
         self._periodic_callbacks['scheduler-info'] = PeriodicCallback(
-                self._update_scheduler_info, 2000, io_loop=self.loop)
+                self._update_scheduler_info, 2000, io_loop=self.loop
+        )
         self._periodic_callbacks['heartbeat'] = PeriodicCallback(
                 self._heartbeat,
                 heartbeat_interval or config.get('client-heartbeat-interval', 5000),
-                io_loop=self.loop)
+                io_loop=self.loop
+        )
 
         if address is None and 'scheduler-address' in config:
             address = config['scheduler-address']
@@ -1026,6 +1028,7 @@ class Client(Node):
                 self.cluster.close()
 
         sync(self.loop, self._close, fast=True)
+
         assert self.status == 'closed'
 
         if self._should_close_loop:
@@ -1048,8 +1051,8 @@ class Client(Node):
         return self.close(*args, **kwargs)
 
     def get_executor(self, **kwargs):
-        """ Return a concurrent.futures Executor for submitting tasks
-        on this Client.
+        """
+        Return a concurrent.futures Executor for submitting tasks on this Client
 
         Parameters
         ----------

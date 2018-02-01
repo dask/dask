@@ -1070,6 +1070,10 @@ class Scheduler(ServerNode):
         logger.info("Scheduler closing...")
         setproctitle("dask-scheduler [closing]")
 
+        for pc in self.periodic_callbacks.values():
+            pc.stop()
+        self.periodic_callbacks.clear()
+
         self.stop_services()
         for ext in self.extensions:
             with ignoring(AttributeError):

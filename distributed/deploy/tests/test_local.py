@@ -334,3 +334,13 @@ def test_bokeh_kwargs(loop):
 
         bs = c.scheduler.services['bokeh']
         assert bs.prefix == '/foo'
+
+
+def test_io_loop_periodic_callbacks(loop):
+    with LocalCluster(loop=loop) as cluster:
+        assert cluster.scheduler.loop is loop
+        for pc in cluster.scheduler.periodic_callbacks.values():
+            assert pc.io_loop is loop
+        for worker in cluster.workers:
+            for pc in worker.periodic_callbacks.values():
+                assert pc.io_loop is loop

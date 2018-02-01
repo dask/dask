@@ -45,7 +45,7 @@ from .metrics import time
 from .proctitle import enable_proctitle_on_children
 from .security import Security
 from .utils import (ignoring, log_errors, mp_context, get_ip, get_ipv6,
-                    DequeHandler)
+                    DequeHandler, reset_logger_locks)
 from .worker import Worker, TOTAL_MEMORY
 
 
@@ -420,6 +420,7 @@ def run_scheduler(q, nputs, **kwargs):
 def run_worker(q, scheduler_q, **kwargs):
     from distributed import Worker
 
+    reset_logger_locks()
     with log_errors():
         with pristine_loop() as loop:
             scheduler_addr = scheduler_q.get()

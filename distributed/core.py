@@ -102,6 +102,7 @@ class Server(object):
 
         self.listener = None
         self.io_loop = io_loop or IOLoop.current()
+        self.loop = io_loop
 
         # Statistics counters for various events
         with ignoring(ImportError):
@@ -115,11 +116,12 @@ class Server(object):
 
         self.periodic_callbacks = dict()
 
-        pc = PeriodicCallback(self.monitor.update, 500)
+        pc = PeriodicCallback(self.monitor.update, 500, io_loop=self.io_loop)
         self.periodic_callbacks['monitor'] = pc
 
         self._last_tick = time()
-        pc = PeriodicCallback(self._measure_tick, config.get('tick-time', 20))
+        pc = PeriodicCallback(self._measure_tick, config.get('tick-time', 20),
+                              io_loop=self.io_loop)
         self.periodic_callbacks['tick'] = pc
 
         self.__stopped = False

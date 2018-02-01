@@ -95,7 +95,7 @@ class Nanny(ServerNode):
                                     **kwargs)
 
         if self.memory_limit:
-            pc = PeriodicCallback(self.memory_monitor, 100)
+            pc = PeriodicCallback(self.memory_monitor, 100, io_loop=self.loop)
             self.periodic_callbacks['memory'] = pc
 
         self._listen_address = listen_address
@@ -329,25 +329,37 @@ class WorkerProcess(object):
             yield self.running.wait()
             return
 
-        self.init_result_q = mp_context.Queue()
-        self.child_stop_q = mp_context.Queue()
-        self.process = AsyncProcess(
-            target=self._run,
-            kwargs=dict(worker_args=self.worker_args,
-                        worker_kwargs=self.worker_kwargs,
-                        worker_start_args=self.worker_start_args,
-                        silence_logs=self.silence_logs,
-                        init_result_q=self.init_result_q,
-                        child_stop_q=self.child_stop_q),
-        )
-        self.process.daemon = True
-        self.process.set_exit_callback(self._on_exit)
-        self.running = Event()
-        self.stopped = Event()
-        self.status = 'starting'
-        yield self.process.start()
-        if self.status == 'starting':
-            yield self._wait_until_running()
+        while True:
+            # FIXME: this sometimes stalls in _wait_until_running
+            # our temporary solution is to retry a few times if the process
+            # doesn't start up in five seconds
+            self.init_result_q = mp_context.Queue()
+            self.child_stop_q = mp_context.Queue()
+            try:
+                self.process = AsyncProcess(
+                    target=self._run,
+                    kwargs=dict(worker_args=self.worker_args,
+                                worker_kwargs=self.worker_kwargs,
+                                worker_start_args=self.worker_start_args,
+                                silence_logs=self.silence_logs,
+                                init_result_q=self.init_result_q,
+                                child_stop_q=self.child_stop_q),
+                )
+                self.process.daemon = True
+                self.process.set_exit_callback(self._on_exit)
+                self.running = Event()
+                self.stopped = Event()
+                self.status = 'starting'
+                yield self.process.start()
+                if self.status == 'starting':
+                    yield gen.with_timeout(timedelta(seconds=5),
+                                           self._wait_until_running())
+            except gen.TimeoutError:
+                logger.info("Failed to start worker process.  Restarting")
+                yield gen.with_timeout(timedelta(seconds=1),
+                                       self.process.terminate())
+            else:
+                break
 
     def _on_exit(self, proc):
         if proc is not self.process:
