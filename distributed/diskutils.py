@@ -53,9 +53,18 @@ class WorkDir(object):
                 logger.debug("Locking %r...", self._lock_path)
                 # Avoid a race condition before locking the file
                 # by taking the global lock
-                with workspace._global_lock():
-                    self._lock_file = locket.lock_file(self._lock_path)
-                    self._lock_file.acquire()
+                try:
+                    with workspace._global_lock():
+                        self._lock_file = locket.lock_file(self._lock_path)
+                        self._lock_file.acquire()
+                except OSError as e:
+                    logger.exception("Could not acquire workspace lock on "
+                                     "path: %s ."
+                                     "Continuing without lock. "
+                                     "This may result in workspaces not being "
+                                     "cleaned up", self._lock_path,
+                                     exc_info=True)
+                    self._lock_file = None
             except Exception:
                 shutil.rmtree(self.dir_path, ignore_errors=True)
                 raise
@@ -89,7 +98,7 @@ class WorkDir(object):
 class WorkSpace(object):
     """
     An on-disk workspace that tracks disposable work directories inside it.
-    If a process crash or another event left stale directories behind,
+    If a process crashes or another event left stale directories behind,
     this will be detected and the directories purged.
     """
 
@@ -219,5 +228,9 @@ class WorkSpace(object):
         name: str (optional)
             The subdirectory name for the workdir
         """
-        self._purge_leftovers()
+        try:
+            self._purge_leftovers()
+        except OSError:
+            logger.error("Failed to clean up lingering worker directories "
+                         "in path: %s ", exc_info=True)
         return WorkDir(self, **kwargs)
