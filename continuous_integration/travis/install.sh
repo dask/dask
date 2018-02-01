@@ -62,6 +62,7 @@ pip install --upgrade --no-deps git+https://github.com/dask/s3fs
 
 if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]] && [[ $NUMPY < '1.14.0' ]]; then
     conda install -q -c conda-forge fastparquet python-snappy
+    conda remove --force fastparquet
     pip install --no-deps git+https://github.com/dask/fastparquet
 fi
 
