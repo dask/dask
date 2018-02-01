@@ -18,6 +18,7 @@ DataFrame
 +++++++++
 
 -  Support month timedeltas in repartition(freq=...) (:pr:`3110`) `Matthew Rocklin`_
+-  Sort grouper values prior to groupby-apply (:pr:`3118`) `Matthew Rocklin`_
 
 Bag
 +++
