@@ -32,34 +32,27 @@ if not os.environ.get('DASK_RUN_HDFS_TESTS', ''):
 basedir = '/tmp/test-dask'
 
 
-def make_fixture(params):
-    @pytest.fixture(params=params)
-    def _(request):
-        if request.param == 'hdfs3':
-            hdfs = hdfs3.HDFileSystem(host='localhost', port=8020)
-        else:
-            hdfs = pyarrow.hdfs.connect(host='localhost', port=8020)
-
-        if hdfs.exists(basedir):
-            hdfs.rm(basedir, recursive=True)
-        hdfs.mkdir(basedir)
-
-        with dask.set_options(hdfs_driver=request.param):
-            yield hdfs
-
-        if hdfs.exists(basedir):
-            hdfs.rm(basedir, recursive=True)
-    return _
-
-
-# These fixtures check for a minimum pyarrow version
-hdfs = make_fixture([pytest.mark.skipif(not hdfs3, 'hdfs3',
-                                        reason='hdfs3 not found'),
-                     pytest.mark.skipif(not PYARROW_DRIVER, 'pyarrow',
-                                        reason='required pyarrow version not found')])
-
-pa_hdfs = make_fixture([pytest.mark.skipif(not PYARROW_DRIVER, 'pyarrow',
+# This fixture checks for a minimum pyarrow version
+@pytest.fixture(params=[pytest.mark.skipif(not hdfs3, 'hdfs3',
+                                           reason='hdfs3 not found'),
+                        pytest.mark.skipif(not PYARROW_DRIVER, 'pyarrow',
                                            reason='required pyarrow version not found')])
+def hdfs(request):
+    if request.param == 'hdfs3':
+        hdfs = hdfs3.HDFileSystem(host='localhost', port=8020)
+    else:
+        hdfs = pyarrow.hdfs.connect(host='localhost', port=8020)
+
+    if hdfs.exists(basedir):
+        hdfs.rm(basedir, recursive=True)
+    hdfs.mkdir(basedir)
+
+    with dask.set_options(hdfs_driver=request.param):
+        yield hdfs
+
+    if hdfs.exists(basedir):
+        hdfs.rm(basedir, recursive=True)
+
 
 # This mark doesn't check the minimum pyarrow version.
 require_pyarrow = pytest.mark.skipif(not pyarrow, reason="pyarrow not installed")
@@ -252,9 +245,13 @@ def test_parquet_pyarrow(hdfs):
     assert len(ddf2) == 1000  # smoke test on read
 
 
-def test_pyarrow_glob(pa_hdfs):
-    from dask.bytes.pyarrow import PyArrowHadoopFileSystem
-    hdfs = PyArrowHadoopFileSystem.from_pyarrow(pa_hdfs)
+def test_glob(hdfs):
+    if type(hdfs).__module__.startswith('hdfs3'):
+        from dask.bytes.hdfs3 import HDFS3HadoopFileSystem
+        hdfs = HDFS3HadoopFileSystem.from_hdfs3(hdfs)
+    else:
+        from dask.bytes.pyarrow import PyArrowHadoopFileSystem
+        hdfs = PyArrowHadoopFileSystem.from_pyarrow(hdfs)
 
     tree = {basedir: (['c', 'c2'], ['a', 'a1', 'a2', 'a3', 'b1']),
             basedir + '/c': (['d'], ['x1', 'x2']),
@@ -262,6 +259,7 @@ def test_pyarrow_glob(pa_hdfs):
             basedir + '/c/d': ([], ['x3'])}
 
     hdfs.mkdirs(basedir + '/c/d/')
+    hdfs.mkdirs(basedir + '/c2/d/')
     for fn in (posixpath.join(dirname, f)
                for (dirname, (_, fils)) in tree.items()
                for f in fils):
@@ -287,6 +285,7 @@ def test_pyarrow_glob(pa_hdfs):
     assert hdfs.glob(basedir + '/missing/') == []
     assert hdfs.glob(basedir + '/missing/x1') == []
     assert hdfs.glob(basedir + '/missing/*') == []
+    assert hdfs.glob(basedir + '/*/missing') == []
 
     assert (set(hdfs.glob(basedir + '/*')) ==
             {basedir + p for p in ['/a', '/a1', '/a2', '/a3', '/b1', '/c', '/c2']})
