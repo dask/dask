@@ -258,7 +258,7 @@ texinfo_documents = [
 epub_title = u'dask'
 epub_author = u'Dask Development Team'
 epub_publisher = u'Anaconda Inc'
-epub_copyright = u'2017, Anaconda Inc'
+epub_copyright = u'2017-2018, Anaconda Inc'
 
 # The language of the text. It defaults to the language option
 # or en if the language is not set.
