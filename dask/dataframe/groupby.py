@@ -141,13 +141,6 @@ def _groupby_raise_unaligned(df, **kwargs):
 def _groupby_slice_apply(df, grouper, key, func):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
-    if isinstance(grouper, (pd.DataFrame, pd.Series, pd.Index)):
-        grouper = grouper.sort_values()
-    else:
-        try:
-            df = df.sort_values(grouper)
-        except KeyError:  # this fails when the grouper includes the index
-            pass
     g = df.groupby(grouper)
     if key:
         g = g[key]

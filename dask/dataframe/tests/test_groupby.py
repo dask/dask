@@ -106,11 +106,10 @@ def test_full_groupby():
     assert 'b' in dir(df.groupby('a'))
 
     def func(df):
-        df['b'] = df.b - df.b.mean()
-        return df
+        return df.assign(b=df.b - df.b.mean())
 
     assert_eq(df.groupby('a').apply(func),
-              ddf.groupby('a').apply(func, meta={"a": int, "b": float}))
+              ddf.groupby('a').apply(func))
 
 
 @pytest.mark.parametrize('grouper', [
@@ -132,14 +131,12 @@ def test_full_groupby_multilevel(grouper, reverse):
     ddf = dd.from_pandas(df, npartitions=3)
 
     def func(df):
-        df['b'] = df.b - df.b.mean()
-        return df
+        return df.assign(b=df.b - df.b.mean())
 
     # last one causes a DeprcationWarning from pandas.
     # See https://github.com/pandas-dev/pandas/issues/16481
-    meta = {"a": int, "d": int, "b": float}
     assert_eq(df.groupby(grouper(df)).apply(func),
-              ddf.groupby(grouper(ddf)).apply(func, meta=meta))
+              ddf.groupby(grouper(ddf)).apply(func))
 
 
 def test_groupby_dir():
