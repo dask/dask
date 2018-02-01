@@ -41,6 +41,11 @@ def test_read_text(fmt, bs, encoding):
         L, = compute(b)
         assert ''.join(L) == expected
 
+        b = read_text(sorted(files), compression=fmt, blocksize=bs,
+                      encoding=encoding)
+        L, = compute(b)
+        assert ''.join(L) == expected
+
         blocks = read_text('.test.accounts.*.json', compression=fmt, blocksize=bs,
                            encoding=encoding, collection=False)
         L = compute(*blocks)

@@ -21,9 +21,11 @@ def read_text(urlpath, blocksize=None, compression='infer',
 
     Parameters
     ----------
-    urlpath: string or list
-        Absolute or relative filepath, URL (may include protocols like
-        ``s3://``), globstring, or a list of beforementioned strings.
+    urlpath : string or list
+        Absolute or relative filepath(s). Prefix with a protocol like ``s3://``
+        to read from alternative filesystems. To read from multiple files you
+        can pass a globstring or a list of paths, with the caveat that they
+        must all have the same protocol.
     blocksize: None or int
         Size (in bytes) to cut up larger files.  Streams by default.
     compression: string
@@ -59,29 +61,18 @@ def read_text(urlpath, blocksize=None, compression='infer',
     --------
     from_sequence: Build bag from Python sequence
     """
-    if isinstance(urlpath, (tuple, list, set)):
-        blocks = sum([read_text(fn, blocksize=blocksize,
-                      compression=compression, encoding=encoding, errors=errors,
-                      linedelimiter=linedelimiter, collection=False,
-                      storage_options=storage_options)
-                     for fn in urlpath], [])
-    else:
-        if blocksize is None:
-            files = open_files(urlpath, mode='rt', encoding=encoding,
-                               errors=errors, compression=compression,
-                               **(storage_options or {}))
-            blocks = [delayed(list, pure=True)(delayed(file_to_blocks)(file))
-                      for file in files]
+    if blocksize is None:
+        files = open_files(urlpath, mode='rt', encoding=encoding,
+                           errors=errors, compression=compression,
+                           **(storage_options or {}))
+        blocks = [delayed(list)(delayed(file_to_blocks)(fil)) for fil in files]
 
-        else:
-            _, blocks = read_bytes(urlpath, delimiter=linedelimiter.encode(),
-                                   blocksize=blocksize, sample=False,
-                                   compression=compression,
-                                   **(storage_options or {}))
-            if isinstance(blocks[0], (tuple, list)):
-                blocks = list(concat(blocks))
-            blocks = [delayed(decode)(b, encoding, errors)
-                      for b in blocks]
+    else:
+        _, blocks = read_bytes(urlpath, delimiter=linedelimiter.encode(),
+                               blocksize=blocksize, sample=False,
+                               compression=compression,
+                               **(storage_options or {}))
+        blocks = [delayed(decode)(b, encoding, errors) for b in concat(blocks)]
 
     if not blocks:
         raise ValueError("No files found", urlpath)
