@@ -9,7 +9,7 @@ from toolz import concat
 
 import dask
 from dask.bytes.core import read_bytes, open_files, get_fs
-from dask.compatibility import unicode
+from dask.compatibility import unicode, PY2
 
 try:
     import hdfs3
@@ -176,8 +176,12 @@ def test_read_csv(hdfs):
     assert df.id.sum() == 1 + 2 + 3 + 4
 
 
+@pytest.mark.skipif(PY2, reason=("pyarrow's hdfs isn't fork-safe, requires "
+                                 "multiprocessing `spawn` start method"))
 def test_read_text(hdfs):
     db = pytest.importorskip('dask.bag')
+    import multiprocessing as mp
+    pool = mp.get_context('spawn').Pool(2)
 
     with hdfs.open('%s/text.1.txt' % basedir, 'wb') as f:
         f.write('Alice 100\nBob 200\nCharlie 300'.encode())
@@ -189,12 +193,14 @@ def test_read_text(hdfs):
         f.write('a b\nc d'.encode())
 
     b = db.read_text('hdfs://%s/text.*.txt' % basedir)
-    result = b.str.strip().str.split().map(len).compute(get=dask.get)
+    with dask.set_options(pool=pool):
+        result = b.str.strip().str.split().map(len).compute()
 
     assert result == [2, 2, 2, 2, 2, 2]
 
     b = db.read_text('hdfs://%s/other.txt' % basedir)
-    result = b.str.split().flatten().compute(get=dask.get)
+    with dask.set_options(pool=pool):
+        result = b.str.split().flatten().compute()
 
     assert result == ['a', 'b', 'c', 'd']
 
