@@ -945,6 +945,7 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
 
 
 def test_user_index(tmpdir):
+    check_fastparquet()
     engine = 'fastparquet'
     fn = os.path.join(str(tmpdir), 'data.parq')
     df = pd.DataFrame(np.random.randn(10, 2), columns=['a', 'b'],
