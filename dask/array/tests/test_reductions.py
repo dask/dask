@@ -290,6 +290,19 @@ def test_nan():
     assert_eq(nanprod(x), da.nanprod(d))
 
 
+@pytest.mark.parametrize('func', ['nansum', 'sum', 'nanmin', 'min',
+                                  'nanmax', 'max'])
+def test_nan_object(func):
+    x = np.array([[1, np.nan, 3, 4],
+                  [5, 6, 7, np.nan],
+                  [9, 10, 11, 12]]).astype(object)
+    d = da.from_array(x, chunks=(2, 2))
+
+    assert_eq(getattr(np, func)(x), getattr(da, func)(d))
+    assert_eq(getattr(np, func)(x, axis=0), getattr(da, func)(d, axis=0))
+    assert_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1))
+
+
 def test_0d_array():
     x = da.mean(da.ones(4, chunks=4), axis=0).compute()
     y = np.mean(np.ones(4))

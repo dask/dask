@@ -143,7 +143,7 @@ def sum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
     else:
-        dt = np.empty((1,), dtype=a.dtype).sum().dtype
+        dt = np.empty((1,), dtype=a.dtype).sum(keepdims=True).dtype
     return reduction(a, chunk.sum, chunk.sum, axis=axis, keepdims=keepdims,
                      dtype=dt, split_every=split_every, out=out)
 
@@ -153,7 +153,7 @@ def prod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
     else:
-        dt = np.empty((1,), dtype=a.dtype).prod().dtype
+        dt = np.empty((1,), dtype=a.dtype).prod(keepdims=True).dtype
     return reduction(a, chunk.prod, chunk.prod, axis=axis, keepdims=keepdims,
                      dtype=dt, split_every=split_every, out=out)
 
@@ -187,7 +187,7 @@ def nansum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None)
     if dtype is not None:
         dt = dtype
     else:
-        dt = chunk.nansum(np.empty((1,), dtype=a.dtype)).dtype
+        dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), 'dtype', object)
     return reduction(a, chunk.nansum, chunk.sum, axis=axis, keepdims=keepdims,
                      dtype=dt, split_every=split_every, out=out)
 
@@ -199,7 +199,7 @@ with ignoring(AttributeError):
         if dtype is not None:
             dt = dtype
         else:
-            dt = chunk.nanprod(np.empty((1,), dtype=a.dtype)).dtype
+            dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), 'dtype', object)
         return reduction(a, chunk.nanprod, chunk.prod, axis=axis,
                          keepdims=keepdims, dtype=dt, split_every=split_every,
                          out=out)
