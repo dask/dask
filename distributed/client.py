@@ -636,10 +636,10 @@ class Client(Node):
             protocol, rest = self.scheduler.address.split('://')
             port = info['services']['bokeh']
             if protocol == 'inproc':
-                address = 'http://localhost:%d' % port
+                address = 'http://localhost:%d/status' % port
             else:
                 host = rest.split(':')[0]
-                address = 'http://%s:%d' % (host, port)
+                address = 'http://%s:%d/status' % (host, port)
             text += "  <li><b>Dashboard: </b><a href='%(web)s' target='_blank'>%(web)s</a>\n" % {'web': address}
 
         text += "</ul>\n"

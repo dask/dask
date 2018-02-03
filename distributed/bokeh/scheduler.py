@@ -206,7 +206,7 @@ class NBytesHistogram(DashboardComponent):
                                             'right': [10, 10],
                                             'top': [0, 0]})
 
-            self.root = figure(title='NBytes Stored',
+            self.root = figure(title='Bytes Stored',
                                id='bk-nbytes-histogram-plot',
                                **kwargs)
             self.root.xaxis[0].formatter = NumeralTickFormatter(format='0.0 b')
@@ -320,7 +320,7 @@ class CurrentLoad(DashboardComponent):
                 else:
                     processing_color.append('blue')
 
-            nbytes = [ws.nbytes for ws in workers]
+            nbytes = [ws.info['memory'] for ws in workers]
             nbytes_text = [format_bytes(nb) for nb in nbytes]
             nbytes_color = []
             max_limit = 0
