@@ -25,10 +25,13 @@ def assert_nan_eq(a, b):
     """ Similar to assert_eq but accept nan value """
     if hasattr(a, 'compute'):
         a = a.compute()
-    a = np.array(a)
     if hasattr(b, 'compute'):
         b = b.compute()
+
+    assert type(a) == type(b)
+    a = np.array(a)
     b = np.array(b)
+    assert a.shape == b.shape
 
     nanidx = a != b
     assert np.isnan(a[nanidx].astype(float)).all()
