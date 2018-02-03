@@ -1170,13 +1170,12 @@ class Worker(WorkerBase):
                 try:
                     msgs = yield comm.read()
                 except CommClosedError as e:
-                    logger.error("Failed while reading from scheduler. "
-                                 "Exception: %s", e)
                     if self.reconnect and self.status not in ('closed', 'closing'):
                         logger.info("Connection to scheduler broken. Reregistering")
                         yield self._register_with_scheduler()
                         return
                     else:
+                        logger.info("Connection to scheduler broken. Closing")
                         yield self._close(report=False)
                     break
                 except EnvironmentError as e:
