@@ -21,6 +21,23 @@ def assert_eq(a, b):
     _assert_eq(a, b, equal_nan=True)
 
 
+def assert_nan_eq(a, b):
+    """ Similar to assert_eq but accept nan value """
+    if hasattr(a, 'compute'):
+        a = a.compute()
+    a = np.array(a)
+    if hasattr(b, 'compute'):
+        b = b.compute()
+    b = np.array(b)
+
+    nanidx = a != b
+    assert np.isnan(a[nanidx].astype(float)).all()
+    assert np.isnan(b[nanidx].astype(float)).all()
+    a[nanidx] = 0.0
+    b[nanidx] = 0.0
+    assert_eq(a, b)
+
+
 def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
     assert_eq(da_func(darr), np_func(narr))
     assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
@@ -290,6 +307,7 @@ def test_nan():
     assert_eq(nanprod(x), da.nanprod(d))
 
 
+@pytest.mark.skipif(np.__version__ < '1.13.0', reason='nanmax/nanmin for object dtype')
 @pytest.mark.parametrize('func', ['nansum', 'sum', 'nanmin', 'min',
                                   'nanmax', 'max'])
 def test_nan_object(func):
@@ -298,9 +316,9 @@ def test_nan_object(func):
                   [9, 10, 11, 12]]).astype(object)
     d = da.from_array(x, chunks=(2, 2))
 
-    assert_eq(getattr(np, func)(x), getattr(da, func)(d))
-    assert_eq(getattr(np, func)(x, axis=0), getattr(da, func)(d, axis=0))
-    assert_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1))
+    assert_nan_eq(getattr(np, func)(x, axis=0), getattr(da, func)(d, axis=0))
+    assert_nan_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1))
+    assert_nan_eq(getattr(np, func)(x), getattr(da, func)(d))
 
 
 def test_0d_array():
