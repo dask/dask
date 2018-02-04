@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
-
 from functools import partial, wraps
 from itertools import product, repeat
 from math import factorial, log, ceil
@@ -442,12 +440,6 @@ def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False, split_every=None,
 
     See np.linalg.norm
     """
-
-    warnings.warn(
-        "DeprecationWarning: Please use `dask.array.linalg.norm` instead.",
-        UserWarning
-    )
-
     if ord is None or ord == 'fro':
         ord = 2
     if ord == np.inf:

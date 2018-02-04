@@ -134,7 +134,7 @@ def test_reductions_2D(dtype):
     a = da.from_array(x, chunks=(4, 4))
 
     b = a.sum(keepdims=True)
-    assert b.__dask_keys__() == [[(b.name, 0, 0)]]
+    assert b._keys() == [[(b.name, 0, 0)]]
 
     reduction_2d_test(da.sum, a, np.sum, x)
     reduction_2d_test(da.prod, a, np.prod, x)
