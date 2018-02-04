@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import pickle
 from time import sleep
 
 import pytest
@@ -104,3 +105,19 @@ def test_lock_types(c, s, a, b):
         yield lock.release()
 
     assert not s.extensions['locks'].events
+
+
+@gen_cluster(client=True)
+def test_serializable(c, s, a, b):
+    def f(x, lock=None):
+        with lock:
+            assert lock.name == 'x'
+            return x + 1
+
+    lock = Lock('x')
+    futures = c.map(f, range(10), lock=lock)
+    yield c.gather(futures)
+
+    lock2 = pickle.loads(pickle.dumps(lock))
+    assert lock2.name == lock.name
+    assert lock2.client is lock.client

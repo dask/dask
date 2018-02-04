@@ -148,3 +148,6 @@ class Lock(object):
     @gen.coroutine
     def __aexit__(self, *args, **kwargs):
         yield self.release()
+
+    def __reduce__(self):
+        return (Lock, (self.name,))
