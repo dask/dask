@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from distutils.version import LooseVersion
 import difflib
 import math
 import os
@@ -15,7 +14,7 @@ from ..sharedict import ShareDict
 
 def allclose(a, b, **kwargs):
     if kwargs.pop('equal_nan', False):
-        if a.dtype.kind in 'cf':
+        if a.dtype.kind != 'O':
             nanidx = np.isnan(a)
         else:
             nanidx = a != b  # index of nan
@@ -25,11 +24,12 @@ def allclose(a, b, **kwargs):
         if not np.isnan(b[nanidx].astype(float)).all():
             return False
 
-        # np.allclose does not support object type
-        dtype = a.dtype if a.dtype != object else float
-        a = a[~nanidx].astype(dtype)
-        b = b[~nanidx].astype(dtype)
-    return np.allclose(a, b, **kwargs)
+        a = a[~nanidx]
+        b = b[~nanidx]
+    try:
+        return np.allclose(a, b, **kwargs)
+    except TypeError:  # explicitly cast if implicit cast is not possible
+        return np.allclose(a.astype(float), b.astype(float), **kwargs)
 
 
 def same_keys(a, b):
@@ -75,21 +75,24 @@ def assert_eq(a, b, check_shape=True, check_dtype=True, **kwargs):
         a = a.compute(get=get_sync)
         if hasattr(a, 'todense'):
             a = a.todense()
-        a = np.array(a)
+        if not hasattr(a, 'dtype'):
+            a = np.array(a)
         if _not_empty(a):
             assert a.dtype == a_original.dtype
         if check_shape:
             assert_eq_shape(a_original.shape, a.shape, check_nan=False)
     else:
         adt = getattr(a, 'dtype', None)
-        a = np.array(a)
+        if not hasattr(a, 'dtype'):
+            a = np.array(a)
 
     if isinstance(b, Array):
         assert b.dtype is not None
         bdt = b.dtype
         _check_dsk(b.dask)
         b = b.compute(get=get_sync)
-        b = np.array(b)
+        if not hasattr(b, 'dtype'):
+            b = np.array(b)
         if hasattr(b, 'todense'):
             b = b.todense()
         if _not_empty(b):
@@ -98,7 +101,8 @@ def assert_eq(a, b, check_shape=True, check_dtype=True, **kwargs):
             assert_eq_shape(b_original.shape, b.shape, check_nan=False)
     else:
         bdt = getattr(b, 'dtype', None)
-        b = np.array(b)
+        if not hasattr(b, 'dtype'):
+            b = np.array(b)
 
     if check_dtype and str(adt) != str(bdt):
         diff = difflib.ndiff(str(adt).splitlines(), str(bdt).splitlines())
