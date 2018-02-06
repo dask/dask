@@ -1476,6 +1476,10 @@ def test_str_accessor():
     assert_eq(ddf.x.str[:2], df.x.str[:2])
     assert_eq(ddf.x.str[1], df.x.str[1])
 
+    # str.extractall
+    assert_eq(ddf.x.str.extractall('(.*)b(.*)'),
+              df.x.str.extractall('(.*)b(.*)'))
+
     # str.cat
     sol = df.x.str.cat(df.x.str.upper(), sep=':')
     assert_eq(ddf.x.str.cat(ddf.x.str.upper(), sep=':'), sol)
