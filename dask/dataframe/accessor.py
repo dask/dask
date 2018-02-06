@@ -5,7 +5,7 @@ import pandas as pd
 from toolz import partial
 
 from ..utils import derived_from
-from .utils import is_categorical_dtype
+from .utils import is_categorical_dtype, PANDAS_VERSION
 
 
 def maybe_wrap_pandas(obj, x):
@@ -59,7 +59,7 @@ class Accessor(object):
 
     def _function_map(self, attr, *args, **kwargs):
         meta = self._delegate_method(self._series._meta_nonempty,
-                                     self._accessor_name,  attr, args, kwargs)
+                                     self._accessor_name, attr, args, kwargs)
         token = '%s-%s' % (self._accessor_name, attr)
         return self._series.map_partitions(self._delegate_method,
                                            self._accessor_name, attr, args,
@@ -134,9 +134,25 @@ class StringAccessor(Accessor):
         return self._series.map_partitions(str_cat, *others, sep=sep,
                                            na_rep=na_rep, meta=self._series._meta)
 
+    @derived_from(pd.core.strings.StringMethods)
+    def extractall(self, pat, flags=0):
+        # TODO: metadata inference here won't be necessary for pandas >= 0.23.0
+        meta = self._series._meta.str.extractall(pat, flags=flags)
+        if PANDAS_VERSION < '0.23.0':
+            index_name = self._series.index.name
+            meta.index = pd.MultiIndex(levels=[[], []],
+                                       labels=[[], []],
+                                       names=[index_name, 'match'])
+        return self._series.map_partitions(str_extractall, pat, flags,
+                                           meta=meta, token='str-extractall')
+
     def __getitem__(self, index):
         return self._series.map_partitions(str_get, index,
                                            meta=self._series._meta)
+
+
+def str_extractall(series, pat, flags):
+    return series.str.extractall(pat, flags=flags)
 
 
 def str_get(series, index):
