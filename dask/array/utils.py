@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from distutils.version import LooseVersion
 import difflib
 import math
 import os
@@ -12,24 +13,28 @@ from ..local import get_sync
 from ..sharedict import ShareDict
 
 
-def allclose(a, b, **kwargs):
-    if kwargs.pop('equal_nan', False):
-        if a.dtype.kind != 'O':
-            nanidx = np.isnan(a)
-        else:
-            nanidx = a != b  # index of nan
-
-        if not np.isnan(a[nanidx].astype(float)).all():
-            return False
-        if not np.isnan(b[nanidx].astype(float)).all():
-            return False
-
-        a = a[~nanidx]
-        b = b[~nanidx]
-    try:
+if LooseVersion(np.__version__) >= '1.10.0':
+    _allclose = np.allclose
+else:
+    def _allclose(a, b, **kwargs):
+        if kwargs.pop('equal_nan', False):
+            a_nans = np.isnan(a)
+            b_nans = np.isnan(b)
+            if not (a_nans == b_nans).all():
+                return False
+            a = a[~a_nans]
+            b = b[~b_nans]
         return np.allclose(a, b, **kwargs)
-    except TypeError:  # explicitly cast if implicit cast is not possible
-        return np.allclose(a.astype(float), b.astype(float), **kwargs)
+
+
+def allclose(a, b, equal_nan=False, **kwargs):
+    if getattr(a, 'dtype', None) != 'O':
+        return _allclose(a, b, equal_nan=equal_nan, **kwargs)
+    if equal_nan:
+        return (a.shape == b.shape and
+                all(np.isnan(b) if np.isnan(a) else a == b
+                    for (a, b) in zip(a.flat, b.flat)))
+    return (a == b).all()
 
 
 def same_keys(a, b):
@@ -65,7 +70,7 @@ def assert_eq_shape(a, b, check_nan=True):
             assert aa == bb
 
 
-def assert_eq(a, b, check_shape=True, check_dtype=True, **kwargs):
+def assert_eq(a, b, check_shape=True, **kwargs):
     a_original = a
     b_original = b
     if isinstance(a, Array):
@@ -76,15 +81,15 @@ def assert_eq(a, b, check_shape=True, check_dtype=True, **kwargs):
         if hasattr(a, 'todense'):
             a = a.todense()
         if not hasattr(a, 'dtype'):
-            a = np.array(a)
+            a = np.array(a, dtype='O')
         if _not_empty(a):
             assert a.dtype == a_original.dtype
         if check_shape:
             assert_eq_shape(a_original.shape, a.shape, check_nan=False)
     else:
-        adt = getattr(a, 'dtype', None)
         if not hasattr(a, 'dtype'):
-            a = np.array(a)
+            a = np.array(a, dtype='O')
+        adt = getattr(a, 'dtype', None)
 
     if isinstance(b, Array):
         assert b.dtype is not None
@@ -92,7 +97,7 @@ def assert_eq(a, b, check_shape=True, check_dtype=True, **kwargs):
         _check_dsk(b.dask)
         b = b.compute(get=get_sync)
         if not hasattr(b, 'dtype'):
-            b = np.array(b)
+            b = np.array(b, dtype='O')
         if hasattr(b, 'todense'):
             b = b.todense()
         if _not_empty(b):
@@ -100,11 +105,11 @@ def assert_eq(a, b, check_shape=True, check_dtype=True, **kwargs):
         if check_shape:
             assert_eq_shape(b_original.shape, b.shape, check_nan=False)
     else:
-        bdt = getattr(b, 'dtype', None)
         if not hasattr(b, 'dtype'):
-            b = np.array(b)
+            b = np.array(b, dtype='O')
+        bdt = getattr(b, 'dtype', None)
 
-    if check_dtype and str(adt) != str(bdt):
+    if str(adt) != str(bdt):
         diff = difflib.ndiff(str(adt).splitlines(), str(bdt).splitlines())
         raise AssertionError('string repr are different' + os.linesep +
                              os.linesep.join(diff))
@@ -113,12 +118,10 @@ def assert_eq(a, b, check_shape=True, check_dtype=True, **kwargs):
         assert a.shape == b.shape
         assert allclose(a, b, **kwargs)
         return True
-    except ValueError:  #TypeError:
+    except TypeError:
         pass
 
     c = a == b
-    print(a)
-    print(b)
 
     if isinstance(c, np.ndarray):
         assert c.all()

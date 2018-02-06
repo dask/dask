@@ -17,28 +17,8 @@ except ImportError:  # pragma: no cover
     nanprod = npcompat.nanprod
 
 
-def assert_eq(a, b, check_dtype=False):
-    _assert_eq(a, b, equal_nan=True, check_dtype=False)
-
-
-def assert_nan_eq(a, b):
-    """ Similar to assert_eq but accept nan value """
-    if hasattr(a, 'compute'):
-        a = a.compute()
-    if hasattr(b, 'compute'):
-        b = b.compute()
-
-    assert type(a) == type(b)
-    a = np.array(a)
-    b = np.array(b)
-    assert a.shape == b.shape
-
-    nanidx = a != b
-    assert np.isnan(a[nanidx].astype(float)).all()
-    assert np.isnan(b[nanidx].astype(float)).all()
-    a[nanidx] = 0.0
-    b[nanidx] = 0.0
-    assert_eq(a, b)
+def assert_eq(a, b):
+    _assert_eq(a, b, equal_nan=True)
 
 
 def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
@@ -319,9 +299,9 @@ def test_nan_object(func):
                   [9, 10, 11, 12]]).astype(object)
     d = da.from_array(x, chunks=(2, 2))
 
-    assert_eq(getattr(np, func)(x, axis=0), getattr(da, func)(d, axis=0), check_dtype=False)
-    assert_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1), check_dtype=False)
-    assert_eq(getattr(np, func)(x), getattr(da, func)(d), check_dtype=False)
+    assert_eq(getattr(np, func)(x, axis=0), getattr(da, func)(d, axis=0))
+    assert_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1))
+    assert_eq(getattr(np, func)(x), getattr(da, func)(d))
 
 
 def test_0d_array():
