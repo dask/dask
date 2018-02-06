@@ -546,7 +546,7 @@ def test_to_parquet_default_writes_nulls(tmpdir):
 @write_read_engines(
     xfail_pyarrow_fastparquet=pyarrow_fastparquet_msg,
     xfail_pyarrow_pyarrow=("Race condition writing using pyarrow with partition_on. "
-                           "Fixed on master, but not on pyarrow 0.7.0")
+                           "Fixed on master, but not on pyarrow 0.8.0")
 )
 def test_partition_on(tmpdir, write_engine, read_engine):
     tmpdir = str(tmpdir)
@@ -929,6 +929,13 @@ def test_parse_pandas_metadata_column_with_index_name():
 
 def test_writing_parquet_with_kwargs(tmpdir, engine):
     fn = str(tmpdir)
+    path1 = os.path.join(fn, 'normal')
+    path2 = os.path.join(fn, 'partitioned')
+
+    df = pd.DataFrame({'a': np.random.choice(['A', 'B', 'C'], size=100),
+                       'b': np.random.random(size=100),
+                       'c': np.random.randint(1, 5, size=100)})
+    ddf = dd.from_pandas(df, npartitions=3)
 
     engine_kwargs = {
         'pyarrow': {
@@ -943,9 +950,17 @@ def test_writing_parquet_with_kwargs(tmpdir, engine):
         }
     }
 
-    ddf.to_parquet(fn,  engine=engine, **engine_kwargs[engine])
-    out = dd.read_parquet(fn, engine=engine)
+    ddf.to_parquet(path1,  engine=engine, **engine_kwargs[engine])
+    out = dd.read_parquet(path1, engine=engine)
     assert_eq(out, df, check_index=(engine != 'fastparquet'))
+
+    # Avoid race condition in pyarrow 0.8.0 on writing partitioned datasets
+    with dask.set_options(get=dask.get):
+        ddf.to_parquet(path2, engine=engine, partition_on=['a'],
+                       **engine_kwargs[engine])
+    out = dd.read_parquet(path2, engine=engine).compute()
+    for val in df.a.unique():
+        assert set(df.b[df.a == val]) == set(out.b[out.a == val])
 
 
 def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
