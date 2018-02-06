@@ -12,10 +12,11 @@ from .core import Array
 from ..local import get_sync
 from ..sharedict import ShareDict
 
+
 if LooseVersion(np.__version__) >= '1.10.0':
-    allclose = np.allclose
+    _allclose = np.allclose
 else:
-    def allclose(a, b, **kwargs):
+    def _allclose(a, b, **kwargs):
         if kwargs.pop('equal_nan', False):
             a_nans = np.isnan(a)
             b_nans = np.isnan(b)
@@ -24,6 +25,16 @@ else:
             a = a[~a_nans]
             b = b[~b_nans]
         return np.allclose(a, b, **kwargs)
+
+
+def allclose(a, b, equal_nan=False, **kwargs):
+    if getattr(a, 'dtype', None) != 'O':
+        return _allclose(a, b, equal_nan=equal_nan, **kwargs)
+    if equal_nan:
+        return (a.shape == b.shape and
+                all(np.isnan(b) if np.isnan(a) else a == b
+                    for (a, b) in zip(a.flat, b.flat)))
+    return (a == b).all()
 
 
 def same_keys(a, b):
@@ -69,11 +80,15 @@ def assert_eq(a, b, check_shape=True, **kwargs):
         a = a.compute(get=get_sync)
         if hasattr(a, 'todense'):
             a = a.todense()
+        if not hasattr(a, 'dtype'):
+            a = np.array(a, dtype='O')
         if _not_empty(a):
             assert a.dtype == a_original.dtype
         if check_shape:
             assert_eq_shape(a_original.shape, a.shape, check_nan=False)
     else:
+        if not hasattr(a, 'dtype'):
+            a = np.array(a, dtype='O')
         adt = getattr(a, 'dtype', None)
 
     if isinstance(b, Array):
@@ -81,6 +96,8 @@ def assert_eq(a, b, check_shape=True, **kwargs):
         bdt = b.dtype
         _check_dsk(b.dask)
         b = b.compute(get=get_sync)
+        if not hasattr(b, 'dtype'):
+            b = np.array(b, dtype='O')
         if hasattr(b, 'todense'):
             b = b.todense()
         if _not_empty(b):
@@ -88,6 +105,8 @@ def assert_eq(a, b, check_shape=True, **kwargs):
         if check_shape:
             assert_eq_shape(b_original.shape, b.shape, check_nan=False)
     else:
+        if not hasattr(b, 'dtype'):
+            b = np.array(b, dtype='O')
         bdt = getattr(b, 'dtype', None)
 
     if str(adt) != str(bdt):
