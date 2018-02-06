@@ -641,7 +641,8 @@ def _write_partition_pyarrow(df, path, fs, filename, write_index,
     t = pa.Table.from_pandas(df, preserve_index=write_index)
 
     if partition_on:
-        parquet.write_to_dataset(t, path, partition_cols=partition_on, filesystem=fs)
+        parquet.write_to_dataset(t, path, partition_cols=partition_on,
+                                 filesystem=fs, **kwargs)
     else:
         with fs.open(filename, 'wb') as fil:
             parquet.write_table(t, fil, **kwargs)
