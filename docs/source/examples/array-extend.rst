@@ -100,3 +100,64 @@ where the ith block along the diagonal of the output is the result of calling
           [0, 0, 0, 0, 0, 0, 6, 0, 0],
           [0, 0, 0, 0, 0, 0, 0, 7, 0],
           [0, 0, 0, 0, 0, 0, 0, 0, 8]])
+
+Example Lazy Reader
+-------------------
+
+Dask may also be used as a lazy loader. Consider the following function which
+takes filenames and a reader:
+
+.. code-block:: python
+
+    from dask.array import Array
+    from dask.base import tokenize
+
+    def lazy_files(filenames, reader):
+        '''
+            This creates a dask array based on numpy files of the same length.
+
+            filenames : the names of the files of the same length.
+                These must be numpy files of same shape and dtype
+                This will concatenate them together as the same dask array.
+
+            reader : The function that reads the files
+        '''
+        Nfiles = len(filenames)
+        arr1 = reader(filenames[0])
+        fsize = arr1.shape[0]*arr1.shape[1]
+
+        # should try loading a file and find dtype
+        dtype = arr1.dtype
+        arr_shape = arr1.shape
+
+        # the files are not chunked
+        chunks = ((1,)*Nfiles, (arr_shape[0],), (arr_shape[1],) )
+
+        name = 'lazy_files-' + tokenize(*filenames)  # unique identifier
+
+        def get_file(i):
+            result = reader(filenames[i])
+            return result[np.newaxis, :, :]
+
+        dsk = {(name, i, 0, 0): (get_file, i)
+                 for i in range(Nfiles)}
+
+        return Array(dsk, name, chunks, dtype)
+
+    >>>     def reader(filename):
+    ...         result = np.load(filename)
+    ...         return result[np.newaxis, :, :]
+
+    >>># create some data and save
+    >>> a1 = np.random.random((100,100))
+    >>> a2 = np.random.random((100,100))
+
+    >>> np.save("foo1.npy", a1.astype(int))
+    >>> np.save("foo2.npy", a2.astype(int))
+
+    >>> filenames = ["foo1.npy", "foo2.npy"]
+
+    >>> new_arr = lazy_files(filenames, reader)
+
+    # compute stats
+    >>> new_arr[1, 3:50, 3:50].sum()
