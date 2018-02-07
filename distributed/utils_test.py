@@ -151,6 +151,7 @@ def pristine_loop():
 @contextmanager
 def mock_ipython():
     import mock
+    from distributed._ipython_utils import remote_magic
     ip = mock.Mock()
     ip.user_ns = {}
     ip.kernel = None
@@ -161,6 +162,10 @@ def mock_ipython():
     with mock.patch('IPython.get_ipython', get_ip), \
             mock.patch('distributed._ipython_utils.get_ipython', get_ip):
         yield ip
+    # cleanup remote_magic client cache
+    for kc in remote_magic._clients.values():
+        kc.stop_channels()
+    remote_magic._clients.clear()
 
 
 def nodebug(func):
