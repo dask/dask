@@ -75,12 +75,23 @@ def _get_return_type(meta):
     return Scalar
 
 
-def new_dd_object(dsk, _name, meta, divisions):
+def new_dd_object(dsk, name, meta, divisions):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
-    return _get_return_type(meta)(dsk, _name, meta, divisions)
+    if isinstance(meta, np.ndarray):
+        import dask.array as da
+        chunks = (((np.nan,) * (len(divisions) - 1),) +
+                 tuple((d,) for d in meta.shape[1:]))
+        if len(chunks) > 1:
+            dsk = dsk.copy()
+            suffix = (0,) * (len(chunks) - 1)
+            for i in range(len(chunks[0])):
+                dsk[(name, i) + suffix] = dsk.pop((name, i))
+        return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
+    else:
+        return _get_return_type(meta)(dsk, name, meta, divisions)
 
 
 def finalize(results):
@@ -3336,7 +3347,7 @@ def map_partitions(func, *args, **kwargs):
         dask = {(name, 0):
                 (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)}
         return Scalar(merge(dask, *[arg.dask for arg in args]), name, meta)
-    elif not isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)):
+    elif not isinstance(meta, (pd.Series, pd.DataFrame, pd.Index, np.ndarray)):
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
         meta = _concat([meta])

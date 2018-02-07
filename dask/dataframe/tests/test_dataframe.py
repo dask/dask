@@ -2927,3 +2927,22 @@ def test_cumulative_multiple_columns():
             d[c + 'cp'] = d[c].cumprod()
 
     assert_eq(ddf, df)
+
+
+def test_map_partition_array():
+    import dask.array as da
+    from dask.array.utils import assert_eq
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+                       'y': [6.0, 7.0, 8.0, 9.0, 10.0]},
+                      index=['a', 'b', 'c', 'd', 'e'])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    for d in [ddf, ddf.x, ddf.y, ddf.index]:
+        x = d.map_partitions(np.asarray)
+        assert isinstance(x, da.Array)
+        assert x.chunks[0] == (np.nan, np.nan)
+
+        assert_eq(x, np.asarray(d.compute()))
+
+    x = ddf.map_partitions(lambda d: d.to_records())
+    assert_eq(x, df.to_records())

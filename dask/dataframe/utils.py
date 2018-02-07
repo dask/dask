@@ -265,6 +265,8 @@ def make_meta(x, index=None):
         return x.iloc[0:0]
     elif isinstance(x, pd.Index):
         return x[0:0]
+    elif isinstance(x, np.ndarray):
+        return x[:0]
     index = index if index is None else index[0:0]
 
     if isinstance(x, dict):
