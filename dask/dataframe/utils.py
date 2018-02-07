@@ -21,7 +21,7 @@ except ImportError:
 
 from ..core import get_deps
 from ..local import get_sync
-from ..utils import asciitable
+from ..utils import asciitable, is_arraylike
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
@@ -265,7 +265,7 @@ def make_meta(x, index=None):
         return x.iloc[0:0]
     elif isinstance(x, pd.Index):
         return x[0:0]
-    elif isinstance(x, np.ndarray):
+    elif is_arraylike(x):
         return x[:0]
     index = index if index is None else index[0:0]
 

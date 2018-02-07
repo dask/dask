@@ -877,3 +877,21 @@ def partial_by_order(*args, **kwargs):
     for i, arg in other:
         args2.insert(i, arg)
     return function(*args2, **kwargs)
+
+
+def is_arraylike(x):
+    """ Is this object a numpy array or something similar?
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> x = np.ones(5)
+    >>> is_arraylike(x)
+    True
+    >>> is_arraylike(5)
+    False
+    >>> is_arraylike('cat')
+    False
+    """
+    return (hasattr(x, '__array_ufunc__') or
+            hasattr(x, 'shape') and x.shape and hasattr(x, 'dtype'))
