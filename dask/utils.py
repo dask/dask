@@ -893,5 +893,6 @@ def is_arraylike(x):
     >>> is_arraylike('cat')
     False
     """
-    return (hasattr(x, '__array_ufunc__') or
-            hasattr(x, 'shape') and x.shape and hasattr(x, 'dtype'))
+    return (hasattr(x, '__array__') and
+            hasattr(x, 'shape') and x.shape
+            and hasattr(x, 'dtype'))
