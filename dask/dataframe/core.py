@@ -2522,19 +2522,7 @@ class DataFrame(_Frame):
         --------
         pandas.DataFrame.query
         """
-        name = 'query-%s' % tokenize(self, expr)
-        if kwargs:
-            name = name + '--' + tokenize(kwargs)
-            dsk = dict(((name, i), (apply, M.query,
-                                    ((self._name, i), (expr,), kwargs)))
-                       for i in range(self.npartitions))
-        else:
-            dsk = dict(((name, i), (M.query, (self._name, i), expr))
-                       for i in range(self.npartitions))
-
-        meta = self._meta.query(expr, **kwargs)
-        return new_dd_object(merge(dsk, self.dask), name,
-                             meta, self.divisions)
+        return self.map_partitions(M.query, expr, **kwargs)
 
     @derived_from(pd.DataFrame)
     def eval(self, expr, inplace=None, **kwargs):
