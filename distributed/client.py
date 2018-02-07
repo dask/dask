@@ -1089,6 +1089,9 @@ class Client(Node):
             may be performed on workers that are not in the `workers` set(s).
         retries: int (default to 0)
             Number of allowed automatic retries if the task fails
+        priority: Number
+            Optional prioritization of task.  Zero is default.
+            Higher priorities take precedence
 
         Examples
         --------
@@ -1110,6 +1113,7 @@ class Client(Node):
         workers = kwargs.pop('workers', None)
         resources = kwargs.pop('resources', None)
         retries = kwargs.pop('retries', None)
+        priority = kwargs.pop('priority', 0)
         allow_other_workers = kwargs.pop('allow_other_workers', False)
 
         if allow_other_workers not in (True, False, None):
@@ -1146,6 +1150,7 @@ class Client(Node):
 
         futures = self._graph_to_futures(dsk, [skey], restrictions,
                                          loose_restrictions, priority={skey: 0},
+                                         user_priority=priority,
                                          resources={skey: resources} if resources else None,
                                          retries={skey: retries} if retries else None)
 
@@ -1190,6 +1195,9 @@ class Client(Node):
             Leave empty to default to all workers (common case)
         retries: int (default to 0)
             Number of allowed automatic retries if a task fails
+        priority: Number
+            Optional prioritization of task.  Zero is default.
+            Higher priorities take precedence
 
         Examples
         --------
@@ -1228,6 +1236,7 @@ class Client(Node):
         workers = kwargs.pop('workers', None)
         retries = kwargs.pop('retries', None)
         resources = kwargs.pop('resources', None)
+        user_priority = kwargs.pop('priority', 0)
         allow_other_workers = kwargs.pop('allow_other_workers', False)
 
         if allow_other_workers and workers is None:
@@ -1286,8 +1295,11 @@ class Client(Node):
             resources = None
 
         futures = self._graph_to_futures(dsk, keys, restrictions,
-                                         loose_restrictions, priority=priority,
-                                         resources=resources, retries=retries)
+                                         loose_restrictions,
+                                         priority=priority,
+                                         resources=resources,
+                                         retries=retries,
+                                         user_priority=user_priority)
         logger.debug("map(%s, ...)", funcname(func))
 
         return [futures[tokey(k)] for k in keys]
@@ -1941,7 +1953,7 @@ class Client(Node):
 
     def _graph_to_futures(self, dsk, keys, restrictions=None,
                           loose_restrictions=None, priority=None,
-                          resources=None, retries=None):
+                          user_priority=0, resources=None, retries=None):
         with self._lock:
             keyset = set(keys)
             flatkeys = list(map(tokey, keys))
@@ -1986,6 +1998,7 @@ class Client(Node):
                                      'restrictions': restrictions or {},
                                      'loose_restrictions': loose_restrictions,
                                      'priority': priority,
+                                     'user_priority': user_priority,
                                      'resources': resources,
                                      'submitting_task': getattr(thread_state, 'key', None),
                                      'retries': retries,
@@ -2092,7 +2105,7 @@ class Client(Node):
 
     def compute(self, collections, sync=False, optimize_graph=True,
                 workers=None, allow_other_workers=False, resources=None,
-                retries=0, **kwargs):
+                retries=0, priority=0, **kwargs):
         """ Compute dask collections on cluster
 
         Parameters
@@ -2114,6 +2127,9 @@ class Client(Node):
             If a list then only the keys for the listed collections are loose
         retries: int (default to 0)
             Number of allowed automatic retries if computing a result fails
+        priority: Number
+            Optional prioritization of task.  Zero is default.
+            Higher priorities take precedence
         **kwargs:
             Options to pass to the graph optimize calls
 
@@ -2181,10 +2197,15 @@ class Client(Node):
         else:
             retries = None
 
+        if not isinstance(priority, Number):
+            priority = {k: p for c, p in priority.items()
+                             for k in self._expand_key(c)}
+
         futures_dict = self._graph_to_futures(merge(dsk2, dsk), names,
                                               restrictions, loose_restrictions,
                                               resources=resources,
-                                              retries=retries)
+                                              retries=retries,
+                                              user_priority=priority)
 
         i = 0
         futures = []
@@ -2207,7 +2228,7 @@ class Client(Node):
 
     def persist(self, collections, optimize_graph=True, workers=None,
                 allow_other_workers=None, resources=None, retries=None,
-                **kwargs):
+                priority=0, **kwargs):
         """ Persist dask collections on cluster
 
         Starts computation of the collection on the cluster in the background.
@@ -2231,6 +2252,9 @@ class Client(Node):
             If a list then only the keys for the listed collections are loose
         retries: int (default to 0)
             Number of allowed automatic retries if computing a result fails
+        priority: Number
+            Optional prioritization of task.  Zero is default.
+            Higher priorities take precedence
         kwargs:
             Options to pass to the graph optimize calls
 
@@ -2272,9 +2296,15 @@ class Client(Node):
         else:
             retries = None
 
+        if not isinstance(priority, Number):
+            priority = {k: p for c, p in priority.items()
+                             for k in self._expand_key(c)}
+
         futures = self._graph_to_futures(dsk, names, restrictions,
                                          loose_restrictions,
-                                         resources=resources, retries=retries)
+                                         resources=resources,
+                                         retries=retries,
+                                         user_priority=priority)
 
         postpersists = [c.__dask_postpersist__() for c in collections]
         result = [func({k: futures[k] for k in flatten(c.__dask_keys__())}, *args)

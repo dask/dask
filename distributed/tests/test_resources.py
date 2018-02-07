@@ -201,7 +201,7 @@ def test_prefer_constrained(c, s, a):
     assert s.processing[a.address]
 
 
-@pytest.mark.xfail(reason="")
+@pytest.mark.skip(reason="")
 @gen_cluster(client=True, ncores=[('127.0.0.1', 2, {'resources': {'A': 1}}),
                                   ('127.0.0.1', 2, {'resources': {'A': 1}})])
 def test_balance_resources(c, s, a, b):
@@ -246,7 +246,7 @@ def test_persist_collections(c, s, a, b):
     assert all(tokey(key) in a.data for key in y.__dask_keys__())
 
 
-@pytest.mark.xfail(reason="Should protect resource keys from optimization")
+@pytest.mark.skip(reason="Should protect resource keys from optimization")
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1, {'resources': {'A': 1}}),
                                   ('127.0.0.1', 1, {'resources': {'B': 1}})])
 def test_dont_optimize_out(c, s, a, b):

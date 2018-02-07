@@ -6,6 +6,7 @@ from functools import partial
 import itertools
 import json
 import logging
+from numbers import Number
 import operator
 import os
 import pickle
@@ -1247,7 +1248,7 @@ class Scheduler(ServerNode):
     def update_graph(self, client=None, tasks=None, keys=None,
                      dependencies=None, restrictions=None, priority=None,
                      loose_restrictions=None, resources=None,
-                     submitting_task=None, retries=None):
+                     submitting_task=None, retries=None, user_priority=0):
         """
         Add new computations to the internal dask graph
 
@@ -1321,7 +1322,11 @@ class Scheduler(ServerNode):
                 dts.dependents.add(ts)
 
         # Compute priorities
+        if isinstance(user_priority, Number):
+            user_priority = {k: user_priority for k in tasks}
+
         new_priority = priority or order(tasks)  # TODO: define order wrt old graph
+
         if submitting_task:  # sub-tasks get better priority than parent tasks
             ts = self.tasks.get(submitting_task)
             if ts is not None:
@@ -1334,7 +1339,7 @@ class Scheduler(ServerNode):
         for key in set(new_priority) & touched_keys:
             ts = self.tasks[key]
             if ts.priority is None:
-                ts.priority = (generation, new_priority[key])  # prefer old
+                ts.priority = (-user_priority.get(key, 0), generation, new_priority[key])
 
         # Ensure all runnables have a priority
         runnables = [ts for ts in touched_tasks

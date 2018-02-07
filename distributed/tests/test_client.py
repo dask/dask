@@ -1592,7 +1592,7 @@ def test_upload_file_exception_sync(loop):
                     c.upload_file(fn)
 
 
-@pytest.mark.xfail
+@pytest.mark.skip
 @gen_cluster()
 def test_multiple_clients(s, a, b):
     a = yield Client((s.ip, s.port), asynchronous=True)
@@ -2562,7 +2562,7 @@ def test_fatally_serialized_input(c, s):
         yield gen.sleep(0.01)
 
 
-@pytest.mark.xfail(reason='Use fast random selection now')
+@pytest.mark.skip(reason='Use fast random selection now')
 @gen_cluster(client=True)
 def test_balance_tasks_by_stacks(c, s, a, b):
     x = c.submit(inc, 1)
@@ -3184,7 +3184,7 @@ def test_even_load_on_startup(c, s, a, b):
     assert len(a.data) == len(b.data) == 1
 
 
-@pytest.mark.xfail
+@pytest.mark.skip
 @gen_cluster(client=True, ncores=[('127.0.0.1', 2)] * 2)
 def test_contiguous_load(c, s, a, b):
     w, x, y, z = c.map(inc, [1, 2, 3, 4])
@@ -4205,7 +4205,7 @@ def test_interleave_computations(c, s, a, b):
     assert_no_data_loss(s)
 
 
-@pytest.mark.xfail(reason="Now prefer first-in-first-out")
+@pytest.mark.skip(reason="Now prefer first-in-first-out")
 @gen_cluster(client=True, timeout=None)
 def test_interleave_computations_map(c, s, a, b):
     xs = c.map(slowinc, range(30), delay=0.02)

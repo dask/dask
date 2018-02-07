@@ -119,7 +119,7 @@ def test_eventually_steal_unknown_functions(c, s, a, b):
     assert len(b.data) >= 3
 
 
-@pytest.mark.xfail(reason='')
+@pytest.mark.skip(reason='')
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)
 def test_steal_related_tasks(e, s, a, b, c):
     futures = e.map(slowinc, range(20), delay=0.05, workers=a.address,
@@ -254,7 +254,7 @@ def test_dont_steal_resource_restrictions(c, s, a, b):
     assert len(b.task_state) == 0
 
 
-@pytest.mark.xfail(reason='no stealing of resources')
+@pytest.mark.skip(reason='no stealing of resources')
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1, {'resources': {'A': 2}})],
              timeout=3)
 def test_steal_resource_restrictions(c, s, a):
