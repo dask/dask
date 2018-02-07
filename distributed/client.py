@@ -822,7 +822,8 @@ class Client(Node):
                 raise
 
     def _heartbeat(self):
-        self.scheduler_comm.send({'op': 'heartbeat'})
+        if self.scheduler_comm:
+            self.scheduler_comm.send({'op': 'heartbeat'})
 
     def __enter__(self):
         if not self._loop_runner.is_started():

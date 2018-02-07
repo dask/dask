@@ -621,7 +621,7 @@ def test_workers_to_close(cl, s, *workers):
     s.task_duration['b'] = 4
     s.task_duration['c'] = 1
 
-    cl.map(slowinc, [1, 1, 1], key=['a-4','b-4','c-1'])
+    futures = cl.map(slowinc, [1, 1, 1], key=['a-4','b-4','c-1'])
     while sum(len(w.processing) for w in s.workers.values()) < 3:
         yield gen.sleep(0.001)
 

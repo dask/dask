@@ -211,7 +211,8 @@ class WorkerState(object):
         return get_address_host(self.address)
 
     def __repr__(self):
-        return "<Worker %r>" % (self.address,)
+        return "<Worker %r, memory: %d, processing: %d>" % (self.address,
+                len(self.has_what), len(self.processing))
 
     def __str__(self):
         return self.address

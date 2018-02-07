@@ -2804,12 +2804,14 @@ def test_client_num_fds(loop):
     psutil = pytest.importorskip('psutil')
     with cluster() as (s, [a, b]):
         proc = psutil.Process()
-        before = proc.num_fds()
-        with Client(s['address'], loop=loop) as c:
-            during = proc.num_fds()
-        after = proc.num_fds()
+        with Client(s['address'], loop=loop) as c:  # first client to start loop
+            before = proc.num_fds()                 # measure
+            for i in range(4):
+                with Client(s['address'], loop=loop):   # start more clients
+                    pass
+            after = proc.num_fds()                  # measure
 
-        assert before >= after
+        assert before == after
 
 
 @gen_cluster()

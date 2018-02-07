@@ -85,51 +85,47 @@ from distributed.diagnostics.progressbar import (ProgressWidget,
                                                  MultiProgressWidget, progress)
 
 
-@gen_cluster()
-def test_progressbar_widget(s, a, b):
-    s.update_graph(tasks=valmap(dumps_task, {'x': (inc, 1),
-                                             'y': (inc, 'x'),
-                                             'z': (inc, 'y')}),
-                   keys=['z'],
-                   dependencies={'y': {'x'}, 'z': {'y'}})
+@gen_cluster(client=True)
+def test_progressbar_widget(c, s, a, b):
+    x = c.submit(inc, 1)
+    y = c.submit(inc, x)
+    z = c.submit(inc, y)
+    yield wait(z)
 
-    progress = ProgressWidget(['z'], scheduler=(s.ip, s.port))
+    progress = ProgressWidget([z.key], scheduler=(s.ip, s.port), complete=True)
     yield progress.listen()
 
     assert progress.bar.value == 1.0
     assert '3 / 3' in progress.bar_text.value
 
-    progress = ProgressWidget(['z'], scheduler=(s.ip, s.port))
+    progress = ProgressWidget([z.key], scheduler=(s.ip, s.port))
     yield progress.listen()
 
 
-@gen_cluster()
-def test_multi_progressbar_widget(s, a, b):
-    s.update_graph(tasks=valmap(dumps_task, {'x-1': (inc, 1),
-                                             'x-2': (inc, 'x-1'),
-                                             'x-3': (inc, 'x-2'),
-                                             'y-1': (dec, 'x-3'),
-                                             'y-2': (dec, 'y-1'),
-                                             'e': (throws, 'y-2'),
-                                             'other': (inc, 123)}),
-                   keys=['e'],
-                   dependencies={'x-2': ['x-1'], 'x-3': ['x-2'],
-                                 'y-1': ['x-3'], 'y-2': ['y-1'],
-                                 'e': ['y-2']})
+@gen_cluster(client=True)
+def test_multi_progressbar_widget(c, s, a, b):
+    x1 = c.submit(inc, 1)
+    x2 = c.submit(inc, x1)
+    x3 = c.submit(inc, x2)
+    y1 = c.submit(dec, x3)
+    y2 = c.submit(dec, y1)
+    e = c.submit(throws, y2)
+    other = c.submit(inc, 123)
+    yield wait([other, e])
 
-    p = MultiProgressWidget(['e'], scheduler=(s.ip, s.port))
+    p = MultiProgressWidget([e.key], scheduler=(s.ip, s.port), complete=True)
     yield p.listen()
 
-    assert p.bars['x'].value == 1.0
-    assert p.bars['y'].value == 1.0
-    assert p.bars['e'].value == 0.0
-    assert '3 / 3' in p.bar_texts['x'].value
-    assert '2 / 2' in p.bar_texts['y'].value
-    assert '0 / 1' in p.bar_texts['e'].value
+    assert p.bars['inc'].value == 1.0
+    assert p.bars['dec'].value == 1.0
+    assert p.bars['throws'].value == 0.0
+    assert '3 / 3' in p.bar_texts['inc'].value
+    assert '2 / 2' in p.bar_texts['dec'].value
+    assert '0 / 1' in p.bar_texts['throws'].value
 
-    assert p.bars['x'].bar_style == 'success'
-    assert p.bars['y'].bar_style == 'success'
-    assert p.bars['e'].bar_style == 'danger'
+    assert p.bars['inc'].bar_style == 'success'
+    assert p.bars['dec'].bar_style == 'success'
+    assert p.bars['throws'].bar_style == 'danger'
 
     assert p.status == 'error'
     assert 'Exception' in p.elapsed_time.value
