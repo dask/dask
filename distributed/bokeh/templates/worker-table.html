@@ -16,7 +16,7 @@
         <td><a href="../worker/{{ url_escape(ws.address) }}.html">{{ws.address}}</a></td>
         <td> {{ ws.ncores }} </td>
         <td> {{ format_bytes(wi['memory_limit']) }} </td>
-        <td> <progress class="progress" value="{{ wi.get('memory-rss') }}" max="{{ wi['memory_limit'] }}"></progress> </td>
+        <td> <progress class="progress" value="{{ wi['memory'] }}" max="{{ wi['memory_limit'] }}"></progress> </td>
         <td> {{ format_time(ws.occupancy) }} </td>
         <td> {{ len(ws.processing) }} </td>
         <td> {{ len(ws.has_what) }} </td>

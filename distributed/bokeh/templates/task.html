@@ -12,7 +12,7 @@
           {% if ts.processing_on %}
           <tr>
               <th> processing on </th>
-              <td> {{ ts.processing_on.address }} </td>
+              <td><a href="../worker/{{ url_escape(ts.processing_on.address) }}.html">{{ts.processing_on.address}}</a></td>
           </tr>
           <tr>
               <th> call stack </th>
@@ -33,6 +33,10 @@
           </tr>
           {% end %}
           {% end %}
+          <tr>
+              <th> priority </th>
+              <td>{{ts.priority}}</td>
+          </tr>
       </table>
 
     <div id="dependencies-dependents" class="columns">
