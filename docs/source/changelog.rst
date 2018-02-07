@@ -23,6 +23,7 @@ DataFrame
   (:pr:`3124`) `Jim Crist`_
 - Deprecates the ``dd.to_delayed`` *function* in favor of the existing method
   (:pr:`3126`) `Jim Crist`_
+- Return dask.arrays from df.map_partitions calls when the UDF returns a numpy array (:pr:`3147`) `Matthew Rocklin`_
 
 Bag
 +++
