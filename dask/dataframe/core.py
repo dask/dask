@@ -83,7 +83,7 @@ def new_dd_object(dsk, name, meta, divisions):
     if isinstance(meta, np.ndarray):
         import dask.array as da
         chunks = (((np.nan,) * (len(divisions) - 1),) +
-                 tuple((d,) for d in meta.shape[1:]))
+                  tuple((d,) for d in meta.shape[1:]))
         if len(chunks) > 1:
             dsk = dsk.copy()
             suffix = (0,) * (len(chunks) - 1)
@@ -1658,18 +1658,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         Operations that depend on shape information, like slicing or reshaping,
         will not work.
         """
-        from ..array.core import Array
-        name = 'values-' + tokenize(self)
-        chunks = ((np.nan,) * self.npartitions,)
-        x = self._meta.values
-        if isinstance(self, DataFrame):
-            chunks = chunks + ((x.shape[1],),)
-            suffix = (0,)
-        else:
-            suffix = ()
-        dsk = {(name, i) + suffix: (getattr, key, 'values')
-               for (i, key) in enumerate(self.__dask_keys__())}
-        return Array(merge(self.dask, dsk), name, chunks, x.dtype)
+        return self.map_partitions(methods.values)
 
 
 def _raise_if_object_series(x, funcname):
