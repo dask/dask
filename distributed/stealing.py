@@ -265,12 +265,11 @@ class WorkStealing(SchedulerPlugin):
         def combined_occupancy(ws):
             return ws.occupancy + self.in_flight_occupancy[ws]
 
-        def perhaps_move_task(level, ts, sat, idl, duration, cost_multiplier):
+        def maybe_move_task(level, ts, sat, idl, duration, cost_multiplier):
             occ_idl = combined_occupancy(idl)
             occ_sat = combined_occupancy(sat)
 
-            if (occ_idl + cost_multiplier * duration
-                    <= occ_sat - duration / 2):
+            if (occ_idl + cost_multiplier * duration <= occ_sat - duration / 2):
                 self.move_task_request(ts, sat, idl)
                 log.append((start, level, ts.key, duration,
                             sat.address, occ_sat,
@@ -321,8 +320,8 @@ class WorkStealing(SchedulerPlugin):
                             stealable.remove(ts)
                             continue
 
-                        perhaps_move_task(level, ts, sat, idl,
-                                          duration, cost_multiplier)
+                        maybe_move_task(level, ts, sat, idl,
+                                        duration, cost_multiplier)
 
                 if self.cost_multipliers[level] < 20:  # don't steal from public at cost
                     stealable = self.stealable_all[level]
@@ -346,8 +345,8 @@ class WorkStealing(SchedulerPlugin):
                         idl = idle[i % len(idle)]
                         duration = sat.processing[ts]
 
-                        perhaps_move_task(level, ts, sat, idl,
-                                          duration, cost_multiplier)
+                        maybe_move_task(level, ts, sat, idl,
+                                        duration, cost_multiplier)
 
             if log:
                 self.log.append(log)

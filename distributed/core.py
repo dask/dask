@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict, deque
-import concurrent.futures
+from concurrent.futures import CancelledError
 from functools import partial
 import logging
 import six
@@ -288,7 +288,7 @@ class Server(object):
                         if type(result) is gen.Future:
                             self._ongoing_coroutines.add(result)
                             result = yield result
-                    except (CommClosedError, concurrent.futures.CancelledError) as e:
+                    except (CommClosedError, CancelledError) as e:
                         logger.warning("Lost connection to %r: %s", address, e)
                         break
                     except Exception as e:
