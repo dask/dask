@@ -894,5 +894,5 @@ def is_arraylike(x):
     False
     """
     return (hasattr(x, '__array__') and
-            hasattr(x, 'shape') and x.shape
-            and hasattr(x, 'dtype'))
+            hasattr(x, 'shape') and x.shape and
+            hasattr(x, 'dtype'))
