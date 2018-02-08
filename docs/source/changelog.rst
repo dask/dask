@@ -11,6 +11,7 @@ Array
 - Added a support object-type arrays for nansum, nanmin, and nanmax (:issue:`3133`) `Keisuke Fujii`_
 - Update error handling when len is called with empty chunks (:issue:`3058`) `Xander Johnson`_
 - Fixes a metadata bug with ``store``'s ``return_stored`` option (:pr:`3064`) `John A Kirkham`_
+- Inline ``store_chunk`` calls for ``store``'s ``return_stored`` option (:pr:`3082`) `John A Kirkham`_
 - Fix a bug in ``optimization.fuse_slice`` to properly handle when first input is ``None`` (:pr:`3076`) `James Bourbeau`_
 - Support arrays with unknown chunk sizes in percentile (:pr:`3107`) `Matthew Rocklin`_
 

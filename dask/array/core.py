@@ -18,12 +18,12 @@ import uuid
 import warnings
 
 try:
-    from cytoolz import (partition, concat, concatv, join, first,
+    from cytoolz import (partition, concat, join, first,
                          groupby, valmap, accumulate, assoc)
     from cytoolz.curried import filter, pluck
 
 except ImportError:
-    from toolz import (partition, concat, concatv, join, first,
+    from toolz import (partition, concat, join, first,
                        groupby, valmap, accumulate, assoc)
     from toolz.curried import filter, pluck
 from toolz import pipe, map, reduce
@@ -45,6 +45,7 @@ from .. import threaded, core
 from .. import sharedict
 from ..sharedict import ShareDict
 from .numpy_compat import _Recurser
+from ..optimization import cull, inline
 
 
 concatenate_lookup = Dispatch('concatenate')
@@ -892,50 +893,64 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         [e.__dask_keys__() for e in sources]
     )
 
+    keep_lock = False
+    if return_stored and not compute:
+        keep_lock = True
+
+    tgt_keys = []
     tgt_dsks = []
     store_keys = []
     store_dsks = []
     if return_stored:
         load_names = []
+        load_keys = []
         load_dsks = []
     for tgt, src, reg in zip(targets, sources, regions):
         # if out is a delayed object update dictionary accordingly
         try:
-            each_tgt_dsk = {}
-            each_tgt_dsk.update(tgt.dask)
+            tgt_dsks.append(tgt.dask)
             tgt = tgt.key
+            tgt_keys.append(tgt)
         except AttributeError:
-            each_tgt_dsk = {}
+            pass
 
         src = Array(sources_dsk, src.name, src.chunks, src.dtype)
 
         each_store_dsk = insert_to_ooc(
-            src, tgt, lock=lock, region=reg, return_stored=return_stored
+            src, tgt, lock=lock, keep_lock=keep_lock, region=reg,
+            return_stored=return_stored
         )
 
         if return_stored:
+            each_load_dsk = retrieve_from_ooc(
+                each_store_dsk.keys(), each_store_dsk
+            )
             load_names.append('load-store-%s' % src.name)
-            load_dsks.append(retrieve_from_ooc(
-                each_store_dsk.keys(),
-                each_store_dsk
-            ))
-
-        tgt_dsks.append(each_tgt_dsk)
+            load_keys.extend(each_load_dsk.keys())
+            load_dsks.append(each_load_dsk)
 
         store_keys.extend(each_store_dsk.keys())
         store_dsks.append(each_store_dsk)
 
-    store_dsks_mrg = sharedict.merge(*concatv(
-        store_dsks, tgt_dsks, [sources_dsk]
-    ))
+    tgt_dsks_mrg = sharedict.merge(*tgt_dsks)
+    store_dsks_mrg = sharedict.merge(*store_dsks)
+
+    tgt_dsks_mrg = cull(tgt_dsks_mrg, tgt_keys)[0]
+
+    store_dsks_mrg = sharedict.merge(
+        store_dsks_mrg, tgt_dsks_mrg, sources_dsk
+    )
 
     if return_stored:
+        load_dsks_mrg = sharedict.merge(*load_dsks)
+
         if compute:
             store_dlyds = [Delayed(k, store_dsks_mrg) for k in store_keys]
             store_dlyds = persist(*store_dlyds)
             store_dsks_mrg = sharedict.merge(*[e.dask for e in store_dlyds])
 
-        load_dsks_mrg = sharedict.merge(store_dsks_mrg, *load_dsks)
+        load_dsks_mrg = sharedict.merge(load_dsks_mrg, store_dsks_mrg)
+        load_dsks_mrg = cull(inline(load_dsks_mrg, store_keys), load_keys)[0]
 
         result = tuple(
             Array(load_dsks_mrg, ln, s.chunks, s.dtype)
@@ -2624,7 +2639,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     return Array(dsk2, name, chunks, dtype=dt)
 
 
-def store_chunk(x, out, index, lock, region, return_stored):
+def store_chunk(x, out, index, lock, keep_lock, region, return_stored):
     """
     A function inserted in a Dask graph for storing a chunk.
 
@@ -2638,6 +2653,8 @@ def store_chunk(x, out, index, lock, region, return_stored):
         Where to store result from ``x`` in ``out``.
     lock: Lock-like or False
         Lock to use before writing to ``out``.
+    keep_lock: bool
+        Whether to keep the lock or release it.
     region: slice-like or None
         Where relative to ``out`` to store ``x``.
     return_stored: bool
@@ -2648,7 +2665,9 @@ def store_chunk(x, out, index, lock, region, return_stored):
 
     >>> a = np.ones((5, 6))
     >>> b = np.empty(a.shape)
-    >>> store_chunk(a, b, (slice(None), slice(None)), False, None, False)
+    >>> store_chunk(
+    ...     a, b, (slice(None), slice(None)), False, False, None, False
+    ... )
     """
 
     result = None
@@ -2663,14 +2682,19 @@ def store_chunk(x, out, index, lock, region, return_stored):
         lock.acquire()
     try:
         out[subindex] = np.asanyarray(x)
-    finally:
+    except:  # noqa: E722
         if lock:
+            lock.release()
+        raise
+    else:
+        if lock and not keep_lock:
             lock.release()
 
     return result
 
 
-def insert_to_ooc(arr, out, lock=True, region=None, return_stored=False):
+def insert_to_ooc(arr, out, lock=True, keep_lock=False, region=None,
+                  return_stored=False):
     """
     Creates a Dask graph for storing chunks from ``arr`` in ``out``.
 
@@ -2683,6 +2707,9 @@ def insert_to_ooc(arr, out, lock=True, region=None, return_stored=False):
     lock: Lock-like or bool, optional
         Whether to lock or with what (default is ``True``,
         which means a ``threading.Lock`` instance).
+    keep_lock: bool, optional
+        Whether to keep the lock or release it.
+        (default is ``False``, meaning ``lock`` is released).
     region: slice-like, optional
         Where in ``out`` to store ``arr``'s results
         (default is ``None``, meaning all of ``out``).
@@ -2707,12 +2734,14 @@ def insert_to_ooc(arr, out, lock=True, region=None, return_stored=False):
     dsk = dict()
     for t, slc in zip(core.flatten(arr.__dask_keys__()), slices):
         store_key = (name,) + t[1:]
-        dsk[store_key] = (store_chunk, t, out, slc, lock, region, return_stored)
+        dsk[store_key] = (
+            store_chunk, t, out, slc, lock, keep_lock, region, return_stored
+        )
 
     return dsk
 
 
-def load_chunk(x, index, lock, region):
+def load_store_chunk(x, index, lock, kept_lock, region):
     """
     A function inserted in a Dask graph for loading a chunk.
 
@@ -2724,6 +2753,8 @@ def load_chunk(x, index, lock, region):
         Where to store result from ``x`` in ``out``.
     lock: Lock-like or False
         Lock to use before writing to ``out``.
+    kept_lock: bool
+        Whether the lock was already acquired.
     region: slice-like or None
         Where relative to ``out`` to store ``x``.
 
@@ -2731,7 +2762,9 @@ def load_chunk(x, index, lock, region):
     --------
 
     >>> a = np.ones((5, 6))
-    >>> load_chunk(a, (slice(None), slice(None)), False, None)  # doctest: +SKIP
+    >>> load_store_chunk(
+    ...     a, (slice(None), slice(None)), False, False, None
+    ... )  # doctest: +SKIP
     """
 
     result = None
@@ -2740,7 +2773,7 @@ def load_chunk(x, index, lock, region):
     if region is not None:
         subindex = fuse_slice(region, index)
 
-    if lock:
+    if lock and not kept_lock:
         lock.acquire()
     try:
         result = x[subindex]
@@ -2772,10 +2805,10 @@ def retrieve_from_ooc(keys, dsk):
     """
 
     load_dsk = dict()
-    for each_key in keys:
-        load_key = ('load-%s' % each_key[0],) + each_key[1:]
-        # Reuse the result and arguments from `store_chunk` in `load_chunk`.
-        load_dsk[load_key] = (load_chunk, each_key,) + dsk[each_key][3:-1]
+    for k in keys:
+        load_key = ('load-%s' % k[0],) + k[1:]
+        # Reuse result and arguments from `store_chunk` in `load_store_chunk`.
+        load_dsk[load_key] = (load_store_chunk, k,) + dsk[k][3:-1]
 
     return load_dsk
 
