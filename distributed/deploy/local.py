@@ -38,6 +38,11 @@ class LocalCluster(object):
         Use a falsey value like False or None for no change.
     ip: string
         IP address on which the scheduler will listen, defaults to only localhost
+    diagnostics_port: int
+        Port on which the :doc:`web` will be provided.  8787 by default, use 0
+        to choose a random port, ``None`` to disable it, or an
+        :samp:`({ip}:{port})` tuple to listen on a different IP address than
+        the scheduler.
     kwargs: dict
         Extra worker arguments, will be passed to the Worker constructor.
     service_kwargs: Dict[str, Dict]

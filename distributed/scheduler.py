@@ -976,7 +976,10 @@ class Scheduler(ServerNode):
 
             try:
                 service = v(self, io_loop=self.loop, **kwargs)
-                service.listen((listen_ip, port))
+                if isinstance(port, tuple):
+                    service.listen(port)
+                else:
+                    service.listen((listen_ip, port))
                 self.services[k] = service
             except Exception as e:
                 logger.info("Could not launch service: %r", (k, port),
