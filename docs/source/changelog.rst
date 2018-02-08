@@ -28,6 +28,7 @@ DataFrame
 Bag
 +++
 
+- Document ``bag.map_paritions`` function may recieve either a list or generator.
 
 Core
 ++++
