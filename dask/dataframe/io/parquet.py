@@ -143,54 +143,54 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols,
     return df
 
 
-def _normalize_columns(user_columns, data_columns):
-    """Normalize user- and file-provided column names
+def _normalize_index_columns(user_columns, data_columns, user_index, data_index):
+    """Normalize user and file-provided column and index names
 
     Parameters
     ----------
     user_columns : None, str or list of str
     data_columns : list of str
-
-    Returns
-    -------
-    column_names : list of str
-    out_type : {pd.Series, pd.DataFrame}
-    """
-    out_type = DataFrame
-    if user_columns is not None:
-        if isinstance(user_columns, string_types):
-            columns = [user_columns]
-            out_type = Series
-        else:
-            columns = list(user_columns)
-        column_names = columns
-    else:
-        column_names = list(data_columns)
-    return column_names, out_type
-
-
-def _normalize_index(user_index, data_index):
-    """Normalize user- and file-provided index names
-
-    Parameters
-    ----------
     user_index : None, str, or list of str
     data_index : list of str
 
     Returns
     -------
+    column_names : list of str
     index_names : list of str
+    out_type : {pd.Series, pd.DataFrame}
     """
-    if user_index is not None:
-        if user_index is False:
-            index_names = []
-        elif isinstance(user_index, string_types):
-            index_names = [user_index]
-        else:
-            index_names = list(user_index)
+    out_type = DataFrame
+    if user_columns is None:
+        column_names = list(data_columns)
+    elif isinstance(user_columns, string_types):
+        column_names = [user_columns]
+        out_type = Series
     else:
+        column_names = list(user_columns)
+
+    if user_index is None:
         index_names = data_index
-    return index_names
+    elif user_index is False:
+        index_names = []
+        # If columns aren't explicitly specified, add any index columns in the
+        # parquet file that are not already specified by the columns_kwarg to
+        # the front of list of output columns
+        if user_columns is None:
+            extra_columns = [d for d in data_index if d not in column_names]
+            column_names = extra_columns + column_names
+    elif isinstance(user_index, string_types):
+        index_names = [user_index]
+    else:
+        index_names = list(user_index)
+
+    # Remove any columns that are to be used as indices
+    column_names = [c for c in column_names if c not in index_names]
+
+    if out_type == Series and not column_names:
+        raise ValueError("column %r is part of index, specify index=False to "
+                         "read as a Series" % user_columns)
+
+    return column_names, index_names, out_type
 
 
 # ----------------------------------------------------------------------
@@ -242,8 +242,8 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     if filters is None:
         filters = []
 
-    column_names, out_type = _normalize_columns(columns, column_names)
-    index_names = _normalize_index(index, index_names)
+    column_names, index_names, out_type = _normalize_index_columns(columns, column_names,
+                                                                   index, index_names)
 
     if categories is None:
         categories = pf.categories
@@ -268,7 +268,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
     meta = _meta_from_dtypes(all_columns, dtypes, index_names, [None])
-    # fastparquet / dask don't handle multiindex
+    # fastparquet doesn't handle multiindex
     if len(index_names) > 1:
         raise ValueError("Cannot read DataFrame with MultiIndex.")
     elif len(index_names) == 0:
@@ -528,8 +528,8 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
             index_names = [name_storage_mapping.get(name, name)
                            for name in index_names]
 
-    column_names, out_type = _normalize_columns(columns, column_names)
-    index_names = _normalize_index(index, index_names)
+    column_names, index_names, out_type = _normalize_index_columns(columns, column_names,
+                                                                   index, index_names)
 
     all_columns = index_names + column_names
 
@@ -550,7 +550,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
             (task_name, i): (_read_pyarrow_parquet_piece,
                              fs,
                              piece,
-                             all_columns,
+                             column_names,
                              index_names,
                              out_type == Series,
                              dataset.partitions)
@@ -576,17 +576,28 @@ def _get_pyarrow_dtypes(schema):
 def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
                                 partitions):
     with fs.open(piece.path, mode='rb') as f:
-        table = piece.read(columns=columns, partitions=partitions,
+        table = piece.read(columns=index_cols + columns,
+                           partitions=partitions,
                            use_pandas_metadata=True,
                            file=f)
     df = table.to_pandas()
-    if (index_cols and df.index.name is None and
-            len(df.columns.intersection(index_cols))):
+    has_index = (df.index.names != [None] or
+                 type(df.index) != pd.RangeIndex)
+
+    if not has_index and index_cols:
         # Index should be set, but it isn't
         df = df.set_index(index_cols)
-    elif not index_cols and df.index.name is not None:
-        # Index shouldn't be set, but it is
+    elif has_index and df.index.names != index_cols:
+        # Index is set, but isn't correct
+        # This can happen when reading in not every column in a multi-index
         df = df.reset_index(drop=False)
+        if index_cols:
+            df = df.set_index(index_cols)
+        drop = list(set(df.columns).difference(columns))
+        if drop:
+            df = df.drop(drop, axis=1)
+        # Ensure proper ordering
+        df = df.reindex(columns, axis=1, copy=False)
 
     if is_series:
         return df[df.columns[0]]

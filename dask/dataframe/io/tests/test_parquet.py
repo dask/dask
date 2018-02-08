@@ -188,6 +188,60 @@ def test_columns_index(tmpdir, write_engine, read_engine, columns, index):
     assert_eq(df[[]], ddf2)
 
 
+def test_index_with_multi_index(tmpdir, engine):
+    fn = os.path.join(str(tmpdir), 'test.parquet')
+    index = pd.MultiIndex.from_arrays([np.arange(10), np.arange(10) + 1],
+                                      names=['x0', 'x1'])
+    df = pd.DataFrame(np.random.randn(10, 2), columns=['a', 'b'], index=index)
+    df2 = df.reset_index(drop=False)
+
+    if engine == 'fastparquet':
+        fastparquet.write(fn, df, write_index=True)
+
+        # fastparquet doesn't support multi-index
+        with pytest.raises(ValueError):
+            ddf = dd.read_parquet(fn, engine=engine)
+    else:
+        import pyarrow as pa
+        pq.write_table(pa.Table.from_pandas(df), fn)
+
+        ddf = dd.read_parquet(fn, engine=engine)
+        assert_eq(ddf, df)
+
+        d = dd.read_parquet(fn, columns=['x0', 'a'], engine=engine)
+        assert_eq(d, df[['a']])
+
+    # DataFrame output
+    d = dd.read_parquet(fn, index=False, engine=engine)
+    assert_eq(d, df2)
+
+    d = dd.read_parquet(fn, index=['a'], engine=engine)
+    assert_eq(d, df2.set_index('a')[['b']])
+
+    d = dd.read_parquet(fn, index=['x0'], engine=engine)
+    assert_eq(d, df2.set_index('x0')[['a', 'b']])
+
+    # Set columns explictly
+    d = dd.read_parquet(fn, index=False, columns=['x0', 'b'], engine=engine)
+    assert_eq(d, df2[['x0', 'b']])
+
+    d = dd.read_parquet(fn, index=['a'], columns=['x0', 'a'], engine=engine)
+    assert_eq(d, df2.set_index('a')[['x0']])
+
+    d = dd.read_parquet(fn, index=['x0'], columns=['x0', 'a'], engine=engine)
+    assert_eq(d, df2.set_index('x0')[['a']])
+
+    # Series output
+    for index in [False, 'a']:
+        for column in ['b', 'x0']:
+            d = dd.read_parquet(fn, index=index, columns=column, engine=engine)
+            sol = df2.set_index(index)[column] if index else df2[column]
+            assert_eq(d, sol)
+
+    with pytest.raises(ValueError):
+        dd.read_parquet(fn, columns='x0', engine=engine)
+
+
 @write_read_engines_xfail
 def test_no_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
