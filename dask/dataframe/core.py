@@ -81,7 +81,7 @@ def new_dd_object(dsk, name, meta, divisions):
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
-    if isinstance(meta, pd.core.base.PandasObject):
+    if isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)):
         return _get_return_type(meta)(dsk, name, meta, divisions)
     elif is_arraylike(meta):
         import dask.array as da
@@ -3327,7 +3327,7 @@ def map_partitions(func, *args, **kwargs):
         dask = {(name, 0):
                 (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)}
         return Scalar(merge(dask, *[arg.dask for arg in args]), name, meta)
-    elif not isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)) and not is_arraylike(meta):
+    elif not (isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)) or is_arraylike(meta)):
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
         meta = _concat([meta])
