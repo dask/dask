@@ -143,54 +143,71 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols,
     return df
 
 
-def _normalize_columns(user_columns, data_columns):
-    """Normalize user- and file-provided column names
+def _normalize_index_columns(user_columns, data_columns, user_index, data_index):
+    """Normalize user and file-provided column and index names
 
     Parameters
     ----------
     user_columns : None, str or list of str
     data_columns : list of str
-
-    Returns
-    -------
-    column_names : list of str
-    out_type : {pd.Series, pd.DataFrame}
-    """
-    out_type = DataFrame
-    if user_columns is not None:
-        if isinstance(user_columns, string_types):
-            columns = [user_columns]
-            out_type = Series
-        else:
-            columns = list(user_columns)
-        column_names = columns
-    else:
-        column_names = list(data_columns)
-    return column_names, out_type
-
-
-def _normalize_index(user_index, data_index):
-    """Normalize user- and file-provided index names
-
-    Parameters
-    ----------
     user_index : None, str, or list of str
     data_index : list of str
 
     Returns
     -------
+    column_names : list of str
     index_names : list of str
+    out_type : {pd.Series, pd.DataFrame}
     """
-    if user_index is not None:
-        if user_index is False:
-            index_names = []
-        elif isinstance(user_index, string_types):
-            index_names = [user_index]
-        else:
-            index_names = list(user_index)
+    specified_columns = user_columns is not None
+    specified_index = user_index is not None
+
+    out_type = DataFrame
+
+    if user_columns is None:
+        user_columns = list(data_columns)
+    elif isinstance(user_columns, string_types):
+        user_columns = [user_columns]
+        out_type = Series
     else:
+        user_columns = list(user_columns)
+
+    if user_index is None:
+        user_index = data_index
+    elif user_index is False:
+        # When index is False, use no index and all fields should be treated as
+        # columns (unless `columns` provided).
+        user_index = []
+        data_columns = data_index + data_columns
+    elif isinstance(user_index, string_types):
+        user_index = [user_index]
+    else:
+        user_index = list(user_index)
+
+    if specified_index and not specified_columns:
+        # Only `index` provided. Use specified index, and all column fields
+        # that weren't specified as indices
+        index_names = user_index
+        column_names = [x for x in data_columns if x not in index_names]
+    elif specified_columns and not specified_index:
+        # Only `columns` provided. Use specified columns, and all index fields
+        # that weren't specified as columns
+        column_names = user_columns
+        index_names = [x for x in data_index if x not in column_names]
+    elif specified_index and specified_columns:
+        # Both `index` and `columns` provided. Use as specified, but error if
+        # they intersect.
+        column_names = user_columns
+        index_names = user_index
+        if set(column_names).intersection(index_names):
+            raise ValueError("Specified index and column names must not "
+                             "intersect")
+    else:
+        # Use default columns and index from the metadata
+        column_names = data_columns
         index_names = data_index
-    return index_names
+
+    return column_names, index_names, out_type
 
 
 # ----------------------------------------------------------------------
@@ -242,8 +259,8 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     if filters is None:
         filters = []
 
-    column_names, out_type = _normalize_columns(columns, column_names)
-    index_names = _normalize_index(index, index_names)
+    column_names, index_names, out_type = _normalize_index_columns(columns, column_names,
+                                                                   index, index_names)
 
     if categories is None:
         categories = pf.categories
@@ -268,7 +285,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
     meta = _meta_from_dtypes(all_columns, dtypes, index_names, [None])
-    # fastparquet / dask don't handle multiindex
+    # fastparquet doesn't handle multiindex
     if len(index_names) > 1:
         raise ValueError("Cannot read DataFrame with MultiIndex.")
     elif len(index_names) == 0:
@@ -528,8 +545,8 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
             index_names = [name_storage_mapping.get(name, name)
                            for name in index_names]
 
-    column_names, out_type = _normalize_columns(columns, column_names)
-    index_names = _normalize_index(index, index_names)
+    column_names, index_names, out_type = _normalize_index_columns(columns, column_names,
+                                                                   index, index_names)
 
     all_columns = index_names + column_names
 
@@ -550,7 +567,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
             (task_name, i): (_read_pyarrow_parquet_piece,
                              fs,
                              piece,
-                             all_columns,
+                             column_names,
                              index_names,
                              out_type == Series,
                              dataset.partitions)
@@ -576,17 +593,27 @@ def _get_pyarrow_dtypes(schema):
 def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
                                 partitions):
     with fs.open(piece.path, mode='rb') as f:
-        table = piece.read(columns=columns, partitions=partitions,
+        table = piece.read(columns=index_cols + columns,
+                           partitions=partitions,
                            use_pandas_metadata=True,
                            file=f)
     df = table.to_pandas()
-    if (index_cols and df.index.name is None and
-            len(df.columns.intersection(index_cols))):
+    has_index = not isinstance(df.index, pd.RangeIndex)
+
+    if not has_index and index_cols:
         # Index should be set, but it isn't
         df = df.set_index(index_cols)
-    elif not index_cols and df.index.name is not None:
-        # Index shouldn't be set, but it is
+    elif has_index and df.index.names != index_cols:
+        # Index is set, but isn't correct
+        # This can happen when reading in not every column in a multi-index
         df = df.reset_index(drop=False)
+        if index_cols:
+            df = df.set_index(index_cols)
+        drop = list(set(df.columns).difference(columns))
+        if drop:
+            df = df.drop(drop, axis=1)
+        # Ensure proper ordering
+        df = df.reindex(columns=columns, copy=False)
 
     if is_series:
         return df[df.columns[0]]
@@ -725,17 +752,21 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         filesystems. To read from multiple files you can pass a globstring or a
         list of paths, with the caveat that they must all have the same
         protocol.
-    columns: list or None
-        List of column names to load
-    filters: list
+    columns : string, list or None (default)
+        Field name(s) to read in as columns in the output. By default all
+        non-index fields will be read (as determined by the pandas parquet
+        metadata, if present). Provide a single field name instead of a list to
+        read in the data as a Series.
+    filters : list
         List of filters to apply, like ``[('x', '>', 0), ...]``. This implements
         row-group (partition) -level filtering only, i.e., to prevent the
         loading of some chunks of the data, and only if relevant statistics
         have been included in the metadata.
-    index: string or None (default) or False
-        Name of index column to use if that column is sorted;
-        False to force dask to not use any column as the index
-    categories: list, dict or None
+    index : string, list, False or None (default)
+        Field name(s) to use as the output frame index. By default will be
+        inferred from the pandas parquet file metadata (if present). Use False
+        to read all fields as columns.
+    categories : list, dict or None
         For any fields listed here, if the parquet encoding is Dictionary,
         the column will be created with dtype category. Use only if it is
         guaranteed that the column is encoded as dictionary in all row-groups.
