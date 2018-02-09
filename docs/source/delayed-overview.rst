@@ -43,7 +43,7 @@ the function and generates a dask graph instead.
 
 .. code-block:: python
 
-    from dask import delayed
+    from dask.delayed import delayed
 
     output = []
     for x in data:
