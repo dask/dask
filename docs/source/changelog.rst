@@ -1,6 +1,48 @@
 Changelog
 =========
 
+1.21.1 - 2018-MM-DD
+-------------------
+
+
+1.21.0 - 2018-02-09
+-------------------
+
+-  Refactor scheduler to use TaskState objects rather than dictionaries (:pr:`1594`) `Antoine Pitrou`_
+-  Plot CPU fraction of total in workers page (:pr:`1624`) `Matthew Rocklin`_
+-  Use thread CPU time in Throttled GC (:pr:`1625`) `Antoine Pitrou`_
+-  Fix bug with ``memory_limit=None`` (:pr:`1639`) `Matthew Rocklin`_
+-  Add futures_of to top level api (:pr:`1646`) `Matthew Rocklin`_
+-  Warn on serializing large data in Client (:pr:`1636`) `Matthew Rocklin`_
+-  Fix intermittent windows failure when removing lock file (:pr:`1652`) `Antoine Pitrou`_
+-  Add diagnosis and logging of poor GC Behavior (:pr:`1635`) `Antoine Pitrou`_
+-  Add client-scheduler heartbeats (:pr:`1657`) `Matthew Rocklin`_
+-  Return dictionary of worker info in ``retire_workers`` (:pr:`1659`) `Matthew Rocklin`_
+-  Ensure dumps_function works with unhashable functions (:pr:`1662`) `Matthew Rocklin`_
+-  Collect client name ids rom client-name config variable (:pr:`1664`) `Matthew Rocklin`_
+-  Allow simultaneous use of --name and --nprocs in dask-worker (:pr:`1665`) `Matthew Rocklin`_
+-  Add support for grouped adaptive scaling and adaptive behavior overrides (:pr:`1632`) `Alexander Ford`_
+-  Share scheduler RPC between worker and client (:pr:`1673`) `Matthew Rocklin`_
+-  Allow ``retries=`` in ClientExecutor (:pr:`1672`) `@rqx`_
+-  Improve documentation for get_client and dask.compute examples (:pr:`1638`) `Scott Sievert`_
+-  Support DASK_SCHEDULER_ADDRESS environment variable in worker (:pr:`1680`) `Matthew Rocklin`_
+-  Support tuple-keys in retries (:pr:`1681`) `Matthew Rocklin`_
+-  Use relative links in bokeh dashboard (:pr:`1682`) `Matthew Rocklin`_
+-  Make message log length configurable, default to zero (:pr:`1691`) `Matthew Rocklin`_
+-  Deprecate ``Client.shutdown`` (:pr:`1699`) `Matthew Rocklin`_
+-  Add warning in configuration docs to install pyyaml (:pr:`1701`) `Cornelius Riemenschneider`_
+-  Handle nested parallelism in distributed.joblib (:pr:`1705`) `Tom Augspurger`_
+-  Don't wait for Worker.executor to shutdown cleanly when restarting process (:pr:`1708`) `Matthew Rocklin`_
+-  Add support for user defined priorities (:pr:`1651`) `Matthew Rocklin`_
+-  Catch and log OSErrors around worker lock files (:pr:`1714`) `Matthew Rocklin`_
+-  Remove worker prioritization.  Coincides with changes to dask.order (:pr:`1730`) `Matthew Rocklin`_
+-  Use process-measured memory rather than nbytes in Bokeh dashboard (:pr:`1737`) `Matthew Rocklin`_
+-  Enable serialization of Locks  (:pr:`1738`) `Matthew Rocklin`_
+-  Support Tornado 5 beta (:pr:`1735`) `Matthew Rocklin`_
+-  Cleanup remote_magic client cache after tests (:pr:`1743`) `Min RK`_
+-  Allow service ports to be specified as (host, port) (:pr:`1744`) `Bruce Merry`_
+
+
 1.20.2 - 2017-12-07
 -------------------
 
@@ -452,3 +494,8 @@ significantly without many new features.
 .. _`Xander Johnson`: https://github.com/metasyn
 .. _`Daniel Li`: https://github.com/li-dan
 .. _`Brett Naul`: https://github.com/bnaul
+.. _`Cornelius Riemenschneider`: https://github.com/corni
+.. _`Alexander Ford`: https://github.com/asford
+.. _`@rqx`: https://github.com/rqx
+.. _`Min RK`: https://github.comminrk/
+.. _`Bruce Merry`: https://github.com/bmerry
