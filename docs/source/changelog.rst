@@ -2,7 +2,26 @@ Changelog
 =========
 
 
-0.16.2 / 2018-MM-DD
+0.17.1 / 2018-MM-DD
+-------------------
+
+Array
++++++
+
+
+DataFrame
++++++++++
+
+
+Bag
++++
+
+
+Core
+++++
+
+
+0.17.0 / 2018-02-09
 -------------------
 
 Array
@@ -13,6 +32,7 @@ Array
 - Fixes a metadata bug with ``store``'s ``return_stored`` option (:pr:`3064`) `John A Kirkham`_
 - Fix a bug in ``optimization.fuse_slice`` to properly handle when first input is ``None`` (:pr:`3076`) `James Bourbeau`_
 - Support arrays with unknown chunk sizes in percentile (:pr:`3107`) `Matthew Rocklin`_
+- Tokenize scipy.sparse arrays and np.matrix (:pr:`3060`) `Roman Yurchak`_
 
 
 DataFrame
@@ -27,6 +47,8 @@ DataFrame
 - Return dask.arrays from df.map_partitions calls when the UDF returns a numpy array (:pr:`3147`) `Matthew Rocklin`_
 - Change handling of ``columns`` and ``index`` in ``dd.read_parquet`` to be more
   consistent, especially in handling of multi-indices (:pr:`3149`) `Jim Crist`_
+- fastparquet append=True allowed to create new dataset (:pr:`3097`) `Martin Durant`_
+- dtype rationalization for sql queries (:pr:`3100`) `Martin Durant`_
 
 Bag
 +++
@@ -49,6 +71,8 @@ Core
 - Adds an ``optimize_graph`` keyword to all ``to_delayed`` methods to allow
   controlling whether optimizations occur on conversion. (:pr:`3126`) `Jim Crist`_
 - Support using ``pyarrow`` for hdfs integration (:pr:`3123`) `Jim Crist`_
+- Move HDFS integration and tests into dask repo (:pr:`3083`) `Jim Crist`_
+- Remove write_bytes (:pr:`3116`) `Jim Crist`_
 
 
 0.16.1 / 2018-01-09
@@ -948,3 +972,4 @@ Other
 .. _`Xander Johnson`: https://github.com/metasyn
 .. _`Nir`: https://github.com/nirizr
 .. _`Keisuke Fujii`: https://github.com/fujiisoup
+.. _`Roman Yurchak`: https://github.com/rth
