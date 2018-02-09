@@ -28,7 +28,7 @@ DataFrame
 Bag
 +++
 
-- Document ``bag.map_paritions`` function may recieve either a list or generator.
+- Document ``bag.map_paritions`` function may recieve either a list or generator. (:pr:`3150`) `Nir`_
 
 Core
 ++++
@@ -943,3 +943,4 @@ Other
 .. _`Martijn Arts`: https://github.com/mfaafm
 .. _`Jon Mease`: https://github.com/jmmease
 .. _`Xander Johnson`: https://github.com/metasyn
+.. _`Nir`: https://github.com/nirizr
