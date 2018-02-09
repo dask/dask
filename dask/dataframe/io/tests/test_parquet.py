@@ -163,29 +163,86 @@ def test_read_list(tmpdir, write_engine, read_engine):
 
 
 @write_read_engines_xfail
-def test_auto_add_index(tmpdir, write_engine, read_engine):
+def test_columns_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
-    ddf2 = dd.read_parquet(fn, columns=['x'], index='myindex', engine=read_engine)
-    assert_eq(df[['x']], ddf2)
+    df2 = df.reset_index()
+
+    assert_eq(dd.read_parquet(fn, columns=[], engine=read_engine), df[[]])
+    assert_eq(dd.read_parquet(fn, columns=['x'], engine=read_engine), df[['x']])
+    assert_eq(dd.read_parquet(fn, index='myindex', columns=['x'], engine=read_engine), df[['x']])
+    assert_eq(dd.read_parquet(fn, index='myindex', columns=['x', 'y'], engine=read_engine), df)
+
+    assert_eq(dd.read_parquet(fn, index=False, engine=read_engine),
+              df2, check_index=False)
+    assert_eq(dd.read_parquet(fn, index=False, columns=['x', 'y'], engine=read_engine),
+              df, check_index=False)
+    assert_eq(dd.read_parquet(fn, index=False, columns=['myindex', 'x'], engine=read_engine),
+              df2[['myindex', 'x']], check_index=False)
 
 
-@write_read_engines_xfail
-def test_index_column_false_index(tmpdir, write_engine, read_engine):
-    fn = str(tmpdir)
-    ddf.to_parquet(fn, engine=write_engine)
-    ddf2 = dd.read_parquet(fn, columns=['myindex'], index=False, engine=read_engine)
-    assert_eq(pd.DataFrame(df.index), ddf2, check_index=False)
+def test_columns_index_with_multi_index(tmpdir, engine):
+    fn = os.path.join(str(tmpdir), 'test.parquet')
+    index = pd.MultiIndex.from_arrays([np.arange(10), np.arange(10) + 1],
+                                      names=['x0', 'x1'])
+    df = pd.DataFrame(np.random.randn(10, 2), columns=['a', 'b'], index=index)
+    df2 = df.reset_index(drop=False)
 
+    if engine == 'fastparquet':
+        fastparquet.write(fn, df, write_index=True)
 
-@pytest.mark.parametrize("columns", [['myindex'], []])
-@pytest.mark.parametrize("index", ['myindex', None])
-@write_read_engines_xfail
-def test_columns_index(tmpdir, write_engine, read_engine, columns, index):
-    fn = str(tmpdir)
-    ddf.to_parquet(fn, engine=write_engine)
-    ddf2 = dd.read_parquet(fn, columns=columns, index=index, engine=read_engine)
-    assert_eq(df[[]], ddf2)
+        # fastparquet doesn't support multi-index
+        with pytest.raises(ValueError):
+            ddf = dd.read_parquet(fn, engine=engine)
+    else:
+        import pyarrow as pa
+        pq.write_table(pa.Table.from_pandas(df), fn)
+
+        # Pyarrow supports multi-index reads
+        ddf = dd.read_parquet(fn, engine=engine)
+        assert_eq(ddf, df)
+
+        d = dd.read_parquet(fn, columns='a', engine=engine)
+        assert_eq(d, df['a'])
+
+        d = dd.read_parquet(fn, index=['a', 'b'], columns=['x0', 'x1'], engine=engine)
+        assert_eq(d, df2.set_index(['a', 'b'])[['x0', 'x1']])
+
+    # Just index
+    d = dd.read_parquet(fn, index=False, engine=engine)
+    assert_eq(d, df2)
+
+    d = dd.read_parquet(fn, index=['a'], engine=engine)
+    assert_eq(d, df2.set_index('a')[['b']])
+
+    d = dd.read_parquet(fn, index=['x0'], engine=engine)
+    assert_eq(d, df2.set_index('x0')[['a', 'b']])
+
+    # Just columns
+    d = dd.read_parquet(fn, columns=['x0', 'a'], engine=engine)
+    assert_eq(d, df2.set_index('x1')[['x0', 'a']])
+
+    # Both index and columns
+    d = dd.read_parquet(fn, index=False, columns=['x0', 'b'], engine=engine)
+    assert_eq(d, df2[['x0', 'b']])
+
+    for index in ['x1', 'b']:
+        d = dd.read_parquet(fn, index=index, columns=['x0', 'a'], engine=engine)
+        assert_eq(d, df2.set_index(index)[['x0', 'a']])
+
+    # Columns and index intersect
+    for index in ['a', 'x0']:
+        with pytest.raises(ValueError):
+            d = dd.read_parquet(fn, index=index, columns=['x0', 'a'], engine=engine)
+
+    # Series output
+    for ind, col, sol_df in [(None, 'x0', df2.set_index('x1')),
+                             (False, 'b', df2),
+                             (False, 'x0', df2),
+                             ('a', 'x0', df2.set_index('a')),
+                             ('a', 'b', df2.set_index('a'))]:
+        d = dd.read_parquet(fn, index=ind, columns=col, engine=engine)
+        assert_eq(d, sol_df[col])
 
 
 @write_read_engines_xfail

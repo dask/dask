@@ -25,6 +25,8 @@ DataFrame
 - Deprecates the ``dd.to_delayed`` *function* in favor of the existing method
   (:pr:`3126`) `Jim Crist`_
 - Return dask.arrays from df.map_partitions calls when the UDF returns a numpy array (:pr:`3147`) `Matthew Rocklin`_
+- Change handling of ``columns`` and ``index`` in ``dd.read_parquet`` to be more
+  consistent, especially in handling of multi-indices (:pr:`3149`) `Jim Crist`_
 
 Bag
 +++
@@ -945,3 +947,4 @@ Other
 .. _`Jon Mease`: https://github.com/jmmease
 .. _`Xander Johnson`: https://github.com/metasyn
 .. _`Nir`: https://github.com/nirizr
+.. _`Keisuke Fujii`: https://github.com/fujiisoup
