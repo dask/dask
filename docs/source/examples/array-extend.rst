@@ -124,14 +124,14 @@ takes filenames and a reader:
         '''
         Nfiles = len(filenames)
         arr1 = reader(filenames[0])
-        fsize = arr1.shape[0]*arr1.shape[1]
 
         # should try loading a file and find dtype
         dtype = arr1.dtype
         arr_shape = arr1.shape
 
         # the files are not chunked
-        chunks = ((1,)*Nfiles, (arr_shape[0],), (arr_shape[1],) )
+        chunks = [(1,)*Nfiles]
+        chunks.extend([(sh, ) for sh in arr_shape])
 
         name = 'lazy_files-' + tokenize(*filenames)  # unique identifier
 
@@ -145,12 +145,12 @@ takes filenames and a reader:
         return Array(dsk, name, chunks, dtype)
 
     >>>     def reader(filename):
-    ...         result = np.load(filename)
-    ...         return result[np.newaxis, :, :]
+    ...         return np.load(filename)
 
-    >>># create some data and save
-    >>> a1 = np.random.random((100,100))
-    >>> a2 = np.random.random((100,100))
+    >>> import numpy as np
+    >>> # create some data and save
+    >>> a1 = np.ones((100,100))
+    >>> a2 = np.ones((100,100))
 
     >>> np.save("foo1.npy", a1.astype(int))
     >>> np.save("foo2.npy", a2.astype(int))
@@ -160,4 +160,5 @@ takes filenames and a reader:
     >>> new_arr = lazy_files(filenames, reader)
 
     # compute stats
-    >>> new_arr[1, 3:50, 3:50].sum()
+    >>> new_arr[1, 3:50, 3:50].sum().compute()
+    2209
