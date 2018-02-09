@@ -1294,7 +1294,8 @@ def test_store_regions():
     at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = store(
-        [a, b], [at, bt], regions=region, compute=False, return_stored=True
+        [a, b], [at, bt], regions=region,
+        compute=False, return_stored=True
     )
     assert isinstance(v, tuple)
     assert all([isinstance(e, da.Array) for e in v])
