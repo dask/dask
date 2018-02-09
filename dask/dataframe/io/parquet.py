@@ -175,6 +175,8 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
     if user_index is None:
         user_index = data_index
     elif user_index is False:
+        # When index is False, use no index and all fields should be treated as
+        # columns (unless `columns` provided).
         user_index = []
         data_columns = data_index + data_columns
     elif isinstance(user_index, string_types):
@@ -183,18 +185,25 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
         user_index = list(user_index)
 
     if specified_index and not specified_columns:
+        # Only `index` provided. Use specified index, and all column fields
+        # that weren't specified as indices
         index_names = user_index
         column_names = [x for x in data_columns if x not in index_names]
     elif specified_columns and not specified_index:
+        # Only `columns` provided. Use specified columns, and all index fields
+        # that weren't specified as columns
         column_names = user_columns
         index_names = [x for x in data_index if x not in column_names]
     elif specified_index and specified_columns:
+        # Both `index` and `columns` provided. Use as specified, but error if
+        # they intersect.
         column_names = user_columns
         index_names = user_index
         if set(column_names).intersection(index_names):
             raise ValueError("Specified index and column names must not "
                              "intersect")
     else:
+        # Use default columns and index from the metadata
         column_names = data_columns
         index_names = data_index
 
@@ -589,8 +598,7 @@ def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
                            use_pandas_metadata=True,
                            file=f)
     df = table.to_pandas()
-    has_index = (df.index.names != [None] or
-                 type(df.index) != pd.RangeIndex)
+    has_index = not isinstance(df.index, pd.RangeIndex)
 
     if not has_index and index_cols:
         # Index should be set, but it isn't
