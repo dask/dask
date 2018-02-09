@@ -161,6 +161,10 @@ def size(x):
     return x.size
 
 
+def values(df):
+    return df.values
+
+
 def sample(df, state, frac, replace):
     rs = np.random.RandomState(state)
     return df.sample(random_state=rs, frac=frac, replace=replace) if len(df) > 0 else df

@@ -10,7 +10,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.utils import put_lines
+from dask.utils import put_lines, M
 
 from dask.dataframe.core import repartition_divisions, aca, _concat, Scalar
 from dask.dataframe import methods
@@ -2936,3 +2936,49 @@ def test_cumulative_multiple_columns():
             d[c + 'cp'] = d[c].cumprod()
 
     assert_eq(ddf, df)
+
+
+@pytest.mark.parametrize('func', [np.asarray, M.to_records])
+def test_map_partition_array(func):
+    import dask.array as da
+    from dask.array.utils import assert_eq
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+                       'y': [6.0, 7.0, 8.0, 9.0, 10.0]},
+                      index=['a', 'b', 'c', 'd', 'e'])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    for pre in [lambda a: a,
+                lambda a: a.x,
+                lambda a: a.y,
+                lambda a: a.index]:
+
+        try:
+            expected = func(pre(df))
+        except Exception:
+            continue
+        x = pre(ddf).map_partitions(func)
+        assert_eq(x, expected)
+
+        assert isinstance(x, da.Array)
+        assert x.chunks[0] == (np.nan, np.nan)
+
+
+def test_map_partition_sparse():
+    sparse = pytest.importorskip('sparse')
+    import dask.array as da
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+                       'y': [6.0, 7.0, 8.0, 9.0, 10.0]},
+                      index=['a', 'b', 'c', 'd', 'e'])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def f(d):
+        return sparse.COO(np.array(d))
+
+    for pre in [lambda a: a,
+                lambda a: a.x]:
+        expected = f(pre(df))
+        result = pre(ddf).map_partitions(f)
+        assert isinstance(result, da.Array)
+        computed = result.compute()
+        assert (computed.data == expected.data).all()
+        assert (computed.coords == expected.coords).all()

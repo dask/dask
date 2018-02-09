@@ -86,6 +86,14 @@ However these arrays do not have known chunk sizes (dask.dataframe does not
 track the number of rows in each partition) and so some operations like slicing
 will not operate correctly.
 
+If you have a function that converts a Pandas dataframe into a Numpy array
+then calling ``map_partitions`` with that function on a Dask dataframe will
+produce a Dask array.
+
+.. code-block:: python
+
+   >>> x = df.map_partitions(np.asarray)
+
 
 Interactions with NumPy arrays
 ------------------------------

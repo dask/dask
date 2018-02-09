@@ -23,7 +23,8 @@ from .. import threaded
 from ..compatibility import apply, operator_div, bind_method
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
-                     memory_repr, put_lines, M, key_split, OperatorMethodMixin)
+                     memory_repr, put_lines, M, key_split, OperatorMethodMixin,
+                     is_arraylike)
 from ..base import Base, tokenize, dont_optimize, is_dask_collection
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
@@ -75,12 +76,25 @@ def _get_return_type(meta):
     return Scalar
 
 
-def new_dd_object(dsk, _name, meta, divisions):
+def new_dd_object(dsk, name, meta, divisions):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
-    return _get_return_type(meta)(dsk, _name, meta, divisions)
+    if isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)):
+        return _get_return_type(meta)(dsk, name, meta, divisions)
+    elif is_arraylike(meta):
+        import dask.array as da
+        chunks = (((np.nan,) * (len(divisions) - 1),) +
+                  tuple((d,) for d in meta.shape[1:]))
+        if len(chunks) > 1:
+            dsk = dsk.copy()
+            suffix = (0,) * (len(chunks) - 1)
+            for i in range(len(chunks[0])):
+                dsk[(name, i) + suffix] = dsk.pop((name, i))
+        return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
+    else:
+        return _get_return_type(meta)(dsk, name, meta, divisions)
 
 
 def finalize(results):
@@ -1647,18 +1661,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         Operations that depend on shape information, like slicing or reshaping,
         will not work.
         """
-        from ..array.core import Array
-        name = 'values-' + tokenize(self)
-        chunks = ((np.nan,) * self.npartitions,)
-        x = self._meta.values
-        if isinstance(self, DataFrame):
-            chunks = chunks + ((x.shape[1],),)
-            suffix = (0,)
-        else:
-            suffix = ()
-        dsk = {(name, i) + suffix: (getattr, key, 'values')
-               for (i, key) in enumerate(self.__dask_keys__())}
-        return Array(merge(self.dask, dsk), name, chunks, x.dtype)
+        return self.map_partitions(methods.values)
 
 
 def _raise_if_object_series(x, funcname):
@@ -3324,7 +3327,7 @@ def map_partitions(func, *args, **kwargs):
         dask = {(name, 0):
                 (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)}
         return Scalar(merge(dask, *[arg.dask for arg in args]), name, meta)
-    elif not isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)):
+    elif not (isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)) or is_arraylike(meta)):
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
         meta = _concat([meta])
