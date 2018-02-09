@@ -159,6 +159,8 @@ takes filenames and a reader:
 
     >>> new_arr = lazy_files(filenames, reader)
 
-    # compute stats
+    # compute stats of a slice
     >>> new_arr[1, 3:50, 3:50].sum().compute()
     2209
+
+This may be useful when processing time series of images, for instance.
