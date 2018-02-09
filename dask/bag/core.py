@@ -616,6 +616,10 @@ class Bag(Base):
         Parameters
         ----------
         func : callable
+            The function to be called on every partition.
+            This function should expect an ``Iterator`` or ``Iterable`` for
+            every partition and should return an ``Iterator`` or ``Iterable``
+            in return.
         *args, **kwargs : Bag, Item, Delayed, or object
             Arguments and keyword arguments to pass to ``func``.
             Partitions from this bag will be the first argument, and these will
