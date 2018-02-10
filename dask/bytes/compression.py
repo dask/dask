@@ -33,10 +33,17 @@ with ignoring(ImportError):
     decompress['snappy'] = snappy.decompress
 
 
-with ignoring(ImportError):
-    import lz4
-    compress['lz4'] = lz4.LZ4_compress
-    decompress['lz4'] = lz4.LZ4_uncompress
+try:
+    import lz4.block
+    compress['lz4'] = lz4.block.compress
+    compress['lz4'] = lz4.block.decompress
+except ImportError:
+    try:
+        import lz4
+        compress['lz4'] = lz4.LZ4_compress
+        compress['lz4'] = lz4.LZ4_uncompress
+    except ImportError:
+        pass
 
 with ignoring(ImportError):
     from ..compatibility import LZMAFile, lzma_compress, lzma_decompress
