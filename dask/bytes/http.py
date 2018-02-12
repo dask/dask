@@ -78,7 +78,7 @@ class HTTPFileSystem(core.FileSystem):
     def ukey(self, path):
         """Unique identifier, so we can tell if a file changed"""
         # Could do HEAD here?
-        return tokenize(self._make_url(url))
+        return tokenize(self._make_url(path))
 
     def size(self, path):
         """Size in bytes of the file at path"""
