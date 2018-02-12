@@ -12,12 +12,12 @@ on Cloud services, like Amazon Web Services, Google Compute Engine, or
 Microsoft Azure.
 
 If you already have Python environments running in a pre-existing Kubernetes
-cluster then you may prefer the :doc:`Kubernetes native` documentation, which
-is a bit lighter weight.
+cluster then you may prefer the :doc:`Kubernetes native<kubernetes-native>`
+documentation, which is a bit lighter weight.
 
 
 Launch Kubernetes Cluster
-~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------
 
 This document assumes that you have a Kubernetes cluster and Helm installed.
 
@@ -36,7 +36,7 @@ Alternatively you may want to experiment with Kubernetes locally using
 
 
 Helm Install Dask
-~~~~~~~~~~~~~~~~~
+-----------------
 
 Dask maintains a Helm repository at https://dask.github.io/helm-chart . You can
 add this to your local helm installation as follows (you should have installed
@@ -54,7 +54,7 @@ also a Jupyter server.
 
 
 Verify Deployment
-~~~~~~~~~~~~~~~~~
+-----------------
 
 This might make a minute to deploy.  You can check on the status with
 ``kubectl``::
@@ -93,7 +93,7 @@ can list all active helm deployments with::
 
 
 Connect to Dask and Jupyter
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------
 
 When we ran `kubectl get services` we saw some externally visible IPs
 
@@ -123,12 +123,13 @@ Although you don't need to use this address, the Dask client will find this
 variable automatically.
 
 .. code-block:: python
+
    from dask.distributed import Client, config
    client = Client()
 
 
 Configure Environment
-~~~~~~~~~~~~~~~~~~~~~
+---------------------
 
 By default the Helm deployment launches three workers using two cores each and
 a standard conda environment.  We can customize this environment by creating a
@@ -185,7 +186,7 @@ list``
 
 
 Check status and logs
-~~~~~~~~~~~~~~~~~~~~~
+---------------------
 
 For standard issues you should be able to see worker status and logs using the
 Dask dashboard (in particular see the worker links from the ``info/`` page).
@@ -228,7 +229,7 @@ their logs with the following commands
 
 
 Delete Helm deployment
-~~~~~~~~~~~~~~~~~~~~~~
+----------------------
 
 You can always delete a helm deployment using its name::
 
@@ -237,8 +238,9 @@ You can always delete a helm deployment using its name::
 Note that this does not destroy any clusters that you may have allocated on a
 Cloud service, you will need to delete those explicitly.
 
+
 Avoid the Jupyter Server
-~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------
 
 Sometimes you do not need to run a Jupyter server alongside your Dask cluster.
 A simple way to avoid the extra pod is to set ``replicas: 0`` within your
