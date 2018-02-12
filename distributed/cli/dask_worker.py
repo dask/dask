@@ -14,6 +14,7 @@ from distributed.security import Security
 from distributed.cli.utils import (check_python_3, uri_from_host_port,
                                    install_signal_handlers)
 from distributed.comm import get_address_host_port
+from distributed.preloading import validate_preload_argv
 from distributed.proctitle import (enable_proctitle_on_children,
                                    enable_proctitle_on_current)
 
@@ -27,7 +28,7 @@ logger = logging.getLogger('distributed.dask_worker')
 pem_file_option_type = click.Path(exists=True, resolve_path=True)
 
 
-@click.command()
+@click.command(context_settings=dict(ignore_unknown_options=True))
 @click.argument('scheduler', type=str, required=False)
 @click.option('--tls-ca-file', type=pem_file_option_type, default=None,
               help="CA cert(s) file for TLS (in PEM format)")
@@ -89,14 +90,16 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help="Seconds to wait for a scheduler before closing")
 @click.option('--bokeh-prefix', type=str, default=None,
               help="Prefix for the bokeh app")
-@click.option('--preload', type=str, multiple=True,
+@click.option('--preload', type=str, multiple=True, is_eager=True,
               help='Module that should be loaded by each worker process '
                    'like "foo.bar" or "/path/to/foo.py"')
+@click.argument('preload_argv', nargs=-1,
+                type=click.UNPROCESSED, callback=validate_preload_argv)
 def main(scheduler, host, worker_port, listen_address, contact_address,
          nanny_port, nthreads, nprocs, nanny, name,
          memory_limit, pid_file, reconnect, resources, bokeh,
          bokeh_port, local_directory, scheduler_file, interface,
-         death_timeout, preload, bokeh_prefix, tls_ca_file,
+         death_timeout, preload, preload_argv, bokeh_prefix, tls_ca_file,
          tls_cert, tls_key):
     enable_proctitle_on_current()
     enable_proctitle_on_children()
@@ -212,7 +215,8 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
                  services=services, loop=loop, resources=resources,
                  memory_limit=memory_limit, reconnect=reconnect,
                  local_dir=local_directory, death_timeout=death_timeout,
-                 preload=preload, security=sec, contact_address=contact_address,
+                 preload=preload, preload_argv=preload_argv,
+                 security=sec, contact_address=contact_address,
                  name=name if nprocs == 1 else name + '-' + str(i),
                  **kwargs)
                for i in range(nprocs)]

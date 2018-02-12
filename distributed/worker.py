@@ -82,7 +82,7 @@ class WorkerBase(ServerNode):
                  services=None, service_ports=None, name=None,
                  reconnect=True, memory_limit='auto',
                  executor=None, resources=None, silence_logs=None,
-                 death_timeout=None, preload=(), security=None,
+                 death_timeout=None, preload=(), preload_argv=[], security=None,
                  contact_address=None, memory_monitor_interval=200, **kwargs):
 
         self._setup_logging()
@@ -102,6 +102,7 @@ class WorkerBase(ServerNode):
         self.available_resources = (resources or {}).copy()
         self.death_timeout = death_timeout
         self.preload = preload
+        self.preload_argv = preload_argv,
         self.contact_address = contact_address
         self.memory_monitor_interval = memory_monitor_interval
         if silence_logs:
@@ -345,7 +346,7 @@ class WorkerBase(ServerNode):
             protocol, listen_host = listen_host.split('://')
 
         self.name = self.name or self.address
-        preload_modules(self.preload, parameter=self, file_dir=self.local_dir)
+        preload_modules(self.preload, parameter=self, file_dir=self.local_dir, argv=self.preload_argv)
         # Services listen on all addresses
         # Note Nanny is not a "real" service, just some metadata
         # passed in service_ports...

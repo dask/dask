@@ -296,3 +296,64 @@ def test_preload_module(loop):
                         c.scheduler.address
     finally:
         shutil.rmtree(tmpdir)
+
+
+PRELOAD_COMMAND_TEXT = """
+import click
+_config = {}
+
+@click.command()
+@click.option("--passthrough", type=str, default="default")
+def dask_setup(scheduler, passthrough):
+    _config["passthrough"] = passthrough
+
+def get_passthrough():
+    return _config["passthrough"]
+"""
+
+
+def test_preload_command(loop):
+
+    def check_passthrough():
+        import passthrough_info
+        return passthrough_info.get_passthrough()
+
+    tmpdir = tempfile.mkdtemp()
+    try:
+        path = os.path.join(tmpdir, 'passthrough_info.py')
+        with open(path, 'w') as f:
+            f.write(PRELOAD_COMMAND_TEXT)
+
+        with tmpfile() as fn:
+            print(fn)
+            with popen(['dask-scheduler', '--scheduler-file', fn,
+                        '--preload', path, "--passthrough", "foobar"]):
+                with Client(scheduler_file=fn, loop=loop) as c:
+                    assert c.run_on_scheduler(check_passthrough) == \
+                        "foobar"
+    finally:
+        shutil.rmtree(tmpdir)
+
+
+def test_preload_command_default(loop):
+
+    def check_passthrough():
+        import passthrough_info
+        return passthrough_info.get_passthrough()
+
+    tmpdir = tempfile.mkdtemp()
+    try:
+        path = os.path.join(tmpdir, 'passthrough_info.py')
+        with open(path, 'w') as f:
+            f.write(PRELOAD_COMMAND_TEXT)
+
+        with tmpfile() as fn2:
+            print(fn2)
+            with popen(['dask-scheduler', '--scheduler-file', fn2,
+                        '--preload', path], stdout=sys.stdout, stderr=sys.stderr):
+                with Client(scheduler_file=fn2, loop=loop) as c:
+                    assert c.run_on_scheduler(check_passthrough) == \
+                        "default"
+
+    finally:
+        shutil.rmtree(tmpdir)

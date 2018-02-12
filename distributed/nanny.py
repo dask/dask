@@ -42,7 +42,7 @@ class Nanny(ServerNode):
                  ncores=None, loop=None, local_dir=None, services=None,
                  name=None, memory_limit='auto', reconnect=True,
                  validate=False, quiet=False, resources=None, silence_logs=None,
-                 death_timeout=None, preload=(), security=None,
+                 death_timeout=None, preload=(), preload_argv=[], security=None,
                  contact_address=None, listen_address=None, **kwargs):
         if scheduler_file:
             cfg = json_load_robust(scheduler_file)
@@ -60,6 +60,8 @@ class Nanny(ServerNode):
         self.resources = resources
         self.death_timeout = death_timeout
         self.preload = preload
+        self.preload_argv = preload_argv
+
         self.contact_address = contact_address
         self.memory_terminate_fraction = config.get('worker-memory-terminate', 0.95)
 
@@ -203,6 +205,7 @@ class Nanny(ServerNode):
                                    silence_logs=self.silence_logs,
                                    death_timeout=self.death_timeout,
                                    preload=self.preload,
+                                   preload_argv=self.preload_argv,
                                    security=self.security,
                                    contact_address=self.contact_address),
                 worker_start_args=(start_arg,),

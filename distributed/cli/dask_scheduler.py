@@ -16,7 +16,7 @@ from distributed.security import Security
 from distributed.utils import get_ip_interface, ignoring
 from distributed.cli.utils import (check_python_3, install_signal_handlers,
                                    uri_from_host_port)
-from distributed.preloading import preload_modules
+from distributed.preloading import preload_modules, validate_preload_argv
 from distributed.proctitle import (enable_proctitle_on_children,
                                    enable_proctitle_on_current)
 
@@ -26,7 +26,7 @@ logger = logging.getLogger('distributed.scheduler')
 pem_file_option_type = click.Path(exists=True, resolve_path=True)
 
 
-@click.command()
+@click.command(context_settings=dict(ignore_unknown_options=True))
 @click.option('--host', type=str, default='',
               help="URI, IP or hostname of this server")
 @click.option('--port', type=int, default=None, help="Serving port")
@@ -58,11 +58,14 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               "cluster is on a shared network file system.")
 @click.option('--local-directory', default='', type=str,
               help="Directory to place scheduler files")
-@click.option('--preload', type=str, multiple=True,
-              help='Module that should be loaded by each worker process like "foo.bar" or "/path/to/foo.py"')
+@click.option('--preload', type=str, multiple=True, is_eager=True,
+              help='Module that should be loaded by each worker process '
+                   'like "foo.bar" or "/path/to/foo.py"')
+@click.argument('preload_argv', nargs=-1,
+                type=click.UNPROCESSED, callback=validate_preload_argv)
 def main(host, port, bokeh_port, show, _bokeh, bokeh_whitelist, bokeh_prefix,
-         use_xheaders, pid_file, scheduler_file, interface,
-         local_directory, preload, tls_ca_file, tls_cert, tls_key):
+        use_xheaders, pid_file, scheduler_file, interface,
+        local_directory, preload, preload_argv, tls_ca_file, tls_cert, tls_key):
 
     enable_proctitle_on_current()
     enable_proctitle_on_children()
@@ -119,7 +122,7 @@ def main(host, port, bokeh_port, show, _bokeh, bokeh_whitelist, bokeh_prefix,
                           scheduler_file=scheduler_file,
                           security=sec)
     scheduler.start(addr)
-    preload_modules(preload, parameter=scheduler, file_dir=local_directory)
+    preload_modules(preload, parameter=scheduler, file_dir=local_directory, argv=preload_argv)
 
     logger.info('Local Directory: %26s', local_directory)
     logger.info('-' * 47)
