@@ -166,7 +166,7 @@ class HTTPFile(object):
         else:
             end = self.loc + length
         self. _fetch(self.loc, end)
-        data = self.cache[self.loc - self.start:end - self.loc]
+        data = self.cache[self.loc - self.start:end]
         self.loc = end
         return data
 
@@ -205,6 +205,10 @@ class HTTPFile(object):
         headers['Range'] = 'bytes=%i-%i' % (start, end + 1)
         r = self.session.get(self.url, headers=headers, **kwargs)
         if r.ok:
+            if len(r.content) > end - start:
+                raise RuntimeError('Received more data than requested, perhaps'
+                                   'server does not support the Range header;'
+                                   'try not loading HTTP data in chunks.')
             return r.content
         else:
             r.raise_for_status()
@@ -241,6 +245,7 @@ class HTTPFile(object):
 def file_size(url, session, **kwargs):
     """Call HEAD on the server to get file size"""
     r = session.head(url, **kwargs)
+    r.raise_for_status()
     if 'Content-Length' in r.headers:
         return int(r.headers['Content-Length'])
     else:
