@@ -251,6 +251,8 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
         index_names, column_names, storage_name_mapping, column_index_names = (
             _parse_pandas_metadata(json.loads(pandas_md[0]))
         )
+        column_names = [n for n in index_names
+                        if n != (index or "")] + column_names
     else:
         raise ValueError("File has multiple entries for 'pandas' metadata")
 

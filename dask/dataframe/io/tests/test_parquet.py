@@ -1025,3 +1025,30 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
 
     with pytest.raises(TypeError):
         ddf.to_parquet(fn,  engine=engine, unknown_key='unknown_value')
+
+
+def test_user_index(tmpdir):
+    check_fastparquet()
+    engine = 'fastparquet'
+    fn = os.path.join(str(tmpdir), 'data.parq')
+    df = pd.DataFrame(np.random.randn(10, 2), columns=['a', 'b'],
+                      index=pd.MultiIndex.from_arrays(
+                          [np.arange(10), np.arange(10) + 1],
+                          names=['x0', 'x1']))
+    df.to_parquet(fn, write_index=True, engine='fastparquet')
+
+    with pytest.raises(Exception):
+        # You get ValueError in fastparquet, NotImplementedError in pyarrow
+        dd.read_parquet(fn, engine=engine)
+
+    d = dd.read_parquet(fn, index=False, engine=engine)
+    assert d.columns.tolist() == ['x0', 'x1', 'a', 'b']
+    assert_eq(d, df.reset_index())
+
+    d = dd.read_parquet(fn, index=['a'], engine=engine)
+    assert d.columns.tolist() == ['x0', 'x1', 'b']
+    assert_eq(d, df.reset_index().set_index('a'))
+
+    d = dd.read_parquet(fn, index=['x0'], engine=engine)
+    assert d.columns.tolist() == ['x1', 'a', 'b']
+    assert_eq(d, df.reset_index().set_index('x0'))
