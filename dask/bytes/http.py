@@ -29,19 +29,18 @@ class HTTPFileSystem(core.FileSystem):
         self.kwargs = storage_options
         self.session = requests.Session()
         self.root = root
+        if 'port' in storage_options:
+            self.root += ':%i' % storage_options.pop('port')
+        self.query = storage_options.pop('url_query', None)
 
     @classmethod
     def http(cls, **storage_options):
         root = 'http://' + storage_options.pop('host')
-        if 'port' in storage_options:
-            root += ':%i' % storage_options.pop('port')
         return cls(root=root, **storage_options)
 
     @classmethod
     def https(cls, **storage_options):
         root = 'https://' + storage_options.pop('host')
-        if 'port' in storage_options:
-            root += ':%i' % storage_options.pop('port')
         return cls(root=root, **storage_options)
 
     def glob(self, path):
@@ -51,6 +50,12 @@ class HTTPFileSystem(core.FileSystem):
     def mkdirs(self, path):
         """Make any intermediate directories to make path writable"""
         raise NotImplementedError
+
+    def _make_url(self, path):
+        url = self.root + path
+        if self.query:
+            url += "?" + self.query
+        return url
 
     def open(self, path, mode='rb', block_size=None, **kwargs):
         """Make a file-like object
@@ -67,17 +72,18 @@ class HTTPFileSystem(core.FileSystem):
         if mode != 'rb':
             raise NotImplementedError
         block_size = block_size if block_size is not None else self.block_size
-        return HTTPFile(self.root + path, self.session, block_size,
+        return HTTPFile(self._make_url(path), self.session, block_size,
                         **self.kwargs)
 
     def ukey(self, path):
         """Unique identifier, so we can tell if a file changed"""
         # Could do HEAD here?
-        return tokenize(self.root + path)
+        return tokenize(self._make_url(url))
 
     def size(self, path):
         """Size in bytes of the file at path"""
-        return file_size(path, session=self.session, **self.kwargs)
+        return file_size(self._make_url(path), session=self.session,
+                         **self.kwargs)
 
 
 core._filesystems['http'] = HTTPFileSystem.http
