@@ -112,55 +112,58 @@ takes filenames and a reader:
     from dask.array import Array
     from dask.base import tokenize
 
-    def lazy_files(filenames, reader):
+    def read_custom(reader, filenames):
         '''
-            This creates a dask array based on numpy files of the same length.
+        This creates a dask array based on numpy files of the same length.
 
-            filenames : the names of the files of the same length.
-                These must be numpy files of same shape and dtype
-                This will concatenate them together as the same dask array.
+        Parameters
+        ----------
+        reader: callable
+            The function that reads the files
 
-            reader : The function that reads the files
+        filenames : List[str]
+            the names of the files of the same length.
+            These must be numpy files of same shape and dtype
+            This will concatenate them together as the same dask array.
+
+        Examples
+        --------
+        >>> read_custom(np.load, ['foo1.npy', 'foo1.npy'])
+        >>> read_custom(skimage.io.imread, ['1.jpg', '2.jpg', '3.jpg'])
         '''
-        Nfiles = len(filenames)
-        arr1 = reader(filenames[0])
+        # Read one file to get example shape and dtype
+        example = reader(filenames[0])
 
-        # should try loading a file and find dtype
-        dtype = arr1.dtype
-        arr_shape = arr1.shape
+        chunks = ((1,) * len(filenames),) + tuple((d,) for d in example.shape)
 
-        # the files are not chunked
-        chunks = [(1,)*Nfiles]
-        chunks.extend([(sh, ) for sh in arr_shape])
+        name = 'read_custom-' + tokenize(reader, *filenames)  # unique identifier
 
-        name = 'lazy_files-' + tokenize(*filenames)  # unique identifier
+        dsk = {(name, i, 0, 0): (operator.getitem,
+                                  (reader, fn),  # read array from file
+                                  (None, Ellipsis))  # add extra dimension like x[None, ...]
+               for i, fn in enumerate(filenames)}
 
-        def get_file(i):
-            result = reader(filenames[i])
-            return result[np.newaxis, :, :]
-
-        dsk = {(name, i, 0, 0): (get_file, i)
-                 for i in range(Nfiles)}
-
-        return Array(dsk, name, chunks, dtype)
-
-    >>>     def reader(filename):
-    ...         return np.load(filename)
-
-    >>> import numpy as np
-    >>> # create some data and save
-    >>> a1 = np.ones((100,100))
-    >>> a2 = np.ones((100,100))
-
-    >>> np.save("foo1.npy", a1.astype(int))
-    >>> np.save("foo2.npy", a2.astype(int))
-
-    >>> filenames = ["foo1.npy", "foo2.npy"]
-
-    >>> new_arr = lazy_files(filenames, reader)
-
-    # compute stats of a slice
-    >>> new_arr[1, 3:50, 3:50].sum().compute()
-    2209
+        return Array(dsk, name, chunks, example.dtype)
 
 This may be useful when processing time series of images, for instance.
+Alternatively, people often do this in practice by just using dask.delayed as
+in the following example:
+
+.. code-block:: python
+
+    import skimage.io
+    import dask.array as da
+    from dask import delayed
+
+    imread = delayed(skimage.io.imread, pure=True)  # Lazy version of imread
+
+    filenames = sorted(glob.glob('*.jpg'))
+
+    lazy_images = [imread(url) for url in urls]     # Lazily evaluate imread on each url
+
+    arrays = [da.from_delayed(lazy_image,           # Construct a small Dask array
+                              dtype=sample.dtype,   # for every lazy value
+                              shape=sample.shape)
+              for lazy_value in lazy_values]
+
+    stack = da.stack(arrays, axis=0)                # Stack all small Dask arrays into one
