@@ -1,7 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-from glob import glob
-import os
 import requests
 
 from . import core
@@ -35,11 +33,15 @@ class HTTPFileSystem(core.FileSystem):
     @classmethod
     def http(cls, **storage_options):
         root = 'http://' + storage_options.pop('host')
+        if 'port' in storage_options:
+            root += ':%i' % storage_options.pop('port')
         return cls(root=root, **storage_options)
 
     @classmethod
     def https(cls, **storage_options):
         root = 'https://' + storage_options.pop('host')
+        if 'port' in storage_options:
+            root += ':%i' % storage_options.pop('port')
         return cls(root=root, **storage_options)
 
     def glob(self, path):
