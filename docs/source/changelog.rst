@@ -11,6 +11,7 @@ Array
 
 DataFrame
 +++++++++
+- Bugfix to allow column assignment of pandas datetimes(:pr:`3164`)`Max Epstein`_
 
 
 Bag
@@ -37,7 +38,6 @@ Array
 
 DataFrame
 +++++++++
-- Bugfix to allow column assignment of pandas datetimes
 - Support month timedeltas in repartition(freq=...) (:pr:`3110`) `Matthew Rocklin`_
 - Avoid mutation in dataframe groupby tests (:pr:`3118`) `Matthew Rocklin`_
 - ``read_csv``, ``read_table``, and ``read_parquet`` accept iterables of paths
@@ -973,3 +973,4 @@ Other
 .. _`Nir`: https://github.com/nirizr
 .. _`Keisuke Fujii`: https://github.com/fujiisoup
 .. _`Roman Yurchak`: https://github.com/rth
+.. _`Max Epstein`: https://github.com/MaxPowerWasTaken
