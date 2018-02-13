@@ -120,6 +120,8 @@ takes filenames and a reader:
         ----------
         reader: callable
             The function that reads the files
+            The reader should take a filename as an argument and return a numpy
+            array (np.ndarray instance).
 
         filenames : List[str]
             the names of the files of the same length.
