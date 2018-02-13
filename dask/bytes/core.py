@@ -289,9 +289,7 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
         paths, protocols, options_list = zip(*map(infer_options, urlpath))
         protocol = protocols[0]
         options = options_list[0]
-        if all(p in ['http', 'https'] for p in protocols):
-            pass
-        elif not (all(p == protocol for p in protocols) and
+        if not (all(p == protocol for p in protocols) and
                 all(o == options for o in options_list)):
             raise ValueError("When specifying a list of paths, all paths must "
                              "share the same protocol and options")
