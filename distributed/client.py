@@ -1962,7 +1962,7 @@ class Client(Node):
             values = {k for k, v in dsk.items() if isinstance(v, Future)
                       and k not in keyset}
             if values:
-                dsk = dask.optimize.inline(dsk, keys=values)
+                dsk = dask.optimization.inline(dsk, keys=values)
 
             d = {k: unpack_remotedata(v) for k, v in dsk.items()}
             extra_keys = set.union(*[v[1] for v in d.values()]) if d else set()
@@ -2066,7 +2066,7 @@ class Client(Node):
                 dsk[key] = Future(key, self, inform=False)
 
         if changed:
-            dsk, _ = dask.optimize.cull(dsk, keys)
+            dsk, _ = dask.optimization.cull(dsk, keys)
 
         return dsk
 
