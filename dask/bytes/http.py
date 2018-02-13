@@ -17,7 +17,7 @@ class HTTPFileSystem(core.FileSystem):
     """
     sep = '/'
 
-    def __init__(self, root='', **storage_options):
+    def __init__(self, **storage_options):
         """
         Parameters
         ----------
@@ -28,41 +28,21 @@ class HTTPFileSystem(core.FileSystem):
         self.block_size = storage_options.pop('block_size', DEFAULT_BLOCK_SIZE)
         self.kwargs = storage_options
         self.session = requests.Session()
-        self.root = root
-        if 'port' in storage_options:
-            self.root += ':%i' % storage_options.pop('port')
-        self.query = storage_options.pop('url_query', None)
 
-    @classmethod
-    def http(cls, **storage_options):
-        root = 'http://' + storage_options.pop('host')
-        return cls(root=root, **storage_options)
-
-    @classmethod
-    def https(cls, **storage_options):
-        root = 'https://' + storage_options.pop('host')
-        return cls(root=root, **storage_options)
-
-    def glob(self, path):
+    def glob(self, url):
         """For a template path, return matching files"""
         raise NotImplementedError
 
-    def mkdirs(self, path):
+    def mkdirs(self, url):
         """Make any intermediate directories to make path writable"""
         raise NotImplementedError
 
-    def _make_url(self, path):
-        url = self.root + path
-        if self.query:
-            url += "?" + self.query
-        return url
-
-    def open(self, path, mode='rb', block_size=None, **kwargs):
+    def open(self, url, mode='rb', block_size=None, **kwargs):
         """Make a file-like object
 
         Parameters
         ----------
-        path: str
+        url: str
             Full URL with protocol
         mode: string
             must be "rb"
@@ -72,22 +52,20 @@ class HTTPFileSystem(core.FileSystem):
         if mode != 'rb':
             raise NotImplementedError
         block_size = block_size if block_size is not None else self.block_size
-        return HTTPFile(self._make_url(path), self.session, block_size,
-                        **self.kwargs)
+        return HTTPFile(url, self.session, block_size, **self.kwargs)
 
-    def ukey(self, path):
+    def ukey(self, url):
         """Unique identifier, so we can tell if a file changed"""
         # Could do HEAD here?
-        return tokenize(self._make_url(path))
+        return tokenize(url)
 
-    def size(self, path):
+    def size(self, url):
         """Size in bytes of the file at path"""
-        return file_size(self._make_url(path), session=self.session,
-                         **self.kwargs)
+        return file_size(url, session=self.session, **self.kwargs)
 
 
-core._filesystems['http'] = HTTPFileSystem.http
-core._filesystems['https'] = HTTPFileSystem.https
+core._filesystems['http'] = HTTPFileSystem
+core._filesystems['https'] = HTTPFileSystem
 
 
 class HTTPFile(object):
@@ -95,6 +73,9 @@ class HTTPFile(object):
     A file-like object pointing to a remove HTTP(S) resource.
 
     Supports only reading, with read-ahead of a predermined block-size.
+
+    In the case that the server does not supply the filesize, only reading of
+    the complete file in one go is supported.
 
     Parameters
     ----------
@@ -116,8 +97,13 @@ class HTTPFile(object):
         self.session = session if session is not None else requests.Session()
         self.blocksize = (block_size if block_size is not None
                           else DEFAULT_BLOCK_SIZE)
-        self.size = file_size(url, self.session, **self.kwargs)
+        try:
+            self.size = file_size(url, self.session, allow_redirects=True,
+                                  **self.kwargs)
+        except ValueError:
+            self.size = None
         self.cache = None
+        self.closed = False
         self.start = None
         self.end = None
 
@@ -161,12 +147,14 @@ class HTTPFile(object):
             Read up to this many bytes. If negative, read all content to end of
             file.
         """
-        if length < 0 or self.loc + length > self.size:
+        if self.size and (length < 0 or self.loc + length > self.size):
             end = self.size
         else:
             end = self.loc + length
+        if self.size and self.loc >= self.size:
+            return b''
         self. _fetch(self.loc, end)
-        data = self.cache[self.loc - self.start:end]
+        data = self.cache[self.loc - self.start:end - self.start]
         self.loc = end
         return data
 
@@ -177,7 +165,7 @@ class HTTPFile(object):
             self.start = start
             self.end = end + self.blocksize
             self.cache = self._fetch_range(start, self.end)
-        if start < self.start:
+        elif start < self.start:
             if self.end - end > self.blocksize:
                 self.start = start
                 self.end = end + self.blocksize
@@ -186,7 +174,7 @@ class HTTPFile(object):
                 new = self._fetch_range(start, self.start)
                 self.start = start
                 self.cache = new + self.cache
-        if end > self.end:
+        elif end > self.end:
             if self.end > self.size:
                 return
             if end - self.end > self.blocksize:
@@ -202,16 +190,16 @@ class HTTPFile(object):
         """Download a block of data"""
         kwargs = self.kwargs.copy()
         headers = self.kwargs.pop('headers', {})
-        headers['Range'] = 'bytes=%i-%i' % (start, end + 1)
+        headers['Range'] = 'bytes=%i-%i' % (start, end - 1)
         r = self.session.get(self.url, headers=headers, **kwargs)
-        if r.ok:
-            if len(r.content) > end - start:
-                raise RuntimeError('Received more data than requested, perhaps'
-                                   'server does not support the Range header;'
-                                   'try not loading HTTP data in chunks.')
-            return r.content
-        else:
-            r.raise_for_status()
+        r.raise_for_status()
+        l = len(r.content)
+        if l > end - start:
+            self.start = 0
+            self.end = l
+            self.size = l
+            self.blocksize = l
+        return r.content
 
     def __enter__(self):
         return self
@@ -226,11 +214,11 @@ class HTTPFile(object):
     def write(self):
         raise NotImplementedError
 
+    def flush(self):
+        pass
+
     def close(self):
-        self.loc = 0
-        self.cache = None
-        self.start = None
-        self.end = None
+        self.closed = True
 
     def seekable(self):
         return True

@@ -39,11 +39,12 @@ def test_simple(server):
     assert data == open(fn, 'rb').read()
 
 
-def test_ops(server):
+@pytest.mark.parametrize('block_size', [None, 2])
+def test_ops(server, block_size):
     root = 'http://localhost:8999/'
     files = [f for f in os.listdir('.') if os.path.isfile(f)]
     fn = files[0]
-    f = open_files(root + fn)[0]
+    f = open_files(root + fn, block_size=block_size)[0]
     data = open(fn, 'rb').read()
     with f as f:
         assert f.read(10) == data[:10]
@@ -52,12 +53,6 @@ def test_ops(server):
         assert f.read(10) == data[10:20]
         f.seek(-10, 2)
         assert f.read() == data[-10:]
-
-    f = open_files(root + fn, block_size=2)[0]
-    with f as f:
-        with pytest.raises(RuntimeError):
-            # this happens because the simple HTTP server does not respect Range
-            assert f.read(10) == data[:10]
 
 
 def test_errors(server):
@@ -74,7 +69,7 @@ def test_errors(server):
     fn = files[0]
     f = open_files(root + fn, mode='wb')[0]
     with pytest.raises(NotImplementedError):
-        with f as f:
+        with f:
             pass
     f = open_files(root + fn)[0]
     with f as f:
@@ -90,3 +85,26 @@ def test_files(server):
     for f, f2 in zip(fs, fn):
         with f as f:
             assert f.read() == open(f2, 'rb').read()
+
+
+@pytest.mark.network
+def test_parquet():
+    dd = pytest.importorskip('dask.dataframe')
+    pytest.importorskip('fastparquet')  # no pyarrow compatability FS yet
+    df = dd.read_parquet([
+                        'https://github.com/Parquet/parquet-compatibility/raw/'
+                        'master/parquet-testdata/impala/1.1.1-NONE/'
+                        'nation.impala.parquet']).compute()
+    assert df.n_nationkey.tolist() == list(range(25))
+    assert df.columns.tolist() == ['n_nationkey', 'n_name', 'n_regionkey',
+                                   'n_comment']
+
+
+@pytest.mark.network
+def test_bag():
+    # This test pulls from different hosts
+    db = pytest.importorskip('dask.bag')
+    urls = ['http://anaconda.com', 'http://en.wikipedia.org']
+    b = db.read_text(urls)
+    assert b.npartitions == 2
+    bc = b.compute()
