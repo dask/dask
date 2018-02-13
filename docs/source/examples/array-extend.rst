@@ -100,3 +100,72 @@ where the ith block along the diagonal of the output is the result of calling
           [0, 0, 0, 0, 0, 0, 6, 0, 0],
           [0, 0, 0, 0, 0, 0, 0, 7, 0],
           [0, 0, 0, 0, 0, 0, 0, 0, 8]])
+
+Example Lazy Reader
+-------------------
+
+Dask may also be used as a lazy loader. Consider the following function which
+takes filenames and a reader:
+
+.. code-block:: python
+
+    from dask.array import Array
+    from dask.base import tokenize
+
+    def read_custom(reader, filenames):
+        '''
+        This creates a dask array based on numpy files of the same length.
+
+        Parameters
+        ----------
+        reader: callable
+            The function that reads the files
+            The reader should take a filename as an argument and return a numpy
+            array (np.ndarray instance).
+
+        filenames : List[str]
+            the names of the files of the same length.
+            These must be numpy files of same shape and dtype
+            This will concatenate them together as the same dask array.
+
+        Examples
+        --------
+        >>> read_custom(np.load, ['foo1.npy', 'foo1.npy'])
+        >>> read_custom(skimage.io.imread, ['1.jpg', '2.jpg', '3.jpg'])
+        '''
+        # Read one file to get example shape and dtype
+        example = reader(filenames[0])
+
+        chunks = ((1,) * len(filenames),) + tuple((d,) for d in example.shape)
+
+        name = 'read_custom-' + tokenize(reader, *filenames)  # unique identifier
+
+        dsk = {(name, i, 0, 0): (operator.getitem,
+                                  (reader, fn),  # read array from file
+                                  (None, Ellipsis))  # add extra dimension like x[None, ...]
+               for i, fn in enumerate(filenames)}
+
+        return Array(dsk, name, chunks, example.dtype)
+
+This may be useful when processing time series of images, for instance.
+Alternatively, people often do this in practice by just using dask.delayed as
+in the following example:
+
+.. code-block:: python
+
+    import skimage.io
+    import dask.array as da
+    from dask import delayed
+
+    imread = delayed(skimage.io.imread, pure=True)  # Lazy version of imread
+
+    filenames = sorted(glob.glob('*.jpg'))
+
+    lazy_images = [imread(url) for url in urls]     # Lazily evaluate imread on each url
+
+    arrays = [da.from_delayed(lazy_image,           # Construct a small Dask array
+                              dtype=sample.dtype,   # for every lazy value
+                              shape=sample.shape)
+              for lazy_value in lazy_values]
+
+    stack = da.stack(arrays, axis=0)                # Stack all small Dask arrays into one
