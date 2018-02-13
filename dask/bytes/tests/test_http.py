@@ -65,7 +65,7 @@ def test_errors(server):
         with f:
             pass
     root = 'http://localhost:8999/'
-    files = [f for f in os.listdir('.') if os.path.isfile(f)]
+    files = [fn for fn in os.listdir('.') if os.path.isfile(fn)]
     fn = files[0]
     f = open_files(root + fn, mode='wb')[0]
     with pytest.raises(NotImplementedError):
@@ -92,9 +92,9 @@ def test_parquet():
     dd = pytest.importorskip('dask.dataframe')
     pytest.importorskip('fastparquet')  # no pyarrow compatability FS yet
     df = dd.read_parquet([
-                        'https://github.com/Parquet/parquet-compatibility/raw/'
-                        'master/parquet-testdata/impala/1.1.1-NONE/'
-                        'nation.impala.parquet']).compute()
+        'https://github.com/Parquet/parquet-compatibility/raw/'
+        'master/parquet-testdata/impala/1.1.1-NONE/'
+        'nation.impala.parquet']).compute()
     assert df.n_nationkey.tolist() == list(range(25))
     assert df.columns.tolist() == ['n_nationkey', 'n_name', 'n_regionkey',
                                    'n_comment']
@@ -107,4 +107,4 @@ def test_bag():
     urls = ['http://anaconda.com', 'http://en.wikipedia.org']
     b = db.read_text(urls)
     assert b.npartitions == 2
-    bc = b.compute()
+    b.compute()
