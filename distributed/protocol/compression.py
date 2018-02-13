@@ -58,9 +58,10 @@ with ignoring(ImportError):
 
     try:
         # try using the new lz4 API
+        import lz4.block
         lz4_compress = lz4.block.compress
         lz4_decompress = lz4.block.decompress
-    except AttributeError as err:
+    except ImportError:
         # fall back to old one
         lz4_compress = lz4.LZ4_compress
         lz4_decompress = lz4.LZ4_uncompress
