@@ -824,17 +824,20 @@ def test_assign():
                    d='string',
                    e=d.a.sum(),
                    f=d.a + d.b,
-                   g=lambda x: x.a + x.b)
+                   g=lambda x: x.a + x.b,
+                   dt = pd.datetime(2018, 2, 13))
     res_unknown = d_unknown.assign(c=1,
                                    d='string',
                                    e=d_unknown.a.sum(),
                                    f=d_unknown.a + d_unknown.b,
-                                   g=lambda x: x.a + x.b)
+                                   g=lambda x: x.a + x.b, 
+                                   dt = pd.datetime(2018, 2, 13))
     sol = full.assign(c=1,
                       d='string',
                       e=full.a.sum(),
                       f=full.a + full.b,
-                      g=lambda x: x.a + x.b)
+                      g=lambda x: x.a + x.b,
+                      dt = pd.datetime(2018, 2, 13))
     assert_eq(res, sol)
     assert_eq(res_unknown, sol)
 
