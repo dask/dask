@@ -228,7 +228,7 @@ class HTTPFile(object):
                 return r.content
             else:
                 raise ValueError('Got more bytes (%i) than requested (%i)' % (
-                    cl, end-start))
+                    cl, end - start))
         cl = 0
         out = []
         for chunk in r.iter_content(chunk_size=2 ** 20):
