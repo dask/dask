@@ -101,6 +101,7 @@ class HTTPFile(object):
             self.size = file_size(url, self.session, allow_redirects=True,
                                   **self.kwargs)
         except ValueError:
+            # No size information - only allow read() and no seek()
             self.size = None
         self.cache = None
         self.closed = False
@@ -121,6 +122,8 @@ class HTTPFile(object):
 
         Returns the position.
         """
+        if self.size is None:
+            raise ValueError('Cannot seek since size of file is not known')
         if whence == 0:
             nloc = where
         elif whence == 1:
@@ -145,13 +148,19 @@ class HTTPFile(object):
         ----------
         length: int
             Read up to this many bytes. If negative, read all content to end of
-            file.
+            file. If the server has not supplied the filesize, attempting to
+            read only part of the data will raise a ValueError.
         """
-        if self.size and (length < 0 or self.loc + length > self.size):
+        if self.size is None:
+            if length >= 0:
+                raise ValueError('File size is unknown, must read all data')
+            else:
+                return self._fetch_all()
+        if length < 0 or self.loc + length > self.size:
             end = self.size
         else:
             end = self.loc + length
-        if self.size and self.loc >= self.size:
+        if self.loc >= self.size:
             return b''
         self. _fetch(self.loc, end)
         data = self.cache[self.loc - self.start:end - self.start]
@@ -186,22 +195,57 @@ class HTTPFile(object):
                 self.end = end + self.blocksize
                 self.cache = self.cache + new
 
+    def _fetch_all(self):
+        """Read whole file in one shot, without caching
+
+        This is only called when size is None and read() is called without a
+        byte-count.
+        """
+        r = self.session.get(self.url, **self.kwargs)
+        r.raise_for_status()
+        return r.content
+
     def _fetch_range(self, start, end):
-        """Download a block of data"""
+        """Download a block of data
+
+        The expectation is that the server returns only the requested bytes,
+        with HTTP code 206. If this is not the case, we first check the headers,
+        and then stream the output - if the data size is bigger than we
+        requested, an exception is raised.
+        """
         kwargs = self.kwargs.copy()
         headers = self.kwargs.pop('headers', {})
         headers['Range'] = 'bytes=%i-%i' % (start, end - 1)
-        r = self.session.get(self.url, headers=headers, **kwargs)
+        r = self.session.get(self.url, headers=headers, stream=True, **kwargs)
         r.raise_for_status()
-        l = len(r.content)
-        if l > end - start:
-            self.start = 0
-            self.end = l
-            self.size = l
-            self.blocksize = l
-        return r.content
+        if r.status_code == 206:
+            # partial content, as expected
+            return r.content
+        if 'Content-Length' in r.headers:
+            cl = int(r.headers['Content-Length'])
+            if cl <= end - start:
+                # data size OK
+                return r.content
+            else:
+                raise ValueError('Got more bytes (%i) than requested (%i)' % (
+                    cl, end-start))
+        cl = 0
+        out = []
+        for chunk in r.iter_content(chunk_size=2 ** 20):
+            # data size unknown, let's see if it goes too big
+            if chunk:
+                out.append(chunk)
+                cl += len(chunk)
+                if cl > end - start:
+                    raise ValueError(
+                        'Got more bytes so far (>%i) than requested (%i)' % (
+                            cl, end - start))
+            else:
+                break
+        return b''.join(out)
 
     def __enter__(self):
+        self.loc = 0
         return self
 
     def __exit__(self, *args):

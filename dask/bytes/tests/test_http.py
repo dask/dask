@@ -39,20 +39,41 @@ def test_simple(server):
     assert data == open(fn, 'rb').read()
 
 
-@pytest.mark.parametrize('block_size', [None, 2])
+@pytest.mark.parametrize('block_size', [None, 99999])
 def test_ops(server, block_size):
     root = 'http://localhost:8999/'
     files = [f for f in os.listdir('.') if os.path.isfile(f)]
     fn = files[0]
-    f = open_files(root + fn, block_size=block_size)[0]
+    f = open_files(root + fn)[0]
     data = open(fn, 'rb').read()
     with f as f:
+        # these pass because the default
         assert f.read(10) == data[:10]
         f.seek(0)
         assert f.read(10) == data[:10]
         assert f.read(10) == data[10:20]
         f.seek(-10, 2)
         assert f.read() == data[-10:]
+
+
+def test_ops_blocksize(server):
+    root = 'http://localhost:8999/'
+    files = [f for f in os.listdir('.') if os.path.isfile(f)]
+    fn = files[0]
+    f = open_files(root + fn, block_size=2)[0]
+    data = open(fn, 'rb').read()
+    with f as f:
+        # it's OK to read the whole file
+        assert f.read() == data
+
+    # note that if we reuse f from above, because it is tokenized, we get
+    # the same open file - where is this cached?
+    fn = files[1]
+    f = open_files(root + fn, block_size=2)[0]
+    with f as f:
+        # fails becasue we want only 12 bytes
+        with pytest.raises(ValueError):
+            assert f.read(10) == data[:10]
 
 
 def test_errors(server):
@@ -104,7 +125,9 @@ def test_parquet():
 def test_bag():
     # This test pulls from different hosts
     db = pytest.importorskip('dask.bag')
-    urls = ['http://anaconda.com', 'http://en.wikipedia.org']
+    urls = ['https://raw.githubusercontent.com/weierophinney/pastebin/'
+            'master/public/js-src/dojox/data/tests/stores/patterns.csv',
+            'https://en.wikipedia.org']
     b = db.read_text(urls)
     assert b.npartitions == 2
     b.compute()
