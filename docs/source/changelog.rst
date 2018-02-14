@@ -8,7 +8,7 @@ Changelog
 Array
 +++++
 
-- Corrected dimension chunking in indices (:issue:`3166`) `Simon Perkins`_
+- Corrected dimension chunking in indices (:issue:`3166`, :pr:`3167`) `Simon Perkins`_
 
 DataFrame
 +++++++++
