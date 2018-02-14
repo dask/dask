@@ -619,7 +619,8 @@ class TaskProgress(DashboardComponent):
         self.root.quad(
             source=self.source,
             top='top', bottom='bottom', left='left', right='right',
-            fill_color="#aaaaaa", line_color="#aaaaaa", fill_alpha=0.1
+            fill_color="#aaaaaa", line_color='#aaaaaa', fill_alpha=0.1,
+            line_alpha=0.3,
         )
         self.root.quad(
             source=self.source,
