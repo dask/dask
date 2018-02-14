@@ -377,7 +377,7 @@ def indices(dimensions, dtype=int, chunks=None):
 
     xi = []
     for i in range(len(dimensions)):
-        xi.append(arange(dimensions[i], dtype=dtype, chunks=chunks[i]))
+        xi.append(arange(dimensions[i], dtype=dtype, chunks=(chunks[i],)))
 
     grid = []
     if np.prod(dimensions):
