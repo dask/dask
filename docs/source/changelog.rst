@@ -8,6 +8,7 @@ Changelog
 Array
 +++++
 
+- Corrected dimension chunking in indices (:issue:`3166`, :pr:`3167`) `Simon Perkins`_
 
 DataFrame
 +++++++++
@@ -973,3 +974,4 @@ Other
 .. _`Nir`: https://github.com/nirizr
 .. _`Keisuke Fujii`: https://github.com/fujiisoup
 .. _`Roman Yurchak`: https://github.com/rth
+.. _`Simon Perkins`: https://github.com/sjperkins
