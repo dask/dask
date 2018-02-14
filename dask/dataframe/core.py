@@ -2488,7 +2488,7 @@ class DataFrame(_Frame):
     def assign(self, **kwargs):
         for k, v in kwargs.items():
             if not (isinstance(v, (Series, Scalar, pd.Series)) or
-                    callable(v) or np.isscalar(v)):
+                    callable(v) or pd.api.types.is_scalar(v)):
                 raise TypeError("Column assignment doesn't support type "
                                 "{0}".format(type(v).__name__))
         pairs = list(sum(kwargs.items(), ()))
