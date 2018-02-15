@@ -308,7 +308,7 @@ class WorkStealing(SchedulerPlugin):
                     for ts in list(stealable):
                         if (ts not in self.key_stealable or
                                 ts.processing_on is not sat):
-                            stealable.remove(ts)
+                            stealable.discard(ts)
                             continue
                         i += 1
                         if not idle:
@@ -317,7 +317,7 @@ class WorkStealing(SchedulerPlugin):
 
                         duration = sat.processing.get(ts)
                         if duration is None:
-                            stealable.remove(ts)
+                            stealable.discard(ts)
                             continue
 
                         maybe_move_task(level, ts, sat, idl,
@@ -329,12 +329,12 @@ class WorkStealing(SchedulerPlugin):
                         if not idle:
                             break
                         if ts not in self.key_stealable:
-                            stealable.remove(ts)
+                            stealable.discard(ts)
                             continue
 
                         sat = ts.processing_on
                         if sat is None:
-                            stealable.remove(ts)
+                            stealable.discard(ts)
                             continue
                         if combined_occupancy(sat) < 0.2:
                             continue
