@@ -22,7 +22,7 @@
           {% if ts.nbytes %}
           <tr>
               <th> bytes in memory </th>
-              <td> {{ ts.nbytes }} </td>
+              <td> {{ format_bytes(ts.nbytes) }} </td>
           </tr>
           {% end %}
           {% if ts.state == 'waiting' %}

@@ -14,12 +14,14 @@ from bokeh.layouts import column, row
 from bokeh.models import (ColumnDataSource, DataRange1d, HoverTool, ResetTool,
                           PanTool, WheelZoomTool, TapTool, OpenURL, Range1d, Plot, Quad,
                           value, LinearAxis, NumeralTickFormatter, BasicTicker, NumberFormatter,
-                          BoxSelectTool)
+                          BoxSelectTool, GroupFilter, CDSView)
 from bokeh.models.widgets import DataTable, TableColumn
 from bokeh.plotting import figure
 from bokeh.palettes import Viridis11
+from bokeh.transform import factor_cmap
 from bokeh.io import curdoc
 from toolz import pipe, merge
+from tornado import escape
 try:
     import numpy as np
 except ImportError:
@@ -34,6 +36,7 @@ from ..metrics import time
 from ..utils import log_errors, format_bytes, format_time
 from ..diagnostics.progress_stream import color_of, progress_quads, nbytes_bar
 from ..diagnostics.progress import AllProgress
+from ..diagnostics.graph_layout import GraphLayout
 from .task_stream import TaskStreamPlugin
 
 try:
@@ -53,7 +56,10 @@ with open(os.path.join(os.path.dirname(__file__), 'template.html')) as f:
 
 template = jinja2.Template(template_source)
 
-template_variables = {'pages': ['status', 'workers', 'tasks', 'system', 'profile']}
+template_variables = {'pages': ['status', 'workers', 'tasks', 'system', 'profile', 'graph']}
+
+
+nan = float('nan')
 
 
 def update(source, data):
@@ -592,6 +598,150 @@ class TaskStream(components.TaskStream):
                 self.source.stream(rectangles, self.n_rectangles)
 
 
+class GraphPlot(DashboardComponent):
+    """
+    A dynamic node-link diagram for the task graph on the scheduler
+
+    See also the GraphLayout diagnostic at
+    distributed/diagnostics/graph_layout.py
+    """
+    def __init__(self, scheduler, **kwargs):
+        self.scheduler = scheduler
+        self.layout = GraphLayout(scheduler)
+        self.invisible_count = 0  # number of invisible nodes
+
+        self.node_source = ColumnDataSource({'x': [], 'y': [], 'name': [],
+                                             'state': [], 'visible': [],
+                                             'key': []})
+        self.edge_source = ColumnDataSource({'x': [], 'y': [], 'visible': []})
+
+        node_view = CDSView(source=self.node_source,
+                            filters=[GroupFilter(column_name='visible', group='True')])
+        edge_view = CDSView(source=self.edge_source,
+                            filters=[GroupFilter(column_name='visible', group='True')])
+
+        node_colors = factor_cmap('state',
+                factors=['waiting', 'processing', 'memory', 'released', 'erred'],
+                palette=['gray', 'green', 'red', 'blue', 'black']
+        )
+
+        self.root = figure(title='Task Graph', **kwargs)
+        self.root.multi_line(xs='x', ys='y', source=self.edge_source,
+                             line_width=1, view=edge_view, color='black',
+                             alpha=0.3)
+        rect = self.root.square(x='x', y='y', size=10, color=node_colors,
+                                source=self.node_source, view=node_view,
+                                legend='state')
+        self.root.xgrid.grid_line_color = None
+        self.root.ygrid.grid_line_color = None
+
+        hover = HoverTool(point_policy="follow_mouse", tooltips="<b>@name</b>: @state",
+                          renderers=[rect])
+        tap = TapTool(callback=OpenURL(url='info/task/@key.html'),
+                      renderers=[rect])
+        rect.nonselection_glyph = None
+        self.root.add_tools(hover, tap)
+
+    def update(self):
+        with log_errors():
+            # occasionally reset the column data source to remove old nodes
+            if self.invisible_count > len(self.node_source.data['x']) / 2:
+                self.layout.reset_index()
+                self.invisible_count = 0
+                update = True
+            else:
+                update = False
+
+            new, self.layout.new = self.layout.new, []
+            new_edges = self.layout.new_edges
+            self.layout.new_edges = []
+
+            self.add_new_nodes_edges(new, new_edges, update=update)
+
+            self.patch_updates()
+
+    def add_new_nodes_edges(self, new, new_edges, update=False):
+        if new or update:
+            node_key = []
+            node_x = []
+            node_y = []
+            node_state = []
+            node_name = []
+            edge_x = []
+            edge_y = []
+
+            x = self.layout.x
+            y = self.layout.y
+
+            tasks = self.scheduler.tasks
+            for key in new:
+                try:
+                    task = tasks[key]
+                except KeyError:
+                    continue
+                xx = x[key]
+                yy = y[key]
+                node_key.append(escape.url_escape(key))
+                node_x.append(xx)
+                node_y.append(yy)
+                node_state.append(task.state)
+                node_name.append(task.prefix)
+
+            for a, b in new_edges:
+                try:
+                    edge_x.append([x[a], x[b]])
+                    edge_y.append([y[a], y[b]])
+                except KeyError:
+                    pass
+
+            node = {'x': node_x,
+                    'y': node_y,
+                    'state': node_state,
+                    'name': node_name,
+                    'key': node_key,
+                    'visible': ['True'] * len(node_x)}
+            edge = {'x': edge_x,
+                    'y': edge_y,
+                    'visible': ['True'] * len(edge_x)}
+
+            if update or not len(self.node_source.data['x']):
+                # see https://github.com/bokeh/bokeh/issues/7523
+                self.node_source.data.update(node)
+                self.edge_source.data.update(edge)
+            else:
+                self.node_source.stream(node)
+                self.edge_source.stream(edge)
+
+    def patch_updates(self):
+        """
+        Small updates like color changes or lost nodes from task transitions
+        """
+        n = len(self.node_source.data['x'])
+        m = len(self.edge_source.data['x'])
+
+        if self.layout.state_updates:
+            state_updates = self.layout.state_updates
+            self.layout.state_updates = []
+            updates = [(i, c) for i, c in state_updates if i < n]
+            self.node_source.patch({'state': updates})
+
+        if self.layout.visible_updates:
+            updates = self.layout.visible_updates
+            updates = [(i, c) for i, c in updates if i < n]
+            self.visible_updates = []
+            self.node_source.patch({'visible': updates})
+            self.invisible_count += len(updates)
+
+        if self.layout.visible_edge_updates:
+            updates = self.layout.visible_edge_updates
+            updates = [(i, c) for i, c in updates if i < m]
+            self.visible_updates = []
+            self.edge_source.patch({'visible': updates})
+
+    def __del__(self):
+        self.scheduler.remove_plugin(self.layout)
+
+
 class TaskProgress(DashboardComponent):
     """ Progress bars per task type """
 
@@ -945,6 +1095,18 @@ def tasks_doc(scheduler, extra, doc):
         doc.template_variables.update(extra)
 
 
+def graph_doc(scheduler, extra, doc):
+    with log_errors():
+        graph = GraphPlot(scheduler, sizing_mode='stretch_both')
+        graph.update()
+        doc.add_periodic_callback(graph.update, 200)
+        doc.add_root(graph.root)
+
+        doc.template = template
+        doc.template_variables['active_page'] = 'graph'
+        doc.template_variables.update(extra)
+
+
 def status_doc(scheduler, extra, doc):
     with log_errors():
         task_stream = TaskStream(scheduler, n_rectangles=1000, clear_interval=10000, height=350)
@@ -1013,6 +1175,7 @@ class BokehScheduler(BokehServer):
         tasks = Application(FunctionHandler(partial(tasks_doc, scheduler, self.extra)))
         status = Application(FunctionHandler(partial(status_doc, scheduler, self.extra)))
         profile = Application(FunctionHandler(partial(profile_doc, scheduler, self.extra)))
+        graph = Application(FunctionHandler(partial(graph_doc, scheduler, self.extra)))
 
         self.apps = {
             '/system': systemmonitor,
@@ -1023,6 +1186,7 @@ class BokehScheduler(BokehServer):
             '/tasks': tasks,
             '/status': status,
             '/profile': profile,
+            '/graph': graph,
         }
 
         self.loop = io_loop or scheduler.loop

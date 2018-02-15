@@ -1328,7 +1328,7 @@ class Scheduler(ServerNode):
         if isinstance(user_priority, Number):
             user_priority = {k: user_priority for k in tasks}
 
-        new_priority = priority or order(tasks)  # TODO: define order wrt old graph
+        priority = priority or order(tasks)  # TODO: define order wrt old graph
 
         if submitting_task:  # sub-tasks get better priority than parent tasks
             ts = self.tasks.get(submitting_task)
@@ -1339,10 +1339,10 @@ class Scheduler(ServerNode):
         else:
             self.generation += 1  # older graph generations take precedence
             generation = self.generation
-        for key in set(new_priority) & touched_keys:
+        for key in set(priority) & touched_keys:
             ts = self.tasks[key]
             if ts.priority is None:
-                ts.priority = (-user_priority.get(key, 0), generation, new_priority[key])
+                ts.priority = (-user_priority.get(key, 0), generation, priority[key])
 
         # Ensure all runnables have a priority
         runnables = [ts for ts in touched_tasks
@@ -1408,16 +1408,17 @@ class Scheduler(ServerNode):
                     recommendations[key] = 'erred'
                     break
 
-        self.transitions(recommendations)
-
         for plugin in self.plugins[:]:
             try:
                 plugin.update_graph(self, client=client, tasks=tasks,
                                     keys=keys, restrictions=restrictions or {},
                                     dependencies=dependencies,
+                                    priority=priority,
                                     loose_restrictions=loose_restrictions)
             except Exception as e:
                 logger.exception(e)
+
+        self.transitions(recommendations)
 
         for ts in touched_tasks:
             if ts.state in ('memory', 'erred'):
@@ -3700,6 +3701,10 @@ class Scheduler(ServerNode):
             if start == finish:
                 return {}
 
+            if self.plugins and finish == 'forgotten':
+                dependents = set(ts.dependents)
+                dependencies = set(ts.dependencies)
+
             if (start, finish) in self._transitions:
                 func = self._transitions[start, finish]
                 recommendations = func(key, *args, **kwargs)
@@ -3727,6 +3732,11 @@ class Scheduler(ServerNode):
             if self.plugins:
                 # Temporarily put back forgotten key for plugin to retrieve it
                 if ts.state == 'forgotten':
+                    try:
+                        ts.dependents = dependents
+                        ts.dependencies = dependencies
+                    except KeyError:
+                        pass
                     self.tasks[ts.key] = ts
                 for plugin in self.plugins:
                     try:
