@@ -194,7 +194,11 @@ class WorkStealing(SchedulerPlugin):
 
     def move_task_confirm(self, key=None, worker=None, state=None):
         try:
-            ts = self.scheduler.tasks[key]
+            try:
+                ts = self.scheduler.tasks[key]
+            except KeyError:
+                logger.debug("Key released between request and confirm: %s", key)
+                return
             try:
                 d = self.in_flight.pop(ts)
             except KeyError:

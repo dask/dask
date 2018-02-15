@@ -16,7 +16,7 @@ from distributed.config import config
 from distributed.metrics import time
 from distributed.scheduler import BANDWIDTH, key_split
 from distributed.utils_test import (slowinc, slowadd, inc, gen_cluster,
-                                    slowidentity)
+                                    slowidentity, captured_logger)
 from distributed.utils_test import (nodebug_setup_module,
                                     nodebug_teardown_module)
 from distributed.worker import TOTAL_MEMORY
@@ -618,3 +618,17 @@ def test_cleanup_repeated_tasks(c, s, a, b):
     assert not any(s.has_what.values())
 
     assert not list(ws)
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 2)
+def test_lose_task(c, s, a, b):
+    with captured_logger('distributed.stealing') as log:
+        s.periodic_callbacks['stealing'].interval = 1
+        for i in range(100):
+            futures = c.map(slowinc, range(10), delay=0.01, pure=False,
+                            workers=a.address, allow_other_workers=True)
+            yield gen.sleep(0.01)
+            del futures
+
+    out = log.getvalue()
+    assert 'Error' not in out
