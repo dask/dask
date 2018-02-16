@@ -1,9 +1,15 @@
 Web Interface
 =============
 
-.. image:: https://raw.githubusercontent.com/dask/dask-org/master/images/daskboard.gif
-   :alt: Dask Bokeh Dashboard
-   :width: 80%
+.. raw:: html
+
+    <iframe width="560"
+            height="315"
+            src="https://www.youtube.com/embed/N_GqzcuGLCY"
+            frameborder="0"
+            allow="autoplay; encrypted-media"
+            allowfullscreen>
+    </iframe>
 
 Information about the current state of the network helps to track progress,
 identify performance issues, and debug failures.
