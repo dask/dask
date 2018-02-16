@@ -1,5 +1,5 @@
-Kubernetes-Helm (Cloud)
-=======================
+Kubernetes and Helm
+===================
 
 It is easy to launch a Dask cluster and Jupyter notebook server on cloud
 resources using Kubernetes_ and Helm_.
@@ -95,7 +95,7 @@ can list all active helm deployments with::
 Connect to Dask and Jupyter
 ---------------------------
 
-When we ran `kubectl get services` we saw some externally visible IPs
+When we ran ``kubectl get services`` we saw some externally visible IPs
 
 .. code-block:: bash
 
@@ -107,7 +107,7 @@ When we ran `kubectl get services` we saw some externally visible IPs
 
 We can navigate to these from any web browser.  One is the Dask diagnostic
 dashboard.  The other is the Jupyter server.  You can log into the Jupyter
-notebook server with the password, `dask`.
+notebook server with the password, ``dask``.
 
 You can create a notebook and create a Dask client from there.  The
 ``DASK_SCHEDULER_ADDRESS`` environment variable has been populated with the
@@ -133,9 +133,8 @@ Configure Environment
 
 By default the Helm deployment launches three workers using two cores each and
 a standard conda environment.  We can customize this environment by creating a
-small yaml file that implements a subset of the values in the `dask helm chart
-values.yaml file
-<https://github.com/dask/helm-chart/blob/master/dask/values.yaml>`_
+small yaml file that implements a subset of the values in the
+`dask helm chart values.yaml file <https://github.com/dask/helm-chart/blob/master/dask/values.yaml>`_
 
 For example we can increase the number of workers, and include extra conda and
 pip packages to install on the both the workers and Jupyter server (these two

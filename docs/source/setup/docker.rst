@@ -10,13 +10,15 @@ a Debian image.
 
 These images are large, around 1GB.
 
--  ``daskdev/dask``: This a normal debian + miniconda image with the full Dask
-    conda package (including the distributed scheduler), numpy, and pandas.
-    This image is about 1GB in size.
--  ``daskdev/dask-notebook``: This is based on the Jupyter base-notebook image,
-   and so is appropriate for use both normally as a Jupyter server, but also as
-   part of a JupyterHub deployment.  It also includes a matching Dask software
-   environment described above.  This image is about 2GB in size.
+-   ``daskdev/dask``: This a normal debian + miniconda image with the full Dask
+     conda package (including the distributed scheduler), Numpy, and Pandas.
+     This image is about 1GB in size.
+
+-   ``daskdev/dask-notebook``: This is based on the
+    `Jupyter base-notebook image <https://hub.docker.com/r/jupyter/base-notebook/>`_
+    and so is appropriate for use both normally as a Jupyter server, but also as
+    part of a JupyterHub deployment.  It also includes a matching Dask software
+    environment described above.  This image is about 2GB in size.
 
 
 Extensibility
@@ -33,3 +35,10 @@ trigger calls to the following respectively::
 
 Note that using these can significantly delay the container from starting,
 especially when using ``apt``, or ``conda`` (``pip`` is relatively fast).
+
+
+Source
+------
+
+Docker files are maintained at https://github.com/dask/dask-docker .
+This repository also includes a docker-compose configuration.

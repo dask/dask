@@ -53,21 +53,17 @@ how to set up Dask on a variety of local and distributed hardware.
     - :doc:`High Performance Computers <setup/hpc>`: How to run Dask on
       traditional HPC environments using tools like MPI, or job schedulers like
       SLURM, SGE, TORQUE, LSF, and so on
-    - :doc:`Kubernetes and Helm <setup/kubernetes-helm>`: Deploy Dask with the
-      popular Kubernetes resource manager using Helm.  This is particularly
-      useful when stand up new standalone Dask and Jupyter environments on
-      cloud deployments like Google, Amazon, or Microsoft Azure.
-    - :doc:`Kubernetes native <setup/kubernetes-native>`: Deploy Dask as a
-      dynamic native Kubernetes application using
-      `Daskernetes <https://daskernetes.readthedocs.io>`_.
-      This is useful if you are already have a way to run Python applications,
-      and want to launch and control dynamic Dask deployments.
+    - :doc:`Kubernetes <setup/kubernetes>`: Deploy Dask with the
+      popular Kubernetes resource manager using either Helm or a native deployment.
     - :doc:`Python API (advanced) <setup/python-advanced>`: Create
       ``Scheduler`` and ``Worker`` objects from Python as part of a distributed
       Tornado TCP application.  This page is useful for those building custom
       frameworks.
     - :doc:`Docker <setup/docker>` containers are available and may be useful
-      in a few of the above solutions.
+      in some of the solutions above.
+    - :doc:`Cloud <setup/cloud>` for current recommendations on how to
+      deploy Dask and Jupyter on common cloud providers like Amazon, Google, or
+      Microsoft Azure.
 
 .. toctree::
    :maxdepth: 1
@@ -79,6 +75,6 @@ how to set up Dask on a variety of local and distributed hardware.
    setup/cli.rst
    setup/ssh.rst
    setup/hpc.rst
-   setup/kubernetes-helm.rst
-   setup/kubernetes-native.rst
+   setup/kubernetes.rst
    setup/python-advanced.rst
+   setup/cloud.rst
