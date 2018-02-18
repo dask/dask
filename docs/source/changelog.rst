@@ -37,7 +37,7 @@ DataFrame
 +++++++++
 
 - Bugfix to allow column assignment of pandas datetimes(:pr:`3164`) `Max Epstein`_
-
+- Support specifying categorical columns on ``read_parquet`` with ``categories=[…]`` for ``engine="pyarrow"`` (:pr:`3177`) `Uwe Korn`_
 
 Bag
 +++
