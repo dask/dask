@@ -3418,13 +3418,18 @@ def to_hdf5(filename, *args, **kwargs):
 
     chunks = kwargs.pop('chunks', True)
 
-    import h5py
-    with h5py.File(filename) as f:
-        dsets = [f.require_dataset(dp, shape=x.shape, dtype=x.dtype,
-                                   chunks=tuple([c[0] for c in x.chunks])
-                                   if chunks is True else chunks, **kwargs)
-                 for dp, x in data.items()]
-        store(list(data.values()), dsets)
+    h5datasets = []
+    for datasetname, darr in data.items():
+        dataset_chunks = chunks
+        if dataset_chunks is True:
+            dataset_chunks = tuple([c[0] for c in darr.chunks])
+
+        h5datasets.append(HDF5Dataset(
+            filename, datasetname, darr.shape, darr.dtype, dataset_chunks
+        ))
+
+    lock = SerializableLock()
+    store(list(data.values()), h5datasets, lock=lock)
 
 
 def interleave_none(a, b):
