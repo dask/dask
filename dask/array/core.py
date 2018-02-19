@@ -3356,6 +3356,32 @@ def concatenate_axes(arrays, axes):
     return concatenate3(transposelist(arrays, axes, extradims=extradims))
 
 
+class HDF5Dataset(object):
+    def __init__(self, filename, datasetname, shape, dtype, chunks):
+        self._filename = filename
+        self._datasetname = datasetname
+
+        import h5py
+        with h5py.File(self._filename, "a") as f:
+            f.require_dataset(
+                self._datasetname,
+                shape=shape,
+                dtype=dtype,
+                chunks=chunks,
+                exact=True
+            )
+
+    def __getitem__(self, idx):
+        import h5py
+        with h5py.File(self._filename, "r") as f:
+            return f[self._datasetname][idx]
+
+    def __setitem__(self, idx, val):
+        import h5py
+        with h5py.File(self._filename, "r+") as f:
+            f[self._datasetname][idx] = val
+
+
 def to_hdf5(filename, *args, **kwargs):
     """ Store arrays in HDF5 file
 
