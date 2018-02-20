@@ -2725,10 +2725,10 @@ def insert_to_ooc(arr, out, lock=True, region=None,
         func = load_store_chunk
         args = (load_stored,)
 
-    dsk = dict()
-    for t, slc in zip(core.flatten(arr.__dask_keys__()), slices):
-        store_key = (name,) + t[1:]
-        dsk[store_key] = (func, t, out, slc, lock, return_stored) + args
+    dsk = {
+        (name,) + t[1:]: (func, t, out, slc, lock, return_stored) + args
+        for t, slc in zip(core.flatten(arr.__dask_keys__()), slices)
+    }
 
     return dsk
 
@@ -2758,11 +2758,10 @@ def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     if not dsk_post:
         dsk_post = {k: k for k in keys}
 
-    load_dsk = dict()
-    for k in keys:
-        load_key = ('load-%s' % k[0],) + k[1:]
-        # Reuse the result and arguments from `store_chunk` in `load_chunk`.
-        load_dsk[load_key] = (load_chunk, dsk_post[k]) + dsk_pre[k][3:-1]
+    load_dsk = {
+        ('load-' + k[0],) + k[1:]: (load_chunk, dsk_post[k]) + dsk_pre[k][3:-1]
+        for k in keys
+    }
 
     return load_dsk
 
