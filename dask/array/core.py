@@ -2775,7 +2775,7 @@ def retrieve_from_ooc(keys, dsk):
     for each_key in keys:
         load_key = ('load-%s' % each_key[0],) + each_key[1:]
         # Reuse the result and arguments from `store_chunk` in `load_chunk`.
-        load_dsk[load_key] = (load_chunk, each_key,) + dsk[each_key][3:-1]
+        load_dsk[load_key] = (load_chunk, each_key) + dsk[each_key][3:-1]
 
     return load_dsk
 
