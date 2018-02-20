@@ -41,7 +41,6 @@ from .utils import (All, ignoring, get_ip, get_fileno_limit, log_errors,
                     key_split, validate_key, no_default, DequeHandler)
 from .utils_comm import (scatter_to_workers, gather_from_workers)
 from .utils_perf import enable_gc_diagnosis, disable_gc_diagnosis
-from .versions import get_versions
 
 from .publish import PublishExtension
 from .queues import QueueExtension
@@ -881,7 +880,7 @@ class Scheduler(ServerNode):
                          'logs': self.get_logs,
                          'worker_logs': self.get_worker_logs,
                          'nbytes': self.get_nbytes,
-                         'versions': self.get_versions,
+                         'versions': self.versions,
                          'add_keys': self.add_keys,
                          'rebalance': self.rebalance,
                          'replicate': self.replicate,
@@ -954,10 +953,6 @@ class Scheduler(ServerNode):
             return None
         else:
             return ws.info['host'], port
-
-    def get_versions(self, comm):
-        """ Basic information about ourselves and our cluster """
-        return get_versions()
 
     def start_services(self, listen_ip):
         for k, v in self.service_specs.items():

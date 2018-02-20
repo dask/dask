@@ -187,6 +187,7 @@ class WorkerBase(ServerNode):
             'profile_metadata': self.get_profile_metadata,
             'get_logs': self.get_logs,
             'keys': self.keys,
+            'versions': self.versions,
         }
 
         super(WorkerBase, self).__init__(handlers, io_loop=self.loop,

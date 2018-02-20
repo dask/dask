@@ -2889,7 +2889,7 @@ class Client(Node):
         except KeyError:
             scheduler = None
 
-        workers = sync(self.loop, self._run, get_versions)
+        workers = sync(self.loop, self.scheduler.broadcast, msg={'op': 'versions'})
         result = {'scheduler': scheduler, 'workers': workers, 'client': client}
 
         if check:

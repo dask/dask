@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from tornado.ioloop import IOLoop
 
 from .core import Server, ConnectionPool
+from .versions import get_versions
 
 
 class Node(object):
@@ -35,3 +36,6 @@ class ServerNode(Node, Server):
                       io_loop=io_loop)
         Server.__init__(self, handlers, connection_limit=connection_limit,
                         deserialize=deserialize, io_loop=self.io_loop)
+
+    def versions(self, comm=None):
+        return get_versions()
