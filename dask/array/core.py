@@ -33,7 +33,7 @@ from . import chunk
 from .numpy_compat import _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
 from ..base import (Base, tokenize, dont_optimize, compute_as_if_collection,
-                    persist)
+                    persist, is_dask_collection)
 from ..context import _globals, globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
@@ -892,21 +892,29 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         list(core.flatten([e.__dask_keys__() for e in sources]))
     )
 
-    tgt_dsks = []
+    # Optimize all targets together
+    targets2 = []
+    targets_keys = []
+    targets_dsk = []
+    for e in targets:
+        if isinstance(e, Delayed):
+            targets2.append(e.key)
+            targets_keys.extend(e.__dask_keys__())
+            targets_dsk.append(e.__dask_graph__())
+        elif is_dask_collection(e):
+            raise TypeError("Targets must be either Delayed objects or array-likes")
+        else:
+            targets2.append(e)
+
+    targets_dsk = sharedict.merge(*targets_dsk)
+    targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
+
     store_keys = []
     store_dsks = []
     if return_stored:
         load_names = []
         load_dsks = []
-    for tgt, src, reg in zip(targets, sources, regions):
-        # if out is a delayed object update dictionary accordingly
-        try:
-            each_tgt_dsk = {}
-            each_tgt_dsk.update(tgt.dask)
-            tgt = tgt.key
-        except AttributeError:
-            each_tgt_dsk = {}
-
+    for tgt, src, reg in zip(targets2, sources, regions):
         src = Array(sources_dsk, src.name, src.chunks, src.dtype)
 
         each_store_dsk = insert_to_ooc(
@@ -920,13 +928,11 @@ def store(sources, targets, lock=True, regions=None, compute=True,
                 each_store_dsk
             ))
 
-        tgt_dsks.append(each_tgt_dsk)
-
         store_keys.extend(each_store_dsk.keys())
         store_dsks.append(each_store_dsk)
 
     store_dsks_mrg = sharedict.merge(*concatv(
-        store_dsks, tgt_dsks, [sources_dsk]
+        store_dsks, [targets_dsk], [sources_dsk]
     ))
 
     if return_stored:
