@@ -2746,7 +2746,7 @@ def load_chunk(x, index, lock):
     return result
 
 
-def retrieve_from_ooc(keys, dsk):
+def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     """
     Creates a Dask graph for loading stored ``keys`` from ``dsk``.
 
@@ -2754,8 +2754,10 @@ def retrieve_from_ooc(keys, dsk):
     ----------
     keys: Sequence
         A sequence containing Dask graph keys to load
-    dsk: Mapping
-        A Dask graph corresponding to a Dask Array
+    dsk_pre: Mapping
+        A Dask graph corresponding to a Dask Array before computation
+    dsk_post: Mapping, optional
+        A Dask graph corresponding to a Dask Array after computation
 
     Examples
     --------
@@ -2766,11 +2768,14 @@ def retrieve_from_ooc(keys, dsk):
     >>> retrieve_from_ooc(g.keys(), g)  # doctest: +SKIP
     """
 
+    if not dsk_post:
+        dsk_post = {k: k for k in keys}
+
     load_dsk = dict()
-    for each_key in keys:
-        load_key = ('load-%s' % each_key[0],) + each_key[1:]
+    for k in keys:
+        load_key = ('load-%s' % k[0],) + k[1:]
         # Reuse the result and arguments from `store_chunk` in `load_chunk`.
-        load_dsk[load_key] = (load_chunk, each_key) + dsk[each_key][3:-1]
+        load_dsk[load_key] = (load_chunk, dsk_post[k]) + dsk_pre[k][3:-1]
 
     return load_dsk
 
