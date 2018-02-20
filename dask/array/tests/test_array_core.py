@@ -1226,7 +1226,13 @@ def test_store_delayed_target():
     # test keeping result
     for st_compute in [False, True]:
         targs.clear()
+
         st = store([a, b], [atd, btd], return_stored=True, compute=st_compute)
+        if st_compute:
+            assert all(
+                not any(dask.core.get_deps(e.dask)[0].values()) for e in st
+            )
+
         st = dask.compute(*st)
 
         at = targs['at']
@@ -1301,7 +1307,11 @@ def test_store_regions():
         )
         assert isinstance(v, tuple)
         assert all([isinstance(e, da.Array) for e in v])
-        if not st_compute:
+        if st_compute:
+            assert all(
+                not any(dask.core.get_deps(e.dask)[0].values()) for e in v
+            )
+        else:
             assert (at == 0).all() and (bt[region] == 0).all()
 
         ar, br = v
@@ -1329,7 +1339,11 @@ def test_store_regions():
         )
         assert isinstance(v, tuple)
         assert all([isinstance(e, da.Array) for e in v])
-        if not st_compute:
+        if st_compute:
+            assert all(
+                not any(dask.core.get_deps(e.dask)[0].values()) for e in v
+            )
+        else:
             assert (at == 0).all() and (bt[region] == 0).all()
 
         ar, br = v
