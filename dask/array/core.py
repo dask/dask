@@ -18,12 +18,12 @@ import uuid
 import warnings
 
 try:
-    from cytoolz import (partition, concat, concatv, join, first,
+    from cytoolz import (partition, concat, join, first,
                          groupby, valmap, accumulate, assoc)
     from cytoolz.curried import filter, pluck
 
 except ImportError:
-    from toolz import (partition, concat, concatv, join, first,
+    from toolz import (partition, concat, join, first,
                        groupby, valmap, accumulate, assoc)
     from toolz.curried import filter, pluck
 from toolz import pipe, map, reduce
@@ -931,9 +931,8 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         store_keys.extend(each_store_dsk.keys())
         store_dsks.append(each_store_dsk)
 
-    store_dsks_mrg = sharedict.merge(*concatv(
-        store_dsks, [targets_dsk], [sources_dsk]
-    ))
+    store_dsks_mrg = sharedict.merge(*store_dsks)
+    store_dsks_mrg = sharedict.merge(store_dsks_mrg, targets_dsk, sources_dsk)
 
     if return_stored:
         if compute:
