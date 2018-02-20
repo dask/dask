@@ -30,7 +30,7 @@ def _dumps(x):
     return cloudpickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-_loads = pickle.loads
+_loads = cloudpickle.loads
 
 
 def _process_get_id():
