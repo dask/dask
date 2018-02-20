@@ -1025,3 +1025,19 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
 
     with pytest.raises(TypeError):
         ddf.to_parquet(fn,  engine=engine, unknown_key='unknown_value')
+
+
+def test_setect_partitioned_column(tmpdir, engine):
+    if engine == 'pyarrow':
+        pytest.xfail()
+    fn = str(tmpdir)
+    size = 20
+    d = {'signal1': np.random.normal(0, 0.3, size=size).cumsum() + 50,
+         'fake_categorical1': np.random.choice(['A', 'B', 'C'], size=size),
+         'fake_categorical2': np.random.choice(['D', 'E', 'F'], size=size)}
+    df = dd.from_pandas(pd.DataFrame(d), 2)
+    df.to_parquet(fn, compression='snappy', write_index=False, engine=engine,
+                  partition_on=['fake_categorical1', 'fake_categorical2'])
+
+    df_partitioned = dd.read_parquet(fn, engine=engine)
+    df_partitioned[df_partitioned.fake_categorical1 == 'A'].compute()
