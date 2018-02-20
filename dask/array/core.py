@@ -2718,17 +2718,17 @@ def insert_to_ooc(arr, out, lock=True, region=None,
         slices = [fuse_slice(region, slc) for slc in slices]
 
     name = 'store-%s' % arr.name
-    sto_chunk = store_chunk
+    func = store_chunk
     args = ()
     if return_stored and load_stored:
         name = 'load-store-%s' % arr.name
-        sto_chunk = load_store_chunk
+        func = load_store_chunk
         args = (load_stored,)
 
     dsk = dict()
     for t, slc in zip(core.flatten(arr.__dask_keys__()), slices):
         store_key = (name,) + t[1:]
-        dsk[store_key] = (sto_chunk, t, out, slc, lock, return_stored) + args
+        dsk[store_key] = (func, t, out, slc, lock, return_stored) + args
 
     return dsk
 
