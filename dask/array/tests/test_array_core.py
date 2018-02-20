@@ -1226,7 +1226,13 @@ def test_store_delayed_target():
     # test keeping result
     for st_compute in [False, True]:
         targs.clear()
+
         st = store([a, b], [atd, btd], return_stored=True, compute=st_compute)
+        if st_compute:
+            assert all(
+                not any(dask.core.get_deps(e.dask)[0].values()) for e in st
+            )
+
         st = dask.compute(*st)
 
         at = targs['at']
@@ -1301,7 +1307,11 @@ def test_store_regions():
         )
         assert isinstance(v, tuple)
         assert all([isinstance(e, da.Array) for e in v])
-        if not st_compute:
+        if st_compute:
+            assert all(
+                not any(dask.core.get_deps(e.dask)[0].values()) for e in v
+            )
+        else:
             assert (at == 0).all() and (bt[region] == 0).all()
 
         ar, br = v
@@ -1329,7 +1339,11 @@ def test_store_regions():
         )
         assert isinstance(v, tuple)
         assert all([isinstance(e, da.Array) for e in v])
-        if not st_compute:
+        if st_compute:
+            assert all(
+                not any(dask.core.get_deps(e.dask)[0].values()) for e in v
+            )
+        else:
             assert (at == 0).all() and (bt[region] == 0).all()
 
         ar, br = v
@@ -1399,6 +1413,22 @@ class ThreadSafeStore(object):
         self.concurrent_uses -= 1
 
 
+class CounterLock(object):
+    def __init__(self, *args, **kwargs):
+        self.lock = Lock(*args, **kwargs)
+
+        self.acquire_count = 0
+        self.release_count = 0
+
+    def acquire(self, *args, **kwargs):
+        self.acquire_count += 1
+        return self.lock.acquire(*args, **kwargs)
+
+    def release(self, *args, **kwargs):
+        self.release_count += 1
+        return self.lock.release(*args, **kwargs)
+
+
 def test_store_locks():
     _Lock = type(Lock())
     d = da.ones((10, 10), chunks=(2, 2))
@@ -1434,6 +1464,27 @@ def test_store_locks():
             break
         if i == 9:
             assert False
+
+    # Verify number of lock calls
+    nchunks = np.sum([np.prod([len(c) for c in e.chunks]) for e in [a, b]])
+    for c in (False, True):
+        at = np.zeros(shape=(10, 10))
+        bt = np.zeros(shape=(10, 10))
+        lock = CounterLock()
+
+        v = store([a, b], [at, bt], lock=lock, compute=c, return_stored=True)
+        assert all(isinstance(e, Array) for e in v)
+
+        da.compute(v)
+
+        # When `return_stored=True` and `compute=False`,
+        # the lock should be acquired only once for store and load steps
+        # as they are fused together into one step.
+        assert lock.acquire_count == lock.release_count
+        if c:
+            assert lock.acquire_count == 2 * nchunks
+        else:
+            assert lock.acquire_count == nchunks
 
 
 @pytest.mark.xfail(reason="can't lock with multiprocessing")
