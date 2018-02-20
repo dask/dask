@@ -909,24 +909,17 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     targets_dsk = sharedict.merge(*targets_dsk)
     targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
 
+    load_stored = (return_stored and not compute)
+
     store_keys = []
     store_dsk = []
-    if return_stored:
-        load_names = []
-        load_dsks = []
     for tgt, src, reg in zip(targets2, sources, regions):
         src = Array(sources_dsk, src.name, src.chunks, src.dtype)
 
         each_store_dsk = insert_to_ooc(
-            src, tgt, lock=lock, region=reg, return_stored=return_stored
+            src, tgt, lock=lock, region=reg,
+            return_stored=return_stored, load_stored=load_stored
         )
-
-        if return_stored:
-            load_names.append('load-store-%s' % src.name)
-            load_dsks.append(retrieve_from_ooc(
-                each_store_dsk.keys(),
-                each_store_dsk
-            ))
 
         store_keys.extend(each_store_dsk.keys())
         store_dsk.append(each_store_dsk)
@@ -935,19 +928,20 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     store_dsk = sharedict.merge(store_dsk, targets_dsk, sources_dsk)
 
     if return_stored:
+        load_store_dsk = store_dsk
         if compute:
             store_dlyds = [Delayed(k, store_dsk) for k in store_keys]
             store_dlyds = persist(*store_dlyds)
-            store_dsk = sharedict.merge(*[e.dask for e in store_dlyds])
+            store_dsk_2 = sharedict.merge(*[e.dask for e in store_dlyds])
 
-        load_dsks_mrg = sharedict.merge(store_dsk, *load_dsks)
+            load_store_dsk = retrieve_from_ooc(
+                store_keys, store_dsk, store_dsk_2
+            )
 
         result = tuple(
-            Array(load_dsks_mrg, ln, s.chunks, s.dtype)
-            for ln, s in zip(load_names, sources)
+            Array(load_store_dsk, 'load-store-%s' % s.name, s.chunks, s.dtype)
+            for s in sources
         )
-
-        assert len(result) == len(sources)
 
         return result
     else:
