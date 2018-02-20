@@ -217,7 +217,7 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
                  local_dir=local_directory, death_timeout=death_timeout,
                  preload=preload, preload_argv=preload_argv,
                  security=sec, contact_address=contact_address,
-                 name=name if nprocs == 1 else name + '-' + str(i),
+                 name=name if nprocs == 1 or not name else name + '-' + str(i),
                  **kwargs)
                for i in range(nprocs)]
 

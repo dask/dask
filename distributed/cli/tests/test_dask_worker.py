@@ -120,16 +120,18 @@ def test_nprocs_expands_name(loop):
     with popen(['dask-scheduler', '--no-bokeh']) as sched:
         with popen(['dask-worker', '127.0.0.1:8786', '--nprocs', '2',
                     '--name', 'foo']) as worker:
-            with Client('tcp://127.0.0.1:8786', loop=loop) as c:
-                start = time()
-                while len(c.scheduler_info()['workers']) < 2:
-                    sleep(0.2)
-                    assert time() < start + 10
+            with popen(['dask-worker', '127.0.0.1:8786', '--nprocs', '2']) as worker:
+                with Client('tcp://127.0.0.1:8786', loop=loop) as c:
+                    start = time()
+                    while len(c.scheduler_info()['workers']) < 4:
+                        sleep(0.2)
+                        assert time() < start + 10
 
-                info = c.scheduler_info()
-                names = [d['name'] for d in info['workers'].values()]
-                assert all(name.startswith('foo') for name in names)
-                assert len(set(names)) == 2
+                    info = c.scheduler_info()
+                    names = [d['name'] for d in info['workers'].values()]
+                    foos = [n for n in names if n.startswith('foo')]
+                    assert len(foos) == 2
+                    assert len(set(names)) == 4
 
 
 @pytest.mark.skipif(not sys.platform.startswith('linux'),
