@@ -889,7 +889,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     sources_dsk = sharedict.merge(*[e.__dask_graph__() for e in sources])
     sources_dsk = Array.__dask_optimize__(
         sources_dsk,
-        [e.__dask_keys__() for e in sources]
+        list(core.flatten([e.__dask_keys__() for e in sources]))
     )
 
     tgt_dsks = []
