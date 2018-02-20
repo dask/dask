@@ -2702,12 +2702,14 @@ def insert_to_ooc(arr, out, lock=True, region=None, return_stored=False):
         lock = Lock()
 
     slices = slices_from_chunks(arr.chunks)
+    if region:
+        slices = [fuse_slice(region, slc) for slc in slices]
 
     name = 'store-%s' % arr.name
     dsk = dict()
     for t, slc in zip(core.flatten(arr.__dask_keys__()), slices):
         store_key = (name,) + t[1:]
-        dsk[store_key] = (store_chunk, t, out, slc, lock, region, return_stored)
+        dsk[store_key] = (store_chunk, t, out, slc, lock, None, return_stored)
 
     return dsk
 
