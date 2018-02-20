@@ -339,6 +339,8 @@ def _read_parquet_row_group(fs, fn, index, columns, rg, series, categories,
                             schema, cs, dt, scheme, storage_name_mapping, *args):
     from fastparquet.api import _pre_allocate
     from fastparquet.core import read_row_group_file
+    from collections import OrderedDict
+
     name_storage_mapping = {v: k for k, v in storage_name_mapping.items()}
     if not isinstance(columns, (tuple, list)):
         columns = [columns,]
@@ -350,6 +352,7 @@ def _read_parquet_row_group(fs, fn, index, columns, rg, series, categories,
 
     columns = [name_storage_mapping.get(col, col) for col in columns]
     index = name_storage_mapping.get(index, index)
+    cs = OrderedDict([(k, v) for k, v in cs.items() if k in columns])
 
     df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt)
     read_row_group_file(fn, rg, columns, categories, schema, cs,
