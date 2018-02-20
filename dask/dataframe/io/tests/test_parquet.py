@@ -468,8 +468,8 @@ def test_append_different_columns(tmpdir):
     assert 'Appended dtypes' in str(excinfo.value)
 
 
-def test_ordering(tmpdir):
-    check_fastparquet()
+@write_read_engines_xfail
+def test_ordering(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     df = pd.DataFrame({'a': [1, 2, 3],
                        'b': [10, 20, 30],
@@ -477,13 +477,14 @@ def test_ordering(tmpdir):
                       index=pd.Index([-1, -2, -3], name='myindex'),
                       columns=['c', 'a', 'b'])
     ddf = dd.from_pandas(df, npartitions=2)
-    dd.to_parquet(ddf, tmp)
+    dd.to_parquet(ddf, tmp, engine=write_engine)
 
-    pf = fastparquet.ParquetFile(tmp)
-    assert pf.columns == ['myindex', 'c', 'a', 'b']
+    if read_engine == 'fastparquet':
+        pf = fastparquet.ParquetFile(tmp)
+        assert pf.columns == ['myindex', 'c', 'a', 'b']
 
-    ddf2 = dd.read_parquet(tmp, index='myindex')
-    assert_eq(ddf, ddf2)
+    ddf2 = dd.read_parquet(tmp, index='myindex', engine=read_engine)
+    assert_eq(ddf, ddf2, check_divisions=False)
 
 
 def test_read_parquet_custom_columns(tmpdir, engine):
