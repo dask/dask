@@ -832,7 +832,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     ----------
 
     sources: Array or iterable of Arrays
-    targets: array-like or iterable of array-likes
+    targets: array-like or Delayed or iterable of array-likes and/or Delayeds
         These should support setitem syntax ``target[10:20] = ...``
     lock: boolean or threading.Lock, optional
         Whether or not to lock the data stores while storing.
