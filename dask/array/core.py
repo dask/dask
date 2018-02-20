@@ -910,7 +910,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
 
     store_keys = []
-    store_dsks = []
+    store_dsk = []
     if return_stored:
         load_names = []
         load_dsks = []
@@ -929,18 +929,18 @@ def store(sources, targets, lock=True, regions=None, compute=True,
             ))
 
         store_keys.extend(each_store_dsk.keys())
-        store_dsks.append(each_store_dsk)
+        store_dsk.append(each_store_dsk)
 
-    store_dsks_mrg = sharedict.merge(*store_dsks)
-    store_dsks_mrg = sharedict.merge(store_dsks_mrg, targets_dsk, sources_dsk)
+    store_dsk = sharedict.merge(*store_dsk)
+    store_dsk = sharedict.merge(store_dsk, targets_dsk, sources_dsk)
 
     if return_stored:
         if compute:
-            store_dlyds = [Delayed(k, store_dsks_mrg) for k in store_keys]
+            store_dlyds = [Delayed(k, store_dsk) for k in store_keys]
             store_dlyds = persist(*store_dlyds)
-            store_dsks_mrg = sharedict.merge(*[e.dask for e in store_dlyds])
+            store_dsk = sharedict.merge(*[e.dask for e in store_dlyds])
 
-        load_dsks_mrg = sharedict.merge(store_dsks_mrg, *load_dsks)
+        load_dsks_mrg = sharedict.merge(store_dsk, *load_dsks)
 
         result = tuple(
             Array(load_dsks_mrg, ln, s.chunks, s.dtype)
@@ -952,7 +952,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         return result
     else:
         name = 'store-' + tokenize(*store_keys)
-        dsk = sharedict.merge({name: store_keys}, store_dsks_mrg)
+        dsk = sharedict.merge({name: store_keys}, store_dsk)
         result = Delayed(name, dsk)
 
         if compute:
