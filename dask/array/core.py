@@ -2624,7 +2624,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     return Array(dsk2, name, chunks, dtype=dt)
 
 
-def store_chunk(x, out, index, lock, region, return_stored):
+def store_chunk(x, out, index, lock, return_stored):
     """
     A function inserted in a Dask graph for storing a chunk.
 
@@ -2638,8 +2638,6 @@ def store_chunk(x, out, index, lock, region, return_stored):
         Where to store result from ``x`` in ``out``.
     lock: Lock-like or False
         Lock to use before writing to ``out``.
-    region: slice-like or None
-        Where relative to ``out`` to store ``x``.
     return_stored: bool
         Whether to return ``out``.
 
@@ -2648,21 +2646,17 @@ def store_chunk(x, out, index, lock, region, return_stored):
 
     >>> a = np.ones((5, 6))
     >>> b = np.empty(a.shape)
-    >>> store_chunk(a, b, (slice(None), slice(None)), False, None, False)
+    >>> store_chunk(a, b, (slice(None), slice(None)), False, False)
     """
 
     result = None
     if return_stored:
         result = out
 
-    subindex = index
-    if region is not None:
-        subindex = fuse_slice(region, index)
-
     if lock:
         lock.acquire()
     try:
-        out[subindex] = np.asanyarray(x)
+        out[index] = np.asanyarray(x)
     finally:
         if lock:
             lock.release()
@@ -2709,12 +2703,12 @@ def insert_to_ooc(arr, out, lock=True, region=None, return_stored=False):
     dsk = dict()
     for t, slc in zip(core.flatten(arr.__dask_keys__()), slices):
         store_key = (name,) + t[1:]
-        dsk[store_key] = (store_chunk, t, out, slc, lock, None, return_stored)
+        dsk[store_key] = (store_chunk, t, out, slc, lock, return_stored)
 
     return dsk
 
 
-def load_chunk(x, index, lock, region):
+def load_chunk(x, index, lock):
     """
     A function inserted in a Dask graph for loading a chunk.
 
@@ -2726,26 +2720,20 @@ def load_chunk(x, index, lock, region):
         Where to store result from ``x`` in ``out``.
     lock: Lock-like or False
         Lock to use before writing to ``out``.
-    region: slice-like or None
-        Where relative to ``out`` to store ``x``.
 
     Examples
     --------
 
     >>> a = np.ones((5, 6))
-    >>> load_chunk(a, (slice(None), slice(None)), False, None)  # doctest: +SKIP
+    >>> load_chunk(a, (slice(None), slice(None)), False)  # doctest: +SKIP
     """
 
     result = None
 
-    subindex = index
-    if region is not None:
-        subindex = fuse_slice(region, index)
-
     if lock:
         lock.acquire()
     try:
-        result = x[subindex]
+        result = x[index]
     finally:
         if lock:
             lock.release()
