@@ -10,6 +10,7 @@ from tornado import gen
 from .client import Client, _wait
 from .utils import ignoring, funcname, itemgetter
 from . import get_client, secede, rejoin
+from .worker import thread_state
 
 # A user could have installed joblib, sklearn, both, or neither. Further, only
 # joblib >= 0.10.0 supports backends, so we also need to check for that. This
@@ -179,18 +180,14 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
         """
         # See 'joblib.Parallel.__call__' and 'joblib.Parallel.retrieve' for how
         # this is used.
-        try:
+        if hasattr(thread_state, 'execution_state'):
+            # we are in a worker. Secede to avoid deadlock.
             secede()
-        except ValueError:
-            # We are not a worker, i.e. not in nested parallelism.
-            pass
 
         yield
 
-        try:
+        if hasattr(thread_state, 'execution_state'):
             rejoin()
-        except AttributeError:
-            pass
 
 
 for base in _bases:
