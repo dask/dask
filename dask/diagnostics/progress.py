@@ -73,7 +73,9 @@ class ProgressBar(Callback):
     [########################################] | 100% Completed | 10.4 s
     """
 
-    def __init__(self, minimum=0, width=40, dt=0.1, out=sys.stdout):
+    def __init__(self, minimum=0, width=40, dt=0.1, out=None):
+        if out is None:
+            out=sys.stdout
         self._minimum = minimum
         self._width = width
         self._dt = dt
