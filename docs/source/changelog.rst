@@ -10,6 +10,7 @@ Array
 
 - Corrected dimension chunking in indices (:issue:`3166`, :pr:`3167`) `Simon Perkins`_
 - Inline ``store_chunk`` calls for ``store``'s ``return_stored`` option (:pr:`3153`) `John A Kirkham`_
+- Compatibility with struct dtypes for NumPy 1.14.1 release (:pr:`3187`) `Matthew Rocklin`_
 
 DataFrame
 +++++++++
