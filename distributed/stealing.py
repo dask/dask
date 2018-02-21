@@ -45,7 +45,8 @@ class WorkStealing(SchedulerPlugin):
             self.add_worker(worker=worker)
 
         pc = PeriodicCallback(callback=self.balance,
-                              callback_time=100)
+                              callback_time=100,
+                              io_loop=self.scheduler.loop)
         self._pc = pc
         self.scheduler.periodic_callbacks['stealing'] = pc
         self.scheduler.plugins.append(self)
