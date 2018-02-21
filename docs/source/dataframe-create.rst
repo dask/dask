@@ -22,7 +22,6 @@ file formats, and other Dask or Python collections.
 File Formats:
 
 .. autosummary::
-
     read_csv
     read_parquet
     read_hdf
