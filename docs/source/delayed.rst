@@ -140,3 +140,10 @@ reproduction of our original problem as a parallel code.
         output.append(c)
 
     total = dask.delayed(sum)(output)
+
+
+Real time
+---------
+
+Sometimes you want to create and destroy work during execution, launch tasks
+from other tasks, etc..  For this, see the :doc:`Futures <futures>` interface.
