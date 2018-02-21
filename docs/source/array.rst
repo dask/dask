@@ -1,6 +1,20 @@
 Array
 =====
 
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+
+   array-api.rst
+   array-creation.rst
+   array-ghost.rst
+   array-design.rst
+   array-sparse.rst
+   array-stats.rst
+   array-linear-operator.rst
+   array-slicing.rst
+   array-stack.rst
+
 Dask Array implements a subset of the NumPy ndarray interface using blocked
 algorithms, cutting up the large array into many small arrays. This lets us
 compute on arrays larger than memory using all of our cores.  We coordinate
@@ -67,23 +81,3 @@ transfer costs and because NumPy releases the GIL well.  It is also quite
 effective on a cluster using the `dask.distributed`_ scheduler.
 
 .. _`dask.distributed`: https://distributed.readthedocs.io/en/latest/
-
-.. toctree::
-   :maxdepth: 1
-
-   array-overview.rst
-   array-creation.rst
-   array-api.rst
-
-Other topics
-
-.. toctree::
-   :maxdepth: 1
-
-   array-slicing.rst
-   array-stack.rst
-   array-ghost.rst
-   array-design.rst
-   array-linear-operator.rst
-   array-sparse.rst
-   array-stats.rst
