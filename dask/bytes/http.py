@@ -4,7 +4,6 @@ import requests
 import uuid
 
 from . import core
-from ..base import tokenize
 
 DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
 
