@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 import os
+import importlib
 from distutils.version import LooseVersion
 
 import pytest
@@ -11,8 +12,23 @@ from distributed.utils_test import cluster, inc
 from distributed.utils_test import loop # noqa F401
 
 distributed_joblib = pytest.importorskip('distributed.joblib')
-joblibs = [distributed_joblib.joblib, distributed_joblib.sk_joblib]
 joblib_funcname = distributed_joblib.joblib_funcname
+
+
+@pytest.fixture(params=['joblib', 'sk_joblib'])
+def joblib(request):
+    if request.param == 'joblib':
+        try:
+            this_joblib = importlib.import_module('joblib')
+        except ImportError:
+            pytest.skip("joblib not available")
+    else:
+        try:
+            this_joblib = importlib.import_module("sklearn.externals.joblib")
+        except ImportError:
+            pytest.skip("sklearn.externals.joblib not available")
+
+    return this_joblib
 
 
 def slow_raise_value_error(condition, duration=0.05):
@@ -21,7 +37,6 @@ def slow_raise_value_error(condition, duration=0.05):
         raise ValueError("condition evaluated to True")
 
 
-@pytest.mark.parametrize('joblib', joblibs)
 def test_simple(loop, joblib):
     if joblib is None:
         pytest.skip()
@@ -45,7 +60,6 @@ def random2():
     return random()
 
 
-@pytest.mark.parametrize('joblib', joblibs)
 def test_dont_assume_function_purity(loop, joblib):
     if joblib is None:
         pytest.skip()
@@ -58,7 +72,6 @@ def test_dont_assume_function_purity(loop, joblib):
                 assert x != y
 
 
-@pytest.mark.parametrize('joblib', joblibs)
 def test_joblib_funcname(joblib):
     if joblib is None:
         pytest.skip()
@@ -71,7 +84,6 @@ def test_joblib_funcname(joblib):
     assert joblib_funcname(random2) == 'random2'
 
 
-@pytest.mark.parametrize('joblib', joblibs)
 def test_joblib_backend_subclass(joblib):
     if joblib is None:
         pytest.skip()
@@ -99,7 +111,6 @@ class CountSerialized(object):
         return (CountSerialized, (self.x,))
 
 
-@pytest.mark.parametrize('joblib', joblibs)
 def test_joblib_scatter(loop, joblib):
     if joblib is None:
         pytest.skip()
@@ -137,7 +148,6 @@ def test_joblib_scatter(loop, joblib):
     assert z.count == 4
 
 
-@pytest.mark.parametrize('joblib', joblibs)
 def test_nested_backend_context_manager(loop, joblib):
     if joblib is None or LooseVersion(joblib.__version__) <= "0.11.0":
         pytest.skip("Joblib >= 0.11.1 required.")
@@ -170,7 +180,6 @@ def test_nested_backend_context_manager(loop, joblib):
                     assert len(set(pid_group)) <= 2
 
 
-@pytest.mark.parametrize('joblib', joblibs)
 def test_errors(loop, joblib):
     if joblib is None:
         pytest.skip()
@@ -182,7 +191,6 @@ def test_errors(loop, joblib):
     assert "create a dask client" in str(info.value).lower()
 
 
-@pytest.mark.parametrize('joblib', joblibs)
 def test_secede_with_no_processes(loop, joblib):
     # https://github.com/dask/distributed/issues/1775
 
