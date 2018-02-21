@@ -6,7 +6,7 @@ from toolz import concat
 
 from dask import compute, delayed
 from dask.bytes.memory import MemoryFileSystem, MemoryFile
-from dask.bytes.core import read_bytes, open_files, open_text_files
+from dask.bytes.core import open_files, read_bytes
 from dask.bytes import core
 
 
@@ -32,14 +32,17 @@ def mem():
         MemoryFileSystem.store.clear()
 
 
-def test_write_bytes(mem):
+def test_write(mem):
     paths = ['memory://' + test_bucket_name + '/more/' + f for f in files]
-    values = [delayed(v) for v in files.values()]
-    out = core.write_bytes(values, paths)
-    compute(*out)
-    sample, values = read_bytes('memory://' + test_bucket_name + '/more/test/accounts.*')
-    results = compute(*concat(values))
-    assert set(list(files.values())) == set(results)
+    fns = open_files(paths, 'wb')
+    for fn, value in zip(fns, files.values()):
+        with fn as f:
+            f.write(value)
+
+    fns = open_files(paths, 'rb')
+    for fn, value in zip(fns, files.values()):
+        with fn as f:
+            assert f.read() == value
 
 
 def test_read_bytes(mem):
@@ -144,7 +147,8 @@ def test_registered_open_files(mem):
 
 
 def test_registered_open_text_files(mem):
-    myfiles = open_text_files('memory://%s/test/accounts.*.json' % test_bucket_name)
+    myfiles = open_files('memory://%s/test/accounts.*.json' % test_bucket_name,
+                         'rt')
     assert len(myfiles) == len(files)
     data = []
     for file in myfiles:
@@ -190,7 +194,7 @@ def test_parquet(mem):
                              size=1000).astype("O")},
                         index=pd.Index(np.arange(1000), name='foo'))
     df = dd.from_pandas(data, chunksize=500)
-    to_parquet(url, df, object_encoding='utf8')
+    df.to_parquet(url, object_encoding='utf8')
 
     df2 = read_parquet(url, index='foo')
     assert len(df2.divisions) > 1
