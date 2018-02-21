@@ -75,7 +75,7 @@ class ProgressBar(Callback):
 
     def __init__(self, minimum=0, width=40, dt=0.1, out=None):
         if out is None:
-            out=sys.stdout
+            out = sys.stdout
         self._minimum = minimum
         self._width = width
         self._dt = dt
