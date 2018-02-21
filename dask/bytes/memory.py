@@ -22,14 +22,8 @@ class MemoryFileSystem(core.FileSystem):
         """
         pass
 
-    def _trim_filename(self, fn):
-        if fn.startswith('memory://'):
-            fn = fn[9:]
-        return fn
-
     def glob(self, path):
         """For a template path, return matching files"""
-        path = self._trim_filename(path)
         pattern = re.compile("^" + path.replace('//', '/')
                              .rstrip('/')
                              .replace('*', '[^/]*')
@@ -51,7 +45,6 @@ class MemoryFileSystem(core.FileSystem):
         mode: string
             normally "rb", "wb" or "ab" or other.
         """
-        path = self._trim_filename(path)
         if 'b' not in mode:
             raise ValueError('Only bytes mode allowed')
         if mode in ['rb', 'ab', 'rb+']:
@@ -70,14 +63,12 @@ class MemoryFileSystem(core.FileSystem):
 
     def ukey(self, path):
         """Unique identifier, so we can tell if a file changed"""
-        path = self._trim_filename(path)
         if path not in self.store:
             raise FileNotFoundError(path)
         return time.time()
 
     def size(self, path):
         """Size in bytes of the file at path"""
-        path = self._trim_filename(path)
         if path not in self.store:
             raise FileNotFoundError(path)
         b = self.store[path]
