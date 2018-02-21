@@ -240,7 +240,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
                     np.issubdtype(x.dtype[name], np.unicode_) or
                     np.issubdtype(x.dtype[name], np.object_)):
                 a = da.from_array(x[name], chunks=(chunksize * len(x.names),))
-                categories[name] = da.unique(a)
+                categories[name] = da.unique(a).compute()
 
     columns = tuple(x.dtype.names)
     divisions = tuple(range(0, len(x), chunksize))
@@ -390,7 +390,7 @@ def from_dask_array(x, columns=None):
         divisions[-1] -= 1
 
     dsk = {}
-    for i, (chunk, ind) in enumerate(zip(x._keys(), index)):
+    for i, (chunk, ind) in enumerate(zip(x.__dask_keys__(), index)):
         if x.ndim == 2:
             chunk = chunk[0]
         if isinstance(meta, pd.Series):
@@ -435,8 +435,8 @@ def to_bag(df, index=False):
         raise TypeError("df must be either DataFrame or Series")
     name = 'to_bag-' + tokenize(df, index)
     dsk = dict(((name, i), (_df_to_bag, block, index))
-               for (i, block) in enumerate(df._keys()))
-    dsk.update(df._optimize(df.dask, df._keys()))
+               for (i, block) in enumerate(df.__dask_keys__()))
+    dsk.update(df.__dask_optimize__(df.__dask_graph__(), df.__dask_keys__()))
     return Bag(dsk, name, df.npartitions)
 
 
@@ -457,15 +457,7 @@ def to_records(df):
     dask.dataframe._Frame.values
     dask.dataframe.from_dask_array
     """
-    from ...array.core import Array
-    if not isinstance(df, (DataFrame, Series)):
-        raise TypeError("df must be either DataFrame or Series")
-    name = 'to-records-' + tokenize(df)
-    dsk = {(name, i): (M.to_records, key)
-           for (i, key) in enumerate(df._keys())}
-    x = df._meta.to_records()
-    chunks = ((np.nan,) * df.npartitions,)
-    return Array(merge(df.dask, dsk), name, chunks, x.dtype)
+    return df.map_partitions(M.to_records)
 
 
 @insert_meta_param_description

@@ -83,15 +83,20 @@ def test_resource_profiler():
     assert len(results) > 0
     assert all(isinstance(i, tuple) and len(i) == 3 for i in results)
 
+    # Tracker stopped on exit
+    assert not rprof._is_running()
+
     rprof.clear()
     assert rprof.results == []
 
+    # Close is idempotent
     rprof.close()
-    assert not rprof._tracker.is_alive()
+    assert not rprof._is_running()
 
-    with pytest.raises(AssertionError):
-        with rprof:
-            get(dsk, 'e')
+    # Restarts tracker if already closed
+    with rprof:
+        get(dsk2, 'c')
+    assert len(rprof.results) > 0
 
 
 @pytest.mark.skipif("not psutil")
@@ -114,7 +119,7 @@ def test_resource_profiler_multiple_gets():
     assert all(isinstance(i, tuple) and len(i) == 3 for i in results)
 
     rprof.close()
-    assert not rprof._tracker.is_alive()
+    assert not rprof._is_running()
 
 
 def test_cache_profiler():
@@ -245,13 +250,21 @@ def test_resource_profiler_plot():
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
     assert check_title(p, "Not the default")
-    # Test empty, checking for errors
+
+    # Test with empty and one point, checking for errors
     rprof.clear()
-
-    with pytest.warns(None) as record:
-        rprof.visualize(show=False, save=False)
-
-    assert len(record) == 0
+    for results in [[], [(1.0, 0, 0)]]:
+        rprof.results = results
+        with pytest.warns(None) as record:
+            p = rprof.visualize(show=False, save=False)
+        assert len(record) == 0
+        # Check bounds are valid
+        assert p.x_range.start == 0
+        assert p.x_range.end == 1
+        assert p.y_range.start == 0
+        assert p.y_range.end == 100
+        assert p.extra_y_ranges['memory'].start == 0
+        assert p.extra_y_ranges['memory'].end == 100
 
 
 @pytest.mark.skipif("not bokeh")

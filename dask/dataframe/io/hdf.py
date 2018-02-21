@@ -12,7 +12,7 @@ from toolz import merge
 from .io import _link
 from ..core import DataFrame, new_dd_object
 from ... import multiprocessing
-from ...base import tokenize
+from ...base import tokenize, compute_as_if_collection
 from ...bytes.utils import build_name_function
 from ...compatibility import PY3
 from ...context import _globals
@@ -216,7 +216,7 @@ def to_hdf(df, path, key, mode='a', append=False, get=None,
         keys = [(name, i) for i in range(df.npartitions)]
 
     if compute:
-        DataFrame._get(dsk, keys, get=get, **dask_kwargs)
+        compute_as_if_collection(DataFrame, dsk, keys, get=get, **dask_kwargs)
         return filenames
     else:
         return delayed([Delayed(k, dsk) for k in keys])

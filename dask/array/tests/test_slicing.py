@@ -12,7 +12,6 @@ from dask.array.slicing import (_sanitize_index_element, _slice_1d,
                                 new_blockdim, sanitize_index, slice_array,
                                 take, normalize_index)
 from dask.array.utils import assert_eq, same_keys
-from dask.compatibility import skip
 
 
 def test_slice_1d():
@@ -344,6 +343,21 @@ def test_slicing_and_chunks():
     assert t.chunks == ((8, 8), (6, 6))
 
 
+def test_slicing_identities():
+    a = da.ones((24, 16), chunks=((4, 8, 8, 4), (2, 6, 6, 2)))
+
+    assert a is a[slice(None)]
+    assert a is a[:]
+    assert a is a[::]
+    assert a is a[...]
+    assert a is a[0:]
+    assert a is a[0::]
+    assert a is a[::1]
+    assert a is a[0:len(a)]
+    assert a is a[0::1]
+    assert a is a[0:len(a):1]
+
+
 def test_slice_stop_0():
     # from gh-125
     a = da.ones(10, chunks=(10,))[:0].compute()
@@ -364,7 +378,7 @@ class ReturnItem(object):
         return key
 
 
-@skip
+@pytest.mark.skip(reason='really long test')
 def test_slicing_exhaustively():
     x = np.random.rand(6, 7, 8)
     a = da.from_array(x, chunks=(3, 3, 3))

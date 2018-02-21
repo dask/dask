@@ -7,10 +7,12 @@ import pytest
 from dask.dataframe.io.sql import read_sql_table
 from dask.utils import tmpfile
 from dask.dataframe.utils import assert_eq
+
 pd = pytest.importorskip('pandas')
 dd = pytest.importorskip('dask.dataframe')
 pytest.importorskip('sqlalchemy')
 pytest.importorskip('sqlite3')
+np = pytest.importorskip('numpy')
 
 
 data = """
@@ -33,6 +35,64 @@ def db():
         uri = 'sqlite:///%s' % f
         df.to_sql('test', uri, index=True, if_exists='replace')
         yield uri
+
+
+def test_empty(db):
+    from sqlalchemy import create_engine, MetaData, Table, Column, Integer
+    with tmpfile() as f:
+        uri = 'sqlite:///%s' % f
+        metadata = MetaData()
+        engine = create_engine(uri)
+        table = Table('empty_table', metadata,
+                      Column('id', Integer, primary_key=True),
+                      Column('col2', Integer))
+        metadata.create_all(engine)
+
+        dask_df = read_sql_table(table.name, uri, index_col='id', npartitions=1)
+        assert dask_df.index.name == 'id'
+        assert dask_df.col2.dtype == np.dtype('int64')
+        pd_dataframe = dask_df.compute()
+        assert pd_dataframe.empty is True
+
+
+def test_needs_rational(db):
+    import datetime
+    now = datetime.datetime.now()
+    d = datetime.timedelta(seconds=1)
+    df = pd.DataFrame({'a': list('ghjkl'), 'b': [now + i * d for i in range(5)],
+                       'c': [True, True, False, True, True]})
+    df = df.append([{'a': 'x', 'b': now + d * 1000, 'c': None},
+                    {'a': None, 'b': now + d * 1001, 'c': None}])
+    with tmpfile() as f:
+        uri = 'sqlite:///%s' % f
+        df.to_sql('test', uri, index=False, if_exists='replace')
+
+        # one partition contains NULL
+        data = read_sql_table('test', uri, npartitions=2, index_col='b')
+        df2 = df.set_index('b')
+        assert_eq(data, df2.astype({'c': bool}))  # bools are coerced
+
+        # one partition contains NULL, but big enough head
+        data = read_sql_table('test', uri, npartitions=2, index_col='b',
+                              head_rows=12)
+        df2 = df.set_index('b')
+        assert_eq(data, df2)
+
+        # empty partitions
+        data = read_sql_table('test', uri, npartitions=20, index_col='b')
+        part = data.get_partition(12).compute()
+        assert part.dtypes.tolist() == ['O', bool]
+        assert part.empty
+        df2 = df.set_index('b')
+        assert_eq(data, df2.astype({'c': bool}))
+
+        # explicit meta
+        data = read_sql_table('test', uri, npartitions=2, index_col='b',
+                              meta=df2[:0])
+        part = data.get_partition(1).compute()
+        assert part.dtypes.tolist() == ['O', 'O']
+        df2 = df.set_index('b')
+        assert_eq(data, df2)
 
 
 def test_simple(db):

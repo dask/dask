@@ -39,7 +39,7 @@ Dask Collections:
     from_delayed
     from_dask_array
     dask.bag.core.Bag.to_dataframe
-    to_delayed
+    DataFrame.to_delayed
     to_records
     to_bag
 

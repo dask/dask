@@ -4,6 +4,7 @@ import pandas as pd
 import pandas.util.testing as tm
 
 from dask.local import get_sync
+from dask.base import compute_as_if_collection
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
@@ -798,6 +799,17 @@ def test_errors_for_merge_on_frame_columns():
         dd.merge(aa, bb, left_on=aa.x, right_on=bb.y)
 
 
+def test_concat_one_series():
+    a = pd.Series([1, 2, 3, 4])
+    aa = dd.from_pandas(a, npartitions=2, sort=False)
+
+    c = dd.concat([aa], axis=0)
+    assert isinstance(c, dd.Series)
+
+    c = dd.concat([aa], axis=1)
+    assert isinstance(c, dd.DataFrame)
+
+
 def test_concat_unknown_divisions():
     a = pd.Series([1, 2, 3, 4])
     b = pd.Series([4, 3, 2, 1])
@@ -1030,7 +1042,9 @@ def test_concat_categorical(known, cat_index, divisions):
         res = dd.concat(ddfs, join=join, interleave_partitions=divisions)
         assert_eq(res, sol)
         if known:
-            for p in [i.iloc[:0] for i in res._get(res.dask, res._keys())]:
+            parts = compute_as_if_collection(dd.DataFrame, res.dask,
+                                             res.__dask_keys__())
+            for p in [i.iloc[:0] for i in parts]:
                 res._meta == p  # will error if schemas don't align
         assert not cat_index or has_known_categories(res.index) == known
         return res
@@ -1056,6 +1070,29 @@ def test_concat_categorical(known, cat_index, divisions):
                                [frames[0][['x', 'y']]] + frames[1:], join)
         assert not hasattr(res, 'w') or has_known_categories(res.w)
         assert has_known_categories(res.y) == known
+
+
+def test_concat_datetimeindex():
+    # https://github.com/dask/dask/issues/2932
+    b2 = pd.DataFrame({'x': ['a']},
+                      index=pd.DatetimeIndex(['2015-03-24 00:00:16'],
+                                             dtype='datetime64[ns]'))
+    b3 = pd.DataFrame({'x': ['c']},
+                      index=pd.DatetimeIndex(['2015-03-29 00:00:44'],
+                                             dtype='datetime64[ns]'))
+
+    b2['x'] = b2.x.astype('category').cat.set_categories(['a', 'c'])
+    b3['x'] = b3.x.astype('category').cat.set_categories(['a', 'c'])
+
+    db2 = dd.from_pandas(b2, 1)
+    db3 = dd.from_pandas(b3, 1)
+
+    result = concat([b2.iloc[:0], b3.iloc[:0]])
+    assert result.index.dtype == '<M8[ns]'
+
+    result = dd.concat([db2, db3])
+    expected = pd.concat([b2, b3])
+    assert_eq(result, expected)
 
 
 def test_append():

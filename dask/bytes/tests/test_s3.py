@@ -1,21 +1,20 @@
 from __future__ import print_function, division, absolute_import
 
+import sys
 from contextlib import contextmanager
 
 import pytest
-pytest.importorskip('s3fs')
-pytest.importorskip('boto3')
-pytest.importorskip('moto')
 
-import boto3
-import moto
+s3fs = pytest.importorskip('s3fs')
+boto3 = pytest.importorskip('boto3')
+moto = pytest.importorskip('moto')
+
 from toolz import concat, valmap, partial
-from s3fs import S3FileSystem
 
-from dask import compute, get, delayed
+from dask import compute, get
 from dask.bytes.s3 import DaskS3FileSystem
-from dask.bytes.core import read_bytes, open_files, open_text_files
-from dask.bytes import core
+from dask.bytes.core import read_bytes, open_files, get_pyarrow_filesystem
+from dask.bytes.compression import compress, files as compress_files, seekable_files
 
 
 compute = partial(compute, get=get)
@@ -40,7 +39,7 @@ def s3():
         client.create_bucket(Bucket=test_bucket_name, ACL='public-read-write')
         for f, data in files.items():
             client.put_object(Bucket=test_bucket_name, Key=f, Body=data)
-        yield S3FileSystem(anon=True)
+        yield s3fs.S3FileSystem(anon=True)
 
 
 @contextmanager
@@ -77,11 +76,12 @@ def test_get_s3():
         DaskS3FileSystem(secret='key', password='key')
 
 
-def test_write_bytes(s3):
+def test_open_files_write(s3):
     paths = ['s3://' + test_bucket_name + '/more/' + f for f in files]
-    values = [delayed(v) for v in files.values()]
-    out = core.write_bytes(values, paths)
-    compute(*out)
+    fils = open_files(paths, mode='wb')
+    for fil, data in zip(fils, files.values()):
+        with fil as f:
+            f.write(data)
     sample, values = read_bytes('s3://' + test_bucket_name + '/more/test/accounts.*')
     results = compute(*concat(values))
     assert set(list(files.values())) == set(results)
@@ -181,38 +181,9 @@ def test_read_bytes_delimited(s3, blocksize):
     assert ours == test
 
 
-def test_registered(s3):
-    sample, values = read_bytes('s3://%s/test/accounts.*.json' % test_bucket_name)
-
-    results = compute(*concat(values))
-    assert set(results) == set(files.values())
-
-
-def test_registered_open_files(s3):
-    myfiles = open_files('s3://%s/test/accounts.*.json' % test_bucket_name)
-    assert len(myfiles) == len(files)
-    data = []
-    for file in myfiles:
-        with file as f:
-            data.append(f.read())
-    assert list(data) == [files[k] for k in sorted(files)]
-
-
-def test_registered_open_text_files(s3):
-    myfiles = open_text_files('s3://%s/test/accounts.*.json' % test_bucket_name)
-    assert len(myfiles) == len(files)
-    data = []
-    for file in myfiles:
-        with file as f:
-            data.append(f.read())
-    assert list(data) == [files[k].decode() for k in sorted(files)]
-
-
-from dask.bytes.compression import compress, files as cfiles, seekable_files
-fmt_bs = [(fmt, None) for fmt in cfiles] + [(fmt, 10) for fmt in seekable_files]
-
-
-@pytest.mark.parametrize('fmt,blocksize', fmt_bs)
+@pytest.mark.parametrize('fmt,blocksize',
+                         [(fmt, None) for fmt in compress_files] +
+                         [(fmt, 10) for fmt in seekable_files])
 def test_compression(s3, fmt, blocksize):
     with s3_context('compress', valmap(compress[fmt], files)):
         sample, values = read_bytes('s3://compress/test/accounts.*',
@@ -224,19 +195,16 @@ def test_compression(s3, fmt, blocksize):
         assert b''.join(results) == b''.join([files[k] for k in sorted(files)])
 
 
-def test_files(s3):
-    myfiles = open_files('s3://' + test_bucket_name + '/test/accounts.*')
+@pytest.mark.parametrize('mode', ['rt', 'rb'])
+def test_open_files(s3, mode):
+    myfiles = open_files('s3://' + test_bucket_name + '/test/accounts.*',
+                         mode=mode)
     assert len(myfiles) == len(files)
     for lazy_file, path in zip(myfiles, sorted(files)):
         with lazy_file as f:
             data = f.read()
-            assert data == files[path]
-
-
-@pytest.mark.parametrize('fmt', list(seekable_files))
-def test_getsize(fmt):
-    with s3_context('compress', {'x': compress[fmt](b'1234567890')}) as s3:
-        assert s3.logical_size('compress/x', fmt) == 10
+            sol = files[path]
+            assert data == sol if mode == 'rb' else sol.decode()
 
 
 double = lambda x: x * 2
@@ -255,20 +223,6 @@ def test_modification_time_read_bytes():
     assert [aa._key for aa in concat(a)] != [cc._key for cc in concat(c)]
 
 
-@pytest.mark.skip()
-def test_modification_time_open_files():
-    with s3_context('compress', files):
-        a = open_files('s3://compress/test/accounts.*')
-        b = open_files('s3://compress/test/accounts.*')
-
-        assert [aa._key for aa in a] == [bb._key for bb in b]
-
-    with s3_context('compress', valmap(double, files)):
-        c = open_files('s3://compress/test/accounts.*')
-
-    assert [aa._key for aa in a] != [cc._key for cc in c]
-
-
 def test_read_csv_passes_through_options():
     dd = pytest.importorskip('dask.dataframe')
     with s3_context('csv', {'a.csv': b'a,b\n1,2\n3,4'}) as s3:
@@ -283,11 +237,10 @@ def test_read_text_passes_through_options():
         assert df.count().compute(get=get) == 3
 
 
-def test_parquet(s3):
+@pytest.mark.parametrize("engine", ['pyarrow', 'fastparquet'])
+def test_parquet(s3, engine):
     dd = pytest.importorskip('dask.dataframe')
-    pytest.importorskip('fastparquet')
-    from dask.dataframe.io.parquet import to_parquet, read_parquet
-
+    pytest.importorskip(engine)
     import pandas as pd
     import numpy as np
 
@@ -297,17 +250,17 @@ def test_parquet(s3):
                          'i64': np.arange(1000, dtype=np.int64),
                          'f': np.arange(1000, dtype=np.float64),
                          'bhello': np.random.choice(
-                             ['hello', 'you', 'people'],
+                             [u'hello', u'you', u'people'],
                              size=1000).astype("O")},
                         index=pd.Index(np.arange(1000), name='foo'))
     df = dd.from_pandas(data, chunksize=500)
-    to_parquet(url, df, object_encoding='utf8')
+    df.to_parquet(url, engine=engine)
 
     files = [f.split('/')[-1] for f in s3.ls(url)]
-    assert '_metadata' in files
+    assert '_common_metadata' in files
     assert 'part.0.parquet' in files
 
-    df2 = read_parquet(url, index='foo')
+    df2 = dd.read_parquet(url, index='foo', engine=engine)
     assert len(df2.divisions) > 1
 
     pd.util.testing.assert_frame_equal(data, df2.compute())
@@ -316,7 +269,6 @@ def test_parquet(s3):
 def test_parquet_wstoragepars(s3):
     dd = pytest.importorskip('dask.dataframe')
     pytest.importorskip('fastparquet')
-    from dask.dataframe.io.parquet import to_parquet, read_parquet
 
     import pandas as pd
     import numpy as np
@@ -325,14 +277,29 @@ def test_parquet_wstoragepars(s3):
 
     data = pd.DataFrame({'i32': np.array([0, 5, 2, 5])})
     df = dd.from_pandas(data, chunksize=500)
-    to_parquet(url, df, write_index=False)
+    df.to_parquet(url, write_index=False)
 
-    read_parquet(url, storage_options={'default_fill_cache': False})
+    dd.read_parquet(url, storage_options={'default_fill_cache': False})
     assert s3.current().default_fill_cache is False
-    read_parquet(url, storage_options={'default_fill_cache': True})
+    dd.read_parquet(url, storage_options={'default_fill_cache': True})
     assert s3.current().default_fill_cache is True
 
-    read_parquet(url, storage_options={'default_block_size': 2**20})
+    dd.read_parquet(url, storage_options={'default_block_size': 2**20})
     assert s3.current().default_block_size == 2**20
     with s3.current().open(url + '/_metadata') as f:
         assert f.blocksize == 2**20
+
+
+@pytest.mark.skipif(sys.platform == 'win32',
+                    reason="pathlib and moto clash on windows")
+def test_pathlib_s3(s3):
+    pathlib = pytest.importorskip("pathlib")
+    with pytest.raises(ValueError):
+        url = pathlib.Path('s3://bucket/test.accounts.*')
+        sample, values = read_bytes(url, blocksize=None)
+
+
+def test_get_pyarrow_fs_s3(s3):
+    pa = pytest.importorskip('pyarrow')
+    fs = DaskS3FileSystem(anon=True)
+    assert isinstance(get_pyarrow_filesystem(fs), pa.filesystem.S3FSWrapper)

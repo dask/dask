@@ -113,6 +113,8 @@ The following class of computations works well:
     *  value_counts:  ``df.x.value_counts()``
     *  Drop duplicates:  ``df.x.drop_duplicates()``
     *  Join on index:  ``dd.merge(df1, df2, left_index=True, right_index=True)``
+       or ``dd.merge(df1, df2, on=['idx', 'x'])`` where ``idx`` is the index
+       name for both ``df1`` and ``df2``
     *  Join with Pandas DataFrames: ``dd.merge(df1, df2, on='id')``
     *  Elementwise operations with different partitions / divisions: ``df1.x + df2.y``
     *  Datetime resampling: ``df.resample(...)``

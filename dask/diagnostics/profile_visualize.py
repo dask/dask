@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 import random
 from bisect import bisect_left
+from distutils.version import LooseVersion
 from itertools import cycle
 from operator import itemgetter, add
 
@@ -168,9 +169,16 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
     The completed bokeh plot object.
     """
     bp = import_required('bokeh.plotting', _BOKEH_MISSING_MSG)
-    from bokeh.io import _state
+    import bokeh
 
-    if not _state._notebook:
+    if LooseVersion(bokeh.__version__) >= "0.12.10":
+        from bokeh.io import state
+        in_notebook = state.curstate().notebook
+    else:
+        from bokeh.io import _state
+        in_notebook = _state._notebook
+
+    if not in_notebook:
         file_path = file_path or "profile.html"
         bp.output_file(file_path)
 
@@ -237,6 +245,7 @@ def plot_tasks(results, dsk, palette='Viridis', label_size=60, **kwargs):
 
     defaults = dict(title="Profile Results",
                     tools="hover,save,reset,xwheel_zoom,xpan",
+                    toolbar_location='above',
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
                     _get_figure_keywords())
@@ -317,6 +326,7 @@ def plot_resources(results, palette='Viridis', **kwargs):
 
     defaults = dict(title="Profile Results",
                     tools="save,reset,xwheel_zoom,xpan",
+                    toolbar_location='above',
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
                     _get_figure_keywords())
@@ -324,21 +334,29 @@ def plot_resources(results, palette='Viridis', **kwargs):
         t, mem, cpu = zip(*results)
         left, right = min(t), max(t)
         t = [i - left for i in t]
-        p = bp.figure(y_range=(0, max(cpu)), x_range=(0, right - left), **defaults)
+        p = bp.figure(y_range=fix_bounds(0, max(cpu), 100),
+                      x_range=fix_bounds(0, right - left, 1),
+                      **defaults)
     else:
         t = mem = cpu = []
-        p = bp.figure(y_range=(0, 100), x_range=(0, 10), **defaults)
+        p = bp.figure(y_range=(0, 100), x_range=(0, 1), **defaults)
     colors = palettes.all_palettes[palette][6]
     p.line(t, cpu, color=colors[0], line_width=4, legend='% CPU')
     p.yaxis.axis_label = "% CPU"
-    p.extra_y_ranges = {'memory': Range1d(start=(min(mem) if mem else 0),
-                                          end=(max(mem) if mem else 100))}
+    p.extra_y_ranges = {'memory': Range1d(*fix_bounds(min(mem) if mem else 0,
+                                                      max(mem) if mem else 100,
+                                                      100))}
     p.line(t, mem, color=colors[2], y_range_name='memory', line_width=4,
            legend='Memory')
     p.add_layout(LinearAxis(y_range_name='memory', axis_label='Memory (MB)'),
                  'right')
     p.xaxis.axis_label = "Time (s)"
     return p
+
+
+def fix_bounds(start, end, min_span):
+    """Adjust end point to ensure span of at least `min_span`"""
+    return start, max(end, start + min_span)
 
 
 def plot_cache(results, dsk, start_time, metric_name, palette='Viridis',
@@ -374,6 +392,7 @@ def plot_cache(results, dsk, start_time, metric_name, palette='Viridis',
 
     defaults = dict(title="Profile Results",
                     tools="hover,save,reset,wheel_zoom,xpan",
+                    toolbar_location='above',
                     plot_width=800, plot_height=300)
     defaults.update((k, v) for (k, v) in kwargs.items() if k in
                     _get_figure_keywords())

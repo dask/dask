@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from functools import partial, wraps
-from itertools import chain, product
+from itertools import product
 from operator import add
 from numbers import Integral
 
@@ -12,7 +12,7 @@ from .. import sharedict
 from ..base import tokenize
 from ..utils import ignoring
 from . import chunk
-from .core import Array, asarray, normalize_chunks, stack, concatenate
+from .core import Array, asarray, normalize_chunks, stack, concatenate, broadcast_to
 from .wrap import empty, ones, zeros, full
 
 
@@ -298,6 +298,49 @@ def arange(*args, **kwargs):
     return Array(dsk, name, chunks, dtype=dtype)
 
 
+@wraps(np.meshgrid)
+def meshgrid(*xi, **kwargs):
+    indexing = kwargs.pop("indexing", "xy")
+    sparse = bool(kwargs.pop("sparse", False))
+
+    if "copy" in kwargs:
+        raise NotImplementedError("`copy` not supported")
+
+    if kwargs:
+        raise TypeError("unsupported keyword argument(s) provided")
+
+    if indexing not in ("ij", "xy"):
+        raise ValueError("`indexing` must be `'ij'` or `'xy'`")
+
+    xi = [asarray(e) for e in xi]
+    xi = [e.flatten() for e in xi]
+    dimensions = [xi[i].size for i in range(len(xi))]
+    chunks = [xi[i].chunks[0] for i in range(len(xi))]
+
+    if indexing == "xy" and len(xi) > 1:
+        xi[0], xi[1] = xi[1], xi[0]
+        dimensions[0], dimensions[1] = dimensions[1], dimensions[0]
+        chunks[0], chunks[1] = chunks[1], chunks[0]
+
+    grid = []
+    for i in range(len(xi)):
+        s = len(dimensions) * [None]
+        s[i] = slice(None)
+        s = tuple(s)
+
+        r = xi[i][s]
+
+        if not sparse:
+            r = broadcast_to(r, shape=dimensions, chunks=chunks)
+
+        grid.append(r)
+
+    if indexing == "xy" and len(xi) > 1:
+        grid[0], grid[1] = grid[1], grid[0]
+
+    return grid
+
+
 def indices(dimensions, dtype=int, chunks=None):
     """
     Implements NumPy's ``indices`` for Dask Arrays.
@@ -332,20 +375,13 @@ def indices(dimensions, dtype=int, chunks=None):
     if len(dimensions) != len(chunks):
         raise ValueError("Need same number of chunks as dimensions.")
 
+    xi = []
+    for i in range(len(dimensions)):
+        xi.append(arange(dimensions[i], dtype=dtype, chunks=(chunks[i],)))
+
     grid = []
     if np.prod(dimensions):
-        for i in range(len(dimensions)):
-            s = len(dimensions) * [None]
-            s[i] = slice(None)
-            s = tuple(s)
-
-            r = arange(dimensions[i], dtype=dtype, chunks=chunks[i])
-            r = r[s]
-
-            for j in chain(range(i), range(i + 1, len(dimensions))):
-                r = r.repeat(dimensions[j], axis=j)
-
-            grid.append(r)
+        grid = meshgrid(*xi, indexing="ij")
 
     if grid:
         grid = stack(grid)
@@ -427,14 +463,14 @@ def diag(v):
                         "got {0}".format(type(v)))
     if v.ndim != 1:
         if v.chunks[0] == v.chunks[1]:
-            dsk = dict(((name, i), (np.diag, row[i])) for (i, row)
-                       in enumerate(v._keys()))
+            dsk = {(name, i): (np.diag, row[i])
+                   for i, row in enumerate(v.__dask_keys__())}
             return Array(sharedict.merge(v.dask, (name, dsk)), name, (v.chunks[0],), dtype=v.dtype)
         else:
             raise NotImplementedError("Extracting diagonals from non-square "
                                       "chunked arrays")
     chunks_1d = v.chunks[0]
-    blocks = v._keys()
+    blocks = v.__dask_keys__()
     dsk = {}
     for i, m in enumerate(chunks_1d):
         for j, n in enumerate(chunks_1d):

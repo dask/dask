@@ -1,10 +1,26 @@
 # coding: utf-8
 import pandas as pd
+from textwrap import dedent
 
 import dask.dataframe as dd
 from dask.dataframe.utils import PANDAS_VERSION
 
-if PANDAS_VERSION >= '0.20.0':
+if PANDAS_VERSION >= '0.21.0':
+    style = """<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+"""
+elif PANDAS_VERSION >= '0.20.0':
     style = """<style>
     .dataframe thead tr:only-child th {
         text-align: right;
@@ -440,14 +456,15 @@ Dask Name: from_pandas, 6 tasks"""
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8],
                   index=pd.CategoricalIndex([1, 2, 3, 4, 5, 6, 7, 8], name='YYY'))
     ds = dd.from_pandas(s, 3)
-    exp = """Dask Index Structure:
-npartitions=3
-1    category[known]
-4                ...
-7                ...
-8                ...
-Name: YYY, dtype: category
-Dask Name: from_pandas, 6 tasks"""
+    exp = dedent("""\
+    Dask Index Structure:
+    npartitions=3
+    1    category[known]
+    4                ...
+    7                ...
+    8                ...
+    Name: YYY, dtype: category
+    Dask Name: from_pandas, 6 tasks""")
     assert repr(ds.index) == exp
     assert str(ds.index) == exp
 

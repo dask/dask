@@ -5,17 +5,20 @@ from operator import getitem
 import numpy as np
 
 from .core import getter, getter_nofancy, getter_inline
-from ..context import defer_to_globals
 from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
-from ..optimize import cull, fuse, inline_functions, dont_optimize
+from ..optimization import cull, fuse, inline_functions
 from ..utils import ensure_dict
 
 
+# All get* functions the optimizations know about
 GETTERS = (getter, getter_nofancy, getter_inline, getitem)
+# These get* functions aren't ever completely removed from the graph,
+# even if the index should be a no-op by numpy semantics. Some array-like's
+# don't completely follow semantics, making indexing always necessary.
+GETNOREMOVE = (getter, getter_nofancy)
 
 
-@defer_to_globals('array_optimize', falsey=dont_optimize)
 def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
              inline_functions_fast_functions=(getter_inline,), rename_fused_keys=True,
              **kwargs):
@@ -138,8 +141,8 @@ def optimize_slices(dsk):
                 a, a_index, a_lock = b, c_index, b_lock
                 a_asarray |= b_asarray
 
-            # Skip the get call if no asarray call, no lock, and nothing to do
-            if ((not a_asarray and not a_lock) and
+            # Skip the get call if not from from_array and nothing to do
+            if (get not in GETNOREMOVE and
                 ((type(a_index) is slice and not a_index.start and
                   a_index.stop is None and a_index.step is None) or
                  (type(a_index) is tuple and
@@ -217,7 +220,7 @@ def fuse_slice(a, b):
     None
     """
     # None only works if the second side is a full slice
-    if a is None and b == slice(None, None):
+    if a is None and isinstance(b, slice) and b == slice(None, None):
         return None
 
     # Replace None with 0 and one in start and step

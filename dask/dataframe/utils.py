@@ -21,7 +21,7 @@ except ImportError:
 
 from ..core import get_deps
 from ..local import get_sync
-from ..utils import asciitable
+from ..utils import asciitable, is_arraylike
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
@@ -265,6 +265,8 @@ def make_meta(x, index=None):
         return x.iloc[0:0]
     elif isinstance(x, pd.Index):
         return x[0:0]
+    elif is_arraylike(x):
+        return x[:0]
     index = index if index is None else index[0:0]
 
     if isinstance(x, dict):
@@ -454,6 +456,13 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             return False
         if (a is '-' or b is '-'):
             return False
+        if is_categorical_dtype(a) and is_categorical_dtype(b):
+            # Pandas 0.21 CategoricalDtype compat
+            if (PANDAS_VERSION >= '0.21.0' and
+                    (UNKNOWN_CATEGORIES in a.categories or
+                     UNKNOWN_CATEGORIES in b.categories)):
+                return True
+            return a == b
         return (a.kind in eq_types and b.kind in eq_types) or (a == b)
 
     if not isinstance(meta, (pd.Series, pd.Index, pd.DataFrame)):
@@ -612,7 +621,7 @@ def assert_divisions(ddf):
         return (x if isinstance(x, pd.Index)
                 else x.index.get_level_values(0))
 
-    results = get_sync(ddf.dask, ddf._keys())
+    results = get_sync(ddf.dask, ddf.__dask_keys__())
     for i, df in enumerate(results[:-1]):
         if len(df):
             assert index(df).min() >= ddf.divisions[i]

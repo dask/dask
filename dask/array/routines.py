@@ -16,9 +16,11 @@ from .. import sharedict
 from ..core import flatten
 from ..base import tokenize
 from . import numpy_compat, chunk
+from .creation import arange
+from .wrap import ones
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
-                   concatenate, stack, atop, broadcast_shapes,
+                   asanyarray, concatenate, stack, atop, broadcast_shapes,
                    is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
 
 
@@ -37,24 +39,58 @@ def result_type(*args):
     return np.result_type(*args)
 
 
-def atleast_3d(x):
-    if x.ndim == 1:
-        return x[None, :, None]
-    elif x.ndim == 2:
-        return x[:, :, None]
-    elif x.ndim > 2:
-        return x
+@wraps(np.atleast_3d)
+def atleast_3d(*arys):
+    new_arys = []
+    for x in arys:
+        x = asanyarray(x)
+        if x.ndim == 0:
+            x = x[None, None, None]
+        elif x.ndim == 1:
+            x = x[None, :, None]
+        elif x.ndim == 2:
+            x = x[:, :, None]
+
+        new_arys.append(x)
+
+    if len(new_arys) == 1:
+        return new_arys[0]
     else:
-        raise NotImplementedError()
+        return new_arys
 
 
-def atleast_2d(x):
-    if x.ndim == 1:
-        return x[None, :]
-    elif x.ndim > 1:
-        return x
+@wraps(np.atleast_2d)
+def atleast_2d(*arys):
+    new_arys = []
+    for x in arys:
+        x = asanyarray(x)
+        if x.ndim == 0:
+            x = x[None, None]
+        elif x.ndim == 1:
+            x = x[None, :]
+
+        new_arys.append(x)
+
+    if len(new_arys) == 1:
+        return new_arys[0]
     else:
-        raise NotImplementedError()
+        return new_arys
+
+
+@wraps(np.atleast_1d)
+def atleast_1d(*arys):
+    new_arys = []
+    for x in arys:
+        x = asanyarray(x)
+        if x.ndim == 0:
+            x = x[None]
+
+        new_arys.append(x)
+
+    if len(new_arys) == 1:
+        return new_arys[0]
+    else:
+        return new_arys
 
 
 @wraps(np.vstack)
@@ -103,6 +139,44 @@ def transpose(a, axes=None):
     axes = tuple(d + a.ndim if d < 0 else d for d in axes)
     return atop(np.transpose, axes, a, tuple(range(a.ndim)),
                 dtype=a.dtype, axes=axes)
+
+
+def flip(m, axis):
+    """
+    Reverse element order along axis.
+
+    Parameters
+    ----------
+    axis : int
+        Axis to reverse element order of.
+
+    Returns
+    -------
+    reversed array : ndarray
+    """
+
+    m = asanyarray(m)
+
+    sl = m.ndim * [slice(None)]
+    try:
+        sl[axis] = slice(None, None, -1)
+    except IndexError:
+        raise ValueError(
+            "`axis` of %s invalid for %s-D array" % (str(axis), str(m.ndim))
+        )
+    sl = tuple(sl)
+
+    return m[sl]
+
+
+@wraps(np.flipud)
+def flipud(m):
+    return flip(m, 0)
+
+
+@wraps(np.fliplr)
+def fliplr(m):
+    return flip(m, 1)
 
 
 alphabet = 'abcdefghijklmnopqrstuvwxyz'
@@ -161,6 +235,11 @@ def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
 
+@wraps(np.vdot)
+def vdot(a, b):
+    return dot(a.conj().ravel(), b.ravel())
+
+
 def _inner_apply_along_axis(arr,
                             func1d,
                             func1d_axis,
@@ -169,6 +248,45 @@ def _inner_apply_along_axis(arr,
     return np.apply_along_axis(
         func1d, func1d_axis, arr, *func1d_args, **func1d_kwargs
     )
+
+
+@wraps(np.matmul)
+def matmul(a, b):
+    a = asanyarray(a)
+    b = asanyarray(b)
+
+    if a.ndim == 0 or b.ndim == 0:
+        raise ValueError("`matmul` does not support scalars.")
+
+    a_is_1d = False
+    if a.ndim == 1:
+        a_is_1d = True
+        a = a[np.newaxis, :]
+
+    b_is_1d = False
+    if b.ndim == 1:
+        b_is_1d = True
+        b = b[:, np.newaxis]
+
+    if a.ndim < b.ndim:
+        a = a[(b.ndim - a.ndim) * (np.newaxis,)]
+    elif a.ndim > b.ndim:
+        b = b[(a.ndim - b.ndim) * (np.newaxis,)]
+
+    out = atop(
+        np.matmul, tuple(range(1, a.ndim + 1)),
+        a, tuple(range(1, a.ndim - 1)) + (a.ndim - 1, 0,),
+        b, tuple(range(1, a.ndim - 1)) + (0, a.ndim,),
+        dtype=result_type(a, b),
+        concatenate=True
+    )
+
+    if a_is_1d:
+        out = out[..., 0, :]
+    if b_is_1d:
+        out = out[..., 0]
+
+    return out
 
 
 @wraps(np.apply_along_axis)
@@ -297,13 +415,12 @@ def bincount(x, weights=None, minlength=None):
     token = tokenize(x, weights, minlength)
     name = 'bincount-' + token
     if weights is not None:
-        dsk = dict(((name, i),
-                   (np.bincount, (x.name, i), (weights.name, i), minlength))
-                   for i, _ in enumerate(x._keys()))
+        dsk = {(name, i): (np.bincount, (x.name, i), (weights.name, i), minlength)
+               for i, _ in enumerate(x.__dask_keys__())}
         dtype = np.bincount([1], weights=[1]).dtype
     else:
-        dsk = dict(((name, i), (np.bincount, (x.name, i), None, minlength))
-                   for i, _ in enumerate(x._keys()))
+        dsk = {(name, i): (np.bincount, (x.name, i), None, minlength)
+               for i, _ in enumerate(x.__dask_keys__())}
         dtype = np.bincount([]).dtype
 
     # Sum up all of the intermediate bincounts per block
@@ -328,9 +445,9 @@ def digitize(a, bins, right=False):
 
 def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
     """
-    Blocked variant of numpy.histogram.
+    Blocked variant of :func:`numpy.histogram`.
 
-    Follows the signature of numpy.histogram exactly with the following
+    Follows the signature of :func:`numpy.histogram` exactly with the following
     exceptions:
 
     - Either an iterable specifying the ``bins`` or the number of ``bins``
@@ -383,7 +500,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         bin_token = bins
     token = tokenize(a, bin_token, range, normed, weights, density)
 
-    nchunks = len(list(flatten(a._keys())))
+    nchunks = len(list(flatten(a.__dask_keys__())))
     chunks = ((1,) * nchunks, (len(bins) - 1,))
 
     name = 'histogram-sum-' + token
@@ -393,14 +510,14 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         return np.histogram(x, bins, weights=weights)[0][np.newaxis]
 
     if weights is None:
-        dsk = dict(((name, i, 0), (block_hist, k))
-                   for i, k in enumerate(flatten(a._keys())))
+        dsk = {(name, i, 0): (block_hist, k)
+               for i, k in enumerate(flatten(a.__dask_keys__()))}
         dtype = np.histogram([])[0].dtype
     else:
-        a_keys = flatten(a._keys())
-        w_keys = flatten(weights._keys())
-        dsk = dict(((name, i, 0), (block_hist, k, w))
-                   for i, (k, w) in enumerate(zip(a_keys, w_keys)))
+        a_keys = flatten(a.__dask_keys__())
+        w_keys = flatten(weights.__dask_keys__())
+        dsk = {(name, i, 0): (block_hist, k, w)
+               for i, (k, w) in enumerate(zip(a_keys, w_keys))}
         dtype = weights.dtype
 
     all_dsk = sharedict.merge(a.dask, (name, dsk))
@@ -495,12 +612,173 @@ def round(a, decimals=0):
     return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
 
 
+def _unique_internal(ar, indices, counts, return_inverse=False):
+    """
+    Helper/wrapper function for :func:`numpy.unique`.
+
+    Uses :func:`numpy.unique` to find the unique values for the array chunk.
+    Given this chunk may not represent the whole array, also take the
+    ``indices`` and ``counts`` that are in 1-to-1 correspondence to ``ar``
+    and reduce them in the same fashion as ``ar`` is reduced. Namely sum
+    any counts that correspond to the same value and take the smallest
+    index that corresponds to the same value.
+
+    To handle the inverse mapping from the unique values to the original
+    array, simply return a NumPy array created with ``arange`` with enough
+    values to correspond 1-to-1 to the unique values. While there is more
+    work needed to be done to create the full inverse mapping for the
+    original array, this provides enough information to generate the
+    inverse mapping in Dask.
+
+    Given Dask likes to have one array returned from functions like
+    ``atop``, some formatting is done to stuff all of the resulting arrays
+    into one big NumPy structured array. Dask is then able to handle this
+    object and can split it apart into the separate results on the Dask
+    side, which then can be passed back to this function in concatenated
+    chunks for further reduction or can be return to the user to perform
+    other forms of analysis.
+
+    By handling the problem in this way, it does not matter where a chunk
+    is in a larger array or how big it is. The chunk can still be computed
+    on the same way. Also it does not matter if the chunk is the result of
+    other chunks being run through this function multiple times. The end
+    result will still be just as accurate using this strategy.
+    """
+
+    return_index = (indices is not None)
+    return_counts = (counts is not None)
+
+    u = np.unique(ar)
+
+    dt = [("values", u.dtype)]
+    if return_index:
+        dt.append(("indices", np.intp))
+    if return_inverse:
+        dt.append(("inverse", np.intp))
+    if return_counts:
+        dt.append(("counts", np.intp))
+
+    r = np.empty(u.shape, dtype=dt)
+    r["values"] = u
+    if return_inverse:
+        r["inverse"] = np.arange(len(r), dtype=np.intp)
+    if return_index or return_counts:
+        for i, v in enumerate(r["values"]):
+            m = (ar == v)
+            if return_index:
+                indices[m].min(keepdims=True, out=r["indices"][i:i + 1])
+            if return_counts:
+                counts[m].sum(keepdims=True, out=r["counts"][i:i + 1])
+
+    return r
+
+
 @wraps(np.unique)
-def unique(x):
-    name = 'unique-' + x.name
-    dsk = dict(((name, i), (np.unique, key)) for i, key in enumerate(x._keys()))
-    parts = Array._get(sharedict.merge((name, dsk), x.dask), list(dsk.keys()))
-    return np.unique(np.concatenate(parts))
+def unique(ar, return_index=False, return_inverse=False, return_counts=False):
+    ar = ar.ravel()
+
+    # Run unique on each chunk and collect results in a Dask Array of
+    # unknown size.
+
+    args = [ar, "i"]
+    out_dtype = [("values", ar.dtype)]
+    if return_index:
+        args.extend([
+            arange(ar.shape[0], dtype=np.intp, chunks=ar.chunks[0]),
+            "i"
+        ])
+        out_dtype.append(("indices", np.intp))
+    else:
+        args.extend([None, None])
+    if return_counts:
+        args.extend([
+            ones((ar.shape[0],), dtype=np.intp, chunks=ar.chunks[0]),
+            "i"
+        ])
+        out_dtype.append(("counts", np.intp))
+    else:
+        args.extend([None, None])
+
+    out = atop(
+        _unique_internal, "i",
+        *args,
+        dtype=out_dtype,
+        return_inverse=False
+    )
+    out._chunks = tuple((np.nan,) * len(c) for c in out.chunks)
+
+    # Take the results from the unique chunks and do the following.
+    #
+    # 1. Collect all results as arguments.
+    # 2. Concatenate each result into one big array.
+    # 3. Pass all results as arguments to the internal unique again.
+    #
+    # TODO: This should be replaced with a tree reduction using this strategy.
+    # xref: https://github.com/dask/dask/issues/2851
+
+    out_parts = [out["values"]]
+    if return_index:
+        out_parts.append(out["indices"])
+    else:
+        out_parts.append(None)
+    if return_counts:
+        out_parts.append(out["counts"])
+    else:
+        out_parts.append(None)
+
+    name = 'unique-aggregate-' + out.name
+    dsk = {
+        (name, 0): (
+            (_unique_internal,) +
+            tuple(
+                (np.concatenate, o. __dask_keys__())
+                if hasattr(o, "__dask_keys__") else o
+                for o in out_parts
+            ) +
+            (return_inverse,)
+        )
+    }
+    out_dtype = [("values", ar.dtype)]
+    if return_index:
+        out_dtype.append(("indices", np.intp))
+    if return_inverse:
+        out_dtype.append(("inverse", np.intp))
+    if return_counts:
+        out_dtype.append(("counts", np.intp))
+
+    out = Array(
+        sharedict.merge(*(
+            [(name, dsk)] +
+            [o.dask for o in out_parts if hasattr(o, "__dask_keys__")]
+        )),
+        name,
+        ((np.nan,),),
+        out_dtype
+    )
+
+    # Split out all results to return to the user.
+
+    result = [out["values"]]
+    if return_index:
+        result.append(out["indices"])
+    if return_inverse:
+        # Using the returned unique values and arange of unknown length, find
+        # each value matching a unique value and replace it with its
+        # corresponding index or `0`. There should be only one entry for this
+        # index in axis `1` (the one of unknown length). Reduce axis `1`
+        # through summing to get an array with known dimensionality and the
+        # mapping of the original values.
+        mtches = (ar[:, None] == out["values"][None, :]).astype(np.intp)
+        result.append((mtches * out["inverse"]).sum(axis=1))
+    if return_counts:
+        result.append(out["counts"])
+
+    if len(result) == 1:
+        result = result[0]
+    else:
+        result = tuple(result)
+
+    return result
 
 
 @wraps(np.roll)
@@ -596,8 +874,8 @@ def topk(k, x):
 
     token = tokenize(k, x)
     name = 'chunk.topk-' + token
-    dsk = dict(((name, i), (chunk.topk, k, key))
-               for i, key in enumerate(x._keys()))
+    dsk = {(name, i): (chunk.topk, k, key)
+           for i, key in enumerate(x.__dask_keys__())}
     name2 = 'topk-' + token
     dsk[(name2, 0)] = (getitem, (np.sort, (np.concatenate, list(dsk))),
                        slice(-1, -k - 1, -1))
@@ -694,6 +972,11 @@ def isclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
     return elemwise(func, arr1, arr2, dtype='bool')
 
 
+@wraps(np.allclose)
+def allclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
+    return isclose(arr1, arr2, rtol=rtol, atol=atol, equal_nan=equal_nan).all()
+
+
 def variadic_choose(a, *choices):
     return np.choose(a, choices)
 
@@ -733,7 +1016,7 @@ def argwhere(a):
 
     nz = isnonzero(a).flatten()
 
-    ind = indices(a.shape, dtype=np.int64, chunks=a.chunks)
+    ind = indices(a.shape, dtype=np.intp, chunks=a.chunks)
     if ind.ndim > 1:
         ind = stack([ind[i].ravel() for i in range(len(ind))], axis=1)
     ind = compress(nz, ind, axis=0)
@@ -763,7 +1046,7 @@ def where(condition, x=None, y=None):
 
 @wraps(np.count_nonzero)
 def count_nonzero(a, axis=None):
-    return isnonzero(asarray(a)).astype(np.int64).sum(axis=axis)
+    return isnonzero(asarray(a)).astype(np.intp).sum(axis=axis)
 
 
 @wraps(np.flatnonzero)
@@ -792,9 +1075,8 @@ def coarsen(reduction, x, axes, trim_excess=False):
         reduction = getattr(np, reduction.__name__)
 
     name = 'coarsen-' + tokenize(reduction, x, axes, trim_excess)
-    dsk = dict(((name,) + key[1:], (chunk.coarsen, reduction, key, axes,
-                                    trim_excess))
-               for key in flatten(x._keys()))
+    dsk = {(name,) + key[1:]: (chunk.coarsen, reduction, key, axes, trim_excess)
+           for key in flatten(x.__dask_keys__())}
     chunks = tuple(tuple(int(bd // axes.get(i, 1)) for bd in bds)
                    for i, bds in enumerate(x.chunks))
 

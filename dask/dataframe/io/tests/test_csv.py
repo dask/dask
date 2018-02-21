@@ -15,6 +15,7 @@ import pandas.util.testing as tm
 
 import dask
 import dask.dataframe as dd
+from dask.base import compute_as_if_collection
 from dask.dataframe.io.csv import (text_blocks_to_pandas, pandas_read_text,
                                    auto_blocksize)
 from dask.dataframe.utils import assert_eq, has_known_categories, PANDAS_VERSION
@@ -269,6 +270,20 @@ def test_read_csv_files(dd_read, pd_read, files):
         assert_eq(df, expected2, check_dtype=False)
 
 
+@pytest.mark.parametrize('dd_read,pd_read,files',
+                         [(dd.read_csv, pd.read_csv, csv_files),
+                          (dd.read_table, pd.read_table, tsv_files)])
+def test_read_csv_files_list(dd_read, pd_read, files):
+    with filetexts(files, mode='b'):
+        subset = sorted(files)[:2]  # Just first 2
+        sol = pd.concat([pd_read(BytesIO(files[k])) for k in subset])
+        res = dd_read(subset)
+        assert_eq(res, sol, check_dtype=False)
+
+        with pytest.raises(ValueError):
+            dd_read([])
+
+
 # After this point, we test just using read_csv, as all functionality
 # for both is implemented using the same code.
 
@@ -279,7 +294,9 @@ def test_read_csv_index():
         result = f.compute(get=dask.get)
         assert result.index.name == 'amount'
 
-        blocks = dd.DataFrame._get(f.dask, f._keys(), get=dask.get)
+        blocks = compute_as_if_collection(dd.DataFrame, f.dask,
+                                          f.__dask_keys__(),
+                                          get=dask.get)
         for i, block in enumerate(blocks):
             if i < len(f.divisions) - 2:
                 assert (block.index < f.divisions[i + 1]).all()
@@ -379,6 +396,62 @@ def test_categorical_dtypes():
         assert res.fruit.dtype == 'category'
         assert (sorted(res.fruit.cat.categories) ==
                 ['apple', 'banana', 'orange', 'pear'])
+
+
+@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
+                    reason="Uses CategoricalDtype")
+def test_categorical_known():
+    text1 = normalize_text("""
+    A,B
+    a,a
+    b,b
+    a,a
+    """)
+    text2 = normalize_text("""
+    A,B
+    a,a
+    b,b
+    c,c
+    """)
+    dtype = pd.api.types.CategoricalDtype(['a', 'b', 'c'])
+    with filetexts({"foo.1.csv": text1, "foo.2.csv": text2}):
+        result = dd.read_csv("foo.*.csv", dtype={"A": 'category',
+                                                 "B": 'category'})
+        assert result.A.cat.known is False
+        assert result.B.cat.known is False
+        expected = pd.DataFrame({
+            "A": pd.Categorical(['a', 'b', 'a', 'a', 'b', 'c'],
+                                categories=dtype.categories),
+            "B": pd.Categorical(['a', 'b', 'a', 'a', 'b', 'c'],
+                                categories=dtype.categories)},
+                                index=[0, 1, 2, 0, 1, 2])
+        assert_eq(result, expected)
+
+        # Specify a dtype
+        result = dd.read_csv("foo.*.csv", dtype={'A': dtype, 'B': 'category'})
+        assert result.A.cat.known is True
+        assert result.B.cat.known is False
+        tm.assert_index_equal(result.A.cat.categories, dtype.categories)
+        assert result.A.cat.ordered is False
+        assert_eq(result, expected)
+
+        # ordered
+        dtype = pd.api.types.CategoricalDtype(['a', 'b', 'c'], ordered=True)
+        result = dd.read_csv("foo.*.csv", dtype={'A': dtype, 'B': 'category'})
+        expected['A'] = expected['A'].cat.as_ordered()
+        assert result.A.cat.known is True
+        assert result.B.cat.known is False
+        assert result.A.cat.ordered is True
+
+        assert_eq(result, expected)
+
+        # Specify "unknown" categories
+        result = dd.read_csv("foo.*.csv",
+                             dtype=pd.api.types.CategoricalDtype())
+        assert result.A.cat.known is False
+
+        result = dd.read_csv("foo.*.csv", dtype="category")
+        assert result.A.cat.known is False
 
 
 @pytest.mark.slow
@@ -561,15 +634,26 @@ def test_read_csv_of_modified_file_has_different_name():
 
 
 def test_late_dtypes():
-    text = 'numbers,names,more_numbers,integers\n'
+    text = 'numbers,names,more_numbers,integers,dates\n'
     for i in range(1000):
-        text += '1,,2,3\n'
-    text += '1.5,bar,2.5,3\n'
+        text += '1,,2,3,2017-10-31 00:00:00\n'
+    text += '1.5,bar,2.5,3,4998-01-01 00:00:00\n'
+
+    date_msg = ("\n"
+                "\n"
+                "-------------------------------------------------------------\n"
+                "\n"
+                "The following columns also failed to properly parse as dates:\n"
+                "\n"
+                "- dates\n"
+                "\n"
+                "This is usually due to an invalid value in that column. To\n"
+                "diagnose and fix it's recommended to drop these columns from the\n"
+                "`parse_dates` keyword, and manually convert them to dates later\n"
+                "using `dd.to_datetime`.")
+
     with filetext(text) as fn:
         sol = pd.read_csv(fn)
-        with pytest.raises(ValueError) as e:
-            dd.read_csv(fn, sample=50).compute(get=dask.get)
-
         msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
                "\n"
                "+--------------+---------+----------+\n"
@@ -590,13 +674,16 @@ def test_late_dtypes():
                "       'names': 'object',\n"
                "       'numbers': 'float64'}\n"
                "\n"
-               "to the call to `read_csv`/`read_table`.\n")
-
-        e.match(msg)
+               "to the call to `read_csv`/`read_table`.")
 
         with pytest.raises(ValueError) as e:
             dd.read_csv(fn, sample=50,
-                        dtype={'names': 'O'}).compute(get=dask.get)
+                        parse_dates=['dates']).compute(get=dask.get)
+        assert e.match(msg + date_msg)
+
+        with pytest.raises(ValueError) as e:
+            dd.read_csv(fn, sample=50).compute(get=dask.get)
+        assert e.match(msg)
 
         msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
                "\n"
@@ -618,6 +705,31 @@ def test_late_dtypes():
                "Alternatively, provide `assume_missing=True` to interpret\n"
                "all unspecified integer columns as floats.")
 
+        with pytest.raises(ValueError) as e:
+            dd.read_csv(fn, sample=50,
+                        dtype={'names': 'O'}).compute(get=dask.get)
+        assert str(e.value) == msg
+
+        with pytest.raises(ValueError) as e:
+            dd.read_csv(fn, sample=50, parse_dates=['dates'],
+                        dtype={'names': 'O'}).compute(get=dask.get)
+        assert str(e.value) == msg + date_msg
+
+        msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
+               "\n"
+               "The following columns failed to properly parse as dates:\n"
+               "\n"
+               "- dates\n"
+               "\n"
+               "This is usually due to an invalid value in that column. To\n"
+               "diagnose and fix it's recommended to drop these columns from the\n"
+               "`parse_dates` keyword, and manually convert them to dates later\n"
+               "using `dd.to_datetime`.")
+
+        with pytest.raises(ValueError) as e:
+            dd.read_csv(fn, sample=50, parse_dates=['dates'],
+                        dtype={'more_numbers': float, 'names': object,
+                               'numbers': float}).compute(get=dask.get)
         assert str(e.value) == msg
 
         # Specifying dtypes works
@@ -826,6 +938,20 @@ def test_error_if_sample_is_too_small():
         # Saying no header means this is fine
         assert_eq(dd.read_csv(fn, sample=sample, header=None, skiprows=3),
                   pd.read_csv(fn, header=None, skiprows=3))
+
+
+def test_read_csv_names_not_none():
+    text = ('Alice,100\n'
+            'Bob,-200\n'
+            'Charlie,300\n'
+            'Dennis,400\n'
+            'Edith,-500\n'
+            'Frank,600\n')
+    names = ['name', 'amount']
+    with filetext(text) as fn:
+        ddf = dd.read_csv(fn, names=names, blocksize=16)
+        df = pd.read_csv(fn, names=names)
+        assert_eq(df, ddf, check_index=False)
 
 
 ############

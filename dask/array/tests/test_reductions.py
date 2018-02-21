@@ -114,7 +114,7 @@ def test_reductions_2D(dtype):
     a = da.from_array(x, chunks=(4, 4))
 
     b = a.sum(keepdims=True)
-    assert b._keys() == [[(b.name, 0, 0)]]
+    assert b.__dask_keys__() == [[(b.name, 0, 0)]]
 
     reduction_2d_test(da.sum, a, np.sum, x)
     reduction_2d_test(da.prod, a, np.prod, x)
@@ -288,6 +288,20 @@ def test_nan():
     assert_eq(np.nanargmin(x, axis=0), da.nanargmin(d, axis=0))
     assert_eq(np.nanargmax(x, axis=0), da.nanargmax(d, axis=0))
     assert_eq(nanprod(x), da.nanprod(d))
+
+
+@pytest.mark.skipif(np.__version__ < '1.13.0', reason='nanmax/nanmin for object dtype')
+@pytest.mark.parametrize('func', ['nansum', 'sum', 'nanmin', 'min',
+                                  'nanmax', 'max'])
+def test_nan_object(func):
+    x = np.array([[1, np.nan, 3, 4],
+                  [5, 6, 7, np.nan],
+                  [9, 10, 11, 12]]).astype(object)
+    d = da.from_array(x, chunks=(2, 2))
+
+    assert_eq(getattr(np, func)(x, axis=0), getattr(da, func)(d, axis=0))
+    assert_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1))
+    assert_eq(getattr(np, func)(x), getattr(da, func)(d))
 
 
 def test_0d_array():

@@ -130,6 +130,11 @@ def _groupby_raise_unaligned(df, **kwargs):
                "\n"
                "For more information see dask GH issue #1876.")
         raise ValueError(msg)
+    elif by is not None and len(by):
+        # since we're coming through apply, `by` will be a tuple.
+        # Pandas treats tuples as a single key, and lists as multiple keys
+        # We want multiple keys
+        kwargs.update(by=list(by))
     return df.groupby(**kwargs)
 
 
@@ -284,8 +289,17 @@ def _nunique_df_chunk(df, *index, **kwargs):
     return grouped
 
 
+def _drop_duplicates_rename(df):
+    # Avoid duplicate index labels in a groupby().apply() context
+    # https://github.com/dask/dask/issues/3039
+    # https://github.com/pandas-dev/pandas/pull/18882
+    names = [None] * df.index.nlevels
+    return df.drop_duplicates().rename_axis(names, copy=False)
+
+
 def _nunique_df_combine(df, levels):
-    result = df.groupby(level=levels, sort=False).apply(pd.DataFrame.drop_duplicates)
+    result = df.groupby(level=levels,
+                        sort=False).apply(_drop_duplicates_rename)
 
     if isinstance(levels, list):
         result.index = pd.MultiIndex.from_arrays([
@@ -453,7 +467,7 @@ def _build_agg_args(spec):
 
         impls = _build_agg_args_single(result_column, func, input_column)
 
-        # overwrite existing result-columns, generate intermedates only once
+        # overwrite existing result-columns, generate intermediates only once
         chunks.update((spec[0], spec) for spec in impls['chunk_funcs'])
         aggs.update((spec[0], spec) for spec in impls['aggregate_funcs'])
 
@@ -608,6 +622,9 @@ def _groupby_apply_funcs(df, *index, **kwargs):
         the aggregated dataframe.
     """
     if len(index):
+        # since we're coming through apply, `by` will be a tuple.
+        # Pandas treats tuples as a single key, and lists as multiple keys
+        # We want multiple keys
         kwargs.update(by=list(index))
 
     funcs = kwargs.pop('funcs')
@@ -632,9 +649,13 @@ def _compute_sum_of_squares(grouped, column):
     return base.apply(lambda x: (x ** 2).sum())
 
 
-def _agg_finalize(df, funcs):
+def _agg_finalize(df, aggregate_funcs, finalize_funcs, level):
+    # finish the final aggregation level
+    df = _groupby_apply_funcs(df, funcs=aggregate_funcs, level=level)
+
+    # and finalize the result
     result = collections.OrderedDict()
-    for result_column, func, kwargs in funcs:
+    for result_column, func, kwargs in finalize_funcs:
         result[result_column] = func(df, **kwargs)
 
     return pd.DataFrame(result)
@@ -996,18 +1017,19 @@ class _GroupBy(object):
         else:
             chunk_args = [self.obj] + self.index
 
-        obj = aca(chunk_args,
-                  chunk=_groupby_apply_funcs,
-                  chunk_kwargs=dict(funcs=chunk_funcs),
-                  aggregate=_groupby_apply_funcs,
-                  aggregate_kwargs=dict(funcs=aggregate_funcs, level=levels),
-                  combine=_groupby_apply_funcs,
-                  combine_kwargs=dict(funcs=aggregate_funcs, level=levels),
-                  token='aggregate', split_every=split_every,
-                  split_out=split_out, split_out_setup=split_out_on_index)
-
-        return map_partitions(_agg_finalize, obj, token='aggregate-finalize',
-                              funcs=finalizers)
+        return aca(chunk_args,
+                   chunk=_groupby_apply_funcs,
+                   chunk_kwargs=dict(funcs=chunk_funcs),
+                   combine=_groupby_apply_funcs,
+                   combine_kwargs=dict(funcs=aggregate_funcs, level=levels),
+                   aggregate=_agg_finalize,
+                   aggregate_kwargs=dict(
+                       aggregate_funcs=aggregate_funcs,
+                       finalize_funcs=finalizers,
+                       level=levels,
+                   ),
+                   token='aggregate', split_every=split_every,
+                   split_out=split_out, split_out_setup=split_out_on_index)
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, meta=no_default):

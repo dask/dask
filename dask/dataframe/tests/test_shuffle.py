@@ -7,15 +7,17 @@ import string
 from copy import copy
 
 import dask
-from dask import delayed
 import dask.dataframe as dd
+from dask import delayed
+from dask.base import compute_as_if_collection
 from dask.threaded import get as threaded_get
 from dask.multiprocessing import get as mp_get
 from dask.dataframe.shuffle import (shuffle,
                                     partitioning_index,
                                     rearrange_by_column,
                                     rearrange_by_divisions,
-                                    maybe_buffered_partd)
+                                    maybe_buffered_partd,
+                                    remove_nans)
 from dask.dataframe.utils import assert_eq, make_meta
 
 
@@ -98,7 +100,7 @@ def test_shuffle_empty_partitions(method):
     df = pd.DataFrame({'x': [1, 2, 3] * 10})
     ddf = dd.from_pandas(df, npartitions=3)
     s = shuffle(ddf, ddf.x, npartitions=6, shuffle=method)
-    parts = s._get(s.dask, s._keys())
+    parts = compute_as_if_collection(dd.DataFrame, s.dask, s.__dask_keys__())
     for p in parts:
         assert s.columns == p.columns
 
@@ -252,7 +254,7 @@ def test_rearrange(shuffle, get):
 
     # Every value in exactly one partition
     a = result.compute(get=get)
-    parts = get(result.dask, result._keys())
+    parts = get(result.dask, result.__dask_keys__())
     for i in a.y.drop_duplicates():
         assert sum(i in part.y for part in parts) == 1
 
@@ -364,27 +366,32 @@ def test_set_index_reduces_partitions_small(shuffle):
     assert ddf2.npartitions < 10
 
 
+def make_part(n):
+    return pd.DataFrame({'x': np.random.random(n),
+                         'y': np.random.random(n)})
+
+
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
 def test_set_index_reduces_partitions_large(shuffle):
-    n = 2**24
-    df = pd.DataFrame({'x': np.random.random(n),
-                       'y': np.random.random(n),
-                       'z': np.random.random(n)})
-    ddf = dd.from_pandas(df, npartitions=50, name='x', sort=False)
-
-    ddf2 = ddf.set_index('x', shuffle=shuffle, npartitions='auto')
+    nbytes = 1e6
+    nparts = 50
+    n = int(nbytes / (nparts * 8))
+    ddf = dd.DataFrame({('x', i): (make_part, n) for i in range(nparts)},
+                       'x', make_part(1), [None] * (nparts + 1))
+    ddf2 = ddf.set_index('x', shuffle=shuffle, npartitions='auto',
+                         partition_size=nbytes)
     assert 1 < ddf2.npartitions < 20
 
 
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
 def test_set_index_doesnt_increase_partitions(shuffle):
-    n = 2**24
-    df = pd.DataFrame({'x': np.random.random(n),
-                       'y': np.random.random(n),
-                       'z': np.random.random(n)})
-    ddf = dd.from_pandas(df, npartitions=2, name='x', sort=False)
-
-    ddf2 = ddf.set_index('x', shuffle=shuffle, npartitions='auto')
+    nparts = 2
+    nbytes = 1e6
+    n = int(nbytes / (nparts * 8))
+    ddf = dd.DataFrame({('x', i): (make_part, n) for i in range(nparts)},
+                       'x', make_part(1), [None] * (nparts + 1))
+    ddf2 = ddf.set_index('x', shuffle=shuffle, npartitions='auto',
+                         partition_size=nbytes)
     assert ddf2.npartitions <= ddf.npartitions
 
 
@@ -590,6 +597,49 @@ def test_set_index_sorted_min_max_same():
     assert df2.divisions == (0, 1, 1)
 
 
+def test_set_index_empty_partition():
+    test_vals = [1, 2, 3]
+
+    converters = [
+        int,
+        float,
+        str,
+        lambda x: pd.to_datetime(x, unit='ns'),
+    ]
+
+    for conv in converters:
+        df = pd.DataFrame([{'x': conv(i), 'y': i} for i in test_vals], columns=['x', 'y'])
+        ddf = dd.concat([
+            dd.from_pandas(df, npartitions=1),
+            dd.from_pandas(df[df.y > df.y.max()], npartitions=1),
+        ])
+
+        assert any(ddf.get_partition(p).compute().empty for p in range(ddf.npartitions))
+        assert assert_eq(ddf.set_index('x'), df.set_index('x'))
+
+
+def test_set_index_on_empty():
+    test_vals = [1, 2, 3, 4]
+    converters = [
+        int,
+        float,
+        str,
+        lambda x: pd.to_datetime(x, unit='ns'),
+    ]
+
+    for converter in converters:
+        df = pd.DataFrame([{'x': converter(x), 'y': x} for x in test_vals])
+        ddf = dd.from_pandas(df, npartitions=4)
+
+        assert ddf.npartitions > 1
+
+        ddf = ddf[ddf.y > df.y.max()].set_index('x')
+        expected_df = df[df.y > df.y.max()].set_index('x')
+
+        assert assert_eq(ddf, expected_df)
+        assert ddf.npartitions == 1
+
+
 def test_compute_divisions():
     from dask.dataframe.shuffle import compute_divisions
     df = pd.DataFrame({'x': [1, 2, 3, 4],
@@ -634,3 +684,29 @@ def test_empty_partitions():
 
     ddf = ddf.set_index('c')
     assert_eq(ddf, df.set_index('b').set_index('c'))
+
+
+def test_remove_nans():
+    tests = [
+        ((1, 1, 2), (1, 1, 2)),
+        ((None, 1, 2), (1, 1, 2)),
+        ((1, None, 2), (1, 2, 2)),
+        ((1, 2, None), (1, 2, 2)),
+        ((1, 2, None, None), (1, 2, 2, 2)),
+        ((None, None, 1, 2), (1, 1, 1, 2)),
+        ((1, None, None, 2), (1, 2, 2, 2)),
+        ((None, 1, None, 2, None, 3, None), (1, 1, 2, 2, 3, 3, 3)),
+    ]
+
+    converters = [
+        (int, np.nan),
+        (float, np.nan),
+        (str, np.nan),
+        (lambda x: pd.to_datetime(x, unit='ns'), np.datetime64('NaT')),
+    ]
+
+    for conv, none_val in converters:
+        for inputs, expected in tests:
+            params = [none_val if x is None else conv(x) for x in inputs]
+            expected = [conv(x) for x in expected]
+            assert remove_nans(params) == expected

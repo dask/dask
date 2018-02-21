@@ -3,6 +3,7 @@ distributed = pytest.importorskip('distributed')
 
 from functools import partial
 import inspect
+from operator import add
 from tornado import gen
 
 import dask
@@ -77,11 +78,11 @@ def test_local_get_with_distributed_active(c, s, a, b):
     with dask.set_options(get=dask.get):
         x = delayed(inc)(1).persist()
     yield gen.sleep(0.01)
-    assert not s.task_state # scheduler hasn't done anything
+    assert not s.tasks # scheduler hasn't done anything
 
     y = delayed(inc)(2).persist(get=dask.get)
     yield gen.sleep(0.01)
-    assert not s.task_state # scheduler hasn't done anything
+    assert not s.tasks # scheduler hasn't done anything
 
 
 
@@ -111,3 +112,17 @@ def test_serializable_groupby_agg(c, s, a, b):
     result = ddf.groupby('y').agg('count')
 
     yield c.compute(result)
+
+
+def test_futures_in_graph(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            x, y = delayed(1), delayed(2)
+            xx = delayed(add)(x, x)
+            yy = delayed(add)(y, y)
+            xxyy = delayed(add)(xx, yy)
+
+            xxyy2 = c.persist(xxyy)
+            xxyy3 = delayed(add)(xxyy2, 10)
+
+            assert xxyy3.compute(get=c.get) == ((1 + 1) + (2 + 2)) + 10

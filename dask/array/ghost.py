@@ -100,8 +100,8 @@ def ghost_internal(x, axes):
     """
     dims = list(map(len, x.chunks))
     expand_key2 = partial(expand_key, dims=dims)
-    interior_keys = pipe(x._keys(), flatten, map(expand_key2), map(flatten),
-                         concat, list)
+    interior_keys = pipe(x.__dask_keys__(), flatten, map(expand_key2),
+                         map(flatten), concat, list)
 
     token = tokenize(x, axes)
     name = 'ghost-' + token
@@ -375,7 +375,7 @@ def add_dummy_padding(x, depth, boundary):
             ax_chunks = list(out_chunks[k])
             ax_chunks[0] += d
             ax_chunks[-1] += d
-            out_chunks[k] = ax_chunks
+            out_chunks[k] = tuple(ax_chunks)
 
             x = concatenate([empty, x, empty], axis=k)
             x = x.rechunk(out_chunks)

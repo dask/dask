@@ -132,9 +132,10 @@ Index
 **Getting Started**
 
 * :doc:`install`
+* :doc:`setup`
 * :doc:`use-cases`
 * :doc:`examples-tutorials`
-* :doc:`cheatsheet`
+* :doc:`support`
 
 .. toctree::
    :maxdepth: 1
@@ -142,9 +143,10 @@ Index
    :caption: Getting Started
 
    install.rst
+   setup.rst
    use-cases.rst
    examples-tutorials.rst
-   cheatsheet.rst
+   support.rst
 
 **Collections**
 
@@ -178,7 +180,6 @@ distributed memory clusters.
 
 * :doc:`distributed`
 * :doc:`scheduler-overview`
-* :doc:`scheduler-choice`
 * :doc:`Single machine scheduler<shared>`
 * :doc:`scheduling-policy`
 
@@ -189,7 +190,6 @@ distributed memory clusters.
 
    distributed.rst
    scheduler-overview.rst
-   scheduler-choice.rst
    shared.rst
    scheduling-policy.rst
 
@@ -235,8 +235,8 @@ often a better choice.  If you are a *core developer*, then you should start her
 **Help & reference**
 
 * :doc:`debugging`
-* :doc:`support`
 * :doc:`changelog`
+* :doc:`cheatsheet`
 * :doc:`presentations`
 * :doc:`develop`
 * :doc:`faq`
@@ -244,6 +244,7 @@ often a better choice.  If you are a *core developer*, then you should start her
 * :doc:`caching`
 * :doc:`bytes`
 * :doc:`remote-data-services`
+* :doc:`custom-collections`
 * :doc:`cite`
 
 .. toctree::
@@ -252,8 +253,8 @@ often a better choice.  If you are a *core developer*, then you should start her
    :caption: Help & reference
 
    debugging.rst
-   support.rst
    changelog.rst
+   cheatsheet.rst
    presentations.rst
    develop.rst
    faq.rst
@@ -261,6 +262,7 @@ often a better choice.  If you are a *core developer*, then you should start her
    caching.rst
    bytes.rst
    remote-data-services.rst
+   custom-collections.rst
    cite.rst
    funding.rst
 

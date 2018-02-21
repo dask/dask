@@ -1,16 +1,18 @@
 from __future__ import absolute_import, division, print_function
 
 from ..utils import ignoring
-from .core import (Array, concatenate, stack, from_array, store, map_blocks,
-                   atop, to_hdf5, to_npy_stack, from_npy_stack, from_delayed,
-                   asarray, asanyarray, broadcast_to)
+from .core import (Array, block, concatenate, stack, from_array, store,
+                   map_blocks, atop, to_hdf5, to_npy_stack, from_npy_stack,
+                   from_delayed, asarray, asanyarray, broadcast_to)
 from .routines import (take, choose, argwhere, where, coarsen, insert,
                        ravel, roll, unique, squeeze, topk, ptp, diff, ediff1d,
                        bincount, digitize, histogram, cov, array, dstack,
                        vstack, hstack, compress, extract, round, count_nonzero,
                        flatnonzero, nonzero, around, isnull, notnull, isclose,
-                       corrcoef, swapaxes, tensordot, transpose, dot,
-                       apply_along_axis, apply_over_axes, result_type)
+                       allclose, corrcoef, swapaxes, tensordot, transpose, dot,
+                       vdot, matmul, apply_along_axis, apply_over_axes,
+                       result_type, atleast_1d, atleast_2d, atleast_3d,
+                       flip, flipud, fliplr)
 from .reshape import reshape
 from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
         true_divide, floor_divide, negative, power, remainder, mod, conj, exp,
@@ -22,7 +24,12 @@ from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
         fmax, fmin, isreal, iscomplex, isfinite, isinf, isnan, signbit,
         copysign, nextafter, spacing, ldexp, fmod, floor, ceil, trunc, degrees,
         radians, rint, fix, angle, real, imag, clip, fabs, sign, absolute,
-        i0, sinc, nan_to_num, frexp, modf, divide)
+        i0, sinc, nan_to_num, frexp, modf, divide, frompyfunc)
+try:
+    from .ufunc import float_power
+except ImportError:
+    # Absent for NumPy versions prior to 1.12.
+    pass
 from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
                          moment,
                          argmin, argmax,
@@ -41,5 +48,5 @@ from .rechunk import rechunk
 from ..context import set_options
 from ..base import compute
 from .optimization import optimize
-from .creation import (arange, linspace, indices, diag, eye, triu, tril,
-                       fromfunction, tile, repeat)
+from .creation import (arange, linspace, meshgrid, indices, diag, eye,
+                       triu, tril, fromfunction, tile, repeat)

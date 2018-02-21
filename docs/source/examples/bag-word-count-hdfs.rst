@@ -44,7 +44,7 @@ count the frequencies of each word, then list the top 10 words by their count:
 
 .. code-block:: python
 
-   >>> wordcount = b.str.split().concat().frequencies().topk(10, lambda x: x[1])
+   >>> wordcount = b.str.split().flatten().frequencies().topk(10, lambda x: x[1])
 
 Note that the combined operations in the previous expression are lazy. We can
 trigger the word count computation using ``.compute()``:
@@ -122,7 +122,7 @@ local ``dask`` example:
 
 .. code-block:: python
 
-   >>> wordcount = b.str.split().concat().frequencies().topk(10, lambda x: x[1])
+   >>> wordcount = b.str.split().flatten().frequencies().topk(10, lambda x: x[1])
 
 We are ready to count the number of words in all of the text files using
 ``distributed`` workers. We can map the ``wordcount`` expression to a future
@@ -187,7 +187,7 @@ The complete Python script for this example is shown below:
    import dask.bag as db
    b = db.read_text('merged.txt')
    b.take(10)
-   wordcount = b.str.split().concat().frequencies().topk(10, lambda x: x[1])
+   wordcount = b.str.split().flatten().frequencies().topk(10, lambda x: x[1])
    wordcount.compute()
 
    # Cluster computation with HDFS
@@ -197,7 +197,7 @@ The complete Python script for this example is shown below:
    client = Client('SCHEDULER_IP:SCHEDULER_PORT')
 
    b = db.read_text('hdfs:///tmp/enron/*/*')
-   wordcount = b.str.split().concat().frequencies().topk(10, lambda x: x[1])
+   wordcount = b.str.split().flatten().frequencies().topk(10, lambda x: x[1])
 
    future = client.compute(wordcount)
    print(future)

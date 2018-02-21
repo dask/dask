@@ -18,6 +18,7 @@ from dask.bag.core import (Bag, lazify, lazify_task, map, collect,
                            reduceby, reify, partition, inline_singleton_lists,
                            optimize, from_delayed)
 from dask.compatibility import BZ2File, GzipFile, PY2
+from dask.delayed import Delayed
 from dask.utils import filetexts, tmpfile, tmpdir
 from dask.utils_test import inc, add
 
@@ -45,7 +46,7 @@ def test_Bag():
 
 
 def test_keys():
-    assert sorted(b._keys()) == sorted(dsk.keys())
+    assert b.__dask_keys__() == sorted(dsk.keys())
 
 
 def test_bag_map():
@@ -530,17 +531,23 @@ def test_take_npartitions():
         b.take(1, npartitions=5)
 
 
-@pytest.mark.skipif(sys.version_info[:2] == (3,3),
-                    reason="Python3.3 uses pytest2.7.2, w/o warns method")
 def test_take_npartitions_warn():
-    with pytest.warns(None):
-        b.take(100)
+    # Use single-threaded scheduler so warnings are properly captured in the
+    # same process
+    with dask.set_options(get=dask.get):
+        with pytest.warns(UserWarning):
+            b.take(100)
 
-    with pytest.warns(None):
-        b.take(7)
+        with pytest.warns(UserWarning):
+            b.take(7)
 
-    with pytest.warns(None):
-        b.take(7, npartitions=2)
+        with pytest.warns(None) as rec:
+            b.take(7, npartitions=2)
+        assert len(rec) == 0
+
+        with pytest.warns(None) as rec:
+            b.take(7, warn=False)
+        assert len(rec) == 0
 
 
 def test_map_is_lazy():
@@ -631,9 +638,11 @@ def test_from_s3():
     e = db.read_text('s3://tip-data/t*.gz', storage_options=dict(anon=True))
     assert e.take(5) == five_tips
 
-    # test all keys in bucket
-    c = db.read_text('s3://tip-data/*', storage_options=dict(anon=True))
-    assert c.npartitions == 4
+    # test multiple keys in bucket
+    c = db.read_text(['s3://tip-data/tips.gz', 's3://tip-data/tips.json',
+                      's3://tip-data/tips.csv'],
+                     storage_options=dict(anon=True))
+    assert c.npartitions == 3
 
 
 def test_from_sequence():
@@ -775,6 +784,11 @@ def test_to_dataframe():
     with pytest.raises(ValueError):
         b.to_dataframe(columns=['a', 'b'], meta=sol)
 
+    # Inference fails if empty first partition
+    b2 = b.filter(lambda x: x['a'] > 200)
+    with pytest.raises(ValueError):
+        b2.to_dataframe()
+
     # Single column
     b = b.pluck('a')
     sol = sol[['a']]
@@ -861,7 +875,9 @@ def test_to_textfiles_inputs():
         B.to_textfiles(dirname)
         assert os.path.exists(dirname)
         assert os.path.exists(os.path.join(dirname, '0.part'))
-    pytest.raises(ValueError, lambda: B.to_textfiles(5))
+
+    with pytest.raises(TypeError):
+        B.to_textfiles(5)
 
 
 def test_to_textfiles_endlines():
@@ -957,8 +973,6 @@ def test_bag_compute_forward_kwargs():
 
 
 def test_to_delayed():
-    from dask.delayed import Delayed
-
     b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=3)
     a, b, c = b.map(inc).to_delayed()
     assert all(isinstance(x, Delayed) for x in [a, b, c])
@@ -970,17 +984,24 @@ def test_to_delayed():
     assert t.compute() == 21
 
 
-def test_to_delayed_optimizes():
+def test_to_delayed_optimize_graph():
     b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=1)
     b2 = b.map(inc).map(inc).map(inc)
 
     [d] = b2.to_delayed()
     text = str(dict(d.dask))
     assert text.count('reify') == 1
+    [d2] = b2.to_delayed(optimize_graph=False)
+    assert dict(d2.dask) == dict(b2.dask)
+    assert d.compute() == d2.compute()
 
-    d = b2.sum().to_delayed()
+    x = b2.sum()
+    d = x.to_delayed()
     text = str(dict(d.dask))
     assert text.count('reify') == 0
+    d2 = x.to_delayed(optimize_graph=False)
+    assert dict(d2.dask) == dict(x.dask)
+    assert d.compute() == d2.compute()
 
     [d] = b2.to_textfiles('foo.txt', compute=False)
     text = str(dict(d.dask))
@@ -1042,7 +1063,7 @@ def test_repartition(nin, nout):
 
     assert c.npartitions == nout
     assert b.compute(get=dask.get) == c.compute(get=dask.get)
-    results = dask.get(c.dask, c._keys())
+    results = dask.get(c.dask, c.__dask_keys__())
     assert all(results)
 
 
@@ -1078,7 +1099,7 @@ def test_accumulate():
 def test_groupby_tasks():
     b = db.from_sequence(range(160), npartitions=4)
     out = b.groupby(lambda x: x % 10, max_branch=4, method='tasks')
-    partitions = dask.get(out.dask, out._keys())
+    partitions = dask.get(out.dask, out.__dask_keys__())
 
     for a in partitions:
         for b in partitions:
@@ -1088,7 +1109,7 @@ def test_groupby_tasks():
     b = db.from_sequence(range(1000), npartitions=100)
     out = b.groupby(lambda x: x % 123, method='tasks')
     assert len(out.dask) < 100**2
-    partitions = dask.get(out.dask, out._keys())
+    partitions = dask.get(out.dask, out.__dask_keys__())
 
     for a in partitions:
         for b in partitions:
@@ -1097,7 +1118,7 @@ def test_groupby_tasks():
 
     b = db.from_sequence(range(10000), npartitions=345)
     out = b.groupby(lambda x: x % 2834, max_branch=24, method='tasks')
-    partitions = dask.get(out.dask, out._keys())
+    partitions = dask.get(out.dask, out.__dask_keys__())
 
     for a in partitions:
         for b in partitions:
@@ -1216,11 +1237,12 @@ def test_optimize_fuse_keys():
     y = x.map(inc)
     z = y.map(inc)
 
-    dsk = z._optimize(z.dask, z._keys())
+    dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
     assert not set(y.dask) & set(dsk)
 
-    dsk = z._optimize(z.dask, z._keys(), fuse_keys=y._keys())
-    assert all(k in dsk for k in y._keys())
+    dsk = z.__dask_optimize__(z.dask, z.__dask_keys__(),
+                              fuse_keys=y.__dask_keys__())
+    assert all(k in dsk for k in y.__dask_keys__())
 
 
 def test_reductions_are_lazy():

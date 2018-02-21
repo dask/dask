@@ -5,16 +5,17 @@ import operator
 import uuid
 
 try:
-    from cytoolz import curry, first, pluck
+    from cytoolz import curry, pluck
 except ImportError:
-    from toolz import curry, first, pluck
+    from toolz import curry, pluck
 
-from . import base, threaded
+from . import threaded
+from .base import Base, is_dask_collection, dont_optimize
+from .base import tokenize as _tokenize
 from .compatibility import apply
 from .core import quote
-from .context import _globals, defer_to_globals
-from .optimize import dont_optimize
-from .utils import concrete, funcname, methodcaller, ensure_dict
+from .context import _globals, globalmethod
+from .utils import funcname, methodcaller, OperatorMethodMixin
 from . import sharedict
 
 __all__ = ['Delayed', 'delayed']
@@ -65,11 +66,13 @@ def to_task_dask(expr):
     if isinstance(expr, Delayed):
         return expr.key, expr.dask
 
-    if isinstance(expr, base.Base):
+    if is_dask_collection(expr):
         name = 'finalize-' + tokenize(expr, pure=True)
-        keys = expr._keys()
-        dsk = expr._optimize(ensure_dict(expr.dask), keys)
-        dsk[name] = (expr._finalize, (concrete, keys))
+        keys = expr.__dask_keys__()
+        opt = getattr(expr, '__dask_optimize__', dont_optimize)
+        finalize, args = expr.__dask_postcompute__()
+        dsk = {name: (finalize, keys) + args}
+        dsk.update(opt(expr.__dask_graph__(), keys))
         return name, dsk
 
     if isinstance(expr, Iterator):
@@ -111,7 +114,7 @@ def tokenize(*args, **kwargs):
         pure = _globals.get('delayed_pure', False)
 
     if pure:
-        return base.tokenize(*args, **kwargs)
+        return _tokenize(*args, **kwargs)
     else:
         return str(uuid.uuid4())
 
@@ -301,7 +304,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     if isinstance(obj, Delayed):
         return obj
 
-    if isinstance(obj, base.Base) or traverse:
+    if is_dask_collection(obj) or traverse:
         task, dsk = to_task_dask(obj)
     else:
         task = quote(obj)
@@ -309,7 +312,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
 
     if task is obj:
         if not (nout is None or (type(nout) is int and nout >= 0)):
-            raise ValueError("nout must be None or a positive integer,"
+            raise ValueError("nout must be None or a non-negative integer,"
                              " got %s" % nout)
         if not name:
             try:
@@ -333,18 +336,16 @@ def right(method):
     return _inner
 
 
-optimize = defer_to_globals('delayed_optimize', falsey=dont_optimize)(dont_optimize)
+def rebuild(dsk, key, length):
+    return Delayed(key, dsk, length)
 
 
-class Delayed(base.Base):
+class Delayed(Base, OperatorMethodMixin):
     """Represents a value to be computed by dask.
 
     Equivalent to the output from a single key in a dask graph.
     """
     __slots__ = ('_key', 'dask', '_length')
-    _finalize = staticmethod(first)
-    _default_get = staticmethod(threaded.get)
-    _optimize = staticmethod(optimize)
 
     def __init__(self, key, dsk, length=None):
         self._key = key
@@ -352,6 +353,24 @@ class Delayed(base.Base):
             dsk = sharedict.merge(*dsk)
         self.dask = dsk
         self._length = length
+
+    def __dask_graph__(self):
+        return self.dask
+
+    def __dask_keys__(self):
+        return [self.key]
+
+    def __dask_tokenize__(self):
+        return self.key
+
+    __dask_scheduler__ = staticmethod(threaded.get)
+    __dask_optimize__ = globalmethod(dont_optimize, key='delayed_optimize')
+
+    def __dask_postcompute__(self):
+        return single_key, ()
+
+    def __dask_postpersist__(self):
+        return rebuild, (self._key, getattr(self, '_length', None))
 
     def __getstate__(self):
         return tuple(getattr(self, i) for i in self.__slots__)
@@ -363,9 +382,6 @@ class Delayed(base.Base):
     @property
     def key(self):
         return self._key
-
-    def _keys(self):
-        return [self.key]
 
     def __repr__(self):
         return "Delayed({0})".format(repr(self.key))
@@ -439,7 +455,7 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     for arg, d in args_dasks:
         if isinstance(d, sharedict.ShareDict):
             dsk.update_with_key(d)
-        elif isinstance(arg, str):
+        elif isinstance(arg, (str, tuple)):
             dsk.update_with_key(d, key=arg)
         else:
             dsk.update(d)
@@ -502,4 +518,6 @@ for op in [operator.abs, operator.neg, operator.pos, operator.invert,
     Delayed._bind_operator(op)
 
 
-base.normalize_token.register(Delayed, lambda a: a.key)
+def single_key(seq):
+    """ Pick out the only element of this list, a list of keys """
+    return seq[0]

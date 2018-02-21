@@ -40,6 +40,7 @@ if PY3:
     from urllib.parse import urlparse, urlsplit, quote, unquote
     FileNotFoundError = FileNotFoundError
     unicode = str
+    string_types = (str,)
     long = int
     zip = zip
     def apply(func, args, kwargs=None):
@@ -53,6 +54,12 @@ if PY3:
 
     def _getargspec(func):
         return inspect.getfullargspec(func)
+
+    def get_named_args(func):
+        """Get all non ``*args/**kwargs`` arguments for a function"""
+        s = inspect.signature(func)
+        return [n for n, p in s.parameters.items()
+                if p.kind == p.POSITIONAL_OR_KEYWORD]
 
     def reraise(exc, tb=None):
         if exc.__traceback__ is not tb:
@@ -71,6 +78,7 @@ else:
     from urlparse import urlparse, urlsplit
     from urllib import quote, unquote
     unicode = unicode
+    string_types = (basestring,)
     long = long
     apply = apply
     range = xrange
@@ -90,6 +98,14 @@ else:
 
     def _getargspec(func):
         return inspect.getargspec(func)
+
+    def get_named_args(func):
+        """Get all non ``*args/**kwargs`` arguments for a function"""
+        try:
+            return getargspec(func).args
+        except TypeError as e:
+            # Be consistent with py3
+            raise ValueError(*e.args)
 
     def gzip_decompress(b):
         f = gzip.GzipFile(fileobj=BytesIO(b))
@@ -241,9 +257,6 @@ def getargspec(func):
             return _getargspec(func.__init__)
         else:
             return _getargspec(func)
-
-def skip(func):
-    return
 
 
 def bind_method(cls, name, func):

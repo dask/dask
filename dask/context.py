@@ -3,11 +3,15 @@ Control global computation context
 """
 from __future__ import absolute_import, division, print_function
 
+import threading
+from functools import partial
 from collections import defaultdict
-import functools
 
 _globals = defaultdict(lambda: None)
 _globals['callbacks'] = set()
+
+
+thread_state = threading.local()
 
 
 class set_options(object):
@@ -43,45 +47,55 @@ class set_options(object):
         _globals.update(self.old)
 
 
-def defer_to_globals(name, falsey=None):
+def globalmethod(default=None, key=None, falsey=None):
     """ Allow function to be taken over by globals
 
-    This modifies a function so that occurrences of it may be taken over by
-    functions registered in the global options.  It is commonly used as a
-    decorator.
+    This modifies a method so that occurrences of it may be taken over by
+    functions registered in the global options. Can be used as a decorator or a
+    function.
 
     Parameters
     ----------
-    name: str
-        name under which we register this function in the global parameters
-    falsey: callable, None, optional
-        A function to use if the option is falsey
+    default : callable
+        The default callable to use.
+    key : str
+        Key under which we register this function in the global parameters
+    falsey : callable, None, optional
+        A function to use if the option is falsey. If not provided, the default
+        is used instead.
 
     Examples
     --------
-
     >>> import dask
-    >>> @defer_to_globals('foo')
-    ... def f():
-    ...     return 1
-
-    >>> f()
+    >>> class Foo(object):
+    ...     @globalmethod(key='bar', falsey=lambda: 3)
+    ...     def bar():
+    ...         return 1
+    >>> f = Foo()
+    >>> f.bar()
     1
-
-    >>> with dask.set_options(foo=lambda: 2):
-    ...     print(f())
+    >>> with dask.set_options(bar=lambda: 2):
+    ...     print(f.bar())
     2
+    >>> with dask.set_options(bar=False):
+    ...     print(f.bar())
+    3
     """
-    def _(func):
-        @functools.wraps(func)
-        def f(*args, **kwargs):
-            if name in _globals:
-                if _globals[name]:
-                    return _globals[name](*args, **kwargs)
-                elif falsey:
-                    return falsey(*args, **kwargs)
-            else:
-                return func(*args, **kwargs)
+    if default is None:
+        return partial(globalmethod, key=key, falsey=falsey)
+    return GlobalMethod(default=default, key=key, falsey=falsey)
 
-        return f
-    return _
+
+class GlobalMethod(object):
+    def __init__(self, default, key, falsey=None):
+        self._default = default
+        self._key = key
+        self._falsey = falsey
+
+    def __get__(self, instance, owner=None):
+        if self._key in _globals:
+            if _globals[self._key]:
+                return _globals[self._key]
+            elif self._falsey is not None:
+                return self._falsey
+        return self._default

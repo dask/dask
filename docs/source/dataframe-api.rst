@@ -169,6 +169,7 @@ Series
    Series.rdiv
    Series.reduction
    Series.repartition
+   Series.rename
    Series.resample
    Series.reset_index
    Series.rolling
@@ -243,19 +244,25 @@ Rolling Operations
 
 .. autosummary::
    rolling.map_overlap
-   rolling.rolling_apply
-   rolling.rolling_count
-   rolling.rolling_kurt
-   rolling.rolling_max
-   rolling.rolling_mean
-   rolling.rolling_median
-   rolling.rolling_min
-   rolling.rolling_quantile
-   rolling.rolling_skew
-   rolling.rolling_std
-   rolling.rolling_sum
-   rolling.rolling_var
-   rolling.rolling_window
+   Series.rolling
+   DataFrame.rolling
+
+.. currentmodule:: dask.dataframe.rolling
+
+.. autosummary::
+   Rolling.apply
+   Rolling.count
+   Rolling.kurt
+   Rolling.max
+   Rolling.mean
+   Rolling.median
+   Rolling.min
+   Rolling.quantile
+   Rolling.skew
+   Rolling.std
+   Rolling.sum
+   Rolling.var
+
 
 Create DataFrames
 ~~~~~~~~~~~~~~~~~
@@ -285,7 +292,6 @@ Store DataFrames
     to_hdf
     to_records
     to_bag
-    to_delayed
 
 DataFrame Methods
 ~~~~~~~~~~~~~~~~~
@@ -334,7 +340,6 @@ Storage and Conversion
 .. autofunction:: from_bcolz
 .. autofunction:: from_dask_array
 .. autofunction:: from_delayed
-.. autofunction:: to_delayed
 .. autofunction:: to_records
 .. autofunction:: to_csv
 .. autofunction:: to_bag
@@ -346,20 +351,7 @@ Rolling
 
 .. currentmodule:: dask.dataframe.rolling
 
-.. autofunction:: rolling_apply
 .. autofunction:: map_overlap
-.. autofunction:: rolling_count
-.. autofunction:: rolling_kurt
-.. autofunction:: rolling_max
-.. autofunction:: rolling_mean
-.. autofunction:: rolling_median
-.. autofunction:: rolling_min
-.. autofunction:: rolling_quantile
-.. autofunction:: rolling_skew
-.. autofunction:: rolling_std
-.. autofunction:: rolling_sum
-.. autofunction:: rolling_var
-.. autofunction:: rolling_window
 
 
 Other functions

@@ -267,6 +267,9 @@ def _fftshift_helper(x, axes=None, inverse=False):
 
         y = _concatenate([y[r], y[l]], axis=i)
 
+        if len(x.chunks[i]) == 1:
+            y = y.rechunk({i: x.chunks[i]})
+
     return y
 
 

@@ -161,9 +161,13 @@ def size(x):
     return x.size
 
 
+def values(df):
+    return df.values
+
+
 def sample(df, state, frac, replace):
     rs = np.random.RandomState(state)
-    return df.sample(random_state=rs, frac=frac, replace=replace)
+    return df.sample(random_state=rs, frac=frac, replace=replace) if len(df) > 0 else df
 
 
 def drop_columns(df, columns, dtype):
@@ -259,9 +263,13 @@ def concat(dfs, axis=0, join='outer', uniform=False):
 
     # Handle categorical index separately
     dfs0_index = dfs[0].index
-    if (isinstance(dfs0_index, pd.CategoricalIndex) or
-            (isinstance(dfs0_index, pd.MultiIndex) and
-             any(isinstance(i, pd.CategoricalIndex) for i in dfs0_index.levels))):
+
+    has_categoricalindex = (
+        isinstance(dfs0_index, pd.CategoricalIndex) or
+        (isinstance(dfs0_index, pd.MultiIndex) and
+         any(isinstance(i, pd.CategoricalIndex) for i in dfs0_index.levels)))
+
+    if has_categoricalindex:
         dfs2 = [df.reset_index(drop=True) for df in dfs]
         ind = concat([df.index for df in dfs])
     else:
@@ -290,6 +298,7 @@ def concat(dfs, axis=0, join='outer', uniform=False):
             not_cat = cat_mask[~cat_mask].index
             out = pd.concat([df[df.columns.intersection(not_cat)]
                              for df in dfs3], join=join)
+            temp_ind = out.index
             for col in cat_mask.index.difference(not_cat):
                 # Find an example of categoricals in this column
                 for df in dfs3:
@@ -308,7 +317,11 @@ def concat(dfs, axis=0, join='outer', uniform=False):
                                                          sample.cat.ordered)
                         parts.append(data)
                 out[col] = union_categoricals(parts)
-            out = out.reindex_axis(cat_mask.index, axis=1)
+                # Pandas resets index type on assignment if frame is empty
+                # https://github.com/pandas-dev/pandas/issues/17101
+                if not len(temp_ind):
+                    out.index = temp_ind
+            out = out.reindex(columns=cat_mask.index)
         else:
             # pandas may raise a RuntimeWarning for comparing ints and strs
             with warnings.catch_warnings():

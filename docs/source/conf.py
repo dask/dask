@@ -16,7 +16,7 @@ import sys, os
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#sys.path.insert(0, os.path.abspath('.'))
+# sys.path.insert(0, os.path.abspath('../../'))
 
 # -- General configuration -----------------------------------------------------
 
@@ -25,7 +25,7 @@ import sys, os
 
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.mathjax',
+extensions = ['sphinx.ext.autodoc', 'sphinx.ext.mathjax', 'sphinx.ext.intersphinx',
               'sphinx.ext.autosummary', 'sphinx.ext.extlinks', 'numpydoc']
 
 numpydoc_show_class_members = False
@@ -44,7 +44,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'dask'
-copyright = u'2017, Anaconda'
+copyright = u'2014-2018, Anaconda, Inc. and contributors'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -258,7 +258,7 @@ texinfo_documents = [
 epub_title = u'dask'
 epub_author = u'Dask Development Team'
 epub_publisher = u'Anaconda Inc'
-epub_copyright = u'2017, Anaconda Inc'
+epub_copyright = u'2014-2018, Anaconda, Inc. and contributors'
 
 # The language of the text. It defaults to the language option
 # or en if the language is not set.
@@ -298,3 +298,17 @@ extlinks = {
     'issue': ('https://github.com/dask/dask/issues/%s', 'GH#'),
     'pr': ('https://github.com/dask/dask/pull/%s', 'GH#')
 }
+
+#  --Options for sphinx extensions -----------------------------------------------
+
+intersphinx_mapping = {'pandas': ('http://pandas.pydata.org/pandas-docs/stable/',
+                                  'http://pandas.pydata.org/pandas-docs/stable/objects.inv'),
+                       'numpy': ('https://docs.scipy.org/doc/numpy/',
+                                 'https://docs.scipy.org/doc/numpy/objects.inv')}
+
+#  --Options for sphinx extensions -----------------------------------------------
+
+intersphinx_mapping = {'pandas': ('http://pandas.pydata.org/pandas-docs/stable/',
+                                  'http://pandas.pydata.org/pandas-docs/stable/objects.inv'),
+                       'numpy': ('https://docs.scipy.org/doc/numpy/',
+                                 'https://docs.scipy.org/doc/numpy/objects.inv')}

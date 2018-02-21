@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import functools
 import inspect
 import os
-import re
 import shutil
 import sys
 import tempfile
@@ -17,10 +16,10 @@ import multiprocessing as mp
 import uuid
 from weakref import WeakValueDictionary
 
-from .compatibility import getargspec, PY3, unicode, urlsplit
+from .compatibility import get_named_args, getargspec, PY3, unicode, bind_method
 from .core import get_deps
 from .context import _globals
-from .optimize import key_split    # noqa: F401
+from .optimization import key_split    # noqa: F401
 
 
 system_encoding = sys.getdefaultencoding()
@@ -486,10 +485,10 @@ def derived_from(original_klass, version=None, ua_args=[]):
                 doc = ''
 
             try:
-                method_args = getargspec(method).args
-                original_args = getargspec(original_method).args
+                method_args = get_named_args(method)
+                original_args = get_named_args(original_method)
                 not_supported = [m for m in original_args if m not in method_args]
-            except TypeError:
+            except ValueError:
                 not_supported = []
 
             if len(ua_args) > 0:
@@ -714,6 +713,9 @@ class itemgetter(object):
     def __reduce__(self):
         return (itemgetter, (self.index,))
 
+    def __eq__(self, other):
+        return type(self) is type(other) and self.index == other.index
+
 
 class MethodCache(object):
     """Attribute access on this object returns a methodcaller for that
@@ -798,8 +800,8 @@ class SerializableLock(object):
 
 def effective_get(get=None, collection=None):
     """Get the effective get method used in a given situation"""
-    collection_get = collection._default_get if collection is not None else None
-    return get or _globals.get('get') or collection_get
+    return (get or _globals.get('get') or
+            getattr(collection, '__dask_scheduler__', None))
 
 
 def get_scheduler_lock(get=None, collection=None):
@@ -824,81 +826,42 @@ def ensure_dict(d):
     return dict(d)
 
 
-# XXX: Kept to keep old versions of distributed/dask in sync. After
-# distributed's dask requirement is updated to > this commit, this function can
-# be moved to dask.bytes.utils.
-def infer_storage_options(urlpath, inherit_storage_options=None):
-    """ Infer storage options from URL path and merge it with existing storage
-    options.
+class OperatorMethodMixin(object):
+    """A mixin for dynamically implementing operators"""
 
-    Parameters
-    ----------
-    urlpath: str or unicode
-        Either local absolute file path or URL (hdfs://namenode:8020/file.csv)
-    storage_options: dict (optional)
-        Its contents will get merged with the inferred information from the
-        given path
+    @classmethod
+    def _bind_operator(cls, op):
+        """ bind operator to this class """
+        name = op.__name__
 
-    Returns
-    -------
-    Storage options dict.
+        if name.endswith('_'):
+            # for and_ and or_
+            name = name[:-1]
+        elif name == 'inv':
+            name = 'invert'
 
-    Examples
-    --------
-    >>> infer_storage_options('/mnt/datasets/test.csv')  # doctest: +SKIP
-    {"protocol": "file", "path", "/mnt/datasets/test.csv"}
-    >>> infer_storage_options(
-    ...          'hdfs://username:pwd@node:123/mnt/datasets/test.csv?q=1',
-    ...          inherit_storage_options={'extra': 'value'})  # doctest: +SKIP
-    {"protocol": "hdfs", "username": "username", "password": "pwd",
-    "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
-    "url_query": "q=1", "extra": "value"}
-    """
-    # Handle Windows paths including disk name in this special case
-    if re.match(r'^[a-zA-Z]:[\\/]', urlpath):
-        return {'protocol': 'file',
-                'path': urlpath}
+        meth = '__{0}__'.format(name)
 
-    parsed_path = urlsplit(urlpath)
-    protocol = parsed_path.scheme or 'file'
-    path = parsed_path.path
-    if protocol == 'file':
-        # Special case parsing file protocol URL on Windows according to:
-        # https://msdn.microsoft.com/en-us/library/jj710207.aspx
-        windows_path = re.match(r'^/([a-zA-Z])[:|]([\\/].*)$', path)
-        if windows_path:
-            path = '%s:%s' % windows_path.groups()
+        if name in ('abs', 'invert', 'neg', 'pos'):
+            bind_method(cls, meth, cls._get_unary_operator(op))
+        else:
+            bind_method(cls, meth, cls._get_binary_operator(op))
 
-    inferred_storage_options = {
-        'protocol': protocol,
-        'path': path,
-    }
+            if name in ('eq', 'gt', 'ge', 'lt', 'le', 'ne', 'getitem'):
+                return
 
-    if parsed_path.netloc:
-        # Parse `hostname` from netloc manually because `parsed_path.hostname`
-        # lowercases the hostname which is not always desirable (e.g. in S3):
-        # https://github.com/dask/dask/issues/1417
-        inferred_storage_options['host'] = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
-        if parsed_path.port:
-            inferred_storage_options['port'] = parsed_path.port
-        if parsed_path.username:
-            inferred_storage_options['username'] = parsed_path.username
-        if parsed_path.password:
-            inferred_storage_options['password'] = parsed_path.password
+            rmeth = '__r{0}__'.format(name)
+            bind_method(cls, rmeth, cls._get_binary_operator(op, inv=True))
 
-    if parsed_path.query:
-        inferred_storage_options['url_query'] = parsed_path.query
-    if parsed_path.fragment:
-        inferred_storage_options['url_fragment'] = parsed_path.fragment
+    @classmethod
+    def _get_unary_operator(cls, op):
+        """ Must return a method used by unary operator """
+        raise NotImplementedError
 
-    if inherit_storage_options:
-        if set(inherit_storage_options) & set(inferred_storage_options):
-            raise KeyError("storage options (%r) and path url options (%r) "
-                           "collision is detected"
-                           % (inherit_storage_options, inferred_storage_options))
-        inferred_storage_options.update(inherit_storage_options)
-
-    return inferred_storage_options
+    @classmethod
+    def _get_binary_operator(cls, op, inv=False):
+        """ Must return a method used by binary operator """
+        raise NotImplementedError
 
 
 def partial_by_order(*args, **kwargs):
@@ -914,3 +877,22 @@ def partial_by_order(*args, **kwargs):
     for i, arg in other:
         args2.insert(i, arg)
     return function(*args2, **kwargs)
+
+
+def is_arraylike(x):
+    """ Is this object a numpy array or something similar?
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> x = np.ones(5)
+    >>> is_arraylike(x)
+    True
+    >>> is_arraylike(5)
+    False
+    >>> is_arraylike('cat')
+    False
+    """
+    return (hasattr(x, '__array__') and
+            hasattr(x, 'shape') and x.shape and
+            hasattr(x, 'dtype'))

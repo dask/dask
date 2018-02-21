@@ -1,11 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 from itertools import product
+from numbers import Integral
 from operator import getitem
 
 import numpy as np
 
-from .core import (normalize_chunks, Array, slices_from_chunks,
+from .core import (normalize_chunks, Array, slices_from_chunks, asarray,
                    broadcast_shapes, broadcast_to)
 from .. import sharedict
 from ..base import tokenize
@@ -170,8 +171,62 @@ class RandomState(object):
     with ignoring(AttributeError):
         @doc_wraps(np.random.RandomState.choice)
         def choice(self, a, size=None, replace=True, p=None, chunks=None):
-            return self._wrap(np.random.RandomState.choice, a,
-                              size=size, replace=True, p=None, chunks=chunks)
+            dsks = []
+            # Normalize and validate `a`
+            if isinstance(a, Integral):
+                # On windows the output dtype differs if p is provided or
+                # absent, see https://github.com/numpy/numpy/issues/9867
+                dummy_p = np.array([1]) if p is not None else p
+                dtype = np.random.choice(1, size=(), p=dummy_p).dtype
+                len_a = a
+                if a < 0:
+                    raise ValueError("a must be greater than 0")
+            else:
+                a = asarray(a).rechunk(a.shape)
+                dtype = a.dtype
+                if a.ndim != 1:
+                    raise ValueError("a must be one dimensional")
+                len_a = len(a)
+                dsks.append(a.dask)
+                a = a.__dask_keys__()[0]
+
+            # Normalize and validate `p`
+            if p is not None:
+                if not isinstance(p, Array):
+                    # If p is not a dask array, first check the sum is close
+                    # to 1 before converting.
+                    p = np.asarray(p)
+                    if not np.isclose(p.sum(), 1, rtol=1e-7, atol=0):
+                        raise ValueError("probabilities do not sum to 1")
+                    p = asarray(p)
+                else:
+                    p = p.rechunk(p.shape)
+
+                if p.ndim != 1:
+                    raise ValueError("p must be one dimensional")
+                if len(p) != len_a:
+                    raise ValueError("a and p must have the same size")
+
+                dsks.append(p.dask)
+                p = p.__dask_keys__()[0]
+
+            if size is None:
+                size = ()
+            elif not isinstance(size, (tuple, list)):
+                size = (size,)
+
+            chunks = normalize_chunks(chunks, size)
+            sizes = list(product(*chunks))
+            state_data = random_state_data(len(sizes), self._numpy_state)
+
+            name = 'da.random.choice-%s' % tokenize(state_data, size, chunks,
+                                                    a, replace, p)
+            keys = product([name], *(range(len(bd)) for bd in chunks))
+            dsk = {k: (_choice, state, a, size, replace, p) for
+                   k, state, size in zip(keys, state_data, sizes)}
+
+            return Array(sharedict.merge((name, dsk), *dsks),
+                         name, chunks, dtype=dtype)
 
     # @doc_wraps(np.random.RandomState.dirichlet)
     # def dirichlet(self, alpha, size=None, chunks=None):
@@ -352,6 +407,11 @@ class RandomState(object):
                           size=size, chunks=chunks)
 
 
+def _choice(state_data, a, size, replace, p):
+    state = np.random.RandomState(state_data)
+    return state.choice(a, size=size, replace=replace, p=p)
+
+
 def _apply_random(func, state_data, size, args, kwargs):
     """Apply RandomState method with seed"""
     state = np.random.RandomState(state_data)
@@ -368,6 +428,8 @@ seed = _state.seed
 beta = _state.beta
 binomial = _state.binomial
 chisquare = _state.chisquare
+if hasattr(_state, 'choice'):
+    choice = _state.choice
 exponential = _state.exponential
 f = _state.f
 gamma = _state.gamma

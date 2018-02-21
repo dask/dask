@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import warnings
+
 from functools import partial, wraps
 from itertools import product, repeat
 from math import factorial, log, ceil
@@ -141,7 +143,7 @@ def sum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
     else:
-        dt = np.empty((1,), dtype=a.dtype).sum().dtype
+        dt = getattr(np.empty((1,), dtype=a.dtype).sum(), 'dtype', object)
     return reduction(a, chunk.sum, chunk.sum, axis=axis, keepdims=keepdims,
                      dtype=dt, split_every=split_every, out=out)
 
@@ -151,7 +153,7 @@ def prod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
     else:
-        dt = np.empty((1,), dtype=a.dtype).prod().dtype
+        dt = getattr(np.empty((1,), dtype=a.dtype).prod(), 'dtype', object)
     return reduction(a, chunk.prod, chunk.prod, axis=axis, keepdims=keepdims,
                      dtype=dt, split_every=split_every, out=out)
 
@@ -185,7 +187,7 @@ def nansum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None)
     if dtype is not None:
         dt = dtype
     else:
-        dt = chunk.nansum(np.empty((1,), dtype=a.dtype)).dtype
+        dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), 'dtype', object)
     return reduction(a, chunk.nansum, chunk.sum, axis=axis, keepdims=keepdims,
                      dtype=dt, split_every=split_every, out=out)
 
@@ -197,7 +199,7 @@ with ignoring(AttributeError):
         if dtype is not None:
             dt = dtype
         else:
-            dt = chunk.nanprod(np.empty((1,), dtype=a.dtype)).dtype
+            dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), 'dtype', object)
         return reduction(a, chunk.nanprod, chunk.prod, axis=axis,
                          keepdims=keepdims, dtype=dt, split_every=split_every,
                          out=out)
@@ -267,7 +269,7 @@ def mean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
     else:
-        dt = np.mean(np.empty(shape=(1,), dtype=a.dtype)).dtype
+        dt = getattr(np.mean(np.empty(shape=(1,), dtype=a.dtype)), 'dtype', object)
     return reduction(a, mean_chunk, mean_agg, axis=axis, keepdims=keepdims,
                      dtype=dt, split_every=split_every, combine=mean_combine,
                      out=out)
@@ -278,7 +280,7 @@ def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None,
     if dtype is not None:
         dt = dtype
     else:
-        dt = np.mean(np.empty(shape=(1,), dtype=a.dtype)).dtype
+        dt = getattr(np.mean(np.empty(shape=(1,), dtype=a.dtype)), 'dtype', object)
     return reduction(a, partial(mean_chunk, sum=chunk.nansum, numel=nannumel),
                      mean_agg, axis=axis, keepdims=keepdims, dtype=dt,
                      split_every=split_every, out=out,
@@ -375,7 +377,7 @@ def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
     if dtype is not None:
         dt = dtype
     else:
-        dt = np.var(np.ones(shape=(1,), dtype=a.dtype)).dtype
+        dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), 'dtype', object)
     return reduction(a, partial(moment_chunk, order=order),
                      partial(moment_agg, order=order, ddof=ddof),
                      axis=axis, keepdims=keepdims,
@@ -389,7 +391,7 @@ def var(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None,
     if dtype is not None:
         dt = dtype
     else:
-        dt = np.var(np.ones(shape=(1,), dtype=a.dtype)).dtype
+        dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), 'dtype', object)
     return reduction(a, moment_chunk, partial(moment_agg, ddof=ddof), axis=axis,
                      keepdims=keepdims, dtype=dt, split_every=split_every,
                      combine=moment_combine, name='var', out=out)
@@ -400,7 +402,7 @@ def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None,
     if dtype is not None:
         dt = dtype
     else:
-        dt = np.var(np.ones(shape=(1,), dtype=a.dtype)).dtype
+        dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), 'dtype', object)
     return reduction(a, partial(moment_chunk, sum=chunk.nansum, numel=nannumel),
                      partial(moment_agg, sum=np.nansum, ddof=ddof), axis=axis,
                      keepdims=keepdims, dtype=dt, split_every=split_every,
@@ -440,6 +442,12 @@ def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False, split_every=None,
 
     See np.linalg.norm
     """
+
+    warnings.warn(
+        "DeprecationWarning: Please use `dask.array.linalg.norm` instead.",
+        UserWarning
+    )
+
     if ord is None or ord == 'fro':
         ord = 2
     if ord == np.inf:
@@ -647,7 +655,7 @@ def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
         x = x.flatten()
         axis = 0
     if dtype is None:
-        dtype = func(np.empty((0,), dtype=x.dtype)).dtype
+        dtype = getattr(func(np.empty((0,), dtype=x.dtype)), 'dtype', object)
     assert isinstance(axis, int)
     axis = validate_axis(x.ndim, axis)
 

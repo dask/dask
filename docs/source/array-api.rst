@@ -7,6 +7,7 @@ Top level user functions:
 
 .. autosummary::
    all
+   allclose
    angle
    any
    apply_along_axis
@@ -24,7 +25,13 @@ Top level user functions:
    argwhere
    around
    array
+   asanyarray
+   asarray
+   atleast_1d
+   atleast_2d
+   atleast_3d
    bincount
+   block
    broadcast_to
    coarsen
    ceil
@@ -57,12 +64,16 @@ Top level user functions:
    fabs
    fix
    flatnonzero
+   flip
+   flipud
+   fliplr
    floor
    fmax
    fmin
    fmod
    frexp
    fromfunction
+   frompyfunc
    full
    full_like
    histogram
@@ -90,9 +101,12 @@ Top level user functions:
    logical_not
    logical_or
    logical_xor
+   map_blocks
+   matmul
    max
    maximum
    mean
+   meshgrid
    min
    minimum
    modf
@@ -149,6 +163,7 @@ Top level user functions:
    trunc
    unique
    var
+   vdot
    vnorm
    vstack
    where
@@ -224,7 +239,7 @@ Random
    random.beta
    random.binomial
    random.chisquare
-   random.different_seeds
+   random.choice
    random.exponential
    random.f
    random.gamma
@@ -305,7 +320,6 @@ Internal functions
 .. currentmodule:: dask.array.core
 
 .. autosummary::
-   map_blocks
    atop
    top
 
@@ -324,6 +338,7 @@ Other functions
 .. autofunction:: concatenate
 
 .. autofunction:: all
+.. autofunction:: allclose
 .. autofunction:: angle
 .. autofunction:: any
 .. autofunction:: apply_along_axis
@@ -341,7 +356,13 @@ Other functions
 .. autofunction:: argwhere
 .. autofunction:: around
 .. autofunction:: array
+.. autofunction:: asanyarray
+.. autofunction:: asarray
+.. autofunction:: atleast_1d
+.. autofunction:: atleast_2d
+.. autofunction:: atleast_3d
 .. autofunction:: bincount
+.. autofunction:: block
 .. autofunction:: broadcast_to
 .. autofunction:: coarsen
 .. autofunction:: ceil
@@ -374,12 +395,16 @@ Other functions
 .. autofunction:: fabs
 .. autofunction:: fix
 .. autofunction:: flatnonzero
+.. autofunction:: flip
+.. autofunction:: flipud
+.. autofunction:: fliplr
 .. autofunction:: floor
 .. autofunction:: fmax
 .. autofunction:: fmin
 .. autofunction:: fmod
 .. autofunction:: frexp
 .. autofunction:: fromfunction
+.. autofunction:: frompyfunc
 .. autofunction:: full
 .. autofunction:: full_like
 .. autofunction:: histogram
@@ -407,9 +432,11 @@ Other functions
 .. autofunction:: logical_not
 .. autofunction:: logical_or
 .. autofunction:: logical_xor
+.. autofunction:: matmul
 .. autofunction:: max
 .. autofunction:: maximum
 .. autofunction:: mean
+.. autofunction:: meshgrid
 .. autofunction:: min
 .. autofunction:: minimum
 .. autofunction:: modf
@@ -466,6 +493,7 @@ Other functions
 .. autofunction:: trunc
 .. autofunction:: unique
 .. autofunction:: var
+.. autofunction:: vdot
 .. autofunction:: vnorm
 .. autofunction:: vstack
 .. autofunction:: where
