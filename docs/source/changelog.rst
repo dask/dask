@@ -4,6 +4,7 @@ Changelog
 1.21.1 - 2018-MM-DD
 -------------------
 
+-  Fixed an uncaught exception in ``distributed.joblib`` with a ``LocalCluster`` using only threads (:issue:`1775`)
 
 1.21.0 - 2018-02-09
 -------------------

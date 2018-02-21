@@ -180,3 +180,15 @@ def test_errors(loop, joblib):
             pass
 
     assert "create a dask client" in str(info.value).lower()
+
+
+@pytest.mark.parametrize('joblib', joblibs)
+def test_secede_with_no_processes(loop, joblib):
+    # https://github.com/dask/distributed/issues/1775
+
+    def f(x):
+        return x
+
+    with Client(loop=loop, processes=False, set_as_default=True):
+        with joblib.parallel_backend('dask'):
+            joblib.Parallel(n_jobs=4)(joblib.delayed(f)(i) for i in range(2))
