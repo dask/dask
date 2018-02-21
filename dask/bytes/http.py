@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import requests
+import uuid
 
 from . import core
 from ..base import tokenize
@@ -13,7 +14,7 @@ class HTTPFileSystem(core.FileSystem):
     Simple File-System for fetching data via HTTP(S)
 
     Unlike other file-systems, HTTP is limited in that it does not provide glob
-    or write capability. Furthermore, no read-ahead is presently
+    or write capability.
     """
     sep = '/'
 
@@ -55,9 +56,8 @@ class HTTPFileSystem(core.FileSystem):
         return HTTPFile(url, self.session, block_size, **self.kwargs)
 
     def ukey(self, url):
-        """Unique identifier, so we can tell if a file changed"""
-        # Could do HEAD here?
-        return tokenize(url)
+        """Unique identifier, implied file might have changed every time"""
+        return uuid.uuid1().hex
 
     def size(self, url):
         """Size in bytes of the file at path"""
@@ -70,7 +70,7 @@ core._filesystems['https'] = HTTPFileSystem
 
 class HTTPFile(object):
     """
-    A file-like object pointing to a remove HTTP(S) resource.
+    A file-like object pointing to a remove HTTP(S) resource
 
     Supports only reading, with read-ahead of a predermined block-size.
 

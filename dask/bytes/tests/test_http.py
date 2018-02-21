@@ -6,46 +6,52 @@ import time
 
 from dask.bytes.core import open_files
 from dask.compatibility import PY2
+from dask.utils import tmpdir
+
+files = ['a', 'b']
 
 
 @pytest.fixture(scope='module')
-def server():
-    if PY2:
-        cmd = ['python', '-m', 'SimpleHTTPServer', '8999']
-    else:
-        cmd = ['python', '-m', 'http.server', '8999']
-    p = subprocess.Popen(cmd)
-    timeout = 10
-    while True:
-        try:
-            requests.get('http://localhost:8999')
-            break
-        except requests.exceptions.ConnectionError:
-            time.sleep(0.1)
-            timeout -= 0.1
-            if timeout < 0:
-                raise RuntimeError('Server did not appear')
-    yield
-    p.terminate()
+def dir_server():
+    with tmpdir() as d:
+        for fn in files:
+            with open(os.path.join(d, fn), 'wb') as f:
+                f.write(b'a'*10000)
+
+        if PY2:
+            cmd = ['python', '-m', 'SimpleHTTPServer', '8999']
+        else:
+            cmd = ['python', '-m', 'http.server', '8999']
+        p = subprocess.Popen(cmd, cwd=d)
+        timeout = 10
+        while True:
+            try:
+                requests.get('http://localhost:8999')
+                break
+            except requests.exceptions.ConnectionError:
+                time.sleep(0.1)
+                timeout -= 0.1
+                if timeout < 0:
+                    raise RuntimeError('Server did not appear')
+        yield d
+        p.terminate()
 
 
-def test_simple(server):
+def test_simple(dir_server):
     root = 'http://localhost:8999/'
-    files = [f for f in os.listdir('.') if os.path.isfile(f)]
     fn = files[0]
     f = open_files(root + fn)[0]
     with f as f:
         data = f.read()
-    assert data == open(fn, 'rb').read()
+    assert data == open(os.path.join(dir_server, fn), 'rb').read()
 
 
 @pytest.mark.parametrize('block_size', [None, 99999])
-def test_ops(server, block_size):
+def test_ops(dir_server, block_size):
     root = 'http://localhost:8999/'
-    files = [f for f in os.listdir('.') if os.path.isfile(f)]
     fn = files[0]
     f = open_files(root + fn)[0]
-    data = open(fn, 'rb').read()
+    data = open(os.path.join(dir_server, fn), 'rb').read()
     with f as f:
         # these pass because the default
         assert f.read(10) == data[:10]
@@ -56,12 +62,11 @@ def test_ops(server, block_size):
         assert f.read() == data[-10:]
 
 
-def test_ops_blocksize(server):
+def test_ops_blocksize(dir_server):
     root = 'http://localhost:8999/'
-    files = [f for f in os.listdir('.') if os.path.isfile(f)]
     fn = files[0]
     f = open_files(root + fn, block_size=2)[0]
-    data = open(fn, 'rb').read()
+    data = open(os.path.join(dir_server, fn), 'rb').read()
     with f as f:
         # it's OK to read the whole file
         assert f.read() == data
@@ -76,7 +81,7 @@ def test_ops_blocksize(server):
             assert f.read(10) == data[:10]
 
 
-def test_errors(server):
+def test_errors(dir_server):
     f = open_files('http://localhost:8999/doesnotexist')[0]
     with pytest.raises(requests.exceptions.RequestException):
         with f:
@@ -86,7 +91,6 @@ def test_errors(server):
         with f:
             pass
     root = 'http://localhost:8999/'
-    files = [fn for fn in os.listdir('.') if os.path.isfile(fn)]
     fn = files[0]
     f = open_files(root + fn, mode='wb')[0]
     with pytest.raises(NotImplementedError):
@@ -98,14 +102,12 @@ def test_errors(server):
             f.seek(-1)
 
 
-def test_files(server):
+def test_files(dir_server):
     root = 'http://localhost:8999/'
-    files = [f for f in os.listdir('.') if os.path.isfile(f)]
-    fn = files[0:2]
-    fs = open_files([root + f for f in fn])
-    for f, f2 in zip(fs, fn):
+    fs = open_files([root + f for f in files])
+    for f, f2 in zip(fs, files):
         with f as f:
-            assert f.read() == open(f2, 'rb').read()
+            assert f.read() == open(os.path.join(dir_server, f2), 'rb').read()
 
 
 @pytest.mark.network
