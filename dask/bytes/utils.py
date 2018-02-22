@@ -51,6 +51,10 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
         if windows_path:
             path = '%s:%s' % windows_path.groups()
 
+    if protocol in ['http', 'https']:
+        # for HTTP, we don't want to parse, as requests will anyway
+        return {'protocol': protocol, 'path': urlpath}
+
     options = {
         'protocol': protocol,
         'path': path,
