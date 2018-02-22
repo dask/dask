@@ -449,6 +449,15 @@ def get_fs(protocol, storage_options=None):
     elif protocol == 'hdfs':
         cls = get_hdfs_driver(_globals.get("hdfs_driver", "auto"))
 
+    elif protocol in ['http', 'https']:
+        import_required('requests',
+                        "Need to install `requests` for HTTP support\n"
+                        "   conda install requests\n"
+                        "    or\n"
+                        "   pip install requests")
+        import dask.bytes.http  # noqa, registers HTTP backend
+        cls = _filesystems[protocol]
+
     else:
         raise ValueError("Unknown protocol %s" % protocol)
 

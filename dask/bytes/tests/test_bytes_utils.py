@@ -91,7 +91,8 @@ def test_infer_storage_options():
     assert so.pop('username') == 'User-name'
     assert so.pop('host') == 'Node-name.com'
 
-    assert infer_storage_options('http://127.0.0.1:8080/test.csv')['host'] == '127.0.0.1'
+    u = 'http://127.0.0.1:8080/test.csv'
+    assert infer_storage_options(u) == {'protocol': 'http', 'path': u}
 
     # For s3 and gcs the netloc is actually the bucket name, so we want to
     # include it in the path. Test that:

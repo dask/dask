@@ -24,6 +24,7 @@ Bag
 Core
 ++++
 
+- New file-system for HTTP(S), allowing direct loading from specific URLs (:pr:`3160`) `Martin Durant`_
 
 0.17.0 / 2018-02-09
 -------------------
