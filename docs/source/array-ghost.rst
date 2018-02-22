@@ -1,5 +1,5 @@
-Overlapping Blocks with Ghost Cells
-===================================
+Overlapping Computations
+========================
 
 Some array operations require communication of borders between neighboring
 blocks.  Example operations include the following:

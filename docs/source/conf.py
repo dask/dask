@@ -12,6 +12,7 @@
 # serve to show the default.
 
 import sys, os
+from shutil import copyfile
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -312,3 +313,37 @@ intersphinx_mapping = {'pandas': ('http://pandas.pydata.org/pandas-docs/stable/'
                                   'http://pandas.pydata.org/pandas-docs/stable/objects.inv'),
                        'numpy': ('https://docs.scipy.org/doc/numpy/',
                                  'https://docs.scipy.org/doc/numpy/objects.inv')}
+
+# Redirects
+# https://tech.signavio.com/2017/managing-sphinx-redirects
+redirect_files = [
+    # old html, new html
+    ('array-overview.html', 'array.html'),
+    ('dataframe-overview.html', 'dataframe.html'),
+    ('delayed-overview.html', 'delayed.html'),
+]
+
+
+redirect_template = """\
+<html>
+  <head>
+    <meta http-equiv="refresh" content="1; url={new}" />
+    <script>
+      window.location.href = "{new}"
+    </script>
+  </head>
+</html>
+"""
+
+
+def copy_legacy_redirects(app, docname):
+    if app.builder.name == 'html':
+        for html_src_path, new in redirect_files:
+            page = redirect_template.format(new=new)
+            target_path = app.outdir + '/' + html_src_path
+            with open(target_path, 'w') as f:
+                f.write(page)
+
+
+def setup(app):
+    app.connect('build-finished', copy_legacy_redirects)
