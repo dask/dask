@@ -835,6 +835,13 @@ def check_index(ind, dimension):
 def slice_with_dask_array(x, index):
     from .core import Array, atop, elemwise
 
+    if all([len(index) == 1,
+            isinstance(index[0], Array),
+            index[0].dtype == bool,
+            index[0].shape == x.shape]):
+        x = x.ravel()
+        index = tuple(i.ravel() for i in index)
+
     out_index = [slice(None)
                  if isinstance(ind, Array) and ind.dtype == bool
                  else ind
