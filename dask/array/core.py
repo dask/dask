@@ -2014,7 +2014,7 @@ def from_delayed(value, shape, dtype, name=None):
     >>> array
     dask.array<from-value, shape=(5,), dtype=float64, chunksize=(5,)>
     >>> array.compute()
-    array([ 1.,  1.,  1.,  1.,  1.])
+    array([1., 1., 1., 1., 1.])
     """
     from dask.delayed import delayed, Delayed
     if not isinstance(value, Delayed) and hasattr(value, 'key'):
@@ -2335,7 +2335,7 @@ def unpack_singleton(x):
     >>> unpack_singleton([[[[1]]]])
     1
     >>> unpack_singleton(np.array(np.datetime64('2000-01-01')))
-    array(datetime.date(2000, 1, 1), dtype='datetime64[D]')
+    array('2000-01-01', dtype='datetime64[D]')
     """
     while isinstance(x, (list, tuple)):
         try:
