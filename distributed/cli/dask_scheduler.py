@@ -75,6 +75,9 @@ def main(host, port, bokeh_port, show, _bokeh, bokeh_whitelist, bokeh_prefix,
                    tls_scheduler_key=tls_key,
                    )
 
+    if not host and (tls_ca_file or tls_cert or tls_key):
+        host = 'tls://'
+
     if pid_file:
         with open(pid_file, 'w') as f:
             f.write(str(os.getpid()))

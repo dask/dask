@@ -28,7 +28,7 @@ def wait_for_cores(c, ncores=1):
 
 
 def test_basic(loop):
-    with popen(['dask-scheduler', '--no-bokeh', '--host', 'tls://'] + tls_args) as s:
+    with popen(['dask-scheduler', '--no-bokeh'] + tls_args) as s:
         with popen(['dask-worker', '--no-bokeh', 'tls://127.0.0.1:8786'] + tls_args) as w:
             with Client('tls://127.0.0.1:8786', loop=loop,
                         security=tls_security()) as c:
@@ -36,7 +36,7 @@ def test_basic(loop):
 
 
 def test_nanny(loop):
-    with popen(['dask-scheduler', '--no-bokeh', '--host', 'tls://'] + tls_args) as s:
+    with popen(['dask-scheduler', '--no-bokeh'] + tls_args) as s:
         with popen(['dask-worker', '--no-bokeh', '--nanny', 'tls://127.0.0.1:8786'] + tls_args) as w:
             with Client('tls://127.0.0.1:8786', loop=loop,
                         security=tls_security()) as c:
@@ -44,7 +44,7 @@ def test_nanny(loop):
 
 
 def test_separate_key_cert(loop):
-    with popen(['dask-scheduler', '--no-bokeh', '--host', 'tls://'] + tls_args_2) as s:
+    with popen(['dask-scheduler', '--no-bokeh'] + tls_args_2) as s:
         with popen(['dask-worker', '--no-bokeh', 'tls://127.0.0.1:8786'] + tls_args_2) as w:
             with Client('tls://127.0.0.1:8786', loop=loop,
                         security=tls_security()) as c:
