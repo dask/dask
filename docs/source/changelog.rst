@@ -1,10 +1,24 @@
 Changelog
 =========
 
-1.21.1 - 2018-MM-DD
+1.21.1 - 2018-02-22
 -------------------
 
--  Fixed an uncaught exception in ``distributed.joblib`` with a ``LocalCluster`` using only threads (:issue:`1775`)
+-  Fixed an uncaught exception in ``distributed.joblib`` with a ``LocalCluster`` using only threads (:issue:`1775`) `Tom Augspurger`_
+-  Format bytes in info worker page (:pr:`1752`) `Matthew Rocklin`_
+-  Add pass-through arguments for scheduler/worker `--preload` modules. (:pr:`1634`) `Alexander Ford`_
+-  Use new LZ4 API (:pr:`1757`) `Thrasibule`_
+-  Replace dask.optimize with dask.optimization (:pr:`1754`) `Matthew Rocklin`_
+-  Add graph layout engine and bokeh plot (:pr:`1756`) `Matthew Rocklin`_
+-  Only expand name with --nprocs if name exists (:pr:`1776`) `Matthew Rocklin`_
+-  specify IOLoop for stealing PeriodicCallback (:pr:`1777`) `Matthew Rocklin`_
+-  Fixed distributed.joblib with no processes `Tom Augspurger`_
+-  Use set.discard to avoid KeyErrors in stealing (:pr:`1766`) `Matthew Rocklin`_
+-  Avoid KeyError when task has been released during steal (:pr:`1765`) `Matthew Rocklin`_
+-  Add versions routes to avoid the use of run in Client.get_versions (:pr:`1773`) `Matthew Rocklin`_
+-  Add write_scheduler_file to Client (:pr:`1778`) `Joe Hamman`_
+-  Default host to tls:// if tls information provided (:pr:`1780`) `Matthew Rocklin`_
+
 
 1.21.0 - 2018-02-09
 -------------------
@@ -500,3 +514,6 @@ significantly without many new features.
 .. _`@rqx`: https://github.com/rqx
 .. _`Min RK`: https://github.comminrk/
 .. _`Bruce Merry`: https://github.com/bmerry
+.. _`Tom Augspurger`: https://github.com/TomAugspurger
+.. _`Joe Hamman`: https://github.com/jhamman
+.. _`Thrasibule`: https://github.com/thrasibule
