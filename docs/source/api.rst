@@ -34,6 +34,7 @@ API
    Client.run_on_scheduler
    Client.scatter
    Client.scheduler_info
+   Client.write_scheduler_file
    Client.set_metadata
    Client.start_ipython_workers
    Client.start_ipython_scheduler

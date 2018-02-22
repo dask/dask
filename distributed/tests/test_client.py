@@ -40,7 +40,8 @@ from distributed.compatibility import PY3
 from distributed.metrics import time
 from distributed.scheduler import Scheduler, KilledWorker
 from distributed.sizeof import sizeof
-from distributed.utils import ignoring, mp_context, sync, tmp_text, tokey
+from distributed.utils import (ignoring, mp_context, sync, tmp_text, tokey,
+                               tmpfile)
 from distributed.utils_test import (cluster, slow, slowinc, slowadd, slowdec,
                                     randominc, inc, dec, div, throws, geninc, asyncinc,
                                     gen_cluster, gen_test, double, deep, popen,
@@ -3714,6 +3715,22 @@ def test_scheduler_info(loop):
             info = c.scheduler_info()
             assert isinstance(info, dict)
             assert len(info['workers']) == 2
+
+
+def test_write_scheduler_file(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            info = c.scheduler_info()
+            with tmpfile('json') as scheduler_file:
+                c.write_scheduler_file(scheduler_file)
+                with Client(scheduler_file=scheduler_file) as c2:
+                    info2 = c2.scheduler_info()
+                    assert c.scheduler.address == c2.scheduler.address
+
+                # test that a ValueError is raised if the scheduler_file
+                # attribute is already set
+                with pytest.raises(ValueError):
+                    c.write_scheduler_file(scheduler_file)
 
 
 def test_get_versions(loop):
