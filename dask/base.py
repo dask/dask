@@ -228,7 +228,7 @@ def optimization_function(x):
     return getattr(x, '__dask_optimize__', dont_optimize)
 
 
-def collections_to_dsk(collections, optimize_graph=True, **kwargs):
+def collections_to_dsk_base(collections, optimize_graph=True, **kwargs):
     """
     Convert many collections into a single dask graph, after optimization
     """
@@ -250,6 +250,16 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
         dsk, _ = _extract_graph_and_keys(collections)
 
     return dsk
+
+
+@globalmethod(key='collections_to_dsk')
+def collections_to_dsk(collections, optimize_graph=True, **kwargs):
+    """
+    Convert many collections into a single dask graph, after optimization
+
+    Overridable for user convenience
+    """
+    return collections_to_dsk_base(collections, optimize_graph=True, **kwargs)
 
 
 def _extract_graph_and_keys(vals):
