@@ -467,8 +467,8 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     >>> x = da.from_array(np.arange(10000), chunks=10)
     >>> h, bins = da.histogram(x, bins=10, range=[0, 10000])
     >>> bins
-    array([     0.,   1000.,   2000.,   3000.,   4000.,   5000.,   6000.,
-             7000.,   8000.,   9000.,  10000.])
+    array([    0.,  1000.,  2000.,  3000.,  4000.,  5000.,  6000.,  7000.,
+            8000.,  9000., 10000.])
     >>> h.compute()
     array([1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000])
 

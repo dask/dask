@@ -674,8 +674,11 @@ def _normalize_function(func):
         return tuple(normalize_function(f) for f in funcs)
     elif isinstance(func, partial):
         args = tuple(normalize_token(i) for i in func.args)
-        kws = tuple((k, normalize_token(v))
-                    for k, v in sorted(func.keywords.items()))
+        if func.keywords:
+            kws = tuple((k, normalize_token(v))
+                        for k, v in sorted(func.keywords.items()))
+        else:
+            kws = None
         return (normalize_function(func.func), args, kws)
     else:
         try:
