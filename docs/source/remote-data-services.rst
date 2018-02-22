@@ -224,6 +224,23 @@ Possible additional storage options:
       a JSON file created by gcloud.
 
 
+HTTP
+----
+
+Direct file-like access to arbitrary URLs is available over HTTP and HTTPS. However,
+there is no such thing as ``glob`` functionality over HTTP, so only explicit lists
+of files can be used.
+
+Server implementations differ in the information they provide - they may or may
+not specify the size of a file via a HEAD request or at the start of a download -
+and some servers may not respect bytes range requests. The HTTPFileSystem therefore
+offers best-effort behaviour: the download is streamed, but if more data is seen
+than the configured block-size, an error will be raised. To be able to access such
+data, you must read the whole file in one shot (and it must fit in memory).
+
+Note that, currently, ``http://`` and ``https://`` are treated as separate protocols,
+and cannot be mixed.
+
 Developer API
 ~~~~~~~~~~~~~
 

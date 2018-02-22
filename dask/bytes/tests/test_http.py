@@ -16,7 +16,7 @@ def dir_server():
     with tmpdir() as d:
         for fn in files:
             with open(os.path.join(d, fn), 'wb') as f:
-                f.write(b'a'*10000)
+                f.write(b'a' * 10000)
 
         if PY2:
             cmd = ['python', '-m', 'SimpleHTTPServer', '8999']
