@@ -2,7 +2,7 @@ Changelog
 =========
 
 
-0.17.1 / 2018-MM-DD
+0.17.1 / 2018-02-22
 -------------------
 
 Array
@@ -27,6 +27,8 @@ Core
 
 - New file-system for HTTP(S), allowing direct loading from specific URLs (:pr:`3160`) `Martin Durant`_
 - Fix bug when tokenizing partials with no keywords (:pr:`3191`) `Matthew Rocklin`_
+- Use more recent LZ4 API (:pr:`3157`) `Thrasibule`_
+- Introduce output stream parameter for progress bar (:pr:`3185`) `Dieter Weber`_
 
 
 0.17.0 / 2018-02-09
