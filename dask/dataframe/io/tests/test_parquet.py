@@ -468,8 +468,8 @@ def test_append_different_columns(tmpdir):
     assert 'Appended dtypes' in str(excinfo.value)
 
 
-def test_ordering(tmpdir):
-    check_fastparquet()
+@write_read_engines_xfail
+def test_ordering(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     df = pd.DataFrame({'a': [1, 2, 3],
                        'b': [10, 20, 30],
@@ -477,13 +477,14 @@ def test_ordering(tmpdir):
                       index=pd.Index([-1, -2, -3], name='myindex'),
                       columns=['c', 'a', 'b'])
     ddf = dd.from_pandas(df, npartitions=2)
-    dd.to_parquet(ddf, tmp)
+    dd.to_parquet(ddf, tmp, engine=write_engine)
 
-    pf = fastparquet.ParquetFile(tmp)
-    assert pf.columns == ['myindex', 'c', 'a', 'b']
+    if read_engine == 'fastparquet':
+        pf = fastparquet.ParquetFile(tmp)
+        assert pf.columns == ['myindex', 'c', 'a', 'b']
 
-    ddf2 = dd.read_parquet(tmp, index='myindex')
-    assert_eq(ddf, ddf2)
+    ddf2 = dd.read_parquet(tmp, index='myindex', engine=read_engine)
+    assert_eq(ddf, ddf2, check_divisions=False)
 
 
 def test_read_parquet_custom_columns(tmpdir, engine):
@@ -1025,3 +1026,19 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
 
     with pytest.raises(TypeError):
         ddf.to_parquet(fn,  engine=engine, unknown_key='unknown_value')
+
+
+def test_setect_partitioned_column(tmpdir, engine):
+    if engine == 'pyarrow':
+        pytest.xfail()
+    fn = str(tmpdir)
+    size = 20
+    d = {'signal1': np.random.normal(0, 0.3, size=size).cumsum() + 50,
+         'fake_categorical1': np.random.choice(['A', 'B', 'C'], size=size),
+         'fake_categorical2': np.random.choice(['D', 'E', 'F'], size=size)}
+    df = dd.from_pandas(pd.DataFrame(d), 2)
+    df.to_parquet(fn, compression='snappy', write_index=False, engine=engine,
+                  partition_on=['fake_categorical1', 'fake_categorical2'])
+
+    df_partitioned = dd.read_parquet(fn, engine=engine)
+    df_partitioned[df_partitioned.fake_categorical1 == 'A'].compute()

@@ -8,9 +8,13 @@ Changelog
 Array
 +++++
 
+- Corrected dimension chunking in indices (:issue:`3166`, :pr:`3167`) `Simon Perkins`_
+- Inline ``store_chunk`` calls for ``store``'s ``return_stored`` option (:pr:`3153`) `John A Kirkham`_
+- Compatibility with struct dtypes for NumPy 1.14.1 release (:pr:`3187`) `Matthew Rocklin`_
 
 DataFrame
 +++++++++
+- Bugfix to allow column assignment of pandas datetimes(:pr:`3164`) `Max Epstein`_
 
 
 Bag
@@ -37,7 +41,6 @@ Array
 
 DataFrame
 +++++++++
-
 - Support month timedeltas in repartition(freq=...) (:pr:`3110`) `Matthew Rocklin`_
 - Avoid mutation in dataframe groupby tests (:pr:`3118`) `Matthew Rocklin`_
 - ``read_csv``, ``read_table``, and ``read_parquet`` accept iterables of paths
@@ -973,3 +976,5 @@ Other
 .. _`Nir`: https://github.com/nirizr
 .. _`Keisuke Fujii`: https://github.com/fujiisoup
 .. _`Roman Yurchak`: https://github.com/rth
+.. _`Max Epstein`: https://github.com/MaxPowerWasTaken
+.. _`Simon Perkins`: https://github.com/sjperkins
