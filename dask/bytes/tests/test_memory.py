@@ -4,10 +4,9 @@ from __future__ import (print_function, division, absolute_import,
 import pytest
 from toolz import concat
 
-from dask import compute, delayed
+from dask import compute
 from dask.bytes.memory import MemoryFileSystem, MemoryFile
 from dask.bytes.core import open_files, read_bytes
-from dask.bytes import core
 
 
 test_bucket_name = 'test'
@@ -179,7 +178,7 @@ def test_csv_roundtrip(mem):
 def test_parquet(mem):
     dd = pytest.importorskip('dask.dataframe')
     pytest.importorskip('fastparquet')
-    from dask.dataframe.io.parquet import to_parquet, read_parquet
+    from dask.dataframe.io.parquet import read_parquet
 
     import pandas as pd
     import numpy as np
