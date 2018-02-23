@@ -14,7 +14,8 @@ It does not currently support the following:
 *  Slicing with lists in multiple axes  ``x[[1, 2, 3], [3, 2, 1]]``
 
 This is straightforward to add though.  If you have a use case then raise an
-issue.
+issue. Also users interested in this should take a look at
+:attr:`~dask.array.Array.vindex`.
 
 Efficiency
 ----------
