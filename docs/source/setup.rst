@@ -315,7 +315,7 @@ As an example, consider the following file that creates a
 
        def add_worker(self, scheduler=None, worker=None, **kwargs):
            print("Added a new worker at:", worker)
-           if self.print_count and scheduler is not None
+           if self.print_count and scheduler is not None:
                print("Total workers:", len(scheduler.workers))
 
    @click.command()
