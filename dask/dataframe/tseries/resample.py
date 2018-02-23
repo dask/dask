@@ -35,8 +35,8 @@ def _resample(obj, rule, how, **kwargs):
 
 
 def _resample_series(series, start, end, reindex_closed, rule,
-                     resample_kwargs, how, fill_value):
-    out = getattr(series.resample(rule, **resample_kwargs), how)()
+                     resample_kwargs, how, fill_value, how_args):
+    out = getattr(series.resample(rule, **resample_kwargs), how)(*how_args)
     return out.reindex(pd.date_range(start, end, freq=rule,
                                      closed=reindex_closed),
                        fill_value=fill_value)
@@ -100,7 +100,7 @@ class Resampler(object):
         self._rule = rule
         self._kwargs = kwargs
 
-    def _agg(self, how, meta=None, fill_value=np.nan):
+    def _agg(self, how, meta=None, fill_value=np.nan, how_args=[]):
         rule = self._rule
         kwargs = self._kwargs
         name = 'resample-' + tokenize(self.obj, rule, kwargs, how)
@@ -118,15 +118,19 @@ class Resampler(object):
         args = zip(keys, outdivs, outdivs[1:], ['left'] * (len(keys) - 1) + [None])
         for i, (k, s, e, c) in enumerate(args):
             dsk[(name, i)] = (_resample_series, k, s, e, c,
-                              rule, kwargs, how, fill_value)
+                              rule, kwargs, how, fill_value, how_args)
 
         # Infer output metadata
         meta_r = self.obj._meta_nonempty.resample(self._rule, **self._kwargs)
-        meta = getattr(meta_r, how)()
+        meta = getattr(meta_r, how)(*how_args)
 
         if isinstance(meta, pd.DataFrame):
             return DataFrame(dsk, name, meta, outdivs)
         return Series(dsk, name, meta, outdivs)
+
+    @derived_from(pd_Resampler)
+    def agg(self, *args):
+        return self._agg('agg', how_args=args)
 
     @derived_from(pd_Resampler)
     def count(self):
