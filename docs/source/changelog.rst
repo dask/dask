@@ -1,13 +1,22 @@
 Changelog
 =========
 
-0.17.X / 2017-02-DD
+0.17.X / 2018-02-DD
 -------------------
+
+Array
++++++
 
 DataFrame
 +++++++++
 
 - Add ``dd.tseries.Resampler.agg`` (:pr:`3202`) `Richard Postelnik`_
+
+Bag
++++
+
+Core
+++++
 
 
 0.17.1 / 2018-02-22
