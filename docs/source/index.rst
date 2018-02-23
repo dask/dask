@@ -106,7 +106,6 @@ Contents
    adaptive
    asynchronous
    configuration
-   ec2
    local-cluster
    ipython
    joblib
