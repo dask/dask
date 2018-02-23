@@ -19,7 +19,7 @@ directly with a light annotation of normal python code.
    >>> y = dask.delayed(inc)(2)
    >>> z = dask.delayed(add)(x, y)
    >>> z.compute()
-   7
+   5
    >>> z.vizualize()
 
 .. image:: images/inc-add.svg
