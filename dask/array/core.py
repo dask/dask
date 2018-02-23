@@ -18,12 +18,12 @@ import uuid
 import warnings
 
 try:
-    from cytoolz import (partition, concat, concatv, join, first,
+    from cytoolz import (partition, concat, join, first,
                          groupby, valmap, accumulate, assoc)
     from cytoolz.curried import filter, pluck
 
 except ImportError:
-    from toolz import (partition, concat, concatv, join, first,
+    from toolz import (partition, concat, join, first,
                        groupby, valmap, accumulate, assoc)
     from toolz.curried import filter, pluck
 from toolz import pipe, map, reduce
@@ -33,7 +33,7 @@ from . import chunk
 from .numpy_compat import _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
 from ..base import (Base, tokenize, dont_optimize, compute_as_if_collection,
-                    persist)
+                    persist, is_dask_collection)
 from ..context import _globals, globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
@@ -832,7 +832,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     ----------
 
     sources: Array or iterable of Arrays
-    targets: array-like or iterable of array-likes
+    targets: array-like or Delayed or iterable of array-likes and/or Delayeds
         These should support setitem syntax ``target[10:20] = ...``
     lock: boolean or threading.Lock, optional
         Whether or not to lock the data stores while storing.
@@ -889,62 +889,64 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     sources_dsk = sharedict.merge(*[e.__dask_graph__() for e in sources])
     sources_dsk = Array.__dask_optimize__(
         sources_dsk,
-        [e.__dask_keys__() for e in sources]
+        list(core.flatten([e.__dask_keys__() for e in sources]))
     )
 
-    tgt_dsks = []
-    store_keys = []
-    store_dsks = []
-    if return_stored:
-        load_names = []
-        load_dsks = []
-    for tgt, src, reg in zip(targets, sources, regions):
-        # if out is a delayed object update dictionary accordingly
-        try:
-            each_tgt_dsk = {}
-            each_tgt_dsk.update(tgt.dask)
-            tgt = tgt.key
-        except AttributeError:
-            each_tgt_dsk = {}
+    # Optimize all targets together
+    targets2 = []
+    targets_keys = []
+    targets_dsk = []
+    for e in targets:
+        if isinstance(e, Delayed):
+            targets2.append(e.key)
+            targets_keys.extend(e.__dask_keys__())
+            targets_dsk.append(e.__dask_graph__())
+        elif is_dask_collection(e):
+            raise TypeError("Targets must be either Delayed objects or array-likes")
+        else:
+            targets2.append(e)
 
+    targets_dsk = sharedict.merge(*targets_dsk)
+    targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
+
+    load_stored = (return_stored and not compute)
+
+    store_keys = []
+    store_dsk = []
+    for tgt, src, reg in zip(targets2, sources, regions):
         src = Array(sources_dsk, src.name, src.chunks, src.dtype)
 
         each_store_dsk = insert_to_ooc(
-            src, tgt, lock=lock, region=reg, return_stored=return_stored
+            src, tgt, lock=lock, region=reg,
+            return_stored=return_stored, load_stored=load_stored
         )
 
-        if return_stored:
-            load_names.append('load-store-%s' % src.name)
-            load_dsks.append(retrieve_from_ooc(
-                each_store_dsk.keys(),
-                each_store_dsk
-            ))
-
-        tgt_dsks.append(each_tgt_dsk)
-
         store_keys.extend(each_store_dsk.keys())
-        store_dsks.append(each_store_dsk)
+        store_dsk.append(each_store_dsk)
 
-    store_dsks_mrg = sharedict.merge(*concatv(
-        store_dsks, tgt_dsks, [sources_dsk]
-    ))
+    store_dsk = sharedict.merge(*store_dsk)
+    store_dsk = sharedict.merge(store_dsk, targets_dsk, sources_dsk)
 
     if return_stored:
+        load_store_dsk = store_dsk
         if compute:
-            store_dlyds = [Delayed(k, store_dsks_mrg) for k in store_keys]
+            store_dlyds = [Delayed(k, store_dsk) for k in store_keys]
             store_dlyds = persist(*store_dlyds)
-            store_dsks_mrg = sharedict.merge(*[e.dask for e in store_dlyds])
+            store_dsk_2 = sharedict.merge(*[e.dask for e in store_dlyds])
 
-        load_dsks_mrg = sharedict.merge(store_dsks_mrg, *load_dsks)
+            load_store_dsk = retrieve_from_ooc(
+                store_keys, store_dsk, store_dsk_2
+            )
 
         result = tuple(
-            Array(load_dsks_mrg, n, src.chunks, src.dtype) for n in load_names
+            Array(load_store_dsk, 'load-store-%s' % s.name, s.chunks, s.dtype)
+            for s in sources
         )
 
         return result
     else:
         name = 'store-' + tokenize(*store_keys)
-        dsk = sharedict.merge({name: store_keys}, store_dsks_mrg)
+        dsk = sharedict.merge({name: store_keys}, store_dsk)
         result = Delayed(name, dsk)
 
         if compute:
@@ -1111,6 +1113,8 @@ class Array(Base):
     chunks = property(_get_chunks, _set_chunks, "chunks property")
 
     def __len__(self):
+        if not self.chunks:
+            raise TypeError("len() of unsized object")
         return sum(self.chunks[0])
 
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
@@ -1828,10 +1832,14 @@ class Array(Base):
         memo[id(self)] = c
         return c
 
-    def to_delayed(self):
-        """ Convert Array into dask Delayed objects
+    def to_delayed(self, optimize_graph=True):
+        """Convert into an array of ``dask.delayed`` objects, one per chunk.
 
-        Returns an array of values, one value per chunk.
+        Parameters
+        ----------
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            ``dask.delayed`` objects.
 
         See Also
         --------
@@ -1839,7 +1847,9 @@ class Array(Base):
         """
         from ..delayed import Delayed
         keys = self.__dask_keys__()
-        dsk = self.__dask_optimize__(self.__dask_graph__(), keys)
+        dsk = self.__dask_graph__()
+        if optimize_graph:
+            dsk = self.__dask_optimize__(dsk, keys)
         L = ndeepmap(self.ndim, lambda k: Delayed(k, dsk), keys)
         return np.array(L, dtype=object)
 
@@ -2004,7 +2014,7 @@ def from_delayed(value, shape, dtype, name=None):
     >>> array
     dask.array<from-value, shape=(5,), dtype=float64, chunksize=(5,)>
     >>> array.compute()
-    array([ 1.,  1.,  1.,  1.,  1.])
+    array([1., 1., 1., 1., 1.])
     """
     from dask.delayed import delayed, Delayed
     if not isinstance(value, Delayed) and hasattr(value, 'key'):
@@ -2325,7 +2335,7 @@ def unpack_singleton(x):
     >>> unpack_singleton([[[[1]]]])
     1
     >>> unpack_singleton(np.array(np.datetime64('2000-01-01')))
-    array(datetime.date(2000, 1, 1), dtype='datetime64[D]')
+    array('2000-01-01', dtype='datetime64[D]')
     """
     while isinstance(x, (list, tuple)):
         try:
@@ -2613,7 +2623,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     return Array(dsk2, name, chunks, dtype=dt)
 
 
-def store_chunk(x, out, index, lock, region, return_stored):
+def load_store_chunk(x, out, index, lock, return_stored, load_stored):
     """
     A function inserted in a Dask graph for storing a chunk.
 
@@ -2627,31 +2637,31 @@ def store_chunk(x, out, index, lock, region, return_stored):
         Where to store result from ``x`` in ``out``.
     lock: Lock-like or False
         Lock to use before writing to ``out``.
-    region: slice-like or None
-        Where relative to ``out`` to store ``x``.
     return_stored: bool
         Whether to return ``out``.
+    load_stored: bool
+        Whether to return the array stored in ``out``.
+        Ignored if ``return_stored`` is not ``True``.
 
     Examples
     --------
 
     >>> a = np.ones((5, 6))
     >>> b = np.empty(a.shape)
-    >>> store_chunk(a, b, (slice(None), slice(None)), False, None, False)
+    >>> load_store_chunk(a, b, (slice(None), slice(None)), False, False, False)
     """
 
     result = None
-    if return_stored:
+    if return_stored and not load_stored:
         result = out
-
-    subindex = index
-    if region is not None:
-        subindex = fuse_slice(region, index)
 
     if lock:
         lock.acquire()
     try:
-        out[subindex] = np.asanyarray(x)
+        if x is not None:
+            out[index] = np.asanyarray(x)
+        if return_stored and load_stored:
+            result = out[index]
     finally:
         if lock:
             lock.release()
@@ -2659,7 +2669,16 @@ def store_chunk(x, out, index, lock, region, return_stored):
     return result
 
 
-def insert_to_ooc(arr, out, lock=True, region=None, return_stored=False):
+def store_chunk(x, out, index, lock, return_stored):
+    return load_store_chunk(x, out, index, lock, return_stored, False)
+
+
+def load_chunk(out, index, lock):
+    return load_store_chunk(None, out, index, lock, True, True)
+
+
+def insert_to_ooc(arr, out, lock=True, region=None,
+                  return_stored=False, load_stored=False):
     """
     Creates a Dask graph for storing chunks from ``arr`` in ``out``.
 
@@ -2678,6 +2697,10 @@ def insert_to_ooc(arr, out, lock=True, region=None, return_stored=False):
     return_stored: bool, optional
         Whether to return ``out``
         (default is ``False``, meaning ``None`` is returned).
+    load_stored: bool, optional
+        Whether to handling loading from ``out`` at the same time.
+        Ignored if ``return_stored`` is not ``True``.
+        (default is ``False``, meaning defer to ``return_stored``).
 
     Examples
     --------
@@ -2691,56 +2714,26 @@ def insert_to_ooc(arr, out, lock=True, region=None, return_stored=False):
         lock = Lock()
 
     slices = slices_from_chunks(arr.chunks)
+    if region:
+        slices = [fuse_slice(region, slc) for slc in slices]
 
     name = 'store-%s' % arr.name
-    dsk = dict()
-    for t, slc in zip(core.flatten(arr.__dask_keys__()), slices):
-        store_key = (name,) + t[1:]
-        dsk[store_key] = (store_chunk, t, out, slc, lock, region, return_stored)
+    func = store_chunk
+    args = ()
+    if return_stored and load_stored:
+        name = 'load-store-%s' % arr.name
+        func = load_store_chunk
+        args = (load_stored,)
+
+    dsk = {
+        (name,) + t[1:]: (func, t, out, slc, lock, return_stored) + args
+        for t, slc in zip(core.flatten(arr.__dask_keys__()), slices)
+    }
 
     return dsk
 
 
-def load_chunk(x, index, lock, region):
-    """
-    A function inserted in a Dask graph for loading a chunk.
-
-    Parameters
-    ----------
-    x: array-like
-        An array (potentially a NumPy one)
-    index: slice-like
-        Where to store result from ``x`` in ``out``.
-    lock: Lock-like or False
-        Lock to use before writing to ``out``.
-    region: slice-like or None
-        Where relative to ``out`` to store ``x``.
-
-    Examples
-    --------
-
-    >>> a = np.ones((5, 6))
-    >>> load_chunk(a, (slice(None), slice(None)), False, None)  # doctest: +SKIP
-    """
-
-    result = None
-
-    subindex = index
-    if region is not None:
-        subindex = fuse_slice(region, index)
-
-    if lock:
-        lock.acquire()
-    try:
-        result = x[subindex]
-    finally:
-        if lock:
-            lock.release()
-
-    return result
-
-
-def retrieve_from_ooc(keys, dsk):
+def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     """
     Creates a Dask graph for loading stored ``keys`` from ``dsk``.
 
@@ -2748,8 +2741,10 @@ def retrieve_from_ooc(keys, dsk):
     ----------
     keys: Sequence
         A sequence containing Dask graph keys to load
-    dsk: Mapping
-        A Dask graph corresponding to a Dask Array
+    dsk_pre: Mapping
+        A Dask graph corresponding to a Dask Array before computation
+    dsk_post: Mapping, optional
+        A Dask graph corresponding to a Dask Array after computation
 
     Examples
     --------
@@ -2760,11 +2755,13 @@ def retrieve_from_ooc(keys, dsk):
     >>> retrieve_from_ooc(g.keys(), g)  # doctest: +SKIP
     """
 
-    load_dsk = dict()
-    for each_key in keys:
-        load_key = ('load-%s' % each_key[0],) + each_key[1:]
-        # Reuse the result and arguments from `store_chunk` in `load_chunk`.
-        load_dsk[load_key] = (load_chunk, each_key,) + dsk[each_key][3:-1]
+    if not dsk_post:
+        dsk_post = {k: k for k in keys}
+
+    load_dsk = {
+        ('load-' + k[0],) + k[1:]: (load_chunk, dsk_post[k]) + dsk_pre[k][3:-1]
+        for k in keys
+    }
 
     return load_dsk
 
@@ -3049,7 +3046,7 @@ def broadcast_to(x, shape, chunks=None):
 
     See Also
     --------
-    numpy.broadcast_to
+    :func:`numpy.broadcast_to`
     """
     x = asarray(x)
     shape = tuple(shape)

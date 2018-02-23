@@ -1224,23 +1224,31 @@ def test_store_delayed_target():
     assert_eq(bt, b)
 
     # test keeping result
-    st = store([a, b], [atd, btd], return_stored=True, compute=False)
-    st = dask.compute(*st)
+    for st_compute in [False, True]:
+        targs.clear()
 
-    at = targs['at']
-    bt = targs['bt']
+        st = store([a, b], [atd, btd], return_stored=True, compute=st_compute)
+        if st_compute:
+            assert all(
+                not any(dask.core.get_deps(e.dask)[0].values()) for e in st
+            )
 
-    assert st is not None
-    assert isinstance(st, tuple)
-    assert all([isinstance(v, np.ndarray) for v in st])
-    assert_eq(at, a)
-    assert_eq(bt, b)
-    assert_eq(st[0], a)
-    assert_eq(st[1], b)
+        st = dask.compute(*st)
 
-    pytest.raises(ValueError, lambda: store([a], [at, bt]))
-    pytest.raises(ValueError, lambda: store(at, at))
-    pytest.raises(ValueError, lambda: store([at, bt], [at, bt]))
+        at = targs['at']
+        bt = targs['bt']
+
+        assert st is not None
+        assert isinstance(st, tuple)
+        assert all([isinstance(v, np.ndarray) for v in st])
+        assert_eq(at, a)
+        assert_eq(bt, b)
+        assert_eq(st[0], a)
+        assert_eq(st[1], b)
+
+        pytest.raises(ValueError, lambda: store([a], [at, bt]))
+        pytest.raises(ValueError, lambda: store(at, at))
+        pytest.raises(ValueError, lambda: store([at, bt], [at, bt]))
 
 
 def test_store():
@@ -1261,13 +1269,14 @@ def test_store():
 
 
 def test_store_regions():
-    d = da.ones((4, 4, 4), chunks=(2, 2, 2))
+    d = da.ones((4, 4, 4), dtype=int, chunks=(2, 2, 2))
     a, b = d + 1, d + 2
+    a = a[:, 1:, :].astype(float)
 
     region = (slice(None,None,2), slice(None), [1, 2, 4, 5])
 
     # Single region:
-    at = np.zeros(shape=(8, 4, 6))
+    at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = store([a, b], [at, bt], regions=region, compute=False)
     assert isinstance(v, Delayed)
@@ -1277,33 +1286,8 @@ def test_store_regions():
     assert not (bt == 3).all() and not ( bt == 0 ).all()
     assert not (at == 2).all() and not ( at == 0 ).all()
 
-    # Single region (keep result):
-    at = np.zeros(shape=(8, 4, 6))
-    bt = np.zeros(shape=(8, 4, 6))
-    v = store(
-        [a, b], [at, bt], regions=region, compute=False, return_stored=True
-    )
-    assert isinstance(v, tuple)
-    assert all([isinstance(e, da.Array) for e in v])
-    assert (at == 0).all() and (bt[region] == 0).all()
-
-    ar, br = v
-    assert ar.dtype == a.dtype
-    assert br.dtype == b.dtype
-    assert ar.shape == a.shape
-    assert br.shape == b.shape
-    assert ar.chunks == a.chunks
-    assert br.chunks == b.chunks
-
-    ar, br = da.compute(ar, br)
-    assert (at[region] == 2).all() and (bt[region] == 3).all()
-    assert not (bt == 3).all() and not ( bt == 0 ).all()
-    assert not (at == 2).all() and not ( at == 0 ).all()
-    assert (br == 3).all()
-    assert (ar == 2).all()
-
     # Multiple regions:
-    at = np.zeros(shape=(8, 4, 6))
+    at = np.zeros(shape=(8, 3, 6))
     bt = np.zeros(shape=(8, 4, 6))
     v = store([a, b], [at, bt], regions=[region, region], compute=False)
     assert isinstance(v, Delayed)
@@ -1313,33 +1297,69 @@ def test_store_regions():
     assert not (bt == 3).all() and not ( bt == 0 ).all()
     assert not (at == 2).all() and not ( at == 0 ).all()
 
+    # Single region (keep result):
+    for st_compute in [False, True]:
+        at = np.zeros(shape=(8, 3, 6))
+        bt = np.zeros(shape=(8, 4, 6))
+        v = store(
+            [a, b], [at, bt], regions=region,
+            compute=st_compute, return_stored=True
+        )
+        assert isinstance(v, tuple)
+        assert all([isinstance(e, da.Array) for e in v])
+        if st_compute:
+            assert all(
+                not any(dask.core.get_deps(e.dask)[0].values()) for e in v
+            )
+        else:
+            assert (at == 0).all() and (bt[region] == 0).all()
+
+        ar, br = v
+        assert ar.dtype == a.dtype
+        assert br.dtype == b.dtype
+        assert ar.shape == a.shape
+        assert br.shape == b.shape
+        assert ar.chunks == a.chunks
+        assert br.chunks == b.chunks
+
+        ar, br = da.compute(ar, br)
+        assert (at[region] == 2).all() and (bt[region] == 3).all()
+        assert not (bt == 3).all() and not ( bt == 0 ).all()
+        assert not (at == 2).all() and not ( at == 0 ).all()
+        assert (br == 3).all()
+        assert (ar == 2).all()
+
     # Multiple regions (keep result):
-    at = np.zeros(shape=(8, 4, 6))
-    bt = np.zeros(shape=(8, 4, 6))
-    v = store(
-        [a, b], [at, bt],
-        regions=[region, region],
-        compute=False,
-        return_stored=True
-    )
-    assert isinstance(v, tuple)
-    assert all([isinstance(e, da.Array) for e in v])
-    assert (at == 0).all() and (bt[region] == 0).all()
+    for st_compute in [False, True]:
+        at = np.zeros(shape=(8, 3, 6))
+        bt = np.zeros(shape=(8, 4, 6))
+        v = store(
+            [a, b], [at, bt], regions=[region, region],
+            compute=st_compute, return_stored=True
+        )
+        assert isinstance(v, tuple)
+        assert all([isinstance(e, da.Array) for e in v])
+        if st_compute:
+            assert all(
+                not any(dask.core.get_deps(e.dask)[0].values()) for e in v
+            )
+        else:
+            assert (at == 0).all() and (bt[region] == 0).all()
 
-    ar, br = v
-    assert ar.dtype == a.dtype
-    assert br.dtype == b.dtype
-    assert ar.shape == a.shape
-    assert br.shape == b.shape
-    assert ar.chunks == a.chunks
-    assert br.chunks == b.chunks
+        ar, br = v
+        assert ar.dtype == a.dtype
+        assert br.dtype == b.dtype
+        assert ar.shape == a.shape
+        assert br.shape == b.shape
+        assert ar.chunks == a.chunks
+        assert br.chunks == b.chunks
 
-    ar, br = da.compute(ar, br)
-    assert (at[region] == 2).all() and (bt[region] == 3).all()
-    assert not (bt == 3).all() and not ( bt == 0 ).all()
-    assert not (at == 2).all() and not ( at == 0 ).all()
-    assert (br == 3).all()
-    assert (ar == 2).all()
+        ar, br = da.compute(ar, br)
+        assert (at[region] == 2).all() and (bt[region] == 3).all()
+        assert not (bt == 3).all() and not ( bt == 0 ).all()
+        assert not (at == 2).all() and not ( at == 0 ).all()
+        assert (br == 3).all()
+        assert (ar == 2).all()
 
 
 def test_store_compute_false():
@@ -1393,6 +1413,22 @@ class ThreadSafeStore(object):
         self.concurrent_uses -= 1
 
 
+class CounterLock(object):
+    def __init__(self, *args, **kwargs):
+        self.lock = Lock(*args, **kwargs)
+
+        self.acquire_count = 0
+        self.release_count = 0
+
+    def acquire(self, *args, **kwargs):
+        self.acquire_count += 1
+        return self.lock.acquire(*args, **kwargs)
+
+    def release(self, *args, **kwargs):
+        self.release_count += 1
+        return self.lock.release(*args, **kwargs)
+
+
 def test_store_locks():
     _Lock = type(Lock())
     d = da.ones((10, 10), chunks=(2, 2))
@@ -1428,6 +1464,27 @@ def test_store_locks():
             break
         if i == 9:
             assert False
+
+    # Verify number of lock calls
+    nchunks = np.sum([np.prod([len(c) for c in e.chunks]) for e in [a, b]])
+    for c in (False, True):
+        at = np.zeros(shape=(10, 10))
+        bt = np.zeros(shape=(10, 10))
+        lock = CounterLock()
+
+        v = store([a, b], [at, bt], lock=lock, compute=c, return_stored=True)
+        assert all(isinstance(e, Array) for e in v)
+
+        da.compute(v)
+
+        # When `return_stored=True` and `compute=False`,
+        # the lock should be acquired only once for store and load steps
+        # as they are fused together into one step.
+        assert lock.acquire_count == lock.release_count
+        if c:
+            assert lock.acquire_count == 2 * nchunks
+        else:
+            assert lock.acquire_count == nchunks
 
 
 @pytest.mark.xfail(reason="can't lock with multiprocessing")
@@ -2369,11 +2426,19 @@ def test_to_delayed():
     assert a.compute() == s
 
 
-def test_to_delayed_optimizes():
+def test_to_delayed_optimize_graph():
     x = da.ones((4, 4), chunks=(2, 2))
     y = x[1:][1:][1:][:, 1:][:, 1:][:, 1:]
+
+    # optimizations
     d = y.to_delayed().flatten().tolist()[0]
     assert len([k for k in d.dask if k[0].startswith('getitem')]) == 1
+
+    # no optimizations
+    d2 = y.to_delayed(optimize_graph=False).flatten().tolist()[0]
+    assert dict(d2.dask) == dict(y.dask)
+
+    assert (d.compute() == d2.compute()).all()
 
 
 def test_cumulative():
@@ -3032,3 +3097,12 @@ def test_delayed_array_key_hygeine():
     d = delayed(identity)(a)
     b = da.from_delayed(d, shape=a.shape, dtype=a.dtype)
     assert_eq(a, b)
+
+
+def test_empty_chunks_in_array_len():
+    x = da.ones((), chunks=())
+    with pytest.raises(TypeError) as exc_info:
+        len(x)
+
+    err_msg = 'len() of unsized object'
+    assert err_msg in str(exc_info.value)

@@ -11,7 +11,7 @@ import dask
 from dask import delayed
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
                        visualize, persist, function_cache, is_dask_collection,
-                       DaskMethodsMixin)
+                       DaskMethodsMixin, optimize)
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
@@ -29,6 +29,7 @@ da = import_or_none('dask.array')
 db = import_or_none('dask.bag')
 dd = import_or_none('dask.dataframe')
 np = import_or_none('numpy')
+sp = import_or_none('scipy.sparse')
 pd = import_or_none('pandas')
 
 
@@ -283,6 +284,48 @@ def test_tokenize_base_types(x):
     assert tokenize(x) == tokenize(x), x
 
 
+@pytest.mark.skipif('not np')
+def test_tokenize_numpy_matrix():
+    rng = np.random.RandomState(1234)
+    a = np.asmatrix(rng.rand(100))
+    b = a.copy()
+    assert tokenize(a) == tokenize(b)
+
+    b[:10] = 1
+    assert tokenize(a) != tokenize(b)
+
+
+@pytest.mark.skipif('not sp')
+@pytest.mark.parametrize('cls_name',
+                         ('dia', 'bsr', 'coo', 'csc', 'csr', 'dok', 'lil'))
+def test_tokenize_dense_sparse_array(cls_name):
+    rng = np.random.RandomState(1234)
+
+    with pytest.warns(None):
+        # ignore scipy.sparse.SparseEfficiencyWarning
+        a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
+    b = a.copy()
+
+    assert tokenize(a) == tokenize(b)
+
+    # modifying the data values
+    if hasattr(b, 'data'):
+        b.data[:10] = 1
+    elif cls_name == 'dok':
+        b[3, 3] = 1
+    else:
+        raise ValueError
+
+    assert tokenize(a) != tokenize(b)
+
+    # modifying the data indices
+    with pytest.warns(None):
+        b = a.copy().asformat('coo')
+        b.row[:10] = np.arange(10)
+        b = b.asformat(cls_name)
+    assert tokenize(a) != tokenize(b)
+
+
 def test_is_dask_collection():
     class DummyCollection(object):
         def __init__(self, dsk=None):
@@ -383,16 +426,16 @@ def test_compute_no_opt():
     keys = []
     with Callback(pretask=lambda key, *args: keys.append(key)):
         o.compute(get=dask.get, optimize_graph=False)
-    assert len([k for k in keys if 'mul' in k[0]]) == 4
-    assert len([k for k in keys if 'add' in k[0]]) == 4
+    assert len([k for k in keys if '-mul-' in k[0]]) == 4
+    assert len([k for k in keys if '-add-' in k[0]]) == 4
     # Check that without the kwarg, the optimization does happen
     keys = []
     with Callback(pretask=lambda key, *args: keys.append(key)):
         o.compute(get=dask.get)
     # Names of fused tasks have been merged, and the original key is an alias.
     # Otherwise, the lengths below would be 4 and 0.
-    assert len([k for k in keys if 'mul' in k[0]]) == 8
-    assert len([k for k in keys if 'add' in k[0]]) == 4
+    assert len([k for k in keys if '-mul-' in k[0]]) == 8
+    assert len([k for k in keys if '-add-' in k[0]]) == 4
     assert len([k for k in keys if 'add-map-mul' in k[0]]) == 4  # See? Renamed
 
 
@@ -504,6 +547,19 @@ def test_visualize():
         assert os.path.exists(os.path.join(d, 'mydask.png'))
 
 
+@pytest.mark.skipif('not da')
+@pytest.mark.skipif(sys.flags.optimize,
+                    reason="graphviz exception with Python -OO flag")
+def test_visualize_order():
+    pytest.importorskip('matplotlib')
+    x = da.arange(5, chunks=2)
+    with tmpfile(extension='dot') as fn:
+        x.visualize(color='order', filename=fn, cmap='RdBu')
+        with open(fn) as f:
+            text = f.read()
+        assert 'color="#' in text
+
+
 def test_use_cloudpickle_to_tokenize_functions_in__main__():
     import sys
     from textwrap import dedent
@@ -521,13 +577,14 @@ def test_use_cloudpickle_to_tokenize_functions_in__main__():
     assert b'cloudpickle' in t
 
 
-def test_optimizations_keyword():
-    def inc_to_dec(dsk, keys):
-        for key in dsk:
-            if dsk[key][0] == inc:
-                dsk[key] = (dec,) + dsk[key][1:]
-        return dsk
+def inc_to_dec(dsk, keys):
+    for key in dsk:
+        if dsk[key][0] == inc:
+            dsk[key] = (dec,) + dsk[key][1:]
+    return dsk
 
+
+def test_optimizations_keyword():
     x = dask.delayed(inc)(1)
     assert x.compute() == 2
 
@@ -535,6 +592,45 @@ def test_optimizations_keyword():
         assert x.compute() == 0
 
     assert x.compute() == 2
+
+
+def test_optimize():
+    x = dask.delayed(inc)(1)
+    y = dask.delayed(inc)(x)
+    z = x + y
+
+    x2, y2, z2, constant = optimize(x, y, z, 1)
+    assert constant == 1
+
+    # Same graphs for each
+    dsk = dict(x2.dask)
+    assert dict(y2.dask) == dsk
+    assert dict(z2.dask) == dsk
+
+    # Computationally equivalent
+    assert dask.compute(x2, y2, z2) == dask.compute(x, y, z)
+
+    # Applying optimizations before compute and during compute gives
+    # same results. Shows optimizations are occurring.
+    sols = dask.compute(x, y, z, optimizations=[inc_to_dec])
+    x3, y3, z3 = optimize(x, y, z, optimizations=[inc_to_dec])
+    assert dask.compute(x3, y3, z3) == sols
+
+    # Optimize respects global optimizations as well
+    with dask.set_options(optimizations=[inc_to_dec]):
+        x4, y4, z4 = optimize(x, y, z)
+    for a, b in zip([x3, y3, z3], [x4, y4, z4]):
+        assert dict(a.dask) == dict(b.dask)
+
+
+# TODO: remove after deprecation cycle of `dask.optimize` module is completed
+def test_optimize_has_deprecated_module_functions_as_attributes():
+    import dask.optimize as deprecated_optimize
+    # Function has method attributes
+    assert dask.optimize.cull is deprecated_optimize.cull
+    assert dask.optimize.inline is deprecated_optimize.inline
+    with pytest.warns(UserWarning):
+        dask.optimize.cull({}, [])
 
 
 def test_default_imports():

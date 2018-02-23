@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
 import collections
-import sys
 
 try:
     import psutil
@@ -18,8 +17,7 @@ except ImportError:
     _HAS_CDT = False
 
 
-from ...bytes import read_bytes
-from ...bytes.core import write_bytes
+from ...bytes import read_bytes, open_files
 from ...bytes.compression import seekable_files, files as cfiles
 from ...compatibility import PY2, PY3
 from ...delayed import delayed
@@ -35,9 +33,6 @@ if PANDAS_VERSION >= '0.20.0':
 else:
     from pandas.types.common import (is_integer_dtype, is_float_dtype,
                                      is_object_dtype, is_datetime64_any_dtype)
-
-
-delayed = delayed(pure=True)
 
 
 def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
@@ -219,7 +214,7 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
         dtypes[k] = 'category'
 
     columns = list(head.columns)
-    delayed_pandas_read_text = delayed(pandas_read_text)
+    delayed_pandas_read_text = delayed(pandas_read_text, pure=True)
     dfs = []
     for blocks in block_lists:
         if not blocks:
@@ -348,7 +343,7 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
 READ_DOC_TEMPLATE = """
 Read {file_type} files into a Dask.DataFrame
 
-This parallelizes the ``pandas.{reader}`` function in the following ways:
+This parallelizes the :func:`pandas.{reader}` function in the following ways:
 
 - It supports loading many files at once using globstrings:
 
@@ -365,15 +360,17 @@ This parallelizes the ``pandas.{reader}`` function in the following ways:
     >>> df = dd.{reader}('hdfs:///myfiles.*.csv')  # doctest: +SKIP
     >>> df = dd.{reader}('hdfs://namenode.example.com/myfiles.*.csv')  # doctest: +SKIP
 
-Internally ``dd.{reader}`` uses ``pandas.{reader}`` and supports many of the
+Internally ``dd.{reader}`` uses :func:`pandas.{reader}` and supports many of the
 same keyword arguments with the same performance guarantees. See the docstring
-for ``pandas.{reader}`` for more information on available keyword arguments.
+for :func:`pandas.{reader}` for more information on available keyword arguments.
 
 Parameters
 ----------
-urlpath : string
-    Absolute or relative filepath, URL (may include protocols like
-    ``s3://``), or globstring for {file_type} files.
+urlpath : string or list
+    Absolute or relative filepath(s). Prefix with a protocol like ``s3://``
+    to read from alternative filesystems. To read from multiple files you
+    can pass a globstring or a list of paths, with the caveat that they
+    must all have the same protocol.
 blocksize : int or None, optional
     Number of bytes by which to cut up larger files. Default value is
     computed based on available physical memory and the number of cores.
@@ -389,7 +386,7 @@ storage_options : dict, optional
     Extra options that make sense for a particular storage connection, e.g.
     host, port, username, password, etc.
 **kwargs
-    Extra keyword arguments to forward to ``pandas.{reader}``.
+    Extra keyword arguments to forward to :func:`pandas.{reader}`.
 
 Notes
 -----
@@ -437,19 +434,9 @@ read_csv = make_reader(pd.read_csv, 'read_csv', 'CSV')
 read_table = make_reader(pd.read_table, 'read_table', 'delimited')
 
 
-@delayed
-def _to_csv_chunk(df, **kwargs):
-    import io
-    if PY2:
-        out = io.BytesIO()
-    else:
-        out = io.StringIO()
-    df.to_csv(out, **kwargs)
-    out.seek(0)
-    if PY2:
-        return out.getvalue()
-    encoding = kwargs.get('encoding', sys.getdefaultencoding())
-    return out.getvalue().encode(encoding)
+def _to_csv_chunk(df, fil, **kwargs):
+    with fil as f:
+        df.to_csv(f, **kwargs)
 
 
 def to_csv(df, filename, name_function=None, compression=None, compute=True,
@@ -563,18 +550,32 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
         European data
     storage_options: dict
         Parameters passed on to the backend filesystem class.
+
     Returns
     -------
     The names of the file written if they were computed right away
     If not, the delayed tasks associated to the writing of the files
     """
-    values = [_to_csv_chunk(d, **kwargs) for d in df.to_delayed()]
-    (values, names) = write_bytes(values, filename, name_function, compression,
-                                  encoding=None, **(storage_options or {}))
+    if PY2:
+        default_encoding = None
+        mode = 'wb'
+    else:
+        default_encoding = 'utf-8'
+        mode = 'wt'
+
+    encoding = kwargs.get('encoding', default_encoding)
+
+    files = open_files(filename, compression=compression, mode=mode,
+                       encoding=encoding, name_function=name_function,
+                       num=df.npartitions, **(storage_options or {}))
+
+    to_csv_chunk = delayed(_to_csv_chunk, pure=False)
+    values = [to_csv_chunk(d, f, **kwargs)
+              for d, f in zip(df.to_delayed(), files)]
 
     if compute:
         delayed(values).compute(get=get)
-        return names
+        return [f.path for f in files]
     else:
         return values
 

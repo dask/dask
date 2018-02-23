@@ -445,9 +445,9 @@ def digitize(a, bins, right=False):
 
 def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
     """
-    Blocked variant of numpy.histogram.
+    Blocked variant of :func:`numpy.histogram`.
 
-    Follows the signature of numpy.histogram exactly with the following
+    Follows the signature of :func:`numpy.histogram` exactly with the following
     exceptions:
 
     - Either an iterable specifying the ``bins`` or the number of ``bins``
@@ -467,8 +467,8 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     >>> x = da.from_array(np.arange(10000), chunks=10)
     >>> h, bins = da.histogram(x, bins=10, range=[0, 10000])
     >>> bins
-    array([     0.,   1000.,   2000.,   3000.,   4000.,   5000.,   6000.,
-             7000.,   8000.,   9000.,  10000.])
+    array([    0.,  1000.,  2000.,  3000.,  4000.,  5000.,  6000.,  7000.,
+            8000.,  9000., 10000.])
     >>> h.compute()
     array([1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000])
 
@@ -614,9 +614,9 @@ def round(a, decimals=0):
 
 def _unique_internal(ar, indices, counts, return_inverse=False):
     """
-    Helper/wrapper function for NumPy's ``unique``.
+    Helper/wrapper function for :func:`numpy.unique`.
 
-    Uses NumPy's ``unique`` to find the unique values for the array chunk.
+    Uses :func:`numpy.unique` to find the unique values for the array chunk.
     Given this chunk may not represent the whole array, also take the
     ``indices`` and ``counts`` that are in 1-to-1 correspondence to ``ar``
     and reduce them in the same fashion as ``ar`` is reduced. Namely sum

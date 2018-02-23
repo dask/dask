@@ -11,11 +11,10 @@ moto = pytest.importorskip('moto')
 
 from toolz import concat, valmap, partial
 
-from dask import compute, get, delayed
+from dask import compute, get
 from dask.bytes.s3 import DaskS3FileSystem
-from dask.bytes.core import (read_bytes, open_files, open_text_files,
-                             get_pyarrow_filesystem)
-from dask.bytes import core
+from dask.bytes.core import read_bytes, open_files, get_pyarrow_filesystem
+from dask.bytes.compression import compress, files as compress_files, seekable_files
 
 
 compute = partial(compute, get=get)
@@ -77,11 +76,12 @@ def test_get_s3():
         DaskS3FileSystem(secret='key', password='key')
 
 
-def test_write_bytes(s3):
+def test_open_files_write(s3):
     paths = ['s3://' + test_bucket_name + '/more/' + f for f in files]
-    values = [delayed(v) for v in files.values()]
-    out = core.write_bytes(values, paths)
-    compute(*out)
+    fils = open_files(paths, mode='wb')
+    for fil, data in zip(fils, files.values()):
+        with fil as f:
+            f.write(data)
     sample, values = read_bytes('s3://' + test_bucket_name + '/more/test/accounts.*')
     results = compute(*concat(values))
     assert set(list(files.values())) == set(results)
@@ -181,38 +181,9 @@ def test_read_bytes_delimited(s3, blocksize):
     assert ours == test
 
 
-def test_registered(s3):
-    sample, values = read_bytes('s3://%s/test/accounts.*.json' % test_bucket_name)
-
-    results = compute(*concat(values))
-    assert set(results) == set(files.values())
-
-
-def test_registered_open_files(s3):
-    myfiles = open_files('s3://%s/test/accounts.*.json' % test_bucket_name)
-    assert len(myfiles) == len(files)
-    data = []
-    for file in myfiles:
-        with file as f:
-            data.append(f.read())
-    assert list(data) == [files[k] for k in sorted(files)]
-
-
-def test_registered_open_text_files(s3):
-    myfiles = open_text_files('s3://%s/test/accounts.*.json' % test_bucket_name)
-    assert len(myfiles) == len(files)
-    data = []
-    for file in myfiles:
-        with file as f:
-            data.append(f.read())
-    assert list(data) == [files[k].decode() for k in sorted(files)]
-
-
-from dask.bytes.compression import compress, files as cfiles, seekable_files
-fmt_bs = [(fmt, None) for fmt in cfiles] + [(fmt, 10) for fmt in seekable_files]
-
-
-@pytest.mark.parametrize('fmt,blocksize', fmt_bs)
+@pytest.mark.parametrize('fmt,blocksize',
+                         [(fmt, None) for fmt in compress_files] +
+                         [(fmt, 10) for fmt in seekable_files])
 def test_compression(s3, fmt, blocksize):
     with s3_context('compress', valmap(compress[fmt], files)):
         sample, values = read_bytes('s3://compress/test/accounts.*',
@@ -224,19 +195,16 @@ def test_compression(s3, fmt, blocksize):
         assert b''.join(results) == b''.join([files[k] for k in sorted(files)])
 
 
-def test_files(s3):
-    myfiles = open_files('s3://' + test_bucket_name + '/test/accounts.*')
+@pytest.mark.parametrize('mode', ['rt', 'rb'])
+def test_open_files(s3, mode):
+    myfiles = open_files('s3://' + test_bucket_name + '/test/accounts.*',
+                         mode=mode)
     assert len(myfiles) == len(files)
     for lazy_file, path in zip(myfiles, sorted(files)):
         with lazy_file as f:
             data = f.read()
-            assert data == files[path]
-
-
-@pytest.mark.parametrize('fmt', list(seekable_files))
-def test_getsize(fmt):
-    with s3_context('compress', {'x': compress[fmt](b'1234567890')}) as s3:
-        assert s3.logical_size('compress/x', fmt) == 10
+            sol = files[path]
+            assert data == sol if mode == 'rb' else sol.decode()
 
 
 double = lambda x: x * 2
@@ -253,20 +221,6 @@ def test_modification_time_read_bytes():
         _, c = read_bytes('s3://compress/test/accounts.*')
 
     assert [aa._key for aa in concat(a)] != [cc._key for cc in concat(c)]
-
-
-@pytest.mark.skip()
-def test_modification_time_open_files():
-    with s3_context('compress', files):
-        a = open_files('s3://compress/test/accounts.*')
-        b = open_files('s3://compress/test/accounts.*')
-
-        assert [aa._key for aa in a] == [bb._key for bb in b]
-
-    with s3_context('compress', valmap(double, files)):
-        c = open_files('s3://compress/test/accounts.*')
-
-    assert [aa._key for aa in a] != [cc._key for cc in c]
 
 
 def test_read_csv_passes_through_options():

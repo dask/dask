@@ -10,7 +10,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.utils import ignoring, put_lines
+from dask.utils import put_lines, M
 
 from dask.dataframe.core import repartition_divisions, aca, _concat, Scalar
 from dask.dataframe import methods
@@ -824,17 +824,20 @@ def test_assign():
                    d='string',
                    e=d.a.sum(),
                    f=d.a + d.b,
-                   g=lambda x: x.a + x.b)
+                   g=lambda x: x.a + x.b,
+                   dt=pd.Timestamp(2018, 2, 13))
     res_unknown = d_unknown.assign(c=1,
                                    d='string',
                                    e=d_unknown.a.sum(),
                                    f=d_unknown.a + d_unknown.b,
-                                   g=lambda x: x.a + x.b)
+                                   g=lambda x: x.a + x.b,
+                                   dt=pd.Timestamp(2018, 2, 13))
     sol = full.assign(c=1,
                       d='string',
                       e=full.a.sum(),
                       f=full.a + full.b,
-                      g=lambda x: x.a + x.b)
+                      g=lambda x: x.a + x.b,
+                      dt=pd.Timestamp(2018, 2, 13))
     assert_eq(res, sol)
     assert_eq(res_unknown, sol)
 
@@ -1290,6 +1293,16 @@ def test_repartition_freq_errors():
     assert 'timeseries' in str(info.value)
 
 
+def test_repartition_freq_month():
+    ts = pd.date_range("2015-01-01 00:00", " 2015-05-01 23:50", freq="10min")
+    df = pd.DataFrame(np.random.randint(0,100,size=(len(ts),4)),
+                      columns=list('ABCD'), index=ts)
+    ddf = dd.from_pandas(df,npartitions=1).repartition(freq='1M')
+
+    assert_eq(df, ddf)
+    assert 2 < ddf.npartitions <= 6
+
+
 def test_embarrassingly_parallel_operations():
     df = pd.DataFrame({'x': [1, 2, 3, 4, None, 6], 'y': list('abdabd')},
                       index=[10, 20, 30, 40, 50, 60])
@@ -1466,6 +1479,10 @@ def test_str_accessor():
     assert_eq(ddf.x.str[:2], df.x.str[:2])
     assert_eq(ddf.x.str[1], df.x.str[1])
 
+    # str.extractall
+    assert_eq(ddf.x.str.extractall('(.*)b(.*)'),
+              df.x.str.extractall('(.*)b(.*)'))
+
     # str.cat
     sol = df.x.str.cat(df.x.str.upper(), sep=':')
     assert_eq(ddf.x.str.cat(ddf.x.str.upper(), sep=':'), sol)
@@ -1490,29 +1507,34 @@ def test_empty_max():
 
 
 def test_query():
+    pytest.importorskip('numexpr')
+
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
-    a = dd.from_pandas(df, npartitions=2)
-    q = a.query('x**2 > y')
-    with ignoring(ImportError):
-        assert_eq(q, df.query('x**2 > y'))
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.query('x**2 > y'),
+              df.query('x**2 > y'))
+    assert_eq(ddf.query('x**2 > @value', local_dict={'value': 4}),
+              df.query('x**2 > @value', local_dict={'value': 4}))
 
 
 def test_eval():
+    pytest.importorskip('numexpr')
+
     p = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     d = dd.from_pandas(p, npartitions=2)
-    with ignoring(ImportError):
-        assert_eq(p.eval('x + y'), d.eval('x + y'))
-        assert_eq(p.eval('z = x + y', inplace=False),
-                  d.eval('z = x + y', inplace=False))
-        with pytest.raises(NotImplementedError):
-            d.eval('z = x + y', inplace=True)
 
-        # catch FutureWarning from pandas about assignment in eval
-        with pytest.warns(None):
-            if PANDAS_VERSION < '0.21.0':
-                if p.eval('z = x + y', inplace=None) is None:
-                    with pytest.raises(NotImplementedError):
-                        d.eval('z = x + y', inplace=None)
+    assert_eq(p.eval('x + y'), d.eval('x + y'))
+    assert_eq(p.eval('z = x + y', inplace=False),
+              d.eval('z = x + y', inplace=False))
+    with pytest.raises(NotImplementedError):
+        d.eval('z = x + y', inplace=True)
+
+    # catch FutureWarning from pandas about assignment in eval
+    with pytest.warns(None):
+        if PANDAS_VERSION < '0.21.0':
+            if p.eval('z = x + y', inplace=None) is None:
+                with pytest.raises(NotImplementedError):
+                    d.eval('z = x + y', inplace=None)
 
 
 @pytest.mark.parametrize('include, exclude', [
@@ -2917,3 +2939,49 @@ def test_cumulative_multiple_columns():
             d[c + 'cp'] = d[c].cumprod()
 
     assert_eq(ddf, df)
+
+
+@pytest.mark.parametrize('func', [np.asarray, M.to_records])
+def test_map_partition_array(func):
+    import dask.array as da
+    from dask.array.utils import assert_eq
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+                       'y': [6.0, 7.0, 8.0, 9.0, 10.0]},
+                      index=['a', 'b', 'c', 'd', 'e'])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    for pre in [lambda a: a,
+                lambda a: a.x,
+                lambda a: a.y,
+                lambda a: a.index]:
+
+        try:
+            expected = func(pre(df))
+        except Exception:
+            continue
+        x = pre(ddf).map_partitions(func)
+        assert_eq(x, expected)
+
+        assert isinstance(x, da.Array)
+        assert x.chunks[0] == (np.nan, np.nan)
+
+
+def test_map_partition_sparse():
+    sparse = pytest.importorskip('sparse')
+    import dask.array as da
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+                       'y': [6.0, 7.0, 8.0, 9.0, 10.0]},
+                      index=['a', 'b', 'c', 'd', 'e'])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def f(d):
+        return sparse.COO(np.array(d))
+
+    for pre in [lambda a: a,
+                lambda a: a.x]:
+        expected = f(pre(df))
+        result = pre(ddf).map_partitions(f)
+        assert isinstance(result, da.Array)
+        computed = result.compute()
+        assert (computed.data == expected.data).all()
+        assert (computed.coords == expected.coords).all()

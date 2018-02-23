@@ -117,7 +117,7 @@ Directory of CSV files on HDFS
 
 The same analyst as above uses dask.dataframe with the dask.distributed_ scheduler
 to analyze terabytes of data on their institution's Hadoop cluster straight
-from Python.  This uses the HDFS3_ Python library for HDFS management
+from Python.  This uses either the hdfs3_ or pyarrow_ Python libraries for HDFS management
 
 This solution is particularly attractive because it stays within the Python
 ecosystem, and uses the speed and algorithm set of Pandas_, a tool with which
@@ -132,7 +132,8 @@ the analyst is already very comfortable.
    df = dd.read_csv('hdfs://data/2016-*.*.csv', parse_dates=['timestamp'])
    df.groupby(df.timestamp.dt.hour).value.mean().compute()
 
-.. _HDFS3: https://hdfs3.readthedocs.io/en/latest/
+.. _hdfs3: https://hdfs3.readthedocs.io/en/latest/
+.. _pyarrow: https://arrow.apache.org/docs/python/index.html
 
 
 Directories of custom format files

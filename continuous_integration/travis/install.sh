@@ -1,10 +1,10 @@
 # Install conda
 case "$(uname -s)" in
     'Darwin')
-        MINICONDA_FILENAME="Miniconda3-4.3.21-MacOSX-x86_64.sh"
+        MINICONDA_FILENAME="Miniconda3-latest-MacOSX-x86_64.sh"
         ;;
     'Linux')
-        MINICONDA_FILENAME="Miniconda3-4.3.21-Linux-x86_64.sh"
+        MINICONDA_FILENAME="Miniconda3-latest-Linux-x86_64.sh"
         ;;
     *)  ;;
 esac
@@ -46,6 +46,7 @@ conda install -q -c conda-forge \
     ipython \
     partd \
     psutil \
+    pytables \
     "pytest<=3.1.1" \
     scikit-image \
     scikit-learn \
@@ -53,30 +54,28 @@ conda install -q -c conda-forge \
     sqlalchemy \
     toolz
 
-# install pytables from defaults for now
-conda install -q pytables
+pip install --upgrade --no-deps git+https://github.com/dask/partd
+pip install --upgrade --no-deps git+https://github.com/dask/zict
+pip install --upgrade --no-deps git+https://github.com/dask/distributed
+pip install --upgrade --no-deps git+https://github.com/mrocklin/sparse
+pip install --upgrade --no-deps git+https://github.com/dask/s3fs
 
-pip install -q --upgrade --no-deps git+https://github.com/dask/partd
-pip install -q --upgrade --no-deps git+https://github.com/dask/zict
-pip install -q --upgrade --no-deps git+https://github.com/dask/distributed
-pip install -q --upgrade --no-deps git+https://github.com/mrocklin/sparse
-pip install -q --upgrade --no-deps git+https://github.com/dask/s3fs
-
-if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]]; then
+if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]] && [[ $NUMPY < '1.14.0' ]]; then
     conda install -q -c conda-forge fastparquet python-snappy
-    pip install -q --no-deps git+https://github.com/dask/fastparquet
+    conda remove --force fastparquet
+    pip install --no-deps git+https://github.com/dask/fastparquet
 fi
 
 if [[ $PYTHON == '2.7' ]]; then
-    pip install -q --no-deps backports.lzma mock
+    pip install --no-deps backports.lzma mock
 fi
 
-pip install -q --upgrade --no-deps \
+pip install --upgrade --no-deps \
     cachey \
     graphviz \
     pandas_datareader
 
-pip install -q --upgrade \
+pip install --upgrade \
     cityhash \
     flake8 \
     moto \
@@ -103,11 +102,11 @@ if [[ ${UPSTREAM_DEV} ]]; then
     echo "Installing NumPy and Pandas dev"
     conda uninstall -y --force numpy pandas
     PRE_WHEELS="https://7933911d6844c6c53a7d-47bd50c35cd79bd838daf386af554a83.ssl.cf2.rackcdn.com"
-    pip install -q --pre --no-deps --upgrade --timeout=60 -f $PRE_WHEELS numpy pandas
+    pip install --pre --no-deps --upgrade --timeout=60 -f $PRE_WHEELS numpy pandas
 fi;
 
 
 # Install dask
-pip install -q --no-deps -e .[complete]
+pip install --no-deps -e .[complete]
 echo conda list
 conda list

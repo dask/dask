@@ -18,6 +18,7 @@ from dask.bag.core import (Bag, lazify, lazify_task, map, collect,
                            reduceby, reify, partition, inline_singleton_lists,
                            optimize, from_delayed)
 from dask.compatibility import BZ2File, GzipFile, PY2
+from dask.delayed import Delayed
 from dask.utils import filetexts, tmpfile, tmpdir
 from dask.utils_test import inc, add
 
@@ -637,9 +638,11 @@ def test_from_s3():
     e = db.read_text('s3://tip-data/t*.gz', storage_options=dict(anon=True))
     assert e.take(5) == five_tips
 
-    # test all keys in bucket
-    c = db.read_text('s3://tip-data/*', storage_options=dict(anon=True))
-    assert c.npartitions == 4
+    # test multiple keys in bucket
+    c = db.read_text(['s3://tip-data/tips.gz', 's3://tip-data/tips.json',
+                      's3://tip-data/tips.csv'],
+                     storage_options=dict(anon=True))
+    assert c.npartitions == 3
 
 
 def test_from_sequence():
@@ -872,7 +875,9 @@ def test_to_textfiles_inputs():
         B.to_textfiles(dirname)
         assert os.path.exists(dirname)
         assert os.path.exists(os.path.join(dirname, '0.part'))
-    pytest.raises(ValueError, lambda: B.to_textfiles(5))
+
+    with pytest.raises(TypeError):
+        B.to_textfiles(5)
 
 
 def test_to_textfiles_endlines():
@@ -968,8 +973,6 @@ def test_bag_compute_forward_kwargs():
 
 
 def test_to_delayed():
-    from dask.delayed import Delayed
-
     b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=3)
     a, b, c = b.map(inc).to_delayed()
     assert all(isinstance(x, Delayed) for x in [a, b, c])
@@ -981,17 +984,24 @@ def test_to_delayed():
     assert t.compute() == 21
 
 
-def test_to_delayed_optimizes():
+def test_to_delayed_optimize_graph():
     b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=1)
     b2 = b.map(inc).map(inc).map(inc)
 
     [d] = b2.to_delayed()
     text = str(dict(d.dask))
     assert text.count('reify') == 1
+    [d2] = b2.to_delayed(optimize_graph=False)
+    assert dict(d2.dask) == dict(b2.dask)
+    assert d.compute() == d2.compute()
 
-    d = b2.sum().to_delayed()
+    x = b2.sum()
+    d = x.to_delayed()
     text = str(dict(d.dask))
     assert text.count('reify') == 0
+    d2 = x.to_delayed(optimize_graph=False)
+    assert dict(d2.dask) == dict(x.dask)
+    assert d.compute() == d2.compute()
 
     [d] = b2.to_textfiles('foo.txt', compute=False)
     text = str(dict(d.dask))

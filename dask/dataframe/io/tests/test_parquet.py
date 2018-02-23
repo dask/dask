@@ -50,31 +50,44 @@ def check_pyarrow():
         pytest.skip('pyarrow not found')
 
 
-def write_read_engines(xfail_arrow_to_fastparquet=True,
-                       xfail_fastparquet_to_arrow=False):
-    xfail = []
-    if xfail_arrow_to_fastparquet:
-        a2f = (pytest.mark.xfail(reason=("Can't read arrow directories "
-                                         "with fastparquet")),)
-    else:
-        a2f = ()
-    if xfail_fastparquet_to_arrow:
-        f2a = (pytest.mark.xfail(reason=("Can't read this fastparquet "
-                                         "file with pyarrow")),)
-    else:
-        f2a = ()
+def write_read_engines(**kwargs):
+    """Product of both engines for write/read:
 
-    xfail = tuple(xfail)
-    ff = () if fastparquet else (pytest.mark.skip(reason='fastparquet not found'),)
-    aa = () if pq else (pytest.mark.skip(reason='pyarrow not found'),)
-    engines = [pytest.param('fastparquet', 'fastparquet', marks=ff),
-               pytest.param('pyarrow', 'pyarrow', marks=aa),
-               pytest.param('fastparquet', 'pyarrow', marks=ff + aa + f2a),
-               pytest.param('pyarrow', 'fastparquet', marks=ff + aa + a2f)]
-    return pytest.mark.parametrize(('write_engine', 'read_engine'), engines)
+    To add custom marks, pass keyword of the form: `mark_writer_reader=reason`,
+    or `mark_engine=reason` to apply to all parameters with that engine."""
+    backends = {'pyarrow', 'fastparquet'}
+    marks = {(w, r): [] for w in backends for r in backends}
+
+    # Skip if uninstalled
+    for name, exists in [('fastparquet', fastparquet), ('pyarrow', pq)]:
+        val = pytest.mark.skip(reason='%s not found' % name)
+        if not exists:
+            for k in marks:
+                if name in k:
+                    marks[k].append(val)
+
+    # Custom marks
+    for kw, val in kwargs.items():
+        kind, rest = kw.split('_', 1)
+        key = tuple(rest.split('_'))
+        if (kind not in ('xfail', 'skip') or len(key) > 2 or
+                set(key).difference(backends)):
+            raise ValueError("unknown keyword %r" % kw)
+        val = getattr(pytest.mark, kind)(reason=val)
+        if len(key) == 2:
+            marks[key].append(val)
+        else:
+            for k in marks:
+                if key in k:
+                    marks[k].append(val)
+
+    return pytest.mark.parametrize(('write_engine', 'read_engine'),
+                                   [pytest.param(*k, marks=tuple(v))
+                                    for (k, v) in sorted(marks.items())])
 
 
-write_read_engines_xfail = write_read_engines(xfail_arrow_to_fastparquet=True)
+pyarrow_fastparquet_msg = "fastparquet fails reading pyarrow written directories"
+write_read_engines_xfail = write_read_engines(xfail_pyarrow_fastparquet=pyarrow_fastparquet_msg)
 
 
 @write_read_engines_xfail
@@ -124,7 +137,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
     assert_eq(df, read_df)
 
 
-@write_read_engines(xfail_arrow_to_fastparquet=False)
+@write_read_engines()
 def test_read_glob(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
@@ -138,30 +151,98 @@ def test_read_glob(tmpdir, write_engine, read_engine):
     assert_eq(df, ddf2)
 
 
-@write_read_engines_xfail
-def test_auto_add_index(tmpdir, write_engine, read_engine):
-    fn = str(tmpdir)
-    ddf.to_parquet(fn, engine=write_engine)
-    ddf2 = dd.read_parquet(fn, columns=['x'], index='myindex', engine=read_engine)
-    assert_eq(df[['x']], ddf2)
+@write_read_engines()
+def test_read_list(tmpdir, write_engine, read_engine):
+    tmpdir = str(tmpdir)
+    ddf.to_parquet(tmpdir, engine=write_engine)
+    files = sorted(os.path.join(tmpdir, f)
+                   for f in os.listdir(tmpdir)
+                   if not f.endswith('_metadata'))
+    ddf2 = dd.read_parquet(files, engine=read_engine)
+    assert_eq(df, ddf2)
 
 
 @write_read_engines_xfail
-def test_index_column_false_index(tmpdir, write_engine, read_engine):
+def test_columns_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
-    ddf2 = dd.read_parquet(fn, columns=['myindex'], index=False, engine=read_engine)
-    assert_eq(pd.DataFrame(df.index), ddf2, check_index=False)
+    df2 = df.reset_index()
+
+    assert_eq(dd.read_parquet(fn, columns=[], engine=read_engine), df[[]])
+    assert_eq(dd.read_parquet(fn, columns=['x'], engine=read_engine), df[['x']])
+    assert_eq(dd.read_parquet(fn, index='myindex', columns=['x'], engine=read_engine), df[['x']])
+    assert_eq(dd.read_parquet(fn, index='myindex', columns=['x', 'y'], engine=read_engine), df)
+
+    assert_eq(dd.read_parquet(fn, index=False, engine=read_engine),
+              df2, check_index=False)
+    assert_eq(dd.read_parquet(fn, index=False, columns=['x', 'y'], engine=read_engine),
+              df, check_index=False)
+    assert_eq(dd.read_parquet(fn, index=False, columns=['myindex', 'x'], engine=read_engine),
+              df2[['myindex', 'x']], check_index=False)
 
 
-@pytest.mark.parametrize("columns", [['myindex'], []])
-@pytest.mark.parametrize("index", ['myindex', None])
-@write_read_engines_xfail
-def test_columns_index(tmpdir, write_engine, read_engine, columns, index):
-    fn = str(tmpdir)
-    ddf.to_parquet(fn, engine=write_engine)
-    ddf2 = dd.read_parquet(fn, columns=columns, index=index, engine=read_engine)
-    assert_eq(df[[]], ddf2)
+def test_columns_index_with_multi_index(tmpdir, engine):
+    fn = os.path.join(str(tmpdir), 'test.parquet')
+    index = pd.MultiIndex.from_arrays([np.arange(10), np.arange(10) + 1],
+                                      names=['x0', 'x1'])
+    df = pd.DataFrame(np.random.randn(10, 2), columns=['a', 'b'], index=index)
+    df2 = df.reset_index(drop=False)
+
+    if engine == 'fastparquet':
+        fastparquet.write(fn, df, write_index=True)
+
+        # fastparquet doesn't support multi-index
+        with pytest.raises(ValueError):
+            ddf = dd.read_parquet(fn, engine=engine)
+    else:
+        import pyarrow as pa
+        pq.write_table(pa.Table.from_pandas(df), fn)
+
+        # Pyarrow supports multi-index reads
+        ddf = dd.read_parquet(fn, engine=engine)
+        assert_eq(ddf, df)
+
+        d = dd.read_parquet(fn, columns='a', engine=engine)
+        assert_eq(d, df['a'])
+
+        d = dd.read_parquet(fn, index=['a', 'b'], columns=['x0', 'x1'], engine=engine)
+        assert_eq(d, df2.set_index(['a', 'b'])[['x0', 'x1']])
+
+    # Just index
+    d = dd.read_parquet(fn, index=False, engine=engine)
+    assert_eq(d, df2)
+
+    d = dd.read_parquet(fn, index=['a'], engine=engine)
+    assert_eq(d, df2.set_index('a')[['b']])
+
+    d = dd.read_parquet(fn, index=['x0'], engine=engine)
+    assert_eq(d, df2.set_index('x0')[['a', 'b']])
+
+    # Just columns
+    d = dd.read_parquet(fn, columns=['x0', 'a'], engine=engine)
+    assert_eq(d, df2.set_index('x1')[['x0', 'a']])
+
+    # Both index and columns
+    d = dd.read_parquet(fn, index=False, columns=['x0', 'b'], engine=engine)
+    assert_eq(d, df2[['x0', 'b']])
+
+    for index in ['x1', 'b']:
+        d = dd.read_parquet(fn, index=index, columns=['x0', 'a'], engine=engine)
+        assert_eq(d, df2.set_index(index)[['x0', 'a']])
+
+    # Columns and index intersect
+    for index in ['a', 'x0']:
+        with pytest.raises(ValueError):
+            d = dd.read_parquet(fn, index=index, columns=['x0', 'a'], engine=engine)
+
+    # Series output
+    for ind, col, sol_df in [(None, 'x0', df2.set_index('x1')),
+                             (False, 'b', df2),
+                             (False, 'x0', df2),
+                             ('a', 'x0', df2.set_index('a')),
+                             ('a', 'b', df2.set_index('a'))]:
+        d = dd.read_parquet(fn, index=ind, columns=col, engine=engine)
+        assert_eq(d, sol_df[col])
 
 
 @write_read_engines_xfail
@@ -216,7 +297,7 @@ def test_optimize(tmpdir, c):
 
 @pytest.mark.skipif(not hasattr(pd.DataFrame, 'to_parquet'),
                     reason="no to_parquet method")
-@write_read_engines(False)
+@write_read_engines()
 def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
     fn = str(tmpdir.join('test.parquet'))
     df = pd.DataFrame({'x': [1, 2, 3]})
@@ -271,6 +352,27 @@ def test_append(tmpdir, engine):
     ddf2.to_parquet(tmp, append=True)
 
     ddf3 = dd.read_parquet(tmp, engine=engine)
+    assert_eq(df, ddf3)
+
+
+def test_append_create(tmpdir):
+    """Test that appended parquet equal to the original one."""
+    check_fastparquet()
+    tmp = str(tmpdir)
+    df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
+                       'i64': np.arange(1000, dtype=np.int64),
+                       'f': np.arange(1000, dtype=np.float64),
+                       'bhello': np.random.choice(['hello', 'yo', 'people'],
+                                                  size=1000).astype("O")})
+    df.index.name = 'index'
+
+    half = len(df) // 2
+    ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
+    ddf2 = dd.from_pandas(df.iloc[half:], chunksize=100)
+    ddf1.to_parquet(tmp, append=True)
+    ddf2.to_parquet(tmp, append=True)
+
+    ddf3 = dd.read_parquet(tmp, engine='fastparquet')
     assert_eq(df, ddf3)
 
 
@@ -366,8 +468,8 @@ def test_append_different_columns(tmpdir):
     assert 'Appended dtypes' in str(excinfo.value)
 
 
-def test_ordering(tmpdir):
-    check_fastparquet()
+@write_read_engines_xfail
+def test_ordering(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     df = pd.DataFrame({'a': [1, 2, 3],
                        'b': [10, 20, 30],
@@ -375,13 +477,14 @@ def test_ordering(tmpdir):
                       index=pd.Index([-1, -2, -3], name='myindex'),
                       columns=['c', 'a', 'b'])
     ddf = dd.from_pandas(df, npartitions=2)
-    dd.to_parquet(ddf, tmp)
+    dd.to_parquet(ddf, tmp, engine=write_engine)
 
-    pf = fastparquet.ParquetFile(tmp)
-    assert pf.columns == ['myindex', 'c', 'a', 'b']
+    if read_engine == 'fastparquet':
+        pf = fastparquet.ParquetFile(tmp)
+        assert pf.columns == ['myindex', 'c', 'a', 'b']
 
-    ddf2 = dd.read_parquet(tmp, index='myindex')
-    assert_eq(ddf, ddf2)
+    ddf2 = dd.read_parquet(tmp, index='myindex', engine=read_engine)
+    assert_eq(ddf, ddf2, check_divisions=False)
 
 
 def test_read_parquet_custom_columns(tmpdir, engine):
@@ -498,7 +601,11 @@ def test_to_parquet_default_writes_nulls(tmpdir):
     assert table[1].null_count == 2
 
 
-@write_read_engines_xfail
+@write_read_engines(
+    xfail_pyarrow_fastparquet=pyarrow_fastparquet_msg,
+    xfail_pyarrow_pyarrow=("Race condition writing using pyarrow with partition_on. "
+                           "Fixed on master, but not on pyarrow 0.8.0")
+)
 def test_partition_on(tmpdir, write_engine, read_engine):
     tmpdir = str(tmpdir)
     df = pd.DataFrame({'a': np.random.choice(['A', 'B', 'C'], size=100),
@@ -615,8 +722,8 @@ def test_parquet_select_cats(tmpdir):
 
 
 @write_read_engines(
-    xfail_arrow_to_fastparquet=True,
-    xfail_fastparquet_to_arrow=True,  # fastparquet-251
+    xfail_pyarrow_fastparquet=pyarrow_fastparquet_msg,
+    xfail_fastparquet_pyarrow="fastparquet gh#251"
 )
 def test_columns_name(tmpdir, write_engine, read_engine):
     if write_engine == read_engine == 'fastparquet':
@@ -880,6 +987,13 @@ def test_parse_pandas_metadata_column_with_index_name():
 
 def test_writing_parquet_with_kwargs(tmpdir, engine):
     fn = str(tmpdir)
+    path1 = os.path.join(fn, 'normal')
+    path2 = os.path.join(fn, 'partitioned')
+
+    df = pd.DataFrame({'a': np.random.choice(['A', 'B', 'C'], size=100),
+                       'b': np.random.random(size=100),
+                       'c': np.random.randint(1, 5, size=100)})
+    ddf = dd.from_pandas(df, npartitions=3)
 
     engine_kwargs = {
         'pyarrow': {
@@ -894,9 +1008,17 @@ def test_writing_parquet_with_kwargs(tmpdir, engine):
         }
     }
 
-    ddf.to_parquet(fn,  engine=engine, **engine_kwargs[engine])
-    out = dd.read_parquet(fn, engine=engine)
+    ddf.to_parquet(path1,  engine=engine, **engine_kwargs[engine])
+    out = dd.read_parquet(path1, engine=engine)
     assert_eq(out, df, check_index=(engine != 'fastparquet'))
+
+    # Avoid race condition in pyarrow 0.8.0 on writing partitioned datasets
+    with dask.set_options(get=dask.get):
+        ddf.to_parquet(path2, engine=engine, partition_on=['a'],
+                       **engine_kwargs[engine])
+    out = dd.read_parquet(path2, engine=engine).compute()
+    for val in df.a.unique():
+        assert set(df.b[df.a == val]) == set(out.b[out.a == val])
 
 
 def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
@@ -904,3 +1026,19 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
 
     with pytest.raises(TypeError):
         ddf.to_parquet(fn,  engine=engine, unknown_key='unknown_value')
+
+
+def test_setect_partitioned_column(tmpdir, engine):
+    if engine == 'pyarrow':
+        pytest.xfail()
+    fn = str(tmpdir)
+    size = 20
+    d = {'signal1': np.random.normal(0, 0.3, size=size).cumsum() + 50,
+         'fake_categorical1': np.random.choice(['A', 'B', 'C'], size=size),
+         'fake_categorical2': np.random.choice(['D', 'E', 'F'], size=size)}
+    df = dd.from_pandas(pd.DataFrame(d), 2)
+    df.to_parquet(fn, compression='snappy', write_index=False, engine=engine,
+                  partition_on=['fake_categorical1', 'fake_categorical2'])
+
+    df_partitioned = dd.read_parquet(fn, engine=engine)
+    df_partitioned[df_partitioned.fake_categorical1 == 'A'].compute()

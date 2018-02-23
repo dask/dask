@@ -11,3 +11,4 @@ log
 *.swp
 *.swo
 .cache/
+hdfs-initialized-indicator

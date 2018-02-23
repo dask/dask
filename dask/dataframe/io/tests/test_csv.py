@@ -270,6 +270,20 @@ def test_read_csv_files(dd_read, pd_read, files):
         assert_eq(df, expected2, check_dtype=False)
 
 
+@pytest.mark.parametrize('dd_read,pd_read,files',
+                         [(dd.read_csv, pd.read_csv, csv_files),
+                          (dd.read_table, pd.read_table, tsv_files)])
+def test_read_csv_files_list(dd_read, pd_read, files):
+    with filetexts(files, mode='b'):
+        subset = sorted(files)[:2]  # Just first 2
+        sol = pd.concat([pd_read(BytesIO(files[k])) for k in subset])
+        res = dd_read(subset)
+        assert_eq(res, sol, check_dtype=False)
+
+        with pytest.raises(ValueError):
+            dd_read([])
+
+
 # After this point, we test just using read_csv, as all functionality
 # for both is implemented using the same code.
 

@@ -7,7 +7,7 @@ import numpy as np
 from .core import getter, getter_nofancy, getter_inline
 from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
-from ..optimize import cull, fuse, inline_functions
+from ..optimization import cull, fuse, inline_functions
 from ..utils import ensure_dict
 
 
@@ -220,7 +220,7 @@ def fuse_slice(a, b):
     None
     """
     # None only works if the second side is a full slice
-    if a is None and b == slice(None, None):
+    if a is None and isinstance(b, slice) and b == slice(None, None):
         return None
 
     # Replace None with 0 and one in start and step

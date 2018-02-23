@@ -56,8 +56,16 @@ class DaskMethodsMixin(object):
         optimize_graph : bool, optional
             If True, the graph is optimized before rendering.  Otherwise,
             the graph is displayed as is. Default is False.
+        color: {None, 'order'}, optional
+            Options to color nodes.  Provide ``cmap=`` keyword for additional
+            colormap
         **kwargs
            Additional keyword arguments to forward to ``to_graphviz``.
+
+        Examples
+        --------
+        >>> x.visualize(filename='dask.pdf')  # doctest: +SKIP
+        >>> x.visualize(filename='dask.pdf', color='order')  # doctest: +SKIP
 
         Returns
         -------
@@ -112,7 +120,7 @@ class DaskMethodsMixin(object):
         """Compute this dask collection
 
         This turns a lazy Dask collection into its in-memory equivalent.
-        For example a Dask.array turns into a NumPy array and a Dask.dataframe
+        For example a Dask.array turns into a  :func:`numpy.array` and a Dask.dataframe
         turns into a Pandas dataframe.  The entire dataset must fit into memory
         before calling this operation.
 
@@ -261,6 +269,57 @@ def _extract_graph_and_keys(vals):
     return dsk, keys
 
 
+def optimize(*args, **kwargs):
+    """Optimize several dask collections at once.
+
+    Returns equivalent dask collections that all share the same merged and
+    optimized underlying graph. This can be useful if converting multiple
+    collections to delayed objects, or to manually apply the optimizations at
+    strategic points.
+
+    Note that in most cases you shouldn't need to call this method directly.
+
+    Parameters
+    ----------
+    *args : objects
+        Any number of objects. If a dask object, its graph is optimized and
+        merged with all those of all other dask objects before returning an
+        equivalent dask collection. Non-dask arguments are passed through
+        unchanged.
+    optimizations : list of callables, optional
+        Additional optimization passes to perform.
+    **kwargs
+        Extra keyword arguments to forward to the optimization passes.
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> a = da.arange(10, chunks=2).sum()
+    >>> b = da.arange(10, chunks=2).mean()
+    >>> a2, b2 = optimize(a, b)
+
+    >>> a2.compute() == a.compute()
+    True
+    >>> b2.compute() == b.compute()
+    True
+    """
+    variables = [a for a in args if is_dask_collection(a)]
+    if not variables:
+        return args
+
+    dsk = collections_to_dsk(variables, **kwargs)
+    postpersists = [a.__dask_postpersist__() if is_dask_collection(a)
+                    else (None, a) for a in args]
+
+    return tuple(a if f is None else f(dsk, *a) for f, a in postpersists)
+
+
+# TODO: remove after deprecation cycle of `dask.optimize` module completes
+from . import optimize as _deprecated_optimize
+for _m in _deprecated_optimize.__all__:
+    setattr(optimize, _m, getattr(_deprecated_optimize, _m))
+
+
 def compute(*args, **kwargs):
     """Compute several dask collections at once.
 
@@ -356,8 +415,16 @@ def visualize(*args, **kwargs):
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
+    color: {None, 'order'}, optional
+        Options to color nodes.  Provide ``cmap=`` keyword for additional
+        colormap
     **kwargs
        Additional keyword arguments to forward to ``to_graphviz``.
+
+    Examples
+    --------
+    >>> x.visualize(filename='dask.pdf')  # doctest: +SKIP
+    >>> x.visualize(filename='dask.pdf', color='order')  # doctest: +SKIP
 
     Returns
     -------
@@ -386,6 +453,28 @@ def visualize(*args, **kwargs):
     for d in dsks:
         dsk.update(d)
 
+    color = kwargs.get('color')
+
+    if color == 'order':
+        from .order import order
+        import matplotlib.pyplot as plt
+        o = order(dsk)
+        try:
+            cmap = kwargs.pop('cmap')
+        except KeyError:
+            cmap = plt.cm.RdBu
+        if isinstance(cmap, str):
+            import matplotlib.pyplot as plt
+            cmap = getattr(plt.cm, cmap)
+        mx = max(o.values()) + 1
+        colors = {k: _colorize(cmap(v / mx, bytes=True)) for k, v in o.items()}
+
+        kwargs['function_attributes'] = {k: {'color': v, 'label': str(o[k])}
+                                         for k, v in colors.items()}
+        kwargs['data_attributes'] = {k: {'color': v} for k, v in colors.items()}
+    elif color:
+        raise NotImplementedError("Unknown value color=%s" % color)
+
     return dot_graph(dsk, filename=filename, **kwargs)
 
 
@@ -398,8 +487,8 @@ def persist(*args, **kwargs):
 
     For example a lazy dask.array built up from many lazy calls will now be a
     dask.array of the same shape, dtype, chunks, etc., but now with all of
-    those previously lazy tasks either computed in memory as many small NumPy
-    arrays (in the single-machine case) or asynchronously running in the
+    those previously lazy tasks either computed in memory as many small :class:`numpy.array`
+    (in the single-machine case) or asynchronously running in the
     background on a cluster (in the distributed case).
 
     This function operates differently if a ``dask.distributed.Client`` exists
@@ -585,8 +674,11 @@ def _normalize_function(func):
         return tuple(normalize_function(f) for f in funcs)
     elif isinstance(func, partial):
         args = tuple(normalize_token(i) for i in func.args)
-        kws = tuple((k, normalize_token(v))
-                    for k, v in sorted(func.keywords.items()))
+        if func.keywords:
+            kws = tuple((k, normalize_token(v))
+                        for k, v in sorted(func.keywords.items()))
+        else:
+            kws = None
         return (normalize_function(func.func), args, kws)
     else:
         try:
@@ -658,6 +750,10 @@ def register_numpy():
                 data = hash_buffer_hex(x.copy().ravel(order='K').view('i1'))
         return (data, x.dtype, x.shape, x.strides)
 
+    @normalize_token.register(np.matrix)
+    def normalize_matrix(x):
+        return type(x).__name__, normalize_array(x.view(type=np.ndarray))
+
     normalize_token.register(np.dtype, repr)
     normalize_token.register(np.generic, repr)
 
@@ -669,3 +765,45 @@ def register_numpy():
                 return 'np.' + name
         except AttributeError:
             return normalize_function(x)
+
+
+@normalize_token.register_lazy("scipy")
+def register_scipy():
+    import scipy.sparse as sp
+
+    def normalize_sparse_matrix(x, attrs):
+        return type(x).__name__, normalize_seq((normalize_token(getattr(x, key))
+                                                for key in attrs))
+
+    for cls, attrs in [(sp.dia_matrix, ('data', 'offsets', 'shape')),
+                       (sp.bsr_matrix, ('data', 'indices', 'indptr',
+                                        'blocksize', 'shape')),
+                       (sp.coo_matrix, ('data', 'row', 'col', 'shape')),
+                       (sp.csr_matrix, ('data', 'indices', 'indptr', 'shape')),
+                       (sp.csc_matrix, ('data', 'indices', 'indptr', 'shape')),
+                       (sp.lil_matrix, ('data', 'rows', 'shape'))]:
+        normalize_token.register(cls,
+                                 partial(normalize_sparse_matrix, attrs=attrs))
+
+    @normalize_token.register(sp.dok_matrix)
+    def normalize_dok_matrix(x):
+        return type(x).__name__, normalize_token(sorted(x.items()))
+
+
+def _colorize(t):
+    """ Convert (r, g, b) triple to "#RRGGBB" string
+
+    For use with ``visualize(color=...)``
+
+    Examples
+    --------
+    >>> _colorize((255, 255, 255))
+    '#FFFFFF'
+    >>> _colorize((0, 32, 128))
+    '#002080'
+    """
+    t = t[:3]
+    i = sum(v * 256 ** (len(t) - i - 1) for i, v in enumerate(t))
+    h = hex(int(i))[2:].upper()
+    h = '0' * (6 - len(h)) + h
+    return "#" + h

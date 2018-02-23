@@ -20,10 +20,11 @@ from .. import array as da
 from .. import core
 from ..utils import partial_by_order
 from .. import threaded
-from ..compatibility import apply, operator_div, bind_method, PY3
+from ..compatibility import apply, operator_div, bind_method
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
-                     memory_repr, put_lines, M, key_split, OperatorMethodMixin)
+                     memory_repr, put_lines, M, key_split, OperatorMethodMixin,
+                     is_arraylike)
 from ..base import Base, tokenize, dont_optimize, is_dask_collection
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
@@ -75,12 +76,25 @@ def _get_return_type(meta):
     return Scalar
 
 
-def new_dd_object(dsk, _name, meta, divisions):
+def new_dd_object(dsk, name, meta, divisions):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
-    return _get_return_type(meta)(dsk, _name, meta, divisions)
+    if isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)):
+        return _get_return_type(meta)(dsk, name, meta, divisions)
+    elif is_arraylike(meta):
+        import dask.array as da
+        chunks = (((np.nan,) * (len(divisions) - 1),) +
+                  tuple((d,) for d in meta.shape[1:]))
+        if len(chunks) > 1:
+            dsk = dsk.copy()
+            suffix = (0,) * (len(chunks) - 1)
+            for i in range(len(chunks[0])):
+                dsk[(name, i) + suffix] = dsk.pop((name, i))
+        return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
+    else:
+        return _get_return_type(meta)(dsk, name, meta, divisions)
 
 
 def finalize(results):
@@ -178,6 +192,21 @@ class Scalar(Base, OperatorMethodMixin):
     @classmethod
     def _get_binary_operator(cls, op, inv=False):
         return lambda self, other: _scalar_binary(op, self, other, inv=inv)
+
+    def to_delayed(self, optimize_graph=True):
+        """Convert into a ``dask.delayed`` object.
+
+        Parameters
+        ----------
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            ``dask.delayed`` objects.
+        """
+        from dask.delayed import Delayed
+        dsk = self.__dask_graph__()
+        if optimize_graph:
+            dsk = self.__dask_optimize__(dsk, self.__dask_keys__())
+        return Delayed(self.key, dsk)
 
 
 def _scalar_binary(op, self, other, inv=False):
@@ -1014,9 +1043,29 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
 
-    def to_delayed(self):
-        """ See dd.to_delayed docstring for more information """
-        return to_delayed(self)
+    def to_delayed(self, optimize_graph=True):
+        """Convert into a list of ``dask.delayed`` objects, one per partition.
+
+        Parameters
+        ----------
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            ``dask.delayed`` objects.
+
+        Examples
+        --------
+        >>> partitions = df.to_delayed()  # doctest: +SKIP
+
+        See Also
+        --------
+        dask.dataframe.from_delayed
+        """
+        from dask.delayed import Delayed
+        keys = self.__dask_keys__()
+        dsk = self.__dask_graph__()
+        if optimize_graph:
+            dsk = self.__dask_optimize__(dsk, keys)
+        return [Delayed(k, dsk) for k in keys]
 
     @classmethod
     def _get_unary_operator(cls, op):
@@ -1612,18 +1661,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         Operations that depend on shape information, like slicing or reshaping,
         will not work.
         """
-        from ..array.core import Array
-        name = 'values-' + tokenize(self)
-        chunks = ((np.nan,) * self.npartitions,)
-        x = self._meta.values
-        if isinstance(self, DataFrame):
-            chunks = chunks + ((x.shape[1],),)
-            suffix = (0,)
-        else:
-            suffix = ()
-        dsk = {(name, i) + suffix: (getattr, key, 'values')
-               for (i, key) in enumerate(self.__dask_keys__())}
-        return Array(merge(self.dask, dsk), name, chunks, x.dtype)
+        return self.map_partitions(methods.values)
 
 
 def _raise_if_object_series(x, funcname):
@@ -2450,7 +2488,7 @@ class DataFrame(_Frame):
     def assign(self, **kwargs):
         for k, v in kwargs.items():
             if not (isinstance(v, (Series, Scalar, pd.Series)) or
-                    callable(v) or np.isscalar(v)):
+                    callable(v) or pd.api.types.is_scalar(v)):
                 raise TypeError("Column assignment doesn't support type "
                                 "{0}".format(type(v).__name__))
         pairs = list(sum(kwargs.items(), ()))
@@ -2484,19 +2522,7 @@ class DataFrame(_Frame):
         --------
         pandas.DataFrame.query
         """
-        name = 'query-%s' % tokenize(self, expr)
-        if kwargs:
-            name = name + '--' + tokenize(kwargs)
-            dsk = dict(((name, i), (apply, M.query,
-                                    ((self._name, i), (expr,), kwargs)))
-                       for i in range(self.npartitions))
-        else:
-            dsk = dict(((name, i), (M.query, (self._name, i), expr))
-                       for i in range(self.npartitions))
-
-        meta = self._meta.query(expr, **kwargs)
-        return new_dd_object(merge(dsk, self.dask), name,
-                             meta, self.divisions)
+        return self.map_partitions(M.query, expr, **kwargs)
 
     @derived_from(pd.DataFrame)
     def eval(self, expr, inplace=None, **kwargs):
@@ -3301,7 +3327,7 @@ def map_partitions(func, *args, **kwargs):
         dask = {(name, 0):
                 (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)}
         return Scalar(merge(dask, *[arg.dask for arg in args]), name, meta)
-    elif not isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)):
+    elif not (isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)) or is_arraylike(meta)):
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
         meta = _concat([meta])
@@ -3446,14 +3472,12 @@ def quantile(df, q):
     name = 'quantiles-1-' + token
     val_dsk = {(name, i): (_percentile, (getattr, key, 'values'), qs)
                for i, key in enumerate(df.__dask_keys__())}
-    name2 = 'quantiles-2-' + token
-    len_dsk = {(name2, i): (len, key) for i, key in enumerate(df.__dask_keys__())}
 
     name3 = 'quantiles-3-' + token
     merge_dsk = {(name3, 0): finalize_tsk((merge_percentiles, qs,
                                            [qs] * df.npartitions,
-                                           sorted(val_dsk), sorted(len_dsk)))}
-    dsk = merge(df.dask, val_dsk, len_dsk, merge_dsk)
+                                           sorted(val_dsk)))}
+    dsk = merge(df.dask, val_dsk, merge_dsk)
     return return_type(dsk, name3, meta, new_divisions)
 
 
@@ -3798,10 +3822,13 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
 
 def repartition_freq(df, freq=None):
     """ Repartition a timeseries dataframe by a new frequency """
-    freq = pd.Timedelta(freq)
     if not isinstance(df.divisions[0], pd.Timestamp):
         raise TypeError("Can only repartition on frequency for timeseries")
-    divisions = pd.DatetimeIndex(start=df.divisions[0].ceil(freq),
+    try:
+        start = df.divisions[0].ceil(freq)
+    except ValueError:
+        start = df.divisions[0]
+    divisions = pd.DatetimeIndex(start=start,
                                  end=df.divisions[-1],
                                  freq=freq).tolist()
     if not len(divisions):
@@ -4031,19 +4058,24 @@ def maybe_shift_divisions(df, periods, freq):
     return df
 
 
-def to_delayed(df):
-    """ Create Dask Delayed objects from a Dask Dataframe
+def to_delayed(df, optimize_graph=True):
+    """Convert into a list of ``dask.delayed`` objects, one per partition.
 
-    Returns a list of delayed values, one value per partition.
+    Deprecated, please use the equivalent ``df.to_delayed`` method instead.
 
-    Examples
+    Parameters
+    ----------
+    optimize_graph : bool, optional
+        If True [default], the graph is optimized before converting into
+        ``dask.delayed`` objects.
+
+    See Also
     --------
-    >>> partitions = df.to_delayed()  # doctest: +SKIP
+    dask.dataframe.from_delayed
     """
-    from dask.delayed import Delayed
-    keys = df.__dask_keys__()
-    dsk = df.__dask_optimize__(df.__dask_graph__(), keys)
-    return [Delayed(k, dsk) for k in keys]
+    warnings.warn("DeprecationWarning: The `dd.to_delayed` function is "
+                  "deprecated, please use the `.to_delayed()` method instead.")
+    return df.to_delayed(optimize_graph=optimize_graph)
 
 
 @wraps(pd.to_datetime)
@@ -4070,7 +4102,3 @@ def _repr_data_series(s, index):
     else:
         dtype = str(s.dtype)
     return pd.Series([dtype] + ['...'] * npartitions, index=index, name=s.name)
-
-
-if PY3:
-    _Frame.to_delayed.__doc__ = to_delayed.__doc__

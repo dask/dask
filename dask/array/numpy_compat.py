@@ -209,7 +209,7 @@ except ImportError:  # pragma: no cover
 
         See Also
         --------
-        numpy.prod : Product across array propagating NaNs.
+        :func:`numpy.prod` : Product across array propagating NaNs.
         isnan : Show which elements are NaN.
 
         Notes
@@ -276,7 +276,7 @@ except ImportError:  # pragma: no cover
 
         See Also
         --------
-        numpy.cumsum : Cumulative sum across array propagating NaNs.
+        :func:`numpy.cumsum` : Cumulative sum across array propagating NaNs.
         isnan : Show which elements are NaN.
 
         Examples
@@ -337,7 +337,7 @@ except ImportError:  # pragma: no cover
 
         See Also
         --------
-        numpy.cumprod : Cumulative product across array propagating NaNs.
+        :func:`numpy.cumprod` : Cumulative product across array propagating NaNs.
         isnan : Show which elements are NaN.
 
         Examples
@@ -364,7 +364,7 @@ except ImportError:  # pragma: no cover
 
 
 def _make_sliced_dtype(dtype, index):
-    if LooseVersion(np.__version__) >= LooseVersion("1.14.0"):
+    if LooseVersion(np.__version__) == LooseVersion("1.14.0"):
         return _make_sliced_dtype_np_ge_14(dtype, index)
     else:
         return _make_sliced_dtype_np_lt_14(dtype, index)

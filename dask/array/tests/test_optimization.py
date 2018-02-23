@@ -4,7 +4,7 @@ pytest.importorskip('numpy')
 import numpy as np
 import dask
 import dask.array as da
-from dask.optimize import fuse
+from dask.optimization import fuse
 from dask.utils import SerializableLock
 from dask.array.core import getter, getter_nofancy
 from dask.array.optimization import (getitem, optimize, optimize_slices,
@@ -139,6 +139,9 @@ def test_fuse_slice():
 
     with pytest.raises(NotImplementedError):
         fuse_slice(slice(10, 15, 2), -1)
+    # Regression test for #3076
+    with pytest.raises(NotImplementedError):
+        fuse_slice(None, np.array([0, 0]))
 
 
 def test_fuse_slice_with_lists():

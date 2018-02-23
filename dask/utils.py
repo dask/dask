@@ -19,7 +19,7 @@ from weakref import WeakValueDictionary
 from .compatibility import get_named_args, getargspec, PY3, unicode, bind_method
 from .core import get_deps
 from .context import _globals
-from .optimize import key_split    # noqa: F401
+from .optimization import key_split    # noqa: F401
 
 
 system_encoding = sys.getdefaultencoding()
@@ -877,3 +877,22 @@ def partial_by_order(*args, **kwargs):
     for i, arg in other:
         args2.insert(i, arg)
     return function(*args2, **kwargs)
+
+
+def is_arraylike(x):
+    """ Is this object a numpy array or something similar?
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> x = np.ones(5)
+    >>> is_arraylike(x)
+    True
+    >>> is_arraylike(5)
+    False
+    >>> is_arraylike('cat')
+    False
+    """
+    return (hasattr(x, '__array__') and
+            hasattr(x, 'shape') and x.shape and
+            hasattr(x, 'dtype'))

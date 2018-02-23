@@ -51,7 +51,11 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
         if windows_path:
             path = '%s:%s' % windows_path.groups()
 
-    inferred_storage_options = {
+    if protocol in ['http', 'https']:
+        # for HTTP, we don't want to parse, as requests will anyway
+        return {'protocol': protocol, 'path': urlpath}
+
+    options = {
         'protocol': protocol,
         'path': path,
     }
@@ -60,27 +64,44 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
         # Parse `hostname` from netloc manually because `parsed_path.hostname`
         # lowercases the hostname which is not always desirable (e.g. in S3):
         # https://github.com/dask/dask/issues/1417
-        inferred_storage_options['host'] = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
+        host = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
+
+        # For gcs and s3 the netloc is actually the bucket name, so we want to
+        # include it in the path. It feels a bit wrong to hardcode this, but
+        # the number of filesystems where this matters is small, so this should
+        # be fine to include:
+        if protocol in ('s3', 'gcs', 'gs'):
+            options['path'] = host + options['path']
+        else:
+            options['host'] = host
+
         if parsed_path.port:
-            inferred_storage_options['port'] = parsed_path.port
+            options['port'] = parsed_path.port
         if parsed_path.username:
-            inferred_storage_options['username'] = parsed_path.username
+            options['username'] = parsed_path.username
         if parsed_path.password:
-            inferred_storage_options['password'] = parsed_path.password
+            options['password'] = parsed_path.password
 
     if parsed_path.query:
-        inferred_storage_options['url_query'] = parsed_path.query
+        options['url_query'] = parsed_path.query
     if parsed_path.fragment:
-        inferred_storage_options['url_fragment'] = parsed_path.fragment
+        options['url_fragment'] = parsed_path.fragment
 
     if inherit_storage_options:
-        if set(inherit_storage_options) & set(inferred_storage_options):
-            raise KeyError("storage options (%r) and path url options (%r) "
-                           "collision is detected"
-                           % (inherit_storage_options, inferred_storage_options))
-        inferred_storage_options.update(inherit_storage_options)
+        update_storage_options(options, inherit_storage_options)
 
-    return inferred_storage_options
+    return options
+
+
+def update_storage_options(options, inherited=None):
+    if not inherited:
+        inherited = {}
+    collisions = set(options) & set(inherited)
+    if collisions:
+        collisions = '\n'.join('- %r' % k for k in collisions)
+        raise KeyError("Collision between inferred and specified storage "
+                       "options:\n%s")
+    options.update(inherited)
 
 
 if PY2:
@@ -153,7 +174,7 @@ def seek_delimiter(file, delimiter, blocksize):
             i = full.index(delimiter)
             file.seek(file.tell() - (len(full) - i) + len(delimiter))
             return
-        except ValueError:
+        except (OSError, ValueError):
             pass
         last = full[-len(delimiter):]
 
@@ -205,7 +226,7 @@ def read_block(f, offset, length, delimiter=None):
         try:
             f.seek(start + length)
             seek_delimiter(f, delimiter, 2**16)
-        except ValueError:
+        except (OSError, ValueError):
             f.seek(0, 2)
         end = f.tell()
 

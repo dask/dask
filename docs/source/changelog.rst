@@ -10,7 +10,89 @@ DataFrame
 - Add ``dd.tseries.Resampler.agg`` (:pr:`3202`) `Richard Postelnik`_
 
 
-0.16.X / 2017-12-DD
+0.17.1 / 2018-02-22
+-------------------
+
+Array
++++++
+
+- Corrected dimension chunking in indices (:issue:`3166`, :pr:`3167`) `Simon Perkins`_
+- Inline ``store_chunk`` calls for ``store``'s ``return_stored`` option (:pr:`3153`) `John A Kirkham`_
+- Compatibility with struct dtypes for NumPy 1.14.1 release (:pr:`3187`) `Matthew Rocklin`_
+
+DataFrame
++++++++++
+
+- Bugfix to allow column assignment of pandas datetimes(:pr:`3164`) `Max Epstein`_
+
+
+Bag
++++
+
+
+Core
+++++
+
+- New file-system for HTTP(S), allowing direct loading from specific URLs (:pr:`3160`) `Martin Durant`_
+- Fix bug when tokenizing partials with no keywords (:pr:`3191`) `Matthew Rocklin`_
+- Use more recent LZ4 API (:pr:`3157`) `Thrasibule`_
+- Introduce output stream parameter for progress bar (:pr:`3185`) `Dieter Weber`_
+
+
+0.17.0 / 2018-02-09
+-------------------
+
+Array
++++++
+
+- Added a support object-type arrays for nansum, nanmin, and nanmax (:issue:`3133`) `Keisuke Fujii`_
+- Update error handling when len is called with empty chunks (:issue:`3058`) `Xander Johnson`_
+- Fixes a metadata bug with ``store``'s ``return_stored`` option (:pr:`3064`) `John A Kirkham`_
+- Fix a bug in ``optimization.fuse_slice`` to properly handle when first input is ``None`` (:pr:`3076`) `James Bourbeau`_
+- Support arrays with unknown chunk sizes in percentile (:pr:`3107`) `Matthew Rocklin`_
+- Tokenize scipy.sparse arrays and np.matrix (:pr:`3060`) `Roman Yurchak`_
+
+
+DataFrame
++++++++++
+- Support month timedeltas in repartition(freq=...) (:pr:`3110`) `Matthew Rocklin`_
+- Avoid mutation in dataframe groupby tests (:pr:`3118`) `Matthew Rocklin`_
+- ``read_csv``, ``read_table``, and ``read_parquet`` accept iterables of paths
+  (:pr:`3124`) `Jim Crist`_
+- Deprecates the ``dd.to_delayed`` *function* in favor of the existing method
+  (:pr:`3126`) `Jim Crist`_
+- Return dask.arrays from df.map_partitions calls when the UDF returns a numpy array (:pr:`3147`) `Matthew Rocklin`_
+- Change handling of ``columns`` and ``index`` in ``dd.read_parquet`` to be more
+  consistent, especially in handling of multi-indices (:pr:`3149`) `Jim Crist`_
+- fastparquet append=True allowed to create new dataset (:pr:`3097`) `Martin Durant`_
+- dtype rationalization for sql queries (:pr:`3100`) `Martin Durant`_
+
+Bag
++++
+
+- Document ``bag.map_paritions`` function may recieve either a list or generator. (:pr:`3150`) `Nir`_
+
+Core
+++++
+
+- Change default task ordering to prefer nodes with few dependents and then
+  many downstream dependencies (:pr:`3056`) `Matthew Rocklin`_
+- Add color= option to visualize to color by task order (:pr:`3057`) (:pr:`3122`) `Matthew Rocklin`_
+- Deprecate ``dask.bytes.open_text_files`` (:pr:`3077`) `Jim Crist`_
+- Remove short-circuit hdfs reads handling due to maintenance costs. May be
+  re-added in a more robust manner later (:pr:`3079`) `Jim Crist`_
+- Add ``dask.base.optimize`` for optimizing multiple collections without
+  computing. (:pr:`3071`) `Jim Crist`_
+- Rename ``dask.optimize`` module to ``dask.optimization`` (:pr:`3071`) `Jim Crist`_
+- Change task ordering to do a full traversal (:pr:`3066`) `Matthew Rocklin`_
+- Adds an ``optimize_graph`` keyword to all ``to_delayed`` methods to allow
+  controlling whether optimizations occur on conversion. (:pr:`3126`) `Jim Crist`_
+- Support using ``pyarrow`` for hdfs integration (:pr:`3123`) `Jim Crist`_
+- Move HDFS integration and tests into dask repo (:pr:`3083`) `Jim Crist`_
+- Remove write_bytes (:pr:`3116`) `Jim Crist`_
+
+
+0.16.1 / 2018-01-09
 -------------------
 
 Array
@@ -31,6 +113,7 @@ bounds indexes (:pr:`2967`) `Stephan Hoyer`_
 - Compatability for changes to structured arrays in the upcoming NumPy 1.14 release (:pr:`2964`) `Tom Augspurger`_
 - Add ``block`` (:pr:`2650`) `John A Kirkham`_
 - Add ``frompyfunc`` (:pr:`3030`) `Jim Crist`_
+- Add the ``return_stored`` option to ``store`` for chaining stored results (:pr:`2980`) `John A Kirkham`_
 
 DataFrame
 +++++++++
@@ -44,7 +127,7 @@ DataFrame
 - Correctly handle the column name (`df.columns.name`) when reading in ``dd.read_parquet`` (:pr:2973`) `Tom Augspurger`_
 - Fixed ``dd.concat`` losing the index dtype when the data contained a categorical (:issue:`2932`) `Tom Augspurger`_
 - Add ``dd.Series.rename`` (:pr:`3027`) `Jim Crist`_
-- ``DataFrame.merge()`` (:pr:`2960`) now supports merging on a combination of columns and the index `Jon Mease`_
+- ``DataFrame.merge()`` now supports merging on a combination of columns and the index (:pr:`2960`) `Jon Mease`_
 - Removed the deprecated ``dd.rolling*`` methods, in preperation for their removal in the next pandas release (:pr:`2995`) `Tom Augspurger`_
 - Fix metadata inference bug in which single-partition series were mistakenly special cased (:pr:`3035`) `Jim Crist`_
 - Add support for ``Series.str.cat`` (:pr:`3028`) `Jim Crist`_
@@ -54,6 +137,7 @@ Core
 ++++
 
 - Improve 32-bit compatibility (:pr:`2937`) `Matthew Rocklin`_
+- Change task prioritization to avoid upwards branching (:pr:`3017`) `Matthew Rocklin`_
 
 
 0.16.0 / 2017-11-17
@@ -901,3 +985,10 @@ Other
 .. _`Albert DeFusco`: https://github.com/AlbertDeFusco
 .. _`Markus Gonser`: https://github.com/magonser
 .. _`Martijn Arts`: https://github.com/mfaafm
+.. _`Jon Mease`: https://github.com/jmmease
+.. _`Xander Johnson`: https://github.com/metasyn
+.. _`Nir`: https://github.com/nirizr
+.. _`Keisuke Fujii`: https://github.com/fujiisoup
+.. _`Roman Yurchak`: https://github.com/rth
+.. _`Max Epstein`: https://github.com/MaxPowerWasTaken
+.. _`Simon Perkins`: https://github.com/sjperkins
