@@ -460,8 +460,7 @@ def shuffle_group(df, col, stage, k, npartitions):
     npartitions, k, stage = [np.array(x, dtype=np.min_scalar_type(x))[()]
                              for x in [npartitions, k, stage]]
 
-    c = np.mod(c, npartitions).astype(typ)
-    c = np.mod(c, npartitions, out=c)
+    c = np.mod(c, npartitions).astype(typ, copy=False)
     c = np.floor_divide(c, k ** stage, out=c)
     c = np.mod(c, k, out=c)
 
@@ -470,9 +469,7 @@ def shuffle_group(df, col, stage, k, npartitions):
     locations = locations.cumsum()
     parts = [df2.iloc[a:b] for a, b in zip(locations[:-1], locations[1:])]
 
-    result = dict(zip(range(k), parts))
-
-    return result
+    return dict(zip(range(k), parts))
 
 
 def shuffle_group_3(df, col, npartitions, p):
