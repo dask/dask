@@ -318,7 +318,7 @@ As an example, consider the following file that creates a
            if self.print_count and scheduler is not None
                print("Total workers:", len(scheduler.workers))
 
-   @click.command
+   @click.command()
    @click.option("--print-count/--no-print-count", default=False)
    def dask_setup(scheduler, print_count):
        plugin = MyPlugin(print_count)
