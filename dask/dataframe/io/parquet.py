@@ -520,6 +520,8 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
 
     if isinstance(categories, string_types):
         categories = [categories]
+    elif categories is None:
+        categories = []
     else:
         categories = list(categories)
 
@@ -602,12 +604,40 @@ def _get_pyarrow_dtypes(schema, categories):
 
 def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
                                 partitions, categories):
+    import pyarrow as pa
+
     with fs.open(piece.path, mode='rb') as f:
         table = piece.read(columns=index_cols + columns,
                            partitions=partitions,
                            use_pandas_metadata=True,
                            file=f)
-    df = table.to_pandas(categories=categories)
+
+    if pa.__version__ < distutils.version.LooseVersion('0.8.0'):
+        df = table.to_pandas()
+        for cat in categories:
+            df[cat] = df[cat].astype('category')
+    elif pa.__version__ < distutils.version.LooseVersion('0.9.0'):
+        # PyArrow can only reliably dictionary encode array that consist of
+        # a single chunk. The necessary C++ functionality for a whole column is
+        # missing from the Python interface.
+        remaining_cats = []
+        for i in range(table.num_columns):
+            col = table.column(i)
+            if col.name in categories:
+                new_col = col
+                if col.data.num_chunks != 1:
+                    remaining_cats.append(col.name)
+                else:
+                    array = col.data.chunk(0)
+                    array = array.dictionary_encode()
+                    new_col = pa.column(col.name, array)
+                    table = table.remove_column(i)
+                    table = table.add_column(i, new_col)
+        df = table.to_pandas()
+        for cat in remaining_cats:
+            df[cat] = df[cat].astype('category')
+    else:
+        df = table.to_pandas(categories=categories)
     has_index = not isinstance(df.index, pd.RangeIndex)
 
     if not has_index and index_cols:

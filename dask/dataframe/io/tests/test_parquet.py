@@ -892,11 +892,6 @@ def test_pyarrow_raises_filters_categoricals(tmpdir):
     with pytest.raises(NotImplementedError) as m:
         dd.read_parquet(tmp, engine="pyarrow", filters=["A>1"])
 
-    with pytest.raises(NotImplementedError) as m:
-        dd.read_parquet(tmp, engine="pyarrow", categories=['A'])
-
-    assert m.match("Categorical reads not yet ")
-
 
 def test_read_no_metadata(tmpdir, engine):
     # use pyarrow.parquet to create a parquet file without
