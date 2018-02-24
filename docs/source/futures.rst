@@ -245,18 +245,19 @@ in the background.
 
 .. code-block:: python
 
-   for future in as_completed(futures, results=True):
+   for future, result in as_completed(futures, with_results=True):
+       # y = future.result()  # don't need this
       ...
 
 Or collect futures all futures in batches that had arrived since the last iteration
 
 .. code-block:: python
 
-   for batch in as_completed(futures, results=True).batches():
-      for future in batch:
+   for batch in as_completed(futures, with_results=True).batches():
+      for future, result in batch:
           ...
 
-Additionally, for iterative algorithms you can add more futures into the ``as_completed`` iterator
+Additionally, for iterative algorithms you can add more futures into the ``as_completed`` iterator *during* iteration.
 
 .. code-block:: python
 
@@ -368,7 +369,7 @@ thread that does not take up a slot within the Dask worker:
 
    def monitor(device):
       client = get_client()
-      secede()
+      secede()  # remove this task from the thread pool
       while True:
           data = device.read_data()
           future = client.submit(process, data)
@@ -377,11 +378,11 @@ thread that does not take up a slot within the Dask worker:
 If you intend to do more work in the same thread after waiting on client work,
 you may want to explicitly block until the thread is able to *rejoin* the
 thread pool.  This allows some control over the number of threads that are
-created.
+created and stops too many threads from being active at once, over-saturating your hardware.
 
 .. code-block:: python
 
-   def f(n):
+   def f(n):  # assume that this runs as a task
       client = get_client()
 
       secede()  # secede while we wait for results to come back
@@ -496,6 +497,21 @@ Locks
 You can also hold onto cluster-wide locks using the ``Lock`` object.
 This lock can either be given a consistent name, or you can pass the lock
 object around itself.
+
+Using a consistent name is convenient when you want to lock some known named resource.
+
+.. code-block:: python
+
+   from dask.distributed import Lock
+
+   def load(fn):
+       with Lock('production-database'):
+           # read data from filename using some sensitive source
+           return ...
+
+   futures = client.map(load, filenames)
+
+Passing around a lock works as well, and is easier when you want to create short-term locks for a particular situation.
 
 .. code-block:: python
 
