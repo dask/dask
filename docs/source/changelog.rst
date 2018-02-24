@@ -1001,3 +1001,4 @@ Other
 .. _`Roman Yurchak`: https://github.com/rth
 .. _`Max Epstein`: https://github.com/MaxPowerWasTaken
 .. _`Simon Perkins`: https://github.com/sjperkins
+.. _`Richard Postelnik`: https://github.com/postelrich
