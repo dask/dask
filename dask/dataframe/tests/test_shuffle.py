@@ -5,6 +5,7 @@ import pickle
 import numpy as np
 import string
 from copy import copy
+import pandas.util.testing as tm
 
 import dask
 import dask.dataframe as dd
@@ -710,3 +711,23 @@ def test_remove_nans():
             params = [none_val if x is None else conv(x) for x in inputs]
             expected = [conv(x) for x in expected]
             assert remove_nans(params) == expected
+
+
+@pytest.mark.slow
+def test_gh_2730():
+    large = pd.DataFrame({'KEY': np.arange(0, 50000)})
+    small = pd.DataFrame({'KEY': np.arange(25, 500)})
+
+    dd_left = dd.from_pandas(small, npartitions=3)
+    dd_right = dd.from_pandas(large, npartitions=257)
+
+    with dask.set_options(shuffle='tasks', get=dask.get):
+        dd_merged = dd_left.merge(dd_right, how='inner', on='KEY')
+        result = dd_merged.compute()
+
+    expected = large.merge(small, how='inner', on='KEY')
+
+    tm.assert_frame_equal(
+        result.sort_values('KEY').reset_index(drop=True),
+        expected
+    )
