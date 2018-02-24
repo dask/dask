@@ -283,11 +283,12 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
                      how, npartitions, suffixes, shuffle, indicator)
     name = 'hash-join-' + token
 
-    dsk = dict(((name, i), (methods.merge, (lhs2._name, i), (rhs2._name, i),
-                            how, left_on, right_on,
-                            left_index, right_index, indicator,
-                            suffixes, lhs._meta, rhs._meta))
-               for i in range(npartitions))
+    dsk = {(name, i): (methods.merge,
+                       (lhs2._name, i), (rhs2._name, i),
+                       how, left_on, right_on,
+                       left_index, right_index, indicator,
+                       suffixes, lhs._meta, rhs._meta)
+           for i in range(npartitions)}
 
     divisions = [None] * (npartitions + 1)
     return new_dd_object(toolz.merge(lhs2.dask, rhs2.dask, dsk),

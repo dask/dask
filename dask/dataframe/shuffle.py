@@ -203,6 +203,7 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32,
     """
     if not isinstance(index, _Frame):
         index = df._select_columns_or_index(index)
+
     partitions = index.map_partitions(partitioning_index,
                                       npartitions=npartitions or df.npartitions,
                                       meta=pd.Series([0]))
@@ -363,6 +364,7 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
     if npartitions is not None and npartitions != df.npartitions:
         parts = [i % df.npartitions for i in range(npartitions)]
         token = tokenize(df2, npartitions)
+
         dsk = {('repartition-group-' + token, i): (shuffle_group_2, k, column)
                for i, k in enumerate(df2.__dask_keys__())}
         for p in range(npartitions):
@@ -442,6 +444,11 @@ def shuffle_group_get(g_head, i):
 
 
 def shuffle_group(df, col, stage, k, npartitions):
+    """ Splits dataframe into groups
+
+    The group is determined by their final partition, and which stage we are in
+    in the shuffle
+    """
     if col == '_partitions':
         ind = df[col]
     else:
@@ -449,12 +456,11 @@ def shuffle_group(df, col, stage, k, npartitions):
 
     c = ind._values
     typ = np.min_scalar_type(npartitions * 2)
-    c = c.astype(typ)
 
     npartitions, k, stage = [np.array(x, dtype=np.min_scalar_type(x))[()]
                              for x in [npartitions, k, stage]]
 
-    c = np.mod(c, npartitions, out=c)
+    c = np.mod(c, npartitions).astype(typ, copy=False)
     c = np.floor_divide(c, k ** stage, out=c)
     c = np.mod(c, k, out=c)
 

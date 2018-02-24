@@ -2,6 +2,27 @@ Changelog
 =========
 
 
+0.XX.X / 2018-MM-DD
+-------------------
+
+Array
++++++
+
+
+DataFrame
++++++++++
+
+-  Fixed bug in shuffle due to aggressive truncation (:pr:`3201`) `Matthew Rocklin`_
+
+
+Bag
++++
+
+
+Core
+++++
+
+
 0.17.1 / 2018-02-22
 -------------------
 
