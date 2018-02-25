@@ -693,6 +693,7 @@ def _write_partition_pyarrow(df, path, fs, filename, write_index,
 
     if partition_on:
         parquet.write_to_dataset(t, path, partition_cols=partition_on,
+                                 preserve_index=write_index,
                                  filesystem=fs, **kwargs)
     else:
         with fs.open(filename, 'wb') as fil:
