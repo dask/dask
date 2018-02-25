@@ -171,6 +171,7 @@ then you should start here.
    delayed.rst
    futures.rst
    machine-learning.rst
+   api.rst
 
 **Scheduling**
 
@@ -178,36 +179,16 @@ Schedulers execute task graphs.  Dask currently has two main schedulers, one
 for single machine processing using threads or processes, and one for
 distributed memory clusters.
 
+* :doc:`scheduling`
 * :doc:`distributed`
-* :doc:`scheduler-overview`
-* :doc:`Single machine scheduler<shared>`
-* :doc:`scheduling-policy`
 
 .. toctree::
    :maxdepth: 1
    :hidden:
    :caption: Scheduling
 
+   scheduling.rst
    distributed.rst
-   scheduler-overview.rst
-   shared.rst
-   scheduling-policy.rst
-
-**Inspecting and Diagnosing Graphs**
-
-Parallel code can be tricky to debug and profile. Dask provides a few tools to
-help make debugging and profiling graph execution easier.
-
-* :doc:`inspect`
-* :doc:`diagnostics`
-
-.. toctree::
-   :maxdepth: 1
-   :hidden:
-   :caption: Diagnostics
-
-   inspect.rst
-   diagnostics.rst
 
 **Graphs**
 
@@ -232,6 +213,23 @@ often a better choice.  If you are a *core developer*, then you should start her
    custom-graphs.rst
    optimize.rst
 
+**Inspecting and Diagnosing Graphs**
+
+Parallel code can be tricky to debug and profile. Dask provides a few tools to
+help make debugging and profiling graph execution easier.
+
+* :doc:`inspect`
+* :doc:`diagnostics`
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: Diagnostics
+
+   inspect.rst
+   diagnostics.rst
+
+
 **Help & reference**
 
 * :doc:`debugging`
@@ -245,7 +243,10 @@ often a better choice.  If you are a *core developer*, then you should start her
 * :doc:`bytes`
 * :doc:`remote-data-services`
 * :doc:`custom-collections`
+* :doc:`shared`
+* :doc:`scheduling-policy`
 * :doc:`cite`
+* :doc:`funding`
 
 .. toctree::
    :maxdepth: 1
@@ -263,6 +264,8 @@ often a better choice.  If you are a *core developer*, then you should start her
    bytes.rst
    remote-data-services.rst
    custom-collections.rst
+   shared.rst
+   scheduling-policy.rst
    cite.rst
    funding.rst
 
