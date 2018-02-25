@@ -10,7 +10,8 @@ import numpy as np
 import pandas as pd
 
 from ..core import DataFrame, Series
-from ..utils import UNKNOWN_CATEGORIES
+from ..utils import (clear_known_categories, strip_unknown_categories,
+                     UNKNOWN_CATEGORIES)
 from ...base import tokenize
 from ...compatibility import PY3, string_types
 from ...delayed import delayed
@@ -561,6 +562,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
     meta = _meta_from_dtypes(all_columns, dtypes, index_names, column_index_names)
+    meta = clear_known_categories(meta, cols=categories)
 
     if out_type == Series:
         assert len(meta.columns) == 1
@@ -582,6 +584,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
             for i, piece in enumerate(dataset.pieces)
         }
     else:
+        meta = strip_unknown_categories(meta)
         divisions = (None, None)
         task_plan = {(task_name, 0): meta}
 
@@ -612,29 +615,9 @@ def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
                            use_pandas_metadata=True,
                            file=f)
 
-    if pa.__version__ < distutils.version.LooseVersion('0.8.0'):
+    if pa.__version__ < distutils.version.LooseVersion('0.9.0'):
         df = table.to_pandas()
         for cat in categories:
-            df[cat] = df[cat].astype('category')
-    elif pa.__version__ < distutils.version.LooseVersion('0.9.0'):
-        # PyArrow can only reliably dictionary encode array that consist of
-        # a single chunk. The necessary C++ functionality for a whole column is
-        # missing from the Python interface.
-        remaining_cats = []
-        for i in range(table.num_columns):
-            col = table.column(i)
-            if col.name in categories:
-                new_col = col
-                if col.data.num_chunks != 1:
-                    remaining_cats.append(col.name)
-                else:
-                    array = col.data.chunk(0)
-                    array = array.dictionary_encode()
-                    new_col = pa.column(col.name, array)
-                    table = table.remove_column(i)
-                    table = table.add_column(i, new_col)
-        df = table.to_pandas()
-        for cat in remaining_cats:
             df[cat] = df[cat].astype('category')
     else:
         df = table.to_pandas(categories=categories)

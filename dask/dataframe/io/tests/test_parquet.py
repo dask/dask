@@ -889,7 +889,7 @@ def test_pyarrow_raises_filters_categoricals(tmpdir):
 
     df.to_parquet(tmp, write_index=False, engine="pyarrow")
 
-    with pytest.raises(NotImplementedError) as m:
+    with pytest.raises(NotImplementedError):
         dd.read_parquet(tmp, engine="pyarrow", filters=["A>1"])
 
 
