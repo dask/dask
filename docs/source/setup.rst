@@ -271,7 +271,7 @@ Windows
 
   - Running ``dask-worker`` processes on Windows is well supported, performant, and without limit.
 
-If you wish to run in a primarily Windows environment, it is recommneded
+If you wish to run in a primarily Windows environment, it is recommended
 to run a ``dask-scheduler`` on a linux or MacOSX environment, with ``dask-worker`` workers
 on the Windows boxes. This works because the scheduler environment is de-coupled from that of
 the workers.
