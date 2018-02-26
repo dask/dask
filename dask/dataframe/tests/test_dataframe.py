@@ -709,6 +709,17 @@ def test_size():
     assert_eq(d.index.size, full.index.size)
 
 
+def test_shape():
+    result = d.shape[0].compute()
+    assert_eq(result, len(full))
+
+    result = d.shape[1].compute()
+    assert_eq(result, len(full.columns))
+
+    result = d.a.shape[0].compute()
+    assert_eq(result, len(full.a))
+
+
 def test_nbytes():
     assert_eq(d.a.nbytes, full.a.nbytes)
     assert_eq(d.index.nbytes, full.index.nbytes)
