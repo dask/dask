@@ -13,6 +13,7 @@ DataFrame
 +++++++++
 
 -  Fixed bug in shuffle due to aggressive truncation (:pr:`3201`) `Matthew Rocklin`_
+- Support specifying categorical columns on ``read_parquet`` with ``categories=[…]`` for ``engine="pyarrow"`` (:pr:`3177`) `Uwe Korn`_
 
 
 Bag
@@ -37,7 +38,6 @@ DataFrame
 +++++++++
 
 - Bugfix to allow column assignment of pandas datetimes(:pr:`3164`) `Max Epstein`_
-
 
 Bag
 +++
