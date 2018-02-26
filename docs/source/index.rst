@@ -190,7 +190,27 @@ distributed memory clusters.
    scheduling.rst
    distributed.rst
 
-**Graphs**
+**Diagnosing Perofmrance**
+
+Parallel code can be tricky to debug and profile. Dask provides a several tools
+to help make debugging and profiling graph execution easier.
+
+* :doc:`understanding-performance`
+* :doc:`graphviz`
+* :doc:`diagnostics-single`
+* :doc:`diagnostics-distributed`
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: Diagnostics
+
+   understanding-performance.rst
+   graphviz.rst
+   diagnostics-single.rst
+   diagnostics-distributed.rst
+
+**Graph Internals**
 
 Internally Dask encodes algorithms in a simple format involving Python dicts,
 tuples, and functions.  This graph format can be used in isolation from the
@@ -213,22 +233,6 @@ often a better choice.  If you are a *core developer*, then you should start her
    custom-graphs.rst
    optimize.rst
 
-**Inspecting and Diagnosing Graphs**
-
-Parallel code can be tricky to debug and profile. Dask provides a few tools to
-help make debugging and profiling graph execution easier.
-
-* :doc:`inspect`
-* :doc:`diagnostics`
-
-.. toctree::
-   :maxdepth: 1
-   :hidden:
-   :caption: Diagnostics
-
-   inspect.rst
-   diagnostics.rst
-
 
 **Help & reference**
 
@@ -247,6 +251,7 @@ help make debugging and profiling graph execution easier.
 * :doc:`scheduling-policy`
 * :doc:`cite`
 * :doc:`funding`
+* :doc:`logos`
 
 .. toctree::
    :maxdepth: 1
@@ -268,6 +273,7 @@ help make debugging and profiling graph execution easier.
    scheduling-policy.rst
    cite.rst
    funding.rst
+   logos.rst
 
 Dask is supported by `Anaconda Inc`_ and develops under the BSD 3-clause license.
 
