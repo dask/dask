@@ -309,6 +309,8 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
                        categories, pf.schema, pf.cats, pf.dtypes,
                        pf.file_scheme, storage_name_mapping)
            for i, rg in enumerate(rgs)}
+    for catcol in pf.cats:
+        meta[catcol] = meta[catcol].cat.set_categories(pf.cats[catcol])
 
     if not dsk:
         # empty dataframe
