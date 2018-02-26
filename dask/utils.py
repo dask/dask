@@ -893,6 +893,10 @@ def is_arraylike(x):
     >>> is_arraylike('cat')
     False
     """
-    return (hasattr(x, '__array__') and
+    import dask.dataframe as dd
+    if isinstance(x, (dd.DataFrame, dd.Series)):
+        return False
+    else:
+        return (hasattr(x, '__array__') and
             hasattr(x, 'shape') and x.shape and
             hasattr(x, 'dtype'))
