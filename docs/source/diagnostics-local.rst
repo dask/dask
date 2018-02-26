@@ -1,9 +1,9 @@
-Diagnostics (single)
+Diagnostics (local)
 ====================
 
 Profiling parallel code can be challening, but ``dask.diagnostics`` provides
 functionality to aid in profiling and inspecting execution with the
-:doc:`single-machine task scheduler <scheduling>`.
+:doc:`local task scheduler <scheduling>`.
 
 This page describes the following few built-in options:
 
@@ -130,13 +130,6 @@ the number of bytes in the scheduler cache:
 
 Example
 -------
-
-.. autosummary::
-   Profiler
-   ResourceProfiler
-   CacheProfiler
-   visualize
-
 
 As an example to demonstrate using the diagnostics, we'll profile some linear
 algebra done with ``dask.array``. We'll create a random array, take its QR

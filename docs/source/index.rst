@@ -176,7 +176,7 @@ then you should start here.
 **Scheduling**
 
 Schedulers execute task graphs.  Dask currently has two main schedulers, one
-for single machine processing using threads or processes, and one for
+for local processing using threads or processes, and one for
 distributed memory clusters.
 
 * :doc:`scheduling`
@@ -197,7 +197,7 @@ to help make debugging and profiling graph execution easier.
 
 * :doc:`understanding-performance`
 * :doc:`graphviz`
-* :doc:`diagnostics-single`
+* :doc:`diagnostics-local`
 * :doc:`diagnostics-distributed`
 
 .. toctree::
@@ -207,7 +207,7 @@ to help make debugging and profiling graph execution easier.
 
    understanding-performance.rst
    graphviz.rst
-   diagnostics-single.rst
+   diagnostics-local.rst
    diagnostics-distributed.rst
 
 **Graph Internals**

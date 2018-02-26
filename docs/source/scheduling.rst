@@ -122,7 +122,7 @@ you may wish to rerun your computation under the single-threaded scheduler,
 where these tools will function properly.
 
 
-Dask.Distributed (local)
+Dask Distributed (local)
 ------------------------
 
 .. code-block:: python
@@ -147,7 +147,7 @@ You can read more about using the dask.distributed scheduler on a single machine
 :doc:`these docs <setup/single-distributed>`.
 
 
-Dask.Distributed (Cluster)
+Dask Distributed (Cluster)
 --------------------------
 
 You can also run Dask on a distributed cluster.
