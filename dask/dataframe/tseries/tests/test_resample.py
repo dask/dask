@@ -53,6 +53,7 @@ def test_resample_agg_passes_kwargs():
     index = pd.date_range('2000-01-01', '2000-02-15', freq='h')
     ps = pd.Series(range(len(index)), index=index)
     ds = dd.from_pandas(ps, npartitions=2)
+
     def foo(series, *args, bar=1, **kwargs):
         return bar
     assert_eq(ds.resample('2h').agg(foo, bar=2),
