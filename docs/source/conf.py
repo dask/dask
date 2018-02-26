@@ -181,21 +181,21 @@ htmlhelp_basename = 'daskdoc'
 # -- Options for LaTeX output --------------------------------------------------
 
 latex_elements = {
-# The paper size ('letterpaper' or 'a4paper').
-#'papersize': 'letterpaper',
+    # The paper size ('letterpaper' or 'a4paper').
+    #'papersize': 'letterpaper',
 
-# The font size ('10pt', '11pt' or '12pt').
-#'pointsize': '10pt',
+    # The font size ('10pt', '11pt' or '12pt').
+    #'pointsize': '10pt',
 
-# Additional stuff for the LaTeX preamble.
-#'preamble': '',
+    # Additional stuff for the LaTeX preamble.
+    #'preamble': '',
 }
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'dask.tex', u'dask Documentation',
-   u'Dask Development Team', 'manual'),
+    ('index', 'dask.tex', u'dask Documentation',
+     u'Dask Development Team', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -238,9 +238,9 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'dask', u'dask Documentation',
-   u'Dask Development Team', 'dask', 'One line description of project.',
-   'Miscellaneous'),
+    ('index', 'dask', u'dask Documentation',
+     u'Dask Development Team', 'dask', 'One line description of project.',
+     'Miscellaneous'),
 ]
 
 # Documents to append as an appendix to all manuals.

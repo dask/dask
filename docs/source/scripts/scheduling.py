@@ -10,32 +10,36 @@ import matplotlib.pyplot as plt
 def noop(x):
     pass
 
+
 nrepetitions = 1
+
 
 def trivial(width, height):
     """ Embarrassingly parallel dask """
     d = {('x', 0, i): i for i in range(width)}
     for j in range(1, height):
         d.update({('x', j, i): (noop, ('x', j - 1, i))
-                                  for i in range(width)})
+                  for i in range(width)})
     return d, [('x', height - 1, i) for i in range(width)]
+
 
 def crosstalk(width, height, connections):
     """ Natural looking dask with some inter-connections """
     d = {('x', 0, i): i for i in range(width)}
     for j in range(1, height):
         d.update({('x', j, i): (noop, [('x', j - 1, randint(0, width))
-                                            for _ in range(connections)])
-                    for i in range(width)})
+                                       for _ in range(connections)])
+                  for i in range(width)})
     return d, [('x', height - 1, i) for i in range(width)]
+
 
 def dense(width, height):
     """ Full barriers between each step """
     d = {('x', 0, i): i for i in range(width)}
     for j in range(1, height):
         d.update({('x', j, i): (noop, [('x', j - 1, k)
-                                            for k in range(width)])
-                    for i in range(width)})
+                                       for k in range(width)])
+                  for i in range(width)})
     return d, [('x', height - 1, i) for i in range(width)]
 
 
