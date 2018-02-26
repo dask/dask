@@ -2081,6 +2081,8 @@ class Worker(WorkerBase):
     @gen.coroutine
     def execute(self, key, report=False):
         executor_error = None
+        if self.status in ('closing', 'closed'):
+            return
         try:
             if key not in self.executing or key not in self.task_state:
                 return

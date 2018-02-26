@@ -34,7 +34,7 @@ class LocalCluster(object):
     scheduler_port: int
         Port of the scheduler.  8786 by default, use 0 to choose a random port
     silence_logs: logging level
-        Level of logs to print out to stdout.  ``logging.CRITICAL`` by default.
+        Level of logs to print out to stdout.  ``logging.WARN`` by default.
         Use a falsey value like False or None for no change.
     ip: string
         IP address on which the scheduler will listen, defaults to only localhost
@@ -67,7 +67,7 @@ class LocalCluster(object):
     """
     def __init__(self, n_workers=None, threads_per_worker=None, processes=True,
                  loop=None, start=True, ip=None, scheduler_port=0,
-                 silence_logs=logging.CRITICAL, diagnostics_port=8787,
+                 silence_logs=logging.WARN, diagnostics_port=8787,
                  services={}, worker_services={}, service_kwargs=None, **worker_kwargs):
         self.status = None
         self.processes = processes
