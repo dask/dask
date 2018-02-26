@@ -306,29 +306,30 @@ def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
     assert_eq(df, ddf)
 
 
-def test_categorical(tmpdir):
-    check_fastparquet()
+@write_read_engines_xfail
+def test_categorical(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     df = pd.DataFrame({'x': ['a', 'b', 'c'] * 100}, dtype='category')
     ddf = dd.from_pandas(df, npartitions=3)
-    dd.to_parquet(ddf, tmp)
+    dd.to_parquet(ddf, tmp, engine=write_engine)
 
-    ddf2 = dd.read_parquet(tmp, categories='x')
+    ddf2 = dd.read_parquet(tmp, categories='x', engine=read_engine)
     assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
 
-    ddf2 = dd.read_parquet(tmp, categories=['x'])
+    ddf2 = dd.read_parquet(tmp, categories=['x'], engine=read_engine)
     assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
 
     # autocat
-    ddf2 = dd.read_parquet(tmp)
-    assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
+    if read_engine != 'pyarrow':
+        ddf2 = dd.read_parquet(tmp, engine=read_engine)
+        assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
 
-    ddf2.loc[:1000].compute()
-    df.index.name = 'index'  # defaults to 'index' in this case
-    assert assert_eq(df, ddf2)
+        ddf2.loc[:1000].compute()
+        df.index.name = 'index'  # defaults to 'index' in this case
+        assert assert_eq(df, ddf2)
 
     # dereference cats
-    ddf2 = dd.read_parquet(tmp, categories=[])
+    ddf2 = dd.read_parquet(tmp, categories=[], engine=read_engine)
 
     ddf2.loc[:1000].compute()
     assert (df.x == ddf2.x).all()
@@ -888,13 +889,8 @@ def test_pyarrow_raises_filters_categoricals(tmpdir):
 
     df.to_parquet(tmp, write_index=False, engine="pyarrow")
 
-    with pytest.raises(NotImplementedError) as m:
+    with pytest.raises(NotImplementedError):
         dd.read_parquet(tmp, engine="pyarrow", filters=["A>1"])
-
-    with pytest.raises(NotImplementedError) as m:
-        dd.read_parquet(tmp, engine="pyarrow", categories=['A'])
-
-    assert m.match("Categorical reads not yet ")
 
 
 def test_read_no_metadata(tmpdir, engine):

@@ -10,7 +10,8 @@ import numpy as np
 import pandas as pd
 
 from ..core import DataFrame, Series
-from ..utils import UNKNOWN_CATEGORIES
+from ..utils import (clear_known_categories, strip_unknown_categories,
+                     UNKNOWN_CATEGORIES)
 from ...base import tokenize
 from ...compatibility import PY3, string_types
 from ...delayed import delayed
@@ -518,8 +519,12 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     if filters is not None:
         raise NotImplementedError("Predicate pushdown not implemented")
 
-    if categories is not None:
-        raise NotImplementedError("Categorical reads not yet implemented")
+    if isinstance(categories, string_types):
+        categories = [categories]
+    elif categories is None:
+        categories = []
+    else:
+        categories = list(categories)
 
     if isinstance(columns, tuple):
         columns = list(columns)
@@ -553,10 +558,11 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
 
     all_columns = index_names + column_names
 
-    dtypes = _get_pyarrow_dtypes(schema)
+    dtypes = _get_pyarrow_dtypes(schema, categories)
     dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
     meta = _meta_from_dtypes(all_columns, dtypes, index_names, column_index_names)
+    meta = clear_known_categories(meta, cols=categories)
 
     if out_type == Series:
         assert len(meta.columns) == 1
@@ -573,34 +579,48 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
                              column_names,
                              index_names,
                              out_type == Series,
-                             dataset.partitions)
+                             dataset.partitions,
+                             categories)
             for i, piece in enumerate(dataset.pieces)
         }
     else:
+        meta = strip_unknown_categories(meta)
         divisions = (None, None)
         task_plan = {(task_name, 0): meta}
 
     return out_type(task_plan, task_name, meta, divisions)
 
 
-def _get_pyarrow_dtypes(schema):
+def _get_pyarrow_dtypes(schema, categories):
     dtypes = {}
     for i in range(len(schema)):
         field = schema[i]
         numpy_dtype = field.type.to_pandas_dtype()
         dtypes[field.name] = numpy_dtype
 
+    if categories:
+        for cat in categories:
+            dtypes[cat] = "category"
+
     return dtypes
 
 
 def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
-                                partitions):
+                                partitions, categories):
+    import pyarrow as pa
+
     with fs.open(piece.path, mode='rb') as f:
         table = piece.read(columns=index_cols + columns,
                            partitions=partitions,
                            use_pandas_metadata=True,
                            file=f)
-    df = table.to_pandas()
+
+    if pa.__version__ < distutils.version.LooseVersion('0.9.0'):
+        df = table.to_pandas()
+        for cat in categories:
+            df[cat] = df[cat].astype('category')
+    else:
+        df = table.to_pandas(categories=categories)
     has_index = not isinstance(df.index, pd.RangeIndex)
 
     if not has_index and index_cols:
