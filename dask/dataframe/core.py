@@ -305,6 +305,19 @@ class _Frame(Base, OperatorMethodMixin):
                               split_every=False)
 
     @property
+    def shape(self):
+        """
+        Return a tuple representing the dimensionality of the DataFrame.
+        """
+        from dask.delayed import delayed
+        if isinstance(self._meta, pd.DataFrame):
+            col_size = len(self.columns)
+            row_size = delayed(int)(self.size/col_size)
+            return delayed(tuple)((row_size, col_size))
+        else:
+            return delayed(tuple)((self.size,))
+
+    @property
     def _meta_nonempty(self):
         """ A non-empty version of `_meta` with fake data."""
         return meta_nonempty(self._meta)
