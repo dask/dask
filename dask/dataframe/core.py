@@ -312,7 +312,7 @@ class _Frame(Base, OperatorMethodMixin):
         from dask.delayed import delayed
         if isinstance(self._meta, pd.DataFrame):
             col_size = len(self.columns)
-            row_size = delayed(int)(self.size/col_size)
+            row_size = delayed(int)(self.size / col_size)
             return delayed(tuple)((row_size, col_size))
         else:
             return delayed(tuple)((self.size,))
