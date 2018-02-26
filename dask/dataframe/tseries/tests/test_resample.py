@@ -38,6 +38,27 @@ def test_series_resample(obj, method, npartitions, freq, closed, label):
     assert expected.index[-1] == divisions[-1]
 
 
+def test_resample_agg():
+    index = pd.date_range('1-1-2000', '2-15-2000', freq='h')
+    ps = pd.Series(range(len(index)), index=index)
+    ds = dd.from_pandas(ps, npartitions=2)
+    result = ds.resample('10min').agg('mean')
+    expected = ps.resample('10min').agg('mean')
+    assert_eq(result, expected, check_dtype=False)
+    result = ds.resample('10min').agg(['mean', 'min'])
+    expected = ps.resample('10min').agg(['mean', 'min'])
+    assert_eq(result, expected, check_dtype=False)
+
+
+def test_resample_agg_passes_kwargs():
+    index = pd.date_range('1-1-2000', '2-15-2000', freq='h')
+    ps = pd.Series(range(len(index)), index=index)
+    ds = dd.from_pandas(ps, npartitions=2)
+    def foo(series, *args, bar=1):
+        return [bar] * len(series)
+    res = ds.resample('10min').agg(foo, bar=2)
+
+
 def test_series_resample_not_implemented():
     index = pd.date_range(start='20120102', periods=100, freq='T')
     s = pd.Series(range(len(index)), index=index)

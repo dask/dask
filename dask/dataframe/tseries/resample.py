@@ -129,8 +129,8 @@ class Resampler(object):
         return Series(dsk, name, meta, outdivs)
 
     @derived_from(pd_Resampler)
-    def agg(self, *args, **kwargs):
-        return self._agg('agg', how_args=args, how_kwargs=kwargs)
+    def agg(self, agg_funcs, *args, **kwargs):
+        return self._agg('agg', how_args=(agg_funcs, *args), how_kwargs=kwargs)
 
     @derived_from(pd_Resampler)
     def count(self):
