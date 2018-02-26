@@ -39,28 +39,30 @@ def test_series_resample(obj, method, npartitions, freq, closed, label):
 
 
 def test_resample_agg():
-    index = pd.date_range('1-1-2000', '2-15-2000', freq='h')
+    index = pd.date_range('2000-01-01', '2000-02-15', freq='h')
     ps = pd.Series(range(len(index)), index=index)
     ds = dd.from_pandas(ps, npartitions=2)
-    result = ds.resample('10min').agg('mean')
-    expected = ps.resample('10min').agg('mean')
-    assert_eq(result, expected, check_dtype=False)
-    result = ds.resample('10min').agg(['mean', 'min'])
-    expected = ps.resample('10min').agg(['mean', 'min'])
-    assert_eq(result, expected, check_dtype=False)
+
+    assert_eq(ds.resample('10min').agg('mean'),
+              ps.resample('10min').agg('mean'))
+    assert_eq(ds.resample('10min').agg(['mean', 'min']),
+              ps.resample('10min').agg(['mean', 'min']))
 
 
 def test_resample_agg_passes_kwargs():
-    index = pd.date_range('1-1-2000', '2-15-2000', freq='h')
+    index = pd.date_range('2000-01-01', '2000-02-15', freq='h')
     ps = pd.Series(range(len(index)), index=index)
     ds = dd.from_pandas(ps, npartitions=2)
+
     def foo(series, *args, bar=1):
-        return [bar] * len(series)
-    res = ds.resample('10min').agg(foo, bar=2)
+        return bar
+
+    assert_eq(ds.resample('10min').agg(foo, bar=2.5),
+              ps.resample('10min').agg(foo, bar=2.5))
 
 
 def test_series_resample_not_implemented():
-    index = pd.date_range(start='20120102', periods=100, freq='T')
+    index = pd.date_range(start='2012-01-02', periods=100, freq='T')
     s = pd.Series(range(len(index)), index=index)
     ds = dd.from_pandas(s, npartitions=5)
     # Frequency doesn't evenly divide day

@@ -103,7 +103,8 @@ class Resampler(object):
     def _agg(self, how, meta=None, fill_value=np.nan, how_args=(), how_kwargs={}):
         rule = self._rule
         kwargs = self._kwargs
-        name = 'resample-' + tokenize(self.obj, rule, kwargs, how)
+        name = 'resample-' + tokenize(self.obj, rule, kwargs, how, *how_args,
+                                      **how_kwargs)
 
         # Create a grouper to determine closed and label conventions
         newdivs, outdivs = _resample_bin_and_out_divs(self.obj.divisions, rule,
@@ -118,7 +119,8 @@ class Resampler(object):
         args = zip(keys, outdivs, outdivs[1:], ['left'] * (len(keys) - 1) + [None])
         for i, (k, s, e, c) in enumerate(args):
             dsk[(name, i)] = (_resample_series, k, s, e, c,
-                              rule, kwargs, how, fill_value, how_args, how_kwargs)
+                              rule, kwargs, how, fill_value, list(how_args),
+                              how_kwargs)
 
         # Infer output metadata
         meta_r = self.obj._meta_nonempty.resample(self._rule, **self._kwargs)
@@ -130,7 +132,7 @@ class Resampler(object):
 
     @derived_from(pd_Resampler)
     def agg(self, agg_funcs, *args, **kwargs):
-        return self._agg('agg', how_args=(agg_funcs, *args), how_kwargs=kwargs)
+        return self._agg('agg', how_args=(agg_funcs,) + args, how_kwargs=kwargs)
 
     @derived_from(pd_Resampler)
     def count(self):
