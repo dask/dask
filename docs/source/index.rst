@@ -199,6 +199,7 @@ to help make debugging and profiling graph execution easier.
 * :doc:`graphviz`
 * :doc:`diagnostics-local`
 * :doc:`diagnostics-distributed`
+* :doc:`debugging`
 
 .. toctree::
    :maxdepth: 1
@@ -209,6 +210,7 @@ to help make debugging and profiling graph execution easier.
    graphviz.rst
    diagnostics-local.rst
    diagnostics-distributed.rst
+   debugging.rst
 
 **Graph Internals**
 
@@ -222,6 +224,7 @@ often a better choice.  If you are a *core developer*, then you should start her
 * :doc:`spec`
 * :doc:`custom-graphs`
 * :doc:`optimize`
+* :doc:`custom-collections`
 
 .. toctree::
    :maxdepth: 1
@@ -232,23 +235,19 @@ often a better choice.  If you are a *core developer*, then you should start her
    spec.rst
    custom-graphs.rst
    optimize.rst
+   custom-collections.rst
 
 
 **Help & reference**
 
-* :doc:`debugging`
-* :doc:`changelog`
-* :doc:`cheatsheet`
-* :doc:`presentations`
 * :doc:`develop`
-* :doc:`faq`
+* :doc:`changelog`
+* :doc:`presentations`
+* :doc:`cheatsheet`
 * :doc:`spark`
 * :doc:`caching`
 * :doc:`bytes`
 * :doc:`remote-data-services`
-* :doc:`custom-collections`
-* :doc:`shared`
-* :doc:`scheduling-policy`
 * :doc:`cite`
 * :doc:`funding`
 * :doc:`logos`
@@ -258,19 +257,14 @@ often a better choice.  If you are a *core developer*, then you should start her
    :hidden:
    :caption: Help & reference
 
-   debugging.rst
-   changelog.rst
-   cheatsheet.rst
-   presentations.rst
    develop.rst
-   faq.rst
+   changelog.rst
+   presentations.rst
+   cheatsheet.rst
    spark.rst
    caching.rst
    bytes.rst
    remote-data-services.rst
-   custom-collections.rst
-   shared.rst
-   scheduling-policy.rst
    cite.rst
    funding.rst
    logos.rst
