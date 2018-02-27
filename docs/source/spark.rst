@@ -39,8 +39,7 @@ functionality.
     - Spark is more focused on traditional business intelligence
       operations like SQL and lightweight machine learning.
     - Dask is applied more generally both to business intelligence
-      applications, as well as a number of scientific and custom business
-      situations
+      applications, as well as a number of scientific and custom situations
 - Internal Design
     - Spark's internal model is higher level, providing good high level
       optimizations on uniformly applied computations, but lacking flexibility
@@ -77,16 +76,17 @@ functionality.
           (this would be challenging given their computation model) although
           some support for two-dimensional matrices may be found in MLLib.
           People may also want to look at the `Thunder
-          <https://github.com/thunder-project/thunder>`_ project.
+          <https://github.com/thunder-project/thunder>`_ project, which
+          combines Apache Spark with NumPy arrays.
         - Dask fully supports the NumPy model for :doc:`scalable multi-dimensional
           arrays <array>`.
     - Streaming
         - Spark's support for streaming data is first-class and integrates well
           into their other APIs.  It follows a mini-batch approach.  This
           provides decent performance on large uniform streaming operations
-        - Dask provides a real-time futures interface that is lower-level than
-          Spark streaming.  This enables more creative and complex use-cases,
-          but requires more work than Spark streaming.
+        - Dask provides a :doc:`real-time futures interface <futures>` that is
+          lower-level than Spark streaming.  This enables more creative and
+          complex use-cases, but requires more work than Spark streaming.
     - Graphs / complex networks
         - Spark provides GraphX, a library for graph processing
         - Dask provides no such library
@@ -117,8 +117,8 @@ Reasons you might choose Dask
 -  You prefer Python or native code, or have large legacy code bases that you
    do not want to entirely rewrite
 -  Your use case is complex or does not cleanly fit the Spark computing model
--  You want a lighter-weight transition from single-machine computing to
-   cluster computing
+-  You want a lighter-weight transition from local computing to cluster
+   computing
 -  You want to interoperate with other technologies and don't mind installing
    multiple packages
 
@@ -149,14 +149,6 @@ one exposes to users.  Dask is unable to perform some optimizations that Spark
 can because Dask schedulers do not have a top-down picture of the computation
 they were asked to perform.  However, dask is able to easily represent far more
 `complex algorithms`_ and expose the creation of these algorithms to normal users.
-
-
-Coding Styles
-~~~~~~~~~~~~~
-
-Both Spark and Dask are written in a functional style.  Spark will probably be
-more familiar to those who enjoy algebraic types while dask will probably be
-more familiar to those who enjoy Lisp and "code as data structures".
 
 
 Conclusion
