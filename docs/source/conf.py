@@ -321,6 +321,9 @@ redirect_files = [
     ('array-overview.html', 'array.html'),
     ('dataframe-overview.html', 'dataframe.html'),
     ('delayed-overview.html', 'delayed.html'),
+    ('scheduler-choice.html', 'setup.html'),
+    ('diagnostics.html', 'diagnostics-local.html'),
+    ('inspect.html', 'graphviz.html'),
 ]
 
 

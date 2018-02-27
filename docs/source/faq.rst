@@ -8,8 +8,7 @@ the questions there useful to you.
 
 1.  **Q: How do I debug my program when using dask?**
 
-    If you want to inspect the dask graph itself see
-    :doc:`inspect docs <inspect>`.
+    You may want to look at the :doc:`diagnostics documentation <understanding-performance>`
 
     If you want to dive down with a Python debugger a common cause of
     frustration is the asynchronous schedulers which, because they run your
