@@ -1,53 +1,28 @@
-Diagnostics
-===========
+Diagnostics (local)
+====================
 
-Profiling parallel code can be tricky, but ``dask.diagnostics`` provides
-functionality to aid in profiling and inspecting dask graph execution.
+Profiling parallel code can be challening, but ``dask.diagnostics`` provides
+functionality to aid in profiling and inspecting execution with the
+:doc:`local task scheduler <scheduling>`.
+
+This page describes the following few built-in options:
+
+1.  ProgressBar
+2.  Profiler
+3.  ResourceProfiler
+4.  CacheProfiler
 
 
-Scheduler Callbacks
--------------------
+This page then provides instructions on how to build your own custom diagnostic.
 
-Schedulers based on ``dask.local.get_async`` (currently
-``dask.get``, ``dask.threaded.get``, and ``dask.multiprocessing.get``)
-accept five callbacks, allowing for inspection of scheduler execution.
-
-The callbacks are:
-
-1. ``start(dsk)``
-
-   Run at the beginning of execution, right before the state is initialized.
-   Receives the dask graph.
-
-2. ``start_state(dsk, state)``
-
-   Run at the beginning of execution, right after the state is initialized.
-   Receives the dask graph and scheduler state.
-
-3. ``pretask(key, dsk, state)``
-
-   Run every time a new task is started. Receives the key of the task to be
-   run, the dask graph, and the scheduler state.
-
-4. ``posttask(key, result, dsk, state, id)``
-
-   Run every time a task is finished. Receives the key of the task that just
-   completed, the result, the dask graph, the scheduler state, and the id of
-   the worker that ran the task.
-
-5. ``finish(dsk, state, errored)``
-
-   Run at the end of execution, right before the result is returned. Receives
-   the dask graph, the scheduler state, and a boolean indicating whether or not
-   the exit was due to an error.
-
-These are internally represented as tuples of length 5, stored in the order
-presented above. Callbacks for common use cases are provided in
-``dask.diagnostics``.
+.. currentmodule:: dask.diagnostics
 
 
 Progress Bar
 ------------
+
+.. autosummary::
+   ProgressBar
 
 The ``ProgressBar`` class builds on the scheduler callbacks described above to
 display a progress bar in the terminal or notebook during computation. This can
@@ -81,15 +56,15 @@ To unregister from the global callbacks, call the ``unregister`` method:
     >>> pbar.unregister()
 
 
-Profiling
----------
+
+Profiler
+--------
+
+.. autosummary::
+   Profiler
 
 Dask provides a few tools for profiling execution. As with the ``ProgressBar``,
 they each can be used as context managers, or registered globally.
-
-
-Profiler
-^^^^^^^^
 
 The ``Profiler`` class is used to profile dask execution at the task level.
 During execution it records the following information for each task:
@@ -102,7 +77,10 @@ During execution it records the following information for each task:
 
 
 ResourceProfiler
-^^^^^^^^^^^^^^^^
+----------------
+
+.. autosummary::
+   ResourceProfiler
 
 The ``ResourceProfiler`` class is used to profile dask execution at the
 resource level. During execution it records the following information
@@ -122,7 +100,10 @@ keyword.
 
 
 CacheProfiler
-^^^^^^^^^^^^^
+-------------
+
+.. autosummary::
+   CacheProfiler
 
 The ``CacheProfiler`` class is used to profile dask execution at the scheduler
 cache level. During execution it records the following information for each
@@ -148,7 +129,7 @@ the number of bytes in the scheduler cache:
 
 
 Example
-^^^^^^^
+-------
 
 As an example to demonstrate using the diagnostics, we'll profile some linear
 algebra done with ``dask.array``. We'll create a random array, take its QR
@@ -257,8 +238,44 @@ parallel, as the CPU percentage spikes up to around 350\%.
 Custom Callbacks
 ----------------
 
-Custom diagnostics can be created using the callback mechanism described above.
-To add your own, subclass the ``Callback`` class, and define your own methods.
+.. autosummary:: Callback
+
+Schedulers based on ``dask.local.get_async`` (currently
+``dask.get``, ``dask.threaded.get``, and ``dask.multiprocessing.get``)
+accept five callbacks, allowing for inspection of scheduler execution.
+
+The callbacks are:
+
+1. ``start(dsk)``
+
+   Run at the beginning of execution, right before the state is initialized.
+   Receives the dask graph.
+
+2. ``start_state(dsk, state)``
+
+   Run at the beginning of execution, right after the state is initialized.
+   Receives the dask graph and scheduler state.
+
+3. ``pretask(key, dsk, state)``
+
+   Run every time a new task is started. Receives the key of the task to be
+   run, the dask graph, and the scheduler state.
+
+4. ``posttask(key, result, dsk, state, id)``
+
+   Run every time a task is finished. Receives the key of the task that just
+   completed, the result, the dask graph, the scheduler state, and the id of
+   the worker that ran the task.
+
+5. ``finish(dsk, state, errored)``
+
+   Run at the end of execution, right before the result is returned. Receives
+   the dask graph, the scheduler state, and a boolean indicating whether or not
+   the exit was due to an error.
+
+Custom diagnostics can be created either by instantiating the ``Callback``
+class with the some of above methods as keywords or by subclassing the
+``Callback`` class.
 Here we create a class that prints the name of every key as it's computed:
 
 .. code-block:: python
@@ -275,6 +292,7 @@ This can now be used as a context manager during computation:
 
     >>> from operator import add, mul
     >>> dsk = {'a': (add, 1, 2), 'b': (add, 3, 'a'), 'c': (mul, 'a', 'b')}
+
     >>> with PrintKeys():
     ...     get(dsk, 'c')
     Computing 'a'!
@@ -287,8 +305,28 @@ Alternatively, functions may be passed in as keyword arguments to ``Callback``:
 
     >>> def printkeys(key, dask, state):
     ...    print("Computing: {0}!".format(repr(key)))
+
     >>> with Callback(pretask=printkeys):
     ...     get(dsk, 'c')
     Computing 'a'!
     Computing 'b'!
     Computing 'c'!
+
+
+API
+---
+
+.. autosummary::
+   CacheProfiler
+   Callback
+   Profiler
+   ProgressBar
+   ResourceProfiler
+   visualize
+
+.. autofunction:: ProgressBar
+.. autofunction:: Profiler
+.. autofunction:: ResourceProfiler
+.. autofunction:: CacheProfiler
+.. autofunction:: Callback
+.. autofunction:: visualize

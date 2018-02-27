@@ -171,45 +171,46 @@ then you should start here.
    delayed.rst
    futures.rst
    machine-learning.rst
+   api.rst
 
 **Scheduling**
 
 Schedulers execute task graphs.  Dask currently has two main schedulers, one
-for single machine processing using threads or processes, and one for
+for local processing using threads or processes, and one for
 distributed memory clusters.
 
+* :doc:`scheduling`
 * :doc:`distributed`
-* :doc:`scheduler-overview`
-* :doc:`Single machine scheduler<shared>`
-* :doc:`scheduling-policy`
 
 .. toctree::
    :maxdepth: 1
    :hidden:
    :caption: Scheduling
 
+   scheduling.rst
    distributed.rst
-   scheduler-overview.rst
-   shared.rst
-   scheduling-policy.rst
 
-**Inspecting and Diagnosing Graphs**
+**Diagnosing Perofmrance**
 
-Parallel code can be tricky to debug and profile. Dask provides a few tools to
-help make debugging and profiling graph execution easier.
+Parallel code can be tricky to debug and profile. Dask provides a several tools
+to help make debugging and profiling graph execution easier.
 
-* :doc:`inspect`
-* :doc:`diagnostics`
+* :doc:`understanding-performance`
+* :doc:`graphviz`
+* :doc:`diagnostics-local`
+* :doc:`diagnostics-distributed`
 
 .. toctree::
    :maxdepth: 1
    :hidden:
    :caption: Diagnostics
 
-   inspect.rst
-   diagnostics.rst
+   understanding-performance.rst
+   graphviz.rst
+   diagnostics-local.rst
+   diagnostics-distributed.rst
 
-**Graphs**
+**Graph Internals**
 
 Internally Dask encodes algorithms in a simple format involving Python dicts,
 tuples, and functions.  This graph format can be used in isolation from the
@@ -232,6 +233,7 @@ often a better choice.  If you are a *core developer*, then you should start her
    custom-graphs.rst
    optimize.rst
 
+
 **Help & reference**
 
 * :doc:`debugging`
@@ -245,7 +247,11 @@ often a better choice.  If you are a *core developer*, then you should start her
 * :doc:`bytes`
 * :doc:`remote-data-services`
 * :doc:`custom-collections`
+* :doc:`shared`
+* :doc:`scheduling-policy`
 * :doc:`cite`
+* :doc:`funding`
+* :doc:`logos`
 
 .. toctree::
    :maxdepth: 1
@@ -263,8 +269,11 @@ often a better choice.  If you are a *core developer*, then you should start her
    bytes.rst
    remote-data-services.rst
    custom-collections.rst
+   shared.rst
+   scheduling-policy.rst
    cite.rst
    funding.rst
+   logos.rst
 
 Dask is supported by `Anaconda Inc`_ and develops under the BSD 3-clause license.
 

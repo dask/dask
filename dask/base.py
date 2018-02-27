@@ -93,6 +93,18 @@ class DaskMethodsMixin(object):
         metadata, but now with the results fully computed or actively computing
         in the background.
 
+        The action of function differs significantly depending on the active
+        task scheduler.  If the task scheduler supports asynchronous computing,
+        such as is the case of the dask.distributed scheduler, then persist
+        will return *immediately* and the return value's task graph will
+        contain Dask Future objects.  However if the task scheduler only
+        supports blocking computation then the call to persist with *block*
+        and the return value's task graph will contain concrete Python results.
+
+        This function is particularly useful when using distributed systems,
+        because the results will be kept in distributed memory, rather than
+        returned to the local process as with compute.
+
         Parameters
         ----------
         get : callable, optional
