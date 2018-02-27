@@ -31,6 +31,10 @@ Top level user functions:
    atleast_2d
    atleast_3d
    bincount
+   bitwise_and
+   bitwise_not
+   bitwise_or
+   bitwise_xor
    block
    broadcast_to
    coarsen
@@ -362,6 +366,10 @@ Other functions
 .. autofunction:: atleast_2d
 .. autofunction:: atleast_3d
 .. autofunction:: bincount
+.. autofunction:: bitwise_and
+.. autofunction:: bitwise_not
+.. autofunction:: bitwise_or
+.. autofunction:: bitwise_xor
 .. autofunction:: block
 .. autofunction:: broadcast_to
 .. autofunction:: coarsen
