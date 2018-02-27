@@ -1,3 +1,5 @@
+Images and Logos
+================
 
 .. image:: images/dask_icon.svg
    :alt: Dask logo

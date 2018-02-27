@@ -3,10 +3,6 @@ Install Dask
 
 You can install dask with ``conda``, with ``pip``, or by installing from source.
 
-Anaconda
---------
-
-
 Conda
 -----
 
@@ -59,6 +55,11 @@ or use ``pip`` locally if you want to install all dependencies as well::
 
 You can view the list of all dependencies within the ``extras_require`` field
 of ``setup.py``.
+
+Anaconda
+--------
+
+Dask is included by default in the `Anaconda distribution <https://www.anaconda.com/download>`_
 
 
 Test
