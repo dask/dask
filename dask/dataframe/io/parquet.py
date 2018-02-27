@@ -246,11 +246,11 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
             index_names = [index_names]
         column_names = pf.columns + list(pf.cats)
         storage_name_mapping = {k: k for k in column_names}
-        column_index_names = [None]
     elif len(pandas_md) == 1:
         index_names, column_names, storage_name_mapping, column_index_names = (
             _parse_pandas_metadata(json.loads(pandas_md[0]))
         )
+        column_names.extend(list(pf.cats))
     else:
         raise ValueError("File has multiple entries for 'pandas' metadata")
 
@@ -259,8 +259,8 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     if filters is None:
         filters = []
 
-    column_names, index_names, out_type = _normalize_index_columns(columns, column_names,
-                                                                   index, index_names)
+    column_names, index_names, out_type = _normalize_index_columns(
+        columns, column_names, index, index_names)
 
     if categories is None:
         categories = pf.categories
@@ -270,12 +270,8 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
         categories = list(categories)
 
     # TODO: write partition_on to pandas metadata...
-    # TODO: figure out if partition_on <-> categories. I suspect not...
     all_columns = list(column_names)
     all_columns.extend(x for x in index_names if x not in column_names)
-    file_cats = pf.cats
-    if file_cats:
-        all_columns.extend(list(file_cats))
 
     rgs = [rg for rg in pf.row_groups if
            not (fastparquet.api.filter_out_stats(rg, filters, pf.schema)) and
@@ -310,7 +306,10 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
                        pf.file_scheme, storage_name_mapping)
            for i, rg in enumerate(rgs)}
     for catcol in pf.cats:
-        meta[catcol] = meta[catcol].cat.set_categories(pf.cats[catcol])
+        if catcol in meta.columns:
+            meta[catcol] = meta[catcol].cat.set_categories(pf.cats[catcol])
+        if meta.index.name == catcol:
+            meta.index = meta.index.cat.set_categories(pf.cats[catcol])
 
     if not dsk:
         # empty dataframe
