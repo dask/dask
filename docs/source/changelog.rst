@@ -8,6 +8,7 @@ Changelog
 Array
 +++++
 
+- Add `bitwise_*` ufuncs (:pr:`3219`) `John A Kirkham`_
 
 DataFrame
 +++++++++
