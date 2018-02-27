@@ -309,7 +309,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
         if catcol in meta.columns:
             meta[catcol] = meta[catcol].cat.set_categories(pf.cats[catcol])
         if meta.index.name == catcol:
-            meta.index = meta.index.cat.set_categories(pf.cats[catcol])
+            meta.index = meta.index.set_categories(pf.cats[catcol])
 
     if not dsk:
         # empty dataframe
