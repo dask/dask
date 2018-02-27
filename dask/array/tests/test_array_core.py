@@ -686,6 +686,7 @@ def test_binops():
 
 
 def test_broadcast_shapes():
+    assert (2, 5) == broadcast_shapes((2, 5))
     assert (0, 5) == broadcast_shapes((0, 1), (1, 5))
     assert (3, 4, 5) == broadcast_shapes((3, 4, 5), (4, 1), ())
     assert (3, 4) == broadcast_shapes((3, 1), (1, 4), (4,))
@@ -2356,6 +2357,8 @@ def test_map_blocks_with_changed_dimension():
 
 
 def test_broadcast_chunks():
+    assert broadcast_chunks(((2, 3),)) == ((2, 3),)
+
     assert broadcast_chunks(((5, 5),), ((5, 5),)) == ((5, 5),)
 
     a = ((10, 10, 10), (5, 5),)
