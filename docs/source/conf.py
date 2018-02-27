@@ -323,6 +323,7 @@ redirect_files = [
     ('delayed-overview.html', 'delayed.html'),
     ('scheduler-choice.html', 'setup.html'),
     ('diagnostics.html', 'diagnostics-local.html'),
+    ('inspect.html', 'graphviz.html'),
 ]
 
 
