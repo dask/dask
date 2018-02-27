@@ -12,7 +12,9 @@ from .. import sharedict
 from ..base import tokenize
 from ..utils import ignoring
 from . import chunk
-from .core import Array, asarray, normalize_chunks, stack, concatenate, broadcast_to
+from .core import (Array, asarray, normalize_chunks,
+                   stack, concatenate,
+                   broadcast_to)
 from .wrap import empty, ones, zeros, full
 
 
