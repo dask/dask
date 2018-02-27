@@ -25,6 +25,7 @@ Core
 Array
 +++++
 
+- Add `broadcast_arrays` for Dask Arrays (:pr:`3217`) `John A Kirkham`_
 - Add `bitwise_*` ufuncs (:pr:`3219`) `John A Kirkham`_
 
 DataFrame

@@ -36,6 +36,7 @@ Top level user functions:
    bitwise_or
    bitwise_xor
    block
+   broadcast_arrays
    broadcast_to
    coarsen
    ceil
@@ -371,6 +372,7 @@ Other functions
 .. autofunction:: bitwise_or
 .. autofunction:: bitwise_xor
 .. autofunction:: block
+.. autofunction:: broadcast_arrays
 .. autofunction:: broadcast_to
 .. autofunction:: coarsen
 .. autofunction:: ceil
