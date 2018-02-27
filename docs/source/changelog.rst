@@ -1,6 +1,23 @@
 Changelog
 =========
 
+0.17.X / 2018-02-DD
+-------------------
+
+Array
++++++
+
+DataFrame
++++++++++
+
+- Add ``dd.tseries.Resampler.agg`` (:pr:`3202`) `Richard Postelnik`_
+
+Bag
++++
+
+Core
+++++
+
 
 0.XX.X / 2018-MM-DD
 -------------------
@@ -1005,3 +1022,4 @@ Other
 .. _`Roman Yurchak`: https://github.com/rth
 .. _`Max Epstein`: https://github.com/MaxPowerWasTaken
 .. _`Simon Perkins`: https://github.com/sjperkins
+.. _`Richard Postelnik`: https://github.com/postelrich
