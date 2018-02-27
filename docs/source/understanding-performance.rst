@@ -25,6 +25,6 @@ so a tool designed for one will not transfer over to the other.
 These pages provide four options for profiling parallel code:
 
 1.  :doc:`Visualize task graphs <graphviz>`
-2.  :doc:`Single threaded scheduler and a normal Python profiler <scheduling>`
+2.  :ref:`Single threaded scheduler and a normal Python profiler <single-threaded-scheduler>`
 3.  :doc:`Diagnostics for the single-machine scheduler <diagnostics-single>`
 4.  :doc:`Dask.distributed dashboard <diagnostics-distributed>`

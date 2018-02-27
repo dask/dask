@@ -100,6 +100,7 @@ where large intermediate results may be depended upon by multiple downstream tas
 we generally recommend the use of the distributed scheduler on a local machine.
 The distributed scheduler is more intelligent about moving around large intermediate results.
 
+.. _single-threaded-scheduler:
 
 Single Thread
 -------------
