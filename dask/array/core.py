@@ -799,7 +799,9 @@ def broadcast_chunks(*chunkss):
         ...
     ValueError: Chunks do not align: [(10, 10, 10), (3, 3)]
     """
-    if len(chunkss) == 1:
+    if not chunkss:
+        return ()
+    elif len(chunkss) == 1:
         return chunkss[0]
     n = max(map(len, chunkss))
     chunkss2 = [((1,),) * (n - len(c)) + c for c in chunkss]
