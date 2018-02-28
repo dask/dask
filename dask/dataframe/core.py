@@ -25,6 +25,7 @@ from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
                      is_arraylike)
+from ..array import Array
 from ..base import Base, tokenize, dont_optimize, is_dask_collection
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
@@ -3017,16 +3018,35 @@ def is_broadcastable(dfs, s):
 
 
 def elemwise(op, *args, **kwargs):
-    """ Elementwise operation for dask.Dataframes """
+    """ Elementwise operation for Dask dataframes
+
+    Parameters
+    ----------
+    op: callable
+        Function to apply across input dataframes
+    *args: DataFrames, Series, Scalars, Arrays,
+        The arguments of the operation
+    **kwrags: scalars
+    meta: pd.DataFrame, pd.Series (optional)
+        Valid metadata for the operation.  Will evaluate on a small piece of
+        data if not provided.
+
+    Examples
+    --------
+    >>> elemwise(operator.add, df.x, df.y)  # doctest: +SKIP
+    """
     meta = kwargs.pop('meta', no_default)
 
-    _name = funcname(op) + '-' + tokenize(op, kwargs, *args)
+    _name = funcname(op) + '-' + tokenize(op, *args, **kwargs)
 
     args = _maybe_from_pandas(args)
 
     from .multi import _maybe_align_partitions
     args = _maybe_align_partitions(args)
-    dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar))]
+    dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar, Array))]
+
+    # TODO: check if arrays
+
     dfs = [df for df in dasks if isinstance(df, _Frame)]
     divisions = dfs[0].divisions
     _is_broadcastable = partial(is_broadcastable, dfs)
@@ -3034,7 +3054,7 @@ def elemwise(op, *args, **kwargs):
     n = len(divisions) - 1
 
     other = [(i, arg) for i, arg in enumerate(args)
-             if not isinstance(arg, (_Frame, Scalar))]
+             if not isinstance(arg, (_Frame, Scalar, Array))]
 
     # adjust the key length of Scalar
     keys = [d.__dask_keys__() * n
@@ -3051,12 +3071,12 @@ def elemwise(op, *args, **kwargs):
     dsk = merge(dsk, *[d.dask for d in dasks])
 
     if meta is no_default:
-        if len(dfs) >= 2 and len(dasks) != len(dfs):
+        if len(dfs) >= 2 and not all(hasattr(d, 'npartitions') for d in dasks):
             # should not occur in current funcs
             msg = 'elemwise with 2 or more DataFrames and Scalar is not supported'
             raise NotImplementedError(msg)
         # For broadcastable series, use no rows.
-        parts = [d._meta if _is_broadcastable(d)
+        parts = [d._meta if _is_broadcastable(d) or isinstance(d, Array)
                  else d._meta_nonempty for d in dasks]
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
