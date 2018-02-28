@@ -2985,3 +2985,17 @@ def test_map_partition_sparse():
         computed = result.compute()
         assert (computed.data == expected.data).all()
         assert (computed.coords == expected.coords).all()
+
+def test_index_operations_yield_indexes():
+    df = pd.DataFrame({'x': [1, 2, 3]}, index=[1, 2, 3])
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert isinstance(ddf.index > 1, dd.Index)
+    assert isinstance(1 < ddf.index, dd.Index)
+    assert isinstance(~(ddf.index > 1), dd.Index)
+
+
+def test_mixed_dask_array_operations():
+    df = pd.DataFrame({'x': [1, 2, 3]}, index=[1, 2, 3])
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq((df.index > 2) | (df.x < 1),
+              (ddf.index > 2) | (ddf.x < 1))
