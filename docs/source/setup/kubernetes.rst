@@ -51,7 +51,7 @@ You can use Kubernetes to launch Dask workers in the following two ways:
 
 You may also want to see the documentation on using
 :doc:`Dask with Docker containers <docker>`
-to help you manage your software enviornments on Kubernetes.
+to help you manage your software environments on Kubernetes.
 
 .. _Kubernetes: https://kubernetes.io/
 .. _Daskernetes: https://daskernetes.readthedocs.io/
