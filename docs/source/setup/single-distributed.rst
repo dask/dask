@@ -57,7 +57,7 @@ and then passing that to your client.
 
 .. code-block:: python
 
-   from dask.distributed import Client, Cluster
+   from dask.distributed import Client, LocalCluster
    cluster = LocalCluster()
    client = Client(cluster)
 
