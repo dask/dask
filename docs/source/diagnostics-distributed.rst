@@ -18,7 +18,7 @@ Progress bar
    progress
 
 The dask.distributed progress bar differs from the ``ProgressBar`` used for
-:doc:`single machine diagnostics <diagnostics-single>`.
+:doc:`local diagnostics <diagnostics-local>`.
 The ``progress`` function takes a Dask object that is executing in the background.
 
 .. code-block:: python
