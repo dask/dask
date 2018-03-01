@@ -998,17 +998,17 @@ def test_combine():
     first = lambda a, b: a
 
     # DataFrame
-    for da, db, a, b in [(ddf1, ddf2, df1, df2),
-                         (ddf1.A, ddf2.A, df1.A, df2.A),
-                         (ddf1.B, ddf2.B, df1.B, df2.B)]:
+    for dda, ddb, a, b in [(ddf1, ddf2, df1, df2),
+                           (ddf1.A, ddf2.A, df1.A, df2.A),
+                           (ddf1.B, ddf2.B, df1.B, df2.B)]:
         for func, fill_value in [(add, None), (add, 100), (first, None)]:
             sol = a.combine(b, func, fill_value=fill_value)
-            assert_eq(da.combine(db, func, fill_value=fill_value), sol)
-            assert_eq(da.combine(b, func, fill_value=fill_value), sol)
+            assert_eq(dda.combine(ddb, func, fill_value=fill_value), sol)
+            assert_eq(dda.combine(b, func, fill_value=fill_value), sol)
 
     assert_eq(ddf1.combine(ddf2, add, overwrite=False),
               df1.combine(df2, add, overwrite=False))
-    assert da.combine(db, add)._name == da.combine(db, add)._name
+    assert dda.combine(ddb, add)._name == dda.combine(ddb, add)._name
 
 
 def test_combine_first():
@@ -3021,7 +3021,7 @@ def test_mixed_dask_array_operations_errors():
 def test_mixed_dask_array_multi_dimensional():
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
                        'y': [5., 6., 7., 8., 9.]},
-                       columns=['x', 'y'])
+                      columns=['x', 'y'])
     ddf = dd.from_pandas(df, npartitions=2)
 
     x = (df.values + 1).astype(float)
