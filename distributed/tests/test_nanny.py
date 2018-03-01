@@ -302,3 +302,16 @@ def test_scheduler_address_config(c, s):
     finally:
         del config['scheduler-address']
     yield nanny._close()
+
+
+@slow
+@gen_test()
+def test_wait_for_scheduler():
+    with captured_logger('distributed') as log:
+        w = Nanny('127.0.0.1:44737')
+        w._start()
+        yield gen.sleep(6)
+
+    log = log.getvalue()
+    assert 'error' not in log.lower(), log
+    assert 'restart' not in log.lower(), log

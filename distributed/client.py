@@ -879,7 +879,7 @@ class Client(Node):
                         msgs = yield self.scheduler_comm.comm.read()
                     except CommClosedError:
                         if self.status == 'running':
-                            logger.warning("Client report stream closed to scheduler")
+                            logger.info("Client report stream closed to scheduler")
                             logger.info("Reconnecting...")
                             self.status = 'connecting'
                             yield self._reconnect()

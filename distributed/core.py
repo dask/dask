@@ -133,6 +133,8 @@ class Server(object):
         This starts all PeriodicCallbacks stored in self.periodic_callbacks if
         they are not yet running.  It does this safely on the IOLoop.
         """
+        self._last_tick = time()
+
         def start_pcs():
             for pc in self.periodic_callbacks.values():
                 if not pc.is_running():

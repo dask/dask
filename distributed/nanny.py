@@ -333,7 +333,7 @@ class WorkerProcess(object):
             return
 
         while True:
-            # FIXME: this sometimes stalls in _wait_until_running
+            # FIXME: this sometimes stalls in _wait_until_connected
             # our temporary solution is to retry a few times if the process
             # doesn't start up in five seconds
             self.init_result_q = mp_context.Queue()
@@ -356,13 +356,16 @@ class WorkerProcess(object):
                 yield self.process.start()
                 if self.status == 'starting':
                     yield gen.with_timeout(timedelta(seconds=5),
-                                           self._wait_until_running())
+                                           self._wait_until_started())
             except gen.TimeoutError:
                 logger.info("Failed to start worker process.  Restarting")
                 yield gen.with_timeout(timedelta(seconds=1),
                                        self.process.terminate())
             else:
                 break
+
+        if self.status == 'starting':
+            yield self._wait_until_connected()
 
     def _on_exit(self, proc):
         if proc is not self.process:
@@ -445,7 +448,21 @@ class WorkerProcess(object):
                 logger.error("Failed to kill worker process: %s", e)
 
     @gen.coroutine
-    def _wait_until_running(self):
+    def _wait_until_started(self):
+        delay = 0.05
+        while True:
+            if self.status != 'starting':
+                return
+            try:
+                msg = self.init_result_q.get_nowait()
+                assert msg == 'started', msg
+                return
+            except Empty:
+                yield gen.sleep(delay)
+                continue
+
+    @gen.coroutine
+    def _wait_until_connected(self):
         delay = 0.05
         while True:
             if self.status != 'starting':
@@ -521,6 +538,7 @@ class WorkerProcess(object):
             """
             Try to start worker and inform parent of outcome.
             """
+            init_result_q.put('started')
             try:
                 yield worker._start(*worker_start_args)
             except Exception as e:
