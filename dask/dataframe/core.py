@@ -3044,10 +3044,22 @@ def elemwise(op, *args, **kwargs):
     from .multi import _maybe_align_partitions
     args = _maybe_align_partitions(args)
     dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar, Array))]
-
-    # TODO: check if arrays
-
     dfs = [df for df in dasks if isinstance(df, _Frame)]
+
+    # Clean up dask arrays if present
+    for i, a in enumerate(dasks):
+        if not isinstance(a, Array):
+            continue
+        # Ensure that they have similar-ish chunk structure
+        if not all(len(a.chunks[0]) == df.npartitions for df in dfs):
+            msg = ("When combining dask arrays with dataframes they must "
+                   "match chunking exactly.  Operation: %s" % funcname(op))
+            raise ValueError(msg)
+        # Rechunk to have a single chunk along all other axes
+        if a.ndim > 1:
+            a = a.rechunk({i + 1: d for i, d in enumerate(a.shape[1:])})
+            dasks[i] = a
+
     divisions = dfs[0].divisions
     _is_broadcastable = partial(is_broadcastable, dfs)
     dfs = list(remove(_is_broadcastable, dfs))
@@ -3059,7 +3071,7 @@ def elemwise(op, *args, **kwargs):
     # adjust the key length of Scalar
     keys = [d.__dask_keys__() * n
             if isinstance(d, Scalar) or _is_broadcastable(d)
-            else d.__dask_keys__() for d in dasks]
+            else core.flatten(d.__dask_keys__()) for d in dasks]
 
     if other:
         dsk = {(_name, i):

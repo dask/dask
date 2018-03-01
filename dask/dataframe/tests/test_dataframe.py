@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 import dask
+import dask.array as da
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.utils import put_lines, M
@@ -2943,7 +2944,6 @@ def test_cumulative_multiple_columns():
 
 @pytest.mark.parametrize('func', [np.asarray, M.to_records])
 def test_map_partition_array(func):
-    import dask.array as da
     from dask.array.utils import assert_eq
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
                        'y': [6.0, 7.0, 8.0, 9.0, 10.0]},
@@ -2968,7 +2968,6 @@ def test_map_partition_array(func):
 
 def test_map_partition_sparse():
     sparse = pytest.importorskip('sparse')
-    import dask.array as da
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
                        'y': [6.0, 7.0, 8.0, 9.0, 10.0]},
                       index=['a', 'b', 'c', 'd', 'e'])
@@ -3000,3 +2999,34 @@ def test_mixed_dask_array_operations():
               ddf.x + ddf.index.values)
     assert_eq(df.index.values + df.x,
               ddf.index.values + ddf.x)
+
+
+def test_mixed_dask_array_operations_errors():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5]}, index=[4, 5, 6, 7, 8])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    x = da.arange(5, chunks=((1, 4),))
+    x._chunks = ((np.nan, np.nan),)
+
+    with pytest.raises(ValueError):
+        (ddf.x + x).compute()
+
+    x = da.arange(5, chunks=((2, 2, 1),))
+    with pytest.raises(ValueError) as info:
+        ddf.x + x
+
+    assert 'add' in str(info.value)
+
+
+def test_mixed_dask_array_multi_dimensional():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+                       'y': [5., 6., 7., 8., 9.]},
+                       columns=['x', 'y'])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    x = (df.values + 1).astype(float)
+    dx = (ddf.values + 1).astype(float)
+
+    assert_eq(ddf + dx + 1, df + x + 1)
+    assert_eq(ddf + dx.rechunk((None, 1)) + 1, df + x + 1)
+    assert_eq(ddf[['y', 'x']] + dx + 1, df[['y', 'x']] + x + 1)
