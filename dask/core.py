@@ -303,7 +303,7 @@ def subs(task, key, val):
             arg = subs(arg, key, val)
         elif type_arg is list:
             arg = [subs(x, key, val) for x in arg]
-        elif type_arg.__name__ == "ndarray":
+        elif type_arg.__name__ == "ndarray" and type(key).__name__ == "ndarray":
             # Can't do a simple equality check, since this may trigger
             # a FutureWarning from NumPy about array equality
             # https://github.com/dask/dask/pull/2457
