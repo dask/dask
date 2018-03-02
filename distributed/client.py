@@ -724,16 +724,17 @@ class Client(Node):
             from .deploy import LocalCluster
 
             try:
-                self.cluster = LocalCluster(loop=self.loop, start=False,
+                self.cluster = LocalCluster(loop=self.loop, asynchronous=True,
                                             **self._startup_kwargs)
-                yield self.cluster._start()
+                yield self.cluster
             except (OSError, socket.error) as e:
                 if e.errno != errno.EADDRINUSE:
                     raise
                 # The default port was taken, use a random one
                 self.cluster = LocalCluster(scheduler_port=0, loop=self.loop,
-                                            start=False, **self._startup_kwargs)
-                yield self.cluster._start()
+                                            asynchronous=True,
+                                            **self._startup_kwargs)
+                yield self.cluster
 
             # Wait for all workers to be ready
             # XXX should be a LocalCluster method instead

@@ -66,12 +66,21 @@ class LocalCluster(object):
     >>> LocalCluster(service_kwargs={'bokeh': {'prefix': '/foo'}})  # doctest: +SKIP
     """
     def __init__(self, n_workers=None, threads_per_worker=None, processes=True,
-                 loop=None, start=True, ip=None, scheduler_port=0,
+                 loop=None, start=None, ip=None, scheduler_port=0,
                  silence_logs=logging.WARN, diagnostics_port=8787,
-                 services={}, worker_services={}, service_kwargs=None, **worker_kwargs):
+                 services={}, worker_services={}, service_kwargs=None,
+                 asynchronous=False, **worker_kwargs):
+        if start is not None:
+            msg = ("The start= parameter is deprecated. "
+                   "LocalCluster always starts. "
+                   "For asynchronous operation use the following: \n\n"
+                   "  cluster = yield LocalCluster(asynchronous=True)")
+            raise ValueError(msg)
+
         self.status = None
         self.processes = processes
         self.silence_logs = silence_logs
+        self._asynchronous = asynchronous
         if silence_logs:
             silence_logging(level=silence_logs)
         if n_workers is None and threads_per_worker is None:
@@ -87,10 +96,8 @@ class LocalCluster(object):
             # Overcommit threads per worker, rather than undercommit
             threads_per_worker = max(1, int(math.ceil(_ncores / n_workers)))
 
-        self._loop_runner = LoopRunner(loop=loop)
+        self._loop_runner = LoopRunner(loop=loop, asynchronous=asynchronous)
         self.loop = self._loop_runner.loop
-        if start:
-            self._loop_runner.start()
 
         if diagnostics_port is not None:
             try:
@@ -112,8 +119,7 @@ class LocalCluster(object):
         self.worker_services = worker_services
         self.worker_kwargs = worker_kwargs
 
-        if start:
-            sync(self.loop, self._start, ip)
+        self.start(ip=ip)
 
         clusters_to_close.add(self)
 
@@ -123,12 +129,20 @@ class LocalCluster(object):
                  sum(w.ncores for w in self.workers))
                 )
 
+    def __await__(self):
+        return self._started.__await__()
+
+    def start(self, **kwargs):
+        self._loop_runner.start()
+        if self._asynchronous:
+            self._started = self._start(**kwargs)
+        else:
+            sync(self.loop, self._start, **kwargs)
+
     @gen.coroutine
     def _start(self, ip=None):
         """
         Start all cluster services.
-        Wait on this if you passed `start=False` to the LocalCluster
-        constructor.
         """
         if self.status == 'running':
             return
@@ -146,6 +160,8 @@ class LocalCluster(object):
             services=self.worker_services, **self.worker_kwargs)
 
         self.status = 'running'
+
+        raise gen.Return(self)
 
     @gen.coroutine
     def _start_all_workers(self, n_workers, **kwargs):
@@ -292,6 +308,15 @@ class LocalCluster(object):
 
     def __exit__(self, *args):
         self.close()
+
+    @gen.coroutine
+    def __aenter__(self):
+        yield self._started
+        raise gen.Return(self)
+
+    @gen.coroutine
+    def __aexit__(self, typ, value, traceback):
+        yield self._close()
 
     @property
     def scheduler_address(self):

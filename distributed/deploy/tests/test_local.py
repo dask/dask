@@ -250,8 +250,9 @@ def test_blocks_until_full(loop):
 @gen_test()
 def test_scale_up_and_down():
     loop = IOLoop.current()
-    cluster = LocalCluster(0, scheduler_port=0, processes=False, silence_logs=False,
-                           diagnostics_port=None, loop=loop, start=False)
+    cluster = yield LocalCluster(0, scheduler_port=0, processes=False,
+                                 silence_logs=False, diagnostics_port=None,
+                                 loop=loop, asynchronous=True)
     c = yield Client(cluster, loop=loop, asynchronous=True)
 
     assert not cluster.workers
@@ -344,3 +345,7 @@ def test_io_loop_periodic_callbacks(loop):
         for worker in cluster.workers:
             for pc in worker.periodic_callbacks.values():
                 assert pc.io_loop is loop
+
+
+if sys.version_info >= (3, 5):
+    from distributed.deploy.tests.py3_test_deploy import *  # noqa F401
