@@ -2554,7 +2554,7 @@ class Scheduler(ServerNode):
                                'key-count': len(keys),
                                'branching-factor': branching_factor})
 
-    def workers_to_close(self, memory_ratio=2, key=None):
+    def workers_to_close(self, memory_ratio=None, n=None, key=None):
         """
         Find workers that we can close with low cost
 
@@ -2572,6 +2572,8 @@ class Scheduler(ServerNode):
             Amount of extra space we want to have for our stored data.
             Defaults two 2, or that we want to have twice as much memory as we
             currently have data.
+        n: int
+            Number of workers to close
         key: Callable(WorkerState)
             An optional callable mapping a WorkerState object to a group
             affiliation.  Groups will be closed together.  This is useful when
@@ -2587,10 +2589,25 @@ class Scheduler(ServerNode):
         >>> scheduler.workers_to_close(key=lambda ws: ws.host)
         ['tcp://192.168.0.1:1234', 'tcp://192.168.0.1:4567']
 
+        Remove two workers
+
+        >>> scheduler.workers_to_close(n=2)
+
+        Keep enough workers to have twice as much memory as we we need.
+
+        >>> scheduler.workers_to_close(memory_ratio=2)
+
         Returns
         -------
         to_close: list of worker addresses that are OK to close
+
+        See Also
+        --------
+        Scheduler.retire_workers
         """
+        if n is None and memory_ratio is None:
+            memory_ratio = 2
+
         with log_errors():
             # XXX processing isn't used is the heuristics below
             if all(ws.processing for ws in self.workers.values()):
@@ -2624,7 +2641,8 @@ class Scheduler(ServerNode):
             while idle:
                 w = idle.pop()
                 limit -= limit_bytes[w]
-                if limit >= memory_ratio * total:  # still plenty of space
+                if (n is not None and len(to_close) < n or  # still plenty of space
+                    memory_ratio is not None and limit >= memory_ratio * total):
                     to_close.append(w)
                 else:
                     break
@@ -2637,7 +2655,7 @@ class Scheduler(ServerNode):
 
     @gen.coroutine
     def retire_workers(self, comm=None, workers=None, remove=True, close=False,
-                       close_workers=False):
+                       close_workers=False, **kwargs):
         """ Gracefully retire workers from cluster
 
         Parameters
@@ -2652,11 +2670,18 @@ class Scheduler(ServerNode):
             Whether or not to actually close the worker explicitly from here.
             Otherwise we expect some external job scheduler to finish off the
             worker.
+        **kwargs: dict
+            Extra options to pass to workers_to_close to determine which
+            workers we should drop
 
         Returns
         -------
         Dictionary mapping worker ID/address to dictionary of information about
         that worker for each retired worker.
+
+        See Also
+        --------
+        Scheduler.workers_to_close
         """
         if close:
             logger.warning("The keyword close= has been deprecated. "
@@ -2666,7 +2691,7 @@ class Scheduler(ServerNode):
             if workers is None:
                 while True:
                     try:
-                        workers = self.workers_to_close()
+                        workers = self.workers_to_close(**kwargs)
                         if workers:
                             workers = yield self.retire_workers(workers=workers,
                                                                 remove=remove,
