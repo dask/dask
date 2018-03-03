@@ -38,7 +38,8 @@ from .node import ServerNode
 from .proctitle import setproctitle
 from .security import Security
 from .utils import (All, ignoring, get_ip, get_fileno_limit, log_errors,
-                    key_split, validate_key, no_default, DequeHandler)
+                    key_split, validate_key, no_default, DequeHandler,
+                    parse_timedelta)
 from .utils_comm import (scatter_to_workers, gather_from_workers)
 from .utils_perf import enable_gc_diagnosis, disable_gc_diagnosis
 
@@ -711,8 +712,8 @@ class Scheduler(ServerNode):
             self,
             center=None,
             loop=None,
-            delete_interval=500,
-            synchronize_worker_interval=60000,
+            delete_interval='500ms',
+            synchronize_worker_interval='60s',
             services=None,
             allowed_failures=ALLOWED_FAILURES,
             extensions=None,
@@ -727,8 +728,8 @@ class Scheduler(ServerNode):
         self.allowed_failures = allowed_failures
         self.validate = validate
         self.status = None
-        self.delete_interval = delete_interval
-        self.synchronize_worker_interval = synchronize_worker_interval
+        self.delete_interval = parse_timedelta(delete_interval, default='ms')
+        self.synchronize_worker_interval = parse_timedelta(synchronize_worker_interval, default='ms')
         self.digests = None
         self.service_specs = services or {}
         self.services = {}
@@ -1205,7 +1206,7 @@ class Scheduler(ServerNode):
             # for key in keys:  # TODO
             #     self.mark_key_in_memory(key, [address])
 
-            self.worker_comms[address] = BatchedSend(interval=5, loop=self.loop)
+            self.worker_comms[address] = BatchedSend(interval='5ms', loop=self.loop)
             self._worker_coroutines.append(self.handle_worker(address))
 
             if ws.ncores > len(ws.processing):
@@ -1866,7 +1867,7 @@ class Scheduler(ServerNode):
         --------
         Scheduler.worker_stream: The equivalent function for workers
         """
-        bcomm = BatchedSend(interval=2, loop=self.loop)
+        bcomm = BatchedSend(interval='2ms', loop=self.loop)
         bcomm.start(comm)
         self.client_comms[client] = bcomm
 
@@ -2810,7 +2811,8 @@ class Scheduler(ServerNode):
                         ts=ts, client=client)
 
     @gen.coroutine
-    def feed(self, comm, function=None, setup=None, teardown=None, interval=1, **kwargs):
+    def feed(self, comm, function=None, setup=None, teardown=None,
+             interval='1s', **kwargs):
         """
         Provides a data Comm to external requester
 
@@ -2818,6 +2820,7 @@ class Scheduler(ServerNode):
         eventually be phased out.  It is mostly used by diagnostics.
         """
         import pickle
+        interval = parse_timedelta(interval)
         with log_errors():
             if function:
                 function = pickle.loads(function)
@@ -4007,7 +4010,9 @@ class Scheduler(ServerNode):
     @gen.coroutine
     def get_profile_metadata(self, comm=None, workers=None, merge_workers=True,
                              start=None, stop=None, profile_cycle_interval=None):
-        dt = profile_cycle_interval or config.get('profile-cycle-interval', 1000) / 1000
+        dt = profile_cycle_interval or config.get('profile-cycle-interval', 1000)
+        dt = parse_timedelta(dt, default='ms')
+
         if workers is None:
             workers = self.workers
         else:

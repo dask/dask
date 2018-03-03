@@ -86,7 +86,6 @@ def test_adaptive_local_cluster(loop):
 @nodebug
 @gen_test(timeout=30)
 def test_adaptive_local_cluster_multi_workers():
-    loop = IOLoop.current()
     cluster = yield LocalCluster(0, scheduler_port=0, silence_logs=False,
                                  processes=False, diagnostics_port=None,
                                  asynchronous=True)
@@ -102,13 +101,13 @@ def test_adaptive_local_cluster_multi_workers():
             yield gen.sleep(0.01)
             assert time() < start + 15
 
-        yield c._gather(futures)
+        yield c.gather(futures)
         del futures
 
         start = time()
         while cluster.workers:
             yield gen.sleep(0.01)
-            assert time() < start + 5
+            assert time() < start + 15
 
         assert not cluster.workers
         assert not cluster.scheduler.workers
@@ -117,7 +116,7 @@ def test_adaptive_local_cluster_multi_workers():
         assert not cluster.scheduler.workers
 
         futures = c.map(slowinc, range(100), delay=0.01)
-        yield c._gather(futures)
+        yield c.gather(futures)
 
     finally:
         yield c._close()

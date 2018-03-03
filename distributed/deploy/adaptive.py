@@ -6,7 +6,7 @@ from ..metrics import time
 
 from tornado import gen
 
-from ..utils import log_errors, PeriodicCallback
+from ..utils import log_errors, PeriodicCallback, parse_timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +22,10 @@ class Adaptive(object):
     scheduler: distributed.Scheduler
     cluster: object
         Must have scale_up and scale_down methods/coroutines
-    startup_cost : Number, default 1
+    startup_cost : timedelta or str, default "1s"
         Estimate of the number of seconds for nnFactor representing how costly it is to start an additional worker.
         Affects quickly to adapt to high tasks per worker loads
-    interval : Number, default 1000ms
+    interval : timedelta or str, default "1000 ms"
         Milliseconds between checks
     wait_count: int, default 3
         Number of consecutive times that a worker should be suggested for
@@ -59,13 +59,15 @@ class Adaptive(object):
     the cluster's ``scale_up`` method.
     '''
 
-    def __init__(self, scheduler, cluster, interval=1000, startup_cost=1,
-                 scale_factor=2, minimum=0, maximum=None, wait_count=3, **kwargs):
+    def __init__(self, scheduler, cluster, interval='1s', startup_cost='1s',
+                 scale_factor=2, minimum=0, maximum=None, wait_count=3,
+                 **kwargs):
+        interval = parse_timedelta(interval, default='ms')
         self.scheduler = scheduler
         self.cluster = cluster
-        self.startup_cost = startup_cost
+        self.startup_cost = parse_timedelta(startup_cost, default='s')
         self.scale_factor = scale_factor
-        self._adapt_callback = PeriodicCallback(self._adapt, interval)
+        self._adapt_callback = PeriodicCallback(self._adapt, interval * 1000)
         self.scheduler.loop.add_callback(self._adapt_callback.start)
         self._adapting = False
         self._workers_to_close_kwargs = kwargs

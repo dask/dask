@@ -20,8 +20,8 @@ multiprocessing-method: forkserver
 use-file-locking: True
 
 # Communication options
-connect-timeout: 3      # seconds delay before connecting fails
-tcp-timeout: 30         # seconds delay before calling an unresponsive connection dead
+connect-timeout: 3s     # seconds delay before connecting fails
+tcp-timeout: 30s        # seconds delay before calling an unresponsive connection dead
 default-scheme: tcp
 require-encryption: False   # whether to require encryption on non-local comms
 socket-backlog: 2048
@@ -44,11 +44,11 @@ recent-messages-log-length: 0  # number of messages to keep for debugging
 # Bokeh web dashboard
 bokeh-export-tool: False
 
-tick-time: 20             # milliseconds between event loop health checks
+tick-time: 20ms           # milliseconds between event loop health checks
 tick-maximum-delay: 1000  # milliseconds allowed before triggering a warning
 
-profile-interval: 10  # milliseconds in between statistical profiling queries
-profile-cycle-interval: 1000  # milliseconds between starting new profile
+profile-interval: 10ms          # milliseconds in between statistical profiling queries
+profile-cycle-interval: 1000ms  # milliseconds between starting new profile
 
 # Fractions of worker memory at which we take action to avoid memory blowup
 # Set any of the lower three values to False to turn off the behavior entirely
@@ -61,4 +61,4 @@ worker-memory-terminate: 0.95  # fraction at which we terminate the worker
 log-length: 10000  # default length of logs to keep in memory
 log-format: '%(name)s - %(levelname)s - %(message)s'
 
-client-heartbeat-interval: 5000  # milliseconds between client heartbeats
+client-heartbeat-interval: 5000ms  # milliseconds between client heartbeats

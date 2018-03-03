@@ -24,7 +24,7 @@ from .config import config
 from .metrics import time
 from .system_monitor import SystemMonitor
 from .utils import (get_traceback, truncate_exception, ignoring, shutting_down,
-                    PeriodicCallback)
+                    PeriodicCallback, parse_timedelta)
 from . import protocol
 
 
@@ -44,6 +44,8 @@ def get_total_physical_memory():
 
 
 MAX_BUFFER_SIZE = get_total_physical_memory()
+
+tick_maximum_delay = parse_timedelta(config.get('tick-maximum-delay', 1000), default='ms')
 
 
 class Server(object):
@@ -121,8 +123,11 @@ class Server(object):
         self.periodic_callbacks['monitor'] = pc
 
         self._last_tick = time()
-        pc = PeriodicCallback(self._measure_tick, config.get('tick-time', 20),
-                              io_loop=self.io_loop)
+        pc = PeriodicCallback(
+                self._measure_tick,
+                parse_timedelta(config.get('tick-time', 20), default='ms') * 1000,
+                io_loop=self.io_loop
+        )
         self.periodic_callbacks['tick'] = pc
 
         self.__stopped = False
@@ -158,7 +163,7 @@ class Server(object):
         now = time()
         diff = now - self._last_tick
         self._last_tick = now
-        if diff > config.get('tick-maximum-delay', 1000) / 1000:
+        if diff > tick_maximum_delay:
             logger.warning("Event loop was unresponsive in %s for %.2fs.  "
                            "This is often caused by long-running GIL-holding "
                            "functions or moving large chunks of data. "

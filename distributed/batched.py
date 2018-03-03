@@ -8,6 +8,7 @@ from tornado.ioloop import IOLoop
 
 from .config import config
 from .core import CommClosedError
+from .utils import parse_timedelta
 
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ class BatchedSend(object):
     Example
     -------
     >>> stream = yield connect(ip, port)
-    >>> bstream = BatchedSend(interval=10)  # 10 ms
+    >>> bstream = BatchedSend(interval='10 ms')
     >>> bstream.start(stream)
     >>> bstream.send('Hello,')
     >>> bstream.send('world!')
@@ -40,8 +41,7 @@ class BatchedSend(object):
     def __init__(self, interval, loop=None):
         # XXX is the loop arg useful?
         self.loop = loop or IOLoop.current()
-        self.interval = interval / 1000.
-
+        self.interval = parse_timedelta(interval, default='ms')
         self.waker = locks.Event()
         self.stopped = locks.Event()
         self.please_stop = False

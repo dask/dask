@@ -19,7 +19,8 @@ from tornado.tcpserver import TCPServer
 
 from .. import config
 from ..compatibility import finalize
-from ..utils import (ensure_bytes, ensure_ip, get_ip, get_ipv6, nbytes)
+from ..utils import (ensure_bytes, ensure_ip, get_ip, get_ipv6, nbytes,
+                    parse_timedelta)
 
 from .registry import Backend, backends
 from .addressing import parse_host_port, unparse_host_port
@@ -51,7 +52,8 @@ def set_tcp_timeout(stream):
     if stream.closed():
         return
 
-    timeout = int(config.get('tcp-timeout', 30))
+    timeout = config.get('tcp-timeout', 30)
+    timeout = int(parse_timedelta(timeout, default='seconds'))
 
     sock = stream.socket
 

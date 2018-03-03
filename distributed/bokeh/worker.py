@@ -21,7 +21,7 @@ from .utils import transpose
 from ..compatibility import WINDOWS
 from ..diagnostics.progress_stream import color_of
 from ..metrics import time
-from ..utils import log_errors, key_split, format_bytes, format_time
+from ..utils import (log_errors, key_split, format_bytes, format_time)
 
 
 logger = logging.getLogger(__name__)

@@ -60,7 +60,8 @@ from .threadpoolexecutor import rejoin
 from .worker import dumps_task, get_client, get_worker, secede
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator,
                     tokey, log_errors, str_graph, key_split, format_bytes, asciitable,
-                    thread_state, no_default, PeriodicCallback, LoopRunner)
+                    thread_state, no_default, PeriodicCallback, LoopRunner,
+                    parse_timedelta)
 from .versions import get_versions
 
 
@@ -516,13 +517,17 @@ class Client(Node):
         self._loop_runner = LoopRunner(loop=loop, asynchronous=asynchronous)
         self.loop = self._loop_runner.loop
 
+        if heartbeat_interval is None:
+            heartbeat_interval = config.get('client-heartbeat-interval', 5000)
+        heartbeat_interval = parse_timedelta(heartbeat_interval, default='ms')
+
         self._periodic_callbacks = dict()
         self._periodic_callbacks['scheduler-info'] = PeriodicCallback(
                 self._update_scheduler_info, 2000, io_loop=self.loop
         )
         self._periodic_callbacks['heartbeat'] = PeriodicCallback(
                 self._heartbeat,
-                heartbeat_interval or config.get('client-heartbeat-interval', 5000),
+                heartbeat_interval * 1000,
                 io_loop=self.loop
         )
 
@@ -797,7 +802,7 @@ class Client(Node):
         assert len(msg) == 1
         assert msg[0]['op'] == 'stream-start'
 
-        bcomm = BatchedSend(interval=10, loop=self.loop)
+        bcomm = BatchedSend(interval='10ms', loop=self.loop)
         bcomm.start(comm)
         self.scheduler_comm = bcomm
 

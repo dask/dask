@@ -16,7 +16,7 @@ from tornado import gen
 from ..config import config
 from ..diagnostics.progress_stream import nbytes_bar
 from .. import profile
-from ..utils import log_errors
+from ..utils import log_errors, parse_timedelta
 
 if config.get('bokeh-export-tool', False):
     from .export_tool import ExportTool
@@ -24,7 +24,8 @@ else:
     ExportTool = None
 
 
-profile_interval = config.get('profile-interval', 10) / 1000
+profile_interval = config.get('profile-interval', 10)
+profile_interval = parse_timedelta(profile_interval, default='ms')
 
 
 class DashboardComponent(object):
@@ -53,10 +54,11 @@ class TaskStream(DashboardComponent):
     The start and stop time of tasks as they occur on each core of the cluster.
     """
 
-    def __init__(self, n_rectangles=1000, clear_interval=20000, **kwargs):
+    def __init__(self, n_rectangles=1000, clear_interval='20s', **kwargs):
         """
         kwargs are applied to the bokeh.models.plots.Plot constructor
         """
+        clear_interval = parse_timedelta(clear_interval, default='ms')
         self.n_rectangles = n_rectangles
         self.clear_interval = clear_interval
         self.last = 0
