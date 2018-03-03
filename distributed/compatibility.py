@@ -51,7 +51,11 @@ if sys.version_info[0] == 2:
 
     logging_names = logging._levelNames
 
+    def iscoroutinefunction(func):
+        return False
+
 if sys.version_info[0] == 3:
+    from asyncio import iscoroutinefunction
     from queue import Queue, Empty
     from importlib import reload
     from threading import get_ident as get_thread_identity

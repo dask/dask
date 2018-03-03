@@ -1,6 +1,8 @@
 from distributed.utils_test import gen_cluster, gen_test
 from distributed import Client
 
+from tornado import gen
+
 
 @gen_cluster()
 async def test_gen_cluster_async(s, a, b):  # flake8: noqa

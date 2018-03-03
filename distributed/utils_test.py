@@ -38,7 +38,7 @@ from tornado import gen, queues
 from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 
-from .compatibility import PY3
+from .compatibility import PY3, iscoroutinefunction
 from .config import config, initialize_logging
 from .core import connect, rpc, CommClosedError
 from .metrics import time
@@ -621,7 +621,10 @@ def gen_test(timeout=10):
     def _(func):
         def test_func():
             with pristine_loop() as loop:
-                cor = gen.coroutine(func)
+                if iscoroutinefunction(func):
+                    cor = func
+                else:
+                    cor = gen.coroutine(func)
                 try:
                     loop.run_sync(cor, timeout=timeout)
                 finally:

@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from time import sleep
 
+from toolz import frequencies, pluck
 from tornado import gen
 from tornado.ioloop import IOLoop
 
@@ -154,3 +155,73 @@ def test_adaptive_scale_down_override(c, s, *workers):
     yield gen.sleep(0.3)
 
     assert len(s.workers) == 2
+
+
+@gen_test(timeout=30)
+def test_min_max():
+    loop = IOLoop.current()
+    cluster = yield LocalCluster(0, scheduler_port=0, silence_logs=False,
+                                 processes=False, diagnostics_port=None,
+                                 loop=loop, asynchronous=True)
+    yield cluster._start()
+    try:
+        adapt = Adaptive(cluster.scheduler, cluster, minimum=1, maximum=2,
+                         interval=20)
+        c = yield Client(cluster, asynchronous=True, loop=loop)
+
+        start = time()
+        while not cluster.scheduler.workers:
+            yield gen.sleep(0.01)
+            assert time() < start + 1
+
+        yield gen.sleep(0.2)
+        assert len(cluster.scheduler.workers) == 1
+        assert frequencies(pluck(1, adapt.log)) == {'up': 1}
+
+        futures = c.map(slowinc, range(100), delay=0.1)
+
+        start = time()
+        while len(cluster.scheduler.workers) < 2:
+            yield gen.sleep(0.01)
+            assert time() < start + 1
+
+        assert len(cluster.scheduler.workers) == 2
+        yield gen.sleep(0.5)
+        assert len(cluster.scheduler.workers) == 2
+        assert len(cluster.workers) == 2
+        assert frequencies(pluck(1, adapt.log)) == {'up': 2}
+
+        del futures
+
+        start = time()
+        while len(cluster.scheduler.workers) != 1:
+            yield gen.sleep(0.01)
+            assert time() < start + 1
+        assert frequencies(pluck(1, adapt.log)) == {'up': 2, 'down': 1}
+    finally:
+        yield c._close()
+        yield cluster._close()
+
+
+@gen_test()
+def test_avoid_churn():
+    """ We want to avoid creating and deleting workers frequently
+
+    Instead we want to wait a few beats before removing a worker in case the
+    user is taking a brief pause between work
+    """
+    cluster = yield LocalCluster(0, asynchronous=True, processes=False,
+                                 scheduler_port=0, silence_logs=False,
+                                 diagnostics_port=None)
+    client = yield Client(cluster, asynchronous=True)
+    try:
+        adapt = Adaptive(cluster.scheduler, cluster, interval=20, wait_count=5)
+
+        for i in range(10):
+            yield client.submit(slowinc, i, delay=0.040)
+            yield gen.sleep(0.040)
+
+        assert frequencies(pluck(1, adapt.log)) == {'up': 1}
+    finally:
+        yield client._close()
+        yield cluster._close()
