@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import Iterator
+import datetime
 from functools import partial
 import io
 import socket
@@ -20,7 +21,7 @@ from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
                                iterator_to_queue, _maybe_complex, read_block, seek_delimiter,
                                funcname, ensure_bytes, open_port, get_ip_interface, nbytes,
                                set_thread_state, thread_state, LoopRunner,
-                               parse_bytes)
+                               parse_bytes, parse_timedelta)
 from distributed.utils_test import loop, loop_in_thread  # noqa: F401
 from distributed.utils_test import div, has_ipv6, inc, throws, gen_test
 
@@ -488,3 +489,27 @@ def test_parse_bytes():
     assert parse_bytes('1e6') == 1000000
     assert parse_bytes('1e6 kB') == 1000000000
     assert parse_bytes('MB') == 1000000
+
+
+def test_parse_timedelta():
+    for text, value in [('1s', 1),
+                        ('100ms', 0.1),
+                        ('5S', 5),
+                        ('5.5s', 5.5),
+                        ('5.5 s', 5.5),
+                        ('1 second', 1),
+                        ('3.3 seconds', 3.3),
+                        ('3.3 milliseconds', 0.0033),
+                        ('3500 us', 0.0035),
+                        ('1 ns', 1e-9),
+                        ('2m', 120),
+                        ('2 minutes', 120),
+                        (datetime.timedelta(seconds=2), 2),
+                        (datetime.timedelta(milliseconds=100), 0.1)]:
+        result = parse_timedelta(text)
+        assert abs(result - value) < 1e-14
+
+    assert parse_timedelta('1ms', default='seconds') == 0.001
+    assert parse_timedelta('1', default='seconds') == 1
+    assert parse_timedelta('1', default='ms') == 0.001
+    assert parse_timedelta(1, default='ms') == 0.001

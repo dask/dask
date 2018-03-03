@@ -8,6 +8,7 @@ import functools
 import json
 import logging
 import multiprocessing
+from numbers import Number
 import operator
 import os
 import re
@@ -1131,6 +1132,70 @@ def parse_bytes(s):
 
     result = n * multiplier
     return int(result)
+
+
+timedelta_sizes = {
+        's': 1,
+        'ms': 1e-3,
+        'us': 1e-6,
+        'ns': 1e-9,
+        'm': 60,
+        'h': 3600,
+        'd': 3600 * 24,
+}
+
+tds2 = {
+        'second': 1,
+        'minute': 60,
+        'hour': 60 * 60,
+        'day': 60 * 60 * 24,
+        'millisecond': 1e-3,
+        'microsecond': 1e-6,
+        'nanosecond': 1e-9,
+}
+tds2.update({k + 's': v for k, v in tds2.items()})
+timedelta_sizes.update(tds2)
+timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
+
+
+def parse_timedelta(s, default='seconds'):
+    """ Parse timedelta string to number of seconds
+
+    Examples
+    --------
+    >>> parse_timedelta('3s')
+    3
+    >>> parse_timedelta('3.5 seconds')
+    3.5
+    >>> parse_timedelta('300ms')
+    0.3
+    >>> parse_timedelta(timedelta(seconds=3))  # also supports timedeltas
+    3
+    """
+    if isinstance(s, timedelta):
+        return s.total_seconds()
+    if isinstance(s, Number):
+        s = str(s)
+    s = s.replace(' ', '')
+    if not s[0].isdigit():
+        s = '1' + s
+
+    for i in range(len(s) - 1, -1, -1):
+        if not s[i].isalpha():
+            break
+    index = i + 1
+
+    prefix = s[:index]
+    suffix = s[index:] or default
+
+    n = float(prefix)
+
+    multiplier = timedelta_sizes[suffix.lower()]
+
+    result = n * multiplier
+    if int(result) == result:
+        result = int(result)
+    return result
 
 
 def asciitable(columns, rows):
