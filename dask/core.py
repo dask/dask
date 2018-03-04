@@ -312,7 +312,7 @@ def subs(task, key, val):
                                                 for aa, bb in zip(arg, key)):
                     arg = val
 
-            except TypeError:
+            except (TypeError, AttributeError):
                 if arg == key:
                     arg = val
         newargs.append(arg)
