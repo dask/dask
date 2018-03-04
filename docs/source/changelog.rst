@@ -42,6 +42,8 @@ Bag
 Core
 ++++
 
+- Fixed bug when using unexpected but hashable types for keys (:pr:`3238`) `Daniel Collins`_
+
 
 0.17.1 / 2018-02-22
 -------------------
