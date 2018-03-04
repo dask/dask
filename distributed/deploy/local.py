@@ -82,7 +82,7 @@ class LocalCluster(object):
         self.silence_logs = silence_logs
         self._asynchronous = asynchronous
         if silence_logs:
-            silence_logging(level=silence_logs)
+            self._old_logging_level = silence_logging(level=silence_logs)
         if n_workers is None and threads_per_worker is None:
             if processes:
                 n_workers = _ncores
@@ -270,6 +270,8 @@ class LocalCluster(object):
             self._loop_runner.stop()
         finally:
             self.status = 'closed'
+        with ignoring(AttributeError):
+            silence_logging(self._old_logging_level)
 
     @gen.coroutine
     def scale_up(self, n, **kwargs):

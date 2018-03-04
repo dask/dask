@@ -54,6 +54,9 @@ def test_logging_default():
     old_root_level = root.level
     root.setLevel('WARN')
 
+    for handler in d.handlers:
+        handler.setLevel('INFO')
+
     try:
         dfb = logging.getLogger('distributed.foo.bar')
         f = logging.getLogger('foo')

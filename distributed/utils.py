@@ -641,11 +641,14 @@ def silence_logging(level, root='distributed'):
     if isinstance(level, str):
         level = getattr(logging, level.upper())
 
-    for name, logger in logging.root.manager.loggerDict.items():
-        if (isinstance(logger, logging.Logger)
-            and logger.name.startswith(root + '.')
-                and logger.level < level):
-            logger.setLevel(level)
+    old = None
+    logger = logging.getLogger(root)
+    for handler in logger.handlers:
+        if isinstance(handler, logging.StreamHandler):
+            old = handler.level
+            handler.setLevel(level)
+
+    return old
 
 
 @memoize

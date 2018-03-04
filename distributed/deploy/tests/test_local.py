@@ -347,5 +347,14 @@ def test_io_loop_periodic_callbacks(loop):
                 assert pc.io_loop is loop
 
 
+def test_logging():
+    """
+    Workers and scheduler have logs even when silenced
+    """
+    with LocalCluster(1, processes=False, diagnostics_port=None) as c:
+        assert c.scheduler._deque_handler.deque
+        assert c.workers[0]._deque_handler.deque
+
+
 if sys.version_info >= (3, 5):
     from distributed.deploy.tests.py3_test_deploy import *  # noqa F401
