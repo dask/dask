@@ -1027,3 +1027,4 @@ Other
 .. _`Max Epstein`: https://github.com/MaxPowerWasTaken
 .. _`Simon Perkins`: https://github.com/sjperkins
 .. _`Richard Postelnik`: https://github.com/postelrich
+.. _`Daniel Collins`: https://github.com/dancollins34

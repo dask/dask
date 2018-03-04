@@ -313,6 +313,7 @@ def subs(task, key, val):
                     arg = val
 
             except (TypeError, AttributeError):
+                # Handle keys which are not sized (len() fails), but are hashable
                 if arg == key:
                     arg = val
         newargs.append(arg)
