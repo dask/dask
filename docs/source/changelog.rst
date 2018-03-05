@@ -1,6 +1,22 @@
 Changelog
 =========
 
+1.21.2 - 2018-03-05
+-------------------
+
+-  Fix bug where we didn't check idle/saturated when stealing (:pr:`1801`) `Matthew Rocklin`_
+-  Fix bug where client was noisy when scheduler closed unexpectedly (:pr:`1806`) `Matthew Rocklin`_
+-  Use string-based timedeltas (like ``'500 ms'``) everywhere (:pr:`1804`) `Matthew Rocklin`_
+-  Keep logs in scheduler and worker even if silenced (:pr:`1803`) `Matthew Rocklin`_
+-  Support minimum, maximum, wait_count keywords in Adaptive (:pr:`1797`) `Jacob Tomlinson`_ and `Matthew Rocklin`_
+-  Support async protocols for LocalCluster, replace start= with asynchronous= (:pr:`1798`) `Matthew Rocklin`_
+-  Avoid restarting workers when nanny waits on scheduler (:pr:`1793`) `Matthew Rocklin`_
+-  Use ``IOStream.read_into()`` when available (:pr:`1477`) `Antoine Pitrou`_
+-  Reduce LocalCluster logging threshold from CRITICAL to WARN (:pr:`1785`) `Andy Jones`_
+-  Add `futures_of` to API docs (:pr:`1783`) `John Kirkham`_
+-  Make diagnostics link in client configurable (:pr:`1810`) `Matthew Rocklin`_
+
+
 1.21.1 - 2018-02-22
 -------------------
 
@@ -517,3 +533,6 @@ significantly without many new features.
 .. _`Tom Augspurger`: https://github.com/TomAugspurger
 .. _`Joe Hamman`: https://github.com/jhamman
 .. _`Thrasibule`: https://github.com/thrasibule
+.. _`Jacob Tomlinson`: https://github.com/jacobtomlinson
+.. _`Andy Jones`: https://github.com/andyljones
+.. _`John Kirkham`: https://github.com/jakirkham
