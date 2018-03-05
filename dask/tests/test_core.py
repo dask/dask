@@ -221,6 +221,20 @@ def test_subs_with_surprisingly_friendly_eq():
         assert subs(df, 'x', 1) is df
 
 
+def test_subs_unexpected_hashable_key():
+    class UnexpectedButHashable:
+        def __init__(self):
+            self.name = "a"
+
+        def __hash__(self):
+            return hash(self.name)
+
+        def __eq__(self, other):
+            return isinstance(other, UnexpectedButHashable)
+
+    assert subs((id, UnexpectedButHashable()), UnexpectedButHashable(), 1) == (id, 1)
+
+
 def test_quote():
     literals = [[1, 2, 3], (add, 1, 2),
                 [1, [2, 3]], (add, 1, (add, 2, 3))]

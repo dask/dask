@@ -42,6 +42,8 @@ Bag
 Core
 ++++
 
+- Fixed bug when using unexpected but hashable types for keys (:pr:`3238`) `Daniel Collins`_
+
 
 0.17.1 / 2018-02-22
 -------------------
@@ -1025,3 +1027,4 @@ Other
 .. _`Max Epstein`: https://github.com/MaxPowerWasTaken
 .. _`Simon Perkins`: https://github.com/sjperkins
 .. _`Richard Postelnik`: https://github.com/postelrich
+.. _`Daniel Collins`: https://github.com/dancollins34
