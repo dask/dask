@@ -419,6 +419,9 @@ def test_partition_on_cats(tmpdir):
     df = dd.read_parquet(tmp, index='c', engine='fastparquet')
     assert set(df.index.categories) == {'x', 'y', 'z'}
     assert 'c' not in df.columns
+    # series
+    df = dd.read_parquet(tmp, columns='b', engine='fastparquet')
+    assert set(df.cat.categories) == {'x', 'y', 'z'}
 
 
 def test_append_wo_index(tmpdir):

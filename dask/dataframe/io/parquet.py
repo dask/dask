@@ -250,7 +250,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
         index_names, column_names, storage_name_mapping, column_index_names = (
             _parse_pandas_metadata(json.loads(pandas_md[0]))
         )
-        column_names.extend(list(pf.cats))
+        column_names.extend(pf.cats)
     else:
         raise ValueError("File has multiple entries for 'pandas' metadata")
 
@@ -293,6 +293,12 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
                                                  categories=[UNKNOWN_CATEGORIES]),
                                   index=meta.index)
 
+    for catcol in pf.cats:
+        if catcol in meta.columns:
+            meta[catcol] = meta[catcol].cat.set_categories(pf.cats[catcol])
+        elif meta.index.name == catcol:
+            meta.index = meta.index.set_categories(pf.cats[catcol])
+
     if out_type == Series:
         assert len(meta.columns) == 1
         meta = meta[meta.columns[0]]
@@ -305,12 +311,6 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
                        categories, pf.schema, pf.cats, pf.dtypes,
                        pf.file_scheme, storage_name_mapping)
            for i, rg in enumerate(rgs)}
-    for catcol in pf.cats:
-        if catcol in meta.columns:
-            meta[catcol] = meta[catcol].cat.set_categories(pf.cats[catcol])
-        if meta.index.name == catcol:
-            meta.index = meta.index.set_categories(pf.cats[catcol])
-
     if not dsk:
         # empty dataframe
         dsk = {(name, 0): meta}
