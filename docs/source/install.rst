@@ -25,19 +25,31 @@ This will install a minimal set of dependencies required to run dask, similar to
 Pip
 ---
 
-To install Dask with ``pip`` there are a few options, depending on which
-dependencies you would like to keep up to date:
+You can install everything required for most common uses of dask (arrays,
+dataframes, ...)  This installs both Dask and dependencies like NumPy, Pandas,
+and so on that are necessary for different workloads.  This is often the right
+choice for Dask users::
 
-*   ``pip install dask[complete]``: Install everything
-*   ``pip install dask[array]``: Install dask and numpy
-*   ``pip install dask[bag]``: Install dask and cloudpickle
-*   ``pip install dask[dataframe]``: Install dask, numpy, and pandas
-*   ``pip install dask``: Install only dask, which depends only on the standard
-    library.  This is appropriate if you only want the task schedulers.
+   pip install "dask[complete]"    # Install everything
 
-We do this so that users of the lightweight core dask scheduler aren't required
-to download the more exotic dependencies of the collections (numpy, pandas,
-etc..)
+You can also install only the Dask library.  Modules like dask.array,
+dask.dataframe, or dask.distributed  won't work until you also install NumPy,
+Pandas, or Tornado respectively.  This is common for downstream library
+maintainers::
+
+   pip install dask                # Install only core parts of dask
+
+We also maintain other dependency sets for different subsets of functionality::
+
+   pip install "dask[array]"       # Install requirements for dask array
+   pip install "dask[bag]"         # Install requirements for dask bag
+   pip install "dask[dataframe]"   # Install requirements for dask dataframe
+   pip install "dask[distributed]" # Install requirements for distributed dask
+
+We have these options so that users of the lightweight core dask scheduler
+aren't required to download the more exotic dependencies of the collections
+(Numpy, Pandas, Tornado, etc..)
+
 
 Install from Source
 -------------------
