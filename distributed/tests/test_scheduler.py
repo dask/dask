@@ -736,7 +736,7 @@ def test_file_descriptors(c, s):
 @gen_cluster(client=True)
 def test_learn_occupancy(c, s, a, b):
     futures = c.map(slowinc, range(1000), delay=0.01)
-    while not any(ts.who_has for ts in s.tasks.values()):
+    while sum(len(ts.who_has) for ts in s.tasks.values()) < 10:
         yield gen.sleep(0.01)
 
     assert 1 < s.total_occupancy < 40

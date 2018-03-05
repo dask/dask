@@ -244,9 +244,13 @@ class WorkStealing(SchedulerPlugin):
                 ts.processing_on = thief
                 duration = victim.processing.pop(ts)
                 victim.occupancy -= duration
+                self.scheduler.total_occupancy -= duration
+                if not victim.processing:
+                    self.scheduler.total_occupancy -= victim.occupancy
+                    victim.occupancy = 0
                 thief.processing[ts] = d['thief_duration']
                 thief.occupancy += d['thief_duration']
-                self.scheduler.total_occupancy += d['thief_duration'] - duration
+                self.scheduler.total_occupancy += d['thief_duration']
                 self.put_key_in_stealable(ts)
 
                 try:
@@ -263,6 +267,15 @@ class WorkStealing(SchedulerPlugin):
                 import pdb
                 pdb.set_trace()
             raise
+        finally:
+            try:
+                self.scheduler.check_idle_saturated(thief)
+            except Exception:
+                pass
+            try:
+                self.scheduler.check_idle_saturated(victim)
+            except Exception:
+                pass
 
     def balance(self):
         s = self.scheduler

@@ -712,7 +712,10 @@ def test_inproc_comm_closed_explicit_2():
     comm = yield connect(contact_addr)
     comm.close()
     assert comm.closed()
-    yield gen.sleep(0.01)
+    start = time()
+    while len(listener_errors) < 1:
+        assert time() < start + 1
+        yield gen.sleep(0.01)
     assert len(listener_errors) == 1
 
     with pytest.raises(CommClosedError):

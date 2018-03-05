@@ -153,9 +153,11 @@ class Nanny(ServerNode):
 
         logger.info('        Start Nanny at: %r', self.address)
         response = yield self.instantiate()
-        if response == 'OK':
+        if response == 'running':
             assert self.worker_address
             self.status = 'running'
+        else:
+            yield self._close()
 
         self.start_periodic_callbacks()
 
@@ -216,14 +218,16 @@ class Nanny(ServerNode):
         self.auto_restart = True
         if self.death_timeout:
             try:
-                yield gen.with_timeout(timedelta(seconds=self.death_timeout),
-                                       self.process.start())
+                result = yield gen.with_timeout(
+                        timedelta(seconds=self.death_timeout),
+                        self.process.start()
+                )
             except gen.TimeoutError:
                 yield self._close(timeout=self.death_timeout)
                 raise gen.Return('timed out')
         else:
-            yield self.process.start()
-        raise gen.Return('OK')
+            result = yield self.process.start()
+        raise gen.Return(result)
 
     @gen.coroutine
     def restart(self, comm=None, timeout=2, executor_wait=True):
@@ -327,10 +331,10 @@ class WorkerProcess(object):
         """
         enable_proctitle_on_children()
         if self.status == 'running':
-            return
+            raise gen.Return(self.status)
         if self.status == 'starting':
             yield self.running.wait()
-            return
+            raise gen.Return(self.status)
 
         while True:
             # FIXME: this sometimes stalls in _wait_until_connected
@@ -365,7 +369,16 @@ class WorkerProcess(object):
                 break
 
         if self.status == 'starting':
-            yield self._wait_until_connected()
+            msg = yield self._wait_until_connected()
+            if not msg:
+                raise gen.Return(self.status)
+            self.worker_address = msg['address']
+            self.worker_dir = msg['dir']
+            assert self.worker_address
+            self.status = 'running'
+            self.running.set()
+
+        raise gen.Return(self.status)
 
     def _on_exit(self, proc):
         if proc is not self.process:
@@ -474,14 +487,11 @@ class WorkerProcess(object):
                 continue
 
             if isinstance(msg, Exception):
+                logger.error("Failed while trying to start worker process",
+                             exc_info=True)
                 yield self.process.join()
                 raise msg
             else:
-                self.worker_address = msg['address']
-                self.worker_dir = msg['dir']
-                assert self.worker_address
-                self.status = 'running'
-                self.running.set()
                 raise gen.Return(msg)
 
     @classmethod

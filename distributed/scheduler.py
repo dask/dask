@@ -171,6 +171,10 @@ class WorkerState(object):
        processing on this worker.  This is the sum of all the costs in
        this worker's :attr:`processing` dictionary.
 
+    .. attribute:: status: str
+
+       The current status of the worker, either ``'running'`` or ``'closed'``
+
     """
     # XXX need a state field to signal active/removed?
 
@@ -187,6 +191,7 @@ class WorkerState(object):
         'resources',
         'time_delay',
         'used_resources',
+        'status',
     )
 
     def __init__(self, worker, ncores, memory_limit, name=None):
@@ -520,15 +525,21 @@ class TaskState(object):
         return "<Task %r %s>" % (self.key, self.state)
 
     def validate(self):
-        for cs in self.who_wants:
-            assert isinstance(cs, ClientState), (repr(cs), self.who_wants)
-        for ws in self.who_has:
-            assert isinstance(ws, WorkerState), (repr(ws), self.who_has)
-        for ts in self.dependencies:
-            assert isinstance(ts, TaskState), (repr(ts), self.dependencies)
-        for ts in self.dependents:
-            assert isinstance(ts, TaskState), (repr(ts), self.dependents)
-        validate_task_state(self)
+        try:
+            for cs in self.who_wants:
+                assert isinstance(cs, ClientState), (repr(cs), self.who_wants)
+            for ws in self.who_has:
+                assert isinstance(ws, WorkerState), (repr(ws), self.who_has)
+            for ts in self.dependencies:
+                assert isinstance(ts, TaskState), (repr(ts), self.dependencies)
+            for ts in self.dependents:
+                assert isinstance(ts, TaskState), (repr(ts), self.dependents)
+            validate_task_state(self)
+        except Exception as e:
+            logger.exception(e)
+            if LOG_PDB:
+                import pdb
+                pdb.set_trace()
 
 
 class _StateLegacyMapping(Mapping):
@@ -1163,6 +1174,7 @@ class Scheduler(ServerNode):
             ws = self.workers.get(address)
             if ws is None:
                 ws = WorkerState(address, ncores, memory_limit, name)
+                ws.status = 'running'
                 self.workers[address] = ws
                 existing = False
             else:
@@ -1548,6 +1560,7 @@ class Scheduler(ServerNode):
             self.idle.discard(ws)
             self.saturated.discard(ws)
             del self.workers[address]
+            ws.status = 'closed'
             self.total_occupancy -= ws.occupancy
 
             recommendations = OrderedDict()
@@ -1754,6 +1767,9 @@ class Scheduler(ServerNode):
             assert isinstance(w, (str, unicode)), (type(w), w)
             assert isinstance(ws, WorkerState), (type(ws), ws)
             assert ws.address == w
+            if not ws.processing:
+                assert not ws.occupancy
+                assert ws in self.idle
 
         for k, ts in self.tasks.items():
             assert isinstance(ts, TaskState), (type(ts), ts)
@@ -2058,6 +2074,7 @@ class Scheduler(ServerNode):
         ws.occupancy -= ws.processing[ts]
         self.total_occupancy -= ws.processing[ts]
         ws.processing[ts] = 0
+        self.check_idle_saturated(ws)
 
     @gen.coroutine
     def handle_worker(self, worker):
@@ -3174,7 +3191,10 @@ class Scheduler(ServerNode):
             else:  # dumb but fast in large case
                 worker = self.workers[self.workers.iloc[self.n_tasks % len(self.workers)]]
 
-        assert worker is None or isinstance(worker, WorkerState), (type(worker), worker)
+        if self.validate:
+            assert worker is None or isinstance(worker, WorkerState), (type(worker), worker)
+            assert worker.address in self.workers
+
         return worker
 
     def transition_waiting_processing(self, key):
@@ -3822,7 +3842,7 @@ class Scheduler(ServerNode):
     ##############################
 
     def check_idle_saturated(self, ws, occ=None):
-        if self.total_ncores == 0:
+        if self.total_ncores == 0 or ws.status == 'closed':
             return
         if occ is None:
             occ = ws.occupancy
