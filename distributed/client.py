@@ -822,7 +822,7 @@ class Client(Node):
         try:
             self._scheduler_identity = yield self.scheduler.identity()
         except EnvironmentError:
-            if self.status not in ('running', 'connecting'):
+            if self.status != 'running':
                 return
             else:
                 raise

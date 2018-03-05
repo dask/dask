@@ -5195,5 +5195,15 @@ def test_client_doesnt_close_given_loop(loop):
             assert c.submit(inc, 2).result() == 3
 
 
+@gen_cluster(client=True, ncores=[])
+def test_quiet_scheduler_loss(c, s):
+    c._periodic_callbacks['scheduler-info'].interval = 10
+    with captured_logger(logging.getLogger('distributed.client')) as logger:
+        yield s.close()
+        yield c._update_scheduler_info()
+    text = logger.getvalue()
+    assert "BrokenPipeError" not in text
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401
