@@ -43,6 +43,7 @@ recent-messages-log-length: 0  # number of messages to keep for debugging
 
 # Bokeh web dashboard
 bokeh-export-tool: False
+diagnostics-link: "http://{host}:{port}/status"
 
 tick-time: 20ms           # milliseconds between event loop health checks
 tick-maximum-delay: 1000  # milliseconds allowed before triggering a warning

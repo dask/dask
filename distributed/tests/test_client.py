@@ -5205,5 +5205,20 @@ def test_quiet_scheduler_loss(c, s):
     assert "BrokenPipeError" not in text
 
 
+@pytest.mark.skipif('USER' not in os.environ, reason='no USER env variable')
+def test_diagnostics_link_env_variable(loop):
+    pytest.importorskip('bokeh')
+    from distributed.bokeh.scheduler import BokehScheduler
+    with cluster(scheduler_kwargs={'services': {('bokeh', 12355): BokehScheduler}}) as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            config['diagnostics-link'] = 'http://foo-{USER}:{port}/status'
+            try:
+                text = c._repr_html_()
+                link = 'http://foo-' + os.environ['USER'] + ':12355/status'
+                assert link in text
+            finally:
+                del config['diagnostics-link']
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401
