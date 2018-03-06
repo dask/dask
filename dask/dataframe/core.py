@@ -2147,7 +2147,6 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
 
 class Index(Series):
-
     _partition_type = pd.Index
     _token_prefix = 'index-'
 
@@ -2231,6 +2230,35 @@ class Index(Series):
         if freq is None:
             freq = meta.freq
         return maybe_shift_divisions(out, periods, freq=freq)
+
+    @classmethod
+    def _get_unary_operator(cls, op):
+        def f(self):
+            try:
+                meta = op(self._meta_nonempty)
+            except Exception:
+                meta = no_default
+            else:
+                if isinstance(meta, np.ndarray):
+                    meta = pd.Index(meta)
+            return elemwise(op, self, meta=meta)
+
+        return f
+
+    @classmethod
+    def _get_binary_operator(cls, op, inv=False):
+        def f(self, other):
+            if inv:
+                self, other = other, self
+
+            meta = op(getattr(self, '_meta_nonempty', self),
+                      getattr(other, '_meta_nonempty', other))
+            if isinstance(meta, np.ndarray):
+                import pdb; pdb.set_trace()
+                meta = pd.Index(meta)
+            return elemwise(op, self, other, meta=meta)
+
+        return f
 
 
 class DataFrame(_Frame):
@@ -2986,6 +3014,7 @@ for op in [operator.abs, operator.add, operator.and_, operator_div,
            operator.sub, operator.truediv, operator.floordiv, operator.xor]:
     _Frame._bind_operator(op)
     Scalar._bind_operator(op)
+    Index._bind_operator(op)
 
 for name in ['add', 'sub', 'mul', 'div',
              'truediv', 'floordiv', 'mod', 'pow',
