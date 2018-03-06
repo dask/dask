@@ -35,9 +35,11 @@ from distributed.cli.utils import check_python_3
 @click.option('--log-directory', default=None, type=click.Path(exists=True),
               help=("Directory to use on all cluster nodes for the output of "
                     "dask-scheduler and dask-worker commands."))
+@click.option('--remote-python', default=None, type=str,
+              help="Path to Python on remote nodes.")
 @click.pass_context
 def main(ctx, scheduler, scheduler_port, hostnames, hostfile, nthreads, nprocs,
-         ssh_username, ssh_port, ssh_private_key, nohost, log_directory):
+         ssh_username, ssh_port, ssh_private_key, nohost, log_directory, remote_python):
     try:
         hostnames = list(hostnames)
         if hostfile:
@@ -53,7 +55,7 @@ def main(ctx, scheduler, scheduler_port, hostnames, hostfile, nthreads, nprocs,
         exit(1)
 
     c = SSHCluster(scheduler, scheduler_port, hostnames, nthreads, nprocs,
-                   ssh_username, ssh_port, ssh_private_key, nohost, log_directory)
+                   ssh_username, ssh_port, ssh_private_key, nohost, log_directory, remote_python)
 
     import distributed
     print('\n---------------------------------------------------------------')
