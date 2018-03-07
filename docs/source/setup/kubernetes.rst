@@ -28,11 +28,11 @@ You can use Kubernetes to launch Dask workers in the following two ways:
 
 2.  **Native**:
     You can quickly deploy Dask workers on Kubernetes
-    from within a Python script or interactive session using Daskernetes_.
+    from within a Python script or interactive session using Dask-Kubernetes_.
 
     .. code-block:: python
 
-       from daskernetes import KubeCluster
+       from dask_kubernetes import KubeCluster
        cluster = KubeCluster.from_yaml('worker-template.yaml')
        cluster.scale(20)  # add 20 workers
        cluster.adapt()  # or create and destroy workers dynamically based on workload
@@ -47,12 +47,12 @@ You can use Kubernetes to launch Dask workers in the following two ways:
         rather than depend on a centralized system
     3.  Quickly adapt Dask cluster size to the current workload
 
-    See Daskernetes_ documentation for more information.
+    See Dask-Kubernetes_ documentation for more information.
 
 You may also want to see the documentation on using
 :doc:`Dask with Docker containers <docker>`
 to help you manage your software environments on Kubernetes.
 
 .. _Kubernetes: https://kubernetes.io/
-.. _Daskernetes: https://daskernetes.readthedocs.io/
+.. _Dask-Kubernetes: https://dask-kubernetes.readthedocs.io/
 .. _Helm: https://helm.sh/
