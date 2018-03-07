@@ -2043,13 +2043,17 @@ class Client(Node):
         packed = pack_data(keys, futures)
         if sync:
             if getattr(thread_state, 'key', False):
-                secede()
+                try:
+                    secede()
+                    should_rejoin = True
+                except Exception:
+                    should_rejoin = False
             try:
                 results = self.gather(packed, asynchronous=asynchronous)
             finally:
                 for f in futures.values():
                     f.release()
-                if getattr(thread_state, 'key', False):
+                if getattr(thread_state, 'key', False) and should_rejoin:
                     rejoin()
             return results
         return packed

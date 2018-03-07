@@ -272,3 +272,15 @@ def test_secede_without_stealing_issue_1262():
     assert f == 2
     # ensure no workers had errors
     assert all([f.exception() is None for f in s._worker_coroutines])
+
+
+@gen_cluster(client=True)
+def test_compute_within_worker_client(c, s, a, b):
+
+    @dask.delayed
+    def f():
+        with worker_client():
+            return dask.delayed(lambda x: x)(1).compute()
+
+    result = yield c.compute(f())
+    assert result == 1
