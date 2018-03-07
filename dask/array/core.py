@@ -1104,6 +1104,10 @@ class Array(Base):
     def shape(self):
         return tuple(map(sum, self.chunks))
 
+    @property
+    def _meta(self):
+        return np.empty(shape=(), dtype=self.dtype)
+
     def _get_chunks(self):
         return self._chunks
 
@@ -2936,7 +2940,10 @@ def elemwise(op, *args, **kwargs):
         vals = [np.empty((1,) * max(1, a.ndim), dtype=a.dtype)
                 if not is_scalar_for_elemwise(a) else a
                 for a in args]
-        dt = apply_infer_dtype(op, vals, {}, 'elemwise', suggest_dtype=False)
+        try:
+            dt = apply_infer_dtype(op, vals, {}, 'elemwise', suggest_dtype=False)
+        except Exception:
+            return NotImplemented
         need_enforce_dtype = any(not is_scalar_for_elemwise(a) and a.ndim == 0 for a in args)
 
     name = kwargs.get('name', None) or '%s-%s' % (funcname(op),

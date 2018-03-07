@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 import dask
+import dask.array as da
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.utils import put_lines, M
@@ -997,17 +998,17 @@ def test_combine():
     first = lambda a, b: a
 
     # DataFrame
-    for da, db, a, b in [(ddf1, ddf2, df1, df2),
-                         (ddf1.A, ddf2.A, df1.A, df2.A),
-                         (ddf1.B, ddf2.B, df1.B, df2.B)]:
+    for dda, ddb, a, b in [(ddf1, ddf2, df1, df2),
+                           (ddf1.A, ddf2.A, df1.A, df2.A),
+                           (ddf1.B, ddf2.B, df1.B, df2.B)]:
         for func, fill_value in [(add, None), (add, 100), (first, None)]:
             sol = a.combine(b, func, fill_value=fill_value)
-            assert_eq(da.combine(db, func, fill_value=fill_value), sol)
-            assert_eq(da.combine(b, func, fill_value=fill_value), sol)
+            assert_eq(dda.combine(ddb, func, fill_value=fill_value), sol)
+            assert_eq(dda.combine(b, func, fill_value=fill_value), sol)
 
     assert_eq(ddf1.combine(ddf2, add, overwrite=False),
               df1.combine(df2, add, overwrite=False))
-    assert da.combine(db, add)._name == da.combine(db, add)._name
+    assert dda.combine(ddb, add)._name == dda.combine(ddb, add)._name
 
 
 def test_combine_first():
@@ -2943,7 +2944,6 @@ def test_cumulative_multiple_columns():
 
 @pytest.mark.parametrize('func', [np.asarray, M.to_records])
 def test_map_partition_array(func):
-    import dask.array as da
     from dask.array.utils import assert_eq
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
                        'y': [6.0, 7.0, 8.0, 9.0, 10.0]},
@@ -2968,7 +2968,6 @@ def test_map_partition_array(func):
 
 def test_map_partition_sparse():
     sparse = pytest.importorskip('sparse')
-    import dask.array as da
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
                        'y': [6.0, 7.0, 8.0, 9.0, 10.0]},
                       index=['a', 'b', 'c', 'd', 'e'])
@@ -2985,3 +2984,49 @@ def test_map_partition_sparse():
         computed = result.compute()
         assert (computed.data == expected.data).all()
         assert (computed.coords == expected.coords).all()
+
+
+def test_mixed_dask_array_operations():
+    df = pd.DataFrame({'x': [1, 2, 3]}, index=[4, 5, 6])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(df.x + df.x.values,
+              ddf.x + ddf.x.values)
+    assert_eq(df.x.values + df.x,
+              ddf.x.values + ddf.x)
+
+    assert_eq(df.x + df.index.values,
+              ddf.x + ddf.index.values)
+    assert_eq(df.index.values + df.x,
+              ddf.index.values + ddf.x)
+
+
+def test_mixed_dask_array_operations_errors():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5]}, index=[4, 5, 6, 7, 8])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    x = da.arange(5, chunks=((1, 4),))
+    x._chunks = ((np.nan, np.nan),)
+
+    with pytest.raises(ValueError):
+        (ddf.x + x).compute()
+
+    x = da.arange(5, chunks=((2, 2, 1),))
+    with pytest.raises(ValueError) as info:
+        ddf.x + x
+
+    assert 'add' in str(info.value)
+
+
+def test_mixed_dask_array_multi_dimensional():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+                       'y': [5., 6., 7., 8., 9.]},
+                      columns=['x', 'y'])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    x = (df.values + 1).astype(float)
+    dx = (ddf.values + 1).astype(float)
+
+    assert_eq(ddf + dx + 1, df + x + 1)
+    assert_eq(ddf + dx.rechunk((None, 1)) + 1, df + x + 1)
+    assert_eq(ddf[['y', 'x']] + dx + 1, df[['y', 'x']] + x + 1)
