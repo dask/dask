@@ -202,6 +202,7 @@ def plot_data(state, profile_interval=0.010):
             x += width
 
     traverse(state, 0, 1, 0)
+    percentages = ["{:.2f}%".format(100 * w) for w in widths]
     return {'left': starts,
             'right': stops,
             'bottom': heights,
@@ -213,7 +214,8 @@ def plot_data(state, profile_interval=0.010):
             'line': lines,
             'line_number': line_numbers,
             'name': names,
-            'time': times}
+            'time': times,
+            'percentage': percentages}
 
 
 try:

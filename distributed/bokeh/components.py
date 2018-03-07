@@ -322,6 +322,10 @@ class ProfilePlot(DashboardComponent):
                     <span style="font-size: 14px; font-weight: bold;">Time:</span>&nbsp;
                     <span style="font-size: 10px; font-family: Monaco, monospace;">@time</span>
                 </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Percentage:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@width</span>
+                </div>
                 """
         )
         self.root.add_tools(hover)
@@ -409,6 +413,10 @@ class ProfileTimePlot(DashboardComponent):
                 <div>
                     <span style="font-size: 14px; font-weight: bold;">Time:</span>&nbsp;
                     <span style="font-size: 10px; font-family: Monaco, monospace;">@time</span>
+                </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Percentage:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@percentage</span>
                 </div>
                 """
         )
