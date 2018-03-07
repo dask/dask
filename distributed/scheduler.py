@@ -39,7 +39,7 @@ from .proctitle import setproctitle
 from .security import Security
 from .utils import (All, ignoring, get_ip, get_fileno_limit, log_errors,
                     key_split, validate_key, no_default, DequeHandler,
-                    parse_timedelta)
+                    parse_timedelta, PeriodicCallback)
 from .utils_comm import (scatter_to_workers, gather_from_workers)
 from .utils_perf import enable_gc_diagnosis, disable_gc_diagnosis
 
@@ -175,6 +175,11 @@ class WorkerState(object):
 
        The current status of the worker, either ``'running'`` or ``'closed'``
 
+    .. attribute:: last_seen: Number
+
+       The last time we received a heartbeat from this worker, in local
+       scheduler time.
+
     """
     # XXX need a state field to signal active/removed?
 
@@ -192,6 +197,7 @@ class WorkerState(object):
         'time_delay',
         'used_resources',
         'status',
+        'last_seen',
     )
 
     def __init__(self, worker, ncores, memory_limit, name=None):
@@ -205,6 +211,7 @@ class WorkerState(object):
         self.processing = dict()
         self.resources = {}
         self.used_resources = {}
+        self.last_seen = 0
 
         self.info = {'name': name,
                      'memory_limit': memory_limit,
@@ -731,6 +738,7 @@ class Scheduler(ServerNode):
             validate=False,
             scheduler_file=None,
             security=None,
+            worker_ttl=None,
             **kwargs):
 
         self._setup_logging()
@@ -745,6 +753,8 @@ class Scheduler(ServerNode):
         self.service_specs = services or {}
         self.services = {}
         self.scheduler_file = scheduler_file
+        worker_ttl = worker_ttl or config.get('worker-ttl')
+        self.worker_ttl = parse_timedelta(worker_ttl) if worker_ttl else None
 
         self.security = security or Security()
         assert isinstance(self.security, Security)
@@ -929,6 +939,12 @@ class Scheduler(ServerNode):
             connection_limit=connection_limit, deserialize=False,
             connection_args=self.connection_args,
             **kwargs)
+
+        if self.worker_ttl:
+            pc = PeriodicCallback(self.check_worker_ttl,
+                                  self.worker_ttl,
+                                  io_loop=loop)
+            self.periodic_callbacks['worker-ttl'] = pc
 
         if extensions is None:
             extensions = DEFAULT_EXTENSIONS
@@ -1162,7 +1178,6 @@ class Scheduler(ServerNode):
             now = now or time()
             info = info or {}
             host_info = host_info or {}
-            info['last-seen'] = time()
 
             address = self.coerce_address(address, resolve_address)
             host = get_address_host(address)
@@ -1179,6 +1194,8 @@ class Scheduler(ServerNode):
                 existing = False
             else:
                 existing = True
+
+            ws.last_seen = time()
 
             if info:
                 ws.info.update(info)
@@ -4156,6 +4173,14 @@ class Scheduler(ServerNode):
             for ts in ws.processing:
                 steal.remove_key_from_stealable(ts)
                 steal.put_key_in_stealable(ts)
+
+    def check_worker_ttl(self):
+        now = time()
+        for ws in self.workers.values():
+            if ws.last_seen < now - self.worker_ttl:
+                logger.warn("Worker failed to heartbeat within %s seconds. "
+                            "Closing: %s", self.worker_ttl, ws)
+                self.remove_worker(address=ws.address)
 
 
 def decide_worker(ts, all_workers, valid_workers, objective):

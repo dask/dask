@@ -726,8 +726,8 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                                     ncores, scheduler, loop, security=security,
                                     Worker=Worker, scheduler_kwargs=scheduler_kwargs,
                                     worker_kwargs=worker_kwargs)
-                            except Exception:
-                                logger.error("Failed to start gen_cluster, retryng")
+                            except Exception as e:
+                                logger.error("Failed to start gen_cluster, retryng", exc_info=True)
                             else:
                                 break
                         workers[:] = ws

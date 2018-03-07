@@ -14,6 +14,7 @@ allowed-failures: 3     # number of retries before a task is considered bad
 pdb-on-err: False       # enter debug mode on scheduling error
 transition-log-length: 100000
 work-stealing: True     # workers should steal tasks from each other
+worker-ttl: null        # like '60s'. Time to live for workers.  They must heartbeat faster than this
 
 # Worker options
 multiprocessing-method: forkserver
