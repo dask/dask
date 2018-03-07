@@ -6,8 +6,7 @@ from toolz import frequencies, pluck
 from tornado import gen
 from tornado.ioloop import IOLoop
 
-from distributed import Client
-from distributed.deploy import Adaptive, LocalCluster
+from distributed import Client, wait, Adaptive, LocalCluster
 from distributed.utils_test import gen_cluster, gen_test, slowinc
 from distributed.utils_test import loop, nodebug  # noqa: F401
 from distributed.metrics import time
@@ -97,22 +96,23 @@ def test_adaptive_local_cluster_multi_workers():
         futures = c.map(slowinc, range(100), delay=0.01)
 
         start = time()
-        while not cluster.scheduler.worker_info:
+        while not cluster.scheduler.workers:
             yield gen.sleep(0.01)
-            assert time() < start + 15
+            assert time() < start + 15, alc.log
 
         yield c.gather(futures)
         del futures
 
         start = time()
-        while cluster.workers:
+        # while cluster.workers:
+        while cluster.scheduler.workers:
             yield gen.sleep(0.01)
-            assert time() < start + 15
+            assert time() < start + 15, alc.log
 
-        assert not cluster.workers
+        # assert not cluster.workers
         assert not cluster.scheduler.workers
         yield gen.sleep(0.2)
-        assert not cluster.workers
+        # assert not cluster.workers
         assert not cluster.scheduler.workers
 
         futures = c.map(slowinc, range(100), delay=0.01)
@@ -221,6 +221,53 @@ def test_avoid_churn():
             yield gen.sleep(0.040)
 
         assert frequencies(pluck(1, adapt.log)) == {'up': 1}
+    finally:
+        yield client._close()
+        yield cluster._close()
+
+
+@gen_test(timeout=None)
+def test_adapt_quickly():
+    """ We want to avoid creating and deleting workers frequently
+
+    Instead we want to wait a few beats before removing a worker in case the
+    user is taking a brief pause between work
+    """
+    cluster = yield LocalCluster(0, asynchronous=True, processes=False,
+                                 scheduler_port=0, silence_logs=False,
+                                 diagnostics_port=None)
+    client = yield Client(cluster, asynchronous=True)
+    adapt = Adaptive(cluster.scheduler, cluster, interval=20, wait_count=5,
+                     maximum=10)
+    try:
+        future = client.submit(slowinc, 1, delay=0.100)
+        yield wait(future)
+        assert len(adapt.log) == 1
+
+        # Scale up when there is plenty of available work
+        futures = client.map(slowinc, range(1000), delay=0.100)
+        while frequencies(pluck(1, adapt.log)) == {'up': 1}:
+            yield gen.sleep(0.01)
+        assert len(adapt.log) == 2
+        assert 'up' in adapt.log[-1]
+        d = [x for x in adapt.log[-1] if isinstance(x, dict)][0]
+        assert 2 < d['n'] <= adapt.maximum
+
+        while len(cluster.scheduler.workers) < adapt.maximum:
+            yield gen.sleep(0.01)
+
+        del futures
+
+        while len(cluster.scheduler.workers) > 1:
+            yield gen.sleep(0.01)
+
+        # Don't scale up for large sequential computations
+        x = yield client.scatter(1)
+        for i in range(100):
+            x = client.submit(slowinc, x)
+
+        yield gen.sleep(0.1)
+        assert len(cluster.scheduler.workers) == 1
     finally:
         yield client._close()
         yield cluster._close()

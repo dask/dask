@@ -2,10 +2,11 @@ from __future__ import print_function, division, absolute_import
 
 from collections import deque
 import logging
-from ..metrics import time
+import math
 
 from tornado import gen
 
+from ..metrics import time
 from ..utils import log_errors, PeriodicCallback, parse_timedelta
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,9 @@ class Adaptive(object):
         removal before we remove it.
     scale_factor : int, default 2
         Factor to scale by when it's determined additional workers are needed
+    target_duration: timedelta or str, default "5s"
+        Amount of time we want a computation to take.
+        This affects how aggressively we scale up.
     minimum: int
         Minimum number of workers to keep around
     maximum: int
@@ -61,7 +65,7 @@ class Adaptive(object):
 
     def __init__(self, scheduler, cluster, interval='1s', startup_cost='1s',
                  scale_factor=2, minimum=0, maximum=None, wait_count=3,
-                 **kwargs):
+                 target_duration='5s', **kwargs):
         interval = parse_timedelta(interval, default='ms')
         self.scheduler = scheduler
         self.cluster = cluster
@@ -76,6 +80,7 @@ class Adaptive(object):
         self.log = deque(maxlen=1000)
         self.close_counts = {}
         self.wait_count = wait_count
+        self.target_duration = parse_timedelta(target_duration)
 
     def needs_cpu(self):
         """
@@ -192,18 +197,19 @@ class Adaptive(object):
     def _retire_workers(self, workers=None):
         if workers is None:
             workers = self.workers_to_close()
+        if not workers:
+            raise gen.Return(workers)
         with log_errors():
-            result = yield self.scheduler.retire_workers(workers=workers,
-                                                         remove=True,
-                                                         close_workers=True)
+            yield self.scheduler.retire_workers(workers=workers,
+                                                remove=True,
+                                                close_workers=True)
 
-            if result:
-                logger.info("Retiring workers %s", result)
-                f = self.cluster.scale_down(result)
-                if gen.is_future(f):
-                    yield f
+            logger.info("Retiring workers %s", workers)
+            f = self.cluster.scale_down(workers)
+            if gen.is_future(f):
+                yield f
 
-            raise gen.Return(result)
+            raise gen.Return(workers)
 
     def get_scale_up_kwargs(self):
         """
@@ -220,7 +226,11 @@ class Adaptive(object):
         --------
         LocalCluster.scale_up
         """
-        instances = max(1, len(self.scheduler.workers) * self.scale_factor)
+        target = math.ceil(self.scheduler.total_occupancy /
+                           self.target_duration)
+        instances = max(1,
+                        len(self.scheduler.workers) * self.scale_factor,
+                        target - len(self.scheduler.workers))
         logger.info("Scaling up to %d workers", instances)
         if self.maximum:
             instances = min(self.maximum, instances)
