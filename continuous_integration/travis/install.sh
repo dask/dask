@@ -50,6 +50,7 @@ conda install -q -c conda-forge \
     pytest-timeout \
     python=$PYTHON \
     requests \
+    scipy \
     tblib \
     toolz \
     tornado=4.5 \

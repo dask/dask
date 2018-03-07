@@ -91,7 +91,7 @@ class ReplayExceptionClient(object):
             raise gen.Return((function, args, kwargs, deps))
         else:
             function, args, kwargs = _deserialize(task=task)
-            raise gen.Return((function, args, kwargs, []))
+            raise gen.Return((function, args, kwargs, deps))
 
     def get_futures_error(self, future):
         """

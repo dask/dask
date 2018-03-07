@@ -4416,6 +4416,16 @@ def test_recreate_error_collection(c, s, a, b):
         function(*args, **kwargs)
 
 
+@gen_cluster(client=True)
+def test_recreate_error_array(c, s, a, b):
+    da = pytest.importorskip('dask.array')
+    pytest.importorskip('scipy')
+    z = (da.linalg.inv(da.zeros((10, 10), chunks=10)) + 1).sum()
+    zz = z.persist()
+    func, args, kwargs = yield c._recreate_error_locally(zz)
+    assert '0.,0.,0.' in str(args).replace(' ', '')  # args contain actual arrays
+
+
 def test_recreate_error_sync(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:

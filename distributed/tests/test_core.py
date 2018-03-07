@@ -9,7 +9,6 @@ from tornado import gen
 import pytest
 
 from distributed.compatibility import finalize
-from distributed.config import set_config
 from distributed.core import (pingpong, Server, rpc, connect, send_recv,
                                coerce_to_address, ConnectionPool)
 
@@ -561,10 +560,15 @@ def test_ticks(s, a, b):
 @gen_cluster()
 def test_tick_logging(s, a, b):
     pytest.importorskip('crick')
-    with set_config(**{'tick-maximum-delay': 10}):
+    from distributed import core
+    old = core.tick_maximum_delay
+    core.tick_maximum_delay = 0.001
+    try:
         with captured_logger('distributed.core') as sio:
             yield gen.sleep(0.1)
 
-    text = sio.getvalue()
-    assert "unresponsive" in text
-    assert 'Scheduler' in text or 'Worker' in text
+        text = sio.getvalue()
+        assert "unresponsive" in text
+        assert 'Scheduler' in text or 'Worker' in text
+    finally:
+        core.tick_maximum_delay = old
