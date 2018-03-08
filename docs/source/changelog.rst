@@ -1,6 +1,20 @@
 Changelog
 =========
 
+
+1.21.3 - 2018-03-08
+-------------------
+
+-  Add cluster superclass and improve adaptivity (#1813) `Matthew Rocklin`_
+-  Fixup tests and support Python 2 for Tornado 5.0 (#1818) `Matthew Rocklin`_
+-  Fix bug in recreate_error when dependencies are dropped (#1815) `Matthew Rocklin`_
+-  Add worker time to live in Scheduler (#1811) `Matthew Rocklin`_
+-  Scale adaptive based on total_occupancy (#1807) `Matthew Rocklin`_
+-  Support calling compute within worker_client (#1814) `Matthew Rocklin`_
+-  Add percentage to profile plot (#1817) `Brett Naul`_
+-  Overwrite option for remote python in dask-ssh (#1812) `Sven Kreiss`_
+
+
 1.21.2 - 2018-03-05
 -------------------
 
@@ -536,3 +550,4 @@ significantly without many new features.
 .. _`Jacob Tomlinson`: https://github.com/jacobtomlinson
 .. _`Andy Jones`: https://github.com/andyljones
 .. _`John Kirkham`: https://github.com/jakirkham
+.. _`Sven Kreiss`:  https://github.com/svenkreiss
