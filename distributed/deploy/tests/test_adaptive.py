@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from time import sleep
 
+import pytest
 from toolz import frequencies, pluck
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -165,7 +166,7 @@ def test_min_max():
     yield cluster._start()
     try:
         adapt = Adaptive(cluster.scheduler, cluster, minimum=1, maximum=2,
-                         interval=20)
+                         interval='20 ms')
         c = yield Client(cluster, asynchronous=True, loop=loop)
 
         start = time()
@@ -268,6 +269,53 @@ def test_adapt_quickly():
 
         yield gen.sleep(0.1)
         assert len(cluster.scheduler.workers) == 1
+    finally:
+        yield client._close()
+        yield cluster._close()
+
+
+@gen_test(timeout=None)
+def test_adapt_down():
+    """ Ensure that redefining adapt with a lower maximum removes workers """
+    cluster = yield LocalCluster(0, asynchronous=True, processes=False,
+                                 scheduler_port=0, silence_logs=False,
+                                 diagnostics_port=None)
+    client = yield Client(cluster, asynchronous=True)
+    cluster.adapt(interval='20ms', maximum=5)
+
+    try:
+        futures = client.map(slowinc, range(1000), delay=0.1)
+        while len(cluster.scheduler.workers) < 5:
+            yield gen.sleep(0.1)
+
+        cluster.adapt(maximum=2)
+
+        start = time()
+        while len(cluster.scheduler.workers) != 2:
+            yield gen.sleep(0.1)
+            assert time() < start + 1
+    finally:
+        yield client._close()
+        yield cluster._close()
+
+
+@pytest.mark.xfail(reason="we currently only judge occupancy, not ntasks")
+@gen_test(timeout=30)
+def test_no_more_workers_than_tasks():
+    loop = IOLoop.current()
+    cluster = yield LocalCluster(0, scheduler_port=0, silence_logs=False,
+                                 processes=False, diagnostics_port=None,
+                                 loop=loop, asynchronous=True)
+    yield cluster._start()
+    try:
+        adapt = Adaptive(cluster.scheduler, cluster, minimum=0, maximum=4,
+                         interval='10 ms')
+        client = yield Client(cluster, asynchronous=True, loop=loop)
+        cluster.scheduler.task_duration['slowinc'] = 1000
+
+        yield client.submit(slowinc, 1, delay=0.100)
+
+        assert len(cluster.scheduler.workers) <= 1
     finally:
         yield client._close()
         yield cluster._close()

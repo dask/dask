@@ -2649,17 +2649,8 @@ class Scheduler(ServerNode):
             memory_ratio = 2
 
         with log_errors():
-            # XXX processing isn't used is the heuristics below
-            if all(ws.processing for ws in self.workers.values()):
+            if not n and all(ws.processing for ws in self.workers.values()):
                 return []
-
-            limit_bytes = {ws.address: ws.memory_limit
-                           for ws in self.workers.values()}
-
-            limit = sum(limit_bytes.values())
-            total = sum(ws.nbytes for ws in self.workers.values())
-            idle = sorted([ws for ws in self.idle if not ws.processing],
-                          key=operator.attrgetter('nbytes'), reverse=True)
 
             if key is None:
                 key = lambda ws: ws.address
@@ -2673,19 +2664,31 @@ class Scheduler(ServerNode):
 
             limit = sum(limit_bytes.values())
             total = sum(group_bytes.values())
-            idle = sorted([group for group, workers in groups.items()
-                           if not any(ws.processing for ws in workers)],
-                          key=group_bytes.get, reverse=True)
+
+            def key(group):
+                is_idle = not any(ws.processing for ws in groups[group])
+                bytes = -group_bytes[group]
+                return (is_idle, bytes)
+            idle = sorted(groups, key=key)
+
             to_close = []
 
             while idle:
-                w = idle.pop()
-                limit -= limit_bytes[w]
-                if (n is not None and len(to_close) < n or  # still plenty of space
-                    memory_ratio is not None and limit >= memory_ratio * total):
-                    to_close.append(w)
-                else:
+                group = idle.pop()
+                if n is None and any(ws.processing for ws in groups[group]):
                     break
+
+                limit -= limit_bytes[group]
+
+                if n is not None and len(to_close) < n:
+                    to_close.append(group)
+                    continue
+
+                if memory_ratio is not None and limit >= memory_ratio * total:
+                    to_close.append(group)
+                    continue
+
+                break
 
             result = [ws.address for g in to_close for ws in groups[g]]
             if result:

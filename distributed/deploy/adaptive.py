@@ -82,6 +82,11 @@ class Adaptive(object):
         self.wait_count = wait_count
         self.target_duration = parse_timedelta(target_duration)
 
+    def stop(self):
+        self._adapt_callback.stop()
+        self._adapt_callback = None
+        del self._adapt_callback
+
     def needs_cpu(self):
         """
         Check if the cluster is CPU constrained (too many tasks per core)
@@ -186,11 +191,17 @@ class Adaptive(object):
         """
         if len(self.scheduler.workers) <= self.minimum:
             return []
+
         kw = dict(self._workers_to_close_kwargs)
         kw.update(kwargs)
+
+        if self.maximum is not None and len(self.scheduler.workers) > self.maximum:
+            kw['n'] = len(self.scheduler.workers) - self.maximum
+
         L = self.scheduler.workers_to_close(**kw)
         if len(self.scheduler.workers) - len(L) < self.minimum:
             L = L[:len(self.scheduler.workers) - self.minimum]
+
         return L
 
     @gen.coroutine

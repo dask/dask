@@ -5,11 +5,14 @@ import logging
 import math
 from time import sleep
 import weakref
+import toolz
 
 from tornado import gen
 
+from .cluster import Cluster
 from ..core import CommClosedError
-from ..utils import sync, ignoring, All, silence_logging, LoopRunner
+from ..utils import (sync, ignoring, All, silence_logging, LoopRunner,
+        log_errors)
 from ..nanny import Nanny
 from ..scheduler import Scheduler
 from ..worker import Worker, _ncores
@@ -17,7 +20,7 @@ from ..worker import Worker, _ncores
 logger = logging.getLogger(__name__)
 
 
-class LocalCluster(object):
+class LocalCluster(Cluster):
     """ Create local Scheduler and Workers
 
     This creates a "cluster" of a scheduler and workers running on the local
@@ -96,6 +99,11 @@ class LocalCluster(object):
             # Overcommit threads per worker, rather than undercommit
             threads_per_worker = max(1, int(math.ceil(_ncores / n_workers)))
 
+        worker_kwargs.update({
+            'ncores': threads_per_worker,
+            'services': worker_services,
+        })
+
         self._loop_runner = LoopRunner(loop=loop, asynchronous=asynchronous)
         self.loop = self._loop_runner.loop
 
@@ -114,12 +122,9 @@ class LocalCluster(object):
         self.scheduler_port = scheduler_port
 
         self.workers = []
-        self.n_workers = n_workers
-        self.threads_per_worker = threads_per_worker
-        self.worker_services = worker_services
         self.worker_kwargs = worker_kwargs
 
-        self.start(ip=ip)
+        self.start(ip=ip, n_workers=n_workers)
 
         clusters_to_close.add(self)
 
@@ -140,7 +145,7 @@ class LocalCluster(object):
             sync(self.loop, self._start, **kwargs)
 
     @gen.coroutine
-    def _start(self, ip=None):
+    def _start(self, ip=None, n_workers=0):
         """
         Start all cluster services.
         """
@@ -155,26 +160,14 @@ class LocalCluster(object):
             scheduler_address = (ip, self.scheduler_port)
         self.scheduler.start(scheduler_address)
 
-        yield self._start_all_workers(
-            self.n_workers, ncores=self.threads_per_worker,
-            services=self.worker_services, **self.worker_kwargs)
+        yield [self._start_worker(**self.worker_kwargs) for i in range(n_workers)]
 
         self.status = 'running'
 
         raise gen.Return(self)
 
     @gen.coroutine
-    def _start_all_workers(self, n_workers, **kwargs):
-        yield [self._start_worker(**kwargs) for i in range(n_workers)]
-
-    @gen.coroutine
-    def _start_worker(self, port=0, processes=None, death_timeout=60, **kwargs):
-        if processes is not None:
-            raise ValueError("overriding `processes` for individual workers "
-                             "in a LocalCluster is not supported anymore")
-        if port:
-            raise ValueError("overriding `port` for individual workers "
-                             "in a LocalCluster is not supported anymore")
+    def _start_worker(self, death_timeout=60, **kwargs):
         if self.processes:
             W = Nanny
             kwargs['quiet'] = True
@@ -197,7 +190,7 @@ class LocalCluster(object):
 
         raise gen.Return(w)
 
-    def start_worker(self, ncores=0, **kwargs):
+    def start_worker(self, **kwargs):
         """ Add a new worker to the running cluster
 
         Parameters
@@ -216,7 +209,7 @@ class LocalCluster(object):
         -------
         The created Worker or Nanny object.  Can be discarded.
         """
-        return sync(self.loop, self._start_worker, ncores=ncores, **kwargs)
+        return sync(self.loop, self._start_worker, **kwargs)
 
     @gen.coroutine
     def _stop_worker(self, w):
@@ -282,8 +275,13 @@ class LocalCluster(object):
 
         This can be implemented either as a function or as a Tornado coroutine.
         """
-        yield [self._start_worker(**kwargs)
-               for i in range(n - len(self.scheduler.workers))]
+        with log_errors():
+            kwargs2 = toolz.merge(self.worker_kwargs, kwargs)
+            yield [self._start_worker(**kwargs2)
+                   for i in range(n - len(self.scheduler.workers))]
+
+            # clean up any closed worker
+            self.workers = [w for w in self.workers if w.status != 'closed']
 
     @gen.coroutine
     def scale_down(self, workers):
@@ -295,12 +293,17 @@ class LocalCluster(object):
 
         This can be implemented either as a function or as a Tornado coroutine.
         """
-        workers = set(workers)
-        yield [self._stop_worker(w)
-               for w in self.workers
-               if w.worker_address in workers]
-        while workers & set(self.workers):
-            yield gen.sleep(0.01)
+        with log_errors():
+            # clean up any closed worker
+            self.workers = [w for w in self.workers if w.status != 'closed']
+            workers = set(workers)
+
+            # we might be given addresses
+            if all(isinstance(w, str) for w in workers):
+                workers = {w for w in self.workers if w.worker_address in workers}
+
+            # stop the provided workers
+            yield [self._stop_worker(w) for w in workers]
 
     def __del__(self):
         self.close()

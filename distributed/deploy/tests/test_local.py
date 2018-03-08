@@ -1,11 +1,13 @@
 from __future__ import print_function, division, absolute_import
 
 from functools import partial
+import gc
 import subprocess
 import sys
 from time import sleep
 from threading import Lock
 import unittest
+import weakref
 
 from tornado.ioloop import IOLoop
 from tornado import gen
@@ -14,7 +16,7 @@ import pytest
 from distributed import Client, Worker, Nanny
 from distributed.deploy.local import LocalCluster
 from distributed.metrics import time
-from distributed.utils_test import (inc, gen_test,
+from distributed.utils_test import (inc, gen_test, slowinc,
                                     assert_can_connect_locally_4,
                                     assert_can_connect_from_everywhere_4_6,
                                     captured_logger)
@@ -354,6 +356,92 @@ def test_logging():
     with LocalCluster(1, processes=False, diagnostics_port=None) as c:
         assert c.scheduler._deque_handler.deque
         assert c.workers[0]._deque_handler.deque
+
+
+def test_ipywidgets(loop):
+    ipywidgets = pytest.importorskip('ipywidgets')
+    with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
+                      diagnostics_port=0, processes=False) as cluster:
+        cluster._ipython_display_()
+        box = cluster._cached_widget
+        assert isinstance(box, ipywidgets.Widget)
+
+
+def test_scale(loop):
+    """ Directly calling scale both up and down works as expected """
+    with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
+                      diagnostics_port=0, processes=False, n_workers=0) as cluster:
+        assert not cluster.scheduler.workers
+        cluster.scale(3)
+
+        start = time()
+        while len(cluster.scheduler.workers) != 3:
+            sleep(0.01)
+            assert time() < start + 5, len(cluster.scheduler.workers)
+
+        sleep(0.2)  # let workers settle # TODO: remove need for this
+
+        cluster.scale(2)
+
+        start = time()
+        while len(cluster.scheduler.workers) != 2:
+            sleep(0.01)
+            assert time() < start + 5, len(cluster.scheduler.workers)
+
+
+def test_adapt(loop):
+    with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
+                      diagnostics_port=0, processes=False, n_workers=0) as cluster:
+        cluster.adapt(minimum=0, maximum=2, interval='10ms')
+        assert cluster._adaptive.minimum == 0
+        assert cluster._adaptive.maximum == 2
+        ref = weakref.ref(cluster._adaptive)
+
+        cluster.adapt(minimum=1, maximum=2, interval='10ms')
+        assert cluster._adaptive.minimum == 1
+        gc.collect()
+
+        # the old Adaptive class sticks around, not sure why
+        # start = time()
+        # while ref():
+        #     sleep(0.01)
+        #     gc.collect()
+        #     assert time() < start + 5
+
+        start = time()
+        while len(cluster.scheduler.workers) != 1:
+            sleep(0.01)
+            assert time() < start + 5
+
+
+def test_adapt_then_manual(loop):
+    """ We can revert from adaptive, back to manual """
+    with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
+                      diagnostics_port=0, processes=False, n_workers=8) as cluster:
+        sleep(0.1)
+        cluster.adapt(minimum=0, maximum=4, interval='10ms')
+
+        start = time()
+        while cluster.scheduler.workers or cluster.workers:
+            sleep(0.1)
+            assert time() < start + 5
+
+        assert not cluster.workers
+
+        with Client(cluster) as client:
+
+            futures = client.map(slowinc, range(1000), delay=0.1)
+            sleep(0.2)
+
+            cluster._adaptive.stop()
+            sleep(0.2)
+
+            cluster.scale(2)
+
+            start = time()
+            while len(cluster.scheduler.workers) != 2:
+                sleep(0.1)
+                assert time() < start + 5
 
 
 if sys.version_info >= (3, 5):
