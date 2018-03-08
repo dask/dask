@@ -14,4 +14,4 @@ async def test_gen_cluster_async(s, a, b):  # flake8: noqa
 
 @gen_test()
 async def test_gen_test_async():  # flake8: noqa
-    await gen.moment
+    await gen.sleep(0.001)

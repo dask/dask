@@ -19,9 +19,6 @@ matrix:
     env: LINT=true
   #- os: osx
     #env: PYTHON=3.6 RUNSLOW=false
-  # Tornado dev builds disabled, as Bokeh and IPython choke on it
-  #- env: PYTHON=3.6 TORNADO=dev
-  #- env: PYTHON=2.7 TORNADO=dev RUNSLOW=false PACKAGES="futures faulthandler"
   # Together with fast_finish, allow build to be marked successful before the OS X job finishes
   #allow_failures:
   #- os: osx

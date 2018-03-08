@@ -691,7 +691,11 @@ class Client(Node):
 
     def _send_to_scheduler_safe(self, msg):
         if self.status in ('running', 'closing'):
-            self.scheduler_comm.send(msg)
+            try:
+                self.scheduler_comm.send(msg)
+            except CommClosedError:
+                if self.status == 'running':
+                    raise
         elif self.status in ('connecting', 'newly-created'):
             self._pending_msg_buffer.append(msg)
 
@@ -823,10 +827,7 @@ class Client(Node):
         try:
             self._scheduler_identity = yield self.scheduler.identity()
         except EnvironmentError:
-            if self.status != 'running':
-                return
-            else:
-                raise
+            logger.debug("Not able to query scheduler for identity")
 
     def _heartbeat(self):
         if self.scheduler_comm:

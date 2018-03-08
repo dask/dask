@@ -405,7 +405,7 @@ def test_restart_timeout_on_long_running_task(c, s, a):
 @gen_cluster(client=True, scheduler_kwargs={'worker_ttl': '100ms'})
 def test_worker_time_to_live(c, s, a, b):
     a.periodic_callbacks['heartbeat'].stop()
-    yield gen.sleep(0.050)
+    yield gen.sleep(0.010)
     assert set(s.workers) == {a.address, b.address}
 
     start = time()

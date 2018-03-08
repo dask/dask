@@ -2810,9 +2810,10 @@ def test_client_num_fds(loop):
             for i in range(4):
                 with Client(s['address'], loop=loop):   # start more clients
                     pass
-            after = proc.num_fds()                  # measure
-
-        assert before == after
+            start = time()
+            while proc.num_fds() > before:
+                sleep(0.01)
+                assert time() < start + 4
 
 
 @gen_cluster()

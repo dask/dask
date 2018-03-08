@@ -39,7 +39,7 @@ from .proctitle import setproctitle
 from .security import Security
 from .utils import (All, ignoring, get_ip, get_fileno_limit, log_errors,
                     key_split, validate_key, no_default, DequeHandler,
-                    parse_timedelta, PeriodicCallback)
+                    parse_timedelta, PeriodicCallback, shutting_down)
 from .utils_comm import (scatter_to_workers, gather_from_workers)
 from .utils_perf import enable_gc_diagnosis, disable_gc_diagnosis
 
@@ -1422,7 +1422,8 @@ class Scheduler(ServerNode):
         # Compute recommendations
         recommendations = OrderedDict()
 
-        for ts in sorted(runnables, key=operator.attrgetter('priority')):
+        for ts in sorted(runnables, key=operator.attrgetter('priority'),
+                reverse=True):
             if ts.state == 'released' and ts.run_spec:
                 recommendations[ts.key] = 'waiting'
 
@@ -1868,15 +1869,18 @@ class Scheduler(ServerNode):
             if not comm.closed():
                 self.client_comms[client].send({'op': 'stream-closed'})
             try:
-                yield self.client_comms[client].close()
-                del self.client_comms[client]
-                logger.info("Close client connection: %s", client)
+                if not shutting_down():
+                    yield self.client_comms[client].close()
+                    del self.client_comms[client]
+                    if self.status == 'running':
+                        logger.info("Close client connection: %s", client)
             except TypeError:  # comm becomes None during GC
                 pass
 
     def remove_client(self, client=None):
         """ Remove client from network """
-        logger.info("Remove client %s", client)
+        if self.status == 'running':
+            logger.info("Remove client %s", client)
         self.log_event(['all', client], {'action': 'remove-client',
                                          'client': client})
         try:
@@ -1913,7 +1917,8 @@ class Scheduler(ServerNode):
                 try:
                     msgs = yield comm.read()
                 except (CommClosedError, AssertionError, GeneratorExit):
-                    logger.info("Connection to client %s broken", str(client))
+                    if self.status == 'running':
+                        logger.info("Connection to client %s broken", str(client))
                     break
                 except Exception as e:
                     logger.exception(e)

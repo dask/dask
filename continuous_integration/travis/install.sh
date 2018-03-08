@@ -27,8 +27,7 @@ conda create -q -n test-environment python=$PYTHON
 source activate test-environment
 
 # Install dependencies
-# (Tornado pinned to 4.5 until we fix our compatibility with Tornado 5.0)
-conda install -q -c conda-forge \
+conda install -q \
     bokeh \
     click \
     coverage \
@@ -46,17 +45,16 @@ conda install -q -c conda-forge \
     paramiko \
     psutil \
     pytest=3.1 \
-    pytest-faulthandler \
     pytest-timeout \
     python=$PYTHON \
     requests \
     scipy \
     tblib \
     toolz \
-    tornado=4.5 \
+    tornado \
     $PACKAGES
 
-pip install -q pytest-repeat
+pip install -q pytest-repeat pytest-faulthandler
 
 pip install -q git+https://github.com/dask/dask.git --upgrade
 pip install -q git+https://github.com/joblib/joblib.git --upgrade
@@ -73,10 +71,7 @@ fi;
 # Install distributed
 pip install --no-deps -e .
 
-# Update Tornado to desired version
-if [[ $TORNADO == "dev" ]]; then
-    pip install -U https://github.com/tornadoweb/tornado/archive/master.zip
-elif [[ ! -z $TORNADO ]]; then
+if [[ ! -z $TORNADO ]]; then
     pip install -U tornado==$TORNADO
 fi
 

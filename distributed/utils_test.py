@@ -655,7 +655,8 @@ def start_cluster(ncores, scheduler_addr, loop, security=None,
     yield [w._start(ncore[0]) for ncore, w in zip(ncores, workers)]
 
     start = time()
-    while len(s.workers) < len(ncores):
+    while (len(s.workers) < len(ncores) or
+           any(comm.comm is None for comm in s.worker_comms.values())):
         yield gen.sleep(0.01)
         if time() - start > 5:
             yield [w._close(timeout=1) for w in workers]

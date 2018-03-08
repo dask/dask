@@ -296,7 +296,8 @@ class Server(object):
                             self._ongoing_coroutines.add(result)
                             result = yield result
                     except (CommClosedError, CancelledError) as e:
-                        logger.warning("Lost connection to %r: %s", address, e)
+                        if self.status == 'running':
+                            logger.info("Lost connection to %r: %s", address, e)
                         break
                     except Exception as e:
                         logger.exception(e)

@@ -141,7 +141,8 @@ def test_race(c, s, *workers):
 
     futures = c.map(f, range(5))
     results = yield c.gather(futures)
-    assert all(r > 80 for r in results)
+    assert all(r > 50 for r in results)
+    assert sum(results) == 510
     qsize = yield q.qsize()
     assert not qsize
 

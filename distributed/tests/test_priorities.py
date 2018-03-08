@@ -74,6 +74,6 @@ def test_expand_persist(c, s, a, b):
     many = [delayed(slowinc)(i, delay=0.1) for i in range(4)]
     high = delayed(inc)(2, dask_key_name='high')
 
-    low, high, _, _, _, _ = persist(low, high, *many, priority={low: -1, high: 1})
+    low, high, x, y, z, w = persist(low, high, *many, priority={low: -1, high: 1})
     yield wait(high)
     assert s.tasks[low.key].state == 'processing'
