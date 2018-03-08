@@ -101,9 +101,9 @@ def test_full_groupby():
                       index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
     ddf = dd.from_pandas(df, npartitions=3)
 
-    pytest.raises(Exception, lambda: df.groupby('does_not_exist'))
-    pytest.raises(Exception, lambda: df.groupby('a').does_not_exist)
-    assert 'b' in dir(df.groupby('a'))
+    pytest.raises(KeyError, lambda: ddf.groupby('does_not_exist'))
+    pytest.raises(AttributeError, lambda: ddf.groupby('a').does_not_exist)
+    assert 'b' in dir(ddf.groupby('a'))
 
     def func(df):
         return df.assign(b=df.b - df.b.mean())
@@ -118,15 +118,25 @@ def test_full_groupby_apply_multiarg():
                       index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
     ddf = dd.from_pandas(df, npartitions=3)
 
-    pytest.raises(Exception, lambda: df.groupby('does_not_exist'))
-    pytest.raises(Exception, lambda: df.groupby('a').does_not_exist)
-    assert 'b' in dir(df.groupby('a'))
-
     def func(df, c, d=3):
         return df.assign(b=df.b - df.b.mean() + c * d)
 
-    assert_eq(df.groupby('a').apply(func, 1),
-              ddf.groupby('a').apply(func, 1))
+    c = 1
+    d = 2
+    c_scalar = dd.core.Scalar({'my-scalar': c}, 'my-scalar', int)
+    d_scalar = dd.core.Scalar({'my-scalar': d}, 'my-scalar', int)
+
+    assert_eq(df.groupby('a').apply(func, c),
+              ddf.groupby('a').apply(func, c))
+
+    assert_eq(df.groupby('a').apply(func, c, d=d),
+              ddf.groupby('a').apply(func, c, d=d))
+
+    assert_eq(df.groupby('a').apply(func, c),
+              ddf.groupby('a').apply(func, c_scalar))
+
+    assert_eq(df.groupby('a').apply(func, c, d=d),
+              ddf.groupby('a').apply(func, c, d=d_scalar))
 
 
 @pytest.mark.parametrize('grouper', [

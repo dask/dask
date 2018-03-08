@@ -1052,6 +1052,7 @@ class _GroupBy(object):
         applied : Series or DataFrame depending on columns keyword
         """
         meta = kwargs.get('meta', no_default)
+
         if meta is no_default:
             msg = ("`meta` is not specified, inferred from partial data. "
                    "Please provide `meta` if the result is unexpected.\n"
@@ -1062,6 +1063,7 @@ class _GroupBy(object):
 
             with raise_on_meta_error("groupby.apply({0})".format(funcname(func))):
                 meta = self._meta_nonempty.apply(func, *args, **kwargs)
+
         meta = make_meta(meta)
 
         # Validate self.index
