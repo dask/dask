@@ -3336,6 +3336,7 @@ def map_partitions(func, *args, **kwargs):
     $META
     """
     meta = kwargs.pop('meta', no_default)
+
     if meta is not no_default:
         meta = make_meta(meta)
 
@@ -3373,6 +3374,7 @@ def map_partitions(func, *args, **kwargs):
         dsk[(name, i)] = (apply_and_enforce, func, values, kwargs, meta)
 
     dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
+
     return new_dd_object(merge(dsk, *dasks), name, meta, args[0].divisions)
 
 

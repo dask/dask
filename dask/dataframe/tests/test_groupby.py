@@ -123,8 +123,10 @@ def test_full_groupby_apply_multiarg():
 
     c = 1
     d = 2
-    c_scalar = dd.core.Scalar({'my-scalar': c}, 'my-scalar', int)
-    d_scalar = dd.core.Scalar({'my-scalar': d}, 'my-scalar', int)
+
+    c_scalar = _make_scalar(c)
+    d_scalar = _make_scalar(d)
+    meta = df.groupby('a').apply(func, c)
 
     assert_eq(df.groupby('a').apply(func, c),
               ddf.groupby('a').apply(func, c))
@@ -135,8 +137,19 @@ def test_full_groupby_apply_multiarg():
     assert_eq(df.groupby('a').apply(func, c),
               ddf.groupby('a').apply(func, c_scalar))
 
+    assert_eq(df.groupby('a').apply(func, c),
+              ddf.groupby('a').apply(func, c_scalar, meta=meta))
+
     assert_eq(df.groupby('a').apply(func, c, d=d),
               ddf.groupby('a').apply(func, c, d=d_scalar))
+
+    assert_eq(df.groupby('a').apply(func, c, d=d),
+              ddf.groupby('a').apply(func, c, d=d_scalar, meta=meta))
+
+
+def _make_scalar(value):
+    # We use this convoluted method to simulate a scalar value
+    return dd.from_pandas(pd.Series([value]), npartitions=1).sum()
 
 
 @pytest.mark.parametrize('grouper', [
