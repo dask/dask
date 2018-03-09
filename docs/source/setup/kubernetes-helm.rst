@@ -150,7 +150,7 @@ environments should be matched).
        cpu: 2
        memory: 7.5 GiB
      pipPackages: >-
-       git+https://github.com/gcsfs/gcsfs.git
+       git+https://github.com/dask/gcsfs.git
        git+https://github.com/xarray/xarray.git
      condaPackages: >-
        -c conda-forge
@@ -160,8 +160,8 @@ environments should be matched).
    # We want to keep the same packages on the worker and jupyter environments
    jupyter:
      pipPackages: >-
-       git+https://github.com/gcsfs/gcsfs.git
-    git+https://github.com/xarray/xarray.git
+       git+https://github.com/dask/gcsfs.git
+       git+https://github.com/xarray/xarray.git
      condaPackages: >-
        -c conda-forge
        zarr
