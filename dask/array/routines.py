@@ -5,7 +5,6 @@ import warnings
 from collections import Iterable
 from distutils.version import LooseVersion
 from functools import wraps, partial
-from itertools import product
 from numbers import Integral
 from operator import getitem
 
@@ -836,20 +835,26 @@ def ravel(array):
 
 @wraps(np.squeeze)
 def squeeze(a, axis=None):
-    if 1 not in a.shape:
-        return a
     if axis is None:
         axis = tuple(i for i, d in enumerate(a.shape) if d == 1)
-    b = a.map_blocks(partial(np.squeeze, axis=axis), dtype=a.dtype)
-    chunks = tuple(bd for bd in b.chunks if bd != (1,))
+    else:
+        if not isinstance(axis, tuple):
+            axis = (axis,)
 
-    name = 'squeeze-' + tokenize(a, axis)
-    old_keys = list(product([b.name], *[range(len(bd)) for bd in b.chunks]))
-    new_keys = list(product([name], *[range(len(bd)) for bd in chunks]))
+        if any(a.shape[i] != 1 for i in axis):
+            raise ValueError("cannot squeeze axis with size other than one")
 
-    dsk = {n: b.dask[o] for o, n in zip(old_keys, new_keys)}
+        for i in axis:
+            if not (-a.ndim <= i < a.ndim):
+                raise ValueError(
+                    "%i out of bounds for %i-D array" % (i, a.ndim)
+                )
 
-    return Array(sharedict.merge(b.dask, (name, dsk)), name, chunks, dtype=a.dtype)
+        axis = tuple(i % a.ndim for i in axis)
+
+    sl = tuple(0 if i in axis else slice(None) for i, s in enumerate(a.shape))
+
+    return a[sl]
 
 
 def topk(k, x):
