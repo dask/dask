@@ -1754,9 +1754,9 @@ class Array(Base):
         return cumprod(self, axis, dtype, out=out)
 
     @derived_from(np.ndarray)
-    def squeeze(self):
+    def squeeze(self, axis=None):
         from .routines import squeeze
-        return squeeze(self)
+        return squeeze(self, axis)
 
     def rechunk(self, chunks, threshold=None, block_size_limit=None):
         """ See da.rechunk for docstring """
