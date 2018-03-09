@@ -190,7 +190,7 @@ distributed memory clusters.
    scheduling.rst
    distributed.rst
 
-**Diagnosing Perofmrance**
+**Diagnosing Performance**
 
 Parallel code can be tricky to debug and profile. Dask provides a several tools
 to help make debugging and profiling graph execution easier.
