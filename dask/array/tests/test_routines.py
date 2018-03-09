@@ -711,12 +711,17 @@ def test_ravel():
 
 
 def test_squeeze():
-    x = da.ones((10, 1), chunks=(3, 1))
+    a = np.arange(10)[None, :, None, None]
+    d = da.from_array(a, chunks=(1, 3, 1, 1))
 
-    assert_eq(x.squeeze(), x.compute().squeeze())
+    for axis in [None, 0, 1, -1, (0, -1)]:
+        a_s = a.squeeze(axis=axis)
+        d_s = d.squeeze(axis=axis)
 
-    assert x.squeeze().chunks == ((3, 3, 3, 1),)
-    assert same_keys(x.squeeze(), x.squeeze())
+        assert_eq(d_s, a_s)
+        assert same_keys(d_s, d.squeeze(axis=axis))
+
+    assert d.squeeze().chunks == ((3, 3, 3, 1),)
 
 
 def test_vstack():
