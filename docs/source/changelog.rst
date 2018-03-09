@@ -19,10 +19,10 @@ DataFrame
 - Add ``dd.tseries.Resampler.agg`` (:pr:`3202`) `Richard Postelnik`_
 - Support operations that mix dataframes and arrays (:pr:`3230`) `Matthew Rocklin`_
 
-
 Bag
 +++
 
+- Support joining against single-partitioned bags and delayed objects (:pr:`3254`) `Matthew Rocklin`_
 
 Core
 ++++
