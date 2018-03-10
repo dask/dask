@@ -1045,6 +1045,8 @@ class _GroupBy(object):
         ----------
         func: function
             Function to apply
+        args, kwargs : DataFrame, Scalar, Delayed or object
+            Arguments and keywords to pass to the function. 
         $META
 
         Returns

@@ -130,7 +130,6 @@ def test_full_groupby_apply_multiarg():
     c_delayed = dask.delayed(lambda: c)()
     d_delayed = dask.delayed(lambda: d)()
 
-
     meta = df.groupby('a').apply(func, c)
 
     for c_lazy, d_lazy in [(c_scalar, d_scalar),
