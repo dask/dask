@@ -5,6 +5,7 @@ import copy
 import json
 import warnings
 import distutils
+import uuid
 
 import numpy as np
 import pandas as pd
@@ -468,8 +469,10 @@ def _write_fastparquet(df, fs, fs_token, path, write_index=None, append=False,
                  for i in range(df.npartitions)]
 
     write = delayed(_write_partition_fastparquet, pure=False)
-    writes = [write(part, fs, path, filename, fmd, compression, partition_on)
-              for filename, part in zip(filenames, df.to_delayed())]
+    token = str(uuid.uuid1().hex)
+    writes = [write(part, fs, path, filename, fmd, compression, partition_on,
+                    dask_key_name=('write-parquet-%s' % token, i))
+              for i, (filename, part) in enumerate(zip(filenames, df.to_delayed()))]
 
     return delayed(_write_metadata)(writes, filenames, fmd, path, fs, sep)
 
@@ -676,9 +679,11 @@ def _write_pyarrow(df, fs, fs_token, path, write_index=None, append=False,
     template = fs.sep.join([path, 'part.%i.parquet'])
 
     write = delayed(_write_partition_pyarrow, pure=False)
+    token = str(uuid.uuid1().hex)
     first_kwargs = kwargs.copy()
     first_kwargs['metadata_path'] = fs.sep.join([path, '_common_metadata'])
     writes = [write(part, path, fs, template % i, write_index, partition_on,
+                    dask_key_name=('write-parquet-%s' + token, i),
                     **(kwargs if i else first_kwargs))
               for i, part in enumerate(df.to_delayed())]
     return delayed(writes)
