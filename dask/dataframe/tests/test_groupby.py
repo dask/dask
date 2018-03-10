@@ -8,7 +8,6 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-import dask.bag as db
 from dask.dataframe.utils import assert_eq, assert_dask_graph, assert_max_deps, PANDAS_VERSION
 
 
@@ -151,8 +150,6 @@ def test_full_groupby_apply_multiarg():
 
         assert_eq(df.groupby('a').apply(func, c, d=d),
                   ddf.groupby('a').apply(func, c, d=d_lazy, meta=meta))
-
-
 
 
 @pytest.mark.parametrize('grouper', [

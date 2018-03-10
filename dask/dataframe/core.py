@@ -3405,7 +3405,6 @@ def apply_and_enforce(func, args, kwargs, meta):
     return df
 
 
-
 def _rename(columns, df):
     """
     Rename columns of pd.DataFrame or name of pd.Series.
