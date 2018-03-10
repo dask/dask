@@ -129,16 +129,12 @@ def test_full_groupby_apply_multiarg():
     d_scalar = ddf.b.mean()
     c_delayed = dask.delayed(lambda: c)()
     d_delayed = dask.delayed(lambda: d)()
-    c_bag = db.from_sequence(df.a.tolist(), npartitions=2).sum()
-    d_bag = db.from_sequence(df.b.tolist(), npartitions=2).mean()
 
 
     meta = df.groupby('a').apply(func, c)
 
     for c_lazy, d_lazy in [(c_scalar, d_scalar),
-                           (c_delayed, d_delayed),
-                           (c_bag, d_bag)]:
-        print(c_lazy)
+                           (c_delayed, d_delayed)]:
         assert_eq(df.groupby('a').apply(func, c),
                   ddf.groupby('a').apply(func, c))
 

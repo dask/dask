@@ -3375,7 +3375,9 @@ def map_partitions(func, *args, **kwargs):
     for i in range(dfs[0].npartitions):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
                   if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
-        dsk[(name, i)] = (apply_and_enforce, func, values, kwargs, meta)
+        # NOTE:, we cast the dictionary in a list of lists represenation
+        # to allow substitution of dask keys
+        dsk[(name, i)] = (apply_and_enforce, func, values, list(map(list, kwargs.items())), meta)
 
     args_dasks.extend([arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))])
 
@@ -3394,13 +3396,14 @@ def apply_and_enforce(func, args, kwargs, meta):
     """Apply a function, and enforce the output to match meta
 
     Ensures the output has the same columns, even if empty."""
-    df = func(*args, **kwargs)
+    df = func(*args, **dict(kwargs))
     if isinstance(df, (pd.DataFrame, pd.Series, pd.Index)):
         if len(df) == 0:
             return meta
         c = meta.columns if isinstance(df, pd.DataFrame) else meta.name
         return _rename(c, df)
     return df
+
 
 
 def _rename(columns, df):
