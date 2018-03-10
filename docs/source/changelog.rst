@@ -12,6 +12,8 @@ DataFrame
 
 - Add ``dd.tseries.Resampler.agg`` (:pr:`3202`) `Richard Postelnik`_
 - Support operations that mix dataframes and arrays (:pr:`3230`) `Matthew Rocklin`_
+- ``dd.groupby._Groupby.apply`` now supports Scalar and Delayed extra args (:pr:`3256`) `Gabriele Lanaro`_
+
 
 Bag
 +++
@@ -1029,3 +1031,4 @@ Other
 .. _`Simon Perkins`: https://github.com/sjperkins
 .. _`Richard Postelnik`: https://github.com/postelrich
 .. _`Daniel Collins`: https://github.com/dancollins34
+.. _`Gabriele Lanaro`: https://github.com/gabrielelanaro

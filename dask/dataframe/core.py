@@ -478,7 +478,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         ----------
         func : function
             Function applied to each partition.
-        args, kwargs : DataFrame, Scalar, Delayed or object
+        args, kwargs : Scalar, Delayed or object
             Arguments and keywords to pass to the function. The partition will
             be the first argument, and these will be passed *after*.
         $META
