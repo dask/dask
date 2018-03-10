@@ -918,21 +918,65 @@ class Bag(Base):
     def join(self, other, on_self, on_other=None):
         """ Joins collection with another collection.
 
-        Other collection must be an Iterable, and not a Bag.
+        Other collection must be one of the following:
 
+        1.  An iterable.  We recommend tuples over lists for internal
+            performance reasons.
+        2.  A delayed object, pointing to a tuple.  This is recommended if the
+            other collection is sizable and you're using the distributed
+            scheduler.  Dask is able to pass around data wrapped in delayed
+            objects with greater sophistication.
+        3.  A Bag with a single partition
+
+        You might also consider Dask Dataframe, whose join operations are much
+        more heavily optimized.
+
+        Parameters
+        ----------
+        other: Iterable, Delayed, Bag
+            Other collection on which to join
+        on_self: callable
+            Function to call on elements in this collection to determine a
+            match
+        on_other: callable (defaults to on_self)
+            Function to call on elements in the other collection to determine a
+            match
+
+        Examples
+        --------
         >>> people = from_sequence(['Alice', 'Bob', 'Charlie'])
         >>> fruit = ['Apple', 'Apricot', 'Banana']
         >>> list(people.join(fruit, lambda x: x[0]))  # doctest: +SKIP
         [('Apple', 'Alice'), ('Apricot', 'Alice'), ('Banana', 'Bob')]
         """
-        assert isinstance(other, Iterable)
-        assert not isinstance(other, Bag)
+        name = 'join-' + tokenize(self, other, on_self, on_other)
+        dsk = {}
+        if isinstance(other, Bag):
+            if other.npartitions == 1:
+                dsk.update(other.dask)
+                dsk['join-%s-other' % name] = (list, other._keys()[0])
+                other = other._keys()[0]
+            else:
+                msg = ("Multi-bag joins are not implemented. "
+                       "We recommend Dask dataframe if appropriate")
+                raise NotImplementedError(msg)
+        elif isinstance(other, Delayed):
+            dsk.update(other.dask)
+            other = other._key
+        elif isinstance(other, Iterable):
+            other = other
+        else:
+            msg = ("Joined argument must be single-partition Bag, "
+                   " delayed object, or Iterable, got %s" %
+                   type(other).__name)
+            raise TypeError(msg)
+
         if on_other is None:
             on_other = on_self
-        name = 'join-' + tokenize(self, other, on_self, on_other)
-        dsk = dict(((name, i), (list, (join, on_other, other,
-                                       on_self, (self.name, i))))
-                   for i in range(self.npartitions))
+
+        dsk.update({(name, i): (list, (join, on_other, other,
+                                       on_self, (self.name, i)))
+                   for i in range(self.npartitions)})
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def product(self, other):
