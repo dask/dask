@@ -8,6 +8,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
+import dask.bag as db
 from dask.dataframe.utils import assert_eq, assert_dask_graph, assert_max_deps, PANDAS_VERSION
 
 
@@ -121,35 +122,42 @@ def test_full_groupby_apply_multiarg():
     def func(df, c, d=3):
         return df.assign(b=df.b - df.b.mean() + c * d)
 
-    c = 1
-    d = 2
+    c = df.a.sum()
+    d = df.b.mean()
 
-    c_scalar = _make_scalar(c)
-    d_scalar = _make_scalar(d)
+    c_scalar = ddf.a.sum()
+    d_scalar = ddf.b.mean()
+    c_delayed = dask.delayed(lambda: c)()
+    d_delayed = dask.delayed(lambda: d)()
+    c_bag = db.from_sequence(df.a.tolist(), npartitions=2).sum()
+    d_bag = db.from_sequence(df.b.tolist(), npartitions=2).mean()
+
+
     meta = df.groupby('a').apply(func, c)
 
-    assert_eq(df.groupby('a').apply(func, c),
-              ddf.groupby('a').apply(func, c))
+    for c_lazy, d_lazy in [(c_scalar, d_scalar),
+                           (c_delayed, d_delayed),
+                           (c_bag, d_bag)]:
+        print(c_lazy)
+        assert_eq(df.groupby('a').apply(func, c),
+                  ddf.groupby('a').apply(func, c))
 
-    assert_eq(df.groupby('a').apply(func, c, d=d),
-              ddf.groupby('a').apply(func, c, d=d))
+        assert_eq(df.groupby('a').apply(func, c, d=d),
+                  ddf.groupby('a').apply(func, c, d=d))
 
-    assert_eq(df.groupby('a').apply(func, c),
-              ddf.groupby('a').apply(func, c_scalar))
+        assert_eq(df.groupby('a').apply(func, c),
+                  ddf.groupby('a').apply(func, c_lazy), check_dtype=False)
 
-    assert_eq(df.groupby('a').apply(func, c),
-              ddf.groupby('a').apply(func, c_scalar, meta=meta))
+        assert_eq(df.groupby('a').apply(func, c),
+                  ddf.groupby('a').apply(func, c_lazy, meta=meta))
 
-    assert_eq(df.groupby('a').apply(func, c, d=d),
-              ddf.groupby('a').apply(func, c, d=d_scalar))
+        assert_eq(df.groupby('a').apply(func, c, d=d),
+                  ddf.groupby('a').apply(func, c, d=d_lazy))
 
-    assert_eq(df.groupby('a').apply(func, c, d=d),
-              ddf.groupby('a').apply(func, c, d=d_scalar, meta=meta))
+        assert_eq(df.groupby('a').apply(func, c, d=d),
+                  ddf.groupby('a').apply(func, c, d=d_lazy, meta=meta))
 
 
-def _make_scalar(value):
-    # We use this convoluted method to simulate a scalar value
-    return dd.from_pandas(pd.Series([value]), npartitions=1).sum()
 
 
 @pytest.mark.parametrize('grouper', [

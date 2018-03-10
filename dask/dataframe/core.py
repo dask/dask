@@ -18,6 +18,7 @@ except ImportError:
 
 from .. import array as da
 from .. import core
+
 from ..utils import partial_by_order
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method
@@ -27,6 +28,8 @@ from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      is_arraylike)
 from ..array import Array
 from ..base import Base, tokenize, dont_optimize, is_dask_collection
+from ..delayed import Delayed
+
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
@@ -3350,6 +3353,7 @@ def map_partitions(func, *args, **kwargs):
     name = '{0}-{1}'.format(name, token)
 
     from .multi import _maybe_align_partitions
+    args_dasks, args, kwargs = _process_lazy_args(args, kwargs)
     args = _maybe_from_pandas(args)
     args = _maybe_align_partitions(args)
 
@@ -3373,9 +3377,17 @@ def map_partitions(func, *args, **kwargs):
                   if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
         dsk[(name, i)] = (apply_and_enforce, func, values, kwargs, meta)
 
-    dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
+    args_dasks.extend([arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))])
 
-    return new_dd_object(merge(dsk, *dasks), name, meta, args[0].divisions)
+    return new_dd_object(merge(dsk, *args_dasks), name, meta, args[0].divisions)
+
+
+def _process_lazy_args(args, kwargs):
+    dsk = [arg.dask for arg in (list(args) + list(kwargs.values())) if isinstance(arg, Delayed)]
+    args = [arg._key if isinstance(arg, Delayed) else arg for arg in args ]
+    kwargs = {k: (v._key if isinstance(v, Delayed) else v) for k, v in kwargs.items()}
+
+    return dsk, args, kwargs
 
 
 def apply_and_enforce(func, args, kwargs, meta):
