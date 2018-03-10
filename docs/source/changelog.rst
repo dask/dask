@@ -1,26 +1,6 @@
 Changelog
 =========
 
-0.17.X / 2018-02-DD
--------------------
-
-Array
-+++++
-
-DataFrame
-+++++++++
-
-- Add ``dd.tseries.Resampler.agg`` (:pr:`3202`) `Richard Postelnik`_
-- Support operations that mix dataframes and arrays (:pr:`3230`) `Matthew Rocklin`_
-- ``dd.groupby._Groupby.apply`` now supports Scalar and Delayed extra args (:pr:`3256`) `Gabriele Lanaro`_
-
-
-Bag
-+++
-
-Core
-++++
-
 
 0.XX.X / 2018-MM-DD
 -------------------
@@ -36,11 +16,14 @@ DataFrame
 
 -  Fixed bug in shuffle due to aggressive truncation (:pr:`3201`) `Matthew Rocklin`_
 - Support specifying categorical columns on ``read_parquet`` with ``categories=[…]`` for ``engine="pyarrow"`` (:pr:`3177`) `Uwe Korn`_
-
+- Add ``dd.tseries.Resampler.agg`` (:pr:`3202`) `Richard Postelnik`_
+- Support operations that mix dataframes and arrays (:pr:`3230`) `Matthew Rocklin`_
+- Support extra Scalar and Delayed args in ``dd.groupby._Groupby.apply`` (:pr:`3256`) `Gabriele Lanaro`_
 
 Bag
 +++
 
+- Support joining against single-partitioned bags and delayed objects (:pr:`3254`) `Matthew Rocklin`_
 
 Core
 ++++

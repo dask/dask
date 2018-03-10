@@ -32,6 +32,15 @@ L = list(range(5)) * 3
 b = Bag(dsk, 'x', 3)
 
 
+def assert_eq(a, b):
+    if hasattr(a, 'compute'):
+        a = a.compute(get=dask.local.get_sync)
+    if hasattr(b, 'compute'):
+        b = b.compute(get=dask.local.get_sync)
+
+    assert a == b
+
+
 def iseven(x):
     return x % 2 == 0
 
@@ -353,12 +362,18 @@ def test_var():
     assert float(b.var()) == 2.0
 
 
-def test_join():
-    c = b.join([1, 2, 3], on_self=isodd, on_other=iseven)
-    assert list(c) == list(join(iseven, [1, 2, 3], isodd, list(b)))
-    assert (list(b.join([1, 2, 3], isodd)) ==
-            list(join(isodd, [1, 2, 3], isodd, list(b))))
-    assert c.name == b.join([1, 2, 3], on_self=isodd, on_other=iseven).name
+@pytest.mark.parametrize('transform', [
+    identity,
+    dask.delayed,
+    lambda x: db.from_sequence(x, npartitions=1)
+])
+def test_join(transform):
+    other = transform([1, 2, 3])
+    c = b.join(other, on_self=isodd, on_other=iseven)
+    assert_eq(c, list(join(iseven, [1, 2, 3], isodd, list(b))))
+    assert_eq(b.join(other, isodd),
+              list(join(isodd, [1, 2, 3], isodd, list(b))))
+    assert c.name == b.join(other, on_self=isodd, on_other=iseven).name
 
 
 def test_foldby():

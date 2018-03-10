@@ -6,6 +6,7 @@ dist/
 .idea/
 log.*
 log
+.pytest_cache/
 .coverage
 .DS_Store
 *.swp
