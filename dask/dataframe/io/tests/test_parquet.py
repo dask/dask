@@ -1040,12 +1040,13 @@ def test_setect_partitioned_column(tmpdir, engine):
     df_partitioned[df_partitioned.fake_categorical1 == 'A'].compute()
 
 
-def test_order():
+@pytest.mark.parametrize('npartitions', [17, 20])  # even and unevenly divides
+def test_order(npartitions):
     from dask.order import order
     df = dd.demo.make_timeseries('2000-01-01', '2000-01-05',
                                  freq='10s', partition_freq='1d',
                                  dtypes={'x': float})
-    x = df.repartition(npartitions=df.npartitions * 3).to_parquet('foo.parquet', compute=False)
+    x = df.repartition(npartitions=npartitions).to_parquet('foo.parquet', compute=False)
     o = order(x.dask)
     dependencies, dependents = dask.core.get_deps(x.dask)
     deps = dependencies[x.key]
