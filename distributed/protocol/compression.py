@@ -47,6 +47,8 @@ with ignoring(ImportError):
         # snappy.decompress() doesn't accept memoryviews
         if isinstance(data, memoryview):
             data = data.tobytes()
+        elif isinstance(data, bytearray):
+            data = bytes(data)
         return snappy.decompress(data)
 
     compressions['snappy'] = {'compress': snappy.compress,

@@ -3769,7 +3769,7 @@ class Scheduler(ServerNode):
             if start == finish:
                 return {}
 
-            if self.plugins and finish == 'forgotten':
+            if self.plugins:
                 dependents = set(ts.dependents)
                 dependencies = set(ts.dependencies)
 
