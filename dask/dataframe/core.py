@@ -28,7 +28,7 @@ from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      is_arraylike)
 from ..array import Array
 from ..base import Base, tokenize, dont_optimize, is_dask_collection
-from ..delayed import Delayed
+from ..delayed import Delayed, to_task_dask
 
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
@@ -3353,7 +3353,7 @@ def map_partitions(func, *args, **kwargs):
     name = '{0}-{1}'.format(name, token)
 
     from .multi import _maybe_align_partitions
-    args_dasks, args, kwargs = _process_lazy_args(args, kwargs)
+    args, args_dasks = _process_lazy_args(args)
     args = _maybe_from_pandas(args)
     args = _maybe_align_partitions(args)
 
@@ -3370,26 +3370,28 @@ def map_partitions(func, *args, **kwargs):
         meta = _concat([meta])
     meta = make_meta(meta)
 
+    kwargs_task, kwargs_dsk = to_task_dask(kwargs)
+    args_dasks.append(kwargs_dsk)
+
     dfs = [df for df in args if isinstance(df, _Frame)]
     dsk = {}
     for i in range(dfs[0].npartitions):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
                   if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
-        # NOTE:, we cast the dictionary in a list of lists represenation
-        # to allow substitution of dask keys
-        dsk[(name, i)] = (apply_and_enforce, func, values, list(map(list, kwargs.items())), meta)
+        dsk[(name, i)] = (apply_and_enforce, func, values, kwargs_task, meta)
 
     args_dasks.extend([arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))])
 
     return new_dd_object(merge(dsk, *args_dasks), name, meta, args[0].divisions)
 
 
-def _process_lazy_args(args, kwargs):
-    dsk = [arg.dask for arg in (list(args) + list(kwargs.values())) if isinstance(arg, Delayed)]
+def _process_lazy_args(args):
+    # NOTE: we use this function instead of to_task_dask to avoid
+    # manipulating _Frame instances that need to be aligned
+    dsk = [arg.dask for arg in args if isinstance(arg, Delayed)]
     args = [arg._key if isinstance(arg, Delayed) else arg for arg in args ]
-    kwargs = {k: (v._key if isinstance(v, Delayed) else v) for k, v in kwargs.items()}
 
-    return dsk, args, kwargs
+    return args, dsk
 
 
 def apply_and_enforce(func, args, kwargs, meta):
