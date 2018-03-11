@@ -351,3 +351,35 @@ def test_local_parents_of_reduction(abcde):
     dask.get(dsk, [a1, b1, c1])  # trigger computation
 
     assert log == expected
+
+
+def test_nearest_neightbor(abcde):
+    """
+
+    a1  a2  a3  a4  a5  a6  a7
+     \  |  /  \ |  /  \ |  /
+        b1      b2      b3
+
+    Want to finish off a local group before moving on.
+    This is difficult because all groups are connected.
+    """
+    a, b, c, _, _ = abcde
+    a1, a2, a3, a4, a5, a6, a7 = [a + i for i in '1234567']
+    b1, b2, b3 = [b + i for i in '123']
+
+    dsk = {b1: (f,),
+           b2: (f,),
+           b3: (f,),
+           a1: (f, b1),
+           a2: (f, b1),
+           a3: (f, b1, b2),
+           a4: (f, b2),
+           a5: (f, b2, b3),
+           a6: (f, b3),
+           a7: (f, b3)}
+
+    o = order(dsk)
+    from dask import visualize
+    visualize(dsk, color='order', filename='dask.png', node_attr={'penwidth': '6'})
+
+    assert {o[b1], o[b2], o[b3]} == {0, 5, 8}
