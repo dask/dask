@@ -559,7 +559,7 @@ class TaskStream(components.TaskStream):
         if self.index == self.plugin.index:
             return
         with log_errors():
-            if self.index and self.source.data['start']:
+            if self.index and len(self.source.data['start']):
                 start = min(self.source.data['start'])
                 duration = max(self.source.data['duration'])
                 boundary = (self.offset + start - duration) / 1000
