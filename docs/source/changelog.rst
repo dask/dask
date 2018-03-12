@@ -28,6 +28,7 @@ Core
 ++++
 
 - Fixed bug when using unexpected but hashable types for keys (:pr:`3238`) `Daniel Collins`_
+- Add ``literal`` and ``quote`` to the public API (:pr:`3275`) `John A Kirkham`_
 
 
 0.17.1 / 2018-02-22
