@@ -16,12 +16,16 @@ Note that the individual APIs have their own separate API pages available here:
 .. autosummary::
    compute
    is_dask_collection
+   literal
    optimize
    persist
+   quote
    visualize
 
 .. autofunction:: compute
 .. autofunction:: is_dask_collection
+.. autofunction:: literal
 .. autofunction:: optimize
 .. autofunction:: persist
+.. autofunction:: quote
 .. autofunction:: visualize
