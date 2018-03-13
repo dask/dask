@@ -16,3 +16,7 @@ try:
     from .io import read_parquet, to_parquet
 except ImportError:
     pass
+try:
+    from .io.orc import read_orc
+except ImportError:
+    pass
