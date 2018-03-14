@@ -35,7 +35,7 @@ non-exhaustive list follows:
 *  http://github.com/dask/dask: The main code repository holding parallel
    algorithms, the single-machine scheduler, and most documentation.
 *  http://github.com/dask/distributed: The distributed memory scheduler
-*  http://github.com/dask/dask-ml: Hachine learning algorithms
+*  http://github.com/dask/dask-ml: Machine learning algorithms
 *  http://github.com/dask/s3fs: S3 Filesystem interface
 *  http://github.com/dask/gcsfs: GCS Filesystem interface
 *  http://github.com/dask/hdfs3: Hadoop Filesystem interface
