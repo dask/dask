@@ -4,7 +4,7 @@ from ..core import DataFrame
 from ...base import tokenize
 from ...bytes.core import get_fs_token_paths
 from ...utils import import_required
-from .parquet import _get_pyarrow_dtypes, _meta_from_dtypes
+from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ...compatibility import string_types
 
 __all__ = ('read_orc',)
@@ -41,13 +41,11 @@ def read_orc(path, columns=None, storage_options=None):
     ...              'master/examples/demo-11-zlib.orc')  # doctest: +SKIP
     """
     orc = import_required('pyarrow.orc', 'Please install dev version pyarrow')
-    if isinstance(path, string_types) and path.endswith('/'):
-        path = path + '*.orc'
     storage_options = storage_options or {}
     fs, fs_token, paths = get_fs_token_paths(path, mode='rb',
                                              storage_options=storage_options)
     schema = None
-    nstripes = []
+    nstripes_per_file = []
     for path in paths:
         with fs.open(path, 'rb') as f:
             o = orc.ORCFile(f)
@@ -55,7 +53,7 @@ def read_orc(path, columns=None, storage_options=None):
                 schema = o.schema
             elif schema != o.schema:
                 raise ValueError("Incompatible schemas while parsing ORC files")
-            nstripes.append(o.nstripes)
+            nstripes_per_file.append(o.nstripes)
     schema = _get_pyarrow_dtypes(schema, categories=None)
     if columns is not None:
         ex = set(columns) - set(schema)
@@ -70,7 +68,7 @@ def read_orc(path, columns=None, storage_options=None):
     name = 'read-orc-' + tokenize(fs_token, path, columns)
     dsk = {}
     N = 0
-    for path, n in zip(paths, nstripes):
+    for path, n in zip(paths, nstripes_per_file):
         for stripe in range(n):
             dsk[(name, N)] = (_read_orc_stripe, fs, path, stripe, columns)
             N += 1

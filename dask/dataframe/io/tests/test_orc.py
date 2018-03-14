@@ -49,5 +49,5 @@ def test_orc_multiple(orc_files):
     d = read_orc(orc_files[0])
     d2 = read_orc(orc_files)
     assert_eq(d2, dd.concat([d, d]), check_index=False)
-    d2 = read_orc(os.path.dirname(orc_files[0]) + '/')
+    d2 = read_orc(os.path.dirname(orc_files[0]) + '/*.orc')
     assert_eq(d2, dd.concat([d, d]), check_index=False)
