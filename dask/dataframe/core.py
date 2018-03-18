@@ -4123,6 +4123,12 @@ def to_timedelta(arg, unit='ns', errors='raise'):
                           meta=meta)
 
 
+@wraps(pd.isna)
+def isna(arg):
+    meta = pd.Series([True])
+    return map_partitions(pd.isna, arg, meta=meta)
+
+
 def _repr_data_series(s, index):
     """A helper for creating the ``_repr_data`` property"""
     npartitions = len(index) - 1
