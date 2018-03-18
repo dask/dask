@@ -2810,6 +2810,13 @@ def test_to_timedelta():
     assert_eq(pd.to_timedelta(s, errors='coerce'),
               dd.to_timedelta(ds, errors='coerce'))
 
+@pytest.mark.parametrize('values', [[np.NaN, 0], [1, 1]])
+def test_isna(values):
+    s = pd.Series(values)
+    ds = dd.from_pandas(s, npartitions=2)
+
+    assert_eq(pd.isna(s), dd.isna(ds))
+
 
 @pytest.mark.parametrize('drop', [0, 9])
 def test_slice_on_filtered_boundary(drop):
