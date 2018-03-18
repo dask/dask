@@ -18,6 +18,7 @@ except ImportError:
 
 from .. import array as da
 from .. import core
+
 from ..utils import partial_by_order
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method
@@ -27,6 +28,8 @@ from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      is_arraylike)
 from ..array import Array
 from ..base import Base, tokenize, dont_optimize, is_dask_collection
+from ..delayed import Delayed, to_task_dask
+
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
@@ -477,7 +480,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             Function applied to each partition.
         args, kwargs :
             Arguments and keywords to pass to the function. The partition will
-            be the first argument, and these will be passed *after*.
+            be the first argument, and these will be passed *after*. Arguments
+            and keywords may contain ``Scalar``, ``Delayed`` or regular
+            python objects.
         $META
 
         Examples
@@ -3332,10 +3337,12 @@ def map_partitions(func, *args, **kwargs):
         Function applied to each partition.
     args, kwargs :
         Arguments and keywords to pass to the function.  At least one of the
-        args should be a Dask.dataframe.
+        args should be a Dask.dataframe. Arguments and keywords may contain
+        ``Scalar``, ``Delayed`` or regular python objects.
     $META
     """
     meta = kwargs.pop('meta', no_default)
+
     if meta is not no_default:
         meta = make_meta(meta)
 
@@ -3365,15 +3372,29 @@ def map_partitions(func, *args, **kwargs):
         meta = _concat([meta])
     meta = make_meta(meta)
 
+    args, args_dasks = _process_lazy_args(args)
+    kwargs_task, kwargs_dsk = to_task_dask(kwargs)
+    args_dasks.append(kwargs_dsk)
+
     dfs = [df for df in args if isinstance(df, _Frame)]
     dsk = {}
     for i in range(dfs[0].npartitions):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
                   if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
-        dsk[(name, i)] = (apply_and_enforce, func, values, kwargs, meta)
+        dsk[(name, i)] = (apply_and_enforce, func, values, kwargs_task, meta)
 
-    dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
-    return new_dd_object(merge(dsk, *dasks), name, meta, args[0].divisions)
+    args_dasks.extend([arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))])
+
+    return new_dd_object(merge(dsk, *args_dasks), name, meta, args[0].divisions)
+
+
+def _process_lazy_args(args):
+    # NOTE: we use this function instead of to_task_dask to avoid
+    # manipulating _Frame instances that need to be aligned
+    dsk = [arg.dask for arg in args if isinstance(arg, Delayed)]
+    args = [arg._key if isinstance(arg, Delayed) else arg for arg in args ]
+
+    return args, dsk
 
 
 def apply_and_enforce(func, args, kwargs, meta):

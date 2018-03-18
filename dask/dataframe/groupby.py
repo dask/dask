@@ -138,13 +138,13 @@ def _groupby_raise_unaligned(df, **kwargs):
     return df.groupby(**kwargs)
 
 
-def _groupby_slice_apply(df, grouper, key, func):
+def _groupby_slice_apply(df, grouper, key, func, *args, **kwargs):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
     g = df.groupby(grouper)
     if key:
         g = g[key]
-    return g.apply(func)
+    return g.apply(func, *args, **kwargs)
 
 
 def _groupby_get_group(df, by_key, get_key, columns):
@@ -1032,7 +1032,7 @@ class _GroupBy(object):
                    split_out=split_out, split_out_setup=split_out_on_index)
 
     @insert_meta_param_description(pad=12)
-    def apply(self, func, meta=no_default):
+    def apply(self, func, *args, **kwargs):
         """ Parallel version of pandas GroupBy.apply
 
         This mimics the pandas version except for the following:
@@ -1045,12 +1045,16 @@ class _GroupBy(object):
         ----------
         func: function
             Function to apply
+        args, kwargs : Scalar, Delayed or object
+            Arguments and keywords to pass to the function.
         $META
 
         Returns
         -------
         applied : Series or DataFrame depending on columns keyword
         """
+        meta = kwargs.get('meta', no_default)
+
         if meta is no_default:
             msg = ("`meta` is not specified, inferred from partial data. "
                    "Please provide `meta` if the result is unexpected.\n"
@@ -1060,7 +1064,8 @@ class _GroupBy(object):
             warnings.warn(msg, stacklevel=2)
 
             with raise_on_meta_error("groupby.apply({0})".format(funcname(func))):
-                meta = self._meta_nonempty.apply(func)
+                meta = self._meta_nonempty.apply(func, *args, **kwargs)
+
         meta = make_meta(meta)
 
         # Validate self.index
@@ -1110,8 +1115,9 @@ class _GroupBy(object):
             index2 = self.index
 
         # Perform embarrassingly parallel groupby-apply
+        kwargs['meta'] = meta
         df5 = map_partitions(_groupby_slice_apply, df4, index2,
-                             self._slice, func, meta=meta)
+                             self._slice, func, *args, **kwargs)
 
         return df5
 

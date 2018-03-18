@@ -18,6 +18,7 @@ DataFrame
 - Support specifying categorical columns on ``read_parquet`` with ``categories=[…]`` for ``engine="pyarrow"`` (:pr:`3177`) `Uwe Korn`_
 - Add ``dd.tseries.Resampler.agg`` (:pr:`3202`) `Richard Postelnik`_
 - Support operations that mix dataframes and arrays (:pr:`3230`) `Matthew Rocklin`_
+- Support extra Scalar and Delayed args in ``dd.groupby._Groupby.apply`` (:pr:`3256`) `Gabriele Lanaro`_
 
 Bag
 +++
@@ -1013,3 +1014,4 @@ Other
 .. _`Simon Perkins`: https://github.com/sjperkins
 .. _`Richard Postelnik`: https://github.com/postelrich
 .. _`Daniel Collins`: https://github.com/dancollins34
+.. _`Gabriele Lanaro`: https://github.com/gabrielelanaro

@@ -101,15 +101,55 @@ def test_full_groupby():
                       index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
     ddf = dd.from_pandas(df, npartitions=3)
 
-    pytest.raises(Exception, lambda: df.groupby('does_not_exist'))
-    pytest.raises(Exception, lambda: df.groupby('a').does_not_exist)
-    assert 'b' in dir(df.groupby('a'))
+    pytest.raises(KeyError, lambda: ddf.groupby('does_not_exist'))
+    pytest.raises(AttributeError, lambda: ddf.groupby('a').does_not_exist)
+    assert 'b' in dir(ddf.groupby('a'))
 
     def func(df):
         return df.assign(b=df.b - df.b.mean())
 
     assert_eq(df.groupby('a').apply(func),
               ddf.groupby('a').apply(func))
+
+
+def test_full_groupby_apply_multiarg():
+    df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                       'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
+                      index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    def func(df, c, d=3):
+        return df.assign(b=df.b - df.b.mean() + c * d)
+
+    c = df.a.sum()
+    d = df.b.mean()
+
+    c_scalar = ddf.a.sum()
+    d_scalar = ddf.b.mean()
+    c_delayed = dask.delayed(lambda: c)()
+    d_delayed = dask.delayed(lambda: d)()
+
+    meta = df.groupby('a').apply(func, c)
+
+    for c_lazy, d_lazy in [(c_scalar, d_scalar),
+                           (c_delayed, d_delayed)]:
+        assert_eq(df.groupby('a').apply(func, c),
+                  ddf.groupby('a').apply(func, c))
+
+        assert_eq(df.groupby('a').apply(func, c, d=d),
+                  ddf.groupby('a').apply(func, c, d=d))
+
+        assert_eq(df.groupby('a').apply(func, c),
+                  ddf.groupby('a').apply(func, c_lazy), check_dtype=False)
+
+        assert_eq(df.groupby('a').apply(func, c),
+                  ddf.groupby('a').apply(func, c_lazy, meta=meta))
+
+        assert_eq(df.groupby('a').apply(func, c, d=d),
+                  ddf.groupby('a').apply(func, c, d=d_lazy))
+
+        assert_eq(df.groupby('a').apply(func, c, d=d),
+                  ddf.groupby('a').apply(func, c, d=d_lazy, meta=meta))
 
 
 @pytest.mark.parametrize('grouper', [
