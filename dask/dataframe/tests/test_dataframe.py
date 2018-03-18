@@ -2810,6 +2810,7 @@ def test_to_timedelta():
     assert_eq(pd.to_timedelta(s, errors='coerce'),
               dd.to_timedelta(ds, errors='coerce'))
 
+
 @pytest.mark.parametrize('values', [[np.NaN, 0], [1, 1]])
 def test_isna(values):
     s = pd.Series(values)
