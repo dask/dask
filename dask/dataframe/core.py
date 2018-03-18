@@ -478,9 +478,11 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         ----------
         func : function
             Function applied to each partition.
-        args, kwargs : Scalar, Delayed or object
+        args, kwargs :
             Arguments and keywords to pass to the function. The partition will
-            be the first argument, and these will be passed *after*.
+            be the first argument, and these will be passed *after*. Arguments
+            and keywords may contain ``Scalar``, ``Delayed`` or regular
+            python objects.
         $META
 
         Examples
@@ -3335,7 +3337,8 @@ def map_partitions(func, *args, **kwargs):
         Function applied to each partition.
     args, kwargs :
         Arguments and keywords to pass to the function.  At least one of the
-        args should be a Dask.dataframe.
+        args should be a Dask.dataframe. Arguments and keywords may contain
+        ``Scalar``, ``Delayed`` or regular python objects.
     $META
     """
     meta = kwargs.pop('meta', no_default)
@@ -3353,7 +3356,6 @@ def map_partitions(func, *args, **kwargs):
     name = '{0}-{1}'.format(name, token)
 
     from .multi import _maybe_align_partitions
-    args, args_dasks = _process_lazy_args(args)
     args = _maybe_from_pandas(args)
     args = _maybe_align_partitions(args)
 
@@ -3370,6 +3372,7 @@ def map_partitions(func, *args, **kwargs):
         meta = _concat([meta])
     meta = make_meta(meta)
 
+    args, args_dasks = _process_lazy_args(args)
     kwargs_task, kwargs_dsk = to_task_dask(kwargs)
     args_dasks.append(kwargs_dsk)
 
@@ -3398,7 +3401,7 @@ def apply_and_enforce(func, args, kwargs, meta):
     """Apply a function, and enforce the output to match meta
 
     Ensures the output has the same columns, even if empty."""
-    df = func(*args, **dict(kwargs))
+    df = func(*args, **kwargs)
     if isinstance(df, (pd.DataFrame, pd.Series, pd.Index)):
         if len(df) == 0:
             return meta
