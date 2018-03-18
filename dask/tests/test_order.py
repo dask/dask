@@ -146,8 +146,10 @@ def test_avoid_upwards_branching_complex(abcde):
            (a, 2): (f, (a, 3)),
            (a, 3): (f, (b, 1), (c, 1)),
            (b, 1): (f, (b, 2)),
+           (b, 2): (f,),
            (c, 1): (f, (c, 2)),
            (c, 2): (f, (c, 3)),
+           (c, 3): (f,),
            (d, 1): (f, (c, 1)),
            (d, 2): (f, (d, 1)),
            (d, 3): (f, (d, 1)),
@@ -238,8 +240,11 @@ def test_gh_3055():
 
     dsk = dict(w.__dask_graph__())
     o = order(dsk)
+    # from dask import visualize
+    # visualize(dsk, color='order', filename='dask.pdf', node_attr={'penwidth': '6'})
     L = [o[k] for k in w.__dask_keys__()]
-    assert sorted(L) == L
+    assert sum(x < len(L) / 2) > len(L) / 3  # some complete quickly
+    assert sorted(L) == L  # operate in order
 
 
 def test_type_comparisions_ok(abcde):
@@ -353,7 +358,7 @@ def test_local_parents_of_reduction(abcde):
     assert log == expected
 
 
-def test_nearest_neightbor(abcde):
+def test_nearest_neighbor(abcde):
     """
 
     a1  a2  a3  a4  a5  a6  a7
@@ -379,7 +384,8 @@ def test_nearest_neightbor(abcde):
            a7: (f, b3)}
 
     o = order(dsk)
-    from dask import visualize
-    visualize(dsk, color='order', filename='dask.png', node_attr={'penwidth': '6'})
+    # from dask import visualize
+    # visualize(dsk, color='order', filename='dask.png', node_attr={'penwidth': '6'})
 
-    assert {o[b1], o[b2], o[b3]} == {0, 5, 8}
+    assert {o[b1], o[b2], o[b3]} == {0, 1, 5}
+    assert o[min([b1, b2, b3])] == 0
