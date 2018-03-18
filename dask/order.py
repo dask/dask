@@ -99,16 +99,17 @@ def order(dsk, dependencies=None):
     waiting = {k: set(v) for k, v in dependencies.items()}
 
     def dependencies_key(x):
-        return total_dependencies.get(x, 0), StrComparable(x)
+        return total_dependencies.get(x, 0), ReverseStrComparable(x)
 
     def dependents_key(x):
-        return total_dependents.get(x, 0), StrComparable(x)
+        return (total_dependents.get(x, 0),
+                StrComparable(x))
 
     result = dict()
     i = 0
 
     stack = [k for k, v in dependents.items() if not v]
-    stack = sorted(stack, key=total_dependencies.get)
+    stack = sorted(stack, key=dependencies_key)
 
     while stack:
         item = stack.pop()
@@ -214,3 +215,21 @@ class StrComparable(object):
             return self.obj < other.obj
         except Exception:
             return str(self.obj) < str(other.obj)
+
+
+class ReverseStrComparable(object):
+    """ Wrap object so that it defaults to string comparison
+
+    Used when sorting in reverse direction.  See StrComparable for normal
+    documentation.
+    """
+    __slots__ = ('obj',)
+
+    def __init__(self, obj):
+        self.obj = obj
+
+    def __lt__(self, other):
+        try:
+            return self.obj > other.obj
+        except Exception:
+            return str(self.obj) > str(other.obj)
