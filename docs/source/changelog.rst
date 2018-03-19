@@ -29,6 +29,7 @@ Core
 ++++
 
 - Fixed bug when using unexpected but hashable types for keys (:pr:`3238`) `Daniel Collins`_
+- Fix bug in task ordering so that we break ties consistently with the key name (:pr:`3271`) `Matthew Rocklin`_
 
 
 0.17.1 / 2018-02-22
