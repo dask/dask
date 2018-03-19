@@ -176,4 +176,4 @@ def test_ordering():
 
     get_sync(dsk, 'y')
 
-    assert L == sorted(L, reverse=True)
+    assert L == sorted(L)
