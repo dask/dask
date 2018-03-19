@@ -109,7 +109,10 @@ def order(dsk, dependencies=None):
     i = 0
 
     stack = [k for k, v in dependents.items() if not v]
-    stack = sorted(stack, key=dependencies_key)
+    if len(stack) < 10000:
+        stack = sorted(stack, key=dependencies_key)
+    else:
+        stack = stack[::-1]
 
     while stack:
         item = stack.pop()
@@ -120,7 +123,9 @@ def order(dsk, dependencies=None):
         deps = waiting[item]
         if deps:
             stack.append(item)
-            stack.extend(sorted(deps, key=dependencies_key))
+            if len(deps) < 1000:
+                deps = sorted(deps, key=dependencies_key)
+            stack.extend(deps)
             continue
 
         result[item] = i
@@ -130,7 +135,9 @@ def order(dsk, dependencies=None):
             waiting[dep].discard(item)
 
         deps = [d for d in dependents[item] if d not in result]
-        stack.extend(sorted(deps, key=dependents_key, reverse=True))
+        if len(deps) < 1000:
+            deps = sorted(deps, key=dependents_key, reverse=True)
+        stack.extend(deps)
 
     return result
 
