@@ -933,7 +933,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         load_store_dsk = store_dsk
         if compute:
             store_dlyds = [Delayed(k, store_dsk) for k in store_keys]
-            store_dlyds = persist(*store_dlyds)
+            store_dlyds = persist(*store_dlyds, **kwargs)
             store_dsk_2 = sharedict.merge(*[e.dask for e in store_dlyds])
 
             load_store_dsk = retrieve_from_ooc(
@@ -952,7 +952,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         result = Delayed(name, dsk)
 
         if compute:
-            result.compute()
+            result.compute(**kwargs)
             return None
         else:
             return result
