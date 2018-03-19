@@ -1208,7 +1208,12 @@ class Array(Base):
 
     @wraps(store)
     def store(self, target, **kwargs):
-        return store([self], [target], **kwargs)
+        r = store([self], [target], **kwargs)
+
+        if kwargs.get("return_stored", False):
+            r = r[0]
+
+        return r
 
     def to_hdf5(self, filename, datapath, **kwargs):
         """ Store array in HDF5 file
