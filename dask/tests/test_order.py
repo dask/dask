@@ -240,8 +240,6 @@ def test_gh_3055():
 
     dsk = dict(w.__dask_graph__())
     o = order(dsk)
-    # from dask import visualize
-    # visualize(dsk, color='order', filename='dask.pdf', node_attr={'penwidth': '6'})
     L = [o[k] for k in w.__dask_keys__()]
     assert sum(x < len(o) / 2 for x in L) > len(L) / 3  # some complete quickly
     assert sorted(L) == L  # operate in order
