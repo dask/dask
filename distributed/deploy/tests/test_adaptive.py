@@ -124,7 +124,7 @@ def test_adaptive_local_cluster_multi_workers():
         yield cluster._close()
 
 
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10, active_rpc_timeout=10)
 def test_adaptive_scale_down_override(c, s, *workers):
     class TestAdaptive(Adaptive):
         def __init__(self, *args, **kwargs):

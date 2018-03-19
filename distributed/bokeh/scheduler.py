@@ -1029,7 +1029,7 @@ class WorkerTable(DashboardComponent):
 def systemmonitor_doc(scheduler, extra, doc):
     with log_errors():
         sysmon = SystemMonitor(scheduler, sizing_mode='scale_width')
-        doc.title = "Dask Scheduler Internal Monitor"
+        doc.title = "Dask: Scheduler System Monitor"
         doc.add_periodic_callback(sysmon.update, 500)
 
         doc.add_root(column(sysmon.root, sizing_mode='scale_width'))
@@ -1044,7 +1044,7 @@ def stealing_doc(scheduler, extra, doc):
         stealing_ts = StealingTimeSeries(scheduler, sizing_mode='scale_width')
         stealing_events = StealingEvents(scheduler, sizing_mode='scale_width')
         stealing_events.root.x_range = stealing_ts.root.x_range
-        doc.title = "Dask Workers Monitor"
+        doc.title = "Dask: Work Stealing"
         doc.add_periodic_callback(occupancy.update, 500)
         doc.add_periodic_callback(stealing_ts.update, 500)
         doc.add_periodic_callback(stealing_events.update, 500)
@@ -1063,7 +1063,7 @@ def events_doc(scheduler, extra, doc):
         events = Events(scheduler, 'all', height=250)
         events.update()
         doc.add_periodic_callback(events.update, 500)
-        doc.title = "Dask Scheduler Events"
+        doc.title = "Dask: Scheduler Events"
         doc.add_root(column(events.root, sizing_mode='scale_width'))
         doc.template = template
         doc.template_variables['active_page'] = 'events'
@@ -1075,7 +1075,7 @@ def workers_doc(scheduler, extra, doc):
         table = WorkerTable(scheduler)
         table.update()
         doc.add_periodic_callback(table.update, 500)
-        doc.title = "Dask Workers"
+        doc.title = "Dask: Workers"
         doc.add_root(table.root)
         doc.template = template
         doc.template_variables['active_page'] = 'workers'
@@ -1088,7 +1088,7 @@ def tasks_doc(scheduler, extra, doc):
                         sizing_mode='stretch_both')
         ts.update()
         doc.add_periodic_callback(ts.update, 5000)
-        doc.title = "Dask Task Stream"
+        doc.title = "Dask: Task Stream"
         doc.add_root(ts.root)
         doc.template = template
         doc.template_variables['active_page'] = 'tasks'
@@ -1098,6 +1098,7 @@ def tasks_doc(scheduler, extra, doc):
 def graph_doc(scheduler, extra, doc):
     with log_errors():
         graph = GraphPlot(scheduler, sizing_mode='stretch_both')
+        doc.title = "Dask: Task Graph"
         graph.update()
         doc.add_periodic_callback(graph.update, 200)
         doc.add_root(graph.root)
@@ -1134,7 +1135,7 @@ def status_doc(scheduler, extra, doc):
             current_load_fig = row(nbytes_hist.root, processing_hist.root,
                                    sizing_mode='scale_width')
 
-        doc.title = "Dask Status"
+        doc.title = "Dask: Status"
         doc.add_root(column(current_load_fig,
                             task_stream.root,
                             task_progress.root,
@@ -1146,7 +1147,7 @@ def status_doc(scheduler, extra, doc):
 
 def profile_doc(scheduler, extra, doc):
     with log_errors():
-        doc.title = "Dask Profile"
+        doc.title = "Dask: Profile"
         prof = ProfileTimePlot(scheduler, sizing_mode='scale_width', doc=doc)
         doc.add_root(prof.root)
         doc.template = template
