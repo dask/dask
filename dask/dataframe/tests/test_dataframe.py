@@ -2811,12 +2811,13 @@ def test_to_timedelta():
               dd.to_timedelta(ds, errors='coerce'))
 
 
-@pytest.mark.parametrize('values', [[np.NaN, 0], [1, 1]])
-def test_isna(values):
-    s = pd.Series(values)
-    ds = dd.from_pandas(s, npartitions=2)
+if PANDAS_VERSION >= '0.22.0':
+    @pytest.mark.parametrize('values', [[np.NaN, 0], [1, 1]])
+    def test_isna(values):
+        s = pd.Series(values)
+        ds = dd.from_pandas(s, npartitions=2)
 
-    assert_eq(pd.isna(s), dd.isna(ds))
+        assert_eq(pd.isna(s), dd.isna(ds))
 
 
 @pytest.mark.parametrize('drop', [0, 9])
