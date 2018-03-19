@@ -106,6 +106,7 @@ def order(dsk, dependencies=None):
                 StrComparable(x))
 
     result = dict()
+    seen = set()  # tasks that should not be added again to the stack
     i = 0
 
     stack = [k for k, v in dependents.items() if not v]
@@ -123,6 +124,7 @@ def order(dsk, dependencies=None):
         deps = waiting[item]
         if deps:
             stack.append(item)
+            seen.add(item)
             if len(deps) < 1000:
                 deps = sorted(deps, key=dependencies_key)
             stack.extend(deps)
@@ -134,7 +136,8 @@ def order(dsk, dependencies=None):
         for dep in dependents[item]:
             waiting[dep].discard(item)
 
-        deps = [d for d in dependents[item] if d not in result]
+        deps = [d for d in dependents[item]
+                if d not in result and not (d in seen and waiting[d])]
         if len(deps) < 1000:
             deps = sorted(deps, key=dependents_key, reverse=True)
         stack.extend(deps)
