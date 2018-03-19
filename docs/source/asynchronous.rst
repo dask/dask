@@ -1,20 +1,21 @@
 Asynchronous Operation
 ======================
 
-Dask.distributed can operate as a fully asynchronous framework and so
-interoperate with other highly concurrent applications.  Internally Dask is
-built on top of Tornado coroutines but also has a compatibility layer for
-asyncio (see below).
+Dask can run fully asynchronously and so interoperate with other highly
+concurrent applications.  Internally Dask is built on top of Tornado coroutines
+but also has a compatibility layer for asyncio (see below).
 
 Basic Operation
 ---------------
 
 When starting a client provide the ``asynchronous=True`` keyword to tell Dask
-that you intend to use this client within an asynchronous context.
+that you intend to use this client within an asynchronous context, such as a
+function defined with ``async/await`` syntax.
 
 .. code-block:: python
 
-   client = await Client(asynchronous=True)
+   async def f():
+       client = await Client(asynchronous=True)
 
 Operations that used to block now provide Tornado coroutines on which you can
 ``await``.

@@ -451,7 +451,9 @@ class Client(Node):
     security: (optional)
         Optional security information
     asynchronous: bool (False by default)
-        Set to True if this client will be used within a Tornado event loop
+        Set to True if using this client within async/await functions or within
+        Tornado gen.coroutines.  Otherwise this should remain False for normal
+        use.
     name: string (optional)
         Gives the client a name that will be included in logs generated on
         the scheduler for matters relating to this client
