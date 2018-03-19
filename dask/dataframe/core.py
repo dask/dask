@@ -4122,11 +4122,10 @@ def to_timedelta(arg, unit='ns', errors='raise'):
     return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors,
                           meta=meta)
 
-
-@wraps(pd.isna)
-def isna(arg):
-    meta = pd.Series([True])
-    return map_partitions(pd.isna, arg, meta=meta)
+if hasattr(pd, isna):
+    @wraps(pd.isna)
+    def isna(arg):
+        return map_partitions(pd.isna, arg)
 
 
 def _repr_data_series(s, index):
