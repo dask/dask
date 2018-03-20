@@ -14,6 +14,7 @@ from tornado import gen
 import pytest
 
 from distributed import Nanny, Worker, Client, wait, fire_and_forget
+from distributed.config import set_config
 from distributed.core import connect, rpc, CommClosedError
 from distributed.scheduler import Scheduler, BANDWIDTH
 from distributed.client import wait
@@ -1034,14 +1035,14 @@ def test_scheduler_file():
     yield s.close()
 
 
-@slow
 @gen_cluster(client=True, ncores=[])
 def test_non_existent_worker(c, s):
-    s.add_worker(address='127.0.0.1:5738', ncores=2, nbytes={}, host_info={})
-    futures = c.map(inc, range(10))
-    yield gen.sleep(4)
-    assert not s.workers
-    assert all(ts.state == 'no-worker' for ts in s.tasks.values())
+    with set_config({'connect-timeout': '100ms'}):
+        s.add_worker(address='127.0.0.1:5738', ncores=2, nbytes={}, host_info={})
+        futures = c.map(inc, range(10))
+        yield gen.sleep(0.300)
+        assert not s.workers
+        assert all(ts.state == 'no-worker' for ts in s.tasks.values())
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)

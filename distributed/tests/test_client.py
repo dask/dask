@@ -29,7 +29,9 @@ import dask
 from dask import delayed
 from dask.context import _globals
 from distributed import (Worker, Nanny, fire_and_forget, config,
-                         get_client, secede, get_worker, Executor, profile)
+                         get_client, secede, get_worker, Executor, profile,
+                         TimeoutError)
+from distributed.config import set_config
 from distributed.comm import CommClosedError
 from distributed.client import (Client, Future, wait, as_completed, tokenize,
                                 _get_global_client, default_client,
@@ -5231,6 +5233,20 @@ def test_diagnostics_link_env_variable(loop):
                 assert link in text
             finally:
                 del config['diagnostics-link']
+
+
+@gen_test()
+def test_client_timeout_2():
+    with set_config({'connect-timeout': '10ms'}):
+        start = time()
+        c = Client('127.0.0.1:3755', asynchronous=True)
+        with pytest.raises((TimeoutError, IOError)):
+            yield c
+        stop = time()
+
+        yield c.close()
+
+        assert stop - start < 1
 
 
 if sys.version_info >= (3, 5):

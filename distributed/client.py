@@ -484,10 +484,15 @@ class Client(Node):
     --------
     distributed.scheduler.Scheduler: Internal scheduler
     """
-    def __init__(self, address=None, loop=None, timeout=5,
+    def __init__(self, address=None, loop=None, timeout=no_default,
                  set_as_default=True, scheduler_file=None,
                  security=None, asynchronous=False,
                  name=None, heartbeat_interval=None, **kwargs):
+        if timeout == no_default:
+            timeout = config.get('connect-timeout', '5s')
+        if timeout is not None:
+            timeout = parse_timedelta(timeout, 's')
+        self._timeout = timeout
 
         self.futures = dict()
         self.refcount = defaultdict(lambda: 0)
@@ -709,7 +714,12 @@ class Client(Node):
                             "Message: %s" % (self.status, msg))
 
     @gen.coroutine
-    def _start(self, timeout=5, **kwargs):
+    def _start(self, timeout=no_default, **kwargs):
+        if timeout == no_default:
+            timeout = config.get('connect-timeout', '5s')
+        if timeout is not None:
+            timeout = parse_timedelta(timeout, 's')
+
         address = self._start_arg
         if self.cluster is not None:
             # Ensure the cluster is started (no-op if already running)
@@ -1011,7 +1021,7 @@ class Client(Node):
 
     _shutdown = _close
 
-    def close(self, timeout=10):
+    def close(self, timeout=no_default):
         """ Close this client
 
         Clients will also close automatically when your Python session ends
@@ -1023,6 +1033,8 @@ class Client(Node):
         --------
         Client.restart
         """
+        if timeout == no_default:
+            timeout = self._timeout * 2
         # XXX handling of self.status here is not thread-safe
         if self.status == 'closed':
             return
@@ -1489,7 +1501,9 @@ class Client(Node):
 
     @gen.coroutine
     def _scatter(self, data, workers=None, broadcast=False, direct=None,
-                 local_worker=None, timeout=3, hash=True):
+                 local_worker=None, timeout=no_default, hash=True):
+        if timeout == no_default:
+            timeout = self._timeout
         if isinstance(workers, six.string_types + (Number,)):
             workers = [workers]
         if isinstance(data, dict) and not all(isinstance(k, (bytes, unicode))
@@ -1601,7 +1615,7 @@ class Client(Node):
                 qout.put(future)
 
     def scatter(self, data, workers=None, broadcast=False, direct=None,
-                hash=True, maxsize=0, timeout=3, asynchronous=None):
+                hash=True, maxsize=0, timeout=no_default, asynchronous=None):
         """ Scatter data into distributed memory
 
         This moves data from the local client process into the workers of the
@@ -1667,6 +1681,8 @@ class Client(Node):
         --------
         Client.gather: Gather data back to local process
         """
+        if timeout == no_default:
+            timeout = self._timeout
         if isqueue(data) or isinstance(data, Iterator):
             logger.debug("Starting thread for streaming data")
             qout = pyQueue(maxsize=maxsize)
@@ -2361,7 +2377,9 @@ class Client(Node):
         return self.sync(self._upload_environment, name, zipfile)
 
     @gen.coroutine
-    def _restart(self, timeout=5):
+    def _restart(self, timeout=no_default):
+        if timeout == no_default:
+            timeout = self._timeout
         self._send_to_scheduler({'op': 'restart', 'timeout': timeout})
         self._restart_event = Event()
         try:

@@ -131,7 +131,9 @@ def initialize_logging(config):
 
 
 @contextmanager
-def set_config(**kwargs):
+def set_config(arg=None, **kwargs):
+    if arg and not kwargs:
+        kwargs = arg
     old = {}
     for key in kwargs:
         if key in config:
