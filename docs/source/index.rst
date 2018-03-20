@@ -192,7 +192,7 @@ distributed memory clusters.
 
 **Diagnosing Performance**
 
-Parallel code can be tricky to debug and profile. Dask provides a several tools
+Parallel code can be tricky to debug and profile. Dask provides several tools
 to help make debugging and profiling graph execution easier.
 
 * :doc:`understanding-performance`
