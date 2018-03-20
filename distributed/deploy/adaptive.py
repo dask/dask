@@ -71,7 +71,8 @@ class Adaptive(object):
         self.cluster = cluster
         self.startup_cost = parse_timedelta(startup_cost, default='s')
         self.scale_factor = scale_factor
-        self._adapt_callback = PeriodicCallback(self._adapt, interval * 1000)
+        self._adapt_callback = PeriodicCallback(self._adapt, interval * 1000,
+                                                io_loop=scheduler.loop)
         self.scheduler.loop.add_callback(self._adapt_callback.start)
         self._adapting = False
         self._workers_to_close_kwargs = kwargs

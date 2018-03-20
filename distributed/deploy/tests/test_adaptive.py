@@ -166,7 +166,7 @@ def test_min_max():
     yield cluster._start()
     try:
         adapt = Adaptive(cluster.scheduler, cluster, minimum=1, maximum=2,
-                         interval='20 ms')
+                         interval='20 ms', wait_count=10)
         c = yield Client(cluster, asynchronous=True, loop=loop)
 
         start = time()
@@ -196,7 +196,7 @@ def test_min_max():
         start = time()
         while len(cluster.scheduler.workers) != 1:
             yield gen.sleep(0.01)
-            assert time() < start + 1
+            assert time() < start + 2
         assert frequencies(pluck(1, adapt.log)) == {'up': 2, 'down': 1}
     finally:
         yield c._close()
@@ -319,3 +319,16 @@ def test_no_more_workers_than_tasks():
     finally:
         yield client._close()
         yield cluster._close()
+
+
+def test_basic_no_loop():
+    try:
+        with LocalCluster(0, scheduler_port=0, silence_logs=False,
+                          diagnostics_port=None) as cluster:
+            with Client(cluster) as client:
+                cluster.adapt()
+                future = client.submit(lambda x: x + 1, 1)
+                assert future.result() == 2
+            loop = cluster.loop
+    finally:
+        loop.add_callback(loop.stop)

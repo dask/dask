@@ -4304,13 +4304,15 @@ def test_map_list_kwargs(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_dont_clear_waiting_data(c, s, a, b):
-    [x] = yield c.scatter([1])
-    y = c.submit(slowinc, x, delay=0.2)
+    start = time()
+    x = yield c.scatter(1)
+    y = c.submit(slowinc, x, delay=0.5)
     while y.key not in s.tasks:
         yield gen.sleep(0.01)
-    [x] = yield c.scatter([1])
+    key = x.key
+    del x
     for i in range(5):
-        assert s.waiting_data[x.key]
+        assert s.waiting_data[key]
         yield gen.moment
 
 
