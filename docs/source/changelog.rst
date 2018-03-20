@@ -10,6 +10,7 @@ Array
 
 - Add `broadcast_arrays` for Dask Arrays (:pr:`3217`) `John A Kirkham`_
 - Add `bitwise_*` ufuncs (:pr:`3219`) `John A Kirkham`_
+- Validate inputs to atop (:pr:`3307`) `Matthew Rocklin`_
 
 DataFrame
 +++++++++
