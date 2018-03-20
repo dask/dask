@@ -1432,6 +1432,8 @@ def test_scatter_gather_sync(loop, direct, broadcast):
             results = c.gather(futures, direct=direct)
             assert results == [1, 2, 3]
 
+            delayed(inc)(1).compute(direct=direct)
+
 
 @gen_cluster(client=True)
 def test_gather_direct(c, s, a, b):

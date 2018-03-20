@@ -2032,7 +2032,8 @@ class Client(Node):
             return futures
 
     def get(self, dsk, keys, restrictions=None, loose_restrictions=None,
-            resources=None, sync=True, asynchronous=None, **kwargs):
+            resources=None, sync=True, asynchronous=None, direct=None,
+            **kwargs):
         """ Compute dask graph
 
         Parameters
@@ -2044,6 +2045,8 @@ class Client(Node):
             jobs can take place
         sync: bool (optional)
             Returns Futures if False or concrete values if True (default).
+        direct: bool
+            Gather results directly from workers
 
         Examples
         --------
@@ -2068,7 +2071,8 @@ class Client(Node):
                 except Exception:
                     should_rejoin = False
             try:
-                results = self.gather(packed, asynchronous=asynchronous)
+                results = self.gather(packed, asynchronous=asynchronous,
+                                      direct=direct)
             finally:
                 for f in futures.values():
                     f.release()
