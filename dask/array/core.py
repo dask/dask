@@ -2312,6 +2312,11 @@ def atop(func, out_ind, *args, **kwargs):
         chunkss[k] = (v,)
     arginds = list(zip(arrays, args[1::2]))
 
+    for arg, ind in arginds:
+        if hasattr(arg, 'ndim') and hasattr(ind, '__len__') and arg.ndim != len(ind):
+            raise ValueError("Index string %s does not match array dimension %d"
+                             % (ind, arg.ndim))
+
     numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
     argindsstr = list(concat([(a if ind is None else a.name, ind) for a, ind in arginds]))
     # Finish up the name
