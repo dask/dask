@@ -2661,6 +2661,15 @@ def test_atop_chunks():
     assert_eq(y, np.ones((20, 10)))
 
 
+def test_atop_raises_on_incorrect_indices():
+    x = da.arange(5, chunks=3)
+    with pytest.raises(ValueError) as info:
+        da.atop(lambda x: x, 'ii', x, 'ii', dtype=int)
+
+    assert 'ii' in str(info.value)
+    assert '1' in str(info.value)
+
+
 def test_from_delayed():
     v = delayed(np.ones)((5, 3))
     x = from_delayed(v, shape=(5, 3), dtype=np.ones(0).dtype)
