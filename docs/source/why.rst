@@ -6,16 +6,46 @@ This document gives high-level motivation on why people choose to adopt Dask.
 .. toctree::
    :maxdepth: 1
 
+Python's role in Data Science
+-----------------------------
+
+Python has grown to become the dominant language both in data analytics, and
+general programming:
+
+.. image:: https://zgab33vy595fw5zq-zippykid.netdna-ssl.com/wp-content/uploads/2017/09/growth_major_languages-1-1024x878.png
+   :alt: Growth of major programming languages
+   :width: 75%
+
+This is fueled largely by libraries like Numpy, Pandas, and Scikit-Learn that
+are popular due to their combination of efficient algorithms and intuitive
+interfaces.
+
+.. image:: https://zgab33vy595fw5zq-zippykid.netdna-ssl.com/wp-content/uploads/2017/09/related_tags_over_time-1-1024x1024.png
+   :alt: Stack overflow traffic to various packages
+   :width: 75%
+
+However these packages were not designed to scale beyond a single machine.
+Dask was developed to scale these packages and the surrounding ecosystem.
+Dask works with the existing Python ecosystem to scale it to multi-core
+machines and distributed clusters.
+
+*Image credit to Stack Overflow blogposts*
+`#1 <https://stackoverflow.blog/2017/09/06/incredible-growth-python>`_
+*and*
+`#2 <https://stackoverflow.blog/2017/09/14/python-growing-quickly/>`_
+
+
 Familiar API
 ------------
 
 Analysts often use tools like Pandas, Scikit-Learn, Numpy, and the rest of the
 Python ecosystem to analyze data on their personal computer.  They like these
 tools because they are efficient, intuitive, and widely trusted.  However when
-they choose to scale their analyses to larger datasets these tools do no scale
-well, and the analyst is forced to rewrite their computation using a more
-scalable tool, often in another language altogether.  This rewrite process
-slows down the analytics process and causes frustration.
+they choose to apply their analyses to larger datasets they find that these
+tools were not designed to scale beyond a single machine, and so the analyst is
+forced to rewrite their computation using a more scalable tool, often in
+another language altogether.  This rewrite process slows down discovery and
+causes frustration.
 
 Dask provides ways to scale Pandas, Scikit-Learn, and Numpy workflows with
 minimal rewriting.  Dask integrates well with these tools so that it copies
