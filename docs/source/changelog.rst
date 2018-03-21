@@ -1,6 +1,14 @@
 Changelog
 =========
 
+1.21.4 - 2018-03-21
+-------------------
+
+-  Avoid passing bytearrays to snappy decompression (:pr:`1831`) `Matthew Rocklin`_
+-  Specify IOLoop in Adaptive (:pr:`1841`) `Matthew Rocklin`_
+-  Use connect-timeout config value throughout client (:pr:`1839`) `Matthew Rocklin`_
+-  Support direct= keyword argument in Client.get (:pr:`1845`) `Matthew Rocklin`_
+
 
 1.21.3 - 2018-03-08
 -------------------
