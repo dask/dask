@@ -14,7 +14,7 @@ storage back-ends may be provided for dask's use.
 
 
 Known Storage Implementations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------------
 
 When specifying a storage location, a URL should be provided using the general
 form ``protocol://path/to/data``.
@@ -52,6 +52,8 @@ to:
 
     - ``gcs:`` or ``gs:`` - Google Cloud Storage, typically used with Google Compute
       resource, using gcsfs_ (in development)
+
+    - ``http:`` or ``https:`` for reading data directly from HTTP web servers
 
     .. - # ``adlfs:`` - Azure Data-lake cloud storage, for use with the Microsoft
       Azure platform, using azure-data-lake-store-python_
@@ -146,7 +148,7 @@ variables. For information on these see the `pyarrow documentation`_.
 
 
 S3
------
+--
 
 Amazon S3 (Simple Storage Service) is a web service offered by Amazon Web
 Services.
@@ -224,8 +226,8 @@ Possible additional storage options:
       a JSON file created by gcloud.
 
 
-HTTP
-----
+HTTP(s)
+-------
 
 Direct file-like access to arbitrary URLs is available over HTTP and HTTPS. However,
 there is no such thing as ``glob`` functionality over HTTP, so only explicit lists
