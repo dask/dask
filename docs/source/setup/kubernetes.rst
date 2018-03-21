@@ -11,9 +11,8 @@ You can use Kubernetes to launch Dask workers in the following two ways:
 
     .. code-block:: bash
 
-       helm repo add dask https://dask.github.io/helm-chart
-       helm repo update
-       helm install dask/dask
+       helm repo update          # get latest helm charts
+       helm install stable/dask  # deploy standard dask chart
 
     This is a good choice if you want to do the following:
 
@@ -35,7 +34,7 @@ You can use Kubernetes to launch Dask workers in the following two ways:
        from dask_kubernetes import KubeCluster
        cluster = KubeCluster.from_yaml('worker-template.yaml')
        cluster.scale(20)  # add 20 workers
-       cluster.adapt()  # or create and destroy workers dynamically based on workload
+       cluster.adapt()    # or create and destroy workers dynamically based on workload
 
        from dask.distributed import Client
        client = Client(cluster)
