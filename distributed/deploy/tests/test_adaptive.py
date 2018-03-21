@@ -332,3 +332,31 @@ def test_basic_no_loop():
             loop = cluster.loop
     finally:
         loop.add_callback(loop.stop)
+
+
+@gen_test(timeout=None)
+def test_target_duration():
+    """ Ensure that redefining adapt with a lower maximum removes workers """
+    cluster = yield LocalCluster(0, asynchronous=True, processes=False,
+                                 scheduler_port=0, silence_logs=False,
+                                 diagnostics_port=None)
+    client = yield Client(cluster, asynchronous=True)
+    adaptive = cluster.adapt(interval='20ms', minimum=2, target_duration='5s')
+
+    cluster.scheduler.task_duration['slowinc'] = 1
+
+    try:
+        while len(cluster.scheduler.workers) < 2:
+            yield gen.sleep(0.01)
+
+        futures = client.map(slowinc, range(100), delay=0.3)
+
+        while len(adaptive.log) < 2:
+            yield gen.sleep(0.01)
+
+        assert adaptive.log[0][1:] == ('up', {'n': 2})
+        assert adaptive.log[1][1:] == ('up', {'n': 20})
+
+    finally:
+        yield client._close()
+        yield cluster._close()

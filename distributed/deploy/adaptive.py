@@ -242,10 +242,13 @@ class Adaptive(object):
                            self.target_duration)
         instances = max(1,
                         len(self.scheduler.workers) * self.scale_factor,
-                        target - len(self.scheduler.workers))
-        logger.info("Scaling up to %d workers", instances)
+                        target,
+                        self.minimum)
+
         if self.maximum:
             instances = min(self.maximum, instances)
+
+        logger.info("Scaling up to %d workers", instances)
         return {'n': instances}
 
     @gen.coroutine
