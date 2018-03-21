@@ -14,6 +14,7 @@ extras_require = {
                 'partd >= 0.3.8', 'cloudpickle >= 0.2.1'],
   'distributed': ['distributed >= 1.21'],
   'delayed': ['toolz >= 0.7.3'],
+  'scipy': ['scipy >= 0.16.0'],
 }
 extras_require['complete'] = sorted(set(sum(extras_require.values(), [])))
 
