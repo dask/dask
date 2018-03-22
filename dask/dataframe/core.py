@@ -4123,7 +4123,7 @@ def to_timedelta(arg, unit='ns', errors='raise'):
                           meta=meta)
 
 
-if hasattr(pd, isna):
+if hasattr(pd, 'isna'):
     @wraps(pd.isna)
     def isna(arg):
         return map_partitions(pd.isna, arg)
