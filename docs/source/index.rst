@@ -136,6 +136,7 @@ Index
 * :doc:`use-cases`
 * :doc:`examples-tutorials`
 * :doc:`support`
+* :doc:`why`
 
 .. toctree::
    :maxdepth: 1
@@ -147,6 +148,7 @@ Index
    use-cases.rst
    examples-tutorials.rst
    support.rst
+   why.rst
 
 **Collections**
 
