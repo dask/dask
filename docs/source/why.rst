@@ -16,9 +16,9 @@ general programming:
    :alt: Growth of major programming languages
    :width: 75%
 
-This is fueled largely by libraries like Numpy, Pandas, and Scikit-Learn that
-are popular due to their combination of efficient algorithms and intuitive
-interfaces.
+This is fueled both by computational libraries like Numpy, Pandas, and
+Scikit-Learn and by a wealth of libraries for visualization, interactive
+notebooks, collaboration, and so forth.
 
 .. image:: https://zgab33vy595fw5zq-zippykid.netdna-ssl.com/wp-content/uploads/2017/09/related_tags_over_time-1-1024x1024.png
    :alt: Stack overflow traffic to various packages
@@ -193,14 +193,15 @@ communication, load balancing, resilience, diagnostics, etc..
 Responsive feedback
 -------------------
 
-Parallel computing is frustrating when things go wrong, which they will.
-All of our tools for gaining insight into our computation like system monitors,
-debuggers, profilers, progress bars and more need to be re-invented to work on
-many cores spread across many machines.  The added distance between a user and
-their computation can drastically affect how quickly they are able to identify
-and resolve bugs or performance problems.
+Because everything happens remotely interactive parallel computing can be
+frustrating for users.  They don't have a good sense how computations are
+progressing, what might be going wrong, or what parts of their code they should
+focus on for performance.  The added distance between a user and their
+computation can drastically affect how quickly they are able to identify and
+resolve bugs and performance problems, which can drastically increase their
+time to solution.
 
-Dask helps keep users informed and happy with a suite of helpful diagnostic and
+Dask keeps users informed and content with a suite of helpful diagnostic and
 investigative tools including the following:
 
 1.  A :doc:`real-time and responsive dashboard <understanding-performance>`
