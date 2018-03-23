@@ -1200,3 +1200,20 @@ def test_retries(c, s, a, b):
     with pytest.raises(ZeroDivisionError) as exc_info:
         res = yield future
     exc_info.match("one")
+
+
+@pytest.mark.xfail(reason="second worker also errant for some reason")
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3, timeout=5)
+def test_mising_data_errant_worker(c, s, w1, w2, w3):
+    with set_config({'connect-timeout': '1s'}):
+        np = pytest.importorskip('numpy')
+
+        x = c.submit(np.random.random, 10000000, workers=w1.address)
+        yield wait(x)
+        yield c.replicate(x, workers=[w1.address, w2.address])
+
+        y = c.submit(len, x, workers=w3.address)
+        while not w3.tasks:
+            yield gen.sleep(0.001)
+        w1._close()
+        yield wait(y)

@@ -2038,11 +2038,12 @@ class Scheduler(ServerNode):
         ts = self.tasks.get(key)
         if ts is None or not ts.who_has:
             return
-        ws = self.workers[errant_worker]
-        if ws in ts.who_has:
-            ts.who_has.remove(ws)
-            ws.has_what.remove(ts)
-            ws.nbytes -= ts.get_nbytes()
+        if errant_worker in self.workers:
+            ws = self.workers[errant_worker]
+            if ws in ts.who_has:
+                ts.who_has.remove(ws)
+                ws.has_what.remove(ts)
+                ws.nbytes -= ts.get_nbytes()
         if not ts.who_has:
             if ts.run_spec:
                 self.transitions({key: 'released'})
@@ -3320,9 +3321,9 @@ class Scheduler(ServerNode):
                 return {key: 'released'}
 
             if ws is not ts.processing_on:  # someone else has this task
-                logger.warning("Unexpected worker completed task, likely due to"
-                               " work stealing.  Expected: %s, Got: %s, Key: %s",
-                               ts.processing_on, ws, key)
+                logger.info("Unexpected worker completed task, likely due to"
+                            " work stealing.  Expected: %s, Got: %s, Key: %s",
+                            ts.processing_on, ws, key)
                 return {}
 
             if startstops:

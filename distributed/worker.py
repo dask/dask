@@ -534,7 +534,8 @@ class WorkerBase(ServerNode):
         try:
             compressed = yield comm.write(msg)
         except EnvironmentError:
-            logger.exception('failed during get data', exc_info=True)
+            logger.exception('failed during get data with %s -> %s',
+                             self.address, who, exc_info=True)
             comm.abort()
             raise
         stop = time()
