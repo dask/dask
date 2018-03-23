@@ -30,7 +30,7 @@ def orc_files(tmpdir):
     try:
         yield files
     finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def test_orc_single(orc_files):

@@ -40,7 +40,7 @@ def read_orc(path, columns=None, storage_options=None):
     >>> d = read_orc('https://github.com/apache/orc/raw/'
     ...              'master/examples/demo-11-zlib.orc')  # doctest: +SKIP
     """
-    orc = import_required('pyarrow.orc', 'Please install dev version pyarrow')
+    orc = import_required('pyarrow.orc', 'Please install pyarrow >= 0.9.0')
     storage_options = storage_options or {}
     fs, fs_token, paths = get_fs_token_paths(path, mode='rb',
                                              storage_options=storage_options)
