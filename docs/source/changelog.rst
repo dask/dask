@@ -32,8 +32,8 @@ Core
 Array
 +++++
 
-- Add `broadcast_arrays` for Dask Arrays (:pr:`3217`) `John A Kirkham`_
-- Add `bitwise_*` ufuncs (:pr:`3219`) `John A Kirkham`_
+- Add ``broadcast_arrays`` for Dask Arrays (:pr:`3217`) `John A Kirkham`_
+- Add ``bitwise_*`` ufuncs (:pr:`3219`) `John A Kirkham`_
 - Validate inputs to atop (:pr:`3307`) `Matthew Rocklin`_
 - Avoid calls to astype in concatenate if all parts have the same dtype (:pr:`3301`) `Martin Durant`_
 
