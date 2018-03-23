@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="icon" href="_images/dask_icon_no_pad.svg">
+
+    <title>Dask: Scalable analytics in Python</title>
+
+    <!-- Bootstrap core CSS -->
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet">
+     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.6.0/themes/prism.min.css">
+
+    <!-- Custom styles for this template -->
+    <link href="_static/main-page.css" rel="stylesheet">
+
+
+  </head>
+  <body>
+
+    <header>
+
+    <nav class="navbar navbar-expand-lg text-light navbar-dark bs-dark">
+      <img src="_images/dask_icon_no_pad.svg" style="height: 32px;">
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavDropdown" aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNavDropdown">
+        <ul class="navbar-nav">
+          <li class="navbar-item"><a class="nav-link" href="https://dask.pydata.org/en/latest/why.html">Why Dask?</a></li>
+          <li class="navbar-item"><a class="nav-link" href="https://dask.pydata.org/en/latest/install.html">Install</a></li>
+          <li class="navbar-item"><a class="nav-link" href="https://github.com/dask/dask-tutorial">Tutorial</a></li>
+          <li class="navbar-item"><a class="nav-link" href="https://dask.pydata.org/en/latest/setup.html">Deploy</a></li>
+          <li class="navbar-item"><a class="nav-link" href="https://dask.pydata.org/en/latest/array.html">Arrays</a></li>
+          <li class="navbar-item"><a class="nav-link" href="https://dask.pydata.org/en/latest/dataframe.html">Dataframes</a></li>
+          <li class="navbar-item"><a class="nav-link" href="https://dask-ml.readthedocs.org/en/latest/">Machine Learning</a></li>
+          <li class="navbar-item"><a class="nav-link" href="https://dask.pydata.org/en/latest/delayed.html">Custom</a></li>
+          <li class="navbar-item"><a class="nav-link" href="https://dask.pydata.org/en/latest/futures.html">Real Time</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <div class="hero position-relative overflow-hidden p-3 text-center text-light">
+      <div class="col-md-5 p-lg-1 mx-auto my-5">
+        <img src="_images/dask_horizontal_white_no_pad.svg">
+		  <p class="lead font-weight-normal">
+        Dask natively scales Python
+      </p>
+		  <p class="lead ">
+        Dask provides advanced parallelism for analytics,
+        enabling performance at scale for the tools you love
+      </p>
+        <a class="btn btn-outline-warning" href="https://dask.pydata.org/en/latest">Learn More</a>
+      </div>
+      <div class="product-device box-shadow d-none d-md-block"></div>
+      <div class="product-device product-device-2 box-shadow d-none d-md-block"></div>
+    </div>
+
+
+    <main role="main">
+
+      <!-- Marketing messaging and featurettes
+      ================================================== -->
+      <!-- Wrap the rest of the page in another container to center all the content. -->
+
+      <div class="container marketing p-md-5">
+
+        <!-- Three columns of text below the carousel -->
+        <div class="row">
+          <div class="col-lg-4">
+            <img src="_images/dask-array-black-text.svg" height="200">
+            <h2>Numpy</h2>
+            <p>Dask arrays scale Numpy, enabling multi-dimensional data analysis in earth science, advanced imaging, and machine learning algorithms</p>
+            <p>
+              <a class="btn btn-outline-secondary" href="https://dask.pydata.org/en/latest/array.html" role="button">Learn More &raquo;</a>
+              <a class="btn btn-secondary" href="https://mybinder.org/v2/gh/dask/dask-examples/master?filepath=array.ipynb" role="button">Try Now &raquo;</a>
+            </p>
+          </div><!-- /.col-lg-4 -->
+          <div class="col-lg-4">
+            <img src="_images/dask-dataframe.svg" height="200">
+            <h2>Pandas</h2>
+            <p>Dask dataframes scale Pandas, enabling applications in time series, business intelligence, and general data munging on big data.</p>
+            <p>
+              <a class="btn btn-outline-secondary" href="https://dask.pydata.org/en/latest/dataframe.html" role="button">Learn More &raquo;</a>
+              <a class="btn btn-secondary" href="https://mybinder.org/v2/gh/dask/dask-examples/master?filepath=dataframe.ipynb" role="button">Try Now &raquo;</a>
+            </p>
+          </div><!-- /.col-lg-4 -->
+          <div class="col-lg-4">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Rosenbrock_function.svg/300px-Rosenbrock_function.svg.png" height="200">
+            <h2>Scikit-Learn</h2>
+            <p>Dask-ML scales machine learning libraries like Scikit-Learn and XGBoost to enable scalable training and prediction on large models and large datasets</p>
+            <p>
+              <a class="btn btn-outline-secondary" href="https://dask-ml.readthedocs.org/en/latest/" role="button">Learn More &raquo;</a>
+              <a class="btn btn-secondary" href="https://mybinder.org/v2/gh/dask/dask-examples/master?filepath=machine-learning.ipynb" role="button">Try Now &raquo;</a>
+            </p>
+          </div><!-- /.col-lg-4 -->
+        </div><!-- /.row -->
+
+
+        <!-- START THE FEATURETTES -->
+
+        <hr class="featurette-divider">
+
+        <div class="row featurette">
+          <div class="col-md-7">
+            <h2 class="featurette-heading">Familiar for Python users <span class="text-muted"> and easy to get started</span></h2>
+            <p class="lead">Dask uses existing Python APIs and data structures to make it easy to switch between Numpy, Pandas, Scikit-learn to their Dask-powered equivalents. </>
+            <p class="lead"> You don't have to rewrite your code or retrain to scale up</p>
+          </div>
+
+          <div class="col-md-5 code-block">
+            <pre><code class="language-python"># Dataframes implement the Pandas API
+import dask.dataframe as dd
+df = dd.read_csv('s3://.../2018-*-*.csv')
+df.groupby(df.account_id).balance.sum()</code></pre>
+
+            <pre><code class="language-python"># Arrays implement the Numpy API
+import dask.array as da
+x = da.random.random(size=(10000, 10000),
+                     chunks=(1000, 1000))
+x + x.T - x.mean(axis=0)</code></pre>
+
+            <pre><code class="language-python"># ML implements the Scikit-Learn API
+from dask_ml.linear_model \
+  import LogisticRegression
+lr = LogisticRegression()
+lr.fit(train, test)</code></pre>
+          </div>
+        </div>
+
+        <hr class="featurette-divider"></hr>
+
+        <div class="row featurette">
+          <div class="col-md-7 order-md-2">
+            <h2 class="featurette-heading">Scale up to clusters <span class="text-muted"> or just use it on your laptop</span></h2>
+            <p class="lead">Dask's schedulers scale to thousand-node clusters and its algorithms have been tested on some of the largest supercomputers in the world.</p>
+
+            <p class="lead">But you don't need a massive cluster to get started.  Dask ships with schedulers designed for use on personal machines.  Many people use Dask today to scale computations on their laptop, using multiple cores for computation and their disk for excess storage.</p>
+          </div>
+          <div class="col-md-5 order-md-1" style="padding-top: 4rem;">
+            <img src="https://github.com/dask/dask-org/raw/master/images/grid_search_schedule.gif"
+                 width="100%">
+          </div>
+        </div>
+
+        <hr class="featurette-divider"></hr>
+
+        <div class="row featurette">
+          <div class="col-md-7">
+            <h2 class="featurette-heading">Flexible and Extensible <span class="text-muted"> letting you parallelize your internal systems</span></h2>
+            <p class="lead">Not all computations fit into a big dataframe</p>
+            <p class="lead">Dask exposes lower-level APIs letting you build custom systems for custom applications.  This helps open source community leaders parallelize their own packages and helps business leaders scale custom business logic</p>
+          </div>
+
+          <div class="col-md-5 p-lg-1 mx-auto my-5">
+            <img src="https://github.com/dask/dask-org/raw/master/images/credit-model.svg.png"
+                 width="100%">
+          </div>
+        </div>
+
+        <hr class="featurette-divider"></hr>
+
+        <!-- /END THE FEATURETTES -->
+
+      <!-- FOOTER -->
+      <footer class="container">
+        <p class="float-right">New-BSD Licensed</p>
+        <p>&copy; 2018 Dask core developers</p>
+      </footer>
+    </main>
+
+    <!-- Bootstrap core JavaScript
+      ================================================== -->
+      <!-- Placed at the end of the document so the pages load faster -->
+      <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.1/popper.min.js"></script>
+      <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+      <!-- Just to make our placeholder images work. Don't actually copy the next line! -->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/holder/2.9.4/holder.min.js"></script>
+
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.6.0/prism.min.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.6.0/components/prism-python.min.js"></script>
+
+
+  </body>
+</html>
