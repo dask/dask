@@ -1,7 +1,7 @@
 Overview
 ========
 
-Dask.Bag implements a operations like ``map``, ``filter``, ``fold``, and
+Dask.Bag implements operations like ``map``, ``filter``, ``fold``, and
 ``groupby`` on collections of Python objects.  It does this in parallel and in
 small memory using Python iterators.  It is similar to a parallel version of
 PyToolz_ or a Pythonic version of the `PySpark RDD`_.
