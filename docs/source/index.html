@@ -29,15 +29,15 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarNavDropdown">
         <ul class="navbar-nav">
-          <li class="navbar-item"><a class="nav-link" href="https://dask.pydata.org/en/latest/why.html">Why Dask?</a></li>
-          <li class="navbar-item"><a class="nav-link" href="https://dask.pydata.org/en/latest/install.html">Install</a></li>
+          <li class="navbar-item"><a class="nav-link" href="why.html">Why Dask?</a></li>
+          <li class="navbar-item"><a class="nav-link" href="install.html">Install</a></li>
           <li class="navbar-item"><a class="nav-link" href="https://github.com/dask/dask-tutorial">Tutorial</a></li>
-          <li class="navbar-item"><a class="nav-link" href="https://dask.pydata.org/en/latest/setup.html">Deploy</a></li>
-          <li class="navbar-item"><a class="nav-link" href="https://dask.pydata.org/en/latest/array.html">Arrays</a></li>
-          <li class="navbar-item"><a class="nav-link" href="https://dask.pydata.org/en/latest/dataframe.html">Dataframes</a></li>
+          <li class="navbar-item"><a class="nav-link" href="setup.html">Deploy</a></li>
+          <li class="navbar-item"><a class="nav-link" href="array.html">Arrays</a></li>
+          <li class="navbar-item"><a class="nav-link" href="dataframe.html">Dataframes</a></li>
           <li class="navbar-item"><a class="nav-link" href="https://dask-ml.readthedocs.org/en/latest/">Machine Learning</a></li>
-          <li class="navbar-item"><a class="nav-link" href="https://dask.pydata.org/en/latest/delayed.html">Custom</a></li>
-          <li class="navbar-item"><a class="nav-link" href="https://dask.pydata.org/en/latest/futures.html">Real Time</a></li>
+          <li class="navbar-item"><a class="nav-link" href="delayed.html">Custom</a></li>
+          <li class="navbar-item"><a class="nav-link" href="futures.html">Real Time</a></li>
         </ul>
       </div>
     </nav>
@@ -52,7 +52,7 @@
         Dask provides advanced parallelism for analytics,
         enabling performance at scale for the tools you love
       </p>
-        <a class="btn btn-outline-warning" href="https://dask.pydata.org/en/latest">Learn More</a>
+        <a class="btn btn-outline-warning" href="docs.html">Learn More</a>
       </div>
       <div class="product-device box-shadow d-none d-md-block"></div>
       <div class="product-device product-device-2 box-shadow d-none d-md-block"></div>
@@ -70,26 +70,26 @@
         <!-- Three columns of text below the carousel -->
         <div class="row">
           <div class="col-lg-4">
-            <img src="_images/dask-array-black-text.svg" height="200">
-            <h2>Numpy</h2>
+            <img src="_images/dask-array-black-text.svg" height=180>
+            <h2 class="mt-3">Numpy</h2>
             <p>Dask arrays scale Numpy, enabling multi-dimensional data analysis in earth science, advanced imaging, and machine learning algorithms</p>
             <p>
-              <a class="btn btn-outline-secondary" href="https://dask.pydata.org/en/latest/array.html" role="button">Learn More &raquo;</a>
+              <a class="btn btn-outline-secondary" href="array.html" role="button">Learn More &raquo;</a>
               <a class="btn btn-secondary" href="https://mybinder.org/v2/gh/dask/dask-examples/master?filepath=array.ipynb" role="button">Try Now &raquo;</a>
             </p>
           </div><!-- /.col-lg-4 -->
           <div class="col-lg-4">
-            <img src="_images/dask-dataframe.svg" height="200">
-            <h2>Pandas</h2>
+            <img src="_images/dask-dataframe.svg" height=180>
+            <h2 class="mt-3">Pandas</h2>
             <p>Dask dataframes scale Pandas, enabling applications in time series, business intelligence, and general data munging on big data.</p>
             <p>
-              <a class="btn btn-outline-secondary" href="https://dask.pydata.org/en/latest/dataframe.html" role="button">Learn More &raquo;</a>
+              <a class="btn btn-outline-secondary" href="dataframe.html" role="button">Learn More &raquo;</a>
               <a class="btn btn-secondary" href="https://mybinder.org/v2/gh/dask/dask-examples/master?filepath=dataframe.ipynb" role="button">Try Now &raquo;</a>
             </p>
           </div><!-- /.col-lg-4 -->
           <div class="col-lg-4">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Rosenbrock_function.svg/300px-Rosenbrock_function.svg.png" height="200">
-            <h2>Scikit-Learn</h2>
+            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Rosenbrock_function.svg/300px-Rosenbrock_function.svg.png" height=180>
+            <h2 class="mt-3">Scikit-Learn</h2>
             <p>Dask-ML scales machine learning libraries like Scikit-Learn and XGBoost to enable scalable training and prediction on large models and large datasets</p>
             <p>
               <a class="btn btn-outline-secondary" href="https://dask-ml.readthedocs.org/en/latest/" role="button">Learn More &raquo;</a>
@@ -111,16 +111,16 @@
           </div>
 
           <div class="col-md-5 code-block">
-            <pre><code class="language-python"># Dataframes implement the Pandas API
-import dask.dataframe as dd
-df = dd.read_csv('s3://.../2018-*-*.csv')
-df.groupby(df.account_id).balance.sum()</code></pre>
-
             <pre><code class="language-python"># Arrays implement the Numpy API
 import dask.array as da
 x = da.random.random(size=(10000, 10000),
                      chunks=(1000, 1000))
 x + x.T - x.mean(axis=0)</code></pre>
+
+            <pre><code class="language-python"># Dataframes implement the Pandas API
+import dask.dataframe as dd
+df = dd.read_csv('s3://.../2018-*-*.csv')
+df.groupby(df.account_id).balance.sum()</code></pre>
 
             <pre><code class="language-python"># ML implements the Scikit-Learn API
 from dask_ml.linear_model \
