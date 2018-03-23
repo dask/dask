@@ -8,8 +8,34 @@ Changelog
 Array
 +++++
 
+-
+
+DataFrame
++++++++++
+
+-
+
+Bag
++++
+
+-
+
+Core
+++++
+
+-
+
+
+0.17.2 / 2018-03-21
+-------------------
+
+Array
++++++
+
 - Add `broadcast_arrays` for Dask Arrays (:pr:`3217`) `John A Kirkham`_
 - Add `bitwise_*` ufuncs (:pr:`3219`) `John A Kirkham`_
+- Validate inputs to atop (:pr:`3307`) `Matthew Rocklin`_
+- Avoid calls to astype in concatenate if all parts have the same dtype (:pr:`3301`) `Martin Durant`_
 
 DataFrame
 +++++++++
@@ -18,6 +44,7 @@ DataFrame
 - Support specifying categorical columns on ``read_parquet`` with ``categories=[…]`` for ``engine="pyarrow"`` (:pr:`3177`) `Uwe Korn`_
 - Add ``dd.tseries.Resampler.agg`` (:pr:`3202`) `Richard Postelnik`_
 - Support operations that mix dataframes and arrays (:pr:`3230`) `Matthew Rocklin`_
+- Support extra Scalar and Delayed args in ``dd.groupby._Groupby.apply`` (:pr:`3256`) `Gabriele Lanaro`_
 
 Bag
 +++
@@ -28,6 +55,8 @@ Core
 ++++
 
 - Fixed bug when using unexpected but hashable types for keys (:pr:`3238`) `Daniel Collins`_
+- Fix bug in task ordering so that we break ties consistently with the key name (:pr:`3271`) `Matthew Rocklin`_
+- Avoid sorting tasks in order when the number of tasks is very large (:pr:`3298`) `Matthew Rocklin`_
 
 
 0.17.1 / 2018-02-22
@@ -1013,3 +1042,4 @@ Other
 .. _`Simon Perkins`: https://github.com/sjperkins
 .. _`Richard Postelnik`: https://github.com/postelrich
 .. _`Daniel Collins`: https://github.com/dancollins34
+.. _`Gabriele Lanaro`: https://github.com/gabrielelanaro

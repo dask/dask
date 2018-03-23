@@ -98,7 +98,7 @@ class DaskMethodsMixin(object):
         such as is the case of the dask.distributed scheduler, then persist
         will return *immediately* and the return value's task graph will
         contain Dask Future objects.  However if the task scheduler only
-        supports blocking computation then the call to persist with *block*
+        supports blocking computation then the call to persist will *block*
         and the return value's task graph will contain concrete Python results.
 
         This function is particularly useful when using distributed systems,
