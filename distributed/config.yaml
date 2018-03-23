@@ -46,8 +46,8 @@ recent-messages-log-length: 0  # number of messages to keep for debugging
 bokeh-export-tool: False
 diagnostics-link: "http://{host}:{port}/status"
 
-tick-time: 20ms           # milliseconds between event loop health checks
-tick-maximum-delay: 1000  # milliseconds allowed before triggering a warning
+tick-time: 20ms         # time between event loop health checks
+tick-maximum-delay: 3s  # time allowed before triggering a warning
 
 profile-interval: 10ms          # milliseconds in between statistical profiling queries
 profile-cycle-interval: 1000ms  # milliseconds between starting new profile
@@ -63,4 +63,4 @@ worker-memory-terminate: 0.95  # fraction at which we terminate the worker
 log-length: 10000  # default length of logs to keep in memory
 log-format: '%(name)s - %(levelname)s - %(message)s'
 
-client-heartbeat-interval: 5000ms  # milliseconds between client heartbeats
+client-heartbeat-interval: 5s  # time between client heartbeats
