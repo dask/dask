@@ -9,12 +9,12 @@
    xmlns="http://www.w3.org/2000/svg"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="812.37378"
-   height="1011.8721"
+   width="958.97528"
+   height="1011.8587"
    id="svg2"
    version="1.1"
-   inkscape:version="0.48.4 r9939"
-   sodipodi:docname="New document 1">
+   inkscape:version="0.91 r13725"
+   sodipodi:docname="dask-dataframe.svg">
   <defs
      id="defs4" />
   <sodipodi:namedview
@@ -24,9 +24,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="0.5"
-     inkscape:cx="68.623957"
-     inkscape:cy="300.16925"
+     inkscape:zoom="1"
+     inkscape:cx="122.99827"
+     inkscape:cy="474.42967"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="true"
@@ -34,8 +34,8 @@
      fit-margin-left="0"
      fit-margin-right="0"
      fit-margin-bottom="0"
-     inkscape:window-width="1600"
-     inkscape:window-height="876"
+     inkscape:window-width="2560"
+     inkscape:window-height="1416"
      inkscape:window-x="0"
      inkscape:window-y="24"
      inkscape:window-maximized="1">
@@ -48,8 +48,8 @@
        snapvisiblegridlinesonly="true"
        spacingx="2px"
        spacingy="2px"
-       originx="45.029487px"
-       originy="-244.02136px" />
+       originx="128.55423"
+       originy="-244.0213" />
   </sodipodi:namedview>
   <metadata
      id="metadata7">
@@ -67,37 +67,37 @@
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
      id="layer1"
-     transform="translate(45.029487,203.53131)">
+     transform="translate(128.55423,203.51791)">
     <rect
-       style="opacity:0.6;fill:#0000b0;fill-opacity:0.50196078;stroke:#000000;stroke-width:5.58885813;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-opacity:0.44292238;stroke-dasharray:none;stroke-dashoffset:0"
+       style="opacity:0.6;fill:#0000b0;fill-opacity:0.50196078;stroke:#000000;stroke-width:5.58885813;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:0.44292238"
        id="rect2987"
        width="251.49863"
        height="195.61005"
        x="246.14598"
        y="-200.72348" />
     <rect
-       style="opacity:0.6;fill:#0000b0;fill-opacity:0.50196078;stroke:#000000;stroke-width:5.58885813;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-opacity:0.44292238;stroke-dasharray:none;stroke-dashoffset:0"
+       style="opacity:0.6;fill:#0000b0;fill-opacity:0.50196078;stroke:#000000;stroke-width:5.58885813;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:0.44292238"
        id="rect3796"
        width="251.49863"
        height="139.72145"
        x="246.14598"
        y="22.830854" />
     <rect
-       style="opacity:0.6;fill:#0000b0;fill-opacity:0.50196078;stroke:#000000;stroke-width:5.58885813;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-opacity:0.44292238;stroke-dasharray:none;stroke-dashoffset:0"
+       style="opacity:0.6;fill:#0000b0;fill-opacity:0.50196078;stroke:#000000;stroke-width:5.58885813;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:0.44292238"
        id="rect3798"
        width="251.49863"
        height="307.38721"
        x="246.14598"
        y="190.4966" />
     <rect
-       style="opacity:0.6;fill:#0000b0;fill-opacity:0.50196078;stroke:#000000;stroke-width:5.58885813;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-opacity:0.44292238;stroke-dasharray:none;stroke-dashoffset:0"
+       style="opacity:0.6;fill:#0000b0;fill-opacity:0.50196078;stroke:#000000;stroke-width:5.58885813;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:0.44292238"
        id="rect3800"
        width="251.49863"
        height="167.66576"
        x="246.14598"
        y="525.82812" />
     <rect
-       style="opacity:0.6;fill:#0000b0;fill-opacity:0.50196078;stroke:#000000;stroke-width:5.58885813;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-opacity:0.44292238;stroke-dasharray:none;stroke-dashoffset:0"
+       style="opacity:0.6;fill:#0000b0;fill-opacity:0.50196078;stroke:#000000;stroke-width:5.58885813;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:0.44292238"
        id="rect3802"
        width="251.49863"
        height="83.832878"
@@ -105,31 +105,19 @@
        y="721.43817" />
     <text
        xml:space="preserve"
-       style="font-size:33.53314972px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:125%;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;font-family:Ubuntu;-inkscape-font-specification:Ubuntu"
-       x="78.480225"
-       y="-116.8906"
-       id="text3804"
-       sodipodi:linespacing="125%"><tspan
-         sodipodi:role="line"
-         id="tspan3806"
-         x="78.480225"
-         y="-116.8906"
-         style="font-size:39.12200928px">January, 2016</tspan></text>
-    <text
-       xml:space="preserve"
-       style="font-size:33.53314972px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:125%;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;font-family:Ubuntu;-inkscape-font-specification:Ubuntu"
-       x="78.480225"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:33.53314972px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none"
+       x="45.246204"
        y="106.66373"
        id="text3804-1"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan3806-5"
-         x="78.480225"
+         x="45.246204"
          y="106.66373"
-         style="font-size:39.12200928px">Febrary, 2016</tspan></text>
+         style="font-size:52.5px">February, 2016</tspan></text>
     <text
        xml:space="preserve"
-       style="font-size:33.53314972px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:125%;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;font-family:Ubuntu;-inkscape-font-specification:Ubuntu"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:33.53314972px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none"
        x="78.480225"
        y="358.16235"
        id="text3804-3"
@@ -138,51 +126,51 @@
          id="tspan3806-9"
          x="78.480225"
          y="358.16235"
-         style="font-size:39.12200928px">March, 2016</tspan></text>
+         style="font-size:52.5px">March, 2016</tspan></text>
     <text
        xml:space="preserve"
-       style="font-size:33.53314972px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:125%;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;font-family:Ubuntu;-inkscape-font-specification:Ubuntu"
-       x="78.480225"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:33.53314972px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none"
+       x="91.42997"
        y="609.66095"
        id="text3804-5"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan3806-52"
-         x="78.480225"
+         x="91.42997"
          y="609.66095"
-         style="font-size:39.12200928px">April, 2016</tspan></text>
+         style="font-size:52.5px">April, 2016</tspan></text>
     <text
        xml:space="preserve"
-       style="font-size:33.53314972px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:125%;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;font-family:Ubuntu;-inkscape-font-specification:Ubuntu"
-       x="78.480225"
-       y="777.32672"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:33.53314972px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none"
+       x="99.693428"
+       y="775.91254"
        id="text3804-51"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan3806-7"
-         x="78.480225"
-         y="777.32672"
-         style="font-size:39.12200928px">May, 2016</tspan></text>
+         x="99.693428"
+         y="775.91254"
+         style="font-size:52.5px">May, 2016</tspan></text>
     <text
        xml:space="preserve"
-       style="font-size:33.53314972px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:125%;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;font-family:Ubuntu;-inkscape-font-specification:Ubuntu"
-       x="671.9798"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:33.53314972px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none"
+       x="698.9798"
        y="78.719437"
        id="text3886"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan3888"
-         x="676.48798"
+         x="705.0296"
          y="78.719437"
-         style="font-size:39.12200928px">Pandas </tspan><tspan
+         style="font-size:52.5px">Pandas </tspan><tspan
          sodipodi:role="line"
-         x="671.9798"
-         y="127.62195"
-         style="font-size:39.12200928px"
-         id="tspan3894">DataFrame</tspan></text>
+         x="698.9798"
+         y="144.34444"
+         style="font-size:52.5px"
+         id="tspan3894">Dataframe</tspan></text>
     <text
        xml:space="preserve"
-       style="font-size:122.2452774px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:125%;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;font-family:Ubuntu;-inkscape-font-specification:Ubuntu"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:122.2452774px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none"
        x="645.08667"
        y="114.33765"
        id="text3890"
@@ -194,24 +182,24 @@
          y="114.33765">}</tspan></text>
     <text
        xml:space="preserve"
-       style="font-size:33.53314972px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:125%;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;font-family:Ubuntu;-inkscape-font-specification:Ubuntu"
-       x="661.44617"
-       y="296.68491"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:33.53314972px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none"
+       x="702.44617"
+       y="293.68491"
        id="text3896"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan3898"
-         x="665.95435"
-         y="296.68491"
-         style="font-size:39.12200928px">Dask </tspan><tspan
+         x="708.49597"
+         y="293.68491"
+         style="font-size:52.5px">Dask </tspan><tspan
          sodipodi:role="line"
-         x="661.44617"
-         y="345.5874"
+         x="702.44617"
+         y="359.30991"
          id="tspan3904"
-         style="font-size:39.12200928px">DataFrame</tspan></text>
+         style="font-size:52.5px">Dataframe</tspan></text>
     <text
        xml:space="preserve"
-       style="font-size:355.3336792px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:center;line-height:125%;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;font-family:Ubuntu;-inkscape-font-specification:Ubuntu"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:355.3336792px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none"
        x="1527.4156"
        y="209.45833"
        id="text3900"
@@ -221,5 +209,17 @@
          id="tspan3902"
          x="1527.4156"
          y="209.45833">}</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:33.53314972px;line-height:125%;font-family:Ubuntu;-inkscape-font-specification:Ubuntu;text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none"
+       x="45.246204"
+       y="-73.336273"
+       id="text3804-1-3"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan3806-5-6"
+         x="45.246204"
+         y="-73.336273"
+         style="font-size:52.5px">January, 2016</tspan></text>
   </g>
 </svg>
