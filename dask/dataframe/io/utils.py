@@ -58,5 +58,3 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols,
     else:
         df.columns.names = column_index_names
     return df
-
-

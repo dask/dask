@@ -5,7 +5,6 @@ from ...base import tokenize
 from ...bytes.core import get_fs_token_paths
 from ...utils import import_required
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
-from ...compatibility import string_types
 
 __all__ = ('read_orc',)
 
