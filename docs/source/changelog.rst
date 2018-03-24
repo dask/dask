@@ -229,8 +229,7 @@ Changelog
 -  Avoid cloudpickle errors for Client.get_versions (:pr:`1279`)
 -  Yield on Tornado IOStream.write futures (:pr:`1289`)
 -  Assume async behavior if inside a sync statement (:pr:`1284`)
--  Avoid error messages on closing (:pr:`1297`), (:pr:`1296`) (:pr:`1318`)
-  (:pr:`1319`)
+-  Avoid error messages on closing (:pr:`1297`), (:pr:`1296`) (:pr:`1318`) (:pr:`1319`)
 -  Add timeout= keyword to get_client (:pr:`1290`)
 -  Respect timeouts when restarting (:pr:`1304`)
 -  Clean file descriptor and memory leaks in tests (:pr:`1317`)
@@ -250,8 +249,7 @@ Changelog
 -----------------------
 -  Multi-threading safety (:pr:`1191`), (:pr:`1228`), (:pr:`1229`)
 -  Improve handling of byte counting (:pr:`1198`) (:pr:`1224`)
--  Add get_client, secede functions, refactor worker-client relationship
-  (:pr:`1201`)
+-  Add get_client, secede functions, refactor worker-client relationship (:pr:`1201`)
 -  Allow logging configuraiton using logging.dictConfig() (:pr:`1206`) (:pr:`1211`)
 -  Offload serialization and deserialization to separate thread (:pr:`1218`)
 -  Support fire-and-forget tasks (:pr:`1221`)
@@ -559,3 +557,4 @@ significantly without many new features.
 .. _`Andy Jones`: https://github.com/andyljones
 .. _`John Kirkham`: https://github.com/jakirkham
 .. _`Sven Kreiss`:  https://github.com/svenkreiss
+.. _`Russ Bubley`: https://github.com/rbubley

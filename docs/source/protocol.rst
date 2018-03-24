@@ -285,8 +285,8 @@ Frames:
 
 *  Header: ``{}``
 *  Administrative Message: ``{'op': 'get-data'}``
-*  Payload header:
-   ::
+*  Payload header: ::
+
       {'headers': [{'type': 'numpy.ndarray',
                     'compression': 'lz4',
                     'count': 1,

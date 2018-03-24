@@ -2153,9 +2153,9 @@ class Client(Node):
         workers: str, list, dict
             Which workers can run which parts of the computation
             If a string a list then the output collections will run on the listed
-                workers, but other sub-computations can run anywhere
+            workers, but other sub-computations can run anywhere
             If a dict then keys should be (tuples of) collections and values
-                should be addresses or lists.
+            should be addresses or lists.
         allow_other_workers: bool, list
             If True then all restrictions in workers= are considered loose
             If a list then only the keys for the listed collections are loose
@@ -2278,9 +2278,9 @@ class Client(Node):
         workers: str, list, dict
             Which workers can run which parts of the computation
             If a string a list then the output collections will run on the listed
-                workers, but other sub-computations can run anywhere
+            workers, but other sub-computations can run anywhere
             If a dict then keys should be (tuples of) collections and values
-                should be addresses or lists.
+            should be addresses or lists.
         allow_other_workers: bool, list
             If True then all restrictions in workers= are considered loose
             If a list then only the keys for the listed collections are loose
@@ -2810,8 +2810,8 @@ class Client(Node):
         system. The scheduler file can be used to instantiate a second Client
         using the same scheduler.
 
-        Parameter
-        ---------
+        Parameters
+        ----------
         scheduler_file: str
             Path to a write the scheduler file.
 
@@ -2835,8 +2835,8 @@ class Client(Node):
 
         See set_metadata for the full docstring with examples
 
-        Parameter
-        ---------
+        Parameters
+        ----------
         keys: key or list
             Key to access.  If a list then gets within a nested collection
         default: optional

@@ -173,10 +173,6 @@ class Adaptive(object):
         Determine which, if any, workers should potentially be removed from
         the cluster.
 
-        Returns
-        -------
-        workers: [worker_name]
-
         Notes
         -----
         ``Adaptive.workers_to_close`` dispatches to Scheduler.workers_to_close(),
