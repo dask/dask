@@ -1050,9 +1050,12 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
         ddf.to_parquet(fn,  engine=engine, unknown_key='unknown_value')
 
 
-def test_setect_partitioned_column(tmpdir, engine):
+def test_select_partitioned_column(tmpdir, engine):
     if engine == 'pyarrow':
-        pytest.xfail()
+        import pyarrow as pa
+        if pa.__version__ < LooseVersion('0.9.0'):
+            pytest.skip("pyarrow<0.9.0 did not support this")
+
     fn = str(tmpdir)
     size = 20
     d = {'signal1': np.random.normal(0, 0.3, size=size).cumsum() + 50,

@@ -13,7 +13,7 @@ Array
 DataFrame
 +++++++++
 
--
+- Fix selection on partition column on ``read_parquet`` for ``engine="pyarrow"`` (:pr:`3207`) `Uwe Korn`_
 
 Bag
 +++
