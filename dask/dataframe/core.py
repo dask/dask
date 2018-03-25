@@ -1506,6 +1506,14 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return self.map_partitions(M.isnull)
 
     @derived_from(pd.DataFrame)
+    def isna(self):
+        if hasattr(pd, 'isna'):
+            return self.map_partitions(M.isna)
+        else:
+            raise NotImplementedError("isna method not supported." 
+                                      "Please use isnull instead.")
+
+    @derived_from(pd.DataFrame)
     def isin(self, values):
         return elemwise(M.isin, self, list(values))
 
