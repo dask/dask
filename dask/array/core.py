@@ -915,19 +915,12 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
 
     load_stored = (return_stored and not compute)
+    store_dsk = sharedict.merge(*[
+        insert_to_ooc(s, t, lock, r, return_stored, load_stored)
+        for t, s, r in zip(targets2, sources2, regions)
+    ])
+    store_keys = list(store_dsk.keys())
 
-    store_keys = []
-    store_dsk = []
-    for tgt, src, reg in zip(targets2, sources2, regions):
-        each_store_dsk = insert_to_ooc(
-            src, tgt, lock=lock, region=reg,
-            return_stored=return_stored, load_stored=load_stored
-        )
-
-        store_keys.extend(each_store_dsk.keys())
-        store_dsk.append(each_store_dsk)
-
-    store_dsk = sharedict.merge(*store_dsk)
     store_dsk = sharedict.merge(store_dsk, targets_dsk, sources_dsk)
 
     if return_stored:
