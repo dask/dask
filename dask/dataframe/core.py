@@ -1510,7 +1510,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         if hasattr(pd, 'isna'):
             return self.map_partitions(M.isna)
         else:
-            raise NotImplementedError("isna method not supported." 
+            raise NotImplementedError("Need more recent version of Pandas "
+                                      "to support isna. "
                                       "Please use isnull instead.")
 
     @derived_from(pd.DataFrame)
