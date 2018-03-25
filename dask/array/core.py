@@ -917,7 +917,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     load_stored = (return_stored and not compute)
     store_dsk = sharedict.merge(*[
         insert_to_ooc(s, t, lock, r, return_stored, load_stored)
-        for t, s, r in zip(targets2, sources2, regions)
+        for s, t, r in zip(sources2, targets2, regions)
     ])
     store_keys = list(store_dsk.keys())
 
