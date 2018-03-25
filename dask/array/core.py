@@ -904,7 +904,9 @@ def store(sources, targets, lock=True, regions=None, compute=True,
             targets_keys.extend(e.__dask_keys__())
             targets_dsk.append(e.__dask_graph__())
         elif is_dask_collection(e):
-            raise TypeError("Targets must be either Delayed objects or array-likes")
+            raise TypeError(
+                "Targets must be either Delayed objects or array-likes"
+            )
         else:
             targets2.append(e)
 
