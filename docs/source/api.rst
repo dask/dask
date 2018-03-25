@@ -14,7 +14,6 @@ Additionally, Dask has its own functions to start computations, persist data in
 memory, check progress, and so forth that complement the APIs above.
 These more general Dask functions are described below:
 
-
 .. currentmodule:: dask
 
 .. autosummary::
@@ -23,6 +22,17 @@ These more general Dask functions are described below:
    optimize
    persist
    visualize
+
+These functions work with any scheduler.  More advanced operations are
+available when using the newer scheduler and starting a
+:obj:`dask.distributed.Client` (which, despite its name, runs nicely on a
+single machine).  This API provides the ability to submit, cancel, and track
+work asynchronously, and includes many functions for complex inter-task
+workflows.  These are not necessary for normal operation, but can be useful for
+real-time or advanced operation.
+
+This more advanced API is available in the `Dask distributed documentation
+<https://distributed.readthedocs.org/en/latest/api.html>`_
 
 .. autofunction:: compute
 .. autofunction:: is_dask_collection
