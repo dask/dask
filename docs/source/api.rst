@@ -1,14 +1,18 @@
-Base API
-========
+API
+===
 
-This page includes API that is common across all Dask operation.
-Note that the individual APIs have their own separate API pages available here:
+Dask APIs generally follow from upstream APIs:
 
--  :doc:`Arrays <array-api>`
--  :doc:`Bags <bag-api>`
--  :doc:`Dataframes <dataframe-api>`
--  :doc:`Delayed <delayed-api>`
--  :doc:`Futures <futures>`
+-  The :doc:`Dask Array API <array-api>` follows the Numpy API
+-  The :doc:`Dask Dataframe API <dataframe-api>` follows the Pandas API
+-  The `Dask-ML API <https://dask-ml.readthedocs.io/en/latest/modules/api>`_ follows the Scikit-Learn API and other related machine learning libraries
+-  The :doc:`Dask Bag API <bag-api>` follows the map/filter/groupby/reduce API common in PySpark, PyToolz, and the Python standard library
+-  The :doc:`Dask Delayed API <delayed-api>` wraps general Python code
+-  The :doc:`Real-time Futures API <futures>` follows the `concurrent.futures <https://docs.python.org/3/library/concurrent.futures.html>`_ API from the standard library.
+
+Additionally, Dask has its own functions to start computations, persist data in
+memory, check progress, and so forth that complement the APIs above.
+These more general Dask functions are described below:
 
 
 .. currentmodule:: dask
