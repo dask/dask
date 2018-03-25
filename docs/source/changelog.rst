@@ -1046,3 +1046,4 @@ Other
 .. _`Daniel Collins`: https://github.com/dancollins34
 .. _`Gabriele Lanaro`: https://github.com/gabrielelanaro
 .. _`Christopher Ren`: https://github.com/cr458
+.. _`Martin Durant`: https://github.com/martindurant
