@@ -36,6 +36,8 @@ Dataframe
     DataFrame.groupby
     DataFrame.head
     DataFrame.index
+    DataFrame.isna
+    DataFrame.isnull
     DataFrame.iterrows
     DataFrame.itertuples
     DataFrame.join
@@ -134,6 +136,7 @@ Series
    Series.idxmax
    Series.idxmin
    Series.isin
+   Series.isna
    Series.isnull
    Series.iteritems
    Series.known_divisions

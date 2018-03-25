@@ -2,7 +2,7 @@ Changelog
 =========
 
 
-0.XX.X / 2018-MM-DD
+0.17.3 / 2018-MM-DD
 -------------------
 
 Array
@@ -13,6 +13,7 @@ Array
 DataFrame
 +++++++++
 
+- Added top level `isna` method for Dask DataFrames (:pr:`3294`) `Christopher Ren`_
 - Fix selection on partition column on ``read_parquet`` for ``engine="pyarrow"`` (:pr:`3207`) `Uwe Korn`_
 
 Bag
@@ -41,7 +42,7 @@ Array
 DataFrame
 +++++++++
 
--  Fixed bug in shuffle due to aggressive truncation (:pr:`3201`) `Matthew Rocklin`_
+- Fixed bug in shuffle due to aggressive truncation (:pr:`3201`) `Matthew Rocklin`_
 - Support specifying categorical columns on ``read_parquet`` with ``categories=[…]`` for ``engine="pyarrow"`` (:pr:`3177`) `Uwe Korn`_
 - Add ``dd.tseries.Resampler.agg`` (:pr:`3202`) `Richard Postelnik`_
 - Support operations that mix dataframes and arrays (:pr:`3230`) `Matthew Rocklin`_
@@ -1044,3 +1045,4 @@ Other
 .. _`Richard Postelnik`: https://github.com/postelrich
 .. _`Daniel Collins`: https://github.com/dancollins34
 .. _`Gabriele Lanaro`: https://github.com/gabrielelanaro
+.. _`Christopher Ren`: https://github.com/cr458
