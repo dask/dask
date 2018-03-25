@@ -893,6 +893,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         sources_dsk,
         list(core.flatten([e.__dask_keys__() for e in sources]))
     )
+    sources2 = [Array(sources_dsk, e.name, e.chunks, e.dtype) for e in sources]
 
     # Optimize all targets together
     targets2 = []
@@ -917,9 +918,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
 
     store_keys = []
     store_dsk = []
-    for tgt, src, reg in zip(targets2, sources, regions):
-        src = Array(sources_dsk, src.name, src.chunks, src.dtype)
-
+    for tgt, src, reg in zip(targets2, sources2, regions):
         each_store_dsk = insert_to_ooc(
             src, tgt, lock=lock, region=reg,
             return_stored=return_stored, load_stored=load_stored
