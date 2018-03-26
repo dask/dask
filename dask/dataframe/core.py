@@ -1506,6 +1506,15 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return self.map_partitions(M.isnull)
 
     @derived_from(pd.DataFrame)
+    def isna(self):
+        if hasattr(pd, 'isna'):
+            return self.map_partitions(M.isna)
+        else:
+            raise NotImplementedError("Need more recent version of Pandas "
+                                      "to support isna. "
+                                      "Please use isnull instead.")
+
+    @derived_from(pd.DataFrame)
     def isin(self, values):
         return elemwise(M.isin, self, list(values))
 
@@ -4142,6 +4151,12 @@ def to_timedelta(arg, unit='ns', errors='raise'):
     meta = pd.Series([pd.Timedelta(1, unit=unit)])
     return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors,
                           meta=meta)
+
+
+if hasattr(pd, 'isna'):
+    @wraps(pd.isna)
+    def isna(arg):
+        return map_partitions(pd.isna, arg)
 
 
 def _repr_data_series(s, index):
