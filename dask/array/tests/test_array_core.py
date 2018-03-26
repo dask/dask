@@ -335,6 +335,17 @@ def test_concatenate():
     pytest.raises(ValueError, lambda: concatenate([a, b, c], axis=2))
 
 
+@pytest.mark.parametrize('dtypes', [(('>f8', '>f8'), '>f8'),
+                                    (('<f4', '<f8'), '<f8')])
+def test_concatenate_types(dtypes):
+    dts_in, dt_out = dtypes
+    arrs = [np.zeros(4, dtype=dt) for dt in dts_in]
+    darrs = [from_array(arr, chunks=(2,)) for arr in arrs]
+
+    x = concatenate(darrs, axis=0)
+    assert x.dtype == dt_out
+
+
 def test_concatenate_unknown_axes():
     dd = pytest.importorskip('dask.dataframe')
     pd = pytest.importorskip('pandas')
@@ -1222,6 +1233,34 @@ def test_bool():
         bool(darr == darr)
 
 
+def test_store_kwargs():
+    d = da.ones((10, 10), chunks=(2, 2))
+    a = d + 1
+
+    called = [False]
+
+    def get_func(*args, **kwargs):
+        assert kwargs.pop("foo") == "test kwarg"
+        r = dask.get(*args, **kwargs)
+        called[0] = True
+        return r
+
+    called[0] = False
+    at = np.zeros(shape=(10, 10))
+    store([a], [at], get=get_func, foo="test kwarg")
+    assert called[0]
+
+    called[0] = False
+    at = np.zeros(shape=(10, 10))
+    a.store(at, get=get_func, foo="test kwarg")
+    assert called[0]
+
+    called[0] = False
+    at = np.zeros(shape=(10, 10))
+    store([a], [at], get=get_func, return_store=True, foo="test kwarg")
+    assert called[0]
+
+
 def test_store_delayed_target():
     from dask.delayed import delayed
     d = da.ones((4, 4), chunks=(2, 2))
@@ -1511,6 +1550,26 @@ def test_store_locks():
             assert lock.acquire_count == 2 * nchunks
         else:
             assert lock.acquire_count == nchunks
+
+
+def test_store_method_return():
+    d = da.ones((10, 10), chunks=(2, 2))
+    a = d + 1
+
+    for compute in [False, True]:
+        for return_stored in [False, True]:
+            at = np.zeros(shape=(10, 10))
+            r = a.store(
+                at, get=dask.threaded.get,
+                compute=compute, return_stored=return_stored
+            )
+
+            if return_stored:
+                assert isinstance(r, Array)
+            elif compute:
+                assert r is None
+            else:
+                assert isinstance(r, Delayed)
 
 
 @pytest.mark.xfail(reason="can't lock with multiprocessing")
@@ -2600,6 +2659,15 @@ def test_atop_chunks():
              adjust_chunks={'i': (10, 10)}, dtype=x.dtype)
     assert y.chunks == ((10, 10), (5, 5))
     assert_eq(y, np.ones((20, 10)))
+
+
+def test_atop_raises_on_incorrect_indices():
+    x = da.arange(5, chunks=3)
+    with pytest.raises(ValueError) as info:
+        da.atop(lambda x: x, 'ii', x, 'ii', dtype=int)
+
+    assert 'ii' in str(info.value)
+    assert '1' in str(info.value)
 
 
 def test_from_delayed():

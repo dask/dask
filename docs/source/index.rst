@@ -136,6 +136,7 @@ Index
 * :doc:`use-cases`
 * :doc:`examples-tutorials`
 * :doc:`support`
+* :doc:`why`
 
 .. toctree::
    :maxdepth: 1
@@ -147,6 +148,7 @@ Index
    use-cases.rst
    examples-tutorials.rst
    support.rst
+   why.rst
 
 **Collections**
 
@@ -192,7 +194,7 @@ distributed memory clusters.
 
 **Diagnosing Performance**
 
-Parallel code can be tricky to debug and profile. Dask provides a several tools
+Parallel code can be tricky to debug and profile. Dask provides several tools
 to help make debugging and profiling graph execution easier.
 
 * :doc:`understanding-performance`

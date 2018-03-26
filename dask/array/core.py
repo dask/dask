@@ -933,7 +933,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         load_store_dsk = store_dsk
         if compute:
             store_dlyds = [Delayed(k, store_dsk) for k in store_keys]
-            store_dlyds = persist(*store_dlyds)
+            store_dlyds = persist(*store_dlyds, **kwargs)
             store_dsk_2 = sharedict.merge(*[e.dask for e in store_dlyds])
 
             load_store_dsk = retrieve_from_ooc(
@@ -952,7 +952,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         result = Delayed(name, dsk)
 
         if compute:
-            result.compute()
+            result.compute(**kwargs)
             return None
         else:
             return result
@@ -1208,7 +1208,12 @@ class Array(Base):
 
     @wraps(store)
     def store(self, target, **kwargs):
-        return store([self], [target], **kwargs)
+        r = store([self], [target], **kwargs)
+
+        if kwargs.get("return_stored", False):
+            r = r[0]
+
+        return r
 
     def to_hdf5(self, filename, datapath, **kwargs):
         """ Store array in HDF5 file
@@ -2307,6 +2312,11 @@ def atop(func, out_ind, *args, **kwargs):
         chunkss[k] = (v,)
     arginds = list(zip(arrays, args[1::2]))
 
+    for arg, ind in arginds:
+        if hasattr(arg, 'ndim') and hasattr(ind, '__len__') and arg.ndim != len(ind):
+            raise ValueError("Index string %s does not match array dimension %d"
+                             % (ind, arg.ndim))
+
     numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
     argindsstr = list(concat([(a if ind is None else a.name, ind) for a, ind in arginds]))
     # Finish up the name
@@ -2611,8 +2621,12 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
     cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq]))
 
-    dt = reduce(np.promote_types, [a.dtype for a in seq])
-    seq = [x.astype(dt) for x in seq]
+    seq_dtypes = [a.dtype for a in seq]
+    if len(set(seq_dtypes)) > 1:
+        dt = reduce(np.promote_types, seq_dtypes)
+        seq = [x.astype(dt) for x in seq]
+    else:
+        dt = seq_dtypes[0]
 
     names = [a.name for a in seq]
 

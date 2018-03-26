@@ -99,16 +99,21 @@ def order(dsk, dependencies=None):
     waiting = {k: set(v) for k, v in dependencies.items()}
 
     def dependencies_key(x):
-        return total_dependencies.get(x, 0), StrComparable(x)
+        return total_dependencies.get(x, 0), ReverseStrComparable(x)
 
     def dependents_key(x):
-        return total_dependents.get(x, 0), StrComparable(x)
+        return (total_dependents.get(x, 0),
+                StrComparable(x))
 
     result = dict()
+    seen = set()  # tasks that should not be added again to the stack
     i = 0
 
     stack = [k for k, v in dependents.items() if not v]
-    stack = sorted(stack, key=total_dependencies.get)
+    if len(stack) < 10000:
+        stack = sorted(stack, key=dependencies_key)
+    else:
+        stack = stack[::-1]
 
     while stack:
         item = stack.pop()
@@ -119,7 +124,10 @@ def order(dsk, dependencies=None):
         deps = waiting[item]
         if deps:
             stack.append(item)
-            stack.extend(sorted(deps, key=dependencies_key))
+            seen.add(item)
+            if len(deps) < 1000:
+                deps = sorted(deps, key=dependencies_key)
+            stack.extend(deps)
             continue
 
         result[item] = i
@@ -128,8 +136,11 @@ def order(dsk, dependencies=None):
         for dep in dependents[item]:
             waiting[dep].discard(item)
 
-        deps = [d for d in dependents[item] if d not in result]
-        stack.extend(sorted(deps, key=dependents_key, reverse=True))
+        deps = [d for d in dependents[item]
+                if d not in result and not (d in seen and waiting[d])]
+        if len(deps) < 1000:
+            deps = sorted(deps, key=dependents_key, reverse=True)
+        stack.extend(deps)
 
     return result
 
@@ -214,3 +225,21 @@ class StrComparable(object):
             return self.obj < other.obj
         except Exception:
             return str(self.obj) < str(other.obj)
+
+
+class ReverseStrComparable(object):
+    """ Wrap object so that it defaults to string comparison
+
+    Used when sorting in reverse direction.  See StrComparable for normal
+    documentation.
+    """
+    __slots__ = ('obj',)
+
+    def __init__(self, obj):
+        self.obj = obj
+
+    def __lt__(self, other):
+        try:
+            return self.obj > other.obj
+        except Exception:
+            return str(self.obj) > str(other.obj)

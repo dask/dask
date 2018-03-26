@@ -551,7 +551,7 @@ def test_map_partitions_method_names():
     assert b.dtype == 'i8'
 
 
-def test_map_partitions_keeps_kwargs_in_dict():
+def test_map_partitions_keeps_kwargs_readable():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     a = dd.from_pandas(df, npartitions=2)
 
@@ -560,7 +560,9 @@ def test_map_partitions_keeps_kwargs_in_dict():
 
     b = a.x.map_partitions(f, x=5)
 
-    assert "'x': 5" in str(b.dask)
+    # NOTE: we'd like to ensure that we keep the keyword arguments readable
+    # in the dask graph
+    assert "['x', 5]" in str(b.dask)
     assert_eq(df.x + 5, b)
 
     assert a.x.map_partitions(f, x=5)._name != a.x.map_partitions(f, x=6)._name
@@ -2809,6 +2811,16 @@ def test_to_timedelta():
     ds = dd.from_pandas(s, npartitions=2)
     assert_eq(pd.to_timedelta(s, errors='coerce'),
               dd.to_timedelta(ds, errors='coerce'))
+
+
+@pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
+                    reason="No isna method")
+@pytest.mark.parametrize('values', [[np.NaN, 0], [1, 1]])
+def test_isna(values):
+    s = pd.Series(values)
+    ds = dd.from_pandas(s, npartitions=2)
+
+    assert_eq(pd.isna(s), dd.isna(ds))
 
 
 @pytest.mark.parametrize('drop', [0, 9])
