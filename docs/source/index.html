@@ -21,9 +21,9 @@
 
     <header>
 
-    <nav class="navbar navbar-expand-lg text-light navbar-dark bs-dark">
+    <nav class="navbar navbar-expand-lg">
       <div class="navbar-brand">
-        <img src="_images/dask_icon_no_pad.svg" style="height: 32px;">
+        <img src="_images/dask_icon_no_pad.svg" style="height: 2rem;">
       </div>
       <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavDropdown" aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
@@ -45,7 +45,7 @@
 
     <div class="hero position-relative overflow-hidden p-3 text-center text-light">
       <div class="col-md-5 p-lg-1 mx-auto my-5">
-        <img src="_images/dask_horizontal_white_no_pad.svg">
+        <img src="_images/dask_horizontal_white_no_pad.svg" style="max-width: 100rem;">
 		  <p class="lead font-weight-normal">
         Dask natively scales Python
       </p>
@@ -53,7 +53,7 @@
         Dask provides advanced parallelism for analytics,
         enabling performance at scale for the tools you love
       </p>
-        <a class="btn btn-outline-warning btn-lg" href="docs.html">Learn More</a>
+        <a class="btn outline-dask btn-lg" href="docs.html">Learn More</a>
       </div>
       <div class="product-device box-shadow d-none d-md-block"></div>
       <div class="product-device product-device-2 box-shadow d-none d-md-block"></div>
@@ -71,7 +71,7 @@
         <!-- Three columns of text below the carousel -->
         <div class="row">
           <div class="col-lg-4">
-            <img src="_images/dask-array-black-text.svg" height=180>
+            <img src="_images/dask-array-black-text.svg" class="top-image">
             <h2 class="mt-3">Numpy</h2>
             <p>Dask arrays scale Numpy, enabling multi-dimensional data analysis in earth science, advanced imaging, and machine learning algorithms</p>
             <p>
@@ -80,7 +80,7 @@
             </p>
           </div><!-- /.col-lg-4 -->
           <div class="col-lg-4">
-            <img src="_images/dask-dataframe.svg" height=180>
+            <img src="_images/dask-dataframe.svg" class="top-image">
             <h2 class="mt-3">Pandas</h2>
             <p>Dask dataframes scale Pandas, enabling applications in time series, business intelligence, and general data munging on big data.</p>
             <p>
@@ -89,7 +89,7 @@
             </p>
           </div><!-- /.col-lg-4 -->
           <div class="col-lg-4">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Rosenbrock_function.svg/300px-Rosenbrock_function.svg.png" height=180>
+            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Rosenbrock_function.svg/300px-Rosenbrock_function.svg.png" class="top-image">
             <h2 class="mt-3">Scikit-Learn</h2>
             <p>Dask-ML scales machine learning libraries like Scikit-Learn and XGBoost to enable scalable training and prediction on large models and large datasets</p>
             <p>
@@ -106,7 +106,8 @@
 
         <div class="row featurette">
           <div class="col-md-7">
-            <h2 class="featurette-heading">Familiar for Python users <span class="text-muted"> and easy to get started</span></h2>
+            <h2 class="featurette-heading">Familiar for Python users</h2>
+            <h2 class="featurette-subheading"> and easy to get started</h2>
             <p class="lead">Dask uses existing Python APIs and data structures to make it easy to switch between Numpy, Pandas, Scikit-learn to their Dask-powered equivalents. </>
             <p class="lead"> You don't have to rewrite your code or retrain to scale up</p>
             <a class="btn btn-secondary" href="api.html" role="button">Learn About Dask APIs &raquo;</a>
@@ -136,7 +137,8 @@ lr.fit(train, test)</code></pre>
 
         <div class="row featurette">
           <div class="col-md-7 order-md-2">
-            <h2 class="featurette-heading">Scale up to clusters <span class="text-muted"> or just use it on your laptop</span></h2>
+            <h2 class="featurette-heading">Scale up to clusters </h2>
+            <h2 class="featurette-subheading">or just use it on your laptop</h2>
             <p class="lead">Dask's schedulers scale to thousand-node clusters and its algorithms have been tested on some of the largest supercomputers in the world.</p>
 
             <p class="lead">But you don't need a massive cluster to get started.  Dask ships with schedulers designed for use on personal machines.  Many people use Dask today to scale computations on their laptop, using multiple cores for computation and their disk for excess storage.</p>
@@ -152,9 +154,10 @@ lr.fit(train, test)</code></pre>
 
         <div class="row featurette">
           <div class="col-md-7">
-            <h2 class="featurette-heading">Flexible and Extensible <span class="text-muted"> letting you parallelize your internal systems</span></h2>
+            <h2 class="featurette-heading">Customizable</h2>
+            <h2 class="featurette-subheading">Enables you to parallelize internal systems</h2>
             <p class="lead">Not all computations fit into a big dataframe</p>
-            <p class="lead">Dask exposes lower-level APIs letting you build custom systems for custom applications.  This helps open source community leaders parallelize their own packages and helps business leaders scale custom business logic</p>
+            <p class="lead">Dask exposes lower-level APIs letting you build custom systems for in-house applications.  This helps open source leaders parallelize their own packages and helps business leaders scale custom business logic</p>
           </div>
 
           <div class="col-md-5 p-lg-1 mx-auto my-5">
