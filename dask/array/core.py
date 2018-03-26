@@ -893,6 +893,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         sources_dsk,
         list(core.flatten([e.__dask_keys__() for e in sources]))
     )
+    sources2 = [Array(sources_dsk, e.name, e.chunks, e.dtype) for e in sources]
 
     # Optimize all targets together
     targets2 = []
@@ -904,7 +905,9 @@ def store(sources, targets, lock=True, regions=None, compute=True,
             targets_keys.extend(e.__dask_keys__())
             targets_dsk.append(e.__dask_graph__())
         elif is_dask_collection(e):
-            raise TypeError("Targets must be either Delayed objects or array-likes")
+            raise TypeError(
+                "Targets must be either Delayed objects or array-likes"
+            )
         else:
             targets2.append(e)
 
@@ -912,21 +915,12 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
 
     load_stored = (return_stored and not compute)
+    store_dsk = sharedict.merge(*[
+        insert_to_ooc(s, t, lock, r, return_stored, load_stored)
+        for s, t, r in zip(sources2, targets2, regions)
+    ])
+    store_keys = list(store_dsk.keys())
 
-    store_keys = []
-    store_dsk = []
-    for tgt, src, reg in zip(targets2, sources, regions):
-        src = Array(sources_dsk, src.name, src.chunks, src.dtype)
-
-        each_store_dsk = insert_to_ooc(
-            src, tgt, lock=lock, region=reg,
-            return_stored=return_stored, load_stored=load_stored
-        )
-
-        store_keys.extend(each_store_dsk.keys())
-        store_dsk.append(each_store_dsk)
-
-    store_dsk = sharedict.merge(*store_dsk)
     store_dsk = sharedict.merge(store_dsk, targets_dsk, sources_dsk)
 
     if return_stored:
