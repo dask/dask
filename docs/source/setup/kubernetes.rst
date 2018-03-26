@@ -1,6 +1,13 @@
 Kubernetes
 ==========
 
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+
+   Helm <kubernetes-helm.rst>
+   Native <kubernetes-native.rst>
+
 Kubernetes_ is a popular system for deploying distributed applications on clusters,
 particularly in the cloud.
 You can use Kubernetes to launch Dask workers in the following two ways:
