@@ -13,6 +13,8 @@ Array
 DataFrame
 +++++++++
 
+
+- Allow `t` as shorthand for `table` in `to_hdf` for pandas compatibility `Jörg Dietrich`_
 - Added top level `isna` method for Dask DataFrames (:pr:`3294`) `Christopher Ren`_
 - Fix selection on partition column on ``read_parquet`` for ``engine="pyarrow"`` (:pr:`3207`) `Uwe Korn`_
 
@@ -1045,5 +1047,6 @@ Other
 .. _`Richard Postelnik`: https://github.com/postelrich
 .. _`Daniel Collins`: https://github.com/dancollins34
 .. _`Gabriele Lanaro`: https://github.com/gabrielelanaro
+.. _`Jörg Dietrich`: https://github.com/joergdietrich
 .. _`Christopher Ren`: https://github.com/cr458
 .. _`Martin Durant`: https://github.com/martindurant
