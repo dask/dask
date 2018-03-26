@@ -2257,7 +2257,7 @@ class DataFrame(_Frame):
 
     Parameters
     ----------
-    dask: dict
+    dsk: dict
         The dask graph to compute this DataFrame
     name: str
         The key prefix that specifies which keys in the dask comprise this
