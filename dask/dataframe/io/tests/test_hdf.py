@@ -353,6 +353,12 @@ def test_to_hdf_kwargs():
         df2 = pd.read_hdf(fn, 'foo4')
         tm.assert_frame_equal(df, df2)
 
+    # test shorthand 't' for table
+    with tmpfile('h5') as fn:
+        ddf.to_hdf(fn, 'foo4', format='t', min_itemsize=4)
+        df2 = pd.read_hdf(fn, 'foo4')
+        tm.assert_frame_equal(df, df2)
+
 
 @pytest.mark.skipif(sys.version_info[:2] == (3, 3),
                     reason="Python3.3 uses pytest2.7.2, w/o warns method")
