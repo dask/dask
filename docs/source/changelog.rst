@@ -174,7 +174,7 @@ DataFrame
 - Prevent ``bool()`` coercion from calling compute (:pr:`2958`) `Albert DeFusco`_
 - ``DataFrame.read_sql()`` (:pr:`2928`) to an empty database tables returns an empty dask dataframe `Apostolos Vlachopoulos`_
 - Compatability for reading Parquet files written by PyArrow 0.8.0 (:pr:`2973`) `Tom Augspurger`_
-- Correctly handle the column name (`df.columns.name`) when reading in ``dd.read_parquet`` (:pr:2973`) `Tom Augspurger`_
+- Correctly handle the column name (`df.columns.name`) when reading in ``dd.read_parquet`` (:pr:`2973`) `Tom Augspurger`_
 - Fixed ``dd.concat`` losing the index dtype when the data contained a categorical (:issue:`2932`) `Tom Augspurger`_
 - Add ``dd.Series.rename`` (:pr:`3027`) `Jim Crist`_
 - ``DataFrame.merge()`` now supports merging on a combination of columns and the index (:pr:`2960`) `Jon Mease`_
@@ -214,8 +214,8 @@ DataFrame
 +++++++++
 
 - Support ``pyarrow`` in ``dd.to_parquet`` (:pr:`2868`) `Jim Crist`_
-- Fixed ``DataFrame.quantile`` and ``Series.quantile`` returning ``nan`` when missing values are present (:pr:`2791`:) `Tom Augspurger`_
-- Fixed ``DataFrame.quantile`` losing the result ``.name`` when ``q`` is a scalar (:pr:`2791`:) `Tom Augspurger`_
+- Fixed ``DataFrame.quantile`` and ``Series.quantile`` returning ``nan`` when missing values are present (:pr:`2791`) `Tom Augspurger`_
+- Fixed ``DataFrame.quantile`` losing the result ``.name`` when ``q`` is a scalar (:pr:`2791`) `Tom Augspurger`_
 - Fixed ``dd.concat`` return a ``dask.Dataframe`` when concatenating a single series along the columns, matching pandas' behavior (:pr:`2800`) `James Munroe`_
 - Fixed default inplace parameter for ``DataFrame.eval`` to match the pandas defualt for pandas >= 0.21.0 (:pr:`2838`) `Tom Augspurger`_
 - Fix exception when calling ``DataFrame.set_index`` on text column where one of the partitions was empty (:pr:`2831`) `Jesse Vogt`_
@@ -230,7 +230,7 @@ DataFrame
 - Error nicely when parsing dates in read_csv (:pr:`2863`) `Jim Crist`_
 - Cleanup handling of passing filesystem objects to PyArrow readers (:pr:`2527`) `@fjetter`_
 - Support repartitioning even if there are no divisions (:pr:`2873`) `@Ced4`_
-- Support reading/writing to hdfs using ``pyarrow`` in ``dd.to_parquet`` (:pr:`2894`:, :pr:`2881`:) `Jim Crist`_
+- Support reading/writing to hdfs using ``pyarrow`` in ``dd.to_parquet`` (:pr:`2894`, :pr:`2881`) `Jim Crist`_
 
 
 Core
@@ -240,7 +240,7 @@ Core
 -  Calling compute within a dask.distributed task defaults to distributed scheduler (:pr:`2762`) `Matthew Rocklin`_
 -  Auto-import gcsfs when gcs:// protocol is used (:pr:`2776`) `Matthew Rocklin`_
 -  Fully remove dask.async module, use dask.local instead (:pr:`2828`) `Thomas Caswell`_
--  Compatability with bokeh 0.12.10 (:pr:`:2844`) `Tom Augspurger`_
+-  Compatability with bokeh 0.12.10 (:pr:`2844`) `Tom Augspurger`_
 -  Reduce test memory usage (:pr:`2782`) `Jim Crist`_
 -  Add Dask collection interface (:pr:`2748`) `Jim Crist`_
 -  Update Dask collection interface during XArray integration (:pr:`2847`) `Matthew Rocklin`_
@@ -275,7 +275,7 @@ DataFrame
 Bag
 +++
 
-- Add tree reduction support for foldby (:pr: `2710`)
+- Add tree reduction support for foldby (:pr:`2710`)
 
 
 Core
@@ -793,7 +793,7 @@ Array
 Bag
 ++++
 
-- Rename ``from_filename``s to ``read_text``
+- Rename ``from_filename``\ s to ``read_text``
 - Remove ``from_s3`` in favor of ``read_text('s3://...')``
 
 DataFrame
@@ -859,7 +859,7 @@ Array
 
 - Changed default array reduction split from 32 to 4
 - Linear algebra, ``tril``, ``triu``, ``LU``, ``inv``, ``cholesky``,
-  ``solve``, ``solve_triangular``, eye``, ``lstsq``, ``diag``, ``corrcoef``.
+  ``solve``, ``solve_triangular``, ``eye``, ``lstsq``, ``diag``, ``corrcoef``.
 
 Bag
 ++++
