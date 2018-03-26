@@ -13,7 +13,7 @@ Array
 DataFrame
 +++++++++
 
--
+- Allow `t` as shorthand for `table` in `to_hdf` for pandas compatibility `Jörg Dietrich`_
 
 Bag
 +++
@@ -1043,3 +1043,4 @@ Other
 .. _`Richard Postelnik`: https://github.com/postelrich
 .. _`Daniel Collins`: https://github.com/dancollins34
 .. _`Gabriele Lanaro`: https://github.com/gabrielelanaro
+.. _`Jörg Dietrich`: https://github.com/joergdietrich
