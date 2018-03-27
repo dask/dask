@@ -13,7 +13,7 @@ Array
 DataFrame
 +++++++++
 
-
+- Accept pathlib.Path as pattern in `read_hdf` `Jörg Dietrich`_
 - Allow `t` as shorthand for `table` in `to_hdf` for pandas compatibility `Jörg Dietrich`_
 - Added top level `isna` method for Dask DataFrames (:pr:`3294`) `Christopher Ren`_
 - Fix selection on partition column on ``read_parquet`` for ``engine="pyarrow"`` (:pr:`3207`) `Uwe Korn`_

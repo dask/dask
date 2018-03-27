@@ -516,6 +516,18 @@ def test_hdf_file_list():
             tm.assert_frame_equal(res.compute(), df)
 
 
+def test_hdf_pathlib():
+    pathlib = pytest.importorskip('pathlib')
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
+                       'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
+
+    with tmpdir() as tdir:
+        df.to_hdf(os.path.join(tdir, 'test.h5'), 'dataframe', format='table')
+        path = pathlib.Path(tdir) / 'test.h5'
+        res = dd.read_hdf(path, 'dataframe')
+        tm.assert_frame_equal(res.compute(), df)
+
+
 def test_read_hdf_doesnt_segfault():
     pytest.importorskip('tables')
     with tmpfile('h5') as fn:
