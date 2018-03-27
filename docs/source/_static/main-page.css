@@ -13,12 +13,6 @@ body {
 .navbar {
   background-color: #000000;
 }
-.navbar a {
-  color: #ECB172;
-}
-.navbar a:hover {
-  color: #212529;
-}
 .navbar li {
   transition: .3s background-color;
   text-align: center;
@@ -30,9 +24,19 @@ body {
 .navbar li:hover {
   background-color: #ECB172;
 }
+.navbar li .nav-link{
+  color: #ECB172;
+}
+.navbar li:hover .nav-link{
+  color: #212529;
+}
 
 .dropdown-menu {
-  background-color: #000000d0
+  background-color: #000000d0;
+}
+
+.dropdown-item {
+  color: #ECB172;
 }
 
 .dropdown-item:hover {
