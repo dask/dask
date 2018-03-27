@@ -209,7 +209,7 @@ format for Python.
 .. code-block:: python
 
    df1 = dd.read_parquet('path/to/my-results/', engine='fastparquet')
-   df2 = dd.read_parquet('path/to/my-results/', engine='arrow')
+   df2 = dd.read_parquet('path/to/my-results/', engine='pyarrow')
 
 These libraries be installed using
 
