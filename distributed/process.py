@@ -137,6 +137,7 @@ class AsyncProcess(object):
                 # later might be needed to restore normal system function.
                 # If this is in appropriate for your use case, please file a
                 # bug.
+                parent_alive_pipe.close()
                 os._exit(-1)
             else:
                 # If we get here, something odd is going on. File descriptors

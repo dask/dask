@@ -370,6 +370,7 @@ class WorkerProcess(object):
 
         if self.status == 'starting':
             msg = yield self._wait_until_connected()
+            self.init_result_q.close()
             if not msg:
                 raise gen.Return(self.status)
             self.worker_address = msg['address']
@@ -444,10 +445,12 @@ class WorkerProcess(object):
         self.status = 'stopping'
 
         process = self.process
-        self.child_stop_q.put({'op': 'stop',
-                               'timeout': max(0, deadline - loop.time()) * 0.8,
-                               'executor_wait': executor_wait,
-                               })
+        self.child_stop_q.put({
+            'op': 'stop',
+            'timeout': max(0, deadline - loop.time()) * 0.8,
+            'executor_wait': executor_wait,
+        })
+        self.child_stop_q.close()
 
         while process.is_alive() and loop.time() < deadline:
             yield gen.sleep(0.05)
@@ -535,6 +538,7 @@ class WorkerProcess(object):
                 except Empty:
                     pass
                 else:
+                    child_stop_q.close()
                     assert msg.pop('op') == 'stop'
                     loop.add_callback(do_stop, **msg)
                     break
@@ -558,6 +562,7 @@ class WorkerProcess(object):
                 assert worker.address
                 init_result_q.put({'address': worker.address,
                                    'dir': worker.local_dir})
+                init_result_q.close()
                 yield worker.wait_until_closed()
                 logger.info("Worker closed")
 

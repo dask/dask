@@ -286,8 +286,8 @@ class Server(object):
                 try:
                     handler = self.handlers[op]
                 except KeyError:
-                    result = "No handler found: %s" % op
-                    logger.warning(result, exc_info=True)
+                    logger.warning("No handler %s found in %s", op,
+                                   type(self).__name__, exc_info=True)
                 else:
                     logger.debug("Calling into handler %s", handler.__name__)
                     try:
