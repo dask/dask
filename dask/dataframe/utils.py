@@ -139,6 +139,10 @@ def raise_on_meta_error(funcname=None):
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
         msg = ("Metadata inference failed{0}.\n\n"
+               "You have supplied a custom function and Dask is unable to \n"
+               "determine the type of output that that function returns. \n\n"
+               "To resolve this please provide a meta= keyword.\n"
+               "The docstring of the Dask function you ran should have more information.\n\n"
                "Original error is below:\n"
                "------------------------\n"
                "{1}\n\n"

@@ -3042,3 +3042,12 @@ def test_mixed_dask_array_multi_dimensional():
     assert_eq(ddf + dx + 1, df + x + 1)
     assert_eq(ddf + dx.rechunk((None, 1)) + 1, df + x + 1)
     assert_eq(ddf[['y', 'x']] + dx + 1, df[['y', 'x']] + x + 1)
+
+
+def test_meta_raises():
+    s = pd.Series(['abcd', 'abcd'])
+    ds = dd.from_pandas(s, npartitions=2)
+    try:
+        ds.map(lambda x: x[3])
+    except ValueError as e:
+        assert "meta=" in str(e)
