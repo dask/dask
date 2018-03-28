@@ -239,16 +239,6 @@ def vdot(a, b):
     return dot(a.conj().ravel(), b.ravel())
 
 
-def _inner_apply_along_axis(arr,
-                            func1d,
-                            func1d_axis,
-                            func1d_args,
-                            func1d_kwargs):
-    return np.apply_along_axis(
-        func1d, func1d_axis, arr, *func1d_args, **func1d_kwargs
-    )
-
-
 @wraps(np.matmul)
 def matmul(a, b):
     a = asanyarray(a)
@@ -286,6 +276,16 @@ def matmul(a, b):
         out = out[..., 0]
 
     return out
+
+
+def _inner_apply_along_axis(arr,
+                            func1d,
+                            func1d_axis,
+                            func1d_args,
+                            func1d_kwargs):
+    return np.apply_along_axis(
+        func1d, func1d_axis, arr, *func1d_args, **func1d_kwargs
+    )
 
 
 @wraps(np.apply_along_axis)
