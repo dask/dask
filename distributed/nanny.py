@@ -21,7 +21,7 @@ from .process import AsyncProcess
 from .proctitle import enable_proctitle_on_children
 from .security import Security
 from .utils import (get_ip, mp_context, silence_logging, json_load_robust,
-        PeriodicCallback)
+        PeriodicCallback, parse_timedelta)
 from .worker import _ncores, run, parse_memory_limit
 
 
@@ -359,7 +359,8 @@ class WorkerProcess(object):
                 self.status = 'starting'
                 yield self.process.start()
                 if self.status == 'starting':
-                    yield gen.with_timeout(timedelta(seconds=5),
+                    timeout = parse_timedelta(config.get('nanny-start-timeout', '30s'))
+                    yield gen.with_timeout(timedelta(seconds=timeout),
                                            self._wait_until_started())
             except gen.TimeoutError:
                 logger.info("Failed to start worker process.  Restarting")
@@ -471,7 +472,10 @@ class WorkerProcess(object):
                 return
             try:
                 msg = self.init_result_q.get_nowait()
-                assert msg == 'started', msg
+                if msg != 'started':
+                    logger.warn("Nanny got unexpected message %s. "
+                                "Starting worker again", msg)
+                    raise gen.TimeoutError()
                 return
             except Empty:
                 yield gen.sleep(delay)
