@@ -3045,9 +3045,21 @@ def test_mixed_dask_array_multi_dimensional():
 
 
 def test_meta_raises():
+    # Raise when we use a user defined fucntion
     s = pd.Series(['abcd', 'abcd'])
     ds = dd.from_pandas(s, npartitions=2)
     try:
         ds.map(lambda x: x[3])
     except ValueError as e:
         assert "meta=" in str(e)
+
+    # But not otherwise
+    df = pd.DataFrame({'a': ['x', 'y', 'y'],
+                       'b': ['x', 'y', 'z'],
+                       'c': [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    with pytest.raises(Exception) as info:
+        ddf.a + ddf.c
+
+    assert "meta=" not in str(info.value)
