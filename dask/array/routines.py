@@ -1065,6 +1065,24 @@ def nonzero(a):
         return (ind,)
 
 
+def _int_piecewise(x, *condlist, **kwargs):
+    return np.piecewise(
+        x, list(condlist), kwargs["funclist"],
+        *kwargs["func_args"], **kwargs["func_kw"]
+    )
+
+
+@wraps(np.piecewise)
+def piecewise(x, condlist, funclist, *args, **kw):
+    return map_blocks(
+        _int_piecewise,
+        x, *condlist,
+        dtype=x.dtype,
+        token="piecewise",
+        funclist=funclist, func_args=args, func_kw=kw
+    )
+
+
 @wraps(chunk.coarsen)
 def coarsen(reduction, x, axes, trim_excess=False):
     if (not trim_excess and

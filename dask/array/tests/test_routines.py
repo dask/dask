@@ -889,6 +889,31 @@ def test_choose():
     assert_eq(index_dask.choose([-d, d]), index_numpy.choose([-x, x]))
 
 
+def test_piecewise():
+    x = np.random.randint(10, size=(15, 16))
+    d = da.from_array(x, chunks=(4, 5))
+
+    assert_eq(
+        np.piecewise(x, [x < 5, x >= 5], [lambda e, v, k: e + 1, 5], 1, k=2),
+        da.piecewise(d, [d < 5, d >= 5], [lambda e, v, k: e + 1, 5], 1, k=2)
+    )
+
+    assert_eq(
+        np.piecewise(
+            x,
+            [x > 2, x <= 5],
+            [lambda e, v, k: e + 1, lambda e, v, k: v * e, lambda e, v, k: 0],
+            1, k=2
+        ),
+        da.piecewise(
+            d,
+            [d > 5, d <= 5],
+            [lambda e, v, k: e + 1, lambda e, v, k: v * e, lambda e, v, k: 0],
+            1, k=2
+        )
+    )
+
+
 def test_argwhere():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.randint(10, size=shape)
