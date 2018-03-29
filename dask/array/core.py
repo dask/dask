@@ -934,9 +934,9 @@ def store(sources, targets, lock=True, regions=None, compute=True,
                 store_keys, store_dsk, store_dsk_2
             )
 
+        name = next(iter(load_store_dsk.keys()))[0]
         result = tuple(
-            Array(load_store_dsk, 'load-store-%s' % s.name, s.chunks, s.dtype)
-            for s in sources
+            Array(load_store_dsk, name, s.chunks, s.dtype) for s in sources
         )
 
         return result
@@ -2731,7 +2731,7 @@ def insert_to_ooc(arr, out, lock=True, region=None,
     if region:
         slices = [fuse_slice(region, slc) for slc in slices]
 
-    name = 'store-%s' % arr.name
+    name = 'store-%s-%s' % (arr.name.rsplit('-', 1)[0], uuid.uuid4().hex)
     func = store_chunk
     args = ()
     if return_stored and load_stored:
