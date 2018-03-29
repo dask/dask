@@ -133,6 +133,7 @@ Top level user functions:
    ones
    ones_like
    percentile
+   piecewise
    prod
    ptp
    rad2deg
@@ -468,6 +469,7 @@ Other functions
 .. autofunction:: ones
 .. autofunction:: ones_like
 .. autofunction:: percentile
+.. autofunction:: piecewise
 .. autofunction:: prod
 .. autofunction:: ptp
 .. autofunction:: rad2deg
