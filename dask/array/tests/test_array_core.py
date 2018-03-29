@@ -2465,6 +2465,21 @@ def test_broadcast_chunks():
     b = ((1,), (5, 5),)
     assert broadcast_chunks(a, b) == a
 
+    a = ((1,), (np.nan, np.nan, np.nan),)
+    b = ((3, 3), (1,),)
+    r = broadcast_chunks(a, b)
+    assert r[0] == b[0] and np.allclose(r[1], a[1], equal_nan=True)
+
+    a = ((3, 3), (1,),)
+    b = ((1,), (np.nan, np.nan, np.nan),)
+    r = broadcast_chunks(a, b)
+    assert r[0] == a[0] and np.allclose(r[1], b[1], equal_nan=True)
+
+    a = ((3, 3,), (5, 5),)
+    b = ((1,), (np.nan, np.nan, np.nan),)
+    with pytest.raises(ValueError):
+        broadcast_chunks(a, b)
+
 
 def test_chunks_error():
     x = np.ones((10, 10))
