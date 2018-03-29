@@ -2735,9 +2735,9 @@ def insert_to_ooc(arr, out, lock=True, region=None,
     func = store_chunk
     args = ()
     if return_stored and load_stored:
-        name = 'load-store-%s' % arr.name
+        name = 'load-%s' % name
         func = load_store_chunk
-        args = (load_stored,)
+        args = args + (load_stored,)
 
     dsk = {
         (name,) + t[1:]: (func, t, out, slc, lock, return_stored) + args
