@@ -8,7 +8,7 @@ Changelog
 Array
 +++++
 
--
+- Add ``piecewise`` for Dask Arrays (:pr:`3350`) `John A Kirkham`_
 
 DataFrame
 +++++++++
