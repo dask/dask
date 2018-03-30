@@ -60,7 +60,7 @@ def determine_config_file():
 def load_config_file(config, path):
     with open(path) as f:
         text = f.read()
-        config.update(yaml.load(text))
+        config.update(yaml.load(text) or {})
 
 
 def load_env_vars(config):
@@ -81,11 +81,14 @@ def _initialize_logging_old_style(config):
             }
         }
     """
-    loggers = config.get('logging', {})
-    loggers.setdefault('distributed', 'info')
-    # We could remove those lines and let the default config.yaml handle it
-    loggers.setdefault('tornado', 'critical')
-    loggers.setdefault('tornado.application', 'error')
+    loggers = {  # default values
+        'distributed': 'info',
+        'distributed.client': 'warning',
+        'bokeh': 'critical',
+        'tornado': 'critical',
+        'tornado.application': 'error',
+    }
+    loggers.update(config.get('logging', {}))
 
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(logging.Formatter(log_format))
