@@ -658,6 +658,49 @@ def test_unique_rand(seed, low, high, shape, chunks):
         assert_eq(e_r_d, e_r_a)
 
 
+@pytest.mark.parametrize("seed", [23, 796])
+@pytest.mark.parametrize("low, high", [
+    [0, 10]
+])
+@pytest.mark.parametrize("elements_shape, elements_chunks", [
+    [(10,), (5,)],
+    [(10,), (3,)],
+    [(4, 5), (3, 2)],
+    [(20, 20), (4, 5)],
+])
+@pytest.mark.parametrize("test_shape, test_chunks", [
+    [(10,), (5,)],
+    [(10,), (3,)],
+    [(4, 5), (3, 2)],
+    [(20, 20), (4, 5)],
+])
+@pytest.mark.parametrize("invert", [True, False])
+def test_isin_rand(seed, low, high, elements_shape, elements_chunks,
+                   test_shape, test_chunks, invert):
+    rng = np.random.RandomState(seed)
+
+    a1 = rng.randint(low, high, size=elements_shape)
+    d1 = da.from_array(a1, chunks=elements_chunks)
+
+    a2 = rng.randint(low, high, size=elements_shape) - 5
+    d2 = da.from_array(a2, chunks=elements_chunks)
+
+    r_a = np.isin(a1, a2, invert=invert)
+    r_d = da.isin(d1, d2, invert=invert)
+    assert_eq(r_a, r_d)
+
+
+@pytest.mark.parametrize("assume_unique", [True, False])
+def test_isin_assume_unique(assume_unique):
+    a1 = np.arange(10)
+    d1 = da.from_array(a1, chunks=(5,))
+
+    test_elements = np.arange(0, 10, 2)
+    r_a = np.isin(a1, test_elements, assume_unique=assume_unique)
+    r_d = da.isin(d1, test_elements, assume_unique=assume_unique)
+    assert_eq(r_a, r_d)
+
+
 def _maybe_len(l):
     try:
         return len(l)
