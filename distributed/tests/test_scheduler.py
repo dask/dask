@@ -991,14 +991,14 @@ def test_close_nanny(c, s, a, b):
 
 @gen_cluster(client=True, timeout=20)
 def test_retire_workers_close(c, s, a, b):
-    yield s.retire_workers(close=True)
+    yield s.retire_workers(close_workers=True)
     assert not s.workers
 
 
 @gen_cluster(client=True, timeout=20, Worker=Nanny)
 def test_retire_nannies_close(c, s, a, b):
     nannies = [a, b]
-    yield s.retire_workers(close=True, remove=True)
+    yield s.retire_workers(close_workers=True, remove=True)
     assert not s.workers
 
     start = time()

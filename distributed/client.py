@@ -2902,6 +2902,26 @@ class Client(Node):
         """
         return self.sync(self.scheduler.worker_logs, n=n, workers=workers)
 
+    def retire_workers(self, workers=None, close_workers=True, **kwargs):
+        """ Retire certain workers on the scheduler
+
+        See dask.distributed.Scheduler.retire_workers for the full docstring.
+
+        Examples
+        --------
+        You can get information about active workers using the following:
+        >>> workers = client.scheduler_info()['workers']
+
+        From that list you may want to select some workers to close
+        >>> client.retire_workers(workers=['tcp://address:port', ...])
+
+        See Also
+        --------
+        dask.distributed.Scheduler.retire_workers
+        """
+        return self.sync(self.scheduler.retire_workers, workers=workers,
+                         close_workers=close_workers, **kwargs)
+
     def set_metadata(self, key, value):
         """ Set arbitrary metadata in the scheduler
 

@@ -4007,7 +4007,7 @@ def test_scatter_type(c, s, a, b):
 
 
 @gen_cluster(client=True)
-def test_retire_workers(c, s, a, b):
+def test_retire_workers_2(c, s, a, b):
     [x] = yield c.scatter([1], workers=a.address)
 
     yield s.retire_workers(workers=[a.address])
@@ -4460,7 +4460,7 @@ def test_recreate_error_not_error(loop):
 @gen_cluster(client=True)
 def test_retire_workers(c, s, a, b):
     assert set(s.workers) == {a.address, b.address}
-    yield c.scheduler.retire_workers(workers=[a.address], close_workers=True)
+    yield c.retire_workers(workers=[a.address], close_workers=True)
     assert set(s.workers) == {b.address}
 
     start = time()
