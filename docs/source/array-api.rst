@@ -107,6 +107,7 @@ Top level user functions:
    logical_or
    logical_xor
    map_blocks
+   map_overlap
    matmul
    max
    maximum
