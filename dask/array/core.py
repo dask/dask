@@ -3470,15 +3470,26 @@ def _vindex(x, *indexes):
     array([ 0,  9, 48,  7])
     """
     indexes = replace_ellipsis(x.ndim, indexes)
-    partial_slices = {i: ind for i, ind in enumerate(indexes)
-                      if isinstance(ind, slice) and ind != slice(None)}
-    if partial_slices:
-        key = tuple(partial_slices.get(i, slice(None))
-                    for i in range(len(indexes)))
-        x = x[key]
+
+    nonfancy_indexes = []
+    reduced_indexes = []
+    for i, ind in enumerate(indexes):
+        if isinstance(ind, Number):
+            nonfancy_indexes.append(ind)
+        elif isinstance(ind, slice):
+            nonfancy_indexes.append(ind)
+            reduced_indexes.append(slice(None))
+        else:
+            nonfancy_indexes.append(slice(None))
+            reduced_indexes.append(ind)
+
+    nonfancy_indexes = tuple(nonfancy_indexes)
+    reduced_indexes = tuple(reduced_indexes)
+
+    x = x[nonfancy_indexes]
 
     array_indexes = {}
-    for i, (ind, size) in enumerate(zip(indexes, x.shape)):
+    for i, (ind, size) in enumerate(zip(reduced_indexes, x.shape)):
         if not isinstance(ind, slice):
             ind = np.array(ind, copy=True)
             if ind.dtype.kind == 'b':
