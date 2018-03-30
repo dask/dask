@@ -340,7 +340,7 @@ class WorkerProcess(object):
             # FIXME: this sometimes stalls in _wait_until_connected
             # our temporary solution is to retry a few times if the process
             # doesn't start up in five seconds
-            self.init_result_q = mp_context.Queue()
+            self.init_result_q = init_q = mp_context.Queue()
             self.child_stop_q = mp_context.Queue()
             try:
                 self.process = AsyncProcess(
@@ -371,7 +371,6 @@ class WorkerProcess(object):
 
         if self.status == 'starting':
             msg = yield self._wait_until_connected()
-            self.init_result_q.close()
             if not msg:
                 raise gen.Return(self.status)
             self.worker_address = msg['address']
@@ -379,6 +378,8 @@ class WorkerProcess(object):
             assert self.worker_address
             self.status = 'running'
             self.running.set()
+
+        init_q.close()
 
         raise gen.Return(self.status)
 
@@ -562,6 +563,7 @@ class WorkerProcess(object):
             except Exception as e:
                 logger.exception("Failed to start worker")
                 init_result_q.put(e)
+                init_result_q.close()
             else:
                 assert worker.address
                 init_result_q.put({'address': worker.address,
