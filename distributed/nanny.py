@@ -251,7 +251,11 @@ class Nanny(ServerNode):
         """ Track worker's memory.  Restart if it goes above 95% """
         if self.status != 'running':
             return
-        memory = psutil.Process(self.process.pid).memory_info().rss
+        try:
+            proc = psutil.Process(self.process.pid)
+        except psutil.NoSuchProcess:
+            return
+        memory = proc.memory_info().rss
         frac = memory / self.memory_limit
         if self.memory_terminate_fraction and frac > self.memory_terminate_fraction:
             logger.warning("Worker exceeded 95% memory budget.  Restarting")
