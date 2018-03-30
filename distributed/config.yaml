@@ -1,3 +1,5 @@
+version: 1
+
 # logging:
 #   distributed: info
 #   distributed.client: warning
