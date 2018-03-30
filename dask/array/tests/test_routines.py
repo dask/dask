@@ -1,6 +1,7 @@
 from __future__ import division, print_function, absolute_import
 
 import itertools
+import textwrap
 
 import pytest
 from distutils.version import LooseVersion
@@ -901,6 +902,16 @@ def test_piecewise():
     )
 
 
+@pytest.mark.skipif(
+    LooseVersion(np.__version__) < '1.12.0',
+    reason=textwrap.dedent(
+        """\
+            NumPy piecewise mishandles the otherwise condition pre-1.12.0.
+
+            xref: https://github.com/numpy/numpy/issues/5737
+        """
+    )
+)
 def test_piecewise_otherwise():
     np.random.seed(1337)
 
