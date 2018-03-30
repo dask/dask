@@ -1970,7 +1970,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                enumerate(self.__dask_keys__())}
         dsk.update(self.dask)
         if meta is no_default:
-            meta = _emulate(M.map, self, arg, na_action=na_action)
+            meta = _emulate(M.map, self, arg, na_action=na_action, udf=True)
         else:
             meta = make_meta(meta)
 
@@ -2121,7 +2121,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
             meta = _emulate(M.apply, self._meta_nonempty, func,
                             convert_dtype=convert_dtype,
-                            args=args, **kwds)
+                            args=args, udf=True, **kwds)
 
         return map_partitions(M.apply, self, func,
                               convert_dtype, args, meta=meta, **kwds)
@@ -2794,7 +2794,7 @@ class DataFrame(_Frame):
             warnings.warn(msg)
 
             meta = _emulate(M.apply, self._meta_nonempty, func,
-                            axis=axis, args=args, **kwds)
+                            axis=axis, args=args, udf=True, **kwds)
 
         return map_partitions(M.apply, self, func, axis,
                               False, False, None, args, meta=meta, **kwds)
@@ -3291,8 +3291,8 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
             dsk[(b, j)] = (aggregate, conc)
 
     if meta is no_default:
-        meta_chunk = _emulate(chunk, *args, **chunk_kwargs)
-        meta = _emulate(aggregate, _concat([meta_chunk]),
+        meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
+        meta = _emulate(aggregate, _concat([meta_chunk]), udf=True,
                         **aggregate_kwargs)
     meta = make_meta(meta)
 
@@ -3332,7 +3332,7 @@ def _emulate(func, *args, **kwargs):
     Apply a function using args / kwargs. If arguments contain dd.DataFrame /
     dd.Series, using internal cache (``_meta``) for calculation
     """
-    with raise_on_meta_error(funcname(func)):
+    with raise_on_meta_error(funcname(func), udf=kwargs.pop('udf', False)):
         return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
 
 
@@ -3369,7 +3369,7 @@ def map_partitions(func, *args, **kwargs):
     args = _maybe_align_partitions(args)
 
     if meta is no_default:
-        meta = _emulate(func, *args, **kwargs)
+        meta = _emulate(func, *args, udf=True, **kwargs)
 
     if all(isinstance(arg, Scalar) for arg in args):
         dask = {(name, 0):
