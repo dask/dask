@@ -810,6 +810,8 @@ class Scheduler(ServerNode):
                     _StateLegacySet(self.tasks, func))
 
         self.generation = 0
+        self._last_client = None
+        self._last_time = 0
         self.unrunnable = set()
 
         self.n_tasks = 0
@@ -1276,13 +1278,15 @@ class Scheduler(ServerNode):
     def update_graph(self, client=None, tasks=None, keys=None,
                      dependencies=None, restrictions=None, priority=None,
                      loose_restrictions=None, resources=None,
-                     submitting_task=None, retries=None, user_priority=0):
+                     submitting_task=None, retries=None, user_priority=0,
+                     fifo_timeout=0):
         """
         Add new computations to the internal dask graph
 
         This happens whenever the Client calls submit, map, get, or compute.
         """
         start = time()
+        fifo_timeout = parse_timedelta(fifo_timeout)
         keys = set(keys)
         if len(tasks) > 1:
             self.log_event(['all', client], {'action': 'update_graph',
@@ -1361,9 +1365,13 @@ class Scheduler(ServerNode):
                 generation = ts.priority[0] - 0.01
             else:  # super-task already cleaned up
                 generation = self.generation
-        else:
+        elif self._last_time + fifo_timeout < start:
             self.generation += 1  # older graph generations take precedence
             generation = self.generation
+            self._last_time = start
+        else:
+            generation = self.generation
+
         for key in set(priority) & touched_keys:
             ts = self.tasks[key]
             if ts.priority is None:

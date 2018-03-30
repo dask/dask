@@ -1114,6 +1114,8 @@ class Client(Node):
         priority: Number
             Optional prioritization of task.  Zero is default.
             Higher priorities take precedence
+        fifo_timeout: str timedelta (default '100ms')
+            Allowed amount of time between calls to consider the same priority
 
         Examples
         --------
@@ -1136,6 +1138,7 @@ class Client(Node):
         resources = kwargs.pop('resources', None)
         retries = kwargs.pop('retries', None)
         priority = kwargs.pop('priority', 0)
+        fifo_timeout = kwargs.pop('fifo_timeout', '100ms')
         allow_other_workers = kwargs.pop('allow_other_workers', False)
 
         if allow_other_workers not in (True, False, None):
@@ -1174,7 +1177,8 @@ class Client(Node):
                                          loose_restrictions, priority={skey: 0},
                                          user_priority=priority,
                                          resources={skey: resources} if resources else None,
-                                         retries={skey: retries} if retries else None)
+                                         retries={skey: retries} if retries else None,
+                                         fifo_timeout=fifo_timeout)
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
 
@@ -1220,6 +1224,8 @@ class Client(Node):
         priority: Number
             Optional prioritization of task.  Zero is default.
             Higher priorities take precedence
+        fifo_timeout: str timedelta (default '100ms')
+            Allowed amount of time between calls to consider the same priority
 
         Examples
         --------
@@ -1260,6 +1266,7 @@ class Client(Node):
         resources = kwargs.pop('resources', None)
         user_priority = kwargs.pop('priority', 0)
         allow_other_workers = kwargs.pop('allow_other_workers', False)
+        fifo_timeout = kwargs.pop('fifo_timeout', '100ms')
 
         if allow_other_workers and workers is None:
             raise ValueError("Only use allow_other_workers= if using workers=")
@@ -1321,7 +1328,8 @@ class Client(Node):
                                          priority=priority,
                                          resources=resources,
                                          retries=retries,
-                                         user_priority=user_priority)
+                                         user_priority=user_priority,
+                                         fifo_timeout=fifo_timeout)
         logger.debug("map(%s, ...)", funcname(func))
 
         return [futures[tokey(k)] for k in keys]
@@ -1979,7 +1987,8 @@ class Client(Node):
 
     def _graph_to_futures(self, dsk, keys, restrictions=None,
                           loose_restrictions=None, priority=None,
-                          user_priority=0, resources=None, retries=None):
+                          user_priority=0, resources=None, retries=None,
+                          fifo_timeout=0):
         with self._lock:
             keyset = set(keys)
             flatkeys = list(map(tokey, keys))
@@ -2028,12 +2037,12 @@ class Client(Node):
                                      'resources': resources,
                                      'submitting_task': getattr(thread_state, 'key', None),
                                      'retries': retries,
-                                     })
+                                     'fifo_timeout': fifo_timeout})
             return futures
 
     def get(self, dsk, keys, restrictions=None, loose_restrictions=None,
             resources=None, sync=True, asynchronous=None, direct=None,
-            **kwargs):
+            fifo_timeout='60s', **kwargs):
         """ Compute dask graph
 
         Parameters
@@ -2061,7 +2070,8 @@ class Client(Node):
         """
         futures = self._graph_to_futures(dsk, set(flatten([keys])),
                                          restrictions, loose_restrictions,
-                                         resources=resources)
+                                         resources=resources,
+                                         fifo_timeout=fifo_timeout)
         packed = pack_data(keys, futures)
         if sync:
             if getattr(thread_state, 'key', False):
@@ -2139,7 +2149,7 @@ class Client(Node):
 
     def compute(self, collections, sync=False, optimize_graph=True,
                 workers=None, allow_other_workers=False, resources=None,
-                retries=0, priority=0, **kwargs):
+                retries=0, priority=0, fifo_timeout='60s', **kwargs):
         """ Compute dask collections on cluster
 
         Parameters
@@ -2164,6 +2174,8 @@ class Client(Node):
         priority: Number
             Optional prioritization of task.  Zero is default.
             Higher priorities take precedence
+        fifo_timeout: timedelta str (defaults to '60s')
+            Allowed amount of time between calls to consider the same priority
         **kwargs:
             Options to pass to the graph optimize calls
 
@@ -2239,7 +2251,8 @@ class Client(Node):
                                               restrictions, loose_restrictions,
                                               resources=resources,
                                               retries=retries,
-                                              user_priority=priority)
+                                              user_priority=priority,
+                                              fifo_timeout=fifo_timeout)
 
         i = 0
         futures = []
@@ -2262,7 +2275,7 @@ class Client(Node):
 
     def persist(self, collections, optimize_graph=True, workers=None,
                 allow_other_workers=None, resources=None, retries=None,
-                priority=0, **kwargs):
+                priority=0, fifo_timeout='60s', **kwargs):
         """ Persist dask collections on cluster
 
         Starts computation of the collection on the cluster in the background.
@@ -2289,6 +2302,8 @@ class Client(Node):
         priority: Number
             Optional prioritization of task.  Zero is default.
             Higher priorities take precedence
+        fifo_timeout: timedelta str (defaults to '60s')
+            Allowed amount of time between calls to consider the same priority
         kwargs:
             Options to pass to the graph optimize calls
 
@@ -2338,7 +2353,8 @@ class Client(Node):
                                          loose_restrictions,
                                          resources=resources,
                                          retries=retries,
-                                         user_priority=priority)
+                                         user_priority=priority,
+                                         fifo_timeout=fifo_timeout)
 
         postpersists = [c.__dask_postpersist__() for c in collections]
         result = [func({k: futures[k] for k in flatten(c.__dask_keys__())}, *args)

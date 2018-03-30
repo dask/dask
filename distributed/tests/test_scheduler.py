@@ -1015,9 +1015,10 @@ def test_retire_nannies_close(c, s, a, b):
 def test_fifo_submission(c, s, w):
     futures = []
     for i in range(20):
-        future = c.submit(slowinc, i, delay=0.1, key='inc-%02d' % i)
+        future = c.submit(slowinc, i, delay=0.1, key='inc-%02d' % i,
+                          fifo_timeout=0.01)
         futures.append(future)
-        yield gen.sleep(0.01)
+        yield gen.sleep(0.02)
     yield wait(futures[-1])
     assert futures[10].status == 'finished'
 

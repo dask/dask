@@ -351,7 +351,7 @@ def test_steal_more_attractive_tasks(c, s, a, *rest):
 
     futures = [c.submit(slowidentity, x, pure=False, delay=0.2)
                for i in range(10)]
-    future = c.submit(slow2, x)
+    future = c.submit(slow2, x, priority=-1)
 
     while not any(w.task_state for w in rest):
         yield gen.sleep(0.01)
@@ -376,7 +376,7 @@ def assert_balanced(inp, expected, c, s, *workers):
     for w, ts in zip(workers, inp):
         for t in sorted(ts, reverse=True):
             if t:
-                [dat] = yield c._scatter([next(data_seq)], workers=w.address)
+                [dat] = yield c.scatter([next(data_seq)], workers=w.address)
                 ts = s.tasks[dat.key]
                 # Ensure scheduler state stays consistent
                 old_nbytes = ts.nbytes
@@ -386,9 +386,10 @@ def assert_balanced(inp, expected, c, s, *workers):
             else:
                 dat = 123
             s.task_duration[str(int(t))] = 1
-            f = c.submit(func, dat, key='%d-%d' % (int(t), next(counter)),
+            i = next(counter)
+            f = c.submit(func, dat, key='%d-%d' % (int(t), i),
                          workers=w.address, allow_other_workers=True,
-                         pure=False)
+                         pure=False, priority=-i)
             futures.append(f)
 
     while len(s.rprocessing) < len(futures):

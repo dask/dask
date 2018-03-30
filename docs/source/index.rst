@@ -92,6 +92,7 @@ Contents
    locality
    manage-computation
    memory
+   priority
    related-work
    resilience
    scheduling-policies

@@ -1087,6 +1087,7 @@ class Worker(WorkerBase):
         self.profile_history = deque(maxlen=3600)
 
         self.priorities = dict()
+        self.generation = 0
         self.durations = dict()
         self.startstops = defaultdict(list)
         self.resource_restrictions = dict()
@@ -1245,6 +1246,10 @@ class Worker(WorkerBase):
                     return
                 if state in IN_PLAY:
                     return
+
+            if priority is not None:
+                priority = tuple(priority) + (self.generation,)
+                self.generation -= 1
 
             if self.dep_state.get(key) == 'memory':
                 self.task_state[key] = 'memory'

@@ -1,11 +1,13 @@
+import pytest
+from tornado import gen
+
 from dask.core import flatten
+import dask
 from dask import delayed, persist
 
-from distributed.utils_test import gen_cluster, inc, slowinc
+from distributed.utils_test import gen_cluster, inc, slowinc, slowdec
 from distributed import wait
 from distributed.utils import tokey
-
-import pytest
 
 
 @gen_cluster(client=True)
@@ -77,3 +79,31 @@ def test_expand_persist(c, s, a, b):
     low, high, x, y, z, w = persist(low, high, *many, priority={low: -1, high: 1})
     yield wait(high)
     assert s.tasks[low.key].state == 'processing'
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
+def test_repeated_persists_same_priority(c, s, w):
+    xs = [delayed(slowinc)(i, delay=0.05, dask_key_name='x-%d' % i) for i in range(10)]
+    ys = [delayed(slowinc)(x, delay=0.05, dask_key_name='y-%d' % i) for i, x in enumerate(xs)]
+    zs = [delayed(slowdec)(x, delay=0.05, dask_key_name='z-%d' % i) for i, x in enumerate(xs)]
+
+    ys = dask.persist(*ys)
+    zs = dask.persist(*zs)
+
+    while sum(t.state == 'memory' for t in s.tasks.values()) < 5:  # TODO: reduce this number
+        yield gen.sleep(0.01)
+
+    assert any(s.tasks[y.key].state == 'memory' for y in ys)
+    assert any(s.tasks[z.key].state == 'memory' for z in zs)
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
+def test_last_in_first_out(c, s, w):
+    xs = [c.submit(slowinc, i, delay=0.05) for i in range(5)]
+    ys = [c.submit(slowinc, x, delay=0.05) for x in xs]
+    zs = [c.submit(slowinc, y, delay=0.05) for y in ys]
+
+    while len(s.tasks) < 15 or not any(s.tasks[z.key].state == 'memory' for z in zs):
+        yield gen.sleep(0.01)
+
+    assert not all(s.tasks[x.key].state == 'memory' for x in xs)

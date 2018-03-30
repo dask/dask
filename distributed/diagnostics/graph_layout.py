@@ -38,17 +38,25 @@ class GraphLayout(SchedulerPlugin):
 
     def update_graph(self, scheduler, dependencies=None, priority=None,
                      **kwargs):
-        for key in sorted(dependencies, key=priority.get):
-            deps = dependencies[key]
+        stack = sorted(dependencies, key=priority.get, reverse=True)
+        while stack:
+            key = stack.pop()
             if key in self.x or key not in scheduler.tasks:
                 continue
+            deps = dependencies[key]
             if deps:
-                total_deps = sum(len(scheduler.tasks[dep].dependents)
-                                 for dep in deps)
-                y = sum(self.y[dep] * len(scheduler.tasks[dep].dependents)
-                                      / total_deps
-                        for dep in deps)
-                x = max(self.x[dep] for dep in deps) + 1
+                if not all(dep in self.y for dep in deps):
+                    stack.append(key)
+                    stack.extend(sorted(deps, key=lambda k: priority.get(k, 0),
+                                        reverse=True))
+                    continue
+                else:
+                    total_deps = sum(len(scheduler.tasks[dep].dependents)
+                                     for dep in deps)
+                    y = sum(self.y[dep] * len(scheduler.tasks[dep].dependents)
+                                          / total_deps
+                            for dep in deps)
+                    x = max(self.x[dep] for dep in deps) + 1
             else:
                 x = 0
                 y = self.next_y
