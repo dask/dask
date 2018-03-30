@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+from distutils.version import LooseVersion
 from functools import partial
 import logging
 import math
@@ -8,6 +9,7 @@ from numbers import Number
 from operator import add
 import os
 
+import bokeh
 from bokeh.application import Application
 from bokeh.application.handlers.function import FunctionHandler
 from bokeh.layouts import column, row
@@ -951,9 +953,14 @@ class WorkerTable(DashboardComponent):
                       'num_fds': NumberFormatter(format='0'),
                       'ncores': NumberFormatter(format='0')}
 
+        if LooseVersion(bokeh.__version__) < '0.12.15':
+            dt_kwargs = {'row_headers': False}
+        else:
+            dt_kwargs = {'index_position': None}
+
         table = DataTable(
             source=self.source, columns=[columns[n] for n in table_names],
-            row_headers=False, reorderable=True, sortable=True, width=width,
+            reorderable=True, sortable=True, width=width, **dt_kwargs
         )
 
         for name in table_names:
