@@ -7,6 +7,7 @@ import os
 import psutil
 import shutil
 import threading
+import uuid
 
 from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError
@@ -346,6 +347,7 @@ class WorkerProcess(object):
             # doesn't start up in five seconds
             self.init_result_q = init_q = mp_context.Queue()
             self.child_stop_q = mp_context.Queue()
+            uid = uuid.uuid4().hex
             try:
                 self.process = AsyncProcess(
                     target=self._run,
@@ -354,7 +356,8 @@ class WorkerProcess(object):
                                 worker_start_args=self.worker_start_args,
                                 silence_logs=self.silence_logs,
                                 init_result_q=self.init_result_q,
-                                child_stop_q=self.child_stop_q),
+                                child_stop_q=self.child_stop_q,
+                                uid=uid),
                 )
                 self.process.daemon = True
                 self.process.set_exit_callback(self._on_exit)
@@ -365,7 +368,7 @@ class WorkerProcess(object):
                 if self.status == 'starting':
                     timeout = parse_timedelta(config.get('nanny-start-timeout', '30s'))
                     yield gen.with_timeout(timedelta(seconds=timeout),
-                                           self._wait_until_started())
+                                           self._wait_until_started(uid))
             except gen.TimeoutError:
                 logger.info("Failed to start worker process.  Restarting")
                 yield gen.with_timeout(timedelta(seconds=1),
@@ -374,7 +377,7 @@ class WorkerProcess(object):
                 break
 
         if self.status == 'starting':
-            msg = yield self._wait_until_connected()
+            msg = yield self._wait_until_connected(uid)
             if not msg:
                 raise gen.Return(self.status)
             self.worker_address = msg['address']
@@ -470,14 +473,16 @@ class WorkerProcess(object):
                 logger.error("Failed to kill worker process: %s", e)
 
     @gen.coroutine
-    def _wait_until_started(self):
+    def _wait_until_started(self, uid):
         delay = 0.05
         while True:
             if self.status != 'starting':
                 return
             try:
                 msg = self.init_result_q.get_nowait()
-                if msg != 'started':
+                if msg['uid'] != uid:  # ensure that we didn't cross queues
+                    continue
+                if msg['status'] != 'started':
                     logger.warn("Nanny got unexpected message %s. "
                                 "Starting worker again", msg)
                     raise gen.TimeoutError()
@@ -487,7 +492,7 @@ class WorkerProcess(object):
                 continue
 
     @gen.coroutine
-    def _wait_until_connected(self):
+    def _wait_until_connected(self, uid):
         delay = 0.05
         while True:
             if self.status != 'starting':
@@ -498,9 +503,12 @@ class WorkerProcess(object):
                 yield gen.sleep(delay)
                 continue
 
-            if isinstance(msg, Exception):
-                logger.error("Failed while trying to start worker process",
-                             exc_info=True)
+            if msg['uid'] != uid:  # ensure that we didn't cross queues
+                continue
+
+            if 'exception' in msg:
+                logger.error("Failed while trying to start worker process: %s",
+                             msg['exception'])
                 yield self.process.join()
                 raise msg
             else:
@@ -508,7 +516,7 @@ class WorkerProcess(object):
 
     @classmethod
     def _run(cls, worker_args, worker_kwargs, worker_start_args,
-             silence_logs, init_result_q, child_stop_q):  # pragma: no cover
+             silence_logs, init_result_q, child_stop_q, uid):  # pragma: no cover
         from distributed import Worker
 
         try:
@@ -561,17 +569,18 @@ class WorkerProcess(object):
             """
             Try to start worker and inform parent of outcome.
             """
-            init_result_q.put('started')
+            init_result_q.put({'uid': uid, 'status': 'started'})
             try:
                 yield worker._start(*worker_start_args)
             except Exception as e:
                 logger.exception("Failed to start worker")
-                init_result_q.put(e)
+                init_result_q.put({'uid': uid, 'exception': e})
                 init_result_q.close()
             else:
                 assert worker.address
                 init_result_q.put({'address': worker.address,
-                                   'dir': worker.local_dir})
+                                   'dir': worker.local_dir,
+                                   'uid': uid})
                 init_result_q.close()
                 yield worker.wait_until_closed()
                 logger.info("Worker closed")
