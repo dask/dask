@@ -796,7 +796,7 @@ def isin(element, test_elements, assume_unique=False, invert=False):
                   element, element_axes,
                   test_elements, test_axes,
                   adjust_chunks={axis: lambda _: 1 for axis in test_axes},
-                  dtype=np.bool_,
+                  dtype=bool,
                   assume_unique=assume_unique)
     result = mapped.any(axis=test_axes)
     if invert:
