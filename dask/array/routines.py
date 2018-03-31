@@ -780,6 +780,30 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     return result
 
 
+def _isin_kernel(element, test_elements, assume_unique=False):
+    values = np.in1d(element.ravel(), test_elements,
+                     assume_unique=assume_unique)
+    return values.reshape(element.shape + (1,) * test_elements.ndim)
+
+
+@wraps(getattr(np, 'isin', None))
+def isin(element, test_elements, assume_unique=False, invert=False):
+    element = asarray(element)
+    test_elements = asarray(test_elements)
+    element_axes = tuple(range(element.ndim))
+    test_axes = tuple(i + element.ndim for i in range(test_elements.ndim))
+    mapped = atop(_isin_kernel, element_axes + test_axes,
+                  element, element_axes,
+                  test_elements, test_axes,
+                  adjust_chunks={axis: lambda _: 1 for axis in test_axes},
+                  dtype=bool,
+                  assume_unique=assume_unique)
+    result = mapped.any(axis=test_axes)
+    if invert:
+        result = ~result
+    return result
+
+
 @wraps(np.roll)
 def roll(array, shift, axis=None):
     result = array

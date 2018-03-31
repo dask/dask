@@ -90,6 +90,7 @@ Top level user functions:
    isclose
    iscomplex
    isfinite
+   isin
    isinf
    isnan
    isnull
