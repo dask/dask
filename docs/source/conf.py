@@ -45,7 +45,7 @@ master_doc = 'docs'
 html_extra_path = ['index.html']
 
 # General information about the project.
-project = u'dask'
+project = u'Dask'
 copyright = u'2014-2018, Anaconda, Inc. and contributors'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -242,8 +242,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('docs', 'dask', u'dask Documentation',
-   u'Dask Development Team', 'dask', 'One line description of project.',
+  ('docs', 'Dask', u'dask Documentation',
+   u'Dask Development Team', 'Dask', 'One line description of project.',
    'Miscellaneous'),
 ]
 
@@ -260,7 +260,7 @@ texinfo_documents = [
 # -- Options for Epub output ---------------------------------------------------
 
 # Bibliographic Dublin Core info.
-epub_title = u'dask'
+epub_title = u'Dask'
 epub_author = u'Dask Development Team'
 epub_publisher = u'Anaconda Inc'
 epub_copyright = u'2014-2018, Anaconda, Inc. and contributors'
