@@ -55,3 +55,17 @@
 .wy-menu-vertical li ul {
   background-color: #303030;
 }
+
+/* Mobile */
+
+.wy-nav-top {
+  background: black;
+}
+
+.wy-nav-top a {
+  color: #ECB172;
+}
+
+.wy-nav-top i {
+  color: #ECB172;
+}
