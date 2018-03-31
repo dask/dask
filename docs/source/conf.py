@@ -45,7 +45,7 @@ master_doc = 'docs'
 html_extra_path = ['index.html']
 
 # General information about the project.
-project = u'dask'
+project = u'Dask'
 copyright = u'2014-2018, Anaconda, Inc. and contributors'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -108,7 +108,9 @@ if not on_rtd:  # only import and set the theme if we're building docs locally
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-#html_theme_options = {}
+html_theme_options = {
+    'logo_only': True
+}
 
 # Add any paths that contain custom themes here, relative to this directory.
 #html_theme_path = []
@@ -122,7 +124,8 @@ if not on_rtd:  # only import and set the theme if we're building docs locally
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-#html_logo = None
+html_logo = "images/dask_horizontal_white_no_pad.svg"
+
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
@@ -239,8 +242,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('docs', 'dask', u'dask Documentation',
-   u'Dask Development Team', 'dask', 'One line description of project.',
+  ('docs', 'Dask', u'dask Documentation',
+   u'Dask Development Team', 'Dask', 'One line description of project.',
    'Miscellaneous'),
 ]
 
@@ -257,7 +260,7 @@ texinfo_documents = [
 # -- Options for Epub output ---------------------------------------------------
 
 # Bibliographic Dublin Core info.
-epub_title = u'dask'
+epub_title = u'Dask'
 epub_author = u'Dask Development Team'
 epub_publisher = u'Anaconda Inc'
 epub_copyright = u'2014-2018, Anaconda, Inc. and contributors'
