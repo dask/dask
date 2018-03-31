@@ -1,6 +1,22 @@
 Changelog
 =========
 
+1.21.5 - 2018-03-31
+-------------------
+
+-  Increase default allowable tick time to 3s (:pr:`1854`) `Matthew Rocklin`_
+-  Handle errant workers when another worker has data (:pr:`1853`) `Matthew Rocklin`_
+-  Close multiprocessing queue in Nanny to reduce open file descriptors (:pr:`1862`) `Matthew Rocklin`_
+-  Extend nanny started timeout to 30s, make configurable (:pr:`1865`) `Matthew Rocklin`_
+-  Comment out the default config file (:pr:`1871`) `Matthew Rocklin`_
+-  Update to fix bokeh 0.12.15 update errors (:pr:`1872`) `Matthew Rocklin`_
+-  Downgrade Event Loop unresponsive warning to INFO level (:pr:`1870`) `Matthew Rocklin`_
+-  Add fifo timeout to control priority generation (:pr:`1828`) `Matthew Rocklin`_
+-  Add retire_workers API to Client (:pr:`1876`) `Matthew Rocklin`_
+-  Catch NoSuchProcess error in Nanny.memory_monitor (:pr:`1877`) `Matthew Rocklin`_
+-  Add uid to nanny queue communitcations (:pr:`1880`) `Matthew Rocklin`_
+
+
 1.21.4 - 2018-03-21
 -------------------
 
