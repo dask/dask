@@ -429,6 +429,7 @@ Other functions
 .. autofunction:: isclose
 .. autofunction:: iscomplex
 .. autofunction:: isfinite
+.. autofunction:: isin
 .. autofunction:: isinf
 .. autofunction:: isnan
 .. autofunction:: isnull
