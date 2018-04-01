@@ -8,13 +8,18 @@ Changelog
 Array
 +++++
 
--
+- Add ``piecewise`` for Dask Arrays (:pr:`3350`) `John A Kirkham`_
+- Fix handling of ``nan`` in ``broadcast_shapes`` (:pr:`3356`) `John A Kirkham`_
+- Add ``isin`` for dask arrays (:pr:`3363`). `Stephan Hoyer`_
 
 DataFrame
 +++++++++
 
+
+- Allow `t` as shorthand for `table` in `to_hdf` for pandas compatibility `Jörg Dietrich`_
 - Added top level `isna` method for Dask DataFrames (:pr:`3294`) `Christopher Ren`_
 - Fix selection on partition column on ``read_parquet`` for ``engine="pyarrow"`` (:pr:`3207`) `Uwe Korn`_
+- Provide more informative error message for meta= errors (:pr:`3343`) `Matthew Rocklin`_
 
 Bag
 +++
@@ -219,7 +224,7 @@ DataFrame
 - Fixed ``dd.concat`` return a ``dask.Dataframe`` when concatenating a single series along the columns, matching pandas' behavior (:pr:`2800`) `James Munroe`_
 - Fixed default inplace parameter for ``DataFrame.eval`` to match the pandas defualt for pandas >= 0.21.0 (:pr:`2838`) `Tom Augspurger`_
 - Fix exception when calling ``DataFrame.set_index`` on text column where one of the partitions was empty (:pr:`2831`) `Jesse Vogt`_
-- Do not raise exception when calling ``DataFrame.set_index`` on empty dataframe (:pr:`2827`) `Jess Vogt`_
+- Do not raise exception when calling ``DataFrame.set_index`` on empty dataframe (:pr:`2827`) `Jesse Vogt`_
 - Fixed bug in ``Dataframe.fillna`` when filling with a ``Series`` value (:pr:`2810`) `Tom Augspurger`_
 - Deprecate old argument ordering in ``dd.to_parquet`` to better match convention of putting the dataframe first (:pr:`2867`) `Jim Crist`_
 - df.astype(categorical_dtype -> known categoricals (:pr:`2835`) `Jim Crist`_
@@ -1045,5 +1050,10 @@ Other
 .. _`Richard Postelnik`: https://github.com/postelrich
 .. _`Daniel Collins`: https://github.com/dancollins34
 .. _`Gabriele Lanaro`: https://github.com/gabrielelanaro
+.. _`Jörg Dietrich`: https://github.com/joergdietrich
 .. _`Christopher Ren`: https://github.com/cr458
 .. _`Martin Durant`: https://github.com/martindurant
+.. _`Thrasibule`: https://github.com/thrasibule
+.. _`Dieter Weber`: https://github.com/uellue
+.. _`Apostolos Vlachopoulos`: https://github.com/avlahop
+.. _`Jesse Vogt`: https://github.com/jessevogt

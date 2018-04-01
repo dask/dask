@@ -90,6 +90,7 @@ Top level user functions:
    isclose
    iscomplex
    isfinite
+   isin
    isinf
    isnan
    isnull
@@ -107,6 +108,7 @@ Top level user functions:
    logical_or
    logical_xor
    map_blocks
+   map_overlap
    matmul
    max
    maximum
@@ -133,6 +135,7 @@ Top level user functions:
    ones
    ones_like
    percentile
+   piecewise
    prod
    ptp
    rad2deg
@@ -426,6 +429,7 @@ Other functions
 .. autofunction:: isclose
 .. autofunction:: iscomplex
 .. autofunction:: isfinite
+.. autofunction:: isin
 .. autofunction:: isinf
 .. autofunction:: isnan
 .. autofunction:: isnull
@@ -468,6 +472,7 @@ Other functions
 .. autofunction:: ones
 .. autofunction:: ones_like
 .. autofunction:: percentile
+.. autofunction:: piecewise
 .. autofunction:: prod
 .. autofunction:: ptp
 .. autofunction:: rad2deg

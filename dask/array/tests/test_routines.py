@@ -1,6 +1,7 @@
 from __future__ import division, print_function, absolute_import
 
 import itertools
+import textwrap
 
 import pytest
 from distutils.version import LooseVersion
@@ -657,6 +658,53 @@ def test_unique_rand(seed, low, high, shape, chunks):
         assert_eq(e_r_d, e_r_a)
 
 
+@pytest.mark.parametrize("seed", [23, 796])
+@pytest.mark.parametrize("low, high", [
+    [0, 10]
+])
+@pytest.mark.parametrize("elements_shape, elements_chunks", [
+    [(10,), (5,)],
+    [(10,), (3,)],
+    [(4, 5), (3, 2)],
+    [(20, 20), (4, 5)],
+])
+@pytest.mark.parametrize("test_shape, test_chunks", [
+    [(10,), (5,)],
+    [(10,), (3,)],
+    [(4, 5), (3, 2)],
+    [(20, 20), (4, 5)],
+])
+@pytest.mark.parametrize("invert", [True, False])
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="np.isin is new in numpy 1.13")
+def test_isin_rand(seed, low, high, elements_shape, elements_chunks,
+                   test_shape, test_chunks, invert):
+    rng = np.random.RandomState(seed)
+
+    a1 = rng.randint(low, high, size=elements_shape)
+    d1 = da.from_array(a1, chunks=elements_chunks)
+
+    a2 = rng.randint(low, high, size=test_shape) - 5
+    d2 = da.from_array(a2, chunks=test_chunks)
+
+    r_a = np.isin(a1, a2, invert=invert)
+    r_d = da.isin(d1, d2, invert=invert)
+    assert_eq(r_a, r_d)
+
+
+@pytest.mark.parametrize("assume_unique", [True, False])
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="np.isin is new in numpy 1.13")
+def test_isin_assume_unique(assume_unique):
+    a1 = np.arange(10)
+    d1 = da.from_array(a1, chunks=(5,))
+
+    test_elements = np.arange(0, 10, 2)
+    r_a = np.isin(a1, test_elements, assume_unique=assume_unique)
+    r_d = da.isin(d1, test_elements, assume_unique=assume_unique)
+    assert_eq(r_a, r_d)
+
+
 def _maybe_len(l):
     try:
         return len(l)
@@ -887,6 +935,50 @@ def test_choose():
     index_numpy = x > 5
     assert_eq(index_dask.choose([0, d]), index_numpy.choose([0, x]))
     assert_eq(index_dask.choose([-d, d]), index_numpy.choose([-x, x]))
+
+
+def test_piecewise():
+    np.random.seed(1337)
+
+    x = np.random.randint(10, size=(15, 16))
+    d = da.from_array(x, chunks=(4, 5))
+
+    assert_eq(
+        np.piecewise(x, [x < 5, x >= 5], [lambda e, v, k: e + 1, 5], 1, k=2),
+        da.piecewise(d, [d < 5, d >= 5], [lambda e, v, k: e + 1, 5], 1, k=2)
+    )
+
+
+@pytest.mark.skipif(
+    LooseVersion(np.__version__) < '1.12.0',
+    reason=textwrap.dedent(
+        """\
+            NumPy piecewise mishandles the otherwise condition pre-1.12.0.
+
+            xref: https://github.com/numpy/numpy/issues/5737
+        """
+    )
+)
+def test_piecewise_otherwise():
+    np.random.seed(1337)
+
+    x = np.random.randint(10, size=(15, 16))
+    d = da.from_array(x, chunks=(4, 5))
+
+    assert_eq(
+        np.piecewise(
+            x,
+            [x > 5, x <= 2],
+            [lambda e, v, k: e + 1, lambda e, v, k: v * e, lambda e, v, k: 0],
+            1, k=2
+        ),
+        da.piecewise(
+            d,
+            [d > 5, d <= 2],
+            [lambda e, v, k: e + 1, lambda e, v, k: v * e, lambda e, v, k: 0],
+            1, k=2
+        )
+    )
 
 
 def test_argwhere():

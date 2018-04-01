@@ -893,6 +893,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         sources_dsk,
         list(core.flatten([e.__dask_keys__() for e in sources]))
     )
+    sources2 = [Array(sources_dsk, e.name, e.chunks, e.dtype) for e in sources]
 
     # Optimize all targets together
     targets2 = []
@@ -904,7 +905,9 @@ def store(sources, targets, lock=True, regions=None, compute=True,
             targets_keys.extend(e.__dask_keys__())
             targets_dsk.append(e.__dask_graph__())
         elif is_dask_collection(e):
-            raise TypeError("Targets must be either Delayed objects or array-likes")
+            raise TypeError(
+                "Targets must be either Delayed objects or array-likes"
+            )
         else:
             targets2.append(e)
 
@@ -912,21 +915,12 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
 
     load_stored = (return_stored and not compute)
+    store_dsk = sharedict.merge(*[
+        insert_to_ooc(s, t, lock, r, return_stored, load_stored)
+        for s, t, r in zip(sources2, targets2, regions)
+    ])
+    store_keys = list(store_dsk.keys())
 
-    store_keys = []
-    store_dsk = []
-    for tgt, src, reg in zip(targets2, sources, regions):
-        src = Array(sources_dsk, src.name, src.chunks, src.dtype)
-
-        each_store_dsk = insert_to_ooc(
-            src, tgt, lock=lock, region=reg,
-            return_stored=return_stored, load_stored=load_stored
-        )
-
-        store_keys.extend(each_store_dsk.keys())
-        store_dsk.append(each_store_dsk)
-
-    store_dsk = sharedict.merge(*store_dsk)
     store_dsk = sharedict.merge(store_dsk, targets_dsk, sources_dsk)
 
     if return_stored:
@@ -1699,25 +1693,24 @@ class Array(Base):
 
         Parameters
         ----------
-
         func: function
             The function to apply to each extended block
         depth: int, tuple, or dict
-            The number of cells that each block should share with its neighbors
-            If a tuple or dict this can be different per axis
+            The number of elements that each block should share with its neighbors
+            If a tuple or dict then this can be different per axis
         boundary: str, tuple, dict
-            how to handle the boundaries.  Values include 'reflect',
-            'periodic', 'nearest', 'none', or any constant value like 0 or
-            np.nan
+            How to handle the boundaries.
+            Values include 'reflect', 'periodic', 'nearest', 'none',
+            or any constant value like 0 or np.nan
         trim: bool
-            Whether or not to trim the excess after the map function.  Set this
-            to false if your mapping function does this for you.
+            Whether or not to trim ``depth`` elements from each block after
+            calling the map function.
+            Set this to False if your mapping function already does this for you
         **kwargs:
             Other keyword arguments valid in ``map_blocks``
 
         Examples
         --------
-
         >>> x = np.array([1, 1, 2, 3, 3, 3, 2, 1, 1])
         >>> x = from_array(x, chunks=5)
         >>> def derivative(x):
@@ -2741,9 +2734,9 @@ def insert_to_ooc(arr, out, lock=True, region=None,
     func = store_chunk
     args = ()
     if return_stored and load_stored:
-        name = 'load-store-%s' % arr.name
+        name = 'load-%s' % name
         func = load_store_chunk
-        args = (load_stored,)
+        args = args + (load_stored,)
 
     dsk = {
         (name,) + t[1:]: (func, t, out, slc, lock, return_stored) + args
@@ -2905,7 +2898,7 @@ def broadcast_shapes(*shapes):
         return shapes[0]
     out = []
     for sizes in zip_longest(*map(reversed, shapes), fillvalue=-1):
-        dim = 0 if 0 in sizes else max(sizes)
+        dim = 0 if 0 in sizes else np.max(sizes)
         if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
             raise ValueError("operands could not be broadcast together with "
                              "shapes {0}".format(' '.join(map(str, shapes))))
