@@ -45,9 +45,7 @@ with ignoring(ImportError):
 
     def _fixed_snappy_decompress(data):
         # snappy.decompress() doesn't accept memoryviews
-        if isinstance(data, memoryview):
-            data = data.tobytes()
-        elif isinstance(data, bytearray):
+        if isinstance(data, (memoryview, bytearray)):
             data = bytes(data)
         return snappy.decompress(data)
 
@@ -75,8 +73,8 @@ with ignoring(ImportError):
         try:
             return lz4_compress(data)
         except TypeError:
-            if isinstance(data, memoryview):
-                return lz4_compress(data.tobytes())
+            if isinstance(data, (memoryview, bytearray)):
+                return lz4_compress(bytes(data))
             else:
                 raise
 
@@ -84,8 +82,8 @@ with ignoring(ImportError):
         try:
             return lz4_decompress(data)
         except (ValueError, TypeError):
-            if isinstance(data, memoryview):
-                return lz4_decompress(data.tobytes())
+            if isinstance(data, (memoryview, bytearray)):
+                return lz4_decompress(bytes(data))
             else:
                 raise
 
