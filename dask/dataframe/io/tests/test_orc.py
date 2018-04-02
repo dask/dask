@@ -6,12 +6,18 @@ import tempfile
 from dask.dataframe import read_orc
 from dask.dataframe.utils import assert_eq
 import dask.dataframe as dd
+from dask.compatibility import PY2
 
 pytest.importorskip('pyarrow.orc')
 url = ('https://www.googleapis.com/download/storage/v1/b/anaconda-public-data/o'
        '/orc%2FTestOrcFile.testDate1900.orc?generation=1522611448751555&alt='
        'media')
 columns = ['time', 'date']
+
+if PY2:
+    import requests
+    reload(requests.adapters)
+    reload(requests.sessions)
 
 
 @pytest.mark.network
