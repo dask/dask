@@ -22,7 +22,7 @@ from .process import AsyncProcess
 from .proctitle import enable_proctitle_on_children
 from .security import Security
 from .utils import (get_ip, mp_context, silence_logging, json_load_robust,
-        PeriodicCallback, parse_timedelta)
+        PeriodicCallback)
 from .worker import _ncores, run, parse_memory_limit
 
 
@@ -341,50 +341,34 @@ class WorkerProcess(object):
             yield self.running.wait()
             raise gen.Return(self.status)
 
-        while True:
-            # FIXME: this sometimes stalls in _wait_until_connected
-            # our temporary solution is to retry a few times if the process
-            # doesn't start up in five seconds
-            self.init_result_q = init_q = mp_context.Queue()
-            self.child_stop_q = mp_context.Queue()
-            uid = uuid.uuid4().hex
-            try:
-                self.process = AsyncProcess(
-                    target=self._run,
-                    kwargs=dict(worker_args=self.worker_args,
-                                worker_kwargs=self.worker_kwargs,
-                                worker_start_args=self.worker_start_args,
-                                silence_logs=self.silence_logs,
-                                init_result_q=self.init_result_q,
-                                child_stop_q=self.child_stop_q,
-                                uid=uid),
-                )
-                self.process.daemon = True
-                self.process.set_exit_callback(self._on_exit)
-                self.running = Event()
-                self.stopped = Event()
-                self.status = 'starting'
-                yield self.process.start()
-                if self.status == 'starting':
-                    timeout = parse_timedelta(config.get('nanny-start-timeout', '30s'))
-                    yield gen.with_timeout(timedelta(seconds=timeout),
-                                           self._wait_until_started(uid))
-            except gen.TimeoutError:
-                logger.info("Failed to start worker process.  Restarting")
-                yield gen.with_timeout(timedelta(seconds=1),
-                                       self.process.terminate())
-            else:
-                break
+        self.init_result_q = init_q = mp_context.Queue()
+        self.child_stop_q = mp_context.Queue()
+        uid = uuid.uuid4().hex
 
-        if self.status == 'starting':
-            msg = yield self._wait_until_connected(uid)
-            if not msg:
-                raise gen.Return(self.status)
-            self.worker_address = msg['address']
-            self.worker_dir = msg['dir']
-            assert self.worker_address
-            self.status = 'running'
-            self.running.set()
+        self.process = AsyncProcess(
+            target=self._run,
+            kwargs=dict(worker_args=self.worker_args,
+                        worker_kwargs=self.worker_kwargs,
+                        worker_start_args=self.worker_start_args,
+                        silence_logs=self.silence_logs,
+                        init_result_q=self.init_result_q,
+                        child_stop_q=self.child_stop_q,
+                        uid=uid),
+        )
+        self.process.daemon = True
+        self.process.set_exit_callback(self._on_exit)
+        self.running = Event()
+        self.stopped = Event()
+        self.status = 'starting'
+        yield self.process.start()
+        msg = yield self._wait_until_connected(uid)
+        if not msg:
+            raise gen.Return(self.status)
+        self.worker_address = msg['address']
+        self.worker_dir = msg['dir']
+        assert self.worker_address
+        self.status = 'running'
+        self.running.set()
 
         init_q.close()
 
@@ -473,25 +457,6 @@ class WorkerProcess(object):
                 logger.error("Failed to kill worker process: %s", e)
 
     @gen.coroutine
-    def _wait_until_started(self, uid):
-        delay = 0.05
-        while True:
-            if self.status != 'starting':
-                return
-            try:
-                msg = self.init_result_q.get_nowait()
-                if msg['uid'] != uid:  # ensure that we didn't cross queues
-                    continue
-                if msg['status'] != 'started':
-                    logger.warn("Nanny got unexpected message %s. "
-                                "Starting worker again", msg)
-                    raise gen.TimeoutError()
-                return
-            except Empty:
-                yield gen.sleep(delay)
-                continue
-
-    @gen.coroutine
     def _wait_until_connected(self, uid):
         delay = 0.05
         while True:
@@ -569,7 +534,6 @@ class WorkerProcess(object):
             """
             Try to start worker and inform parent of outcome.
             """
-            init_result_q.put({'uid': uid, 'status': 'started'})
             try:
                 yield worker._start(*worker_start_args)
             except Exception as e:

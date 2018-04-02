@@ -184,7 +184,7 @@ class LocalCluster(Cluster):
         while w.status != 'closed' and w.worker_address not in self.scheduler.worker_info:
             yield gen.sleep(0.01)
 
-        if w.status == 'closed':
+        if w.status == 'closed' and self.scheduler.status == 'running':
             self.workers.remove(w)
             raise gen.TimeoutError("Worker failed to start")
 

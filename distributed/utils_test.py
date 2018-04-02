@@ -38,7 +38,7 @@ from tornado import gen, queues
 from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 
-from .compatibility import PY3, iscoroutinefunction
+from .compatibility import PY3, iscoroutinefunction, Empty
 from .config import config, initialize_logging
 from .core import connect, rpc, CommClosedError
 from .metrics import time
@@ -529,8 +529,11 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
 
             for worker in workers:
                 worker['proc'].start()
-            for worker in workers:
-                worker['address'] = worker['queue'].get()
+            try:
+                for worker in workers:
+                    worker['address'] = worker['queue'].get(timeout=5)
+            except Empty:
+                raise pytest.xfail.Exception("Worker failed to start in test")
 
             saddr = scheduler_q.get()
 
