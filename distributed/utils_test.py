@@ -1067,6 +1067,17 @@ def new_config(new_config):
 
 
 @contextmanager
+def new_environment(changes):
+    saved_environ = os.environ.copy()
+    os.environ.update(changes)
+    try:
+        yield
+    finally:
+        os.environ.clear()
+        os.environ.update(saved_environ)
+
+
+@contextmanager
 def new_config_file(c):
     """
     Temporarily change configuration file to match dictionary *c*.

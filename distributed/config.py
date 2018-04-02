@@ -67,7 +67,24 @@ def load_env_vars(config):
     for name, value in os.environ.items():
         if name.startswith('DASK_'):
             varname = name[5:].lower().replace('_', '-')
-            config[varname] = value
+            config[varname] = _parse_env_value(value)
+
+
+def _parse_env_value(value):
+    """ Convert a string to an integer, float or boolean (in that order) if possible. """
+    bools = {
+        'true': True,
+        'false': False
+    }
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    return bools.get(value.lower(), value)
 
 
 def _initialize_logging_old_style(config):
