@@ -412,11 +412,14 @@ def test_clip(lower, upper):
 def test_squeeze():
     df = pd.DataFrame({'x': [1, 3, 6],
                        'y': [2, 5, 7]})
+    s = pd.Series({'test': 0, 'b': 100})
 
     ddf = dd.from_pandas(df, 2)
+    ds = dd.from_pandas(s, 2)
 
     assert_eq(df.squeeze(), ddf.squeeze())
     assert_eq(df.squeeze(axis=1), ddf.squeeze(axis=1))
+    assert_eq(ds.squeeze(), s.squeeze())
 
 
 def test_where_mask():
