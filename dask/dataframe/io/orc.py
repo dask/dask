@@ -4,9 +4,15 @@ from ..core import DataFrame
 from ...base import tokenize
 from ...bytes.core import get_fs_token_paths
 from ...utils import import_required
+from ...compatibility import PY2
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 
 __all__ = ('read_orc',)
+
+if PY2:
+    import requests
+    reload(requests.adapters)
+    reload(requests.sessions)
 
 
 def _read_orc_stripe(fs, path, stripe, columns=None):
