@@ -409,6 +409,7 @@ def test_clip(lower, upper):
     assert_eq(ds.clip_upper(lower), s.clip_upper(lower))
     assert_eq(ds.clip_upper(upper), s.clip_upper(upper))
 
+
 def test_squeeze():
     df = pd.DataFrame({'x': [1, 3, 6],
                        'y': [2, 5, 7]})
