@@ -17,6 +17,11 @@ class Adaptive(object):
     Adaptively allocate workers based on scheduler load.  A superclass.
 
     Contains logic to dynamically resize a Dask cluster based on current use.
+    This class needs to be paired with a system that can create and destroy
+    Dask workers using a cluster resource manager.  Typically it is built into
+    already existing solutions, rather than used directly by users.
+    It is most commonly used from the ``.adapt(...)`` method of various Dask
+    cluster classes.
 
     Parameters
     ----------
@@ -45,11 +50,25 @@ class Adaptive(object):
 
     Examples
     --------
-    >>> class MyCluster(object):
+
+    This is commonly used from existing Dask classes, like KubeCluster
+
+    >>> from dask_kubernetes import KubeCluster
+    >>> cluster = KubeCluster()
+    >>> cluster.adapt(minimum=10, maximum=100)
+
+    Alternatively you can use it from your own Cluster class by subclassing
+    from Dask's Cluster superclass
+
+    >>> from distributed.deploy import Cluster
+    >>> class MyCluster(Cluster):
     ...     def scale_up(self, n):
     ...         """ Bring worker count up to n """
     ...     def scale_down(self, workers):
     ...        """ Remove worker addresses from cluster """
+
+    >>> cluster = MyCluster()
+    >>> cluster.adapt(minimum=10, maximum=100)
 
     Notes
     -----

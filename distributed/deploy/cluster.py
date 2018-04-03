@@ -14,7 +14,7 @@ class Cluster(object):
     """ Superclass for cluster objects
 
     This expects a local Scheduler defined on the object.  It provides
-    common methods, and an IPython widget display.
+    common methods and an IPython widget display.
 
     Clusters inheriting from this class should provide the following:
 
@@ -29,6 +29,22 @@ class Cluster(object):
 
     This will provide a general ``scale`` method as well as an IPython widget
     for display.
+
+    Examples
+    --------
+
+    >>> from distributed.deploy import Cluster
+    >>> class MyCluster(cluster):
+    ...     def scale_up(self, n):
+    ...         ''' Bring the total worker count up to n '''
+    ...         pass
+    ...     def scale_down(self, workers):
+    ...         ''' Close the workers with the given addresses '''
+    ...         pass
+
+    >>> cluster = MyCluster()
+    >>> cluster.scale(5)                       # scale manually
+    >>> cluster.adapt(minimum=1, maximum=100)  # scale automatically
 
     See Also
     --------
