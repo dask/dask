@@ -2468,6 +2468,7 @@ def test_persist(loop):
             assert (zz == z).all()
 
 
+@pytest.mark.avoid_travis  # This hangs intermittently.  We don't know why.
 @gen_cluster(timeout=60, client=True)
 def test_long_traceback(c, s, a, b):
     from distributed.protocol.pickle import dumps

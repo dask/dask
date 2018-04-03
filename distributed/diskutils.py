@@ -201,8 +201,8 @@ class WorkSpace(object):
             # Lock file is stale, therefore purge corresponding directory
             dir_path = lock_path[:-len(DIR_LOCK_EXT)]
             if os.path.exists(dir_path):
-                logger.warning("Found stale lock file and directory %r, purging",
-                               dir_path)
+                logger.info("Found stale lock file and directory %r, purging",
+                            dir_path)
                 self._purge_directory(dir_path)
         finally:
             lock.release()

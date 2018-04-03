@@ -125,7 +125,7 @@ def test_workspace_process_crash(tmpdir):
     assert p.wait()  # process returned with non-zero code
     assert_contents([a_path, a_path + '.dirlock', b_path, b_path + '.dirlock'])
 
-    with captured_logger('distributed.diskutils', 'WARNING', propagate=False) as sio:
+    with captured_logger('distributed.diskutils', 'INFO', propagate=False) as sio:
         ws._purge_leftovers()
     assert_contents([])
     # One log line per purged directory
