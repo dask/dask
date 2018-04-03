@@ -237,7 +237,6 @@ def sync(loop, func, *args, **kwargs):
             thread_state.asynchronous = True
             result[0] = yield make_coro()
         except Exception as exc:
-            logger.exception(exc)
             error[0] = sys.exc_info()
         finally:
             thread_state.asynchronous = False
