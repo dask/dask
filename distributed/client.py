@@ -61,7 +61,7 @@ from .worker import dumps_task, get_client, get_worker, secede
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator,
                     tokey, log_errors, str_graph, key_split, format_bytes, asciitable,
                     thread_state, no_default, PeriodicCallback, LoopRunner,
-                    parse_timedelta)
+                    parse_timedelta, shutting_down)
 from .versions import get_versions
 
 
@@ -1054,7 +1054,7 @@ class Client(Node):
 
         assert self.status == 'closed'
 
-        if self._should_close_loop:
+        if self._should_close_loop and not shutting_down():
             self._loop_runner.stop()
 
         with ignoring(AttributeError):
@@ -3651,6 +3651,7 @@ def _close_global_client():
     """
     c = _get_global_client()
     if c is not None:
+        c._should_close_loop = False
         c.close(timeout=2)
 
 
