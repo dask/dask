@@ -750,7 +750,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
     Examples
     --------
-    >>> df = read_parquet('s3://bucket/my-parquet-data')  # doctest: +SKIP
+    >>> df = dd.read_parquet('s3://bucket/my-parquet-data')  # doctest: +SKIP
 
     See Also
     --------

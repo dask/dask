@@ -36,8 +36,8 @@ def read_orc(path, columns=None, storage_options=None):
 
     Examples
     --------
-    >>> d = read_orc('https://github.com/apache/orc/raw/'
-    ...              'master/examples/demo-11-zlib.orc')  # doctest: +SKIP
+    >>> df = dd.read_orc('https://github.com/apache/orc/raw/'
+    ...                  'master/examples/demo-11-zlib.orc')  # doctest: +SKIP
     """
     orc = import_required('pyarrow.orc', 'Please install pyarrow >= 0.9.0')
     storage_options = storage_options or {}
