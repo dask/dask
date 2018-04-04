@@ -21,6 +21,7 @@ DataFrame
 - Fix selection on partition column on ``read_parquet`` for ``engine="pyarrow"`` (:pr:`3207`) `Uwe Korn`_
 - Provide more informative error message for meta= errors (:pr:`3343`) `Matthew Rocklin`_
 - add orc reader (:pr:3284) `Martin Durant`_
+- Default compression for parquet now always Snappy, in line with pandas (:pr:3373) `Martin Durant`_
 
 Bag
 +++

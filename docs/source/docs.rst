@@ -165,8 +165,9 @@ then you should start here.
 .. toctree::
    :maxdepth: 1
    :hidden:
-   :caption: Collections
+   :caption: User Interface
 
+   user-interfaces.rst
    array.rst
    bag.rst
    dataframe.rst
