@@ -23,7 +23,6 @@ def test_orc_with_backend():
     assert len(d) == 70000
 
 
-@pytest.mark.skipif(PY2)
 @pytest.fixture(scope='module')
 def orc_files():
     requests = pytest.importorskip('requests')
