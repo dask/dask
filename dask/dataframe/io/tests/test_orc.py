@@ -14,10 +14,8 @@ url = ('https://www.googleapis.com/download/storage/v1/b/anaconda-public-data/o'
        'media')
 columns = ['time', 'date']
 
-if PY2:
-    pytest.skip()
 
-
+@pytest.mark.skipif(PY2)
 @pytest.mark.network
 def test_orc_with_backend():
     d = read_orc(url)
@@ -25,6 +23,7 @@ def test_orc_with_backend():
     assert len(d) == 70000
 
 
+@pytest.mark.skipif(PY2)
 @pytest.fixture(scope='module')
 def orc_files():
     requests = pytest.importorskip('requests')
@@ -40,6 +39,7 @@ def orc_files():
         shutil.rmtree(d, ignore_errors=True)
 
 
+@pytest.mark.skipif(PY2)
 def test_orc_single(orc_files):
     fn = orc_files[0]
     d = read_orc(fn)
@@ -52,6 +52,7 @@ def test_orc_single(orc_files):
     assert 'nonexist' in str(e)
 
 
+@pytest.mark.skipif(PY2)
 def test_orc_multiple(orc_files):
     d = read_orc(orc_files[0])
     d2 = read_orc(orc_files)
