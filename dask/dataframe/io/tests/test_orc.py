@@ -15,9 +15,9 @@ url = ('https://www.googleapis.com/download/storage/v1/b/anaconda-public-data/o'
 columns = ['time', 'date']
 
 if PY2:
-    import requests
-    reload(requests.adapters)
-    reload(requests.sessions)
+    import requests  # noqa
+    reload(requests.adapters)   # noqa
+    reload(requests.sessions)  # noqa
 
 
 @pytest.mark.network
