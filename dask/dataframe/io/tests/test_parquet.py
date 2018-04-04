@@ -776,7 +776,7 @@ def test_columns_name(tmpdir, write_engine, read_engine):
 def test_writing_parquet_with_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
 
-    if engine == 'fastparquet' and compression == 'snappy':
+    if engine == 'fastparquet' and compression in ['snappy', 'default']:
         pytest.importorskip('snappy')
 
     df = pd.DataFrame({'x': ['a', 'b', 'c'] * 10,
@@ -784,6 +784,12 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     ddf = dd.from_pandas(df, npartitions=3)
 
     ddf.to_parquet(fn, compression=compression, engine=engine)
+    if engine == 'fastparquet' and compression == 'default':
+        # ensure default compression for fastparquet is Snappy
+        import fastparquet
+        pf = fastparquet.ParquetFile(fn)
+        assert pf.row_groups[0].columns[0].meta_data.codec == 1
+
     out = dd.read_parquet(fn, engine=engine)
     assert_eq(out, df, check_index=(engine != 'fastparquet'))
 
