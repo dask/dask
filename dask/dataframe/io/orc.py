@@ -11,7 +11,7 @@ __all__ = ('read_orc',)
 
 def _read_orc_stripe(fs, path, stripe, columns=None):
     """Pull out specific data from specific part of ORC file"""
-    orc = import_required('pyarrow.orc', 'Please install dev version pyarrow')
+    orc = import_required('pyarrow.orc', 'Please install pyarrow >= 0.9.0')
     with fs.open(path, 'rb') as f:
         o = orc.ORCFile(f)
         return o.read_stripe(stripe, columns).to_pandas()
