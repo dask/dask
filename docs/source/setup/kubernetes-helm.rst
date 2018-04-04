@@ -149,10 +149,10 @@ environments should be matched).
      resources:
        limits:
          cpu: 2
-         memory: 7.5 GiB
+         memory: 7.5G
        requests:
          cpu: 2
-         memory: 7.5 GiB
+         memory: 7.5G
      env:
        - name: EXTRA_CONDA_PACKAGES
          value: numba xarray -c conda-forge
