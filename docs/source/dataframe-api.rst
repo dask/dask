@@ -277,6 +277,7 @@ Create DataFrames
    read_table
    read_parquet
    read_hdf
+   read_orc
    read_sql_table
    from_array
    from_bcolz
