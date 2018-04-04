@@ -708,7 +708,7 @@ def test_reductions(split_every):
 @pytest.mark.parametrize('redfunc', ['sum', 'prod', 'min', 'max', 'mean', 'var', 'std'])
 def test_reductions_out(frame, axis, out, redfunc):
     dsk_in = dd.from_pandas(frame, 3)
-    dsk_out = dd.core.Scalar({('a', 0): np.int64(0)}, 'a', 'i8')
+    dsk_out = dd.from_pandas(pd.Series([0]), 1).sum()
 
     if out is not None:
         dsk_out = dd.from_pandas(out, 3)

@@ -115,7 +115,8 @@ class ufunc(object):
                 result = dsk._elemwise(self._ufunc, *args, **kwargs)
                 if type(result) != type(NotImplemented):
                     return result
-            return NotImplemented
+            raise TypeError("Parameters of such types "
+                            "are not supported by " + self.__name__)
         else:
             return self._ufunc(*args, **kwargs)
 

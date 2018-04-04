@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import pytest
-from dask.dataframe.core import Scalar
 
 pd = pytest.importorskip('pandas')
 import pandas.util.testing as tm
@@ -257,7 +256,12 @@ def test_frame_2ufunc_out():
                           columns=['X', 'Y', 'Z'])
     ddf_out = dd.from_pandas(df_out, 3)
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(ValueError):
+        np.sin(ddf, out=ddf_out)
+
+    # types mismatch
+    ddf_out = dd.from_pandas(pd.Series([0]),1)
+    with pytest.raises(TypeError):
         np.sin(ddf, out=ddf_out)
 
     df_out = pd.DataFrame(np.random.randint(1, 100, size=(20, 2)),
@@ -278,7 +282,7 @@ def test_frame_2ufunc_out():
     pd.DataFrame({'A': np.random.randint(1, 100, size=20),
                   'B': np.random.randint(1, 100, size=20),
                   'C': np.abs(np.random.randn(20))})])
-@pytest.mark.parametrize('arg2', [2, Scalar({('a', 0): np.int64(2)}, 'a', 'i8')])
+@pytest.mark.parametrize('arg2', [2, dd.from_pandas(pd.Series([0]), 1).sum()])
 @pytest.mark.parametrize('ufunc', _UFUNCS_2ARG)
 def test_mixed_types(ufunc, arg1, arg2):
     npfunc = getattr(np, ufunc)

@@ -3148,8 +3148,7 @@ def handle_out(out, result):
     """ Handle out parameters
 
     If out is a dask.DataFrame, dask.Series or dask.Scalar then
-    this overwrites the contents of it with
-    the result
+    this overwrites the contents of it with the result
     """
     if isinstance(out, tuple):
         if len(out) == 1:
@@ -3160,13 +3159,13 @@ def handle_out(out, result):
             out = None
 
     if out is not None and type(out) != type(result):
-        raise NotImplementedError(
+        raise TypeError(
             "Mismatched types between result and out parameter. "
             "out=%s, result=%s" % (str(type(out)), str(type(result))))
 
     if isinstance(out, DataFrame):
         if len(out.columns) != len(result.columns):
-            raise NotImplementedError(
+            raise ValueError(
                 "Mismatched columns count between result and out parameter. "
                 "out=%s, result=%s" % (str(len(out.columns)), str(len(result.columns))))
 
