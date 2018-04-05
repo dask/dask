@@ -1439,7 +1439,7 @@ class Scheduler(ServerNode):
             for dts in ts.dependencies:
                 if dts.exception_blame:
                     ts.exception_blame = dts.exception_blame
-                    recommendations[key] = 'erred'
+                    recommendations[ts.key] = 'erred'
                     break
 
         for plugin in self.plugins[:]:
