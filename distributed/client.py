@@ -3462,8 +3462,17 @@ class as_completed(object):
 
     def is_empty(self):
         """Return True if there no waiting futures, False otherwise"""
+        return not self.count()
+
+    def count(self):
+        """ Return the number of futures yet to be returned
+
+        This includes both the number of futures still computing, as well as
+        those that are finished, but have not yet been returned from this
+        iterator.
+        """
         with self.lock:
-            return not self.futures and self.queue.empty()
+            return len(self.futures) + len(self.queue.queue)
 
     def __iter__(self):
         return self

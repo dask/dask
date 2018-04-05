@@ -38,8 +38,10 @@ def test_as_completed(loop):
             z = c.submit(inc, 1)
 
             seq = as_completed([x, y, z])
+            assert seq.count() == 3
             assert isinstance(seq, Iterator)
             assert set(seq) == {x, y, z}
+            assert seq.count() == 0
 
             assert list(as_completed([])) == []
 
