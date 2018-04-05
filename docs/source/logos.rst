@@ -24,3 +24,6 @@ Images and Logos
 
 .. image:: images/dask_stacked_white.svg
    :alt: Dask logo
+
+.. image:: images/HHMI_Janelia_Color.png
+   :alt: HHMI Janelia logo
