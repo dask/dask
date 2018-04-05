@@ -198,14 +198,14 @@ class TCP(Comm):
             self.stream = None
             if not shutting_down():
                 convert_stream_closed_error(self, e)
-
-        try:
-            msg = yield from_frames(frames, deserialize=self.deserialize)
-        except EOFError:
-            # Frames possibly garbled or truncated by communication error
-            self.abort()
-            raise CommClosedError("aborted stream on truncated data")
-        raise gen.Return(msg)
+        else:
+            try:
+                msg = yield from_frames(frames, deserialize=self.deserialize)
+            except EOFError:
+                # Frames possibly garbled or truncated by communication error
+                self.abort()
+                raise CommClosedError("aborted stream on truncated data")
+            raise gen.Return(msg)
 
     @gen.coroutine
     def write(self, msg):

@@ -263,6 +263,7 @@ class Adaptive(object):
         if self.maximum:
             instances = min(self.maximum, instances)
 
+        instances = int(instances)
         logger.info("Scaling up to %d workers", instances)
         return {'n': instances}
 

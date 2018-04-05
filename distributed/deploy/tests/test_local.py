@@ -133,21 +133,21 @@ def test_Client_with_local(loop):
 
 
 def test_Client_solo(loop):
-    with Client(loop=loop) as c:
+    with Client(loop=loop, silence_logs=False) as c:
         pass
     assert c.cluster.status == 'closed'
 
 
 def test_Client_kwargs(loop):
-    with Client(loop=loop, processes=False, n_workers=2) as c:
+    with Client(loop=loop, processes=False, n_workers=2, silence_logs=False) as c:
         assert len(c.cluster.workers) == 2
         assert all(isinstance(w, Worker) for w in c.cluster.workers)
     assert c.cluster.status == 'closed'
 
 
 def test_Client_twice(loop):
-    with Client(loop=loop) as c:
-        with Client(loop=loop) as f:
+    with Client(loop=loop, silence_logs=False) as c:
+        with Client(loop=loop, silence_logs=False) as f:
             assert c.cluster.scheduler.port != f.cluster.scheduler.port
 
 
@@ -340,7 +340,7 @@ def test_bokeh_kwargs(loop):
 
 
 def test_io_loop_periodic_callbacks(loop):
-    with LocalCluster(loop=loop) as cluster:
+    with LocalCluster(loop=loop, silence_logs=False) as cluster:
         assert cluster.scheduler.loop is loop
         for pc in cluster.scheduler.periodic_callbacks.values():
             assert pc.io_loop is loop
