@@ -214,6 +214,19 @@ def test_compute_retries(c, s, a, b):
     assert (yield z) == 80
 
 
+def test_retries_get(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            args = [ZeroDivisionError("one"), ZeroDivisionError("two"), 3]
+            x = delayed(varying(args))()
+            assert x.compute(retries=5) == 3
+
+            args = [ZeroDivisionError("one"), ZeroDivisionError("two"), 3]
+            x = delayed(varying(args))()
+            with pytest.raises(ZeroDivisionError):
+                x.compute()
+
+
 @gen_cluster(client=True)
 def test_compute_persisted_retries(c, s, a, b):
     args = [ZeroDivisionError("one"), ZeroDivisionError("two"), 3]

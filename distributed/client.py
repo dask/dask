@@ -1177,7 +1177,7 @@ class Client(Node):
                                          loose_restrictions, priority={skey: 0},
                                          user_priority=priority,
                                          resources={skey: resources} if resources else None,
-                                         retries={skey: retries} if retries else None,
+                                         retries=retries,
                                          fifo_timeout=fifo_timeout)
 
         logger.debug("Submit %s(...), %s", funcname(func), key)
@@ -1310,11 +1310,6 @@ class Client(Node):
             loose_restrictions = set(keys)
         else:
             loose_restrictions = set()
-
-        if retries:
-            retries = {k: retries for k in keys}
-        else:
-            retries = None
 
         priority = dict(zip(keys, range(len(keys))))
 
@@ -2026,6 +2021,9 @@ class Client(Node):
                                  for key, deps in dependencies.items()}
                 priority = dask.order.order(dsk3, dependencies2)
 
+            if isinstance(retries, Number) and retries > 0:
+                retries = {k: retries for k in dsk3}
+
             self._send_to_scheduler({'op': 'update-graph',
                                      'tasks': valmap(dumps_task, dsk3),
                                      'dependencies': valmap(list, dependencies),
@@ -2042,7 +2040,7 @@ class Client(Node):
 
     def get(self, dsk, keys, restrictions=None, loose_restrictions=None,
             resources=None, sync=True, asynchronous=None, direct=None,
-            fifo_timeout='60s', **kwargs):
+            retries=None, priority=0, fifo_timeout='60s', **kwargs):
         """ Compute dask graph
 
         Parameters
@@ -2052,6 +2050,11 @@ class Client(Node):
         restrictions: dict (optional)
             A mapping of {key: {set of worker hostnames}} that restricts where
             jobs can take place
+        retries: int (default to 0)
+            Number of allowed automatic retries if computing a result fails
+        priority: Number
+            Optional prioritization of task.  Zero is default.
+            Higher priorities take precedence
         sync: bool (optional)
             Returns Futures if False or concrete values if True (default).
         direct: bool
@@ -2071,7 +2074,10 @@ class Client(Node):
         futures = self._graph_to_futures(dsk, set(flatten([keys])),
                                          restrictions, loose_restrictions,
                                          resources=resources,
-                                         fifo_timeout=fifo_timeout)
+                                         fifo_timeout=fifo_timeout,
+                                         retries=retries,
+                                         user_priority=priority,
+                                         )
         packed = pack_data(keys, futures)
         if sync:
             if getattr(thread_state, 'key', False):
