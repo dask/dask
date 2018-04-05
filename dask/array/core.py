@@ -2985,7 +2985,7 @@ def handle_out(out, result):
             out = None
     if isinstance(out, Array):
         if out.shape != result.shape:
-            raise NotImplementedError(
+            raise ValueError(
                 "Mismatched shapes between result and out parameter. "
                 "out=%s, result=%s" % (str(out.shape), str(result.shape)))
         out._chunks = result.chunks
