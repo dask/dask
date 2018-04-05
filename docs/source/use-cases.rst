@@ -396,12 +396,28 @@ Streaming data engineering
 
 A data engineer responsible for watching a data feed needs to scale out a
 continuous process.  They `combine dask.distributed with normal Python Queues`_ to
-produce a rudimentary but effective stream processing system.
+produce a rudimentary but effective stream processing system. Alternatively, futures can be 
+streamed beween different clients using `channels`_ .
 
 Because dask.distributed is elastic, they can scale up or scale down their
 cluster resources in response to demand.
 
+One-off tasks from a web server
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Message queue based tools such as `Celery`_ allow a kind of message persistence
+and fault tolerance not yet possible with Dask and Distributed. There may
+however be situations where the developer who is looking to support power users for
+custom plugins but also basic users who need to run long running, pre-baked tasks.
+
+In such a situation the `channels`_ feature in distributed, combined with a local_client
+would allow one-off tasks to be run in a "fire and forget" during a web request.
+The power users would then be able to take advantage of the other features and use cases
+of Dask and Distributed listed above.
+
 .. _`combine dask.distributed with normal Python Queues`: https://distributed.readthedocs.io/en/latest/queues.html
+.. _`channels`: https://distributed.readthedocs.io/en/latest/channels.html
+.. _`Celery`: http://www.celeryproject.org/
 
 .. _Joblib: https://pythonhosted.org/joblib/parallel.html
 .. _dask.distributed: https://distributed.readthedocs.io/en/latest/
