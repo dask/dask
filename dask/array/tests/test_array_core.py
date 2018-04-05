@@ -2187,6 +2187,27 @@ def test_point_slicing():
     result = d.vindex[[1, 2, 5, 5], [3, 1, 6, 1]]
     assert_eq(result, x[[1, 2, 5, 5], [3, 1, 6, 1]])
 
+    result = d.vindex[da.asarray([1, 2, 6, 6]), :]
+    assert_eq(result, x[[1, 2, 6, 6], :])
+
+    result = d.vindex[:, da.asarray([1, 2, 7, 7])]
+    assert_eq(result, x[:, [1, 2, 7, 7]])
+
+    result = d.vindex[2, da.asarray([1, 2, 7, 7])]
+    assert_eq(result, x[2, [1, 2, 7, 7]])
+
+    result = d.vindex[:, da.asarray([2, 1, 7, 6])]
+    assert_eq(result, x[:, [2, 1, 7, 6]])
+
+    result = d.vindex[:, da.asarray([2, 1, 7, 7])]
+    assert_eq(result, x[:, [2, 1, 7, 7]])
+
+    result = d.vindex[:, da.from_array(np.array([7, 1, 2, 6]), chunks=2)]
+    assert_eq(result, x[:, [7, 1, 2, 6]])
+
+    result = d.vindex[(d % 3).nonzero()]
+    assert_eq(result, x[(x % 3).nonzero()])
+
     result = d.vindex[[0, 1, 6, 0], [0, 1, 0, 7]]
     assert_eq(result, x[[0, 1, 6, 0], [0, 1, 0, 7]])
     assert same_keys(result, d.vindex[[0, 1, 6, 0], [0, 1, 0, 7]])
