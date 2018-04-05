@@ -3598,10 +3598,24 @@ def _vindex_array(x, dict_indexes):
 
 
 def _vindex_dask_arrays(x, dict_indexes):
-    """Point wise indexing with Dask Arrays"""
+    """ Point wise indexing with Dask Arrays
+
+    Makes two passes of the data. First pass with all static values: integers,
+    slices, lists, and NumPy Arrays. Second pass (done in this function)
+    handles Dask Arrays using ``atop``. The strategy there involves comparing
+    Dask Array indices with ``arange`` in chunks to determine the relative
+    indexing needed to extract values for that chunk. This strategy works just
+    as well for Dask Arrays of known and unknown length.
+    """
 
     from .creation import arange
 
+    # Construct a tuple of indices for selection.
+    # Also collect axes that are part of the result.
+    #
+    # * arr_inds -- used for second pass
+    # * out_axes -- track where each
+    #
     arr_inds = []
     out_axes = []
     for i in range(x.ndim):
@@ -3617,10 +3631,14 @@ def _vindex_dask_arrays(x, dict_indexes):
     arr_inds = tuple(arr_inds)
     out_axes = tuple(out_axes)
 
+    # Find indices for all points in x to aid in selection within chunks
     x_inds = tuple(
         arange(s, chunks=c) for s, c in zip(x.shape, x.chunks)
     )
 
+    # Use global indices for reference in applying selected indices relative
+    # to each chunk. For static values applied in the first pass, pass along
+    # a dummy scalar value to notify the chunk should be kept unchanged.
     idx_vals = atop(
         _vindex_dask_arrays_chunk,
         out_axes,
@@ -3638,6 +3656,15 @@ def _vindex_dask_arrays(x, dict_indexes):
 
 
 def _vindex_dask_arrays_chunk(xc, *args):
+    """ Point wise indexing with Dask Arrays within each chunk
+
+    Uses the global indices provided to this chunk both for reference (as to
+    where this chunk lies in the larger Dask Array) and for selection (user
+    provided, but still in the absolute reference frame). Find the selection
+    in chunk relative indices and apply it.
+    """
+
+    # Unpack interwoven reference indices and selection indices.
     inds = args[::2]
     x_inds = args[1::2]
 
