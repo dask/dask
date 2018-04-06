@@ -136,10 +136,11 @@ slow due to inter-worker communication or scheduler overhead or one of several
 other issues.  Getting feedback about what's going on can help to identify
 both failures and general performance bottlenecks.
 
-For the single-machine scheduler see :doc:`diagnostics <diagnostics>`
-documentation.  The rest of the section will assume that you are using the
-`distributed scheduler <http://distributed.readthedocs.io/en/latest/>`_ where
-these issues arise more commonly.
+For the single-machine scheduler see :doc:`diagnostics
+<understanding-performance>` documentation.  The rest of the section will
+assume that you are using the `distributed scheduler
+<http://distributed.readthedocs.io/en/latest/>`_ where these issues arise more
+commonly.
 
 Web Diagnostics
 ~~~~~~~~~~~~~~~
