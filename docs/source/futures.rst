@@ -317,7 +317,6 @@ Submit Tasks from Tasks
 -----------------------
 
 .. autosummary::
-   compute
    get_client
    rejoin
    secede
