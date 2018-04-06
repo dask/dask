@@ -151,5 +151,3 @@ the Pandas development team is actively working on releasing the GIL.
 When dealing with text data you may see speedups by switching to the newer
 :doc:`distributed scheduler <setup/single-distributed>` either on a cluster or
 single machine.
-
-.. _Pandas: http://pandas.pydata.org/

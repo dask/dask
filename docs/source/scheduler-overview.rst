@@ -166,7 +166,7 @@ well with ``pdb``:
 
 The shared memory schedulers also provide a set of callbacks that can be used
 for diagnosing and profiling. You can learn more about scheduler callbacks and
-diagnostics :doc:`here <diagnostics>`.
+diagnostics :doc:`here <diagnostics-local>`.
 
 
 More Information
