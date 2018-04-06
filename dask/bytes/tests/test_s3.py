@@ -34,6 +34,7 @@ files = {'test/accounts.1.json':  (b'{"amount": 100, "name": "Alice"}\n'
 @pytest.yield_fixture
 def s3():
     # writable local S3 system
+    import moto
     with moto.mock_s3():
         client = boto3.client('s3')
         client.create_bucket(Bucket=test_bucket_name, ACL='public-read-write')
