@@ -78,10 +78,10 @@ pip install --upgrade --no-deps \
 pip install --upgrade \
     cityhash \
     flake8 \
-    moto \
     mmh3 \
     pytest-xdist \
     xxhash
+pip install git+https://github.com/spulec/moto  # includes fix for requests
 
 if [[ ${UPSTREAM_DEV} ]]; then
     echo "Installing PyArrow dev"
