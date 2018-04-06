@@ -8,6 +8,7 @@ import pytest
 s3fs = pytest.importorskip('s3fs')
 boto3 = pytest.importorskip('boto3')
 moto = pytest.importorskip('moto')
+httpretty = pytest.importorskip('httpretty')
 
 from toolz import concat, valmap, partial
 
@@ -34,12 +35,17 @@ files = {'test/accounts.1.json':  (b'{"amount": 100, "name": "Alice"}\n'
 @pytest.yield_fixture
 def s3():
     # writable local S3 system
-    with moto.mock_s3():
-        client = boto3.client('s3')
-        client.create_bucket(Bucket=test_bucket_name, ACL='public-read-write')
-        for f, data in files.items():
-            client.put_object(Bucket=test_bucket_name, Key=f, Body=data)
-        yield s3fs.S3FileSystem(anon=True)
+    import moto
+    try:
+        with moto.mock_s3():
+            client = boto3.client('s3')
+            client.create_bucket(Bucket=test_bucket_name, ACL='public-read-write')
+            for f, data in files.items():
+                client.put_object(Bucket=test_bucket_name, Key=f, Body=data)
+            yield s3fs.S3FileSystem(anon=True)
+    finally:
+        httpretty.HTTPretty.disable()
+        httpretty.HTTPretty.reset()
 
 
 @contextmanager
@@ -58,7 +64,11 @@ def s3_context(bucket, files):
             client.delete_object(Bucket=bucket, Key=f, Body=data)
         except Exception:
             pass
-    m.stop()
+        finally:
+            m.stop()
+            httpretty = pytest.importorskip('httpretty')
+            httpretty.HTTPretty.disable()
+            httpretty.HTTPretty.reset()
 
 
 def test_get_s3():

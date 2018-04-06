@@ -6,7 +6,6 @@ import tempfile
 from dask.dataframe import read_orc
 from dask.dataframe.utils import assert_eq
 import dask.dataframe as dd
-from dask.compatibility import PY2
 
 pytest.importorskip('pyarrow.orc')
 url = ('https://www.googleapis.com/download/storage/v1/b/anaconda-public-data/o'
@@ -15,7 +14,6 @@ url = ('https://www.googleapis.com/download/storage/v1/b/anaconda-public-data/o'
 columns = ['time', 'date']
 
 
-@pytest.mark.skipif(PY2, reason='moto and requests confusion')
 @pytest.mark.network
 def test_orc_with_backend():
     d = read_orc(url)
@@ -38,7 +36,6 @@ def orc_files():
         shutil.rmtree(d, ignore_errors=True)
 
 
-@pytest.mark.skipif(PY2, reason='moto and requests confusion')
 def test_orc_single(orc_files):
     fn = orc_files[0]
     d = read_orc(fn)
@@ -51,7 +48,6 @@ def test_orc_single(orc_files):
     assert 'nonexist' in str(e)
 
 
-@pytest.mark.skipif(PY2, reason='moto and requests confusion')
 def test_orc_multiple(orc_files):
     d = read_orc(orc_files[0])
     d2 = read_orc(orc_files)

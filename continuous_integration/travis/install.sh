@@ -78,10 +78,10 @@ pip install --upgrade --no-deps \
 pip install --upgrade \
     cityhash \
     flake8 \
-    moto \
     mmh3 \
     pytest-xdist \
-    xxhash
+    xxhash \
+    moto
 
 if [[ ${UPSTREAM_DEV} ]]; then
     echo "Installing PyArrow dev"
