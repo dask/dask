@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from functools import partial, wraps
+from functools import wraps
 from itertools import product
 from operator import add
 from numbers import Integral
@@ -10,6 +10,7 @@ from toolz import accumulate, sliding_window
 
 from .. import sharedict
 from ..base import tokenize
+from ..compatibility import apply
 from ..utils import ignoring
 from . import chunk
 from .core import (Array, asarray, normalize_chunks,
@@ -221,7 +222,7 @@ def linspace(start, stop, num=50, chunks=None, dtype=None):
 
     for i, bs in enumerate(chunks[0]):
         blockstop = blockstart + ((bs - 1) * space)
-        task = (partial(np.linspace, dtype=dtype), blockstart, blockstop, bs)
+        task = (apply, np.linspace, [blockstart, blockstop, bs], {'dtype': dtype})
         blockstart = blockstart + (space * bs)
         dsk[(name, i)] = task
 

@@ -978,7 +978,7 @@ def _take_dask_array_from_numpy(a, indices, axis):
 
 @wraps(np.around)
 def around(x, decimals=0):
-    return map_blocks(partial(np.around, decimals=decimals), x, dtype=x.dtype)
+    return map_blocks(np.around, x, dtype=x.dtype, decimals=decimals)
 
 
 def isnull(values):

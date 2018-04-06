@@ -422,3 +422,10 @@ def test_array_cumreduction_out(func):
     x = da.ones((10, 10), chunks=(4, 4))
     func(x, axis=0, out=x)
     assert_eq(x, func(np.ones((10, 10)), axis=0))
+
+
+def test_no_partials():
+    cloudpickle = pytest.importorskip('cloudpickle')
+    x = da.ones(5, chunks=(2,))
+    assert b'partial' not in cloudpickle.dumps(x.sum()).replace(b'_partial_tree_reduce', b'')
+    assert b'compose' not in cloudpickle.dumps(x.sum())

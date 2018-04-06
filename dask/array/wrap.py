@@ -11,6 +11,7 @@ except ImportError:
     from toolz import curry
 
 from ..base import tokenize
+from ..compatibility import apply
 from .core import Array, normalize_chunks
 from .numpy_compat import full
 
@@ -39,8 +40,10 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
 
     keys = product([name], *[range(len(bd)) for bd in chunks])
     shapes = product(*chunks)
-    func = partial(func, dtype=dtype, **kwargs)
-    vals = ((func,) + (s,) + args for s in shapes)
+    if 'dtype' not in kwargs:
+        kwargs['dtype'] = dtype
+    args = list(args)
+    vals = ((apply, func, [s] + args, kwargs) for s in shapes)
 
     dsk = dict(zip(keys, vals))
     return Array(dsk, name, chunks, dtype=dtype)
