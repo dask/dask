@@ -80,8 +80,8 @@ pip install --upgrade \
     flake8 \
     mmh3 \
     pytest-xdist \
-    xxhash
-pip install --upgrade git+https://github.com/spulec/moto  # includes fix for requests
+    xxhash \
+    moto
 
 if [[ ${UPSTREAM_DEV} ]]; then
     echo "Installing PyArrow dev"

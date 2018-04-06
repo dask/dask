@@ -6,7 +6,6 @@ import tempfile
 from dask.dataframe import read_orc
 from dask.dataframe.utils import assert_eq
 import dask.dataframe as dd
-from dask.compatibility import PY2
 
 pytest.importorskip('pyarrow.orc')
 url = ('https://www.googleapis.com/download/storage/v1/b/anaconda-public-data/o'
