@@ -1,6 +1,24 @@
 Changelog
 =========
 
+1.21.6 - 2018-04-06
+-------------------
+
+-  Fix numeric environment variable configuration (#1885) `Joseph Atkins-Kurkish`_
+-  support bytearrays in older lz4 library (#1886) `Matthew Rocklin`_
+-  Remove started timeout in nanny (#1852) `Matthew Rocklin`_
+-  Don't log errors in sync (#1894) `Matthew Rocklin`_
+-  downgrade stale lock warning to info logging level (#1890) `Matthew Rocklin`_
+-  Fix ``UnboundLocalError`` for ``key`` (#1900) `John Kirkham`_
+-  Resolve deployment issues in Python 2 (#1905) `Matthew Rocklin`_
+-  Support retries and priority in Client.get method (#1902) `Matthew Rocklin`_
+-  Add additional attributes to task page if applicable (#1901) `Matthew Rocklin`_
+-  Add count method to as_completed (#1897) `Matthew Rocklin`_
+-  Extend default timeout to 10s (#1904) `Matthew Rocklin`_
+
+
+
+
 1.21.5 - 2018-03-31
 -------------------
 
@@ -574,3 +592,4 @@ significantly without many new features.
 .. _`John Kirkham`: https://github.com/jakirkham
 .. _`Sven Kreiss`:  https://github.com/svenkreiss
 .. _`Russ Bubley`: https://github.com/rbubley
+.. _`Joseph Atkins-Kurkish`: https://github.com/spacerat
