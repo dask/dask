@@ -478,36 +478,37 @@ def test_worker_name():
 
 @gen_test()
 def test_coerce_address():
-    s = Scheduler(validate=True)
-    s.start(0)
-    print("scheduler:", s.address, s.listen_address)
-    a = Worker(s.ip, s.port, name='alice')
-    b = Worker(s.ip, s.port, name=123)
-    c = Worker('127.0.0.1', s.port, name='charlie')
-    yield [a._start(), b._start(), c._start()]
+    with set_config({'connect-timeout': '100ms'}):
+        s = Scheduler(validate=True)
+        s.start(0)
+        print("scheduler:", s.address, s.listen_address)
+        a = Worker(s.ip, s.port, name='alice')
+        b = Worker(s.ip, s.port, name=123)
+        c = Worker('127.0.0.1', s.port, name='charlie')
+        yield [a._start(), b._start(), c._start()]
 
-    assert s.coerce_address('127.0.0.1:8000') == 'tcp://127.0.0.1:8000'
-    assert s.coerce_address('[::1]:8000') == 'tcp://[::1]:8000'
-    assert s.coerce_address('tcp://127.0.0.1:8000') == 'tcp://127.0.0.1:8000'
-    assert s.coerce_address('tcp://[::1]:8000') == 'tcp://[::1]:8000'
-    assert s.coerce_address('localhost:8000') in ('tcp://127.0.0.1:8000', 'tcp://[::1]:8000')
-    assert s.coerce_address(u'localhost:8000') in ('tcp://127.0.0.1:8000', 'tcp://[::1]:8000')
-    assert s.coerce_address(a.address) == a.address
-    # Aliases
-    assert s.coerce_address('alice') == a.address
-    assert s.coerce_address(123) == b.address
-    assert s.coerce_address('charlie') == c.address
+        assert s.coerce_address('127.0.0.1:8000') == 'tcp://127.0.0.1:8000'
+        assert s.coerce_address('[::1]:8000') == 'tcp://[::1]:8000'
+        assert s.coerce_address('tcp://127.0.0.1:8000') == 'tcp://127.0.0.1:8000'
+        assert s.coerce_address('tcp://[::1]:8000') == 'tcp://[::1]:8000'
+        assert s.coerce_address('localhost:8000') in ('tcp://127.0.0.1:8000', 'tcp://[::1]:8000')
+        assert s.coerce_address(u'localhost:8000') in ('tcp://127.0.0.1:8000', 'tcp://[::1]:8000')
+        assert s.coerce_address(a.address) == a.address
+        # Aliases
+        assert s.coerce_address('alice') == a.address
+        assert s.coerce_address(123) == b.address
+        assert s.coerce_address('charlie') == c.address
 
-    assert s.coerce_hostname('127.0.0.1') == '127.0.0.1'
-    assert s.coerce_hostname('alice') == a.ip
-    assert s.coerce_hostname(123) == b.ip
-    assert s.coerce_hostname('charlie') == c.ip
-    assert s.coerce_hostname('jimmy') == 'jimmy'
+        assert s.coerce_hostname('127.0.0.1') == '127.0.0.1'
+        assert s.coerce_hostname('alice') == a.ip
+        assert s.coerce_hostname(123) == b.ip
+        assert s.coerce_hostname('charlie') == c.ip
+        assert s.coerce_hostname('jimmy') == 'jimmy'
 
-    assert s.coerce_address('zzzt:8000', resolve=False) == 'tcp://zzzt:8000'
+        assert s.coerce_address('zzzt:8000', resolve=False) == 'tcp://zzzt:8000'
 
-    yield s.close()
-    yield [w._close() for w in [a, b, c]]
+        yield s.close()
+        yield [w._close() for w in [a, b, c]]
 
 
 @pytest.mark.skipif(sys.platform.startswith('win'),

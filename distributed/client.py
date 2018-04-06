@@ -489,7 +489,7 @@ class Client(Node):
                  security=None, asynchronous=False,
                  name=None, heartbeat_interval=None, **kwargs):
         if timeout == no_default:
-            timeout = config.get('connect-timeout', '5s')
+            timeout = config.get('connect-timeout', '10s')
         if timeout is not None:
             timeout = parse_timedelta(timeout, 's')
         self._timeout = timeout
@@ -716,7 +716,7 @@ class Client(Node):
     @gen.coroutine
     def _start(self, timeout=no_default, **kwargs):
         if timeout == no_default:
-            timeout = config.get('connect-timeout', '5s')
+            timeout = self._timeout
         if timeout is not None:
             timeout = parse_timedelta(timeout, 's')
 
@@ -2405,7 +2405,7 @@ class Client(Node):
     @gen.coroutine
     def _restart(self, timeout=no_default):
         if timeout == no_default:
-            timeout = self._timeout
+            timeout = self._timeout * 2
         self._send_to_scheduler({'op': 'restart', 'timeout': timeout})
         self._restart_event = Event()
         try:

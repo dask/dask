@@ -51,7 +51,7 @@ version: 1
 #########################
 #
 # compression: auto
-# connect-timeout: 5s     # seconds delay before connecting fails
+# connect-timeout: 10s    # seconds delay before connecting fails
 # tcp-timeout: 30s        # seconds delay before calling an unresponsive connection dead
 # default-scheme: tcp
 # require-encryption: False   # whether to require encryption on non-local comms

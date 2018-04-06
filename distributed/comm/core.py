@@ -161,7 +161,7 @@ def connect(addr, timeout=None, deserialize=True, connection_args=None):
     retried until the *timeout* is expired.
     """
     if timeout is None:
-        timeout = config.get('connect-timeout', '3s')
+        timeout = config.get('connect-timeout', '10s')
     timeout = parse_timedelta(timeout, default='seconds')
 
     scheme, loc = parse_address(addr)

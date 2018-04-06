@@ -349,7 +349,7 @@ def test_GraphPlot_clear(c, s, a, b):
         assert time() < start + 5
 
 
-@gen_cluster(client=True)
+@gen_cluster(client=True, timeout=30)
 def test_GraphPlot_complex(c, s, a, b):
     da = pytest.importorskip('dask.array')
     gp = GraphPlot(s)

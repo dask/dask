@@ -704,6 +704,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
         end
     """
     config['nanny-start-timeout'] = '5s'
+    config['connect-timeout'] = '5s'
     worker_kwargs = merge({'memory_limit': TOTAL_MEMORY, 'death_timeout': 5},
                           worker_kwargs)
 
@@ -742,7 +743,11 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                                              asynchronous=True)
                             args = [c] + args
                         try:
-                            result = yield func(*args)
+                            future = func(*args)
+                            if timeout:
+                                future = gen.with_timeout(timedelta(seconds=timeout),
+                                                          future)
+                            result = yield future
                             if s.validate:
                                 s.validate_state()
                         finally:
@@ -754,7 +759,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
 
                         raise gen.Return(result)
 
-                    result = loop.run_sync(coro, timeout=timeout)
+                    result = loop.run_sync(coro, timeout=timeout * 2 if timeout else timeout)
 
             for w in workers:
                 if getattr(w, 'data', None):
