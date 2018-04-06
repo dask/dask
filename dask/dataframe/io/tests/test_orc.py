@@ -16,9 +16,6 @@ columns = ['time', 'date']
 
 @pytest.mark.network
 def test_orc_with_backend():
-    httpretty = pytest.importorskip('httpretty')
-    httpretty.HTTPretty.disable()
-    httpretty.HTTPretty.reset()
     d = read_orc(url)
     assert set(d.columns) == {'time', 'date'}  # order is not guranteed
     assert len(d) == 70000
@@ -27,9 +24,6 @@ def test_orc_with_backend():
 @pytest.fixture(scope='module')
 def orc_files():
     requests = pytest.importorskip('requests')
-    httpretty = pytest.importorskip('httpretty')
-    httpretty.HTTPretty.disable()
-    httpretty.HTTPretty.reset()
     data = requests.get(url).content
     d = tempfile.mkdtemp()
     files = [os.path.join(d, fn) for fn in ['test1.orc', 'test2.orc']]
