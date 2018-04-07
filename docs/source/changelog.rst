@@ -4,17 +4,17 @@ Changelog
 1.21.6 - 2018-04-06
 -------------------
 
--  Fix numeric environment variable configuration (#1885) `Joseph Atkins-Kurkish`_
--  support bytearrays in older lz4 library (#1886) `Matthew Rocklin`_
--  Remove started timeout in nanny (#1852) `Matthew Rocklin`_
--  Don't log errors in sync (#1894) `Matthew Rocklin`_
--  downgrade stale lock warning to info logging level (#1890) `Matthew Rocklin`_
--  Fix ``UnboundLocalError`` for ``key`` (#1900) `John Kirkham`_
--  Resolve deployment issues in Python 2 (#1905) `Matthew Rocklin`_
--  Support retries and priority in Client.get method (#1902) `Matthew Rocklin`_
--  Add additional attributes to task page if applicable (#1901) `Matthew Rocklin`_
--  Add count method to as_completed (#1897) `Matthew Rocklin`_
--  Extend default timeout to 10s (#1904) `Matthew Rocklin`_
+-  Fix numeric environment variable configuration (:pr:`1885`) `Joseph Atkins-Kurkish`_
+-  support bytearrays in older lz4 library (:pr:`1886`) `Matthew Rocklin`_
+-  Remove started timeout in nanny (:pr:`1852`) `Matthew Rocklin`_
+-  Don't log errors in sync (:pr:`1894`) `Matthew Rocklin`_
+-  downgrade stale lock warning to info logging level (:pr:`1890`) `Matthew Rocklin`_
+-  Fix ``UnboundLocalError`` for ``key`` (:pr:`1900`) `John Kirkham`_
+-  Resolve deployment issues in Python 2 (:pr:`1905`) `Matthew Rocklin`_
+-  Support retries and priority in Client.get method (:pr:`1902`) `Matthew Rocklin`_
+-  Add additional attributes to task page if applicable (:pr:`1901`) `Matthew Rocklin`_
+-  Add count method to as_completed (:pr:`1897`) `Matthew Rocklin`_
+-  Extend default timeout to 10s (:pr:`1904`) `Matthew Rocklin`_
 
 
 
@@ -47,14 +47,14 @@ Changelog
 1.21.3 - 2018-03-08
 -------------------
 
--  Add cluster superclass and improve adaptivity (#1813) `Matthew Rocklin`_
--  Fixup tests and support Python 2 for Tornado 5.0 (#1818) `Matthew Rocklin`_
--  Fix bug in recreate_error when dependencies are dropped (#1815) `Matthew Rocklin`_
--  Add worker time to live in Scheduler (#1811) `Matthew Rocklin`_
--  Scale adaptive based on total_occupancy (#1807) `Matthew Rocklin`_
--  Support calling compute within worker_client (#1814) `Matthew Rocklin`_
--  Add percentage to profile plot (#1817) `Brett Naul`_
--  Overwrite option for remote python in dask-ssh (#1812) `Sven Kreiss`_
+-  Add cluster superclass and improve adaptivity (:pr:`1813`) `Matthew Rocklin`_
+-  Fixup tests and support Python 2 for Tornado 5.0 (:pr:`1818`) `Matthew Rocklin`_
+-  Fix bug in recreate_error when dependencies are dropped (:pr:`1815`) `Matthew Rocklin`_
+-  Add worker time to live in Scheduler (:pr:`1811`) `Matthew Rocklin`_
+-  Scale adaptive based on total_occupancy (:pr:`1807`) `Matthew Rocklin`_
+-  Support calling compute within worker_client (:pr:`1814`) `Matthew Rocklin`_
+-  Add percentage to profile plot (:pr:`1817`) `Brett Naul`_
+-  Overwrite option for remote python in dask-ssh (:pr:`1812`) `Sven Kreiss`_
 
 
 1.21.2 - 2018-03-05
