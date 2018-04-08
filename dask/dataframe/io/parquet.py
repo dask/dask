@@ -463,6 +463,29 @@ def _write_metadata(writes, filenames, fmd, path, fs, sep):
 
 # ----------------------------------------------------------------------
 # PyArrow interface
+def _nat_sorted_pieces(pieces):
+    """
+    Return list of pyarrow Parquet pieces sorted 'naturally' by path
+
+    Lexicographic sorted list of paths:
+    ['/.../part.1.parquet', '/.../part.10.parquet', '/.../part.2.parquet']
+
+    Naturally sorted list of paths:
+    ['/.../part.1.parquet', '/.../part.2.parquet', '/.../part.10.parquet']
+
+    Parameters
+    ----------
+    pieces : list[pyarrow.parquet.ParquetDatasetPiece]
+
+    Returns
+    -------
+    list[pyarrow.parquet.ParquetDatasetPiece]
+    """
+    def to_sort_tuple(piece):
+        return [int(s) if s.isdigit() else s for s in re.split('(\d+)', piece.path)]
+
+    return sorted(pieces, key=to_sort_tuple)
+
 
 def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
                   categories=None, index=None):
@@ -528,6 +551,9 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
         if pf.num_row_groups > 0:
             non_empty_pieces.append(piece)
 
+    # Sort pieces naturally
+    non_empty_pieces = _nat_sorted_pieces(non_empty_pieces)
+
     # Determine divisions
     if non_empty_pieces and index_names:
         # Try to find parquet column index of divisions column
@@ -542,14 +568,20 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
         if divisions_col_index is not None:
             # Compute min/max for column in each row group
             min_maxs = []
+            last_max = None
             for piece in non_empty_pieces:
                 pf = piece.get_metadata(pq.ParquetFile)
                 rg = pf.row_group(0)
                 col_meta = rg.column(divisions_col_index)
                 stats = col_meta.statistics
-                min_maxs.append((stats.min, stats.max))
+                if last_max is None or last_max < stats.min:
+                    min_maxs.append((stats.min, stats.max))
+                    last_max = stats.max
+                else:
+                    # Divisions not valid
+                    min_maxs = None
+                    break
 
-            # TODO: check if min_maxes represent valid partitions, handle sorting non_empty_pieces
             if min_maxs:
                 divisions = [mn for mn, mx in min_maxs] + [min_maxs[-1][1]]
             else:
