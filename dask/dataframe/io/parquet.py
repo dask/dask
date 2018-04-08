@@ -8,6 +8,7 @@ import distutils
 
 import numpy as np
 import pandas as pd
+from pyarrow.parquet import ParquetDatasetPiece
 
 from ..core import DataFrame, Series
 from ..utils import (clear_known_categories, strip_unknown_categories,
@@ -498,6 +499,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
             _parse_pandas_metadata(pandas_metadata)
         )
     else:
+        pandas_metadata = {}
         index_names = []
         column_names = schema.names
         storage_name_mapping = {k: k for k in column_names}
@@ -517,6 +519,49 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
 
     all_columns = index_names + column_names
 
+    # Find non-empty pieces
+    non_empty_pieces = []
+    # Determine valid pieces
+    for piece in dataset.pieces:
+        pf = piece.get_metadata(pq.ParquetFile)
+        # non_empty_pieces.append(piece)
+        if pf.num_row_groups > 0:
+            non_empty_pieces.append(piece)
+
+    # Determine divisions
+    if non_empty_pieces and index_names:
+        # Try to find parquet column index of divisions column
+        divisions_col_index = None
+        if len(index_names) == 1 and pandas_metadata and pandas_metadata['columns']:
+            col_names = [e['name'] for e in pandas_metadata['columns']]
+            try:
+                divisions_col_index = col_names.index(index_names[0])
+            except ValueError:
+                pass
+
+        if divisions_col_index is not None:
+            # Compute min/max for column in each row group
+            min_maxs = []
+            for piece in non_empty_pieces:
+                pf = piece.get_metadata(pq.ParquetFile)
+                rg = pf.row_group(0)
+                col_meta = rg.column(divisions_col_index)
+                stats = col_meta.statistics
+                min_maxs.append((stats.min, stats.max))
+
+            # TODO: check if min_maxes represent valid partitions, handle sorting non_empty_pieces
+            if min_maxs:
+                divisions = [mn for mn, mx in min_maxs] + [min_maxs[-1][1]]
+            else:
+                divisions = (None,) * (len(non_empty_pieces) + 1)
+        else:
+            divisions = (None,) * (len(non_empty_pieces) + 1)
+    elif non_empty_pieces:
+        divisions = (None,) * (len(non_empty_pieces) + 1)
+    else:
+        divisions = (None, None)
+
+    # Build task
     dtypes = _get_pyarrow_dtypes(schema, categories)
     dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
@@ -529,8 +574,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
 
     task_name = 'read-parquet-' + tokenize(fs_token, paths, all_columns)
 
-    if dataset.pieces:
-        divisions = (None,) * (len(dataset.pieces) + 1)
+    if non_empty_pieces:
         task_plan = {
             (task_name, i): (_read_pyarrow_parquet_piece,
                              fs,
@@ -540,11 +584,10 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
                              out_type == Series,
                              dataset.partitions,
                              categories)
-            for i, piece in enumerate(dataset.pieces)
+            for i, piece in enumerate(non_empty_pieces)
         }
     else:
         meta = strip_unknown_categories(meta)
-        divisions = (None, None)
         task_plan = {(task_name, 0): meta}
 
     return out_type(task_plan, task_name, meta, divisions)
