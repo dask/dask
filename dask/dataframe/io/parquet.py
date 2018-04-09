@@ -653,18 +653,34 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema):
     import pyarrow as pa
     import pyarrow.parquet as pq
 
-    # Get column index of division column
+    # Check whether divisions_name is in the schema
     # Note: get_field_index returns -1 if not found, but it does not accept None
-    divisions_col_index = pa_schema.get_field_index(divisions_name) if divisions_name is not None else -1
+    divisions_name_in_schema = divisions_name is not None and pa_schema.get_field_index(divisions_name) >= 0
 
-    if pa_pieces and divisions_col_index >= 0:
+    if pa_pieces and divisions_name_in_schema:
         # We have pieces and a valid division column.
         # Compute min/max for column in each row group
         min_maxs = []
         last_max = None
+
+        # Initialize index of divisions column within the row groups.
+        # To be computed during while processing the first piece below
+        divisions_col_index = None
+
         for piece in pa_pieces:
             pf = piece.get_metadata(pq.ParquetFile)
             rg = pf.row_group(0)
+
+            # Compute division column index if needed
+            if divisions_col_index is None:
+                rg_paths = [rg.column(i).path_in_schema for i in range(rg.num_columns)]
+                try:
+                    divisions_col_index = rg_paths.index(divisions_name)
+                except ValueError:
+                    # Divisions not valid
+                    min_maxs = None
+                    break
+
             col_meta = rg.column(divisions_col_index)
             stats = col_meta.statistics
             if stats.has_min_max and (last_max is None or last_max < stats.min):
