@@ -600,6 +600,13 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     meta = _meta_from_dtypes(all_columns, dtypes, index_names, column_index_names)
     meta = clear_known_categories(meta, cols=categories)
 
+    # Handle converting divisions to timestamps
+    if divisions[0] is not None and meta.index.dtype.kind == 'M':
+        # Why is this factor of 1000 needed???
+        datetimes = [np.array([d*1000]).astype(meta.index.dtype)[0]
+                     for d in divisions]
+        divisions = [pd.Timestamp(dt) for dt in datetimes]
+
     if out_type == Series:
         assert len(meta.columns) == 1
         meta = meta[meta.columns[0]]
