@@ -531,9 +531,18 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
 
     # Determine divisions
     if len(index_names) == 1:
-        divisions_name = index_names[0]
+
+        # Look up storage name of the single index column
+        divisions_names = [storage_name for storage_name, name in storage_name_mapping.items()
+                           if index_names[0] == name]
+
+        if divisions_names:
+            divisions_name = divisions_names[0]
+        else:
+            divisions_name = None
     else:
         divisions_name = None
+
     divisions = _get_pyarrow_divisions(non_empty_pieces, divisions_name, schema)
 
     # Build task
