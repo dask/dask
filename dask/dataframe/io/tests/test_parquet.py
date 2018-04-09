@@ -781,7 +781,7 @@ def test_parquet_select_cats(tmpdir):
     xfail_fastparquet_pyarrow="fastparquet gh#251"
 )
 def test_columns_name(tmpdir, write_engine, read_engine):
-    if write_engine == read_engine == 'fastparquet':
+    if write_engine == 'fastparquet':
         pytest.skip('Fastparquet does not write column_indexes')
 
     if write_engine == 'pyarrow':
