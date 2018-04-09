@@ -8,7 +8,6 @@ import distutils
 
 import numpy as np
 import pandas as pd
-from pyarrow.parquet import ParquetDatasetPiece
 
 from ..core import DataFrame, Series
 from ..utils import (clear_known_categories, strip_unknown_categories,
@@ -463,29 +462,6 @@ def _write_metadata(writes, filenames, fmd, path, fs, sep):
 
 # ----------------------------------------------------------------------
 # PyArrow interface
-def _nat_sorted_pieces(pieces):
-    """
-    Return list of pyarrow Parquet pieces sorted 'naturally' by path
-
-    Lexicographic sorted list of paths:
-    ['/.../part.1.parquet', '/.../part.10.parquet', '/.../part.2.parquet']
-
-    Naturally sorted list of paths:
-    ['/.../part.1.parquet', '/.../part.2.parquet', '/.../part.10.parquet']
-
-    Parameters
-    ----------
-    pieces : list[pyarrow.parquet.ParquetDatasetPiece]
-
-    Returns
-    -------
-    list[pyarrow.parquet.ParquetDatasetPiece]
-    """
-    def to_sort_tuple(piece):
-        return [int(s) if s.isdigit() else s for s in re.split('(\d+)', piece.path)]
-
-    return sorted(pieces, key=to_sort_tuple)
-
 
 def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
                   categories=None, index=None):
@@ -522,7 +498,6 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
             _parse_pandas_metadata(pandas_metadata)
         )
     else:
-        pandas_metadata = {}
         index_names = []
         column_names = schema.names
         storage_name_mapping = {k: k for k in column_names}
@@ -555,43 +530,11 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     non_empty_pieces = _nat_sorted_pieces(non_empty_pieces)
 
     # Determine divisions
-    if non_empty_pieces and index_names:
-        # Try to find parquet column index of divisions column
-        divisions_col_index = None
-        if len(index_names) == 1 and pandas_metadata and pandas_metadata['columns']:
-            col_names = [e['name'] for e in pandas_metadata['columns']]
-            try:
-                divisions_col_index = col_names.index(index_names[0])
-            except ValueError:
-                pass
-
-        if divisions_col_index is not None:
-            # Compute min/max for column in each row group
-            min_maxs = []
-            last_max = None
-            for piece in non_empty_pieces:
-                pf = piece.get_metadata(pq.ParquetFile)
-                rg = pf.row_group(0)
-                col_meta = rg.column(divisions_col_index)
-                stats = col_meta.statistics
-                if last_max is None or last_max < stats.min:
-                    min_maxs.append((stats.min, stats.max))
-                    last_max = stats.max
-                else:
-                    # Divisions not valid
-                    min_maxs = None
-                    break
-
-            if min_maxs:
-                divisions = [mn for mn, mx in min_maxs] + [min_maxs[-1][1]]
-            else:
-                divisions = (None,) * (len(non_empty_pieces) + 1)
-        else:
-            divisions = (None,) * (len(non_empty_pieces) + 1)
-    elif non_empty_pieces:
-        divisions = (None,) * (len(non_empty_pieces) + 1)
+    if len(index_names) == 1:
+        divisions_name = index_names[0]
     else:
-        divisions = (None, None)
+        divisions_name = None
+    divisions = _get_pyarrow_divisions(non_empty_pieces, divisions_name, schema)
 
     # Build task
     dtypes = _get_pyarrow_dtypes(schema, categories)
@@ -599,13 +542,6 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
 
     meta = _meta_from_dtypes(all_columns, dtypes, index_names, column_index_names)
     meta = clear_known_categories(meta, cols=categories)
-
-    # Handle converting divisions to timestamps
-    if divisions[0] is not None and meta.index.dtype.kind == 'M':
-        # Why is this factor of 1000 needed???
-        datetimes = [np.array([d*1000]).astype(meta.index.dtype)[0]
-                     for d in divisions]
-        divisions = [pd.Timestamp(dt) for dt in datetimes]
 
     if out_type == Series:
         assert len(meta.columns) == 1
@@ -630,6 +566,124 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
         task_plan = {(task_name, 0): meta}
 
     return out_type(task_plan, task_name, meta, divisions)
+
+
+def _nat_sorted_pieces(pieces):
+    """
+    Return list of pyarrow Parquet pieces sorted 'naturally' by path
+
+    Lexicographic sorted list of paths:
+    ['/.../part.1.parquet', '/.../part.10.parquet', '/.../part.2.parquet']
+
+    Naturally sorted list of paths:
+    ['/.../part.1.parquet', '/.../part.2.parquet', '/.../part.10.parquet']
+
+    Parameters
+    ----------
+    pieces : list[pyarrow.parquet.ParquetDatasetPiece]
+
+    Returns
+    -------
+    list[pyarrow.parquet.ParquetDatasetPiece]
+    """
+    def to_sort_tuple(piece):
+        return [int(s) if s.isdigit() else s for s in re.split('(\d+)', piece.path)]
+
+    return sorted(pieces, key=to_sort_tuple)
+
+
+def _to_ns(val, unit):
+    """
+    Convert an input time in the specified units to nanoseconds
+
+    Parameters
+    ----------
+    val: int
+        Input time value
+    unit : str
+        Time units of `val`.
+        One of 's', 'ms', 'us', 'ns'
+
+    Returns
+    -------
+    int
+        Time val in nanoseconds
+    """
+    if unit == 's':
+        factor = int(1e9)
+    elif unit == 'ms':
+        factor = int(1e6)
+    elif unit == 'us':
+        factor = int(1e3)
+    elif unit == 'ns':
+        factor = 1
+    else:
+        raise ValueError("Unsupported time unit '{unit}'"
+                         .format(unit=unit))
+
+    return val * factor
+
+
+def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema):
+    """
+    Compute DataFrame divisions from a list of pyarrow dataset pieces
+
+    Parameters
+    ----------
+    pa_pieces : list[pyarrow.parquet.ParquetDatasetPiece]
+        List of dataset pieces. Each piece corresponds to a single partition in the eventual dask DataFrame
+    divisions_name : str|None
+        The name of the column to compute divisions for
+    pa_schema : pyarrow.lib.Schema
+        The pyarrow schema for the dataset
+    Returns
+    -------
+    list
+    """
+    # Local imports
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    # Get column index of division column
+    # Note: get_field_index returns -1 if not found, but it does not accept None
+    divisions_col_index = pa_schema.get_field_index(divisions_name) if divisions_name is not None else -1
+
+    if pa_pieces and divisions_col_index >= 0:
+        # We have pieces and a valid division column.
+        # Compute min/max for column in each row group
+        min_maxs = []
+        last_max = None
+        for piece in pa_pieces:
+            pf = piece.get_metadata(pq.ParquetFile)
+            rg = pf.row_group(0)
+            col_meta = rg.column(divisions_col_index)
+            stats = col_meta.statistics
+            if stats.has_min_max and (last_max is None or last_max < stats.min):
+                min_maxs.append((stats.min, stats.max))
+                last_max = stats.max
+            else:
+                # Divisions not valid
+                min_maxs = None
+                break
+
+        if min_maxs:
+            # We have min/max pairs
+            divisions = [mn for mn, mx in min_maxs] + [min_maxs[-1][1]]
+
+            # Handle conversion to pandas timestamp divisions
+            index_field = pa_schema.field_by_name(divisions_name)
+            if isinstance(index_field.type, pa.TimestampType):
+                time_unit = index_field.type.unit
+                divisions_ns = [_to_ns(d, time_unit) for d in
+                                divisions]
+                divisions = [pd.Timestamp(ns) for ns in divisions_ns]
+        else:
+            divisions = (None,) * (len(pa_pieces) + 1)
+    elif pa_pieces:
+        divisions = (None,) * (len(pa_pieces) + 1)
+    else:
+        divisions = (None, None)
+    return divisions
 
 
 def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
