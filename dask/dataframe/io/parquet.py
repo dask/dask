@@ -677,6 +677,13 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema):
                 divisions_ns = [_to_ns(d, time_unit) for d in
                                 divisions]
                 divisions = [pd.Timestamp(ns) for ns in divisions_ns]
+
+            # Handle encoding of bytes string
+            if index_field.type == pa.string():
+                # Is this always true? Is the string encoding specified in the parquet metadata somewhere?
+                encoding = 'utf-8'
+                divisions = [d.decode(encoding).strip() for d in divisions]
+
         else:
             divisions = (None,) * (len(pa_pieces) + 1)
     elif pa_pieces:
