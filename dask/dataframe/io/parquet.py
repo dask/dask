@@ -680,7 +680,7 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema):
 
             # Handle encoding of bytes string
             if index_field.type == pa.string():
-                # Is this always true? Is the string encoding specified in the parquet metadata somewhere?
+                # Parquet strings are always encoded as utf-8
                 encoding = 'utf-8'
                 divisions = [d.decode(encoding).strip() for d in divisions]
 
