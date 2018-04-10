@@ -228,13 +228,13 @@ def test_groupby_on_index(get):
 
 
 @pytest.mark.parametrize('grouper',
-                         [lambda ddf, df: (ddf.groupby('a')['b'], df.groupby('a')['b']),
-                          lambda ddf, df: (ddf.groupby(['a', 'b']), df.groupby(['a', 'b'])),
-                          lambda ddf, df: (ddf.groupby(['a', 'b'])['c'], df.groupby(['a', 'b'])['c']),
-                          lambda ddf, df: (ddf.groupby(ddf['a'])[['b', 'c']], df.groupby(df['a'])[['b', 'c']]),
-                          lambda ddf, df: (ddf.groupby('a')[['b', 'c']], df.groupby('a')[['b', 'c']]),
-                          lambda ddf, df: (ddf.groupby('a')[['b']], df.groupby('a')[['b']]),
-                          lambda ddf, df: (ddf.groupby(['a', 'b', 'c']), df.groupby(['a', 'b', 'c']))])
+                         [lambda df: df.groupby('a')['b'],
+                          lambda df: df.groupby(['a', 'b']),
+                          lambda df: df.groupby(['a', 'b'])['c'],
+                          lambda df: df.groupby(df['a'])[['b', 'c']],
+                          lambda df: df.groupby('a')[['b', 'c']],
+                          lambda df: df.groupby('a')[['b']],
+                          lambda df: df.groupby(['a', 'b', 'c'])])
 def test_groupby_multilevel_getitem(grouper, agg_func):
     # nunique is not implemented for DataFrameGroupBy
     if agg_func == 'nunique':
@@ -246,7 +246,8 @@ def test_groupby_multilevel_getitem(grouper, agg_func):
                        'd': [1, 2, 1, 1, 2, 2]})
     ddf = dd.from_pandas(df, 2)
 
-    dask_group, pandas_group = grouper(ddf, df)
+    dask_group = grouper(ddf)
+    pandas_group = grouper(df)
 
     dask_agg = getattr(dask_group, agg_func)
     pandas_agg = getattr(pandas_group, agg_func)
