@@ -1,5 +1,6 @@
 from __future__ import division, print_function, absolute_import
 
+import functools
 import inspect
 import warnings
 from collections import Iterable
@@ -786,7 +787,14 @@ def _isin_kernel(element, test_elements, assume_unique=False):
     return values.reshape(element.shape + (1,) * test_elements.ndim)
 
 
-@wraps(getattr(np, 'isin', None))
+def safe_wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS):
+    if all(hasattr(wrapped, attr) for attr in assigned):
+        return wraps(wrapped, assigned=assigned)
+    else:
+        return lambda x: x
+
+
+@safe_wraps(getattr(np, 'isin', None))
 def isin(element, test_elements, assume_unique=False, invert=False):
     element = asarray(element)
     test_elements = asarray(test_elements)
