@@ -343,7 +343,13 @@ def _nonempty_index(idx):
         return pd.CategoricalIndex(data, categories=cats,
                                    ordered=idx.ordered, name=idx.name)
     elif typ is pd.MultiIndex:
-        levels = [_nonempty_index(i) for i in idx.levels]
+        levels = []
+        for i in idx.levels:
+            lvl = _nonempty_index(i)
+            if isinstance(lvl, pd.CategoricalIndex):
+                lvl = lvl.drop_duplicates()
+            levels.append(lvl)
+
         labels = [[0, 0] for i in idx.levels]
         return pd.MultiIndex(levels=levels, labels=labels, names=idx.names)
     raise TypeError("Don't know how to handle index of "
