@@ -316,7 +316,10 @@ def test_describe_empty():
 
 def test_cumulative():
     df = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
+    df_out = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
+
     ddf = dd.from_pandas(df, 5)
+    ddf_out = dd.from_pandas(df_out, 5)
 
     assert_eq(ddf.cumsum(), df.cumsum())
     assert_eq(ddf.cumprod(), df.cumprod())
@@ -327,6 +330,25 @@ def test_cumulative():
     assert_eq(ddf.cumprod(axis=1), df.cumprod(axis=1))
     assert_eq(ddf.cummin(axis=1), df.cummin(axis=1))
     assert_eq(ddf.cummax(axis=1), df.cummax(axis=1))
+
+    # testing out parameter
+    np.cumsum(ddf, out=ddf_out)
+    assert_eq(ddf_out, df.cumsum())
+    np.cumprod(ddf, out=ddf_out)
+    assert_eq(ddf_out, df.cumprod())
+    ddf.cummin(out=ddf_out)
+    assert_eq(ddf_out, df.cummin())
+    ddf.cummax(out=ddf_out)
+    assert_eq(ddf_out, df.cummax())
+
+    np.cumsum(ddf, out=ddf_out, axis=1)
+    assert_eq(ddf_out, df.cumsum(axis=1))
+    np.cumprod(ddf, out=ddf_out, axis=1)
+    assert_eq(ddf_out, df.cumprod(axis=1))
+    ddf.cummin(out=ddf_out, axis=1)
+    assert_eq(ddf_out, df.cummin(axis=1))
+    ddf.cummax(out=ddf_out, axis=1)
+    assert_eq(ddf_out, df.cummax(axis=1))
 
     assert_eq(ddf.a.cumsum(), df.a.cumsum())
     assert_eq(ddf.a.cumprod(), df.a.cumprod())
@@ -3054,3 +3076,24 @@ def test_mixed_dask_array_multi_dimensional():
     assert_eq(ddf + dx + 1, df + x + 1)
     assert_eq(ddf + dx.rechunk((None, 1)) + 1, df + x + 1)
     assert_eq(ddf[['y', 'x']] + dx + 1, df[['y', 'x']] + x + 1)
+
+
+def test_meta_raises():
+    # Raise when we use a user defined fucntion
+    s = pd.Series(['abcd', 'abcd'])
+    ds = dd.from_pandas(s, npartitions=2)
+    try:
+        ds.map(lambda x: x[3])
+    except ValueError as e:
+        assert "meta=" in str(e)
+
+    # But not otherwise
+    df = pd.DataFrame({'a': ['x', 'y', 'y'],
+                       'b': ['x', 'y', 'z'],
+                       'c': [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    with pytest.raises(Exception) as info:
+        ddf.a + ddf.c
+
+    assert "meta=" not in str(info.value)

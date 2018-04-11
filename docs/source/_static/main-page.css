@@ -7,7 +7,7 @@ body {
   color: #5a5a5a;
 }
 
-/* navbar 
+/* navbar
  * ----------------------------------------*/
 
 .navbar {
@@ -44,7 +44,7 @@ body {
 }
 
 .hero {
-  background-color: #000000e0;
+  background-color: rgba(0,0,0,0.92);
   text-color: white;
 }
 
@@ -102,6 +102,27 @@ body {
   display: block;
   font-weight: 600;
   margin: 1.2rem 0;
+}
+
+/* Supporters
+ * ----------------------------*/
+
+.supporters {
+  text-align: center;
+}
+
+.supporter {
+  margin: 0.5rem 0;
+  width: 100%;
+}
+
+.supporter img{
+  max-height: 100%;
+  max-width: 85%;
+  position: relative;
+  top: 50%;
+  transform: translateY(-50%);
+
 }
 
 

@@ -1693,25 +1693,24 @@ class Array(Base):
 
         Parameters
         ----------
-
         func: function
             The function to apply to each extended block
         depth: int, tuple, or dict
-            The number of cells that each block should share with its neighbors
-            If a tuple or dict this can be different per axis
+            The number of elements that each block should share with its neighbors
+            If a tuple or dict then this can be different per axis
         boundary: str, tuple, dict
-            how to handle the boundaries.  Values include 'reflect',
-            'periodic', 'nearest', 'none', or any constant value like 0 or
-            np.nan
+            How to handle the boundaries.
+            Values include 'reflect', 'periodic', 'nearest', 'none',
+            or any constant value like 0 or np.nan
         trim: bool
-            Whether or not to trim the excess after the map function.  Set this
-            to false if your mapping function does this for you.
+            Whether or not to trim ``depth`` elements from each block after
+            calling the map function.
+            Set this to False if your mapping function already does this for you
         **kwargs:
             Other keyword arguments valid in ``map_blocks``
 
         Examples
         --------
-
         >>> x = np.array([1, 1, 2, 3, 3, 3, 2, 1, 1])
         >>> x = from_array(x, chunks=5)
         >>> def derivative(x):
@@ -1950,10 +1949,10 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     x : array_like
     chunks : int, tuple
         How to chunk the array. Must be one of the following forms:
-        - A blocksize like 1000.
-        - A blockshape like (1000, 1000).
-        - Explicit sizes of all blocks along all dimensions
-          like ((1000, 1000, 500), (400, 400)).
+        -   A blocksize like 1000.
+        -   A blockshape like (1000, 1000).
+        -   Explicit sizes of all blocks along all dimensions like
+            ((1000, 1000, 500), (400, 400)).
 
         -1 as a blocksize indicates the size of the corresponding dimension.
     name : str, optional
@@ -2359,8 +2358,8 @@ def block(arrays, allow_unknown_chunksizes=False):
     """
     Assemble an nd-array from nested lists of blocks.
 
-    Blocks in the innermost lists are `concatenate`d along the last
-    dimension (-1), then these are `concatenate`d along the second-last
+    Blocks in the innermost lists are concatenated along the last
+    dimension (-1), then these are concatenated along the second-last
     dimension (-2), and so on until the outermost list is reached
 
     Blocks can be of any dimension, but will not be broadcasted using the normal
@@ -2899,7 +2898,7 @@ def broadcast_shapes(*shapes):
         return shapes[0]
     out = []
     for sizes in zip_longest(*map(reversed, shapes), fillvalue=-1):
-        dim = 0 if 0 in sizes else max(sizes)
+        dim = 0 if 0 in sizes else np.max(sizes)
         if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
             raise ValueError("operands could not be broadcast together with "
                              "shapes {0}".format(' '.join(map(str, shapes))))
@@ -2986,7 +2985,7 @@ def handle_out(out, result):
             out = None
     if isinstance(out, Array):
         if out.shape != result.shape:
-            raise NotImplementedError(
+            raise ValueError(
                 "Mismatched shapes between result and out parameter. "
                 "out=%s, result=%s" % (str(out.shape), str(result.shape)))
         out._chunks = result.chunks
@@ -3470,15 +3469,26 @@ def _vindex(x, *indexes):
     array([ 0,  9, 48,  7])
     """
     indexes = replace_ellipsis(x.ndim, indexes)
-    partial_slices = {i: ind for i, ind in enumerate(indexes)
-                      if isinstance(ind, slice) and ind != slice(None)}
-    if partial_slices:
-        key = tuple(partial_slices.get(i, slice(None))
-                    for i in range(len(indexes)))
-        x = x[key]
+
+    nonfancy_indexes = []
+    reduced_indexes = []
+    for i, ind in enumerate(indexes):
+        if isinstance(ind, Number):
+            nonfancy_indexes.append(ind)
+        elif isinstance(ind, slice):
+            nonfancy_indexes.append(ind)
+            reduced_indexes.append(slice(None))
+        else:
+            nonfancy_indexes.append(slice(None))
+            reduced_indexes.append(ind)
+
+    nonfancy_indexes = tuple(nonfancy_indexes)
+    reduced_indexes = tuple(reduced_indexes)
+
+    x = x[nonfancy_indexes]
 
     array_indexes = {}
-    for i, (ind, size) in enumerate(zip(indexes, x.shape)):
+    for i, (ind, size) in enumerate(zip(reduced_indexes, x.shape)):
         if not isinstance(ind, slice):
             ind = np.array(ind, copy=True)
             if ind.dtype.kind == 'b':
@@ -3491,41 +3501,49 @@ def _vindex(x, *indexes):
             ind %= size
             array_indexes[i] = ind
 
+    if array_indexes:
+        x = _vindex_array(x, array_indexes)
+
+    return x
+
+
+def _vindex_array(x, dict_indexes):
+    """Point wise indexing with only NumPy Arrays."""
+
     try:
-        broadcast_indexes = np.broadcast_arrays(*array_indexes.values())
+        broadcast_indexes = np.broadcast_arrays(*dict_indexes.values())
     except ValueError:
         # note: error message exactly matches numpy
-        shapes_str = ' '.join(str(a.shape) for a in array_indexes.values())
+        shapes_str = ' '.join(str(a.shape) for a in dict_indexes.values())
         raise IndexError('shape mismatch: indexing arrays could not be '
                          'broadcast together with shapes ' + shapes_str)
     broadcast_shape = broadcast_indexes[0].shape
 
-    lookup = dict(zip(array_indexes, broadcast_indexes))
+    lookup = dict(zip(dict_indexes, broadcast_indexes))
     flat_indexes = [lookup[i].ravel().tolist() if i in lookup else None
-                    for i in range(len(indexes))]
+                    for i in range(x.ndim)]
     flat_indexes.extend([None] * (x.ndim - len(flat_indexes)))
-    result_1d = _vindex_1d(x, *flat_indexes)
-    return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
-
-def _vindex_1d(x, *indexes):
-    """Point wise indexing with only 1D lists and full slices."""
-    indexes = [list(index) if index is not None else index for index in indexes]
+    flat_indexes = [
+        list(index) if index is not None else index for index in flat_indexes
+    ]
     bounds = [list(accumulate(add, (0,) + c)) for c in x.chunks]
-    bounds2 = [b for i, b in zip(indexes, bounds) if i is not None]
-    axis = _get_axis(indexes)
-    token = tokenize(x, indexes)
+    bounds2 = [
+        b for i, b in zip(flat_indexes, bounds) if i is not None
+    ]
+    axis = _get_axis(flat_indexes)
+    token = tokenize(x, flat_indexes)
     out_name = 'vindex-merge-' + token
 
     points = list()
-    for i, idx in enumerate(zip(*[i for i in indexes if i is not None])):
+    for i, idx in enumerate(zip(*[i for i in flat_indexes if i is not None])):
         block_idx = [np.searchsorted(b, ind, 'right') - 1
                      for b, ind in zip(bounds2, idx)]
         inblock_idx = [ind - bounds2[k][j]
                        for k, (ind, j) in enumerate(zip(idx, block_idx))]
         points.append((i, tuple(block_idx), tuple(inblock_idx)))
 
-    chunks = [c for i, c in zip(indexes, x.chunks) if i is None]
+    chunks = [c for i, c in zip(flat_indexes, x.chunks) if i is None]
     chunks.insert(0, (len(points),) if points else (0,))
     chunks = tuple(chunks)
 
@@ -3534,9 +3552,11 @@ def _vindex_1d(x, *indexes):
         per_block = dict((k, v) for k, v in per_block.items() if v)
 
         other_blocks = list(product(*[list(range(len(c))) if i is None else [None]
-                                    for i, c in zip(indexes, x.chunks)]))
+                                    for i, c in zip(flat_indexes, x.chunks)]))
 
-        full_slices = [slice(None, None) if i is None else None for i in indexes]
+        full_slices = [
+            slice(None, None) if i is None else None for i in flat_indexes
+        ]
 
         name = 'vindex-slice-' + token
         dsk = dict((keyname(name, i, okey),
@@ -3553,14 +3573,18 @@ def _vindex_1d(x, *indexes):
                     [keyname(name, i, okey) for i in range(len(per_block))]))
                    for okey in other_blocks)
 
-        return Array(sharedict.merge(x.dask, (out_name, dsk)), out_name, chunks,
-                     x.dtype)
+        result_1d = Array(
+            sharedict.merge(x.dask, (out_name, dsk)), out_name, chunks, x.dtype
+        )
+        return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
     # output has a zero dimension, just create a new zero-shape array with the
     # same dtype
     from .wrap import empty
-    return empty(tuple(map(sum, chunks)), chunks=chunks, dtype=x.dtype,
-                 name=out_name)
+    result_1d = empty(
+        tuple(map(sum, chunks)), chunks=chunks, dtype=x.dtype, name=out_name
+    )
+    return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
 
 def _get_axis(indexes):
@@ -3636,7 +3660,6 @@ def to_npy_stack(dirname, x, axis=0):
 
     Examples
     --------
-
     >>> x = da.ones((5, 10, 10), chunks=(2, 4, 4))  # doctest: +SKIP
     >>> da.to_npy_stack('data/', x, axis=0)  # doctest: +SKIP
 

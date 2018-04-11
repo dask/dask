@@ -9,6 +9,8 @@ Array
 +++++
 
 - Add ``piecewise`` for Dask Arrays (:pr:`3350`) `John A Kirkham`_
+- Fix handling of ``nan`` in ``broadcast_shapes`` (:pr:`3356`) `John A Kirkham`_
+- Add ``isin`` for dask arrays (:pr:`3363`). `Stephan Hoyer`_
 
 DataFrame
 +++++++++
@@ -18,6 +20,9 @@ DataFrame
 - Added top level `isna` method for Dask DataFrames (:pr:`3294`) `Christopher Ren`_
 - Fix selection on partition column on ``read_parquet`` for ``engine="pyarrow"`` (:pr:`3207`) `Uwe Korn`_
 - Added DataFrame.squeeze method (:pr:`3366`) `Christopher Ren`_
+- Provide more informative error message for meta= errors (:pr:`3343`) `Matthew Rocklin`_
+- add orc reader (:pr:`3284`) `Martin Durant`_
+- Default compression for parquet now always Snappy, in line with pandas (:pr:`3373`) `Martin Durant`_
 
 Bag
 +++
@@ -159,8 +164,7 @@ Array
 - Explicit ``chunks`` argument for ``broadcast_to`` (:pr:`2943`) `Stephan Hoyer`_
 - Add ``meshgrid`` (:pr:`2938`) `John A Kirkham`_ and (:pr:`3001`) `Markus Gonser`_
 - Preserve singleton chunks in ``fftshift``/``ifftshift`` (:pr:`2733`) `John A Kirkham`_
-- Fix handling of negative indexes in ``vindex`` and raise errors for out of
-bounds indexes (:pr:`2967`) `Stephan Hoyer`_
+- Fix handling of negative indexes in ``vindex`` and raise errors for out of bounds indexes (:pr:`2967`) `Stephan Hoyer`_
 - Add ``flip``, ``flipud``, ``fliplr`` (:pr:`2954`) `John A Kirkham`_
 - Add ``float_power`` ufunc (:pr:`2962`) (:pr:`2969`) `John A Kirkham`_
 - Compatability for changes to structured arrays in the upcoming NumPy 1.14 release (:pr:`2964`) `Tom Augspurger`_

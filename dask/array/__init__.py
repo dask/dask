@@ -9,11 +9,11 @@ from .routines import (take, choose, argwhere, where, coarsen, insert,
                        ravel, roll, unique, squeeze, topk, ptp, diff, ediff1d,
                        bincount, digitize, histogram, cov, array, dstack,
                        vstack, hstack, compress, extract, round, count_nonzero,
-                       flatnonzero, nonzero, around, isnull, notnull, isclose,
-                       allclose, corrcoef, swapaxes, tensordot, transpose, dot,
-                       vdot, matmul, apply_along_axis, apply_over_axes,
-                       result_type, atleast_1d, atleast_2d, atleast_3d,
-                       piecewise, flip, flipud, fliplr)
+                       flatnonzero, nonzero, around, isin, isnull, notnull,
+                       isclose, allclose, corrcoef, swapaxes, tensordot,
+                       transpose, dot, vdot, matmul, apply_along_axis,
+                       apply_over_axes, result_type, atleast_1d, atleast_2d,
+                       atleast_3d, piecewise, flip, flipud, fliplr)
 from .reshape import reshape
 from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
         true_divide, floor_divide, negative, power, remainder, mod, conj, exp,
@@ -44,6 +44,7 @@ with ignoring(ImportError):
 with ignoring(ImportError):
     from . import ma
 from . import random, linalg, ghost, learn, fft
+from .ghost import map_overlap
 from .wrap import ones, zeros, empty, full
 from .creation import ones_like, zeros_like, empty_like, full_like
 from .rechunk import rechunk

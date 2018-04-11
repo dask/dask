@@ -90,6 +90,7 @@ Top level user functions:
    isclose
    iscomplex
    isfinite
+   isin
    isinf
    isnan
    isnull
@@ -107,6 +108,7 @@ Top level user functions:
    logical_or
    logical_xor
    map_blocks
+   map_overlap
    matmul
    max
    maximum
@@ -427,6 +429,7 @@ Other functions
 .. autofunction:: isclose
 .. autofunction:: iscomplex
 .. autofunction:: isfinite
+.. autofunction:: isin
 .. autofunction:: isinf
 .. autofunction:: isnan
 .. autofunction:: isnull

@@ -132,7 +132,9 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         The function or object to wrap
     name : string or hashable, optional
         The key to use in the underlying graph for the wrapped object. Defaults
-        to hashing content.
+        to hashing content. Note that this only affects the name of the object
+        wrapped by this call to delayed, and *not* the output of delayed
+        function calls - for that use ``dask_key_name=`` as described below.
     pure : bool, optional
         Indicates whether calling the resulting ``Delayed`` object is a pure
         operation. If True, arguments to the call are hashed to produce
