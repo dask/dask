@@ -2573,8 +2573,8 @@ class DataFrame(_Frame):
         return self.map_partitions(M.clip_upper, threshold=threshold)
 
     @derived_from(pd.DataFrame)
-    def squeeze(self, axis=None):
-        return self.map_partitions(M.squeeze, axis=axis)
+    def squeeze(self):
+        return self.map_partitions(M.squeeze)
 
     @derived_from(pd.DataFrame)
     def to_timestamp(self, freq=None, how='start', axis=0):

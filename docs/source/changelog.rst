@@ -17,6 +17,7 @@ DataFrame
 - Allow `t` as shorthand for `table` in `to_hdf` for pandas compatibility `Jörg Dietrich`_
 - Added top level `isna` method for Dask DataFrames (:pr:`3294`) `Christopher Ren`_
 - Fix selection on partition column on ``read_parquet`` for ``engine="pyarrow"`` (:pr:`3207`) `Uwe Korn`_
+- Added DataFrame.squeeze method (:pr:`3366`) `Christopher Ren`_
 
 Bag
 +++

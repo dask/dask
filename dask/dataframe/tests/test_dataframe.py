@@ -419,7 +419,6 @@ def test_squeeze():
     ds = dd.from_pandas(s, 2)
 
     assert_eq(df.squeeze(), ddf.squeeze())
-    assert_eq(df.squeeze(axis=1), ddf.squeeze(axis=1))
     assert_eq(ds.squeeze(), s.squeeze())
 
 
