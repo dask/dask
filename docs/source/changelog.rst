@@ -19,6 +19,8 @@ DataFrame
 - Allow `t` as shorthand for `table` in `to_hdf` for pandas compatibility `Jörg Dietrich`_
 - Added top level `isna` method for Dask DataFrames (:pr:`3294`) `Christopher Ren`_
 - Fix selection on partition column on ``read_parquet`` for ``engine="pyarrow"`` (:pr:`3207`) `Uwe Korn`_
+- Added `infer_divisions` option to ``read_parquet`` to specify whether read engines should compute divisions (:pr:`3387`) `Jon Mease`_
+- Added support for inferring division for ``engine="pyarrow"`` (:pr:`3387`) `Jon Mease`_
 - Provide more informative error message for meta= errors (:pr:`3343`) `Matthew Rocklin`_
 - add orc reader (:pr:3284) `Martin Durant`_
 - Default compression for parquet now always Snappy, in line with pandas (:pr:3373) `Martin Durant`_
