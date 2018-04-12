@@ -486,6 +486,8 @@ def _build_agg_args_single(result_column, func, input_column):
         'max': (M.max, M.max),
         'count': (M.count, M.sum),
         'size': (M.size, M.sum),
+        'first': (M.first, M.first),
+        'last': (M.last, M.last)
     }
 
     if func in simple_impl.keys():
@@ -948,6 +950,16 @@ class _GroupBy(object):
         v = self.var(ddof, split_every=split_every, split_out=split_out)
         result = map_partitions(np.sqrt, v, meta=v)
         return result
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def first(self, split_every=None, split_out=1):
+        return self._aca_agg(token='first', func=M.first, split_every=split_every,
+                             split_out=split_out)
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def last(self, split_every=None, split_out=1):
+        return self._aca_agg(token='last', func=M.last, split_every=split_every,
+                             split_out=split_out)
 
     @derived_from(pd.core.groupby.GroupBy)
     def get_group(self, key):
