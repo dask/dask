@@ -157,6 +157,7 @@ def test_index(tmpdir, write_engine, read_engine):
         # the dataset, which could be expensive
         assert_eq(ddf.clear_divisions(), ddf2_default, check_divisions=True)
 
+
 @pytest.mark.parametrize('index', [False, True])
 @write_read_engines_xfail
 def test_empty(tmpdir, write_engine, read_engine, index):
