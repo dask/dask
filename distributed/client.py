@@ -2637,6 +2637,9 @@ class Client(Node):
     def has_what(self, workers=None, **kwargs):
         """ Which keys are held by which workers
 
+        This returns the keys of the data that are held in each worker's
+        memory.
+
         Parameters
         ----------
         workers: list (optional)
@@ -2655,6 +2658,7 @@ class Client(Node):
         --------
         Client.who_has
         Client.ncores
+        Client.processing
         """
         if (isinstance(workers, tuple)
                 and all(isinstance(i, (str, tuple)) for i in workers)):
