@@ -182,8 +182,10 @@ def test_read_glob(tmpdir, write_engine, read_engine):
     assert '_metadata' not in files
 
     # Infer divisions for engines/versions that support it
-    ddf2 = dd.read_parquet(os.path.join(fn, '*'), engine=read_engine, infer_divisions=check_divs(read_engine))
-    assert_eq(ddf, ddf2, check_divisions=check_divs(read_engine))
+
+    ddf2 = dd.read_parquet(os.path.join(fn, '*'), engine=read_engine,
+                           infer_divisions=check_divs(write_engine) and check_divs(read_engine))
+    assert_eq(ddf, ddf2, check_divisions=check_divs(write_engine) and check_divs(read_engine))
 
     # No divisions
     ddf2_no_divs = dd.read_parquet(os.path.join(fn, '*'), engine=read_engine, infer_divisions=False)
@@ -199,8 +201,9 @@ def test_read_list(tmpdir, write_engine, read_engine):
                    if not f.endswith('_metadata'))
 
     # Infer divisions for engines/versions that support it
-    ddf2 = dd.read_parquet(files, engine=read_engine, infer_divisions=check_divs(read_engine))
-    assert_eq(ddf, ddf2, check_divisions=check_divs(read_engine))
+    ddf2 = dd.read_parquet(files, engine=read_engine,
+                           infer_divisions=check_divs(write_engine) and check_divs(read_engine))
+    assert_eq(ddf, ddf2, check_divisions=check_divs(write_engine) and check_divs(read_engine))
 
     # No divisions
     ddf2_no_divs = dd.read_parquet(files, engine=read_engine, infer_divisions=False)
@@ -283,8 +286,14 @@ def test_infer_divisions_not_sorted(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
 
-    with pytest.raises(ValueError,
-                       match='not known to be sorted across partitions'):
+    if read_engine == 'pyarrow' and not check_pa_divs:
+        match = 'requires pyarrow >=0.9.0'
+        ex = NotImplementedError
+    else:
+        match = 'not known to be sorted across partitions'
+        ex = ValueError
+
+    with pytest.raises(ex, match=match):
         dd.read_parquet(fn, index='x', engine=read_engine, infer_divisions=True)
 
 
@@ -293,8 +302,14 @@ def test_infer_divisions_no_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine, write_index=False)
 
-    with pytest.raises(ValueError,
-                       match='no index column was discovered'):
+    if read_engine == 'pyarrow' and not check_pa_divs:
+        match = 'requires pyarrow >=0.9.0'
+        ex = NotImplementedError
+    else:
+        match = 'no index column was discovered'
+        ex = ValueError
+
+    with pytest.raises(ex, match=match):
         dd.read_parquet(fn, engine=read_engine, infer_divisions=True)
 
 

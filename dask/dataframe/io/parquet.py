@@ -670,6 +670,9 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
     import pyarrow as pa
     import pyarrow.parquet as pq
 
+    if infer_divisions is True and pa.__version__ < distutils.version.LooseVersion('0.9.0'):
+        raise NotImplementedError('infer_divisions=True requires pyarrow >=0.9.0')
+
     # Check whether divisions_name is in the schema
     # Note: get_field_index returns -1 if not found, but it does not accept None
     if infer_divisions is True:
