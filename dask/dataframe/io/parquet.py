@@ -174,7 +174,7 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
 
 
 def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
-                      categories=None, index=None):
+                      categories=None, index=None, infer_divisions=None):
     import fastparquet
     from fastparquet.util import check_column_names
 
@@ -187,6 +187,11 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
                                          sep=fs.sep)
         except Exception:
             pf = fastparquet.ParquetFile(paths[0], open_with=fs.open, sep=fs.sep)
+
+    # Validate infer_divisions
+    if not pf.fn.endswith('/_metadata') and infer_divisions is True:
+        raise NotImplementedError("infer_divisions=True is not supported by the fastparquet engine for datasets "
+                                  "that do not contain a global '_metadata' file")
 
     check_column_names(pf.columns, categories)
     if isinstance(columns, tuple):
@@ -276,7 +281,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
         divisions = (None, None)
         return out_type(dsk, name, meta, divisions)
 
-    if index_names:
+    if index_names and infer_divisions is not False:
         index_name = meta.index.name
         minmax = fastparquet.api.sorted_partitioned_columns(pf)
         if index_name in minmax:
@@ -285,8 +290,17 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
             divisions = [divisions[i] for i, rg in enumerate(pf.row_groups)
                          if rg in rgs] + [divisions[-1]]
         else:
+            if infer_divisions is True:
+                raise ValueError(
+                    ("Unable to infer divisions for index of '{index_name}' because it is not known to be "
+                     "sorted across partitions").format(index_name=index_name))
+
             divisions = (None,) * (len(rgs) + 1)
     else:
+        if infer_divisions is True:
+            raise ValueError(
+                'Unable to infer divisions for because no index column was discovered')
+
         divisions = (None,) * (len(rgs) + 1)
 
     if isinstance(divisions[0], np.datetime64):
@@ -464,7 +478,7 @@ def _write_metadata(writes, filenames, fmd, path, fs, sep):
 # PyArrow interface
 
 def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
-                  categories=None, index=None):
+                  categories=None, index=None, infer_divisions=None):
     from ...bytes.core import get_pyarrow_filesystem
     import pyarrow.parquet as pq
     import pyarrow as pa
@@ -543,7 +557,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     else:
         divisions_name = None
 
-    divisions = _get_pyarrow_divisions(non_empty_pieces, divisions_name, schema)
+    divisions = _get_pyarrow_divisions(non_empty_pieces, divisions_name, schema, infer_divisions)
 
     # Build task
     dtypes = _get_pyarrow_dtypes(schema, categories)
@@ -633,7 +647,7 @@ def _to_ns(val, unit):
     return val * factor
 
 
-def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema):
+def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions):
     """
     Compute DataFrame divisions from a list of pyarrow dataset pieces
 
@@ -645,6 +659,9 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema):
         The name of the column to compute divisions for
     pa_schema : pyarrow.lib.Schema
         The pyarrow schema for the dataset
+    infer_divisions : bool or None
+        If True divisions must be inferred (otherwise an exception is raised). If False or None divisions are not
+        inferred
     Returns
     -------
     list
@@ -655,7 +672,14 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema):
 
     # Check whether divisions_name is in the schema
     # Note: get_field_index returns -1 if not found, but it does not accept None
-    divisions_name_in_schema = divisions_name is not None and pa_schema.get_field_index(divisions_name) >= 0
+    if infer_divisions is True:
+        divisions_name_in_schema = divisions_name is not None and pa_schema.get_field_index(divisions_name) >= 0
+
+        if divisions_name_in_schema is False and infer_divisions is True:
+            raise ValueError(
+                'Unable to infer divisions for because no index column was discovered')
+    else:
+        divisions_name_in_schema = None
 
     if pa_pieces and divisions_name_in_schema:
         # We have pieces and a valid division column.
@@ -710,6 +734,11 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema):
                 divisions = [d.decode(encoding).strip() for d in divisions]
 
         else:
+            if infer_divisions is True:
+                raise ValueError(
+                    ("Unable to infer divisions for index of '{index_name}' because it is not known to be "
+                     "sorted across partitions").format(index_name=divisions_name_in_schema))
+
             divisions = (None,) * (len(pa_pieces) + 1)
     elif pa_pieces:
         divisions = (None,) * (len(pa_pieces) + 1)
@@ -874,7 +903,7 @@ def get_engine(engine):
 
 
 def read_parquet(path, columns=None, filters=None, categories=None, index=None,
-                 storage_options=None, engine='auto'):
+                 storage_options=None, engine='auto', infer_divisions=None):
     """
     Read ParquetFile into a Dask DataFrame
 
@@ -915,6 +944,13 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
         Parquet reader library to use. If only one library is installed, it
         will use that one; if both, it will use 'fastparquet'
+    infer_divisions : bool or None (default).
+        By default, divisions are inferred if the read `engine` supports
+        doing so efficiently and the `index` of the underlying dataset is
+        sorted across the individual parquet files. Set to ``True`` to
+        force divisions to be inferred in all cases. Note that this may
+        require reading metadata from each file in the dataset, which may
+        be expensive. Set to ``False`` to never infer divisions.
 
     Examples
     --------
@@ -930,7 +966,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                                              storage_options=storage_options)
 
     return read(fs, fs_token, paths, columns=columns, filters=filters,
-                categories=categories, index=index)
+                categories=categories, index=index, infer_divisions=infer_divisions)
 
 
 def to_parquet(df, path, engine='auto', compression='default', write_index=None,
