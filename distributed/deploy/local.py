@@ -60,12 +60,15 @@ class LocalCluster(Cluster):
     >>> c = Client(c)  # connect to local cluster  # doctest: +SKIP
 
     Add a new worker to the cluster
+
     >>> w = c.start_worker(ncores=2)  # doctest: +SKIP
 
     Shut down the extra worker
+
     >>> c.remove_worker(w)  # doctest: +SKIP
 
     Pass extra keyword arguments to Bokeh
+
     >>> LocalCluster(service_kwargs={'bokeh': {'prefix': '/foo'}})  # doctest: +SKIP
     """
     def __init__(self, n_workers=None, threads_per_worker=None, processes=True,
