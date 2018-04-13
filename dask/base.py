@@ -513,6 +513,15 @@ def persist(*args, **kwargs):
     When using Dask on a single machine you should ensure that the dataset fits
     entirely within memory.
 
+    Parameters
+    ----------
+    traverse : bool, optional
+        By default dask traverses builtin python collections looking for dask
+        objects passed to ``compute``. For large collections this can be
+        expensive. If none of the arguments contain any dask objects, set
+        ``traverse=False`` to avoid doing this traversal.
+
+
     Examples
     --------
     >>> df = dd.read_csv('/path/to/*.csv')  # doctest: +SKIP
@@ -545,6 +554,12 @@ def persist(*args, **kwargs):
     -------
     New dask collections backed by in-memory data
     """
+    from dask.delayed import delayed
+    traverse = kwargs.pop('traverse', True)
+    if traverse:
+        args = tuple(delayed(a)
+                     if isinstance(a, (list, set, tuple, dict, Iterator))
+                     else a for a in args)
     collections = [a for a in args if is_dask_collection(a)]
     if not collections:
         return args
