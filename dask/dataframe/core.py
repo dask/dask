@@ -2605,8 +2605,21 @@ class DataFrame(_Frame):
         return self.map_partitions(M.clip_upper, threshold=threshold)
 
     @derived_from(pd.DataFrame)
-    def squeeze(self):
-        return self.map_partitions(M.squeeze)
+    def squeeze(self, axis=1):
+        if axis == 1:
+            if len(self.columns) == 1:
+                if len(self.index) == 1:
+                    # return scalar if dataframe contains single value to
+                    # match pandas implementation
+                    return self.values.compute()[0]
+                else:
+                    return self[self.columns[0]]
+            else:
+                return self
+
+        elif axis == 0:
+            raise NotImplementedError("Dask Dataframe does not support "
+                                      "squeeze along axis 0")
 
     @derived_from(pd.DataFrame)
     def to_timestamp(self, freq=None, how='start', axis=0):

@@ -433,15 +433,23 @@ def test_clip(lower, upper):
 
 
 def test_squeeze():
-    df = pd.DataFrame({'x': [1, 3, 6],
-                       'y': [2, 5, 7]})
+    df = pd.DataFrame({'x': [1, 3, 6]})
+    df2 = pd.DataFrame({'x':[0]})
     s = pd.Series({'test': 0, 'b': 100})
 
-    ddf = dd.from_pandas(df, 2)
+    ddf = dd.from_pandas(df, 3)
+    ddf2 = dd.from_pandas(df2, 3)
     ds = dd.from_pandas(s, 2)
 
     assert_eq(df.squeeze(), ddf.squeeze())
+    # returns scalar for one element dataframe
+    assert df2.squeeze() == ddf2.squeeze()
     assert_eq(ds.squeeze(), s.squeeze())
+
+    with pytest.raises(NotImplementedError) as info:
+        ddf.squeeze(axis=0)
+    msg = "Dask Dataframe does not support squeeze along axis 0"
+    assert msg in str(info.value)
 
 
 def test_where_mask():
