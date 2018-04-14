@@ -736,8 +736,9 @@ def topk(a, k, axis=-1, split_every=None):
 
     Examples
     --------
+    >>> import dask.array as da
     >>> x = np.array([5, 1, 3, 6])
-    >>> d = from_array(x, chunks=2)
+    >>> d = da.from_array(x, chunks=2)
     >>> d.topk(2).compute()
     array([6, 5])
     >>> d.topk(-2).compute()
@@ -770,8 +771,9 @@ def argtopk(a, k, axis=-1, split_every=None):
 
     Examples
     --------
+    >>> import dask.array as da
     >>> x = np.array([5, 1, 3, 6])
-    >>> d = from_array(x, chunks=2)
+    >>> d = da.from_array(x, chunks=2)
     >>> d.argtopk(2).compute()
     array([3, 0])
     >>> d.argtopk(-2).compute()
