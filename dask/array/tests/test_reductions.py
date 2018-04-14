@@ -422,3 +422,45 @@ def test_array_cumreduction_out(func):
     x = da.ones((10, 10), chunks=(4, 4))
     func(x, axis=0, out=x)
     assert_eq(x, func(np.ones((10, 10)), axis=0))
+
+
+def test_topk_argtopk():
+    # Test data
+    k = 5
+    a = da.random.random(1000, chunks=250)
+    b = da.random.random((10, 20, 30), chunks=(4, 8, 8))
+    c = da.from_array(np.array([(1, 'Hello'), (2, 'World')], dtype=[('foo', int), ('bar', '<U5')]),
+                   chunks=1)
+
+    # Support for deprecated API for topk
+    np.testing.assert_array_equal(da.topk(a, 5), da.topk(5, a))
+
+    # As Array methods
+    a.topk(5)
+    np.testing.assert_array_equal(da.topk(a, 5), da.topk(5, a))
+
+    for npf, daskf in ((np.sort, da.topk), (np.argsort, da.argtopk)):
+        for se in (None, 2):
+            # 1-dimensional arrays
+            np.testing.assert_array_equal(npf(a)[-k:][::-1], daskf(a, k, split_every=se))
+            np.testing.assert_array_equal(npf(a)[:k], daskf(a, -k, split_every=se))
+
+            # n-dimensional arrays
+            # also testing when k > chunk
+            np.testing.assert_array_equal(npf(b, axis=0)[-k:, :, :][::-1, :, :],
+                                          daskf(b, k, axis=0, split_every=se))
+            np.testing.assert_array_equal(npf(b, axis=1)[:, -k:, :][:, ::-1, :],
+                                          daskf(b, k, axis=1, split_every=se))
+            np.testing.assert_array_equal(npf(b, axis=2)[:, :, -k:][:, :, ::-1],
+                                          daskf(b, k, axis=2, split_every=se))
+
+            np.testing.assert_array_equal(npf(b, axis=0)[:k, :, :],
+                                          daskf(b, -k, axis=0, split_every=se))
+            np.testing.assert_array_equal(npf(b, axis=1)[:, :k, :],
+                                          daskf(b, -k, axis=1, split_every=se))
+            np.testing.assert_array_equal(npf(b, axis=2)[:, :, :k],
+                                          daskf(b, -k, axis=2, split_every=se))
+
+            # structured arrays
+            np.testing.assert_array_equal(npf(c, axis=0)[-1:][::-1], daskf(c, 1, split_every=se))
+            np.testing.assert_array_equal(npf(c, axis=0)[:1], daskf(c, -1, split_every=se))

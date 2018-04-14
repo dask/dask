@@ -22,6 +22,7 @@ Top level user functions:
    arctanh
    argmax
    argmin
+   argtopk
    argwhere
    around
    array
@@ -340,7 +341,6 @@ Other functions
 .. autofunction:: from_array
 .. autofunction:: from_delayed
 .. autofunction:: store
-.. autofunction:: topk
 .. autofunction:: coarsen
 .. autofunction:: stack
 .. autofunction:: concatenate
@@ -361,6 +361,7 @@ Other functions
 .. autofunction:: arctanh
 .. autofunction:: argmax
 .. autofunction:: argmin
+.. autofunction:: argtopk
 .. autofunction:: argwhere
 .. autofunction:: around
 .. autofunction:: array
