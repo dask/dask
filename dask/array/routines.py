@@ -6,7 +6,6 @@ from collections import Iterable
 from distutils.version import LooseVersion
 from functools import wraps, partial
 from numbers import Integral
-from operator import getitem
 
 import numpy as np
 from toolz import concat, sliding_window, interleave

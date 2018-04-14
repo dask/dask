@@ -430,7 +430,7 @@ def test_topk_argtopk():
     a = da.random.random(1000, chunks=250)
     b = da.random.random((10, 20, 30), chunks=(4, 8, 8))
     c = da.from_array(np.array([(1, 'Hello'), (2, 'World')], dtype=[('foo', int), ('bar', '<U5')]),
-                   chunks=1)
+                      chunks=1)
 
     # Support for deprecated API for topk
     np.testing.assert_array_equal(da.topk(a, 5), da.topk(5, a))

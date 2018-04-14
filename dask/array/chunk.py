@@ -174,6 +174,8 @@ try:
     from numpy import broadcast_to
 except ImportError:  # pragma: no cover
     broadcast_to = npcompat.broadcast_to
+
+
 def topk(a, k, axis, keepdims):
     """Kernel of topk and argtopk.
     Extract the k largest elements from a on the given axis.
