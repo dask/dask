@@ -891,53 +891,46 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
 
     This is a helper function of `slice_with_int_dask_array`.
     """
-    from .core import Array
+    from .core import Array, atop, from_array
 
     if np.isnan(x.chunks[axis]).any():
         raise NotImplementedError("Slicing an array with unknown chunks with a "
                                   "dask.array of ints is not supported")
 
-    dsk = {}
-    token = tokenize(x, idx, axis)
-    name1 = 'slice_with_int_dask_array_chunk-' + token
-    name2 = 'slice_with_int_dask_array_aggregate-' + token
+    # Calculate the offset at which each chunk starts along axis
+    # e.g. chunks=(..., (5, 3, 4), ...) -> offset=[0, 5, 8]
+    offset = np.roll(np.cumsum(x.chunks[axis]), 1)
+    offset[0] = 0
+    offset = from_array(offset, chunks=1)
+    # Tamper with the declared chunks of offset to make atop align it with x[axis]
+    offset = Array(offset.dask, name=offset.name, chunks=(x.chunks[axis], ), dtype=int)
 
-    res_numblocks = list(x.numblocks)
-    res_numblocks[axis] = idx.numblocks[0]
-    for res_block_ii in product(*[list(range(i)) for i in res_numblocks]):
-        chunk_keys = []
+    # Define axis labels for atop
+    x_axes = 'abcdefghijklmnopqrstuvwxy'[:x.ndim]
+    idx_axes = 'z'
+    offset_axes = x_axes[axis]
+    p_axes = x_axes[:axis + 1] + idx_axes + x_axes[axis + 1:]
+    y_axes = x_axes[:axis] + idx_axes + x_axes[axis + 1:]
 
-        idx_key = idx.name, res_block_ii[axis]
+    # Calculate the cartesian product of every chunk of x vs. every chunk of idx
+    p = atop(slice_with_int_dask_array_chunk,
+             p_axes, x, x_axes, idx, idx_axes, offset, offset_axes,
+             axis=axis, dtype=x.dtype)
 
-        for x_block_i in range(x.numblocks[axis]):
-            x_block_ii = tuple(
-                x_block_i if axis_i == axis else res_block_i
-                for axis_i, res_block_i in enumerate(res_block_ii))
-
-            x_key = (x.name,) + x_block_ii
-            chunk_key = (name1,) + x_key[1:] + idx_key[1:]
-            chunk_keys.append(chunk_key)
-            offset = sum(x.chunks[axis][:x_block_i])
-
-            dsk[chunk_key] = slice_with_int_dask_array_chunk, \
-                x_key, idx_key, axis, offset
-
-        dsk[(name2,) + res_block_ii] = slice_with_int_dask_array_aggregate, \
-            idx_key, chunk_keys, x.chunks[axis], axis
-
-    res_chunks = list(x.chunks)
-    res_chunks[axis] = idx.chunks[0]
-    return Array(sharedict.merge(dsk, x.dask, idx.dask),
-                 name=name2, chunks=res_chunks, dtype=x.dtype)
+    # Aggregate on the chunks of x along axis
+    y = atop(slice_with_int_dask_array_aggregate,
+             y_axes, idx, idx_axes, p, p_axes,
+             concatenate=True, x_chunks=x.chunks[axis], axis=axis, dtype=x.dtype)
+    return y
 
 
-def slice_with_int_dask_array_chunk(x, idx, axis, offset):
+def slice_with_int_dask_array_chunk(x, idx, offset, axis):
     """Chunk kernel of `slice_with_int_dask_array_on_axis`.
 
     Returns ``x`` sliced along ``axis``, using only the elements of
     ``idx`` that fall inside the current chunk.
     """
-    idx = idx - offset
+    idx = idx - offset[0]
     idx_filter = np.logical_and(idx >= 0, idx < x.shape[axis])
     idx = idx[idx_filter]
     return x[[
@@ -958,8 +951,6 @@ def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
         idx_filter = np.logical_and(idx >= offset, idx < offset + x_chunk)
         idx_ranges.append(np.arange(idx.size)[idx_filter])
         offset += x_chunk
-
-    chunk_outputs = np.concatenate(chunk_outputs, axis=axis)
     idx_ranges = np.concatenate(idx_ranges)
 
     return chunk_outputs[[
