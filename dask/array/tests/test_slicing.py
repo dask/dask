@@ -520,7 +520,32 @@ def test_oob_check():
         x[0, 0]
 
 
-def test_index_with_dask_array():
+def test_index_with_int_dask_array():
+    x = np.array([[10, 20, 30, 40, 50],
+                  [60, 70, 80, 90, 100],
+                  [110, 120, 130, 140, 150]])
+    d = da.from_array(x, chunks=2)
+    idx = np.array([2, 0, 2])
+    idx_d = da.from_array(idx, chunks=2)
+
+    np.testing.assert_array_equal(x[idx, :], d[idx_d, :])
+    np.testing.assert_array_equal(x[:, idx], d[:, idx_d])
+    np.testing.assert_array_equal(x[0, idx], d[0, idx_d])
+
+    # Slice by 0-dimensional arrays
+    idx0 = np.array(1)
+    idx0_d = da.from_array(idx0, chunks=1)
+    np.testing.assert_array_equal(x[idx0, :], d[idx0_d, :])
+    np.testing.assert_array_equal(x[:, idx0], d[:, idx0_d])
+    np.testing.assert_array_equal(x[idx0, idx0], d[idx0_d, idx0_d])
+    np.testing.assert_array_equal(x[idx0, idx], d[idx0_d, idx])
+    np.testing.assert_array_equal(x[idx0, idx], d[idx0_d, idx_d])
+    # Unsupported: 0d numpy array slicers (#3406)
+    # np.testing.assert_array_equal(x[idx0, idx0], d[idx0, idx0_d])
+    # np.testing.assert_array_equal(x[idx0, idx], d[idx0, idx_d])
+
+
+def test_index_with_bool_dask_array():
     x = np.arange(36).reshape((6, 6))
     d = da.from_array(x, chunks=(3, 3))
     ind = np.asarray([True, True, False, True, False, False], dtype=bool)
@@ -530,7 +555,7 @@ def test_index_with_dask_array():
         assert_eq(x[x_index], d[index])
 
 
-def test_index_with_dask_array_2():
+def test_index_with_bool_dask_array_2():
     x = np.random.random((10, 10, 10))
     ind = np.random.random(10) > 0.5
 

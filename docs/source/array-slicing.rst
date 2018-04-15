@@ -7,15 +7,19 @@ supports the following:
 *  Slicing by integers and slices ``x[0, :5]``
 *  Slicing by lists/arrays of integers  ``x[[1, 2, 4]]``
 *  Slicing by lists/arrays of booleans ``x[[False, True, True, False, True]]``
-*  Slicing one ``dask.array`` with another ``x[x > 0]``
+*  Slicing one `~dask.array.Array` with a `~dask.array.Array` of bools ``x[x > 0]``
+*  Slicing one `~dask.array.Array` with a zero or one-dimensional `~dask.array.Array`
+   of ints ``x[x.map_blocks(np.argsort)]``
 
 It does not currently support the following:
 
 *  Slicing with lists in multiple axes  ``x[[1, 2, 3], [3, 2, 1]]``
 
-This is straightforward to add though.  If you have a use case then raise an
-issue. Also users interested in this should take a look at
-:attr:`~dask.array.Array.vindex`.
+   This is straightforward to add though.  If you have a use case then raise an
+   issue. Also users interested in this should take a look at
+   :attr:`~dask.array.Array.vindex`.
+
+*  Slicing one `~dask.array.Array` with a multi-dimensional `~dask.array.Array` of ints
 
 Efficiency
 ----------

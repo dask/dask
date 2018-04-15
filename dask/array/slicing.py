@@ -240,7 +240,7 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
 
     # lists and full slices.  Just use take
     if all(isinstance(i, np.ndarray) or i == slice(None, None, None)
-            for i in index):
+           for i in index):
         axis = where_list[0]
         blockdims2, dsk3 = take(out_name, in_name, blockdims,
                                 index[where_list[0]], axis=axis)
@@ -832,7 +832,162 @@ def check_index(ind, dimension):
         raise IndexError(msg % (ind, dimension))
 
 
-def slice_with_dask_array(x, index):
+def slice_with_int_dask_array(x, index):
+    """Slice x with one or more dask arrays of ints
+
+    This is a helper function of `Array.__getitem__`.
+
+    Parameters
+    ----------
+    x: Array
+    index: tuple with as many elements as x.ndim, among which there are
+           one or more Array's with dtype=int
+
+    Returns
+    -------
+    tuple of (sliced x, new index)
+
+    where the new index is the same as the input, but with slice(None)
+    replaced to the original slicer where a 1D filter has been applied and
+    one less element where a zero-dimensional filter has been applied.
+    """
+    from .core import Array
+
+    assert len(index) == x.ndim
+    fancy_indexes = [
+        isinstance(idx, (tuple, list)) or
+        (isinstance(idx, (np.ndarray, Array)) and idx.ndim > 0)
+        for idx in index
+    ]
+    if sum(fancy_indexes) > 1:
+        raise NotImplementedError("Don't yet support nd fancy indexing)")
+
+    out_index = []
+    dropped_axis_cnt = 0
+    for in_axis, idx in enumerate(index):
+        out_axis = in_axis - dropped_axis_cnt
+        if isinstance(idx, Array) and idx.dtype.kind == 'i':
+            if idx.ndim == 0:
+                idx = idx[np.newaxis]
+                x = slice_with_int_dask_array_on_axis(x, idx, out_axis)
+                x = x[tuple(
+                    0 if i == out_axis else slice(None)
+                    for i in range(x.ndim)
+                )]
+                dropped_axis_cnt += 1
+            elif idx.ndim == 1:
+                x = slice_with_int_dask_array_on_axis(x, idx, out_axis)
+                out_index.append(slice(None))
+            else:
+                raise NotImplementedError("Slicing with dask.array of ints only permitted when "
+                                          "the indexer has zero or one dimensions")
+        else:
+            out_index.append(idx)
+    return x, tuple(out_index)
+
+
+def slice_with_int_dask_array_on_axis(x, idx, axis):
+    """Slice x with a dask arrays of ints along the given axis
+
+    This is a helper function of `slice_with_int_dask_array`.
+    """
+    from .core import Array
+
+    if np.isnan(x.chunks[axis]).any():
+        raise NotImplementedError("Slicing an array with unknown chunks with a "
+                                  "dask.array of ints is not supported")
+
+    dsk = {}
+    token = tokenize(x, idx, axis)
+    name1 = 'slice_with_int_dask_array_chunk-' + token
+    name2 = 'slice_with_int_dask_array_aggregate-' + token
+
+    res_numblocks = list(x.numblocks)
+    res_numblocks[axis] = idx.numblocks[0]
+    for res_block_ii in product(*[list(range(i)) for i in res_numblocks]):
+        chunk_keys = []
+
+        idx_key = idx.name, res_block_ii[axis]
+
+        for x_block_i in range(x.numblocks[axis]):
+            x_block_ii = tuple(
+                x_block_i if axis_i == axis else res_block_i
+                for axis_i, res_block_i in enumerate(res_block_ii))
+
+            x_key = (x.name,) + x_block_ii
+            chunk_key = (name1,) + x_key[1:] + idx_key[1:]
+            chunk_keys.append(chunk_key)
+            offset = sum(x.chunks[axis][:x_block_i])
+
+            dsk[chunk_key] = slice_with_int_dask_array_chunk, \
+                x_key, idx_key, axis, offset
+
+        dsk[(name2,) + res_block_ii] = slice_with_int_dask_array_aggregate, \
+            idx_key, chunk_keys, x.chunks[axis], axis
+
+    res_chunks = list(x.chunks)
+    res_chunks[axis] = idx.chunks[0]
+    return Array(sharedict.merge(dsk, x.dask, idx.dask),
+                 name=name2, chunks=res_chunks, dtype=x.dtype)
+
+
+def slice_with_int_dask_array_chunk(x, idx, axis, offset):
+    """Chunk kernel of `slice_with_int_dask_array_on_axis`.
+
+    Returns ``x`` sliced along ``axis``, using only the elements of
+    ``idx`` that fall inside the current chunk.
+    """
+    idx = idx - offset
+    idx_filter = np.logical_and(idx >= 0, idx < x.shape[axis])
+    idx = idx[idx_filter]
+    return x[[
+        idx if i == axis else slice(None)
+        for i in range(x.ndim)
+    ]]
+
+
+def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
+    """Final aggregation kernel of `slice_with_int_dask_array_on_axis`.
+
+    Returns ``x`` sliced along ``axis``, using only the elements of
+    ``idx`` that fall inside the current chunk.
+    """
+    offset = 0
+    idx_ranges = []
+    for x_chunk in x_chunks:
+        idx_filter = np.logical_and(idx >= offset, idx < offset + x_chunk)
+        idx_ranges.append(np.arange(idx.size)[idx_filter])
+        offset += x_chunk
+
+    chunk_outputs = np.concatenate(chunk_outputs, axis=axis)
+    idx_ranges = np.concatenate(idx_ranges)
+
+    return chunk_outputs[[
+        idx_ranges if i == axis else slice(None)
+        for i in range(chunk_outputs.ndim)
+    ]]
+
+
+def slice_with_bool_dask_array(x, index):
+    """Slice x with one or more dask arrays of bools
+
+    This is a helper function of `Array.__getitem__`.
+
+    Parameters
+    ----------
+    x: Array
+    index: tuple with as many elements as x.ndim, among which there are
+           one or more Array's with dtype=bool
+
+    Returns
+    -------
+    tuple of (sliced x, new index)
+
+    where the new index is the same as the input, but with slice(None)
+    replaced to the original slicer when a filter has been applied.
+
+    Note: The sliced x will have nan chunks on the sliced axes.
+    """
     from .core import Array, atop, elemwise
 
     out_index = [slice(None)
@@ -849,8 +1004,8 @@ def slice_with_dask_array(x, index):
                 out_index)
 
     if any(isinstance(ind, Array) and ind.dtype == bool and ind.ndim != 1
-            for ind in index):
-        raise NotImplementedError("Slicing with dask.array only permitted when "
+           for ind in index):
+        raise NotImplementedError("Slicing with dask.array of bools only permitted when "
                                   "the indexer has only one dimension or when "
                                   "it has the same dimension as the sliced "
                                   "array")
