@@ -789,4 +789,4 @@ def argtopk(a, k, axis=-1, split_every=None):
     res = topk(a_rec, k, axis=axis, split_every=split_every)
 
     # Discard values
-    return res.map_blocks(operator.getitem, 'idx', dtype=int)
+    return res['idx']
