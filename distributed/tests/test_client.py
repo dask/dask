@@ -28,7 +28,7 @@ from tornado.ioloop import IOLoop
 import dask
 from dask import delayed
 from dask.context import _globals
-from distributed import (Worker, Nanny, fire_and_forget, config,
+from distributed import (Worker, Nanny, fire_and_forget, config, LocalCluster,
                          get_client, secede, get_worker, Executor, profile,
                          TimeoutError)
 from distributed.config import set_config
@@ -1879,6 +1879,24 @@ def test_repr(loop):
         for func in funcs:
             text = func(c)
             assert 'not connected' in text
+
+
+@gen_cluster(client=True)
+def test_repr_async(c, s, a, b):
+    c._repr_html_()
+
+
+@gen_test()
+def test_repr_localcluster():
+    cluster = yield LocalCluster(processes=False, diagnostics_port=None,
+                                 asynchronous=True)
+    client = yield Client(cluster, asynchronous=True)
+    try:
+        text = client._repr_html_()
+        assert cluster.scheduler.address in text
+    finally:
+        yield client.close()
+        yield cluster._close()
 
 
 @gen_cluster(client=True)
@@ -4911,8 +4929,6 @@ def test_use_synchronous_client_in_async_context(loop):
 
 
 def test_quiet_quit_when_cluster_leaves(loop_in_thread):
-    from distributed import LocalCluster
-
     loop = loop_in_thread
     with LocalCluster(loop=loop, scheduler_port=0, diagnostics_port=None,
                       silence_logs=False) as cluster:

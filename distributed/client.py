@@ -631,7 +631,11 @@ class Client(Node):
             return '<%s: not connected>' % (self.__class__.__name__,)
 
     def _repr_html_(self):
-        if self._loop_runner.is_started() and self.scheduler:
+        if self.cluster and hasattr(self.cluster, 'scheduler'):
+            info = self.cluster.scheduler.identity()
+        elif (self._loop_runner.is_started() and
+                self.scheduler and
+                not (self.asynchronous and self.loop is IOLoop.current())):
             info = sync(self.loop, self.scheduler.identity)
         else:
             info = False
