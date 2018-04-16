@@ -1,6 +1,5 @@
 from __future__ import division, print_function, absolute_import
 
-import functools
 import inspect
 import warnings
 from collections import Iterable
@@ -17,6 +16,7 @@ from ..core import flatten
 from ..base import tokenize
 from . import numpy_compat, chunk
 from .creation import arange
+from .utils import safe_wraps
 from .wrap import ones
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
@@ -785,13 +785,6 @@ def _isin_kernel(element, test_elements, assume_unique=False):
     values = np.in1d(element.ravel(), test_elements,
                      assume_unique=assume_unique)
     return values.reshape(element.shape + (1,) * test_elements.ndim)
-
-
-def safe_wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS):
-    if all(hasattr(wrapped, attr) for attr in assigned):
-        return wraps(wrapped, assigned=assigned)
-    else:
-        return lambda x: x
 
 
 @safe_wraps(getattr(np, 'isin', None))
