@@ -14,6 +14,7 @@ import dask.multiprocessing
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet import _parse_pandas_metadata
+from dask.utils import nat_sort_key
 
 try:
     import fastparquet
@@ -42,11 +43,14 @@ def check_divs(engine):
     return False
 
 
-df = pd.DataFrame({'x': [6, 2, 3, 4, 5],
-                   'y': [1.0, 2.0, 1.0, 2.0, 1.0]},
-                  index=pd.Index([10, 20, 30, 40, 50], name='myindex'))
+nrows = 40
+npartitions = 15
+df = pd.DataFrame({'x': [i*7 % 5 for i in range(nrows)],  # Not sorted
+                   'y': [i*2.5 for i in range(nrows)]  # Sorted
+                   },
+                  index=pd.Index([10*i for i in range(nrows)], name='myindex'))
 
-ddf = dd.from_pandas(df, npartitions=3)
+ddf = dd.from_pandas(df, npartitions=npartitions)
 
 
 @pytest.fixture(params=[pytest.mark.skipif(not fastparquet, 'fastparquet',
@@ -197,9 +201,10 @@ def test_read_glob(tmpdir, write_engine, read_engine):
 def test_read_list(tmpdir, write_engine, read_engine):
     tmpdir = str(tmpdir)
     ddf.to_parquet(tmpdir, engine=write_engine)
-    files = sorted(os.path.join(tmpdir, f)
+    files = sorted([os.path.join(tmpdir, f)
                    for f in os.listdir(tmpdir)
-                   if not f.endswith('_metadata'))
+                   if not f.endswith('_metadata')],
+                   key=nat_sort_key)
 
     # Infer divisions for engines/versions that support it
     ddf2 = dd.read_parquet(files, engine=read_engine,
@@ -654,11 +659,19 @@ def test_read_parquet_custom_columns(tmpdir, engine):
     df = dd.from_pandas(data, chunksize=50)
     df.to_parquet(tmp)
 
-    df2 = dd.read_parquet(tmp, columns=['i32', 'f'], engine=engine)
-    assert_eq(df2, df2, check_index=False)
+    df2 = dd.read_parquet(tmp,
+                          columns=['i32', 'f'],
+                          engine=engine,
+                          infer_divisions=check_divs(engine))
+    assert_eq(df[['i32', 'f']], df2,
+              check_index=False, check_divisions=check_divs(engine))
 
-    df3 = dd.read_parquet(tmp, columns=['f', 'i32'], engine=engine)
-    assert_eq(df3, df3, check_index=False)
+    df3 = dd.read_parquet(tmp,
+                          columns=['f', 'i32'],
+                          engine=engine,
+                          infer_divisions=check_divs(engine))
+    assert_eq(df[['f', 'i32']], df3,
+              check_index=False, check_divisions=check_divs(engine))
 
 
 @pytest.mark.parametrize('df,write_kwargs,read_kwargs', [
