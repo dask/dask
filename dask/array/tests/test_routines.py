@@ -1336,4 +1336,4 @@ def test_einsum():
                             da_C, da_C, da_I, da_C, da_C,
                             optimize='greedy')
 
-    assert np.allclose(result.compute(), np_result)
+    assert np.allclose(result.compute(), np_result, rtol=1e-15)
