@@ -643,21 +643,14 @@ def persist(*args, **kwargs):
             except ValueError:
                 pass
             else:
-                if client.get == _globals['get']:
-                    collections = client.persist(collections, **kwargs)
-                    if isinstance(collections, list):  # distributed is inconsistent here
-                        collections = tuple(collections)
-                    else:
-                        collections = (collections,)
-                    results_iter = iter(collections)
-                    return tuple(a if not is_dask_collection(a)
-                                 else next(results_iter)
-                                 for a in args)
+                if client.get == get:
+                    results = client.persist(collections, **kwargs)
+                    return repack(results)
 
     if not get:
         get = collections[0].__dask_scheduler__
         if not all(a.__dask_scheduler__ == get for a in collections):
-            raise ValueError("Compute called on multiple collections with "
+            raise ValueError("Persist called on multiple collections with "
                              "differing default schedulers. Please specify a "
                              "scheduler `get` function using either "
                              "the `get` kwarg or globally with `set_options`.")
