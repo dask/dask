@@ -24,7 +24,6 @@ except ImportError:
 try:
     import pyarrow.parquet as pq
 except ImportError:
-    check_pa_divs = False
     pq = False
 
 
