@@ -1288,52 +1288,35 @@ def test_result_type():
     assert da.result_type(a, c) == np.float64
 
 
-def test_einsum():
-    # Dimension and chunk sizes
-    s = 10
-    sc = (4,3,2,1)
-    t = 5
-    tc = (2,3)
-    a = 4
-    ac = (2,2)
-    c = 8
-    cc = (3,3,2)
+@pytest.mark.parametrize('einsum_signature', [
+    'abc,bad->abcd',
+    'abcdef,bcdfg->abcdeg',
+    'ea,fb,abcd,gc,hd->efgh',
+])
+def test_einsum(einsum_signature):
+    # einsum label dimensions
+    dimensions = {'a': 5, 'b': 6, 'c': 7,
+                  'd': 5, 'e': 6, 'f': 10,
+                  'g': 1, 'h': 2}
 
-    ar1 = np.random.random((s,t,a))
-    ar2 = np.random.random((t,a,c))
+    # dimension chunks sizes
+    chunks = {'a': (2, 3), 'b': (2, 3, 1), 'c': (2, 3, 2),
+              'd': (4, 1), 'e': (2, 4), 'f': (1, 2, 3, 4),
+              'g': 1, 'h': (1, 1)}
 
-    da_ar1 = da.from_array(ar1, (sc, tc, ac))
-    da_ar2 = da.from_array(ar2, (tc, ac, cc))
+    def shape_from_string(s):
+        return tuple(dimensions[c] for c in s)
 
-    np_result = np.einsum("sta,tac->stac", ar1, ar2)
-    result = da.einsum("sta,tac->stac", da_ar1, da_ar2)
+    def chunks_from_string(s):
+        return tuple(chunks[c] for c in s)
 
-    assert np.all(result.compute() == np_result)
+    input_sigs = einsum_signature.split('->')[0].split(',')
 
-    ar1 = np.random.random((s,t,a,c,2,2))
-    ar2 = np.random.random((t,a,c,2,2))
+    shapes = [shape_from_string(s) for s in input_sigs]
+    chunks = [chunks_from_string(s) for s in input_sigs]
 
-    da_ar1 = da.from_array(ar1, (sc,tc,ac,cc,2,2))
-    da_ar2 = da.from_array(ar2, (tc,ac,cc,2,2))
+    np_inputs = [np.random.random(s) for s in shapes]
+    da_inputs = [da.from_array(i, chunks=c) for i, c in zip(np_inputs, chunks)]
 
-    np_result = np.einsum("stacij,tacjk->stacik", ar1, ar2)
-    result = da.einsum("stacij,tacjk->stacik", da_ar1, da_ar2)
-
-    assert np.all(result.compute() == np_result)
-
-    # Example from opt_einsum docs
-    I = np.random.random((10, 10, 10, 10))
-    C = np.random.random((10, 10))
-
-    np_result = np.einsum('ea,fb,abcd,gc,hd->efgh',
-                            C, C, I, C, C,
-                            optimize='greedy')
-
-    da_I = da.from_array(I, (5, 5, 5, 5))
-    da_C = da.from_array(C, (5, 5))
-
-    result = da.einsum('ea,fb,abcd,gc,hd->efgh',
-                            da_C, da_C, da_I, da_C, da_C,
-                            optimize='greedy')
-
-    assert np.allclose(result.compute(), np_result, rtol=1e-15)
+    assert_eq(np.einsum(einsum_signature, *np_inputs),
+              da.einsum(einsum_signature, *da_inputs))

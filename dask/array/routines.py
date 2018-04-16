@@ -1192,6 +1192,29 @@ def insert(arr, obj, values, axis):
     return concatenate(interleaved, axis=axis)
 
 
+def _einsum_kernel_nooptimize(*operands, **kwargs):
+    chunk = np.einsum(kwargs['subscripts'], *operands,
+                      casting=kwargs['casting'],
+                      dtype=kwargs['kernel_dtype'],
+                      order=kwargs['order'])
+
+    # Avoid concatenate=True in atop by adding 1's
+    # for the contracted dimensions
+    return chunk.reshape(chunk.shape + (1,) * kwargs['ncontract_inds'])
+
+
+def _einsum_kernel_optimize(*operands, **kwargs):
+    chunk = np.einsum(kwargs['subscripts'], *operands,
+                      casting=kwargs['casting'],
+                      dtype=kwargs['kernel_dtype'],
+                      order=kwargs['order'],
+                      optimize=kwargs['optimize'])
+
+    # Avoid concatenate=True in atop by adding 1's
+    # for the contracted dimensions
+    return chunk.reshape(chunk.shape + (1,) * kwargs['ncontract_inds'])
+
+
 @wraps(np.einsum)
 def einsum(subscripts, *operands, **kwargs):
     casting = kwargs.get('casting', 'safe')
@@ -1204,11 +1227,14 @@ def einsum(subscripts, *operands, **kwargs):
     if dtype is None:
         dtype = np.result_type(*[o.dtype for o in operands])
 
-    # If we should optimize, compute the einsum path
-    # for use in all atop chunks
-    if optimize is not False:
-        optimize, _ = np.einsum_path(subscripts, *operands,
-                                            optimize=optimize)
+    can_optimize = LooseVersion(np.__version__) > LooseVersion("1.12.0")
+
+    if can_optimize:
+        if optimize is not False:
+            optimize, _ = np.einsum_path(subscripts, *operands,
+                                         optimize=optimize)
+    else:
+        optimize = None
 
     subscripts_split = [s.strip() for s in subscripts.split('->')]
 
@@ -1227,9 +1253,9 @@ def einsum(subscripts, *operands, **kwargs):
 
     if len(inputs) != len(operands):
         raise ValueError("Length of inputs (%d) "
-                        "does not equal length "
-                        "of operands (%d)."
-                            % len(inputs), len(operands))
+                         "does not equal length "
+                         "of operands (%d)."
+                         % len(inputs), len(operands))
 
     # Set of all indices
     all_inds_set = set().union(*inputs)
@@ -1243,30 +1269,22 @@ def einsum(subscripts, *operands, **kwargs):
     contract_inds = all_inds_set - set(output_str)
     ncontract_inds = len(contract_inds)
 
-    def einsum_kernel(*operands, **kwargs):
-        chunk = np.einsum(kwargs['subscripts'], *operands,
-                        casting=kwargs['casting'],
-                        dtype=kwargs['kernel_dtype'],
-                        order=kwargs['order'],
-                        optimize=kwargs['optimize'])
-
-        # Avoid concatenate=True in atop by adding 1's
-        # for the contracted dimensions
-        return chunk.reshape(chunk.shape + (1,)*ncontract_inds)
+    kernel = (_einsum_kernel_optimize if can_optimize
+              else _einsum_kernel_nooptimize)
 
     # Introduce the contracted indices into the atop product
     # so that we get numpy arrays, not lists
-    result = atop(einsum_kernel, output_str + ''.join(contract_inds),
-                *(a for ap in zip(operands, inputs) for a in ap),
-                subscripts=subscripts,
-                kernel_dtype=einsum_dtype,
-                casting=casting,
-                optimize=optimize,
-                order=order,
-                adjust_chunks={ind: 1 for ind in contract_inds},
-                dtype=dtype)
-
+    result = atop(kernel, output_str + ''.join(contract_inds),
+                  *(a for ap in zip(operands, inputs) for a in ap),
+                  subscripts=subscripts,
+                  kernel_dtype=einsum_dtype,
+                  casting=casting,
+                  ncontract_inds=ncontract_inds,
+                  optimize=optimize,
+                  order=order,
+                  adjust_chunks={ind: 1 for ind in contract_inds},
+                  dtype=dtype)
 
     # Now reduce over the extra contraction dimensions
     size = len(output_str)
-    return result.sum(axis=range(size, size+ncontract_inds))
+    return result.sum(axis=range(size, size + ncontract_inds))
