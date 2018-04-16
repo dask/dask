@@ -693,6 +693,22 @@ def test_persist_literals():
     assert persist(1, 2, 3) == (1, 2, 3)
 
 
+def test_persist_nested():
+    a = delayed(1) + 5
+    b = a + 1
+    c = a + 2
+    result = persist({'a': a, 'b': [1, 2, b]}, (c, 2))
+    assert isinstance(result[0]['a'], Delayed)
+    assert isinstance(result[0]['b'][2], Delayed)
+    assert isinstance(result[1][0], Delayed)
+    assert compute(*result) == ({'a': 6, 'b': [1, 2, 7]}, (8, 2))
+
+    res = persist([a, b], c, traverse=False)
+    assert res[0][0] is a
+    assert res[0][1] is b
+    assert res[1].compute() == 8
+
+
 def test_persist_delayed():
     x1 = delayed(1)
     x2 = delayed(inc)(x1)

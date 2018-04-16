@@ -595,6 +595,11 @@ def persist(*args, **kwargs):
         A scheduler ``get`` function to use. If not provided, the default
         is to check the global settings first, and then fall back to
         the collection defaults.
+    traverse : bool, optional
+        By default dask traverses builtin python collections looking for dask
+        objects passed to ``persist``. For large collections this can be
+        expensive. If none of the arguments contain any dask objects, set
+        ``traverse=False`` to avoid doing this traversal.
     optimize_graph : bool, optional
         If True [default], the graph is optimized before computation.
         Otherwise the graph is run as is. This can be useful for debugging.
@@ -605,11 +610,13 @@ def persist(*args, **kwargs):
     -------
     New dask collections backed by in-memory data
     """
-    collections = [a for a in args if is_dask_collection(a)]
+    traverse = kwargs.pop('traverse', True)
+    optimize_graph = kwargs.pop('optimize_graph', True)
+    get = kwargs.pop('get', None) or _globals['get']
+
+    collections, repack = unpack_collections(*args, traverse=traverse)
     if not collections:
         return args
-
-    get = kwargs.pop('get', None) or _globals['get']
 
     if get is None and getattr(thread_state, 'key', False):
         from distributed.worker import get_worker
@@ -637,8 +644,6 @@ def persist(*args, **kwargs):
                                  else next(results_iter)
                                  for a in args)
 
-    optimize_graph = kwargs.pop('optimize_graph', True)
-
     if not get:
         get = collections[0].__dask_scheduler__
         if not all(a.__dask_scheduler__ == get for a in collections):
@@ -648,21 +653,17 @@ def persist(*args, **kwargs):
                              "the `get` kwarg or globally with `set_options`.")
 
     dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
-
     keys, postpersists = [], []
-    for a in args:
-        if is_dask_collection(a):
-            a_keys = list(flatten(a.__dask_keys__()))
-            rebuild, state = a.__dask_postpersist__()
-            keys.extend(a_keys)
-            postpersists.append((rebuild, a_keys, state))
-        else:
-            postpersists.append((None, None, a))
+    for a in collections:
+        a_keys = list(flatten(a.__dask_keys__()))
+        rebuild, state = a.__dask_postpersist__()
+        keys.extend(a_keys)
+        postpersists.append((rebuild, a_keys, state))
 
     results = get(dsk, keys, **kwargs)
     d = dict(zip(keys, results))
-    return tuple(s if r is None else r({k: d[k] for k in ks}, *s)
-                 for r, ks, s in postpersists)
+    results2 = [r({k: d[k] for k in ks}, *s) for r, ks, s in postpersists]
+    return repack(results2)
 
 
 ############
