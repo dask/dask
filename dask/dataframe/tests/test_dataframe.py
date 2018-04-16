@@ -448,7 +448,17 @@ def test_squeeze():
 
     with pytest.raises(NotImplementedError) as info:
         ddf.squeeze(axis=0)
-    msg = "Dask Dataframe does not support squeeze along axis 0"
+    msg = "{0} does not support squeeze along axis 0".format(type(ddf))
+    assert msg in str(info.value)
+
+    with pytest.raises(ValueError) as info:
+        ddf.squeeze(axis=2)
+    msg = 'No axis {0} for object type {1}'.format(2, type(ddf))
+    assert msg in str(info.value)
+
+    with pytest.raises(ValueError) as info:
+        ddf.squeeze(axis='test')
+    msg = 'No axis test for object type {0}'.format(type(ddf))
     assert msg in str(info.value)
 
 

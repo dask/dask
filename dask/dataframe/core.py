@@ -2605,21 +2605,30 @@ class DataFrame(_Frame):
         return self.map_partitions(M.clip_upper, threshold=threshold)
 
     @derived_from(pd.DataFrame)
-    def squeeze(self, axis=1):
-        if axis == 1:
+    def squeeze(self, axis=None):
+        if axis in [None, 1]:
+            squeezed_series = self[self.columns[0]]
+
             if len(self.columns) == 1:
                 if len(self.index) == 1:
-                    # return scalar if dataframe contains single value to
-                    # match pandas implementation
-                    return self.values.compute()[0]
+                    # dask dataframe with only one element should return scalar
+                    dask_arr = squeezed_series.values
+                    # set chunks so we can index for first and only element
+                    dask_arr._chunks = ((1, ),)
+                    return dask_arr[0]
                 else:
-                    return self[self.columns[0]]
+                    return squeezed_series
+
             else:
                 return self
 
         elif axis == 0:
-            raise NotImplementedError("Dask Dataframe does not support "
-                                      "squeeze along axis 0")
+            raise NotImplementedError("{0} does not support "
+                                      "squeeze along axis 0".format(type(self)))
+
+        elif axis not in [0, 1, None]:
+            raise ValueError('No axis {0} for object type {1}'.format(
+                axis, type(self)))
 
     @derived_from(pd.DataFrame)
     def to_timestamp(self, freq=None, how='start', axis=0):
