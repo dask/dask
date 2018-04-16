@@ -18,7 +18,7 @@ from ...compatibility import PY3, string_types
 from ...delayed import delayed
 from ...bytes.core import get_fs_token_paths
 from ...bytes.utils import infer_storage_options
-from ...utils import import_required
+from ...utils import import_required, nat_sort_key
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 
 __all__ = ('read_parquet', 'to_parquet')
@@ -541,7 +541,12 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
             non_empty_pieces.append(piece)
 
     # Sort pieces naturally
-    non_empty_pieces = _nat_sorted_pieces(non_empty_pieces)
+    # If a single input path resulted in multiple dataset pieces, then sort
+    # the pieces naturally. If multiple paths were supplied then we leave
+    # the order of the resulting pieces unmodified
+    if len(paths) == 1 and len(dataset.pieces) > 1:
+        non_empty_pieces = sorted(
+            non_empty_pieces, key=lambda piece: nat_sort_key(piece.path))
 
     # Determine divisions
     if len(index_names) == 1:
@@ -589,30 +594,6 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
         task_plan = {(task_name, 0): meta}
 
     return out_type(task_plan, task_name, meta, divisions)
-
-
-def _nat_sorted_pieces(pieces):
-    """
-    Return list of pyarrow Parquet pieces sorted 'naturally' by path
-
-    Lexicographic sorted list of paths:
-    ['/.../part.1.parquet', '/.../part.10.parquet', '/.../part.2.parquet']
-
-    Naturally sorted list of paths:
-    ['/.../part.1.parquet', '/.../part.2.parquet', '/.../part.10.parquet']
-
-    Parameters
-    ----------
-    pieces : list[pyarrow.parquet.ParquetDatasetPiece]
-
-    Returns
-    -------
-    list[pyarrow.parquet.ParquetDatasetPiece]
-    """
-    def to_sort_tuple(piece):
-        return [int(s) if s.isdigit() else s for s in re.split('(\d+)', piece.path)]
-
-    return sorted(pieces, key=to_sort_tuple)
 
 
 def _to_ns(val, unit):
@@ -967,6 +948,11 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
     fs, fs_token, paths = get_fs_token_paths(path, mode='rb',
                                              storage_options=storage_options)
+
+    if isinstance(path, str) and len(paths) > 1:
+        # Sort paths naturally if multiple paths resulted from a single
+        # specification (by '*' globbing)
+        paths = sorted(paths, key=nat_sort_key)
 
     return read(fs, fs_token, paths, columns=columns, filters=filters,
                 categories=categories, index=index, infer_divisions=infer_divisions)
