@@ -1190,3 +1190,68 @@ def insert(arr, obj, values, axis):
     interleaved = list(interleave([split_arr, split_values]))
     interleaved = [i for i in interleaved if i.nbytes]
     return concatenate(interleaved, axis=axis)
+
+
+@wraps(np.einsum)
+def einsum(subscripts, *operands, **kwargs):
+    casting = kwargs.get('casting', 'safe')
+    dtype = kwargs.get('dtype')
+    optimize = kwargs.get('optimize', True)
+    order = kwargs.get('order', 'K')
+    einsum_dtype = dtype
+
+    # Infer the output dtype from operands
+    if dtype is None:
+        dtype = np.result_type(*[o.dtype for o in operands])
+
+    # If we should optimize, compute the einsum path
+    # for use in all atop chunks
+    if optimize is True:
+        optimize, _ = np.einsum_path(subscripts, *operands,
+                                            optimize=optimize)
+
+    subscripts_split = [s.strip() for s in subscripts.split('->')]
+
+    # No output string provided
+    if len(subscripts_split) == 1:
+        inputs_str = subscripts_split[0]
+        output_str = None
+    # Input string(s) and output string provided
+    elif len(subscripts_split) == 2:
+        inputs_str, output_str = subscripts_split
+    else:
+        raise ValueError("Invalid subscripts string %s" % subscripts)
+
+    # Split input strings
+    inputs = [s.strip() for s in inputs_str.split(',')]
+
+    if len(inputs) != len(operands):
+        raise ValueError("Length of inputs (%d) "
+                        "does not equal length "
+                        "of operands (%d)."
+                            % len(inputs), len(operands))
+
+    # Set of all indices
+    all_inds_set = set().union(*inputs)
+
+    # If output isn't provided, it's equal to
+    # the sorted list of all indices
+    if output_str is None:
+        output_str = list(sorted(all_inds_set))
+
+    def _einsum(*operands, **kwargs):
+        return np.einsum(kwargs['subscripts'], *operands,
+                        casting=kwargs['casting'],
+                        dtype=kwargs['kernel_dtype'],
+                        order=kwargs['order'],
+                        optimize=kwargs['optimize'])
+
+    return atop(_einsum, output_str,
+                    *([a for ap in zip(operands, inputs) for a in ap]),
+                    subscripts=subscripts,
+                    kernel_dtype=einsum_dtype,
+                    casting=casting,
+                    optimize=optimize,
+                    order=order,
+                    concatenate=True,
+                    dtype=dtype)

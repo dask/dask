@@ -1286,3 +1286,54 @@ def test_result_type():
     # dask 0d-arrays are NOT treated like scalars
     c = da.from_array(np.ones((), np.float64), chunks=())
     assert da.result_type(a, c) == np.float64
+
+
+def test_einsum():
+    # Dimension and chunk sizes
+    s = 10
+    sc = (4,3,2,1)
+    t = 5
+    tc = (2,3)
+    a = 4
+    ac = (2,2)
+    c = 8
+    cc = (3,3,2)
+
+    ar1 = np.random.random((s,t,a))
+    ar2 = np.random.random((t,a,c))
+
+    da_ar1 = da.from_array(ar1, (sc, tc, ac))
+    da_ar2 = da.from_array(ar2, (tc, ac, cc))
+
+    np_result = np.einsum("sta,tac->stac", ar1, ar2)
+    result = da.einsum("sta,tac->stac", da_ar1, da_ar2)
+
+    assert np.all(result.compute() == np_result)
+
+    ar1 = np.random.random((s,t,a,c,2,2))
+    ar2 = np.random.random((t,a,c,2,2))
+
+    da_ar1 = da.from_array(ar1, (sc,tc,ac,cc,2,2))
+    da_ar2 = da.from_array(ar2, (tc,ac,cc,2,2))
+
+    np_result = np.einsum("stacij,tacjk->stacik", ar1, ar2)
+    result = da.einsum("stacij,tacjk->stacik", da_ar1, da_ar2)
+
+    assert np.all(result.compute() == np_result)
+
+    # Example from opt_einsum docs
+    I = np.random.random((10, 10, 10, 10))
+    C = np.random.random((10, 10))
+
+    np_result = np.einsum('ea,fb,abcd,gc,hd->efgh',
+                            C, C, I, C, C,
+                            optimize='greedy')
+
+    da_I = da.from_array(I, (5, 5, 5, 5))
+    da_C = da.from_array(C, (5, 5))
+
+    result = da.einsum('ea,fb,abcd,gc,hd->efgh',
+                            da_C, da_C, da_I, da_C, da_C,
+                            optimize='greedy')
+
+    assert np.all(result.compute() == np_result)
