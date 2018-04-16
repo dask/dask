@@ -614,17 +614,11 @@ def _to_ns(val, unit):
     int
         Time val in nanoseconds
     """
-    if unit == 's':
-        factor = int(1e9)
-    elif unit == 'ms':
-        factor = int(1e6)
-    elif unit == 'us':
-        factor = int(1e3)
-    elif unit == 'ns':
-        factor = 1
-    else:
-        raise ValueError("Unsupported time unit '{unit}'"
-                         .format(unit=unit))
+    factors = {'s': int(1e9), 'ms': int(1e6), 'us': int(1e3), 'ns': 1}
+    try:
+        factor = factors.get(unit)
+    except KeyError:
+        raise ValueError("Unsupported time unit '{unit}'".format(unit=unit))
 
     return val * factor
 
