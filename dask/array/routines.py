@@ -1206,7 +1206,7 @@ def einsum(subscripts, *operands, **kwargs):
 
     # If we should optimize, compute the einsum path
     # for use in all atop chunks
-    if optimize is True:
+    if optimize is not False:
         optimize, _ = np.einsum_path(subscripts, *operands,
                                             optimize=optimize)
 
