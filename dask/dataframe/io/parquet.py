@@ -20,7 +20,7 @@ from ...compatibility import PY3, string_types
 from ...delayed import delayed
 from ...bytes.core import get_fs_token_paths
 from ...bytes.utils import infer_storage_options
-from ...utils import import_required, nat_sort_key
+from ...utils import import_required, natural_sort_key
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 
 __all__ = ('read_parquet', 'to_parquet')
@@ -547,7 +547,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     # the order of the resulting pieces unmodified
     if len(paths) == 1 and len(dataset.pieces) > 1:
         non_empty_pieces = sorted(
-            non_empty_pieces, key=lambda piece: nat_sort_key(piece.path))
+            non_empty_pieces, key=lambda piece: natural_sort_key(piece.path))
 
     # Determine divisions
     if len(index_names) == 1:
@@ -944,7 +944,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     if isinstance(path, str) and len(paths) > 1:
         # Sort paths naturally if multiple paths resulted from a single
         # specification (by '*' globbing)
-        paths = sorted(paths, key=nat_sort_key)
+        paths = sorted(paths, key=natural_sort_key)
 
     return read(fs, fs_token, paths, columns=columns, filters=filters,
                 categories=categories, index=index, infer_divisions=infer_divisions)

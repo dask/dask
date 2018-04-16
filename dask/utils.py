@@ -899,10 +899,12 @@ def is_arraylike(x):
             hasattr(x, 'dtype'))
 
 
-def nat_sort_key(s):
+def natural_sort_key(s):
     """
     Sorting `key` function for performing a natural sort on a collection of
     strings
+    
+    See https://en.wikipedia.org/wiki/Natural_sort_order
 
     Parameters
     ----------
@@ -920,7 +922,7 @@ def nat_sort_key(s):
     >>> a = ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
     >>> sorted(a)
         ['f0', 'f1', 'f10', 'f11', 'f19', 'f2', 'f20', 'f21', 'f8', 'f9']
-    >>> sorted(a, key=nat_sort_key)
+    >>> sorted(a, key=natural_sort_key)
         ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
     """
     return [int(part) if part.isdigit() else part

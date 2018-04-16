@@ -14,7 +14,7 @@ import dask.multiprocessing
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet import _parse_pandas_metadata
-from dask.utils import nat_sort_key
+from dask.utils import natural_sort_key
 
 try:
     import fastparquet
@@ -204,7 +204,7 @@ def test_read_list(tmpdir, write_engine, read_engine):
     files = sorted([os.path.join(tmpdir, f)
                    for f in os.listdir(tmpdir)
                    if not f.endswith('_metadata')],
-                   key=nat_sort_key)
+                   key=natural_sort_key)
 
     # Infer divisions for engines/versions that support it
     ddf2 = dd.read_parquet(files, engine=read_engine,
