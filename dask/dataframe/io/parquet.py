@@ -5,6 +5,7 @@ import copy
 import json
 import warnings
 import distutils
+import os
 from distutils.version import LooseVersion
 
 import numpy as np
@@ -190,7 +191,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
             pf = fastparquet.ParquetFile(paths[0], open_with=fs.open, sep=fs.sep)
 
     # Validate infer_divisions
-    if not pf.fn.endswith('/_metadata') and infer_divisions is True:
+    if os.path.split(pf.fn)[-1] != '_metadata' and infer_divisions is True:
         raise NotImplementedError("infer_divisions=True is not supported by the fastparquet engine for datasets "
                                   "that do not contain a global '_metadata' file")
 
