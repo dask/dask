@@ -5,6 +5,7 @@ import copy
 import json
 import warnings
 import distutils
+from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
@@ -353,7 +354,6 @@ def _write_partition_fastparquet(df, fs, path, filename, fmd, compression,
                                  partition_on):
     from fastparquet.writer import partition_on_columns, make_part_file
     import fastparquet
-    from distutils.version import LooseVersion
     # Fastparquet mutates this in a non-threadsafe manner. For now we just copy
     # it before forwarding to fastparquet.
     fmd = copy.copy(fmd)
@@ -517,7 +517,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
         storage_name_mapping = {k: k for k in column_names}
         column_index_names = [None]
 
-    if pa.__version__ < distutils.version.LooseVersion('0.8.0'):
+    if pa.__version__ < LooseVersion('0.8.0'):
         # the pyarrow 0.7.0 *reader* expects the storage names for index names
         # that are None.
         if any(x is None for x in index_names):
@@ -651,7 +651,7 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
     import pyarrow as pa
     import pyarrow.parquet as pq
 
-    if infer_divisions is True and pa.__version__ < distutils.version.LooseVersion('0.9.0'):
+    if infer_divisions is True and pa.__version__ < LooseVersion('0.9.0'):
         raise NotImplementedError('infer_divisions=True requires pyarrow >=0.9.0')
 
     # Check whether divisions_name is in the schema
@@ -738,7 +738,7 @@ def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
                            use_pandas_metadata=True,
                            file=f)
 
-    if pa.__version__ < distutils.version.LooseVersion('0.9.0'):
+    if pa.__version__ < LooseVersion('0.9.0'):
         df = table.to_pandas()
         for cat in categories:
             df[cat] = df[cat].astype('category')
