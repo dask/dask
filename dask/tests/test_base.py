@@ -377,6 +377,15 @@ def test_unpack_collections():
     assert not collections
     assert repack(collections) == (1, 2, {'a': 3})
 
+    # Result that looks like a task
+    def fail(*args):
+        raise ValueError("Shouldn't have been called")
+
+    collections, repack = unpack_collections(a, (fail, 1), [(fail, 2, 3)],
+                                             traverse=False)
+    repack(collections)  # Smoketest task literals
+    repack([(fail, 1)])  # Smoketest results that look like tasks
+
 
 class Tuple(DaskMethodsMixin):
     __slots__ = ('_dask', '_keys')
@@ -657,6 +666,29 @@ def test_optimize():
         x4, y4, z4 = optimize(x, y, z)
     for a, b in zip([x3, y3, z3], [x4, y4, z4]):
         assert dict(a.dask) == dict(b.dask)
+
+
+def test_optimize_nested():
+    a = dask.delayed(inc)(1)
+    b = dask.delayed(inc)(a)
+    c = a + b
+
+    result = optimize({'a': a, 'b': [1, 2, b]}, (c, 2))
+
+    a2 = result[0]['a']
+    b2 = result[0]['b'][2]
+    c2 = result[1][0]
+
+    assert isinstance(a2, Delayed)
+    assert isinstance(b2, Delayed)
+    assert isinstance(c2, Delayed)
+    assert dict(a2.dask) == dict(b2.dask) == dict(c2.dask)
+    assert compute(*result) == ({'a': 2, 'b': [1, 2, 3]}, (5, 2))
+
+    res = optimize([a, b], c, traverse=False)
+    assert res[0][0] is a
+    assert res[0][1] is b
+    assert res[1].compute() == 5
 
 
 # TODO: remove after deprecation cycle of `dask.optimize` module is completed

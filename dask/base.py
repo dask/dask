@@ -17,7 +17,7 @@ from toolz.functoolz import Compose
 
 from .compatibility import long, unicode
 from .context import _globals, thread_state
-from .core import flatten, get as simple_get
+from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict
 
@@ -126,7 +126,7 @@ class DaskMethodsMixin(object):
         --------
         dask.base.persist
         """
-        (result,) = persist(self, **kwargs)
+        (result,) = persist(self, traverse=False, **kwargs)
         return result
 
     def compute(self, **kwargs):
@@ -323,7 +323,7 @@ def unpack_collections(*args, **kwargs):
 
         tok = uuid.uuid4().hex
         if not traverse:
-            tsk = expr
+            tsk = quote(expr)
         else:
             # Treat iterators like lists
             typ = list if isinstance(expr, Iterator) else type(expr)
@@ -344,7 +344,7 @@ def unpack_collections(*args, **kwargs):
 
     def repack(results):
         dsk = repack_dsk.copy()
-        dsk['collections'] = results
+        dsk['collections'] = quote(results)
         return simple_get(dsk, out)
 
     return collections, repack
@@ -367,6 +367,11 @@ def optimize(*args, **kwargs):
         merged with all those of all other dask objects before returning an
         equivalent dask collection. Non-dask arguments are passed through
         unchanged.
+    traverse : bool, optional
+        By default dask traverses builtin python collections looking for dask
+        objects passed to ``optimize``. For large collections this can be
+        expensive. If none of the arguments contain any dask objects, set
+        ``traverse=False`` to avoid doing this traversal.
     optimizations : list of callables, optional
         Additional optimization passes to perform.
     **kwargs
@@ -384,15 +389,20 @@ def optimize(*args, **kwargs):
     >>> b2.compute() == b.compute()
     True
     """
-    variables = [a for a in args if is_dask_collection(a)]
-    if not variables:
+    collections, repack = unpack_collections(*args, **kwargs)
+    if not collections:
         return args
 
-    dsk = collections_to_dsk(variables, **kwargs)
+    dsk = collections_to_dsk(collections, **kwargs)
     postpersists = [a.__dask_postpersist__() if is_dask_collection(a)
                     else (None, a) for a in args]
 
-    return tuple(a if f is None else f(dsk, *a) for f, a in postpersists)
+    keys, postpersists = [], []
+    for a in collections:
+        keys.extend(flatten(a.__dask_keys__()))
+        postpersists.append(a.__dask_postpersist__())
+
+    return repack([r(dsk, *s) for r, s in postpersists])
 
 
 # TODO: remove after deprecation cycle of `dask.optimize` module completes
