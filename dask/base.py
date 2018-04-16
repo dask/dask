@@ -4,6 +4,7 @@ from abc import ABCMeta
 from collections import OrderedDict, Iterator
 from functools import partial
 from hashlib import md5
+from operator import getitem
 import inspect
 import pickle
 import os
@@ -16,7 +17,7 @@ from toolz.functoolz import Compose
 
 from .compatibility import long, unicode
 from .context import _globals, thread_state
-from .core import flatten
+from .core import flatten, get as simple_get
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict
 
@@ -281,6 +282,74 @@ def _extract_graph_and_keys(vals):
     return dsk, keys
 
 
+def unpack_collections(*args, **kwargs):
+    """Extract collections in preparation for compute/persist/etc...
+
+    Intended use is to find all collections in a set of (possibly nested)
+    python objects, do something to them (compute, etc...), then repackage them
+    in equivalent python objects.
+
+    Parameters
+    ----------
+    *args
+        Any number of objects. If it is a dask collection, it's extracted and
+        added to the list of collections returned. By default, python builtin
+        collections are also traversed to look for dask collections (for more
+        information see the ``traverse`` keyword).
+    traverse : bool, optional
+        If True (default), builtin python collections are traversed looking for
+        any dask collections they might contain.
+
+    Returns
+    -------
+    collections : list
+        A list of all dask collections contained in ``args``
+    repack : callable
+        A function to call on the transformed collections to repackage them as
+        they were in the original ``args``.
+    """
+    traverse = kwargs.pop('traverse', True)
+
+    collections = []
+    repack_dsk = {}
+
+    def _unpack(expr):
+        if is_dask_collection(expr):
+            tok = tokenize(expr)
+            if tok not in repack_dsk:
+                repack_dsk[tok] = (getitem, 'collections', len(collections))
+                collections.append(expr)
+            return tok
+
+        tok = uuid.uuid4().hex
+        if not traverse:
+            tsk = expr
+        else:
+            # Treat iterators like lists
+            typ = list if isinstance(expr, Iterator) else type(expr)
+
+            if typ in (list, tuple, set):
+                tsk = (typ, [_unpack(i) for i in expr])
+            elif typ is dict:
+                tsk = (dict, [[_unpack(k), _unpack(v)]
+                              for k, v in expr.items()])
+            else:
+                return expr
+
+        repack_dsk[tok] = tsk
+        return tok
+
+    out = uuid.uuid4().hex
+    repack_dsk[out] = (tuple, [_unpack(i) for i in args])
+
+    def repack(results):
+        dsk = repack_dsk.copy()
+        dsk['collections'] = results
+        return simple_get(dsk, out)
+
+    return collections, repack
+
+
 def optimize(*args, **kwargs):
     """Optimize several dask collections at once.
 
@@ -371,40 +440,31 @@ def compute(*args, **kwargs):
     >>> compute({'a': a, 'b': b, 'c': 1})  # doctest: +SKIP
     ({'a': 45, 'b': 4.5, 'c': 1},)
     """
-    from dask.delayed import delayed
     traverse = kwargs.pop('traverse', True)
-    if traverse:
-        args = tuple(delayed(a)
-                     if isinstance(a, (list, set, tuple, dict, Iterator))
-                     else a for a in args)
-
     optimize_graph = kwargs.pop('optimize_graph', True)
-    variables = [a for a in args if is_dask_collection(a)]
-    if not variables:
-        return args
-
     get = kwargs.pop('get', None) or _globals['get']
+
+    collections, repack = unpack_collections(*args, traverse=traverse)
+    if not collections:
+        return args
 
     if get is None and getattr(thread_state, 'key', False):
         from distributed.worker import get_worker
         get = get_worker().client.get
 
     if not get:
-        get = variables[0].__dask_scheduler__
-        if not all(a.__dask_scheduler__ == get for a in variables):
+        get = collections[0].__dask_scheduler__
+        if not all(a.__dask_scheduler__ == get for a in collections):
             raise ValueError("Compute called on multiple collections with "
                              "differing default schedulers. Please specify a "
                              "scheduler `get` function using either "
                              "the `get` kwarg or globally with `set_options`.")
 
-    dsk = collections_to_dsk(variables, optimize_graph, **kwargs)
-    keys = [var.__dask_keys__() for var in variables]
-    postcomputes = [a.__dask_postcompute__() if is_dask_collection(a)
-                    else (None, a) for a in args]
+    dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
+    keys = [x.__dask_keys__() for x in collections]
+    postcomputes = [x.__dask_postcompute__() for x in collections]
     results = get(dsk, keys, **kwargs)
-    results_iter = iter(results)
-    return tuple(a if f is None else f(next(results_iter), *a)
-                 for f, a in postcomputes)
+    return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
 
 
 def visualize(*args, **kwargs):

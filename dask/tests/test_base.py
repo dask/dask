@@ -11,7 +11,7 @@ import dask
 from dask import delayed
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
                        visualize, persist, function_cache, is_dask_collection,
-                       DaskMethodsMixin, optimize)
+                       DaskMethodsMixin, optimize, unpack_collections)
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
@@ -340,6 +340,42 @@ def test_is_dask_collection():
     assert is_dask_collection(DummyCollection({}))
     assert not is_dask_collection(DummyCollection())
     assert not is_dask_collection(DummyCollection)
+
+
+def test_unpack_collections():
+    a = delayed(1) + 5
+    b = a + 1
+    c = a + 2
+
+    def build(a, b, c, iterator):
+        return (a, b,               # Top-level collections
+                {'a': a,            # dict
+                 a: b,              # collections as keys
+                 'b': [1, 2, b],    # list
+                 'c': 10,           # other builtins pass through unchanged
+                 'd': (c, 2),       # tuple
+                 'e': {a, 2, 3}},   # set
+                iterator)           # Iterator
+
+    args = build(a, b, c, (i for i in [a, b, c]))
+
+    collections, repack = unpack_collections(*args)
+    assert len(collections) == 3
+
+    # Replace collections with `'~a'` strings
+    result = repack(['~a', '~b', '~c'])
+    sol = build('~a', '~b', '~c', ['~a', '~b', '~c'])
+    assert result == sol
+
+    # traverse=False
+    collections, repack = unpack_collections(*args, traverse=False)
+    assert len(collections) == 2  # just a and b
+    assert repack(collections) == args
+
+    # No collections
+    collections, repack = unpack_collections(1, 2, {'a': 3})
+    assert not collections
+    assert repack(collections) == (1, 2, {'a': 3})
 
 
 class Tuple(DaskMethodsMixin):
