@@ -44,10 +44,10 @@ def should_check_divs(engine):
 
 nrows = 40
 npartitions = 15
-df = pd.DataFrame({'x': [i*7 % 5 for i in range(nrows)],  # Not sorted
-                   'y': [i*2.5 for i in range(nrows)]  # Sorted
+df = pd.DataFrame({'x': [i * 7 % 5 for i in range(nrows)],  # Not sorted
+                   'y': [i * 2.5 for i in range(nrows)]  # Sorted
                    },
-                  index=pd.Index([10*i for i in range(nrows)], name='myindex'))
+                  index=pd.Index([10 * i for i in range(nrows)], name='myindex'))
 
 ddf = dd.from_pandas(df, npartitions=npartitions)
 

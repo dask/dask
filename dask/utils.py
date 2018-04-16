@@ -903,7 +903,7 @@ def natural_sort_key(s):
     """
     Sorting `key` function for performing a natural sort on a collection of
     strings
-    
+
     See https://en.wikipedia.org/wiki/Natural_sort_order
 
     Parameters

@@ -4,7 +4,6 @@ import re
 import copy
 import json
 import warnings
-import distutils
 import os
 from distutils.version import LooseVersion
 
