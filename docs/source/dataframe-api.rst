@@ -222,6 +222,8 @@ Groupby Operations
    DataFrameGroupBy.std
    DataFrameGroupBy.sum
    DataFrameGroupBy.var
+   DataFrameGroupBy.first
+   DataFrameGroupBy.last
 
 .. autosummary::
    SeriesGroupBy.aggregate
@@ -239,6 +241,8 @@ Groupby Operations
    SeriesGroupBy.std
    SeriesGroupBy.sum
    SeriesGroupBy.var
+   SeriesGroupBy.first
+   SeriesGroupBy.last
 
 Rolling Operations
 ~~~~~~~~~~~~~~~~~~
