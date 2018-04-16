@@ -2043,6 +2043,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                    fill_value=fill_value)
 
     @derived_from(pd.Series)
+    def squeeze(self):
+        return self
+
+    @derived_from(pd.Series)
     def combine_first(self, other):
         return self.map_partitions(M.combine_first, other)
 
@@ -2599,6 +2603,22 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def clip_upper(self, threshold):
         return self.map_partitions(M.clip_upper, threshold=threshold)
+
+    @derived_from(pd.DataFrame)
+    def squeeze(self, axis=None):
+        if axis in [None, 1]:
+            if len(self.columns) == 1:
+                return self[self.columns[0]]
+            else:
+                return self
+
+        elif axis == 0:
+            raise NotImplementedError("{0} does not support "
+                                      "squeeze along axis 0".format(type(self)))
+
+        elif axis not in [0, 1, None]:
+            raise ValueError('No axis {0} for object type {1}'.format(
+                axis, type(self)))
 
     @derived_from(pd.DataFrame)
     def to_timestamp(self, freq=None, how='start', axis=0):
