@@ -442,8 +442,7 @@ def test_squeeze():
     ds = dd.from_pandas(s, 2)
 
     assert_eq(df.squeeze(), ddf.squeeze())
-    # returns scalar for one element dataframe
-    assert df2.squeeze() == ddf2.squeeze()
+    assert_eq(pd.Series([0], name='x'), ddf2.squeeze())
     assert_eq(ds.squeeze(), s.squeeze())
 
     with pytest.raises(NotImplementedError) as info:

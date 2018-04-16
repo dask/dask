@@ -2607,18 +2607,8 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def squeeze(self, axis=None):
         if axis in [None, 1]:
-            squeezed_series = self[self.columns[0]]
-
             if len(self.columns) == 1:
-                if len(self.index) == 1:
-                    # dask dataframe with only one element should return scalar
-                    dask_arr = squeezed_series.values
-                    # set chunks so we can index for first and only element
-                    dask_arr._chunks = ((1, ),)
-                    return dask_arr[0]
-                else:
-                    return squeezed_series
-
+                return self[self.columns[0]]
             else:
                 return self
 
