@@ -28,7 +28,7 @@ from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
                      is_arraylike)
 from ..array import Array
-from ..base import Base, tokenize, dont_optimize, is_dask_collection
+from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..delayed import Delayed, to_task_dask
 
 from . import methods
@@ -106,7 +106,7 @@ def finalize(results):
     return _concat(results)
 
 
-class Scalar(Base, OperatorMethodMixin):
+class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     """ A Dask object to represent a pandas scalar"""
     def __init__(self, dsk, name, meta, divisions=None):
         # divisions is ignored, only present to be compatible with other
@@ -247,7 +247,7 @@ def _scalar_binary(op, self, other, inv=False):
         return Scalar(dsk, name, meta)
 
 
-class _Frame(Base, OperatorMethodMixin):
+class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     """ Superclass for DataFrame and Series
 
     Parameters
