@@ -822,9 +822,6 @@ def test_filters(tmpdir):
 
 @pytest.mark.parametrize('get', [dask.threaded.get, dask.multiprocessing.get])
 def test_to_parquet_lazy(tmpdir, get, engine):
-    check_fastparquet()
-    check_pyarrow()
-
     tmpdir = str(tmpdir)
     df = pd.DataFrame({'a': [1, 2, 3, 4],
                        'b': [1., 2., 3., 4.]})
