@@ -673,21 +673,18 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
 
         # Initialize index of divisions column within the row groups.
         # To be computed during while processing the first piece below
-        divisions_col_index = None
-
         for piece in pa_pieces:
             pf = piece.get_metadata(pq.ParquetFile)
             rg = pf.row_group(0)
 
-            # Compute division column index if needed
-            if divisions_col_index is None:
-                rg_paths = [rg.column(i).path_in_schema for i in range(rg.num_columns)]
-                try:
-                    divisions_col_index = rg_paths.index(divisions_name)
-                except ValueError:
-                    # Divisions not valid
-                    min_maxs = None
-                    break
+            # Compute division column index
+            rg_paths = [rg.column(i).path_in_schema for i in range(rg.num_columns)]
+            try:
+                divisions_col_index = rg_paths.index(divisions_name)
+            except ValueError:
+                # Divisions not valid
+                min_maxs = None
+                break
 
             col_meta = rg.column(divisions_col_index)
             stats = col_meta.statistics
