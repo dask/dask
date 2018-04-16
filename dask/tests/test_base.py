@@ -670,6 +670,14 @@ def test_persist_delayed():
     assert x3.compute() == xx.compute()
 
 
+def test_persist_nested():
+    x1 = delayed(1)
+    x2 = delayed(inc)(x1)
+    xx, = persist([x2, 1])
+    assert isinstance(xx[0], Delayed)
+    assert xx[0].compute() == x2.compute()
+
+
 @pytest.mark.skipif('not da or not db')
 def test_persist_array_bag():
     x = da.arange(5, chunks=2) + 1

@@ -35,6 +35,13 @@ def test_persist(c, s, a, b):
     yield wait(y2)
     assert y2.key in a.data or y2.key in b.data
 
+    y = delayed(inc)(11)
+    out = persist([y, 2])  # needs to descend into list structure
+    y2 = out[0]
+
+    yield wait(y2)
+    assert y2.key in a.data or y2.key in b.data
+
 
 def test_futures_to_delayed_dataframe(loop):
     pd = pytest.importorskip('pandas')
