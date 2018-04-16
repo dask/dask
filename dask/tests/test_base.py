@@ -351,7 +351,7 @@ def test_unpack_collections():
         return (a, b,               # Top-level collections
                 {'a': a,            # dict
                  a: b,              # collections as keys
-                 'b': [1, 2, b],    # list
+                 'b': [1, 2, [b]],  # list
                  'c': 10,           # other builtins pass through unchanged
                  'd': (c, 2),       # tuple
                  'e': {a, 2, 3}},   # set
