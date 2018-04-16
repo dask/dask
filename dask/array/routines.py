@@ -16,6 +16,7 @@ from ..core import flatten
 from ..base import tokenize
 from . import numpy_compat, chunk
 from .creation import arange
+from .utils import safe_wraps
 from .wrap import ones
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
@@ -786,7 +787,7 @@ def _isin_kernel(element, test_elements, assume_unique=False):
     return values.reshape(element.shape + (1,) * test_elements.ndim)
 
 
-@wraps(getattr(np, 'isin', None))
+@safe_wraps(getattr(np, 'isin', None))
 def isin(element, test_elements, assume_unique=False, invert=False):
     element = asarray(element)
     test_elements = asarray(test_elements)
