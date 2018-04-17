@@ -1300,14 +1300,17 @@ def test_result_type():
     'a,b',
     'a,b,c',
     'a',
-    'a...a->a',
     'ba,b',
     'ba,b->',
     'defab,fedbc->defac',
     'ab...,bc...->ac...',
     'a...a',
     'abc...->cba...',
-    '...ab->...a'
+    '...ab->...a',
+    'a...a->a...',
+    # Following 2 from # https://stackoverflow.com/a/19203475/1611416
+    '...abc,...abcd->...d',
+    'ab...,b->ab...',
 ])
 def test_einsum(einsum_signature):
     # einsum label dimensions

@@ -1246,8 +1246,8 @@ def einsum(subscripts, *operands, **kwargs):
     # Path optimization should have replaced ellipses,
     # complain if any still exist
     if '...' in subscripts:
-        raise ValueError("Please explicitly replace ellipse (...) "
-                         "with subscripts or install "
+        raise ValueError("Please replace ellipses (...) with "
+                         "explicit subscripts or install "
                          "NumPy >= 1.12.0" % (np.__version__))
 
     subscripts_split = [s.strip() for s in subscripts.split('->')]
