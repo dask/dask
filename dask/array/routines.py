@@ -1225,7 +1225,7 @@ def einsum(subscripts, *operands, **kwargs):
     # No output string provided
     if len(subscripts_split) == 1:
         inputs_str = subscripts_split[0]
-        output_str = None
+        output_str = ''
     # Input string(s) and output string provided
     elif len(subscripts_split) == 2:
         inputs_str, output_str = subscripts_split
@@ -1246,8 +1246,8 @@ def einsum(subscripts, *operands, **kwargs):
 
     # If output isn't provided, it's equal to
     # the sorted list of all indices
-    if output_str is None:
-        output_str = list(sorted(all_inds_set))
+    if output_str == '':
+        output_str = ''.join(sorted(all_inds_set))
 
     # Which indices are contracted?
     contract_inds = all_inds_set - set(output_str)
