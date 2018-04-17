@@ -1239,9 +1239,9 @@ def einsum(subscripts, *operands, **kwargs):
         # missing outputs and replace ellipses with concrete
         # subscripts.
         contraction_str = 'Complete contraction:'
-        s = path_info.find(contraction_str) + len(contraction_str)
-        e = path_info.find('\n')
-        subscripts = path_info[s:e].strip()
+        start = path_info.find(contraction_str) + len(contraction_str)
+        end = path_info.find('\n')
+        subscripts = path_info[start:end].strip()
 
     # Path optimization should have replaced ellipses,
     # complain if any still exist
