@@ -6,7 +6,10 @@ einsum_symbols_set = set(einsum_symbols)
 
 def parse_einsum_input(operands):
     """
-    A reproduction of einsum c side einsum parsing in python.
+    A reproduction of numpy's _parse_einsum_input()
+    which in itself is a reproduction of
+    c side einsum parsing in python.
+
     Returns
     -------
     input_strings : str
