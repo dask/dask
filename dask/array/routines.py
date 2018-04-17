@@ -9,10 +9,10 @@ from numbers import Integral
 from operator import getitem
 
 import numpy as np
-from six import string_types
 from toolz import concat, sliding_window, interleave
 
 from .. import sharedict
+from ..compatibility import string_types
 from ..core import flatten
 from ..base import tokenize
 from . import numpy_compat, chunk
