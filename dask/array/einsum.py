@@ -26,11 +26,11 @@ def parse_einsum_input(operands):
     Examples
     --------
     The operand list is simplified to reduce printing:
-    >>> a = np.random.rand(4, 4)
-    >>> b = np.random.rand(4, 4, 4)
-    >>> __parse_einsum_input(('...a,...a->...', a, b))
+    >> a = np.random.rand(4, 4)
+    >> b = np.random.rand(4, 4, 4)
+    >> __parse_einsum_input(('...a,...a->...', a, b))
     ('za,xza', 'xz', [a, b])
-    >>> __parse_einsum_input((a, [Ellipsis, 0], b, [Ellipsis, 0]))
+    >> __parse_einsum_input((a, [Ellipsis, 0], b, [Ellipsis, 0]))
     ('za,xza', 'xz', [a, b])
     """
 
