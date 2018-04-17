@@ -1258,15 +1258,15 @@ def einsum(subscripts, *operands, **kwargs):
                          % len(inputs), len(operands))
 
     # Set of all indices
-    all_inds_set = set().union(*inputs)
+    all_inds_str = ''.join(sorted(set(''.join(inputs))))
 
     # If output isn't provided, it's
     # the first element of the sorted list of all indices
     if output_str is None:
-        output_str = ''.join(sorted(all_inds_set))[:1]
+        output_str = all_inds_str[:1]
 
     # Which indices are contracted?
-    contract_inds = all_inds_set - set(output_str)
+    contract_inds = set(all_inds_str) - set(output_str)
     ncontract_inds = len(contract_inds)
 
     atop_kwargs = {
