@@ -1,7 +1,10 @@
 from numpy.compat import basestring
 
+from .core import asarray
+
 einsum_symbols = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 einsum_symbols_set = set(einsum_symbols)
+
 
 # This function duplicates numpy's _parse_einsum_input() function
 # See https://github.com/numpy/numpy/blob/master/LICENSE.txt
@@ -36,7 +39,7 @@ def parse_einsum_input(operands):
 
     if isinstance(operands[0], basestring):
         subscripts = operands[0].replace(" ", "")
-        operands = operands[1:]
+        operands = [asarray(o) for o in operands[1:]]
 
         # Ensure all characters are valid
         for s in subscripts:
@@ -54,7 +57,7 @@ def parse_einsum_input(operands):
             subscript_list.append(tmp_operands.pop(0))
 
         output_list = tmp_operands[-1] if len(tmp_operands) else None
-        operands = [v for v in operand_list]
+        operands = [asarray(v) for v in operand_list]
         subscripts = ""
         last = len(subscript_list) - 1
         for num, sub in enumerate(subscript_list):
