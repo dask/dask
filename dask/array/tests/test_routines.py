@@ -1300,8 +1300,6 @@ def test_result_type():
     pytest.param('ab...,bc...->ac...', marks=pytest.mark.xfail)
 
 ])
-
-
 def test_einsum(einsum_signature):
     # einsum label dimensions
     dimensions = {'a': 5, 'b': 6, 'c': 7,

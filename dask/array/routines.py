@@ -1216,10 +1216,10 @@ def einsum(subscripts, *operands, **kwargs):
         any(isinstance(o, string_types) for o in operands)):
 
         raise ValueError("einsum(op0, sublist0, "
-                                "op1, sublist1, "
-                                "..., [sublistout]) "
-                                "call style is not "
-                                "currently supported.")
+                         "op1, sublist1, "
+                         "..., [sublistout]) "
+                         "call style is not "
+                         "currently supported.")
 
     # Infer the output dtype from operands
     if dtype is None:
