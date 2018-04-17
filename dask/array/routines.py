@@ -1215,7 +1215,7 @@ def einsum(subscripts, *operands, **kwargs):
     if dtype is None:
         dtype = np.result_type(*[o.dtype for o in operands])
 
-    can_optimize = LooseVersion(np.__version__) > LooseVersion("1.12.0")
+    can_optimize = LooseVersion(np.__version__) >= LooseVersion("1.12.0")
 
     if can_optimize:
         if optimize is not False:
