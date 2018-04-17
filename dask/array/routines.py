@@ -1207,13 +1207,16 @@ def _einsum_kernel(*operands, **kwargs):
 def einsum(subscripts, *operands, **kwargs):
     casting = kwargs.get('casting', 'safe')
     dtype = kwargs.get('dtype')
-    optimize = kwargs.get('optimize', True)
+    optimize = kwargs.get('optimize')
     order = kwargs.get('order', 'K')
     einsum_dtype = dtype
 
     # Infer the output dtype from operands
     if dtype is None:
         dtype = np.result_type(*[o.dtype for o in operands])
+
+    if optimize is None:
+        optimize = False
 
     can_optimize = LooseVersion(np.__version__) >= LooseVersion("1.12.0")
 
