@@ -1291,7 +1291,6 @@ def einsum(subscripts, *operands, **kwargs):
     # Now reduce over any extra contraction dimensions
     if ncontract_inds > 0:
         size = len(output_str)
-        axes = list(range(size, size+ncontract_inds))
         result = result.sum(axis=list(range(size, size + ncontract_inds)))
 
     return result
