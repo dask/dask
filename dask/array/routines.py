@@ -1217,12 +1217,8 @@ def einsum(subscripts, *operands, **kwargs):
 
     can_optimize = LooseVersion(np.__version__) >= LooseVersion("1.12.0")
 
-    if can_optimize:
-        if optimize is not False:
-            optimize, _ = np.einsum_path(subscripts, *operands,
-                                         optimize=optimize)
-    else:
-        optimize = None
+    if can_optimize and optimize is not False:
+        optimize, _ = np.einsum_path(subscripts, *operands, optimize=optimize)
 
     subscripts_split = [s.strip() for s in subscripts.split('->')]
 
