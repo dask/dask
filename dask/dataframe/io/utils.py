@@ -1,12 +1,29 @@
 import pandas as pd
+import json
 
 
 def _get_pyarrow_dtypes(schema, categories):
     """Convert a pyarrow.Schema object to pandas dtype dict"""
+
+    # Check for pandas metadata
+    has_pandas_metadata = schema.metadata is not None and b'pandas' in schema.metadata
+    if has_pandas_metadata:
+        pandas_metadata = json.loads(schema.metadata[b'pandas'].decode('utf8'))
+        pandas_metadata_dtypes = {c.get('field_name', c.get('name', None)): c['numpy_type']
+                                  for c in pandas_metadata.get('columns', [])}
+    else:
+        pandas_metadata_dtypes = {}
+
     dtypes = {}
     for i in range(len(schema)):
         field = schema[i]
-        numpy_dtype = field.type.to_pandas_dtype()
+
+        # Get numpy_dtype from pandas metadata if available
+        if field.name in pandas_metadata_dtypes:
+            numpy_dtype = pandas_metadata_dtypes[field.name]
+        else:
+            numpy_dtype = field.type.to_pandas_dtype()
+
         dtypes[field.name] = numpy_dtype
 
     if categories:
