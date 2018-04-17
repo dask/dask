@@ -9,6 +9,7 @@ from numbers import Integral
 from operator import getitem
 
 import numpy as np
+from six import string_types
 from toolz import concat, sliding_window, interleave
 
 from .. import sharedict
@@ -1210,6 +1211,15 @@ def einsum(subscripts, *operands, **kwargs):
     optimize = kwargs.get('optimize')
     order = kwargs.get('order', 'K')
     einsum_dtype = dtype
+
+    if (not isinstance(subscripts, string_types) or
+        any(isinstance(o, string_types) for o in operands)):
+
+        raise ValueError("einsum(op0, sublist0, "
+                                "op1, sublist1, "
+                                "..., [sublistout]) "
+                                "call method is not "
+                                "currently supported.")
 
     # Infer the output dtype from operands
     if dtype is None:
