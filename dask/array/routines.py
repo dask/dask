@@ -1220,6 +1220,9 @@ def einsum(subscripts, *operands, **kwargs):
     if can_optimize and optimize is not False:
         optimize, _ = np.einsum_path(subscripts, *operands, optimize=optimize)
 
+    if '...' in subscripts:
+        raise ValueError("Ellipses are not currently supported in subscripts")
+
     subscripts_split = [s.strip() for s in subscripts.split('->')]
 
     # No output string provided
