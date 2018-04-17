@@ -303,10 +303,10 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
 
     if (LooseVersion(np.__version__) < LooseVersion("1.13.0") and
             (np.array(test_result.shape) > 1).sum(dtype=int) > 1):
-            raise ValueError(
-                "No more than one non-trivial dimension allowed in result. "
-                "Need NumPy 1.13.0+ for this functionality."
-            )
+        raise ValueError(
+            "No more than one non-trivial dimension allowed in result. "
+            "Need NumPy 1.13.0+ for this functionality."
+        )
 
     # Rechunk so that func1d is applied over the full axis.
     arr = arr.rechunk(
@@ -1208,12 +1208,12 @@ def _einsum_kernel(*operands, **kwargs):
 def einsum(subscripts, *operands, **kwargs):
     casting = kwargs.get('casting', 'safe')
     dtype = kwargs.get('dtype')
-    optimize = kwargs.get('optimize')
+    optimize = kwargs.get('optimize', True)
     order = kwargs.get('order', 'K')
     einsum_dtype = dtype
 
     if (not isinstance(subscripts, string_types) or
-        any(isinstance(o, string_types) for o in operands)):
+            any(isinstance(o, string_types) for o in operands)):
 
         raise ValueError("einsum(op0, sublist0, "
                          "op1, sublist1, "
@@ -1231,17 +1231,30 @@ def einsum(subscripts, *operands, **kwargs):
     can_optimize = LooseVersion(np.__version__) >= LooseVersion("1.12.0")
 
     if can_optimize and optimize is not False:
-        optimize, _ = np.einsum_path(subscripts, *operands, optimize=optimize)
+        optimize, path_info = np.einsum_path(subscripts, *operands,
+                                             optimize=optimize)
+
+        # We can obtain a more complete subscript specification
+        # from the path_info string, as it will fill in
+        # missing outputs.
+        contraction_str = 'Complete contraction:'
+        s = path_info.find(contraction_str) + len(contraction_str)
+        e = path_info.find('\n')
+        subscripts = path_info[s:e].strip()
 
     if '...' in subscripts:
         raise ValueError("Ellipses are not currently supported in subscripts")
 
     subscripts_split = [s.strip() for s in subscripts.split('->')]
 
-    # No output string provided
+    # No output string found, request a better version of NumPy
     if len(subscripts_split) == 1:
-        inputs_str = subscripts_split[0]
-        output_str = None
+        raise ValueError("No output specifier was provided "
+                         "and the functionality for inferring "
+                         "it is not present in this version of "
+                         "NumPy (%s). NumPy >= 1.12.0 is required "
+                         % (np.__version__))
+
     # Input string(s) and output string provided
     elif len(subscripts_split) == 2:
         inputs_str, output_str = subscripts_split
@@ -1260,23 +1273,18 @@ def einsum(subscripts, *operands, **kwargs):
     # Set of all indices
     all_inds_str = ''.join(sorted(set(''.join(inputs))))
 
-    # If output isn't provided, it's
-    # the first element of the sorted list of all indices
-    if output_str is None:
-        output_str = all_inds_str[:1]
-
     # Which indices are contracted?
     contract_inds = set(all_inds_str) - set(output_str)
     ncontract_inds = len(contract_inds)
 
     atop_kwargs = {
-      'subscripts': subscripts,
-      'kernel_dtype': einsum_dtype,
-      'casting': casting,
-      'ncontract_inds': ncontract_inds,
-      'order': order,
-      'adjust_chunks': {ind: 1 for ind in contract_inds},
-      'dtype': dtype,
+        'subscripts': subscripts,
+        'kernel_dtype': einsum_dtype,
+        'casting': casting,
+        'ncontract_inds': ncontract_inds,
+        'order': order,
+        'adjust_chunks': {ind: 1 for ind in contract_inds},
+        'dtype': dtype,
     }
 
     if can_optimize:
