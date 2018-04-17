@@ -1296,6 +1296,7 @@ def test_result_type():
     'a',
     'ba,b',
     'ba,b->',
+    pytest.param('ab...,bc...->ac...', marks=pytest.mark.xfail)
 
 ])
 def test_einsum(einsum_signature):
