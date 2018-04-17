@@ -12,7 +12,6 @@ import numpy as np
 from toolz import concat, sliding_window, interleave
 
 from .. import sharedict
-from ..compatibility import string_types
 from ..core import flatten
 from ..base import tokenize
 from . import numpy_compat, chunk
@@ -22,6 +21,8 @@ from .wrap import ones
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    asanyarray, concatenate, stack, atop, broadcast_shapes,
                    is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
+
+from .einsum import parse_einsum_input
 
 
 @wraps(np.array)
@@ -1204,82 +1205,38 @@ def _einsum_kernel(*operands, **kwargs):
     return chunk.reshape(chunk.shape + (1,) * ncontract_inds)
 
 
+_einsum_can_optimize = LooseVersion(np.__version__) >= LooseVersion("1.12.0")
+
+
 @wraps(np.einsum)
-def einsum(subscripts, *operands, **kwargs):
+def einsum(*operands, **kwargs):
     casting = kwargs.get('casting', 'safe')
     dtype = kwargs.get('dtype')
-    optimize = kwargs.get('optimize', True)
+    optimize = kwargs.get('optimize')
     order = kwargs.get('order', 'K')
     einsum_dtype = dtype
 
-    if (not isinstance(subscripts, string_types) or
-            any(isinstance(o, string_types) for o in operands)):
-
-        raise ValueError("einsum(op0, sublist0, "
-                         "op1, sublist1, "
-                         "..., [sublistout]) "
-                         "call style is not "
-                         "currently supported.")
+    inputs, outputs, ops = parse_einsum_input(operands)
+    subscripts = '->'.join((inputs,outputs))
 
     # Infer the output dtype from operands
     if dtype is None:
-        dtype = np.result_type(*[o.dtype for o in operands])
+        dtype = np.result_type(*[o.dtype for o in ops])
 
     if optimize is None:
         optimize = False
 
-    can_optimize = LooseVersion(np.__version__) >= LooseVersion("1.12.0")
+    if _einsum_can_optimize and optimize is not False:
+        optimize, _ = np.einsum_path(operands, optimize=optimize)
 
-    if can_optimize and optimize is not False:
-        optimize, path_info = np.einsum_path(subscripts, *operands,
-                                             optimize=optimize)
-
-        # We can obtain a more complete subscript specification
-        # from the path_info string, as it will fill in
-        # missing outputs and replace ellipses with concrete
-        # subscripts.
-        contraction_str = 'Complete contraction:'
-        start = path_info.find(contraction_str) + len(contraction_str)
-        end = path_info.find('\n')
-        subscripts = path_info[start:end].strip()
-
-    # Path optimization should have replaced ellipses,
-    # complain if any still exist
-    if '...' in subscripts:
-        raise ValueError("Please replace ellipses (...) with "
-                         "explicit subscripts or install "
-                         "NumPy >= 1.12.0" % (np.__version__))
-
-    subscripts_split = [s.strip() for s in subscripts.split('->')]
-
-    # No output string found, request a better version of NumPy
-    if len(subscripts_split) == 1:
-        raise ValueError("Please explicitly add "
-                         "output subscripts (a,b->a...) or "
-                         "install NumPy >= 1.12.0" % (np.__version__))
-
-    # Input string(s) and output string provided
-    elif len(subscripts_split) == 2:
-        inputs_str, output_str = subscripts_split
-    else:
-        raise ValueError("Invalid subscripts string %s" % subscripts)
-
-    # Split input strings
-    inputs = [s.strip() for s in inputs_str.split(',')]
-
-    if len(inputs) != len(operands):
-        raise ValueError("Length of inputs (%d) "
-                         "does not equal length "
-                         "of operands (%d)."
-                         % len(inputs), len(operands))
+    inputs = [tuple(i) for i in inputs.split(",")]
 
     # Set of all indices
-    all_inds_str = sorted(a for i in inputs for a in i)
+    all_inds = set(a for i in inputs for a in i)
 
     # Which indices are contracted?
-    contract_inds = set(all_inds_str) - set(output_str)
+    contract_inds = all_inds - set(outputs)
     ncontract_inds = len(contract_inds)
-    outputs = tuple(output_str) + tuple(contract_inds)
 
     atop_kwargs = {
         'subscripts': subscripts,
@@ -1291,18 +1248,18 @@ def einsum(subscripts, *operands, **kwargs):
         'dtype': dtype,
     }
 
-    if can_optimize:
+    if _einsum_can_optimize:
         atop_kwargs['optimize'] = optimize
 
     # Introduce the contracted indices into the atop product
     # so that we get numpy arrays, not lists
-    result = atop(_einsum_kernel, outputs,
-                  *(a for ap in zip(operands, inputs) for a in ap),
+    result = atop(_einsum_kernel, tuple(outputs) + tuple(contract_inds),
+                  *(a for ap in zip(ops, inputs) for a in ap),
                   **atop_kwargs)
 
     # Now reduce over any extra contraction dimensions
     if ncontract_inds > 0:
-        size = len(output_str)
+        size = len(outputs)
         result = result.sum(axis=list(range(size, size + ncontract_inds)))
 
     return result
