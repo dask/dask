@@ -1218,7 +1218,7 @@ def einsum(subscripts, *operands, **kwargs):
         raise ValueError("einsum(op0, sublist0, "
                                 "op1, sublist1, "
                                 "..., [sublistout]) "
-                                "call method is not "
+                                "call style is not "
                                 "currently supported.")
 
     # Infer the output dtype from operands
