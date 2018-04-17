@@ -28,7 +28,7 @@ except ImportError:
     from toolz import (frequencies, merge_with, join, reduceby,
                        count, pluck, groupby, topk)
 
-from ..base import Base, tokenize, dont_optimize, is_dask_collection
+from ..base import tokenize, dont_optimize, is_dask_collection, DaskMethodsMixin
 from ..bytes import open_files
 from ..compatibility import apply, urlopen
 from ..context import _globals, globalmethod
@@ -285,7 +285,7 @@ def robust_wraps(wrapper):
     return _
 
 
-class Item(Base):
+class Item(DaskMethodsMixin):
     def __init__(self, dsk, key):
         self.dask = dsk
         self.key = key
@@ -337,7 +337,7 @@ class Item(Base):
         dsk = {name: (func, self.key)}
         return Item(merge(self.dask, dsk), name)
 
-    __int__ = __float__ = __complex__ = __bool__ = Base.compute
+    __int__ = __float__ = __complex__ = __bool__ = DaskMethodsMixin.compute
 
     def to_delayed(self, optimize_graph=True):
         """Convert into a ``dask.delayed`` object.
@@ -355,7 +355,7 @@ class Item(Base):
         return Delayed(self.key, dsk)
 
 
-class Bag(Base):
+class Bag(DaskMethodsMixin):
     """ Parallel collection of Python objects
 
     Examples
@@ -954,8 +954,8 @@ class Bag(Base):
         if isinstance(other, Bag):
             if other.npartitions == 1:
                 dsk.update(other.dask)
-                dsk['join-%s-other' % name] = (list, other._keys()[0])
-                other = other._keys()[0]
+                other = other.__dask_keys__()[0]
+                dsk['join-%s-other' % name] = (list, other)
             else:
                 msg = ("Multi-bag joins are not implemented. "
                        "We recommend Dask dataframe if appropriate")

@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from abc import ABCMeta
 from collections import OrderedDict, Iterator
 from functools import partial
 from hashlib import md5
@@ -10,7 +9,6 @@ import pickle
 import os
 import threading
 import uuid
-import warnings
 
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
@@ -24,7 +22,7 @@ from .utils import Dispatch, ensure_dict
 
 __all__ = ("DaskMethodsMixin",
            "is_dask_collection",
-           "compute", "persist", "visualize",
+           "compute", "persist", "optimize", "visualize",
            "tokenize", "normalize_token")
 
 
@@ -155,73 +153,6 @@ class DaskMethodsMixin(object):
         """
         (result,) = compute(self, traverse=False, **kwargs)
         return result
-
-
-def call_finalize(finalize, args, results):
-    return finalize(results, *args)
-
-
-def add_ABCMeta(cls):
-    """Use the metaclass ABCMeta for this class"""
-    return ABCMeta(cls.__name__, cls.__bases__, cls.__dict__.copy())
-
-
-# TODO: this class is deprecated and should be removed in a future release.
-@add_ABCMeta
-class Base(DaskMethodsMixin):
-    """DEPRECATED. The recommended way to create a custom dask object now is to
-    implement the dask collection interface (see the docs), and optionally
-    subclass from ``DaskMethodsMixin`` if desired.
-
-    See http://dask.pydata.org/en/latest/custom-collections.html for more
-    information"""
-    __slots__ = ()
-
-    @classmethod
-    def __subclasshook__(cls, other):
-        if cls is Base:
-            warnings.warn("DeprecationWarning: `dask.base.Base` is deprecated. "
-                          "To check if an object is a dask collection use "
-                          "dask.base.is_dask_collection.\n\nSee http://dask."
-                          "pydata.org/en/latest/custom-collections.html "
-                          " for more information")
-        return NotImplemented
-
-    def __dask_graph__(self):
-        # We issue a deprecation warning for the whole class here, as any
-        # non-instance check usage will end up calling `__dask_graph__`.
-        warnings.warn("DeprecationWarning: `dask.base.Base` is deprecated. "
-                      "To create a custom dask object implement the dask "
-                      "collection interface, and optionally subclass from "
-                      "``DaskMethodsMixin`` if desired.\n\nSee http://dask."
-                      "pydata.org/en/latest/custom-collections.html "
-                      " for more information")
-        return self.dask
-
-    def _keys(self):
-        warnings.warn("DeprecationWarning: the `_keys` method is deprecated, "
-                      "use `__dask_keys__` instead")
-        return self.__dask_keys__()
-
-    @property
-    def _finalize(self):
-        warnings.warn("DeprecationWarning: the `_finalize` method is "
-                      "deprecated, use `__dask_postcompute__` instead")
-        f, args = self.__dask_postcompute__()
-        return partial(call_finalize, f, args) if args else f
-
-    @classmethod
-    def _optimize(cls, *args, **kwargs):
-        warnings.warn("DeprecationWarning: the `_optimize` method is "
-                      "deprecated, use `__dask_optimize__` instead")
-        return cls.__dask_optimize__(*args, **kwargs)
-
-    @classmethod
-    def _get(cls, dsk, keys, **kwargs):
-        warnings.warn("DeprecationWarning: the `_get` method is "
-                      "deprecated, use ``dask.base.compute_as_if_collection`` "
-                      "instead")
-        return compute_as_if_collection(cls, dsk, keys, **kwargs)
 
 
 def compute_as_if_collection(cls, dsk, keys, get=None, **kwargs):

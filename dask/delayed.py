@@ -10,7 +10,7 @@ except ImportError:
     from toolz import curry, pluck
 
 from . import threaded
-from .base import Base, is_dask_collection, dont_optimize
+from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
 from .base import tokenize as _tokenize
 from .compatibility import apply
 from .core import quote
@@ -342,7 +342,7 @@ def rebuild(dsk, key, length):
     return Delayed(key, dsk, length)
 
 
-class Delayed(Base, OperatorMethodMixin):
+class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     """Represents a value to be computed by dask.
 
     Equivalent to the output from a single key in a dask graph.
