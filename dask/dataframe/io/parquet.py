@@ -940,7 +940,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     fs, fs_token, paths = get_fs_token_paths(path, mode='rb',
                                              storage_options=storage_options)
 
-    if isinstance(path, str) and len(paths) > 1:
+    if isinstance(path, string_types) and len(paths) > 1:
         # Sort paths naturally if multiple paths resulted from a single
         # specification (by '*' globbing)
         paths = sorted(paths, key=natural_sort_key)
