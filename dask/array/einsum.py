@@ -3,7 +3,9 @@ from numpy.compat import basestring
 einsum_symbols = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 einsum_symbols_set = set(einsum_symbols)
 
-
+# This function duplicates numpy's _parse_einsum_input() function
+# See https://github.com/numpy/numpy/blob/master/LICENSE.txt
+# or NUMPY_LICENSE.txt within this directory
 def parse_einsum_input(operands):
     """
     A reproduction of numpy's _parse_einsum_input()
