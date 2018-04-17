@@ -32,8 +32,8 @@ import numpy as np
 from . import chunk
 from .numpy_compat import _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
-from ..base import (Base, tokenize, dont_optimize, compute_as_if_collection,
-                    persist, is_dask_collection)
+from ..base import (DaskMethodsMixin, tokenize, dont_optimize,
+                    compute_as_if_collection, persist, is_dask_collection)
 from ..context import _globals, globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
@@ -999,7 +999,7 @@ See the following documentation page for details:
 """.strip()
 
 
-class Array(Base):
+class Array(DaskMethodsMixin):
     """ Parallel Dask Array
 
     A parallel nd-array comprised of many numpy arrays arranged in a grid.
