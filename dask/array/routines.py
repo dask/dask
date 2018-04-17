@@ -1249,11 +1249,9 @@ def einsum(subscripts, *operands, **kwargs):
 
     # No output string found, request a better version of NumPy
     if len(subscripts_split) == 1:
-        raise ValueError("No output specifier was provided "
-                         "and the functionality for inferring "
-                         "it is not present in this version of "
-                         "NumPy (%s). NumPy >= 1.12.0 is required "
-                         % (np.__version__))
+        raise ValueError("Please explicitly add "
+                         "output subscripts (a,b->a...) or "
+                         "install NumPy >= 1.12.0" % (np.__version__))
 
     # Input string(s) and output string provided
     elif len(subscripts_split) == 2:
