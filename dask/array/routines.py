@@ -1192,27 +1192,15 @@ def insert(arr, obj, values, axis):
     return concatenate(interleaved, axis=axis)
 
 
-def _einsum_kernel_nooptimize(*operands, **kwargs):
-    chunk = np.einsum(kwargs['subscripts'], *operands,
-                      casting=kwargs['casting'],
-                      dtype=kwargs['kernel_dtype'],
-                      order=kwargs['order'])
+def _einsum_kernel(*operands, **kwargs):
+    subscripts = kwargs.pop('subscripts')
+    ncontract_inds = kwargs.pop('ncontract_inds')
+    dtype = kwargs.pop('kernel_dtype')
+    chunk = np.einsum(subscripts, *operands, dtype=dtype, **kwargs)
 
     # Avoid concatenate=True in atop by adding 1's
     # for the contracted dimensions
-    return chunk.reshape(chunk.shape + (1,) * kwargs['ncontract_inds'])
-
-
-def _einsum_kernel_optimize(*operands, **kwargs):
-    chunk = np.einsum(kwargs['subscripts'], *operands,
-                      casting=kwargs['casting'],
-                      dtype=kwargs['kernel_dtype'],
-                      order=kwargs['order'],
-                      optimize=kwargs['optimize'])
-
-    # Avoid concatenate=True in atop by adding 1's
-    # for the contracted dimensions
-    return chunk.reshape(chunk.shape + (1,) * kwargs['ncontract_inds'])
+    return chunk.reshape(chunk.shape + (1,) * ncontract_inds)
 
 
 @wraps(np.einsum)
@@ -1269,21 +1257,24 @@ def einsum(subscripts, *operands, **kwargs):
     contract_inds = all_inds_set - set(output_str)
     ncontract_inds = len(contract_inds)
 
-    kernel = (_einsum_kernel_optimize if can_optimize
-              else _einsum_kernel_nooptimize)
+    atop_kwargs = {
+      'subscripts': subscripts,
+      'kernel_dtype': einsum_dtype,
+      'casting': casting,
+      'ncontract_inds': ncontract_inds,
+      'order': order,
+      'adjust_chunks': {ind: 1 for ind in contract_inds},
+      'dtype': dtype,
+    }
+
+    if can_optimize:
+        atop_kwargs['optimize'] = optimize
 
     # Introduce the contracted indices into the atop product
     # so that we get numpy arrays, not lists
-    result = atop(kernel, output_str + ''.join(contract_inds),
+    result = atop(_einsum_kernel, output_str + ''.join(contract_inds),
                   *(a for ap in zip(operands, inputs) for a in ap),
-                  subscripts=subscripts,
-                  kernel_dtype=einsum_dtype,
-                  casting=casting,
-                  ncontract_inds=ncontract_inds,
-                  optimize=optimize,
-                  order=order,
-                  adjust_chunks={ind: 1 for ind in contract_inds},
-                  dtype=dtype)
+                  **atop_kwargs)
 
     # Now reduce over the extra contraction dimensions
     size = len(output_str)
