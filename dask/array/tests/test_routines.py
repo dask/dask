@@ -1292,9 +1292,11 @@ def test_result_type():
     'abc,bad->abcd',
     'abcdef,bcdfg->abcdeg',
     'ea,fb,abcd,gc,hd->efgh',
-    'ba,b',
     'ab,b',
     'a',
+    'ba,b',
+    'ba,b->',
+
 ])
 def test_einsum(einsum_signature):
     # einsum label dimensions
