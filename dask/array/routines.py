@@ -1236,14 +1236,19 @@ def einsum(subscripts, *operands, **kwargs):
 
         # We can obtain a more complete subscript specification
         # from the path_info string, as it will fill in
-        # missing outputs.
+        # missing outputs and replace ellipses with concrete
+        # subscripts.
         contraction_str = 'Complete contraction:'
         s = path_info.find(contraction_str) + len(contraction_str)
         e = path_info.find('\n')
         subscripts = path_info[s:e].strip()
 
+    # Path optimization should have replaced ellipses,
+    # complain if any still exist
     if '...' in subscripts:
-        raise ValueError("Ellipses are not currently supported in subscripts")
+        raise ValueError("Please explicitly replace ellipse (...) "
+                         "with subscripts or install "
+                         "NumPy >= 1.12.0" % (np.__version__))
 
     subscripts_split = [s.strip() for s in subscripts.split('->')]
 
@@ -1269,11 +1274,12 @@ def einsum(subscripts, *operands, **kwargs):
                          % len(inputs), len(operands))
 
     # Set of all indices
-    all_inds_str = ''.join(sorted(set(''.join(inputs))))
+    all_inds_str = sorted(a for i in inputs for a in i)
 
     # Which indices are contracted?
     contract_inds = set(all_inds_str) - set(output_str)
     ncontract_inds = len(contract_inds)
+    outputs = tuple(output_str) + tuple(contract_inds)
 
     atop_kwargs = {
         'subscripts': subscripts,
@@ -1290,7 +1296,7 @@ def einsum(subscripts, *operands, **kwargs):
 
     # Introduce the contracted indices into the atop product
     # so that we get numpy arrays, not lists
-    result = atop(_einsum_kernel, output_str + ''.join(contract_inds),
+    result = atop(_einsum_kernel, outputs,
                   *(a for ap in zip(operands, inputs) for a in ap),
                   **atop_kwargs)
 

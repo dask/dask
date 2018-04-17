@@ -1300,22 +1300,25 @@ def test_result_type():
     'a,b',
     'a,b,c',
     'a',
+    'a...a->a',
     'ba,b',
     'ba,b->',
     'defab,fedbc->defac',
-    pytest.param('ab...,bc...->ac...', marks=pytest.mark.xfail)
-
+    'ab...,bc...->ac...',
+    'a...a',
+    'abc...->cba...',
+    '...ab->...a'
 ])
 def test_einsum(einsum_signature):
     # einsum label dimensions
     dimensions = {'a': 5, 'b': 6, 'c': 7,
                   'd': 5, 'e': 6, 'f': 10,
-                  'g': 1, 'h': 2}
+                  'g': 1, 'h': 2, '*': 11}
 
     # dimension chunks sizes
     chunks = {'a': (2, 3), 'b': (2, 3, 1), 'c': (2, 3, 2),
-              'd': (4, 1), 'e': (2, 4), 'f': (1, 2, 3, 4),
-              'g': 1, 'h': (1, 1)}
+              'd': (4, 1), 'e': (2, 4),    'f': (1, 2, 3, 4),
+              'g': 1,      'h': (1, 1),    '*': 11}
 
     def shape_from_string(s):
         return tuple(dimensions[c] for c in s)
@@ -1323,7 +1326,9 @@ def test_einsum(einsum_signature):
     def chunks_from_string(s):
         return tuple(chunks[c] for c in s)
 
-    input_sigs = einsum_signature.split('->')[0].split(',')
+    input_sigs = (einsum_signature.split('->')[0]
+                                  .replace("...", "*")
+                                  .split(','))
 
     shapes = [shape_from_string(s) for s in input_sigs]
     chunks = [chunks_from_string(s) for s in input_sigs]
