@@ -1250,10 +1250,10 @@ def einsum(subscripts, *operands, **kwargs):
     # Set of all indices
     all_inds_set = set().union(*inputs)
 
-    # If output isn't provided, it's equal to
-    # the sorted list of all indices
+    # If output isn't provided, it's
+    # the first element of the sorted list of all indices
     if output_str == '':
-        output_str = ''.join(sorted(all_inds_set))
+        output_str = ''.join(sorted(all_inds_set))[:1]
 
     # Which indices are contracted?
     contract_inds = all_inds_set - set(output_str)
@@ -1278,6 +1278,9 @@ def einsum(subscripts, *operands, **kwargs):
                   *(a for ap in zip(operands, inputs) for a in ap),
                   **atop_kwargs)
 
-    # Now reduce over the extra contraction dimensions
-    size = len(output_str)
-    return result.sum(axis=range(size, size + ncontract_inds))
+    if ncontract_inds > 0:
+        # Now reduce over the extra contraction dimensions
+        size = len(output_str)
+        return result.sum(axis=range(size, size + ncontract_inds))
+    else:
+        return result
