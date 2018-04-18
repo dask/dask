@@ -215,7 +215,7 @@ def einsum(*operands, **kwargs):
         optimize = False
 
     if _einsum_can_optimize and optimize is not False:
-        optimize, _ = np.einsum_path(operands, optimize=optimize)
+        optimize, _ = np.einsum_path(subscripts, *ops, optimize=optimize)
 
     inputs = [tuple(i) for i in inputs.split(",")]
 

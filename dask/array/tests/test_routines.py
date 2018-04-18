@@ -1288,6 +1288,32 @@ def test_result_type():
     assert da.result_type(a, c) == np.float64
 
 
+def _numpy_and_dask_inputs(input_sigs):
+    # einsum label dimensions
+    _dimensions = {'a': 5, 'b': 6, 'c': 7,
+                   'd': 5, 'e': 6, 'f': 10,
+                   'g': 1, 'h': 2, '*': 11}
+
+    # dimension chunks sizes
+    _chunks = {'a': (2, 3), 'b': (2, 3, 1), 'c': (2, 3, 2),
+               'd': (4, 1), 'e': (2, 4),    'f': (1, 2, 3, 4),
+               'g': 1,      'h': (1, 1),    '*': 11}
+
+    def _shape_from_string(s):
+        return tuple(_dimensions[c] for c in s)
+
+    def _chunks_from_string(s):
+        return tuple(_chunks[c] for c in s)
+
+    shapes = [_shape_from_string(s) for s in input_sigs]
+    chunks = [_chunks_from_string(s) for s in input_sigs]
+
+    np_inputs = [np.random.random(s) for s in shapes]
+    da_inputs = [da.from_array(i, chunks=c) for i, c in zip(np_inputs, chunks)]
+
+    return np_inputs, da_inputs
+
+
 @pytest.mark.parametrize('einsum_signature', [
     'abc,bad->abcd',
     'abcdef,bcdfg->abcdeg',
@@ -1320,34 +1346,30 @@ def test_result_type():
     'fff,fae,bef,def->abd',
 ])
 def test_einsum(einsum_signature):
-    # einsum label dimensions
-    dimensions = {'a': 5, 'b': 6, 'c': 7,
-                  'd': 5, 'e': 6, 'f': 10,
-                  'g': 1, 'h': 2, '*': 11}
-
-    # dimension chunks sizes
-    chunks = {'a': (2, 3), 'b': (2, 3, 1), 'c': (2, 3, 2),
-              'd': (4, 1), 'e': (2, 4),    'f': (1, 2, 3, 4),
-              'g': 1,      'h': (1, 1),    '*': 11}
-
-    def shape_from_string(s):
-        return tuple(dimensions[c] for c in s)
-
-    def chunks_from_string(s):
-        return tuple(chunks[c] for c in s)
-
     input_sigs = (einsum_signature.split('->')[0]
                                   .replace("...", "*")
                                   .split(','))
 
-    shapes = [shape_from_string(s) for s in input_sigs]
-    chunks = [chunks_from_string(s) for s in input_sigs]
-
-    np_inputs = [np.random.random(s) for s in shapes]
-    da_inputs = [da.from_array(i, chunks=c) for i, c in zip(np_inputs, chunks)]
+    np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
 
     assert_eq(np.einsum(einsum_signature, *np_inputs),
               da.einsum(einsum_signature, *da_inputs))
+
+
+def test_einsum_optimize():
+    sig = 'ea,fb,abcd,gc,hd->efgh'
+
+    input_sigs = sig.split('->')[0].split(',')
+
+    np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
+
+    perms = [[True, False],
+             ['greedy', False],
+             ['optimal', False]]
+
+    for opt1, opt2 in perms:
+        assert_eq(np.einsum(sig, *np_inputs, optimize=opt1),
+                  da.einsum(sig, *np_inputs, optimize=opt2))
 
 
 def test_einsum_broadcasting_contraction():
