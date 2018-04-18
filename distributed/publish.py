@@ -42,10 +42,7 @@ class PublishExtension(object):
 
     def get(self, stream, name=None, client=None):
         with log_errors():
-            if name in self.datasets:
-                return self.datasets[name]
-            else:
-                raise KeyError("Dataset '%s' not found" % name)
+            return self.datasets.get(name, None)
 
 
 class Datasets(MutableMapping):

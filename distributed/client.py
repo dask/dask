@@ -1828,6 +1828,8 @@ class Client(Node):
     @gen.coroutine
     def _get_dataset(self, name):
         out = yield self.scheduler.publish_get(name=name, client=self.id)
+        if out is None:
+            raise KeyError("Dataset '%s' not found" % name)
 
         with temp_default_client(self):
             data = loads(out['data'])
