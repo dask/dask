@@ -1371,6 +1371,9 @@ def test_einsum_optimize():
         assert_eq(np.einsum(sig, *np_inputs, optimize=opt1),
                   da.einsum(sig, *np_inputs, optimize=opt2))
 
+        assert_eq(np.einsum(sig, *np_inputs, optimize=opt2),
+                  da.einsum(sig, *np_inputs, optimize=opt1))
+
 
 def test_einsum_broadcasting_contraction():
     a = np.random.rand(1, 5, 4)
