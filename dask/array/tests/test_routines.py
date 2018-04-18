@@ -1365,9 +1365,12 @@ def test_einsum_broadcasting_contraction():
     da_res = da.einsum('ijk,kl,jl', d_a, d_b, d_c)
     assert_eq(np_res, da_res)
 
+    mul_res = da_res * d
+
     np_res = np.einsum('ijk,kl,jl,i->i', a, b, c, d)
     da_res = da.einsum('ijk,kl,jl,i->i', d_a, d_b, d_c, d_d)
     assert_eq(np_res, da_res)
+    assert_eq(np_res, mul_res)
 
 
 def test_einsum_broadcasting_contraction2():
@@ -1385,9 +1388,12 @@ def test_einsum_broadcasting_contraction2():
     da_res = da.einsum('abjk,kl,jl', d_a, d_b, d_c)
     assert_eq(np_res, da_res)
 
+    mul_res = da_res * d
+
     np_res = np.einsum('abjk,kl,jl,ab->ab', a, b, c, d)
     da_res = da.einsum('abjk,kl,jl,ab->ab', d_a, d_b, d_c, d_d)
     assert_eq(np_res, da_res)
+    assert_eq(np_res, mul_res)
 
 
 def test_einsum_broadcasting_contraction3():
