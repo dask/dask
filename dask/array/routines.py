@@ -22,7 +22,7 @@ from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    asanyarray, concatenate, stack, atop, broadcast_shapes,
                    is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
 
-from .einsum import parse_einsum_input
+from .einsum import einsum
 
 
 @wraps(np.array)
@@ -1192,74 +1192,3 @@ def insert(arr, obj, values, axis):
     interleaved = list(interleave([split_arr, split_values]))
     interleaved = [i for i in interleaved if i.nbytes]
     return concatenate(interleaved, axis=axis)
-
-
-def _einsum_kernel(*operands, **kwargs):
-    subscripts = kwargs.pop('subscripts')
-    ncontract_inds = kwargs.pop('ncontract_inds')
-    dtype = kwargs.pop('kernel_dtype')
-    chunk = np.einsum(subscripts, *operands, dtype=dtype, **kwargs)
-
-    # Avoid concatenate=True in atop by adding 1's
-    # for the contracted dimensions
-    return chunk.reshape(chunk.shape + (1,) * ncontract_inds)
-
-
-_einsum_can_optimize = LooseVersion(np.__version__) >= LooseVersion("1.12.0")
-
-
-@wraps(np.einsum)
-def einsum(*operands, **kwargs):
-    casting = kwargs.get('casting', 'safe')
-    dtype = kwargs.get('dtype')
-    optimize = kwargs.get('optimize')
-    order = kwargs.get('order', 'K')
-    einsum_dtype = dtype
-
-    inputs, outputs, ops = parse_einsum_input(operands)
-    subscripts = '->'.join((inputs, outputs))
-
-    # Infer the output dtype from operands
-    if dtype is None:
-        dtype = np.result_type(*[o.dtype for o in ops])
-
-    if optimize is None:
-        optimize = False
-
-    if _einsum_can_optimize and optimize is not False:
-        optimize, _ = np.einsum_path(operands, optimize=optimize)
-
-    inputs = [tuple(i) for i in inputs.split(",")]
-
-    # Set of all indices
-    all_inds = set(a for i in inputs for a in i)
-
-    # Which indices are contracted?
-    contract_inds = all_inds - set(outputs)
-    ncontract_inds = len(contract_inds)
-
-    atop_kwargs = {
-        'subscripts': subscripts,
-        'kernel_dtype': einsum_dtype,
-        'casting': casting,
-        'ncontract_inds': ncontract_inds,
-        'order': order,
-        'adjust_chunks': {ind: 1 for ind in contract_inds},
-        'dtype': dtype,
-    }
-
-    if _einsum_can_optimize:
-        atop_kwargs['optimize'] = optimize
-
-    # Introduce the contracted indices into the atop product
-    # so that we get numpy arrays, not lists
-    result = atop(_einsum_kernel, tuple(outputs) + tuple(contract_inds),
-                  *(a for ap in zip(ops, inputs) for a in ap),
-                  **atop_kwargs)
-
-    # Now reduce over any extra contraction dimensions
-    if ncontract_inds > 0:
-        size = len(outputs)
-        result = result.sum(axis=list(range(size, size + ncontract_inds)))
-
-    return result
