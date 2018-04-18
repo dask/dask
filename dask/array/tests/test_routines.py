@@ -1356,23 +1356,24 @@ def test_einsum(einsum_signature):
               da.einsum(einsum_signature, *da_inputs))
 
 
-def test_einsum_optimize():
+@pytest.mark.parametrize('optimize_opts', [
+    (True, False),
+    ('greedy', False),
+    ('optimal', False)
+])
+def test_einsum_optimize(optimize_opts):
     sig = 'ea,fb,abcd,gc,hd->efgh'
 
     input_sigs = sig.split('->')[0].split(',')
 
     np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
+    opt1, opt2 = optimize_opts
 
-    perms = [[True, False],
-             ['greedy', False],
-             ['optimal', False]]
+    assert_eq(np.einsum(sig, *np_inputs, optimize=opt1),
+              da.einsum(sig, *np_inputs, optimize=opt2))
 
-    for opt1, opt2 in perms:
-        assert_eq(np.einsum(sig, *np_inputs, optimize=opt1),
-                  da.einsum(sig, *np_inputs, optimize=opt2))
-
-        assert_eq(np.einsum(sig, *np_inputs, optimize=opt2),
-                  da.einsum(sig, *np_inputs, optimize=opt1))
+    assert_eq(np.einsum(sig, *np_inputs, optimize=opt2),
+              da.einsum(sig, *np_inputs, optimize=opt1))
 
 
 def test_einsum_broadcasting_contraction():
