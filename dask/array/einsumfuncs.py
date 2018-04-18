@@ -215,7 +215,12 @@ def einsum(*operands, **kwargs):
         optimize = False
 
     if _einsum_can_optimize and optimize is not False:
-        optimize, _ = np.einsum_path(subscripts, *ops, optimize=optimize)
+        # Avoid computation of dask arrays within np.einsum_path
+        # by passing in small numpy arrays broadcasted
+        # up to the right shape
+        fake_ops = [np.broadcast_to(o.dtype.type(0), shape=o.shape)
+                    for o in ops]
+        optimize, _ = np.einsum_path(subscripts, *fake_ops, optimize=optimize)
 
     inputs = [tuple(i) for i in inputs.split(",")]
 
