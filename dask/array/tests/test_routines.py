@@ -1363,10 +1363,9 @@ def test_einsum(einsum_signature):
 ])
 def test_einsum_optimize(optimize_opts):
     sig = 'ea,fb,abcd,gc,hd->efgh'
-
     input_sigs = sig.split('->')[0].split(',')
-
     np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
+
     opt1, opt2 = optimize_opts
 
     assert_eq(np.einsum(sig, *np_inputs, optimize=opt1),
@@ -1374,6 +1373,27 @@ def test_einsum_optimize(optimize_opts):
 
     assert_eq(np.einsum(sig, *np_inputs, optimize=opt2),
               da.einsum(sig, *np_inputs, optimize=opt1))
+
+
+@pytest.mark.parametrize('order', ['C', 'F', 'A', 'K'])
+def test_einsum_order(order):
+    sig = 'ea,fb,abcd,gc,hd->efgh'
+    input_sigs = sig.split('->')[0].split(',')
+    np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
+
+    assert_eq(np.einsum(sig, *np_inputs, order=order),
+              da.einsum(sig, *np_inputs, order=order))
+
+
+@pytest.mark.parametrize('casting', [
+    'no', 'equiv', 'safe', 'same_kind', 'unsafe'])
+def test_einsum_casting(casting):
+    sig = 'ea,fb,abcd,gc,hd->efgh'
+    input_sigs = sig.split('->')[0].split(',')
+    np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
+
+    assert_eq(np.einsum(sig, *np_inputs, casting=casting),
+              da.einsum(sig, *np_inputs, casting=casting))
 
 
 def test_einsum_broadcasting_contraction():
