@@ -22,7 +22,7 @@ from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    asanyarray, concatenate, stack, atop, broadcast_shapes,
                    is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
 
-from .einsum import einsum
+from .einsumfuncs import einsum  # noqa
 
 
 @wraps(np.array)
