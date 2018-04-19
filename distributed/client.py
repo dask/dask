@@ -2482,13 +2482,13 @@ class Client(Node):
         """ Upload local package to workers
 
         This sends a local file up to all worker nodes.  This file is placed
-        into a temporary directory on Python's system path so any .py, .pyc, .egg
+        into a temporary directory on Python's system path so any .py,  .egg
         or .zip  files will be importable.
 
         Parameters
         ----------
         filename: string
-            Filename of .py, .pyc, .egg or .zip file to send to workers
+            Filename of .py, .egg or .zip file to send to workers
 
         Examples
         --------

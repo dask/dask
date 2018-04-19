@@ -20,7 +20,7 @@ from tornado.ioloop import TimeoutError
 
 from distributed import (Nanny, Client, get_client, wait, default_client,
         get_worker, Reschedule)
-from distributed.compatibility import WINDOWS
+from distributed.compatibility import WINDOWS, cache_from_source
 from distributed.config import config
 from distributed.core import rpc
 from distributed.client import wait
@@ -179,6 +179,33 @@ def test_upload_file(c, s, a, b):
     aa.close_rpc()
     bb.close_rpc()
     assert not os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
+
+
+@pytest.mark.xfail(reason="don't yet support uploading pyc files")
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
+def test_upload_file_pyc(c, s, w):
+    with tmpfile() as dirname:
+        os.mkdir(dirname)
+        with open(os.path.join(dirname, 'foo.py'), mode='w') as f:
+            f.write('def f():\n    return 123')
+
+        sys.path.append(dirname)
+        try:
+            import foo
+            assert foo.f() == 123
+            pyc = cache_from_source(os.path.join(dirname, 'foo.py'))
+            assert os.path.exists(pyc)
+            yield c.upload_file(pyc)
+
+            def g():
+                import foo
+                return foo.x
+
+            future = c.submit(g)
+            result = yield future
+            assert result == 123
+        finally:
+            sys.path.remove(dirname)
 
 
 @gen_cluster(client=True)

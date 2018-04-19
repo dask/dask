@@ -987,19 +987,19 @@ def open_port(host=''):
 
 
 def import_file(path):
-    """ Loads modules for a file (.py, .pyc, .zip, .egg) """
+    """ Loads modules for a file (.py, .zip, .egg) """
     directory, filename = os.path.split(path)
     name, ext = os.path.splitext(filename)
     names_to_import = []
     tmp_python_path = None
 
-    if ext in ('.py', '.pyc'):
+    if ext in ('.py'):  # , '.pyc'):
         if directory not in sys.path:
             tmp_python_path = directory
         names_to_import.append(name)
-        # Ensures that no pyc file will be reused
+    if ext == '.py':  # Ensure that no pyc file will be reused
         cache_file = cache_from_source(path)
-        if os.path.exists(cache_file):
+        with ignoring(OSError):
             os.remove(cache_file)
     if ext in ('.egg', '.zip'):
         if path not in sys.path:
