@@ -657,8 +657,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         3  3.0  1.0
         4  4.0  1.0
 
-        If you have a ``DatetimeIndex``, you can use a `timedelta` for time-
+        If you have a ``DatetimeIndex``, you can use a ``pd.Timedelta`` for time-
         based windows.
+
         >>> ts = pd.Series(range(10), index=pd.date_range('2017', periods=10))
         >>> dts = dd.from_pandas(ts, npartitions=2)
         >>> dts.map_overlap(lambda df: df.rolling('2D').sum(),
