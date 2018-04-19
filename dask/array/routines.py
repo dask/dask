@@ -23,6 +23,8 @@ from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    asanyarray, concatenate, stack, atop, broadcast_shapes,
                    is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
 
+from .einsumfuncs import einsum  # noqa
+
 
 @wraps(np.array)
 def array(x, dtype=None, ndmin=None):
@@ -303,10 +305,10 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
 
     if (LooseVersion(np.__version__) < LooseVersion("1.13.0") and
             (np.array(test_result.shape) > 1).sum(dtype=int) > 1):
-            raise ValueError(
-                "No more than one non-trivial dimension allowed in result. "
-                "Need NumPy 1.13.0+ for this functionality."
-            )
+        raise ValueError(
+            "No more than one non-trivial dimension allowed in result. "
+            "Need NumPy 1.13.0+ for this functionality."
+        )
 
     # Rechunk so that func1d is applied over the full axis.
     arr = arr.rechunk(

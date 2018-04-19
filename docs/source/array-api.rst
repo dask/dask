@@ -61,6 +61,7 @@ Top level user functions:
    dot
    dstack
    ediff1d
+   einsum
    empty
    empty_like
    exp
