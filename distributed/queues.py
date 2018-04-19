@@ -32,13 +32,17 @@ class QueueExtension(object):
         self.client_refcount = dict()
         self.future_refcount = defaultdict(lambda: 0)
 
-        self.scheduler.handlers.update({'queue_create': self.create,
-                                        'queue_release': self.release,
-                                        'queue_put': self.put,
-                                        'queue_get': self.get,
-                                        'queue_qsize': self.qsize})
+        self.scheduler.handlers.update({
+            'queue_create': self.create,
+            'queue_put': self.put,
+            'queue_get': self.get,
+            'queue_qsize': self.qsize}
+        )
 
-        self.scheduler.client_handlers['queue-future-release'] = self.future_release
+        self.scheduler.client_handlers.update({
+            'queue-future-release': self.future_release,
+            'queue_release': self.release,
+        })
 
         self.scheduler.extensions['queues'] = self
 
@@ -50,13 +54,18 @@ class QueueExtension(object):
             self.client_refcount[name] += 1
 
     def release(self, stream=None, name=None, client=None):
+        if name not in self.queues:
+            return
+
         self.client_refcount[name] -= 1
         if self.client_refcount[name] == 0:
             del self.client_refcount[name]
-            futures = self.queues[name].queue
+            futures = self.queues[name]._queue
             del self.queues[name]
-            self.scheduler.client_releases_keys(keys=[f.key for f in futures],
-                                                client='queue-%s' % name)
+            self.scheduler.client_releases_keys(
+                    keys=[d['value'] for d in futures if d['type'] == 'Future'],
+                    client='queue-%s' % name
+            )
 
     @gen.coroutine
     def put(self, stream=None, name=None, key=None, data=None, client=None, timeout=None):
@@ -232,13 +241,10 @@ class Queue(object):
         result = yield self.client.scheduler.queue_qsize(name=self.name)
         raise gen.Return(result)
 
-    def _release(self):
+    def close(self):
         if self.client.status == 'running':  # TODO: can leave zombie futures
             self.client._send_to_scheduler({'op': 'queue_release',
                                             'name': self.name})
-
-    def __del__(self):
-        self._release()
 
     def __getstate__(self):
         return (self.name, self.client.scheduler.address)
