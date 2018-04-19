@@ -575,7 +575,9 @@ def persist(*args, **kwargs):
                 pass
             else:
                 if client.get == get:
-                    results = client.persist(collections, **kwargs)
+                    results = client.persist(collections,
+                                             optimize_graph=optimize_graph,
+                                             **kwargs)
                     return repack(results)
 
     if not get:
