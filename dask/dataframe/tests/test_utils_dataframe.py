@@ -229,6 +229,17 @@ def test_meta_nonempty_index():
         assert idx1.name == idx2.name
     assert res.names == idx.names
 
+    levels = [pd.Int64Index([1], name='a'),
+              pd.CategoricalIndex(data=['b'], categories=['b'], name='b'),
+              pd.TimedeltaIndex([np.timedelta64(1, 'D')], name='timedelta')]
+    idx = pd.MultiIndex(levels=levels, labels=[[0], [0], [0]], names=['a', 'b', 'timedelta'])
+    res = meta_nonempty(idx)
+    assert type(res) is pd.MultiIndex
+    for idx1, idx2 in zip(idx.levels, res.levels):
+        assert type(idx1) is type(idx2)
+        assert idx1.name == idx2.name
+    assert res.names == idx.names
+
 
 @pytest.mark.skipif(PANDAS_VERSION < '0.20.0',
                     reason="Pandas < 0.20.0 doesn't support UInt64Index")
