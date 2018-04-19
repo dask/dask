@@ -250,6 +250,6 @@ def einsum(*operands, **kwargs):
     # Now reduce over any extra contraction dimensions
     if ncontract_inds > 0:
         size = len(outputs)
-        result = result.sum(axis=list(range(size, size + ncontract_inds)))
+        return result.sum(axis=list(range(size, size + ncontract_inds)))
 
     return result
