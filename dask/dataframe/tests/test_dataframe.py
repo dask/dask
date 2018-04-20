@@ -1,6 +1,7 @@
 import sys
-from operator import add
+from distutils.version import LooseVersion
 from itertools import product
+from operator import add
 
 import pandas as pd
 import pandas.util.testing as tm
@@ -331,24 +332,25 @@ def test_cumulative():
     assert_eq(ddf.cummin(axis=1), df.cummin(axis=1))
     assert_eq(ddf.cummax(axis=1), df.cummax(axis=1))
 
-    # testing out parameter
-    np.cumsum(ddf, out=ddf_out)
-    assert_eq(ddf_out, df.cumsum())
-    np.cumprod(ddf, out=ddf_out)
-    assert_eq(ddf_out, df.cumprod())
-    ddf.cummin(out=ddf_out)
-    assert_eq(ddf_out, df.cummin())
-    ddf.cummax(out=ddf_out)
-    assert_eq(ddf_out, df.cummax())
+    # testing out parameter if out parameter supported
+    if LooseVersion(np.__version__) >= '1.13.0':
+        np.cumsum(ddf, out=ddf_out)
+        assert_eq(ddf_out, df.cumsum())
+        np.cumprod(ddf, out=ddf_out)
+        assert_eq(ddf_out, df.cumprod())
+        ddf.cummin(out=ddf_out)
+        assert_eq(ddf_out, df.cummin())
+        ddf.cummax(out=ddf_out)
+        assert_eq(ddf_out, df.cummax())
 
-    np.cumsum(ddf, out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cumsum(axis=1))
-    np.cumprod(ddf, out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cumprod(axis=1))
-    ddf.cummin(out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cummin(axis=1))
-    ddf.cummax(out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cummax(axis=1))
+        np.cumsum(ddf, out=ddf_out, axis=1)
+        assert_eq(ddf_out, df.cumsum(axis=1))
+        np.cumprod(ddf, out=ddf_out, axis=1)
+        assert_eq(ddf_out, df.cumprod(axis=1))
+        ddf.cummin(out=ddf_out, axis=1)
+        assert_eq(ddf_out, df.cummin(axis=1))
+        ddf.cummax(out=ddf_out, axis=1)
+        assert_eq(ddf_out, df.cummax(axis=1))
 
     assert_eq(ddf.a.cumsum(), df.a.cumsum())
     assert_eq(ddf.a.cumprod(), df.a.cumprod())
