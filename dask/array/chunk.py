@@ -61,15 +61,14 @@ nanargmax = keepdims_wrapper(np.nanargmax)
 any = keepdims_wrapper(np.any)
 all = keepdims_wrapper(np.all)
 nansum = keepdims_wrapper(np.nansum)
+nanprod = keepdims_wrapper(np.nanprod)
 
 try:
-    from numpy import nanprod, nancumprod, nancumsum
+    from numpy import nancumprod, nancumsum
 except ImportError:  # pragma: no cover
-    nanprod = npcompat.nanprod
     nancumprod = npcompat.nancumprod
     nancumsum = npcompat.nancumsum
 
-nanprod = keepdims_wrapper(nanprod)
 nancumprod = keepdims_wrapper(nancumprod)
 nancumsum = keepdims_wrapper(nancumsum)
 

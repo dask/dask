@@ -286,8 +286,6 @@ def test_stack_promote_type():
     assert_eq(res, np.stack([i, f]))
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.10.0',
-                    reason="NumPy doesn't yet support stack")
 def test_stack_rechunk():
     x = da.random.random(10, chunks=5)
     y = da.random.random(10, chunks=4)

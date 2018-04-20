@@ -469,8 +469,6 @@ def test_bincount_raises_informative_error_on_missing_minlength_kwarg():
         assert False
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.10.0',
-                    reason="NumPy doesn't yet support nd digitize")
 def test_digitize():
     x = np.array([2, 4, 5, 6, 1])
     bins = np.array([1, 2, 3, 4, 5])
