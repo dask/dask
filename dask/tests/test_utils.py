@@ -9,7 +9,9 @@ from dask.sharedict import ShareDict
 from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
                         memory_repr, methodcaller, M, skip_doctest,
                         SerializableLock, funcname, ndeepmap, ensure_dict,
-                        extra_titles, asciitable, itemgetter, partial_by_order)
+                        extra_titles, asciitable, itemgetter, partial_by_order,
+                        Interval,
+                        )
 from dask.utils_test import inc
 
 
@@ -316,3 +318,73 @@ def test_itemgetter():
 
 def test_partial_by_order():
     assert partial_by_order(5, function=operator.add, other=[(1, 20)]) == 25
+
+
+def test_intervals():
+    inc = Interval.inclusive(5, 10)
+    ex = Interval.exclusive(5, 10)
+    base_tests = [
+        (4, False),
+        (5, True),
+        (7, True),
+        (15, False),
+    ]
+    for test, expected in base_tests + [(10, True)]:
+        assert (test in inc) is expected
+
+    for test, expected in base_tests + [(10, False)]:
+        assert (test in ex) is expected
+
+    assert not inc.strict_lt(ex)
+
+    assert not Interval.inclusive(5, 10).strict_lt(Interval.inclusive(10, 15))
+    assert Interval.exclusive(5, 10).strict_lt(Interval.inclusive(10, 15))
+
+    # Range containment tests
+    assert Interval.inclusive(5, 10) in Interval.inclusive(0, 10)
+    assert Interval.exclusive(5, 10) in Interval.inclusive(5, 10)
+    assert Interval.exclusive(5, 10) in Interval.exclusive(0, 10)
+    assert not Interval.inclusive(5, 10) in Interval.exclusive(5, 10)
+
+    assert not Interval.inclusive(5, 10) in Interval.exclusive(0, 10)
+
+    assert not Interval.inclusive(0, 10) in Interval.inclusive(3, 7)
+
+    # Logic tests
+    assert not (inc & ex).closed
+    assert (Interval(5, 10, 1) & Interval(7, 11, 0)) == Interval.inclusive(7, 10)
+    assert (Interval(5, 10, 0) & Interval(7, 11, 1)) == Interval.exclusive(7, 10)
+    assert (Interval(5, 10, 1) & Interval(7, 9, 0)) == Interval.exclusive(7, 9)
+    assert not (Interval.inclusive(5, 10) & Interval.inclusive(10, 11)).empty()
+    assert (Interval.exclusive(5, 10) & Interval.inclusive(10, 11)).empty()
+    assert 10 in (Interval.inclusive(5, 10) & Interval.inclusive(10, 11))
+    assert (Interval.inclusive(5, 10) & Interval.inclusive(20, 30)).empty()
+
+    assert Interval.inclusive(5, 10).overlaps(Interval.inclusive(7, 10))
+    assert Interval.inclusive(5, 10).overlaps(Interval.inclusive(10, 10))
+    assert not Interval.exclusive(5, 10).overlaps(Interval.inclusive(10, 10))
+    assert not Interval.exclusive(5, 10).overlaps(Interval.inclusive(12, 12))
+
+    # Comparison tests
+    assert Interval.exclusive(0, 1) < Interval.inclusive(0, 1)
+    assert Interval.inclusive(0, 1) < Interval.exclusive(0, 2)
+    expected_order = [
+        Interval.exclusive(5, 10),
+        Interval.exclusive(7, 15),
+        9,
+        Interval.exclusive(10, 20),
+        Interval.inclusive(10, 20),
+        Interval.exclusive(12, 15),
+    ]
+    s = list(sorted(reversed(expected_order)))
+    assert expected_order == s
+
+    # Splitting
+    assert (Interval.exclusive(0, 5).split(3)) == (Interval.exclusive(0, 3), Interval.exclusive(3, 5))
+    assert (Interval.inclusive(0, 5).split(3)) == (Interval.exclusive(0, 3), Interval.inclusive(3, 5), )
+    assert (Interval.exclusive(0, 5).split(0)) == (Interval.exclusive(0, 5), )
+    assert (Interval.inclusive(0, 5).split(5)) == (Interval.inclusive(0, 5), )
+
+    for interval, split in [(Interval.inclusive(0, 1), -1), (Interval.exclusive(0, 1), 1)]:
+        with pytest.raises(ValueError):
+            interval.split(split)

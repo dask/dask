@@ -7,7 +7,7 @@ import shutil
 import sys
 import tempfile
 from errno import ENOENT
-from collections import Iterator
+from collections import Iterator, namedtuple
 from contextlib import contextmanager
 from importlib import import_module
 from numbers import Integral
@@ -896,3 +896,138 @@ def is_arraylike(x):
     return (hasattr(x, '__array__') and
             hasattr(x, 'shape') and x.shape and
             hasattr(x, 'dtype'))
+
+
+class Interval(namedtuple('RawInterval', ['start', 'stop', 'closed'])):
+    """Arbitrary interval range with containment/sorting logic"""
+
+    # Constructors
+    @classmethod
+    def inclusive(cls, start, stop):
+        return cls(start, stop, 1)
+
+    @classmethod
+    def exclusive(cls, start, stop):
+        return cls(start, stop, 0)
+
+    # Combination logic
+
+    def __contains__(self, item):
+        """Value falls within this interval"""
+        if isinstance(item, Interval):
+            # Strict containment
+            if item.start in self:
+                if self.closed:
+                    return item.stop in self
+                elif not (self.closed or item.closed):
+                    # Both open
+                    return item.stop <= self.stop
+                # Other is closed, self open, must be less than
+                return item.stop < self.stop
+            return False
+
+        if self.closed:
+            return self.start <= item <= self.stop
+        return self.start <= item < self.stop
+
+    def __lt__(self, other):
+        if isinstance(other, Interval):
+            # Tuple should handle correctly
+            # for the same interval bounds (self[:2]), closed will sort after open
+            return super(Interval, self).__lt__(other)
+
+        return self.start < other
+
+    def strict_lt(self, other):
+        """Strictly less than another item/interval, without overlap"""
+
+        if isinstance(other, Interval):
+            return self.strict_lt(other.start)
+
+        if self < other:
+            if self.closed:
+                return self.stop < other
+            return self.stop <= other
+        return False
+
+    def __gt__(self, other):
+        if isinstance(other, Interval):
+            return other < self
+
+        return self.start > other
+
+    def __lte__(self, other):
+        if isinstance(other, Interval):
+            return (self < other) or (self == other)
+        return self < other or self.start == other
+
+    def __gte__(self, other):
+        if isinstance(other, Interval):
+            return (self > other) or (self == other)
+        return self > other or self.start == other
+
+    def __eq__(self, other):
+        if isinstance(other, Interval):
+            return super(Interval, self).__eq__(other)
+        raise TypeError(
+            "'==' not supported between"
+            " instances of '{}' and '{}'".format(
+                self.__class__, other.__class__))
+
+    def strict_gt(self, other):
+        """Strictly greater than another item/interval, without overlap"""
+        if isinstance(other, Interval):
+            return other.strict_lt(self)
+        return self > other
+
+    def __and__(self, other):
+        start = max(self.start, other.start)
+
+        # Need to handle inclusive/exclusive
+        if self.stop < other.stop:
+            stop = self.stop
+            closed = self.closed
+        elif other.stop < self.stop:
+            stop = other.stop
+            closed = other.closed
+        else:
+            stop = self.stop
+            closed = min(self.closed, other.closed)
+
+        if start > stop:
+            # Empty interval
+            closed = 0
+            stop = start
+
+        return self.__class__(start, stop, closed)
+
+    def __bool__(self):
+        if self.closed:
+            return self.start <= self.stop
+        return self.start < self.stop
+
+    def empty(self):
+        return not bool(self)
+
+    def overlaps(self, other):
+        return not (self & other).empty()
+
+    def split(self, value):
+        """Split interval into one or more others at a value (exclusively)
+
+        If the value corresponds to an endpoint, a len=1 tuple of self is
+        returned.  Otherwise, the return will be len=2
+
+        :raises: ValueError if value is not within the interval
+
+        :rtype: tuple
+        """
+
+        if not value in self:
+            raise ValueError('{} not within {}'.format(value, self))
+
+        if value == self.start or value == self.stop:
+            return self,
+
+        return self.exclusive(self.start, value),\
+               self.__class__(value, self.stop, self.closed)
