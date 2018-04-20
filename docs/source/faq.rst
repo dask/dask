@@ -66,7 +66,7 @@ preferentially run a task on a particular worker or set of workers.
 For example Dask developers use this ability to build in data locality when we
 communicate to data-local storage systems like the Hadoop File System.  When
 users use high-level functions like
-``dask.dataframe.read_csv('hdfs:///path/to/files.*.csv'`` Dask talks to the
+``dask.dataframe.read_csv('hdfs:///path/to/files.*.csv')`` Dask talks to the
 HDFS name node, finds the locations of all of the blocks of data, and sends
 that information to the scheduler so that it can make smarter decisions and
 improve load times for users.
