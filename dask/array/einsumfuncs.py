@@ -193,7 +193,7 @@ def _einsum_kernel(*operands, **kwargs):
     return chunk.reshape(chunk.shape + (1,) * ncontract_inds)
 
 
-_einsum_can_optimize = LooseVersion(np.__version__) >= LooseVersion("1.12.0")
+einsum_can_optimize = LooseVersion(np.__version__) >= LooseVersion("1.12.0")
 
 
 @wraps(np.einsum)
@@ -212,7 +212,7 @@ def einsum(*operands, **kwargs):
     if optimize is None:
         optimize = False
 
-    if _einsum_can_optimize and optimize is not False:
+    if einsum_can_optimize and optimize is not False:
         # Avoid computation of dask arrays within np.einsum_path
         # by passing in small numpy arrays broadcasted
         # up to the right shape
@@ -234,7 +234,7 @@ def einsum(*operands, **kwargs):
     kwargs['kernel_dtype'] = einsum_dtype
     kwargs['ncontract_inds'] = ncontract_inds
 
-    if _einsum_can_optimize:
+    if einsum_can_optimize:
         kwargs['optimize'] = optimize
 
     # Update kwargs with atop parameters

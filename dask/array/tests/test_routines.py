@@ -11,6 +11,7 @@ np = pytest.importorskip('numpy')
 import dask.array as da
 from dask.utils import ignoring
 from dask.array.utils import assert_eq, same_keys
+from dask.array.einsumfuncs import einsum_can_optimize
 
 
 def test_array():
@@ -1356,6 +1357,8 @@ def test_einsum(einsum_signature):
               da.einsum(einsum_signature, *da_inputs))
 
 
+@pytest.mark.skipif(not einsum_can_optimize,
+                    reason="np.einsum(optimize) unavailable")
 @pytest.mark.parametrize('optimize_opts', [
     (True, False),
     ('greedy', False),
