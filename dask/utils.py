@@ -898,17 +898,36 @@ def is_arraylike(x):
             hasattr(x, 'dtype'))
 
 
-class Interval(namedtuple('RawInterval', ['start', 'stop', 'closed'])):
-    """Arbitrary interval range with containment/sorting logic"""
+class Interval(namedtuple('RawInterval', ['start', 'lopen', 'stop', 'closed'])):
+    """Arbitrary interval range with containment/sorting logic
+
+    The order and value of the tuple parameters are designed so that standard
+    tuple sorting will yield correct order; ie for the same start/stop values, a
+    closed start should sort before an open start, and an open end should sort
+    before a closed end.
+
+    :param start: smallest value in the interval (inclusive)
+
+    :param bool lopen: if the start value is open/exclusive start value
+
+    :param stop: largest value in the interval
+
+    :param bool closed: if ```True```, the stop value is inclusive (a closed
+        range).  Otherwise, the stop value is an open/exclusive max value and
+        is not included in the interval
+
+    """
 
     # Constructors
     @classmethod
     def inclusive(cls, start, stop):
-        return cls(start, stop, 1)
+        """A new closed interval (inclusive max value)"""
+        return cls(start, False, stop, True)
 
     @classmethod
     def exclusive(cls, start, stop):
-        return cls(start, stop, 0)
+        """A new semi-open (inclusive start, exclusive stop value)"""
+        return cls(start, False, stop, False)
 
     # Combination logic
 
@@ -916,21 +935,21 @@ class Interval(namedtuple('RawInterval', ['start', 'stop', 'closed'])):
         """Value falls within this interval"""
         if isinstance(item, Interval):
             # Strict containment
-            if item.start in self:
-                if self.closed:
-                    return item.stop in self
-                elif not (self.closed or item.closed):
-                    # Both open
-                    return item.stop <= self.stop
-                # Other is closed, self open, must be less than
-                return item.stop < self.stop
-            return False
+            return self[:2] <= item[:2] and item[2:] <= self[2:]
 
-        if self.closed:
-            return self.start <= item <= self.stop
-        return self.start <= item < self.stop
+        if self.lopen:
+            if self.closed:
+                return self.start < item <= self.stop
+            else:
+                return self.start < item < self.stop
+        else:
+            if self.closed:
+                return self.start <= item <= self.stop
+            else:
+                return self.start <= item < self.stop
 
     def __lt__(self, other):
+        """Any part of this interval is less than a value"""
         if isinstance(other, Interval):
             # Tuple should handle correctly
             # for the same interval bounds (self[:2]), closed will sort after open
@@ -942,23 +961,24 @@ class Interval(namedtuple('RawInterval', ['start', 'stop', 'closed'])):
         """Strictly less than another item/interval, without overlap"""
 
         if isinstance(other, Interval):
-            return self.strict_lt(other.start)
+            return self[2:] <= other[:2]  # (stop, closed) <= (start, open)
 
-        if self < other:
-            if self.closed:
-                return self.stop < other
-            return self.stop <= other
-        return False
+        if self.closed:
+            return self.stop < other
+        return self.stop <= other
 
     def __gt__(self, other):
         if isinstance(other, Interval):
             return other < self
 
-        return self.start > other
+        return self.stop > other
 
     def __lte__(self, other):
         if isinstance(other, Interval):
             return (self < other) or (self == other)
+        if self.lopen:
+            # Can't ever be equal
+            return self < other
         return self < other or self.start == other
 
     def __gte__(self, other):
@@ -978,33 +998,24 @@ class Interval(namedtuple('RawInterval', ['start', 'stop', 'closed'])):
         """Strictly greater than another item/interval, without overlap"""
         if isinstance(other, Interval):
             return other.strict_lt(self)
-        return self > other
+        if self.lopen:
+            return self.start >= other
+        return self.start > other
 
     def __and__(self, other):
-        start = max(self.start, other.start)
+        start = max(self[:2], other[:2])
+        stop = min(self[2:], other[2:])
 
-        # Need to handle inclusive/exclusive
-        if self.stop < other.stop:
-            stop = self.stop
-            closed = self.closed
-        elif other.stop < self.stop:
-            stop = other.stop
-            closed = other.closed
-        else:
-            stop = self.stop
-            closed = min(self.closed, other.closed)
-
-        if start > stop:
+        if stop <= start:
+            # (stop, right_closed) <= (start, left_open)
             # Empty interval
-            closed = 0
-            stop = start
+            start = (start[0], True)
+            stop = (start[0], False)
 
-        return self.__class__(start, stop, closed)
+        return self.__class__(*start, *stop)
 
     def __bool__(self):
-        if self.closed:
-            return self.start <= self.stop
-        return self.start < self.stop
+        return self[:2] < self[2:]
 
     def empty(self):
         return not bool(self)
@@ -1029,5 +1040,5 @@ class Interval(namedtuple('RawInterval', ['start', 'stop', 'closed'])):
         if value == self.start or value == self.stop:
             return self,
 
-        return self.exclusive(self.start, value),\
-               self.__class__(value, self.stop, self.closed)
+        return self.__class__(*self[:2], value, False),\
+               self.__class__(value, False, *self[2:])
