@@ -784,7 +784,7 @@ def argtopk(a, k, axis=-1, split_every=None):
     axis = validate_axis(a.ndim, axis)
 
     # Convert a to a recarray that contains its index
-    idx = arange(a.shape[axis], chunks=a.chunks[axis])
+    idx = arange(a.shape[axis], chunks=a.chunks[axis], dtype=np.int64)
     idx = idx[tuple(slice(None) if i == axis else np.newaxis for i in range(a.ndim))]
     a_rec = a.map_blocks(chunk.argtopk_preprocess, idx,
                          dtype=[('a', a.dtype), ('idx', idx.dtype)])
