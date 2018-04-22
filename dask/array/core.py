@@ -1409,7 +1409,7 @@ class Array(Base):
         return topk(self, k, axis=axis, split_every=split_every)
 
     def argtopk(self, k, axis=-1, split_every=None):
-        """The indexes of the top k elements of an array.
+        """The indices of the top k elements of an array.
 
         See ``da.argtopk`` for docstring"""
         from .reductions import argtopk

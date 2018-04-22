@@ -196,12 +196,10 @@ def topk(a, k, axis, keepdims):
     return a
 
 
-def topk_postproc(a, k, axis):
+def topk_postprocess(a, k, axis):
     """Kernel of topk and argtopk.
     Post-processes the outpout of topk, sorting the results internally.
     """
-    if axis < 0:
-        axis += a.ndim
     a = np.sort(a, axis=axis)
     if k > 0:
         # a = a[::-1] on arbitrary axis
@@ -212,10 +210,11 @@ def topk_postproc(a, k, axis):
     return a
 
 
-def argtopk_preproc(a, idx):
+def argtopk_preprocess(a, idx):
     """Kernel of argtopk.
     Preprocess data, by putting it together with its indexes in a recarray
     """
+    # np.core.records.fromarrays won't work if a and idx don't have the same shape
     res = np.recarray(a.shape, dtype=[('values', a.dtype), ('idx', int)])
     res.values = a
     res.idx = idx

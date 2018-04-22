@@ -748,6 +748,8 @@ def topk(a, k, axis=-1, split_every=None):
         warnings.warn("DeprecationWarning: topk(k, x) has been replaced with topk(a, k)")
         a, k = k, a
 
+    axis = validate_axis(a.ndim, axis)
+
     kernel = partial(chunk.topk, k=k)
     res = reduction(a, kernel, kernel, axis=axis, keepdims=True,
                     dtype=a.dtype, split_every=split_every)
@@ -757,13 +759,13 @@ def topk(a, k, axis=-1, split_every=None):
     res = Array(res.dask, res.name, chunks, res.dtype)
 
     # Sort result internally
-    return res.map_blocks(chunk.topk_postproc, k=k, axis=axis, dtype=a.dtype)
+    return res.map_blocks(chunk.topk_postprocess, k=k, axis=axis, dtype=a.dtype)
 
 
 def argtopk(a, k, axis=-1, split_every=None):
-    """Extract the indexes of the k largest elements from a on the given axis,
+    """Extract the indices of the k largest elements from a on the given axis,
     and return them sorted from largest to smallest.
-    If k is negative, extract the indexes of the -k smallest elements instead,
+    If k is negative, extract the indices of the -k smallest elements instead,
     and return them sorted from smallest to largest.
 
     This assumes that ``k`` is small.  All results will be returned in a single
@@ -779,12 +781,13 @@ def argtopk(a, k, axis=-1, split_every=None):
     >>> d.argtopk(-2).compute()
     array([1, 2])
     """
+    axis = validate_axis(a.ndim, axis)
+
     # Convert a to a recarray that contains its index
-    if axis < 0:
-        axis += a.ndim
     idx = arange(a.shape[axis], chunks=a.chunks[axis])
     idx = idx[tuple(slice(None) if i == axis else np.newaxis for i in range(a.ndim))]
-    a_rec = a.map_blocks(chunk.argtopk_preproc, idx, dtype=[('values', a.dtype), ('idx', int)])
+    a_rec = a.map_blocks(chunk.argtopk_preprocess, idx,
+                         dtype=[('a', a.dtype), ('idx', idx.dtype)])
 
     res = topk(a_rec, k, axis=axis, split_every=split_every)
 
