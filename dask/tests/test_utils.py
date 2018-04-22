@@ -325,24 +325,53 @@ def test_intervals():
     # Shortcuts
     inclusive = Interval.inclusive
     exclusive = Interval.exclusive
+
+    intervals = [
+        exclusive(5, 7),
+        inclusive(5, 7),
+        Interval(5, True, 7, False),
+        Interval(5, True, 7, True),
+    ]
+    n = len(intervals)
+
+    for test, expected_series in [
+        (4, [False]*n),
+        (5, [True, True, False, False]),
+        (6, [True]*n),
+        (7, [False, True, False, True]),
+        (8, [False]*n),
+    ]:
+        for interval, expected in zip(intervals, expected_series):
+            assert (test in interval) is expected
+
     inc = inclusive(5, 10)
     ex = exclusive(5, 10)
-    base_tests = [
-        (4, False),
-        (5, True),
-        (7, True),
-        (15, False),
-    ]
-    for test, expected in base_tests + [(10, True)]:
-        assert (test in inc) is expected
 
-    for test, expected in base_tests + [(10, False)]:
-        assert (test in ex) is expected
+    assert 4 not in Interval(5, True, 6, True)
+    assert 5 not in Interval(5, True, 6, True)
+    assert 6 in Interval(5, True, 6, True)
 
     assert not inc.strict_lt(ex)
+    assert ex.strict_lt(ex.stop)
+    assert ex.strict_lt(ex.stop + 1)
+    assert not inc.strict_lt(inc.stop)
+    assert inc.strict_lt(inc.stop + 1)
 
+    assert ex.strict_lt(Interval(ex.stop, False, inc.stop + 1, False))
+    assert not inc.strict_lt(Interval(inc.stop, False, inc.stop + 1, False))
+    assert inc.strict_lt(Interval(inc.stop, True, inc.stop + 1, False))
+
+    assert inclusive(0, 5).strict_lt(inclusive(10, 20))
+    assert not inclusive(0, 5).strict_lt(inclusive(-5, 5))
+    assert inclusive(10, 20).strict_gt(exclusive(5, 10))
     assert not inclusive(5, 10).strict_lt(inclusive(10, 15))
     assert exclusive(5, 10).strict_lt(inclusive(10, 15))
+
+    assert Interval(5, False, 6, True).strict_gt(4)
+    assert not Interval(5, False, 6, True).strict_gt(5)
+    assert Interval(5, True, 6, True).strict_gt(5)
+    assert not Interval(5, False, 6, True).strict_gt(6)
+    assert not Interval(5, True, 6, True).strict_gt(6)
 
     # Range containment tests
     assert inclusive(5, 10) in inclusive(0, 10)
@@ -355,7 +384,7 @@ def test_intervals():
     assert not inclusive(0, 10) in inclusive(3, 7)
 
     # Logic tests
-    assert not (inc & ex).closed
+    assert not (inc & ex).rclosed
     assert (inclusive(5, 10) & exclusive(7, 11)) == inclusive(7, 10)
     assert (exclusive(5, 10) & inclusive(7, 11)) == exclusive(7, 10)
     assert (inclusive(5, 10) & exclusive(7, 9)) == exclusive(7, 9)
@@ -382,6 +411,12 @@ def test_intervals():
     ]
     s = list(sorted(reversed(expected_order)))
     assert expected_order == s
+
+    assert inclusive(5, 6) == inclusive(5, 6)
+    assert inclusive(5, 6) != exclusive(5, 6)
+
+    with pytest.raises(TypeError):
+        inc == 4
 
     # Splitting
     assert (exclusive(0, 5).split(3)) == (exclusive(0, 3), exclusive(3, 5))
