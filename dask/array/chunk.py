@@ -215,7 +215,7 @@ def argtopk_preprocess(a, idx):
     Preprocess data, by putting it together with its indexes in a recarray
     """
     # np.core.records.fromarrays won't work if a and idx don't have the same shape
-    res = np.recarray(a.shape, dtype=[('values', a.dtype), ('idx', int)])
+    res = np.recarray(a.shape, dtype=[('values', a.dtype), ('idx', idx.dtype)])
     res.values = a
     res.idx = idx
     return res
