@@ -745,7 +745,7 @@ def topk(a, k, axis=-1, split_every=None):
     array([1, 3])
     """
     if isinstance(a, int) and isinstance(k, Array):
-        warnings.warn("DeprecationWarning: topk(k, x) has been replaced with topk(a, k)")
+        warnings.warn("DeprecationWarning: topk(k, a) has been replaced with topk(a, k)")
         a, k = k, a
 
     axis = validate_axis(a.ndim, axis)
