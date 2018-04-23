@@ -64,7 +64,7 @@ Often we store data in several different locations and want to stitch them toget
         x = da.from_array(d, chunks=(1000, 1000))
         dask_arrays.append(x)
 
-    x = da.concatenate(arrays, axis=0)  # concatenate arrays along first axis
+    x = da.concatenate(dask_arrays, axis=0)  # concatenate arrays along first axis
 
 For more information see :doc:`concatenation and stacking <array-stack>` docs.
 
