@@ -9,7 +9,7 @@ supports the following:
 *  Slicing by lists/arrays of booleans ``x[[False, True, True, False, True]]``
 *  Slicing one `~dask.array.Array` with a `~dask.array.Array` of bools ``x[x > 0]``
 *  Slicing one `~dask.array.Array` with a zero or one-dimensional `~dask.array.Array`
-   of ints ``x[x.map_blocks(np.argsort)]``
+   of ints ``a[b.argtopk(5)]``
 
 It does not currently support the following:
 
