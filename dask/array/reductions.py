@@ -12,6 +12,7 @@ from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
 from .core import _concatenate2, Array, atop, lol_tuples, handle_out
+from .creation import arange
 from .ufunc import sqrt
 from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
@@ -722,3 +723,73 @@ def validate_axis(ndim, axis):
         return axis + ndim
     else:
         return axis
+
+
+def topk(a, k, axis=-1, split_every=None):
+    """Extract the k largest elements from a on the given axis,
+    and return them sorted from largest to smallest.
+    If k is negative, extract the -k smallest elements instead,
+    and return them sorted from smallest to largest.
+
+    This assumes that ``k`` is small.  All results will be returned in a single
+    chunk along the given axis.
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> x = np.array([5, 1, 3, 6])
+    >>> d = da.from_array(x, chunks=2)
+    >>> d.topk(2).compute()
+    array([6, 5])
+    >>> d.topk(-2).compute()
+    array([1, 3])
+    """
+    if isinstance(a, int) and isinstance(k, Array):
+        warnings.warn("DeprecationWarning: topk(k, a) has been replaced with topk(a, k)")
+        a, k = k, a
+
+    axis = validate_axis(a.ndim, axis)
+
+    kernel = partial(chunk.topk, k=k)
+    res = reduction(a, kernel, kernel, axis=axis, keepdims=True,
+                    dtype=a.dtype, split_every=split_every)
+    # reduction(keepdims=True) sets shape[axis] to 1. Fix it.
+    chunks = list(res.chunks)
+    chunks[axis] = (abs(k), )
+    res = Array(res.dask, res.name, chunks, res.dtype)
+
+    # Sort result internally
+    return res.map_blocks(chunk.topk_postprocess, k=k, axis=axis, dtype=a.dtype)
+
+
+def argtopk(a, k, axis=-1, split_every=None):
+    """Extract the indices of the k largest elements from a on the given axis,
+    and return them sorted from largest to smallest.
+    If k is negative, extract the indices of the -k smallest elements instead,
+    and return them sorted from smallest to largest.
+
+    This assumes that ``k`` is small.  All results will be returned in a single
+    chunk along the given axis.
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> x = np.array([5, 1, 3, 6])
+    >>> d = da.from_array(x, chunks=2)
+    >>> d.argtopk(2).compute()
+    array([3, 0])
+    >>> d.argtopk(-2).compute()
+    array([1, 2])
+    """
+    axis = validate_axis(a.ndim, axis)
+
+    # Convert a to a recarray that contains its index
+    idx = arange(a.shape[axis], chunks=a.chunks[axis], dtype=np.int64)
+    idx = idx[tuple(slice(None) if i == axis else np.newaxis for i in range(a.ndim))]
+    a_rec = a.map_blocks(chunk.argtopk_preprocess, idx,
+                         dtype=[('a', a.dtype), ('idx', idx.dtype)])
+
+    res = topk(a_rec, k, axis=axis, split_every=split_every)
+
+    # Discard values
+    return res['idx']

@@ -6,7 +6,7 @@ from .core import (Array, block, concatenate, stack, from_array, store,
                    from_delayed, asarray, asanyarray,
                    broadcast_arrays, broadcast_to)
 from .routines import (take, choose, argwhere, where, coarsen, insert,
-                       ravel, roll, unique, squeeze, topk, ptp, diff, ediff1d,
+                       ravel, roll, unique, squeeze, ptp, diff, ediff1d,
                        bincount, digitize, histogram, cov, array, dstack,
                        vstack, hstack, compress, extract, round, count_nonzero,
                        flatnonzero, nonzero, around, isin, isnull, notnull,
@@ -37,7 +37,8 @@ from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
                          argmin, argmax,
                          nansum, nanmean, nanstd, nanvar, nanmin,
                          nanmax, nanargmin, nanargmax,
-                         cumsum, cumprod)
+                         cumsum, cumprod,
+                         topk, argtopk)
 from .percentile import percentile
 with ignoring(ImportError):
     from .reductions import nanprod, nancumprod, nancumsum

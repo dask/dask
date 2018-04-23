@@ -422,3 +422,65 @@ def test_array_cumreduction_out(func):
     x = da.ones((10, 10), chunks=(4, 4))
     func(x, axis=0, out=x)
     assert_eq(x, func(np.ones((10, 10)), axis=0))
+
+
+@pytest.mark.parametrize('npfunc,daskfunc', [
+    (np.sort, da.topk),
+    (np.argsort, da.argtopk),
+])
+@pytest.mark.parametrize('split_every', [None, 2])
+def test_topk_argtopk1(npfunc, daskfunc, split_every):
+    # Test data
+    k = 5
+    a = da.random.random(1000, chunks=250)
+    b = da.random.random((10, 20, 30), chunks=(4, 8, 8))
+    c = da.from_array(np.array([(1, 'Hello'), (2, 'World')], dtype=[('foo', int), ('bar', '<U5')]),
+                      chunks=1)
+
+    # 1-dimensional arrays
+    # top 5 elements, sorted descending
+    assert_eq(npfunc(a)[-k:][::-1],
+              daskfunc(a, k, split_every=split_every))
+    # bottom 5 elements, sorted ascending
+    assert_eq(npfunc(a)[:k],
+              daskfunc(a, -k, split_every=split_every))
+
+    # n-dimensional arrays
+    # also testing when k > chunk
+    # top 5 elements, sorted descending
+    assert_eq(npfunc(b, axis=0)[-k:, :, :][::-1, :, :],
+              daskfunc(b, k, axis=0, split_every=split_every))
+    assert_eq(npfunc(b, axis=1)[:, -k:, :][:, ::-1, :],
+              daskfunc(b, k, axis=1, split_every=split_every))
+    assert_eq(npfunc(b, axis=-1)[:, :, -k:][:, :, ::-1],
+              daskfunc(b, k, axis=-1, split_every=split_every))
+    with pytest.raises(ValueError):
+        daskfunc(b, k, axis=3, split_every=split_every)
+
+    # bottom 5 elements, sorted ascending
+    assert_eq(npfunc(b, axis=0)[:k, :, :],
+              daskfunc(b, -k, axis=0, split_every=split_every))
+    assert_eq(npfunc(b, axis=1)[:, :k, :],
+              daskfunc(b, -k, axis=1, split_every=split_every))
+    assert_eq(npfunc(b, axis=-1)[:, :, :k],
+              daskfunc(b, -k, axis=-1, split_every=split_every))
+    with pytest.raises(ValueError):
+        daskfunc(b, -k, axis=3, split_every=split_every)
+
+    # structured arrays
+    assert_eq(npfunc(c, axis=0)[-1:][::-1],
+              daskfunc(c, 1, split_every=split_every))
+    assert_eq(npfunc(c, axis=0)[:1],
+              daskfunc(c, -1, split_every=split_every))
+
+
+def test_topk_argtopk2():
+    a = da.random.random((10, 20, 30), chunks=(4, 8, 8))
+
+    # Support for deprecated API for topk
+    with pytest.warns(UserWarning):
+        assert_eq(da.topk(a, 5), da.topk(5, a))
+
+    # As Array methods
+    assert_eq(a.topk(5, axis=1, split_every=2), da.topk(a, 5, axis=1, split_every=2))
+    assert_eq(a.argtopk(5, axis=1, split_every=2), da.argtopk(a, 5, axis=1, split_every=2))
