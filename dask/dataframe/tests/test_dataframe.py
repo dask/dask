@@ -3114,3 +3114,15 @@ def test_meta_raises():
         ddf.a + ddf.c
 
     assert "meta=" not in str(info.value)
+
+
+def test_part_concat():
+
+    # Should be able to get a partition(s) and stitch back together w/o
+    # breaking divisions
+    df = pd.DataFrame({"a": range(10)})
+    ddf = dd.from_pandas(df, npartitions=3)
+    assert_eq(
+        dd.concat([ddf.get_partition(i) for i in range(ddf.npartitions)]),
+        df
+    )
