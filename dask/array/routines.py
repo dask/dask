@@ -6,7 +6,6 @@ from collections import Iterable
 from distutils.version import LooseVersion
 from functools import wraps, partial
 from numbers import Integral
-from operator import getitem
 
 import numpy as np
 from toolz import concat, sliding_window, interleave
@@ -14,13 +13,16 @@ from toolz import concat, sliding_window, interleave
 from .. import sharedict
 from ..core import flatten
 from ..base import tokenize
-from . import numpy_compat, chunk
+from . import chunk
 from .creation import arange
+from .utils import safe_wraps
 from .wrap import ones
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    asanyarray, concatenate, stack, atop, broadcast_shapes,
                    is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
+
+from .einsumfuncs import einsum  # noqa
 
 
 @wraps(np.array)
@@ -302,10 +304,10 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
 
     if (LooseVersion(np.__version__) < LooseVersion("1.13.0") and
             (np.array(test_result.shape) > 1).sum(dtype=int) > 1):
-            raise ValueError(
-                "No more than one non-trivial dimension allowed in result. "
-                "Need NumPy 1.13.0+ for this functionality."
-            )
+        raise ValueError(
+            "No more than one non-trivial dimension allowed in result. "
+            "Need NumPy 1.13.0+ for this functionality."
+        )
 
     # Rechunk so that func1d is applied over the full axis.
     arr = arr.rechunk(
@@ -786,7 +788,7 @@ def _isin_kernel(element, test_elements, assume_unique=False):
     return values.reshape(element.shape + (1,) * test_elements.ndim)
 
 
-@wraps(getattr(np, 'isin', None))
+@safe_wraps(getattr(np, 'isin', None))
 def isin(element, test_elements, assume_unique=False, invert=False):
     element = asarray(element)
     test_elements = asarray(test_elements)
@@ -878,38 +880,6 @@ def squeeze(a, axis=None):
     return a[sl]
 
 
-def topk(k, x):
-    """ The top k elements of an array
-
-    Returns the k greatest elements of the array in sorted order.  Only works
-    on arrays of a single dimension.
-
-    This assumes that ``k`` is small.  All results will be returned in a single
-    chunk.
-
-    Examples
-    --------
-
-    >>> x = np.array([5, 1, 3, 6])
-    >>> d = from_array(x, chunks=2)
-    >>> d.topk(2).compute()
-    array([6, 5])
-    """
-    if x.ndim != 1:
-        raise ValueError("Topk only works on arrays of one dimension")
-
-    token = tokenize(k, x)
-    name = 'chunk.topk-' + token
-    dsk = {(name, i): (chunk.topk, k, key)
-           for i, key in enumerate(x.__dask_keys__())}
-    name2 = 'topk-' + token
-    dsk[(name2, 0)] = (getitem, (np.sort, (np.concatenate, list(dsk))),
-                       slice(-1, -k - 1, -1))
-    chunks = ((k,),)
-
-    return Array(sharedict.merge((name2, dsk), x.dask), name2, chunks, dtype=x.dtype)
-
-
 @wraps(np.compress)
 def compress(condition, a, axis=None):
     if axis is None:
@@ -992,9 +962,9 @@ def notnull(values):
     return ~isnull(values)
 
 
-@wraps(numpy_compat.isclose)
+@wraps(np.isclose)
 def isclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
-    func = partial(numpy_compat.isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
+    func = partial(np.isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
     return elemwise(func, arr1, arr2, dtype='bool')
 
 

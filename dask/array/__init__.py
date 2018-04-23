@@ -6,14 +6,14 @@ from .core import (Array, block, concatenate, stack, from_array, store,
                    from_delayed, asarray, asanyarray,
                    broadcast_arrays, broadcast_to)
 from .routines import (take, choose, argwhere, where, coarsen, insert,
-                       ravel, roll, unique, squeeze, topk, ptp, diff, ediff1d,
+                       ravel, roll, unique, squeeze, ptp, diff, ediff1d,
                        bincount, digitize, histogram, cov, array, dstack,
                        vstack, hstack, compress, extract, round, count_nonzero,
                        flatnonzero, nonzero, around, isin, isnull, notnull,
                        isclose, allclose, corrcoef, swapaxes, tensordot,
                        transpose, dot, vdot, matmul, apply_along_axis,
                        apply_over_axes, result_type, atleast_1d, atleast_2d,
-                       atleast_3d, piecewise, flip, flipud, fliplr)
+                       atleast_3d, piecewise, flip, flipud, fliplr, einsum)
 from .reshape import reshape
 from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
         true_divide, floor_divide, negative, power, remainder, mod, conj, exp,
@@ -37,7 +37,8 @@ from .reductions import (sum, prod, mean, std, var, any, all, min, max, vnorm,
                          argmin, argmax,
                          nansum, nanmean, nanstd, nanvar, nanmin,
                          nanmax, nanargmin, nanargmax,
-                         cumsum, cumprod)
+                         cumsum, cumprod,
+                         topk, argtopk)
 from .percentile import percentile
 with ignoring(ImportError):
     from .reductions import nanprod, nancumprod, nancumsum

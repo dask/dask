@@ -22,6 +22,7 @@ Top level user functions:
    arctanh
    argmax
    argmin
+   argtopk
    argwhere
    around
    array
@@ -61,6 +62,7 @@ Top level user functions:
    dot
    dstack
    ediff1d
+   einsum
    empty
    empty_like
    exp
@@ -340,7 +342,6 @@ Other functions
 .. autofunction:: from_array
 .. autofunction:: from_delayed
 .. autofunction:: store
-.. autofunction:: topk
 .. autofunction:: coarsen
 .. autofunction:: stack
 .. autofunction:: concatenate
@@ -361,6 +362,7 @@ Other functions
 .. autofunction:: arctanh
 .. autofunction:: argmax
 .. autofunction:: argmin
+.. autofunction:: argtopk
 .. autofunction:: argwhere
 .. autofunction:: around
 .. autofunction:: array
@@ -402,6 +404,7 @@ Other functions
 .. autofunction:: ediff1d
 .. autofunction:: empty
 .. autofunction:: empty_like
+.. autofunction:: einsum
 .. autofunction:: exp
 .. autofunction:: expm1
 .. autofunction:: eye

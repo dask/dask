@@ -1,5 +1,6 @@
 *.pyc
 *.egg-info
+dask-worker-space/
 docs/build
 build/
 dist/

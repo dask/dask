@@ -32,8 +32,8 @@ import numpy as np
 from . import chunk
 from .numpy_compat import _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
-from ..base import (Base, tokenize, dont_optimize, compute_as_if_collection,
-                    persist, is_dask_collection)
+from ..base import (DaskMethodsMixin, tokenize, dont_optimize,
+                    compute_as_if_collection, persist, is_dask_collection)
 from ..context import _globals, globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
@@ -999,7 +999,7 @@ See the following documentation page for details:
 """.strip()
 
 
-class Array(Base):
+class Array(DaskMethodsMixin):
     """ Parallel Dask Array
 
     A parallel nd-array comprised of many numpy arrays arranged in a grid.
@@ -1403,12 +1403,19 @@ class Array(Base):
             shape = shape[0]
         return reshape(self, shape)
 
-    def topk(self, k):
+    def topk(self, k, axis=-1, split_every=None):
         """The top k elements of an array.
 
         See ``da.topk`` for docstring"""
-        from .routines import topk
-        return topk(k, self)
+        from .reductions import topk
+        return topk(self, k, axis=axis, split_every=split_every)
+
+    def argtopk(self, k, axis=-1, split_every=None):
+        """The indices of the top k elements of an array.
+
+        See ``da.argtopk`` for docstring"""
+        from .reductions import argtopk
+        return argtopk(self, k, axis=axis, split_every=split_every)
 
     def astype(self, dtype, **kwargs):
         """Copy of the array, cast to a specified type.

@@ -9,7 +9,7 @@ from dask.array.utils import assert_eq
 
 sparse = pytest.importorskip('sparse')
 
-if LooseVersion(np.__version__) < '1.11.0':
+if LooseVersion(np.__version__) < '1.11.2':
     pytestmark = pytest.mark.skip
 
 

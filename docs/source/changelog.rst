@@ -8,9 +8,16 @@ Changelog
 Array
 +++++
 
+- Add ``einsum`` for Dask Arrays (:pr:`3412`) `Simon Perkins`_
 - Add ``piecewise`` for Dask Arrays (:pr:`3350`) `John A Kirkham`_
 - Fix handling of ``nan`` in ``broadcast_shapes`` (:pr:`3356`) `John A Kirkham`_
 - Add ``isin`` for dask arrays (:pr:`3363`). `Stephan Hoyer`_
+- Overhauled ``topk`` for Dask Arrays: faster algorithm, particularly for large k's; added support
+  for multiple axes, recursive aggregation, and an option to pick the bottom k elements instead.
+  (:pr:`3395`) `Guido Imperiale`_
+- The ``topk`` API has changed from topk(k, array) to the more conventional topk(array, k).
+  The legacy API still works but is now deprecated. (:pr:`2965`) `Guido Imperiale`_
+- New function ``argtopk`` for Dask Arrays (:pr:`3396`) `Guido Imperiale`_
 - Allow slicing a Dask Array by another one-dimensional Dask Array of integers
   (:pr:`3396`) `Guido Imperiale`_
 
@@ -21,9 +28,12 @@ DataFrame
 - Allow `t` as shorthand for `table` in `to_hdf` for pandas compatibility `Jörg Dietrich`_
 - Added top level `isna` method for Dask DataFrames (:pr:`3294`) `Christopher Ren`_
 - Fix selection on partition column on ``read_parquet`` for ``engine="pyarrow"`` (:pr:`3207`) `Uwe Korn`_
+- Added DataFrame.squeeze method (:pr:`3366`) `Christopher Ren`_
+- Added `infer_divisions` option to ``read_parquet`` to specify whether read engines should compute divisions (:pr:`3387`) `Jon Mease`_
+- Added support for inferring division for ``engine="pyarrow"`` (:pr:`3387`) `Jon Mease`_
 - Provide more informative error message for meta= errors (:pr:`3343`) `Matthew Rocklin`_
-- add orc reader (:pr:3284) `Martin Durant`_
-- Default compression for parquet now always Snappy, in line with pandas (:pr:3373) `Martin Durant`_
+- add orc reader (:pr:`3284`) `Martin Durant`_
+- Default compression for parquet now always Snappy, in line with pandas (:pr:`3373`) `Martin Durant`_
 
 Bag
 +++
@@ -33,7 +43,7 @@ Bag
 Core
 ++++
 
--
+- Support traversing collections in persist, visualize, and optimize (:pr:`3410`) `Jim Crist`_
 
 
 0.17.2 / 2018-03-21
@@ -1023,6 +1033,7 @@ Other
   normal python code
 - Traded pydot for graphviz library for graph printing to support Python3
 - There is also a gitter chat room and a stackoverflow tag
+
 
 .. _`Guido Imperiale`: https://github.com/crusaderky
 .. _`John A Kirkham`: https://github.com/jakirkham
