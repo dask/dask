@@ -187,18 +187,17 @@ def topk(a, k, axis, keepdims):
     if abs(k) >= a.shape[axis]:
         return a
     a = np.partition(a, -k, axis=axis)
-    # a = a[-k:] if k>0 else a[:-k], on arbitrary axis
-    a = a[[
+    # return a[-k:] if k>0 else a[:-k], on arbitrary axis
+    return a[[
         (slice(-k, None) if k > 0 else slice(None, -k))
         if i == axis else slice(None)
         for i in range(a.ndim)
     ]]
-    return a
 
 
 def topk_postprocess(a, k, axis):
     """Kernel of topk and argtopk.
-    Post-processes the outpout of topk, sorting the results internally.
+    Post-processes the output of topk, sorting the results internally.
     """
     a = np.sort(a, axis=axis)
     if k > 0:
