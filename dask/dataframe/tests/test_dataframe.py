@@ -432,6 +432,35 @@ def test_clip(lower, upper):
     assert_eq(ds.clip_upper(upper), s.clip_upper(upper))
 
 
+def test_squeeze():
+    df = pd.DataFrame({'x': [1, 3, 6]})
+    df2 = pd.DataFrame({'x':[0]})
+    s = pd.Series({'test': 0, 'b': 100})
+
+    ddf = dd.from_pandas(df, 3)
+    ddf2 = dd.from_pandas(df2, 3)
+    ds = dd.from_pandas(s, 2)
+
+    assert_eq(df.squeeze(), ddf.squeeze())
+    assert_eq(pd.Series([0], name='x'), ddf2.squeeze())
+    assert_eq(ds.squeeze(), s.squeeze())
+
+    with pytest.raises(NotImplementedError) as info:
+        ddf.squeeze(axis=0)
+    msg = "{0} does not support squeeze along axis 0".format(type(ddf))
+    assert msg in str(info.value)
+
+    with pytest.raises(ValueError) as info:
+        ddf.squeeze(axis=2)
+    msg = 'No axis {0} for object type {1}'.format(2, type(ddf))
+    assert msg in str(info.value)
+
+    with pytest.raises(ValueError) as info:
+        ddf.squeeze(axis='test')
+    msg = 'No axis test for object type {0}'.format(type(ddf))
+    assert msg in str(info.value)
+
+
 def test_where_mask():
     pdf1 = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
                          'b': [3, 5, 2, 5, 7, 2, 4, 2, 4]})

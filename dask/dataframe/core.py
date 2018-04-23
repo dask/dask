@@ -29,7 +29,7 @@ from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
                      is_arraylike, Interval)
 from ..array import Array
-from ..base import Base, tokenize, dont_optimize, is_dask_collection
+from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..delayed import Delayed, to_task_dask
 
 from . import methods
@@ -286,7 +286,7 @@ def finalize(results):
     return _concat(results)
 
 
-class Scalar(Base, OperatorMethodMixin):
+class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     """ A Dask object to represent a pandas scalar"""
 
     @_deprecate_divisions(inspect_args=False)
@@ -435,7 +435,7 @@ def _scalar_binary(op, self, other, inv=False):
         return Scalar(dsk, name, meta)
 
 
-class _Frame(Base, OperatorMethodMixin):
+class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     """ Superclass for DataFrame and Series
 
     Parameters
@@ -881,8 +881,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         3  3.0  1.0
         4  4.0  1.0
 
-        If you have a ``DatetimeIndex``, you can use a `timedelta` for time-
+        If you have a ``DatetimeIndex``, you can use a ``pd.Timedelta`` for time-
         based windows.
+
         >>> ts = pd.Series(range(10), index=pd.date_range('2017', periods=10))
         >>> dts = dd.from_pandas(ts, npartitions=2)
         >>> dts.map_overlap(lambda df: df.rolling('2D').sum(),
@@ -2298,6 +2299,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                    fill_value=fill_value)
 
     @derived_from(pd.Series)
+    def squeeze(self):
+        return self
+
+    @derived_from(pd.Series)
     def combine_first(self, other):
         return self.map_partitions(M.combine_first, other)
 
@@ -2855,6 +2860,22 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def clip_upper(self, threshold):
         return self.map_partitions(M.clip_upper, threshold=threshold)
+
+    @derived_from(pd.DataFrame)
+    def squeeze(self, axis=None):
+        if axis in [None, 1]:
+            if len(self.columns) == 1:
+                return self[self.columns[0]]
+            else:
+                return self
+
+        elif axis == 0:
+            raise NotImplementedError("{0} does not support "
+                                      "squeeze along axis 0".format(type(self)))
+
+        elif axis not in [0, 1, None]:
+            raise ValueError('No axis {0} for object type {1}'.format(
+                axis, type(self)))
 
     @derived_from(pd.DataFrame)
     def to_timestamp(self, freq=None, how='start', axis=0):

@@ -330,20 +330,20 @@ def _nonempty_index(idx):
                               name=idx.name)
     elif typ is pd.TimedeltaIndex:
         start = np.timedelta64(1, 'D')
-        data = [start, start] if idx.freq is None else None
+        data = [start, start + 1] if idx.freq is None else None
         return pd.TimedeltaIndex(data, start=start, periods=2, freq=idx.freq,
                                  name=idx.name)
     elif typ is pd.CategoricalIndex:
-        if len(idx.categories):
-            data = [idx.categories[0]] * 2
-            cats = idx.categories
-        else:
+        if len(idx.categories) == 0:
             data = _nonempty_index(idx.categories)
             cats = None
+        else:
+            data = _nonempty_index(_nonempty_index(idx.categories))
+            cats = idx.categories
         return pd.CategoricalIndex(data, categories=cats,
                                    ordered=idx.ordered, name=idx.name)
     elif typ is pd.MultiIndex:
-        levels = [_nonempty_index(i) for i in idx.levels]
+        levels = [_nonempty_index(l) for l in idx.levels]
         labels = [[0, 0] for i in idx.levels]
         return pd.MultiIndex(levels=levels, labels=labels, names=idx.names)
     raise TypeError("Don't know how to handle index of "

@@ -16,11 +16,14 @@ from ..core import flatten
 from ..base import tokenize
 from . import numpy_compat, chunk
 from .creation import arange
+from .utils import safe_wraps
 from .wrap import ones
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    asanyarray, concatenate, stack, atop, broadcast_shapes,
                    is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
+
+from .einsumfuncs import einsum  # noqa
 
 
 @wraps(np.array)
@@ -302,10 +305,10 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
 
     if (LooseVersion(np.__version__) < LooseVersion("1.13.0") and
             (np.array(test_result.shape) > 1).sum(dtype=int) > 1):
-            raise ValueError(
-                "No more than one non-trivial dimension allowed in result. "
-                "Need NumPy 1.13.0+ for this functionality."
-            )
+        raise ValueError(
+            "No more than one non-trivial dimension allowed in result. "
+            "Need NumPy 1.13.0+ for this functionality."
+        )
 
     # Rechunk so that func1d is applied over the full axis.
     arr = arr.rechunk(
@@ -786,7 +789,7 @@ def _isin_kernel(element, test_elements, assume_unique=False):
     return values.reshape(element.shape + (1,) * test_elements.ndim)
 
 
-@wraps(getattr(np, 'isin', None))
+@safe_wraps(getattr(np, 'isin', None))
 def isin(element, test_elements, assume_unique=False, invert=False):
     element = asarray(element)
     test_elements = asarray(test_elements)

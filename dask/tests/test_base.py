@@ -11,7 +11,7 @@ import dask
 from dask import delayed
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
                        visualize, persist, function_cache, is_dask_collection,
-                       DaskMethodsMixin, optimize)
+                       DaskMethodsMixin, optimize, unpack_collections)
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
@@ -342,6 +342,51 @@ def test_is_dask_collection():
     assert not is_dask_collection(DummyCollection)
 
 
+def test_unpack_collections():
+    a = delayed(1) + 5
+    b = a + 1
+    c = a + 2
+
+    def build(a, b, c, iterator):
+        return (a, b,               # Top-level collections
+                {'a': a,            # dict
+                 a: b,              # collections as keys
+                 'b': [1, 2, [b]],  # list
+                 'c': 10,           # other builtins pass through unchanged
+                 'd': (c, 2),       # tuple
+                 'e': {a, 2, 3}},   # set
+                iterator)           # Iterator
+
+    args = build(a, b, c, (i for i in [a, b, c]))
+
+    collections, repack = unpack_collections(*args)
+    assert len(collections) == 3
+
+    # Replace collections with `'~a'` strings
+    result = repack(['~a', '~b', '~c'])
+    sol = build('~a', '~b', '~c', ['~a', '~b', '~c'])
+    assert result == sol
+
+    # traverse=False
+    collections, repack = unpack_collections(*args, traverse=False)
+    assert len(collections) == 2  # just a and b
+    assert repack(collections) == args
+
+    # No collections
+    collections, repack = unpack_collections(1, 2, {'a': 3})
+    assert not collections
+    assert repack(collections) == (1, 2, {'a': 3})
+
+    # Result that looks like a task
+    def fail(*args):
+        raise ValueError("Shouldn't have been called")
+
+    collections, repack = unpack_collections(a, (fail, 1), [(fail, 2, 3)],
+                                             traverse=False)
+    repack(collections)  # Smoketest task literals
+    repack([(fail, 1)])  # Smoketest results that look like tasks
+
+
 class Tuple(DaskMethodsMixin):
     __slots__ = ('_dask', '_keys')
     __dask_scheduler__ = staticmethod(dask.threaded.get)
@@ -623,6 +668,29 @@ def test_optimize():
         assert dict(a.dask) == dict(b.dask)
 
 
+def test_optimize_nested():
+    a = dask.delayed(inc)(1)
+    b = dask.delayed(inc)(a)
+    c = a + b
+
+    result = optimize({'a': a, 'b': [1, 2, b]}, (c, 2))
+
+    a2 = result[0]['a']
+    b2 = result[0]['b'][2]
+    c2 = result[1][0]
+
+    assert isinstance(a2, Delayed)
+    assert isinstance(b2, Delayed)
+    assert isinstance(c2, Delayed)
+    assert dict(a2.dask) == dict(b2.dask) == dict(c2.dask)
+    assert compute(*result) == ({'a': 2, 'b': [1, 2, 3]}, (5, 2))
+
+    res = optimize([a, b], c, traverse=False)
+    assert res[0][0] is a
+    assert res[0][1] is b
+    assert res[1].compute() == 5
+
+
 # TODO: remove after deprecation cycle of `dask.optimize` module is completed
 def test_optimize_has_deprecated_module_functions_as_attributes():
     import dask.optimize as deprecated_optimize
@@ -655,6 +723,22 @@ def test_default_imports():
 
 def test_persist_literals():
     assert persist(1, 2, 3) == (1, 2, 3)
+
+
+def test_persist_nested():
+    a = delayed(1) + 5
+    b = a + 1
+    c = a + 2
+    result = persist({'a': a, 'b': [1, 2, b]}, (c, 2))
+    assert isinstance(result[0]['a'], Delayed)
+    assert isinstance(result[0]['b'][2], Delayed)
+    assert isinstance(result[1][0], Delayed)
+    assert compute(*result) == ({'a': 6, 'b': [1, 2, 7]}, (8, 2))
+
+    res = persist([a, b], c, traverse=False)
+    assert res[0][0] is a
+    assert res[0][1] is b
+    assert res[1].compute() == 8
 
 
 def test_persist_delayed():

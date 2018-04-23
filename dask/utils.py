@@ -6,6 +6,7 @@ import os
 import shutil
 import sys
 import tempfile
+import re
 from errno import ENOENT
 from collections import Iterator, namedtuple
 from contextlib import contextmanager
@@ -1075,3 +1076,33 @@ class Interval(namedtuple('RawInterval', ['start', 'lopen', 'stop', 'rclosed']))
 
         return self.__class__(*self[:2], value, False),\
                self.__class__(value, False, *self[2:])
+
+
+def natural_sort_key(s):
+    """
+    Sorting `key` function for performing a natural sort on a collection of
+    strings
+
+    See https://en.wikipedia.org/wiki/Natural_sort_order
+
+    Parameters
+    ----------
+    s : str
+        A string that is an element of the collection being sorted
+
+    Returns
+    -------
+    tuple[str or int]
+        Tuple of the parts of the input string where each part is either a
+        string or an integer
+
+    Examples
+    --------
+    >>> a = ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
+    >>> sorted(a)
+    ['f0', 'f1', 'f10', 'f11', 'f19', 'f2', 'f20', 'f21', 'f8', 'f9']
+    >>> sorted(a, key=natural_sort_key)
+    ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
+    """
+    return [int(part) if part.isdigit() else part
+            for part in re.split('(\d+)', s)]

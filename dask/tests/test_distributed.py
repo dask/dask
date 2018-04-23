@@ -7,7 +7,8 @@ from operator import add
 from tornado import gen
 
 import dask
-from dask import persist, delayed
+from dask import persist, delayed, compute
+from dask.delayed import Delayed
 from distributed.client import wait, Client
 from distributed.utils_test import gen_cluster, inc, cluster, loop  # flake8: noqa
 
@@ -34,6 +35,27 @@ def test_persist(c, s, a, b):
 
     yield wait(y2)
     assert y2.key in a.data or y2.key in b.data
+
+
+def test_persist_nested(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop):
+            a = delayed(1) + 5
+            b = a + 1
+            c = a + 2
+            result = persist({'a': a, 'b': [1, 2, b]}, (c, 2), 4, [5])
+            assert isinstance(result[0]['a'], Delayed)
+            assert isinstance(result[0]['b'][2], Delayed)
+            assert isinstance(result[1][0], Delayed)
+
+            sol = ({'a': 6, 'b': [1, 2, 7]}, (8, 2), 4, [5])
+            assert compute(*result) == sol
+
+            res = persist([a, b], c, 4, [5], traverse=False)
+            assert res[0][0] is a
+            assert res[0][1] is b
+            assert res[1].compute() == 8
+            assert res[2:] == (4, [5])
 
 
 def test_futures_to_delayed_dataframe(loop):

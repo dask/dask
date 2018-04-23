@@ -61,6 +61,7 @@ Top level user functions:
    dot
    dstack
    ediff1d
+   einsum
    empty
    empty_like
    exp
@@ -402,6 +403,7 @@ Other functions
 .. autofunction:: ediff1d
 .. autofunction:: empty
 .. autofunction:: empty_like
+.. autofunction:: einsum
 .. autofunction:: exp
 .. autofunction:: expm1
 .. autofunction:: eye
