@@ -9,7 +9,7 @@ import distutils
 import numpy as np
 import pandas as pd
 
-from ..core import DataFrame, Series
+from ..core import DataFrame, Series, IndexBounds
 from ..utils import (clear_known_categories, strip_unknown_categories,
                      UNKNOWN_CATEGORIES)
 from ...bytes.compression import compress
@@ -18,7 +18,7 @@ from ...compatibility import PY3, string_types
 from ...delayed import delayed
 from ...bytes.core import get_fs_token_paths
 from ...bytes.utils import infer_storage_options
-from ...utils import import_required
+from ...utils import import_required, Interval
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 
 __all__ = ('read_parquet', 'to_parquet')
@@ -273,26 +273,31 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     if not dsk:
         # empty dataframe
         dsk = {(name, 0): meta}
-        divisions = (None, None)
-        return out_type(dsk, name, meta, divisions)
+        index_bounds = IndexBounds((None,))
+        return out_type(dsk, name, meta, index_bounds)
+
+    maybe_timestamp = lambda val: (
+        pd.Timestamp(val) if isinstance(val, np.datetime64) else val
+    )
 
     if index_names:
         index_name = meta.index.name
         minmax = fastparquet.api.sorted_partitioned_columns(pf)
         if index_name in minmax:
-            divisions = (list(minmax[index_name]['min']) +
-                         [minmax[index_name]['max'][-1]])
-            divisions = [divisions[i] for i, rg in enumerate(pf.row_groups)
-                         if rg in rgs] + [divisions[-1]]
+            index_bounds = [
+                Interval.inclusive(
+                    maybe_timestamp(mn), maybe_timestamp(mx))
+                for mn, mx in zip(
+                    minmax[index_name]['min'], minmax[index_name]['max'])
+            ]
+            index_bounds = [index_bounds[i] for i, rg in enumerate(pf.row_groups)
+                         if rg in rgs]
         else:
-            divisions = (None,) * (len(rgs) + 1)
+            index_bounds = (None,) * len(rgs)
     else:
-        divisions = (None,) * (len(rgs) + 1)
+        index_bounds = (None,) * len(rgs)
 
-    if isinstance(divisions[0], np.datetime64):
-        divisions = [pd.Timestamp(d) for d in divisions]
-
-    return out_type(dsk, name, meta, divisions)
+    return out_type(dsk, name, meta, IndexBounds(index_bounds))
 
 
 def _read_parquet_row_group(fs, fn, index, columns, rg, series, categories,
@@ -376,8 +381,8 @@ def _write_fastparquet(df, fs, fs_token, path, write_index=None, append=False,
         raise ValueError('"infer" not allowed as object encoding, '
                          'because this required data in memory.')
 
-    divisions = df.divisions
-    if write_index is True or write_index is None and df.known_divisions:
+    index_bounds = df.index_bounds
+    if write_index is True or write_index is None and df.known_bounds:
         df = df.reset_index()
         index_cols = [df.columns[0]]
     else:
@@ -411,10 +416,10 @@ def _write_fastparquet(df, fs, fs_token, path, write_index=None, append=False,
         if not ignore_divisions:
             minmax = fastparquet.api.sorted_partitioned_columns(pf)
             old_end = minmax[index_cols[0]]['max'][-1]
-            if divisions[0] < old_end:
+            if index_bounds[0].start < old_end:
                 raise ValueError(
                     'Appended divisions overlapping with the previous ones.\n'
-                    'New: {} | Previous: {}'.format(old_end, divisions[0]))
+                    'New: {} | Previous: {}'.format(old_end, index_bounds[0].start))
     else:
         fmd = fastparquet.writer.make_metadata(df._meta,
                                                object_encoding=object_encoding,
@@ -530,7 +535,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     task_name = 'read-parquet-' + tokenize(fs_token, paths, all_columns)
 
     if dataset.pieces:
-        divisions = (None,) * (len(dataset.pieces) + 1)
+        index_bounds = (None,) * len(dataset.pieces)
         task_plan = {
             (task_name, i): (_read_pyarrow_parquet_piece,
                              fs,
@@ -544,10 +549,10 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
         }
     else:
         meta = strip_unknown_categories(meta)
-        divisions = (None, None)
+        index_bounds = (None,)
         task_plan = {(task_name, 0): meta}
 
-    return out_type(task_plan, task_name, meta, divisions)
+    return out_type(task_plan, task_name, meta, IndexBounds(index_bounds))
 
 
 def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
@@ -613,7 +618,7 @@ def _write_pyarrow(df, fs, fs_token, path, write_index=None, append=False,
                "%r" % list(set(kwargs).difference(_pyarrow_write_table_kwargs)))
         raise TypeError(msg)
 
-    if write_index is None and df.known_divisions:
+    if write_index is None and df.known_bounds:
         write_index = True
 
     fs.mkdirs(path)

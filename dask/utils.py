@@ -910,13 +910,19 @@ class Interval(namedtuple('RawInterval', ['start', 'lopen', 'stop', 'rclosed']))
     part of the interval < a value, or all?  Stict tests for nonoverlapping
     comparisons are provided as separate methods (eg :meth:`self.strict_lt`).
 
-    :param start: smallest value in the interval (inclusive)
 
-    :param bool lopen: if the start value is open/exclusive start value
+    Parameters
+    ----------
 
-    :param stop: largest value in the interval
-
-    :param bool rclosed: if ```True```, the stop value is inclusive (a closed
+    start:
+        smallest value in the interval (inclusive).  May be any object that
+        supports comparisons like '<'
+    lopen: bool
+        if the start value is open/exclusive start value
+    stop:
+        largest value in the interval
+    rclosed: bool
+        if ```True```, the stop value is inclusive (a closed
         range).  Otherwise, the stop value is an open/exclusive max value and
         is not included in the interval
 
@@ -1008,6 +1014,9 @@ class Interval(namedtuple('RawInterval', ['start', 'lopen', 'stop', 'rclosed']))
         return self > other or self.start == other
 
     def __eq__(self, other):
+        if other is None:
+            return False
+
         if isinstance(other, Interval):
             return tuple(self) == tuple(other)
 

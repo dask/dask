@@ -14,11 +14,11 @@ from ...compatibility import unicode, PY3
 from ... import array as da
 from ...delayed import delayed
 
-from ..core import DataFrame, Series, new_dd_object
+from ..core import DataFrame, Series, new_dd_object, IndexBounds, _deprecate_divisions
 from ..shuffle import set_partition
 from ..utils import insert_meta_param_description, check_meta, make_meta
 
-from ...utils import M, ensure_dict
+from ...utils import M, ensure_dict, Interval
 
 lock = Lock()
 
@@ -86,8 +86,11 @@ def from_array(x, chunksize=50000, columns=None):
 
     meta = _meta_from_array(x, columns)
 
-    divisions = tuple(range(0, len(x), chunksize))
-    divisions = divisions + (len(x) - 1,)
+    n = len(x)
+    index_bounds = IndexBounds([
+        Interval.inclusive(i, min(i + chunksize, n) - 1)
+        for i in range(0, n, chunksize)
+    ])
     token = tokenize(x, chunksize, columns)
     name = 'from_array-' + token
 
@@ -98,7 +101,7 @@ def from_array(x, chunksize=50000, columns=None):
             dsk[name, i] = (pd.Series, data, None, meta.dtype, meta.name)
         else:
             dsk[name, i] = (pd.DataFrame, data, None, meta.columns)
-    return new_dd_object(dsk, name, meta, divisions)
+    return new_dd_object(dsk, name, meta, index_bounds)
 
 
 def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
@@ -181,21 +184,19 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     name = name or ('from_pandas-' + tokenize(data, chunksize))
 
     if not nrows:
-        return new_dd_object({(name, 0): data}, name, data, [None, None])
+        return new_dd_object({(name, 0): data}, name, data, IndexBounds((None,)))
 
     if sort and not data.index.is_monotonic_increasing:
         data = data.sort_index(ascending=True)
-    if sort:
-        divisions, locations = sorted_division_locations(data.index,
+    if sort:  # TODO: or data.index.is_monotonic_increasing?
+        index_bounds, slices = sorted_bounds_slices(data.index,
                                                          chunksize=chunksize)
     else:
-        locations = list(range(0, nrows, chunksize)) + [len(data)]
-        divisions = [None] * len(locations)
+        slices = [slice(i, i+chunksize) for i in range(0, nrows, chunksize)]
+        index_bounds = IndexBounds((None,) * len(slices))
 
-    dsk = dict(((name, i), data.iloc[start: stop])
-               for i, (start, stop) in enumerate(zip(locations[:-1],
-                                                     locations[1:])))
-    return new_dd_object(dsk, name, data, divisions)
+    dsk = {(name, i): data.iloc[slc] for i, slc in enumerate(slices)}
+    return new_dd_object(dsk, name, data, index_bounds)
 
 
 def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
@@ -379,15 +380,18 @@ def from_dask_array(x, columns=None):
 
     name = 'from-dask-array' + tokenize(x, columns)
     if np.isnan(sum(x.shape)):
-        divisions = [None] * (len(x.chunks[0]) + 1)
         index = [None] * len(x.chunks[0])
+        index_bounds = IndexBounds(index)
     else:
-        divisions = [0]
+        _divs = [0]
         for c in x.chunks[0]:
-            divisions.append(divisions[-1] + c)
-        index = [(np.arange, a, b, 1, 'i8') for a, b in
-                 zip(divisions[:-1], divisions[1:])]
-        divisions[-1] -= 1
+            _divs.append(_divs[-1] + c)
+        index_bounds = IndexBounds([
+            Interval.inclusive(a, b - 1)
+            for a, b in zip(_divs[:-1], _divs[1:])
+        ])
+        index = [(np.arange, bound.start, bound.stop + 1, 1, 'i8') for bound in
+                 index_bounds]
 
     dsk = {}
     for i, (chunk, ind) in enumerate(zip(x.__dask_keys__(), index)):
@@ -398,7 +402,7 @@ def from_dask_array(x, columns=None):
         else:
             dsk[name, i] = (pd.DataFrame, chunk, ind, meta.columns)
 
-    return new_dd_object(merge(ensure_dict(x.dask), dsk), name, meta, divisions)
+    return new_dd_object(merge(ensure_dict(x.dask), dsk), name, meta, index_bounds)
 
 
 def _link(token, result):
@@ -461,7 +465,7 @@ def to_records(df):
 
 
 @insert_meta_param_description
-def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed'):
+def from_delayed(dfs, meta=None, divisions=None, index_bounds=None, prefix='from-delayed', _checkdivs=True):
     """ Create Dask DataFrame from many Dask Delayed objects
 
     Parameters
@@ -480,6 +484,24 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed'):
     prefix : str, optional
         Prefix to prepend to the keys.
     """
+
+    if divisions == 'sorted' or index_bounds == 'sorted':
+        sort = True
+        divisions = index_bounds = None
+    else:
+        sort = False
+
+    if _checkdivs:
+        raw = _deprecate_divisions(from_delayed)(
+            dfs, meta=meta, divisions=divisions, index_bounds=index_bounds,
+            prefix=prefix, _checkdivs=False)
+
+        if sort:
+            from ..shuffle import compute_bounds
+            index_bounds = compute_bounds(raw)
+            raw.index_bounds = index_bounds
+        return raw
+
     from dask.delayed import Delayed
     if isinstance(dfs, Delayed):
         dfs = [dfs]
@@ -501,19 +523,15 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed'):
     dsk.update({(name, i): (check_meta, df.key, meta, 'from_delayed')
                 for (i, df) in enumerate(dfs)})
 
-    if divisions is None or divisions == 'sorted':
-        divs = [None] * (len(dfs) + 1)
+
+    if index_bounds is None:
+        index_bounds = IndexBounds((None,) * len(dfs))
     else:
-        divs = tuple(divisions)
-        if len(divs) != len(dfs) + 1:
-            raise ValueError("divisions should be a tuple of len(dfs) + 1")
+        index_bounds = IndexBounds(index_bounds)
+        if len(index_bounds) != len(dfs):
+            raise ValueError("index_bounds should be of len(dfs)")
 
-    df = new_dd_object(dsk, name, meta, divs)
-
-    if divisions == 'sorted':
-        from ..shuffle import compute_divisions
-        divisions = compute_divisions(df)
-        df.divisions = divisions
+    df = new_dd_object(dsk, name, meta, index_bounds)
 
     return df
 
@@ -564,6 +582,21 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
         values.append(seq[-1])
 
     return values, positions
+
+
+def sorted_bounds_slices(seq, **kwargs):
+    """Find index bounds and position slices in sorted list"""
+
+    # TODO: rewrite sorted_division_locations to call this instead?
+    divs, locs = sorted_division_locations(seq, **kwargs)
+    minmax = list(zip(locs[:-1], locs[1:]))
+    slices = [slice(start, stop) for start, stop in minmax]
+    index_bounds = IndexBounds([
+        Interval.inclusive(seq[start], seq[stop - 1])
+        for start, stop in minmax
+    ])
+
+    return index_bounds, slices
 
 
 if PY3:

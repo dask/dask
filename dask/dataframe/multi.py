@@ -65,7 +65,9 @@ import pandas as pd
 from ..base import tokenize
 from ..compatibility import apply
 from .core import (_Frame, DataFrame, Series, map_partitions, Index,
-                   _maybe_from_pandas, new_dd_object, is_broadcastable)
+                   _maybe_from_pandas, new_dd_object, is_broadcastable,
+                   IndexBounds,
+                   )
 from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
@@ -99,7 +101,7 @@ def align_partitions(*dfs):
             not _is_broadcastable(df)]
     if len(dfs) == 0:
         raise ValueError("dfs contains no DataFrame and Series")
-    if not all(df.known_divisions for df in dfs1):
+    if not all(df.known_bounds for df in dfs1):
         raise ValueError("Not all divisions are known, can't align "
                          "partitions. Please use `set_index` "
                          "to set the index.")
@@ -142,8 +144,8 @@ def _maybe_align_partitions(args):
     if not dfs:
         return args
 
-    divisions = dfs[0].divisions
-    if not all(df.divisions == divisions for df in dfs):
+    bounds = dfs[0].index_bounds
+    if not all(df.index_bounds == bounds for df in dfs):
         dfs2 = iter(align_partitions(*dfs)[0])
         return [a if not isinstance(a, _Frame) else next(dfs2) for a in args]
     return args
@@ -308,9 +310,9 @@ def single_partition_join(left, right, **kwargs):
 
         if kwargs.get('right_index') or right._contains_index_name(
                 kwargs.get('right_on')):
-            divisions = right.divisions
+            index_bounds = right.index_bounds
         else:
-            divisions = [None for _ in right.divisions]
+            index_bounds = IndexBounds((None,) * right.npartitions)
 
     elif right.npartitions == 1:
         right_key = first(right.__dask_keys__())
@@ -319,12 +321,12 @@ def single_partition_join(left, right, **kwargs):
 
         if kwargs.get('left_index') or left._contains_index_name(
                 kwargs.get('left_on')):
-            divisions = left.divisions
+            index_bounds = left.index_bounds
         else:
-            divisions = [None for _ in left.divisions]
+            index_bounds = IndexBounds((None,) * left.npartitions)
 
     return new_dd_object(toolz.merge(dsk, left.dask, right.dask), name,
-                         meta, divisions)
+                         meta, index_bounds)
 
 
 @wraps(pd.merge)
@@ -368,10 +370,10 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
 
     # Both sides are now dd.DataFrame or dd.Series objects
     merge_indexed_left = (left_index or left._contains_index_name(
-        left_on)) and left.known_divisions
+        left_on)) and left.known_bounds
 
     merge_indexed_right = (right_index or right._contains_index_name(
-        right_on)) and right.known_divisions
+        right_on)) and right.known_bounds
 
     # Both sides indexed
     if merge_indexed_left and merge_indexed_right:  # Do indexed join
@@ -393,19 +395,19 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                                      suffixes=suffixes, indicator=indicator)
 
     # One side is indexed, the other not
-    elif (left_index and left.known_divisions and not right_index or
-          right_index and right.known_divisions and not left_index):
+    elif (left_index and left.known_bounds and not right_index or
+          right_index and right.known_bounds and not left_index):
         left_empty = left._meta_nonempty
         right_empty = right._meta_nonempty
         meta = pd.merge(left_empty, right_empty, how=how, on=on,
                         left_on=left_on, right_on=right_on,
                         left_index=left_index, right_index=right_index,
                         suffixes=suffixes, indicator=indicator)
-        if merge_indexed_left and left.known_divisions:
+        if merge_indexed_left and left.known_bounds:
             right = rearrange_by_divisions(right, right_on, left.divisions,
                                            max_branch, shuffle=shuffle)
             left = left.clear_divisions()
-        elif merge_indexed_right and right.known_divisions:
+        elif merge_indexed_right and right.known_bounds:
             left = rearrange_by_divisions(left, left_on, right.divisions,
                                           max_branch, shuffle=shuffle)
             right = right.clear_divisions()
@@ -440,7 +442,7 @@ def concat_unindexed_dataframes(dfs):
     meta = pd.concat([df._meta for df in dfs], axis=1)
 
     return new_dd_object(toolz.merge(dsk, *[df.dask for df in dfs]),
-                         name, meta, dfs[0].divisions)
+                         name, meta, dfs[0].index_bounds)
 
 
 def concat_indexed_dataframes(dfs, axis=0, join='outer'):
@@ -464,7 +466,7 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-def stack_partitions(dfs, divisions, join='outer'):
+def stack_partitions(dfs, index_bounds, join='outer'):
     """Concatenate partitions on axis=0 by doing a simple stack"""
     meta = methods.concat([df._meta for df in dfs], join=join)
     empty = strip_unknown_categories(meta)
@@ -490,7 +492,7 @@ def stack_partitions(dfs, divisions, join='outer'):
                 dsk[(name, i)] = (methods.concat, [empty, key], 0, join)
             i += 1
 
-    return new_dd_object(dsk, name, meta, divisions)
+    return new_dd_object(dsk, name, meta, index_bounds)
 
 
 def concat(dfs, axis=0, join='outer', interleave_partitions=False):
@@ -594,10 +596,10 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
     dfs = _maybe_from_pandas(dfs)
 
     if axis == 1:
-        if all(df.known_divisions for df in dasks):
+        if all(df.known_bounds for df in dasks):
             return concat_indexed_dataframes(dfs, axis=axis, join=join)
         elif (len(dasks) == len(dfs) and
-              all(not df.known_divisions for df in dfs) and
+              all(not df.known_bounds for df in dfs) and
               len({df.npartitions for df in dasks}) == 1):
             warn("Concatenating dataframes with unknown divisions.\n"
                  "We're assuming that the indexes of each dataframes are \n"
@@ -607,16 +609,14 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
             raise ValueError('Unable to concatenate DataFrame with unknown '
                              'division specifying axis=1')
     else:
-        if all(df.known_divisions for df in dasks):
+        if all(df.known_bounds for df in dasks):
             # each DataFrame's division must be greater than previous one
-            if all(dfs[i].divisions[-1] < dfs[i + 1].divisions[0]
+            if all(dfs[i].index_bounds[-1].strict_lt(dfs[i + 1].index_bounds[0])
                    for i in range(len(dfs) - 1)):
-                divisions = []
-                for df in dfs[:-1]:
-                    # remove last to concatenate with next
-                    divisions += df.divisions[:-1]
-                divisions += dfs[-1].divisions
-                return stack_partitions(dfs, divisions, join=join)
+                index_bounds = IndexBounds(
+                    sum((df.index_bounds for df in dfs), tuple())
+                )
+                return stack_partitions(dfs, index_bounds, join=join)
             elif interleave_partitions:
                 return concat_indexed_dataframes(dfs, join=join)
             else:
@@ -624,5 +624,5 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
                                  'cannot be concatenated in order. Specify '
                                  'interleave_partitions=True to ignore order')
         else:
-            divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
-            return stack_partitions(dfs, divisions, join=join)
+            index_bounds = IndexBounds((None,) * (sum([df.npartitions for df in dfs])))
+            return stack_partitions(dfs, index_bounds, join=join)

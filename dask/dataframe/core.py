@@ -1,7 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Iterator
+from collections import Iterator, Iterable
 from functools import wraps, partial
+from itertools import chain
 import operator
 from operator import getitem
 from pprint import pformat
@@ -26,7 +27,7 @@ from ..compatibility import apply, operator_div, bind_method
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
-                     is_arraylike)
+                     is_arraylike, Interval)
 from ..array import Array
 from ..base import Base, tokenize, dont_optimize, is_dask_collection
 from ..delayed import Delayed, to_task_dask
@@ -81,16 +82,195 @@ def _get_return_type(meta):
     return Scalar
 
 
-def new_dd_object(dsk, name, meta, divisions):
+DEPRECATE_DIVISIONS = PendingDeprecationWarning(
+    "'divisions' is deprecated, please use 'index_bounds'")
+
+
+class IndexBounds(tuple):
+    """Basic class to provide disambiguation of divisions/bounds
+
+    Each element should either be ```None``` or an instance of
+    :class:`.Interval` if the bounds of the index is known for a corresponding
+    partition
+
+    """
+
+    def __getitem__(self, item):
+        sup = super(IndexBounds, self).__getitem__(item)
+
+        if isinstance(item, slice):
+            # Ensure slicing doesn't turn back into a tuple
+            return self.__class__(sup)
+
+        return sup
+
+    def map(self, callable):
+        """Return a new instance of self with the interval values transformed
+
+        Bounding conditions and order of the intervals will be unchanged
+
+        Will fail if any elements are unknown!
+
+        :param callable callable: a function that takes a start/stop point and
+            transforms it
+
+        :rtype: self.__class__
+        """
+
+        return self.__class__([
+            Interval(callable(b.start), b.lopen, callable(b.stop), b.rclosed)
+            for b in self
+        ])
+
+    def map_all(self, callable):
+        """Return a new instance of self with the interval values transformed
+
+        Bounding conditions and order of the intervals will be unchanged
+
+        Will fail if any elements are unknown!
+
+        :param callable callable: a function that takes a list of *all* values
+            in the form ```[start_0, stop_0, start_1, ... stop_n]``` and returns
+            a new iterable of the same form
+
+        :rtype: self.__class__
+        """
+        vals = list(chain(*[(b.start, b.stop) for b in self]))
+        transformed = callable(vals)
+        return self.__class__([
+            Interval(transformed[2*i], b.lopen, transformed[2*i+1], b.rclosed)
+            for i, b in enumerate(self)
+        ])
+
+    def is_strictly_sorted(self):
+        """Every bound is strictly less than the next (sorted, no overlapping)
+
+        :rtype: bool
+        """
+        if len(self) < 2:
+            return True
+
+        return all(a.strict_lt(b) for a, b in zip(self[:-1], self[1:]))
+
+
+def _divisions_to_bounds(divisions):
+    """Convert old style divisions to an :class:`.IndexBounds` interval set
+
+    :rtype: IndexBounds
+    """
+
+    if divisions[0] is None:
+        return IndexBounds((None,) * (len(divisions) - 1))
+
+    naive_bounds = tuple(zip(divisions[:-1], divisions[1:]))
+
+    out = [
+        Interval.exclusive(*b) for b in naive_bounds[:-1]
+    ]
+    out.append(Interval.inclusive(*naive_bounds[-1]))
+
+    return IndexBounds(out)
+
+
+def _maybe_divisions_to_bounds(maybe):
+    """See if the arg looks like divisions, and convert it"""
+
+    if maybe is None:
+        return None
+
+    # Check to see if this looks like 'divisions' for backwards compat
+
+    if isinstance(maybe, Iterable) and len(maybe):
+        if isinstance(maybe, IndexBounds):
+            return maybe
+
+        if isinstance(maybe[0], Interval):
+            # It's good
+            return IndexBounds(maybe)
+
+        return _divisions_to_bounds(maybe)
+
+    raise NotImplementedError()
+
+
+def _deprecate_divisions(func=None, warn=True, inspect_args=False, check_dsk=False):
+    """Decorator to safely promote 'divisions' as an arg or kwarg to 'index_bounds'
+
+    Example::
+
+        @_deprecate_divisions
+        def func(some_dataframe, index_bounds=None):
+            ...
+
+        func(ddf, divisions=[0, 1, 4])
+
+    :param bool inspect_args: if the function is not provided `divisions` in
+        the kwargs, will assume the last argument is either `divisions` or
+        `index_bounds` and will try to infer
+
+    """
+    if func is None:
+        return lambda f: _deprecate_divisions(
+            func=f, warn=warn, inspect_args=inspect_args, check_dsk=check_dsk)
+
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        divisions = kwargs.pop('divisions', None)
+        index_bounds = kwargs.pop('index_bounds', None)
+
+        if divisions is not None and index_bounds is not None:
+            raise ValueError(
+                "May only specify one of"
+                " 'divisions' and 'index_bounds'")
+
+        if inspect_args and not (index_bounds or divisions):
+
+            maybe = args[-1]
+
+            b = _maybe_divisions_to_bounds(maybe)
+            if b is not None:
+                index_bounds = b
+            elif check_dsk:
+                if warn:
+                    warnings.warn("Ambiguous divisions/index bounds")
+                # Divisions unknown, but can rely on signature of __init__
+                dsk, name = args[:2]
+
+                # Trust that we have the correct # of keys for # of partitions
+                hits = sum([(name, i) in dsk for i in range(len(maybe)+1)])
+                index_bounds = IndexBounds((None,) * hits)
+
+            else:
+                raise NotImplementedError("Don't know how to parse divisions")
+
+            # Stick back in args, not kwargs
+            args = args[:-1] + (index_bounds,)
+            index_bounds = None
+
+        if divisions:
+            if False and warn:
+                warnings.warn(DEPRECATE_DIVISIONS)
+
+            index_bounds = _divisions_to_bounds(divisions)
+
+        if index_bounds:
+            kwargs['index_bounds'] = index_bounds
+
+        return func(*args, **kwargs)
+    return wrapped
+
+
+@_deprecate_divisions(inspect_args=True, check_dsk=True)
+def new_dd_object(dsk, name, meta, index_bounds):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
     if isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)):
-        return _get_return_type(meta)(dsk, name, meta, divisions)
+        return _get_return_type(meta)(dsk, name, meta, index_bounds)
     elif is_arraylike(meta):
         import dask.array as da
-        chunks = (((np.nan,) * (len(divisions) - 1),) +
+        chunks = (((np.nan,) * len(index_bounds),) +
                   tuple((d,) for d in meta.shape[1:]))
         if len(chunks) > 1:
             dsk = dsk.copy()
@@ -99,7 +279,7 @@ def new_dd_object(dsk, name, meta, divisions):
                 dsk[(name, i) + suffix] = dsk.pop((name, i))
         return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
     else:
-        return _get_return_type(meta)(dsk, name, meta, divisions)
+        return _get_return_type(meta)(dsk, name, meta, index_bounds)
 
 
 def finalize(results):
@@ -108,8 +288,11 @@ def finalize(results):
 
 class Scalar(Base, OperatorMethodMixin):
     """ A Dask object to represent a pandas scalar"""
-    def __init__(self, dsk, name, meta, divisions=None):
-        # divisions is ignored, only present to be compatible with other
+
+    @_deprecate_divisions(inspect_args=False)
+    def __init__(self, dsk, name, meta, index_bounds=None):
+        # TODO: weirdness here because kwarg
+        # index_bounds is ignored, only present to be compatible with other
         # objects.
         self.dask = dsk
         self._name = name
@@ -136,7 +319,7 @@ class Scalar(Base, OperatorMethodMixin):
         return first, ()
 
     def __dask_postpersist__(self):
-        return Scalar, (self._name, self._meta, self.divisions)
+        return Scalar, (self._name, self._meta, self.index_bounds)
 
     @property
     def _meta_nonempty(self):
@@ -157,6 +340,11 @@ class Scalar(Base, OperatorMethodMixin):
     def divisions(self):
         """Dummy divisions to be compat with Series and DataFrame"""
         return [None, None]
+
+    @property
+    def index_bounds(self):
+        """Dummy index_bounds to be compat with Series and DataFrame"""
+        return IndexBounds((None,))
 
     def __repr__(self):
         name = self._name if len(self._name) < 10 else self._name[:7] + '...'
@@ -261,10 +449,13 @@ class _Frame(Base, OperatorMethodMixin):
     meta: pandas.DataFrame, pandas.Series, or pandas.Index
         An empty pandas object with names, dtypes, and indices matching the
         expected output.
-    divisions: tuple of index values
-        Values along which we partition our blocks on the index
+    index_bounds: IndexBounds
+        a tuple (wrapped in IndexBounds class) of the intervals representing
+        the bounds of the index at each partition
+
     """
-    def __init__(self, dsk, name, meta, divisions):
+    @_deprecate_divisions(inspect_args=True, check_dsk=True)
+    def __init__(self, dsk, name, meta, index_bounds):
         self.dask = dsk
         self._name = name
         meta = make_meta(meta)
@@ -273,7 +464,31 @@ class _Frame(Base, OperatorMethodMixin):
                             "{1}".format(self._partition_type.__name__,
                                          type(meta).__name__))
         self._meta = meta
-        self.divisions = tuple(divisions)
+
+        self.index_bounds = index_bounds
+
+    @property
+    def divisions(self):
+        """Values along which we partition our blocks on the index
+
+        :rtype: tuple
+        """
+        if False:
+            warnings.warn(DEPRECATE_DIVISIONS)
+        # Backwards compatibility
+        if self.known_bounds:
+            return tuple(
+                [b.start for b in self.index_bounds] + [self.index_bounds[-1].stop]
+            )
+        return (None,) * (self.npartitions + 1)
+
+    @divisions.setter
+    def divisions(self, divisions):
+        # Setting divisions should be avoided as we lose information
+        warnings.warn(DEPRECATE_DIVISIONS)
+
+        # Backwards compatibility
+        self.index_bounds = _divisions_to_bounds(divisions)
 
     def __dask_graph__(self):
         return self.dask
@@ -292,7 +507,7 @@ class _Frame(Base, OperatorMethodMixin):
         return finalize, ()
 
     def __dask_postpersist__(self):
-        return type(self), (self._name, self._meta, self.divisions)
+        return type(self), (self._name, self._meta, self.index_bounds)
 
     @property
     def _constructor(self):
@@ -301,7 +516,7 @@ class _Frame(Base, OperatorMethodMixin):
     @property
     def npartitions(self):
         """Return number of partitions"""
-        return len(self.divisions) - 1
+        return len(self.index_bounds)
 
     @property
     def size(self):
@@ -316,13 +531,13 @@ class _Frame(Base, OperatorMethodMixin):
 
     @property
     def _args(self):
-        return (self.dask, self._name, self._meta, self.divisions)
+        return (self.dask, self._name, self._meta, self.index_bounds)
 
     def __getstate__(self):
         return self._args
 
     def __setstate__(self, state):
-        self.dask, self._name, self._meta, self.divisions = state
+        self.dask, self._name, self._meta, self.index_bounds = state
 
     def copy(self):
         """ Make a copy of the dataframe
@@ -331,7 +546,7 @@ class _Frame(Base, OperatorMethodMixin):
         It does not affect the underlying data
         """
         return new_dd_object(self.dask, self._name,
-                             self._meta, self.divisions)
+                             self._meta, self.index_bounds)
 
     def __array__(self, dtype=None, **kwargs):
         self._computed = self.compute()
@@ -372,7 +587,7 @@ class _Frame(Base, OperatorMethodMixin):
     @property
     def _repr_divisions(self):
         name = "npartitions={0}".format(self.npartitions)
-        if self.known_divisions:
+        if self.known_bounds:
             divisions = pd.Index(self.divisions, name=name)
         else:
             # avoid to be converted to NaN
@@ -395,7 +610,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                for i, key in enumerate(self.__dask_keys__())}
 
         return Index(merge(dsk, self.dask), name,
-                     self._meta.index, self.divisions)
+                     self._meta.index, self.index_bounds)
 
     def reset_index(self, drop=False):
         """Reset the index to the default index.
@@ -420,23 +635,32 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return self.map_partitions(M.reset_index, drop=drop).clear_divisions()
 
     @property
+    def known_bounds(self):
+        """Whether index bounds are already known"""
+        return len(self.index_bounds) > 0 and self.index_bounds[0] is not None
+
+    @property
     def known_divisions(self):
         """Whether divisions are already known"""
-        return len(self.divisions) > 0 and self.divisions[0] is not None
+        return self.known_bounds
 
     def clear_divisions(self):
         """ Forget division information """
-        divisions = (None,) * (self.npartitions + 1)
-        return type(self)(self.dask, self._name, self._meta, divisions)
+        return self.clear_index_bounds()
+
+    def clear_index_bounds(self):
+        """Forget index_bounds"""
+        index_bounds = IndexBounds((None,) * self.npartitions)
+        return type(self)(self.dask, self._name, self._meta, index_bounds)
 
     def get_partition(self, n):
         """Get a dask DataFrame/Series representing the `nth` partition."""
         if 0 <= n < self.npartitions:
             name = 'get-partition-%s-%s' % (str(n), self._name)
             dsk = {(name, 0): (self._name, n)}
-            divisions = self.divisions[n:n + 2]
+            index_bounds = self.index_bounds[n:n + 1]
             return new_dd_object(merge(self.dask, dsk), name,
-                                 self._meta, divisions)
+                                 self._meta, index_bounds)
         else:
             msg = "n must be 0 <= n < {0}".format(self.npartitions)
             raise ValueError(msg)
@@ -857,7 +1081,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             dsk2 = {(name2, j): (getitem, (name, j), i)
                     for j in range(self.npartitions)}
             out.append(type(self)(merge(self.dask, dsk, dsk2), name2,
-                                  self._meta, self.divisions))
+                                  self._meta, self.index_bounds))
         return out
 
     def head(self, n=5, npartitions=1, compute=True):
@@ -895,8 +1119,17 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         else:
             dsk = {(name, 0): (safe_head, (self._name, 0), n)}
 
+        if self.known_bounds:
+            bound = self.index_bounds[0]
+            if npartitions > 1:
+                tip = self.index_bounds[npartitions-1]
+                bound = Interval(*bound[:2], *tip[2:])
+            index_bounds = (bound,)
+        else:
+            index_bounds = (None,)
+
         result = new_dd_object(merge(self.dask, dsk), name, self._meta,
-                               [self.divisions[0], self.divisions[npartitions]])
+                               IndexBounds(index_bounds))
 
         if compute:
             result = result.compute()
@@ -911,7 +1144,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         dsk = {(name, 0): (M.tail, (self._name, self.npartitions - 1), n)}
 
         result = new_dd_object(merge(self.dask, dsk), name,
-                               self._meta, self.divisions[-2:])
+                               self._meta, self.index_bounds[-1:])
 
         if compute:
             result = result.compute()
@@ -1009,7 +1242,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                method, i != skip_check)
                    for i in range(self.npartitions)}
             parts = new_dd_object(merge(dsk, self.dask), name, meta,
-                                  self.divisions)
+                                  self.index_bounds)
         else:
             parts = self
 
@@ -1053,7 +1286,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                for i, state in enumerate(state_data)}
 
         return new_dd_object(merge(self.dask, dsk), name,
-                             self._meta, self.divisions)
+                             self._meta, self.index_bounds)
 
     def to_hdf(self, path_or_buf, key, mode='a', append=False, get=None, **kwargs):
         """ See dd.to_hdf docstring for more information """
@@ -1206,7 +1439,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                     skipna=skipna, axis=axis,
                                     split_every=split_every)
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.index_bounds = IndexBounds(
+                    (Interval.inclusive(min(self.columns), max(self.columns)),)
+                )
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -1262,7 +1497,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                          token=self._token_prefix + fn, split_every=split_every,
                          skipna=skipna, fn=fn)
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.index_bounds = IndexBounds(
+                    (Interval.exclusive(min(self.columns), max(self.columns)),)
+                )
             return result
 
     @derived_from(pd.DataFrame)
@@ -1282,7 +1519,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                          token=self._token_prefix + fn, split_every=split_every,
                          skipna=skipna, fn=fn)
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.index_bounds = IndexBounds(
+                    (Interval.inclusive(min(self.columns), max(self.columns)),)
+                )
             return result
 
     @derived_from(pd.DataFrame)
@@ -1298,7 +1537,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             result = self.reduction(M.count, aggregate=M.sum, meta=meta,
                                     token=token, split_every=split_every)
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.index_bounds = IndexBounds(
+                    (Interval.inclusive(min(self.columns), max(self.columns)),)
+                )
             return result
 
     @derived_from(pd.DataFrame)
@@ -1319,7 +1560,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             result = map_partitions(methods.mean_aggregate, s, n,
                                     token=name, meta=meta)
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.index_bounds = IndexBounds(
+                    (Interval.inclusive(min(self.columns), max(self.columns)),)
+                )
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -1341,7 +1584,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             result = map_partitions(methods.var_aggregate, x2, x, n,
                                     token=name, meta=meta, ddof=ddof)
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.index_bounds = IndexBounds(
+                    (Interval.inclusive(min(self.columns), max(self.columns)),)
+                )
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -1376,7 +1621,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             name = self._token_prefix + 'sem'
             result = map_partitions(np.sqrt, v / n, meta=meta, token=name)
             if isinstance(self, DataFrame):
-                result.divisions = (min(self.columns), max(self.columns))
+                result.index_bounds = IndexBounds(
+                    (Interval.inclusive(min(self.columns), max(self.columns)),)
+                )
             return result
 
     def quantile(self, q=0.5, axis=0):
@@ -1412,11 +1659,13 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             if isinstance(quantiles[0], Scalar):
                 dask[(keyname, 0)] = (pd.Series, qnames, num.columns,
                                       None, meta.name)
-                divisions = (min(num.columns), max(num.columns))
-                return Series(dask, keyname, meta, divisions)
+                index_bounds = IndexBounds(
+                    (Interval.inclusive(min(num.columns), max(num.columns)),)
+                )
+                return Series(dask, keyname, meta, index_bounds)
             else:
                 dask[(keyname, 0)] = (methods.concat, qnames, 1)
-                return DataFrame(dask, keyname, meta, quantiles[0].divisions)
+                return DataFrame(dask, keyname, meta, quantiles[0].index_bounds)
 
     @derived_from(pd.DataFrame)
     def describe(self, split_every=False):
@@ -1439,7 +1688,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         dsk = merge(num.dask, *(s.dask for s in stats))
         dsk[(name, 0)] = (methods.describe_aggregate, stats_names)
 
-        return new_dd_object(dsk, name, num._meta, divisions=[None, None])
+        return new_dd_object(dsk, name, num._meta, index_bounds=IndexBounds((None,)))
 
     def _cum_agg(self, op_name, chunk, aggregate, axis, skipna=True,
                  chunk_kwargs=None, out=None):
@@ -1480,7 +1729,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                         (cumlast._name, i - 1))
                 dask[(name, i)] = (aggregate, (cumpart._name, i), (cname, i))
             result = new_dd_object(merge(dask, cumpart.dask, cumlast.dask),
-                                   name, chunk(self._meta), self.divisions)
+                                   name, chunk(self._meta), self.index_bounds)
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -1597,13 +1846,13 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         dsk1 = {(name1, i): (getitem, key, 0)
                 for i, key in enumerate(aligned.__dask_keys__())}
         dsk1.update(aligned.dask)
-        result1 = new_dd_object(dsk1, name1, meta1, aligned.divisions)
+        result1 = new_dd_object(dsk1, name1, meta1, aligned.index_bounds)
 
         name2 = 'align2-' + token
         dsk2 = {(name2, i): (getitem, key, 1)
                 for i, key in enumerate(aligned.__dask_keys__())}
         dsk2.update(aligned.dask)
-        result2 = new_dd_object(dsk2, name2, meta2, aligned.divisions)
+        result2 = new_dd_object(dsk2, name2, meta2, aligned.index_bounds)
 
         return result1, result2
 
@@ -1631,49 +1880,54 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         # Let pandas error on bad args
         self._meta_nonempty.first(offset)
 
-        if not self.known_divisions:
+        if not self.known_bounds:
             raise ValueError("`first` is not implemented for unknown divisions")
 
         offset = pd.tseries.frequencies.to_offset(offset)
-        date = self.divisions[0] + offset
+        date = self.index_bounds[0].start + offset
         end = self.loc._get_partitions(date)
 
         include_right = offset.isAnchored() or not hasattr(offset, '_inc')
 
-        if end == self.npartitions - 1:
-            divs = self.divisions
-        else:
-            divs = self.divisions[:end + 1] + (date,)
+        interval = Interval(self.index_bounds[0].start, False, date, include_right)
+
+        index_bounds = IndexBounds(
+            self.index_bounds[:end] + (self.index_bounds[end] & interval,)
+        )
 
         name = 'first-' + tokenize(self, offset)
+        # TODO: can check if resulting interval is empty, return empty meta
         dsk = {(name, i): (self._name, i) for i in range(end)}
         dsk[(name, end)] = (methods.boundary_slice, (self._name, end),
                             None, date, include_right, True, 'ix')
-        return new_dd_object(merge(self.dask, dsk), name, self, divs)
+        return new_dd_object(merge(self.dask, dsk), name, self, index_bounds)
 
     @derived_from(pd.DataFrame)
     def last(self, offset):
         # Let pandas error on bad args
         self._meta_nonempty.first(offset)
 
-        if not self.known_divisions:
+        if not self.known_bounds:
             raise ValueError("`last` is not implemented for unknown divisions")
 
         offset = pd.tseries.frequencies.to_offset(offset)
-        date = self.divisions[-1] - offset
+        date = self.index_bounds[-1].stop - offset
         start = self.loc._get_partitions(date)
 
-        if start == 0:
-            divs = self.divisions
-        else:
-            divs = (date,) + self.divisions[start + 1:]
+        # The start value is EXCLUSIVE
+        interval = Interval(date, True, self.index_bounds[-1].stop, True)
+
+        index_bounds = IndexBounds(
+            (self.index_bounds[start] & interval,)
+            + self.index_bounds[start + 1:]
+        )
 
         name = 'last-' + tokenize(self, offset)
         dsk = {(name, i + 1): (self._name, j + 1)
                for i, j in enumerate(range(start, self.npartitions))}
         dsk[(name, 0)] = (methods.boundary_slice, (self._name, start),
                           date, None, True, False, 'ix')
-        return new_dd_object(merge(self.dask, dsk), name, self, divs)
+        return new_dd_object(merge(self.dask, dsk), name, self, index_bounds)
 
     def nunique_approx(self, split_every=None):
         """Approximate number of unique rows.
@@ -1737,8 +1991,9 @@ class Series(_Frame):
     meta: pandas.Series
         An empty ``pandas.Series`` with names, dtypes, and index matching the
         expected output.
-    divisions: tuple of index values
-        Values along which we partition our blocks on the index
+    index_bounds: IndexBounds
+        a tuple (wrapped in IndexBounds class) of the intervals representing
+        the bounds of the index at each partition
 
     See Also
     --------
@@ -1869,22 +2124,22 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             res.name = index
         else:
             res = self.map_partitions(M.rename, index)
-            if self.known_divisions:
+            if self.known_bounds:
                 if sorted_index and (callable(index) or is_dict_like(index)):
-                    old = pd.Series(range(self.npartitions + 1),
-                                    index=self.divisions)
-                    new = old.rename(index).index
-                    if not new.is_monotonic_increasing:
+                    new_bounds = self.index_bounds.map_all(
+                        lambda d: pd.Series(range(len(d)), index=d).rename(index).index
+                    )
+                    if not new_bounds.is_strictly_sorted():
                         msg = ("sorted_index=True, but the transformed index "
                                "isn't monotonic_increasing")
                         raise ValueError(msg)
-                    res.divisions = tuple(new.tolist())
+                    res.index_bounds = new_bounds
                 else:
-                    res = res.clear_divisions()
+                    res = res.clear_index_bounds()
             if inplace:
                 self.dask = res.dask
                 self._name = res._name
-                self.divisions = res.divisions
+                self.index_bounds = res.index_bounds
                 self._meta = res._meta
                 res = self
         return res
@@ -1896,7 +2151,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @derived_from(pd.DataFrame)
     def to_timestamp(self, freq=None, how='start', axis=0):
         df = elemwise(M.to_timestamp, self, freq, how, axis)
-        df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
+        df.index_bounds = self.index_bounds.map_all(lambda b: pd.Index(b).to_timestamp())
         return df
 
     def quantile(self, q=0.5):
@@ -1914,13 +2169,13 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return partition_quantiles(self, npartitions, upsample=upsample)
 
     def __getitem__(self, key):
-        if isinstance(key, Series) and self.divisions == key.divisions:
+        if isinstance(key, Series) and self.index_bounds == key.index_bounds:
             name = 'index-%s' % tokenize(self, key)
             dsk = dict(((name, i), (operator.getitem, (self._name, i),
                                     (key._name, i)))
                        for i in range(self.npartitions))
             return Series(merge(self.dask, key.dask, dsk), name,
-                          self._meta, self.divisions)
+                          self._meta, self.index_bounds)
         raise NotImplementedError()
 
     @derived_from(pd.DataFrame)
@@ -2006,7 +2261,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         else:
             meta = make_meta(meta)
 
-        return Series(dsk, name, meta, self.divisions)
+        return Series(dsk, name, meta, self.index_bounds)
 
     @derived_from(pd.Series)
     def dropna(self):
@@ -2239,7 +2494,7 @@ class Index(Series):
         dsk = {(name, 0): (operator.getitem, (self._name, 0), slice(0, n))}
 
         result = new_dd_object(merge(self.dask, dsk), name,
-                               self._meta, self.divisions[:2])
+                               self._meta, self.index_bounds[:1])
 
         if compute:
             result = result.compute()
@@ -2297,8 +2552,9 @@ class DataFrame(_Frame):
     meta: pandas.DataFrame
         An empty ``pandas.DataFrame`` with names, dtypes, and index matching
         the expected output.
-    divisions: tuple of index values
-        Values along which we partition our blocks on the index
+    index_bounds: IndexBounds
+        a tuple (wrapped in IndexBounds class) of the intervals representing
+        the bounds of the index at each partition
     """
 
     _partition_type = pd.DataFrame
@@ -2334,7 +2590,7 @@ class DataFrame(_Frame):
             dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                        for i in range(self.npartitions))
             return new_dd_object(merge(self.dask, dsk), name,
-                                 meta, self.divisions)
+                                 meta, self.index_bounds)
         elif isinstance(key, slice):
             return self.loc[key]
 
@@ -2345,17 +2601,17 @@ class DataFrame(_Frame):
             dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                        for i in range(self.npartitions))
             return new_dd_object(merge(self.dask, dsk), name,
-                                 meta, self.divisions)
+                                 meta, self.index_bounds)
         if isinstance(key, Series):
             # do not perform dummy calculation, as columns will not be changed.
             #
-            if self.divisions != key.divisions:
+            if self.index_bounds != key.index_bounds:
                 from .multi import _maybe_align_partitions
                 self, key = _maybe_align_partitions([self, key])
             dsk = {(name, i): (M._getitem_array, (self._name, i), (key._name, i))
                    for i in range(self.npartitions)}
             return new_dd_object(merge(self.dask, key.dask, dsk), name,
-                                 self, self.divisions)
+                                 self, self.index_bounds)
         raise NotImplementedError(key)
 
     def __setitem__(self, key, value):
@@ -2368,7 +2624,7 @@ class DataFrame(_Frame):
         self.dask = df.dask
         self._name = df._name
         self._meta = df._meta
-        self.divisions = df.divisions
+        self.index_bounds = df.index_bounds
 
     def __delitem__(self, key):
         result = self.drop([key], axis=1)
@@ -2394,7 +2650,7 @@ class DataFrame(_Frame):
             dsk = dict(((name, i), (operator.getitem, (self._name, i), key))
                        for i in range(self.npartitions))
             return new_dd_object(merge(self.dask, dsk), name,
-                                 meta, self.divisions)
+                                 meta, self.index_bounds)
         raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
     def __dir__(self):
@@ -2603,7 +2859,7 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def to_timestamp(self, freq=None, how='start', axis=0):
         df = elemwise(M.to_timestamp, self, freq, how, axis)
-        df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
+        df.index_bounds = self.index_bounds.map_all(lambda b: pd.Index(b).to_timestamp())
         return df
 
     def to_bag(self, index=False):
@@ -3058,8 +3314,9 @@ def is_broadcastable(dfs, s):
     """
     return (isinstance(s, Series) and
             s.npartitions == 1 and
-            s.known_divisions and
-            any(s.divisions == (min(df.columns), max(df.columns))
+            s.known_bounds and
+            any((s.index_bounds[0].start, s.index_bounds[0].stop)
+                == (min(df.columns), max(df.columns))
                 for df in dfs if isinstance(df, DataFrame)))
 
 
@@ -3107,10 +3364,10 @@ def elemwise(op, *args, **kwargs):
             a = a.rechunk({i + 1: d for i, d in enumerate(a.shape[1:])})
             dasks[i] = a
 
-    divisions = dfs[0].divisions
+    index_bounds = dfs[0].index_bounds
     _is_broadcastable = partial(is_broadcastable, dfs)
     dfs = list(remove(_is_broadcastable, dfs))
-    n = len(divisions) - 1
+    n = len(index_bounds)
 
     other = [(i, arg) for i, arg in enumerate(args)
              if not isinstance(arg, (_Frame, Scalar, Array))]
@@ -3140,7 +3397,7 @@ def elemwise(op, *args, **kwargs):
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
 
-    result = new_dd_object(dsk, _name, meta, divisions)
+    result = new_dd_object(dsk, _name, meta, index_bounds)
     return handle_out(out, result)
 
 
@@ -3175,7 +3432,7 @@ def handle_out(out, result):
         out.dask = result.dask
 
         if not isinstance(out, Scalar):
-            out.divisions = result.divisions
+            out.index_bounds = result.index_bounds
     elif out is not None:
         msg = ("The out parameter is not fully supported."
                " Received type %s, expected %s " % ( type(out).__name__, type(result).__name__))
@@ -3468,7 +3725,7 @@ def map_partitions(func, *args, **kwargs):
 
     args_dasks.extend([arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))])
 
-    return new_dd_object(merge(dsk, *args_dasks), name, meta, args[0].divisions)
+    return new_dd_object(merge(dsk, *args_dasks), name, meta, args[0].index_bounds)
 
 
 def _process_lazy_args(args):
@@ -3561,7 +3818,7 @@ def _rename_dask(df, names):
     dsk = {}
     for i in range(df.npartitions):
         dsk[name, i] = (_rename, metadata, (df._name, i))
-    return new_dd_object(merge(dsk, df.dask), name, metadata, df.divisions)
+    return new_dd_object(merge(dsk, df.dask), name, metadata, df.index_bounds)
 
 
 def quantile(df, q):
@@ -3958,17 +4215,18 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
 
 def repartition_freq(df, freq=None):
     """ Repartition a timeseries dataframe by a new frequency """
-    if not isinstance(df.divisions[0], pd.Timestamp):
+    bound = df.index_bounds[0].start if df.known_bounds else None
+    if not isinstance(bound, pd.Timestamp):
         raise TypeError("Can only repartition on frequency for timeseries")
     try:
-        start = df.divisions[0].ceil(freq)
+        start = bound.ceil(freq)
     except ValueError:
-        start = df.divisions[0]
+        start = bound
     divisions = pd.DatetimeIndex(start=start,
-                                 end=df.divisions[-1],
+                                 end=df.index_bounds[-1].stop,
                                  freq=freq).tolist()
     if not len(divisions):
-        divisions = [df.divisions[0], df.divisions[-1]]
+        divisions = [df.index_bounds[0].start, df.index_bounds[-1].stop]
     else:
         if divisions[-1] != df.divisions[-1]:
             divisions.append(df.divisions[-1])
@@ -3999,7 +4257,7 @@ def repartition_npartitions(df, npartitions):
         return new_dd_object(merge(df.dask, dsk), new_name, df._meta, divisions)
     else:
         original_divisions = divisions = pd.Series(df.divisions)
-        if (df.known_divisions and (np.issubdtype(divisions.dtype, np.datetime64) or
+        if (df.known_bounds and (np.issubdtype(divisions.dtype, np.datetime64) or
                                     np.issubdtype(divisions.dtype, np.number))):
             if np.issubdtype(divisions.dtype, np.datetime64):
                 divisions = divisions.values.astype('float64')
@@ -4042,8 +4300,8 @@ def repartition_npartitions(df, npartitions):
                     j += 1
                 last = new
 
-            divisions = [None] * (npartitions + 1)
-            return new_dd_object(merge(df.dask, dsk), new_name, df._meta, divisions)
+            index_bounds = IndexBounds((None,) * npartitions)
+            return new_dd_object(merge(df.dask, dsk), new_name, df._meta, index_bounds)
 
 
 def repartition(df, divisions=None, force=False):
@@ -4077,19 +4335,30 @@ def repartition(df, divisions=None, force=False):
     """
 
     token = tokenize(df, divisions)
+
+    # TODO: allow passing in bounds directly
+    index_bounds = _maybe_divisions_to_bounds(divisions)
+
     if isinstance(df, _Frame):
         tmp = 'repartition-split-' + token
         out = 'repartition-merge-' + token
         dsk = repartition_divisions(df.divisions, divisions,
                                     df._name, tmp, out, force=force)
+
+        # TODO: may be able to do slightly better with bounds
+        # if df.known_bounds(); can inspect end points and split the intervals
         return new_dd_object(merge(df.dask, dsk), out,
-                             df._meta, divisions)
+                             df._meta, index_bounds)
+
     elif isinstance(df, (pd.Series, pd.DataFrame)):
         name = 'repartition-dataframe-' + token
         from .utils import shard_df_on_index
         dfs = shard_df_on_index(df, divisions[1:-1])
         dsk = dict(((name, i), df) for i, df in enumerate(dfs))
-        return new_dd_object(dsk, name, df, divisions)
+        # TODO: we know better bounds (could call from_pandas) but that would
+        # violate the 'set divisions to equal this exactly' notion of this
+        # function.  Consider allowing it to improve bounds in future
+        return new_dd_object(dsk, name, df, index_bounds)
     raise ValueError('Data must be DataFrame or Series')
 
 
@@ -4187,7 +4456,7 @@ def maybe_shift_divisions(df, periods, freq):
         # divisions may now split identical index value.
         # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])
         return df.clear_divisions()
-    if df.known_divisions:
+    if df.known_bounds:
         divs = pd.Series(range(len(df.divisions)), index=df.divisions)
         divisions = divs.shift(periods, freq=freq).index
         return type(df)(df.dask, df._name, df._meta, divisions)

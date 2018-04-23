@@ -298,10 +298,10 @@ def test_read_csv_index():
                                           f.__dask_keys__(),
                                           get=dask.get)
         for i, block in enumerate(blocks):
-            if i < len(f.divisions) - 2:
-                assert (block.index < f.divisions[i + 1]).all()
-            if i > 0:
-                assert (block.index >= f.divisions[i]).all()
+            assert (block.index >= f.index_bounds[i].start).all()
+            assert (block.index <= f.index_bounds[i].stop).all()
+            if i < len(f.index_bounds) - 1:
+                assert (block.index < f.index_bounds[i + 1].start).all()
 
         expected = pd.read_csv(fn).set_index('amount')
         assert_eq(result, expected)

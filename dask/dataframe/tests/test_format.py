@@ -219,8 +219,8 @@ def test_dataframe_format_unknown_divisions():
                        'B': list('ABCDEFGH'),
                        'C': pd.Categorical(list('AAABBBCC'))})
     ddf = dd.from_pandas(df, 3)
-    ddf = ddf.clear_divisions()
-    assert not ddf.known_divisions
+    ddf = ddf.clear_index_bounds()
+    assert not ddf.known_bounds
 
     exp = ("Dask DataFrame Structure:\n"
            "                   A       B                C\n"

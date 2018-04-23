@@ -1254,7 +1254,7 @@ def test_groupby_column_and_index_apply(group_args, apply_func):
     assert_eq(expected, result, check_divisions=False)
 
     # Check that partitioning is preserved
-    assert ddf.divisions == result.divisions
+    assert ddf.index_bounds == result.index_bounds
 
     # Check that no shuffling occurred.
     # The groupby operation should add only 1 task per partition
@@ -1265,7 +1265,7 @@ def test_groupby_column_and_index_apply(group_args, apply_func):
     assert_eq(expected, result, check_divisions=False)
 
     # Check that divisions were preserved (all None in this case)
-    assert ddf_no_divs.divisions == result.divisions
+    assert ddf_no_divs.index_bounds == result.index_bounds
 
     # Crude check to see if shuffling was performed.
     # The groupby operation should add only more than 1 task per partition

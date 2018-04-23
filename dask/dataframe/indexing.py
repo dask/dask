@@ -8,9 +8,10 @@ import bisect
 import numpy as np
 import pandas as pd
 
-from .core import new_dd_object, Series
+from .core import new_dd_object, Series, IndexBounds
 from . import methods
 from ..base import tokenize
+from ..utils import Interval
 
 
 class _LocIndexer(object):
@@ -54,7 +55,7 @@ class _LocIndexer(object):
         if isinstance(iindexer, Series):
             return self._loc_series(iindexer, cindexer)
 
-        if self.obj.known_divisions:
+        if self.obj.known_bounds:
             iindexer = self._maybe_partial_time_string(iindexer)
 
             if isinstance(iindexer, slice):
@@ -117,7 +118,7 @@ class _LocIndexer(object):
         name = 'loc-%s' % tokenize(iindexer, self.obj)
         part = self._get_partitions(iindexer)
 
-        if iindexer < self.obj.divisions[0] or iindexer > self.obj.divisions[-1]:
+        if not any(iindexer in b for b in self.obj.index_bounds):
             raise KeyError('the label [%s] is not in the index' % str(iindexer))
 
         dsk = {(name, 0): (methods.loc, (self._name, part),
@@ -125,9 +126,12 @@ class _LocIndexer(object):
 
         meta = self._make_meta(iindexer, cindexer)
         return new_dd_object(merge(self.obj.dask, dsk), name,
-                             meta=meta, divisions=[iindexer, iindexer])
+                             meta=meta,
+                             index_bounds=IndexBounds((
+                                 Interval.inclusive(iindexer, iindexer),)))
 
     def _get_partitions(self, keys):
+        # TODO: use index_bounds
         if isinstance(keys, (list, np.ndarray)):
             return _partitions_of_index_values(self.obj.divisions, keys)
         else:
@@ -135,6 +139,7 @@ class _LocIndexer(object):
             return _partition_of_index_value(self.obj.divisions, keys)
 
     def _coerce_loc_index(self, key):
+        # TODO: use index_bounds
         return _coerce_loc_index(self.obj.divisions, key)
 
     def _loc_slice(self, iindexer, cindexer):
@@ -152,19 +157,23 @@ class _LocIndexer(object):
         else:
             stop = self.obj.npartitions - 1
 
-        if iindexer.start is None and self.obj.known_divisions:
-            istart = self.obj.divisions[0]
+        if iindexer.start is None and self.obj.known_bounds:
+            istart = self.obj.index_bounds[0].start
         else:
             istart = self._coerce_loc_index(iindexer.start)
-        if iindexer.stop is None and self.obj.known_divisions:
-            istop = self.obj.divisions[-1]
+        if iindexer.stop is None and self.obj.known_bounds:
+            istop = self.obj.index_bounds[-1].stop
         else:
             istop = self._coerce_loc_index(iindexer.stop)
+
+        i_interval = Interval.inclusive(istart, istop)
 
         if stop == start:
             dsk = {(name, 0): (methods.loc, (self._name, start),
                                slice(iindexer.start, iindexer.stop), cindexer)}
-            divisions = [istart, istop]
+            index_bounds = IndexBounds((
+                i_interval & self.obj.index_bounds[start],)
+            )
         else:
             dsk = {(name, 0): (methods.loc, (self._name, start),
                                slice(iindexer.start, None), cindexer)}
@@ -178,25 +187,15 @@ class _LocIndexer(object):
             dsk[name, stop - start] = (methods.loc, (self._name, stop),
                                        slice(None, iindexer.stop), cindexer)
 
-            if iindexer.start is None:
-                div_start = self.obj.divisions[0]
-            else:
-                div_start = max(istart, self.obj.divisions[start])
+            index_bounds = IndexBounds([
+                my_int & i_interval
+                for my_int in self.obj.index_bounds[start:stop+1]])
 
-            if iindexer.stop is None:
-                div_stop = self.obj.divisions[-1]
-            else:
-                div_stop = min(istop, self.obj.divisions[stop + 1])
-
-            divisions = ((div_start, ) +
-                         self.obj.divisions[start + 1:stop + 1] +
-                         (div_stop, ))
-
-        assert len(divisions) == len(dsk) + 1
+        assert len(index_bounds) == len(dsk)
 
         meta = self._make_meta(iindexer, cindexer)
         return new_dd_object(merge(self.obj.dask, dsk), name,
-                             meta=meta, divisions=divisions)
+                             meta=meta, index_bounds=index_bounds)
 
 
 def _partition_of_index_value(divisions, val):
@@ -211,6 +210,7 @@ def _partition_of_index_value(divisions, val):
     >>> _partition_of_index_value([0, 5, 10], 5)  # left-inclusive divisions
     1
     """
+    # TODO: may be better using index_bounds
     if divisions[0] is None:
         msg = "Can not use loc on DataFrame without known divisions"
         raise ValueError(msg)

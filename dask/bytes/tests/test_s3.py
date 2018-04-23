@@ -271,7 +271,7 @@ def test_parquet(s3, engine):
     assert 'part.0.parquet' in files
 
     df2 = dd.read_parquet(url, index='foo', engine=engine)
-    assert len(df2.divisions) > 1
+    assert len(df2.index_bounds) > 0
 
     pd.util.testing.assert_frame_equal(data, df2.compute())
 

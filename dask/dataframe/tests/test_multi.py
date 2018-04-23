@@ -5,6 +5,7 @@ import pandas.util.testing as tm
 
 from dask.local import get_sync
 from dask.base import compute_as_if_collection
+from dask.utils import Interval
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
@@ -92,7 +93,7 @@ def test_align_partitions_unknown_divisions():
     # One known, one unknown
     ddf = dd.from_pandas(df, npartitions=2)
     ddf2 = dd.from_pandas(df, npartitions=2, sort=False)
-    assert not ddf2.known_divisions
+    assert not ddf2.known_bounds
 
     with pytest.raises(ValueError):
         align_partitions(ddf, ddf2)
@@ -100,8 +101,8 @@ def test_align_partitions_unknown_divisions():
     # Both unknown
     ddf = dd.from_pandas(df + 1, npartitions=2, sort=False)
     ddf2 = dd.from_pandas(df, npartitions=2, sort=False)
-    assert not ddf.known_divisions
-    assert not ddf2.known_divisions
+    assert not ddf.known_bounds
+    assert not ddf2.known_bounds
 
     with pytest.raises(ValueError):
         align_partitions(ddf, ddf2)
@@ -121,8 +122,8 @@ def test__maybe_align_partitions():
     # Both unknown, same divisions
     ddf = dd.from_pandas(df + 1, npartitions=2, sort=False)
     ddf2 = dd.from_pandas(df, npartitions=2, sort=False)
-    assert not ddf.known_divisions
-    assert not ddf2.known_divisions
+    assert not ddf.known_bounds
+    assert not ddf2.known_bounds
 
     a, b = _maybe_align_partitions([ddf, ddf2])
     assert a is ddf
@@ -133,13 +134,13 @@ def test__maybe_align_partitions():
     ddf2 = dd.from_pandas(df, npartitions=3)
 
     a, b = _maybe_align_partitions([ddf, ddf2])
-    assert a.divisions == b.divisions
+    assert a.index_bounds == b.index_bounds
 
     # Both unknown, different divisions
     ddf = dd.from_pandas(df + 1, npartitions=2, sort=False)
     ddf2 = dd.from_pandas(df, npartitions=3, sort=False)
-    assert not ddf.known_divisions
-    assert not ddf2.known_divisions
+    assert not ddf.known_bounds
+    assert not ddf2.known_bounds
 
     with pytest.raises(ValueError):
         _maybe_align_partitions([ddf, ddf2])
@@ -147,7 +148,7 @@ def test__maybe_align_partitions():
     # One known, one unknown
     ddf = dd.from_pandas(df, npartitions=2)
     ddf2 = dd.from_pandas(df, npartitions=2, sort=False)
-    assert not ddf2.known_divisions
+    assert not ddf2.known_bounds
 
     with pytest.raises(ValueError):
         _maybe_align_partitions([ddf, ddf2])
@@ -163,23 +164,23 @@ def test_merge_indexed_dataframe_to_indexed_dataframe():
     b = dd.repartition(B, [1, 2, 5, 8])
 
     c = merge_indexed_dataframes(a, b, how='left')
-    assert c.divisions[0] == a.divisions[0]
-    assert c.divisions[-1] == max(a.divisions + b.divisions)
+    assert c.index_bounds[0].start == a.index_bounds[0].start
+    assert c.index_bounds[-1].stop == max(a.divisions + b.divisions)
     assert_eq(c, A.join(B))
 
     c = merge_indexed_dataframes(a, b, how='right')
-    assert c.divisions[0] == b.divisions[0]
-    assert c.divisions[-1] == b.divisions[-1]
+    assert c.index_bounds[0].start == b.index_bounds[0].start
+    assert c.index_bounds[-1].stop == b.index_bounds[-1].stop
     assert_eq(c, A.join(B, how='right'))
 
     c = merge_indexed_dataframes(a, b, how='inner')
-    assert c.divisions[0] == 1
-    assert c.divisions[-1] == max(a.divisions + b.divisions)
+    assert c.index_bounds[0].start == 1
+    assert c.index_bounds[-1].stop == max(a.divisions + b.divisions)
     assert_eq(c.compute(), A.join(B, how='inner'))
 
     c = merge_indexed_dataframes(a, b, how='outer')
-    assert c.divisions[0] == 1
-    assert c.divisions[-1] == 8
+    assert c.index_bounds[0].start == 1
+    assert c.index_bounds[-1].stop == 8
     assert_eq(c.compute(), A.join(B, how='outer'))
 
     assert (sorted(merge_indexed_dataframes(a, b, how='inner').dask) ==
@@ -308,7 +309,7 @@ def test_merge(how, shuffle):
 
     result = dd.merge(a, b, on='y', how=how)
     list_eq(result, pd.merge(A, B, on='y', how=how))
-    assert all(d is None for d in result.divisions)
+    assert all(d is None for d in result.index_bounds)
 
     list_eq(dd.merge(a, b, left_on='x', right_on='z', how=how, shuffle=shuffle),
             pd.merge(A, B, left_on='x', right_on='z', how=how))
@@ -711,11 +712,11 @@ def test_cheap_single_partition_merge_divisions():
     bb = dd.from_pandas(b, npartitions=1, sort=False)
 
     actual = aa.merge(bb, on='x', how='inner')
-    assert not actual.known_divisions
+    assert not actual.known_bounds
     assert_divisions(actual)
 
     actual = bb.merge(aa, on='x', how='inner')
-    assert not actual.known_divisions
+    assert not actual.known_bounds
     assert_divisions(actual)
 
 
@@ -730,13 +731,13 @@ def test_cheap_single_partition_merge_on_index():
     actual = aa.merge(bb, left_index=True, right_on='x', how='inner')
     expected = a.merge(b, left_index=True, right_on='x', how='inner')
 
-    assert actual.known_divisions
+    assert actual.known_bounds
     assert_eq(actual, expected)
 
     actual = bb.merge(aa, right_index=True, left_on='x', how='inner')
     expected = b.merge(a, right_index=True, left_on='x', how='inner')
 
-    assert actual.known_divisions
+    assert actual.known_bounds
     assert_eq(actual, expected)
 
 
@@ -816,7 +817,7 @@ def test_concat_unknown_divisions():
     aa = dd.from_pandas(a, npartitions=2, sort=False)
     bb = dd.from_pandas(b, npartitions=2, sort=False)
 
-    assert not aa.known_divisions
+    assert not aa.known_bounds
 
     with pytest.warns(UserWarning):
         assert_eq(pd.concat([a, b], axis=1),
@@ -870,13 +871,13 @@ def test_concat2():
         pdcase = [_c.compute() for _c in case]
 
         assert result.npartitions == case[0].npartitions + case[1].npartitions
-        assert result.divisions == (None, ) * (result.npartitions + 1)
+        assert result.index_bounds == dd.IndexBounds((None, ) * result.npartitions)
         assert_eq(pd.concat(pdcase), result)
         assert set(result.dask) == set(dd.concat(case).dask)
 
         result = dd.concat(case, join='inner')
         assert result.npartitions == case[0].npartitions + case[1].npartitions
-        assert result.divisions == (None, ) * (result.npartitions + 1)
+        assert result.index_bounds == dd.IndexBounds((None, ) * result.npartitions)
         assert_eq(pd.concat(pdcase, join='inner'), result)
         assert set(result.dask) == set(dd.concat(case, join='inner').dask)
 
@@ -893,7 +894,7 @@ def test_concat3():
     ddf3 = dd.from_pandas(pdf3, 2)
 
     result = dd.concat([ddf1, ddf2])
-    assert result.divisions == ddf1.divisions[:-1] + ddf2.divisions
+    assert result.index_bounds == dd.IndexBounds(ddf1.index_bounds + ddf2.index_bounds)
     assert result.npartitions == ddf1.npartitions + ddf2.npartitions
     assert_eq(result, pd.concat([pdf1, pdf2]))
 
@@ -901,8 +902,8 @@ def test_concat3():
               pd.concat([pdf1, pdf2]))
 
     result = dd.concat([ddf1, ddf2, ddf3])
-    assert result.divisions == (ddf1.divisions[:-1] + ddf2.divisions[:-1] +
-                                ddf3.divisions)
+    assert result.index_bounds == dd.IndexBounds(ddf1.index_bounds + ddf2.index_bounds +
+                                ddf3.index_bounds)
     assert result.npartitions == (ddf1.npartitions + ddf2.npartitions +
                                   ddf3.npartitions)
     assert_eq(result, pd.concat([pdf1, pdf2, pdf3]))
@@ -1231,5 +1232,5 @@ def test_singleton_divisions():
     ddf2 = ddf.set_index('x')
 
     joined = ddf2.join(ddf2, rsuffix='r')
-    assert joined.divisions == (1, 1)
+    assert joined.index_bounds == dd.IndexBounds((Interval.inclusive(1, 1),))
     joined.compute()

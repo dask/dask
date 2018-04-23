@@ -107,7 +107,7 @@ def test_local(tmpdir, write_engine, read_engine):
 
     df2 = dd.read_parquet(tmp, index=False, engine=read_engine)
 
-    assert len(df2.divisions) > 1
+    assert len(df2.index_bounds) > 0
 
     out = df2.compute(get=dask.get).reset_index()
 

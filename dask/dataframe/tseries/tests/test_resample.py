@@ -32,10 +32,10 @@ def test_series_resample(obj, method, npartitions, freq, closed, label):
     expected = resample(ps, freq, how=method, closed=closed, label=label)
     assert_eq(result, expected, check_dtype=False)
 
-    divisions = result.divisions
+    bounds = result.index_bounds
 
-    assert expected.index[0] == divisions[0]
-    assert expected.index[-1] == divisions[-1]
+    assert expected.index[0] == bounds[0].start
+    assert expected.index[-1] == bounds[-1].stop
 
 
 def test_resample_agg():

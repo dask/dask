@@ -618,7 +618,7 @@ def assert_divisions(ddf):
         return
     if not hasattr(ddf, 'index'):
         return
-    if not ddf.known_divisions:
+    if not ddf.known_bounds:
         return
 
     def index(x):

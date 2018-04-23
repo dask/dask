@@ -107,7 +107,7 @@ def test_simple(db):
 def test_npartitions(db):
     data = read_sql_table('test', db, columns=list(df.columns), npartitions=2,
                           index_col='number')
-    assert len(data.divisions) == 3
+    assert len(data.index_bounds) == 2
     assert (data.name.compute() == df.name).all()
     data = read_sql_table('test', db, columns=['name'], npartitions=6,
                           index_col="number")
@@ -157,7 +157,7 @@ def test_datetimes():
         df.to_sql('test', uri, index=False, if_exists='replace')
         data = read_sql_table('test', uri, npartitions=2, index_col='b')
         assert data.index.dtype.kind == "M"
-        assert data.divisions[0] == df.b.min()
+        assert data.index_bounds[0].start == df.b.min()
         df2 = df.set_index('b')
         assert_eq(data.map_partitions(lambda x: x.sort_index()),
                   df2.sort_index())
@@ -169,7 +169,7 @@ def test_with_func(db):
 
     # function for the index, get all columns
     data = read_sql_table('test', db, npartitions=2, index_col=index)
-    assert data.divisions[0] == 0
+    assert data.index_bounds[0].start == 0
     part = data.get_partition(0).compute()
     assert (part.index == 0).all()
 

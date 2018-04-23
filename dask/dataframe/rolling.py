@@ -137,7 +137,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         dsk[(name, i)] = (overlap_chunk, func, prev, current, next, before,
                           after, args, kwargs)
 
-    return df._constructor(dsk, name, meta, df.divisions)
+    return df._constructor(dsk, name, meta, df.index_bounds)
 
 
 def _head_timedelta(current, next_, after):

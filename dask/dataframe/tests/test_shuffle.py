@@ -475,7 +475,7 @@ def test_set_index_interpolate():
     assert set(d1.divisions) == set([1, 2, 3, 4])
 
     d2 = d.set_index('y', npartitions=3)
-    assert d2.divisions[0] == 1.
+    assert d2.index_bounds[0].start == 1.
     assert 1. < d2.divisions[1] < d2.divisions[2] < 2.
     assert d2.divisions[3] == 2.
 
@@ -496,20 +496,20 @@ def test_set_index_timezone():
 
     d1 = d.set_index('notz', npartitions=2)
     s1 = pd.DatetimeIndex(s_naive.values, dtype=s_naive.dtype)
-    assert d1.divisions[0] == s_naive[0] == s1[0]
-    assert d1.divisions[-1] == s_naive[2] == s1[2]
+    assert d1.index_bounds[0].start == s_naive[0] == s1[0]
+    assert d1.index_bounds[-1].stop == s_naive[2] == s1[2]
 
     # We currently lose "freq".  Converting data with pandas-defined dtypes
     # to numpy or pure Python can be lossy like this.
     d2 = d.set_index('tz', npartitions=2)
     s2 = pd.DatetimeIndex(s_aware, dtype=s_aware.dtype)
-    assert d2.divisions[0] == s2[0]
-    assert d2.divisions[-1] == s2[2]
-    assert d2.divisions[0].tz == s2[0].tz
-    assert d2.divisions[0].tz is not None
+    assert d2.index_bounds[0].start == s2[0]
+    assert d2.index_bounds[-1].stop == s2[2]
+    assert d2.index_bounds[0].start.tz == s2[0].tz
+    assert d2.index_bounds[0].start.tz is not None
     s2badtype = pd.DatetimeIndex(s_aware.values, dtype=s_naive.dtype)
     with pytest.raises(TypeError):
-        d2.divisions[0] == s2badtype[0]
+        d2.index_bounds[0].start == s2badtype[0]
 
 
 @pytest.mark.parametrize('drop', [True, False])
@@ -559,10 +559,10 @@ def test_set_index_sorted_true():
                        'y': [10, 20, 30, 40],
                        'z': [4, 3, 2, 1]})
     a = dd.from_pandas(df, 2, sort=False)
-    assert not a.known_divisions
+    assert not a.known_bounds
 
     b = a.set_index('x', sorted=True)
-    assert b.known_divisions
+    assert b.known_bounds
     assert set(a.dask).issubset(set(b.dask))
 
     for drop in [True, False]:
@@ -592,7 +592,7 @@ def test_set_index_sorted_min_max_same():
     bb = delayed(b)
 
     df = dd.from_delayed([aa, bb], meta=a)
-    assert not df.known_divisions
+    assert not df.known_bounds
 
     df2 = df.set_index('y', sorted=True)
     assert df2.divisions == (0, 1, 1)
@@ -641,21 +641,21 @@ def test_set_index_on_empty():
         assert ddf.npartitions == 1
 
 
-def test_compute_divisions():
-    from dask.dataframe.shuffle import compute_divisions
+def test_compute_bounds():
+    from dask.dataframe.shuffle import compute_bounds
     df = pd.DataFrame({'x': [1, 2, 3, 4],
                        'y': [10, 20, 30, 40],
                        'z': [4, 3, 2, 1]},
                       index=[1, 3, 10, 20])
     a = dd.from_pandas(df, 2, sort=False)
-    assert not a.known_divisions
+    assert not a.known_bounds
 
-    divisions = compute_divisions(a)
+    bounds = compute_bounds(a)
     b = copy(a)
-    b.divisions = divisions
+    b.index_bounds = bounds
 
     assert_eq(a, b, check_divisions=False)
-    assert b.known_divisions
+    assert b.known_bounds
 
 
 def test_temporary_directory(tmpdir):

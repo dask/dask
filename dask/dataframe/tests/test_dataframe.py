@@ -253,11 +253,11 @@ def test_rename_series_method():
     for is_sorted in [True, False]:
         res = ds.rename(lambda x: x ** 2, sorted_index=is_sorted)
         assert_eq(res, s.rename(lambda x: x ** 2))
-        assert res.known_divisions == is_sorted
+        assert res.known_bounds == is_sorted
 
         res = ds.rename(s, sorted_index=is_sorted)
         assert_eq(res, s.rename(s))
-        assert res.known_divisions == is_sorted
+        assert res.known_bounds == is_sorted
 
     with pytest.raises(ValueError):
         ds.rename(lambda x: -x, sorted_index=True)
@@ -265,12 +265,12 @@ def test_rename_series_method():
 
     res = ds.rename(ds)
     assert_eq(res, s.rename(s))
-    assert not res.known_divisions
+    assert not res.known_bounds
 
     ds2 = ds.clear_divisions()
     res = ds2.rename(lambda x: x**2, sorted_index=True)
     assert_eq(res, s.rename(lambda x: x**2))
-    assert not res.known_divisions
+    assert not res.known_bounds
 
     res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
     assert res is ds
@@ -844,7 +844,7 @@ def test_index():
 
 def test_assign():
     d_unknown = dd.from_pandas(full, npartitions=3, sort=False)
-    assert not d_unknown.known_divisions
+    assert not d_unknown.known_bounds
     res = d.assign(c=1,
                    d='string',
                    e=d.a.sum(),
@@ -914,9 +914,9 @@ def test_args():
 
 
 def test_known_divisions():
-    assert d.known_divisions
+    assert d.known_bounds
     df = dd.DataFrame(dsk, 'x', meta, divisions=[None, None, None])
-    assert not df.known_divisions
+    assert not df.known_bounds
 
 
 def test_unknown_divisions():
@@ -1276,7 +1276,7 @@ def test_repartition_object_index():
     b = a.repartition(npartitions=10)
     assert b.npartitions == 10
     assert_eq(b, df)
-    assert not b.known_divisions
+    assert not b.known_bounds
 
 
 @pytest.mark.slow
@@ -1303,8 +1303,8 @@ def test_repartition_freq_divisions():
     ddf2 = ddf.repartition(freq='15s')
     for div in ddf2.divisions[1:-1]:
         assert div == div.round('15s')
-    assert ddf2.divisions[0] == df.index.min()
-    assert ddf2.divisions[-1] == df.index.max()
+    assert ddf2.index_bounds[0].start == df.index.min()
+    assert ddf2.index_bounds[-1].stop == df.index.max()
     assert_eq(ddf2, ddf2)
 
 
@@ -2186,22 +2186,22 @@ def test_reset_index():
 
     sol = df.reset_index()
     res = ddf.reset_index()
-    assert all(d is None for d in res.divisions)
+    assert all(d is None for d in res.index_bounds)
     assert_eq(res, sol, check_index=False)
 
     sol = df.reset_index(drop=True)
     res = ddf.reset_index(drop=True)
-    assert all(d is None for d in res.divisions)
+    assert all(d is None for d in res.index_bounds)
     assert_eq(res, sol, check_index=False)
 
     sol = df.x.reset_index()
     res = ddf.x.reset_index()
-    assert all(d is None for d in res.divisions)
+    assert all(d is None for d in res.index_bounds)
     assert_eq(res, sol, check_index=False)
 
     sol = df.x.reset_index(drop=True)
     res = ddf.x.reset_index(drop=True)
-    assert all(d is None for d in res.divisions)
+    assert all(d is None for d in res.index_bounds)
     assert_eq(res, sol, check_index=False)
 
 
@@ -2623,11 +2623,11 @@ def test_shift_with_freq():
             for d, p in [(ddf, df), (ddf.A, df.A), (ddf.index, df.index)]:
                 res = d.shift(2, freq=freq)
                 assert_eq(res, p.shift(2, freq=freq))
-                assert res.known_divisions == divs2
+                assert res.known_bounds == divs2
         # Index shifts also work with freq=None
         res = ddf.index.shift(2)
         assert_eq(res, df.index.shift(2))
-        assert res.known_divisions == divs1
+        assert res.known_bounds == divs1
 
     # PeriodIndex
     for data_freq, divs in [('B', False), ('D', True), ('H', True)]:
@@ -2637,11 +2637,11 @@ def test_shift_with_freq():
         for d, p in [(ddf, df), (ddf.A, df.A)]:
             res = d.shift(2, freq=data_freq)
             assert_eq(res, p.shift(2, freq=data_freq))
-            assert res.known_divisions == divs
+            assert res.known_bounds == divs
         # PeriodIndex.shift doesn't have `freq` parameter
         res = ddf.index.shift(2)
         assert_eq(res, df.index.shift(2))
-        assert res.known_divisions == divs
+        assert res.known_bounds == divs
 
     with pytest.raises(ValueError):
         ddf.index.shift(2, freq='D')  # freq keyword not supported
@@ -2654,11 +2654,11 @@ def test_shift_with_freq():
             for d, p in [(ddf, df), (ddf.A, df.A), (ddf.index, df.index)]:
                 res = d.shift(2, freq=freq)
                 assert_eq(res, p.shift(2, freq=freq))
-                assert res.known_divisions
+                assert res.known_bounds
         # Index shifts also work with freq=None
         res = ddf.index.shift(2)
         assert_eq(res, df.index.shift(2))
-        assert res.known_divisions
+        assert res.known_bounds
 
     # Other index types error
     df = tm.makeDataFrame()

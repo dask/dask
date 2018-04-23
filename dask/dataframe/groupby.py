@@ -742,11 +742,11 @@ class _GroupBy(object):
 
         if isinstance(self.index, list):
             do_index_partition_align = all(
-                item.divisions == df.divisions if isinstance(item, Series) else True
+                item.index_bounds == df.index_bounds if isinstance(item, Series) else True
                 for item in self.index
             )
         elif isinstance(self.index, Series):
-            do_index_partition_align = df.divisions == self.index.divisions
+            do_index_partition_align = df.index_bounds == self.index.index_bounds
         else:
             do_index_partition_align = True
 
@@ -864,7 +864,7 @@ class _GroupBy(object):
                                index, 0 if columns is None else columns,
                                aggregate, initial)
         return new_dd_object(merge(dask, cumpart_ext.dask, cumlast.dask),
-                             name, chunk(self._meta), self.obj.divisions)
+                             name, chunk(self._meta), self.obj.index_bounds)
 
     @derived_from(pd.core.groupby.GroupBy)
     def cumsum(self, axis=0):
@@ -1075,7 +1075,7 @@ class _GroupBy(object):
                                       "is currently not supported")
 
         df = self.obj
-        should_shuffle = not (df.known_divisions and
+        should_shuffle = not (df.known_bounds and
                               df._contains_index_name(self.index))
 
         if should_shuffle:

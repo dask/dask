@@ -11,7 +11,7 @@ import dask.dataframe as dd
 from dask.dataframe.io.io import _meta_from_array
 from dask.delayed import Delayed, delayed
 
-from dask.utils import tmpfile
+from dask.utils import tmpfile, Interval
 from dask.local import get_sync
 
 from dask.dataframe.utils import assert_eq, is_categorical_dtype
@@ -43,7 +43,7 @@ def test_meta_from_array():
     np.random.seed(42)
     x = np.random.rand(201, 2)
     x = dd.from_array(x, chunksize=50, columns=['a', 'b'])
-    assert len(x.divisions) == 6   # Should be 5 partitions and the end
+    assert len(x.index_bounds) == 5   # Should be 5 partitions and the end
 
 
 def test_meta_from_1darray():
@@ -92,13 +92,21 @@ def test_from_array():
     d = dd.from_array(x, chunksize=4)
     assert isinstance(d, dd.DataFrame)
     tm.assert_index_equal(d.columns, pd.Index([0, 1, 2]))
-    assert d.divisions == (0, 4, 8, 9)
+    assert d.index_bounds == dd.IndexBounds((
+        Interval.inclusive(0, 3),
+        Interval.inclusive(4, 7),
+        Interval.inclusive(8, 9),
+    ))
     assert (d.compute().values == x).all()
 
     d = dd.from_array(x, chunksize=4, columns=list('abc'))
     assert isinstance(d, dd.DataFrame)
     tm.assert_index_equal(d.columns, pd.Index(['a', 'b', 'c']))
-    assert d.divisions == (0, 4, 8, 9)
+    assert d.index_bounds == dd.IndexBounds((
+        Interval.inclusive(0, 3),
+        Interval.inclusive(4, 7),
+        Interval.inclusive(8, 9),
+    ))
     assert (d.compute().values == x).all()
 
     with pytest.raises(ValueError):
@@ -111,7 +119,11 @@ def test_from_array_with_record_dtype():
     d = dd.from_array(x, chunksize=4)
     assert isinstance(d, dd.DataFrame)
     assert list(d.columns) == ['a', 'b']
-    assert d.divisions == (0, 4, 8, 9)
+    assert d.index_bounds == dd.IndexBounds((
+        Interval.inclusive(0, 3),
+        Interval.inclusive(4, 7),
+        Interval.inclusive(8, 9),
+    ))
 
     assert (d.compute().to_records(index=False) == x).all()
 
@@ -219,8 +231,8 @@ def test_from_pandas_dataframe():
                       index=pd.date_range(start='20120101', periods=len(a)))
     ddf = dd.from_pandas(df, 3)
     assert len(ddf.dask) == 3
-    assert len(ddf.divisions) == len(ddf.dask) + 1
-    assert isinstance(ddf.divisions[0], type(df.index[0]))
+    assert len(ddf.index_bounds) == len(ddf.dask)
+    assert isinstance(ddf.index_bounds[0].start, type(df.index[0]))
     tm.assert_frame_equal(df, ddf.compute())
     ddf = dd.from_pandas(df, chunksize=8)
     msg = 'Exactly one of npartitions and chunksize must be specified.'
@@ -231,8 +243,8 @@ def test_from_pandas_dataframe():
         dd.from_pandas(df)
     assert msg in str(err.value)
     assert len(ddf.dask) == 3
-    assert len(ddf.divisions) == len(ddf.dask) + 1
-    assert isinstance(ddf.divisions[0], type(df.index[0]))
+    assert len(ddf.index_bounds) == len(ddf.dask)
+    assert isinstance(ddf.index_bounds[0].start, type(df.index[0]))
     tm.assert_frame_equal(df, ddf.compute())
 
 
@@ -241,13 +253,13 @@ def test_from_pandas_small():
     for i in [1, 2, 30]:
         a = dd.from_pandas(df, i)
         assert len(a.compute()) == 3
-        assert a.divisions[0] == 0
-        assert a.divisions[-1] == 2
+        assert a.index_bounds[0].start == 0
+        assert a.index_bounds[-1].stop == 2
 
         a = dd.from_pandas(df, chunksize=i)
         assert len(a.compute()) == 3
-        assert a.divisions[0] == 0
-        assert a.divisions[-1] == 2
+        assert a.index_bounds[0].start == 0
+        assert a.index_bounds[-1].stop == 2
 
     for sort in [True, False]:
         for i in [0, 2]:
@@ -274,32 +286,32 @@ def test_from_pandas_series():
                   index=pd.date_range(start='20120101', periods=n))
     ds = dd.from_pandas(s, 3)
     assert len(ds.dask) == 3
-    assert len(ds.divisions) == len(ds.dask) + 1
-    assert isinstance(ds.divisions[0], type(s.index[0]))
+    assert len(ds.index_bounds) == len(ds.dask)
+    assert isinstance(ds.index_bounds[0].start, type(s.index[0]))
     tm.assert_series_equal(s, ds.compute())
 
     ds = dd.from_pandas(s, chunksize=8)
     assert len(ds.dask) == 3
-    assert len(ds.divisions) == len(ds.dask) + 1
-    assert isinstance(ds.divisions[0], type(s.index[0]))
+    assert len(ds.index_bounds) == len(ds.dask)
+    assert isinstance(ds.index_bounds[0].start, type(s.index[0]))
     tm.assert_series_equal(s, ds.compute())
 
 
 def test_from_pandas_non_sorted():
     df = pd.DataFrame({'x': [1, 2, 3]}, index=[3, 1, 2])
     ddf = dd.from_pandas(df, npartitions=2, sort=False)
-    assert not ddf.known_divisions
+    assert not ddf.known_bounds
     assert_eq(df, ddf)
 
     ddf = dd.from_pandas(df, chunksize=2, sort=False)
-    assert not ddf.known_divisions
+    assert not ddf.known_bounds
     assert_eq(df, ddf)
 
 
 def test_from_pandas_single_row():
     df = pd.DataFrame({'x': [1]}, index=[1])
     ddf = dd.from_pandas(df, npartitions=1)
-    assert ddf.divisions == (1, 1)
+    assert ddf.index_bounds == dd.IndexBounds((Interval.inclusive(1, 1),))
     assert_eq(ddf, df)
 
 
@@ -323,14 +335,16 @@ def test_DataFrame_from_dask_array():
     df = dd.from_dask_array(x, ['a', 'b', 'c'])
     assert isinstance(df, dd.DataFrame)
     tm.assert_index_equal(df.columns, pd.Index(['a', 'b', 'c']))
-    assert list(df.divisions) == [0, 4, 8, 9]
+    assert df.index_bounds == dd.IndexBounds((
+        Interval.inclusive(0, 3), Interval.inclusive(4, 7),
+        Interval.inclusive(8, 9)))
     assert (df.compute(get=get_sync).values == x.compute(get=get_sync)).all()
 
     # dd.from_array should re-route to from_dask_array
     df2 = dd.from_array(x, columns=['a', 'b', 'c'])
     assert isinstance(df, dd.DataFrame)
     tm.assert_index_equal(df2.columns, df.columns)
-    assert df2.divisions == df.divisions
+    assert df2.index_bounds == df.index_bounds
 
 
 def test_Series_from_dask_array():
@@ -339,7 +353,10 @@ def test_Series_from_dask_array():
     ser = dd.from_dask_array(x, 'a')
     assert isinstance(ser, dd.Series)
     assert ser.name == 'a'
-    assert list(ser.divisions) == [0, 4, 8, 9]
+    assert ser.index_bounds == dd.IndexBounds((
+        Interval.inclusive(0, 3), Interval.inclusive(4, 7),
+        Interval.inclusive(8, 9)
+    ))
     assert (ser.compute(get=get_sync).values == x.compute(get=get_sync)).all()
 
     ser = dd.from_dask_array(x)
@@ -441,7 +458,7 @@ def test_from_dask_array_unknown_chunks():
                   ((np.nan, np.nan,),), np.arange(1).dtype)
     df = dd.from_dask_array(dx)
     assert isinstance(df, dd.Series)
-    assert not df.known_divisions
+    assert not df.known_bounds
     assert_eq(df, pd.Series(np.arange(11)), check_index=False)
 
     # DataFrame
@@ -450,7 +467,7 @@ def test_from_dask_array_unknown_chunks():
     dx = da.Array(dsk, 'x', ((np.nan, np.nan,), (3,)), np.float64)
     df = dd.from_dask_array(dx)
     assert isinstance(df, dd.DataFrame)
-    assert not df.known_divisions
+    assert not df.known_bounds
     assert_eq(df, pd.DataFrame(dx.compute()), check_index=False)
 
     # Unknown width
@@ -495,13 +512,13 @@ def test_from_delayed():
         ddf = dd.from_delayed(dfs, meta=meta, divisions=divisions)
         assert_eq(ddf, df)
         assert list(ddf.map_partitions(my_len).compute()) == [1, 2, 3, 4]
-        assert ddf.known_divisions == (divisions is not None)
+        assert ddf.known_bounds == (divisions is not None)
 
         s = dd.from_delayed([d.a for d in dfs], meta=meta.a,
                             divisions=divisions)
         assert_eq(s, df.a)
         assert list(s.map_partitions(my_len).compute()) == [1, 2, 3, 4]
-        assert ddf.known_divisions == (divisions is not None)
+        assert ddf.known_bounds == (divisions is not None)
 
     meta2 = [(c, 'f8') for c in df.columns]
     assert_eq(dd.from_delayed(dfs, meta=meta2), df)
@@ -520,9 +537,10 @@ def test_from_delayed_sorted():
     b = pd.DataFrame({'x': [4, 1]}, index=[100, 200])
 
     A = dd.from_delayed([delayed(a), delayed(b)], divisions='sorted')
-    assert A.known_divisions
+    assert A.known_bounds
 
-    assert A.divisions == (1, 100, 200)
+    assert A.index_bounds == dd.IndexBounds((
+        Interval.inclusive(1, 10), Interval.inclusive(100, 200)))
 
 
 def test_to_delayed():

@@ -442,7 +442,7 @@ def test_read_hdf_multiple():
         a.to_hdf(fn, '/data*')
         r = dd.read_hdf(fn, '/data*', sorted_index=True)
         assert a.npartitions == r.npartitions
-        assert a.divisions == r.divisions
+        assert a.index_bounds == r.index_bounds
         assert_eq(a, r)
 
 

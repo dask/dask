@@ -84,7 +84,7 @@ def _resample_bin_and_out_divs(divisions, rule, closed='left', label='left'):
 
 class Resampler(object):
     def __init__(self, obj, rule, **kwargs):
-        if not obj.known_divisions:
+        if not obj.known_bounds:
             msg = ("Can only resample dataframes with known divisions\n"
                    "See dask.pydata.org/en/latest/dataframe-design.html#partitions\n"
                    "for more information.")

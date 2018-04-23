@@ -9,7 +9,10 @@ import pandas as pd
 from toolz import merge
 
 from .methods import drop_columns
-from .core import DataFrame, Series, _Frame, _concat, map_partitions
+from .core import (
+    DataFrame, Series, _Frame, _concat, map_partitions, IndexBounds,
+    _deprecate_divisions, _divisions_to_bounds,
+)
 from .hashing import hash_pandas_object
 from .utils import PANDAS_VERSION
 
@@ -18,7 +21,7 @@ from ..base import tokenize, compute, compute_as_if_collection
 from ..context import _globals
 from ..delayed import delayed
 from ..sizeof import sizeof
-from ..utils import digit, insert, M
+from ..utils import digit, insert, M, Interval
 
 if PANDAS_VERSION >= '0.20.0':
     from pandas._libs.algos import groupsort_indexer
@@ -177,7 +180,8 @@ def set_partition(df, index, divisions, max_branch=32, drop=True, shuffle=None,
         df4 = df3.map_partitions(set_index_post_series, index_name=index.name,
                                  drop=drop, column_dtype=df.columns.dtype)
 
-    df4.divisions = divisions
+    # TODO: index_bounds
+    df4.index_bounds = _divisions_to_bounds(divisions)
 
     return df4.map_partitions(M.sort_index)
 
@@ -295,11 +299,11 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     dsk4 = {(name, i): (collect, p, i, df._meta, barrier_token)
             for i in range(npartitions)}
 
-    divisions = (None,) * (npartitions + 1)
+    index_bounds = IndexBounds((None,) * npartitions)
 
     dsk = merge(dsk, dsk1, dsk3, dsk4)
 
-    return DataFrame(dsk, name, df._meta, divisions)
+    return DataFrame(dsk, name, df._meta, index_bounds)
 
 
 def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
@@ -359,7 +363,7 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
                for i, inp in enumerate(inputs))
 
     dsk = merge(df.dask, start, end, *(groups + splits + joins))
-    df2 = DataFrame(dsk, 'shuffle-' + token, df, df.divisions)
+    df2 = DataFrame(dsk, 'shuffle-' + token, df, df.index_bounds)
 
     if npartitions is not None and npartitions != df.npartitions:
         parts = [i % df.npartitions for i in range(npartitions)]
@@ -372,10 +376,10 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
                 (shuffle_group_get, ('repartition-group-' + token, parts[p]), p)
 
         df3 = DataFrame(merge(df2.dask, dsk), 'repartition-get-' + token, df2,
-                        [None] * (npartitions + 1))
+                        IndexBounds((None,) * npartitions))
     else:
         df3 = df2
-        df3.divisions = (None,) * (df.npartitions + 1)
+        df3.index_bounds = IndexBounds((None,) * df.npartitions)
 
     return df3
 
@@ -491,7 +495,8 @@ def set_index_post_series(df, index_name, drop, column_dtype):
     return df2
 
 
-def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
+@_deprecate_divisions
+def set_sorted_index(df, index, drop=True, index_bounds=None, **kwargs):
     if not isinstance(index, Series):
         meta = df._meta.set_index(index, drop=drop)
     else:
@@ -499,23 +504,27 @@ def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
 
     result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
 
-    if not divisions:
-        divisions = compute_divisions(result, **kwargs)
-    elif len(divisions) != len(df.divisions):
-        msg = ("When doing `df.set_index(col, sorted=True, divisions=...)`, "
-               "divisions indicates known splits in the index column. In this "
-               "case divisions must be the same length as the existing "
-               "divisions in `df`\n\n"
-               "If the intent is to repartition into new divisions after "
+    if not index_bounds:
+        index_bounds = compute_bounds(result, **kwargs)
+    elif len(index_bounds) != len(df.index_bounds):
+        msg = ("When doing `df.set_index(col, sorted=True, index_bounds=...)`, "
+               "index_bounds indicates known bounds in the index column. In this "
+               "case the bounds must be the same length as the existing "
+               "bounds in `df`\n\n"
+               "If the intent is to repartition into new bounds after "
                "setting the index, you probably want:\n\n"
                "`df.set_index(col, sorted=True).repartition(divisions=divisions)`")
         raise ValueError(msg)
 
-    result.divisions = tuple(divisions)
+    result.index_bounds = index_bounds
     return result
 
 
 def compute_divisions(df, **kwargs):
+    return compute_bounds(df, _old_divisions=True, **kwargs)
+
+
+def compute_bounds(df, _old_divisions=False, **kwargs):
     mins = df.index.map_partitions(M.min, meta=df.index)
     maxes = df.index.map_partitions(M.max, meta=df.index)
     mins, maxes = compute(mins, maxes, **kwargs)
@@ -526,5 +535,7 @@ def compute_divisions(df, **kwargs):
         raise ValueError("Partitions must be sorted ascending with the index",
                          mins, maxes)
 
-    divisions = tuple(mins) + (list(maxes)[-1],)
-    return divisions
+    if _old_divisions:
+        return tuple(mins) + (list(maxes)[-1],)
+
+    return IndexBounds([Interval.inclusive(mn, mx) for mn, mx in zip(mins, maxes)])

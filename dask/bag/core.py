@@ -1310,8 +1310,8 @@ class Bag(Base):
         dsk = self.__dask_optimize__(self.dask, self.__dask_keys__())
         dsk.update({(name, i): (to_dataframe, (self.name, i), cols, dtypes)
                     for i in range(self.npartitions)})
-        divisions = [None] * (self.npartitions + 1)
-        return dd.DataFrame(dsk, name, meta, divisions)
+        index_bounds = dd.IndexBounds((None,) * self.npartitions)
+        return dd.DataFrame(dsk, name, meta, index_bounds)
 
     def to_delayed(self, optimize_graph=True):
         """Convert into a list of ``dask.delayed`` objects, one per partition.

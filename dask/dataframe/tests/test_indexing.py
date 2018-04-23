@@ -7,8 +7,10 @@ import pytest
 import dask
 import dask.dataframe as dd
 
+from dask.dataframe.core import IndexBounds
 from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta
+from dask.utils import Interval
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -23,10 +25,10 @@ full = d.compute()
 
 
 def test_loc():
-    assert d.loc[3:8].divisions[0] == 3
-    assert d.loc[3:8].divisions[-1] == 8
+    assert d.loc[3:8].index_bounds[0].start == 3
+    assert d.loc[3:8].index_bounds[-1].stop == 8
 
-    assert d.loc[5].divisions == (5, 5)
+    assert d.loc[5].index_bounds == IndexBounds((Interval.inclusive(5, 5),))
 
     assert_eq(d.loc[5], full.loc[5:5])
     assert_eq(d.loc[3:8], full.loc[3:8])
@@ -59,8 +61,8 @@ def test_loc():
 def test_loc_non_informative_index():
     df = pd.DataFrame({'x': [1, 2, 3, 4]}, index=[10, 20, 30, 40])
     ddf = dd.from_pandas(df, npartitions=2, sort=True)
-    ddf.divisions = (None,) * 3
-    assert not ddf.known_divisions
+    ddf.index_bounds = IndexBounds((None,) * 2)
+    assert not ddf.known_bounds
 
     ddf.loc[20:30].compute(get=dask.get)
 
@@ -77,7 +79,7 @@ def test_loc_with_text_dates():
     s = dd.Series({('df', 0): A, ('df', 1): B}, 'df', A,
                   [A.index.min(), B.index.min(), B.index.max()])
 
-    assert s.loc['2000': '2010'].divisions == s.divisions
+    assert s.loc['2000': '2010'].index_bounds == s.index_bounds
     assert_eq(s.loc['2000': '2010'], s)
     assert len(s.loc['2000-01-03': '2000-01-05'].compute()) == 3
 
@@ -155,8 +157,8 @@ def test_loc2d_with_unknown_divisions():
                       columns=list('ABCDE'))
     ddf = dd.from_pandas(df, 3)
 
-    ddf.divisions = (None, ) * len(ddf.divisions)
-    assert ddf.known_divisions is False
+    ddf.index_bounds = IndexBounds((None, ) * ddf.npartitions)
+    assert ddf.known_bounds is False
 
     assert_eq(ddf.loc['a', 'A'], df.loc[['a'], 'A'])
     assert_eq(ddf.loc['a', ['A']], df.loc[['a'], ['A']])
@@ -236,7 +238,7 @@ def test_loc_on_numpy_datetimes():
     df = pd.DataFrame({'x': [1, 2, 3]},
                       index=list(map(np.datetime64, ['2014', '2015', '2016'])))
     a = dd.from_pandas(df, 2)
-    a.divisions = list(map(np.datetime64, a.divisions))
+    a.index_bounds = a.index_bounds.map(np.datetime64)
 
     assert_eq(a.loc['2014': '2015'], a.loc['2014': '2015'])
 
@@ -245,7 +247,7 @@ def test_loc_on_pandas_datetimes():
     df = pd.DataFrame({'x': [1, 2, 3]},
                       index=list(map(pd.Timestamp, ['2014', '2015', '2016'])))
     a = dd.from_pandas(df, 2)
-    a.divisions = list(map(pd.Timestamp, a.divisions))
+    a.index_bounds = a.index_bounds.map(pd.Timestamp)
 
     assert_eq(a.loc['2014': '2015'], a.loc['2014': '2015'])
 
@@ -364,3 +366,31 @@ def test_getitem_period_str():
 
     assert_eq(df['2011-01':'2012-05'], ddf['2011-01':'2012-05'])
     assert_eq(df['2011':'2015'], ddf['2011':'2015'])
+
+
+def test_index_bounds():
+    inclusive = Interval.inclusive
+    exclusive = Interval.exclusive
+
+    for test, expected in [
+        ((inclusive(5, 6), inclusive(7, 8)), True),
+        ((inclusive(7, 8), inclusive(5, 6)), False),
+        ((inclusive(5, 6), inclusive(6, 8)), False),
+        ((exclusive(5, 6), inclusive(6, 8)), True),
+        ((inclusive(5, 6), Interval(6, True, 8, True)), True),
+    ]:
+        assert IndexBounds(test).is_strictly_sorted() is expected
+
+    assert (
+            IndexBounds(
+                (exclusive(0, 5), inclusive(5, 9))).map(lambda a: a + 1) ==
+            IndexBounds(
+                (exclusive(1, 6), inclusive(6, 10)))
+            )
+    assert (
+            IndexBounds(
+                (exclusive(0, 5), inclusive(5, 9))
+            ).map_all(lambda a: np.asarray(a).cumsum()) ==
+            IndexBounds(
+                (exclusive(0, 5), inclusive(10, 19)))
+            )

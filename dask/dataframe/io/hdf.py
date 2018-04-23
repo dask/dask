@@ -10,7 +10,7 @@ import pandas as pd
 from toolz import merge
 
 from .io import _link
-from ..core import DataFrame, new_dd_object
+from ..core import DataFrame, new_dd_object, IndexBounds
 from ... import multiprocessing
 from ...base import tokenize, compute_as_if_collection
 from ...bytes.utils import build_name_function
@@ -18,7 +18,7 @@ from ...compatibility import PY3
 from ...context import _globals
 from ...delayed import Delayed, delayed
 from ...local import get_sync
-from ...utils import effective_get, get_scheduler_lock
+from ...utils import effective_get, get_scheduler_lock, Interval
 
 
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
@@ -243,7 +243,7 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
     Read a single hdf file into a dask.dataframe. Used for each file in
     read_hdf.
     """
-    def get_keys_stops_divisions(path, key, stop, sorted_index):
+    def get_keys_stops_bounds(path, key, stop, sorted_index):
         """
         Get the "keys" or group identifiers which match the given key, which
         can contain wildcards. This uses the hdf file identified by the
@@ -253,7 +253,7 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
         with pd.HDFStore(path, mode=mode) as hdf:
             keys = [k for k in hdf.keys() if fnmatch(k, key)]
             stops = []
-            divisions = []
+            index_bounds = []
             for k in keys:
                 storer = hdf.get_storer(k)
                 if storer.format_type != 'table':
@@ -269,12 +269,12 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                     division_start = storer.read_column('index', start=0, stop=1)[0]
                     division_end = storer.read_column('index', start=storer.nrows - 1,
                                                       stop=storer.nrows)[0]
-                    divisions.append([division_start, division_end])
+                    index_bounds.append(Interval.inclusive(division_start, division_end))
                 else:
-                    divisions.append(None)
-        return keys, stops, divisions
+                    index_bounds.append(None)
+        return keys, stops, IndexBounds(index_bounds)
 
-    def one_path_one_key(path, key, start, stop, columns, chunksize, division, lock):
+    def one_path_one_key(path, key, start, stop, columns, chunksize, interval, lock):
         """
         Get the data frame corresponding to one path and one key (which should
         not contain any wildcards).
@@ -284,7 +284,7 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
             empty = empty[columns]
 
         token = tokenize((path, os.path.getmtime(path), key, start,
-                          stop, empty, chunksize, division))
+                          stop, empty, chunksize, interval))
         name = 'read-hdf-' + token
         if empty.ndim == 1:
             base = {'name': empty.name, 'mode': mode}
@@ -295,11 +295,11 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
             raise ValueError("Start row number ({}) is above or equal to stop "
                              "row number ({})".format(start, stop))
 
-        if division:
+        if interval is not None:
             dsk = {(name, 0): (_pd_read_hdf, path, key, lock,
                                base)}
 
-            divisions = division
+            index_bounds = (interval,)
         else:
             def update(s):
                 new = base.copy()
@@ -310,16 +310,16 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                                     update(s)))
                        for i, s in enumerate(range(start, stop, chunksize)))
 
-            divisions = [None] * (len(dsk) + 1)
+            index_bounds = (None,) * len(dsk)
 
-        return new_dd_object(dsk, name, empty, divisions)
+        return new_dd_object(dsk, name, empty, IndexBounds(index_bounds))
 
-    keys, stops, divisions = get_keys_stops_divisions(path, key, stop, sorted_index)
+    keys, stops, index_bounds = get_keys_stops_bounds(path, key, stop, sorted_index)
     if (start != 0 or stop is not None) and len(keys) > 1:
         raise NotImplementedError(read_hdf_error_msg)
     from ..multi import concat
-    return concat([one_path_one_key(path, k, start, s, columns, chunksize, d, lock)
-                   for k, s, d in zip(keys, stops, divisions)])
+    return concat([one_path_one_key(path, k, start, s, columns, chunksize, b, lock)
+                   for k, s, b in zip(keys, stops, index_bounds)])
 
 
 def _pd_read_hdf(path, key, lock, kwargs):
