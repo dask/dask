@@ -948,7 +948,7 @@ class Interval(namedtuple('RawInterval', ['start', 'lopen', 'stop', 'rclosed']))
     def _common_str(self, start, stop):
         return "{}{}{}, {}{}".format(
             self.__class__.__name__,
-            {False: '[', True: ')'}[self.lopen],
+            {False: '[', True: '('}[self.lopen],
             start,
             stop,
             {False: ')', True: ']'}[self.rclosed]
