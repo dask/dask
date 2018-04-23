@@ -12,6 +12,12 @@ Array
 - Add ``piecewise`` for Dask Arrays (:pr:`3350`) `John A Kirkham`_
 - Fix handling of ``nan`` in ``broadcast_shapes`` (:pr:`3356`) `John A Kirkham`_
 - Add ``isin`` for dask arrays (:pr:`3363`). `Stephan Hoyer`_
+- Overhauled ``topk`` for Dask Arrays: faster algorithm, particularly for large k's; added support
+  for multiple axes, recursive aggregation, and an option to pick the bottom k elements instead.
+  (:pr:`3395`) `Guido Imperiale`_
+- The ``topk`` API has changed from topk(k, array) to the more conventional topk(array, k).
+  The legacy API still works but is now deprecated. (:pr:`2965`) `Guido Imperiale`_
+- New function ``argtopk`` for Dask Arrays (:pr:`3396`) `Guido Imperiale`_
 
 DataFrame
 +++++++++
@@ -1027,6 +1033,7 @@ Other
 - There is also a gitter chat room and a stackoverflow tag
 
 
+.. _`Guido Imperiale`: https://github.com/crusaderky
 .. _`John A Kirkham`: https://github.com/jakirkham
 .. _`Matthew Rocklin`: https://github.com/mrocklin
 .. _`Jim Crist`: https://github.com/jcrist

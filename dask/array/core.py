@@ -1401,12 +1401,19 @@ class Array(DaskMethodsMixin):
             shape = shape[0]
         return reshape(self, shape)
 
-    def topk(self, k):
+    def topk(self, k, axis=-1, split_every=None):
         """The top k elements of an array.
 
         See ``da.topk`` for docstring"""
-        from .routines import topk
-        return topk(k, self)
+        from .reductions import topk
+        return topk(self, k, axis=axis, split_every=split_every)
+
+    def argtopk(self, k, axis=-1, split_every=None):
+        """The indices of the top k elements of an array.
+
+        See ``da.argtopk`` for docstring"""
+        from .reductions import argtopk
+        return argtopk(self, k, axis=axis, split_every=split_every)
 
     def astype(self, dtype, **kwargs):
         """Copy of the array, cast to a specified type.

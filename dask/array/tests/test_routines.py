@@ -419,27 +419,6 @@ def test_ediff1d(shape, to_end, to_begin):
     assert_eq(da.ediff1d(a, to_end, to_begin), np.ediff1d(x, to_end, to_begin))
 
 
-def test_topk():
-    x = np.array([5, 2, 1, 6])
-    d = da.from_array(x, chunks=2)
-
-    e = da.topk(2, d)
-
-    assert e.chunks == ((2,),)
-    assert_eq(e, np.sort(x)[-1:-3:-1])
-    assert same_keys(da.topk(2, d), e)
-
-
-def test_topk_k_bigger_than_chunk():
-    x = np.array([5, 2, 1, 6])
-    d = da.from_array(x, chunks=2)
-
-    e = da.topk(3, d)
-
-    assert e.chunks == ((3,),)
-    assert_eq(e, np.array([6, 5, 2]))
-
-
 def test_bincount():
     x = np.array([2, 1, 5, 2, 1])
     d = da.from_array(x, chunks=2)
