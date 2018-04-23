@@ -12,7 +12,6 @@ except ImportError:
 
 from ..base import tokenize
 from .core import Array, normalize_chunks
-from .numpy_compat import full
 
 
 def wrap_func_shape_as_first_arg(func, *args, **kwargs):
@@ -68,4 +67,4 @@ w = wrap(wrap_func_shape_as_first_arg)
 ones = w(np.ones, dtype='f8')
 zeros = w(np.zeros, dtype='f8')
 empty = w(np.empty, dtype='f8')
-full = w(full)
+full = w(np.full)

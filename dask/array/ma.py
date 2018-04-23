@@ -10,8 +10,8 @@ from .core import (concatenate_lookup, tensordot_lookup, map_blocks,
                    asanyarray, atop)
 
 
-if LooseVersion(np.__version__) < '1.11.0':
-    raise ImportError("dask.array.ma requires numpy >= 1.11.0")
+if LooseVersion(np.__version__) < '1.11.2':
+    raise ImportError("dask.array.ma requires numpy >= 1.11.2")
 
 
 @normalize_token.register(np.ma.masked_array)

@@ -13,7 +13,7 @@ from toolz import concat, sliding_window, interleave
 from .. import sharedict
 from ..core import flatten
 from ..base import tokenize
-from . import numpy_compat, chunk
+from . import chunk
 from .creation import arange
 from .utils import safe_wraps
 from .wrap import ones
@@ -962,9 +962,9 @@ def notnull(values):
     return ~isnull(values)
 
 
-@wraps(numpy_compat.isclose)
+@wraps(np.isclose)
 def isclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
-    func = partial(numpy_compat.isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
+    func = partial(np.isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
     return elemwise(func, arr1, arr2, dtype='bool')
 
 
