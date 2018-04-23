@@ -58,6 +58,36 @@ def test_loc():
     assert sorted(d.loc[5].dask) != sorted(d.loc[6].dask)
 
 
+def test_loc_divisions():
+    # https://github.com/dask/dask/issues/3411
+
+    inclusive = Interval.inclusive
+    df = pd.DataFrame({'a': range(10, 15)}).set_index('a')
+    two_parts = dd.from_pandas(df, npartitions=2)
+    assert two_parts.divisions == (10, 13, 14)
+
+    # Slicing seems to treat divisions accurately
+    assert two_parts[11:13].divisions == (11, 13, 13)
+    assert two_parts[0:20].divisions == (10, 13, 14)
+
+    one_part = dd.from_pandas(df, npartitions=1)
+    assert one_part.index_bounds == IndexBounds((inclusive(10, 14),))
+    assert one_part[11:12].index_bounds == IndexBounds((inclusive(11, 12),))
+    assert one_part[:12].index_bounds == IndexBounds((inclusive(10, 12),))
+
+    # Except when slicing 1 partition, beyond range of index on that side
+    assert one_part[0:20].index_bounds == IndexBounds((inclusive(10, 14),))  # (0, 20) Should be (10, 14)
+    assert two_parts[0:12].index_bounds == IndexBounds((inclusive(10, 12),))  # (0, 12) Should be (10, 12)
+    assert two_parts[12:20].index_bounds == IndexBounds((
+        inclusive(12, 12), inclusive(13, 14)))
+    assert two_parts[13:20].index_bounds == IndexBounds((inclusive(13, 14),))  # (13, 20) whoops!
+
+    # Out of index range stuff gives weird divisions
+    # It's not clear whether bounds should match the slice or a given partition
+    # so best to just test that it's empty here
+    assert two_parts[20:].index_bounds[0].empty()  # (20, 14)
+
+
 def test_loc_non_informative_index():
     df = pd.DataFrame({'x': [1, 2, 3, 4]}, index=[10, 20, 30, 40])
     ddf = dd.from_pandas(df, npartitions=2, sort=True)
