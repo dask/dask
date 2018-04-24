@@ -528,21 +528,25 @@ def test_index_with_int_dask_array():
     idx = np.array([2, 0, 2])
     idx_d = da.from_array(idx, chunks=2)
 
-    np.testing.assert_array_equal(x[idx, :], d[idx_d, :])
-    np.testing.assert_array_equal(x[:, idx], d[:, idx_d])
-    np.testing.assert_array_equal(x[0, idx], d[0, idx_d])
+    assert_eq(x[idx, :], d[idx_d, :])
+    assert_eq(x[:, idx], d[:, idx_d])
+    assert_eq(x[0, idx], d[0, idx_d])
 
     # Slice by 0-dimensional arrays
     idx0 = np.array(1)
     idx0_d = da.from_array(idx0, chunks=1)
-    np.testing.assert_array_equal(x[idx0, :], d[idx0_d, :])
-    np.testing.assert_array_equal(x[:, idx0], d[:, idx0_d])
-    np.testing.assert_array_equal(x[idx0, idx0], d[idx0_d, idx0_d])
-    np.testing.assert_array_equal(x[idx0, idx], d[idx0_d, idx])
-    np.testing.assert_array_equal(x[idx0, idx], d[idx0_d, idx_d])
+    assert_eq(x[idx0, :], d[idx0_d, :])
+    assert_eq(x[:, idx0], d[:, idx0_d])
+    assert_eq(x[idx0, idx0], d[idx0_d, idx0_d])
+    assert_eq(x[idx0, idx], d[idx0_d, idx])
+    assert_eq(x[idx0, idx], d[idx0_d, idx_d])
     # Unsupported: 0d numpy array slicers (#3406)
-    # np.testing.assert_array_equal(x[idx0, idx0], d[idx0, idx0_d])
-    # np.testing.assert_array_equal(x[idx0, idx], d[idx0, idx_d])
+    # assert_eq(x[idx0, idx0], d[idx0, idx0_d])
+    # assert_eq(x[idx0, idx], d[idx0, idx_d])
+
+    # Slice by array with nan chunks
+    a = da.arange(-2, 3, chunks=2)
+    assert_eq(a[a.nonzero()], np.array([-2, -1,  1,  2]))
 
 
 def test_index_with_bool_dask_array():
