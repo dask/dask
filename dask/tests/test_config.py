@@ -1,7 +1,10 @@
-from dask.utils import tmpfile
-from dask.config import merge, collect_yaml, collect_env
 import yaml
 import os
+
+import pytest
+
+from dask.config import merge, collect_yaml, collect_env, get
+from dask.utils import tmpfile
 
 
 def test_merge():
@@ -56,3 +59,13 @@ def test_env():
         del os.environ['DASK_A_B']
         del os.environ['DASK_C']
         del os.environ['DASK_D']
+
+
+def test_get():
+    d = {'x': 1, 'y': {'a': 2}}
+
+    assert get('x', config=d) == 1
+    assert get('y.a', config=d) == 2
+    assert get('y.b', 123, config=d) == 123
+    with pytest.raises(KeyError):
+        get('y.b', config=d)

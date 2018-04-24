@@ -7,6 +7,9 @@ import sys
 from .compatibility import FileExistsError
 
 
+no_default = '__no_default__'
+
+
 config_paths = [
     '/etc/dask',
     os.path.join(sys.prefix, 'etc', 'dask'),
@@ -192,3 +195,34 @@ except ImportError:
 configs.append(collect_env())
 
 config = merge(*configs)
+
+
+def get(key, default=no_default, config=config):
+    """
+    Get elements from global config
+
+    Use '.' for nested access
+
+    Examples
+    --------
+    >>> from dask import config
+    >>> config.get('foo')
+    {'x': 1, 'y': 2}
+
+    >>> config.get('foo.x')
+    1
+
+    >>> config.get('foo.x.y', default=123)
+    123
+    """
+    keys = key.split('.')
+    result = config
+    for k in keys:
+        try:
+            result = result[k]
+        except (TypeError, IndexError, KeyError):
+            if default is not no_default:
+                return default
+            else:
+                raise
+    return result
