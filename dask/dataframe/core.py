@@ -344,8 +344,11 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get('out', ())
         for x in inputs + out:
-            if not isinstance(x, (Number, Scalar, _Frame, Array,
-                                  pd.DataFrame, pd.Series, pd.Index)):
+            # Want to check for 0-dimensional arrays
+            if isinstance(x, np.ndarray) and x.shape == ():
+                continue
+            elif not isinstance(x, (Number, Scalar, _Frame, Array,
+                                    pd.DataFrame, pd.Series, pd.Index)):
                 return NotImplemented
 
         if method == '__call__':
