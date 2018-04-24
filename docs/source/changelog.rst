@@ -32,6 +32,7 @@ DataFrame
 - Provide more informative error message for meta= errors (:pr:`3343`) `Matthew Rocklin`_
 - add orc reader (:pr:`3284`) `Martin Durant`_
 - Default compression for parquet now always Snappy, in line with pandas (:pr:`3373`) `Martin Durant`_
+- Fixed bug in Dask DataFrame and Series comparisons with NumPy scalars (:pr:`3436`) `James Bourbeau`_
 
 Bag
 +++
