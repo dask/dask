@@ -376,17 +376,16 @@ def test_ufunc_with_reduction(redfunc, ufunc, pandas):
         assert_eq(np_redfunc(np_ufunc(dask)), np_redfunc(np_ufunc(pandas)))
 
 
-@pytest.mark.parametrize('ufunc', ['greater', 'greater_equal', 'less', 'less_equal'])
 @pytest.mark.parametrize('pandas',
                          [pd.Series(np.random.randint(1, 100, size=100)),
                           pd.DataFrame({'A': np.random.randint(1, 100, size=20),
                                         'B': np.random.randint(1, 100, size=20),
                                         'C': np.abs(np.random.randn(20))})])
 @pytest.mark.parametrize('scalar', [15, 16.4, np.int64(15), np.float64(16.4)])
-def test_ufunc_numpy_scalar(ufunc, pandas, scalar):
+def test_ufunc_numpy_scalar_comparison(pandas, scalar):
     # Regression test for issue #3392
-    dafunc = getattr(da, ufunc)
-    npfunc = getattr(np, ufunc)
 
-    dask = dd.from_pandas(pandas, 3)
-    assert_eq(dafunc(scalar, dask), npfunc(scalar, pandas))
+    dask_compare = scalar >= dd.from_pandas(pandas, npartitions=3)
+    pandas_compare = scalar >= pandas
+
+    assert_eq(dask_compare, pandas_compare)
