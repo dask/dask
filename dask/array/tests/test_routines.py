@@ -1,6 +1,7 @@
 from __future__ import division, print_function, absolute_import
 
 import itertools
+from numbers import Number
 import textwrap
 
 import pytest
@@ -417,6 +418,36 @@ def test_ediff1d(shape, to_end, to_begin):
     a = da.from_array(x, chunks=(len(shape) * (5,)))
 
     assert_eq(da.ediff1d(a, to_end, to_begin), np.ediff1d(x, to_end, to_begin))
+
+
+@pytest.mark.parametrize('shape, varargs, axis', [
+    [(10, 15, 20), (), None],
+    [(10, 15, 20), (2,), None],
+    [(10, 15, 20), (1.0, 1.5, 2.0), None],
+    [(10, 15, 20), (), 0],
+    [(10, 15, 20), (), 1],
+    [(10, 15, 20), (), 2],
+    [(10, 15, 20), (), -1],
+    [(10, 15, 20), (), (0, 2)],
+])
+@pytest.mark.parametrize('edge_order', [
+    1,
+    2
+])
+def test_gradient(shape, varargs, axis, edge_order):
+    a = np.random.randint(0, 10, shape)
+    d_a = da.from_array(a, chunks=(len(shape) * (5,)))
+
+    r = np.gradient(a, *varargs, axis=axis, edge_order=edge_order)
+    r_a = da.gradient(d_a, *varargs, axis=axis, edge_order=edge_order)
+
+    if isinstance(axis, Number):
+        assert_eq(r, r_a)
+    else:
+        assert len(r) == len(r_a)
+
+        for e_r, e_r_a in zip(r, r_a):
+            assert_eq(e_r, e_r_a)
 
 
 def test_bincount():
