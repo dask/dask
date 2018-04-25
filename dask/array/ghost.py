@@ -465,4 +465,5 @@ def coerce_boundary(ndim, boundary):
         boundary = (boundary,) * ndim
     if isinstance(boundary, tuple):
         boundary = dict(zip(range(ndim), boundary))
+
     return boundary
