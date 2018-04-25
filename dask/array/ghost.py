@@ -361,7 +361,7 @@ def add_dummy_padding(x, depth, boundary):
     array([..., 0, 1, 2, 3, 4, 5, ...])
     """
     for k, v in boundary.items():
-        d = depth[k]
+        d = depth.get(k, 0)
         if v == 'none' and d > 0:
             empty_shape = list(x.shape)
             empty_shape[k] = d
