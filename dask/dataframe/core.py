@@ -939,8 +939,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             List of partitions to be used. If specified npartitions will be
             ignored.
         npartitions : int, optional
-            Number of partitions of output, must be less than npartitions of
-            input. Only used if divisions isn't specified.
+            Number of partitions of output. Only used if divisions isn't
+            specified.
         freq : str, pd.Timedelta
             A period on which to partition timeseries data like ``'7D'`` or
             ``'12h'`` or ``pd.Timedelta(hours=12)``.  Assumes a datetime index.
