@@ -1754,7 +1754,10 @@ class Series(_Frame):
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
-            index = context[1][0].index
+            if isinstance(context[1][0], np.ndarray) and context[1][0].shape == ():
+                index = None
+            else:
+                index = context[1][0].index
 
         return pd.Series(array, index=index, name=self.name)
 
@@ -2314,7 +2317,10 @@ class DataFrame(_Frame):
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
-            index = context[1][0].index
+            if isinstance(context[1][0], np.ndarray) and context[1][0].shape == ():
+                index = None
+            else:
+                index = context[1][0].index
 
         return pd.DataFrame(array, index=index, columns=self.columns)
 
