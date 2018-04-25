@@ -73,7 +73,7 @@ the following:
 
 .. code-block:: bash
 
-   export DASK_FOO_BAR=true
+   export DASK_FOO_BAR=True
 
 resulting in configuration values like the following:
 

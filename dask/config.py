@@ -1,10 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
+import ast
 from contextlib import contextmanager
 import os
 import sys
-
-from .compatibility import FileExistsError
 
 
 no_default = '__no_default__'
@@ -95,7 +94,7 @@ def collect_yaml(paths=config_paths):
     # Parse yaml files
     for path in file_paths:
         with open(path) as f:
-            data = yaml.load(f.read() or {})
+            data = yaml.load(f.read()) or {}
             configs.append(data)
 
     return configs
@@ -111,26 +110,12 @@ def collect_env():
     for name, value in os.environ.items():
         if name.startswith('DASK_'):
             varname = name[5:].lower().replace('_', '-')
-            env[varname] = _parse_env_value(value)
+            try:
+                env[varname] = ast.literal_eval(value)
+            except ValueError:
+                env[varname] = value
 
     return env
-
-
-def _parse_env_value(value):
-    """ Convert a string to an integer, float or boolean (in that order) if possible. """
-    bools = {
-        'true': True,
-        'false': False
-    }
-    try:
-        return int(value)
-    except ValueError:
-        pass
-    try:
-        return float(value)
-    except ValueError:
-        pass
-    return bools.get(value.lower(), value)
 
 
 def ensure_config_file(
@@ -148,10 +133,7 @@ def ensure_config_file(
     if not os.path.exists(destination):
         import shutil
         if not os.path.exists(os.path.dirname(destination)):
-            try:
-                os.mkdir(os.path.dirname(destination))
-            except FileExistsError:
-                pass
+            os.makedirs(os.path.dirname(destination), exists_ok=True)
         # Atomically create destination.  Parallel testing discovered
         # a race condition where a process can be busy creating the
         # destination while another process reads an empty config file.
@@ -165,8 +147,16 @@ def ensure_config_file(
 
 @contextmanager
 def set_config(arg=None, **kwargs):
+    """ Temporarily set configuration values within a context manager
+
+    Examples
+    --------
+    >>> with set_config({'foo': 123}):
+    ...     pass
+    """
     if arg and not kwargs:
         kwargs = arg
+
     old = {}
     for key in kwargs:
         if key in config:
