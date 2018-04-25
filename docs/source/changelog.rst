@@ -23,7 +23,7 @@ DataFrame
 +++++++++
 
 
-- Allow `t` as shorthand for `table` in `to_hdf` for pandas compatibility `Jörg Dietrich`_
+- Allow `t` as shorthand for `table` in `to_hdf` for pandas compatibility (:pr:`3330`) `Jörg Dietrich`_
 - Added top level `isna` method for Dask DataFrames (:pr:`3294`) `Christopher Ren`_
 - Fix selection on partition column on ``read_parquet`` for ``engine="pyarrow"`` (:pr:`3207`) `Uwe Korn`_
 - Added DataFrame.squeeze method (:pr:`3366`) `Christopher Ren`_
@@ -33,6 +33,7 @@ DataFrame
 - add orc reader (:pr:`3284`) `Martin Durant`_
 - Default compression for parquet now always Snappy, in line with pandas (:pr:`3373`) `Martin Durant`_
 - Fixed bug in Dask DataFrame and Series comparisons with NumPy scalars (:pr:`3436`) `James Bourbeau`_
+- Remove outdated requirement from repartition docstring (:pr:`3440`) `Jörg Dietrich`_
 
 Bag
 +++
