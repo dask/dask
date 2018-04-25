@@ -83,6 +83,7 @@ Top level user functions:
    frompyfunc
    full
    full_like
+   gradient
    histogram
    hstack
    hypot
@@ -423,6 +424,7 @@ Other functions
 .. autofunction:: frompyfunc
 .. autofunction:: full
 .. autofunction:: full_like
+.. autofunction:: gradient
 .. autofunction:: histogram
 .. autofunction:: hstack
 .. autofunction:: hypot

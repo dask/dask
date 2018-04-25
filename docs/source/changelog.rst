@@ -18,6 +18,7 @@ Array
 - The ``topk`` API has changed from topk(k, array) to the more conventional topk(array, k).
   The legacy API still works but is now deprecated. (:pr:`2965`) `Guido Imperiale`_
 - New function ``argtopk`` for Dask Arrays (:pr:`3396`) `Guido Imperiale`_
+- Add ``gradient`` for Dask Arrays (:pr:`3434`) `John A Kirkham`_
 
 DataFrame
 +++++++++
