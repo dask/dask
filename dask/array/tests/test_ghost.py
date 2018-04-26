@@ -195,8 +195,11 @@ def test_map_overlap():
     exp1 = d.map_overlap(lambda x: x + x.size, depth=1, dtype=d.dtype)
     exp2 = d.map_overlap(lambda x: x + x.size, depth={0: 1, 1: 1},
                          boundary={0: 'reflect', 1: 'none'}, dtype=d.dtype)
+    exp3 = d.map_overlap(lambda x: x + x.size, depth={1: 1},
+                         boundary={1: 'reflect'}, dtype=d.dtype)
     assert_eq(exp1, x + 16)
     assert_eq(exp2, x + 12)
+    assert_eq(exp3, x + 8)
 
 
 @pytest.mark.parametrize("boundary", [
