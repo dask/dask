@@ -142,7 +142,7 @@ def pristine_loop():
     finally:
         try:
             loop.close(all_fds=True)
-        except ValueError:
+        except (KeyError, ValueError):
             pass
         IOLoop.clear_instance()
         IOLoop.clear_current()
