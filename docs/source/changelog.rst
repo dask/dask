@@ -18,11 +18,12 @@ Array
 - The ``topk`` API has changed from topk(k, array) to the more conventional topk(array, k).
   The legacy API still works but is now deprecated. (:pr:`2965`) `Guido Imperiale`_
 - New function ``argtopk`` for Dask Arrays (:pr:`3396`) `Guido Imperiale`_
+- Fix handling partial depth and boundary in ``map_overlap`` (:pr:`3445`) `John A Kirkham`_
 - Add ``gradient`` for Dask Arrays (:pr:`3434`) `John A Kirkham`_
+
 
 DataFrame
 +++++++++
-
 
 - Allow `t` as shorthand for `table` in `to_hdf` for pandas compatibility (:pr:`3330`) `Jörg Dietrich`_
 - Added top level `isna` method for Dask DataFrames (:pr:`3294`) `Christopher Ren`_
