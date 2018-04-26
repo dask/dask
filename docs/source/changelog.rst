@@ -35,6 +35,7 @@ DataFrame
 - add orc reader (:pr:`3284`) `Martin Durant`_
 - Default compression for parquet now always Snappy, in line with pandas (:pr:`3373`) `Martin Durant`_
 - Remove outdated requirement from repartition docstring (:pr:`3440`) `Jörg Dietrich`_
+- Fixed bug in aggregation when only a Series is selected (:pr:`3446`) `Jörg Dietrich`_
 
 Bag
 +++

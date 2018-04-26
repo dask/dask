@@ -1429,3 +1429,13 @@ def test_groupby_agg_custom__mode():
     expected = expected['cc'].groupby([expected['g0'], expected['g1']]).agg('sum')
 
     assert_eq(actual, expected)
+
+
+def test_groupby_select_column_agg():
+    pdf = pd.DataFrame({'A': [1, 2, 3, 1, 2, 3, 1, 2, 4],
+                        'B': [-0.776, -0.4, -0.873, 0.054, 1.419, -0.948,
+                              -0.967, -1.714, -0.666]})
+    ddf = dd.from_pandas(pdf, npartitions=4)
+    actual = ddf.groupby('A')['B'].agg('var')
+    expected = pdf.groupby('A')['B'].agg('var')
+    assert_eq(actual, expected)
