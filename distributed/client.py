@@ -1353,7 +1353,7 @@ class Client(Node):
             """ Want to stop the All(...) early if we find an error """
             st = self.futures[k]
             yield st.wait()
-            if st.status != 'finished':
+            if st.status != 'finished' and errors == 'raise' :
                 raise AllExit()
 
         while True:
@@ -1414,7 +1414,8 @@ class Client(Node):
                 response = yield self.scheduler.gather(keys=keys)
 
             if response['status'] == 'error':
-                logger.warning("Couldn't gather keys %s", response['keys'])
+                log = logger.warning if errors == 'raise' else logger.debug
+                log("Couldn't gather keys %s", response['keys'])
                 for key in response['keys']:
                     self._send_to_scheduler({'op': 'report-key',
                                              'key': key})

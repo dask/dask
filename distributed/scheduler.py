@@ -2144,7 +2144,7 @@ class Scheduler(ServerNode):
                     for msg in msgs:
                         if msg == 'OK':  # from close
                             break
-                        if 'status' in msg and 'error' in msg['status']:
+                        if 'status' in msg and 'error' in msg['status'] and msg.get('op') != 'task-erred':
                             try:
                                 logger.error("error from worker %s: %s",
                                          worker, clean_exception(**msg)[1])

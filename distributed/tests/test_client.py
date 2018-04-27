@@ -526,6 +526,20 @@ def test_gather_strict(c, s, a, b):
     assert xx == 2
 
 
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
+def test_gather_skip(c, s, a):
+    x = c.submit(div, 1, 0, priority=10)
+    y = c.submit(slowinc, 1, delay=0.5)
+
+    with captured_logger(logging.getLogger('distributed.scheduler')) as sched:
+        with captured_logger(logging.getLogger('distributed.client')) as client:
+            L = yield c.gather([x, y], errors='skip')
+            assert L == [2]
+
+    assert not client.getvalue()
+    assert not sched.getvalue()
+
+
 @gen_cluster(client=True, timeout=None)
 def test_get(c, s, a, b):
     future = c.get({'x': (inc, 1)}, 'x', sync=False)
