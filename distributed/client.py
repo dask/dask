@@ -1415,7 +1415,7 @@ class Client(Node):
 
             if response['status'] == 'error':
                 log = logger.warning if errors == 'raise' else logger.debug
-                log("Couldn't gather keys %s", response['keys'])
+                log("Couldn't gather %s keys, rescheduling %s", (len(response['keys']), response['keys']))
                 for key in response['keys']:
                     self._send_to_scheduler({'op': 'report-key',
                                              'key': key})
