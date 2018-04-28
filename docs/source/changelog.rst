@@ -42,6 +42,7 @@ Core
 ++++
 
 - Support traversing collections in persist, visualize, and optimize (:pr:`3410`) `Jim Crist`_
+- Add schedule= keyword, replace get= (:pr:`3448`) `Matthew Rocklin`_
 
 
 0.17.2 / 2018-03-21
