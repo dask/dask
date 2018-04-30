@@ -97,7 +97,7 @@ def collect_yaml(paths=config_paths):
             if os.path.isdir(path):
                 file_paths.extend(sorted([
                     p for p in os.listdir(path)
-                    if os.splitext(p)[1].lower() in ('json', 'yaml', 'yml')
+                    if os.path.splitext(p)[1].lower() in ('json', 'yaml', 'yml')
                 ]))
             else:
                 file_paths.append(path)
@@ -125,7 +125,7 @@ def collect_env():
             varname = name[5:].lower().replace('_', '-')
             try:
                 env[varname] = ast.literal_eval(value)
-            except ValueError:
+            except (SyntaxError, ValueError):
                 env[varname] = value
 
     return env
@@ -211,6 +211,8 @@ configs = []
 try:
     import yaml
 except ImportError:
+    pass
+else:
     configs.extend(collect_yaml())
 
 configs.append(collect_env())
