@@ -37,12 +37,12 @@ def update(old, new, priority='new'):
     -------
     >>> a = {'x': 1, 'y': {'a': 2}}
     >>> b = {'x': 2, 'y': {'b': 3}}
-    >>> update(a, b)
+    >>> update(a, b)  # doctest: +SKIP
     {'x': 2, 'y': {'a': 2, 'b': 3}}
 
     >>> a = {'x': 1, 'y': {'a': 2}}
     >>> b = {'x': 2, 'y': {'b': 3}}
-    >>> update(a, b, priority='old')
+    >>> update(a, b, priority='old')  # doctest: +SKIP
     {'x': 1, 'y': {'a': 2, 'b': 3}}
 
     See Also
@@ -71,7 +71,7 @@ def merge(*dicts):
     -------
     >>> a = {'x': 1, 'y': {'a': 2}}
     >>> b = {'y': {'b': 3}}
-    >>> merge(a, b)
+    >>> merge(a, b)  # doctest: +SKIP
     {'x': 1, 'y': {'a': 2, 'b': 3}}
 
     See Also
