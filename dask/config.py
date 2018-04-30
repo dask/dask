@@ -20,18 +20,29 @@ if 'DASK_CONFIG' in os.environ:
     config_paths.append(os.environ['DASK_CONFIG'])
 
 
-def update(old, new):
+def update(old, new, priority='new'):
     """ Update a nested dictionary with values from another
 
     This is like dict.update except that it smoothly merges nested values
 
     This operates in-place and modifies old
 
+    Parameters
+    ----------
+    priority: string {'old', 'new'}
+        If new (default) then the new dictionary has preference.
+        Otherwise the old dictionary does.
+
     Example
     -------
     >>> a = {'x': 1, 'y': {'a': 2}}
-    >>> b = {'y': {'b': 3}}
+    >>> b = {'x': 2, 'y': {'b': 3}}
     >>> update(a, b)
+    {'x': 2, 'y': {'a': 2, 'b': 3}}
+
+    >>> a = {'x': 1, 'y': {'a': 2}}
+    >>> b = {'x': 2, 'y': {'b': 3}}
+    >>> update(a, b, priority='old')
     {'x': 1, 'y': {'a': 2, 'b': 3}}
 
     See Also
@@ -43,9 +54,11 @@ def update(old, new):
             old[k] = {}
 
         if type(v) is dict:
-            update(old[k], v)
+            update(old[k], v, priority=priority)
         else:
-            old[k] = v
+            if priority == 'new' or k not in old:
+                old[k] = v
+
     return old
 
 
@@ -196,13 +209,13 @@ def get(key, default=no_default, config=config):
     Examples
     --------
     >>> from dask import config
-    >>> config.get('foo')
+    >>> config.get('foo')  # doctest: +SKIP
     {'x': 1, 'y': 2}
 
-    >>> config.get('foo.x')
+    >>> config.get('foo.x')  # doctest: +SKIP
     1
 
-    >>> config.get('foo.x.y', default=123)
+    >>> config.get('foo.x.y', default=123)  # doctest: +SKIP
     123
     """
     keys = key.split('.')

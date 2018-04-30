@@ -3,8 +3,21 @@ import os
 
 import pytest
 
-from dask.config import merge, collect_yaml, collect_env, get
+from dask.config import update, merge, collect_yaml, collect_env, get
 from dask.utils import tmpfile
+
+
+def test_update():
+    a = {'x': 1, 'y': {'a': 1}}
+    b = {'x': 2, 'z': 3, 'y': {'b': 2}}
+    update(b, a)
+    assert b == {'x': 1, 'y': {'a': 1, 'b': 2}, 'z': 3}
+
+    a = {'x': 1, 'y': {'a': 1}}
+    b = {'x': 2, 'z': 3, 'y': {'a': 3, 'b': 2}}
+    update(b, a, priority='old')
+    assert b == {'x': 2, 'y': {'a': 3, 'b': 2}, 'z': 3}
+
 
 
 def test_merge():
