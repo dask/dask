@@ -133,15 +133,25 @@ def collect_env():
 
 def ensure_config_file(
         source,
-        destination=os.path.join(os.path.expanduser('~'), '.config', 'dask')):
+        destination=os.path.join(os.path.expanduser('~'), '.config', 'dask'),
+        comment=True):
     """ Copy file to default location if it does not already exist
 
-    This tries to move a default configuration files to a default location if
-    if does not already exist.
+    This tries to move a default configuration file to a default location if
+    if does not already exist.  It also comments out that file by default.
 
     This is to be used by downstream modules (like dask.distributed) that may
     have default configuration files that they wish to include in the default
     configuration path.
+
+    Parameters
+    ----------
+    source: string, filename
+        source configuration file, typically within a source directory
+    destination: string, filename
+        destination filename, typically ~/.config/dask
+    comment: bool, True by default
+        Whether or not to comment out the config file when copying
     """
     if not os.path.exists(destination):
         import shutil
@@ -151,7 +161,15 @@ def ensure_config_file(
         # a race condition where a process can be busy creating the
         # destination while another process reads an empty config file.
         tmp = '%s.tmp.%d' % (destination, os.getpid())
-        shutil.copy(source, tmp)
+        with open(source) as f:
+            if comment:
+                lines = ['#' + line if line else line for line in f]
+            else:
+                lines = list(f)
+
+        with open(tmp, 'w') as f:
+            f.write(os.linesep.join(lines))
+
         try:
             os.rename(tmp, destination)
         except OSError:

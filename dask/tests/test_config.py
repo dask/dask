@@ -3,7 +3,8 @@ import os
 
 import pytest
 
-from dask.config import update, merge, collect_yaml, collect_env, get
+from dask.config import (update, merge, collect_yaml, collect_env, get,
+        ensure_config_file)
 from dask.utils import tmpfile
 
 
@@ -82,3 +83,42 @@ def test_get():
     assert get('y.b', 123, config=d) == 123
     with pytest.raises(KeyError):
         get('y.b', config=d)
+
+
+def test_ensure_config_file():
+    a = {'x': 1, 'y': {'a': 1}}
+    b = {'x': 123}
+
+    with tmpfile(extension='yaml') as source:
+        with tmpfile(extension='yaml') as destination:
+            with open(source, 'w') as f:
+                yaml.dump(a, f)
+
+            ensure_config_file(source=source, destination=destination, comment=False)
+
+            with open(destination) as f:
+                result = yaml.load(f)
+
+            assert result == a
+
+            # don't overwrite old config files
+            with open(source, 'w') as f:
+                yaml.dump(b, f)
+            ensure_config_file(source=source, destination=destination, comment=False)
+            with open(destination) as f:
+                result = yaml.load(f)
+
+            assert result == a
+
+            os.remove(destination)
+
+            # Write again, now with comments
+            ensure_config_file(source=source, destination=destination, comment=True)
+            with open(destination) as f:
+                text = f.read()
+            assert '123' in text
+
+            with open(destination) as f:
+                result = yaml.load(f)
+
+            assert not result
