@@ -185,3 +185,20 @@ def test_secede_with_no_processes(loop, joblib):
     with Client(loop=loop, processes=False, set_as_default=True):
         with joblib.parallel_backend('dask'):
             joblib.Parallel(n_jobs=4)(joblib.delayed(f)(i) for i in range(2))
+
+
+def _test_keywords_f(_):
+    from distributed import get_worker
+    return get_worker().address
+
+
+def test_keywords(loop, joblib):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as client:
+            with joblib.parallel_backend('dask', workers=a['address']) as (ba, _):
+                seq = joblib.Parallel()(joblib.delayed(_test_keywords_f)(i) for i in range(10))
+                assert seq == [a['address']] * 10
+
+            with joblib.parallel_backend('dask', workers=b['address']) as (ba, _):
+                seq = joblib.Parallel()(joblib.delayed(_test_keywords_f)(i) for i in range(10))
+                assert seq == [b['address']] * 10

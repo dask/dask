@@ -73,7 +73,7 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
     MAX_IDEAL_BATCH_DURATION = 1.0
 
     def __init__(self, scheduler_host=None, scatter=None,
-                 client=None, loop=None):
+                 client=None, loop=None, **submit_kwargs):
         if client is None:
             if scheduler_host:
                 client = Client(scheduler_host, loop=loop, set_as_default=False)
@@ -104,6 +104,7 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
             self._scatter = []
             self.data_to_future = {}
         self.futures = set()
+        self.submit_kwargs = submit_kwargs
 
     def __reduce__(self):
         return (DaskDistributedBackend, ())
@@ -148,7 +149,7 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
         key = '%s-batch-%s' % (joblib_funcname(func), uuid4().hex)
         func, args = self._to_func_args(func)
 
-        future = self.client.submit(func, *args, key=key)
+        future = self.client.submit(func, *args, key=key, **self.submit_kwargs)
         self.futures.add(future)
 
         @gen.coroutine
