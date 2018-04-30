@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import ast
 from contextlib import contextmanager
+import copy
 import os
 import sys
 
@@ -232,10 +233,7 @@ def set_config(arg=None, config=config, **kwargs):
     if arg and not kwargs:
         kwargs = arg
 
-    old = {}
-    for key in kwargs:
-        if key in config:
-            old[key] = get(key)
+    old = copy.deepcopy(config)
 
     def assign(keys, value, d):
         key = keys[0]
@@ -252,8 +250,5 @@ def set_config(arg=None, config=config, **kwargs):
     try:
         yield
     finally:
-        for key in kwargs:
-            if key in old:
-                assign(key.split('.'), old[key], config)
-            else:
-                del config[key]
+        config.clear()
+        config.update(old)
