@@ -154,18 +154,23 @@ def ensure_config_file(
     comment: bool, True by default
         Whether or not to comment out the config file when copying
     """
+    if not os.path.exists(os.path.dirname(destination)):
+        os.makedirs(os.path.dirname(destination), exists_ok=True)
+
+    if os.path.isdir(destination):
+        _, filename = os.path.split(source)
+        destination = os.path.join(destination, filename)
+
     if not os.path.exists(destination):
-        if not os.path.exists(os.path.dirname(destination)):
-            os.makedirs(os.path.dirname(destination), exists_ok=True)
         # Atomically create destination.  Parallel testing discovered
         # a race condition where a process can be busy creating the
         # destination while another process reads an empty config file.
         tmp = '%s.tmp.%d' % (destination, os.getpid())
         with open(source) as f:
-            if comment:
-                lines = ['#' + line if line else line for line in f]
-            else:
-                lines = list(f)
+            lines = list(f)
+
+        if comment:
+            lines = ['#' + line if line else line for line in lines]
 
         with open(tmp, 'w') as f:
             f.write(os.linesep.join(lines))

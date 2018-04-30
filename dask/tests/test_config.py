@@ -137,3 +137,17 @@ def test_set_config():
 
     with set_config({'abc.x': 1, 'abc.y': 2, 'abc.z.a': 3}):
         assert config['abc'] == {'x': 1, 'y': 2, 'z': {'a': 3}}
+
+
+def test_ensure_config_file_directory():
+    a = {'x': 1, 'y': {'a': 1}}
+    with tmpfile(extension='yaml') as source:
+        with tmpfile() as destination:
+            os.mkdir(destination)
+            with open(source, 'w') as f:
+                yaml.dump(a, f)
+
+            ensure_config_file(source=source, destination=destination)
+            assert os.path.isdir(destination)
+            [fn] = os.listdir(destination)
+            assert os.path.split(fn)[1] == os.path.split(source)[1]
