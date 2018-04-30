@@ -625,6 +625,7 @@ class BokehWorker(BokehServer):
         prefix = prefix.rstrip('/')
         if prefix and not prefix.startswith('/'):
             prefix = '/' + prefix
+        self.prefix = prefix
 
         extra = {'prefix': prefix}
 

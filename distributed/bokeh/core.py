@@ -1,9 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
 from distutils.version import LooseVersion
+import os
 
 import bokeh
 from bokeh.server.server import Server
+from tornado import web
+
 
 if LooseVersion(bokeh.__version__) < LooseVersion('0.12.6'):
     raise ImportError("Dask needs bokeh >= 0.12.6")
@@ -28,6 +31,13 @@ class BokehServer(object):
                                      allow_websocket_origin=["*"],
                                      **self.server_kwargs)
                 self.server.start()
+
+                handlers = [(self.prefix + r'/statics/(.*)',
+                             web.StaticFileHandler,
+                             {'path': os.path.join(os.path.dirname(__file__), 'static')})]
+
+                self.server._tornado.add_handlers(r'.*', handlers)
+
                 return
             except (SystemExit, EnvironmentError):
                 port = 0

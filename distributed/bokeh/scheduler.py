@@ -1215,4 +1215,5 @@ class BokehScheduler(BokehServer):
         from .scheduler_html import routes
         handlers = [(self.prefix + '/' + url, cls, {'server': self.my_server, 'extra': self.extra})
                     for url, cls in routes]
+
         self.server._tornado.add_handlers(r'.*', handlers)
