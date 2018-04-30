@@ -154,7 +154,6 @@ def ensure_config_file(
         Whether or not to comment out the config file when copying
     """
     if not os.path.exists(destination):
-        import shutil
         if not os.path.exists(os.path.dirname(destination)):
             os.makedirs(os.path.dirname(destination), exists_ok=True)
         # Atomically create destination.  Parallel testing discovered
@@ -174,36 +173,6 @@ def ensure_config_file(
             os.rename(tmp, destination)
         except OSError:
             os.remove(tmp)
-
-
-@contextmanager
-def set_config(arg=None, **kwargs):
-    """ Temporarily set configuration values within a context manager
-
-    Examples
-    --------
-    >>> with set_config({'foo': 123}):
-    ...     pass
-    """
-    if arg and not kwargs:
-        kwargs = arg
-
-    old = {}
-    for key in kwargs:
-        if key in config:
-            old[key] = config[key]
-
-    for key, value in kwargs.items():
-        config[key] = value
-
-    try:
-        yield
-    finally:
-        for key in kwargs:
-            if key in old:
-                config[key] = old[key]
-            else:
-                del config[key]
 
 
 configs = []
@@ -249,3 +218,42 @@ def get(key, default=no_default, config=config):
             else:
                 raise
     return result
+
+
+@contextmanager
+def set_config(arg=None, config=config, **kwargs):
+    """ Temporarily set configuration values within a context manager
+
+    Examples
+    --------
+    >>> with set_config({'foo': 123}):
+    ...     pass
+    """
+    if arg and not kwargs:
+        kwargs = arg
+
+    old = {}
+    for key in kwargs:
+        if key in config:
+            old[key] = get(key)
+
+    def assign(keys, value, d):
+        key = keys[0]
+        if len(keys) == 1:
+            d[keys[0]] = value
+        else:
+            if key not in d:
+                d[key] = {}
+            assign(keys[1:], value, d[key])
+
+    for key, value in kwargs.items():
+        assign(key.split('.'), value, config)
+
+    try:
+        yield
+    finally:
+        for key in kwargs:
+            if key in old:
+                assign(key.split('.'), old[key], config)
+            else:
+                del config[key]

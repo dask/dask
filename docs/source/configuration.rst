@@ -6,10 +6,15 @@ This might be to control logging, specify cluster configuration, provide
 credentials for security, or any of several other options that arise in
 production.
 
-Configuration is usually specified either with YAML files in specific
-directories, like ``~/.config/dask/*.yaml``, or with environment variables like
-``DASK_WORK_STEALING=true``.  This combination makes it easy to specify
-configuration in a variety of settings.
+Configuration is specified in one of the following ways:
+
+1.  YAML files in ``~/.config/dask/`` or ``/etc/dask/``
+2.  Environment variables like ``DASK_WORK_STEALING=True``
+3.  Default settings within sub-libraries
+
+This combination makes it easy to specify configuration in a variety of
+settings ranging from personal workstations, to IT-mandated configuration, to
+docker images.
 
 
 Access Configuration
@@ -21,12 +26,12 @@ Access Configuration
    get
 
 Configuration is usually read by using the ``dask.config`` module, either with
-the ``config`` dictionary or the ``get`` function
+the ``config`` dictionary or the ``get`` function:
 
 .. code-block:: python
 
-   >>> from dask import config
-   >>> config.config
+   >>> import dask
+   >>> dask.config.config
    {
     'logging': {
       'distributed': 'info',
@@ -37,7 +42,10 @@ the ``config`` dictionary or the ``get`` function
     'log-format': '%(name)s - %(levelname)s - %(message)s'
    }
 
-   >>> config.get('logging.bokeh')
+   >>> dask.config.get('work-stealing')
+   True
+
+   >>> dask.config.get('logging.bokeh')  # use `.` for nested access
    'critical'
 
 You may wish to inspect the ``dask.config.config`` dictionary to get a sense
@@ -50,8 +58,7 @@ Specify with YAML files
 Dask checks the following locations for configuration files:
 
 1.  ``~/.config/dask``
-2.  ``~/.dask/`` (deprecated)
-3.  the ``/etc/dask`` directory local to the Python executable
+3.  the ``{sys.executable}/etc/dask`` directory local to the Python executable
 4.  The root ``/etc/dask/`` directory
 
 Within each of these directories it collects *all* YAML files and merges them
@@ -63,6 +70,9 @@ list above.
 The contents of these YAML files are merged together, allowing different
 dask subprojects like ``dask-kubernetes`` or ``dask-ml`` to manage configuration
 files separately, but have them merge into the same global configuration.
+
+*Note: for historical reasons we also look in the ``~/.dask`` directory for
+config files.  This is deprecated and will soon be removed.*
 
 
 Specify with Environment Variables
@@ -82,8 +92,10 @@ resulting in configuration values like the following:
    {'foo-bar': True}
 
 Dask searches for all environment variables that start with ``DASK_``, then
-transforms them by converting to lower case and changing underscores to
-hyphens.  Dask also parses numeric and boolean values if possible.
+transforms keys by converting to lower case and changing underscores to
+hyphens.  Dask tries to parse all values with ``ast.literal_eval``, letting
+users pass numeric and boolean values (such as ``True`` in the example above)
+as well as lists, dictionaries, and so on with normal Python syntax.
 
 Environment variables take precedence over configuration values found in YAML
 files.
@@ -100,6 +112,11 @@ Configuration is stored within a normal Python dictionary in
 
 Additionally, you can temporarily set a configuration value using the
 ``set_config`` context manager.
+
+.. code-block:: python
+
+   with dask.config.set_config({'work-stealing': False}):
+       ...
 
 API
 ---

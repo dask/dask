@@ -4,7 +4,7 @@ import os
 import pytest
 
 from dask.config import (update, merge, collect_yaml, collect_env, get,
-        ensure_config_file)
+                         ensure_config_file, set_config, config)
 from dask.utils import tmpfile
 
 
@@ -18,7 +18,6 @@ def test_update():
     b = {'x': 2, 'z': 3, 'y': {'a': 3, 'b': 2}}
     update(b, a, priority='old')
     assert b == {'x': 2, 'y': {'a': 3, 'b': 2}, 'z': 3}
-
 
 
 def test_merge():
@@ -122,3 +121,19 @@ def test_ensure_config_file():
                 result = yaml.load(f)
 
             assert not result
+
+
+def test_set_config():
+    with set_config(abc=123):
+        assert config['abc'] == 123
+        with set_config(abc=456):
+            assert config['abc'] == 456
+        assert config['abc'] == 123
+
+    assert 'abc' not in config
+
+    with set_config({'abc': 123}):
+        assert config['abc'] == 123
+
+    with set_config({'abc.x': 1, 'abc.y': 2, 'abc.z.a': 3}):
+        assert config['abc'] == {'x': 1, 'y': 2, 'z': {'a': 3}}
