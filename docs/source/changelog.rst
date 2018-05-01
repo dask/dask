@@ -34,6 +34,7 @@ DataFrame
 - Provide more informative error message for meta= errors (:pr:`3343`) `Matthew Rocklin`_
 - add orc reader (:pr:`3284`) `Martin Durant`_
 - Default compression for parquet now always Snappy, in line with pandas (:pr:`3373`) `Martin Durant`_
+- Fixed bug in Dask DataFrame and Series comparisons with NumPy scalars (:pr:`3436`) `James Bourbeau`_
 - Remove outdated requirement from repartition docstring (:pr:`3440`) `Jörg Dietrich`_
 - Fixed bug in aggregation when only a Series is selected (:pr:`3446`) `Jörg Dietrich`_
 - Add default values to make_timeseries (:pr:`3421`) `Matthew Rocklin`_
