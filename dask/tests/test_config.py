@@ -142,6 +142,10 @@ def test_set():
     with set({'abc.x': 1, 'abc.y': 2, 'abc.z.a': 3}):
         assert config['abc'] == {'x': 1, 'y': 2, 'z': {'a': 3}}
 
+    d = {}
+    set({'abc.x': 123}, config=d)
+    assert d['abc']['x'] == 123
+
 
 @pytest.mark.parametrize('mkdir', [True, False])
 def test_ensure_config_file_directory(mkdir):

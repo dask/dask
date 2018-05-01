@@ -230,8 +230,7 @@ def get(key, default=no_default, config=config):
     return result
 
 
-@contextmanager
-def set(arg=None, config=config, **kwargs):
+class set(object):
     """ Temporarily set configuration values within a context manager
 
     Examples
@@ -240,25 +239,28 @@ def set(arg=None, config=config, **kwargs):
     >>> with dask.config.set({'foo': 123}):
     ...     pass
     """
-    if arg and not kwargs:
-        kwargs = arg
+    def __init__(self, arg=None, config=config, **kwargs):
+        if arg and not kwargs:
+            kwargs = arg
 
-    old = copy.deepcopy(config)
+        self.config = config
+        self.old = copy.deepcopy(config)
 
-    def assign(keys, value, d):
-        key = keys[0]
-        if len(keys) == 1:
-            d[keys[0]] = value
-        else:
-            if key not in d:
-                d[key] = {}
-            assign(keys[1:], value, d[key])
+        def assign(keys, value, d):
+            key = keys[0]
+            if len(keys) == 1:
+                d[keys[0]] = value
+            else:
+                if key not in d:
+                    d[key] = {}
+                assign(keys[1:], value, d[key])
 
-    for key, value in kwargs.items():
-        assign(key.split('.'), value, config)
+        for key, value in kwargs.items():
+            assign(key.split('.'), value, config)
 
-    try:
-        yield
-    finally:
-        config.clear()
-        config.update(old)
+    def __enter__(self):
+        return config
+
+    def __exit__(self, type, value, traceback):
+        self.config.clear()
+        self.config.update(self.old)
