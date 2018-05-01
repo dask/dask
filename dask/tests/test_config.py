@@ -143,11 +143,13 @@ def test_set_config():
         assert config['abc'] == {'x': 1, 'y': 2, 'z': {'a': 3}}
 
 
-def test_ensure_config_file_directory():
+@pytest.mark.parametrize('mkdir', [True, False])
+def test_ensure_config_file_directory(mkdir):
     a = {'x': 1, 'y': {'a': 1}}
     with tmpfile(extension='yaml') as source:
         with tmpfile() as destination:
-            os.mkdir(destination)
+            if mkdir:
+                os.mkdir(destination)
             with open(source, 'w') as f:
                 yaml.dump(a, f)
 

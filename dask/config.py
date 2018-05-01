@@ -136,7 +136,8 @@ def ensure_config_file(
         source,
         destination=os.path.join(os.path.expanduser('~'), '.config', 'dask'),
         comment=True):
-    """ Copy file to default location if it does not already exist
+    """
+    Copy file to default location if it does not already exist
 
     This tries to move a default configuration file to a default location if
     if does not already exist.  It also comments out that file by default.
@@ -154,12 +155,12 @@ def ensure_config_file(
     comment: bool, True by default
         Whether or not to comment out the config file when copying
     """
-    if not os.path.exists(os.path.dirname(destination)):
-        os.makedirs(os.path.dirname(destination), exists_ok=True)
-
-    if os.path.isdir(destination):
+    if not os.path.splitext(destination)[1].strip('.'):
         _, filename = os.path.split(source)
         destination = os.path.join(destination, filename)
+
+    if not os.path.exists(os.path.dirname(destination)):
+        os.makedirs(os.path.dirname(destination))
 
     if not os.path.exists(destination):
         # Atomically create destination.  Parallel testing discovered
@@ -170,7 +171,10 @@ def ensure_config_file(
             lines = list(f)
 
         if comment:
-            lines = ['#' + line if line else line for line in lines]
+            lines = ['# ' + line
+                     if line.strip() and not line.startswith('#')
+                     else line
+                     for line in lines]
 
         with open(tmp, 'w') as f:
             f.write(''.join(lines))
