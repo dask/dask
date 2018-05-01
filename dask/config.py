@@ -231,12 +231,13 @@ def get(key, default=no_default, config=config):
 
 
 @contextmanager
-def set_config(arg=None, config=config, **kwargs):
+def set(arg=None, config=config, **kwargs):
     """ Temporarily set configuration values within a context manager
 
     Examples
     --------
-    >>> with set_config({'foo': 123}):
+    >>> import dask
+    >>> with dask.config.set({'foo': 123}):
     ...     pass
     """
     if arg and not kwargs:

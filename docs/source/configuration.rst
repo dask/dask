@@ -105,21 +105,21 @@ Specify within Python
 ---------------------
 
 .. autosummary::
-   set_config
+   set
 
 Configuration is stored within a normal Python dictionary in
 ``dask.config.config`` and can be modified using normal Python operations.
 
 Additionally, you can temporarily set a configuration value using the
-``set_config`` context manager.
+``dask.config.set`` context manager.
 
 .. code-block:: python
 
-   with dask.config.set_config({'work-stealing': False}):
+   with dask.config.set({'work-stealing': False}):
        ...
 
 API
 ---
 
 .. autofunction:: get
-.. autofunction:: set_config
+.. autofunction:: set

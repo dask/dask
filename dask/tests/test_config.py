@@ -4,7 +4,7 @@ import os
 import pytest
 
 from dask.config import (update, merge, collect_yaml, collect_env, get,
-                         ensure_config_file, set_config, config)
+                         ensure_config_file, set, config)
 from dask.utils import tmpfile
 
 
@@ -127,19 +127,19 @@ def test_ensure_config_file():
             assert not result
 
 
-def test_set_config():
-    with set_config(abc=123):
+def test_set():
+    with set(abc=123):
         assert config['abc'] == 123
-        with set_config(abc=456):
+        with set(abc=456):
             assert config['abc'] == 456
         assert config['abc'] == 123
 
     assert 'abc' not in config
 
-    with set_config({'abc': 123}):
+    with set({'abc': 123}):
         assert config['abc'] == 123
 
-    with set_config({'abc.x': 1, 'abc.y': 2, 'abc.z.a': 3}):
+    with set({'abc.x': 1, 'abc.y': 2, 'abc.z.a': 3}):
         assert config['abc'] == {'x': 1, 'y': 2, 'z': {'a': 3}}
 
 
