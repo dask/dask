@@ -98,6 +98,10 @@ def test_ensure_config_file():
             with open(destination) as f:
                 result = yaml.load(f)
 
+            with open(source) as src:
+                with open(destination) as dst:
+                    assert src.read() == dst.read()
+
             assert result == a
 
             # don't overwrite old config files

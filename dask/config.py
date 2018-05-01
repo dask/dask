@@ -173,7 +173,7 @@ def ensure_config_file(
             lines = ['#' + line if line else line for line in lines]
 
         with open(tmp, 'w') as f:
-            f.write(os.linesep.join(lines))
+            f.write(''.join(lines))
 
         try:
             os.rename(tmp, destination)
