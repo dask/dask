@@ -374,3 +374,18 @@ def test_ufunc_with_reduction(redfunc, ufunc, pandas):
     with pytest.warns(None):
         assert isinstance(np_redfunc(dask), (dd.DataFrame, dd.Series, dd.core.Scalar))
         assert_eq(np_redfunc(np_ufunc(dask)), np_redfunc(np_ufunc(pandas)))
+
+
+@pytest.mark.parametrize('pandas',
+                         [pd.Series(np.random.randint(1, 100, size=100)),
+                          pd.DataFrame({'A': np.random.randint(1, 100, size=20),
+                                        'B': np.random.randint(1, 100, size=20),
+                                        'C': np.abs(np.random.randn(20))})])
+@pytest.mark.parametrize('scalar', [15, 16.4, np.int64(15), np.float64(16.4)])
+def test_ufunc_numpy_scalar_comparison(pandas, scalar):
+    # Regression test for issue #3392
+
+    dask_compare = scalar >= dd.from_pandas(pandas, npartitions=3)
+    pandas_compare = scalar >= pandas
+
+    assert_eq(dask_compare, pandas_compare)

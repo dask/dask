@@ -344,8 +344,12 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get('out', ())
         for x in inputs + out:
-            if not isinstance(x, (Number, Scalar, _Frame, Array,
-                                  pd.DataFrame, pd.Series, pd.Index)):
+            # ufuncs work with 0-dimensional NumPy ndarrays
+            # so we don't want to raise NotImplemented
+            if isinstance(x, np.ndarray) and x.shape == ():
+                continue
+            elif not isinstance(x, (Number, Scalar, _Frame, Array,
+                                    pd.DataFrame, pd.Series, pd.Index)):
                 return NotImplemented
 
         if method == '__call__':
@@ -1751,7 +1755,10 @@ class Series(_Frame):
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
-            index = context[1][0].index
+            if isinstance(context[1][0], np.ndarray) and context[1][0].shape == ():
+                index = None
+            else:
+                index = context[1][0].index
 
         return pd.Series(array, index=index, name=self.name)
 
@@ -2311,7 +2318,10 @@ class DataFrame(_Frame):
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
-            index = context[1][0].index
+            if isinstance(context[1][0], np.ndarray) and context[1][0].shape == ():
+                index = None
+            else:
+                index = context[1][0].index
 
         return pd.DataFrame(array, index=index, columns=self.columns)
 
