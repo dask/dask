@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
 import ast
-from contextlib import contextmanager
 import copy
 import os
 import sys
@@ -264,3 +263,22 @@ class set(object):
     def __exit__(self, type, value, traceback):
         self.config.clear()
         self.config.update(self.old)
+
+
+def rename(aliases, config=config):
+    """ Rename old keys to new keys
+
+    This helps migrate older configuration versions over time
+    """
+    old = list()
+    new = dict()
+    for o, n in aliases.items():
+        value = get(o, None, config=config)
+        if value is not None:
+            old.append(o)
+            new[n] = value
+
+    for k in old:
+        del config[k]  # TODO: support nested keys
+
+    set(new, config=config)

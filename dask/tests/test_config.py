@@ -4,7 +4,7 @@ import os
 import pytest
 
 from dask.config import (update, merge, collect_yaml, collect_env, get,
-                         ensure_config_file, set, config)
+                         ensure_config_file, set, config, rename)
 from dask.utils import tmpfile
 
 
@@ -161,3 +161,10 @@ def test_ensure_config_file_directory(mkdir):
             assert os.path.isdir(destination)
             [fn] = os.listdir(destination)
             assert os.path.split(fn)[1] == os.path.split(source)[1]
+
+
+def test_rename():
+    aliases = {'foo-bar': 'foo.bar'}
+    config = {'foo-bar': 123}
+    rename(aliases, config=config)
+    assert config == {'foo': {'bar': 123}}
