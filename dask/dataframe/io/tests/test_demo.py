@@ -39,6 +39,13 @@ def test_make_timeseries():
     assert a._name != e._name
 
 
+def test_make_timeseries_no_args():
+    df = dd.demo.make_timeseries()
+    assert 1 < df.npartitions < 1000
+    assert len(df.columns) > 1
+    assert len(set(df.dtypes)) > 1
+
+
 def test_no_overlaps():
     df = dd.demo.make_timeseries('2000', '2001', {'A': float},
                                  freq='3H', partition_freq='3M')
