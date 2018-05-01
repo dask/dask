@@ -65,9 +65,6 @@ class Datasets(MutableMapping):
     def __delitem__(self, key):
         self.__client.unpublish_dataset(key)
 
-    def __contains__(self, key):
-        return key in self.__client.list_datasets()
-
     def __iter__(self):
         for key in self.__client.list_datasets():
             yield key
