@@ -2600,6 +2600,17 @@ def test_getitem_multilevel():
     assert_eq(pdf[[('A', '0'), ('B', '1')]], ddf[[('A', '0'), ('B', '1')]])
 
 
+def test_getitem_string_subclass():
+    df = pd.DataFrame({'column_1': list(range(10))})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    class string_subclass(str):
+        pass
+    column_1 = string_subclass('column_1')
+
+    assert_eq(df[column_1], ddf[column_1])
+
+
 def test_diff():
     df = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
     ddf = dd.from_pandas(df, 5)

@@ -8,6 +8,7 @@ from pprint import pformat
 import warnings
 
 from toolz import merge, first, unique, partition_all, remove
+import six
 import pandas as pd
 import numpy as np
 from numbers import Number
@@ -2338,7 +2339,7 @@ class DataFrame(_Frame):
 
     def __getitem__(self, key):
         name = 'getitem-%s' % tokenize(self, key)
-        if np.isscalar(key) or isinstance(key, tuple):
+        if np.isscalar(key) or isinstance(key, (tuple, six.string_types)):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
