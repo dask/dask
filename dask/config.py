@@ -33,8 +33,8 @@ def update(old, new, priority='new'):
         If new (default) then the new dictionary has preference.
         Otherwise the old dictionary does.
 
-    Example
-    -------
+    Examples
+    --------
     >>> a = {'x': 1, 'y': {'a': 2}}
     >>> b = {'x': 2, 'y': {'b': 3}}
     >>> update(a, b)  # doctest: +SKIP
@@ -47,7 +47,7 @@ def update(old, new, priority='new'):
 
     See Also
     --------
-    merge
+    dask.config.merge
     """
     for k, v in new.items():
         if k not in old and type(v) is dict:
@@ -67,8 +67,8 @@ def merge(*dicts):
 
     This prefers the values in the latter dictionaries to those in the former
 
-    Example
-    -------
+    Examples
+    --------
     >>> a = {'x': 1, 'y': {'a': 2}}
     >>> b = {'y': {'b': 3}}
     >>> merge(a, b)  # doctest: +SKIP
@@ -76,7 +76,7 @@ def merge(*dicts):
 
     See Also
     --------
-    update
+    dask.config.update
     """
     result = {}
     for d in dicts:
@@ -201,6 +201,10 @@ class set(object):
     >>> import dask
     >>> with dask.config.set({'foo': 123}):
     ...     pass
+
+    See Also
+    --------
+    dask.config.get
     """
     def __init__(self, arg=None, config=None, **kwargs):
         if config is None:
@@ -263,6 +267,10 @@ def get(key, default=no_default, config=config):
 
     >>> config.get('foo.x.y', default=123)  # doctest: +SKIP
     123
+
+    See Also
+    --------
+    dask.config.set
     """
     keys = key.split('.')
     result = config
