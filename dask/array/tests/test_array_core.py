@@ -32,7 +32,8 @@ from dask.array.core import (getem, getter, top, dotmany, concatenate3,
                              broadcast_to, blockdims_from_blockshape, store,
                              optimize, from_func, normalize_chunks,
                              broadcast_chunks, atop, from_delayed,
-                             concatenate_axes, common_blockdim)
+                             concatenate_axes, common_blockdim, to_zarr,
+                             from_zarr)
 from dask.array.utils import assert_eq, same_keys
 
 # temporary until numpy functions migrated
@@ -3232,3 +3233,13 @@ def test_meta(dtype):
     assert a._meta.dtype == a.dtype
     assert isinstance(a._meta, np.ndarray)
     assert a.nbytes < 1000
+
+
+def test_zarr_roundtrip():
+    pytest.importorskip('zarr')
+    with tmpdir() as d:
+        a = da.zeros((3, 3), chunks=(1, 1))
+        a.to_zarr(d)
+        a2 = da.from_zarr(d)
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
