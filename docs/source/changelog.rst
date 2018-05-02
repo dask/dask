@@ -13,7 +13,7 @@ Array
 Dataframe
 +++++++++
 
--
+- Add support for indexing Dask DataFrames with string subclasses (:pr:`3461`) `James Bourbeau`_
 
 Bag
 +++
