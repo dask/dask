@@ -1,6 +1,25 @@
 Changelog
 =========
 
+1.21.7 - 2018-05-02
+-------------------
+
+-  Newline needed for doctest rendering (:pr:`1917`) `Loïc Estève`_
+-  Support Client._repr_html_ when in async mode (:pr:`1909`) `Matthew Rocklin`_
+-  Add parameters to dask-ssh command (:pr:`1910`) `Irene Rodriguez`_
+-  Santize get_dataset trace (:pr:`1888`) `John Kirkham`_
+-  Fix bug where queues would not clean up cleanly (:pr:`1922`) `Matthew Rocklin`_
+-  Delete cached file safely in upload file (:pr:`1921`) `Matthew Rocklin`_
+-  Accept KeyError when closing tornado IOLoop in tests (:pr:`1937`) `Matthew Rocklin`_
+-  Quiet the client and scheduler when gather(..., errors='skip'`) (:pr:`1936`) `Matthew Rocklin`_
+-  Clarify couldn't gather keys warning (:pr:`1942`) `Kenneth Koski`_
+-  Support submit keywords in joblib (:pr:`1947`) `Matthew Rocklin`_
+-  Avoid use of external resources in bokeh server (:pr:`1934`) `Matthew Rocklin`_
+-  Drop `__contains__` from `Datasets` (:pr:`1889`) `John Kirkham`_
+-  Fix bug with queue timeouts (:pr:`1950`) `Matthew Rocklin`_
+-  Replace msgpack-python by msgpack (:pr:`1927`) `Loïc Estève`_
+
+
 1.21.6 - 2018-04-06
 -------------------
 
@@ -593,3 +612,6 @@ significantly without many new features.
 .. _`Sven Kreiss`:  https://github.com/svenkreiss
 .. _`Russ Bubley`: https://github.com/rbubley
 .. _`Joseph Atkins-Kurkish`: https://github.com/spacerat
+.. _`Irene Rodriguez`: https://github.com/irenerodriguez
+.. _`Loïc Estève`: https://github.com/lesteve
+.. _`Kenneth Koski`: https://github.com/knkski
