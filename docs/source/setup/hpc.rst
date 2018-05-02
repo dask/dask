@@ -36,7 +36,13 @@ They provide interfaces that look like the following:
 
    from dask_jobqueue import PBSCluster
 
-   cluster = PBSCluster(# TODO realistic example)
+   cluster = PBSCluster(processes=18,
+                        threads=4, memory="6GB",
+                        project='P48500028',
+                        queue='premium',
+                        resource_spec='select=1:ncpus=36:mem=109G',
+                        walltime='02:00:00')
+
    cluster.start_workers(100)  # Start 100 jobs that match the description above
 
    from dask.distributed import Client
