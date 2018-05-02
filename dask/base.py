@@ -107,7 +107,7 @@ class DaskMethodsMixin(object):
 
         Parameters
         ----------
-        scheduler: string, optional
+        scheduler : string, optional
             Which scheduler to use like "threads", "synchronous" or "processes".
             If not provided, the default is to check the global settings first,
             and then fall back to the collection defaults.
@@ -138,7 +138,7 @@ class DaskMethodsMixin(object):
 
         Parameters
         ----------
-        scheduler: string, optional
+        scheduler : string, optional
             Which scheduler to use like "threads", "synchronous" or "processes".
             If not provided, the default is to check the global settings first,
             and then fall back to the collection defaults.
@@ -358,7 +358,7 @@ def compute(*args, **kwargs):
         objects passed to ``compute``. For large collections this can be
         expensive. If none of the arguments contain any dask objects, set
         ``traverse=False`` to avoid doing this traversal.
-    scheduler: string, optional
+    scheduler : string, optional
         Which scheduler to use like "threads", "synchronous" or "processes".
         If not provided, the default is to check the global settings first,
         and then fall back to the collection defaults.
@@ -524,7 +524,7 @@ def persist(*args, **kwargs):
     Parameters
     ----------
     *args: Dask collections
-    scheduler: string, optional
+    scheduler : string, optional
         Which scheduler to use like "threads", "synchronous" or "processes".
         If not provided, the default is to check the global settings first,
         and then fall back to the collection defaults.
@@ -806,7 +806,7 @@ named_schedulers = {
     'synchronous': local.get_sync,
     'single-threaded': local.get_sync,
     'threads': threaded.get,
-    'threaded': threaded.get,
+    'threading': threaded.get,
 }
 
 try:
