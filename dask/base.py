@@ -9,6 +9,7 @@ import pickle
 import os
 import threading
 import uuid
+import warnings
 
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
@@ -824,6 +825,10 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     if get is not None:
         if scheduler is not None:
             raise ValueError("Both get= and scheduler= provided.  Choose one")
+        warnings.warn("The get= keyword has been deprecated. "
+                      "Please use the scheduler= keyword instead with the "
+                      "name of the desired scheduler "
+                      "like 'threads' or 'processes'")
         return get
 
     if scheduler is not None:

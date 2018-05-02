@@ -5,6 +5,8 @@ import pytest
 from operator import add, mul
 import subprocess
 import sys
+import warnings
+
 from toolz import merge
 
 import dask
@@ -846,3 +848,12 @@ def test_scheduler_keyword():
             x.compute(get=dask.threaded.get, scheduler='foo')
     finally:
         del named_schedulers['foo']
+
+
+def test_warn_get_keyword():
+    x = delayed(inc)(1)
+
+    with warnings.catch_warnings(record=True) as record:
+        x.compute(get=dask.get)
+
+    assert 'scheduler=' in str(record[0].message)
