@@ -58,20 +58,26 @@ def test_collect():
 
 
 def test_env():
-    os.environ['DASK_A_B'] = '123'
-    os.environ['DASK_C'] = 'True'
-    os.environ['DASK_D'] = 'hello'
-    try:
-        env = collect_env()
-        assert env == {
-            'a-b': 123,
-            'c': True,
-            'd': 'hello'
-        }
-    finally:
-        del os.environ['DASK_A_B']
-        del os.environ['DASK_C']
-        del os.environ['DASK_D']
+    env = {'DASK_A_B': '123',
+           'DASK_C': 'True',
+           'DASK_D': 'hello',
+           'DASK_E__X': '123',
+           'DASK_E__Y': '456',
+           'DASK_F': '[1, 2, "3"]',
+           'DASK_G': '/not/parsable/as/literal',
+           'FOO': 'not included',
+           }
+
+    expected = {
+        'a-b': 123,
+        'c': True,
+        'd': 'hello',
+        'e': {'x': 123, 'y': 456},
+        'f': [1, 2, "3"],
+        'g': '/not/parsable/as/literal',
+    }
+
+    assert collect_env(env) == expected
 
 
 def test_get():

@@ -113,22 +113,31 @@ def collect_yaml(paths=config_paths):
     return configs
 
 
-def collect_env():
+def collect_env(env=os.environ):
     """ Collect config from environment variables
 
-    This grabs environment variables of the form "DASK_FOO_BAR=123"
-    and turns these into config variables of the form ``{"foo-bar": 123}``
-    """
-    env = {}
-    for name, value in os.environ.items():
-        if name.startswith('DASK_'):
-            varname = name[5:].lower().replace('_', '-')
-            try:
-                env[varname] = ast.literal_eval(value)
-            except (SyntaxError, ValueError):
-                env[varname] = value
+    This grabs environment variables of the form "DASK_FOO__BAR_BAZ=123" and
+    turns these into config variables of the form ``{"foo": {"bar-baz": 123}}``
+    It transforms the key and value in the following way:
 
-    return env
+    -  Lower-cases the key text
+    -  Treats ``__`` (double-underscore) as nested access
+    -  Replaces ``_`` (underscore) with a hyphen.
+    -  Calls ``ast.literal_eval`` on the value
+    """
+    d = {}
+    for name, value in env.items():
+        if name.startswith('DASK_'):
+            varname = name[5:].lower().replace('__', '.').replace('_', '-')
+            try:
+                d[varname] = ast.literal_eval(value)
+            except (SyntaxError, ValueError):
+                d[varname] = value
+
+    result = {}
+    set(d, config=result)
+
+    return result
 
 
 def ensure_config_file(
@@ -184,6 +193,44 @@ def ensure_config_file(
             os.remove(tmp)
 
 
+class set(object):
+    """ Temporarily set configuration values within a context manager
+
+    Examples
+    --------
+    >>> import dask
+    >>> with dask.config.set({'foo': 123}):
+    ...     pass
+    """
+    def __init__(self, arg=None, config=None, **kwargs):
+        if config is None:
+            config = global_config
+        if arg and not kwargs:
+            kwargs = arg
+
+        self.config = config
+        self.old = copy.deepcopy(config)
+
+        def assign(keys, value, d):
+            key = keys[0]
+            if len(keys) == 1:
+                d[keys[0]] = value
+            else:
+                if key not in d:
+                    d[key] = {}
+                assign(keys[1:], value, d[key])
+
+        for key, value in kwargs.items():
+            assign(key.split('.'), value, config)
+
+    def __enter__(self):
+        return config
+
+    def __exit__(self, type, value, traceback):
+        self.config.clear()
+        self.config.update(self.old)
+
+
 configs = []
 
 try:
@@ -196,6 +243,7 @@ else:
 configs.append(collect_env())
 
 config = merge(*configs)
+global_config = config
 
 
 def get(key, default=no_default, config=config):
@@ -227,42 +275,6 @@ def get(key, default=no_default, config=config):
             else:
                 raise
     return result
-
-
-class set(object):
-    """ Temporarily set configuration values within a context manager
-
-    Examples
-    --------
-    >>> import dask
-    >>> with dask.config.set({'foo': 123}):
-    ...     pass
-    """
-    def __init__(self, arg=None, config=config, **kwargs):
-        if arg and not kwargs:
-            kwargs = arg
-
-        self.config = config
-        self.old = copy.deepcopy(config)
-
-        def assign(keys, value, d):
-            key = keys[0]
-            if len(keys) == 1:
-                d[keys[0]] = value
-            else:
-                if key not in d:
-                    d[key] = {}
-                assign(keys[1:], value, d[key])
-
-        for key, value in kwargs.items():
-            assign(key.split('.'), value, config)
-
-    def __enter__(self):
-        return config
-
-    def __exit__(self, type, value, traceback):
-        self.config.clear()
-        self.config.update(self.old)
 
 
 def rename(aliases, config=config):
