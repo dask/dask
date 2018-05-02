@@ -32,8 +32,7 @@ from dask.array.core import (getem, getter, top, dotmany, concatenate3,
                              broadcast_to, blockdims_from_blockshape, store,
                              optimize, from_func, normalize_chunks,
                              broadcast_chunks, atop, from_delayed,
-                             concatenate_axes, common_blockdim, to_zarr,
-                             from_zarr)
+                             concatenate_axes, common_blockdim)
 from dask.array.utils import assert_eq, same_keys
 
 # temporary until numpy functions migrated

@@ -326,7 +326,7 @@ def get_mapper(fs, path):
         return DirectoryStore(path)
     elif fs.protocol == 's3':
         from s3fs.mapping import S3Map
-        return S3Map(path, s3)
+        return S3Map(path, fs)
     elif fs.protocol in ['gcs', 'gs']:
         from gcsfs.mapping import GCSMap
         return GCSMap(path, fs)
