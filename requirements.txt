@@ -1,7 +1,7 @@
 click >= 6.6
 cloudpickle >= 0.2.2
 dask >= 0.17.0
-msgpack-python
+msgpack
 psutil
 six
 sortedcontainers
