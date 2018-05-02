@@ -254,3 +254,22 @@ def test_close(c, s, a, b):
 
     while q.name in s.extensions['queues'].queues:
         yield gen.sleep(0.01)
+
+
+@gen_cluster(client=True)
+def test_timeout(c, s, a, b):
+    q = Queue('v', maxsize=1)
+
+    start = time()
+    with pytest.raises(gen.TimeoutError):
+        yield q.get(timeout=0.1)
+    stop = time()
+    assert 0.1 < stop - start < 2.0
+
+    yield q.put(1)
+
+    start = time()
+    with pytest.raises(gen.TimeoutError):
+        yield q.put(2, timeout=0.1)
+    stop = time()
+    assert 0.1 < stop - start < 2.0

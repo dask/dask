@@ -10,6 +10,7 @@ from time import sleep
 from distributed import Client
 from distributed.utils_test import cluster, inc
 from distributed.utils_test import loop # noqa F401
+from toolz import identity
 
 distributed_joblib = pytest.importorskip('distributed.joblib')
 joblib_funcname = distributed_joblib.joblib_funcname
@@ -179,12 +180,9 @@ def test_errors(loop, joblib):
 def test_secede_with_no_processes(loop, joblib):
     # https://github.com/dask/distributed/issues/1775
 
-    def f(x):
-        return x
-
     with Client(loop=loop, processes=False, set_as_default=True):
         with joblib.parallel_backend('dask'):
-            joblib.Parallel(n_jobs=4)(joblib.delayed(f)(i) for i in range(2))
+            joblib.Parallel(n_jobs=4)(joblib.delayed(identity)(i) for i in range(2))
 
 
 def _test_keywords_f(_):
