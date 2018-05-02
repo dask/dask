@@ -66,7 +66,7 @@ It is common to specify configuration in YAML files any of a few possible
 locations:
 
 1.  The ``~/.config/dask`` directory in the user's home directory
-2.  The ``{sys.executable}/etc/dask`` directory local to the Python executable
+2.  The ``{sys.prefix}/etc/dask`` directory local to Python
 3.  The root ``/etc/dask/`` directory
 
 Dask searches for *all* YAML files within each of these directories and merges
