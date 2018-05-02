@@ -1,0 +1,15 @@
+bcolz
+h5py
+matplotlib
+moto
+pandas_datareader
+partd
+pytest
+requests
+s3fs
+six
+sklearn
+snappy
+sparse
+sqlalchemy
+tornado
