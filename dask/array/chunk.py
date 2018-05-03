@@ -61,15 +61,14 @@ nanargmax = keepdims_wrapper(np.nanargmax)
 any = keepdims_wrapper(np.any)
 all = keepdims_wrapper(np.all)
 nansum = keepdims_wrapper(np.nansum)
+nanprod = keepdims_wrapper(np.nanprod)
 
 try:
-    from numpy import nanprod, nancumprod, nancumsum
+    from numpy import nancumprod, nancumsum
 except ImportError:  # pragma: no cover
-    nanprod = npcompat.nanprod
     nancumprod = npcompat.nancumprod
     nancumsum = npcompat.nancumsum
 
-nanprod = keepdims_wrapper(nanprod)
 nancumprod = keepdims_wrapper(nancumprod)
 nancumsum = keepdims_wrapper(nancumsum)
 
@@ -176,16 +175,48 @@ except ImportError:  # pragma: no cover
     broadcast_to = npcompat.broadcast_to
 
 
-def topk(k, x):
-    """ Top k elements of an array
-
-    >>> topk(2, np.array([5, 1, 3, 6]))
-    array([6, 5])
+def topk(a, k, axis, keepdims):
+    """Kernel of topk and argtopk.
+    Extract the k largest elements from a on the given axis.
+    If k is negative, extract the -k smallest elements instead.
+    Note that, unlike in the parent function, the returned elements
+    are not sorted internally.
     """
-    # http://stackoverflow.com/a/23734295/616616 by larsmans
-    k = np.minimum(k, len(x))
-    ind = np.argpartition(x, -k)[-k:]
-    return np.sort(x[ind])[::-1]
+    axis = axis[0]
+    if abs(k) >= a.shape[axis]:
+        return a
+    a = np.partition(a, -k, axis=axis)
+    # return a[-k:] if k>0 else a[:-k], on arbitrary axis
+    return a[[
+        (slice(-k, None) if k > 0 else slice(None, -k))
+        if i == axis else slice(None)
+        for i in range(a.ndim)
+    ]]
+
+
+def topk_postprocess(a, k, axis):
+    """Kernel of topk and argtopk.
+    Post-processes the output of topk, sorting the results internally.
+    """
+    a = np.sort(a, axis=axis)
+    if k > 0:
+        # a = a[::-1] on arbitrary axis
+        a = a[[
+            slice(None, None, -1) if i == axis else slice(None)
+            for i in range(a.ndim)
+        ]]
+    return a
+
+
+def argtopk_preprocess(a, idx):
+    """Kernel of argtopk.
+    Preprocess data, by putting it together with its indexes in a recarray
+    """
+    # np.core.records.fromarrays won't work if a and idx don't have the same shape
+    res = np.recarray(a.shape, dtype=[('values', a.dtype), ('idx', idx.dtype)])
+    res.values = a
+    res.idx = idx
+    return res
 
 
 def arange(start, stop, step, length, dtype):

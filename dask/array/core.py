@@ -32,8 +32,8 @@ import numpy as np
 from . import chunk
 from .numpy_compat import _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
-from ..base import (Base, tokenize, dont_optimize, compute_as_if_collection,
-                    persist, is_dask_collection)
+from ..base import (DaskMethodsMixin, tokenize, dont_optimize,
+                    compute_as_if_collection, persist, is_dask_collection)
 from ..context import _globals, globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
@@ -799,7 +799,9 @@ def broadcast_chunks(*chunkss):
         ...
     ValueError: Chunks do not align: [(10, 10, 10), (3, 3)]
     """
-    if len(chunkss) == 1:
+    if not chunkss:
+        return ()
+    elif len(chunkss) == 1:
         return chunkss[0]
     n = max(map(len, chunkss))
     chunkss2 = [((1,),) * (n - len(c)) + c for c in chunkss]
@@ -891,6 +893,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         sources_dsk,
         list(core.flatten([e.__dask_keys__() for e in sources]))
     )
+    sources2 = [Array(sources_dsk, e.name, e.chunks, e.dtype) for e in sources]
 
     # Optimize all targets together
     targets2 = []
@@ -902,7 +905,9 @@ def store(sources, targets, lock=True, regions=None, compute=True,
             targets_keys.extend(e.__dask_keys__())
             targets_dsk.append(e.__dask_graph__())
         elif is_dask_collection(e):
-            raise TypeError("Targets must be either Delayed objects or array-likes")
+            raise TypeError(
+                "Targets must be either Delayed objects or array-likes"
+            )
         else:
             targets2.append(e)
 
@@ -910,28 +915,19 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
 
     load_stored = (return_stored and not compute)
+    store_dsk = sharedict.merge(*[
+        insert_to_ooc(s, t, lock, r, return_stored, load_stored)
+        for s, t, r in zip(sources2, targets2, regions)
+    ])
+    store_keys = list(store_dsk.keys())
 
-    store_keys = []
-    store_dsk = []
-    for tgt, src, reg in zip(targets2, sources, regions):
-        src = Array(sources_dsk, src.name, src.chunks, src.dtype)
-
-        each_store_dsk = insert_to_ooc(
-            src, tgt, lock=lock, region=reg,
-            return_stored=return_stored, load_stored=load_stored
-        )
-
-        store_keys.extend(each_store_dsk.keys())
-        store_dsk.append(each_store_dsk)
-
-    store_dsk = sharedict.merge(*store_dsk)
     store_dsk = sharedict.merge(store_dsk, targets_dsk, sources_dsk)
 
     if return_stored:
         load_store_dsk = store_dsk
         if compute:
             store_dlyds = [Delayed(k, store_dsk) for k in store_keys]
-            store_dlyds = persist(*store_dlyds)
+            store_dlyds = persist(*store_dlyds, **kwargs)
             store_dsk_2 = sharedict.merge(*[e.dask for e in store_dlyds])
 
             load_store_dsk = retrieve_from_ooc(
@@ -950,7 +946,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         result = Delayed(name, dsk)
 
         if compute:
-            result.compute()
+            result.compute(**kwargs)
             return None
         else:
             return result
@@ -1003,7 +999,7 @@ See the following documentation page for details:
 """.strip()
 
 
-class Array(Base):
+class Array(DaskMethodsMixin):
     """ Parallel Dask Array
 
     A parallel nd-array comprised of many numpy arrays arranged in a grid.
@@ -1101,6 +1097,10 @@ class Array(Base):
     @property
     def shape(self):
         return tuple(map(sum, self.chunks))
+
+    @property
+    def _meta(self):
+        return np.empty(shape=(), dtype=self.dtype)
 
     def _get_chunks(self):
         return self._chunks
@@ -1202,7 +1202,12 @@ class Array(Base):
 
     @wraps(store)
     def store(self, target, **kwargs):
-        return store([self], [target], **kwargs)
+        r = store([self], [target], **kwargs)
+
+        if kwargs.get("return_stored", False):
+            r = r[0]
+
+        return r
 
     def to_hdf5(self, filename, datapath, **kwargs):
         """ Store array in HDF5 file
@@ -1396,12 +1401,19 @@ class Array(Base):
             shape = shape[0]
         return reshape(self, shape)
 
-    def topk(self, k):
+    def topk(self, k, axis=-1, split_every=None):
         """The top k elements of an array.
 
         See ``da.topk`` for docstring"""
-        from .routines import topk
-        return topk(k, self)
+        from .reductions import topk
+        return topk(self, k, axis=axis, split_every=split_every)
+
+    def argtopk(self, k, axis=-1, split_every=None):
+        """The indices of the top k elements of an array.
+
+        See ``da.argtopk`` for docstring"""
+        from .reductions import argtopk
+        return argtopk(self, k, axis=axis, split_every=split_every)
 
     def astype(self, dtype, **kwargs):
         """Copy of the array, cast to a specified type.
@@ -1688,25 +1700,24 @@ class Array(Base):
 
         Parameters
         ----------
-
         func: function
             The function to apply to each extended block
         depth: int, tuple, or dict
-            The number of cells that each block should share with its neighbors
-            If a tuple or dict this can be different per axis
+            The number of elements that each block should share with its neighbors
+            If a tuple or dict then this can be different per axis
         boundary: str, tuple, dict
-            how to handle the boundaries.  Values include 'reflect',
-            'periodic', 'nearest', 'none', or any constant value like 0 or
-            np.nan
+            How to handle the boundaries.
+            Values include 'reflect', 'periodic', 'nearest', 'none',
+            or any constant value like 0 or np.nan
         trim: bool
-            Whether or not to trim the excess after the map function.  Set this
-            to false if your mapping function does this for you.
+            Whether or not to trim ``depth`` elements from each block after
+            calling the map function.
+            Set this to False if your mapping function already does this for you
         **kwargs:
             Other keyword arguments valid in ``map_blocks``
 
         Examples
         --------
-
         >>> x = np.array([1, 1, 2, 3, 3, 3, 2, 1, 1])
         >>> x = from_array(x, chunks=5)
         >>> def derivative(x):
@@ -1748,9 +1759,9 @@ class Array(Base):
         return cumprod(self, axis, dtype, out=out)
 
     @derived_from(np.ndarray)
-    def squeeze(self):
+    def squeeze(self, axis=None):
         from .routines import squeeze
-        return squeeze(self)
+        return squeeze(self, axis)
 
     def rechunk(self, chunks, threshold=None, block_size_limit=None):
         """ See da.rechunk for docstring """
@@ -1945,10 +1956,10 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     x : array_like
     chunks : int, tuple
         How to chunk the array. Must be one of the following forms:
-        - A blocksize like 1000.
-        - A blockshape like (1000, 1000).
-        - Explicit sizes of all blocks along all dimensions
-          like ((1000, 1000, 500), (400, 400)).
+        -   A blocksize like 1000.
+        -   A blockshape like (1000, 1000).
+        -   Explicit sizes of all blocks along all dimensions like
+            ((1000, 1000, 500), (400, 400)).
 
         -1 as a blocksize indicates the size of the corresponding dimension.
     name : str, optional
@@ -2301,6 +2312,11 @@ def atop(func, out_ind, *args, **kwargs):
         chunkss[k] = (v,)
     arginds = list(zip(arrays, args[1::2]))
 
+    for arg, ind in arginds:
+        if hasattr(arg, 'ndim') and hasattr(ind, '__len__') and arg.ndim != len(ind):
+            raise ValueError("Index string %s does not match array dimension %d"
+                             % (ind, arg.ndim))
+
     numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
     argindsstr = list(concat([(a if ind is None else a.name, ind) for a, ind in arginds]))
     # Finish up the name
@@ -2349,8 +2365,8 @@ def block(arrays, allow_unknown_chunksizes=False):
     """
     Assemble an nd-array from nested lists of blocks.
 
-    Blocks in the innermost lists are `concatenate`d along the last
-    dimension (-1), then these are `concatenate`d along the second-last
+    Blocks in the innermost lists are concatenated along the last
+    dimension (-1), then these are concatenated along the second-last
     dimension (-2), and so on until the outermost list is reached
 
     Blocks can be of any dimension, but will not be broadcasted using the normal
@@ -2605,8 +2621,12 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
     cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq]))
 
-    dt = reduce(np.promote_types, [a.dtype for a in seq])
-    seq = [x.astype(dt) for x in seq]
+    seq_dtypes = [a.dtype for a in seq]
+    if len(set(seq_dtypes)) > 1:
+        dt = reduce(np.promote_types, seq_dtypes)
+        seq = [x.astype(dt) for x in seq]
+    else:
+        dt = seq_dtypes[0]
 
     names = [a.name for a in seq]
 
@@ -2721,9 +2741,9 @@ def insert_to_ooc(arr, out, lock=True, region=None,
     func = store_chunk
     args = ()
     if return_stored and load_stored:
-        name = 'load-store-%s' % arr.name
+        name = 'load-%s' % name
         func = load_store_chunk
-        args = (load_stored,)
+        args = args + (load_stored,)
 
     dsk = {
         (name,) + t[1:]: (func, t, out, slc, lock, return_stored) + args
@@ -2885,7 +2905,7 @@ def broadcast_shapes(*shapes):
         return shapes[0]
     out = []
     for sizes in zip_longest(*map(reversed, shapes), fillvalue=-1):
-        dim = 0 if 0 in sizes else max(sizes)
+        dim = 0 if 0 in sizes else np.max(sizes)
         if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
             raise ValueError("operands could not be broadcast together with "
                              "shapes {0}".format(' '.join(map(str, shapes))))
@@ -2934,7 +2954,10 @@ def elemwise(op, *args, **kwargs):
         vals = [np.empty((1,) * max(1, a.ndim), dtype=a.dtype)
                 if not is_scalar_for_elemwise(a) else a
                 for a in args]
-        dt = apply_infer_dtype(op, vals, {}, 'elemwise', suggest_dtype=False)
+        try:
+            dt = apply_infer_dtype(op, vals, {}, 'elemwise', suggest_dtype=False)
+        except Exception:
+            return NotImplemented
         need_enforce_dtype = any(not is_scalar_for_elemwise(a) and a.ndim == 0 for a in args)
 
     name = kwargs.get('name', None) or '%s-%s' % (funcname(op),
@@ -2969,7 +2992,7 @@ def handle_out(out, result):
             out = None
     if isinstance(out, Array):
         if out.shape != result.shape:
-            raise NotImplementedError(
+            raise ValueError(
                 "Mismatched shapes between result and out parameter. "
                 "out=%s, result=%s" % (str(out.shape), str(result.shape)))
         out._chunks = result.chunks
@@ -3087,6 +3110,24 @@ def broadcast_to(x, shape, chunks=None):
 
     return Array(sharedict.merge((name, dsk), x.dask), name, chunks,
                  dtype=x.dtype)
+
+
+@wraps(np.broadcast_arrays)
+def broadcast_arrays(*args, **kwargs):
+    subok = bool(kwargs.pop("subok", False))
+
+    to_array = asanyarray if subok else asarray
+    args = tuple(to_array(e) for e in args)
+
+    if kwargs:
+        raise TypeError("unsupported keyword argument(s) provided")
+
+    shape = broadcast_shapes(*(e.shape for e in args))
+    chunks = broadcast_chunks(*(e.chunks for e in args))
+
+    result = [broadcast_to(e, shape=shape, chunks=chunks) for e in args]
+
+    return result
 
 
 def offset_func(func, offset, *args):
@@ -3435,15 +3476,26 @@ def _vindex(x, *indexes):
     array([ 0,  9, 48,  7])
     """
     indexes = replace_ellipsis(x.ndim, indexes)
-    partial_slices = {i: ind for i, ind in enumerate(indexes)
-                      if isinstance(ind, slice) and ind != slice(None)}
-    if partial_slices:
-        key = tuple(partial_slices.get(i, slice(None))
-                    for i in range(len(indexes)))
-        x = x[key]
+
+    nonfancy_indexes = []
+    reduced_indexes = []
+    for i, ind in enumerate(indexes):
+        if isinstance(ind, Number):
+            nonfancy_indexes.append(ind)
+        elif isinstance(ind, slice):
+            nonfancy_indexes.append(ind)
+            reduced_indexes.append(slice(None))
+        else:
+            nonfancy_indexes.append(slice(None))
+            reduced_indexes.append(ind)
+
+    nonfancy_indexes = tuple(nonfancy_indexes)
+    reduced_indexes = tuple(reduced_indexes)
+
+    x = x[nonfancy_indexes]
 
     array_indexes = {}
-    for i, (ind, size) in enumerate(zip(indexes, x.shape)):
+    for i, (ind, size) in enumerate(zip(reduced_indexes, x.shape)):
         if not isinstance(ind, slice):
             ind = np.array(ind, copy=True)
             if ind.dtype.kind == 'b':
@@ -3456,41 +3508,49 @@ def _vindex(x, *indexes):
             ind %= size
             array_indexes[i] = ind
 
+    if array_indexes:
+        x = _vindex_array(x, array_indexes)
+
+    return x
+
+
+def _vindex_array(x, dict_indexes):
+    """Point wise indexing with only NumPy Arrays."""
+
     try:
-        broadcast_indexes = np.broadcast_arrays(*array_indexes.values())
+        broadcast_indexes = np.broadcast_arrays(*dict_indexes.values())
     except ValueError:
         # note: error message exactly matches numpy
-        shapes_str = ' '.join(str(a.shape) for a in array_indexes.values())
+        shapes_str = ' '.join(str(a.shape) for a in dict_indexes.values())
         raise IndexError('shape mismatch: indexing arrays could not be '
                          'broadcast together with shapes ' + shapes_str)
     broadcast_shape = broadcast_indexes[0].shape
 
-    lookup = dict(zip(array_indexes, broadcast_indexes))
+    lookup = dict(zip(dict_indexes, broadcast_indexes))
     flat_indexes = [lookup[i].ravel().tolist() if i in lookup else None
-                    for i in range(len(indexes))]
+                    for i in range(x.ndim)]
     flat_indexes.extend([None] * (x.ndim - len(flat_indexes)))
-    result_1d = _vindex_1d(x, *flat_indexes)
-    return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
-
-def _vindex_1d(x, *indexes):
-    """Point wise indexing with only 1D lists and full slices."""
-    indexes = [list(index) if index is not None else index for index in indexes]
+    flat_indexes = [
+        list(index) if index is not None else index for index in flat_indexes
+    ]
     bounds = [list(accumulate(add, (0,) + c)) for c in x.chunks]
-    bounds2 = [b for i, b in zip(indexes, bounds) if i is not None]
-    axis = _get_axis(indexes)
-    token = tokenize(x, indexes)
+    bounds2 = [
+        b for i, b in zip(flat_indexes, bounds) if i is not None
+    ]
+    axis = _get_axis(flat_indexes)
+    token = tokenize(x, flat_indexes)
     out_name = 'vindex-merge-' + token
 
     points = list()
-    for i, idx in enumerate(zip(*[i for i in indexes if i is not None])):
+    for i, idx in enumerate(zip(*[i for i in flat_indexes if i is not None])):
         block_idx = [np.searchsorted(b, ind, 'right') - 1
                      for b, ind in zip(bounds2, idx)]
         inblock_idx = [ind - bounds2[k][j]
                        for k, (ind, j) in enumerate(zip(idx, block_idx))]
         points.append((i, tuple(block_idx), tuple(inblock_idx)))
 
-    chunks = [c for i, c in zip(indexes, x.chunks) if i is None]
+    chunks = [c for i, c in zip(flat_indexes, x.chunks) if i is None]
     chunks.insert(0, (len(points),) if points else (0,))
     chunks = tuple(chunks)
 
@@ -3499,9 +3559,11 @@ def _vindex_1d(x, *indexes):
         per_block = dict((k, v) for k, v in per_block.items() if v)
 
         other_blocks = list(product(*[list(range(len(c))) if i is None else [None]
-                                    for i, c in zip(indexes, x.chunks)]))
+                                    for i, c in zip(flat_indexes, x.chunks)]))
 
-        full_slices = [slice(None, None) if i is None else None for i in indexes]
+        full_slices = [
+            slice(None, None) if i is None else None for i in flat_indexes
+        ]
 
         name = 'vindex-slice-' + token
         dsk = dict((keyname(name, i, okey),
@@ -3518,14 +3580,18 @@ def _vindex_1d(x, *indexes):
                     [keyname(name, i, okey) for i in range(len(per_block))]))
                    for okey in other_blocks)
 
-        return Array(sharedict.merge(x.dask, (out_name, dsk)), out_name, chunks,
-                     x.dtype)
+        result_1d = Array(
+            sharedict.merge(x.dask, (out_name, dsk)), out_name, chunks, x.dtype
+        )
+        return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
     # output has a zero dimension, just create a new zero-shape array with the
     # same dtype
     from .wrap import empty
-    return empty(tuple(map(sum, chunks)), chunks=chunks, dtype=x.dtype,
-                 name=out_name)
+    result_1d = empty(
+        tuple(map(sum, chunks)), chunks=chunks, dtype=x.dtype, name=out_name
+    )
+    return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
 
 def _get_axis(indexes):
@@ -3601,7 +3667,6 @@ def to_npy_stack(dirname, x, axis=0):
 
     Examples
     --------
-
     >>> x = da.ones((5, 10, 10), chunks=(2, 4, 4))  # doctest: +SKIP
     >>> da.to_npy_stack('data/', x, axis=0)  # doctest: +SKIP
 

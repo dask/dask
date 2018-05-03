@@ -38,6 +38,7 @@ def test_ufunc():
 
 
 binary_ufuncs = ['add', 'arctan2', 'copysign', 'divide', 'equal',
+                 'bitwise_and', 'bitwise_or', 'bitwise_xor',
                  'floor_divide', 'fmax', 'fmin', 'fmod', 'greater',
                  'greater_equal', 'hypot', 'ldexp', 'less', 'less_equal',
                  'logaddexp', 'logaddexp2', 'logical_and', 'logical_or',
@@ -53,13 +54,13 @@ except AttributeError:
     pass
 
 unary_ufuncs = ['absolute', 'arccos', 'arccosh', 'arcsin', 'arcsinh', 'arctan',
-                'arctanh', 'cbrt', 'ceil', 'conj', 'cos', 'cosh', 'deg2rad',
-                'degrees', 'exp', 'exp2', 'expm1', 'fabs', 'fix', 'floor',
-                'i0', 'isfinite', 'isinf', 'isnan', 'log', 'log10', 'log1p',
-                'log2', 'logical_not', 'nan_to_num', 'negative', 'rad2deg',
-                'radians', 'reciprocal', 'rint', 'sign', 'signbit', 'sin',
-                'sinc', 'sinh', 'spacing', 'sqrt', 'square', 'tan', 'tanh',
-                'trunc']
+                'arctanh', 'bitwise_not', 'cbrt', 'ceil', 'conj', 'cos',
+                'cosh', 'deg2rad', 'degrees', 'exp', 'exp2', 'expm1', 'fabs',
+                'fix', 'floor', 'i0', 'isfinite', 'isinf', 'isnan', 'log',
+                'log10', 'log1p', 'log2', 'logical_not', 'nan_to_num',
+                'negative', 'rad2deg', 'radians', 'reciprocal', 'rint', 'sign',
+                'signbit', 'sin', 'sinc', 'sinh', 'spacing', 'sqrt', 'square',
+                'tan', 'tanh', 'trunc']
 
 
 @pytest.mark.parametrize('ufunc', unary_ufuncs)
@@ -364,3 +365,11 @@ def test_out_numpy():
 
     assert 'ndarray' in str(info.value)
     assert 'Array' in str(info.value)
+
+
+@pytest.mark.skipif(np.__version__ < '1.13.0', reason='array_ufunc not present')
+def test_out_shape_mismatch():
+    x = da.arange(10, chunks=(5,))
+    y = da.arange(15, chunks=(5,))
+    with pytest.raises(ValueError):
+        assert np.log(x, out=y)

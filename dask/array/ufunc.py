@@ -109,9 +109,14 @@ class ufunc(object):
         return repr(self._ufunc)
 
     def __call__(self, *args, **kwargs):
-        dsk = [arg for arg in args if hasattr(arg, '_elemwise')]
-        if len(dsk) > 0:
-            return dsk[0]._elemwise(self._ufunc, *args, **kwargs)
+        dsks = [arg for arg in args if hasattr(arg, '_elemwise')]
+        if len(dsks) > 0:
+            for dsk in dsks:
+                result = dsk._elemwise(self._ufunc, *args, **kwargs)
+                if type(result) != type(NotImplemented):
+                    return result
+            raise TypeError("Parameters of such types "
+                            "are not supported by " + self.__name__)
         else:
             return self._ufunc(*args, **kwargs)
 
@@ -218,6 +223,12 @@ maximum = ufunc(np.maximum)
 minimum = ufunc(np.minimum)
 fmax = ufunc(np.fmax)
 fmin = ufunc(np.fmin)
+
+# bitwise functions
+bitwise_and = ufunc(np.bitwise_and)
+bitwise_or = ufunc(np.bitwise_or)
+bitwise_xor = ufunc(np.bitwise_xor)
+bitwise_not = ufunc(np.bitwise_not)
 
 # floating functions
 isfinite = ufunc(np.isfinite)

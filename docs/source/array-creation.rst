@@ -61,10 +61,10 @@ Often we store data in several different locations and want to stitch them toget
     for fn in filenames:
         f = h5py.File(fn)
         d = f['/data']
-        x = da.from_array(d, chunks=(1000, 1000))
-        dask_arrays.append(x)
+        array = da.from_array(d, chunks=(1000, 1000))
+        dask_arrays.append(array)
 
-    x = da.concatenate(arrays, axis=0)  # concatenate arrays along first axis
+    x = da.concatenate(dask_arrays, axis=0)  # concatenate arrays along first axis
 
 For more information see :doc:`concatenation and stacking <array-stack>` docs.
 
