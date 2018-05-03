@@ -4,12 +4,16 @@ import ast
 import copy
 import os
 import sys
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 
 no_default = '__no_default__'
 
 
-config_paths = [
+paths = [
     '/etc/dask',
     os.path.join(sys.prefix, 'etc', 'dask'),
     os.path.join(os.path.expanduser('~'), '.config', 'dask'),
@@ -17,7 +21,10 @@ config_paths = [
 ]
 
 if 'DASK_CONFIG' in os.environ:
-    config_paths.append(os.environ['DASK_CONFIG'])
+    paths.append(os.environ['DASK_CONFIG'])
+
+
+global_config = config = {}
 
 
 def update(old, new, priority='new'):
@@ -84,10 +91,10 @@ def merge(*dicts):
     return result
 
 
-def collect_yaml(paths=config_paths):
+def collect_yaml(paths=paths):
     """ Collect configuration from yaml files
 
-    This searches through ``config_paths``, expands to find all yaml or json
+    This searches through a list of paths, expands to find all yaml or json
     files, and then parses each file.
     """
     # Find all paths
@@ -206,9 +213,7 @@ class set(object):
     --------
     dask.config.get
     """
-    def __init__(self, arg=None, config=None, **kwargs):
-        if config is None:
-            config = global_config
+    def __init__(self, arg=None, config=config, **kwargs):
         if arg and not kwargs:
             kwargs = arg
 
@@ -235,20 +240,46 @@ class set(object):
         self.config.update(self.old)
 
 
-configs = []
+def collect(paths=paths, env=os.environ):
+    """
+    Collect configuration from paths and environment variables
 
-try:
-    import yaml
-except ImportError:
-    yaml = None
+    Parameters
+    ----------
+    paths : List[str]
+        A list of paths to search for yaml config files
 
-if yaml:
-    configs.extend(collect_yaml())
+    env : dict
+        The system environment variables
 
-configs.append(collect_env())
+    Returns
+    -------
+    config: dict
 
-config = merge(*configs)
-global_config = config
+    See Also
+    --------
+    dask.config.refresh: collect configuration and update into primary config
+    """
+    This returns
+    configs = []
+
+    if yaml:
+        configs.extend(collect_yaml(paths=paths))
+
+    configs.append(collect_env(env=env))
+
+    return merge(*configs)
+
+
+def refresh(config=config, **kwargs):
+    """
+    Update configuration by re-reading yaml files and env variables
+
+    See Also
+    --------
+    dask.config.collect: for parameters
+    """
+    update(config, collect(**kwargs))
 
 
 def get(key, default=no_default, config=config):
@@ -303,3 +334,6 @@ def rename(aliases, config=config):
         del config[k]  # TODO: support nested keys
 
     set(new, config=config)
+
+
+refresh()
