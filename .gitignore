@@ -1,11 +1,13 @@
 *.pyc
 *.egg-info
+dask-worker-space/
 docs/build
 build/
 dist/
 .idea/
 log.*
 log
+.pytest_cache/
 .coverage
 .DS_Store
 *.swp

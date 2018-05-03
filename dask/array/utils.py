@@ -1,7 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
-from distutils.version import LooseVersion
 import difflib
+import functools
 import math
 import os
 
@@ -13,23 +13,9 @@ from ..local import get_sync
 from ..sharedict import ShareDict
 
 
-if LooseVersion(np.__version__) >= '1.10.0':
-    _allclose = np.allclose
-else:
-    def _allclose(a, b, **kwargs):
-        if kwargs.pop('equal_nan', False):
-            a_nans = np.isnan(a)
-            b_nans = np.isnan(b)
-            if not (a_nans == b_nans).all():
-                return False
-            a = a[~a_nans]
-            b = b[~b_nans]
-        return np.allclose(a, b, **kwargs)
-
-
 def allclose(a, b, equal_nan=False, **kwargs):
     if getattr(a, 'dtype', None) != 'O':
-        return _allclose(a, b, equal_nan=equal_nan, **kwargs)
+        return np.allclose(a, b, equal_nan=equal_nan, **kwargs)
     if equal_nan:
         return (a.shape == b.shape and
                 all(np.isnan(b) if np.isnan(a) else a == b
@@ -129,3 +115,14 @@ def assert_eq(a, b, check_shape=True, **kwargs):
         assert c
 
     return True
+
+
+def safe_wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS):
+    """Like functools.wraps, but safe to use even if wrapped is not a function.
+
+    Only needed on Python 2.
+    """
+    if all(hasattr(wrapped, attr) for attr in assigned):
+        return functools.wraps(wrapped, assigned=assigned)
+    else:
+        return lambda x: x

@@ -304,12 +304,18 @@ def subs(task, key, val):
         elif type_arg is list:
             arg = [subs(x, key, val) for x in arg]
         elif type_arg is type(key):
-            # Can't do a simple equality check, since this may trigger
-            # a FutureWarning from NumPy about array equality
-            # https://github.com/dask/dask/pull/2457
-            if len(arg) == len(key) and all(type(aa) == type(bb) and aa == bb
-                                            for aa, bb in zip(arg, key)):
-                arg = val
+            try:
+                # Can't do a simple equality check, since this may trigger
+                # a FutureWarning from NumPy about array equality
+                # https://github.com/dask/dask/pull/2457
+                if len(arg) == len(key) and all(type(aa) == type(bb) and aa == bb
+                                                for aa, bb in zip(arg, key)):
+                    arg = val
+
+            except (TypeError, AttributeError):
+                # Handle keys which are not sized (len() fails), but are hashable
+                if arg == key:
+                    arg = val
         newargs.append(arg)
     return task[:1] + tuple(newargs)
 
@@ -365,7 +371,7 @@ def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
                         if returncycle:
                             return cycle
                         else:
-                            cycle = '->'.join(cycle)
+                            cycle = '->'.join(str(x) for x in cycle)
                             raise RuntimeError('Cycle detected in Dask: %s' % cycle)
                     next_nodes.append(nxt)
 

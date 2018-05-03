@@ -143,7 +143,7 @@ def to_hdf(df, path, key, mode='a', append=False, get=None,
     if '*' in key:
         single_node = False
 
-    if 'format' in kwargs and kwargs['format'] != 'table':
+    if 'format' in kwargs and kwargs['format'] not in ['t', 'table']:
         raise ValueError("Dask only support 'table' format in hdf files.")
 
     if mode not in ('a', 'w', 'r+'):

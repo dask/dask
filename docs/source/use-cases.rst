@@ -292,21 +292,18 @@ Algorithm developer
 A graduate student in machine learning is prototyping novel parallel
 algorithms.  They are in a situation much like the financial analyst above
 except that they need to benchmark and profile their computation heavily under
-a variety of situations and scales.  The dask profiling tools (:doc:`single
-machine diagnostics<diagnostics>` and `distributed diagnostics`_) provide the
-feedback they need to understand their parallel performance, including how long
-each task takes, how intense communication is, and their scheduling overhead.
-They scale their algorithm between 1 and 50 cores on single workstations and
-then scale out to a cluster running their computation at thousands of cores.
-They don't have access to an institutional cluster, so instead they use
-dask-ec2_ to easily provision clusters of varying sizes.
+a variety of situations and scales.  The :doc:`dask profiling tools
+<understanding-performance>`  provide the feedback they need to understand
+their parallel performance, including how long each task takes, how intense
+communication is, and their scheduling overhead.  They scale their algorithm
+between 1 and 50 cores on single workstations and then scale out to a cluster
+running their computation at thousands of cores.  They don't have access to an
+institutional cluster, so instead they use :doc:`dask on the cloud
+<setup/cloud>` to easily provision clusters of varying sizes.
 
 Their algorithm is written the same in all cases, drastically reducing the
 cognitive load, and letting the readers of their work experiment with their
 system on their own machines, aiding reproducibility.
-
-.. _`distributed diagnostics`: https://distributed.readthedocs.io/en/latest/web.html
-.. _dask-ec2: https://distributed.readthedocs.io/en/latest/ec2.html
 
 
 Scikit-Learn or Joblib User

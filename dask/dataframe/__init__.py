@@ -12,7 +12,12 @@ from .multi import merge, concat
 from . import rolling
 from ..base import compute
 from .reshape import get_dummies, pivot_table, melt
+from .io.orc import read_orc
 try:
     from .io import read_parquet, to_parquet
+except ImportError:
+    pass
+try:
+    from .core import isna
 except ImportError:
     pass

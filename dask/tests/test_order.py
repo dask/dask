@@ -146,8 +146,10 @@ def test_avoid_upwards_branching_complex(abcde):
            (a, 2): (f, (a, 3)),
            (a, 3): (f, (b, 1), (c, 1)),
            (b, 1): (f, (b, 2)),
+           (b, 2): (f,),
            (c, 1): (f, (c, 2)),
            (c, 2): (f, (c, 3)),
+           (c, 3): (f,),
            (d, 1): (f, (c, 1)),
            (d, 2): (f, (d, 1)),
            (d, 3): (f, (d, 1)),
@@ -239,7 +241,8 @@ def test_gh_3055():
     dsk = dict(w.__dask_graph__())
     o = order(dsk)
     L = [o[k] for k in w.__dask_keys__()]
-    assert sorted(L) == L
+    assert sum(x < len(o) / 2 for x in L) > len(L) / 3  # some complete quickly
+    assert sorted(L) == L  # operate in order
 
 
 def test_type_comparisions_ok(abcde):
@@ -351,3 +354,58 @@ def test_local_parents_of_reduction(abcde):
     dask.get(dsk, [a1, b1, c1])  # trigger computation
 
     assert log == expected
+
+
+def test_nearest_neighbor(abcde):
+    """
+
+    a1  a2  a3  a4  a5  a6  a7 a8  a9
+     \  |  /  \ |  /  \ |  / \ |  /
+        b1      b2      b3     b4
+
+    Want to finish off a local group before moving on.
+    This is difficult because all groups are connected.
+    """
+    a, b, c, _, _ = abcde
+    a1, a2, a3, a4, a5, a6, a7, a8, a9 = [a + i for i in '123456789']
+    b1, b2, b3, b4 = [b + i for i in '1234']
+
+    dsk = {b1: (f,),
+           b2: (f,),
+           b3: (f,),
+           b4: (f,),
+           a1: (f, b1),
+           a2: (f, b1),
+           a3: (f, b1, b2),
+           a4: (f, b2),
+           a5: (f, b2, b3),
+           a6: (f, b3),
+           a7: (f, b3, b4),
+           a8: (f, b4),
+           a9: (f, b4)}
+
+    o = order(dsk)
+
+    assert 3 < sum(o[a + i] < len(o) / 2 for i in '123456789') < 7
+    assert 1 < sum(o[b + i] < len(o) / 2 for i in '1234') < 4
+    assert o[min([b1, b2, b3, b4])] == 0
+
+
+def test_string_ordering():
+    """ Prefer ordering tasks by name first """
+    dsk = {('a', 1): (f,), ('a', 2): (f,), ('a', 3): (f,)}
+    o = order(dsk)
+    assert o == {('a', 1): 0,
+                 ('a', 2): 1,
+                 ('a', 3): 2}
+
+
+def test_string_ordering_dependents():
+    """ Prefer ordering tasks by name first even when in dependencies """
+    dsk = {('a', 1): (f, 'b'), ('a', 2): (f, 'b'), ('a', 3): (f, 'b'),
+           'b': (f,)}
+    o = order(dsk)
+    assert o == {'b': 0,
+                 ('a', 1): 1,
+                 ('a', 2): 2,
+                 ('a', 3): 3}

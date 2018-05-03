@@ -138,13 +138,13 @@ def _groupby_raise_unaligned(df, **kwargs):
     return df.groupby(**kwargs)
 
 
-def _groupby_slice_apply(df, grouper, key, func):
+def _groupby_slice_apply(df, grouper, key, func, *args, **kwargs):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
     g = df.groupby(grouper)
     if key:
         g = g[key]
-    return g.apply(func)
+    return g.apply(func, *args, **kwargs)
 
 
 def _groupby_get_group(df, by_key, get_key, columns):
@@ -486,6 +486,8 @@ def _build_agg_args_single(result_column, func, input_column):
         'max': (M.max, M.max),
         'count': (M.count, M.sum),
         'size': (M.size, M.sum),
+        'first': (M.first, M.first),
+        'last': (M.last, M.last)
     }
 
     if func in simple_impl.keys():
@@ -950,6 +952,16 @@ class _GroupBy(object):
         return result
 
     @derived_from(pd.core.groupby.GroupBy)
+    def first(self, split_every=None, split_out=1):
+        return self._aca_agg(token='first', func=M.first, split_every=split_every,
+                             split_out=split_out)
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def last(self, split_every=None, split_out=1):
+        return self._aca_agg(token='last', func=M.last, split_every=split_every,
+                             split_out=split_out)
+
+    @derived_from(pd.core.groupby.GroupBy)
     def get_group(self, key):
         token = self._token_prefix + 'get_group'
 
@@ -1032,7 +1044,7 @@ class _GroupBy(object):
                    split_out=split_out, split_out_setup=split_out_on_index)
 
     @insert_meta_param_description(pad=12)
-    def apply(self, func, meta=no_default):
+    def apply(self, func, *args, **kwargs):
         """ Parallel version of pandas GroupBy.apply
 
         This mimics the pandas version except for the following:
@@ -1045,12 +1057,16 @@ class _GroupBy(object):
         ----------
         func: function
             Function to apply
+        args, kwargs : Scalar, Delayed or object
+            Arguments and keywords to pass to the function.
         $META
 
         Returns
         -------
         applied : Series or DataFrame depending on columns keyword
         """
+        meta = kwargs.get('meta', no_default)
+
         if meta is no_default:
             msg = ("`meta` is not specified, inferred from partial data. "
                    "Please provide `meta` if the result is unexpected.\n"
@@ -1060,7 +1076,8 @@ class _GroupBy(object):
             warnings.warn(msg, stacklevel=2)
 
             with raise_on_meta_error("groupby.apply({0})".format(funcname(func))):
-                meta = self._meta_nonempty.apply(func)
+                meta = self._meta_nonempty.apply(func, *args, **kwargs)
+
         meta = make_meta(meta)
 
         # Validate self.index
@@ -1110,8 +1127,9 @@ class _GroupBy(object):
             index2 = self.index
 
         # Perform embarrassingly parallel groupby-apply
+        kwargs['meta'] = meta
         df5 = map_partitions(_groupby_slice_apply, df4, index2,
-                             self._slice, func, meta=meta)
+                             self._slice, func, *args, **kwargs)
 
         return df5
 
@@ -1203,7 +1221,7 @@ class SeriesGroupBy(_GroupBy):
         if self._slice:
             result = result[self._slice]
 
-        if not isinstance(arg, (list, dict)):
+        if not isinstance(arg, (list, dict)) and isinstance(result, DataFrame):
             result = result[result.columns[0]]
 
         return result
