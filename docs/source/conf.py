@@ -314,6 +314,7 @@ redirect_files = [
     ('scheduler-choice.html', 'setup.html'),
     ('diagnostics.html', 'diagnostics-local.html'),
     ('inspect.html', 'graphviz.html'),
+    ('faq.html', 'https://stackoverflow.com/questions/tagged/dask?sort=frequent'),
 ]
 
 
