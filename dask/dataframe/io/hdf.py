@@ -243,7 +243,7 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
     Read a single hdf file into a dask.dataframe. Used for each file in
     read_hdf.
     """
-    def get_keys_stops_divisions(path, key, stop, sorted_index):
+    def get_keys_stops_divisions(path, key, stop, sorted_index, chunksize):
         """
         Get the "keys" or group identifiers which match the given key, which
         can contain wildcards. This uses the hdf file identified by the
@@ -266,12 +266,17 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                 else:
                     stops.append(stop)
                 if sorted_index:
-                    division_start = storer.read_column('index', start=0, stop=1)[0]
-                    division_end = storer.read_column('index', start=storer.nrows - 1,
+                    division = [storer.read_column('index', start=start, stop=start + 1)[0]
+                                for start in range(0, storer.nrows, chunksize)]
+                    division_end = storer.read_column('index',
+                                                      start=storer.nrows - 1,
                                                       stop=storer.nrows)[0]
-                    divisions.append([division_start, division_end])
+
+                    division.append(division_end)
+                    divisions.append(division)
                 else:
                     divisions.append(None)
+
         return keys, stops, divisions
 
     def one_path_one_key(path, key, start, stop, columns, chunksize, division, lock):
@@ -295,26 +300,23 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
             raise ValueError("Start row number ({}) is above or equal to stop "
                              "row number ({})".format(start, stop))
 
-        if division:
-            dsk = {(name, 0): (_pd_read_hdf, path, key, lock,
-                               base)}
+        def update(s):
+            new = base.copy()
+            new.update({'start': s, 'stop': s + chunksize})
+            return new
 
+        dsk = dict(((name, i), (_pd_read_hdf, path, key, lock,
+                                update(s)))
+                   for i, s in enumerate(range(start, stop, chunksize)))
+
+        if division:
             divisions = division
         else:
-            def update(s):
-                new = base.copy()
-                new.update({'start': s, 'stop': s + chunksize})
-                return new
-
-            dsk = dict(((name, i), (_pd_read_hdf, path, key, lock,
-                                    update(s)))
-                       for i, s in enumerate(range(start, stop, chunksize)))
-
             divisions = [None] * (len(dsk) + 1)
 
         return new_dd_object(dsk, name, empty, divisions)
 
-    keys, stops, divisions = get_keys_stops_divisions(path, key, stop, sorted_index)
+    keys, stops, divisions = get_keys_stops_divisions(path, key, stop, sorted_index, chunksize)
     if (start != 0 or stop is not None) and len(keys) > 1:
         raise NotImplementedError(read_hdf_error_msg)
     from ..multi import concat
