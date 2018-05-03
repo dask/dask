@@ -190,6 +190,8 @@ For performance, a good choice of ``chunks`` follows the following rules:
     efficient if your chunks are aligned so that you have to touch fewer
     chunks.  If you want to add two arrays then its convenient if those arrays
     have matching chunks patterns.
+4.  Chunk sizes between 10MB-1GB are common, depending on the availability of
+    RAM and the duration of computations
 
 
 Unknown Chunks
