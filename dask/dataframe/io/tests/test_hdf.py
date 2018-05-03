@@ -415,6 +415,14 @@ def test_read_hdf(data, compare):
         assert (sorted(dd.read_hdf(fn, '/data', mode='r').dask) ==
                 sorted(dd.read_hdf(fn, '/data', mode='r').dask))
 
+    with tmpfile('h5') as fn:
+        sorted_data = data.sort_index()
+        sorted_data.to_hdf(fn, '/data', format='table')
+        a = dd.read_hdf(fn, '/data', chunksize=2, sorted_index=True, mode='r')
+        assert a.npartitions == 2
+
+        compare(a.compute(), sorted_data)
+
 
 def test_read_hdf_multiply_open():
     """Test that we can read from a file that's already opened elsewhere in
