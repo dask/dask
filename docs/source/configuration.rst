@@ -9,7 +9,7 @@ production.
 Configuration is specified in one of the following ways:
 
 1.  YAML files in ``~/.config/dask/`` or ``/etc/dask/``
-2.  Environment variables like ``DASK_SCHEDULER__WORK_STEALING=True``
+2.  Environment variables like ``DASK_DISTRIBUTED__SCHEDULER__WORK_STEALING=True``
 3.  Default settings within sub-libraries
 
 This combination makes it easy to specify configuration in a variety of
@@ -106,14 +106,19 @@ the following:
 
 .. code-block:: bash
 
-   export DASK_SCHEDULER__WORK_STEALING=True
-   export DASK_SCHEDULER__ALLOWED_FAILURES=5
+   export DASK_DISTRIBUTED__SCHEDULER__WORK_STEALING=True
+   export DASK_DISTRIBUTED__SCHEDULER__ALLOWED_FAILURES=5
 
 resulting in configuration values like the following:
 
 .. code-block:: python
 
-   {'scheduler': {'work-stealing': True, 'allowed-failures': 5}}
+   {'distributed':
+     {'scheduler':
+       {'work-stealing': True,
+        'allowed-failures': 5}
+     }
+   }
 
 Dask searches for all environment variables that start with ``DASK_``, then
 transforms keys by converting to lower case, changing double-underscores to
