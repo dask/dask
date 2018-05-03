@@ -1,6 +1,15 @@
 Changelog
 =========
 
+1.21.8 - 2018-05-03
+-------------------
+
+-  Remove errant print statement (#1957) `Matthew Rocklin`_
+-  Only add reevaluate_occupancy callback once (#1953) `Tony Lorenzo`_
+
+
+
+
 1.21.7 - 2018-05-02
 -------------------
 
@@ -615,3 +624,4 @@ significantly without many new features.
 .. _`Irene Rodriguez`: https://github.com/irenerodriguez
 .. _`Loïc Estève`: https://github.com/lesteve
 .. _`Kenneth Koski`: https://github.com/knkski
+.. _`Tony Lorenzo`: https://github.com/alorenzo175
