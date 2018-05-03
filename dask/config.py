@@ -240,7 +240,7 @@ configs = []
 try:
     import yaml
 except ImportError:
-    yaml == None
+    yaml = None
 
 if yaml:
     configs.extend(collect_yaml())
