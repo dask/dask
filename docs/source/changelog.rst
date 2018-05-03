@@ -13,8 +13,6 @@ Array
 Dataframe
 +++++++++
 
-- Add support for indexing Dask DataFrames with string subclasses (:pr:`3461`) `James Bourbeau`_
-
 Bag
 +++
 
@@ -24,6 +22,18 @@ Core
 ++++
 
 -
+
+0.17.4 / 2018-05-03
+-------------------
+
+Dataframe
++++++++++
+
+
+-  Add support for indexing Dask DataFrames with string subclasses (:pr:`3461`) `James Bourbeau`_
+-  Allow using both sorted_index and chunksize in read_hdf (:pr:`3463`) `Pierre Bartet`_
+-  Pass filesystem to arrow piece reader (:pr:`3466`) `Martin Durant`_
+-  Switches to using dask.compat string_types (#3462) `James Bourbeau`_
 
 
 0.17.3 / 2018-05-02
@@ -1099,3 +1109,4 @@ Other
 .. _`Dieter Weber`: https://github.com/uellue
 .. _`Apostolos Vlachopoulos`: https://github.com/avlahop
 .. _`Jesse Vogt`: https://github.com/jessevogt
+.. _`Pierre Bartet`: https://github.com/Pierre-Bartet
