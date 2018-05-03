@@ -9,7 +9,6 @@ import numpy as np
 from toolz import frequencies, concat
 
 from .core import Array
-from ..local import get_sync
 from ..sharedict import ShareDict
 
 
@@ -63,7 +62,7 @@ def assert_eq(a, b, check_shape=True, **kwargs):
         assert a.dtype is not None
         adt = a.dtype
         _check_dsk(a.dask)
-        a = a.compute(get=get_sync)
+        a = a.compute(scheduler='sync')
         if hasattr(a, 'todense'):
             a = a.todense()
         if not hasattr(a, 'dtype'):
@@ -81,7 +80,7 @@ def assert_eq(a, b, check_shape=True, **kwargs):
         assert b.dtype is not None
         bdt = b.dtype
         _check_dsk(b.dask)
-        b = b.compute(get=get_sync)
+        b = b.compute(scheduler='sync')
         if not hasattr(b, 'dtype'):
             b = np.array(b, dtype='O')
         if hasattr(b, 'todense'):

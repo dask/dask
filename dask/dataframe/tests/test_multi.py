@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
-from dask.local import get_sync
 from dask.base import compute_as_if_collection
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
@@ -190,11 +189,11 @@ def test_merge_indexed_dataframe_to_indexed_dataframe():
 
 def list_eq(aa, bb):
     if isinstance(aa, dd.DataFrame):
-        a = aa.compute(get=get_sync)
+        a = aa.compute(scheduler='sync')
     else:
         a = aa
     if isinstance(bb, dd.DataFrame):
-        b = bb.compute(get=get_sync)
+        b = bb.compute(scheduler='sync')
     else:
         b = bb
     tm.assert_index_equal(a.columns, b.columns)

@@ -156,8 +156,8 @@ def test_text_blocks_to_pandas_simple(reader, files):
     assert len(values) == 3
     assert all(hasattr(item, 'dask') for item in values)
 
-    result = df.amount.sum().compute(get=dask.get)
-    assert result == (100 + 200 + 300 + 400 + 500 + 600)
+    assert_eq(df.amount.sum(),
+              100 + 200 + 300 + 400 + 500 + 600)
 
 
 @csv_and_table
@@ -221,7 +221,7 @@ def test_enforce_dtypes(reader, blocks):
     header = blocks[0][0].split(b'\n')[0] + b'\n'
     dfs = text_blocks_to_pandas(reader, blocks, header, head, {},
                                 collection=False)
-    dfs = dask.compute(*dfs, get=dask.get)
+    dfs = dask.compute(*dfs, scheduler='sync')
     assert all(df.dtypes.to_dict() == head.dtypes.to_dict() for df in dfs)
 
 
@@ -235,7 +235,7 @@ def test_enforce_columns(reader, blocks):
     with pytest.raises(ValueError):
         dfs = text_blocks_to_pandas(reader, blocks, header, head, {},
                                     collection=False, enforce=True)
-        dask.compute(*dfs, get=dask.get)
+        dask.compute(*dfs, scheduler='sync')
 
 
 #############################
@@ -252,7 +252,7 @@ def test_read_csv(dd_read, pd_read, text, sep):
         f = dd_read(fn, blocksize=30, lineterminator=os.linesep, sep=sep)
         assert list(f.columns) == ['name', 'amount']
         # index may be different
-        result = f.compute(get=dask.get).reset_index(drop=True)
+        result = f.compute(scheduler='sync').reset_index(drop=True)
         assert_eq(result, pd_read(fn, sep=sep))
 
 
@@ -291,12 +291,12 @@ def test_read_csv_files_list(dd_read, pd_read, files):
 def test_read_csv_index():
     with filetext(csv_text) as fn:
         f = dd.read_csv(fn, blocksize=20).set_index('amount')
-        result = f.compute(get=dask.get)
+        result = f.compute(scheduler='sync')
         assert result.index.name == 'amount'
 
         blocks = compute_as_if_collection(dd.DataFrame, f.dask,
                                           f.__dask_keys__(),
-                                          get=dask.get)
+                                          scheduler='sync')
         for i, block in enumerate(blocks):
             if i < len(f.divisions) - 2:
                 assert (block.index < f.divisions[i + 1]).all()
@@ -491,7 +491,7 @@ def test_read_csv_compression(fmt, blocksize):
     files2 = valmap(compress[fmt], csv_files)
     with filetexts(files2, mode='b'):
         df = dd.read_csv('2014-01-*.csv', compression=fmt, blocksize=blocksize)
-        assert_eq(df.compute(get=dask.get).reset_index(drop=True),
+        assert_eq(df.compute(scheduler='sync').reset_index(drop=True),
                   expected.reset_index(drop=True), check_dtype=False)
 
 
@@ -678,11 +678,11 @@ def test_late_dtypes():
 
         with pytest.raises(ValueError) as e:
             dd.read_csv(fn, sample=50,
-                        parse_dates=['dates']).compute(get=dask.get)
+                        parse_dates=['dates']).compute(scheduler='sync')
         assert e.match(msg + date_msg)
 
         with pytest.raises(ValueError) as e:
-            dd.read_csv(fn, sample=50).compute(get=dask.get)
+            dd.read_csv(fn, sample=50).compute(scheduler='sync')
         assert e.match(msg)
 
         msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
@@ -707,12 +707,12 @@ def test_late_dtypes():
 
         with pytest.raises(ValueError) as e:
             dd.read_csv(fn, sample=50,
-                        dtype={'names': 'O'}).compute(get=dask.get)
+                        dtype={'names': 'O'}).compute(scheduler='sync')
         assert str(e.value) == msg
 
         with pytest.raises(ValueError) as e:
             dd.read_csv(fn, sample=50, parse_dates=['dates'],
-                        dtype={'names': 'O'}).compute(get=dask.get)
+                        dtype={'names': 'O'}).compute(scheduler='sync')
         assert str(e.value) == msg + date_msg
 
         msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
@@ -729,7 +729,7 @@ def test_late_dtypes():
         with pytest.raises(ValueError) as e:
             dd.read_csv(fn, sample=50, parse_dates=['dates'],
                         dtype={'more_numbers': float, 'names': object,
-                               'numbers': float}).compute(get=dask.get)
+                               'numbers': float}).compute(scheduler='sync')
         assert str(e.value) == msg
 
         # Specifying dtypes works
@@ -888,7 +888,7 @@ def test_read_csv_slash_r():
     data = b'0,my\n1,data\n' * 1000 + b'2,foo\rbar'
     with filetext(data, mode='wb') as fn:
         dd.read_csv(fn, header=None, sep=',', lineterminator='\n',
-                    names=['a', 'b'], blocksize=200).compute(get=dask.get)
+                    names=['a', 'b'], blocksize=200).compute(scheduler='sync')
 
 
 def test_read_csv_singleton_dtype():
@@ -971,7 +971,7 @@ def test_to_csv():
 
         with tmpdir() as dn:
             r = a.to_csv(dn, index=False, compute=False)
-            dask.compute(*r, get=dask.get)
+            dask.compute(*r, scheduler='sync')
             result = dd.read_csv(os.path.join(dn, '*')).compute().reset_index(drop=True)
             assert_eq(result, df)
 

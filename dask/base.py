@@ -821,14 +821,26 @@ else:
     })
 
 
+_warnned_on_get = [False]
+
+
+def warn_on_get(get):
+    if _warnned_on_get[0]:
+        return
+    else:
+        if get in named_schedulers.values():
+            _warnned_on_get[0] = True
+            warnings.warn("The get= keyword has been deprecated. "
+                          "Please use the scheduler= keyword instead with the "
+                          "name of the desired scheduler "
+                          "like 'threads' or 'processes'")
+
+
 def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     if get is not None:
         if scheduler is not None:
             raise ValueError("Both get= and scheduler= provided.  Choose one")
-        warnings.warn("The get= keyword has been deprecated. "
-                      "Please use the scheduler= keyword instead with the "
-                      "name of the desired scheduler "
-                      "like 'threads' or 'processes'")
+        warn_on_get(get)
         return get
 
     if scheduler is not None:
@@ -842,11 +854,12 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         # else:  # try to connect to remote scheduler with this name
         #     return get_client(scheduler).get
 
-    if _globals.get('get'):
-        return _globals['get']
-
     if _globals.get('scheduler'):
         return get_scheduler(scheduler=_globals['scheduler'])
+
+    if _globals.get('get'):
+        warn_on_get(_globals['get'])
+        return _globals['get']
 
     if getattr(thread_state, 'key', False):
         from distributed.worker import get_worker
@@ -855,7 +868,8 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     if cls is not None:
         return cls.__dask_scheduler__
 
-    if collections is not None:
+    collections = [c for c in collections if c is not None]
+    if collections:
         get = collections[0].__dask_scheduler__
         if not all(c.__dask_scheduler__ == get for c in collections):
             raise ValueError("Compute called on multiple collections with "

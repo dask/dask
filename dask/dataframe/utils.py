@@ -507,7 +507,7 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
     import dask.dataframe as dd
     if hasattr(dsk, 'dask'):
         if result is None:
-            result = dsk.compute(get=get_sync)
+            result = dsk.compute(scheduler='sync')
         if isinstance(dsk, dd.Index):
             assert isinstance(result, pd.Index), type(result)
             assert isinstance(dsk._meta, pd.Index), type(dsk._meta)
