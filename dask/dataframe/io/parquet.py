@@ -526,16 +526,17 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
             index_names = [name_storage_mapping.get(name, name)
                            for name in index_names]
 
-    column_names, index_names, out_type = _normalize_index_columns(columns, column_names,
-                                                                   index, index_names)
+    column_names, index_names, out_type = _normalize_index_columns(
+        columns, column_names, index, index_names)
 
     all_columns = index_names + column_names
 
     # Find non-empty pieces
     non_empty_pieces = []
     # Determine valid pieces
+    _open = lambda fn: pq.ParquetFile(fs.open(fn, mode='rb'))
     for piece in dataset.pieces:
-        pf = piece.get_metadata(pq.ParquetFile)
+        pf = piece.get_metadata(_open)
         # non_empty_pieces.append(piece)
         if pf.num_row_groups > 0:
             non_empty_pieces.append(piece)
@@ -552,7 +553,8 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     if len(index_names) == 1:
 
         # Look up storage name of the single index column
-        divisions_names = [storage_name for storage_name, name in storage_name_mapping.items()
+        divisions_names = [storage_name for storage_name, name
+                           in storage_name_mapping.items()
                            if index_names[0] == name]
 
         if divisions_names:
@@ -562,13 +564,15 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     else:
         divisions_name = None
 
-    divisions = _get_pyarrow_divisions(non_empty_pieces, divisions_name, schema, infer_divisions)
+    divisions = _get_pyarrow_divisions(non_empty_pieces, divisions_name,
+                                       schema, infer_divisions)
 
     # Build task
     dtypes = _get_pyarrow_dtypes(schema, categories)
     dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
-    meta = _meta_from_dtypes(all_columns, dtypes, index_names, column_index_names)
+    meta = _meta_from_dtypes(all_columns, dtypes, index_names,
+                             column_index_names)
     meta = clear_known_categories(meta, cols=categories)
 
     if out_type == Series:
