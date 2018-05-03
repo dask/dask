@@ -179,7 +179,6 @@ class Cluster(object):
         adapt.on_click(adapt_cb)
 
         def scale_cb(b):
-            print('Hello!')
             with log_errors():
                 n = request.value
                 with ignoring(AttributeError):
