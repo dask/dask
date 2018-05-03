@@ -147,7 +147,7 @@ def collect_env(env=os.environ):
     return result
 
 
-def ensure_config_file(
+def ensure_file(
         source,
         destination=os.path.join(os.path.expanduser('~'), '.config', 'dask'),
         comment=True):
@@ -260,7 +260,6 @@ def collect(paths=paths, env=os.environ):
     --------
     dask.config.refresh: collect configuration and update into primary config
     """
-    This returns
     configs = []
 
     if yaml:
@@ -274,6 +273,9 @@ def collect(paths=paths, env=os.environ):
 def refresh(config=config, **kwargs):
     """
     Update configuration by re-reading yaml files and env variables
+
+    This mutates the global dask.config.config, or the config parameter if
+    passed in.
 
     See Also
     --------

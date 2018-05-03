@@ -4,7 +4,7 @@ import os
 import pytest
 
 from dask.config import (update, merge, collect_yaml, collect_env, get,
-                         ensure_config_file, set, config, rename)
+                         ensure_file, set, config, rename)
 from dask.utils import tmpfile
 
 
@@ -90,7 +90,7 @@ def test_get():
         get('y.b', config=d)
 
 
-def test_ensure_config_file():
+def test_ensure_file():
     a = {'x': 1, 'y': {'a': 1}}
     b = {'x': 123}
 
@@ -99,7 +99,7 @@ def test_ensure_config_file():
             with open(source, 'w') as f:
                 yaml.dump(a, f)
 
-            ensure_config_file(source=source, destination=destination, comment=False)
+            ensure_file(source=source, destination=destination, comment=False)
 
             with open(destination) as f:
                 result = yaml.load(f)
@@ -113,7 +113,7 @@ def test_ensure_config_file():
             # don't overwrite old config files
             with open(source, 'w') as f:
                 yaml.dump(b, f)
-            ensure_config_file(source=source, destination=destination, comment=False)
+            ensure_file(source=source, destination=destination, comment=False)
             with open(destination) as f:
                 result = yaml.load(f)
 
@@ -122,7 +122,7 @@ def test_ensure_config_file():
             os.remove(destination)
 
             # Write again, now with comments
-            ensure_config_file(source=source, destination=destination, comment=True)
+            ensure_file(source=source, destination=destination, comment=True)
             with open(destination) as f:
                 text = f.read()
             assert '123' in text
@@ -154,7 +154,7 @@ def test_set():
 
 
 @pytest.mark.parametrize('mkdir', [True, False])
-def test_ensure_config_file_directory(mkdir):
+def test_ensure_file_directory(mkdir):
     a = {'x': 1, 'y': {'a': 1}}
     with tmpfile(extension='yaml') as source:
         with tmpfile() as destination:
@@ -163,7 +163,7 @@ def test_ensure_config_file_directory(mkdir):
             with open(source, 'w') as f:
                 yaml.dump(a, f)
 
-            ensure_config_file(source=source, destination=destination)
+            ensure_file(source=source, destination=destination)
             assert os.path.isdir(destination)
             [fn] = os.listdir(destination)
             assert os.path.split(fn)[1] == os.path.split(source)[1]

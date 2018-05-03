@@ -173,8 +173,11 @@ This function can also be used as a context manager for consistent cleanup.
        ...
 
 
-Updating and Merging Configuration
-----------------------------------
+Updating Configuration
+----------------------
+
+Manipulating configuration dictionaries
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. autosummary::
    dask.config.merge
@@ -207,6 +210,134 @@ to either config.  This is often used to update the global configuration in
    dask.config.update(dask.config, new, priority='new')  # Give priority to new values
    dask.config.update(dask.config, new, priority='old')  # Give priority to old values
 
+Refreshing Configuration
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autosummary::
+   dask.config.collect
+   dask.config.refresh
+
+If you change your environment variables or YAML files Dask will not
+immediately see the changes.  Instead, you can call ``refresh`` to go through
+the configuration collection process and update the default configuration.
+
+.. code-block:: python
+
+   >>> dask.config.config
+   {}
+
+   >>> # make some changes to yaml files
+
+   >>> dask.config.refresh()
+   >>> dask.config.config
+   {...}
+
+This function uses ``dask.config.collect``, which returns the configuration
+without modifying the global configuration.  You might use this to determine
+the configuration of particular paths not yet on the config path.
+
+.. code-block:: python
+
+   >>> dask.config.collect(paths=[...])
+   {...}
+
+Downstream Libraries
+--------------------
+
+.. autosummary::
+   dask.config.ensure_file
+   dask.config.update
+
+Downstream Dask libraries often follow a standard convention to use the central
+Dask configuration.  This section provides recommendations for integration,
+using a fictional project, ``dask-foo``, as an example.
+
+Downstream projects typically follow the following convention:
+
+1.  Maintain default configuration in a YAML file within their source
+    directory::
+
+       setup.py
+       dask_foo/__init__.py
+       dask_foo/config.py
+       dask_foo/core.py
+       dask_foo/foo.yaml  # <---
+
+2.  Place configuration in that file within a namespace for the project
+
+    .. code-block:: yaml
+
+       # dask_foo/foo.yaml
+
+       foo:
+         color: red
+         admin:
+           a: 1
+           b: 2
+
+3.  Within a config.py file (or anywhere) load that default config file and
+    update it into the global configuration
+
+    .. code-block:: python
+
+       # dask_foo/config.py
+       import os
+       import yaml
+
+       import dask.config
+
+       fn = os.path.join(os.path.dirname(__file__), 'foo.yaml')
+
+       with open(fn) as f:
+           defaults = yaml.load(f)
+
+       dask.config.update(dask.config.config, defaults, priority='old')
+
+4.  Within that same config.py file, copy the ``'foo.yaml'`` file to the user's
+    configuration directory if it doesn't already exist.
+
+    We also comment the file to make it easier for us to change defaults in the
+    future.
+
+    .. code-block:: python
+
+       # ... continued from above
+
+       dask.config.ensure_file(source=fn, comment=True)
+
+    The user can investigate ``~/.config/dask/*.yaml`` to see all of the
+    commented out configuration files to which they have access.
+
+5.  Ensure that this file is run on import by including it in ``__init__.py``
+
+    .. code-block:: python
+
+       # dask_foo/__init__.py
+
+       from . import config
+
+5.  Within ``dask_foo`` code, use the ``dask.config.get`` function to access
+    configuration values
+
+    .. code-block:: python
+
+       # dask_foo/core.py
+
+       def process(fn, color=dask.config.get('foo.color')):
+           ...
+
+This process keeps configuration in a central place, but also keeps it safe
+within namespaces.  It places config files in an easy to access location
+,``~/.config/dask/\*.yaml`` by default so that users can easily discover what
+they can change, but maintains the actual defaults within the source code, so
+that they more closely track changes in the library.
+
+However, downstream libraries may choose alternative solutions, such as
+isolating their configuration within their library, rather than using the
+global dask.config system.  All functions in the ``dask.config`` module also
+work with parameters, and do not need to mutate global state.
+
+
 API
 ---
 
@@ -214,3 +345,6 @@ API
 .. autofunction:: dask.config.set
 .. autofunction:: dask.config.merge
 .. autofunction:: dask.config.update
+.. autofunction:: dask.config.collect
+.. autofunction:: dask.config.refresh
+.. autofunction:: dask.config.ensure_file
