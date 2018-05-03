@@ -4,10 +4,8 @@ Changelog
 1.21.8 - 2018-05-03
 -------------------
 
--  Remove errant print statement (#1957) `Matthew Rocklin`_
--  Only add reevaluate_occupancy callback once (#1953) `Tony Lorenzo`_
-
-
+-  Remove errant print statement (:pr:`1957`) `Matthew Rocklin`_
+-  Only add reevaluate_occupancy callback once (:pr:`1953`) `Tony Lorenzo`_
 
 
 1.21.7 - 2018-05-02
