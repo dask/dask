@@ -268,7 +268,6 @@ often a better choice.  If you are a *core developer*, then you should start her
    caching.rst
    bytes.rst
    remote-data-services.rst
-   faq.rst
    cite.rst
    funding.rst
    logos.rst
