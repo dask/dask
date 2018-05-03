@@ -274,8 +274,6 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
 
                     division.append(division_end)
                     divisions.append(division)
-
-                    print(divisions)
                 else:
                     divisions.append(None)
 
@@ -302,21 +300,18 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
             raise ValueError("Start row number ({}) is above or equal to stop "
                              "row number ({})".format(start, stop))
 
-        if division:
-            dsk = {(name, 0): (_pd_read_hdf, path, key, lock,
-                               base)}
+        def update(s):
+            new = base.copy()
+            new.update({'start': s, 'stop': s + chunksize})
+            return new
 
+        dsk = dict(((name, i), (_pd_read_hdf, path, key, lock,
+                                update(s)))
+                   for i, s in enumerate(range(start, stop, chunksize)))
+
+        if division:
             divisions = division
         else:
-            def update(s):
-                new = base.copy()
-                new.update({'start': s, 'stop': s + chunksize})
-                return new
-
-            dsk = dict(((name, i), (_pd_read_hdf, path, key, lock,
-                                    update(s)))
-                       for i, s in enumerate(range(start, stop, chunksize)))
-
             divisions = [None] * (len(dsk) + 1)
 
         return new_dd_object(dsk, name, empty, divisions)
