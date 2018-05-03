@@ -120,7 +120,7 @@ def collect_yaml(paths=paths):
     return configs
 
 
-def collect_env(env=os.environ):
+def collect_env(env=None):
     """ Collect config from environment variables
 
     This grabs environment variables of the form "DASK_FOO__BAR_BAZ=123" and
@@ -132,6 +132,8 @@ def collect_env(env=os.environ):
     -  Replaces ``_`` (underscore) with a hyphen.
     -  Calls ``ast.literal_eval`` on the value
     """
+    if env is None:
+        env = os.environ
     d = {}
     for name, value in env.items():
         if name.startswith('DASK_'):
@@ -240,7 +242,7 @@ class set(object):
         self.config.update(self.old)
 
 
-def collect(paths=paths, env=os.environ):
+def collect(paths=paths, env=None):
     """
     Collect configuration from paths and environment variables
 
@@ -260,6 +262,8 @@ def collect(paths=paths, env=os.environ):
     --------
     dask.config.refresh: collect configuration and update into primary config
     """
+    if os is None:
+        env = os.environ
     configs = []
 
     if yaml:
