@@ -266,18 +266,16 @@ def _read_single_hdf(path, key, start=0, stop=None, columns=None,
                 else:
                     stops.append(stop)
                 if sorted_index:
-                    if chunksize is not None:
-                        division = [storer.read_column('index', start=start, stop=start + 1)[0]
-                                    for start in range(0, storer.nrows, chunksize)]
-                        division_end = storer.read_column('index',
-                                                          start=storer.nrows - 1,
-                                                          stop=storer.nrows)[0]
-                        divisions += division + [division_end]
-                    else:
-                        division_start = storer.read_column('index', start=0, stop=1)[0]
-                        division_end = storer.read_column('index', start=storer.nrows - 1,
-                                                          stop=storer.nrows)[0]
-                        divisions.append([division_start, division_end])
+                    division = [storer.read_column('index', start=start, stop=start + 1)[0]
+                                for start in range(0, storer.nrows, chunksize)]
+                    division_end = storer.read_column('index',
+                                                      start=storer.nrows - 1,
+                                                      stop=storer.nrows)[0]
+
+                    division.append(division_end)
+                    divisions.append(division)
+
+                    print(divisions)
                 else:
                     divisions.append(None)
 
