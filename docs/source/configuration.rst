@@ -62,8 +62,23 @@ Specify Configuration
 YAML files
 ~~~~~~~~~~
 
-It is common to specify configuration in YAML files any of a few possible
-locations:
+You can specify configuration values in YAML files like the following:
+
+.. code-block:: yaml
+
+   logging:
+     distributed: info
+     bokeh: critical
+     tornado: critical
+
+   scheduler:
+     work-stealing: True
+     allowed-failures: 5
+
+    admin:
+      log-format: '%(name)s - %(levelname)s - %(message)s'
+
+These files can live in any of the following locations:
 
 1.  The ``~/.config/dask`` directory in the user's home directory
 2.  The ``{sys.prefix}/etc/dask`` directory local to Python
