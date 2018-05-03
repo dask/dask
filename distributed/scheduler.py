@@ -13,6 +13,7 @@ import pickle
 import random
 import six
 
+import psutil
 from sortedcontainers import SortedSet, SortedDict
 try:
     from cytoolz import frequencies, merge, pluck, merge_sorted, first
@@ -747,6 +748,7 @@ class Scheduler(ServerNode):
         self.allowed_failures = allowed_failures
         self.validate = validate
         self.status = None
+        self.proc = psutil.Process()
         self.delete_interval = parse_timedelta(delete_interval, default='ms')
         self.synchronize_worker_interval = parse_timedelta(synchronize_worker_interval, default='ms')
         self.digests = None
@@ -1056,6 +1058,8 @@ class Scheduler(ServerNode):
             for k, v in self.services.items():
                 logger.info("%11s at: %25s", k, '%s:%d' % (listen_ip, v.port))
 
+            self.loop.add_callback(self.reevaluate_occupancy)
+
         if self.scheduler_file:
             with open(self.scheduler_file, 'w') as f:
                 json.dump(self.identity(), f, indent=2)
@@ -1068,7 +1072,6 @@ class Scheduler(ServerNode):
 
             finalize(self, del_scheduler_file)
 
-        self.loop.add_callback(self.reevaluate_occupancy)
         self.start_periodic_callbacks()
 
         setproctitle("dask-scheduler [%s]" % (self.address,))
@@ -4135,12 +4138,10 @@ class Scheduler(ServerNode):
             if self.status == 'closed':
                 return
 
-            import psutil
-            proc = psutil.Process()
             last = time()
             next_time = timedelta(seconds=DELAY)
 
-            if proc.cpu_percent() < 50:
+            if self.proc.cpu_percent() < 50:
                 workers = list(self.workers.values())
                 for i in range(len(workers)):
                     ws = workers[worker_index % len(workers)]

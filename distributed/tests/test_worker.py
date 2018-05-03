@@ -27,7 +27,7 @@ from distributed.client import wait
 from distributed.scheduler import Scheduler
 from distributed.metrics import time
 from distributed.worker import Worker, error_message, logger, TOTAL_MEMORY
-from distributed.utils import tmpfile
+from distributed.utils import tmpfile, format_bytes
 from distributed.utils_test import (inc, mul, gen_cluster, div, dec,
                                     slow, slowinc, gen_test, cluster,
                                     captured_logger)
@@ -1016,7 +1016,8 @@ def test_pause_executor(c, s, a):
         futures = c.map(slowinc, range(10), delay=0.1)
 
         yield gen.sleep(0.3)
-        assert a.paused
+        assert a.paused, (format_bytes(psutil.Process().memory_info().rss),
+                          format_bytes(a.memory_limit))
         out = logger.getvalue()
         assert 'memory' in out.lower()
         assert 'pausing' in out.lower()
