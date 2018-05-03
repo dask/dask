@@ -14,6 +14,40 @@ labs.  These systems commonly have the following attributes:
 3.  A high performance network interconnect, such as Infiniband
 4.  Little or no node-local storage
 
+Where to start
+--------------
+
+Most of this page documents best practices to use Dask on an HPC cluster.  This
+is technical and aimed both at users with some experience deploying Dask and
+also system administrators.
+
+New users may instead prefer to start with one of the following projects, which
+provide easy high-level access to Dask using resource managers that are
+commonly deployed on HPC systems:
+
+1.  `dask-jobqueue <https://dask-jobqueue.readthedocs.io>`_ for use with PBS,
+    SLURM, and SGE resource managers
+2.  `dask-drmaa <https://github.com/dask/dask-drmaa>`_ for use with any DRMAA
+    compliant resource manager
+
+They provide interfaces that look like the following:
+
+.. code-block:: python
+
+   from dask_jobqueue import PBSCluster
+
+   cluster = PBSCluster(processes=18,
+                        threads=4, memory="6GB",
+                        project='P48500028',
+                        queue='premium',
+                        resource_spec='select=1:ncpus=36:mem=109G',
+                        walltime='02:00:00')
+
+   cluster.start_workers(100)  # Start 100 jobs that match the description above
+
+   from dask.distributed import Client
+   client = Client(cluster)    # Connect to that cluster
+
 
 Using a Shared Network File System and a Job Scheduler
 ------------------------------------------------------
