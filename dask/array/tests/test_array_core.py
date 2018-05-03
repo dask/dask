@@ -3242,3 +3242,35 @@ def test_zarr_roundtrip():
         a2 = da.from_zarr(d)
         assert_eq(a, a2)
         assert a2.chunks == a.chunks
+
+
+def test_zarr_group():
+    zarr = pytest.importorskip('zarr')
+    with tmpdir() as d:
+        a = da.zeros((3, 3), chunks=(1, 1))
+        with pytest.raises((OSError, ValueError)):
+            a.to_zarr(d, component='test', overwrite_group=False)
+        a.to_zarr(d, component='test', overwrite_group=True)
+
+        # second time is fine, group exists
+        a.to_zarr(d, component='test2', overwrite_group=False)
+        a.to_zarr(d, component='nested/test', overwrite_group=False)
+        group = zarr.open_group(d, mode='r')
+        assert list(group) == ['nested', 'test', 'test2']
+        assert 'test' in group['nested']
+
+        a2 = da.from_zarr(d, component='test')
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
+
+
+def test_zarr_nocompute():
+    pytest.importorskip('zarr')
+    with tmpdir() as d:
+        a = da.zeros((3, 3), chunks=(1, 1))
+        out = a.to_zarr(d, compute=False)
+        assert isinstance(out, Delayed)
+        dask.compute(out)
+        a2 = da.from_zarr(d)
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
