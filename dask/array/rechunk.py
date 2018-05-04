@@ -191,6 +191,9 @@ def blockshape_dict_to_tuple(old_chunks, d):
 
     >>> blockshape_dict_to_tuple(((4, 4), (5, 5)), {1: 3})
     ((4, 4), (3, 3, 3, 1))
+    >>> blockshape_dict_to_tuple(((4, 4), (5, 5)), {1: -1})
+    ((4, 4), (10,))
+
     """
     shape = tuple(map(sum, old_chunks))
     new_chunks = list(old_chunks)
@@ -228,15 +231,17 @@ def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
     Parameters
     ----------
 
-    x:   dask array
-    chunks:  tuple
-        The new block dimensions to create
+    x: dask array
+        Array to be rechunked.
+    chunks:  int, tuple or dict
+        The new block dimensions to create. -1 indicates the full size of the
+        corresponding dimension.
     threshold: int
-        The graph growth factor under which we don't bother
-        introducing an intermediate step
+        The graph growth factor under which we don't bother introducing an
+        intermediate step.
     block_size_limit: int
         The maximum block size (in bytes) we want to produce during an
-        intermediate step
+        intermediate step.
     """
     threshold = threshold or DEFAULT_THRESHOLD
     block_size_limit = block_size_limit or DEFAULT_BLOCK_SIZE_LIMIT
