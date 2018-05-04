@@ -383,3 +383,6 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'numpy': ('http://docs.scipy.org/doc/numpy', None),
     }
+
+def setup(app):
+    app.add_stylesheet("http://dask.pydata.org/en/latest/_static/style.css")
