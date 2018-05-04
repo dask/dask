@@ -8,7 +8,7 @@ Changelog
 Array
 +++++
 
--
+- Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
 
 Dataframe
 +++++++++
