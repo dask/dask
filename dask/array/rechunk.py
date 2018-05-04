@@ -195,8 +195,9 @@ def blockshape_dict_to_tuple(old_chunks, d):
     shape = tuple(map(sum, old_chunks))
     new_chunks = list(old_chunks)
     for k, v in d.items():
-        div = shape[k] // v
-        mod = shape[k] % v
+        if v == -1:
+            v = shape[k]
+        div, mod = divmod(shape[k], v)
         new_chunks[k] = (v,) * div + ((mod,) if mod else ())
     return tuple(new_chunks)
 
