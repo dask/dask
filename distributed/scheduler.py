@@ -24,6 +24,7 @@ from tornado import gen
 from tornado.gen import Return
 from tornado.ioloop import IOLoop
 
+from dask.core import reverse_dict
 from dask.order import order
 
 from .batched import BatchedSend
@@ -1303,7 +1304,7 @@ class Scheduler(ServerNode):
         dependencies = dependencies or {}
 
         n = 0
-        while len(tasks) != n:  # walk thorough new tasks, cancel any bad deps
+        while len(tasks) != n:  # walk through new tasks, cancel any bad deps
             n = len(tasks)
             for k, deps in list(dependencies.items()):
                 if any(dep not in self.tasks and dep not in tasks
@@ -1316,13 +1317,34 @@ class Scheduler(ServerNode):
                     self.report({'op': 'cancelled-key', 'key': k}, client=client)
                     self.client_releases_keys(keys=[k], client=client)
 
-        # Remove any self-dependencies (happens on test_publish_bag()
-        # and others)
-        for k in dependencies:
-            deps = set(dependencies[k])
+        # Remove any self-dependencies (happens on test_publish_bag() and others)
+        for k, v in dependencies.items():
+            deps = set(v)
             if k in deps:
                 deps.remove(k)
             dependencies[k] = deps
+
+        # Avoid computation that is already finished
+        already_in_memory = set()  # tasks that are already done
+        for k, v in dependencies.items():
+            if v and k in self.tasks and self.tasks[k].state in ('memory', 'erred'):
+                already_in_memory.add(k)
+
+        if already_in_memory:
+            dependents = reverse_dict(dependencies)
+            stack = list(already_in_memory)
+            done = set(already_in_memory)
+            while stack:  # remove unnecessary dependencies
+                key = stack.pop()
+                ts = self.tasks[key]
+                for dep in dependencies[key]:
+                    if all(d in done for d in dependents[dep]):
+                        done.add(dep)
+                        stack.append(dep)
+
+            for d in done:
+                del tasks[d]
+                del dependencies[d]
 
         # Get or create task states
         stack = list(keys)

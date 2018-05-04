@@ -7,6 +7,7 @@ import json
 from operator import add, mul
 import sys
 
+import dask
 from dask import delayed
 from toolz import merge, concat, valmap, first, frequencies
 from tornado import gen
@@ -1219,3 +1220,94 @@ def test_mising_data_errant_worker(c, s, w1, w2, w3):
             yield gen.sleep(0.001)
         w1._close()
         yield wait(y)
+
+
+@gen_cluster(client=True)
+def test_dont_recompute_if_persisted(c, s, a, b):
+    x = delayed(inc)(1, dask_key_name='x')
+    y = delayed(inc)(x, dask_key_name='y')
+
+    yy = y.persist()
+    yield wait(yy)
+
+    old = list(s.transition_log)
+
+    yyy = y.persist()
+    yield wait(yyy)
+
+    yield gen.sleep(0.100)
+    assert list(s.transition_log) == old
+
+
+@gen_cluster(client=True)
+def test_dont_recompute_if_persisted_2(c, s, a, b):
+    x = delayed(inc)(1, dask_key_name='x')
+    y = delayed(inc)(x, dask_key_name='y')
+    z = delayed(inc)(y, dask_key_name='z')
+
+    yy = y.persist()
+    yield wait(yy)
+
+    old = s.story('x', 'y')
+
+    zz = z.persist()
+    yield wait(zz)
+
+    yield gen.sleep(0.100)
+    assert s.story('x', 'y') == old
+
+
+@gen_cluster(client=True)
+def test_dont_recompute_if_persisted_3(c, s, a, b):
+    x = delayed(inc)(1, dask_key_name='x')
+    y = delayed(inc)(2, dask_key_name='y')
+    z = delayed(inc)(y, dask_key_name='z')
+    w = delayed(add)(x, z, dask_key_name='w')
+
+    ww = w.persist()
+    yield wait(ww)
+
+    old = list(s.transition_log)
+
+    www = w.persist()
+    yield wait(www)
+    yield gen.sleep(0.100)
+    assert list(s.transition_log) == old
+
+
+@gen_cluster(client=True)
+def test_dont_recompute_if_persisted_4(c, s, a, b):
+    x = delayed(inc)(1, dask_key_name='x')
+    y = delayed(inc)(x, dask_key_name='y')
+    z = delayed(inc)(x, dask_key_name='z')
+
+    yy = y.persist()
+    yield wait(yy)
+
+    old = s.story('x')
+
+    while s.tasks['x'].state == 'memory':
+        yield gen.sleep(0.01)
+
+    yyy, zzz = dask.persist(y, z)
+    yield wait([yyy, zzz])
+
+    new = s.story('x')
+    assert len(new) > len(old)
+
+
+@gen_cluster(client=True)
+def test_dont_recompute_if_erred(c, s, a, b):
+    x = delayed(inc)(1, dask_key_name='x')
+    y = delayed(div)(x, 0, dask_key_name='y')
+
+    yy = y.persist()
+    yield wait(yy)
+
+    old = list(s.transition_log)
+
+    yyy = y.persist()
+    yield wait(yyy)
+
+    yield gen.sleep(0.100)
+    assert list(s.transition_log) == old
