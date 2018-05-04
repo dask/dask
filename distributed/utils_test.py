@@ -805,14 +805,20 @@ def terminate_process(proc):
 
 
 @contextmanager
-def popen(*args, **kwargs):
+def popen(args, **kwargs):
     kwargs['stdout'] = subprocess.PIPE
     kwargs['stderr'] = subprocess.PIPE
     if sys.platform.startswith('win'):
         # Allow using CTRL_C_EVENT / CTRL_BREAK_EVENT
         kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
     dump_stdout = False
-    proc = subprocess.Popen(*args, **kwargs)
+
+    args = list(args)
+    if sys.platform.startswith('win'):
+        args[0] = os.path.join(sys.prefix, 'Scripts', args[0])
+    else:
+        args[0] = os.path.join(sys.prefix, 'bin', args[0])
+    proc = subprocess.Popen(args, **kwargs)
     try:
         yield proc
     except Exception:
