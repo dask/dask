@@ -8,7 +8,7 @@ import sys
 import pytest
 from toolz import concat, valmap, partial
 
-from dask import compute, get
+from dask import compute
 from dask.compatibility import FileNotFoundError, unicode
 from dask.utils import filetexts
 from dask.bytes import compression
@@ -17,7 +17,7 @@ from dask.bytes.core import (read_bytes, open_files, FileSystem,
                              get_pyarrow_filesystem, logical_size,
                              get_fs_token_paths)
 
-compute = partial(compute, get=get)
+compute = partial(compute, scheduler='sync')
 
 files = {'.test.accounts.1.json': (b'{"amount": 100, "name": "Alice"}\n'
                                    b'{"amount": 200, "name": "Bob"}\n'

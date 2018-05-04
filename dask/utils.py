@@ -19,7 +19,6 @@ from weakref import WeakValueDictionary
 
 from .compatibility import get_named_args, getargspec, PY3, unicode, bind_method
 from .core import get_deps
-from .context import _globals
 from .optimization import key_split    # noqa: F401
 
 
@@ -799,20 +798,18 @@ class SerializableLock(object):
     __repr__ = __str__
 
 
-def effective_get(get=None, collection=None):
-    """Get the effective get method used in a given situation"""
-    return (get or _globals.get('get') or
-            getattr(collection, '__dask_scheduler__', None))
-
-
-def get_scheduler_lock(get=None, collection=None):
+def get_scheduler_lock(get=None, collection=None, scheduler=None):
     """Get an instance of the appropriate lock for a certain situation based on
        scheduler used."""
     from . import multiprocessing
-    actual_get = effective_get(get, collection)
+    from .base import get_scheduler
+    actual_get = get_scheduler(get=get,
+                               collections=[collection],
+                               scheduler=scheduler)
 
     if actual_get == multiprocessing.get:
         return mp.Manager().Lock()
+
     return SerializableLock()
 
 

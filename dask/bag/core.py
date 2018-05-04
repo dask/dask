@@ -134,8 +134,8 @@ def _to_textfiles_chunk(data, lazy_file):
 
 
 def to_textfiles(b, path, name_function=None, compression='infer',
-                 encoding=system_encoding, compute=True, get=None,
-                 storage_options=None):
+                 encoding=system_encoding, compute=True, storage_options=None,
+                 **kwargs):
     """ Write dask Bag to disk, one filename per partition, one line per element.
 
     **Paths**: This will create one file for each partition in your bag. You
@@ -200,7 +200,7 @@ def to_textfiles(b, path, name_function=None, compression='infer',
     out = type(b)(merge(dsk, b.dask), name, b.npartitions)
 
     if compute:
-        out.compute(get=get)
+        out.compute(**kwargs)
         return [f.path for f in files]
     else:
         return out.to_delayed()
@@ -691,10 +691,10 @@ class Bag(DaskMethodsMixin):
 
     @wraps(to_textfiles)
     def to_textfiles(self, path, name_function=None, compression='infer',
-                     encoding=system_encoding, compute=True, get=None,
-                     storage_options=None):
+                     encoding=system_encoding, compute=True,
+                     storage_options=None, **kwargs):
         return to_textfiles(self, path, name_function, compression, encoding,
-                            compute, get=get, storage_options=storage_options)
+                            compute, storage_options=storage_options, **kwargs)
 
     def fold(self, binop, combine=None, initial=no_default, split_every=None):
         """ Parallelizable reduction
