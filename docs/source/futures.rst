@@ -582,12 +582,14 @@ API
    fire_and_forget
    get_client
    secede
+   rejoin
    wait
 
 .. autofunction:: as_completed
 .. autofunction:: fire_and_forget
 .. autofunction:: get_client
 .. autofunction:: secede
+.. autofunction:: rejoin
 .. autofunction:: wait
 
 .. autoclass:: Client

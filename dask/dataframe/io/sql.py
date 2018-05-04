@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
-import six
 
 from ... import delayed
+from ...compatibility import string_types
 from .io import from_delayed, from_pandas
 
 
@@ -83,27 +83,27 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         raise ValueError("Must specify index column to partition on")
     engine = sa.create_engine(uri)
     m = sa.MetaData()
-    if isinstance(table, six.string_types):
+    if isinstance(table, string_types):
         table = sa.Table(table, m, autoload=True, autoload_with=engine,
                          schema=schema)
 
-    index = (table.columns[index_col] if isinstance(index_col, six.string_types)
+    index = (table.columns[index_col] if isinstance(index_col, string_types)
              else index_col)
-    if not isinstance(index_col, six.string_types + (elements.Label,)):
+    if not isinstance(index_col, string_types + (elements.Label,)):
         raise ValueError('Use label when passing an SQLAlchemy instance'
                          ' as the index (%s)' % index)
     if divisions and npartitions:
         raise TypeError('Must supply either divisions or npartitions, not both')
 
-    columns = ([(table.columns[c] if isinstance(c, six.string_types) else c)
+    columns = ([(table.columns[c] if isinstance(c, string_types) else c)
                 for c in columns]
                if columns else list(table.columns))
     if index_col not in columns:
         columns.append(table.columns[index_col]
-                       if isinstance(index_col, six.string_types)
+                       if isinstance(index_col, string_types)
                        else index_col)
 
-    if isinstance(index_col, six.string_types):
+    if isinstance(index_col, string_types):
         kwargs['index_col'] = index_col
     else:
         # function names get pandas auto-named

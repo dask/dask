@@ -1221,7 +1221,7 @@ class SeriesGroupBy(_GroupBy):
         if self._slice:
             result = result[self._slice]
 
-        if not isinstance(arg, (list, dict)):
+        if not isinstance(arg, (list, dict)) and isinstance(result, DataFrame):
             result = result[result.columns[0]]
 
         return result

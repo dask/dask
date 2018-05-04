@@ -47,13 +47,13 @@ You can specify these functions in any of the following ways:
 
     .. code-block:: python
 
-       x.compute(get=dask.threaded.get)
+       x.compute(scheduler='threads')
 
 -   With a context manager
 
     .. code-block:: python
 
-       with dask.set_options(get=dask.threaded.get):
+       with dask.set_options(scheduler='threads'):
            x.compute()
            y.compute()
 
@@ -61,7 +61,7 @@ You can specify these functions in any of the following ways:
 
     .. code-block:: python
 
-       dask.set_options(get=dask.threaded.get)
+       dask.set_options(scheduler='threads')
 
 
 Use the Distributed Scheduler
