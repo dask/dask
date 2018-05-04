@@ -1113,7 +1113,7 @@ def test_accumulate():
 
 def test_groupby_tasks():
     b = db.from_sequence(range(160), npartitions=4)
-    out = b.groupby(lambda x: x % 10, max_branch=4, method='tasks')
+    out = b.groupby(lambda x: x % 10, max_branch=4, shuffle='tasks')
     partitions = dask.get(out.dask, out.__dask_keys__())
 
     for a in partitions:
@@ -1122,7 +1122,7 @@ def test_groupby_tasks():
                 assert not set(pluck(0, a)) & set(pluck(0, b))
 
     b = db.from_sequence(range(1000), npartitions=100)
-    out = b.groupby(lambda x: x % 123, method='tasks')
+    out = b.groupby(lambda x: x % 123, shuffle='tasks')
     assert len(out.dask) < 100**2
     partitions = dask.get(out.dask, out.__dask_keys__())
 
@@ -1132,7 +1132,7 @@ def test_groupby_tasks():
                 assert not set(pluck(0, a)) & set(pluck(0, b))
 
     b = db.from_sequence(range(10000), npartitions=345)
-    out = b.groupby(lambda x: x % 2834, max_branch=24, method='tasks')
+    out = b.groupby(lambda x: x % 2834, max_branch=24, shuffle='tasks')
     partitions = dask.get(out.dask, out.__dask_keys__())
 
     for a in partitions:
@@ -1145,26 +1145,26 @@ def test_groupby_tasks_names():
     b = db.from_sequence(range(160), npartitions=4)
     func = lambda x: x % 10
     func2 = lambda x: x % 20
-    assert (set(b.groupby(func, max_branch=4, method='tasks').dask) ==
-            set(b.groupby(func, max_branch=4, method='tasks').dask))
-    assert (set(b.groupby(func, max_branch=4, method='tasks').dask) !=
-            set(b.groupby(func, max_branch=2, method='tasks').dask))
-    assert (set(b.groupby(func, max_branch=4, method='tasks').dask) !=
-            set(b.groupby(func2, max_branch=4, method='tasks').dask))
+    assert (set(b.groupby(func, max_branch=4, shuffle='tasks').dask) ==
+            set(b.groupby(func, max_branch=4, shuffle='tasks').dask))
+    assert (set(b.groupby(func, max_branch=4, shuffle='tasks').dask) !=
+            set(b.groupby(func, max_branch=2, shuffle='tasks').dask))
+    assert (set(b.groupby(func, max_branch=4, shuffle='tasks').dask) !=
+            set(b.groupby(func2, max_branch=4, shuffle='tasks').dask))
 
 
 @pytest.mark.parametrize('size,npartitions,groups', [(1000, 20, 100),
                                                      (12345, 234, 1042)])
 def test_groupby_tasks_2(size, npartitions, groups):
     func = lambda x: x % groups
-    b = db.range(size, npartitions=npartitions).groupby(func, method='tasks')
+    b = db.range(size, npartitions=npartitions).groupby(func, shuffle='tasks')
     result = b.compute(scheduler='sync')
     assert dict(result) == groupby(func, range(size))
 
 
 def test_groupby_tasks_3():
     func = lambda x: x % 10
-    b = db.range(20, npartitions=5).groupby(func, method='tasks', max_branch=2)
+    b = db.range(20, npartitions=5).groupby(func, shuffle='tasks', max_branch=2)
     result = b.compute(scheduler='sync')
     assert dict(result) == groupby(func, range(20))
     # assert b.npartitions == 5
