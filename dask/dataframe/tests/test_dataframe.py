@@ -956,7 +956,7 @@ def test_unknown_divisions():
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
     meta = make_meta({'a': 'i8', 'b': 'i8'})
     d = dd.DataFrame(dsk, 'x', meta, [None, None, None, None])
-    full = d.compute(get=dask.get)
+    full = d.compute(scheduler='sync')
 
     assert_eq(d.a.sum(), full.a.sum())
     assert_eq(d.a + d.b + 1, full.a + full.b + 1)
@@ -2741,7 +2741,7 @@ def test_hash_split_unique(npartitions, split_every, split_out):
 
     assert len([k for k, v in dependencies.items() if not v]) == npartitions
     assert dropped.npartitions == (split_out or 1)
-    assert sorted(dropped.compute(get=dask.get)) == sorted(s.unique())
+    assert sorted(dropped.compute(scheduler='sync')) == sorted(s.unique())
 
 
 @pytest.mark.parametrize('split_every', [None, 2])

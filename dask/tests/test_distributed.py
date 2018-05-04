@@ -97,12 +97,12 @@ def test_futures_to_delayed_array(loop):
 
 @gen_cluster(client=True)
 def test_local_get_with_distributed_active(c, s, a, b):
-    with dask.set_options(get=dask.get):
+    with dask.set_options(scheduler='sync'):
         x = delayed(inc)(1).persist()
     yield gen.sleep(0.01)
     assert not s.tasks # scheduler hasn't done anything
 
-    y = delayed(inc)(2).persist(get=dask.get)
+    y = delayed(inc)(2).persist(scheduler='sync')
     yield gen.sleep(0.01)
     assert not s.tasks # scheduler hasn't done anything
 
@@ -147,4 +147,4 @@ def test_futures_in_graph(loop):
             xxyy2 = c.persist(xxyy)
             xxyy3 = delayed(add)(xxyy2, 10)
 
-            assert xxyy3.compute(get=c.get) == ((1 + 1) + (2 + 2)) + 10
+            assert xxyy3.compute(scheduler='dask.distributed') == ((1 + 1) + (2 + 2)) + 10

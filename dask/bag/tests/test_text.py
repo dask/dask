@@ -3,12 +3,12 @@ from __future__ import print_function, division, absolute_import
 import pytest
 from toolz import partial
 
-from dask import compute, get
+from dask import compute
 from dask.utils import filetexts
 from dask.bytes import compression
 from dask.bag.text import read_text
 
-compute = partial(compute, get=get)
+compute = partial(compute, scheduler='sync')
 
 
 files = {'.test.accounts.1.json':  ('{"amount": 100, "name": "Alice"}\n'
@@ -58,5 +58,5 @@ def test_errors():
             read_text('.test.foo', encoding='ascii').compute()
 
         result = read_text('.test.foo', encoding='ascii', errors='ignore')
-        result = result.compute(get=get)
+        result = result.compute(scheduler='sync')
         assert result == ['Jos\n', 'Alice']

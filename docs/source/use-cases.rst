@@ -213,7 +213,7 @@ parallelize and load balance the work.
 .. code-block:: python
 
    import dask.threaded
-   results = compute(*values, get=dask.threaded.get)
+   results = compute(*values, scheduler='threads')
 
 **Multiple Processes**:
 
@@ -221,7 +221,7 @@ parallelize and load balance the work.
 
 
    import dask.multiprocessing
-   results = compute(*values, get=dask.multiprocessing.get)
+   results = compute(*values, scheduler='processes')
 
 **Distributed Cluster**:
 
@@ -230,7 +230,7 @@ parallelize and load balance the work.
 
    from dask.distributed import Client
    client = Client("cluster-address:8786")
-   results = compute(*values, get=client.get)
+   results = compute(*values, scheduler='distributed')
 
 
 Complex dependencies

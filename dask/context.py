@@ -32,8 +32,8 @@ class set_options(object):
 
     Examples
     --------
-    >>> with set_options(get=dask.get):  # doctest: +SKIP
-    ...     x = np.array(x)  # uses dask.get internally
+    >>> with set_options(scheduler='single-threaded'):  # doctest: +SKIP
+    ...     x = np.array(x)  # uses single-threaded scheduler internally
     """
     def __init__(self, **kwargs):
         self.old = _globals.copy()

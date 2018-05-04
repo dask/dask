@@ -11,8 +11,6 @@ import dask
 import dask.dataframe as dd
 from dask import delayed
 from dask.base import compute_as_if_collection
-from dask.threaded import get as threaded_get
-from dask.multiprocessing import get as mp_get
 from dask.dataframe.shuffle import (shuffle,
                                     partitioning_index,
                                     rearrange_by_column,
@@ -59,7 +57,7 @@ def test_shuffle_npartitions_task():
     df = pd.DataFrame({'x': np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=10)
     s = shuffle(ddf, ddf.x, shuffle='tasks', npartitions=17, max_branch=4)
-    sc = s.compute(get=dask.get)
+    sc = s.compute(scheduler='sync')
     assert s.npartitions == 17
     assert set(s.dask).issuperset(set(ddf.dask))
 
@@ -93,7 +91,8 @@ def test_shuffle_from_one_partition_to_one_other(method):
 
     for i in [1, 2]:
         b = shuffle(a, 'x', npartitions=i, shuffle=method)
-        assert len(a.compute(get=dask.get)) == len(b.compute(get=dask.get))
+        assert (len(a.compute(scheduler='sync')) ==
+                len(b.compute(scheduler='sync')))
 
 
 @pytest.mark.parametrize('method', ['disk', 'tasks'])
@@ -216,7 +215,7 @@ def test_set_index_tasks_2(shuffle):
         freq='2H', partition_freq='1M', seed=1)
 
     df2 = df.set_index('name', shuffle=shuffle)
-    df2.value.sum().compute(get=dask.get)
+    df2.value.sum().compute(scheduler='sync')
 
 
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
@@ -243,8 +242,8 @@ def test_shuffle_sort(shuffle):
 
 
 @pytest.mark.parametrize('shuffle', ['tasks', 'disk'])
-@pytest.mark.parametrize('get', [threaded_get, mp_get])
-def test_rearrange(shuffle, get):
+@pytest.mark.parametrize('scheduler', ['threads', 'processes'])
+def test_rearrange(shuffle, scheduler):
     df = pd.DataFrame({'x': np.random.random(10)})
     ddf = dd.from_pandas(df, npartitions=4)
     ddf2 = ddf.assign(y=ddf.x % 4)
@@ -254,7 +253,8 @@ def test_rearrange(shuffle, get):
     assert set(ddf.dask).issubset(result.dask)
 
     # Every value in exactly one partition
-    a = result.compute(get=get)
+    a = result.compute(scheduler=scheduler)
+    get = dask.base.get_scheduler(scheduler=scheduler)
     parts = get(result.dask, result.__dask_keys__())
     for i in a.y.drop_duplicates():
         assert sum(i in part.y for part in parts) == 1
@@ -307,7 +307,7 @@ def test_set_index_divisions_2():
     result = ddf.set_index('y', divisions=['a', 'c', 'd'])
     assert result.divisions == ('a', 'c', 'd')
 
-    assert list(result.compute(get=dask.get).index[-2:]) == ['d', 'd']
+    assert list(result.compute(scheduler='sync').index[-2:]) == ['d', 'd']
 
 
 def test_set_index_divisions_compute():
@@ -665,7 +665,7 @@ def test_temporary_directory(tmpdir):
     ddf = dd.from_pandas(df, npartitions=10, name='x', sort=False)
 
     with dask.set_options(temporary_directory=str(tmpdir),
-                          get=dask.multiprocessing.get):
+                          scheduler='processes'):
         ddf2 = ddf.set_index('x', shuffle='disk')
         ddf2.compute()
         assert any(fn.endswith('.partd') for fn in os.listdir(str(tmpdir)))
@@ -721,7 +721,7 @@ def test_gh_2730():
     dd_left = dd.from_pandas(small, npartitions=3)
     dd_right = dd.from_pandas(large, npartitions=257)
 
-    with dask.set_options(shuffle='tasks', get=dask.get):
+    with dask.set_options(shuffle='tasks', scheduler='sync'):
         dd_merged = dd_left.merge(dd_right, how='inner', on='KEY')
         result = dd_merged.compute()
 

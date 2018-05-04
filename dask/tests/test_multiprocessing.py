@@ -126,7 +126,7 @@ def test_random_seeds(random):
         return tuple(random.randint(0, 10000) for i in range(5))
 
     N = 10
-    with set_options(get=get):
+    with set_options(scheduler='processes'):
         results, = compute([delayed(f, pure=False)() for i in range(N)])
 
     assert len(set(results)) == N
