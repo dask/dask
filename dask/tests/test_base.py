@@ -14,7 +14,7 @@ from dask import delayed
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
                        visualize, persist, function_cache, is_dask_collection,
                        DaskMethodsMixin, optimize, unpack_collections,
-                       named_schedulers)
+                       named_schedulers, get_scheduler)
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
@@ -857,3 +857,12 @@ def test_warn_get_keyword():
         x.compute(get=dask.get)
 
     assert 'scheduler=' in str(record[0].message)
+
+
+def test_get_scheduler():
+    assert get_scheduler() is None
+    assert get_scheduler(scheduler='threads') is dask.threaded.get
+    assert get_scheduler(scheduler='sync') is dask.local.get_sync
+    with dask.set_options(scheduler='threads'):
+        assert get_scheduler(scheduler='threads') is dask.threaded.get
+    assert get_scheduler() is None

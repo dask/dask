@@ -837,6 +837,18 @@ def warn_on_get(get):
 
 
 def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
+    """ Get scheduler function
+
+    There are various ways to specify the scheduler to use:
+
+    1.  Passing in get= parameters (deprecated)
+    2.  Passing in scheduler= parameters
+    3.  Passing these into global confiuration
+    4.  Using defaults of a dask collection
+
+    This function centralizes the logic to determine the right scheduler to use
+    from those many options
+    """
     if get is not None:
         if scheduler is not None:
             raise ValueError("Both get= and scheduler= provided.  Choose one")
@@ -868,7 +880,8 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     if cls is not None:
         return cls.__dask_scheduler__
 
-    collections = [c for c in collections if c is not None]
+    if collections:
+        collections = [c for c in collections if c is not None]
     if collections:
         get = collections[0].__dask_scheduler__
         if not all(c.__dask_scheduler__ == get for c in collections):
