@@ -200,6 +200,7 @@ einsum_can_optimize = LooseVersion(np.__version__) >= LooseVersion("1.12.0")
 def einsum(*operands, **kwargs):
     dtype = kwargs.get('dtype')
     optimize = kwargs.get('optimize')
+    split_every = kwargs.pop('split_every', None)
     einsum_dtype = dtype
 
     inputs, outputs, ops = parse_einsum_input(operands)
@@ -250,6 +251,7 @@ def einsum(*operands, **kwargs):
     # Now reduce over any extra contraction dimensions
     if ncontract_inds > 0:
         size = len(outputs)
-        return result.sum(axis=list(range(size, size + ncontract_inds)))
+        return result.sum(axis=list(range(size, size + ncontract_inds)),
+                          split_every=split_every)
 
     return result
