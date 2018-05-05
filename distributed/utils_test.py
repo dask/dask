@@ -46,7 +46,7 @@ from .proctitle import enable_proctitle_on_children
 from .security import Security
 from .utils import (ignoring, log_errors, mp_context, get_ip, get_ipv6,
                     DequeHandler, reset_logger_locks)
-from .worker import Worker, TOTAL_MEMORY
+from .worker import Worker, TOTAL_MEMORY, _global_workers
 
 
 logger = logging.getLogger(__name__)
@@ -82,6 +82,7 @@ def invalid_python_script(tmpdir_factory):
 
 @pytest.fixture
 def loop():
+    del _global_workers[:]
     with pristine_loop() as loop:
         # Monkey-patch IOLoop.start to wait for loop stop
         orig_start = loop.start
@@ -105,6 +106,7 @@ def loop():
                 raise
         else:
             is_stopped.wait()
+    del _global_workers[:]
 
 
 @pytest.fixture
@@ -705,6 +707,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
     """
     config['nanny-start-timeout'] = '5s'
     config['connect-timeout'] = '5s'
+    del _global_workers[:]
     worker_kwargs = merge({'memory_limit': TOTAL_MEMORY, 'death_timeout': 5},
                           worker_kwargs)
 
@@ -771,6 +774,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                         pass
                     del w.data
             DequeHandler.clear_all_instances()
+            del _global_workers[:]
             return result
 
         return test_func

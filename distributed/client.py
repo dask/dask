@@ -67,16 +67,24 @@ from .versions import get_versions
 
 logger = logging.getLogger(__name__)
 
-_global_client = [None]
+_global_clients = weakref.WeakValueDictionary()
+_global_client_index = [0]
 
 
 def _get_global_client():
-    wr = _global_client[0]
-    return wr and wr()
+    for k in sorted(_global_clients, reverse=True):
+        c = _global_clients[k]
+        if c.status != 'closed':
+            return c
+        else:
+            del _global_clients[k]
+    return None
 
 
 def _set_global_client(c):
-    _global_client[0] = weakref.ref(c) if c is not None else None
+    if c is not None:
+        _global_clients[_global_client_index[0]] = c
+        _global_client_index[0] += 1
 
 
 class Future(WrappedKey):
@@ -552,8 +560,9 @@ class Client(Node):
 
         self._start_arg = address
         if set_as_default:
-            self._previous_get = _globals.get('get')
-            dask.set_options(get=self.get)
+            self._previous_scheduler = _globals.get('scheduler')
+            dask.set_options(scheduler='dask.distributed')
+
             self._previous_shuffle = _globals.get('shuffle')
             dask.set_options(shuffle='tasks')
 
@@ -987,7 +996,7 @@ class Client(Node):
                 pc.stop()
             self._scheduler_identity = {}
             with ignoring(AttributeError):
-                dask.set_options(get=self._previous_get)
+                dask.set_options(scheduler=self._previous_scheduler)
             with ignoring(AttributeError):
                 dask.set_options(shuffle=self._previous_shuffle)
             if self.get == _globals.get('get'):
@@ -1062,7 +1071,7 @@ class Client(Node):
             self._loop_runner.stop()
 
         with ignoring(AttributeError):
-            dask.set_options(get=self._previous_get)
+            dask.set_options(scheduler=self._previous_scheduler)
         with ignoring(AttributeError):
             dask.set_options(shuffle=self._previous_shuffle)
         if self.get == _globals.get('get'):
@@ -3585,9 +3594,8 @@ def default_client(c=None):
 
 
 def ensure_default_get(client):
-    if _globals['get'] != client.get:
-        print("Setting global dask scheduler to use distributed")
-        dask.set_options(get=client.get)
+    _globals['scheduler'] = 'dask.distributed'
+    _set_global_client(client)
 
 
 def redict_collection(c, dsk):

@@ -283,6 +283,7 @@ class Server(object):
                     if reply:
                         yield comm.write('OK')
                     break
+                result = None
                 try:
                     handler = self.handlers[op]
                 except KeyError:

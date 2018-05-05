@@ -37,6 +37,7 @@ def test_simple(loop):
             assert any(w.data == {x.key: 2} for w in c.workers)
 
 
+@pytest.mark.skipif('sys.version_info[0] == 2', reason='fork issues')
 def test_close_twice():
     with LocalCluster() as cluster:
         with Client(cluster.scheduler_address) as client:
@@ -151,6 +152,7 @@ def test_Client_twice(loop):
             assert c.cluster.scheduler.port != f.cluster.scheduler.port
 
 
+@pytest.mark.skipif('sys.version_info[0] == 2', reason='fork issues')
 def test_defaults():
     from distributed.worker import _ncores
 

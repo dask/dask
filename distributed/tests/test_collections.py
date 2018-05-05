@@ -5,7 +5,6 @@ import pytest
 pytest.importorskip('numpy')
 pytest.importorskip('pandas')
 
-import dask
 import dask.dataframe as dd
 import dask.bag as db
 from distributed import Client
@@ -48,8 +47,7 @@ def test_dataframes(c, s, a, b):
     remote = c.compute(rdf)
     result = yield remote
 
-    tm.assert_frame_equal(result,
-                          ldf.compute(get=dask.get))
+    tm.assert_frame_equal(result, ldf.compute(scheduler='sync'))
 
     exprs = [lambda df: df.x.mean(),
              lambda df: df.y.std(),
@@ -60,7 +58,7 @@ def test_dataframes(c, s, a, b):
              lambda df: df.groupby(['x', 'y']).count(),
              lambda df: df.loc[50:75]]
     for f in exprs:
-        local = f(ldf).compute(get=dask.get)
+        local = f(ldf).compute(scheduler='sync')
         remote = c.compute(f(rdf))
         remote = yield remote
         assert_equal(local, remote)
@@ -90,7 +88,7 @@ def test__dask_array_collections(c, s, a, b):
              lambda x, y: x - x.mean(axis=1)[:, None]]
 
     for expr in exprs:
-        local = expr(x_local, y_local).compute(get=dask.get)
+        local = expr(x_local, y_local).compute(scheduler='sync')
 
         remote = c.compute(expr(x_remote, y_remote))
         remote = yield remote
@@ -100,27 +98,25 @@ def test__dask_array_collections(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_bag_groupby_tasks_default(c, s, a, b):
-    with dask.set_options(get=c.get):
-        b = db.range(100, npartitions=10)
-        b2 = b.groupby(lambda x: x % 13)
-        assert not any('partd' in k[0] for k in b2.dask)
+    b = db.range(100, npartitions=10)
+    b2 = b.groupby(lambda x: x % 13)
+    assert not any('partd' in k[0] for k in b2.dask)
 
 
 @pytest.mark.parametrize('wait', [wait, lambda x: None])
 def test_dataframe_set_index_sync(loop, wait):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
-            with dask.set_options(get=c.get):
-                df = dd.demo.make_timeseries('2000', '2001',
-                                             {'value': float, 'name': str, 'id': int},
-                                             freq='2H', partition_freq='1M', seed=1)
-                df = c.persist(df)
-                wait(df)
+            df = dd.demo.make_timeseries('2000', '2001',
+                                         {'value': float, 'name': str, 'id': int},
+                                         freq='2H', partition_freq='1M', seed=1)
+            df = c.persist(df)
+            wait(df)
 
-                df2 = df.set_index('name', shuffle='tasks')
-                df2 = c.persist(df2)
+            df2 = df.set_index('name', shuffle='tasks')
+            df2 = c.persist(df2)
 
-                assert len(df2)
+            assert len(df2)
 
 
 def test_loc_sync(loop):
@@ -128,7 +124,7 @@ def test_loc_sync(loop):
         with Client(s['address'], loop=loop) as c:
             df = pd.util.testing.makeTimeDataFrame()
             ddf = dd.from_pandas(df, npartitions=10)
-            ddf.loc['2000-01-17':'2000-01-24'].compute(get=c.get)
+            ddf.loc['2000-01-17':'2000-01-24'].compute()
 
 
 def test_rolling_sync(loop):
@@ -136,7 +132,7 @@ def test_rolling_sync(loop):
         with Client(s['address'], loop=loop) as c:
             df = pd.util.testing.makeTimeDataFrame()
             ddf = dd.from_pandas(df, npartitions=10)
-            ddf.A.rolling(2).mean().compute(get=c.get)
+            ddf.A.rolling(2).mean().compute()
 
 
 @gen_cluster(client=True)
@@ -154,25 +150,24 @@ def test_dataframe_groupby_tasks(loop):
     ddf = dd.from_pandas(df, npartitions=10)
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
-            with dask.set_options(get=c.get):
-                for ind in [lambda x: 'A', lambda x: x.A]:
-                    a = df.groupby(ind(df)).apply(len)
-                    b = ddf.groupby(ind(ddf)).apply(len, meta=int)
-                    assert_equal(a, b.compute(get=dask.get).sort_index())
-                    assert not any('partd' in k[0] for k in b.dask)
+            for ind in [lambda x: 'A', lambda x: x.A]:
+                a = df.groupby(ind(df)).apply(len)
+                b = ddf.groupby(ind(ddf)).apply(len, meta=int)
+                assert_equal(a, b.compute(scheduler='sync').sort_index())
+                assert not any('partd' in k[0] for k in b.dask)
 
-                    a = df.groupby(ind(df)).B.apply(len)
-                    b = ddf.groupby(ind(ddf)).B.apply(len, meta=('B', int))
-                    assert_equal(a, b.compute(get=dask.get).sort_index())
-                    assert not any('partd' in k[0] for k in b.dask)
+                a = df.groupby(ind(df)).B.apply(len)
+                b = ddf.groupby(ind(ddf)).B.apply(len, meta=('B', int))
+                assert_equal(a, b.compute(scheduler='sync').sort_index())
+                assert not any('partd' in k[0] for k in b.dask)
 
-                with pytest.raises(NotImplementedError):
-                    ddf.groupby(ddf[['A', 'B']]).apply(len, meta=int)
+            with pytest.raises(NotImplementedError):
+                ddf.groupby(ddf[['A', 'B']]).apply(len, meta=int)
 
-                a = df.groupby(['A', 'B']).apply(len)
-                b = ddf.groupby(['A', 'B']).apply(len, meta=int)
+            a = df.groupby(['A', 'B']).apply(len)
+            b = ddf.groupby(['A', 'B']).apply(len, meta=int)
 
-                assert_equal(a, b.compute(get=dask.get).sort_index())
+            assert_equal(a, b.compute(scheduler='sync').sort_index())
 
 
 @gen_cluster(client=True)

@@ -35,7 +35,7 @@ from distributed.config import set_config
 from distributed.comm import CommClosedError
 from distributed.client import (Client, Future, wait, as_completed, tokenize,
                                 _get_global_client, default_client,
-                                ensure_default_get, futures_of,
+                                futures_of,
                                 temp_default_client)
 from distributed.compatibility import PY3
 
@@ -588,7 +588,7 @@ def test_get_sync_optimize_graph_passes_through(loop):
     bag = db.range(10, npartitions=3).map(inc)
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
-            dask.compute(bag.sum(), optimize_graph=False, get=c.get)
+            dask.compute(bag.sum(), optimize_graph=False)
 
 
 @gen_cluster(client=True)
@@ -2429,16 +2429,12 @@ def test_map_differnet_lengths(c, s, a, b):
 def test_Future_exception_sync_2(loop, capsys):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
-            ensure_default_get(c)
-            ensure_default_get(c)
-            ensure_default_get(c)
-            ensure_default_get(c)
-            assert _globals['get'] == c.get
+            assert dask.base.get_scheduler() == c.get
 
     out, err = capsys.readouterr()
     assert len(out.strip().split('\n')) == 1
 
-    assert _globals.get('get') != c.get
+    assert dask.base.get_scheduler() != c.get
 
 
 @gen_cluster(timeout=60, client=True)
@@ -2508,8 +2504,8 @@ def test_persist(loop):
             assert all(isinstance(v, Future) for v in yy.dask.values())
             assert yy.__dask_keys__() == y.__dask_keys__()
 
-            zz = yy.compute(get=c.get)
-            z = y.compute(get=c.get)
+            zz = yy.compute()
+            z = y.compute()
             assert (zz == z).all()
 
 
@@ -2821,7 +2817,7 @@ def test_persist_get_sync(loop):
             xxyy2 = c.persist(xxyy)
             xxyy3 = delayed(add)(xxyy2, 10)
 
-            assert xxyy3.compute(get=c.get) == ((1 + 1) + (2 + 2)) + 10
+            assert xxyy3.compute() == ((1 + 1) + (2 + 2)) + 10
 
 
 @gen_cluster(client=True)
@@ -3307,35 +3303,40 @@ def test_cancel_clears_processing(c, s, *workers):
 
 def test_default_get():
     with cluster() as (s, [a, b]):
-        pre_get = _globals.get('get')
+        pre_get = dask.base.get_scheduler()
         pre_shuffle = _globals.get('shuffle')
         with Client(s['address'], set_as_default=True) as c:
-            assert _globals['get'] == c.get
+            assert dask.base.get_scheduler() == c.get
             assert _globals['shuffle'] == 'tasks'
 
-        assert _globals['get'] is pre_get
+        assert dask.base.get_scheduler() == pre_get
         assert _globals['shuffle'] == pre_shuffle
 
         c = Client(s['address'], set_as_default=False)
-        assert _globals['get'] is pre_get
+        assert dask.base.get_scheduler() == pre_get
         assert _globals['shuffle'] == pre_shuffle
         c.close()
 
         c = Client(s['address'], set_as_default=True)
         assert _globals['shuffle'] == 'tasks'
-        assert _globals['get'] == c.get
+        assert dask.base.get_scheduler() == c.get
         c.close()
-        assert _globals['get'] is pre_get
+        assert dask.base.get_scheduler() == pre_get
         assert _globals['shuffle'] == pre_shuffle
 
         with Client(s['address']) as c:
-            assert _globals['get'] == c.get
+            assert dask.base.get_scheduler() == c.get
 
         with Client(s['address'], set_as_default=False) as c:
-            assert _globals['get'] != c.get
-            dask.set_options(get=c.get)
-            assert _globals['get'] == c.get
-        assert _globals['get'] != c.get
+            assert dask.base.get_scheduler() != c.get
+        assert dask.base.get_scheduler() != c.get
+
+        with Client(s['address'], set_as_default=True) as c1:
+            assert dask.base.get_scheduler() == c1.get
+            with Client(s['address'], set_as_default=True) as c2:
+                assert dask.base.get_scheduler() == c2.get
+            assert dask.base.get_scheduler() == c1.get
+        assert dask.base.get_scheduler() == pre_get
 
 
 @gen_cluster(client=True)
