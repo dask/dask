@@ -79,10 +79,10 @@ def test_raise_error_on_serialize_write_permissions():
         with h5py.File(fn, mode='a') as f:
             x = f.create_dataset('/x', shape=(2, 2), dtype='i4')
             f.flush()
-            with pytest.raises(ValueError):
-                serialize(x)
-            with pytest.raises(ValueError):
-                serialize(f)
+            with pytest.raises(TypeError):
+                deserialize(*serialize(x))
+            with pytest.raises(TypeError):
+                deserialize(*serialize(f))
 
 
 from distributed.utils_test import gen_cluster

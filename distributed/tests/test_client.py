@@ -3671,7 +3671,7 @@ def test_open_close_many_workers(loop, worker, count, repeat):
     psutil = pytest.importorskip('psutil')
     proc = psutil.Process()
 
-    with cluster(nworkers=0, active_rpc_timeout=20) as (s, []):
+    with cluster(nworkers=0, active_rpc_timeout=20) as (s, _):
         gc.collect()
         before = proc.num_fds()
         done = Semaphore(0)
@@ -5294,6 +5294,76 @@ def test_client_timeout_2():
         yield c.close()
 
         assert stop - start < 1
+
+
+@gen_cluster()
+def test_turn_off_pickle(s, a, b):
+    import numpy as np
+    c = yield Client(s.address, asynchronous=True,
+                     serializers=['dask', 'msgpack'])
+    try:
+        assert (yield c.submit(inc, 1)) == 2
+        yield c.submit(np.ones, 5)
+        yield c.scatter(1)
+
+        # Can't send complex data
+        with pytest.raises(TypeError):
+            future = yield c.scatter(inc)
+
+        # can send complex tasks (this uses pickle regardless)
+        future = c.submit(lambda x: x, inc)
+        yield wait(future)
+
+        # but can't receive complex results
+        with pytest.raises(TypeError):
+            yield future
+
+        # Run works
+        result = yield c.run(lambda: 1)
+        assert list(result.values()) == [1, 1]
+        result = yield c.run_on_scheduler(lambda: 1)
+        assert result == 1
+
+        # But not with complex return values
+        with pytest.raises(TypeError):
+            yield c.run(lambda: inc)
+        with pytest.raises(TypeError):
+            yield c.run_on_scheduler(lambda: inc)
+    finally:
+        yield c._close()
+
+
+@gen_cluster()
+def test_de_serialization(s, a, b):
+    import numpy as np
+    c = yield Client(s.address, asynchronous=True,
+                     serializers=['msgpack', 'pickle'],
+                     deserializers=['msgpack'])
+    try:
+        # Can send complex data
+        future = yield c.scatter(np.ones(5))
+
+        # But can not retrieve it
+        with pytest.raises(TypeError):
+            result = yield future
+    finally:
+        yield c._close()
+
+
+@gen_cluster()
+def test_de_serialization_none(s, a, b):
+    import numpy as np
+    c = yield Client(s.address, asynchronous=True,
+                     deserializers=['msgpack'])
+    try:
+        # Can send complex data
+        future = yield c.scatter(np.ones(5))
+
+        # But can not retrieve it
+        with pytest.raises(TypeError):
+            result = yield future
+    finally:
+        yield c._close()
 
 
 if sys.version_info >= (3, 5):

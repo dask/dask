@@ -177,7 +177,7 @@ class InProc(Comm):
         return self._peer_addr
 
     @gen.coroutine
-    def read(self):
+    def read(self, deserializers='ignored'):
         if self._closed:
             raise CommClosedError
 
@@ -192,7 +192,7 @@ class InProc(Comm):
         raise gen.Return(msg)
 
     @gen.coroutine
-    def write(self, msg):
+    def write(self, msg, serializers=None, on_error=None):
         if self.closed():
             raise CommClosedError
 

@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
-
 from functools import partial
+import traceback
 
 from dask.base import normalize_token
 try:
@@ -16,14 +16,71 @@ from .compression import maybe_compress, decompress
 from .utils import unpack_frames, pack_frames_prelude, frame_split_size
 
 
-serializers = {}
-deserializers = {None: lambda header, frames: pickle.loads(b''.join(frames))}
+class_serializers = {}
 
 lazy_registrations = {}
 
 
+def dask_dumps(x):
+    """Serialise object using the class-based registry"""
+    typ = typename(type(x))
+    if typ in class_serializers:
+        dumps, loads = class_serializers[typ]
+        header, frames = dumps(x)
+        header['type'] = typ
+        header['serializer'] = 'dask'
+        return header, frames
+    elif _find_lazy_registration(typ):
+        return dask_dumps(x)  # recurse
+    else:
+        raise TypeError(typ)
+
+
+def dask_loads(header, frames):
+    typ = header['type']
+
+    if typ not in class_serializers:
+        _find_lazy_registration(typ)
+
+    try:
+        dumps, loads = class_serializers[typ]
+    except KeyError:
+        raise TypeError("Serialization for type %s not found" % typ)
+    else:
+        return loads(header, frames)
+
+
+def pickle_dumps(x):
+    return {'serializer': 'pickle'}, [pickle.dumps(x)]
+
+
+def pickle_loads(header, frames):
+    return pickle.loads(b''.join(frames))
+
+
+def msgpack_dumps(x):
+    return {'serializer': 'msgpack'}, [msgpack.dumps(x, use_bin_type=True)]
+
+
+def msgpack_loads(header, frames):
+    return msgpack.loads(b''.join(frames), encoding='utf8')
+
+
+def serialization_error_loads(header, frames):
+    msg = '\n'.join([frame.decode('utf8') for frame in frames])
+    raise TypeError(msg)
+
+
+families = {
+ 'dask': (dask_dumps, dask_loads),
+ 'pickle': (pickle_dumps, pickle_loads),
+ 'msgpack': (msgpack_dumps, msgpack_loads),
+ 'error': (None, serialization_error_loads),
+}
+
+
 def register_serialization(cls, serialize, deserialize):
-    """ Register a new class for custom serialization
+    """ Register a new class for dask-custom serialization
 
     Parameters
     ----------
@@ -58,8 +115,7 @@ def register_serialization(cls, serialize, deserialize):
         name = typename(cls)
     elif isinstance(cls, str):
         name = cls
-    serializers[name] = serialize
-    deserializers[name] = deserialize
+    class_serializers[name] = (serialize, deserialize)
 
 
 def register_serialization_lazy(toplevel, func):
@@ -90,14 +146,19 @@ def _find_lazy_registration(typename):
         return False
 
 
-def serialize(x):
+def serialize(x, serializers=None, on_error='message'):
     r"""
     Convert object to a header and list of bytestrings
 
     This takes in an arbitrary Python object and returns a msgpack serializable
-    header and a list of bytes or memoryview objects.  By default this uses
-    pickle/cloudpickle but can use special functions if they have been
-    pre-registered.
+    header and a list of bytes or memoryview objects.
+
+    The serialization protocols to use are configurable: a list of names
+    define the set of serializers to use, in order. These names are keys in
+    the ``serializer_registry`` dict (e.g., 'pickle', 'msgpack'), which maps
+    to the de/serialize functions. The name 'dask' is special, and will use the
+    per-class serialization methods. ``None`` gives the default list
+    ``['dask', 'pickle']``.
 
     Examples
     --------
@@ -121,23 +182,38 @@ def serialize(x):
     to_serialize: Mark that data in a message should be serialized
     register_serialization: Register custom serialization functions
     """
+    if serializers is None:
+        serializers = ('dask', 'pickle')  # TODO: get from configuration
+
     if isinstance(x, Serialized):
         return x.header, x.frames
 
-    typ = type(x)
-    name = typename(typ)
-    if name in serializers:
-        header, frames = serializers[name](x)
-        header['type'] = name
-    else:
-        if _find_lazy_registration(name):
-            return serialize(x)  # recurse
-        header, frames = {}, [pickle.dumps(x)]
+    tb = ''
 
-    return header, frames
+    for name in serializers:
+        dumps, loads = families[name]
+        try:
+            header, frames = dumps(x)
+            header['serializer'] = name
+            return header, frames
+        except Exception:
+            tb = traceback.format_exc()
+            continue
+
+    msg = "Could not serialize object of type %s" % type(x).__name__
+    if on_error == 'message':
+        frames = [msg]
+        if tb:
+            frames.append(tb[:100000])
+
+        frames = [frame.encode() for frame in frames]
+
+        return {'serializer': 'error'}, frames
+    elif on_error == 'raise':
+        raise TypeError(msg)
 
 
-def deserialize(header, frames):
+def deserialize(header, frames, deserializers=None):
     """
     Convert serialized header and list of bytestrings back to a Python object
 
@@ -150,12 +226,12 @@ def deserialize(header, frames):
     --------
     serialize
     """
-    name = header.get('type')
-    if name not in deserializers:
-        if _find_lazy_registration(name):
-            return deserialize(header, frames)  # recurse
-    f = deserializers[header.get('type')]
-    return f(header, frames)
+    name = header.get('serializer')
+    if deserializers is not None and name not in deserializers:
+        raise TypeError("Data serialized with %s but only able to deserialize "
+                        "data with %s" % (name, str(list(deserializers))))
+    dumps, loads = families[name]
+    return loads(header, frames)
 
 
 class Serialize(object):
@@ -339,8 +415,8 @@ register_serialization(bytes, _serialize_bytes, _deserialize_bytes)
 register_serialization(bytearray, _serialize_bytes, _deserialize_bytes)
 
 
-def serialize_bytelist(x):
-    header, frames = serialize(x)
+def serialize_bytelist(x, **kwargs):
+    header, frames = serialize(x, **kwargs)
     frames = frame_split_size(frames)
     if frames:
         compression, frames = zip(*map(maybe_compress, frames))
@@ -354,8 +430,8 @@ def serialize_bytelist(x):
     return [pack_frames_prelude(frames2)] + frames2
 
 
-def serialize_bytes(x):
-    L = serialize_bytelist(x)
+def serialize_bytes(x, **kwargs):
+    L = serialize_bytelist(x, **kwargs)
     if PY2:
         L = [bytes(y) for y in L]
     return b''.join(L)

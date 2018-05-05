@@ -16,9 +16,9 @@ import weakref
 from dask.core import istask
 from dask.compatibility import apply
 try:
-    from cytoolz import pluck
+    from cytoolz import pluck, partial
 except ImportError:
-    from toolz import pluck
+    from toolz import pluck, partial
 from tornado.gen import Return
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -144,7 +144,9 @@ class WorkerBase(ServerNode):
             except ImportError:
                 raise ImportError("Please `pip install zict` for spill-to-disk workers")
             path = os.path.join(self.local_dir, 'storage')
-            storage = Func(serialize_bytelist, deserialize_bytes, File(path))
+            storage = Func(partial(serialize_bytelist, on_error='raise'),
+                           deserialize_bytes,
+                           File(path))
             target = int(float(self.memory_limit) * self.memory_target_fraction)
             self.data = Buffer({}, storage, target, weight)
         else:
@@ -478,7 +480,7 @@ class WorkerBase(ServerNode):
         return run(self, comm, function=function, args=args, kwargs=kwargs,
                    is_coro=True, wait=wait)
 
-    def update_data(self, comm=None, data=None, report=True):
+    def update_data(self, comm=None, data=None, report=True, serializers=None):
         for key, value in data.items():
             if key in self.task_state:
                 self.transition(key, 'memory', value=value)
@@ -522,7 +524,7 @@ class WorkerBase(ServerNode):
         raise Return('OK')
 
     @gen.coroutine
-    def get_data(self, comm, keys=None, who=None):
+    def get_data(self, comm, keys=None, who=None, serializers=None):
         start = time()
 
         msg = {k: to_serialize(self.data[k]) for k in keys if k in self.data}
@@ -532,7 +534,7 @@ class WorkerBase(ServerNode):
             self.digests['get-data-load-duration'].add(stop - start)
         start = time()
         try:
-            compressed = yield comm.write(msg)
+            compressed = yield comm.write(msg, serializers=serializers)
         except EnvironmentError:
             logger.exception('failed during get data with %s -> %s',
                              self.address, who, exc_info=True)

@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 from collections import defaultdict, deque
 from concurrent.futures import CancelledError
 from functools import partial
+import inspect
 import logging
 import six
 import traceback
@@ -17,6 +18,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.locks import Event
 
+from .compatibility import PY3
 from .comm import (connect, listen, CommClosedError,
                    normalize_address,
                    unparse_host_port, get_address_host_port)
@@ -273,16 +275,19 @@ class Server(object):
                 if not isinstance(msg, dict):
                     raise TypeError("Bad message type.  Expected dict, got\n  "
                                     + str(msg))
+
                 op = msg.pop('op')
                 if self.counters is not None:
                     self.counters['op'].add(op)
                 self._comms[comm] = op
+                serializers = msg.pop('serializers', None)
                 close_desired = msg.pop('close', False)
                 reply = msg.pop('reply', True)
                 if op == 'close':
                     if reply:
                         yield comm.write('OK')
                     break
+
                 result = None
                 try:
                     handler = self.handlers[op]
@@ -290,6 +295,9 @@ class Server(object):
                     logger.warning("No handler %s found in %s", op,
                                    type(self).__name__, exc_info=True)
                 else:
+                    if serializers is not None and has_serializers_keyword(handler):
+                        msg['serializers'] = serializers  # add back in
+
                     logger.debug("Calling into handler %s", handler.__name__)
                     try:
                         result = handler(comm, **msg)
@@ -303,9 +311,10 @@ class Server(object):
                     except Exception as e:
                         logger.exception(e)
                         result = error_message(e, status='uncaught-error')
+
                 if reply and result != 'dont-reply':
                     try:
-                        yield comm.write(result)
+                        yield comm.write(result, serializers=serializers)
                     except EnvironmentError as e:
                         logger.debug("Lost connection to %r while sending result for op %r: %s",
                                      address, op, e)
@@ -344,7 +353,8 @@ def pingpong(comm):
 
 
 @gen.coroutine
-def send_recv(comm, reply=True, deserialize=True, **kwargs):
+def send_recv(comm, reply=True, deserialize=True, serializers=None,
+              deserializers=None, **kwargs):
     """ Send and recv with a Comm.
 
     Keyword arguments turn into the message
@@ -355,11 +365,15 @@ def send_recv(comm, reply=True, deserialize=True, **kwargs):
     msg['reply'] = reply
     please_close = kwargs.get('close')
     force_close = False
+    if deserializers is None:
+        deserializers = serializers
+    if deserializers is not None:
+        msg['serializers'] = deserializers
 
     try:
-        yield comm.write(msg)
+        yield comm.write(msg, serializers=serializers, on_error='raise')
         if reply:
-            response = yield comm.read()
+            response = yield comm.read(deserializers=deserializers)
         else:
             response = None
     except EnvironmentError:
@@ -406,12 +420,14 @@ class rpc(object):
     address = None
 
     def __init__(self, arg=None, comm=None, deserialize=True, timeout=None,
-                 connection_args=None):
+                 connection_args=None, serializers=None, deserializers=None):
         self.comms = {}
         self.address = coerce_to_address(arg)
         self.timeout = timeout
         self.status = 'running'
         self.deserialize = deserialize
+        self.serializers = serializers
+        self.deserializers = deserializers if deserializers is not None else serializers
         self.connection_args = connection_args
         rpc.active.add(self)
 
@@ -471,6 +487,10 @@ class rpc(object):
     def __getattr__(self, key):
         @gen.coroutine
         def send_recv_from_rpc(**kwargs):
+            if self.serializers is not None and kwargs.get('serializers') is None:
+                kwargs['serializers'] = self.serializers
+            if self.deserializers is not None and kwargs.get('deserializers') is None:
+                kwargs['deserializers'] = self.deserializers
             try:
                 comm = yield self.live_comm()
                 result = yield send_recv(comm=comm, op=key, **kwargs)
@@ -516,13 +536,19 @@ class PooledRPCCall(object):
         ConnectionPool
     """
 
-    def __init__(self, addr, pool):
+    def __init__(self, addr, pool, serializers=None, deserializers=None):
         self.addr = addr
         self.pool = pool
+        self.serializers = serializers
+        self.deserializers = deserializers if deserializers is not None else serializers
 
     def __getattr__(self, key):
         @gen.coroutine
         def send_recv_from_rpc(**kwargs):
+            if self.serializers is not None and kwargs.get('serializers') is None:
+                kwargs['serializers'] = self.serializers
+            if self.deserializers is not None and kwargs.get('deserializers') is None:
+                kwargs['deserializers'] = self.deserializers
             comm = yield self.pool.connect(self.addr)
             try:
                 result = yield send_recv(comm=comm, op=key, **kwargs)
@@ -580,7 +606,11 @@ class ConnectionPool(object):
         Whether or not to deserialize data by default or pass it through
     """
 
-    def __init__(self, limit=512, deserialize=True, connection_args=None):
+    def __init__(self, limit=512,
+                 deserialize=True,
+                 serializers=None,
+                 deserializers=None,
+                 connection_args=None):
         self.open = 0          # Total number of open comms
         self.active = 0        # Number of comms currently in use
         self.limit = limit     # Max number of open comms
@@ -589,6 +619,8 @@ class ConnectionPool(object):
         # Invariant: len(occupied) == active
         self.occupied = defaultdict(set)
         self.deserialize = deserialize
+        self.serializers = serializers
+        self.deserializers = deserializers if deserializers is not None else serializers
         self.connection_args = connection_args
         self.event = Event()
 
@@ -599,7 +631,9 @@ class ConnectionPool(object):
     def __call__(self, addr=None, ip=None, port=None):
         """ Cached rpc objects """
         addr = addr_from_args(addr=addr, ip=ip, port=port)
-        return PooledRPCCall(addr, self)
+        return PooledRPCCall(addr, self,
+                             serializers=self.serializers,
+                             deserializers=self.deserializers)
 
     @gen.coroutine
     def connect(self, addr, timeout=None):
@@ -734,3 +768,13 @@ def clean_exception(exception, traceback, **kwargs):
     elif isinstance(traceback, string_types):
         traceback = None  # happens if the traceback failed serializing
     return type(exception), exception, traceback
+
+
+def has_serializers_keyword(func):
+    if PY3:
+        return 'serializers' in inspect.signature(func).parameters
+    else:
+        # https://stackoverflow.com/questions/50100498/determine-keywords-of-a-tornado-coroutine
+        if gen.is_coroutine_function(func):
+            func = func.__wrapped__
+        return 'serializers' in inspect.getargspec(func).args

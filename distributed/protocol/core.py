@@ -21,7 +21,7 @@ _deserialize = deserialize
 logger = logging.getLogger(__name__)
 
 
-def dumps(msg):
+def dumps(msg, serializers=None, on_error='message'):
     """ Transform Python message to bytestream suitable for communication """
     try:
         data = {}
@@ -37,7 +37,9 @@ def dumps(msg):
                for key, value in data.items()
                if type(value) is Serialized}
 
-        data = {key: serialize(value.data)
+        data = {key: serialize(value.data,
+                               serializers=serializers,
+                               on_error=on_error)
                 for key, value in data.items()
                 if type(value) is Serialize}
 
@@ -85,7 +87,7 @@ def dumps(msg):
         raise
 
 
-def loads(frames, deserialize=True):
+def loads(frames, deserialize=True, deserializers=None):
     """ Transform bytestream back into Python value """
     frames = frames[::-1]  # reverse order to improve pop efficiency
     if not isinstance(frames, list):
@@ -116,7 +118,7 @@ def loads(frames, deserialize=True):
                 if 'compression' in head:
                     fs = decompress(head, fs)
                 fs = merge_frames(head, fs)
-                value = _deserialize(head, fs)
+                value = _deserialize(head, fs, deserializers=deserializers)
             else:
                 value = Serialized(head, fs)
 

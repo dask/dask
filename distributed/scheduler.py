@@ -2273,7 +2273,7 @@ class Scheduler(ServerNode):
         raise gen.Return(keys)
 
     @gen.coroutine
-    def gather(self, comm=None, keys=None):
+    def gather(self, comm=None, keys=None, serializers=None):
         """ Collect data in from workers """
         keys = list(keys)
         who_has = {}
@@ -2285,7 +2285,7 @@ class Scheduler(ServerNode):
                 who_has[key] = []
 
         data, missing_keys, missing_workers = yield gather_from_workers(
-            who_has, rpc=self.rpc, close=False)
+            who_has, rpc=self.rpc, close=False, serializers=serializers)
         if not missing_keys:
             result = {'status': 'OK', 'data': data}
         else:
@@ -2389,7 +2389,7 @@ class Scheduler(ServerNode):
 
     @gen.coroutine
     def broadcast(self, comm=None, msg=None, workers=None, hosts=None,
-                  nanny=False):
+                  nanny=False, serializers=None):
         """ Broadcast message to workers, return all results """
         if workers is None:
             if hosts is None:
@@ -2412,7 +2412,7 @@ class Scheduler(ServerNode):
         def send_message(addr):
             comm = yield connect(addr, deserialize=self.deserialize,
                                  connection_args=self.connection_args)
-            resp = yield send_recv(comm, close=True, **msg)
+            resp = yield send_recv(comm, close=True, serializers=serializers, **msg)
             raise gen.Return(resp)
 
         results = yield All([send_message(self.coerce_address(address))
@@ -2829,7 +2829,8 @@ class Scheduler(ServerNode):
 
         return 'OK'
 
-    def update_data(self, comm=None, who_has=None, nbytes=None, client=None):
+    def update_data(self, comm=None, who_has=None, nbytes=None, client=None,
+                    serializers=None):
         """
         Learn that new data has entered the network from an external source
 

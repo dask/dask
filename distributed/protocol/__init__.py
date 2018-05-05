@@ -7,7 +7,8 @@ from .core import (dumps, loads, maybe_compress, decompress, msgpack)
 from .serialize import (
     serialize, deserialize, nested_deserialize, Serialize, Serialized,
     to_serialize, register_serialization, register_serialization_lazy,
-    serialize_bytes, deserialize_bytes, serialize_bytelist)
+    serialize_bytes, deserialize_bytes, serialize_bytelist,
+)
 
 from ..utils import ignoring
 

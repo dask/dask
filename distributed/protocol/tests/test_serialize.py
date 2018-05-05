@@ -12,6 +12,8 @@ from distributed.protocol import (register_serialization, serialize,
                                   Serialized, to_serialize, serialize_bytes,
                                   deserialize_bytes, serialize_bytelist,)
 from distributed.utils import nbytes
+from distributed.utils_test import inc, gen_test
+from distributed.comm.utils import to_frames, from_frames
 
 
 class MyObj(object):
@@ -36,7 +38,7 @@ register_serialization(MyObj, serialize_myobj, deserialize_myobj)
 def test_dumps_serialize():
     for x in [123, [1, 2, 3]]:
         header, frames = serialize(x)
-        assert not header
+        assert header['serializer'] == 'pickle'
         assert len(frames) == 1
 
         result = deserialize(header, frames)
@@ -185,3 +187,54 @@ def test_serialize_list_compress():
     b = b''.join(L)
     y = deserialize_bytes(b)
     assert (x == y).all()
+
+
+def test_malicious_exception():
+    class BadException(Exception):
+        def __setstate__(self):
+            return Exception("Sneaky deserialization code")
+
+    class MyClass(object):
+        def __getstate__(self):
+            raise BadException()
+
+    obj = MyClass()
+
+    header, frames = serialize(obj, serializers=[])
+    with pytest.raises(Exception) as info:
+        deserialize(header, frames)
+
+    assert "Sneaky" not in str(info.value)
+    assert "MyClass" in str(info.value)
+
+    header, frames = serialize(obj, serializers=['pickle'])
+    with pytest.raises(Exception) as info:
+        deserialize(header, frames)
+
+    assert "Sneaky" not in str(info.value)
+    assert "BadException" in str(info.value)
+
+
+def test_errors():
+    msg = {'data': {'foo': to_serialize(inc)}}
+
+    header, frames = serialize(msg, serializers=['msgpack', 'pickle'])
+    assert header['serializer'] == 'pickle'
+
+    header, frames = serialize(msg, serializers=['msgpack'])
+    assert header['serializer'] == 'error'
+
+    with pytest.raises(TypeError):
+        serialize(msg, serializers=['msgpack'], on_error='raise')
+
+
+@gen_test()
+def test_err_on_bad_deserializer():
+    frames = yield to_frames({'x': to_serialize(1234)},
+                                     serializers=['pickle'])
+
+    result = yield from_frames(frames, deserializers=['pickle', 'foo'])
+    assert result == {'x': 1234}
+
+    with pytest.raises(TypeError) as info:
+        yield from_frames(frames, deserializers=['msgpack'])

@@ -29,13 +29,15 @@ def offload(fn, *args, **kwargs):
 
 
 @gen.coroutine
-def to_frames(msg):
+def to_frames(msg, serializers=None, on_error='message'):
     """
     Serialize a message into a list of Distributed protocol frames.
     """
     def _to_frames():
         try:
-            return list(protocol.dumps(msg))
+            return list(protocol.dumps(msg,
+                                       serializers=serializers,
+                                       on_error=on_error))
         except Exception as e:
             logger.info("Unserializable Message: %s", msg)
             logger.exception(e)
@@ -50,7 +52,7 @@ def to_frames(msg):
 
 
 @gen.coroutine
-def from_frames(frames, deserialize=True):
+def from_frames(frames, deserialize=True, deserializers=None):
     """
     Unserialize a list of Distributed protocol frames.
     """
@@ -58,7 +60,9 @@ def from_frames(frames, deserialize=True):
 
     def _from_frames():
         try:
-            return protocol.loads(frames, deserialize=deserialize)
+            return protocol.loads(frames,
+                                  deserialize=deserialize,
+                                  deserializers=deserializers)
         except EOFError:
             if size > 1000:
                 datastr = "[too large to display]"

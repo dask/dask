@@ -170,7 +170,7 @@ class TCP(Comm):
         return self._peer_addr
 
     @gen.coroutine
-    def read(self):
+    def read(self, deserializers=None):
         stream = self.stream
         if stream is None:
             raise CommClosedError
@@ -200,7 +200,9 @@ class TCP(Comm):
                 convert_stream_closed_error(self, e)
         else:
             try:
-                msg = yield from_frames(frames, deserialize=self.deserialize)
+                msg = yield from_frames(frames,
+                                        deserialize=self.deserialize,
+                                        deserializers=deserializers)
             except EOFError:
                 # Frames possibly garbled or truncated by communication error
                 self.abort()
@@ -208,13 +210,15 @@ class TCP(Comm):
             raise gen.Return(msg)
 
     @gen.coroutine
-    def write(self, msg):
+    def write(self, msg, serializers=None, on_error='message'):
         stream = self.stream
         bytes_since_last_yield = 0
         if stream is None:
             raise CommClosedError
 
-        frames = yield to_frames(msg)
+        frames = yield to_frames(msg,
+                                 serializers=serializers,
+                                 on_error=on_error)
 
         try:
             lengths = ([struct.pack('Q', len(frames))] +

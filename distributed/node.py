@@ -12,10 +12,13 @@ class Node(object):
     """
 
     def __init__(self, connection_limit=512, deserialize=True,
-                 connection_args=None, io_loop=None):
+                 connection_args=None, io_loop=None,
+                 serializers=None, deserializers=None):
         self.io_loop = io_loop or IOLoop.current()
         self.rpc = ConnectionPool(limit=connection_limit,
                                   deserialize=deserialize,
+                                  serializers=serializers,
+                                  deserializers=deserializers,
                                   connection_args=connection_args)
 
 

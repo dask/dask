@@ -23,7 +23,7 @@ from distributed.utils_test import (
     assert_can_connect_from_everywhere_4,
     assert_can_connect_from_everywhere_4_6, assert_can_connect_from_everywhere_6,
     assert_can_connect_locally_4, assert_can_connect_locally_6,
-    tls_security, captured_logger)
+    tls_security, captured_logger, inc)
 from distributed.utils_test import loop  # noqa F401
 
 
@@ -598,3 +598,20 @@ def test_compression(compression, serialize, loop):
             server.stop()
 
         loop.run_sync(f)
+
+
+def test_rpc_serialization(loop):
+    @gen.coroutine
+    def f():
+        server = Server({'echo': echo_serialize})
+        server.listen('tcp://')
+
+        with rpc(server.address, serializers=['msgpack']) as r:
+            with pytest.raises(TypeError):
+                yield r.echo(x=to_serialize(inc))
+
+        with rpc(server.address, serializers=['msgpack', 'pickle']) as r:
+            result = yield r.echo(x=to_serialize(inc))
+            assert result == {'result': inc}
+
+    loop.run_sync(f)
