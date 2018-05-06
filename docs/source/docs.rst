@@ -245,6 +245,7 @@ often a better choice.  If you are a *core developer*, then you should start her
 
 * :doc:`develop`
 * :doc:`changelog`
+* :doc:`configuration`
 * :doc:`presentations`
 * :doc:`cheatsheet`
 * :doc:`spark`
@@ -262,6 +263,7 @@ often a better choice.  If you are a *core developer*, then you should start her
 
    develop.rst
    changelog.rst
+   configuration.rst
    presentations.rst
    cheatsheet.rst
    spark.rst
