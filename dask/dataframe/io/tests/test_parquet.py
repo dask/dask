@@ -129,7 +129,7 @@ def test_local(tmpdir, write_engine, read_engine):
 
     assert len(df2.divisions) > 1
 
-    out = df2.compute(get=dask.get).reset_index()
+    out = df2.compute(scheduler='sync').reset_index()
 
     for column in df.columns:
         assert (data[column] == out[column]).all()
@@ -819,8 +819,8 @@ def test_filters(tmpdir):
     assert len(ddf2) > 0
 
 
-@pytest.mark.parametrize('get', [dask.threaded.get, dask.multiprocessing.get])
-def test_to_parquet_lazy(tmpdir, get, engine):
+@pytest.mark.parametrize('scheduler', ['threads', 'processes'])
+def test_to_parquet_lazy(tmpdir, scheduler, engine):
     tmpdir = str(tmpdir)
     df = pd.DataFrame({'a': [1, 2, 3, 4],
                        'b': [1., 2., 3., 4.]})
@@ -829,7 +829,7 @@ def test_to_parquet_lazy(tmpdir, get, engine):
     value = ddf.to_parquet(tmpdir, compute=False, engine=engine)
 
     assert hasattr(value, 'dask')
-    value.compute(get=get)
+    value.compute(scheduler=scheduler)
     assert os.path.exists(tmpdir)
 
     ddf2 = dd.read_parquet(tmpdir, engine=engine, infer_divisions=should_check_divs(engine))
@@ -1185,7 +1185,7 @@ def test_writing_parquet_with_kwargs(tmpdir, engine):
     assert_eq(out, ddf, check_index=(engine != 'fastparquet'), check_divisions=should_check_divs(engine))
 
     # Avoid race condition in pyarrow 0.8.0 on writing partitioned datasets
-    with dask.set_options(get=dask.get):
+    with dask.set_options(scheduler='sync'):
         ddf.to_parquet(path2, engine=engine, partition_on=['a'],
                        **engine_kwargs[engine])
     out = dd.read_parquet(path2, engine=engine).compute()

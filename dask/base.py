@@ -9,15 +9,17 @@ import pickle
 import os
 import threading
 import uuid
+import warnings
 
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
 from .compatibility import long, unicode
 from .context import _globals, thread_state
-from .core import flatten, quote, get as simple_get
+from .core import flatten, quote
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict
+from . import threaded, local
 
 
 __all__ = ("DaskMethodsMixin",
@@ -106,15 +108,15 @@ class DaskMethodsMixin(object):
 
         Parameters
         ----------
-        get : callable, optional
-            A scheduler ``get`` function to use. If not provided, the default
-            is to check the global settings first, and then fall back to
-            the collection defaults.
+        scheduler : string, optional
+            Which scheduler to use like "threads", "synchronous" or "processes".
+            If not provided, the default is to check the global settings first,
+            and then fall back to the collection defaults.
         optimize_graph : bool, optional
             If True [default], the graph is optimized before computation.
             Otherwise the graph is run as is. This can be useful for debugging.
         **kwargs
-            Extra keywords to forward to the scheduler ``get`` function.
+            Extra keywords to forward to the scheduler function.
 
         Returns
         -------
@@ -137,15 +139,15 @@ class DaskMethodsMixin(object):
 
         Parameters
         ----------
-        get : callable, optional
-            A scheduler ``get`` function to use. If not provided, the default
-            is to check the global settings first, and then fall back to
-            the collection defaults.
+        scheduler : string, optional
+            Which scheduler to use like "threads", "synchronous" or "processes".
+            If not provided, the default is to check the global settings first,
+            and then fall back to the collection defaults.
         optimize_graph : bool, optional
             If True [default], the graph is optimized before computation.
             Otherwise the graph is run as is. This can be useful for debugging.
         kwargs
-            Extra keywords to forward to the scheduler ``get`` function.
+            Extra keywords to forward to the scheduler function.
 
         See Also
         --------
@@ -155,13 +157,13 @@ class DaskMethodsMixin(object):
         return result
 
 
-def compute_as_if_collection(cls, dsk, keys, get=None, **kwargs):
+def compute_as_if_collection(cls, dsk, keys, get=None, scheduler=None, **kwargs):
     """Compute a graph as if it were of type cls.
 
     Allows for applying the same optimizations and default scheduler."""
-    get = get or _globals['get'] or cls.__dask_scheduler__
+    schedule = get_scheduler(get=get, scheduler=scheduler, cls=cls)
     dsk2 = optimization_function(cls)(ensure_dict(dsk), keys, **kwargs)
-    return get(dsk2, keys, **kwargs)
+    return schedule(dsk2, keys, **kwargs)
 
 
 def dont_optimize(dsk, keys, **kwargs):
@@ -276,7 +278,7 @@ def unpack_collections(*args, **kwargs):
     def repack(results):
         dsk = repack_dsk.copy()
         dsk['collections'] = quote(results)
-        return simple_get(dsk, out)
+        return local.get_sync(dsk, out)
 
     return collections, repack
 
@@ -357,16 +359,16 @@ def compute(*args, **kwargs):
         objects passed to ``compute``. For large collections this can be
         expensive. If none of the arguments contain any dask objects, set
         ``traverse=False`` to avoid doing this traversal.
-    get : callable, optional
-        A scheduler ``get`` function to use. If not provided, the default is
-        to check the global settings first, and then fall back to defaults for
-        the collections.
+    scheduler : string, optional
+        Which scheduler to use like "threads", "synchronous" or "processes".
+        If not provided, the default is to check the global settings first,
+        and then fall back to the collection defaults.
     optimize_graph : bool, optional
         If True [default], the optimizations for each collection are applied
         before computation. Otherwise the graph is run as is. This can be
         useful for debugging.
     kwargs
-        Extra keywords to forward to the scheduler ``get`` function.
+        Extra keywords to forward to the scheduler function.
 
     Examples
     --------
@@ -383,28 +385,19 @@ def compute(*args, **kwargs):
     """
     traverse = kwargs.pop('traverse', True)
     optimize_graph = kwargs.pop('optimize_graph', True)
-    get = kwargs.pop('get', None) or _globals['get']
 
     collections, repack = unpack_collections(*args, traverse=traverse)
     if not collections:
         return args
 
-    if get is None and getattr(thread_state, 'key', False):
-        from distributed.worker import get_worker
-        get = get_worker().client.get
-
-    if not get:
-        get = collections[0].__dask_scheduler__
-        if not all(a.__dask_scheduler__ == get for a in collections):
-            raise ValueError("Compute called on multiple collections with "
-                             "differing default schedulers. Please specify a "
-                             "scheduler `get` function using either "
-                             "the `get` kwarg or globally with `set_options`.")
+    schedule = get_scheduler(get=kwargs.pop('get', None),
+                             scheduler=kwargs.pop('scheduler', None),
+                             collections=collections)
 
     dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
     keys = [x.__dask_keys__() for x in collections]
     postcomputes = [x.__dask_postcompute__() for x in collections]
-    results = get(dsk, keys, **kwargs)
+    results = schedule(dsk, keys, **kwargs)
     return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
 
 
@@ -532,10 +525,10 @@ def persist(*args, **kwargs):
     Parameters
     ----------
     *args: Dask collections
-    get : callable, optional
-        A scheduler ``get`` function to use. If not provided, the default
-        is to check the global settings first, and then fall back to
-        the collection defaults.
+    scheduler : string, optional
+        Which scheduler to use like "threads", "synchronous" or "processes".
+        If not provided, the default is to check the global settings first,
+        and then fall back to the collection defaults.
     traverse : bool, optional
         By default dask traverses builtin python collections looking for dask
         objects passed to ``persist``. For large collections this can be
@@ -545,7 +538,7 @@ def persist(*args, **kwargs):
         If True [default], the graph is optimized before computation.
         Otherwise the graph is run as is. This can be useful for debugging.
     **kwargs
-        Extra keywords to forward to the scheduler ``get`` function.
+        Extra keywords to forward to the scheduler function.
 
     Returns
     -------
@@ -553,17 +546,16 @@ def persist(*args, **kwargs):
     """
     traverse = kwargs.pop('traverse', True)
     optimize_graph = kwargs.pop('optimize_graph', True)
-    get = kwargs.pop('get', None) or _globals['get']
 
     collections, repack = unpack_collections(*args, traverse=traverse)
     if not collections:
         return args
 
-    if get is None and getattr(thread_state, 'key', False):
-        from distributed.worker import get_worker
-        get = get_worker().client.get
+    schedule = get_scheduler(get=kwargs.pop('get', None),
+                             scheduler=kwargs.pop('scheduler', None),
+                             collections=collections)
 
-    if inspect.ismethod(get):
+    if inspect.ismethod(schedule):
         try:
             from distributed.client import default_client
         except ImportError:
@@ -574,19 +566,11 @@ def persist(*args, **kwargs):
             except ValueError:
                 pass
             else:
-                if client.get == get:
+                if client.get == schedule:
                     results = client.persist(collections,
                                              optimize_graph=optimize_graph,
                                              **kwargs)
                     return repack(results)
-
-    if not get:
-        get = collections[0].__dask_scheduler__
-        if not all(a.__dask_scheduler__ == get for a in collections):
-            raise ValueError("Persist called on multiple collections with "
-                             "differing default schedulers. Please specify a "
-                             "scheduler `get` function using either "
-                             "the `get` kwarg or globally with `set_options`.")
 
     dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
     keys, postpersists = [], []
@@ -596,7 +580,7 @@ def persist(*args, **kwargs):
         keys.extend(a_keys)
         postpersists.append((rebuild, a_keys, state))
 
-    results = get(dsk, keys, **kwargs)
+    results = schedule(dsk, keys, **kwargs)
     d = dict(zip(keys, results))
     results2 = [r({k: d[k] for k in ks}, *s) for r, ks, s in postpersists]
     return repack(results2)
@@ -816,3 +800,95 @@ def _colorize(t):
     h = hex(int(i))[2:].upper()
     h = '0' * (6 - len(h)) + h
     return "#" + h
+
+
+named_schedulers = {
+    'sync': local.get_sync,
+    'synchronous': local.get_sync,
+    'single-threaded': local.get_sync,
+    'threads': threaded.get,
+    'threading': threaded.get,
+}
+
+try:
+    from dask import multiprocessing as dask_multiprocessing
+except ImportError:
+    pass
+else:
+    named_schedulers.update({
+        'processes': dask_multiprocessing.get,
+        'multiprocessing': dask_multiprocessing.get,
+    })
+
+
+_warnned_on_get = [False]
+
+
+def warn_on_get(get):
+    if _warnned_on_get[0]:
+        return
+    else:
+        if get in named_schedulers.values():
+            _warnned_on_get[0] = True
+            warnings.warn("The get= keyword has been deprecated. "
+                          "Please use the scheduler= keyword instead with the "
+                          "name of the desired scheduler "
+                          "like 'threads' or 'processes'")
+
+
+def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
+    """ Get scheduler function
+
+    There are various ways to specify the scheduler to use:
+
+    1.  Passing in get= parameters (deprecated)
+    2.  Passing in scheduler= parameters
+    3.  Passing these into global confiuration
+    4.  Using defaults of a dask collection
+
+    This function centralizes the logic to determine the right scheduler to use
+    from those many options
+    """
+    if get is not None:
+        if scheduler is not None:
+            raise ValueError("Both get= and scheduler= provided.  Choose one")
+        warn_on_get(get)
+        return get
+
+    if scheduler is not None:
+        if scheduler.lower() in named_schedulers:
+            return named_schedulers[scheduler.lower()]
+        elif scheduler.lower() in ('dask.distributed', 'distributed'):
+            from distributed.worker import get_client
+            return get_client().get
+        else:
+            raise ValueError("Expected one of [distributed, %s]" % ', '.join(sorted(named_schedulers)))
+        # else:  # try to connect to remote scheduler with this name
+        #     return get_client(scheduler).get
+
+    if _globals.get('scheduler'):
+        return get_scheduler(scheduler=_globals['scheduler'])
+
+    if _globals.get('get'):
+        warn_on_get(_globals['get'])
+        return _globals['get']
+
+    if getattr(thread_state, 'key', False):
+        from distributed.worker import get_worker
+        return get_worker().client.get
+
+    if cls is not None:
+        return cls.__dask_scheduler__
+
+    if collections:
+        collections = [c for c in collections if c is not None]
+    if collections:
+        get = collections[0].__dask_scheduler__
+        if not all(c.__dask_scheduler__ == get for c in collections):
+            raise ValueError("Compute called on multiple collections with "
+                             "differing default schedulers. Please specify a "
+                             "scheduler=` parameter explicitly in compute or "
+                             "globally with `set_options`.")
+        return get
+
+    return None

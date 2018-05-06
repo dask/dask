@@ -2,7 +2,43 @@ Changelog
 =========
 
 
-0.17.3 / 2018-MM-DD
+0.18.0 / 2018-MM-DD
+-------------------
+
+Array
++++++
+
+- Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
+- Allow slicing a Dask Array by another one-dimensional Dask Array of integers
+  (:pr:`3396`) `Guido Imperiale`_
+
+Dataframe
++++++++++
+
+Bag
++++
+
+-
+
+Core
+++++
+
+-
+
+0.17.4 / 2018-05-03
+-------------------
+
+Dataframe
++++++++++
+
+
+-  Add support for indexing Dask DataFrames with string subclasses (:pr:`3461`) `James Bourbeau`_
+-  Allow using both sorted_index and chunksize in read_hdf (:pr:`3463`) `Pierre Bartet`_
+-  Pass filesystem to arrow piece reader (:pr:`3466`) `Martin Durant`_
+-  Switches to using dask.compat string_types (#3462) `James Bourbeau`_
+
+
+0.17.3 / 2018-05-02
 -------------------
 
 Array
@@ -18,14 +54,13 @@ Array
 - The ``topk`` API has changed from topk(k, array) to the more conventional topk(array, k).
   The legacy API still works but is now deprecated. (:pr:`2965`) `Guido Imperiale`_
 - New function ``argtopk`` for Dask Arrays (:pr:`3396`) `Guido Imperiale`_
-- Allow slicing a Dask Array by another one-dimensional Dask Array of integers
-  (:pr:`3396`) `Guido Imperiale`_
+- Fix handling partial depth and boundary in ``map_overlap`` (:pr:`3445`) `John A Kirkham`_
+- Add ``gradient`` for Dask Arrays (:pr:`3434`) `John A Kirkham`_
 
 DataFrame
 +++++++++
 
-
-- Allow `t` as shorthand for `table` in `to_hdf` for pandas compatibility `Jörg Dietrich`_
+- Allow `t` as shorthand for `table` in `to_hdf` for pandas compatibility (:pr:`3330`) `Jörg Dietrich`_
 - Added top level `isna` method for Dask DataFrames (:pr:`3294`) `Christopher Ren`_
 - Fix selection on partition column on ``read_parquet`` for ``engine="pyarrow"`` (:pr:`3207`) `Uwe Korn`_
 - Added DataFrame.squeeze method (:pr:`3366`) `Christopher Ren`_
@@ -34,6 +69,10 @@ DataFrame
 - Provide more informative error message for meta= errors (:pr:`3343`) `Matthew Rocklin`_
 - add orc reader (:pr:`3284`) `Martin Durant`_
 - Default compression for parquet now always Snappy, in line with pandas (:pr:`3373`) `Martin Durant`_
+- Fixed bug in Dask DataFrame and Series comparisons with NumPy scalars (:pr:`3436`) `James Bourbeau`_
+- Remove outdated requirement from repartition docstring (:pr:`3440`) `Jörg Dietrich`_
+- Fixed bug in aggregation when only a Series is selected (:pr:`3446`) `Jörg Dietrich`_
+- Add default values to make_timeseries (:pr:`3421`) `Matthew Rocklin`_
 
 Bag
 +++
@@ -44,6 +83,7 @@ Core
 ++++
 
 - Support traversing collections in persist, visualize, and optimize (:pr:`3410`) `Jim Crist`_
+- Add schedule= keyword to compute and persist.  This replaces common use of the get= keyword (:pr:`3448`) `Matthew Rocklin`_
 
 
 0.17.2 / 2018-03-21
@@ -1071,3 +1111,4 @@ Other
 .. _`Dieter Weber`: https://github.com/uellue
 .. _`Apostolos Vlachopoulos`: https://github.com/avlahop
 .. _`Jesse Vogt`: https://github.com/jessevogt
+.. _`Pierre Bartet`: https://github.com/Pierre-Bartet

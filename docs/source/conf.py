@@ -304,13 +304,6 @@ intersphinx_mapping = {'pandas': ('http://pandas.pydata.org/pandas-docs/stable/'
                        'numpy': ('https://docs.scipy.org/doc/numpy/',
                                  'https://docs.scipy.org/doc/numpy/objects.inv')}
 
-#  --Options for sphinx extensions -----------------------------------------------
-
-intersphinx_mapping = {'pandas': ('http://pandas.pydata.org/pandas-docs/stable/',
-                                  'http://pandas.pydata.org/pandas-docs/stable/objects.inv'),
-                       'numpy': ('https://docs.scipy.org/doc/numpy/',
-                                 'https://docs.scipy.org/doc/numpy/objects.inv')}
-
 # Redirects
 # https://tech.signavio.com/2017/managing-sphinx-redirects
 redirect_files = [
@@ -321,6 +314,7 @@ redirect_files = [
     ('scheduler-choice.html', 'setup.html'),
     ('diagnostics.html', 'diagnostics-local.html'),
     ('inspect.html', 'graphviz.html'),
+    ('faq.html', 'https://stackoverflow.com/questions/tagged/dask?sort=frequent'),
 ]
 
 

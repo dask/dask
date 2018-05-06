@@ -198,8 +198,8 @@ def test_groupby_dir():
     assert 'b c d e' not in dir(g)
 
 
-@pytest.mark.parametrize('get', [dask.get, dask.threaded.get])
-def test_groupby_on_index(get):
+@pytest.mark.parametrize('scheduler', ['sync', 'threads'])
+def test_groupby_on_index(scheduler):
     pdf = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
                         'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
                        index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
@@ -215,7 +215,7 @@ def test_groupby_on_index(get):
     def func2(df):
         return df[['b']] - df[['b']].mean()
 
-    with dask.set_options(get=get):
+    with dask.set_options(scheduler=scheduler):
         with pytest.warns(None):
             assert_eq(ddf.groupby('a').apply(func),
                       pdf.groupby('a').apply(func))
@@ -705,11 +705,10 @@ def test_groupby_apply_tasks():
 
 
 def test_groupby_multiprocessing():
-    from dask.multiprocessing import get
     df = pd.DataFrame({'A': [1, 2, 3, 4, 5],
                        'B': ['1','1','a','a','a']})
     ddf = dd.from_pandas(df, npartitions=3)
-    with dask.set_options(get=get):
+    with dask.set_options(scheduler='processes'):
         assert_eq(ddf.groupby('B').apply(lambda x: x, meta={"A": int,
                                                             "B": object}),
                   df.groupby('B').apply(lambda x: x))
@@ -1428,4 +1427,14 @@ def test_groupby_agg_custom__mode():
     expected = pd.DataFrame({'g0': [0, 1], 'g1': [0, 1], 'cc': [4, 6]})
     expected = expected['cc'].groupby([expected['g0'], expected['g1']]).agg('sum')
 
+    assert_eq(actual, expected)
+
+
+def test_groupby_select_column_agg():
+    pdf = pd.DataFrame({'A': [1, 2, 3, 1, 2, 3, 1, 2, 4],
+                        'B': [-0.776, -0.4, -0.873, 0.054, 1.419, -0.948,
+                              -0.967, -1.714, -0.666]})
+    ddf = dd.from_pandas(pdf, npartitions=4)
+    actual = ddf.groupby('A')['B'].agg('var')
+    expected = pdf.groupby('A')['B'].agg('var')
     assert_eq(actual, expected)

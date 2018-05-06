@@ -22,7 +22,7 @@ from .. import core
 
 from ..utils import partial_by_order
 from .. import threaded
-from ..compatibility import apply, operator_div, bind_method
+from ..compatibility import apply, operator_div, bind_method, string_types
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
@@ -344,8 +344,12 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get('out', ())
         for x in inputs + out:
-            if not isinstance(x, (Number, Scalar, _Frame, Array,
-                                  pd.DataFrame, pd.Series, pd.Index)):
+            # ufuncs work with 0-dimensional NumPy ndarrays
+            # so we don't want to raise NotImplemented
+            if isinstance(x, np.ndarray) and x.shape == ():
+                continue
+            elif not isinstance(x, (Number, Scalar, _Frame, Array,
+                                    pd.DataFrame, pd.Series, pd.Index)):
                 return NotImplemented
 
         if method == '__call__':
@@ -939,8 +943,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             List of partitions to be used. If specified npartitions will be
             ignored.
         npartitions : int, optional
-            Number of partitions of output, must be less than npartitions of
-            input. Only used if divisions isn't specified.
+            Number of partitions of output. Only used if divisions isn't
+            specified.
         freq : str, pd.Timedelta
             A period on which to partition timeseries data like ``'7D'`` or
             ``'12h'`` or ``pd.Timedelta(hours=12)``.  Assumes a datetime index.
@@ -1056,10 +1060,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return new_dd_object(merge(self.dask, dsk), name,
                              self._meta, self.divisions)
 
-    def to_hdf(self, path_or_buf, key, mode='a', append=False, get=None, **kwargs):
+    def to_hdf(self, path_or_buf, key, mode='a', append=False, **kwargs):
         """ See dd.to_hdf docstring for more information """
         from .io import to_hdf
-        return to_hdf(self, path_or_buf, key, mode, append, get=get, **kwargs)
+        return to_hdf(self, path_or_buf, key, mode, append, **kwargs)
 
     def to_parquet(self, path, *args, **kwargs):
         """ See dd.to_parquet docstring for more information """
@@ -1751,7 +1755,10 @@ class Series(_Frame):
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
-            index = context[1][0].index
+            if isinstance(context[1][0], np.ndarray) and context[1][0].shape == ():
+                index = None
+            else:
+                index = context[1][0].index
 
         return pd.Series(array, index=index, name=self.name)
 
@@ -2311,7 +2318,10 @@ class DataFrame(_Frame):
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
-            index = context[1][0].index
+            if isinstance(context[1][0], np.ndarray) and context[1][0].shape == ():
+                index = None
+            else:
+                index = context[1][0].index
 
         return pd.DataFrame(array, index=index, columns=self.columns)
 
@@ -2328,7 +2338,7 @@ class DataFrame(_Frame):
 
     def __getitem__(self, key):
         name = 'getitem-%s' % tokenize(self, key)
-        if np.isscalar(key) or isinstance(key, tuple):
+        if np.isscalar(key) or isinstance(key, (tuple, string_types)):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:

@@ -89,15 +89,11 @@ Selecting methods
 Dask will use on-disk shuffling by default but will switch to task-based
 distributed shuffling if the default scheduler is set to use a
 ``dask.distributed.Client`` such as would be the case if the user sets the
-Client as default using one of the following two options:
+Client as default:
 
 .. code-block:: python
 
     client = Client('scheduler:8786', set_as_default=True)
-
-    or
-
-    dask.set_options(get=client.get)
 
 Alternatively, if you prefer to avoid defaults, you can specify a ``method=``
 keyword argument to ``groupby`` or ``set_index``

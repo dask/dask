@@ -440,7 +440,7 @@ def _to_csv_chunk(df, fil, **kwargs):
 
 
 def to_csv(df, filename, name_function=None, compression=None, compute=True,
-           get=None, storage_options=None, **kwargs):
+           get=None, scheduler=None, storage_options=None, **kwargs):
     """
     Store Dask DataFrame to CSV files
 
@@ -574,7 +574,7 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
               for d, f in zip(df.to_delayed(), files)]
 
     if compute:
-        delayed(values).compute(get=get)
+        delayed(values).compute(get=get, scheduler=scheduler)
         return [f.path for f in files]
     else:
         return values

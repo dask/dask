@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import io
 import itertools
 import math
-import types
 import uuid
 import warnings
 from collections import Iterable, Iterator, defaultdict
@@ -134,8 +133,8 @@ def _to_textfiles_chunk(data, lazy_file):
 
 
 def to_textfiles(b, path, name_function=None, compression='infer',
-                 encoding=system_encoding, compute=True, get=None,
-                 storage_options=None):
+                 encoding=system_encoding, compute=True, storage_options=None,
+                 **kwargs):
     """ Write dask Bag to disk, one filename per partition, one line per element.
 
     **Paths**: This will create one file for each partition in your bag. You
@@ -200,7 +199,7 @@ def to_textfiles(b, path, name_function=None, compression='infer',
     out = type(b)(merge(dsk, b.dask), name, b.npartitions)
 
     if compute:
-        out.compute(get=get)
+        out.compute(**kwargs)
         return [f.path for f in files]
     else:
         return out.to_delayed()
@@ -691,10 +690,10 @@ class Bag(DaskMethodsMixin):
 
     @wraps(to_textfiles)
     def to_textfiles(self, path, name_function=None, compression='infer',
-                     encoding=system_encoding, compute=True, get=None,
-                     storage_options=None):
+                     encoding=system_encoding, compute=True,
+                     storage_options=None, **kwargs):
         return to_textfiles(self, path, name_function, compression, encoding,
-                            compute, get=get, storage_options=storage_options)
+                            compute, storage_options=storage_options, **kwargs)
 
     def fold(self, binop, combine=None, initial=no_default, split_every=None):
         """ Parallelizable reduction
@@ -1190,7 +1189,7 @@ class Bag(DaskMethodsMixin):
         return iter(self.compute())
 
     def groupby(self, grouper, method=None, npartitions=None, blocksize=2**20,
-                max_branch=None):
+                max_branch=None, shuffle=None):
         """ Group collection by key function
 
         This requires a full dataset read, serialization and shuffle.
@@ -1200,7 +1199,7 @@ class Bag(DaskMethodsMixin):
         ----------
         grouper: function
             Function on which to group elements
-        method: str
+        shuffle: str
             Either 'disk' for an on-disk shuffle or 'tasks' to use the task
             scheduling framework.  Use 'disk' if you are on a single machine
             and 'tasks' if you are on a distributed cluster.
@@ -1224,20 +1223,22 @@ class Bag(DaskMethodsMixin):
         --------
         Bag.foldby
         """
-        if method is None:
-            get = _globals.get('get')
-            if (isinstance(get, types.MethodType) and
-               'distributed' in get.__func__.__module__):
-                method = 'tasks'
+        if method is not None:
+            raise Exception("The method= keyword has been moved to shuffle=")
+        if shuffle is None:
+            shuffle = _globals.get('shuffle')
+        if shuffle is None:
+            if 'distributed' in _globals.get('scheduler', ''):
+                shuffle = 'tasks'
             else:
-                method = 'disk'
-        if method == 'disk':
+                shuffle = 'disk'
+        if shuffle == 'disk':
             return groupby_disk(self, grouper, npartitions=npartitions,
                                 blocksize=blocksize)
-        elif method == 'tasks':
+        elif shuffle == 'tasks':
             return groupby_tasks(self, grouper, max_branch=max_branch)
         else:
-            msg = "Shuffle method must be 'disk' or 'tasks'"
+            msg = "Shuffle must be 'disk' or 'tasks'"
             raise NotImplementedError(msg)
 
     def to_dataframe(self, meta=None, columns=None):
