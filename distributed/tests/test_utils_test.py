@@ -132,7 +132,7 @@ def test_wait_for_port():
 def test_new_config():
     c = config.copy()
     with new_config({'xyzzy': 5}):
-        assert config == {'xyzzy': 5}
+        config['xyzzy'] == 5
 
     assert config == c
     assert 'xyzzy' not in config

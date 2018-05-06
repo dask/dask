@@ -13,6 +13,7 @@ import sys
 import warnings
 import weakref
 
+import dask
 from dask.core import istask
 from dask.compatibility import apply
 try:
@@ -28,7 +29,6 @@ from . import profile
 from .batched import BatchedSend
 from .comm import get_address_host, get_local_address_for
 from .comm.utils import offload
-from .config import config, log_format
 from .compatibility import unicode, get_thread_identity, finalize
 from .core import (error_message, CommClosedError,
                    rpc, pingpong, coerce_to_address)
@@ -54,7 +54,7 @@ _ncores = mp_context.cpu_count()
 
 logger = logging.getLogger(__name__)
 
-LOG_PDB = config.get('pdb-on-err')
+LOG_PDB = dask.config.get('distributed.admin.pdb-on-err')
 
 no_value = '--no-value-sentinel--'
 
@@ -90,8 +90,8 @@ class WorkerBase(ServerNode):
         if scheduler_file:
             cfg = json_load_robust(scheduler_file)
             scheduler_addr = cfg['address']
-        elif scheduler_ip is None and config.get('scheduler-address'):
-            scheduler_addr = config['scheduler-address']
+        elif scheduler_ip is None and dask.config.get('scheduler-address', None):
+            scheduler_addr = dask.config.get('scheduler-address')
         elif scheduler_port is None:
             scheduler_addr = coerce_to_address(scheduler_ip)
         else:
@@ -128,15 +128,15 @@ class WorkerBase(ServerNode):
         if 'memory_target_fraction' in kwargs:
             self.memory_target_fraction = kwargs.pop('memory_target_fraction')
         else:
-            self.memory_target_fraction = config.get('worker-memory-target', 0.6)
+            self.memory_target_fraction = dask.config.get('distributed.worker.memory.target')
         if 'memory_spill_fraction' in kwargs:
             self.memory_spill_fraction = kwargs.pop('memory_spill_fraction')
         else:
-            self.memory_spill_fraction = config.get('worker-memory-spill', 0.7)
+            self.memory_spill_fraction = dask.config.get('distributed.worker.memory.spill')
         if 'memory_pause_fraction' in kwargs:
             self.memory_pause_fraction = kwargs.pop('memory_pause_fraction')
         else:
-            self.memory_pause_fraction = config.get('worker-memory-pause', 0.8)
+            self.memory_pause_fraction = dask.config.get('distributed.worker.memory.pause')
 
         if self.memory_limit:
             try:
@@ -212,8 +212,8 @@ class WorkerBase(ServerNode):
         setproctitle("dask-worker [not started]")
 
     def _setup_logging(self):
-        self._deque_handler = DequeHandler(n=config.get('log-length', 10000))
-        self._deque_handler.setFormatter(logging.Formatter(log_format))
+        self._deque_handler = DequeHandler(n=dask.config.get('distributed.admin.log-length'))
+        self._deque_handler.setFormatter(logging.Formatter(dask.config.get('distributed.admin.log-format')))
         logger.addHandler(self._deque_handler)
         finalize(self, logger.removeHandler, self._deque_handler)
 
@@ -1101,7 +1101,7 @@ class Worker(WorkerBase):
         self.long_running = set()
 
         self.batched_stream = None
-        self.recent_messages_log = deque(maxlen=config.get('recent-messages-log-length', 0))
+        self.recent_messages_log = deque(maxlen=dask.config.get('distributed.comm.recent-messages-log-length'))
         self.target_message_size = 50e6  # 50 MB
 
         self.log = deque(maxlen=100000)
@@ -1137,14 +1137,14 @@ class Worker(WorkerBase):
         self._client = None
 
         profile_cycle_interval = kwargs.pop('profile_cycle_interval',
-                                        config.get('profile-cycle-interval', 1000))
+                                            dask.config.get('distributed.worker.profile.cycle'))
         profile_cycle_interval = parse_timedelta(profile_cycle_interval, default='ms')
 
         WorkerBase.__init__(self, *args, **kwargs)
 
         pc = PeriodicCallback(
                 self.trigger_profile,
-                parse_timedelta(config.get('profile-interval', 10), default='ms') * 1000,
+                parse_timedelta(dask.config.get('distributed.worker.profile.interval'), default='ms') * 1000,
                 io_loop=self.io_loop
         )
         self.periodic_callbacks['profile'] = pc

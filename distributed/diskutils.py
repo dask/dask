@@ -8,9 +8,9 @@ import shutil
 import stat
 import tempfile
 
-from . import locket
+import dask
 
-from . import config
+from . import locket
 from .compatibility import finalize
 
 
@@ -20,7 +20,7 @@ DIR_LOCK_EXT = '.dirlock'
 
 
 def is_locking_enabled():
-    return config.get('use-file-locking', True)
+    return dask.config.get('distributed.worker.use-file-locking')
 
 
 def safe_unlink(path):

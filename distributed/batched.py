@@ -3,10 +3,10 @@ from __future__ import print_function, division, absolute_import
 from collections import deque
 import logging
 
+import dask
 from tornado import gen, locks
 from tornado.ioloop import IOLoop
 
-from .config import config
 from .core import CommClosedError
 from .utils import parse_timedelta
 
@@ -51,7 +51,7 @@ class BatchedSend(object):
         self.batch_count = 0
         self.byte_count = 0
         self.next_deadline = None
-        self.recent_message_log = deque(maxlen=config.get('recent-messages-log-length', 0))
+        self.recent_message_log = deque(maxlen=dask.config.get('distributed.comm.recent-messages-log-length'))
 
     def start(self, comm):
         self.comm = comm

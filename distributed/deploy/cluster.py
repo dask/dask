@@ -2,10 +2,11 @@ import logging
 import os
 from weakref import ref
 
-from ..config import config
-from ..utils import format_bytes, PeriodicCallback, log_errors, ignoring
+import dask
 
 from .adaptive import Adaptive
+
+from ..utils import format_bytes, PeriodicCallback, log_errors, ignoring
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +138,7 @@ class Cluster(object):
         layout = Layout(width='150px')
 
         if 'bokeh' in self.scheduler.services:
-            template = config.get('diagnostics-link', 'http://{host}:{port}/status')
+            template = dask.config.get('distributed.dashboard.link')
 
             host = self.scheduler.address.split('://')[1].split(':')[0]
             port = self.scheduler.services['bokeh'].port

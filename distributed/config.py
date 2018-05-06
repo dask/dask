@@ -1,90 +1,72 @@
 from __future__ import print_function, division, absolute_import
 
-from contextlib import contextmanager
 import logging
 import logging.config
 import os
 import sys
-import warnings
 
-from .compatibility import FileExistsError, logging_names
+import dask
+import yaml
+
+from .compatibility import logging_names
+
+config = dask.config.config
+
+
+fn = os.path.join(os.path.dirname(__file__), 'distributed.yaml')
+dask.config.ensure_file(source=fn)
+
+with open(fn) as f:
+    defaults = yaml.load(f)
+
+dask.config.update(dask.config.config, defaults, priority='old')
+
+aliases = {
+    'allowed-failures': 'distributed.scheduler.allowed-failures',
+    'bandwidth': 'distributed.scheduler.bandwidth',
+    'default-data-size': 'distributed.scheduler.default-data-size',
+    'transition-log-length': 'distributed.scheduler.transition-log-length',
+    'work-stealing': 'distributed.scheduler.work-stealing',
+    'worker-ttl': 'distributed.scheduler.worker-ttl',
+
+    'multiprocessing-method': 'distributed.worker.multiprocessing-method',
+    'use-file-locking': 'distributed.worker.use-file-locking',
+    'profile-interval': 'distributed.worker.profile.interval',
+    'profile-cycle-interval': 'distributed.worker.profile.cycle',
+    'worker-memory-target': 'distributed.worker.memory.target',
+    'worker-memory-spill': 'distributed.worker.memory.spill',
+    'worker-memory-pause': 'distributed.worker.memory.pause',
+    'worker-memory-terminate': 'distributed.worker.memory.terminate',
+
+    'heartbeat-interval': 'distributed.client.heartbeat',
+
+    'compression': 'distributed.comm.compression',
+    'connect-timeout': 'distributed.comm.timeouts.connect',
+    'tcp-timeout': 'distributed.comm.timeouts.tcp',
+    'default-scheme': 'distributed.comm.default-scheme',
+    'socket-backlog': 'distributed.comm.socket-backlog',
+    'recent-messages-log-length': 'distributed.comm.recent-messages-log-length',
+
+    'diagnostics-link': 'distributed.dashboard.link',
+    'bokeh-export-tool': 'distributed.dashboard.export-tool',
+
+    'tick-time': 'distributed.admin.tick.interval',
+    'tick-maximum-delay': 'distributed.admin.tick.limit',
+    'log-length': 'distributed.admin.log-length',
+    'log-format': 'distributed.admin.log-format',
+    'pdb-on-err': 'distributed.admin.pdb-on-err',
+}
+
+dask.config.rename(aliases)
+
+
+#########################
+# Logging specific code #
+#########################
+#
+# Here we enact the policies in the logging part of the configuration
 
 logger = logging.getLogger(__name__)
-
-config = {}
-
-
-def ensure_config_file(source, destination):
-    if not os.path.exists(destination):
-        import shutil
-        if not os.path.exists(os.path.dirname(destination)):
-            try:
-                os.mkdir(os.path.dirname(destination))
-            except FileExistsError:
-                pass
-        # Atomically create destination.  Parallel testing discovered
-        # a race condition where a process can be busy creating the
-        # destination while another process reads an empty config file.
-        tmp = '%s.tmp.%d' % (destination, os.getpid())
-        shutil.copy(source, tmp)
-        try:
-            os.rename(tmp, destination)
-        except OSError:
-            os.remove(tmp)
-
-
-def determine_config_file():
-    path = os.environ.get('DASK_CONFIG')
-    if path:
-        if (os.path.exists(path) and
-                (os.path.isfile(path) or os.path.islink(path))):
-            return path
-        warnings.warn("DASK_CONFIG set to '%s' but file does not exist "
-                      "or is not a regular file" % (path,),
-                      UserWarning)
-
-    dirname = os.path.dirname(__file__)
-    default_path = os.path.join(dirname, 'config.yaml')
-    path = os.path.join(os.path.expanduser('~'), '.dask', 'config.yaml')
-
-    try:
-        ensure_config_file(default_path, path)
-    except EnvironmentError as e:
-        warnings.warn("Could not write default config file to '%s'. "
-                      "Received error %s" % (path, e),
-                      UserWarning)
-
-    return path if os.path.exists(path) else default_path
-
-
-def load_config_file(config, path):
-    with open(path) as f:
-        text = f.read()
-        config.update(yaml.load(text) or {})
-
-
-def load_env_vars(config):
-    for name, value in os.environ.items():
-        if name.startswith('DASK_'):
-            varname = name[5:].lower().replace('_', '-')
-            config[varname] = _parse_env_value(value)
-
-
-def _parse_env_value(value):
-    """ Convert a string to an integer, float or boolean (in that order) if possible. """
-    bools = {
-        'true': True,
-        'false': False
-    }
-    try:
-        return int(value)
-    except ValueError:
-        pass
-    try:
-        return float(value)
-    except ValueError:
-        pass
-    return bools.get(value.lower(), value)
 
 
 def _initialize_logging_old_style(config):
@@ -108,7 +90,8 @@ def _initialize_logging_old_style(config):
     loggers.update(config.get('logging', {}))
 
     handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(logging.Formatter(log_format))
+    handler.setFormatter(logging.Formatter(dask.config.get('distributed.admin.log-format',
+                                                           config=config)))
     for name, level in loggers.items():
         if isinstance(level, str):
             level = logging_names[level.upper()]
@@ -124,7 +107,7 @@ def _initialize_logging_new_style(config):
     Initialize logging using logging's "Configuration dictionary schema".
     (ref.: https://docs.python.org/2/library/logging.config.html#logging-config-dictschema)
     """
-    logging.config.dictConfig(config['logging'])
+    logging.config.dictConfig(config.get('logging'))
 
 
 def _initialize_logging_file_config(config):
@@ -132,7 +115,7 @@ def _initialize_logging_file_config(config):
     Initialize logging using logging's "Configuration file format".
     (ref.: https://docs.python.org/2/library/logging.config.html#configuration-file-format)
     """
-    logging.config.fileConfig(config['logging-file-config'], disable_existing_loggers=False)
+    logging.config.fileConfig(config.get('logging-file-config'), disable_existing_loggers=False)
 
 
 def initialize_logging(config):
@@ -150,38 +133,4 @@ def initialize_logging(config):
             _initialize_logging_old_style(config)
 
 
-@contextmanager
-def set_config(arg=None, **kwargs):
-    if arg and not kwargs:
-        kwargs = arg
-    old = {}
-    for key in kwargs:
-        if key in config:
-            old[key] = config[key]
-
-    for key, value in kwargs.items():
-        config[key] = value
-
-    try:
-        yield
-    finally:
-        for key in kwargs:
-            if key in old:
-                config[key] = old[key]
-            else:
-                del config[key]
-
-
-try:
-    import yaml
-except ImportError:
-    pass
-else:
-    path = determine_config_file()
-    load_config_file(config, path)
-
-load_env_vars(config)
-
-log_format = config.get('log-format', '%(name)s - %(levelname)s - %(message)s')
-
-initialize_logging(config)
+initialize_logging(dask.config.config)

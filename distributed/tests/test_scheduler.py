@@ -15,7 +15,6 @@ from tornado import gen
 import pytest
 
 from distributed import Nanny, Worker, Client, wait, fire_and_forget
-from distributed.config import set_config
 from distributed.core import connect, rpc, CommClosedError
 from distributed.scheduler import Scheduler, BANDWIDTH
 from distributed.client import wait
@@ -479,7 +478,7 @@ def test_worker_name():
 
 @gen_test()
 def test_coerce_address():
-    with set_config({'connect-timeout': '100ms'}):
+    with dask.config.set({'distributed.comm.timeouts.connect': '100ms'}):
         s = Scheduler(validate=True)
         s.start(0)
         print("scheduler:", s.address, s.listen_address)
@@ -1040,7 +1039,7 @@ def test_scheduler_file():
 
 @gen_cluster(client=True, ncores=[])
 def test_non_existent_worker(c, s):
-    with set_config({'connect-timeout': '100ms'}):
+    with dask.config.set({'distributed.comm.timeouts.connect': '100ms'}):
         s.add_worker(address='127.0.0.1:5738', ncores=2, nbytes={}, host_info={})
         futures = c.map(inc, range(10))
         yield gen.sleep(0.300)
@@ -1208,7 +1207,7 @@ def test_retries(c, s, a, b):
 @pytest.mark.xfail(reason="second worker also errant for some reason")
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3, timeout=5)
 def test_mising_data_errant_worker(c, s, w1, w2, w3):
-    with set_config({'connect-timeout': '1s'}):
+    with dask.config.set({'distributed.comm.timeouts.connect': '1s'}):
         np = pytest.importorskip('numpy')
 
         x = c.submit(np.random.random, 10000000, workers=w1.address)

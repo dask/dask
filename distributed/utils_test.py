@@ -32,6 +32,7 @@ except ImportError:
 import pytest
 import six
 
+import dask
 from dask.context import _globals
 from toolz import merge, memoize
 from tornado import gen, queues
@@ -39,7 +40,7 @@ from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 
 from .compatibility import PY3, iscoroutinefunction, Empty
-from .config import config, initialize_logging
+from .config import initialize_logging
 from .core import connect, rpc, CommClosedError
 from .metrics import time
 from .proctitle import enable_proctitle_on_children
@@ -705,9 +706,8 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
         start
         end
     """
-    config['nanny-start-timeout'] = '5s'
-    config['connect-timeout'] = '5s'
     del _global_workers[:]
+    dask.config.set({'distributed.comm.timeouts.connect': '5s'})
     worker_kwargs = merge({'memory_limit': TOTAL_MEMORY, 'death_timeout': 5},
                           worker_kwargs)
 
@@ -1072,10 +1072,13 @@ def new_config(new_config):
     """
     Temporarily change configuration dictionary.
     """
+    from .config import defaults
+    config = dask.config.config
     orig_config = config.copy()
     try:
         config.clear()
-        config.update(new_config)
+        config.update(defaults.copy())
+        dask.config.update(config, new_config)
         initialize_logging(config)
         yield
     finally:

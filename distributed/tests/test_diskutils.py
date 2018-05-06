@@ -10,11 +10,12 @@ from time import sleep
 
 import mock
 
+import dask
 from distributed.compatibility import Empty
 from distributed.diskutils import WorkSpace
 from distributed.metrics import time
 from distributed.utils import mp_context
-from distributed.utils_test import captured_logger, slow, new_config
+from distributed.utils_test import captured_logger, slow
 
 
 def assert_directory_contents(dir_path, expected):
@@ -153,7 +154,7 @@ def test_workspace_rmtree_failure(tmpdir):
 def test_locking_disabled(tmpdir):
     base_dir = str(tmpdir)
 
-    with new_config({'use-file-locking': False}):
+    with dask.config.set({'distributed.worker.use-file-locking': False}):
         with mock.patch('distributed.diskutils.locket.lock_file') as lock_file:
             assert_contents = functools.partial(assert_directory_contents, base_dir)
 

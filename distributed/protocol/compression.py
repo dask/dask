@@ -8,6 +8,7 @@ from __future__ import print_function, division, absolute_import
 import logging
 import random
 
+import dask
 from dask.context import _globals
 from toolz import identity, partial
 
@@ -19,7 +20,6 @@ try:
 except ImportError:
     blosc = False
 
-from ..config import config
 from ..utils import ignoring, ensure_bytes
 
 
@@ -98,7 +98,7 @@ with ignoring(ImportError):
                              'decompress': blosc.decompress}
 
 
-default = config.get('compression', 'auto')
+default = dask.config.get('distributed.comm.compression')
 if default != 'auto':
     if default in compressions:
         default_compression = default

@@ -5,7 +5,7 @@ try:
 except ImportError:
     ssl = None
 
-from . import config
+import dask
 
 
 _roles = ['client', 'scheduler', 'worker']
@@ -49,7 +49,7 @@ class Security(object):
     __slots__ = tuple(_fields)
 
     def __init__(self, **kwargs):
-        self._init_from_dict(config)
+        self._init_from_dict(dask.config.config)
         for k, v in kwargs.items():
             if v is not None:
                 setattr(self, k, v)

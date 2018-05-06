@@ -11,20 +11,20 @@ from bokeh.models import ( ColumnDataSource, Plot, DataRange1d, LinearAxis,
         Quad, TapTool, OpenURL, Button, Select)
 from bokeh.palettes import Spectral9
 from bokeh.plotting import figure
+import dask
 from tornado import gen
 
-from ..config import config
 from ..diagnostics.progress_stream import nbytes_bar
 from .. import profile
 from ..utils import log_errors, parse_timedelta
 
-if config.get('bokeh-export-tool', False):
+if dask.config.get('distributed.dashboard.export-tool'):
     from .export_tool import ExportTool
 else:
     ExportTool = None
 
 
-profile_interval = config.get('profile-interval', 10)
+profile_interval = dask.config.get('distributed.worker.profile.interval')
 profile_interval = parse_timedelta(profile_interval, default='ms')
 
 

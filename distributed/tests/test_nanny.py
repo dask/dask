@@ -12,8 +12,8 @@ import pytest
 from toolz import valmap, first
 from tornado import gen
 
+import dask
 from distributed import Nanny, rpc, Scheduler
-from distributed.config import config
 from distributed.core import CommClosedError
 from distributed.metrics import time
 from distributed.protocol.pickle import dumps
@@ -288,8 +288,7 @@ def test_avoid_memory_monitor_if_zero_limit(c, s):
 
 @gen_cluster(ncores=[], client=True)
 def test_scheduler_address_config(c, s):
-    config['scheduler-address'] = s.address
-    try:
+    with dask.config.set({'scheduler-address': s.address}):
         nanny = Nanny(loop=s.loop)
         yield nanny._start()
         assert nanny.scheduler.address == s.address
@@ -299,8 +298,6 @@ def test_scheduler_address_config(c, s):
             yield gen.sleep(0.1)
             assert time() < start + 10
 
-    finally:
-        del config['scheduler-address']
     yield nanny._close()
 
 

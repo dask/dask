@@ -3,10 +3,9 @@ from __future__ import print_function, division, absolute_import
 from collections import defaultdict, deque
 import logging
 from math import log
-import os
 from time import time
 
-from .config import config
+import dask
 from .core import CommClosedError
 from .diagnostics.plugin import SchedulerPlugin
 from .utils import log_errors, PeriodicCallback
@@ -23,7 +22,7 @@ log_2 = log(2)
 logger = logging.getLogger(__name__)
 
 
-LOG_PDB = config.get('pdb-on-err') or os.environ.get('DASK_ERROR_PDB', False)
+LOG_PDB = dask.config.get('distributed.admin.pdb-on-err')
 
 
 class WorkStealing(SchedulerPlugin):

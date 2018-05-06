@@ -9,8 +9,8 @@ import os
 import pytest
 
 from distributed.utils_test import (captured_handler, captured_logger,
-                                    new_config, new_config_file, new_environment)
-from distributed.config import initialize_logging, set_config, config, load_env_vars
+                                    new_config, new_config_file)
+from distributed.config import initialize_logging
 
 
 def dump_logger_list():
@@ -120,6 +120,7 @@ def test_logging_simple():
     with new_config_file(c):
         code = """if 1:
             import logging
+            import dask
 
             from distributed.utils_test import captured_handler
 
@@ -139,7 +140,7 @@ def test_logging_simple():
             assert distributed_log == [
                 "distributed.foo - INFO - 1: info",
                 "distributed.foo.bar - ERROR - 3: error",
-                ]
+                ], (dask.config.config, distributed_log)
             """
 
         subprocess.check_call([sys.executable, "-c", code])
@@ -272,35 +273,3 @@ qualname=foo.bar
             """
         subprocess.check_call([sys.executable, "-c", code])
     os.remove(logging_config.name)
-
-
-def test_set_config():
-    assert 'foo' not in config
-    with set_config(foo=1):
-        assert config['foo'] == 1
-    assert 'foo' not in config
-
-
-def test_load_env_vars():
-    environment = dict(
-        DASK_STRING='test',
-        DASK_INT='20',
-        DASK_TRUE='True',
-        DASK_FALSE='false',
-        DASK_FLOAT='1.5',
-        NOT_FOR_DASK='__variable not used__'
-    )
-    conf = {}
-    with new_environment(environment):
-        load_env_vars(conf)
-        assert conf['string'] == 'test'
-        assert conf['int'] == 20
-        assert conf['true'] is True
-        assert conf['false'] is False
-        assert conf['float'] == 1.5
-        assert isinstance(conf['string'], str)
-        assert isinstance(conf['int'], int)
-        assert isinstance(conf['float'], float)
-        assert isinstance(conf['true'], bool)
-        assert isinstance(conf['false'], bool)
-        assert '__variable not used__' not in conf.values()

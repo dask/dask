@@ -32,6 +32,7 @@ try:
 except ImportError:
     resource = None
 
+import dask
 from dask import istask
 from toolz import memoize, valmap
 import tornado
@@ -39,7 +40,6 @@ from tornado import gen
 from tornado.ioloop import IOLoop, PollIOLoop
 
 from .compatibility import Queue, PY3, PY2, get_thread_identity, unicode
-from .config import config
 from .metrics import time
 
 
@@ -56,7 +56,7 @@ no_default = '__no_default__'
 
 def _initialize_mp_context():
     if PY3 and not sys.platform.startswith('win') and 'PyPy' not in sys.version:
-        method = config.get('multiprocessing-method', 'forkserver')
+        method = dask.config.get('distributed.worker.multiprocessing-method')
         ctx = multiprocessing.get_context(method)
         # Makes the test suite much faster
         preload = ['distributed']

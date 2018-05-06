@@ -11,6 +11,7 @@ import sys
 from time import sleep
 import traceback
 
+import dask
 from dask import delayed
 import pytest
 from toolz import pluck, sliding_window, first
@@ -21,7 +22,6 @@ from tornado.ioloop import TimeoutError
 from distributed import (Nanny, Client, get_client, wait, default_client,
         get_worker, Reschedule)
 from distributed.compatibility import WINDOWS, cache_from_source
-from distributed.config import config
 from distributed.core import rpc
 from distributed.client import wait
 from distributed.scheduler import Scheduler
@@ -1125,11 +1125,8 @@ def test_parse_memory_limit(s, w):
 
 @gen_cluster(ncores=[], client=True)
 def test_scheduler_address_config(c, s):
-    config['scheduler-address'] = s.address
-    try:
+    with dask.config.set({'scheduler-address': s.address}):
         worker = Worker(loop=s.loop)
         yield worker._start()
         assert worker.scheduler.address == s.address
-    finally:
-        del config['scheduler-address']
     yield worker._close()

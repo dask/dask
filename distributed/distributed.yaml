@@ -1,0 +1,84 @@
+distributed:
+  version: 2
+  # logging:
+  #   distributed: info
+  #   distributed.client: warning
+  #   bokeh: critical
+  #   # http://stackoverflow.com/questions/21234772/python-tornado-disable-logging-to-stderr
+  #   tornado: critical
+  #   tornado.application: error
+
+  scheduler:
+    allowed-failures: 3     # number of retries before a task is considered bad
+    bandwidth: 100000000    # 100 MB/s estimated worker-worker bandwidth
+    default-data-size: 1000
+    transition-log-length: 100000
+    work-stealing: True     # workers should steal tasks from each other
+    worker-ttl: null        # like '60s'. Time to live for workers.  They must heartbeat faster than this
+
+  worker:
+    multiprocessing-method: forkserver
+    use-file-locking: True
+
+    profile:
+      interval: 10ms        # Time between statistical profiling queries
+      cycle: 1000ms         # Time between starting new profile
+
+    # Fractions of worker memory at which we take action to avoid memory blowup
+    # Set any of the lower three values to False to turn off the behavior entirely
+    memory:
+      target: 0.60  # target fraction to stay below
+      spill: 0.70  # fraction at which we spill to disk
+      pause: 0.80  # fraction at which we pause worker threads
+      terminate: 0.95  # fraction at which we terminate the worker
+
+  client:
+    heartbeat: 5s  # time between client heartbeats
+
+  comm:
+    compression: auto
+    default-scheme: tcp
+    socket-backlog: 2048
+    recent-messages-log-length: 0  # number of messages to keep for debugging
+
+    timeouts:
+      connect: 10s          # time before connecting fails
+      tcp: 30s              # time before calling an unresponsive connection dead
+
+  # require-encryption: False   # whether to require encryption on non-local comms
+  #
+  # tls:
+  #   ca-file: xxx.pem
+  #   scheduler:
+  #     key: xxx.pem
+  #     cert: xxx.pem
+  #   worker:
+  #     key: xxx.pem
+  #     cert: xxx.pem
+  #   client:
+  #     key: xxx.pem
+  #     cert: xxx.pem
+  #   ciphers:
+  #     ECDHE-ECDSA-AES128-GCM-SHA256
+
+
+  ###################
+  # Bokeh dashboard #
+  ###################
+
+  dashboard:
+    link: "http://{host}:{port}/status"
+    export-tool: False
+
+  ##################
+  # Administrative #
+  ##################
+
+  admin:
+    tick:
+      interval: 20ms  # time between event loop health checks
+      limit: 3s       # time allowed before triggering a warning
+
+    log-length: 10000  # default length of logs to keep in memory
+    log-format: '%(name)s - %(levelname)s - %(message)s'
+    pdb-on-err: False       # enter debug mode on scheduling error

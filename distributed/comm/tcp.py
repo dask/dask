@@ -11,13 +11,13 @@ try:
 except ImportError:
     ssl = None
 
+import dask
 import tornado
 from tornado import gen, netutil
 from tornado.iostream import StreamClosedError, IOStream
 from tornado.tcpclient import TCPClient
 from tornado.tcpserver import TCPServer
 
-from .. import config
 from ..compatibility import finalize, PY3
 from ..utils import (ensure_bytes, ensure_ip, get_ip, get_ipv6, nbytes,
                      parse_timedelta, shutting_down)
@@ -42,8 +42,6 @@ def get_total_physical_memory():
 
 MAX_BUFFER_SIZE = get_total_physical_memory()
 
-DEFAULT_BACKLOG = 2048
-
 
 def set_tcp_timeout(stream):
     """
@@ -52,7 +50,7 @@ def set_tcp_timeout(stream):
     if stream.closed():
         return
 
-    timeout = config.get('tcp-timeout', 30)
+    timeout = dask.config.get('distributed.comm.timeouts.tcp')
     timeout = int(parse_timedelta(timeout, default='seconds'))
 
     sock = stream.socket
@@ -369,7 +367,7 @@ class BaseTCPListener(Listener, RequireEncryptionMixin):
         self.tcp_server = TCPServer(max_buffer_size=MAX_BUFFER_SIZE,
                                     **self.server_args)
         self.tcp_server.handle_stream = self._handle_stream
-        backlog = int(config.get('socket-backlog', DEFAULT_BACKLOG))
+        backlog = int(dask.config.get('distributed.comm.socket-backlog'))
         for i in range(5):
             try:
                 # When shuffling data between workers, there can

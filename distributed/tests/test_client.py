@@ -28,10 +28,9 @@ from tornado.ioloop import IOLoop
 import dask
 from dask import delayed
 from dask.context import _globals
-from distributed import (Worker, Nanny, fire_and_forget, config, LocalCluster,
+from distributed import (Worker, Nanny, fire_and_forget, LocalCluster,
                          get_client, secede, get_worker, Executor, profile,
                          TimeoutError)
-from distributed.config import set_config
 from distributed.comm import CommClosedError
 from distributed.client import (Client, Future, wait, as_completed, tokenize,
                                 _get_global_client, default_client,
@@ -5182,16 +5181,15 @@ def test_avoid_delayed_finalize(c, s, a, b):
 
 @gen_cluster()
 def test_config_scheduler_address(s, a, b):
-    config['scheduler-address'] = s.address
-    with captured_logger('distributed.client') as sio:
-        c = yield Client(asynchronous=True)
-        assert c.scheduler.address == s.address
+    with dask.config.set({'scheduler-address': s.address}):
+        with captured_logger('distributed.client') as sio:
+            c = yield Client(asynchronous=True)
+            assert c.scheduler.address == s.address
 
-    text = sio.getvalue()
-    assert s.address in text
+        text = sio.getvalue()
+        assert s.address in text
 
-    del config['scheduler-address']
-    yield c.close()
+        yield c.close()
 
 
 @gen_cluster(client=True)
@@ -5239,12 +5237,9 @@ def test_unhashable_function(c, s, a, b):
 
 @gen_cluster()
 def test_client_name(s, a, b):
-    config['client-name'] = 'hello-world'
-    try:
+    with dask.config.set({'client-name': 'hello-world'}):
         c = yield Client(s.address, asynchronous=True)
         assert any("hello-world" in name for name in list(s.clients))
-    finally:
-        del config['client-name']
 
     yield c._close()
 
@@ -5273,18 +5268,15 @@ def test_diagnostics_link_env_variable(loop):
     from distributed.bokeh.scheduler import BokehScheduler
     with cluster(scheduler_kwargs={'services': {('bokeh', 12355): BokehScheduler}}) as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
-            config['diagnostics-link'] = 'http://foo-{USER}:{port}/status'
-            try:
+            with dask.config.set({'distributed.dashboard.link': 'http://foo-{USER}:{port}/status'}):
                 text = c._repr_html_()
                 link = 'http://foo-' + os.environ['USER'] + ':12355/status'
                 assert link in text
-            finally:
-                del config['diagnostics-link']
 
 
 @gen_test()
 def test_client_timeout_2():
-    with set_config({'connect-timeout': '10ms'}):
+    with dask.config.set({'distributed.comm.timeouts.connect': '10ms'}):
         start = time()
         c = Client('127.0.0.1:3755', asynchronous=True)
         with pytest.raises((TimeoutError, IOError)):

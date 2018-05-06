@@ -2,11 +2,12 @@ from __future__ import print_function, division, absolute_import
 
 import six
 
-from ..config import config
+import dask
+
 from . import registry
 
 
-DEFAULT_SCHEME = config.get('default-scheme', 'tcp')
+DEFAULT_SCHEME = dask.config.get('distributed.comm.default-scheme')
 
 
 def parse_address(addr, strict=False):

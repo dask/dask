@@ -12,3 +12,4 @@ zict >= 0.1.3
 # Compatibility packages
 futures; python_version < '3.0'
 singledispatch; python_version < '3.4'
+pyyaml

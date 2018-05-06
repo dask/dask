@@ -9,12 +9,12 @@ import shutil
 import threading
 import uuid
 
+import dask
 from tornado import gen
 from tornado.ioloop import IOLoop, TimeoutError
 from tornado.locks import Event
 
 from .comm import get_address_host, get_local_address_for, unparse_host_port
-from .config import config
 from .core import rpc, RPCClosed, CommClosedError, coerce_to_address
 from .metrics import time
 from .node import ServerNode
@@ -48,8 +48,8 @@ class Nanny(ServerNode):
         if scheduler_file:
             cfg = json_load_robust(scheduler_file)
             self.scheduler_addr = cfg['address']
-        elif scheduler_ip is None and config.get('scheduler-address'):
-            self.scheduler_addr = config['scheduler-address']
+        elif scheduler_ip is None and dask.config.get('scheduler-address'):
+            self.scheduler_addr = dask.config.get('scheduler-address')
         elif scheduler_port is None:
             self.scheduler_addr = coerce_to_address(scheduler_ip)
         else:
@@ -64,7 +64,7 @@ class Nanny(ServerNode):
         self.preload_argv = preload_argv
 
         self.contact_address = contact_address
-        self.memory_terminate_fraction = config.get('worker-memory-terminate', 0.95)
+        self.memory_terminate_fraction = dask.config.get('distributed.worker.memory.terminate')
 
         self.security = security or Security()
         assert isinstance(self.security, Security)
