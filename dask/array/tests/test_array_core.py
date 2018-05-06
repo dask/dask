@@ -217,6 +217,26 @@ def test_Array_computation():
     assert float(a[0, 0]) == 1
 
 
+def test_Array_numpy_gufunc_call__array_ufunc__01():
+    x = da.random.normal(size=(3, 10, 10), chunks=2)
+    nx = x.compute()
+    ny = np.linalg._umath_linalg.inv(nx)
+    y = np.linalg._umath_linalg.inv(x, output_dtypes=float)
+    vy = y.compute()
+    np.testing.assert_array_equal(ny, vy)
+
+
+def test_Array_numpy_gufunc_call__array_ufunc__02():
+    x = da.random.normal(size=(3, 10, 10), chunks=2)
+    nx = x.compute()
+    nw, nv = np.linalg._umath_linalg.eig(nx)
+    w, v = np.linalg._umath_linalg.eig(x, output_dtypes=(float, float))
+    vw = w.compute()
+    vv = v.compute()
+    np.testing.assert_array_equal(nw, vw)
+    np.testing.assert_array_equal(nv, vv)
+
+
 def test_stack():
     a, b, c = [Array(getem(name, chunks=(2, 3), shape=(4, 6)),
                      name, chunks=(2, 3), dtype='f8', shape=(4, 6))
