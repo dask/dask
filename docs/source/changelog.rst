@@ -9,6 +9,7 @@ Array
 +++++
 
 - Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
+- ``einsum`` now accepts the ``split_every`` parameter (:pr:`3396` `Guido Imperiale`_
 
 Dataframe
 +++++++++
