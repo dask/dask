@@ -7,6 +7,7 @@ import numpy as np
 from numpy.compat import basestring
 
 from .core import (atop, asarray)
+from . import chunk
 
 einsum_symbols = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 einsum_symbols_set = set(einsum_symbols)
@@ -182,17 +183,6 @@ def parse_einsum_input(operands):
     return (input_subscripts, output_subscript, operands)
 
 
-def _einsum_kernel(*operands, **kwargs):
-    subscripts = kwargs.pop('subscripts')
-    ncontract_inds = kwargs.pop('ncontract_inds')
-    dtype = kwargs.pop('kernel_dtype')
-    chunk = np.einsum(subscripts, *operands, dtype=dtype, **kwargs)
-
-    # Avoid concatenate=True in atop by adding 1's
-    # for the contracted dimensions
-    return chunk.reshape(chunk.shape + (1,) * ncontract_inds)
-
-
 einsum_can_optimize = LooseVersion(np.__version__) >= LooseVersion("1.12.0")
 
 
@@ -244,7 +234,7 @@ def einsum(*operands, **kwargs):
 
     # Introduce the contracted indices into the atop product
     # so that we get numpy arrays, not lists
-    result = atop(_einsum_kernel, tuple(outputs) + tuple(contract_inds),
+    result = atop(chunk.einsum, tuple(outputs) + tuple(contract_inds),
                   *(a for ap in zip(ops, inputs) for a in ap),
                   **kwargs)
 
