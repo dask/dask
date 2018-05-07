@@ -2123,6 +2123,7 @@ def _check_regular_chunks(chunkset):
 
     Examples
     --------
+    >>> import dask.array as da
     >>> arr = da.zeros(10, chunks=(5, ))
     >>> _check_regular_chunks(arr.chunks)
     True
