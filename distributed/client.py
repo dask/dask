@@ -2691,36 +2691,6 @@ class Client(Node):
             workers = [workers]
         return self.sync(self.scheduler.has_what, workers=workers, **kwargs)
 
-    def stacks(self, workers=None):
-        """ The task queues on each worker
-
-        Parameters
-        ----------
-        workers: list (optional)
-            A list of worker addresses, defaults to all
-
-        Examples
-        --------
-        >>> x, y, z = c.map(inc, [1, 2, 3])  # doctest: +SKIP
-        >>> c.stacks()  # doctest: +SKIP
-        {'192.168.1.141:46784': ['inc-1c8dd6be1c21646c71f76c16d09304ea',
-                                 'inc-fd65c238a7ea60f6a01bf4c8a5fcf44b',
-                                 'inc-1e297fc27658d7b67b3a758f16bcf47a']}
-
-        See Also
-        --------
-        Client.processing
-        Client.who_has
-        Client.has_what
-        Client.ncores
-        """
-        if (isinstance(workers, tuple)
-                and all(isinstance(i, (str, tuple)) for i in workers)):
-            workers = list(workers)
-        if workers is not None and not isinstance(workers, (list, set)):
-            workers = [workers]
-        return sync(self.loop, self.scheduler.stacks, workers=workers)
-
     def processing(self, workers=None):
         """ The tasks currently running on each worker
 
@@ -2739,7 +2709,6 @@ class Client(Node):
 
         See Also
         --------
-        Client.stacks
         Client.who_has
         Client.has_what
         Client.ncores
@@ -2749,8 +2718,7 @@ class Client(Node):
             workers = list(workers)
         if workers is not None and not isinstance(workers, (list, set)):
             workers = [workers]
-        return valmap(set, sync(self.loop, self.scheduler.processing,
-                                workers=workers))
+        return self.sync(self.scheduler.processing, workers=workers)
 
     def nbytes(self, keys=None, summary=True, **kwargs):
         """ The bytes taken up by each key on the cluster
