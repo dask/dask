@@ -22,8 +22,8 @@ def agg_func(request):
     return request.param
 
 
-def groupby_internal_repr():
-    pdf = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7, 8, 9, 10],
+def test_groupby_internal_repr():
+    pdf = pd.DataFrame({'x': [0, 1, 2, 3, 4, 6, 7, 8, 9, 10],
                         'y': list('abcbabbcda')})
     ddf = dd.from_pandas(pdf, 3)
 
