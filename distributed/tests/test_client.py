@@ -5358,5 +5358,18 @@ def test_de_serialization_none(s, a, b):
         yield c._close()
 
 
+@gen_cluster()
+def test_client_repr_closed(s, a, b):
+    c = yield Client(s.address, asynchronous=True)
+    yield c.close()
+    c._repr_html_()
+
+
+def test_client_repr_closed_sync(loop):
+    with Client(loop=loop, processes=False) as c:
+        c.close()
+        c._repr_html_()
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401

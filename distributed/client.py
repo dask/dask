@@ -646,25 +646,28 @@ class Client(Node):
             return '<%s: not connected>' % (self.__class__.__name__,)
 
     def _repr_html_(self):
-        if self.cluster and hasattr(self.cluster, 'scheduler'):
+        if self.cluster and hasattr(self.cluster, 'scheduler') and self.cluster.scheduler:
             info = self.cluster.scheduler.identity()
+            scheduler = self.cluster.scheduler
         elif (self._loop_runner.is_started() and
                 self.scheduler and
                 not (self.asynchronous and self.loop is IOLoop.current())):
             info = sync(self.loop, self.scheduler.identity)
+            scheduler = self.scheduler
         else:
             info = False
+            scheduler = self.scheduler
 
-        if self.scheduler is not None:
+        if scheduler is not None:
             text = ("<h3>Client</h3>\n"
                     "<ul>\n"
-                    "  <li><b>Scheduler: </b>%s\n") % self.scheduler.address
+                    "  <li><b>Scheduler: </b>%s\n") % scheduler.address
         else:
             text = ("<h3>Client</h3>\n"
                     "<ul>\n"
                     "  <li><b>Scheduler: not connected</b>\n")
         if info and 'bokeh' in info['services']:
-            protocol, rest = self.scheduler.address.split('://')
+            protocol, rest = scheduler.address.split('://')
             port = info['services']['bokeh']
             if protocol == 'inproc':
                 host = 'localhost'
