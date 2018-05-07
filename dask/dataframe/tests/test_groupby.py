@@ -67,8 +67,8 @@ def groupby_internal_repr():
     assert_eq(dp.obj, gp.obj)
 
 
-def groupby_error():
-    pdf = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7, 8, 9, 10],
+def test_groupby_error():
+    pdf = pd.DataFrame({'x': [0, 1, 2, 3, 4, 6, 7, 8, 9, 10],
                         'y': list('abcbabbcda')})
     ddf = dd.from_pandas(pdf, 3)
 
@@ -85,6 +85,7 @@ def groupby_error():
         dp['A']
     assert msg in str(err.value)
 
+    msg = 'Columns not found: '
     with pytest.raises(KeyError) as err:
         dp[['x', 'A']]
     assert msg in str(err.value)
