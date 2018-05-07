@@ -3244,6 +3244,15 @@ def test_zarr_roundtrip():
         assert a2.chunks == a.chunks
 
 
+def test_zarr_rechunk():
+    pytest.importorskip('zarr')
+    a = da.zeros((3, ), chunks=((1, 2), ))
+    with tmpdir() as d:
+        with pytest.raises(ValueError):
+            a.to_zarr(d)
+        a.to_zarr(d, rechunk=(1, ))
+
+
 def test_zarr_group():
     zarr = pytest.importorskip('zarr')
     with tmpdir() as d:
@@ -3262,6 +3271,20 @@ def test_zarr_group():
         a2 = da.from_zarr(d, component='test')
         assert_eq(a, a2)
         assert a2.chunks == a.chunks
+
+
+@pytest.mark.parametrize('data', [[((), ), True],
+                                  [((1, ),), True],
+                                  [((1, 1, 1),), True],
+                                  [((1, ), (1, )), True],
+                                  [((2, 2, 1), ), True],
+                                  [((2, 2, 3), ), False],
+                                  [((1, 1, 1), (2, 2, 3)), False],
+                                  [((1, 2, 1), ), False]
+                                  ])
+def test_regular_chunks(data):
+    chunkset, expected = data
+    assert da.core._check_regular_chunks(chunkset) == expected
 
 
 def test_zarr_nocompute():

@@ -2051,7 +2051,8 @@ def from_zarr(url, component=None, storage_options=None, **kwargs):
 
 
 def to_zarr(arr, url, component=None, storage_options=None,
-            overwrite_group=False, compute=True, return_stored=False, **kwargs):
+            overwrite_group=False, rechunk=False, compute=True,
+            return_stored=False, **kwargs):
     """Save array to the zarr storage format
 
     See https://zarr.readthedocs.io for details about the format.
@@ -2073,11 +2074,20 @@ def to_zarr(arr, url, component=None, storage_options=None,
         If component is not none, this controls whether to create/overwrite the
         zarr group, or if the group must exits already (but the specific
         dataset is always overwritten)
+    rechunk: None, False, set of chunks or string
+        Rechunking to be applied to the array before storage, since zarr
+        requires a regular chunks scheme.
+        See ``Array.rechunk``. If False, no rechunk operation is performed,
+        so if the chunks are not regular, an exception is raised.
     compute, return_stored: see ``store()``
     kwargs: passed to zarr's open functions, e.g., compression options
     """
     import zarr
-    # TODO: rechunk here, if necessary
+    if rechunk is not False:
+        arr = arr.rechunk(rechunk)
+    if not _check_regular_chunks(arr.chunks):
+        raise ValueError('Attempt to save array to zarr with irregular '
+                         'chunking')
     storage_options = storage_options or {}
     fs, fs_token, path = get_fs_token_paths(
         url, 'rb', storage_options=storage_options)
@@ -2094,6 +2104,45 @@ def to_zarr(arr, url, component=None, storage_options=None,
             component, shape=arr.shape, chunks=chunks, dtype=arr.dtype,
             **kwargs)
     return store(arr, z, compute=compute, return_stored=return_stored)
+
+
+def _check_regular_chunks(chunkset):
+    """Check if the chunks are regular
+
+    "Regular" in this context means that along every axis, the chunks all
+    have the same size, except the last one, which may be smaller
+
+    Parameters
+    ----------
+    chunkset: tuple of tuples of ints
+        From the ``.chunks`` attribute of an ``Array``
+
+    Returns
+    -------
+    True if chunkset passes, else False
+
+    Examples
+    --------
+    >>> arr = da.zeros(10, chunks=(5, ))
+    >>> _check_regular_chunks(arr.chunks)
+    True
+
+    >>> arr = da.zeros(10, chunks=((3, 3, 3, 1), ))
+    >>> _check_regular_chunks(arr.chunks)
+    True
+
+    >>> arr = da.zeros(10, chunks=((3, 1, 3, 3), ))
+    >>> _check_regular_chunks(arr.chunks)
+    False
+    """
+    for chunks in chunkset:
+        if len(chunks) < 2:
+            continue
+        if len(set(chunks[:-1])) > 1:
+            return False
+        if chunks[-1] > chunks[0]:
+            return False
+    return True
 
 
 def from_delayed(value, shape, dtype, name=None):
