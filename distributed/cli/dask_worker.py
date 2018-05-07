@@ -8,7 +8,7 @@ from sys import exit
 import click
 from distributed import Nanny, Worker
 from distributed.config import config
-from distributed.utils import get_ip_interface
+from distributed.utils import get_ip_interface, parse_timedelta
 from distributed.worker import _ncores
 from distributed.security import Security
 from distributed.cli.utils import (check_python_3, uri_from_host_port,
@@ -86,7 +86,7 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 @click.option('--scheduler-file', type=str, default='',
               help='Filename to JSON encoded scheduler information. '
                    'Use with dask-scheduler --scheduler-file')
-@click.option('--death-timeout', type=float, default=None,
+@click.option('--death-timeout', type=str, default=None,
               help="Seconds to wait for a scheduler before closing")
 @click.option('--bokeh-prefix', type=str, default=None,
               help="Prefix for the bokeh app")
@@ -210,6 +210,9 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
     else:
         # Choose appropriate address for scheduler
         addr = None
+
+    if death_timeout is not None:
+        death_timeout = parse_timedelta(death_timeout, 's')
 
     nannies = [t(scheduler, scheduler_file=scheduler_file, ncores=nthreads,
                  services=services, loop=loop, resources=resources,
