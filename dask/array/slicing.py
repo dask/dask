@@ -423,7 +423,13 @@ def _slice_1d(dim_shape, lengths, index):
             stop -= length
     else:
         rstart = start  # running start
-        for i in range(len(chunk_boundaries) - 1, -1 ,-1):
+
+        istart = chunk_boundaries.searchsorted(start, side='left')
+        istop = chunk_boundaries.searchsorted(stop, side='right')
+        istart = min(istart +1, len(chunk_boundaries) - 1)
+        istop = max(istop - 1, -1)
+
+        for i in range(istart, istop, -1):
             chunk_stop = chunk_boundaries[i]
             # create a chunk start and stop
             if i == 0:
