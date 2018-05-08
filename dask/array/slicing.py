@@ -3,10 +3,10 @@ from __future__ import absolute_import, division, print_function
 from itertools import product
 import math
 from numbers import Integral, Number
-from operator import add, getitem, itemgetter
+from operator import getitem, itemgetter
 
 import numpy as np
-from toolz import accumulate, memoize, merge, pluck, concat
+from toolz import memoize, merge, pluck, concat
 
 from .. import core
 from .. import sharedict
@@ -432,7 +432,7 @@ def _slice_1d(dim_shape, lengths, index):
         istop = chunk_boundaries.searchsorted(stop, side='right')
 
         # the bound is not exactly tight; make it tighter?
-        istart = min(istart +1, len(chunk_boundaries) - 1)
+        istart = min(istart + 1, len(chunk_boundaries) - 1)
         istop = max(istop - 1, -1)
 
         for i in range(istart, istop, -1):
