@@ -27,17 +27,19 @@ The ``dask-ssh`` utility depends on the ``paramiko``::
 
 
 CLI Options
--------- 
+----------- 
 
-Launch a distributed cluster over SSH. A 'dask-scheduler' process will run
+Launch a distributed cluster over SSH. A ``dask-scheduler`` process will run
 on the first host specified in [HOSTNAMES] or in the hostfile (unless
---scheduler is specified explicitly). One or more 'dask-worker' processes
+``--scheduler`` is specified explicitly). One or more ``dask-worker`` processes
 will be run each host in [HOSTNAMES] or in the hostfile. Use command line
 flags to adjust how many dask-worker process are run on each host
-(--nprocs) and how many cpus are used by each dask-worker process
-(--nthreads).
+(``--nprocs``) and how many cpus are used by each dask-worker process
+(``--nthreads``).
 
 Options:
+
+Note: This table may grow out of date, you should check ``dask-ssh --help`` to get an up-to-date listing of all options.
 
 +--------------------+---------+----------------------------------------------------------------------------------------------------------------+
 | Option             | TYPE    | Description                                                                                                    |
