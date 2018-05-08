@@ -38,7 +38,7 @@ class BatchedSend(object):
     """
     # XXX why doesn't BatchedSend follow either the IOStream or Comm API?
 
-    def __init__(self, interval, loop=None):
+    def __init__(self, interval, loop=None, serializers=None):
         # XXX is the loop arg useful?
         self.loop = loop or IOLoop.current()
         self.interval = parse_timedelta(interval, default='ms')
@@ -52,6 +52,7 @@ class BatchedSend(object):
         self.byte_count = 0
         self.next_deadline = None
         self.recent_message_log = deque(maxlen=dask.config.get('distributed.comm.recent-messages-log-length'))
+        self.serializers = serializers
 
     def start(self, comm):
         self.comm = comm
@@ -80,7 +81,9 @@ class BatchedSend(object):
             self.batch_count += 1
             self.next_deadline = self.loop.time() + self.interval
             try:
-                nbytes = yield self.comm.write(payload)
+                nbytes = yield self.comm.write(payload,
+                                               serializers=self.serializers,
+                                               on_error='raise')
                 if nbytes < 1e6:
                     self.recent_message_log.append(payload)
                 else:
@@ -123,7 +126,9 @@ class BatchedSend(object):
             try:
                 if self.buffer:
                     self.buffer, payload = [], self.buffer
-                    yield self.comm.write(payload)
+                    yield self.comm.write(payload,
+                                          serializers=self.serializers,
+                                          on_error='raise')
             except CommClosedError:
                 pass
             yield self.comm.close()

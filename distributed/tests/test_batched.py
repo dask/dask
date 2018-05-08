@@ -14,7 +14,8 @@ from distributed.batched import BatchedSend
 from distributed.core import listen, connect, CommClosedError
 from distributed.metrics import time
 from distributed.utils import All
-from distributed.utils_test import gen_test, slow, gen_cluster
+from distributed.utils_test import gen_test, slow, gen_cluster, captured_logger
+from distributed.protocol import to_serialize
 
 
 class EchoServer(object):
@@ -266,3 +267,32 @@ def test_dont_hold_on_to_large_messages(c, s, a, b):
             pytest.fail("array should have been destroyed")
 
         yield gen.sleep(0.05)
+
+
+@gen_test()
+def test_serializers():
+    with echo_server() as e:
+        comm = yield connect(e.address)
+
+        b = BatchedSend(interval='10ms', serializers=['msgpack'])
+        b.start(comm)
+
+        b.send({'x': to_serialize(123)})
+        b.send({'x': to_serialize('hello')})
+        yield gen.sleep(0.100)
+
+        b.send({'x': to_serialize(lambda x: x + 1)})
+
+        with captured_logger('distributed.protocol') as sio:
+            yield gen.sleep(0.100)
+
+        value = sio.getvalue()
+        assert 'serialize' in value
+        assert 'type' in value
+        assert 'function' in value
+
+        msg = yield comm.read()
+        assert msg == [{'x': 123}, {'x': 'hello'}]
+
+        with pytest.raises(gen.TimeoutError):
+            msg = yield gen.with_timeout(timedelta(milliseconds=100), comm.read())
