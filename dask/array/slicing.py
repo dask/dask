@@ -391,7 +391,7 @@ def _slice_1d(dim_shape, lengths, index):
         start = index.start or 0
         stop = index.stop if index.stop is not None else dim_shape
     else:
-        start = index.start or dim_shape - 1
+        start = index.start if index.start is not None else dim_shape - 1
         start = dim_shape - 1 if start >= dim_shape else start
         stop = -(dim_shape + 1) if index.stop is None else index.stop
 
