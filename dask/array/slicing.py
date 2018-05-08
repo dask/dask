@@ -375,12 +375,11 @@ def _slice_1d(dim_shape, lengths, index):
     chunk_boundaries = np.cumsum(lengths)
 
     if isinstance(index, Integral):
-        i = 0
-        ind = index
-        lens = list(lengths)
-        while ind >= lens[0]:
-            i += 1
-            ind -= lens.pop(0)
+        i = chunk_boundaries.searchsorted(index, side='right')
+        if i > 0:
+            ind = index - chunk_boundaries[i - 1]
+        else:
+            ind = index
         return {i: ind}
 
     assert isinstance(index, slice)
