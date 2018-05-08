@@ -375,8 +375,10 @@ def _slice_1d(dim_shape, lengths, index):
     chunk_boundaries = np.cumsum(lengths)
 
     if isinstance(index, Integral):
+        # use right-side search to be consistent with previous result
         i = chunk_boundaries.searchsorted(index, side='right')
         if i > 0:
+            # the very first chunk has no relative shift
             ind = index - chunk_boundaries[i - 1]
         else:
             ind = index
@@ -406,6 +408,8 @@ def _slice_1d(dim_shape, lengths, index):
     if step > 0:
         istart = chunk_boundaries.searchsorted(start, side='right')
         istop = chunk_boundaries.searchsorted(stop, side='left')
+
+        # the bound is not exactly tight; make it tighter?
         istop = min(istop + 1, len(lengths))
 
         # jump directly to istart
@@ -426,6 +430,8 @@ def _slice_1d(dim_shape, lengths, index):
 
         istart = chunk_boundaries.searchsorted(start, side='left')
         istop = chunk_boundaries.searchsorted(stop, side='right')
+
+        # the bound is not exactly tight; make it tighter?
         istart = min(istart +1, len(chunk_boundaries) - 1)
         istop = max(istop - 1, -1)
 
