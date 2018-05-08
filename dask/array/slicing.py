@@ -372,6 +372,8 @@ def _slice_1d(dim_shape, lengths, index):
     >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, -12, -3))
     {4: slice(-1, -12, -3)}
     """
+    chunk_boundaries = np.cumsum(lengths)
+
     if isinstance(index, Integral):
         i = 0
         ind = index
@@ -412,7 +414,6 @@ def _slice_1d(dim_shape, lengths, index):
             stop -= length
     else:
         rstart = start  # running start
-        chunk_boundaries = list(accumulate(add, lengths))
         for i, chunk_stop in reversed(list(enumerate(chunk_boundaries))):
             # create a chunk start and stop
             if i == 0:
