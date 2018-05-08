@@ -404,7 +404,8 @@ def _slice_1d(dim_shape, lengths, index):
 
     d = dict()
     if step > 0:
-        for i, length in enumerate(lengths):
+        for i in range(0, len(lengths)):
+            length = lengths[i]
             if start < length and stop > 0:
                 d[i] = slice(start, min(stop, length), step)
                 start = (start - length) % step
@@ -413,7 +414,8 @@ def _slice_1d(dim_shape, lengths, index):
             stop -= length
     else:
         rstart = start  # running start
-        for i, chunk_stop in reversed(list(enumerate(chunk_boundaries))):
+        for i in range(len(chunk_boundaries) - 1, -1 ,-1):
+            chunk_stop = chunk_boundaries[i]
             # create a chunk start and stop
             if i == 0:
                 chunk_start = 0
