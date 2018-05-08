@@ -3556,8 +3556,7 @@ def _rename(columns, df):
             # if target is identical, rename is not necessary
             return df
         # deep=False doesn't doesn't copy any data/indices, so this is cheap
-        df = df.copy(deep=False)
-        df.columns = columns
+        df = df[columns].copy(deep=False)
         return df
     elif isinstance(df, (pd.Series, pd.Index)):
         if isinstance(columns, (pd.Series, pd.Index)):

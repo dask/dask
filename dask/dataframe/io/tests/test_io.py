@@ -514,6 +514,25 @@ def test_from_delayed():
     assert str(e.value).startswith('Metadata mismatch found in `from_delayed`')
 
 
+def test_from_delayed_misordered_meta():
+    df = pd.DataFrame(
+        columns=['(1)', '(2)', 'date', 'ent', 'val'],
+        data=[range(i * 5, i * 5 + 5) for i in range(3)],
+        index=range(3)
+    )
+
+    # meta with different order for columns
+    misordered_meta = pd.DataFrame(
+        columns=['date', 'ent', 'val', '(1)', '(2)'],
+        data=[range(5)]
+    )
+
+    ddf = dd.from_delayed([delayed(lambda: df)()], meta=misordered_meta)
+
+    assert_eq(ddf, ddf.reset_index(drop=True), check_names=False,
+              check_like=True)
+
+
 def test_from_delayed_sorted():
     a = pd.DataFrame({'x': [1, 2]}, index=[1, 10])
     b = pd.DataFrame({'x': [4, 1]}, index=[100, 200])
