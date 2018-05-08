@@ -404,7 +404,16 @@ def _slice_1d(dim_shape, lengths, index):
 
     d = dict()
     if step > 0:
-        for i in range(0, len(lengths)):
+        istart = chunk_boundaries.searchsorted(start, side='right')
+        istop = chunk_boundaries.searchsorted(stop, side='left')
+        istop = min(istop + 1, len(lengths))
+
+        # jump directly to istart
+        if istart > 0:
+            start = start - chunk_boundaries[istart - 1]
+            stop = stop - chunk_boundaries[istart - 1]
+
+        for i in range(istart, istop):
             length = lengths[i]
             if start < length and stop > 0:
                 d[i] = slice(start, min(stop, length), step)
