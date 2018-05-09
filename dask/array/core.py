@@ -2026,9 +2026,10 @@ def from_zarr(url, component=None, storage_options=None, **kwargs):
 
     Parameters
     ----------
-    url: str
-        Location of the data. This can include a protocol specifier like s3://
-        for remote data.
+    url: str or MutableMapping
+        Location of the data. A URL can include a protocol specifier like s3://
+        for remote data. Can also be any MutableMapping instance, which should
+        be serializable if used in multiple processes.
     component: str or None
         If the location is a zarr group rather than an array, this is the
         subcomponent that should be loaded, something like ``'foo/bar'``.
@@ -2039,10 +2040,13 @@ def from_zarr(url, component=None, storage_options=None, **kwargs):
     """
     import zarr
     storage_options = storage_options or {}
-    fs, fs_token, path = get_fs_token_paths(
-        url, 'rb', storage_options=storage_options)
-    assert len(path) == 1
-    mapper = get_mapper(fs, path[0])
+    if isinstance(url, str):
+        fs, fs_token, path = get_fs_token_paths(
+            url, 'rb', storage_options=storage_options)
+        assert len(path) == 1
+        mapper = get_mapper(fs, path[0])
+    else:
+        mapper = url
     if component is None:
         z = zarr.open_array(mapper, mode='r', **kwargs)
     else:
@@ -2061,9 +2065,10 @@ def to_zarr(arr, url, component=None, storage_options=None,
     ----------
     arr: dask.array
         Data to store
-    url: str
-        Location of the data. This can include a protocol specifier like s3://
-        for remote data.
+    url: str or MutableMapping
+        Location of the data. A URL can include a protocol specifier like s3://
+        for remote data. Can also be any MutableMapping instance, which should
+        be serializable if used in multiple processes.
     component: str or None
         If the location is a zarr group rather than an array, this is the
         subcomponent that should be created/over-written.
@@ -2074,11 +2079,11 @@ def to_zarr(arr, url, component=None, storage_options=None,
         If component is not none, this controls whether to create/overwrite the
         zarr group, or if the group must exits already (but the specific
         dataset is always overwritten)
-    rechunk: None, False, set of chunks or string
+    rechunk: see ``Array.rechunk``
         Rechunking to be applied to the array before storage, since zarr
-        requires a regular chunks scheme.
-        See ``Array.rechunk``. If False, no rechunk operation is performed,
-        so if the chunks are not regular, an exception is raised.
+        requires a regular chunks scheme - passed to ``.rechunk()``.
+        If False, no rechunk operation is performed;
+        if the chunks are not regular, an exception is raised.
     compute, return_stored: see ``store()``
     kwargs: passed to zarr's open functions, e.g., compression options
     """
@@ -2089,10 +2094,14 @@ def to_zarr(arr, url, component=None, storage_options=None,
         raise ValueError('Attempt to save array to zarr with irregular '
                          'chunking')
     storage_options = storage_options or {}
-    fs, fs_token, path = get_fs_token_paths(
-        url, 'rb', storage_options=storage_options)
-    assert len(path) == 1
-    mapper = get_mapper(fs, path[0])
+    if isinstance(url, str):
+        fs, fs_token, path = get_fs_token_paths(
+            url, 'rb', storage_options=storage_options)
+        assert len(path) == 1
+        mapper = get_mapper(fs, path[0])
+    else:
+        # assume the aobject passed is already a mapper
+        mapper = url
     chunks = [c[0] for c in arr.chunks]
     if component is None:
         z = zarr.open_array(
