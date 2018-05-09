@@ -3,10 +3,10 @@ from __future__ import absolute_import, division, print_function
 from itertools import product
 import math
 from numbers import Integral, Number
-from operator import add, getitem, itemgetter
+from operator import getitem, itemgetter
 
 import numpy as np
-from toolz import accumulate, memoize, merge, pluck, concat
+from toolz import memoize, merge, pluck, concat
 
 from .. import core
 from .. import sharedict
@@ -372,13 +372,16 @@ def _slice_1d(dim_shape, lengths, index):
     >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, -12, -3))
     {4: slice(-1, -12, -3)}
     """
+    chunk_boundaries = np.cumsum(lengths)
+
     if isinstance(index, Integral):
-        i = 0
-        ind = index
-        lens = list(lengths)
-        while ind >= lens[0]:
-            i += 1
-            ind -= lens.pop(0)
+        # use right-side search to be consistent with previous result
+        i = chunk_boundaries.searchsorted(index, side='right')
+        if i > 0:
+            # the very first chunk has no relative shift
+            ind = index - chunk_boundaries[i - 1]
+        else:
+            ind = index
         return {i: ind}
 
     assert isinstance(index, slice)
@@ -391,7 +394,7 @@ def _slice_1d(dim_shape, lengths, index):
         start = index.start or 0
         stop = index.stop if index.stop is not None else dim_shape
     else:
-        start = index.start or dim_shape - 1
+        start = index.start if index.start is not None else dim_shape - 1
         start = dim_shape - 1 if start >= dim_shape else start
         stop = -(dim_shape + 1) if index.stop is None else index.stop
 
@@ -403,7 +406,19 @@ def _slice_1d(dim_shape, lengths, index):
 
     d = dict()
     if step > 0:
-        for i, length in enumerate(lengths):
+        istart = chunk_boundaries.searchsorted(start, side='right')
+        istop = chunk_boundaries.searchsorted(stop, side='left')
+
+        # the bound is not exactly tight; make it tighter?
+        istop = min(istop + 1, len(lengths))
+
+        # jump directly to istart
+        if istart > 0:
+            start = start - chunk_boundaries[istart - 1]
+            stop = stop - chunk_boundaries[istart - 1]
+
+        for i in range(istart, istop):
+            length = lengths[i]
             if start < length and stop > 0:
                 d[i] = slice(start, min(stop, length), step)
                 start = (start - length) % step
@@ -412,8 +427,16 @@ def _slice_1d(dim_shape, lengths, index):
             stop -= length
     else:
         rstart = start  # running start
-        chunk_boundaries = list(accumulate(add, lengths))
-        for i, chunk_stop in reversed(list(enumerate(chunk_boundaries))):
+
+        istart = chunk_boundaries.searchsorted(start, side='left')
+        istop = chunk_boundaries.searchsorted(stop, side='right')
+
+        # the bound is not exactly tight; make it tighter?
+        istart = min(istart + 1, len(chunk_boundaries) - 1)
+        istop = max(istop - 1, -1)
+
+        for i in range(istart, istop, -1):
+            chunk_stop = chunk_boundaries[i]
             # create a chunk start and stop
             if i == 0:
                 chunk_start = 0
