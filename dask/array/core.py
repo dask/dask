@@ -2146,7 +2146,7 @@ def _check_regular_chunks(chunkset):
     False
     """
     for chunks in chunkset:
-        if len(chunks) < 2:
+        if len(chunks) == 1:
             continue
         if len(set(chunks[:-1])) > 1:
             return False
