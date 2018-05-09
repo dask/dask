@@ -13,7 +13,8 @@ esac
 wget https://repo.continuum.io/miniconda/$MINICONDA_FILENAME -O miniconda.sh
 bash miniconda.sh -b -p $HOME/miniconda
 export PATH="$HOME/miniconda/bin:$PATH"
-conda config --set always_yes yes --set changeps1 no
+conda config --set always_yes yes \
+             --set changeps1 no
 
 # Create conda environment
 conda create -q -n test-environment python=$PYTHON
