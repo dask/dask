@@ -597,3 +597,25 @@ def test_rechunk_zero_dim():
 
     x = da.ones((0, 10, 100), chunks=(0, 10, 10)).rechunk((0, 10, 50))
     assert len(x.compute()) == 0
+
+
+@pytest.mark.parametrize('data', [[((10,),), ((10,),)],
+                                  [((3, 3, 3, 1),), ((3, 3, 3, 1,),)],
+                                  [((9, 1,),), ((9, 1),)],  # this is regular
+                                  [((8, 1, 1,),), ((4, 4, 2),)],
+                                  ])
+def test_rechunk_preserve_number(data):
+    inchunk, outchunk = data
+    a = da.zeros(10, chunks=inchunk)
+    b = a.rechunk('preserve_number')
+    assert b.chunks == outchunk
+
+
+@pytest.mark.parametrize('data', [[((8, 1, 1,), (8,)), ((4, 4, 2), (8,))],
+                                  [((2, 6, 2,), (2, 6)), ((4, 4, 2), (4, 4))],
+                                  ])
+def test_rechunk_preserve_number2d(data):
+    inchunk, outchunk = data
+    a = da.zeros((10, 8), chunks=inchunk)
+    b = a.rechunk('preserve_number')
+    assert b.chunks == outchunk

@@ -209,6 +209,24 @@ DEFAULT_THRESHOLD = 4
 DEFAULT_BLOCK_SIZE_LIMIT = 1e8
 
 
+def rechunk_preserve_number(x, *args, **kwargs):
+    """Make new regular chunks with the same number of chunks on each dim"""
+    out = []
+    for size, ch in zip(x.shape, x.chunks):
+        if (len(set(ch[:-1])) > 1) or (ch[-1] > ch[0]):
+            # irregular
+            l = len(ch)
+            newsize = int(np.ceil(size / l))
+            out.append(tuple([newsize] * (l - 1) + [size - newsize * (l - 1)]))
+        else:
+            # already regular
+            out.append(ch)
+    return tuple(out)
+
+
+rechunkers = {'preserve_number': rechunk_preserve_number}
+
+
 def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
             block_size_limit=DEFAULT_BLOCK_SIZE_LIMIT):
     """
@@ -233,9 +251,9 @@ def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
 
     x: dask array
         Array to be rechunked.
-    chunks:  int, tuple or dict
-        The new block dimensions to create. -1 indicates the full size of the
-        corresponding dimension.
+    chunks:  tuple of tuples, tuple of int, or str
+        The specific new block dimensions to create, or an automatic rechunking
+        scheme with one of the keys of ``rechunkers``.
     threshold: int
         The graph growth factor under which we don't bother introducing an
         intermediate step.
@@ -243,6 +261,17 @@ def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
         The maximum block size (in bytes) we want to produce during an
         intermediate step.
     """
+    if chunks is None or chunks == 'default':
+        chunks = 'preserve_number'
+    if isinstance(chunks, str) and chunks in rechunkers:
+        chunks = rechunkers[chunks](x, threshold=DEFAULT_THRESHOLD,
+                                    block_size_limit=DEFAULT_BLOCK_SIZE_LIMIT)
+    return _rechunk(x, chunks, threshold, block_size_limit)
+
+
+def _rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
+             block_size_limit=DEFAULT_BLOCK_SIZE_LIMIT):
+    """Implement rechunk with specific chunks provided"""
     threshold = threshold or DEFAULT_THRESHOLD
     block_size_limit = block_size_limit or DEFAULT_BLOCK_SIZE_LIMIT
 
