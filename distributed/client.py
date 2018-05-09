@@ -1770,7 +1770,9 @@ class Client(Node):
             for name, data in kwargs.items():
                 keys = [tokey(f.key) for f in futures_of(data)]
                 coroutines.append(self.scheduler.publish_put(keys=keys,
-                                                             name=tokey(name), data=dumps(data), client=self.id))
+                                                             name=tokey(name),
+                                                             data=to_serialize(data),
+                                                             client=self.id))
 
             yield coroutines
 
@@ -1853,7 +1855,7 @@ class Client(Node):
             raise KeyError("Dataset '%s' not found" % name)
 
         with temp_default_client(self):
-            data = loads(out['data'])
+            data = out['data']
         raise gen.Return(data)
 
     def get_dataset(self, name, **kwargs):

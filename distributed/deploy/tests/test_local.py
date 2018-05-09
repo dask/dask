@@ -125,6 +125,7 @@ class LocalTest(ClusterTest, unittest.TestCase):
     Cluster = partial(LocalCluster, silence_logs=False, diagnostics_port=None)
 
 
+@pytest.mark.skipif('sys.version_info[0] == 2', reason='')
 def test_Client_with_local(loop):
     with LocalCluster(1, scheduler_port=0, silence_logs=False,
                       diagnostics_port=None, loop=loop) as c:
