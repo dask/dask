@@ -205,7 +205,7 @@ def test_categorical_set_index(shuffle):
     df['y'] = pd.Categorical(df['y'], categories=['a', 'b', 'c'], ordered=True)
     a = dd.from_pandas(df, npartitions=2)
 
-    with dask.set_options(get=dask.get, shuffle=shuffle):
+    with dask.set_options(scheduler='sync', shuffle=shuffle):
         b = a.set_index('y', npartitions=a.npartitions)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ['a']

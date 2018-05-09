@@ -39,6 +39,7 @@ if PY3:
     from urllib.request import urlopen
     from urllib.parse import urlparse, urlsplit, quote, unquote
     FileNotFoundError = FileNotFoundError
+    FileExistsError = FileExistsError
     unicode = str
     string_types = (str,)
     long = int
@@ -85,6 +86,7 @@ else:
     reduce = reduce
     operator_div = operator.div
     FileNotFoundError = IOError
+    FileExistsError = OSError
 
     def _make_reraise():
         _code = ("def reraise(exc, tb=None):"

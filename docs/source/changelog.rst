@@ -2,7 +2,41 @@ Changelog
 =========
 
 
-0.17.3 / 2018-MM-DD
+0.18.0 / 2018-MM-DD
+-------------------
+
+Array
++++++
+
+- Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
+
+Dataframe
++++++++++
+
+Bag
++++
+
+-
+
+Core
+++++
+
+-
+
+0.17.4 / 2018-05-03
+-------------------
+
+Dataframe
++++++++++
+
+
+-  Add support for indexing Dask DataFrames with string subclasses (:pr:`3461`) `James Bourbeau`_
+-  Allow using both sorted_index and chunksize in read_hdf (:pr:`3463`) `Pierre Bartet`_
+-  Pass filesystem to arrow piece reader (:pr:`3466`) `Martin Durant`_
+-  Switches to using dask.compat string_types (#3462) `James Bourbeau`_
+
+
+0.17.3 / 2018-05-02
 -------------------
 
 Array
@@ -48,6 +82,7 @@ Core
 ++++
 
 - Support traversing collections in persist, visualize, and optimize (:pr:`3410`) `Jim Crist`_
+- Add schedule= keyword to compute and persist.  This replaces common use of the get= keyword (:pr:`3448`) `Matthew Rocklin`_
 
 
 0.17.2 / 2018-03-21
@@ -1075,3 +1110,4 @@ Other
 .. _`Dieter Weber`: https://github.com/uellue
 .. _`Apostolos Vlachopoulos`: https://github.com/avlahop
 .. _`Jesse Vogt`: https://github.com/jessevogt
+.. _`Pierre Bartet`: https://github.com/Pierre-Bartet

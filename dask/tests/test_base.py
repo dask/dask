@@ -5,13 +5,16 @@ import pytest
 from operator import add, mul
 import subprocess
 import sys
+import warnings
+
 from toolz import merge
 
 import dask
 from dask import delayed
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
                        visualize, persist, function_cache, is_dask_collection,
-                       DaskMethodsMixin, optimize, unpack_collections)
+                       DaskMethodsMixin, optimize, unpack_collections,
+                       named_schedulers, get_scheduler)
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
@@ -470,13 +473,13 @@ def test_compute_no_opt():
     # Check that with the kwarg, the optimization doesn't happen
     keys = []
     with Callback(pretask=lambda key, *args: keys.append(key)):
-        o.compute(get=dask.get, optimize_graph=False)
+        o.compute(scheduler='single-threaded', optimize_graph=False)
     assert len([k for k in keys if '-mul-' in k[0]]) == 4
     assert len([k for k in keys if '-add-' in k[0]]) == 4
     # Check that without the kwarg, the optimization does happen
     keys = []
     with Callback(pretask=lambda key, *args: keys.append(key)):
-        o.compute(get=dask.get)
+        o.compute(scheduler='single-threaded')
     # Names of fused tasks have been merged, and the original key is an alias.
     # Otherwise, the lengths below would be 4 and 0.
     assert len([k for k in keys if '-mul-' in k[0]]) == 8
@@ -537,7 +540,7 @@ def test_compute_array_bag():
 
     pytest.raises(ValueError, lambda: compute(x, b))
 
-    xx, bb = compute(x, b, get=dask.get)
+    xx, bb = compute(x, b, scheduler='single-threaded')
     assert np.allclose(xx, np.arange(5))
     assert bb == [1, 2, 3]
 
@@ -762,7 +765,7 @@ def test_persist_array_bag():
     with pytest.raises(ValueError):
         persist(x, b)
 
-    xx, bb = persist(x, b, get=dask.get)
+    xx, bb = persist(x, b, scheduler='single-threaded')
 
     assert isinstance(xx, da.Array)
     assert isinstance(bb, db.Bag)
@@ -804,7 +807,7 @@ def test_optimize_globals():
     b = db.range(10, npartitions=2)
 
     with dask.set_options(array_optimize=optimize_double):
-        xx, bb = dask.compute(x + 1, b.map(inc), get=dask.get)
+        xx, bb = dask.compute(x + 1, b.map(inc), scheduler='single-threaded')
         assert_eq(xx, (np.ones(10) * 2 + 1) * 2)
 
 
@@ -820,3 +823,46 @@ def test_optimize_None():
 
     with dask.set_options(array_optimize=None, get=my_get):
         y.compute()
+
+
+def test_scheduler_keyword():
+    def schedule(dsk, keys, **kwargs):
+        return [[123]]
+
+    named_schedulers['foo'] = schedule
+
+    x = delayed(inc)(1)
+
+    try:
+        assert x.compute() == 2
+        assert x.compute(scheduler='foo') == 123
+
+        with dask.set_options(scheduler='foo'):
+            assert x.compute() == 123
+        assert x.compute() == 2
+
+        with dask.set_options(scheduler='foo'):
+            assert x.compute(scheduler='threads') == 2
+
+        with pytest.raises(ValueError):
+            x.compute(get=dask.threaded.get, scheduler='foo')
+    finally:
+        del named_schedulers['foo']
+
+
+def test_warn_get_keyword():
+    x = delayed(inc)(1)
+
+    with warnings.catch_warnings(record=True) as record:
+        x.compute(get=dask.get)
+
+    assert 'scheduler=' in str(record[0].message)
+
+
+def test_get_scheduler():
+    assert get_scheduler() is None
+    assert get_scheduler(scheduler='threads') is dask.threaded.get
+    assert get_scheduler(scheduler='sync') is dask.local.get_sync
+    with dask.set_options(scheduler='threads'):
+        assert get_scheduler(scheduler='threads') is dask.threaded.get
+    assert get_scheduler() is None
