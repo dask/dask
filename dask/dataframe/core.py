@@ -3519,7 +3519,14 @@ def apply_and_enforce(func, args, kwargs, meta):
     if isinstance(df, (pd.DataFrame, pd.Series, pd.Index)):
         if len(df) == 0:
             return meta
-        c = meta.columns if isinstance(df, pd.DataFrame) else meta.name
+
+        if isinstance(df, pd.DataFrame):
+            if not np.array_equal(meta.columns, df.columns):
+                raise ValueError('Meta columns do not match dataframe.')
+            else:
+                c = meta.columns
+        else:
+            c = meta.name
         return _rename(c, df)
     return df
 
