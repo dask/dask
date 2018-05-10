@@ -3284,7 +3284,7 @@ def test_zarr_group():
         assert a2.chunks == a.chunks
 
 
-@pytest.mark.parametrize('data', [[((), ), True],
+@pytest.mark.parametrize('data', [[( ), True],
                                   [((1, ),), True],
                                   [((1, 1, 1),), True],
                                   [((1, ), (1, )), True],
