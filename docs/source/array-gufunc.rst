@@ -26,7 +26,7 @@ inside ``np.linalg._umath_linalg`` and might change in the future.
     import dask.array as da
     import numpy as np
 
-    x = da.random.normal(size=(3, 10, 10), chunks=2)
+    x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
 
     w, v = np.linalg._umath_linalg.eig(x, output_dtypes=(float, float))
 
@@ -38,7 +38,7 @@ Wrap own python function
 
 .. code-block:: python
 
-    x = da.random.normal(size=(10, 5), chunks=(2, 3))
+    x = da.random.normal(size=(10, 5), chunks=(2, 5))
 
     def foo(x):
         return np.mean(x, axis=-1)
@@ -53,7 +53,7 @@ Instead of ``gufunc``, also the ``as_gufunc`` decorator can be used for convenie
 
 .. code-block:: python
 
-    x = da.random.normal(size=(10, 5), chunks=(2, 3))
+    x = da.random.normal(size=(10, 5), chunks=(2, 5))
 
     @da.as_gufunc(signature="(i)->()", output_dtypes=float, vectorize=True)
     def gufoo(x):

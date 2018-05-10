@@ -1,13 +1,16 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
+from functools import partial
 from itertools import count
+from operator import itemgetter
 import re
 
 try:
-    from cytoolz import concat, merge
+    from cytoolz import concat, merge, groupby, valmap, compose, unique
+
 except ImportError:
-    from toolz import concat, merge
+    from toolz import concat, merge, groupby, valmap, compose, unique
 
 from .core import Array, asarray, atop, getitem
 from .. import sharedict
@@ -122,8 +125,11 @@ def apply_gufunc(func, signature, *args, **kwargs):
     vectorize: bool, keyword only
         If set to ``True``, ``np.vectorize`` is applied to ``func`` for
         convenience. Defaults to ``False``.
-    concatenate:  bool, keyword only
-        If true concatenate arrays along core dimensions, else provide lists
+    allow_rechunk: Optional, bool, keyword only
+        Allows rechunking, otherwise chunk sizes need to match and core
+        dimensions are to consist only of one chunk.
+        Warning: enabling this can increase memory usage significantly.
+        Defaults to ``False``.
 
     Returns
     -------
@@ -135,7 +141,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     >>> import numpy as np
     >>> def stats(x):
     ...     return np.mean(x, axis=-1), np.std(x, axis=-1)
-    >>> a = da.random.normal(size=(10,20,30), chunks=5)
+    >>> a = da.random.normal(size=(10,20,30), chunks=(5, 10, 30))
     >>> mean, std = da.apply_gufunc(stats, "(i)->(),()", a, output_dtypes=2*(a.dtype,))
     >>> mean.compute().shape
     (10, 20)
@@ -143,8 +149,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
 
     >>> def outer_product(x, y):
     ...     return np.einsum("i,j->ij", x, y)
-    >>> a = da.random.normal(size=(   20,30), chunks=5)
-    >>> b = da.random.normal(size=(10, 1,40), chunks=10)
+    >>> a = da.random.normal(size=(   20,30), chunks=(10, 30))
+    >>> b = da.random.normal(size=(10, 1,40), chunks=(5, 1, 40))
     >>> c = da.apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b, output_dtypes=a.dtype, vectorize=True)
     >>> c.compute().shape
     (10, 20, 30, 40)
@@ -157,7 +163,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     output_dtypes = kwargs.pop("output_dtypes", None)
     output_sizes = kwargs.pop("output_sizes", None)
     vectorize = kwargs.pop("vectorize", None)
-    concatenate = kwargs.pop("concatenate", True)
+    allow_rechunk = kwargs.pop("allow_rechunk", False)
     if output_dtypes is None:
         raise ValueError("Must specify `output_dtypes` of output array(s)")
 
@@ -196,16 +202,41 @@ def apply_gufunc(func, signature, *args, **kwargs):
 
     ## Assess input args for loop dims
     input_shapes = [a.shape for a in args]
+    input_chunkss = [tuple(c[0] for c in a.chunks) for a in args]
     num_loopdims = [len(s) - len(cd) for s, cd in zip(input_shapes, core_input_dimss)]
     max_loopdims = max(num_loopdims) if num_loopdims else None
     _core_input_shapes = [dict(zip(cid, s[n:])) for s, n, cid in zip(input_shapes, num_loopdims, core_input_dimss)]
     core_shapes = merge(output_sizes, *_core_input_shapes)
 
     loop_input_dimss = [tuple("__loopdim%d__" % d for d in range(max_loopdims - n, max_loopdims)) for n in num_loopdims]
-
     input_dimss = [l + c for l, c in zip(loop_input_dimss, core_input_dimss)]
 
     loop_output_dims = max(loop_input_dimss, key=len) if loop_input_dimss else set()
+
+    ## Assess input args for same size and chunk sizes
+    ### Check that the arrays have same length for same dimensions or dimension `1`
+    _temp = groupby(0, concat(zip(ad, s) for ad, s in zip(input_dimss, input_shapes)))
+    dimsizess = valmap(compose(set, partial(map, itemgetter(1))), _temp)
+    if not allow_rechunk:
+        for dim, sizes in dimsizess.items():
+            if sizes.union({1}) != {1, max(sizes)}:
+                raise ValueError("Dimension ``{}`` with different lengths in arrays".format(dim))
+
+    # Check if arrays have same chunk size for the same dimension
+    _temp = groupby(0, concat(zip(ad, s, c) for ad, s, c in zip(input_dimss, input_shapes, input_chunkss)))
+    dimchunksizess = valmap(compose(tuple, unique,
+                                    partial(map, itemgetter(1)),
+                                    partial(filter, lambda e: e != (1, 1)),
+                                    partial(map, lambda tpl: tpl[1:])),
+                            _temp)
+    if not allow_rechunk:
+        for dim, dimchunksizes in dimchunksizess.items():
+            if len(dimchunksizes) > 1:
+                raise ValueError('Dimension ``{}`` with different chunksize present'.format(dim))
+            if (dim in core_shapes) and (dimchunksizes[0] < core_shapes[dim]):
+                raise ValueError('Core dimension ``{}`` consists of multiple chunks. To fix, rechunk into a single \
+chunk along this dimension or set `allow_rechunk=True`, but beware that this may increase memory usage \
+significantly.'.format(dim))
 
     ## Apply function - use atop here
     arginds = list(concat(zip(args, input_dimss)))
@@ -220,7 +251,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ### Modifying `atop` could improve things here.
     tmp = atop(func, loop_output_dims, *arginds,
                dtype=int,  # Only dummy dtype, anyone will do
-               concatenate=concatenate,
+               concatenate=True,
                **kwargs)
 
     ## Prepare output shapes
@@ -275,6 +306,11 @@ class gufunc(object):
     vectorize: bool, keyword only
         If set to ``True``, ``np.vectorize`` is applied to ``func`` for
         convenience. Defaults to ``False``.
+    allow_rechunk: Optional, bool, keyword only
+        Allows rechunking, otherwise chunk sizes need to match and core
+        dimensions are to consist only of one chunk.
+        Warning: enabling this can increase memory usage significantly.
+        Defaults to ``False``.
 
     Returns
     -------
@@ -284,7 +320,7 @@ class gufunc(object):
     --------
     >>> import dask.array as da
     >>> import numpy as np
-    >>> a = da.random.normal(size=(10,20,30), chunks=5)
+    >>> a = da.random.normal(size=(10,20,30), chunks=(5, 10, 30))
     >>> def stats(x):
     ...     return np.mean(x, axis=-1), np.std(x, axis=-1)
     >>> gustats = da.gufunc(stats, signature="(i)->(),()", output_dtypes=(float, float))
@@ -293,8 +329,8 @@ class gufunc(object):
     (10, 20)
 
 
-    >>> a = da.random.normal(size=(   20,30), chunks=5)
-    >>> b = da.random.normal(size=(10, 1,40), chunks=10)
+    >>> a = da.random.normal(size=(   20,30), chunks=(10, 30))
+    >>> b = da.random.normal(size=(10, 1,40), chunks=(5, 1, 40))
     >>> def outer_product(x, y):
     ...     return np.einsum("i,j->ij", x, y)
     >>> guouter_product = da.gufunc(outer_product, signature="(i),(j)->(i,j)", output_dtypes=float, vectorize=True)
@@ -313,6 +349,7 @@ class gufunc(object):
         self.vectorize = kwargs.pop("vectorize", False)
         self.output_sizes = kwargs.pop("output_sizes", None)
         self.output_dtypes = kwargs.pop("output_dtypes", None)
+        self.allow_rechunk = kwargs.pop("allow_rechunk", False)
         if kwargs:
             raise TypeError("Unsupported keyword argument(s) provided")
 
@@ -339,6 +376,7 @@ class gufunc(object):
                             vectorize=self.vectorize,
                             output_sizes=self.output_sizes,
                             output_dtypes=self.output_dtypes,
+                            allow_rechunk=self.allow_rechunk or kwargs.pop("allow_rechunk", False),
                             **kwargs)
 
 
@@ -359,6 +397,11 @@ def as_gufunc(signature=None, **kwargs):
     vectorize: bool, keyword only
         If set to ``True``, ``np.vectorize`` is applied to ``func`` for
         convenience. Defaults to ``False``.
+    allow_rechunk: Optional, bool, keyword only
+        Allows rechunking, otherwise chunk sizes need to match and core
+        dimensions are to consist only of one chunk.
+        Warning: enabling this can increase memory usage significantly.
+        Defaults to ``False``.
 
     Returns
     -------
@@ -368,7 +411,7 @@ def as_gufunc(signature=None, **kwargs):
     --------
     >>> import dask.array as da
     >>> import numpy as np
-    >>> a = da.random.normal(size=(10,20,30), chunks=5)
+    >>> a = da.random.normal(size=(10,20,30), chunks=(5, 10, 30))
     >>> @da.as_gufunc("(i)->(),()", output_dtypes=(float, float))
     ... def stats(x):
     ...     return np.mean(x, axis=-1), np.std(x, axis=-1)
@@ -376,8 +419,8 @@ def as_gufunc(signature=None, **kwargs):
     >>> mean.compute().shape
     (10, 20)
 
-    >>> a = da.random.normal(size=(   20,30), chunks=5)
-    >>> b = da.random.normal(size=(10, 1,40), chunks=10)
+    >>> a = da.random.normal(size=(   20,30), chunks=(10, 30))
+    >>> b = da.random.normal(size=(10, 1,40), chunks=(5, 1, 40))
     >>> @da.as_gufunc("(i),(j)->(i,j)", output_dtypes=float, vectorize=True)
     ... def outer_product(x, y):
     ...     return np.einsum("i,j->ij", x, y)
@@ -390,7 +433,7 @@ def as_gufunc(signature=None, **kwargs):
     .. [1] http://docs.scipy.org/doc/numpy/reference/ufuncs.html
     .. [2] http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
     """
-    _allowedkeys = {"vectorize", "output_sizes", "output_dtypes"}
+    _allowedkeys = {"vectorize", "output_sizes", "output_dtypes", "allow_rechunk"}
     if set(_allowedkeys).issubset(kwargs.keys()):
         raise TypeError("Unsupported keyword argument(s) provided")
 

@@ -38,19 +38,39 @@ def test__parse_gufunc_signature():
 def test_apply_gufunc_01():
     def stats(x):
         return np.mean(x, axis=-1), np.std(x, axis=-1)
-    a = da.random.normal(size=(10, 20, 30), chunks=5)
+    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
     mean, std = apply_gufunc(stats, "(i)->(),()", a,
                              output_dtypes=2 * (a.dtype,))
     assert mean.compute().shape == (10, 20)
     assert std.compute().shape == (10, 20)
 
 
+def test_apply_gufunc_01b():
+    def stats(x):
+        return np.mean(x, axis=-1), np.std(x, axis=-1)
+    a = da.random.normal(size=(10, 20, 30), chunks=5)
+    mean, std = apply_gufunc(stats, "(i)->(),()", a,
+                             output_dtypes=2 * (a.dtype,),
+                             allow_rechunk=True)
+    assert mean.compute().shape == (10, 20)
+    assert std.compute().shape == (10, 20)
+
+
+def test_apply_gufunc_01c():
+    def stats(x):
+        return np.mean(x, axis=-1), np.std(x, axis=-1)
+    a = da.random.normal(size=(10, 20, 30), chunks=5)
+    with assert_raises(ValueError):
+        apply_gufunc(stats, "(i)->(),()", a,
+                     output_dtypes=2 * (a.dtype,))
+
+
 @pytest.mark.xfail(reason="Currently np.einsum doesn't seem to broadcast correctly for this case")
 def test_apply_gufunc_02():
     def outer_product(x, y):
         return np.einsum("...i,...j->...ij", x, y)
-    a = da.random.normal(size=(   20, 30), chunks=5)
-    b = da.random.normal(size=(10, 1, 40), chunks=10)
+    a = da.random.normal(size=(   20, 30), chunks=(5, 30))
+    b = da.random.normal(size=(10, 1, 40), chunks=(10, 1, 40))
     c = apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b, output_dtypes=a.dtype)
     assert c.compute().shape == (10, 20, 30, 40)
 
@@ -69,6 +89,15 @@ def test_apply_gufunc_elemwise_01():
     b = da.from_array(np.array([1, 2, 3]), chunks=2, name='b')
     z = apply_gufunc(add, "(),()->()", a, b, output_dtypes=a.dtype)
     assert_eq(z, np.array([2, 4, 6]))
+
+
+def test_apply_gufunc_elemwise_01b():
+    def add(x, y):
+        return x + y
+    a = da.from_array(np.array([1, 2, 3]), chunks=2, name='a')
+    b = da.from_array(np.array([1, 2, 3]), chunks=1, name='b')
+    with assert_raises(ValueError):
+        apply_gufunc(add, "(),()->()", a, b, output_dtypes=a.dtype)
 
 
 def test_apply_gufunc_elemwise_02():
@@ -104,7 +133,7 @@ def test_apply_gufunc_elemwise_core():
     def foo(x):
         assert x.shape == (3,)
         return 2 * x
-    a = da.from_array(np.array([1, 2, 3]), chunks=2, name='a')
+    a = da.from_array(np.array([1, 2, 3]), chunks=3, name='a')
     z = apply_gufunc(foo, "(i)->(i)", a, output_dtypes=int)
     assert z.chunks == ((3,),)
     assert_eq(z, np.array([2, 4, 6]))
@@ -140,8 +169,8 @@ def test_apply_gufunc_two_mixed_outputs():
 def test_gufunc_two_inputs():
     def foo(x, y):
         return np.einsum('...ij,...jk->ik', x, y)
-    a = da.ones((2, 3), chunks=(1, 2), dtype=int)
-    b = da.ones((3, 4), chunks=(2, 3), dtype=int)
+    a = da.ones((2, 3), chunks=100, dtype=int)
+    b = da.ones((3, 4), chunks=100, dtype=int)
     x = apply_gufunc(foo, "(i,j),(j,k)->(i,k)", a, b, output_dtypes=int)
     assert_eq(x, 3 * np.ones((2, 4), dtype=int))
 
@@ -158,7 +187,7 @@ def test_gufunc_mixed_inputs():
 @pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
                     reason="`np.vectorize(..., signature=...)` not supported yet")
 def test_gufunc():
-    x = da.random.normal(size=(10, 5), chunks=(2, 3))
+    x = da.random.normal(size=(10, 5), chunks=(2, 5))
 
     def foo(x):
         return np.mean(x, axis=-1)
@@ -173,7 +202,7 @@ def test_gufunc():
 @pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
                     reason="`np.vectorize(..., signature=...)` not supported yet")
 def test_as_gufunc():
-    x = da.random.normal(size=(10, 5), chunks=(2, 3))
+    x = da.random.normal(size=(10, 5), chunks=(2, 5))
 
     @as_gufunc("(i)->()", output_dtypes=float, vectorize=True)
     def foo(x):
@@ -192,8 +221,8 @@ def test_apply_gufunc_broadcasting_loopdims():
         x, y = np.broadcast_arrays(x, y)
         return x, y, x * y
 
-    a = da.random.normal(size=(    10, 30), chunks=8)
-    b = da.random.normal(size=(20,  1, 30), chunks=3)
+    a = da.random.normal(size=(    10, 30), chunks=(8, 30))
+    b = da.random.normal(size=(20,  1, 30), chunks=(3, 1, 30))
 
     x, y, z = apply_gufunc(foo, "(i),(i)->(i),(i),(i)", a, b, output_dtypes=3 * (float,), vectorize=False)
 
