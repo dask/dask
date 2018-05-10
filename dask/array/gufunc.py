@@ -338,7 +338,7 @@ class gufunc(object):
                             **kwargs)
 
 
-def asgufunc(signature=None, **kwargs):
+def as_gufunc(signature=None, **kwargs):
     """
     Decorator for ``dask.array.gufunc``.
 
@@ -365,7 +365,7 @@ def asgufunc(signature=None, **kwargs):
     >>> import dask.array as da
     >>> import numpy as np
     >>> a = da.random.normal(size=(10,20,30), chunks=5)
-    >>> @da.asgufunc("(i)->(),()", output_dtypes=(float, float))
+    >>> @da.as_gufunc("(i)->(),()", output_dtypes=(float, float))
     ... def stats(x):
     ...     return np.mean(x, axis=-1), np.std(x, axis=-1)
     >>> mean, std = stats(a)
@@ -374,7 +374,7 @@ def asgufunc(signature=None, **kwargs):
 
     >>> a = da.random.normal(size=(   20,30), chunks=5)
     >>> b = da.random.normal(size=(10, 1,40), chunks=10)
-    >>> @da.asgufunc("(i),(j)->(i,j)", output_dtypes=float, vectorize=True)
+    >>> @da.as_gufunc("(i),(j)->(i,j)", output_dtypes=float, vectorize=True)
     ... def outer_product(x, y):
     ...     return np.einsum("i,j->ij", x, y)
     >>> c = outer_product(a, b)
@@ -390,9 +390,9 @@ def asgufunc(signature=None, **kwargs):
     if set(_allowedkeys).issubset(kwargs.keys()):
         raise TypeError("Unsupported keyword argument(s) provided")
 
-    def _asgufunc(pyfunc):
+    def _as_gufunc(pyfunc):
         return gufunc(pyfunc, signature=signature, **kwargs)
-    _asgufunc.__doc__ = """
+    _as_gufunc.__doc__ = """
         Decorator to make ``dask.array.gufunc``
         signature: ``'{signature}'``
 
@@ -405,4 +405,4 @@ def asgufunc(signature=None, **kwargs):
         -------
         ``dask.array.gufunc``
         """.format(signature=signature)
-    return _asgufunc
+    return _as_gufunc

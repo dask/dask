@@ -48,14 +48,14 @@ Wrap own python function
     y = gufoo(x)
 
 
-Instead of ``gufunc``, also the ``asgufunc`` decorator can be used for convenience:
+Instead of ``gufunc``, also the ``as_gufunc`` decorator can be used for convenience:
 
 
 .. code-block:: python
 
     x = da.random.normal(size=(10, 5), chunks=(2, 3))
 
-    @da.asgufunc(signature="(i)->()", output_dtypes=float, vectorize=True)
+    @da.as_gufunc(signature="(i)->()", output_dtypes=float, vectorize=True)
     def gufoo(x):
         return np.mean(x, axis=-1)
 
@@ -78,5 +78,5 @@ API
 
 .. autosummary::
    apply_gufunc
-   asgufunc
+   as_gufunc
    gufunc

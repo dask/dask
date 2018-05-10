@@ -8,7 +8,7 @@ import dask.array as da
 import numpy as np
 
 from dask.array.core import Array
-from dask.array.gufunc import _parse_gufunc_signature, apply_gufunc,gufunc, asgufunc
+from dask.array.gufunc import _parse_gufunc_signature, apply_gufunc,gufunc, as_gufunc
 
 
 # Copied from `numpy.lib.test_test_function_base.py`:
@@ -164,10 +164,10 @@ def test_gufunc():
 
 @pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
                     reason="`np.vectorize(..., signature=...)` not supported yet")
-def test_asgufunc():
+def test_as_gufunc():
     x = da.random.normal(size=(10, 5), chunks=(2, 3))
 
-    @asgufunc("(i)->()", output_dtypes=float, vectorize=True)
+    @as_gufunc("(i)->()", output_dtypes=float, vectorize=True)
     def foo(x):
         return np.mean(x, axis=-1)
 

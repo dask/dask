@@ -332,7 +332,7 @@ Generalized Ufuncs
 
 .. autosummary::
    apply_gufunc
-   asgufunc
+   as_gufunc
    gufunc
 
 
@@ -659,7 +659,7 @@ Other functions
 .. currentmodule:: dask.array.gufunc
 
 .. autofunction:: apply_gufunc
-.. autofunction:: asgufunc
+.. autofunction:: as_gufunc
 .. autofunction:: gufunc
 
 .. currentmodule:: dask.array.core
