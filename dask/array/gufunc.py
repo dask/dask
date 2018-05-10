@@ -9,8 +9,9 @@ try:
 except ImportError:
     from toolz import concat, merge
 
-from .core import Array, asarray, atop, flatten, getitem
+from .core import Array, asarray, atop, getitem
 from .. import sharedict
+from ..core import flatten
 
 # Modified version of `numpy.lib.function_base._parse_gufunc_signature`
 # Modifications:
