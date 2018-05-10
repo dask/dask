@@ -3521,7 +3521,9 @@ def apply_and_enforce(func, args, kwargs, meta):
             return meta
 
         if isinstance(df, pd.DataFrame):
-            if not np.array_equal(meta.columns, df.columns):
+            # Need nan_to_num otherwise nan comparison gives False
+            if not np.array_equal(np.nan_to_num(meta.columns),
+                                  np.nan_to_num(df.columns)):
                 raise ValueError('Meta columns do not match dataframe.')
             else:
                 c = meta.columns
