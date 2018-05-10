@@ -1125,7 +1125,6 @@ class Array(DaskMethodsMixin):
 
         if method == '__call__':
             if numpy_ufunc.signature is not None:
-                # Patch for own gufunc wrapper (else recursion occurs)
                 from .gufunc import apply_gufunc
                 return apply_gufunc(numpy_ufunc,
                                     numpy_ufunc.signature,
