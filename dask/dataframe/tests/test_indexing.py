@@ -4,7 +4,6 @@ import numpy as np
 
 import pytest
 
-import dask
 import dask.dataframe as dd
 
 from dask.dataframe.indexing import _coerce_loc_index
@@ -62,7 +61,7 @@ def test_loc_non_informative_index():
     ddf.divisions = (None,) * 3
     assert not ddf.known_divisions
 
-    ddf.loc[20:30].compute(get=dask.get)
+    ddf.loc[20:30].compute(scheduler='sync')
 
     assert_eq(ddf.loc[20:30], df.loc[20:30])
 

@@ -245,18 +245,19 @@ in the background.
 
 .. code-block:: python
 
-   for future in as_completed(futures, results=True):
+   for future, result in as_completed(futures, with_results=True):
+       # y = future.result()  # don't need this
       ...
 
 Or collect futures all futures in batches that had arrived since the last iteration
 
 .. code-block:: python
 
-   for batch in as_completed(futures, results=True).batches():
-      for future in batch:
+   for batch in as_completed(futures, with_results=True).batches():
+      for future, result in batch:
           ...
 
-Additionally, for iterative algorithms you can add more futures into the ``as_completed`` iterator
+Additionally, for iterative algorithms you can add more futures into the ``as_completed`` iterator *during* iteration.
 
 .. code-block:: python
 
@@ -317,6 +318,7 @@ Submit Tasks from Tasks
 
 .. autosummary::
    get_client
+   rejoin
    secede
 
 Tasks can launch other tasks by getting their own client.  This enables complex
@@ -366,11 +368,46 @@ thread that does not take up a slot within the Dask worker:
 
    def monitor(device):
       client = get_client()
-      secede()
+      secede()  # remove this task from the thread pool
       while True:
           data = device.read_data()
           future = client.submit(process, data)
           fire_and_forget(future)
+
+If you intend to do more work in the same thread after waiting on client work,
+you may want to explicitly block until the thread is able to *rejoin* the
+thread pool.  This allows some control over the number of threads that are
+created and stops too many threads from being active at once, over-saturating your hardware.
+
+.. code-block:: python
+
+   def f(n):  # assume that this runs as a task
+      client = get_client()
+
+      secede()  # secede while we wait for results to come back
+      futures = client.map(func, range(n))
+      results = client.gather(futures)
+
+      rejoin()  # block until a slot is open in the thread pool
+      result = analyze(results)
+      return result
+
+
+Alternatively, you can just use the normal ``dask.compute`` function *within* a
+task.  This will automatically call ``secede`` and ``rejoin`` appropriately.
+
+.. code-block:: python
+
+   def f(name, fn):
+       df = dd.read_csv(fn)  # note that this is a dask collection
+       result = df[df.name == name].count()
+
+       # This calls secede
+       # Then runs the computation on the cluster (including this worker)
+       # Then blocks on rejoin, and finally delivers the answer
+       result = result.compute()
+
+       return result
 
 
 Coordinate Data Between Clients
@@ -449,6 +486,48 @@ If you want to share large pieces of information then scatter the data first
    >>> future = client.scatter(parameters)
    >>> var.set(future)
 
+
+Locks
+-----
+
+.. autosummary::
+   Lock
+
+You can also hold onto cluster-wide locks using the ``Lock`` object.
+This lock can either be given a consistent name, or you can pass the lock
+object around itself.
+
+Using a consistent name is convenient when you want to lock some known named resource.
+
+.. code-block:: python
+
+   from dask.distributed import Lock
+
+   def load(fn):
+       with Lock('production-database'):
+           # read data from filename using some sensitive source
+           return ...
+
+   futures = client.map(load, filenames)
+
+Passing around a lock works as well, and is easier when you want to create short-term locks for a particular situation.
+
+.. code-block:: python
+
+   from dask.distributed import Lock
+   lock = Lock()
+
+   def load(fn, lock=None):
+       with lock:
+           # read data from filename using some sensitive source
+           return ...
+
+   futures = client.map(load, filenames, lock=lock)
+
+This can be useful if you want to control concurrent access to some external
+resource like a database or un-thread-safe library.
+
+
 API
 ---
 
@@ -503,12 +582,14 @@ API
    fire_and_forget
    get_client
    secede
+   rejoin
    wait
 
 .. autofunction:: as_completed
 .. autofunction:: fire_and_forget
 .. autofunction:: get_client
 .. autofunction:: secede
+.. autofunction:: rejoin
 .. autofunction:: wait
 
 .. autoclass:: Client
@@ -522,4 +603,7 @@ API
    :members:
 
 .. autoclass:: Variable
+   :members:
+
+.. autoclass:: Lock
    :members:

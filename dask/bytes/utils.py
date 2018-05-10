@@ -51,6 +51,10 @@ def infer_storage_options(urlpath, inherit_storage_options=None):
         if windows_path:
             path = '%s:%s' % windows_path.groups()
 
+    if protocol in ['http', 'https']:
+        # for HTTP, we don't want to parse, as requests will anyway
+        return {'protocol': protocol, 'path': urlpath}
+
     options = {
         'protocol': protocol,
         'path': path,
@@ -170,7 +174,7 @@ def seek_delimiter(file, delimiter, blocksize):
             i = full.index(delimiter)
             file.seek(file.tell() - (len(full) - i) + len(delimiter))
             return
-        except ValueError:
+        except (OSError, ValueError):
             pass
         last = full[-len(delimiter):]
 
@@ -222,7 +226,7 @@ def read_block(f, offset, length, delimiter=None):
         try:
             f.seek(start + length)
             seek_delimiter(f, delimiter, 2**16)
-        except ValueError:
+        except (OSError, ValueError):
             f.seek(0, 2)
         end = f.tell()
 

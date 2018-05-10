@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import io
 import os
+from distutils.version import LooseVersion
 from warnings import warn
 
 from toolz import merge
@@ -11,86 +12,10 @@ from .utils import (SeekableFile, read_block, infer_compression,
                     infer_storage_options, build_name_function,
                     update_storage_options)
 from ..compatibility import unicode
+from ..context import _globals
 from ..base import tokenize
 from ..delayed import delayed
-from ..utils import import_required, ensure_bytes, ensure_unicode, is_integer
-
-
-def write_block_to_file(data, lazy_file):
-    """
-    Parameters
-    ----------
-    data : data to write
-        Either str/bytes, or iterable producing those, or something file-like
-        which can be read.
-    lazy_file : file-like or file context
-        gives writable backend-dependent file-like object when used with `with`
-    """
-    binary = 'b' in str(getattr(lazy_file, 'mode', 'b'))
-    with lazy_file as f:
-        if isinstance(f, io.TextIOWrapper):
-            binary = False
-        if binary:
-            ensure = ensure_bytes
-        else:
-            ensure = ensure_unicode
-        if isinstance(data, (str, bytes, unicode)):
-            f.write(ensure(data))
-        elif isinstance(data, io.IOBase):
-            # file-like
-            out = True
-            while out:
-                out = data.read(64 * 2 ** 10)
-                f.write(ensure(out))
-        else:
-            # iterable, e.g., bag contents
-            start = False
-            for d in data:
-                if start:
-                    if binary:
-                        try:
-                            f.write(b'\n')
-                        except TypeError:
-                            binary = False
-                            f.write('\n')
-                    else:
-                        f.write(u'\n')
-                else:
-                    start = True
-                f.write(ensure(d))
-
-
-def write_bytes(data, urlpath, name_function=None, compression=None,
-                encoding=None, **kwargs):
-    """Write dask data to a set of files
-
-    Parameters
-    ----------
-    data: list of delayed objects
-        Producing data to write
-    urlpath: list or template
-        Location(s) to write to, including backend specifier.
-    name_function: function or None
-        If urlpath is a template, use this function to create a string out
-        of the sequence number.
-    compression: str or None
-        Compression algorithm to apply (e.g., gzip), if any
-    encoding: str or None
-        If None, data must produce bytes, else will be encoded.
-    kwargs: passed to filesystem constructor
-    """
-    mode = 'wb' if encoding is None else 'wt'
-
-    files = open_files(urlpath, compression=compression, mode=mode,
-                       encoding=encoding, name_function=name_function,
-                       num=len(data), **kwargs)
-
-    values = [delayed(write_block_to_file, pure=False)(d, f)
-              for d, f in zip(data, files)]
-
-    paths = [f.path for f in files]
-
-    return values, paths
+from ..utils import import_required, is_integer
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
@@ -216,8 +141,6 @@ class OpenFile(object):
         Mode of the opened file
     compression : str or None, optional
         Compression to apply
-    text : bool, optional
-        Whether to wrap the file to be text-like
     encoding : str or None, optional
         The encoding to use if opened in text mode.
     errors : str or None, optional
@@ -454,6 +377,45 @@ def _expand_paths(path, name_function, num):
     return paths
 
 
+def get_hdfs_driver(driver="auto"):
+    """Get the hdfs driver implementation.
+
+    Parameters
+    ----------
+    driver : {'auto', 'hdfs3', 'pyarrow'}, default 'auto'
+        HDFS library to use. Default is first installed in this list.
+
+    Returns
+    -------
+    A filesystem class
+    """
+    if driver == 'auto':
+        for d in ['hdfs3', 'pyarrow']:
+            try:
+                return get_hdfs_driver(d)
+            except RuntimeError:
+                pass
+        else:
+            raise RuntimeError("Please install either `hdfs3` or `pyarrow`")
+
+    elif driver == 'hdfs3':
+        import_required('hdfs3', "`hdfs3` not installed")
+        from dask.bytes.hdfs3 import HDFS3HadoopFileSystem as cls
+        return cls
+
+    elif driver == 'pyarrow':
+        pa = import_required('pyarrow', "`pyarrow` not installed")
+        from dask.bytes.pyarrow import (_MIN_PYARROW_VERSION_SUPPORTED,
+                                        PyArrowHadoopFileSystem as cls)
+        if LooseVersion(pa.__version__) < _MIN_PYARROW_VERSION_SUPPORTED:
+            raise RuntimeError("pyarrow version >= %r required for hdfs driver "
+                               "support" % _MIN_PYARROW_VERSION_SUPPORTED)
+        return cls
+
+    else:
+        raise ValueError('Unsupported hdfs driver: {0}'.format(driver))
+
+
 def get_fs(protocol, storage_options=None):
     """Create a filesystem object from a protocol and options.
 
@@ -464,13 +426,17 @@ def get_fs(protocol, storage_options=None):
     storage_options : dict, optional
         Keywords to pass to the filesystem class.
     """
-    if protocol == 's3':
+    if protocol in _filesystems:
+        cls = _filesystems[protocol]
+
+    elif protocol == 's3':
         import_required('s3fs',
                         "Need to install `s3fs` library for s3 support\n"
                         "    conda install s3fs -c conda-forge\n"
                         "    or\n"
                         "    pip install s3fs")
         import dask.bytes.s3  # noqa, register the s3 backend
+        cls = _filesystems[protocol]
 
     elif protocol in ('gs', 'gcs'):
         import_required('gcsfs',
@@ -478,15 +444,20 @@ def get_fs(protocol, storage_options=None):
                         "    conda install gcsfs -c conda-forge\n"
                         "    or\n"
                         "    pip install gcsfs")
+        cls = _filesystems[protocol]
 
     elif protocol == 'hdfs':
-        import_required('hdfs3',
-                        "Need to install `hdfs3` library for hdfs support\n"
-                        "    conda install s3fs -c conda-forge")
-        import dask.bytes.hdfs  # noqa, register the hdfs3 backend
+        cls = get_hdfs_driver(_globals.get("hdfs_driver", "auto"))
 
-    if protocol in _filesystems:
+    elif protocol in ['http', 'https']:
+        import_required('requests',
+                        "Need to install `requests` for HTTP support\n"
+                        "   conda install requests\n"
+                        "    or\n"
+                        "   pip install requests")
+        import dask.bytes.http  # noqa, registers HTTP backend
         cls = _filesystems[protocol]
+
     else:
         raise ValueError("Unknown protocol %s" % protocol)
 

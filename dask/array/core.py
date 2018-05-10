@@ -18,12 +18,12 @@ import uuid
 import warnings
 
 try:
-    from cytoolz import (partition, concat, concatv, join, first,
+    from cytoolz import (partition, concat, join, first,
                          groupby, valmap, accumulate, assoc)
     from cytoolz.curried import filter, pluck
 
 except ImportError:
-    from toolz import (partition, concat, concatv, join, first,
+    from toolz import (partition, concat, join, first,
                        groupby, valmap, accumulate, assoc)
     from toolz.curried import filter, pluck
 from toolz import pipe, map, reduce
@@ -32,8 +32,8 @@ import numpy as np
 from . import chunk
 from .numpy_compat import _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
-from ..base import (Base, tokenize, dont_optimize, compute_as_if_collection,
-                    persist)
+from ..base import (DaskMethodsMixin, tokenize, dont_optimize,
+                    compute_as_if_collection, persist, is_dask_collection)
 from ..context import _globals, globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
@@ -799,7 +799,9 @@ def broadcast_chunks(*chunkss):
         ...
     ValueError: Chunks do not align: [(10, 10, 10), (3, 3)]
     """
-    if len(chunkss) == 1:
+    if not chunkss:
+        return ()
+    elif len(chunkss) == 1:
         return chunkss[0]
     n = max(map(len, chunkss))
     chunkss2 = [((1,),) * (n - len(c)) + c for c in chunkss]
@@ -832,7 +834,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     ----------
 
     sources: Array or iterable of Arrays
-    targets: array-like or iterable of array-likes
+    targets: array-like or Delayed or iterable of array-likes and/or Delayeds
         These should support setitem syntax ``target[10:20] = ...``
     lock: boolean or threading.Lock, optional
         Whether or not to lock the data stores while storing.
@@ -889,69 +891,62 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     sources_dsk = sharedict.merge(*[e.__dask_graph__() for e in sources])
     sources_dsk = Array.__dask_optimize__(
         sources_dsk,
-        [e.__dask_keys__() for e in sources]
+        list(core.flatten([e.__dask_keys__() for e in sources]))
     )
+    sources2 = [Array(sources_dsk, e.name, e.chunks, e.dtype) for e in sources]
 
-    tgt_dsks = []
-    store_keys = []
-    store_dsks = []
-    if return_stored:
-        load_names = []
-        load_dsks = []
-    for tgt, src, reg in zip(targets, sources, regions):
-        # if out is a delayed object update dictionary accordingly
-        try:
-            each_tgt_dsk = {}
-            each_tgt_dsk.update(tgt.dask)
-            tgt = tgt.key
-        except AttributeError:
-            each_tgt_dsk = {}
+    # Optimize all targets together
+    targets2 = []
+    targets_keys = []
+    targets_dsk = []
+    for e in targets:
+        if isinstance(e, Delayed):
+            targets2.append(e.key)
+            targets_keys.extend(e.__dask_keys__())
+            targets_dsk.append(e.__dask_graph__())
+        elif is_dask_collection(e):
+            raise TypeError(
+                "Targets must be either Delayed objects or array-likes"
+            )
+        else:
+            targets2.append(e)
 
-        src = Array(sources_dsk, src.name, src.chunks, src.dtype)
+    targets_dsk = sharedict.merge(*targets_dsk)
+    targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
 
-        each_store_dsk = insert_to_ooc(
-            src, tgt, lock=lock, region=reg, return_stored=return_stored
-        )
+    load_stored = (return_stored and not compute)
+    store_dsk = sharedict.merge(*[
+        insert_to_ooc(s, t, lock, r, return_stored, load_stored)
+        for s, t, r in zip(sources2, targets2, regions)
+    ])
+    store_keys = list(store_dsk.keys())
 
-        if return_stored:
-            load_names.append('load-store-%s' % src.name)
-            load_dsks.append(retrieve_from_ooc(
-                each_store_dsk.keys(),
-                each_store_dsk
-            ))
-
-        tgt_dsks.append(each_tgt_dsk)
-
-        store_keys.extend(each_store_dsk.keys())
-        store_dsks.append(each_store_dsk)
-
-    store_dsks_mrg = sharedict.merge(*concatv(
-        store_dsks, tgt_dsks, [sources_dsk]
-    ))
+    store_dsk = sharedict.merge(store_dsk, targets_dsk, sources_dsk)
 
     if return_stored:
+        load_store_dsk = store_dsk
         if compute:
-            store_dlyds = [Delayed(k, store_dsks_mrg) for k in store_keys]
-            store_dlyds = persist(*store_dlyds)
-            store_dsks_mrg = sharedict.merge(*[e.dask for e in store_dlyds])
+            store_dlyds = [Delayed(k, store_dsk) for k in store_keys]
+            store_dlyds = persist(*store_dlyds, **kwargs)
+            store_dsk_2 = sharedict.merge(*[e.dask for e in store_dlyds])
 
-        load_dsks_mrg = sharedict.merge(store_dsks_mrg, *load_dsks)
+            load_store_dsk = retrieve_from_ooc(
+                store_keys, store_dsk, store_dsk_2
+            )
 
         result = tuple(
-            Array(load_dsks_mrg, ln, s.chunks, s.dtype)
-            for ln, s in zip(load_names, sources)
+            Array(load_store_dsk, 'load-store-%s' % s.name, s.chunks, s.dtype)
+            for s in sources
         )
-
-        assert len(result) == len(sources)
 
         return result
     else:
         name = 'store-' + tokenize(*store_keys)
-        dsk = sharedict.merge({name: store_keys}, store_dsks_mrg)
+        dsk = sharedict.merge({name: store_keys}, store_dsk)
         result = Delayed(name, dsk)
 
         if compute:
-            result.compute()
+            result.compute(**kwargs)
             return None
         else:
             return result
@@ -1004,7 +999,7 @@ See the following documentation page for details:
 """.strip()
 
 
-class Array(Base):
+class Array(DaskMethodsMixin):
     """ Parallel Dask Array
 
     A parallel nd-array comprised of many numpy arrays arranged in a grid.
@@ -1102,6 +1097,10 @@ class Array(Base):
     @property
     def shape(self):
         return tuple(map(sum, self.chunks))
+
+    @property
+    def _meta(self):
+        return np.empty(shape=(), dtype=self.dtype)
 
     def _get_chunks(self):
         return self._chunks
@@ -1203,7 +1202,12 @@ class Array(Base):
 
     @wraps(store)
     def store(self, target, **kwargs):
-        return store([self], [target], **kwargs)
+        r = store([self], [target], **kwargs)
+
+        if kwargs.get("return_stored", False):
+            r = r[0]
+
+        return r
 
     def to_hdf5(self, filename, datapath, **kwargs):
         """ Store array in HDF5 file
@@ -1397,12 +1401,19 @@ class Array(Base):
             shape = shape[0]
         return reshape(self, shape)
 
-    def topk(self, k):
+    def topk(self, k, axis=-1, split_every=None):
         """The top k elements of an array.
 
         See ``da.topk`` for docstring"""
-        from .routines import topk
-        return topk(k, self)
+        from .reductions import topk
+        return topk(self, k, axis=axis, split_every=split_every)
+
+    def argtopk(self, k, axis=-1, split_every=None):
+        """The indices of the top k elements of an array.
+
+        See ``da.argtopk`` for docstring"""
+        from .reductions import argtopk
+        return argtopk(self, k, axis=axis, split_every=split_every)
 
     def astype(self, dtype, **kwargs):
         """Copy of the array, cast to a specified type.
@@ -1689,25 +1700,24 @@ class Array(Base):
 
         Parameters
         ----------
-
         func: function
             The function to apply to each extended block
         depth: int, tuple, or dict
-            The number of cells that each block should share with its neighbors
-            If a tuple or dict this can be different per axis
+            The number of elements that each block should share with its neighbors
+            If a tuple or dict then this can be different per axis
         boundary: str, tuple, dict
-            how to handle the boundaries.  Values include 'reflect',
-            'periodic', 'nearest', 'none', or any constant value like 0 or
-            np.nan
+            How to handle the boundaries.
+            Values include 'reflect', 'periodic', 'nearest', 'none',
+            or any constant value like 0 or np.nan
         trim: bool
-            Whether or not to trim the excess after the map function.  Set this
-            to false if your mapping function does this for you.
+            Whether or not to trim ``depth`` elements from each block after
+            calling the map function.
+            Set this to False if your mapping function already does this for you
         **kwargs:
             Other keyword arguments valid in ``map_blocks``
 
         Examples
         --------
-
         >>> x = np.array([1, 1, 2, 3, 3, 3, 2, 1, 1])
         >>> x = from_array(x, chunks=5)
         >>> def derivative(x):
@@ -1749,9 +1759,9 @@ class Array(Base):
         return cumprod(self, axis, dtype, out=out)
 
     @derived_from(np.ndarray)
-    def squeeze(self):
+    def squeeze(self, axis=None):
         from .routines import squeeze
-        return squeeze(self)
+        return squeeze(self, axis)
 
     def rechunk(self, chunks, threshold=None, block_size_limit=None):
         """ See da.rechunk for docstring """
@@ -1833,10 +1843,14 @@ class Array(Base):
         memo[id(self)] = c
         return c
 
-    def to_delayed(self):
-        """ Convert Array into dask Delayed objects
+    def to_delayed(self, optimize_graph=True):
+        """Convert into an array of ``dask.delayed`` objects, one per chunk.
 
-        Returns an array of values, one value per chunk.
+        Parameters
+        ----------
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            ``dask.delayed`` objects.
 
         See Also
         --------
@@ -1844,7 +1858,9 @@ class Array(Base):
         """
         from ..delayed import Delayed
         keys = self.__dask_keys__()
-        dsk = self.__dask_optimize__(self.__dask_graph__(), keys)
+        dsk = self.__dask_graph__()
+        if optimize_graph:
+            dsk = self.__dask_optimize__(dsk, keys)
         L = ndeepmap(self.ndim, lambda k: Delayed(k, dsk), keys)
         return np.array(L, dtype=object)
 
@@ -1940,10 +1956,10 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     x : array_like
     chunks : int, tuple
         How to chunk the array. Must be one of the following forms:
-        - A blocksize like 1000.
-        - A blockshape like (1000, 1000).
-        - Explicit sizes of all blocks along all dimensions
-          like ((1000, 1000, 500), (400, 400)).
+        -   A blocksize like 1000.
+        -   A blockshape like (1000, 1000).
+        -   Explicit sizes of all blocks along all dimensions like
+            ((1000, 1000, 500), (400, 400)).
 
         -1 as a blocksize indicates the size of the corresponding dimension.
     name : str, optional
@@ -2009,7 +2025,7 @@ def from_delayed(value, shape, dtype, name=None):
     >>> array
     dask.array<from-value, shape=(5,), dtype=float64, chunksize=(5,)>
     >>> array.compute()
-    array([ 1.,  1.,  1.,  1.,  1.])
+    array([1., 1., 1., 1., 1.])
     """
     from dask.delayed import delayed, Delayed
     if not isinstance(value, Delayed) and hasattr(value, 'key'):
@@ -2299,6 +2315,11 @@ def atop(func, out_ind, *args, **kwargs):
         chunkss[k] = (v,)
     arginds = list(zip(arrays, args[1::2]))
 
+    for arg, ind in arginds:
+        if hasattr(arg, 'ndim') and hasattr(ind, '__len__') and arg.ndim != len(ind):
+            raise ValueError("Index string %s does not match array dimension %d"
+                             % (ind, arg.ndim))
+
     numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
     argindsstr = list(concat([(a if ind is None else a.name, ind) for a, ind in arginds]))
     # Finish up the name
@@ -2333,7 +2354,7 @@ def unpack_singleton(x):
     >>> unpack_singleton([[[[1]]]])
     1
     >>> unpack_singleton(np.array(np.datetime64('2000-01-01')))
-    array(datetime.date(2000, 1, 1), dtype='datetime64[D]')
+    array('2000-01-01', dtype='datetime64[D]')
     """
     while isinstance(x, (list, tuple)):
         try:
@@ -2347,8 +2368,8 @@ def block(arrays, allow_unknown_chunksizes=False):
     """
     Assemble an nd-array from nested lists of blocks.
 
-    Blocks in the innermost lists are `concatenate`d along the last
-    dimension (-1), then these are `concatenate`d along the second-last
+    Blocks in the innermost lists are concatenated along the last
+    dimension (-1), then these are concatenated along the second-last
     dimension (-2), and so on until the outermost list is reached
 
     Blocks can be of any dimension, but will not be broadcasted using the normal
@@ -2603,8 +2624,12 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
     cum_dims = [0] + list(accumulate(add, [len(a.chunks[axis]) for a in seq]))
 
-    dt = reduce(np.promote_types, [a.dtype for a in seq])
-    seq = [x.astype(dt) for x in seq]
+    seq_dtypes = [a.dtype for a in seq]
+    if len(set(seq_dtypes)) > 1:
+        dt = reduce(np.promote_types, seq_dtypes)
+        seq = [x.astype(dt) for x in seq]
+    else:
+        dt = seq_dtypes[0]
 
     names = [a.name for a in seq]
 
@@ -2621,7 +2646,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     return Array(dsk2, name, chunks, dtype=dt)
 
 
-def store_chunk(x, out, index, lock, region, return_stored):
+def load_store_chunk(x, out, index, lock, return_stored, load_stored):
     """
     A function inserted in a Dask graph for storing a chunk.
 
@@ -2635,31 +2660,31 @@ def store_chunk(x, out, index, lock, region, return_stored):
         Where to store result from ``x`` in ``out``.
     lock: Lock-like or False
         Lock to use before writing to ``out``.
-    region: slice-like or None
-        Where relative to ``out`` to store ``x``.
     return_stored: bool
         Whether to return ``out``.
+    load_stored: bool
+        Whether to return the array stored in ``out``.
+        Ignored if ``return_stored`` is not ``True``.
 
     Examples
     --------
 
     >>> a = np.ones((5, 6))
     >>> b = np.empty(a.shape)
-    >>> store_chunk(a, b, (slice(None), slice(None)), False, None, False)
+    >>> load_store_chunk(a, b, (slice(None), slice(None)), False, False, False)
     """
 
     result = None
-    if return_stored:
+    if return_stored and not load_stored:
         result = out
-
-    subindex = index
-    if region is not None:
-        subindex = fuse_slice(region, index)
 
     if lock:
         lock.acquire()
     try:
-        out[subindex] = np.asanyarray(x)
+        if x is not None:
+            out[index] = np.asanyarray(x)
+        if return_stored and load_stored:
+            result = out[index]
     finally:
         if lock:
             lock.release()
@@ -2667,7 +2692,16 @@ def store_chunk(x, out, index, lock, region, return_stored):
     return result
 
 
-def insert_to_ooc(arr, out, lock=True, region=None, return_stored=False):
+def store_chunk(x, out, index, lock, return_stored):
+    return load_store_chunk(x, out, index, lock, return_stored, False)
+
+
+def load_chunk(out, index, lock):
+    return load_store_chunk(None, out, index, lock, True, True)
+
+
+def insert_to_ooc(arr, out, lock=True, region=None,
+                  return_stored=False, load_stored=False):
     """
     Creates a Dask graph for storing chunks from ``arr`` in ``out``.
 
@@ -2686,6 +2720,10 @@ def insert_to_ooc(arr, out, lock=True, region=None, return_stored=False):
     return_stored: bool, optional
         Whether to return ``out``
         (default is ``False``, meaning ``None`` is returned).
+    load_stored: bool, optional
+        Whether to handling loading from ``out`` at the same time.
+        Ignored if ``return_stored`` is not ``True``.
+        (default is ``False``, meaning defer to ``return_stored``).
 
     Examples
     --------
@@ -2699,56 +2737,26 @@ def insert_to_ooc(arr, out, lock=True, region=None, return_stored=False):
         lock = Lock()
 
     slices = slices_from_chunks(arr.chunks)
+    if region:
+        slices = [fuse_slice(region, slc) for slc in slices]
 
     name = 'store-%s' % arr.name
-    dsk = dict()
-    for t, slc in zip(core.flatten(arr.__dask_keys__()), slices):
-        store_key = (name,) + t[1:]
-        dsk[store_key] = (store_chunk, t, out, slc, lock, region, return_stored)
+    func = store_chunk
+    args = ()
+    if return_stored and load_stored:
+        name = 'load-%s' % name
+        func = load_store_chunk
+        args = args + (load_stored,)
+
+    dsk = {
+        (name,) + t[1:]: (func, t, out, slc, lock, return_stored) + args
+        for t, slc in zip(core.flatten(arr.__dask_keys__()), slices)
+    }
 
     return dsk
 
 
-def load_chunk(x, index, lock, region):
-    """
-    A function inserted in a Dask graph for loading a chunk.
-
-    Parameters
-    ----------
-    x: array-like
-        An array (potentially a NumPy one)
-    index: slice-like
-        Where to store result from ``x`` in ``out``.
-    lock: Lock-like or False
-        Lock to use before writing to ``out``.
-    region: slice-like or None
-        Where relative to ``out`` to store ``x``.
-
-    Examples
-    --------
-
-    >>> a = np.ones((5, 6))
-    >>> load_chunk(a, (slice(None), slice(None)), False, None)  # doctest: +SKIP
-    """
-
-    result = None
-
-    subindex = index
-    if region is not None:
-        subindex = fuse_slice(region, index)
-
-    if lock:
-        lock.acquire()
-    try:
-        result = x[subindex]
-    finally:
-        if lock:
-            lock.release()
-
-    return result
-
-
-def retrieve_from_ooc(keys, dsk):
+def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     """
     Creates a Dask graph for loading stored ``keys`` from ``dsk``.
 
@@ -2756,8 +2764,10 @@ def retrieve_from_ooc(keys, dsk):
     ----------
     keys: Sequence
         A sequence containing Dask graph keys to load
-    dsk: Mapping
-        A Dask graph corresponding to a Dask Array
+    dsk_pre: Mapping
+        A Dask graph corresponding to a Dask Array before computation
+    dsk_post: Mapping, optional
+        A Dask graph corresponding to a Dask Array after computation
 
     Examples
     --------
@@ -2768,11 +2778,13 @@ def retrieve_from_ooc(keys, dsk):
     >>> retrieve_from_ooc(g.keys(), g)  # doctest: +SKIP
     """
 
-    load_dsk = dict()
-    for each_key in keys:
-        load_key = ('load-%s' % each_key[0],) + each_key[1:]
-        # Reuse the result and arguments from `store_chunk` in `load_chunk`.
-        load_dsk[load_key] = (load_chunk, each_key,) + dsk[each_key][3:-1]
+    if not dsk_post:
+        dsk_post = {k: k for k in keys}
+
+    load_dsk = {
+        ('load-' + k[0],) + k[1:]: (load_chunk, dsk_post[k]) + dsk_pre[k][3:-1]
+        for k in keys
+    }
 
     return load_dsk
 
@@ -2896,7 +2908,7 @@ def broadcast_shapes(*shapes):
         return shapes[0]
     out = []
     for sizes in zip_longest(*map(reversed, shapes), fillvalue=-1):
-        dim = 0 if 0 in sizes else max(sizes)
+        dim = 0 if 0 in sizes else np.max(sizes)
         if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
             raise ValueError("operands could not be broadcast together with "
                              "shapes {0}".format(' '.join(map(str, shapes))))
@@ -2945,7 +2957,10 @@ def elemwise(op, *args, **kwargs):
         vals = [np.empty((1,) * max(1, a.ndim), dtype=a.dtype)
                 if not is_scalar_for_elemwise(a) else a
                 for a in args]
-        dt = apply_infer_dtype(op, vals, {}, 'elemwise', suggest_dtype=False)
+        try:
+            dt = apply_infer_dtype(op, vals, {}, 'elemwise', suggest_dtype=False)
+        except Exception:
+            return NotImplemented
         need_enforce_dtype = any(not is_scalar_for_elemwise(a) and a.ndim == 0 for a in args)
 
     name = kwargs.get('name', None) or '%s-%s' % (funcname(op),
@@ -2980,7 +2995,7 @@ def handle_out(out, result):
             out = None
     if isinstance(out, Array):
         if out.shape != result.shape:
-            raise NotImplementedError(
+            raise ValueError(
                 "Mismatched shapes between result and out parameter. "
                 "out=%s, result=%s" % (str(out.shape), str(result.shape)))
         out._chunks = result.chunks
@@ -3098,6 +3113,24 @@ def broadcast_to(x, shape, chunks=None):
 
     return Array(sharedict.merge((name, dsk), x.dask), name, chunks,
                  dtype=x.dtype)
+
+
+@wraps(np.broadcast_arrays)
+def broadcast_arrays(*args, **kwargs):
+    subok = bool(kwargs.pop("subok", False))
+
+    to_array = asanyarray if subok else asarray
+    args = tuple(to_array(e) for e in args)
+
+    if kwargs:
+        raise TypeError("unsupported keyword argument(s) provided")
+
+    shape = broadcast_shapes(*(e.shape for e in args))
+    chunks = broadcast_chunks(*(e.chunks for e in args))
+
+    result = [broadcast_to(e, shape=shape, chunks=chunks) for e in args]
+
+    return result
 
 
 def offset_func(func, offset, *args):
@@ -3446,15 +3479,26 @@ def _vindex(x, *indexes):
     array([ 0,  9, 48,  7])
     """
     indexes = replace_ellipsis(x.ndim, indexes)
-    partial_slices = {i: ind for i, ind in enumerate(indexes)
-                      if isinstance(ind, slice) and ind != slice(None)}
-    if partial_slices:
-        key = tuple(partial_slices.get(i, slice(None))
-                    for i in range(len(indexes)))
-        x = x[key]
+
+    nonfancy_indexes = []
+    reduced_indexes = []
+    for i, ind in enumerate(indexes):
+        if isinstance(ind, Number):
+            nonfancy_indexes.append(ind)
+        elif isinstance(ind, slice):
+            nonfancy_indexes.append(ind)
+            reduced_indexes.append(slice(None))
+        else:
+            nonfancy_indexes.append(slice(None))
+            reduced_indexes.append(ind)
+
+    nonfancy_indexes = tuple(nonfancy_indexes)
+    reduced_indexes = tuple(reduced_indexes)
+
+    x = x[nonfancy_indexes]
 
     array_indexes = {}
-    for i, (ind, size) in enumerate(zip(indexes, x.shape)):
+    for i, (ind, size) in enumerate(zip(reduced_indexes, x.shape)):
         if not isinstance(ind, slice):
             ind = np.array(ind, copy=True)
             if ind.dtype.kind == 'b':
@@ -3467,41 +3511,49 @@ def _vindex(x, *indexes):
             ind %= size
             array_indexes[i] = ind
 
+    if array_indexes:
+        x = _vindex_array(x, array_indexes)
+
+    return x
+
+
+def _vindex_array(x, dict_indexes):
+    """Point wise indexing with only NumPy Arrays."""
+
     try:
-        broadcast_indexes = np.broadcast_arrays(*array_indexes.values())
+        broadcast_indexes = np.broadcast_arrays(*dict_indexes.values())
     except ValueError:
         # note: error message exactly matches numpy
-        shapes_str = ' '.join(str(a.shape) for a in array_indexes.values())
+        shapes_str = ' '.join(str(a.shape) for a in dict_indexes.values())
         raise IndexError('shape mismatch: indexing arrays could not be '
                          'broadcast together with shapes ' + shapes_str)
     broadcast_shape = broadcast_indexes[0].shape
 
-    lookup = dict(zip(array_indexes, broadcast_indexes))
+    lookup = dict(zip(dict_indexes, broadcast_indexes))
     flat_indexes = [lookup[i].ravel().tolist() if i in lookup else None
-                    for i in range(len(indexes))]
+                    for i in range(x.ndim)]
     flat_indexes.extend([None] * (x.ndim - len(flat_indexes)))
-    result_1d = _vindex_1d(x, *flat_indexes)
-    return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
-
-def _vindex_1d(x, *indexes):
-    """Point wise indexing with only 1D lists and full slices."""
-    indexes = [list(index) if index is not None else index for index in indexes]
+    flat_indexes = [
+        list(index) if index is not None else index for index in flat_indexes
+    ]
     bounds = [list(accumulate(add, (0,) + c)) for c in x.chunks]
-    bounds2 = [b for i, b in zip(indexes, bounds) if i is not None]
-    axis = _get_axis(indexes)
-    token = tokenize(x, indexes)
+    bounds2 = [
+        b for i, b in zip(flat_indexes, bounds) if i is not None
+    ]
+    axis = _get_axis(flat_indexes)
+    token = tokenize(x, flat_indexes)
     out_name = 'vindex-merge-' + token
 
     points = list()
-    for i, idx in enumerate(zip(*[i for i in indexes if i is not None])):
+    for i, idx in enumerate(zip(*[i for i in flat_indexes if i is not None])):
         block_idx = [np.searchsorted(b, ind, 'right') - 1
                      for b, ind in zip(bounds2, idx)]
         inblock_idx = [ind - bounds2[k][j]
                        for k, (ind, j) in enumerate(zip(idx, block_idx))]
         points.append((i, tuple(block_idx), tuple(inblock_idx)))
 
-    chunks = [c for i, c in zip(indexes, x.chunks) if i is None]
+    chunks = [c for i, c in zip(flat_indexes, x.chunks) if i is None]
     chunks.insert(0, (len(points),) if points else (0,))
     chunks = tuple(chunks)
 
@@ -3510,9 +3562,11 @@ def _vindex_1d(x, *indexes):
         per_block = dict((k, v) for k, v in per_block.items() if v)
 
         other_blocks = list(product(*[list(range(len(c))) if i is None else [None]
-                                    for i, c in zip(indexes, x.chunks)]))
+                                    for i, c in zip(flat_indexes, x.chunks)]))
 
-        full_slices = [slice(None, None) if i is None else None for i in indexes]
+        full_slices = [
+            slice(None, None) if i is None else None for i in flat_indexes
+        ]
 
         name = 'vindex-slice-' + token
         dsk = dict((keyname(name, i, okey),
@@ -3529,14 +3583,18 @@ def _vindex_1d(x, *indexes):
                     [keyname(name, i, okey) for i in range(len(per_block))]))
                    for okey in other_blocks)
 
-        return Array(sharedict.merge(x.dask, (out_name, dsk)), out_name, chunks,
-                     x.dtype)
+        result_1d = Array(
+            sharedict.merge(x.dask, (out_name, dsk)), out_name, chunks, x.dtype
+        )
+        return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
     # output has a zero dimension, just create a new zero-shape array with the
     # same dtype
     from .wrap import empty
-    return empty(tuple(map(sum, chunks)), chunks=chunks, dtype=x.dtype,
-                 name=out_name)
+    result_1d = empty(
+        tuple(map(sum, chunks)), chunks=chunks, dtype=x.dtype, name=out_name
+    )
+    return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
 
 def _get_axis(indexes):
@@ -3612,7 +3670,6 @@ def to_npy_stack(dirname, x, axis=0):
 
     Examples
     --------
-
     >>> x = da.ones((5, 10, 10), chunks=(2, 4, 4))  # doctest: +SKIP
     >>> da.to_npy_stack('data/', x, axis=0)  # doctest: +SKIP
 

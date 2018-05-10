@@ -6,6 +6,7 @@ import os
 import shutil
 import sys
 import tempfile
+import re
 from errno import ENOENT
 from collections import Iterator
 from contextlib import contextmanager
@@ -18,7 +19,6 @@ from weakref import WeakValueDictionary
 
 from .compatibility import get_named_args, getargspec, PY3, unicode, bind_method
 from .core import get_deps
-from .context import _globals
 from .optimization import key_split    # noqa: F401
 
 
@@ -798,20 +798,18 @@ class SerializableLock(object):
     __repr__ = __str__
 
 
-def effective_get(get=None, collection=None):
-    """Get the effective get method used in a given situation"""
-    return (get or _globals.get('get') or
-            getattr(collection, '__dask_scheduler__', None))
-
-
-def get_scheduler_lock(get=None, collection=None):
+def get_scheduler_lock(get=None, collection=None, scheduler=None):
     """Get an instance of the appropriate lock for a certain situation based on
        scheduler used."""
     from . import multiprocessing
-    actual_get = effective_get(get, collection)
+    from .base import get_scheduler
+    actual_get = get_scheduler(get=get,
+                               collections=[collection],
+                               scheduler=scheduler)
 
     if actual_get == multiprocessing.get:
         return mp.Manager().Lock()
+
     return SerializableLock()
 
 
@@ -877,3 +875,52 @@ def partial_by_order(*args, **kwargs):
     for i, arg in other:
         args2.insert(i, arg)
     return function(*args2, **kwargs)
+
+
+def is_arraylike(x):
+    """ Is this object a numpy array or something similar?
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> x = np.ones(5)
+    >>> is_arraylike(x)
+    True
+    >>> is_arraylike(5)
+    False
+    >>> is_arraylike('cat')
+    False
+    """
+    return (hasattr(x, '__array__') and
+            hasattr(x, 'shape') and x.shape and
+            hasattr(x, 'dtype'))
+
+
+def natural_sort_key(s):
+    """
+    Sorting `key` function for performing a natural sort on a collection of
+    strings
+
+    See https://en.wikipedia.org/wiki/Natural_sort_order
+
+    Parameters
+    ----------
+    s : str
+        A string that is an element of the collection being sorted
+
+    Returns
+    -------
+    tuple[str or int]
+        Tuple of the parts of the input string where each part is either a
+        string or an integer
+
+    Examples
+    --------
+    >>> a = ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
+    >>> sorted(a)
+    ['f0', 'f1', 'f10', 'f11', 'f19', 'f2', 'f20', 'f21', 'f8', 'f9']
+    >>> sorted(a, key=natural_sort_key)
+    ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
+    """
+    return [int(part) if part.isdigit() else part
+            for part in re.split('(\d+)', s)]

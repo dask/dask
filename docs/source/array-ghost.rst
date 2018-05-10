@@ -1,5 +1,5 @@
-Overlapping Blocks with Ghost Cells
-===================================
+Overlapping Computations
+========================
 
 Some array operations require communication of borders between neighboring
 blocks.  Example operations include the following:
@@ -14,11 +14,21 @@ blocks.  Example operations include the following:
 Dask array supports these operations by creating a new array where each
 block is slightly expanded by the borders of its neighbors.  This costs an
 excess copy and the communication of many small chunks but allows localized
-functions to evaluate in an embarrassing manner.  We call this process
-*ghosting*.
+functions to evaluate in an embarrassingly parallel manner.
 
-Ghosting
---------
+The main API for these computations is the ``map_overlap`` method defined
+below:
+
+.. currentmodule:: dask.array
+
+.. autosummary::
+   map_overlap
+
+.. autofunction:: map_overlap
+
+
+Explanation
+-----------
 
 Consider two neighboring blocks in a Dask array.
 

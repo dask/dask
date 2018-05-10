@@ -2,28 +2,8 @@ from __future__ import absolute_import, division, print_function
 
 from distutils.version import LooseVersion
 
-from ..compatibility import builtins
 import numpy as np
 import warnings
-
-try:
-    isclose = np.isclose
-except AttributeError:
-    def isclose(*args, **kwargs):
-        raise RuntimeError("You need numpy version 1.7 or greater to use "
-                           "isclose.")
-
-try:
-    full = np.full
-except AttributeError:
-    def full(shape, fill_value, dtype=None, order=None):
-        """Our implementation of numpy.full because your numpy is old."""
-        if order is not None:
-            raise NotImplementedError("`order` kwarg is not supported upgrade "
-                                      "to Numpy 1.8 or greater for support.")
-        return np.multiply(fill_value, np.ones(shape, dtype=dtype),
-                           dtype=dtype)
-
 
 # Taken from scikit-learn:
 # https://github.com/scikit-learn/scikit-learn/blob/master/sklearn/utils/fixes.py#L84
@@ -54,79 +34,12 @@ except TypeError:
                                                     np.ma.core._DomainSafeDivide(),
                                                     0, 1)
 
-# functions copied from numpy
-try:
-    from numpy import broadcast_to, nanprod, nancumsum, nancumprod
-except ImportError:  # pragma: no cover
-    # these functions should arrive in numpy v1.10 to v1.12.  Until then,
-    # they are duplicated here
+if LooseVersion(np.__version__) < '1.12.0':
+    # These functions were added in numpy 1.12.0. For previous versions they
+    # are duplicated here
 
     # See https://github.com/numpy/numpy/blob/master/LICENSE.txt
     # or NUMPY_LICENSE.txt within this directory
-    def _maybe_view_as_subclass(original_array, new_array):
-        if type(original_array) is not type(new_array):
-            # if input was an ndarray subclass and subclasses were OK,
-            # then view the result as that subclass.
-            new_array = new_array.view(type=type(original_array))
-            # Since we have done something akin to a view from original_array, we
-            # should let the subclass finalize (if it has it implemented, i.e., is
-            # not None).
-            if new_array.__array_finalize__:
-                new_array.__array_finalize__(original_array)
-        return new_array
-
-    def _broadcast_to(array, shape, subok, readonly):
-        shape = tuple(shape) if np.iterable(shape) else (shape,)
-        array = np.array(array, copy=False, subok=subok)
-        if not shape and array.shape:
-            raise ValueError('cannot broadcast a non-scalar to a scalar array')
-        if builtins.any(size < 0 for size in shape):
-            raise ValueError('all elements of broadcast shape must be non-'
-                             'negative')
-        broadcast = np.nditer(
-            (array,), flags=['multi_index', 'zerosize_ok', 'refs_ok'],
-            op_flags=['readonly'], itershape=shape, order='C').itviews[0]
-        result = _maybe_view_as_subclass(array, broadcast)
-        if not readonly and array.flags.writeable:
-            result.flags.writeable = True
-        return result
-
-    def broadcast_to(array, shape, subok=False):
-        """Broadcast an array to a new shape.
-
-        Parameters
-        ----------
-        array : array_like
-            The array to broadcast.
-        shape : tuple
-            The shape of the desired array.
-        subok : bool, optional
-            If True, then sub-classes will be passed-through, otherwise
-            the returned array will be forced to be a base-class array (default).
-
-        Returns
-        -------
-        broadcast : array
-            A readonly view on the original array with the given shape. It is
-            typically not contiguous. Furthermore, more than one element of a
-            broadcasted array may refer to a single memory location.
-
-        Raises
-        ------
-        ValueError
-            If the array is not compatible with the new shape according to NumPy's
-            broadcasting rules.
-
-        Examples
-        --------
-        >>> x = np.array([1, 2, 3])
-        >>> np.broadcast_to(x, (3, 3))  # doctest: +SKIP
-        array([[1, 2, 3],
-               [1, 2, 3],
-               [1, 2, 3]])
-        """
-        return _broadcast_to(array, shape, subok=subok, readonly=True)
-
     def _replace_nan(a, val):
         """
         If `a` is of inexact type, make a copy of `a`, replace NaNs with
@@ -167,75 +80,6 @@ except ImportError:  # pragma: no cover
         mask = np.isnan(a)
         np.copyto(a, val, where=mask)
         return a, mask
-
-    def nanprod(a, axis=None, dtype=None, out=None, keepdims=0):
-        """
-        Return the product of array elements over a given axis treating Not a
-        Numbers (NaNs) as zero.
-
-        One is returned for slices that are all-NaN or empty.
-
-        .. versionadded:: 1.10.0
-
-        Parameters
-        ----------
-        a : array_like
-            Array containing numbers whose sum is desired. If `a` is not an
-            array, a conversion is attempted.
-        axis : int, optional
-            Axis along which the product is computed. The default is to compute
-            the product of the flattened array.
-        dtype : data-type, optional
-            The type of the returned array and of the accumulator in which the
-            elements are summed.  By default, the dtype of `a` is used.  An
-            exception is when `a` has an integer type with less precision than
-            the platform (u)intp. In that case, the default will be either
-            (u)int32 or (u)int64 depending on whether the platform is 32 or 64
-            bits. For inexact inputs, dtype must be inexact.
-        out : ndarray, optional
-            Alternate output array in which to place the result.  The default
-            is ``None``. If provided, it must have the same shape as the
-            expected output, but the type will be cast if necessary.  See
-            `doc.ufuncs` for details. The casting of NaN to integer can yield
-            unexpected results.
-        keepdims : bool, optional
-            If True, the axes which are reduced are left in the result as
-            dimensions with size one. With this option, the result will
-            broadcast correctly against the original `arr`.
-
-        Returns
-        -------
-        y : ndarray or numpy scalar
-
-        See Also
-        --------
-        :func:`numpy.prod` : Product across array propagating NaNs.
-        isnan : Show which elements are NaN.
-
-        Notes
-        -----
-        Numpy integer arithmetic is modular. If the size of a product exceeds
-        the size of an integer accumulator, its value will wrap around and the
-        result will be incorrect. Specifying ``dtype=double`` can alleviate
-        that problem.
-
-        Examples
-        --------
-        >>> np.nanprod(1)
-        1
-        >>> np.nanprod([1])
-        1
-        >>> np.nanprod([1, np.nan])
-        1.0
-        >>> a = np.array([[1, 2], [3, np.nan]])
-        >>> np.nanprod(a)
-        6.0
-        >>> np.nanprod(a, axis=0)
-        array([ 3.,  2.])
-
-        """
-        a, mask = _replace_nan(a, 1)
-        return np.prod(a, axis=axis, dtype=dtype, out=out, keepdims=keepdims)
 
     def nancumsum(a, axis=None, dtype=None, out=None):
         """
@@ -364,7 +208,7 @@ except ImportError:  # pragma: no cover
 
 
 def _make_sliced_dtype(dtype, index):
-    if LooseVersion(np.__version__) >= LooseVersion("1.14.0"):
+    if LooseVersion(np.__version__) == LooseVersion("1.14.0"):
         return _make_sliced_dtype_np_ge_14(dtype, index)
     else:
         return _make_sliced_dtype_np_lt_14(dtype, index)

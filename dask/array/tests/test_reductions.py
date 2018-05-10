@@ -1,20 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
 import pytest
-pytest.importorskip('numpy')
+np = pytest.importorskip('numpy')
 
 import dask.array as da
 from dask.array.utils import assert_eq as _assert_eq, same_keys
 from dask.core import get_deps
 from dask.context import set_options
-
-import numpy as np
-# temporary until numpy functions migrated
-try:
-    from numpy import nanprod
-except ImportError:  # pragma: no cover
-    import dask.array.numpy_compat as npcompat
-    nanprod = npcompat.nanprod
 
 
 def assert_eq(a, b):
@@ -56,7 +48,7 @@ def test_reductions_1D(dtype):
     reduction_1d_test(da.all, a, np.all, x, False)
 
     reduction_1d_test(da.nansum, a, np.nansum, x)
-    reduction_1d_test(da.nanprod, a, nanprod, x)
+    reduction_1d_test(da.nanprod, a, np.nanprod, x)
     reduction_1d_test(da.nanmean, a, np.mean, x)
     reduction_1d_test(da.nanvar, a, np.var, x)
     reduction_1d_test(da.nanstd, a, np.std, x)
@@ -127,7 +119,7 @@ def test_reductions_2D(dtype):
     reduction_2d_test(da.all, a, np.all, x, False)
 
     reduction_2d_test(da.nansum, a, np.nansum, x)
-    reduction_2d_test(da.nanprod, a, nanprod, x)
+    reduction_2d_test(da.nanprod, a, np.nanprod, x)
     reduction_2d_test(da.nanmean, a, np.mean, x)
     reduction_2d_test(da.nanvar, a, np.nanvar, x, False)  # Difference in dtype algo
     reduction_2d_test(da.nanstd, a, np.nanstd, x, False)  # Difference in dtype algo
@@ -207,7 +199,7 @@ def test_reductions_2D_nans():
     reduction_2d_test(da.all, a, np.all, x, False, False)
 
     reduction_2d_test(da.nansum, a, np.nansum, x, False, False)
-    reduction_2d_test(da.nanprod, a, nanprod, x, False, False)
+    reduction_2d_test(da.nanprod, a, np.nanprod, x, False, False)
     reduction_2d_test(da.nanmean, a, np.nanmean, x, False, False)
     with pytest.warns(None):  # division by 0 warning
         reduction_2d_test(da.nanvar, a, np.nanvar, x, False, False)
@@ -287,7 +279,21 @@ def test_nan():
     assert_eq(np.nanstd(x, axis=0), da.nanstd(d, axis=0))
     assert_eq(np.nanargmin(x, axis=0), da.nanargmin(d, axis=0))
     assert_eq(np.nanargmax(x, axis=0), da.nanargmax(d, axis=0))
-    assert_eq(nanprod(x), da.nanprod(d))
+    assert_eq(np.nanprod(x), da.nanprod(d))
+
+
+@pytest.mark.skipif(np.__version__ < '1.13.0', reason='nanmax/nanmin for object dtype')
+@pytest.mark.parametrize('func', ['nansum', 'sum', 'nanmin', 'min',
+                                  'nanmax', 'max'])
+def test_nan_object(func):
+    x = np.array([[1, np.nan, 3, 4],
+                  [5, 6, 7, np.nan],
+                  [9, 10, 11, 12]]).astype(object)
+    d = da.from_array(x, chunks=(2, 2))
+
+    assert_eq(getattr(np, func)(x, axis=0), getattr(da, func)(d, axis=0))
+    assert_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1))
+    assert_eq(getattr(np, func)(x), getattr(da, func)(d))
 
 
 def test_0d_array():
@@ -408,3 +414,65 @@ def test_array_cumreduction_out(func):
     x = da.ones((10, 10), chunks=(4, 4))
     func(x, axis=0, out=x)
     assert_eq(x, func(np.ones((10, 10)), axis=0))
+
+
+@pytest.mark.parametrize('npfunc,daskfunc', [
+    (np.sort, da.topk),
+    (np.argsort, da.argtopk),
+])
+@pytest.mark.parametrize('split_every', [None, 2])
+def test_topk_argtopk1(npfunc, daskfunc, split_every):
+    # Test data
+    k = 5
+    a = da.random.random(1000, chunks=250)
+    b = da.random.random((10, 20, 30), chunks=(4, 8, 8))
+    c = da.from_array(np.array([(1, 'Hello'), (2, 'World')], dtype=[('foo', int), ('bar', '<U5')]),
+                      chunks=1)
+
+    # 1-dimensional arrays
+    # top 5 elements, sorted descending
+    assert_eq(npfunc(a)[-k:][::-1],
+              daskfunc(a, k, split_every=split_every))
+    # bottom 5 elements, sorted ascending
+    assert_eq(npfunc(a)[:k],
+              daskfunc(a, -k, split_every=split_every))
+
+    # n-dimensional arrays
+    # also testing when k > chunk
+    # top 5 elements, sorted descending
+    assert_eq(npfunc(b, axis=0)[-k:, :, :][::-1, :, :],
+              daskfunc(b, k, axis=0, split_every=split_every))
+    assert_eq(npfunc(b, axis=1)[:, -k:, :][:, ::-1, :],
+              daskfunc(b, k, axis=1, split_every=split_every))
+    assert_eq(npfunc(b, axis=-1)[:, :, -k:][:, :, ::-1],
+              daskfunc(b, k, axis=-1, split_every=split_every))
+    with pytest.raises(ValueError):
+        daskfunc(b, k, axis=3, split_every=split_every)
+
+    # bottom 5 elements, sorted ascending
+    assert_eq(npfunc(b, axis=0)[:k, :, :],
+              daskfunc(b, -k, axis=0, split_every=split_every))
+    assert_eq(npfunc(b, axis=1)[:, :k, :],
+              daskfunc(b, -k, axis=1, split_every=split_every))
+    assert_eq(npfunc(b, axis=-1)[:, :, :k],
+              daskfunc(b, -k, axis=-1, split_every=split_every))
+    with pytest.raises(ValueError):
+        daskfunc(b, -k, axis=3, split_every=split_every)
+
+    # structured arrays
+    assert_eq(npfunc(c, axis=0)[-1:][::-1],
+              daskfunc(c, 1, split_every=split_every))
+    assert_eq(npfunc(c, axis=0)[:1],
+              daskfunc(c, -1, split_every=split_every))
+
+
+def test_topk_argtopk2():
+    a = da.random.random((10, 20, 30), chunks=(4, 8, 8))
+
+    # Support for deprecated API for topk
+    with pytest.warns(UserWarning):
+        assert_eq(da.topk(a, 5), da.topk(5, a))
+
+    # As Array methods
+    assert_eq(a.topk(5, axis=1, split_every=2), da.topk(a, 5, axis=1, split_every=2))
+    assert_eq(a.argtopk(5, axis=1, split_every=2), da.argtopk(a, 5, axis=1, split_every=2))

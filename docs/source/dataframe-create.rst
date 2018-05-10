@@ -22,10 +22,10 @@ file formats, and other Dask or Python collections.
 File Formats:
 
 .. autosummary::
-
     read_csv
     read_parquet
     read_hdf
+    read_orc
     read_sql_table
     from_bcolz
     from_array
@@ -39,7 +39,7 @@ Dask Collections:
     from_delayed
     from_dask_array
     dask.bag.core.Bag.to_dataframe
-    to_delayed
+    DataFrame.to_delayed
     to_records
     to_bag
 
@@ -76,7 +76,7 @@ Dask Delayed
 ------------
 
 For more complex situations not covered by the functions above you may want to
-use :doc:`dask.delayed<delayed-overview>` , which lets you construct
+use :doc:`dask.delayed<delayed>` , which lets you construct
 Dask.dataframes out of arbitrary Python function calls that load dataframes.
 This can allow you to handle new formats easily, or bake in particular logic
 around loading data if, for example, your data is stored with some special
@@ -96,7 +96,7 @@ From Raw Dask Graphs
 
 This section is mainly for developers wishing to extend dask.dataframe.  It
 discusses internal API not normally needed by users.  Everything below can be
-done just as effectively with :doc:`dask.delayed<delayed-overview>`  described
+done just as effectively with :doc:`dask.delayed<delayed>`  described
 just above.  You should never need to create a dataframe object by hand.
 
 To construct a DataFrame manually from a dask graph you need the following

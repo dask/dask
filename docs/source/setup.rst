@@ -32,7 +32,7 @@ scheduler you must set up a ``Client``
    client = Client(...)  # Connect to distributed cluster and override default
    df.x.sum().compute()  # This now runs on the distributed system
 
-Note that the newer ``dask.distributed`` scheduler is often preferble even on
+Note that the newer ``dask.distributed`` scheduler is often preferable even on
 single workstations.  It contains many diagnostics and features not found in
 the older single-machine scheduler.  The following pages explain in more detail
 how to set up Dask on a variety of local and distributed hardware.
@@ -53,13 +53,17 @@ how to set up Dask on a variety of local and distributed hardware.
     - :doc:`High Performance Computers <setup/hpc>`: How to run Dask on
       traditional HPC environments using tools like MPI, or job schedulers like
       SLURM, SGE, TORQUE, LSF, and so on
-    - :doc:`Kubernetes <setup/kubernetes>`: Deploy Dask on the popular
-      Kubernetes resource manager.  This is particularly useful for any cloud
-      deployments on Google, Amazon, or Microsoft Azure.
+    - :doc:`Kubernetes <setup/kubernetes>`: Deploy Dask with the
+      popular Kubernetes resource manager using either Helm or a native deployment.
     - :doc:`Python API (advanced) <setup/python-advanced>`: Create
       ``Scheduler`` and ``Worker`` objects from Python as part of a distributed
       Tornado TCP application.  This page is useful for those building custom
       frameworks.
+    - :doc:`Docker <setup/docker>` containers are available and may be useful
+      in some of the solutions above.
+    - :doc:`Cloud <setup/cloud>` for current recommendations on how to
+      deploy Dask and Jupyter on common cloud providers like Amazon, Google, or
+      Microsoft Azure.
 
 .. toctree::
    :maxdepth: 1
@@ -73,3 +77,5 @@ how to set up Dask on a variety of local and distributed hardware.
    setup/hpc.rst
    setup/kubernetes.rst
    setup/python-advanced.rst
+   setup/cloud.rst
+   setup/adaptive.rst

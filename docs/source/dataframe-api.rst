@@ -36,6 +36,8 @@ Dataframe
     DataFrame.groupby
     DataFrame.head
     DataFrame.index
+    DataFrame.isna
+    DataFrame.isnull
     DataFrame.iterrows
     DataFrame.itertuples
     DataFrame.join
@@ -134,6 +136,7 @@ Series
    Series.idxmax
    Series.idxmin
    Series.isin
+   Series.isna
    Series.isnull
    Series.iteritems
    Series.known_divisions
@@ -219,6 +222,8 @@ Groupby Operations
    DataFrameGroupBy.std
    DataFrameGroupBy.sum
    DataFrameGroupBy.var
+   DataFrameGroupBy.first
+   DataFrameGroupBy.last
 
 .. autosummary::
    SeriesGroupBy.aggregate
@@ -236,6 +241,8 @@ Groupby Operations
    SeriesGroupBy.std
    SeriesGroupBy.sum
    SeriesGroupBy.var
+   SeriesGroupBy.first
+   SeriesGroupBy.last
 
 Rolling Operations
 ~~~~~~~~~~~~~~~~~~
@@ -274,6 +281,7 @@ Create DataFrames
    read_table
    read_parquet
    read_hdf
+   read_orc
    read_sql_table
    from_array
    from_bcolz
@@ -292,7 +300,6 @@ Store DataFrames
     to_hdf
     to_records
     to_bag
-    to_delayed
 
 DataFrame Methods
 ~~~~~~~~~~~~~~~~~
@@ -341,7 +348,6 @@ Storage and Conversion
 .. autofunction:: from_bcolz
 .. autofunction:: from_dask_array
 .. autofunction:: from_delayed
-.. autofunction:: to_delayed
 .. autofunction:: to_records
 .. autofunction:: to_csv
 .. autofunction:: to_bag

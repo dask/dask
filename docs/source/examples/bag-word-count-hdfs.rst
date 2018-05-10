@@ -130,7 +130,7 @@ that triggers the computation on the cluster.
 
 .. code-block:: python
 
-   >>> future = clinet.compute(wordcount)
+   >>> future = client.compute(wordcount)
 
 Note that the ``compute`` operation is non-blocking, and you can continue to
 work in the Python shell/notebook while the computations are running.

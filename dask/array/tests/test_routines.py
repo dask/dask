@@ -1,6 +1,8 @@
 from __future__ import division, print_function, absolute_import
 
 import itertools
+from numbers import Number
+import textwrap
 
 import pytest
 from distutils.version import LooseVersion
@@ -10,6 +12,7 @@ np = pytest.importorskip('numpy')
 import dask.array as da
 from dask.utils import ignoring
 from dask.array.utils import assert_eq, same_keys
+from dask.array.einsumfuncs import einsum_can_optimize
 
 
 def test_array():
@@ -417,25 +420,34 @@ def test_ediff1d(shape, to_end, to_begin):
     assert_eq(da.ediff1d(a, to_end, to_begin), np.ediff1d(x, to_end, to_begin))
 
 
-def test_topk():
-    x = np.array([5, 2, 1, 6])
-    d = da.from_array(x, chunks=2)
+@pytest.mark.parametrize('shape, varargs, axis', [
+    [(10, 15, 20), (), None],
+    [(10, 15, 20), (2,), None],
+    [(10, 15, 20), (1.0, 1.5, 2.0), None],
+    [(10, 15, 20), (), 0],
+    [(10, 15, 20), (), 1],
+    [(10, 15, 20), (), 2],
+    [(10, 15, 20), (), -1],
+    [(10, 15, 20), (), (0, 2)],
+])
+@pytest.mark.parametrize('edge_order', [
+    1,
+    2
+])
+def test_gradient(shape, varargs, axis, edge_order):
+    a = np.random.randint(0, 10, shape)
+    d_a = da.from_array(a, chunks=(len(shape) * (5,)))
 
-    e = da.topk(2, d)
+    r = np.gradient(a, *varargs, axis=axis, edge_order=edge_order)
+    r_a = da.gradient(d_a, *varargs, axis=axis, edge_order=edge_order)
 
-    assert e.chunks == ((2,),)
-    assert_eq(e, np.sort(x)[-1:-3:-1])
-    assert same_keys(da.topk(2, d), e)
+    if isinstance(axis, Number):
+        assert_eq(r, r_a)
+    else:
+        assert len(r) == len(r_a)
 
-
-def test_topk_k_bigger_than_chunk():
-    x = np.array([5, 2, 1, 6])
-    d = da.from_array(x, chunks=2)
-
-    e = da.topk(3, d)
-
-    assert e.chunks == ((3,),)
-    assert_eq(e, np.array([6, 5, 2]))
+        for e_r, e_r_a in zip(r, r_a):
+            assert_eq(e_r, e_r_a)
 
 
 def test_bincount():
@@ -468,8 +480,6 @@ def test_bincount_raises_informative_error_on_missing_minlength_kwarg():
         assert False
 
 
-@pytest.mark.skipif(LooseVersion(np.__version__) < '1.10.0',
-                    reason="NumPy doesn't yet support nd digitize")
 def test_digitize():
     x = np.array([2, 4, 5, 6, 1])
     bins = np.array([1, 2, 3, 4, 5])
@@ -657,6 +667,53 @@ def test_unique_rand(seed, low, high, shape, chunks):
         assert_eq(e_r_d, e_r_a)
 
 
+@pytest.mark.parametrize("seed", [23, 796])
+@pytest.mark.parametrize("low, high", [
+    [0, 10]
+])
+@pytest.mark.parametrize("elements_shape, elements_chunks", [
+    [(10,), (5,)],
+    [(10,), (3,)],
+    [(4, 5), (3, 2)],
+    [(20, 20), (4, 5)],
+])
+@pytest.mark.parametrize("test_shape, test_chunks", [
+    [(10,), (5,)],
+    [(10,), (3,)],
+    [(4, 5), (3, 2)],
+    [(20, 20), (4, 5)],
+])
+@pytest.mark.parametrize("invert", [True, False])
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="np.isin is new in numpy 1.13")
+def test_isin_rand(seed, low, high, elements_shape, elements_chunks,
+                   test_shape, test_chunks, invert):
+    rng = np.random.RandomState(seed)
+
+    a1 = rng.randint(low, high, size=elements_shape)
+    d1 = da.from_array(a1, chunks=elements_chunks)
+
+    a2 = rng.randint(low, high, size=test_shape) - 5
+    d2 = da.from_array(a2, chunks=test_chunks)
+
+    r_a = np.isin(a1, a2, invert=invert)
+    r_d = da.isin(d1, d2, invert=invert)
+    assert_eq(r_a, r_d)
+
+
+@pytest.mark.parametrize("assume_unique", [True, False])
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="np.isin is new in numpy 1.13")
+def test_isin_assume_unique(assume_unique):
+    a1 = np.arange(10)
+    d1 = da.from_array(a1, chunks=(5,))
+
+    test_elements = np.arange(0, 10, 2)
+    r_a = np.isin(a1, test_elements, assume_unique=assume_unique)
+    r_d = da.isin(d1, test_elements, assume_unique=assume_unique)
+    assert_eq(r_a, r_d)
+
+
 def _maybe_len(l):
     try:
         return len(l)
@@ -710,13 +767,35 @@ def test_ravel():
     assert_eq(np.ravel(x), da.ravel(a))
 
 
-def test_squeeze():
-    x = da.ones((10, 1), chunks=(3, 1))
+@pytest.mark.parametrize('is_func', [True, False])
+@pytest.mark.parametrize('axis', [None, 0, -1, (0, -1)])
+def test_squeeze(is_func, axis):
+    a = np.arange(10)[None, :, None, None]
+    d = da.from_array(a, chunks=(1, 3, 1, 1))
 
-    assert_eq(x.squeeze(), x.compute().squeeze())
+    if is_func:
+        a_s = np.squeeze(a, axis=axis)
+        d_s = da.squeeze(d, axis=axis)
+    else:
+        a_s = a.squeeze(axis=axis)
+        d_s = d.squeeze(axis=axis)
 
-    assert x.squeeze().chunks == ((3, 3, 3, 1),)
-    assert same_keys(x.squeeze(), x.squeeze())
+    assert_eq(d_s, a_s)
+    assert same_keys(d_s, da.squeeze(d, axis=axis))
+
+    if axis is None:
+        axis = tuple(range(a.ndim))
+    else:
+        axis = axis if isinstance(axis, tuple) else (axis,)
+        axis = tuple(i % a.ndim for i in axis)
+    axis = tuple(
+        i for i, c in enumerate(d.chunks) if i in axis and len(c) == 1
+    )
+
+    exp_d_s_chunks = tuple(
+        c for i, c in enumerate(d.chunks) if i not in axis
+    )
+    assert d_s.chunks == exp_d_s_chunks
 
 
 def test_vstack():
@@ -865,6 +944,50 @@ def test_choose():
     index_numpy = x > 5
     assert_eq(index_dask.choose([0, d]), index_numpy.choose([0, x]))
     assert_eq(index_dask.choose([-d, d]), index_numpy.choose([-x, x]))
+
+
+def test_piecewise():
+    np.random.seed(1337)
+
+    x = np.random.randint(10, size=(15, 16))
+    d = da.from_array(x, chunks=(4, 5))
+
+    assert_eq(
+        np.piecewise(x, [x < 5, x >= 5], [lambda e, v, k: e + 1, 5], 1, k=2),
+        da.piecewise(d, [d < 5, d >= 5], [lambda e, v, k: e + 1, 5], 1, k=2)
+    )
+
+
+@pytest.mark.skipif(
+    LooseVersion(np.__version__) < '1.12.0',
+    reason=textwrap.dedent(
+        """\
+            NumPy piecewise mishandles the otherwise condition pre-1.12.0.
+
+            xref: https://github.com/numpy/numpy/issues/5737
+        """
+    )
+)
+def test_piecewise_otherwise():
+    np.random.seed(1337)
+
+    x = np.random.randint(10, size=(15, 16))
+    d = da.from_array(x, chunks=(4, 5))
+
+    assert_eq(
+        np.piecewise(
+            x,
+            [x > 5, x <= 2],
+            [lambda e, v, k: e + 1, lambda e, v, k: v * e, lambda e, v, k: 0],
+            1, k=2
+        ),
+        da.piecewise(
+            d,
+            [d > 5, d <= 2],
+            [lambda e, v, k: e + 1, lambda e, v, k: v * e, lambda e, v, k: 0],
+            1, k=2
+        )
+    )
 
 
 def test_argwhere():
@@ -1172,3 +1295,175 @@ def test_result_type():
     # dask 0d-arrays are NOT treated like scalars
     c = da.from_array(np.ones((), np.float64), chunks=())
     assert da.result_type(a, c) == np.float64
+
+
+def _numpy_and_dask_inputs(input_sigs):
+    # einsum label dimensions
+    _dimensions = {'a': 5, 'b': 6, 'c': 7,
+                   'd': 5, 'e': 6, 'f': 10,
+                   'g': 1, 'h': 2, '*': 11}
+
+    # dimension chunks sizes
+    _chunks = {'a': (2, 3), 'b': (2, 3, 1), 'c': (2, 3, 2),
+               'd': (4, 1), 'e': (2, 4),    'f': (1, 2, 3, 4),
+               'g': 1,      'h': (1, 1),    '*': 11}
+
+    def _shape_from_string(s):
+        return tuple(_dimensions[c] for c in s)
+
+    def _chunks_from_string(s):
+        return tuple(_chunks[c] for c in s)
+
+    shapes = [_shape_from_string(s) for s in input_sigs]
+    chunks = [_chunks_from_string(s) for s in input_sigs]
+
+    np_inputs = [np.random.random(s) for s in shapes]
+    da_inputs = [da.from_array(i, chunks=c) for i, c in zip(np_inputs, chunks)]
+
+    return np_inputs, da_inputs
+
+
+@pytest.mark.parametrize('einsum_signature', [
+    'abc,bad->abcd',
+    'abcdef,bcdfg->abcdeg',
+    'ea,fb,abcd,gc,hd->efgh',
+    'ab,b',
+    'aa',
+    'a,a->',
+    'a,a->a',
+    'a,a',
+    'a,b',
+    'a,b,c',
+    'a',
+    'ba,b',
+    'ba,b->',
+    'defab,fedbc->defac',
+    'ab...,bc...->ac...',
+    'a...a',
+    'abc...->cba...',
+    '...ab->...a',
+    'a...a->a...',
+    # Following 2 from # https://stackoverflow.com/a/19203475/1611416
+    '...abc,...abcd->...d',
+    'ab...,b->ab...',
+    # https://github.com/dask/dask/pull/3412#discussion_r182413444
+    'aa->a',
+    'ab,ab,c->c',
+    'aab,bc->ac',
+    'aab,bcc->ac',
+    'fdf,cdd,ccd,afe->ae',
+    'fff,fae,bef,def->abd',
+])
+def test_einsum(einsum_signature):
+    input_sigs = (einsum_signature.split('->')[0]
+                                  .replace("...", "*")
+                                  .split(','))
+
+    np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
+
+    assert_eq(np.einsum(einsum_signature, *np_inputs),
+              da.einsum(einsum_signature, *da_inputs))
+
+
+@pytest.mark.skipif(not einsum_can_optimize,
+                    reason="np.einsum(optimize) unavailable")
+@pytest.mark.parametrize('optimize_opts', [
+    (True, False),
+    ('greedy', False),
+    ('optimal', False)
+])
+def test_einsum_optimize(optimize_opts):
+    sig = 'ea,fb,abcd,gc,hd->efgh'
+    input_sigs = sig.split('->')[0].split(',')
+    np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
+
+    opt1, opt2 = optimize_opts
+
+    assert_eq(np.einsum(sig, *np_inputs, optimize=opt1),
+              da.einsum(sig, *np_inputs, optimize=opt2))
+
+    assert_eq(np.einsum(sig, *np_inputs, optimize=opt2),
+              da.einsum(sig, *np_inputs, optimize=opt1))
+
+
+@pytest.mark.parametrize('order', ['C', 'F', 'A', 'K'])
+def test_einsum_order(order):
+    sig = 'ea,fb,abcd,gc,hd->efgh'
+    input_sigs = sig.split('->')[0].split(',')
+    np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
+
+    assert_eq(np.einsum(sig, *np_inputs, order=order),
+              da.einsum(sig, *np_inputs, order=order))
+
+
+@pytest.mark.parametrize('casting', [
+    'no', 'equiv', 'safe', 'same_kind', 'unsafe'])
+def test_einsum_casting(casting):
+    sig = 'ea,fb,abcd,gc,hd->efgh'
+    input_sigs = sig.split('->')[0].split(',')
+    np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
+
+    assert_eq(np.einsum(sig, *np_inputs, casting=casting),
+              da.einsum(sig, *np_inputs, casting=casting))
+
+
+def test_einsum_broadcasting_contraction():
+    a = np.random.rand(1, 5, 4)
+    b = np.random.rand(4, 6)
+    c = np.random.rand(5, 6)
+    d = np.random.rand(10)
+
+    d_a = da.from_array(a, chunks=(1, (2, 3), (2, 2)))
+    d_b = da.from_array(b, chunks=((2, 2), (4, 2)))
+    d_c = da.from_array(c, chunks=((2, 3), (4, 2)))
+    d_d = da.from_array(d, chunks=((7, 3)))
+
+    np_res = np.einsum('ijk,kl,jl', a, b, c)
+    da_res = da.einsum('ijk,kl,jl', d_a, d_b, d_c)
+    assert_eq(np_res, da_res)
+
+    mul_res = da_res * d
+
+    np_res = np.einsum('ijk,kl,jl,i->i', a, b, c, d)
+    da_res = da.einsum('ijk,kl,jl,i->i', d_a, d_b, d_c, d_d)
+    assert_eq(np_res, da_res)
+    assert_eq(np_res, mul_res)
+
+
+def test_einsum_broadcasting_contraction2():
+    a = np.random.rand(1, 1, 5, 4)
+    b = np.random.rand(4, 6)
+    c = np.random.rand(5, 6)
+    d = np.random.rand(7, 7)
+
+    d_a = da.from_array(a, chunks=(1, 1, (2, 3), (2, 2)))
+    d_b = da.from_array(b, chunks=((2, 2), (4, 2)))
+    d_c = da.from_array(c, chunks=((2, 3), (4, 2)))
+    d_d = da.from_array(d, chunks=((7, 3)))
+
+    np_res = np.einsum('abjk,kl,jl', a, b, c)
+    da_res = da.einsum('abjk,kl,jl', d_a, d_b, d_c)
+    assert_eq(np_res, da_res)
+
+    mul_res = da_res * d
+
+    np_res = np.einsum('abjk,kl,jl,ab->ab', a, b, c, d)
+    da_res = da.einsum('abjk,kl,jl,ab->ab', d_a, d_b, d_c, d_d)
+    assert_eq(np_res, da_res)
+    assert_eq(np_res, mul_res)
+
+
+def test_einsum_broadcasting_contraction3():
+    a = np.random.rand(1, 5, 4)
+    b = np.random.rand(4, 1, 6)
+    c = np.random.rand(5, 6)
+    d = np.random.rand(7, 7)
+
+    d_a = da.from_array(a, chunks=(1, (2, 3), (2, 2)))
+    d_b = da.from_array(b, chunks=((2, 2), 1,  (4, 2)))
+    d_c = da.from_array(c, chunks=((2, 3), (4, 2)))
+    d_d = da.from_array(d, chunks=((7, 3)))
+
+    np_res = np.einsum('ajk,kbl,jl,ab->ab', a, b, c, d)
+    da_res = da.einsum('ajk,kbl,jl,ab->ab', d_a, d_b, d_c, d_d)
+    assert_eq(np_res, da_res)

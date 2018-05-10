@@ -630,6 +630,7 @@ def test_reductions(split_every):
                      (boolds, bools)]:
         assert isinstance(dds, dd.Series)
         assert isinstance(pds, pd.Series)
+
         assert_eq(dds.sum(split_every=split_every), pds.sum())
         assert_eq(dds.prod(split_every=split_every), pds.prod())
         assert_eq(dds.min(split_every=split_every), pds.min())
@@ -688,9 +689,49 @@ def test_reductions(split_every):
     # nunique is performed using drop-duplicates
     assert_dask_graph(ddf1.b.nunique(split_every=split_every), 'drop-duplicates')
 
+    # testing index
     assert_eq(ddf1.index.min(split_every=split_every), pdf1.index.min())
     assert_eq(ddf1.index.max(split_every=split_every), pdf1.index.max())
     assert_eq(ddf1.index.count(split_every=split_every), pd.notnull(pdf1.index).sum())
+
+
+@pytest.mark.parametrize('frame,axis,out',
+                         [(pd.DataFrame({'a': [1, 2, 3],
+                                         'b': [4, 5, 6]},
+                                        index=[0, 1, 3]),
+                          0, pd.Series([])),
+                          (pd.DataFrame({'a': [1, 2, 3],
+                                        'b': [4, 5, 6]},
+                                        index=[0, 1, 3]),
+                           1, pd.Series([])),
+                          (pd.Series([1, 2.5, 6]), None, None)])
+@pytest.mark.parametrize('redfunc', ['sum', 'prod', 'min', 'max', 'mean', 'var', 'std'])
+def test_reductions_out(frame, axis, out, redfunc):
+    dsk_in = dd.from_pandas(frame, 3)
+    dsk_out = dd.from_pandas(pd.Series([0]), 1).sum()
+
+    if out is not None:
+        dsk_out = dd.from_pandas(out, 3)
+
+    np_redfunc = getattr(np, redfunc)
+    pd_redfunc = getattr(frame.__class__, redfunc)
+    dsk_redfunc = getattr(dsk_in.__class__, redfunc)
+
+    if redfunc in ['var', 'std']:
+        # numpy has default ddof value 0 while
+        # dask and pandas have 1, so ddof should be passed
+        # explicitly when calling np.var(dask)
+        np_redfunc(dsk_in, axis=axis, ddof=1, out=dsk_out)
+    else:
+        np_redfunc(dsk_in, axis=axis, out=dsk_out)
+
+    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
+
+    dsk_redfunc(dsk_in, axis=axis, split_every=False, out=dsk_out)
+    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
+
+    dsk_redfunc(dsk_in, axis=axis, split_every=2, out=dsk_out)
+    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
 
 
 @pytest.mark.parametrize('split_every', [False, 2])
@@ -710,6 +751,31 @@ def test_allany(split_every):
 
     assert_eq(ddf.A.all(split_every=split_every), df.A.all())
     assert_eq(ddf.A.any(split_every=split_every), df.A.any())
+
+    # testing numpy functions with out param
+    ddf_out_axis_default = dd.from_pandas(pd.Series([False, False, False, False, False],
+                                                    index=['A', 'B', 'C', 'D', 'E']), 10)
+    ddf_out_axis1 = dd.from_pandas(pd.Series(np.random.choice([True, False], size=(100,))), 10)
+
+    # all
+    ddf.all(split_every=split_every, out=ddf_out_axis_default)
+    assert_eq(ddf_out_axis_default, df.all())
+
+    ddf.all(axis=1, split_every=split_every, out=ddf_out_axis1)
+    assert_eq(ddf_out_axis1, df.all(axis=1))
+
+    ddf.all(split_every=split_every, axis=0, out=ddf_out_axis_default)
+    assert_eq(ddf_out_axis_default, df.all(axis=0))
+
+    # any
+    ddf.any(split_every=split_every, out=ddf_out_axis_default)
+    assert_eq(ddf_out_axis_default, df.any())
+
+    ddf.any(axis=1, split_every=split_every, out=ddf_out_axis1)
+    assert_eq(ddf_out_axis1, df.any(axis=1))
+
+    ddf.any(split_every=split_every, axis=0, out=ddf_out_axis_default)
+    assert_eq(ddf_out_axis_default, df.any(axis=0))
 
 
 @pytest.mark.parametrize('split_every', [False, 2])

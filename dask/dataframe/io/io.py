@@ -457,15 +457,7 @@ def to_records(df):
     dask.dataframe._Frame.values
     dask.dataframe.from_dask_array
     """
-    from ...array.core import Array
-    if not isinstance(df, (DataFrame, Series)):
-        raise TypeError("df must be either DataFrame or Series")
-    name = 'to-records-' + tokenize(df)
-    dsk = {(name, i): (M.to_records, key)
-           for (i, key) in enumerate(df.__dask_keys__())}
-    x = df._meta.to_records()
-    chunks = ((np.nan,) * df.npartitions,)
-    return Array(merge(df.dask, dsk), name, chunks, x.dtype)
+    return df.map_partitions(M.to_records)
 
 
 @insert_meta_param_description

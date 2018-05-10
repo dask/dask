@@ -2,20 +2,137 @@ Changelog
 =========
 
 
-0.16.2 / 2018-MM-DD
+0.18.0 / 2018-MM-DD
 -------------------
 
 Array
 +++++
 
-- Update error handling when len is called with empty chunks (:issue:`3058`) `Xander Johnson`_
-- Fixes a metadata bug with ``store``'s ``return_stored`` option (:pr:`3064`) `John A Kirkham`_
-- Fix a bug in ``optimization.fuse_slice`` to properly handle when first input is ``None`` (:pr:`3076`) `James Bourbeau`_
-- Add ``apply_gufunc`` and ``gufunc`` (:pr:`#3109`) `Markus Gonser`_
+- Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
+
+Dataframe
++++++++++
+
+Bag
++++
+
+-
+
+Core
+++++
+
+-
+
+0.17.4 / 2018-05-03
+-------------------
+
+Dataframe
++++++++++
+
+
+-  Add support for indexing Dask DataFrames with string subclasses (:pr:`3461`) `James Bourbeau`_
+-  Allow using both sorted_index and chunksize in read_hdf (:pr:`3463`) `Pierre Bartet`_
+-  Pass filesystem to arrow piece reader (:pr:`3466`) `Martin Durant`_
+-  Switches to using dask.compat string_types (#3462) `James Bourbeau`_
+
+
+0.17.3 / 2018-05-02
+-------------------
+
+Array
++++++
+
+- Add ``einsum`` for Dask Arrays (:pr:`3412`) `Simon Perkins`_
+- Add ``piecewise`` for Dask Arrays (:pr:`3350`) `John A Kirkham`_
+- Fix handling of ``nan`` in ``broadcast_shapes`` (:pr:`3356`) `John A Kirkham`_
+- Add ``isin`` for dask arrays (:pr:`3363`). `Stephan Hoyer`_
+- Overhauled ``topk`` for Dask Arrays: faster algorithm, particularly for large k's; added support
+  for multiple axes, recursive aggregation, and an option to pick the bottom k elements instead.
+  (:pr:`3395`) `Guido Imperiale`_
+- The ``topk`` API has changed from topk(k, array) to the more conventional topk(array, k).
+  The legacy API still works but is now deprecated. (:pr:`2965`) `Guido Imperiale`_
+- New function ``argtopk`` for Dask Arrays (:pr:`3396`) `Guido Imperiale`_
+- Fix handling partial depth and boundary in ``map_overlap`` (:pr:`3445`) `John A Kirkham`_
+- Add ``gradient`` for Dask Arrays (:pr:`3434`) `John A Kirkham`_
+
 
 DataFrame
 +++++++++
 
+- Allow `t` as shorthand for `table` in `to_hdf` for pandas compatibility (:pr:`3330`) `Jörg Dietrich`_
+- Added top level `isna` method for Dask DataFrames (:pr:`3294`) `Christopher Ren`_
+- Fix selection on partition column on ``read_parquet`` for ``engine="pyarrow"`` (:pr:`3207`) `Uwe Korn`_
+- Added DataFrame.squeeze method (:pr:`3366`) `Christopher Ren`_
+- Added `infer_divisions` option to ``read_parquet`` to specify whether read engines should compute divisions (:pr:`3387`) `Jon Mease`_
+- Added support for inferring division for ``engine="pyarrow"`` (:pr:`3387`) `Jon Mease`_
+- Provide more informative error message for meta= errors (:pr:`3343`) `Matthew Rocklin`_
+- add orc reader (:pr:`3284`) `Martin Durant`_
+- Default compression for parquet now always Snappy, in line with pandas (:pr:`3373`) `Martin Durant`_
+- Fixed bug in Dask DataFrame and Series comparisons with NumPy scalars (:pr:`3436`) `James Bourbeau`_
+- Remove outdated requirement from repartition docstring (:pr:`3440`) `Jörg Dietrich`_
+- Fixed bug in aggregation when only a Series is selected (:pr:`3446`) `Jörg Dietrich`_
+- Add default values to make_timeseries (:pr:`3421`) `Matthew Rocklin`_
+
+Bag
++++
+
+-
+
+Core
+++++
+
+- Support traversing collections in persist, visualize, and optimize (:pr:`3410`) `Jim Crist`_
+- Add schedule= keyword to compute and persist.  This replaces common use of the get= keyword (:pr:`3448`) `Matthew Rocklin`_
+
+
+0.17.2 / 2018-03-21
+-------------------
+
+Array
++++++
+
+- Add ``broadcast_arrays`` for Dask Arrays (:pr:`3217`) `John A Kirkham`_
+- Add ``bitwise_*`` ufuncs (:pr:`3219`) `John A Kirkham`_
+- Add optional ``axis`` argument to ``squeeze`` (:pr:`3261`) `John A Kirkham`_
+- Validate inputs to atop (:pr:`3307`) `Matthew Rocklin`_
+- Avoid calls to astype in concatenate if all parts have the same dtype (:pr:`3301`) `Martin Durant`_
+
+DataFrame
++++++++++
+
+- Fixed bug in shuffle due to aggressive truncation (:pr:`3201`) `Matthew Rocklin`_
+- Support specifying categorical columns on ``read_parquet`` with ``categories=[…]`` for ``engine="pyarrow"`` (:pr:`3177`) `Uwe Korn`_
+- Add ``dd.tseries.Resampler.agg`` (:pr:`3202`) `Richard Postelnik`_
+- Support operations that mix dataframes and arrays (:pr:`3230`) `Matthew Rocklin`_
+- Support extra Scalar and Delayed args in ``dd.groupby._Groupby.apply`` (:pr:`3256`) `Gabriele Lanaro`_
+
+Bag
++++
+
+- Support joining against single-partitioned bags and delayed objects (:pr:`3254`) `Matthew Rocklin`_
+
+Core
+++++
+
+- Fixed bug when using unexpected but hashable types for keys (:pr:`3238`) `Daniel Collins`_
+- Fix bug in task ordering so that we break ties consistently with the key name (:pr:`3271`) `Matthew Rocklin`_
+- Avoid sorting tasks in order when the number of tasks is very large (:pr:`3298`) `Matthew Rocklin`_
+
+
+0.17.1 / 2018-02-22
+-------------------
+
+Array
++++++
+
+- Corrected dimension chunking in indices (:issue:`3166`, :pr:`3167`) `Simon Perkins`_
+- Inline ``store_chunk`` calls for ``store``'s ``return_stored`` option (:pr:`3153`) `John A Kirkham`_
+- Compatibility with struct dtypes for NumPy 1.14.1 release (:pr:`3187`) `Matthew Rocklin`_
+
+DataFrame
++++++++++
+
+- Bugfix to allow column assignment of pandas datetimes(:pr:`3164`) `Max Epstein`_
 
 Bag
 +++
@@ -24,15 +141,63 @@ Bag
 Core
 ++++
 
+- New file-system for HTTP(S), allowing direct loading from specific URLs (:pr:`3160`) `Martin Durant`_
+- Fix bug when tokenizing partials with no keywords (:pr:`3191`) `Matthew Rocklin`_
+- Use more recent LZ4 API (:pr:`3157`) `Thrasibule`_
+- Introduce output stream parameter for progress bar (:pr:`3185`) `Dieter Weber`_
+
+
+0.17.0 / 2018-02-09
+-------------------
+
+Array
++++++
+
+- Added a support object-type arrays for nansum, nanmin, and nanmax (:issue:`3133`) `Keisuke Fujii`_
+- Update error handling when len is called with empty chunks (:issue:`3058`) `Xander Johnson`_
+- Fixes a metadata bug with ``store``'s ``return_stored`` option (:pr:`3064`) `John A Kirkham`_
+- Fix a bug in ``optimization.fuse_slice`` to properly handle when first input is ``None`` (:pr:`3076`) `James Bourbeau`_
+- Support arrays with unknown chunk sizes in percentile (:pr:`3107`) `Matthew Rocklin`_
+- Tokenize scipy.sparse arrays and np.matrix (:pr:`3060`) `Roman Yurchak`_
+
+
+DataFrame
++++++++++
+- Support month timedeltas in repartition(freq=...) (:pr:`3110`) `Matthew Rocklin`_
+- Avoid mutation in dataframe groupby tests (:pr:`3118`) `Matthew Rocklin`_
+- ``read_csv``, ``read_table``, and ``read_parquet`` accept iterables of paths
+  (:pr:`3124`) `Jim Crist`_
+- Deprecates the ``dd.to_delayed`` *function* in favor of the existing method
+  (:pr:`3126`) `Jim Crist`_
+- Return dask.arrays from df.map_partitions calls when the UDF returns a numpy array (:pr:`3147`) `Matthew Rocklin`_
+- Change handling of ``columns`` and ``index`` in ``dd.read_parquet`` to be more
+  consistent, especially in handling of multi-indices (:pr:`3149`) `Jim Crist`_
+- fastparquet append=True allowed to create new dataset (:pr:`3097`) `Martin Durant`_
+- dtype rationalization for sql queries (:pr:`3100`) `Martin Durant`_
+
+Bag
++++
+
+- Document ``bag.map_paritions`` function may recieve either a list or generator. (:pr:`3150`) `Nir`_
+
+Core
+++++
+
 - Change default task ordering to prefer nodes with few dependents and then
   many downstream dependencies (:pr:`3056`) `Matthew Rocklin`_
-- Add color= option to visualize to color by task order (:pr:`3057`) `Matthew Rocklin`_
+- Add color= option to visualize to color by task order (:pr:`3057`) (:pr:`3122`) `Matthew Rocklin`_
 - Deprecate ``dask.bytes.open_text_files`` (:pr:`3077`) `Jim Crist`_
 - Remove short-circuit hdfs reads handling due to maintenance costs. May be
   re-added in a more robust manner later (:pr:`3079`) `Jim Crist`_
 - Add ``dask.base.optimize`` for optimizing multiple collections without
   computing. (:pr:`3071`) `Jim Crist`_
 - Rename ``dask.optimize`` module to ``dask.optimization`` (:pr:`3071`) `Jim Crist`_
+- Change task ordering to do a full traversal (:pr:`3066`) `Matthew Rocklin`_
+- Adds an ``optimize_graph`` keyword to all ``to_delayed`` methods to allow
+  controlling whether optimizations occur on conversion. (:pr:`3126`) `Jim Crist`_
+- Support using ``pyarrow`` for hdfs integration (:pr:`3123`) `Jim Crist`_
+- Move HDFS integration and tests into dask repo (:pr:`3083`) `Jim Crist`_
+- Remove write_bytes (:pr:`3116`) `Jim Crist`_
 
 
 0.16.1 / 2018-01-09
@@ -66,7 +231,7 @@ DataFrame
 - Prevent ``bool()`` coercion from calling compute (:pr:`2958`) `Albert DeFusco`_
 - ``DataFrame.read_sql()`` (:pr:`2928`) to an empty database tables returns an empty dask dataframe `Apostolos Vlachopoulos`_
 - Compatability for reading Parquet files written by PyArrow 0.8.0 (:pr:`2973`) `Tom Augspurger`_
-- Correctly handle the column name (`df.columns.name`) when reading in ``dd.read_parquet`` (:pr:2973`) `Tom Augspurger`_
+- Correctly handle the column name (`df.columns.name`) when reading in ``dd.read_parquet`` (:pr:`2973`) `Tom Augspurger`_
 - Fixed ``dd.concat`` losing the index dtype when the data contained a categorical (:issue:`2932`) `Tom Augspurger`_
 - Add ``dd.Series.rename`` (:pr:`3027`) `Jim Crist`_
 - ``DataFrame.merge()`` now supports merging on a combination of columns and the index (:pr:`2960`) `Jon Mease`_
@@ -106,12 +271,12 @@ DataFrame
 +++++++++
 
 - Support ``pyarrow`` in ``dd.to_parquet`` (:pr:`2868`) `Jim Crist`_
-- Fixed ``DataFrame.quantile`` and ``Series.quantile`` returning ``nan`` when missing values are present (:pr:`2791`:) `Tom Augspurger`_
-- Fixed ``DataFrame.quantile`` losing the result ``.name`` when ``q`` is a scalar (:pr:`2791`:) `Tom Augspurger`_
+- Fixed ``DataFrame.quantile`` and ``Series.quantile`` returning ``nan`` when missing values are present (:pr:`2791`) `Tom Augspurger`_
+- Fixed ``DataFrame.quantile`` losing the result ``.name`` when ``q`` is a scalar (:pr:`2791`) `Tom Augspurger`_
 - Fixed ``dd.concat`` return a ``dask.Dataframe`` when concatenating a single series along the columns, matching pandas' behavior (:pr:`2800`) `James Munroe`_
 - Fixed default inplace parameter for ``DataFrame.eval`` to match the pandas defualt for pandas >= 0.21.0 (:pr:`2838`) `Tom Augspurger`_
 - Fix exception when calling ``DataFrame.set_index`` on text column where one of the partitions was empty (:pr:`2831`) `Jesse Vogt`_
-- Do not raise exception when calling ``DataFrame.set_index`` on empty dataframe (:pr:`2827`) `Jess Vogt`_
+- Do not raise exception when calling ``DataFrame.set_index`` on empty dataframe (:pr:`2827`) `Jesse Vogt`_
 - Fixed bug in ``Dataframe.fillna`` when filling with a ``Series`` value (:pr:`2810`) `Tom Augspurger`_
 - Deprecate old argument ordering in ``dd.to_parquet`` to better match convention of putting the dataframe first (:pr:`2867`) `Jim Crist`_
 - df.astype(categorical_dtype -> known categoricals (:pr:`2835`) `Jim Crist`_
@@ -122,7 +287,7 @@ DataFrame
 - Error nicely when parsing dates in read_csv (:pr:`2863`) `Jim Crist`_
 - Cleanup handling of passing filesystem objects to PyArrow readers (:pr:`2527`) `@fjetter`_
 - Support repartitioning even if there are no divisions (:pr:`2873`) `@Ced4`_
-- Support reading/writing to hdfs using ``pyarrow`` in ``dd.to_parquet`` (:pr:`2894`:, :pr:`2881`:) `Jim Crist`_
+- Support reading/writing to hdfs using ``pyarrow`` in ``dd.to_parquet`` (:pr:`2894`, :pr:`2881`) `Jim Crist`_
 
 
 Core
@@ -132,7 +297,7 @@ Core
 -  Calling compute within a dask.distributed task defaults to distributed scheduler (:pr:`2762`) `Matthew Rocklin`_
 -  Auto-import gcsfs when gcs:// protocol is used (:pr:`2776`) `Matthew Rocklin`_
 -  Fully remove dask.async module, use dask.local instead (:pr:`2828`) `Thomas Caswell`_
--  Compatability with bokeh 0.12.10 (:pr:`:2844`) `Tom Augspurger`_
+-  Compatability with bokeh 0.12.10 (:pr:`2844`) `Tom Augspurger`_
 -  Reduce test memory usage (:pr:`2782`) `Jim Crist`_
 -  Add Dask collection interface (:pr:`2748`) `Jim Crist`_
 -  Update Dask collection interface during XArray integration (:pr:`2847`) `Matthew Rocklin`_
@@ -167,7 +332,7 @@ DataFrame
 Bag
 +++
 
-- Add tree reduction support for foldby (:pr: `2710`)
+- Add tree reduction support for foldby (:pr:`2710`)
 
 
 Core
@@ -685,7 +850,7 @@ Array
 Bag
 ++++
 
-- Rename ``from_filename``s to ``read_text``
+- Rename ``from_filename``\ s to ``read_text``
 - Remove ``from_s3`` in favor of ``read_text('s3://...')``
 
 DataFrame
@@ -751,7 +916,7 @@ Array
 
 - Changed default array reduction split from 32 to 4
 - Linear algebra, ``tril``, ``triu``, ``LU``, ``inv``, ``cholesky``,
-  ``solve``, ``solve_triangular``, eye``, ``lstsq``, ``diag``, ``corrcoef``.
+  ``solve``, ``solve_triangular``, ``eye``, ``lstsq``, ``diag``, ``corrcoef``.
 
 Bag
 ++++
@@ -909,6 +1074,7 @@ Other
 - There is also a gitter chat room and a stackoverflow tag
 
 
+.. _`Guido Imperiale`: https://github.com/crusaderky
 .. _`John A Kirkham`: https://github.com/jakirkham
 .. _`Matthew Rocklin`: https://github.com/mrocklin
 .. _`Jim Crist`: https://github.com/jcrist
@@ -929,3 +1095,19 @@ Other
 .. _`Martijn Arts`: https://github.com/mfaafm
 .. _`Jon Mease`: https://github.com/jmmease
 .. _`Xander Johnson`: https://github.com/metasyn
+.. _`Nir`: https://github.com/nirizr
+.. _`Keisuke Fujii`: https://github.com/fujiisoup
+.. _`Roman Yurchak`: https://github.com/rth
+.. _`Max Epstein`: https://github.com/MaxPowerWasTaken
+.. _`Simon Perkins`: https://github.com/sjperkins
+.. _`Richard Postelnik`: https://github.com/postelrich
+.. _`Daniel Collins`: https://github.com/dancollins34
+.. _`Gabriele Lanaro`: https://github.com/gabrielelanaro
+.. _`Jörg Dietrich`: https://github.com/joergdietrich
+.. _`Christopher Ren`: https://github.com/cr458
+.. _`Martin Durant`: https://github.com/martindurant
+.. _`Thrasibule`: https://github.com/thrasibule
+.. _`Dieter Weber`: https://github.com/uellue
+.. _`Apostolos Vlachopoulos`: https://github.com/avlahop
+.. _`Jesse Vogt`: https://github.com/jessevogt
+.. _`Pierre Bartet`: https://github.com/Pierre-Bartet

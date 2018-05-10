@@ -1,4 +1,4 @@
-FROM ubuntu:trusty
+FROM ubuntu:xenial
 
 RUN apt-get update && \
     apt-get install -y -q curl bzip2 git && \
@@ -7,11 +7,11 @@ RUN apt-get update && \
 # Install CDH5 in a single node: Pseudo Distributed
 # Docs: http://www.cloudera.com/content/www/en-us/documentation/enterprise/latest/topics/cdh_qs_yarn_pseudo.html
 ADD docker-files/cloudera.pref /etc/apt/preferences.d/cloudera.pref
-RUN curl -s http://archive.cloudera.com/cdh5/ubuntu/trusty/amd64/cdh/archive.key | apt-key add - && \
-    echo 'deb [arch=amd64] http://archive.cloudera.com/cdh5/ubuntu/trusty/amd64/cdh trusty-cdh5 contrib' > /etc/apt/sources.list.d/cloudera.list && \
-    echo 'deb-src http://archive.cloudera.com/cdh5/ubuntu/trusty/amd64/cdh trusty-cdh5 contrib' >> /etc/apt/sources.list.d/cloudera.list && \
+RUN curl -s http://archive.cloudera.com/cdh5/ubuntu/xenial/amd64/cdh/archive.key | apt-key add - && \
+    echo 'deb [arch=amd64] http://archive.cloudera.com/cdh5/ubuntu/xenial/amd64/cdh xenial-cdh5 contrib' > /etc/apt/sources.list.d/cloudera.list && \
+    echo 'deb-src http://archive.cloudera.com/cdh5/ubuntu/xenial/amd64/cdh xenial-cdh5 contrib' >> /etc/apt/sources.list.d/cloudera.list && \
     apt-get update && \
-    apt-get install -y -q openjdk-7-jre-headless hadoop-conf-pseudo && \
+    apt-get install -y -q sudo openjdk-8-jre-headless hadoop-conf-pseudo libhdfs0 && \
     sudo -u hdfs hdfs namenode -format -force && \
     for x in `cd /etc/init.d ; ls hadoop-hdfs-*` ; do sudo service $x start ; done && \
     bash /usr/lib/hadoop/libexec/init-hdfs.sh && \
@@ -34,6 +34,9 @@ ENV PATH /opt/conda/bin:$PATH
 
 # Notifies the dask tests to run
 ENV DASK_RUN_HDFS_TESTS true
+
+# Needed for libhdfs
+ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64/jre/
 
 EXPOSE 8020 50070
 

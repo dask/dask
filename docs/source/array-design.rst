@@ -66,9 +66,9 @@ key-value pairs required to eventually compute the desired values, for example
    }
 
 The name of an ``Array`` object can be found in the ``name`` attribute.  One
-can get a nested list of keys with the ``._keys()`` method.  One can flatten
-down this list with ``dask.array.core.flatten()``; this is sometimes useful
-when building new dictionaries.
+can get a nested list of keys with the ``.__dask_keys__()`` method.  One can
+flatten down this list with ``dask.array.core.flatten()``; this is sometimes
+useful when building new dictionaries.
 
 Chunks
 ------

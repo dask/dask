@@ -3,10 +3,12 @@ distributed = pytest.importorskip('distributed')
 
 from functools import partial
 import inspect
+from operator import add
 from tornado import gen
 
 import dask
-from dask import persist, delayed
+from dask import persist, delayed, compute
+from dask.delayed import Delayed
 from distributed.client import wait, Client
 from distributed.utils_test import gen_cluster, inc, cluster, loop  # flake8: noqa
 
@@ -33,6 +35,27 @@ def test_persist(c, s, a, b):
 
     yield wait(y2)
     assert y2.key in a.data or y2.key in b.data
+
+
+def test_persist_nested(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop):
+            a = delayed(1) + 5
+            b = a + 1
+            c = a + 2
+            result = persist({'a': a, 'b': [1, 2, b]}, (c, 2), 4, [5])
+            assert isinstance(result[0]['a'], Delayed)
+            assert isinstance(result[0]['b'][2], Delayed)
+            assert isinstance(result[1][0], Delayed)
+
+            sol = ({'a': 6, 'b': [1, 2, 7]}, (8, 2), 4, [5])
+            assert compute(*result) == sol
+
+            res = persist([a, b], c, 4, [5], traverse=False)
+            assert res[0][0] is a
+            assert res[0][1] is b
+            assert res[1].compute() == 8
+            assert res[2:] == (4, [5])
 
 
 def test_futures_to_delayed_dataframe(loop):
@@ -74,12 +97,12 @@ def test_futures_to_delayed_array(loop):
 
 @gen_cluster(client=True)
 def test_local_get_with_distributed_active(c, s, a, b):
-    with dask.set_options(get=dask.get):
+    with dask.set_options(scheduler='sync'):
         x = delayed(inc)(1).persist()
     yield gen.sleep(0.01)
     assert not s.tasks # scheduler hasn't done anything
 
-    y = delayed(inc)(2).persist(get=dask.get)
+    y = delayed(inc)(2).persist(scheduler='sync')
     yield gen.sleep(0.01)
     assert not s.tasks # scheduler hasn't done anything
 
@@ -111,3 +134,17 @@ def test_serializable_groupby_agg(c, s, a, b):
     result = ddf.groupby('y').agg('count')
 
     yield c.compute(result)
+
+
+def test_futures_in_graph(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            x, y = delayed(1), delayed(2)
+            xx = delayed(add)(x, x)
+            yy = delayed(add)(y, y)
+            xxyy = delayed(add)(xx, yy)
+
+            xxyy2 = c.persist(xxyy)
+            xxyy3 = delayed(add)(xxyy2, 10)
+
+            assert xxyy3.compute(scheduler='dask.distributed') == ((1 + 1) + (2 + 2)) + 10

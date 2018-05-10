@@ -65,26 +65,84 @@ from .utils_test import add, inc  # noqa: F401
 def order(dsk, dependencies=None):
     """ Order nodes in dask graph
 
-    The ordering will be a topological sort but will also tend to produce
-    computations that have a small memory footprint.
+    This produces an ordering over our tasks that we use to break ties when
+    executing.  We do this ahead of time to reduce a bit of stress on the
+    scheduler and also to assist in static analysis.
+
+    This currently traverses the graph as a single-threaded scheduler would
+    traverse it.  It breaks ties in the following ways:
+
+    1.  Start from roots nodes that have the largest subgraphs
+    2.  When a node has dependencies that are not yet computed prefer
+        dependencies with large subtrees  (start hard things first)
+    2.  When we reach a node that can be computed we then traverse up and
+        prefer dependents that have small super-trees (few total dependents)
+        (finish existing work quickly)
 
     Examples
     --------
     >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
     >>> order(dsk)
-    {'a': 2, 'c': 1, 'b': 3, 'd': 0}
+    {'a': 0, 'c': 1, 'b': 2, 'd': 3}
     """
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+
+    for k, deps in dependencies.items():
+        deps.discard(k)
+
     dependents = reverse_dict(dependencies)
 
-    ndepts = {k: len(dependents[k]) for k in dependents}
-    ndepends = ndependencies(dependencies, dependents)
+    total_dependencies = ndependencies(dependencies, dependents)
+    total_dependents = ndependents(dependencies, dependents)
 
-    def key(x):
-        return StrComparable((ndepts[x], -ndepends.get(x, 0), x))
+    waiting = {k: set(v) for k, v in dependencies.items()}
 
-    return dfs(dependencies, dependents, key=key)
+    def dependencies_key(x):
+        return total_dependencies.get(x, 0), ReverseStrComparable(x)
+
+    def dependents_key(x):
+        return (total_dependents.get(x, 0),
+                StrComparable(x))
+
+    result = dict()
+    seen = set()  # tasks that should not be added again to the stack
+    i = 0
+
+    stack = [k for k, v in dependents.items() if not v]
+    if len(stack) < 10000:
+        stack = sorted(stack, key=dependencies_key)
+    else:
+        stack = stack[::-1]
+
+    while stack:
+        item = stack.pop()
+
+        if item in result:
+            continue
+
+        deps = waiting[item]
+        if deps:
+            stack.append(item)
+            seen.add(item)
+            if len(deps) < 1000:
+                deps = sorted(deps, key=dependencies_key)
+            stack.extend(deps)
+            continue
+
+        result[item] = i
+        i += 1
+
+        for dep in dependents[item]:
+            waiting[dep].discard(item)
+
+        deps = [d for d in dependents[item]
+                if d not in result and not (d in seen and waiting[d])]
+        if len(deps) < 1000:
+            deps = sorted(deps, key=dependents_key, reverse=True)
+        stack.extend(deps)
+
+    return result
 
 
 def ndependents(dependencies, dependents):
@@ -96,7 +154,6 @@ def ndependents(dependencies, dependents):
 
     Examples
     --------
-
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
 
@@ -124,7 +181,6 @@ def ndependencies(dependencies, dependents):
 
     Examples
     --------
-
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
     >>> sorted(ndependencies(dependencies, dependents).items())
@@ -140,48 +196,6 @@ def ndependencies(dependencies, dependents):
             num_needed[parent] -= 1
             if num_needed[parent] == 0:
                 current.add(parent)
-    return result
-
-
-def dfs(dependencies, dependents, key=lambda x: x):
-    """ Depth First Search of dask graph
-
-    This traverses from root/output nodes down to leaf/input nodes in a depth
-    first manner.  At each node it traverses down its immediate children by the
-    order determined by maximizing the key function.
-
-    As inputs it takes dependencies and dependents as can be computed from
-    ``get_deps(dsk)``.
-
-    Examples
-    --------
-    >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
-    >>> dependencies, dependents = get_deps(dsk)
-
-    >>> sorted(dfs(dependencies, dependents).items())
-    [('a', 3), ('b', 1), ('c', 2), ('d', 0)]
-    """
-    result = dict()
-    i = 0
-
-    roots = [k for k, v in dependents.items() if not v]
-    stack = sorted(roots, key=key, reverse=True)
-    seen = set()
-
-    while stack:
-        item = stack.pop()
-        if item in seen:
-            continue
-        seen.add(item)
-
-        result[item] = i
-        deps = dependencies[item]
-        if deps:
-            deps = deps - seen
-            deps = sorted(deps, key=key, reverse=True)
-            stack.extend(deps)
-        i += 1
-
     return result
 
 
@@ -211,3 +225,21 @@ class StrComparable(object):
             return self.obj < other.obj
         except Exception:
             return str(self.obj) < str(other.obj)
+
+
+class ReverseStrComparable(object):
+    """ Wrap object so that it defaults to string comparison
+
+    Used when sorting in reverse direction.  See StrComparable for normal
+    documentation.
+    """
+    __slots__ = ('obj',)
+
+    def __init__(self, obj):
+        self.obj = obj
+
+    def __lt__(self, other):
+        try:
+            return self.obj > other.obj
+        except Exception:
+            return str(self.obj) > str(other.obj)

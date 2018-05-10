@@ -21,7 +21,7 @@ except ImportError:
 
 from ..core import get_deps
 from ..local import get_sync
-from ..utils import asciitable
+from ..utils import asciitable, is_arraylike
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
@@ -124,7 +124,7 @@ def insert_meta_param_description(*args, **kwargs):
 
 
 @contextmanager
-def raise_on_meta_error(funcname=None):
+def raise_on_meta_error(funcname=None, udf=False):
     """Reraise errors in this block to show metadata inference failure.
 
     Parameters
@@ -138,15 +138,19 @@ def raise_on_meta_error(funcname=None):
     except Exception as e:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
-        msg = ("Metadata inference failed{0}.\n\n"
-               "Original error is below:\n"
-               "------------------------\n"
-               "{1}\n\n"
-               "Traceback:\n"
-               "---------\n"
-               "{2}"
-               ).format(" in `{0}`".format(funcname) if funcname else "",
-                        repr(e), tb)
+        msg = "Metadata inference failed{0}.\n\n"
+        if udf:
+            msg += ("You have supplied a custom function and Dask is unable to \n"
+                    "determine the type of output that that function returns. \n\n"
+                    "To resolve this please provide a meta= keyword.\n"
+                    "The docstring of the Dask function you ran should have more information.\n\n")
+        msg += ("Original error is below:\n"
+                "------------------------\n"
+                "{1}\n\n"
+                "Traceback:\n"
+                "---------\n"
+                "{2}")
+        msg = msg.format(" in `{0}`".format(funcname) if funcname else "", repr(e), tb)
         raise ValueError(msg)
 
 
@@ -265,6 +269,8 @@ def make_meta(x, index=None):
         return x.iloc[0:0]
     elif isinstance(x, pd.Index):
         return x[0:0]
+    elif is_arraylike(x):
+        return x[:0]
     index = index if index is None else index[0:0]
 
     if isinstance(x, dict):
@@ -324,20 +330,20 @@ def _nonempty_index(idx):
                               name=idx.name)
     elif typ is pd.TimedeltaIndex:
         start = np.timedelta64(1, 'D')
-        data = [start, start] if idx.freq is None else None
+        data = [start, start + 1] if idx.freq is None else None
         return pd.TimedeltaIndex(data, start=start, periods=2, freq=idx.freq,
                                  name=idx.name)
     elif typ is pd.CategoricalIndex:
-        if len(idx.categories):
-            data = [idx.categories[0]] * 2
-            cats = idx.categories
-        else:
+        if len(idx.categories) == 0:
             data = _nonempty_index(idx.categories)
             cats = None
+        else:
+            data = _nonempty_index(_nonempty_index(idx.categories))
+            cats = idx.categories
         return pd.CategoricalIndex(data, categories=cats,
                                    ordered=idx.ordered, name=idx.name)
     elif typ is pd.MultiIndex:
-        levels = [_nonempty_index(i) for i in idx.levels]
+        levels = [_nonempty_index(l) for l in idx.levels]
         labels = [[0, 0] for i in idx.levels]
         return pd.MultiIndex(levels=levels, labels=labels, names=idx.names)
     raise TypeError("Don't know how to handle index of "
@@ -501,7 +507,7 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
     import dask.dataframe as dd
     if hasattr(dsk, 'dask'):
         if result is None:
-            result = dsk.compute(get=get_sync)
+            result = dsk.compute(scheduler='sync')
         if isinstance(dsk, dd.Index):
             assert isinstance(result, pd.Index), type(result)
             assert isinstance(dsk._meta, pd.Index), type(dsk._meta)

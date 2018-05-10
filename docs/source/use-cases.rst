@@ -117,7 +117,7 @@ Directory of CSV files on HDFS
 
 The same analyst as above uses dask.dataframe with the dask.distributed_ scheduler
 to analyze terabytes of data on their institution's Hadoop cluster straight
-from Python.  This uses the HDFS3_ Python library for HDFS management
+from Python.  This uses either the hdfs3_ or pyarrow_ Python libraries for HDFS management
 
 This solution is particularly attractive because it stays within the Python
 ecosystem, and uses the speed and algorithm set of Pandas_, a tool with which
@@ -132,7 +132,8 @@ the analyst is already very comfortable.
    df = dd.read_csv('hdfs://data/2016-*.*.csv', parse_dates=['timestamp'])
    df.groupby(df.timestamp.dt.hour).value.mean().compute()
 
-.. _HDFS3: https://hdfs3.readthedocs.io/en/latest/
+.. _hdfs3: https://hdfs3.readthedocs.io/en/latest/
+.. _pyarrow: https://arrow.apache.org/docs/python/index.html
 
 
 Directories of custom format files
@@ -212,7 +213,7 @@ parallelize and load balance the work.
 .. code-block:: python
 
    import dask.threaded
-   results = compute(*values, get=dask.threaded.get)
+   results = compute(*values, scheduler='threads')
 
 **Multiple Processes**:
 
@@ -220,7 +221,7 @@ parallelize and load balance the work.
 
 
    import dask.multiprocessing
-   results = compute(*values, get=dask.multiprocessing.get)
+   results = compute(*values, scheduler='processes')
 
 **Distributed Cluster**:
 
@@ -229,7 +230,7 @@ parallelize and load balance the work.
 
    from dask.distributed import Client
    client = Client("cluster-address:8786")
-   results = compute(*values, get=client.get)
+   results = compute(*values, scheduler='distributed')
 
 
 Complex dependencies
@@ -291,21 +292,18 @@ Algorithm developer
 A graduate student in machine learning is prototyping novel parallel
 algorithms.  They are in a situation much like the financial analyst above
 except that they need to benchmark and profile their computation heavily under
-a variety of situations and scales.  The dask profiling tools (:doc:`single
-machine diagnostics<diagnostics>` and `distributed diagnostics`_) provide the
-feedback they need to understand their parallel performance, including how long
-each task takes, how intense communication is, and their scheduling overhead.
-They scale their algorithm between 1 and 50 cores on single workstations and
-then scale out to a cluster running their computation at thousands of cores.
-They don't have access to an institutional cluster, so instead they use
-dask-ec2_ to easily provision clusters of varying sizes.
+a variety of situations and scales.  The :doc:`dask profiling tools
+<understanding-performance>`  provide the feedback they need to understand
+their parallel performance, including how long each task takes, how intense
+communication is, and their scheduling overhead.  They scale their algorithm
+between 1 and 50 cores on single workstations and then scale out to a cluster
+running their computation at thousands of cores.  They don't have access to an
+institutional cluster, so instead they use :doc:`dask on the cloud
+<setup/cloud>` to easily provision clusters of varying sizes.
 
 Their algorithm is written the same in all cases, drastically reducing the
 cognitive load, and letting the readers of their work experiment with their
 system on their own machines, aiding reproducibility.
-
-.. _`distributed diagnostics`: https://distributed.readthedocs.io/en/latest/web.html
-.. _dask-ec2: https://distributed.readthedocs.io/en/latest/ec2.html
 
 
 Scikit-Learn or Joblib User

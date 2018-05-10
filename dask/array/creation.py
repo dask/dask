@@ -12,7 +12,9 @@ from .. import sharedict
 from ..base import tokenize
 from ..utils import ignoring
 from . import chunk
-from .core import Array, asarray, normalize_chunks, stack, concatenate, broadcast_to
+from .core import (Array, asarray, normalize_chunks,
+                   stack, concatenate,
+                   broadcast_arrays)
 from .wrap import empty, ones, zeros, full
 
 
@@ -314,26 +316,22 @@ def meshgrid(*xi, **kwargs):
 
     xi = [asarray(e) for e in xi]
     xi = [e.flatten() for e in xi]
-    dimensions = [xi[i].size for i in range(len(xi))]
-    chunks = [xi[i].chunks[0] for i in range(len(xi))]
 
     if indexing == "xy" and len(xi) > 1:
         xi[0], xi[1] = xi[1], xi[0]
-        dimensions[0], dimensions[1] = dimensions[1], dimensions[0]
-        chunks[0], chunks[1] = chunks[1], chunks[0]
 
     grid = []
     for i in range(len(xi)):
-        s = len(dimensions) * [None]
+        s = len(xi) * [None]
         s[i] = slice(None)
         s = tuple(s)
 
         r = xi[i][s]
 
-        if not sparse:
-            r = broadcast_to(r, shape=dimensions, chunks=chunks)
-
         grid.append(r)
+
+    if not sparse:
+        grid = broadcast_arrays(*grid)
 
     if indexing == "xy" and len(xi) > 1:
         grid[0], grid[1] = grid[1], grid[0]
@@ -377,7 +375,7 @@ def indices(dimensions, dtype=int, chunks=None):
 
     xi = []
     for i in range(len(dimensions)):
-        xi.append(arange(dimensions[i], dtype=dtype, chunks=chunks[i]))
+        xi.append(arange(dimensions[i], dtype=dtype, chunks=(chunks[i],)))
 
     grid = []
     if np.prod(dimensions):
