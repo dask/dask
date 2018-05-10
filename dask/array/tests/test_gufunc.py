@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+from distutils.version import LooseVersion
+import pytest
 from pytest import raises as assert_raises
 from numpy.testing import assert_array_equal, assert_equal
 import dask.array as da
@@ -145,6 +147,8 @@ def test_gufunc_two_inputs():
     assert_array_equal(x.compute(), 3 * np.ones((2, 4), dtype=int))
 
 
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
+                    reason="`np.vectorize(..., signature=...)` not supported yet")
 def test_gufunc():
     x = da.random.normal(size=(10, 5), chunks=(2, 3))
 
@@ -158,6 +162,8 @@ def test_gufunc():
     assert valy.shape == (10,)
 
 
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
+                    reason="`np.vectorize(..., signature=...)` not supported yet")
 def test_asgufunc():
     x = da.random.normal(size=(10, 5), chunks=(2, 3))
 
