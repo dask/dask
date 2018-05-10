@@ -88,7 +88,7 @@ def _compile_gufunc_signature(ins, outs):
 
 def apply_gufunc(func, signature, *args, **kwargs):
     """
-    Apply a generalized ufunc [2]_ or similar python function to arrays.
+    Apply a generalized ufunc or similar python function to arrays.
 
     ``signature`` determines if the function consumes or produces core
     dimensions. The remaining dimensions in given input arrays (``*args``)
