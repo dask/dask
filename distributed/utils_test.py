@@ -46,7 +46,7 @@ from .metrics import time
 from .proctitle import enable_proctitle_on_children
 from .security import Security
 from .utils import (ignoring, log_errors, mp_context, get_ip, get_ipv6,
-                    DequeHandler, reset_logger_locks)
+                    DequeHandler, reset_logger_locks, sync)
 from .worker import Worker, TOTAL_MEMORY, _global_workers
 
 
@@ -81,6 +81,13 @@ def invalid_python_script(tmpdir_factory):
     return local_file
 
 
+@gen.coroutine
+def cleanup_global_workers():
+    for w in _global_workers:
+        w = w()
+        w._close(report=False, executor_wait=False)
+
+
 @pytest.fixture
 def loop():
     del _global_workers[:]
@@ -99,12 +106,16 @@ def loop():
         loop.start = start
 
         yield loop
+
         # Stop the loop in case it's still running
         try:
+            sync(loop, cleanup_global_workers, callback_timeout=0.500)
             loop.add_callback(loop.stop)
         except RuntimeError as e:
             if not re.match("IOLoop is clos(ed|ing)", str(e)):
                 raise
+        except gen.TimeoutError:
+            pass
         else:
             is_stopped.wait()
     del _global_workers[:]
@@ -478,7 +489,7 @@ def check_active_rpc(loop, active_rpc_timeout=1):
 
     def fail():
         pytest.fail("some RPCs left active by test: %s"
-                    % (sorted(set(rpc.active) - active_before)))
+                    % (set(rpc.active) - active_before))
 
     @gen.coroutine
     def wait():
@@ -757,6 +768,8 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                             if client:
                                 yield c._close(fast=s.status == 'closed')
                             yield end_cluster(s, workers)
+                            yield gen.with_timeout(timedelta(seconds=1),
+                                                   cleanup_global_workers())
                             _globals.clear()
                             _globals.update(old_globals)
 
@@ -774,6 +787,11 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                         pass
                     del w.data
             DequeHandler.clear_all_instances()
+            for w in _global_workers:
+                w = w()
+                w._close(report=False, executor_wait=False)
+                if w.status == 'running':
+                    w.close()
             del _global_workers[:]
             return result
 

@@ -141,6 +141,8 @@ def test_close_closed():
         comm.close()  # external closing
 
         yield b.close()
+        assert 'closed' in repr(b)
+        assert 'closed' in str(b)
 
 
 @gen_test()

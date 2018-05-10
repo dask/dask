@@ -86,6 +86,15 @@ def _set_global_client(c):
         _global_client_index[0] += 1
 
 
+def _del_global_client(c):
+    for k in list(_global_clients):
+        try:
+            if _global_clients[k] is c:
+                del _global_clients[k]
+        except KeyError:
+            pass
+
+
 class Future(WrappedKey):
     """ A remotely running computation
 
@@ -299,7 +308,10 @@ class Future(WrappedKey):
         # (see e.g. Client.get() or Future.__del__())
         if not self._cleared and self.client.generation == self._generation:
             self._cleared = True
-            self.client.loop.add_callback(self.client._dec_ref, tokey(self.key))
+            try:
+                self.client.loop.add_callback(self.client._dec_ref, tokey(self.key))
+            except TypeError:
+                pass  # Shutting down, add_callback may be None
 
     def __getstate__(self):
         return (self.key, self.client.scheduler.address)
@@ -867,7 +879,7 @@ class Client(Node):
 
     def _heartbeat(self):
         if self.scheduler_comm:
-            self.scheduler_comm.send({'op': 'heartbeat'})
+            self.scheduler_comm.send({'op': 'heartbeat-client'})
 
     def __enter__(self):
         if not self._loop_runner.is_started():
@@ -1003,6 +1015,7 @@ class Client(Node):
         self.status = 'closing'
 
         with log_errors():
+            _del_global_client(self)
             for pc in self._periodic_callbacks.values():
                 pc.stop()
             self._scheduler_identity = {}
@@ -1015,6 +1028,7 @@ class Client(Node):
             if self.status == 'closed':
                 raise gen.Return()
             if self.scheduler_comm and self.scheduler_comm.comm and not self.scheduler_comm.comm.closed():
+                self._send_to_scheduler({'op': 'close-client'})
                 self._send_to_scheduler({'op': 'close-stream'})
                 yield self.scheduler_comm.close()
             for key in list(self.futures):

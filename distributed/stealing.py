@@ -57,7 +57,7 @@ class WorkStealing(SchedulerPlugin):
         # { worker state: occupancy }
         self.in_flight_occupancy = defaultdict(lambda: 0)
 
-        self.scheduler.worker_handlers['steal-response'] = self.move_task_confirm
+        self.scheduler.stream_handlers['steal-response'] = self.move_task_confirm
 
     @property
     def log(self):

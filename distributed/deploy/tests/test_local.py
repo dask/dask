@@ -247,6 +247,7 @@ def test_bokeh(loop, processes):
         requests.get(url, timeout=0.2)
 
 
+@pytest.mark.skipif(sys.version_info < (3, 6), reason='Unknown')
 def test_blocks_until_full(loop):
     with Client(loop=loop) as c:
         assert len(c.ncores()) > 0

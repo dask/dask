@@ -76,8 +76,8 @@ def test_wait(loop):
                 fs += [e.submit(throws, None)]
                 fs += [e.submit(slowdec, i, delay=0.05) for i in range(N)]
                 res = wait(fs, return_when=FIRST_EXCEPTION)
-                assert len(res.not_done) > 0
-                assert len(res.done) >= N - 2  # likely, unless tasks get reordered
+                assert any(f.exception() for f in res.done)
+                assert res.not_done
 
                 errors = []
                 for fs in res.done:

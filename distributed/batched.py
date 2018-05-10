@@ -58,8 +58,16 @@ class BatchedSend(object):
         self.comm = comm
         self.loop.add_callback(self._background_send)
 
+    def closed(self):
+        return self.comm and self.comm.closed()
+
     def __repr__(self):
-        return '<BatchedSend: %d in buffer>' % len(self.buffer)
+        if self.closed():
+            return '<BatchedSend: closed>'
+        else:
+            return '<BatchedSend: %d in buffer>' % len(self.buffer)
+
+    __str__ = __repr__
 
     @gen.coroutine
     def _background_send(self):

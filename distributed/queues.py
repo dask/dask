@@ -40,7 +40,7 @@ class QueueExtension(object):
             'queue_qsize': self.qsize}
         )
 
-        self.scheduler.client_handlers.update({
+        self.scheduler.stream_handlers.update({
             'queue-future-release': self.future_release,
             'queue_release': self.release,
         })

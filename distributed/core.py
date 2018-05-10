@@ -12,7 +12,7 @@ import weakref
 
 import dask
 from six import string_types
-from toolz import assoc
+from toolz import merge
 from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.locks import Event
@@ -46,6 +46,8 @@ def get_total_physical_memory():
 MAX_BUFFER_SIZE = get_total_physical_memory()
 
 tick_maximum_delay = parse_timedelta(dask.config.get('distributed.admin.tick.limit'), default='ms')
+
+LOG_PDB = dask.config.get('distributed.admin.pdb-on-err')
 
 
 class Server(object):
@@ -87,9 +89,16 @@ class Server(object):
     default_ip = ''
     default_port = 0
 
-    def __init__(self, handlers, connection_limit=512, deserialize=True,
-                 io_loop=None):
-        self.handlers = assoc(handlers, 'identity', self.identity)
+    def __init__(self, handlers, stream_handlers=None, connection_limit=512,
+                 deserialize=True, io_loop=None):
+        self.handlers = {
+            'identity': self.identity,
+            'connection_stream': self.handle_stream,
+        }
+        self.handlers.update(handlers)
+        self.stream_handlers = {}
+        self.stream_handlers.update(stream_handlers or {})
+
         self.id = type(self).__name__ + '-' + str(uuid.uuid4())
         self._address = None
         self._listen_address = None
@@ -313,7 +322,7 @@ class Server(object):
                 if reply and result != 'dont-reply':
                     try:
                         yield comm.write(result, serializers=serializers)
-                    except EnvironmentError as e:
+                    except (EnvironmentError, TypeError) as e:
                         logger.debug("Lost connection to %r while sending result for op %r: %s",
                                      address, op, e)
                         break
@@ -331,6 +340,47 @@ class Server(object):
                 except Exception as e:
                     logger.error("Failed while closing connection to %r: %s",
                                  address, e)
+
+    @gen.coroutine
+    def handle_stream(self, comm, extra=None, every_cycle=[]):
+        extra = extra or {}
+        logger.info("Starting established connection")
+
+        io_error = None
+        closed = False
+        try:
+            while not closed:
+                msgs = yield comm.read()
+                if not isinstance(msgs, list):
+                    msgs = [msgs]
+
+                if not comm.closed():
+                    for msg in msgs:
+                        if msg == 'OK':  # from close
+                            break
+                        op = msg.pop('op')
+                        if op:
+                            if op == 'close-stream':
+                                closed = True
+                                break
+                            handler = self.stream_handlers[op]
+                            handler(**merge(extra, msg))
+                        else:
+                            logger.error("odd message %s", msg)
+                for func in every_cycle:
+                    func()
+
+        except (CommClosedError, EnvironmentError) as e:
+            io_error = e
+        except Exception as e:
+            logger.exception(e)
+            if LOG_PDB:
+                import pdb
+                pdb.set_trace()
+            raise
+        finally:
+            comm.close()  # TODO: why do we need this now?
+            assert comm.closed()
 
     @gen.coroutine
     def close(self):

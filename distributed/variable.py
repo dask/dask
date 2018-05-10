@@ -40,8 +40,8 @@ class VariableExtension(object):
         self.scheduler.handlers.update({'variable_set': self.set,
                                         'variable_get': self.get})
 
-        self.scheduler.client_handlers['variable-future-release'] = self.future_release
-        self.scheduler.client_handlers['variable_delete'] = self.delete
+        self.scheduler.stream_handlers['variable-future-release'] = self.future_release
+        self.scheduler.stream_handlers['variable_delete'] = self.delete
 
         self.scheduler.extensions['variables'] = self
 

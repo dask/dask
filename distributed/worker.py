@@ -27,7 +27,7 @@ from tornado.locks import Event
 
 from . import profile
 from .batched import BatchedSend
-from .comm import get_address_host, get_local_address_for
+from .comm import get_address_host, get_local_address_for, connect
 from .comm.utils import offload
 from .compatibility import unicode, get_thread_identity, finalize
 from .core import (error_message, CommClosedError,
@@ -43,7 +43,7 @@ from .security import Security
 from .sizeof import safe_sizeof as sizeof
 from .threadpoolexecutor import ThreadPoolExecutor, secede as tpe_secede
 from .utils import (funcname, get_ip, has_arg, _maybe_complex, log_errors,
-                    ignoring, validate_key, mp_context, import_file,
+                    ignoring, mp_context, import_file,
                     silence_logging, thread_state, json_load_robust, key_split,
                     format_bytes, DequeHandler, PeriodicCallback,
                     parse_bytes, parse_timedelta)
@@ -174,7 +174,6 @@ class WorkerBase(ServerNode):
 
         handlers = {
             'gather': self.gather,
-            'compute-stream': self.compute_stream,
             'run': self.run,
             'run_coroutine': self.run_coroutine,
             'get_data': self.get_data,
@@ -192,9 +191,20 @@ class WorkerBase(ServerNode):
             'versions': self.versions,
         }
 
-        super(WorkerBase, self).__init__(handlers, io_loop=self.loop,
-                                         connection_args=self.connection_args,
-                                         **kwargs)
+        stream_handlers = {
+            'close': self._close,
+            'compute-task': self.add_task,
+            'release-task': partial(self.release_key, report=False),
+            'delete-data': self.delete_data,
+            'steal-request': self.steal_request,
+        }
+
+        super(WorkerBase, self).__init__(
+                handlers=handlers,
+                stream_handlers=stream_handlers,
+                io_loop=self.loop,
+                connection_args=self.connection_args,
+                **kwargs)
 
         pc = PeriodicCallback(self.heartbeat, 1000, io_loop=self.io_loop)
         self.periodic_callbacks['heartbeat'] = pc
@@ -229,12 +239,10 @@ class WorkerBase(ServerNode):
             logger.debug("Heartbeat: %s" % self.address)
             try:
                 start = time()
-                response = yield self.scheduler.register(
+                response = yield self.scheduler.heartbeat_worker(
                     address=self.contact_address,
                     name=self.name,
-                    ncores=self.ncores,
                     now=time(),
-                    services=self.service_ports,
                     memory_limit=self.memory_limit,
                     executing=len(self.executing),
                     in_memory=len(self.data),
@@ -243,6 +251,9 @@ class WorkerBase(ServerNode):
                     **self.monitor.recent())
                 end = time()
                 middle = (start + end) / 2
+                if response['status'] == 'missing':
+                    yield self._register_with_scheduler()
+                    return
                 self.scheduler_delay = response['time'] - middle
                 self.periodic_callbacks['heartbeat'].callback_time = response['heartbeat-interval'] * 1000
             finally:
@@ -265,19 +276,24 @@ class WorkerBase(ServerNode):
                 raise gen.Return
             try:
                 _start = time()
-                future = self.scheduler.register(
-                        ncores=self.ncores,
-                        address=self.contact_address,
-                        keys=list(self.data),
-                        name=self.name,
-                        nbytes=self.nbytes,
-                        now=time(),
-                        services=self.service_ports,
-                        memory_limit=self.memory_limit,
-                        local_directory=self.local_dir,
-                        resources=self.total_resources,
-                        pid=os.getpid(),
-                        **self.monitor.recent())
+                comm = yield connect(self.scheduler.address,
+                                     connection_args=self.connection_args)
+                yield comm.write(dict(op='register-worker',
+                                         ncores=self.ncores,
+                                         address=self.contact_address,
+                                         keys=list(self.data),
+                                         name=self.name,
+                                         nbytes=self.nbytes,
+                                         now=time(),
+                                         services=self.service_ports,
+                                         memory_limit=self.memory_limit,
+                                         local_directory=self.local_dir,
+                                         resources=self.total_resources,
+                                         pid=os.getpid(),
+                                         reply=False,
+                                         **self.monitor.recent()),
+                                         serializers=['msgpack'])
+                future = comm.read(deserializers=['msgpack'])
                 if self.death_timeout:
                     diff = self.death_timeout - (time() - start)
                     if diff < 0:
@@ -300,7 +316,25 @@ class WorkerBase(ServerNode):
         else:
             logger.info('        Registered to: %26s', self.scheduler.address)
             logger.info('-' * 49)
+
+        self.batched_stream = BatchedSend(interval='2ms', loop=self.loop)
+        self.batched_stream.start(comm)
         self.periodic_callbacks['heartbeat'].start()
+        self.loop.add_callback(self.handle_scheduler, comm)
+
+    @gen.coroutine
+    def handle_scheduler(self, comm):
+        try:
+            yield self.handle_stream(comm, every_cycle=[self.ensure_communicating,
+                                                        self.ensure_computing])
+        except Exception as e:
+            logger.exception(e)
+            raise
+        finally:
+            if self.reconnect:
+                self.loop.add_callback(self._register_with_scheduler)
+            else:
+                yield self._close(report=False)
 
     def start_services(self, listen_ip=''):
         for k, v in self.service_specs.items():
@@ -389,44 +423,51 @@ class WorkerBase(ServerNode):
 
     @gen.coroutine
     def _close(self, report=True, timeout=10, nanny=True, executor_wait=True):
-        if self.status in ('closed', 'closing'):
-            return
+        with log_errors():
+            if self.status in ('closed', 'closing'):
+                return
 
-        disable_gc_diagnosis()
+            disable_gc_diagnosis()
 
-        logger.info("Stopping worker at %s", self.address)
-        self.status = 'closing'
-        setproctitle("dask-worker [closing]")
+            logger.info("Stopping worker at %s", self.address)
+            self.status = 'closing'
+            setproctitle("dask-worker [closing]")
 
-        self.stop()
-        for pc in self.periodic_callbacks.values():
-            pc.stop()
-        with ignoring(EnvironmentError, gen.TimeoutError):
-            if report:
-                yield gen.with_timeout(timedelta(seconds=timeout),
-                                       self.scheduler.unregister(address=self.contact_address))
-        self.scheduler.close_rpc()
-        if isinstance(self.executor, ThreadPoolExecutor):
-            self.executor.shutdown(wait=executor_wait, timeout=timeout)
-        else:
-            self.executor.shutdown(wait=False)
-        self._workdir.release()
+            self.stop()
+            for pc in self.periodic_callbacks.values():
+                pc.stop()
+            with ignoring(EnvironmentError, gen.TimeoutError):
+                if report:
+                    yield gen.with_timeout(timedelta(seconds=timeout),
+                                           self.scheduler.unregister(address=self.contact_address))
+            self.scheduler.close_rpc()
+            if isinstance(self.executor, ThreadPoolExecutor):
+                self.executor.shutdown(wait=executor_wait, timeout=timeout)
+            else:
+                self.executor.shutdown(wait=False)
+            self._workdir.release()
 
-        for k, v in self.services.items():
-            v.stop()
+            for k, v in self.services.items():
+                v.stop()
 
-        self.status = 'closed'
+            self.status = 'closed'
 
-        if nanny and 'nanny' in self.service_ports:
-            with self.rpc((self.ip, self.service_ports['nanny'])) as r:
-                yield r.terminate()
+            if nanny and 'nanny' in self.service_ports:
+                with self.rpc((self.ip, self.service_ports['nanny'])) as r:
+                    yield r.terminate()
 
-        self.rpc.close()
-        self._closed.set()
-        self._remove_from_global_workers()
-        yield super(WorkerBase, self).close()
+            if self.batched_stream and not self.batched_stream.comm.closed():
+                self.batched_stream.send({'op': 'close-stream'})
 
-        setproctitle("dask-worker [closed]")
+            if self.batched_stream:
+                self.batched_stream.close()
+
+            self.rpc.close()
+            self._closed.set()
+            self._remove_from_global_workers()
+            yield super(WorkerBase, self).close()
+
+            setproctitle("dask-worker [closed]")
 
     def __del__(self):
         self._remove_from_global_workers()
@@ -1018,8 +1059,6 @@ class Worker(WorkerBase):
     local_dir: str, optional
         Directory where we place local resources
     name: str, optional
-    heartbeat_interval: int
-        Milliseconds between heartbeats to scheduler
     memory_limit: int, float, string
         Number of bytes of memory that this worker should use.
         Set to zero for no limit.  Set to 'auto' for 60% of memory use.
@@ -1166,72 +1205,6 @@ class Worker(WorkerBase):
     ################
     # Update Graph #
     ################
-
-    @gen.coroutine
-    def compute_stream(self, comm):
-        try:
-            self.batched_stream = BatchedSend(interval='2ms', loop=self.loop)
-            self.batched_stream.start(comm)
-
-            closed = False
-
-            while not closed:
-                try:
-                    msgs = yield comm.read()
-                except CommClosedError as e:
-                    if self.reconnect and self.status not in ('closed', 'closing'):
-                        logger.info("Connection to scheduler broken. Reregistering")
-                        yield self._register_with_scheduler()
-                        return
-                    else:
-                        logger.info("Connection to scheduler broken. Closing")
-                        yield self._close(report=False)
-                    break
-                except EnvironmentError as e:
-                    break
-                except Exception as e:
-                    logger.error("Worker failed to read message. "
-                                 "This will likely cause the cluster to fail.",
-                                 exc_info=True)
-                    raise
-
-                start = time()
-
-                for msg in msgs:
-                    self.recent_messages_log.append(msg)
-                    op = msg.pop('op', None)
-                    if 'key' in msg:
-                        validate_key(msg['key'])
-                    if op == 'close':
-                        closed = True
-                        self._close()
-                        break
-                    elif op == 'compute-task':
-                        self.add_task(**msg)
-                    elif op == 'release-task':
-                        self.log.append((msg['key'], 'release-task', msg.get('reason')))
-                        self.release_key(report=False, **msg)
-                    elif op == 'delete-data':
-                        self.delete_data(**msg)
-                    elif op == 'steal-request':
-                        self.steal_request(**msg)
-                    else:
-                        logger.warning("Unknown operation %s, %s", op, msg)
-
-                self.ensure_communicating()
-                self.ensure_computing()
-
-                end = time()
-                if self.digests is not None:
-                    self.digests['handle-messages-duration'].add(end - start)
-
-            logger.info('Close compute stream')
-        except Exception as e:
-            logger.exception(e)
-            yield self._close()
-            raise
-        finally:
-            yield self.batched_stream.close()
 
     def add_task(self, key, function=None, args=None, kwargs=None, task=None,
                  who_has=None, nbytes=None, priority=None, duration=None,
