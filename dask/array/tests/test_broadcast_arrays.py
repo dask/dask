@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from distutils.version import LooseVersion
 import pytest
 from numpy.testing import assert_array_equal, assert_equal
 import dask.array as da
@@ -36,9 +37,9 @@ def test__parse_signature():
 
 # Test from `dask.array.tests.test_array_core.py`
 def test_broadcast_arrays():
-    # # Calling `broadcast_arrays` with no arguments only works in NumPy 1.13.0+.
-    # if LooseVersion(np.__version__) >= LooseVersion("1.13.0"):
-    #     assert np.broadcast_arrays() == da.broadcast_arrays()
+    # Calling `broadcast_arrays` with no arguments only works in NumPy 1.13.0+.
+    if LooseVersion(np.__version__) >= LooseVersion("1.13.0"):
+        assert np.broadcast_arrays() == broadcast_arrays()
 
     a = np.arange(4)
     d_a = da.from_array(a, chunks=tuple(s // 2 for s in a.shape))
