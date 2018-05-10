@@ -1127,11 +1127,7 @@ class Array(DaskMethodsMixin):
             if numpy_ufunc.signature is not None:
                 # Patch for own gufunc wrapper (else recursion occurs)
                 from .gufunc import apply_gufunc
-                try:
-                    _numpy_ufunc = numpy_ufunc.pyfunc
-                except AttributeError:
-                    _numpy_ufunc = numpy_ufunc
-                return apply_gufunc(_numpy_ufunc,
+                return apply_gufunc(numpy_ufunc,
                                     numpy_ufunc.signature,
                                     *inputs,
                                     **kwargs)
