@@ -9,6 +9,7 @@ Array
 +++++
 
 - Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
+- Experimental addition of generalized ufunc support, ``apply_gufunc``, ``gufunc``, and ``asgufunc`` (:pr:`#3109`) `Markus Gonser`_
 
 Dataframe
 +++++++++

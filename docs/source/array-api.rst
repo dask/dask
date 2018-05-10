@@ -659,6 +659,7 @@ Other functions
 
 .. autofunction:: apply_gufunc
 .. autofunction:: gufunc
+.. autofunction:: asgufunc
 
 .. currentmodule:: dask.array.core
 
