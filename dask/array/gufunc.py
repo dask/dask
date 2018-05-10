@@ -86,16 +86,16 @@ def _compile_gufunc_signature(ins, outs):
 
 def apply_gufunc(func, signature, *args, **kwargs):
     """
-    Apply a generalized ufunc [2]_ to arrays. The function is
-    mapped to the input arguments. The ``signature`` determines
-    if the function consumes or produces core dimensions. The
-    remaining dimensions in given input arrays (``*args``) are
-    considered loop dimensions and are required to broadcast
+    Apply a generalized ufunc [2]_ or similar python function to arrays.
+
+    ``signature`` determines if the function consumes or produces core
+    dimensions. The remaining dimensions in given input arrays (``*args``)
+    are considered loop dimensions and are required to broadcast
     naturally against each other.
 
     In other terms, this function is like np.vectorize, but for
     the blocks of dask arrays. If the function itself shall also
-    be vectorized, ``vectorize=True`` can be used for convenience..
+    be vectorized use ``vectorize=True`` for convenience.
 
     Parameters
     ----------
@@ -248,7 +248,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
 
 class gufunc(object):
     """
-    Binds `pyfunc` into `dask.array.apply_gufunc` when called.
+    Binds `pyfunc` into ``dask.array.apply_gufunc`` when called.
 
     Parameters
     ----------
@@ -338,7 +338,6 @@ class gufunc(object):
                             **kwargs)
 
 
-# Decorator, which calls `apply_gufunc` directly
 def asgufunc(signature=None, **kwargs):
     """
     Decorator for ``dask.array.gufunc``.
