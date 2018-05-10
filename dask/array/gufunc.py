@@ -20,7 +20,8 @@ _DIMENSION_NAME = r'\w+'
 _CORE_DIMENSION_LIST = '(?:{0:}(?:,{0:})*,?)?'.format(_DIMENSION_NAME)
 _ARGUMENT = r'\({}\)'.format(_CORE_DIMENSION_LIST)
 _INPUT_ARGUMENTS = '(?:{0:}(?:,{0:})*,?)?'.format(_ARGUMENT)
-_OUTPUT_ARGUMENTS = '{0:}(?:,{0:})*'.format(_ARGUMENT) # Use `'{0:}(?:,{0:})*,?'` if gufunc signature should be allowed for length 1 tuple returns
+_OUTPUT_ARGUMENTS = '{0:}(?:,{0:})*'.format(_ARGUMENT)  # Use `'{0:}(?:,{0:})*,?'` if gufunc-
+# signature should be allowed for length 1 tuple returns
 _SIGNATURE = '^{0:}->{1:}$'.format(_INPUT_ARGUMENTS, _OUTPUT_ARGUMENTS)
 
 
@@ -186,7 +187,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
     args = [asarray(a) for a in args]
 
     if len(core_input_dimss) != len(args):
-        ValueError("According to `signature`, `func` requires %d arguments, but %s given" % (len(core_output_dimss), len(args)))
+        ValueError("According to `signature`, `func` requires %d arguments, but %s given"
+                   % (len(core_output_dimss), len(args)))
 
     ## Assess input args for loop dims
     input_shapes = [a.shape for a in args]
@@ -195,9 +197,9 @@ def apply_gufunc(func, signature, *args, **kwargs):
     _core_input_shapes = [dict(zip(cid, s[n:])) for s, n, cid in zip(input_shapes, num_loopdims, core_input_dimss)]
     core_shapes = merge(output_sizes, *_core_input_shapes)
 
-    loop_input_dimss = [tuple("__loopdim%d__"%d for d in range(max_loopdims-n, max_loopdims)) for n in num_loopdims]
+    loop_input_dimss = [tuple("__loopdim%d__" % d for d in range(max_loopdims - n, max_loopdims)) for n in num_loopdims]
 
-    input_dimss = [l+c for l, c in zip(loop_input_dimss, core_input_dimss)]
+    input_dimss = [l + c for l, c in zip(loop_input_dimss, core_input_dimss)]
 
     loop_output_dims = max(loop_input_dimss, key=len) if loop_input_dimss else set()
 
@@ -229,7 +231,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     leaf_arrs = []
     for i, cod, odt in zip(count(0), core_output_dimss, output_dtypes):
         core_output_shape = tuple(core_shapes[d] for d in cod)
-        core_chunkinds = len(cod)*(0,)
+        core_chunkinds = len(cod) * (0,)
         output_shape = loop_output_shape + core_output_shape
         output_chunks = loop_output_chunks + core_output_shape
         leaf_name = "%s_%d-%s" % (name, i, token)
@@ -391,6 +393,7 @@ def asgufunc(signature=None, **kwargs):
     _allowedkeys = {"vectorize", "output_sizes", "output_dtypes"}
     if set(_allowedkeys).issubset(kwargs.keys()):
         raise TypeError("Unsupported keyword argument(s) provided")
+
     def _asgufunc(pyfunc):
         return gufunc(pyfunc, signature=signature, **kwargs)
     _asgufunc.__doc__ = """

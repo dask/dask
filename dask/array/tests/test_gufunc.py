@@ -37,7 +37,7 @@ def test_apply_gufunc_01():
         return np.mean(x, axis=-1), np.std(x, axis=-1)
     a = da.random.normal(size=(10, 20, 30), chunks=5)
     mean, std = apply_gufunc(stats, "(i)->(),()", a,
-                             output_dtypes=2*(a.dtype,))
+                             output_dtypes=2 * (a.dtype,))
     assert mean.compute().shape == (10, 20)
     assert std.compute().shape == (10, 20)
 
@@ -73,10 +73,10 @@ def test_apply_gufunc_elemwise_01():
 def test_apply_gufunc_elemwise_02():
     def addmul(x, y):
         assert x.shape in ((2,), (1,))
-        return x+y, x*y
+        return x + y, x * y
     a = da.from_array(np.array([1, 2, 3]), chunks=2, name='a')
     b = da.from_array(np.array([1, 2, 3]), chunks=2, name='b')
-    z1, z2 = apply_gufunc(addmul, "(),()->(),()", a, b, output_dtypes=2*(a.dtype,))
+    z1, z2 = apply_gufunc(addmul, "(),()->(),()", a, b, output_dtypes=2 * (a.dtype,))
     assert_array_equal(z1.compute(), [2, 4, 6])
     assert_array_equal(z2.compute(), [1, 4, 9])
 
@@ -142,14 +142,16 @@ def test_gufunc_two_inputs():
     a = da.ones((2, 3), chunks=(1, 2), dtype=int)
     b = da.ones((3, 4), chunks=(2, 3), dtype=int)
     x = apply_gufunc(foo, "(i,j),(j,k)->(i,k)", a, b, output_dtypes=int)
-    assert_array_equal(x.compute(), 3*np.ones((2, 4), dtype=int))
+    assert_array_equal(x.compute(), 3 * np.ones((2, 4), dtype=int))
 
 
 def test_gufunc():
     x = da.random.normal(size=(10, 5), chunks=(2, 3))
+
     def foo(x):
         return np.mean(x, axis=-1)
     gufoo = gufunc(foo, signature="(i)->()", output_dtypes=float, vectorize=True)
+
     y = gufoo(x)
     valy = y.compute()
     assert isinstance(y, Array)
@@ -158,9 +160,11 @@ def test_gufunc():
 
 def test_asgufunc():
     x = da.random.normal(size=(10, 5), chunks=(2, 3))
+
     @asgufunc("(i)->()", output_dtypes=float, vectorize=True)
     def foo(x):
         return np.mean(x, axis=-1)
+
     y = foo(x)
     valy = y.compute()
     assert isinstance(y, Array)
@@ -172,12 +176,12 @@ def test_apply_gufunc_broadcasting_loopdims():
         assert len(x.shape) == 2
         assert len(y.shape) == 3
         x, y = np.broadcast_arrays(x, y)
-        return x, y, x*y
+        return x, y, x * y
 
     a = da.random.normal(size=(    10, 30), chunks=8)
     b = da.random.normal(size=(20,  1, 30), chunks=3)
 
-    x, y, z = apply_gufunc(foo, "(i),(i)->(i),(i),(i)", a, b, output_dtypes=3*(float,), vectorize=False)
+    x, y, z = apply_gufunc(foo, "(i),(i)->(i),(i),(i)", a, b, output_dtypes=3 * (float,), vectorize=False)
 
     assert x.compute().shape == (20, 10, 30)
     assert y.compute().shape == (20, 10, 30)
