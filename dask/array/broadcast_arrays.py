@@ -4,7 +4,6 @@ import re
 from functools import partial
 from itertools import count
 from operator import itemgetter
-import numpy as np
 try:
     from cytoolz import concat, groupby, valmap, unique, compose
 except ImportError:
@@ -31,7 +30,7 @@ def _parse_signature(signature):
     Returns
     -------
     Tuple of input and output core dimensions parsed from the signature, each
-    of the form List[Tuple[str, ...]]. 
+    of the form List[Tuple[str, ...]].
     """
     signature = signature.replace(' ', '')
     signature = signature if '->' in signature else signature + '->'
@@ -59,7 +58,7 @@ def _where(seq, elem):
 
 def _inverse(seq):
     """
-    Returns the inverse of a sequence of int. 
+    Returns the inverse of a sequence of int.
     ``None`` is ignored.
 
     Examples
@@ -69,12 +68,12 @@ def _inverse(seq):
     >>> _inverse([2, 1])
     [None, 1, 0]
     >>> _inverse([None, 1, 0])
-    [2, 1] 
+    [2, 1]
     """
     if not seq:
         return []
     n = max(filter(lambda e: e is not None, seq))
-    return [_where(seq, i) for i in range(n+1)]
+    return [_where(seq, i) for i in range(n + 1)]
 
 
 def _argsort(list_):
@@ -119,15 +118,15 @@ def broadcast_arrays(*args, **kwargs):
 
         Defaults to ``None``.
 
-        Note: while the syntax is similar to numpy generalized 
+        Note: while the syntax is similar to numpy generalized
         ufuncs [2]_, its meaning here is different.
-       
+
     sparse: Optional; Bool
         Specifies if a broadcast should be sparse, i.e. new broadcast
         dimensions are of length 1. If not sparse existing sparse
         dimensions are broadcast to their full size (as stated by
         the other passed arguments). Defaults to ``False``.
-    
+
     subok: Bool
         If True, then sub-classes will be passed-through, otherwise
         the returned array will be forced to be a base-class array
@@ -141,11 +140,12 @@ def broadcast_arrays(*args, **kwargs):
 
     Examples
     --------
+    >>> import numpy as np
     >>> a = np.random.randn(3, 1)
     >>> b = np.random.randn(1, 4)
     >>> A, B = broadcast_arrays(a, b)
     >>> A.shape, B.shape
-    (3, 4), (3, 4)
+    ((3, 4), (3, 4))
 
     Broadcast two scalars with distinct loop dims against each other
     Equivalent signatures:
@@ -156,7 +156,7 @@ def broadcast_arrays(*args, **kwargs):
     >>> b = np.random.randn(4)
     >>> A, B = broadcast_arrays(a, b, signature="(i),(j)")
     >>> A.shape, B.shape
-    (3, 4), (3, 4)
+    ((3, 4), (3, 4))
 
     Broadcast two vectors with distinct loop dims against each other
     Equivalent signatures:
@@ -168,7 +168,7 @@ def broadcast_arrays(*args, **kwargs):
     >>> b = np.random.randn(4, 6)
     >>> A, B = broadcast_arrays(a, b, signature="(i),(j)")
     >>> A.shape, B.shape
-    (3, 4, 5), (3, 4, 5)
+    ((3, 4, 5), (3, 4, 6))
 
     Broadcast two scalars with same loop dim against each other
     Equivalent signatures:
@@ -181,7 +181,7 @@ def broadcast_arrays(*args, **kwargs):
     >>> b = np.random.randn(3)
     >>> A, B = broadcast_arrays(a, b, signature="(i),(i)")
     >>> A.shape, B.shape
-    (3,), (3,)
+    ((3,), (3,))
 
     Broadcast two vectors each with same loop dim against each other
     Equivalent signatures:
@@ -194,7 +194,7 @@ def broadcast_arrays(*args, **kwargs):
     >>> b = np.random.randn(3, 6)
     >>> A, B = broadcast_arrays(a, b, signature="(i),(i)")
     >>> A.shape, B.shape
-    (3, 5), (3, 6)
+    ((3, 5), (3, 6))
 
     Broadcast two vectors each with partially same loop dim against each other no proposed loop dim order
     Equivalent signatures:
@@ -207,7 +207,7 @@ def broadcast_arrays(*args, **kwargs):
     >>> b = np.random.randn(3, 4, 6)
     >>> A, B = broadcast_arrays(a, b, signature="(j),(i,j)")
     >>> A.shape, B.shape
-    (3, 4, 5), (3, 4, 6)
+    ((3, 4, 5), (3, 4, 6))
 
     Broadcast two vectors each with partially same loop dim against each other no proposed loop dim order
     Equivalent signatures:
@@ -217,17 +217,18 @@ def broadcast_arrays(*args, **kwargs):
         - ``"(i,U),(i,j,V)->(i,j,U),(i,j,V)"``
     >>> a = np.random.randn(3, 5)
     >>> b = np.random.randn(3, 4, 6)
-    >>> # Equivalent signatures: "(i),(i,j)", "(i),(i,j)->(k),(l)", "(i,k),(i,j,l)->(k),(l)", "(i,k),(i,j,l)->(i,j,k),(i,j,l)"
     >>> A, B = broadcast_arrays(a, b, signature="(i),(i,j)")
     >>> A.shape, B.shape
-    (3, 4, 5), (3, 4, 6)
+    ((3, 4, 5), (3, 4, 6))
 
-    # Broadcast many core and loop dimensions against each other that are passed in random order
+    Broadcast many core and loop dimensions against each other that are passed in random order
+    and also set ``sparse=True``
+    >>> import dask.array as da
     >>> x = da.random.normal(size=(20, 30, 3), chunks=(5, 6, 3))
-    >>> y = da.random.normal(size=(3, 30, 20, 2), chunks=(3, 6, 5, 2))
-    >>> X, Y = broadcast_arrays(x, y, signature="(i,j,U),(U,j,i,V)->(U),(V,U)")
+    >>> y = da.random.normal(size=(3, 20, 2), chunks=(3, 5, 2))
+    >>> X, Y = broadcast_arrays(x, y, signature="(i,j,U),(U,i,V)->(U),(V,U)", sparse=True)
     >>> X.shape, Y.shape
-    (20, 30, 3), (20, 30, 2, 3)
+    ((20, 30, 3), (20, 1, 2, 3))
 
 
     References
@@ -240,7 +241,7 @@ def broadcast_arrays(*args, **kwargs):
     subok = bool(kwargs.pop('subok', False))
     if kwargs:
         raise TypeError("Unsupported keyword argument(s) provided")
-    
+
     # Input processing
     to_array = asanyarray if subok else asarray
     args = tuple(to_array(e) for e in args)
@@ -263,8 +264,9 @@ def broadcast_arrays(*args, **kwargs):
         rhs_dimss = []
     else:
         raise ValueError("``signature`` is invalid")
-    rhs_dimss = rhs_dimss if rhs_dimss else [tuple()]*nargs
-    lhs_dimss = lhs_dimss if lhs_dimss else [tuple(reversed(range(n - len(rhs_dims)))) for n, rhs_dims in zip(ndimss, rhs_dimss)]
+    rhs_dimss = rhs_dimss if rhs_dimss else nargs * [tuple()]
+    lhs_dimss = lhs_dimss if lhs_dimss else [tuple(reversed(range(n - len(rhs_dims))))
+                                             for n, rhs_dims in zip(ndimss, rhs_dimss)]
 
     # Check consistency of passed arguments
     if len(lhs_dimss) != len(args):
@@ -279,11 +281,11 @@ def broadcast_arrays(*args, **kwargs):
             raise ValueError("Repeated dimension name for array #{} in signature".format(idx))
         if len(lhs_dims) > ndims:
             raise ValueError("Too many dimension(s) for input array #{} in signature given".format(idx))
-    
+
     # Construct complete dimension names of passed arrays
     in_dimss = []
     auto_core_dimss = []
-    for idx, ndims, lhs_dims, rhs_dims in  zip(count(), ndimss, lhs_dimss, rhs_dimss):
+    for idx, ndims, lhs_dims, rhs_dims in zip(count(), ndimss, lhs_dimss, rhs_dimss):
         in_dims = list(lhs_dims)
         auto_core_dims = tuple()
         ndiff = ndims - len(in_dims)
@@ -301,7 +303,7 @@ def broadcast_arrays(*args, **kwargs):
             # dimensions names
             in_dims.extend(rhs_dims[-ndiff:])
             if len(in_dims) != ndims:
-                raise ValueError("Signature for array #{} cannot be created easily - please clarify dimensions".format(idx))
+                raise ValueError("Signature for array #{} cannot be created easily (clarify dimensions)".format(idx))
         in_dimss.append(in_dims)
         auto_core_dimss.append(auto_core_dims)
         # Check consistency of in_dimss construction
@@ -330,7 +332,7 @@ def broadcast_arrays(*args, **kwargs):
 
     # Find loop dims and union of all loop dims in order of appearance
     auto_loop_dimss = [tuple(i for i in id_ if i not in rd)
-                          for id_, rd in zip(lhs_dimss, rhs_dimss)]
+                       for id_, rd in zip(lhs_dimss, rhs_dimss)]
 
     # According to https://docs.scipy.org/doc/numpy-1.14.0/user/basics.broadcasting.html automatic broadcasting
     # is right aligned. Therefore to determine the correct order of dim names for auto broadcasting, we sort the
@@ -339,10 +341,8 @@ def broadcast_arrays(*args, **kwargs):
     _auto_loop_dimss_sorted = sorted(auto_loop_dimss, key=len, reverse=True)
     auto_total_loop_dims = tuple(unique(concat(_auto_loop_dimss_sorted)))
 
-    out_dimss = [auto_total_loop_dims
-                  + rd
-                  + acd   #??+ tuple(r for r in rd if r not in id_)
-                  for id_, rd, acd in zip(in_dimss, rhs_dimss, auto_core_dimss)]
+    out_dimss = [auto_total_loop_dims + rd + acd
+                 for id_, rd, acd in zip(in_dimss, rhs_dimss, auto_core_dimss)]
 
     # Find order of transposition for each array and perform transformations
     new_args = []
@@ -353,7 +353,7 @@ def broadcast_arrays(*args, **kwargs):
         for idx, out_dim in enumerate(out_dims):
             oidx = _where(in_dims, out_dim)
             if oidx is None:
-                oidx = -idx-1
+                oidx = -idx - 1
             in2out_poss.append(oidx)  # Insert new dim if not present
         # Determine order for later transposition
         _temp = _argsort(in2out_poss)
@@ -364,16 +364,16 @@ def broadcast_arrays(*args, **kwargs):
         if sparse is True:
             new_shape = tuple(1 for i in in2out_poss if i < 0) + shape
         else:
-            new_shape = tuple(dimsizes[out_dims[-i-1]] for i in sorted_in2out_poss if i < 0) \
-                      + tuple(dimsizes[in_dims[i]] for i in sorted_in2out_poss if i >= 0) # Also need to extend size `1` sparse dimensions in this case
+            new_shape = tuple(dimsizes[out_dims[-i - 1]] for i in sorted_in2out_poss if i < 0) \
+                + tuple(dimsizes[in_dims[i]] for i in sorted_in2out_poss if i >= 0)  # Extend size `1`
 
         # Chunks can be original size, in case of `sparse=True` it will be cut back to `1` by new_shape
-        new_chunks = tuple(dimchunksizes[out_dims[-i-1]] for i in sorted_in2out_poss if i < 0) + chunks
+        new_chunks = tuple(dimchunksizes[out_dims[-i - 1]] for i in sorted_in2out_poss if i < 0) + chunks
 
         # Apply old `dask.array.broadcast_to` and `transpose`
         new_arg = broadcast_to(arg, shape=new_shape, chunks=new_chunks)
         new_arg = new_arg.transpose(transpose_idcs)
 
         new_args.append(new_arg)
-    
+
     return new_args

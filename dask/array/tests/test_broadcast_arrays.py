@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import pytest
-from pytest import raises as assert_raises
 from numpy.testing import assert_array_equal, assert_equal
 import dask.array as da
 import numpy as np
@@ -15,8 +14,8 @@ from dask.array.broadcast_arrays import _parse_signature, broadcast_arrays
 def test__where():
     assert _where([], 1) is None
     assert _where([0, 2], 1) is None
-    assert _where([0, 2], 2) == 1 
-    assert _where([0, 2, None], None) == 2 
+    assert _where([0, 2], 2) == 1
+    assert _where([0, 2, None], None) == 2
 
 
 def test__inverse():
@@ -112,11 +111,9 @@ def test_broadcast_arrays_05():
 
 
 # 1) Broadcast two scalars each with distinct loop dims against each other
-@pytest.mark.parametrize("signature", [
-                                       "(i),(j)",
+@pytest.mark.parametrize("signature", ["(i),(j)",
                                        "(i),(j)->(),()",
-                                       "(i),(j)->(i,j),(i,j)"
-                                      ])
+                                       "(i),(j)->(i,j),(i,j)"])
 def test_broadcast_arrays_scalar_distinct_loop_dims(signature):
     a = np.random.randn(3)
     b = np.random.randn(4,)
@@ -126,12 +123,10 @@ def test_broadcast_arrays_scalar_distinct_loop_dims(signature):
 
 
 # 2) Broadcast two vectors each with distinct loop dims against each other
-@pytest.mark.parametrize("signature", [
-                                       "(i),(j)",
+@pytest.mark.parametrize("signature", ["(i),(j)",
                                        "(i),(j)->(U),(V)",  # Advanced usage, maybe not recommended
                                        "(i,U),(j,V)->(U),(V)",
-                                       "(i,U),(j,V)->(i,j,U),(i,j,V)"
-                                       ])
+                                       "(i,U),(j,V)->(i,j,U),(i,j,V)"])
 def test_broadcast_arrays_vectors_distinct_loop_dims(signature):
     a = np.random.randn(3, 5)
     b = np.random.randn(4, 6)
@@ -141,13 +136,11 @@ def test_broadcast_arrays_vectors_distinct_loop_dims(signature):
 
 
 # 3) Broadcast two scaVars with same loop dim against each other
-@pytest.mark.parametrize("signature", [
-                                       None,
+@pytest.mark.parametrize("signature", [None,
                                        "(i),(i)",
                                        "->(),()",
                                        "(i),(i)->(),()",
-                                       "(i),(i)->(i),(i)",
-                                       ])
+                                       "(i),(i)->(i),(i)"])
 def test_broadcast_arrays_scaVars_same_loop_dims(signature):
     a = np.random.randn(3)
     b = np.random.randn(3)
@@ -157,13 +150,11 @@ def test_broadcast_arrays_scaVars_same_loop_dims(signature):
 
 
 # 4) Broadcast two vectors each with same loop dim against each other
-@pytest.mark.parametrize("signature", [
-                                       "(i),(i)",
+@pytest.mark.parametrize("signature", ["(i),(i)",
                                        "->(U),(V)",
                                        "(i),(i)->(U),(V)",  # Advanced usage, maybe not recommended
                                        "(i,U),(i,V)->(U),(V)",
-                                       "(i,U),(i,V)->(i,U),(i,V)"
-                                       ])
+                                       "(i,U),(i,V)->(i,U),(i,V)"])
 def test_broadcast_arrays_vectors_same_loop_dims(signature):
     a = np.random.randn(3, 5)
     b = np.random.randn(3, 6)
@@ -173,13 +164,11 @@ def test_broadcast_arrays_vectors_same_loop_dims(signature):
 
 
 # 5a) Broadcast two vectors each with partially same loop dim against each other no proposed loop dim order
-@pytest.mark.parametrize("signature", [
-                                       "(j),(i,j)",
+@pytest.mark.parametrize("signature", ["(j),(i,j)",
                                        "->(U),(V)",
                                        "(j),(i,j)->(U),(V)",  # Advanced usage, maybe not recommended
                                        "(j,U),(i,j,V)->(U),(V)",
-                                       "(j,U),(i,j,V)->(i,j,U),(i,j,V)"
-                                       ])
+                                       "(j,U),(i,j,V)->(i,j,U),(i,j,V)"])
 def test_broadcast_arrays_vectors_mixed_loop_dims(signature):
     a = np.random.randn(4, 5)
     b = np.random.randn(3, 4, 6)
@@ -189,12 +178,10 @@ def test_broadcast_arrays_vectors_mixed_loop_dims(signature):
 
 
 # 5b) Broadcast two vectors each with partially same loop dim against each other no proposed loop dim order
-@pytest.mark.parametrize("signature", [
-                                       "(i),(i,j)",
+@pytest.mark.parametrize("signature", ["(i),(i,j)",
                                        "(i),(i,j)->(U),(V)",  # Advanced usage, maybe not recommended
                                        "(i,U),(i,j,V)->(U),(V)",
-                                       "(i,U),(i,j,V)->(i,j,U),(i,j,V)"
-                                      ])
+                                       "(i,U),(i,j,V)->(i,j,U),(i,j,V)"])
 def test_broadcast_arrays_vectors_mixed_loop_dims_02(signature):
     a = np.random.randn(3, 5)
     b = np.random.randn(3, 4, 6)
