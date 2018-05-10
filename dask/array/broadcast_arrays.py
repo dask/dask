@@ -101,7 +101,15 @@ def broadcast_arrays(*args, **kwargs):
         the two loop dimensions are ``"i"`` and ``"j"``. Specification of core
         dimensions could also be omitted, e.g. ``"(i),(j)"``. Then only loop
         dimensions could be specified and the signature is left aligned,
-        meaning trailing array dimensions are considered core dimensions.
+        meaning trailing array dimensions are considered mutual unique core
+        dimensions.
+
+        Either side of signature could be omitted, e.g. ``"->(K),(K)"``
+        specifies to broadcast all but the last dimension automatically
+        against each other according to numpy broadcasting rules [1]_.
+
+        If required, the arrays are also transposed to achieve the right
+        output order dimensions.
 
         Dimension sizes for same loop dimensions must match or be of length
         ``1``. Dimension sizes of same core dimensions must match.
@@ -109,13 +117,10 @@ def broadcast_arrays(*args, **kwargs):
         Chunk sizes for same loop or core dimensions must be same,
         except where a loop dimension is sparse and of length ``1``.
 
-        Order of loop dimensions is in order of their appearance.
-        Core dimensions are put to the end in the specified order.
-
         Defaults to ``None``.
 
         Note: while the syntax is similar to numpy generalized 
-        ufuncs [2]_, its meaning here is different. 
+        ufuncs [2]_, its meaning here is different.
        
     sparse: Optional; Bool
         Specifies if a broadcast should be sparse, i.e. new broadcast
@@ -124,7 +129,9 @@ def broadcast_arrays(*args, **kwargs):
         the other passed arguments). Defaults to ``False``.
     
     subok: Bool
-
+        If True, then sub-classes will be passed-through, otherwise
+        the returned array will be forced to be a base-class array
+        (default).
 
     Returns
     -------
@@ -140,33 +147,93 @@ def broadcast_arrays(*args, **kwargs):
     >>> A.shape, B.shape
     (3, 4), (3, 4)
 
-
+    Broadcast two scalars with distinct loop dims against each other
+    Equivalent signatures:
+        - ``"(i),(j)"``
+        - ``"(i),(j)->(),()"``
+        - ``"(i),(j)->(i,j),(i,j)"``
     >>> a = np.random.randn(3)
     >>> b = np.random.randn(4)
     >>> A, B = broadcast_arrays(a, b, signature="(i),(j)")
     >>> A.shape, B.shape
     (3, 4), (3, 4)
 
-
-    >>> a = np.random.randn(3)
-    >>> b = np.random.randn(4)
-    >>> A, B = broadcast_arrays(a, b, signature="(i),(j)", sparse=True)
+    Broadcast two vectors with distinct loop dims against each other
+    Equivalent signatures:
+        - ``"(i),(j)"``
+        - ``"(i),(j)->(U),(V)"`` (advanced usage, not recommended)
+        - ``"(i,U),(j,V)->(U),(V)"``
+        - ``"(i,U),(j,V)->(i,j,U),(i,j,V)"``
+    >>> a = np.random.randn(3, 5)
+    >>> b = np.random.randn(4, 6)
+    >>> A, B = broadcast_arrays(a, b, signature="(i),(j)")
     >>> A.shape, B.shape
-    (3, 1), (1, 4)
+    (3, 4, 5), (3, 4, 5)
 
+    Broadcast two scalars with same loop dim against each other
+    Equivalent signatures:
+        - ``None``
+        - ``"(i),(i)"``
+        - ``"->(),()"``
+        - ``"(i),(i)->(),()"``
+        - ``"(i),(i)->(i),(i)"``
+    >>> a = np.random.randn(3)
+    >>> b = np.random.randn(3)
+    >>> A, B = broadcast_arrays(a, b, signature="(i),(i)")
+    >>> A.shape, B.shape
+    (3,), (3,)
 
-    >>> x = da.random.normal(size=(2, 4, 5), chunks=(1, 3, 4))
-    >>> y = da.random.normal(size=(6, 2, 8, 7), chunks=(2, 1, 5, 6))
-    >>> X, Y = broadcast_arrays(x, y, signature="(L1,K2,K1),(K3,L1,L2,K4)->(K1,K2),(K3,K4)", sparse=True)
+    Broadcast two vectors each with same loop dim against each other
+    Equivalent signatures:
+        - ``"(i),(i)",``
+        - ``"->(U),(V)"``
+        - ``"(i),(i)->(U),(V)"`` (advanced usage, not recommended)
+        - ``"(i,U),(i,V)->(U),(V)"``
+        - ``"(i,U),(i,V)->(i,U),(i,V)"``
+    >>> a = np.random.randn(3, 5)
+    >>> b = np.random.randn(3, 6)
+    >>> A, B = broadcast_arrays(a, b, signature="(i),(i)")
+    >>> A.shape, B.shape
+    (3, 5), (3, 6)
+
+    Broadcast two vectors each with partially same loop dim against each other no proposed loop dim order
+    Equivalent signatures:
+        - ``"(j),(i,j)"``
+        - ``"->(U),(V)"``
+        - ``"(j),(i,j)->(U),(V)"`` (advanced usage, not recommended)
+        - ``"(j,U),(i,j,V)->(U),(V)"``
+        - ``"(j,U),(i,j,V)->(i,j,U),(i,j,V)"``
+    >>> a = np.random.randn(4, 5)
+    >>> b = np.random.randn(3, 4, 6)
+    >>> A, B = broadcast_arrays(a, b, signature="(j),(i,j)")
+    >>> A.shape, B.shape
+    (3, 4, 5), (3, 4, 6)
+
+    Broadcast two vectors each with partially same loop dim against each other no proposed loop dim order
+    Equivalent signatures:
+        - ``"(i),(i,j)"``
+        - ``"(i),(i,j)->(U),(V)"`` (advanced usage, not recommended)
+        - ``"(i,U),(i,j,V)->(U),(V)"``
+        - ``"(i,U),(i,j,V)->(i,j,U),(i,j,V)"``
+    >>> a = np.random.randn(3, 5)
+    >>> b = np.random.randn(3, 4, 6)
+    >>> # Equivalent signatures: "(i),(i,j)", "(i),(i,j)->(k),(l)", "(i,k),(i,j,l)->(k),(l)", "(i,k),(i,j,l)->(i,j,k),(i,j,l)"
+    >>> A, B = broadcast_arrays(a, b, signature="(i),(i,j)")
+    >>> A.shape, B.shape
+    (3, 4, 5), (3, 4, 6)
+
+    # Broadcast many core and loop dimensions against each other that are passed in random order
+    >>> x = da.random.normal(size=(20, 30, 3), chunks=(5, 6, 3))
+    >>> y = da.random.normal(size=(3, 30, 20, 2), chunks=(3, 6, 5, 2))
+    >>> X, Y = broadcast_arrays(x, y, signature="(i,j,U),(U,j,i,V)->(U),(V,U)")
     >>> X.shape, Y.shape
-    (2, 1, 5, 4), (2, 8, 6, 7)
+    (20, 30, 3), (20, 30, 2, 3)
 
 
     References
     ----------
-    .. [1] http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
-
-
+    .. [1] https://docs.scipy.org/doc/numpy-1.14.0/user/basics.broadcasting.html
+    .. [2] http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
     """
     signature = kwargs.pop('signature', None)
     sparse = kwargs.pop('sparse', False)
