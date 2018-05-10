@@ -4,7 +4,7 @@ from bisect import bisect
 from collections import Iterable, Mapping
 from collections import Iterator
 from functools import partial, wraps
-from itertools import product, count
+from itertools import product
 import math
 from numbers import Number
 import operator
@@ -19,12 +19,12 @@ import warnings
 
 try:
     from cytoolz import (partition, concat, join, first,
-                         groupby, valmap, accumulate, assoc, merge)
+                         groupby, valmap, accumulate, assoc)
     from cytoolz.curried import filter, pluck
 
 except ImportError:
     from toolz import (partition, concat, join, first,
-                       groupby, valmap, accumulate, assoc, merge)
+                       groupby, valmap, accumulate, assoc)
     from toolz.curried import filter, pluck
 from toolz import pipe, map, reduce
 import numpy as np
@@ -39,7 +39,7 @@ from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict, Dispatch)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
-from ..core import quote, flatten
+from ..core import quote
 from ..delayed import Delayed, to_task_dask
 from .. import threaded, core
 from .. import sharedict
