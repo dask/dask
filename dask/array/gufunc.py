@@ -13,6 +13,7 @@ from .core import Array, asarray, atop, getitem
 from .. import sharedict
 from ..core import flatten
 
+
 # Modified version of `numpy.lib.function_base._parse_gufunc_signature`
 # Modifications:
 #   - Allow for zero input arguments
@@ -67,6 +68,7 @@ def _compile_gufunc_signature(ins, outs):
     outs: List[Tuple[str, ...]] or Tuple[str, ...]
         For one output: tuple of dimension names;
         For many outputs: list of tuple of dimension names
+
     Returns
     -------
     Signature according to the specification of numpy.gufunc signature [2]_
@@ -112,14 +114,16 @@ def apply_gufunc(func, signature, *args, **kwargs):
     signature: String
         Specifies what core dimensions are consumed and produced by ``func``.
         According to the specification of numpy.gufunc signature [2]_
-    output_dtypes : dtype or list of dtypes
+    output_dtypes : dtype or list of dtypes, keyword only
         dtype or list of output dtypes.
-    output_sizes : dict, optional
+    output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
         new core dimensions (not found on inputs) appear on outputs.
-    vectorize: bool
+    vectorize: bool, keyword only
         If set to ``True``, ``np.vectorize`` is applied to ``func`` for
         convenience. Defaults to ``False``.
+    concatenate:  bool, keyword only
+        If true concatenate arrays along core dimensions, else provide lists
 
     Returns
     -------
@@ -260,15 +264,15 @@ class gufunc(object):
         the style of NumPy universal functions [1]_ (if this is not the case,
         set ``vectorize=True``). If this function returns multiple outputs,
         ``output_core_dims`` has to be set as well.
-    signature : String
+    signature : String, keyword only
         Specifies what core dimensions are consumed and produced by ``func``.
         According to the specification of numpy.gufunc signature [2]_
-    output_dtypes : dtype or list of dtypes
+    output_dtypes : dtype or list of dtypes, keyword only
         dtype or list of output dtypes.
-    output_sizes : dict, optional
+    output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
         new core dimensions (not found on inputs) appear on outputs.
-    vectorize: bool
+    vectorize: bool, keyword only
         If set to ``True``, ``np.vectorize`` is applied to ``func`` for
         convenience. Defaults to ``False``.
 
@@ -347,12 +351,12 @@ def as_gufunc(signature=None, **kwargs):
     signature : String
         Specifies what core dimensions are consumed and produced by ``func``.
         According to the specification of numpy.gufunc signature [2]_
-    output_dtypes : dtype or list of dtypes
+    output_dtypes : dtype or list of dtypes, keyword only
         dtype or list of output dtypes.
-    output_sizes : dict, optional
+    output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
         new core dimensions (not found on inputs) appear on outputs.
-    vectorize: bool
+    vectorize: bool, keyword only
         If set to ``True``, ``np.vectorize`` is applied to ``func`` for
         convenience. Defaults to ``False``.
 
