@@ -31,7 +31,7 @@ inside ``np.linalg._umath_linalg`` and might change in the future.
     w, v = np.linalg._umath_linalg.eig(x, output_dtypes=(float, float))
 
 
-Wrap own python function
+Wrap own Python function
 ~~~~~~~~~~~~~~~~~~~~~~~~
 ``gufunc`` can be used to make a Python function behave like a generalized ufunc:
 
@@ -67,7 +67,8 @@ Disclaimer
 This experimental generalized ufunc integration is not complete:
 
 * ``gufunc`` does not create a true generalized ufunc to be used with other input arrays, but dask.
-I.e. at the moment ``gufunc`` casts all input arguments to ``dask.array.Array``.
+  I.e. at the moment ``gufunc`` casts all input arguments to ``dask.array.Array``.
+
 * Inferring ``output_dtypes`` automatically is not implemented yet.
 
 
