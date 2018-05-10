@@ -128,22 +128,21 @@ def apply_gufunc(func, signature, *args, **kwargs):
     Examples
     --------
     >>> import dask.array as da
-    ... import numpy as np
-    ... def stats(x):
+    >>> import numpy as np
+    >>> def stats(x):
     ...     return np.mean(x, axis=-1), np.std(x, axis=-1)
-    ... a = da.random.normal(size=(10,20,30), chunks=5)
-    ... mean, std = da.apply_gufunc(stats, "(i)->(),()", a, output_dtypes=2*(a.dtype,))
-    ... mean.compute().shape
+    >>> a = da.random.normal(size=(10,20,30), chunks=5)
+    >>> mean, std = da.apply_gufunc(stats, "(i)->(),()", a, output_dtypes=2*(a.dtype,))
+    >>> mean.compute().shape
     (10, 20)
 
-    >>> import dask.array as da
-    ... import numpy as np
-    ... def outer_product(x, y):
-    ...     return np.einsum("...i,...j->...ij", x, y)
-    ... a = da.random.normal(size=(   20,30), chunks=5)
-    ... b = da.random.normal(size=(10, 1,40), chunks=10)
-    ... c = da.apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b, output_dtypes=a.dtype)
-    ... c.compute().shape
+
+    >>> def outer_product(x, y):
+    ...     return np.einsum("i,j->ij", x, y)
+    >>> a = da.random.normal(size=(   20,30), chunks=5)
+    >>> b = da.random.normal(size=(10, 1,40), chunks=10)
+    >>> c = da.apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b, output_dtypes=a.dtype, vectorize=True)
+    >>> c.compute().shape
     (10, 20, 30, 40)
 
     References
@@ -284,19 +283,18 @@ class gufunc(object):
     >>> a = da.random.normal(size=(10,20,30), chunks=5)
     >>> def stats(x):
     ...     return np.mean(x, axis=-1), np.std(x, axis=-1)
-    >>> gustats = da.gufunc(stats, "(i)->(),()")
-    ... mean, std = gustats(a)
-    ... mean.compute().shape
+    >>> gustats = da.gufunc(stats, signature="(i)->(),()", output_dtypes=(float, float))
+    >>> mean, std = gustats(a)
+    >>> mean.compute().shape
     (10, 20)
 
-    >>> import dask.array as da
-    >>> import numpy as np
+
     >>> a = da.random.normal(size=(   20,30), chunks=5)
     >>> b = da.random.normal(size=(10, 1,40), chunks=10)
-    ... def outer_product(x, y):
-    ...     return np.einsum("...i,...j->...ij", x, y)
-    >>> gustats = da.gufunc(stats, "(i),(j)->(i,j)")
-    >>> c = outer_product(a, b)
+    >>> def outer_product(x, y):
+    ...     return np.einsum("i,j->ij", x, y)
+    >>> guouter_product = da.gufunc(outer_product, signature="(i),(j)->(i,j)", output_dtypes=float, vectorize=True)
+    >>> c = guouter_product(a, b)
     >>> c.compute().shape
     (10, 20, 30, 40)
 
@@ -368,20 +366,18 @@ def asgufunc(signature=None, **kwargs):
     >>> import dask.array as da
     >>> import numpy as np
     >>> a = da.random.normal(size=(10,20,30), chunks=5)
-    >>> @da.asgufunc("(i)->(),()")
+    >>> @da.asgufunc("(i)->(),()", output_dtypes=(float, float))
     ... def stats(x):
     ...     return np.mean(x, axis=-1), np.std(x, axis=-1)
     >>> mean, std = stats(a)
     >>> mean.compute().shape
     (10, 20)
 
-    >>> import dask.array as da
-    >>> import numpy as np
     >>> a = da.random.normal(size=(   20,30), chunks=5)
     >>> b = da.random.normal(size=(10, 1,40), chunks=10)
-    >>> @da.asgufunc("(i),(j)->(i,j)")
+    >>> @da.asgufunc("(i),(j)->(i,j)", output_dtypes=float, vectorize=True)
     ... def outer_product(x, y):
-    ...     return np.einsum("...i,...j->...ij", x, y)
+    ...     return np.einsum("i,j->ij", x, y)
     >>> c = outer_product(a, b)
     >>> c.compute().shape
     (10, 20, 30, 40)
