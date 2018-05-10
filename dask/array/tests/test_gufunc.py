@@ -3,8 +3,9 @@ from __future__ import absolute_import, division, print_function
 from distutils.version import LooseVersion
 import pytest
 from pytest import raises as assert_raises
-from numpy.testing import assert_array_equal, assert_equal
+from numpy.testing import assert_equal
 import dask.array as da
+from dask.array.utils import assert_eq
 import numpy as np
 
 from dask.array.core import Array
@@ -69,7 +70,7 @@ def test_apply_gufunc_elemwise_01():
     a = da.from_array(np.array([1, 2, 3]), chunks=2, name='a')
     b = da.from_array(np.array([1, 2, 3]), chunks=2, name='b')
     z = apply_gufunc(add, "(),()->()", a, b, output_dtypes=a.dtype)
-    assert_array_equal(z.compute(), [2, 4, 6])
+    assert_eq(z, np.array([2, 4, 6]))
 
 
 def test_apply_gufunc_elemwise_02():
@@ -79,8 +80,8 @@ def test_apply_gufunc_elemwise_02():
     a = da.from_array(np.array([1, 2, 3]), chunks=2, name='a')
     b = da.from_array(np.array([1, 2, 3]), chunks=2, name='b')
     z1, z2 = apply_gufunc(addmul, "(),()->(),()", a, b, output_dtypes=2 * (a.dtype,))
-    assert_array_equal(z1.compute(), [2, 4, 6])
-    assert_array_equal(z2.compute(), [1, 4, 9])
+    assert_eq(z1, np.array([2, 4, 6]))
+    assert_eq(z2, np.array([1, 4, 9]))
 
 
 def test_gufunc_vector_output():
@@ -88,7 +89,7 @@ def test_gufunc_vector_output():
         return np.array([1, 2, 3], dtype=int)
     x = apply_gufunc(foo, "->(i_0)", output_dtypes=int, output_sizes={"i_0": 3})
     assert x.chunks == ((3,),)
-    assert_array_equal( x.compute(), [1, 2, 3])
+    assert_eq(x, np.array([1, 2, 3]))
 
 
 def test_apply_gufunc_elemwise_loop():
@@ -98,7 +99,7 @@ def test_apply_gufunc_elemwise_loop():
     a = da.from_array(np.array([1, 2, 3]), chunks=2, name='a')
     z = apply_gufunc(foo, "()->()", a, output_dtypes=int)
     assert z.chunks == ((2, 1),)
-    assert_array_equal(z.compute(), [2, 4, 6])
+    assert_eq(z, np.array([2, 4, 6]))
 
 
 def test_apply_gufunc_elemwise_core():
@@ -108,7 +109,7 @@ def test_apply_gufunc_elemwise_core():
     a = da.from_array(np.array([1, 2, 3]), chunks=2, name='a')
     z = apply_gufunc(foo, "(i)->(i)", a, output_dtypes=int)
     assert z.chunks == ((3,),)
-    assert_array_equal(z.compute(), [2, 4, 6])
+    assert_eq(z, np.array([2, 4, 6]))
 
 
 # TODO: In case single tuple output will get enabled:
@@ -135,7 +136,7 @@ def test_apply_gufunc_two_mixed_outputs():
                         output_sizes={'i': 2, 'j': 3})
     assert x.compute() == 1
     assert y.chunks == ((2,), (3,))
-    assert_array_equal(y.compute(), np.ones((2, 3), dtype=float))
+    assert_eq(y, np.ones((2, 3), dtype=float))
 
 
 def test_gufunc_two_inputs():
@@ -144,7 +145,7 @@ def test_gufunc_two_inputs():
     a = da.ones((2, 3), chunks=(1, 2), dtype=int)
     b = da.ones((3, 4), chunks=(2, 3), dtype=int)
     x = apply_gufunc(foo, "(i,j),(j,k)->(i,k)", a, b, output_dtypes=int)
-    assert_array_equal(x.compute(), 3 * np.ones((2, 4), dtype=int))
+    assert_eq(x, 3 * np.ones((2, 4), dtype=int))
 
 
 @pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
