@@ -253,7 +253,8 @@ def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
         Array to be rechunked.
     chunks:  tuple of tuples, tuple of int, or str
         The specific new block dimensions to create, or an automatic rechunking
-        scheme with one of the keys of ``rechunkers``.
+        scheme with one of the keys of ``rechunkers``. For ints, -1 indicates
+        the full size of the corresponding dimension.
     threshold: int
         The graph growth factor under which we don't bother introducing an
         intermediate step.
