@@ -194,11 +194,13 @@ A scheduler will be available under ``c.scheduler`` and a list of workers under
 ``c.workers``.  There is an IOLoop running in a background thread.
 
 
-Using Amazon EC2
-----------------
+Using AWS
+---------
 
-See the :doc:`EC2 quickstart <ec2>` for information on the ``dask-ec2`` easy
-setup script to launch a canned cluster on EC2.
+See `Cloud Deployments`_ for the latest information on deploying to Amazon
+cloud.
+
+.. _cloud deployments: _https://dask.pydata.org/en/latest/setup/cloud.html
 
 
 Using Google Cloud
