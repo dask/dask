@@ -46,10 +46,11 @@ def test_read_json_error():
             dd.read_json(f, orient='split', blocksize=1)
 
 
-def test_read_chunked():
+@pytest.mark.parametrize('block', [5, 15, 33, 200, 90000])
+def test_read_chunked(block):
     with tmpdir() as path:
         fn = os.path.join(path, '1.json')
         df.to_json(fn, orient='records', lines=True)
-        d = dd.read_json(fn, blocksize=33)
-        assert d.npartitions > 1
+        d = dd.read_json(fn, blocksize=block, sample=10)
+        assert (d.npartitions > 1) or (block > 50)
         assert_eq(d, df, check_index=False)

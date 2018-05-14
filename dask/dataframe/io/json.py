@@ -60,7 +60,7 @@ def write_json_partition(df, openfile, kwargs):
 
 
 def read_json(url_path, orient='records', lines=True, storage_options=None,
-              blocksize=None, **kwargs):
+              blocksize=None, sample=2**20, **kwargs):
     """Create a dataframe from a set of JSON files
 
     This utilises ``pandas.read_json()``, and most parameters are
@@ -91,6 +91,9 @@ def read_json(url_path, orient='records', lines=True, storage_options=None,
         file. If int, which can only be used for line-delimited JSON files,
         each partition will be approximately this size in bytes, to the nearest
         newline character.
+    sample: int
+        Number of bytes to pre-load, to provide an empty dataframe structure
+        to any blocks wihout data. Only relevant is using blocksize.
 
     Returns
     -------
@@ -122,10 +125,14 @@ def read_json(url_path, orient='records', lines=True, storage_options=None,
     errors = kwargs.pop('errors', 'strict')
     storage_options = storage_options or {}
     if blocksize:
-        _, chunks = read_bytes(url_path, b'\n', blocksize=blocksize,
-                               sample=False, **storage_options)
-        parts = [dask.delayed(read_json_chunk)(chunk, encoding, errors, kwargs)
-                 for chunk in dask.core.flatten(chunks)]
+        first, chunks = read_bytes(url_path, b'\n', blocksize=blocksize,
+                                   sample=sample, **storage_options)
+        chunks = list(dask.core.flatten(chunks))
+        first = read_json_chunk(first, encoding, errors, kwargs)
+        parts = [dask.delayed(read_json_chunk)(
+            chunk, encoding, errors, kwargs, meta=first[:0])
+                 for chunk in chunks]
+
     else:
         files = open_files(url_path, 'rt', encoding=encoding, errors=errors,
                            **storage_options)
@@ -134,10 +141,14 @@ def read_json(url_path, orient='records', lines=True, storage_options=None,
     return dd.from_delayed(parts)
 
 
-def read_json_chunk(chunk, encoding, errors, kwargs):
+def read_json_chunk(chunk, encoding, errors, kwargs, meta=None):
     s = io.StringIO(chunk.decode(encoding, errors))
     s.seek(0)
-    return pd.read_json(s, orient='records', lines=True, **kwargs)
+    df = pd.read_json(s, orient='records', lines=True, **kwargs)
+    if meta is not None and df.empty:
+        return meta
+    else:
+        return df
 
 
 def read_json_file(f, orient, lines, kwargs):
