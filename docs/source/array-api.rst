@@ -651,6 +651,10 @@ Other functions
 .. autofunction:: atop
 .. autofunction:: top
 
+.. currentmodule:: dask.array.broadcast_arrays
+
+.. autofunction:: broadcast_arrays
+
 .. currentmodule:: dask.array
 
 Array Methods

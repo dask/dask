@@ -9,6 +9,7 @@ Array
 +++++
 
 - Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
+- Enhance ``broadcast_arrays`` by ``signature`` argument to exclude core dims from broadcast and ``sparse`` argument as in ``numpy.meshgrid`` (:pr:`3486`) `Markus Gonser`_
 
 Dataframe
 +++++++++
