@@ -768,9 +768,11 @@ def test_size():
 def test_shape():
     result = d.shape
     assert_eq((result[0].compute(),result[1]), (len(full),len(full.columns)))
+    assert_eq(dd.compute(result)[0], (len(full),len(full.columns)))
 
-    result = d.a.shape[0].compute()
-    assert_eq(result, len(full.a))
+    result = d.a.shape
+    assert_eq(result[0].compute(), len(full.a))
+    assert_eq(dd.compute(result)[0], (len(full.a),))
 
 
 def test_nbytes():
