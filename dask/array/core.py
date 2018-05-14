@@ -2105,7 +2105,7 @@ def to_zarr(arr, url, component=None, storage_options=None,
         assert len(path) == 1
         mapper = get_mapper(fs, path[0])
     else:
-        # assume the aobject passed is already a mapper
+        # assume the object passed is already a mapper
         mapper = url
     chunks = [c[0] for c in arr.chunks]
     if component is None:
