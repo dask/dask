@@ -150,12 +150,14 @@ class HTTPFile(object):
             file. If the server has not supplied the filesize, attempting to
             read only part of the data will raise a ValueError.
         """
+        if length == 0:
+            return b''
         if self.size is None:
             if length >= 0:
                 raise ValueError('File size is unknown, must read all data')
             else:
                 return self._fetch_all()
-        if length < 1 and self.loc == 0:
+        if length < 0 and self.loc == 0:
             return self._fetch_all()
         if length < 0 or self.loc + length > self.size:
             end = self.size
