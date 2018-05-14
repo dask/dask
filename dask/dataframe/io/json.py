@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import io
 import pandas as pd
 from dask.bytes import open_files, read_bytes
@@ -35,7 +37,6 @@ def to_json(df, url_path, orient='records', lines=True, storage_options=None,
         If true, immediately executes. If False, returns a set of delayed
         objects, which can be computed at a later time.
     """
-    import dask.dataframe as dd
     kwargs['orient'] = orient
     kwargs['lines'] = lines and orient == 'records'
     outfiles = open_files(

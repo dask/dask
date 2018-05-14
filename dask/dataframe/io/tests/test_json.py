@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import pytest
 
-import dask
 import dask.dataframe as dd
 from dask.utils import tmpfile, tmpdir
 from dask.dataframe.utils import assert_eq
