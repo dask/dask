@@ -130,8 +130,8 @@ def read_json(url_path, orient='records', lines=True, storage_options=None,
         chunks = list(dask.core.flatten(chunks))
         first = read_json_chunk(first, encoding, errors, kwargs)
         parts = [dask.delayed(read_json_chunk)(
-            chunk, encoding, errors, kwargs, meta=first[:0])
-                 for chunk in chunks]
+            chunk, encoding, errors, kwargs, meta=first[:0]
+        ) for chunk in chunks]
 
     else:
         files = open_files(url_path, 'rt', encoding=encoding, errors=errors,
