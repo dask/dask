@@ -766,11 +766,8 @@ def test_size():
 
 
 def test_shape():
-    result = d.shape[0].compute()
-    assert_eq(result, len(full))
-
-    result = d.shape[1].compute()
-    assert_eq(result, len(full.columns))
+    result = d.shape
+    assert_eq((result[0].compute(),result[1]), (len(full),len(full.columns)))
 
     result = d.a.shape[0].compute()
     assert_eq(result, len(full.a))

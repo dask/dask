@@ -28,8 +28,7 @@ from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
                      is_arraylike)
 from ..array import Array
-from ..base import (DaskMethodsMixin, tokenize, dont_optimize,
-                     is_dask_collection, compute, persist)
+from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..delayed import Delayed, to_task_dask
 
 from . import methods
@@ -1785,7 +1784,7 @@ class Series(_Frame):
         """
         Return a tuple representing the dimensionality of a Series.
         """
-        return Tuple((self.size,))
+        return (self.size,)
 
     @property
     def dtype(self):
@@ -2300,77 +2299,6 @@ class Index(Series):
         return maybe_shift_divisions(out, periods, freq=freq)
 
 
-class Tuple(tuple):
-    def compute(self, **kwargs):
-        """Compute this dask collection
-
-        This turns a lazy Dask collection into its in-memory equivalent.
-        For example a Dask.array turns into a  :func:`numpy.array` and a Dask.dataframe
-        turns into a Pandas dataframe.  The entire dataset must fit into memory
-        before calling this operation.
-
-        Parameters
-        ----------
-        get : callable, optional
-            A scheduler ``get`` function to use. If not provided, the default
-            is to check the global settings first, and then fall back to
-            the collection defaults.
-        optimize_graph : bool, optional
-            If True [default], the graph is optimized before computation.
-            Otherwise the graph is run as is. This can be useful for debugging.
-        kwargs
-            Extra keywords to forward to the scheduler ``get`` function.
-
-        See Also
-        --------
-        dask.base.compute
-        """
-        (result,) = compute(self, **kwargs)
-        return result
-
-    def persist(self, **kwargs):
-        """Persist this dask collection into memory
-
-        This turns a lazy Dask collection into a Dask collection with the same
-        metadata, but now with the results fully computed or actively computing
-        in the background.
-
-        The action of function differs significantly depending on the active
-        task scheduler.  If the task scheduler supports asynchronous computing,
-        such as is the case of the dask.distributed scheduler, then persist
-        will return *immediately* and the return value's task graph will
-        contain Dask Future objects.  However if the task scheduler only
-        supports blocking computation then the call to persist will *block*
-        and the return value's task graph will contain concrete Python results.
-
-        This function is particularly useful when using distributed systems,
-        because the results will be kept in distributed memory, rather than
-        returned to the local process as with compute.
-
-        Parameters
-        ----------
-        get : callable, optional
-            A scheduler ``get`` function to use. If not provided, the default
-            is to check the global settings first, and then fall back to
-            the collection defaults.
-        optimize_graph : bool, optional
-            If True [default], the graph is optimized before computation.
-            Otherwise the graph is run as is. This can be useful for debugging.
-        **kwargs
-            Extra keywords to forward to the scheduler ``get`` function.
-
-        Returns
-        -------
-        New dask collections backed by in-memory data
-
-        See Also
-        --------
-        dask.base.persist
-        """
-        (result,) = persist(self, **kwargs)
-        return result
-
-
 class DataFrame(_Frame):
     """
     Parallel Pandas DataFrame
@@ -2510,9 +2438,9 @@ class DataFrame(_Frame):
         Return a tuple representing the dimensionality of the DataFrame.
         """
         from dask.delayed import delayed
-        col_size = delayed(int)(len(self.columns))
+        col_size = len(self.columns)
         row_size = delayed(int)(self.size / col_size)
-        return Tuple((row_size, col_size))
+        return (row_size, col_size)
 
     @property
     def dtypes(self):
