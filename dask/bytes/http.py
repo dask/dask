@@ -155,6 +155,8 @@ class HTTPFile(object):
                 raise ValueError('File size is unknown, must read all data')
             else:
                 return self._fetch_all()
+        if length < 1 and self.loc == 0:
+            return self._fetch_all()
         if length < 0 or self.loc + length > self.size:
             end = self.size
         else:
@@ -202,7 +204,9 @@ class HTTPFile(object):
         """
         r = self.session.get(self.url, **self.kwargs)
         r.raise_for_status()
-        return r.content
+        out = r.content
+        self.loc = len(out)
+        return out
 
     def _fetch_range(self, start, end):
         """Download a block of data
