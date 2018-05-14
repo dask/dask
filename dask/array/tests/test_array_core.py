@@ -3252,6 +3252,15 @@ def test_zarr_rechunk():
         a.to_zarr(d, rechunk=(1, ))
 
 
+def test_read_zarr_chunks():
+    pytest.importorskip('zarr')
+    a = da.zeros((9, ), chunks=(3, ))
+    with tmpdir() as d:
+        a.to_zarr(d)
+        arr = da.from_zarr(d, chunks=(5, ))
+        assert arr.chunks == ((5, 4), )
+
+
 def test_zarr_pass_mapper():
     pytest.importorskip('zarr')
     import zarr.storage

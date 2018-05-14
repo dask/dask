@@ -2019,7 +2019,7 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     return Array(dsk, name, chunks, dtype=x.dtype)
 
 
-def from_zarr(url, component=None, storage_options=None, **kwargs):
+def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
     """Load array from the zarr storage format
 
     See https://zarr.readthedocs.io for details about the format.
@@ -2036,6 +2036,10 @@ def from_zarr(url, component=None, storage_options=None, **kwargs):
     storage_options: dict
         Any additional parameters for the storage backend (ignored for local
         paths)
+    chunks: tuple of ints or tuples of ints
+        Passed to ``da.from_array``, allows setting the chunks on
+        initialisation, if the chunking scheme in the on-disc dataset is not
+        optimal for the calculations to follow.
     kwargs: passed to zarr's open functions.
     """
     import zarr
@@ -2051,7 +2055,8 @@ def from_zarr(url, component=None, storage_options=None, **kwargs):
         z = zarr.open_array(mapper, mode='r', **kwargs)
     else:
         z = zarr.open_group(mapper, mode='r', **kwargs)[component]
-    return from_array(z, z.chunks, name='zarr-%s' % url)
+    chunks = chunks if chunks is not None else z.chunks
+    return from_array(z, chunks, name='zarr-%s' % url)
 
 
 def to_zarr(arr, url, component=None, storage_options=None,
