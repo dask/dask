@@ -14,6 +14,8 @@ Array
 Dataframe
 +++++++++
 
+- Add to/read_json (:pr:`3494`) `Martin Durant`_
+
 Bag
 +++
 
