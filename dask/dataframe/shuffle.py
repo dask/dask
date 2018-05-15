@@ -241,7 +241,7 @@ class maybe_buffered_partd(object):
     """If serialized, will return non-buffered partd. Otherwise returns a
     buffered partd"""
     def __init__(self, buffer=True, tempdir=None):
-        self.tempdir = tempdir or config.get('temporary_directory')
+        self.tempdir = tempdir or config.get('temporary_directory', None)
         self.buffer = buffer
 
     def __reduce__(self):
