@@ -34,7 +34,7 @@ def test_merge():
     assert c == expected
 
 
-def test_collect():
+def test_collect_yaml_paths():
     a = {'x': 1, 'y': {'a': 1}}
     b = {'x': 2, 'z': 3, 'y': {'b': 2}}
 
@@ -46,8 +46,6 @@ def test_collect():
 
     with tmpfile(extension='yaml') as fn1:
         with tmpfile(extension='yaml') as fn2:
-            a = {'x': 1, 'y': {'a': 1}}
-            b = {'x': 2, 'z': 3, 'y': {'b': 2}}
             with open(fn1, 'w') as f:
                 yaml.dump(a, f)
             with open(fn2, 'w') as f:
@@ -55,6 +53,27 @@ def test_collect():
 
             config = merge(*collect_yaml(paths=[fn1, fn2]))
             assert config == expected
+
+
+def test_collect_yaml_dir():
+    a = {'x': 1, 'y': {'a': 1}}
+    b = {'x': 2, 'z': 3, 'y': {'b': 2}}
+
+    expected = {
+        'x': 2,
+        'y': {'a': 1, 'b': 2},
+        'z': 3,
+    }
+
+    with tmpfile() as dirname:
+        os.mkdir(dirname)
+        with open(os.path.join(dirname, 'a.yaml'), mode='w') as f:
+            yaml.dump(a, f)
+        with open(os.path.join(dirname, 'b.yaml'), mode='w') as f:
+            yaml.dump(b, f)
+
+        config = merge(*collect_yaml(paths=[dirname]))
+        assert config == expected
 
 
 def test_env():
