@@ -7,6 +7,7 @@ import numpy as np
 from numpy.compat import basestring
 
 from .core import (atop, asarray)
+from . import chunk
 
 einsum_symbols = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 einsum_symbols_set = set(einsum_symbols)
@@ -182,24 +183,20 @@ def parse_einsum_input(operands):
     return (input_subscripts, output_subscript, operands)
 
 
-def _einsum_kernel(*operands, **kwargs):
-    subscripts = kwargs.pop('subscripts')
-    ncontract_inds = kwargs.pop('ncontract_inds')
-    dtype = kwargs.pop('kernel_dtype')
-    chunk = np.einsum(subscripts, *operands, dtype=dtype, **kwargs)
-
-    # Avoid concatenate=True in atop by adding 1's
-    # for the contracted dimensions
-    return chunk.reshape(chunk.shape + (1,) * ncontract_inds)
-
-
 einsum_can_optimize = LooseVersion(np.__version__) >= LooseVersion("1.12.0")
 
 
 @wraps(np.einsum)
 def einsum(*operands, **kwargs):
-    dtype = kwargs.get('dtype')
-    optimize = kwargs.get('optimize')
+    casting = kwargs.pop('casting', 'safe')
+    dtype = kwargs.pop('dtype', None)
+    optimize = kwargs.pop('optimize', False)
+    order = kwargs.pop('order', 'K')
+    split_every = kwargs.pop('split_every', None)
+    if kwargs:
+        raise TypeError("einsum() got unexpected keyword "
+                        "argument(s) %s" % ",".join(kwargs))
+
     einsum_dtype = dtype
 
     inputs, outputs, ops = parse_einsum_input(operands)
@@ -209,16 +206,18 @@ def einsum(*operands, **kwargs):
     if dtype is None:
         dtype = np.result_type(*[o.dtype for o in ops])
 
-    if optimize is None:
-        optimize = False
-
-    if einsum_can_optimize and optimize is not False:
-        # Avoid computation of dask arrays within np.einsum_path
-        # by passing in small numpy arrays broadcasted
-        # up to the right shape
-        fake_ops = [np.broadcast_to(o.dtype.type(0), shape=o.shape)
-                    for o in ops]
-        optimize, _ = np.einsum_path(subscripts, *fake_ops, optimize=optimize)
+    if einsum_can_optimize:
+        if optimize is not False:
+            # Avoid computation of dask arrays within np.einsum_path
+            # by passing in small numpy arrays broadcasted
+            # up to the right shape
+            fake_ops = [np.broadcast_to(o.dtype.type(0), shape=o.shape)
+                        for o in ops]
+            optimize, _ = np.einsum_path(subscripts, *fake_ops,
+                                         optimize=optimize)
+        kwargs = {'optimize': optimize}
+    else:
+        kwargs = {}
 
     inputs = [tuple(i) for i in inputs.split(",")]
 
@@ -229,27 +228,21 @@ def einsum(*operands, **kwargs):
     contract_inds = all_inds - set(outputs)
     ncontract_inds = len(contract_inds)
 
-    # Update kwargs with np.einsum parameters
-    kwargs['subscripts'] = subscripts
-    kwargs['kernel_dtype'] = einsum_dtype
-    kwargs['ncontract_inds'] = ncontract_inds
-
-    if einsum_can_optimize:
-        kwargs['optimize'] = optimize
-
-    # Update kwargs with atop parameters
-    kwargs['adjust_chunks'] = {ind: 1 for ind in contract_inds}
-    kwargs['dtype'] = dtype
-
     # Introduce the contracted indices into the atop product
     # so that we get numpy arrays, not lists
-    result = atop(_einsum_kernel, tuple(outputs) + tuple(contract_inds),
+    result = atop(chunk.einsum, tuple(outputs) + tuple(contract_inds),
                   *(a for ap in zip(ops, inputs) for a in ap),
-                  **kwargs)
+                  # atop parameters
+                  adjust_chunks={ind: 1 for ind in contract_inds}, dtype=dtype,
+                  # np.einsum parameters
+                  subscripts=subscripts, kernel_dtype=einsum_dtype,
+                  ncontract_inds=ncontract_inds, order=order,
+                  casting=casting, **kwargs)
 
     # Now reduce over any extra contraction dimensions
     if ncontract_inds > 0:
         size = len(outputs)
-        return result.sum(axis=list(range(size, size + ncontract_inds)))
+        return result.sum(axis=list(range(size, size + ncontract_inds)),
+                          split_every=split_every)
 
     return result
