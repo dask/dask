@@ -133,8 +133,6 @@ def apply_gufunc(func, signature, *args, **kwargs):
     output_sizes = kwargs.pop("output_sizes", None)
     vectorize = kwargs.pop("vectorize", None)
     allow_rechunk = kwargs.pop("allow_rechunk", False)
-    if output_dtypes is None:
-        raise ValueError("Must specify `output_dtypes` of output array(s)")
 
     # Input processing:
     ## Signature
@@ -142,18 +140,27 @@ def apply_gufunc(func, signature, *args, **kwargs):
         raise ValueError('`signature` has to be of type string')
     core_input_dimss, core_output_dimss = _parse_gufunc_signature(signature)
 
-    ## Determine nout
+    ## Determine nout: nout = None for functions of one direct return; nout = int for return tuples
     nout = None if not isinstance(core_output_dimss, list) else len(core_output_dimss)
 
     ## Assert output_dtypes
-    if nout is not None and not (isinstance(output_dtypes, tuple) or isinstance(output_dtypes, list)):
-        raise ValueError("Must specify tuple of dtypes for `output_dtypes` for function with multiple outputs")
-    if nout is None and (isinstance(output_dtypes, tuple) or isinstance(output_dtypes, list)):
-        raise ValueError("Must specify single dtype for `output_dtypes` for function with one output")
+    if output_dtypes is None:
+        raise ValueError("Must specify `output_dtypes` of output array(s)")
+    elif isinstance(output_dtypes, str):
+        otypes = list(output_dtypes)
+        output_dtypes = otypes[0] if nout is None else otypes
+    elif isinstance(output_dtypes, (tuple, list)):
+        if nout is None:
+            raise ValueError("Must specify single dtype for `output_dtypes` for function with one output")
+        otypes = output_dtypes
+    else:
+        if nout is not None:
+            raise ValueError("Must specify tuple of dtypes for `output_dtypes` for function with multiple outputs")
+        otypes = [output_dtypes]
 
     ## Vectorize function, if required
     if vectorize:
-        func = np.vectorize(func, signature=signature)
+        func = np.vectorize(func, signature=signature, otypes=otypes)
 
     ## Miscellaneous
     if output_sizes is None:
