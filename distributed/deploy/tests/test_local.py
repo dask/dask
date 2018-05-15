@@ -17,7 +17,9 @@ from distributed import Client, Worker, Nanny
 from distributed.deploy.local import LocalCluster
 from distributed.metrics import time
 from distributed.utils_test import (inc, gen_test, slowinc,
+                                    assert_cannot_connect,
                                     assert_can_connect_locally_4,
+                                    assert_can_connect_from_everywhere_4,
                                     assert_can_connect_from_everywhere_4_6,
                                     captured_logger)
 from distributed.utils_test import loop  # noqa: F401
@@ -446,6 +448,23 @@ def test_adapt_then_manual(loop):
             while len(cluster.scheduler.workers) != 2:
                 sleep(0.1)
                 assert time() < start + 5
+
+
+def test_local_tls(loop):
+    from distributed.utils_test import tls_only_security
+    security = tls_only_security()
+    with LocalCluster(scheduler_port=8786, silence_logs=False, security=security,
+                      diagnostics_port=0, ip='tls://0.0.0.0', loop=loop) as c:
+        sync(loop, assert_can_connect_from_everywhere_4, c.scheduler.port,
+             connection_args=security.get_connection_args('client'),
+             protocol='tls', timeout=3)
+
+        # If we connect to a TLS localculster without ssl information we should fail
+        sync(loop, assert_cannot_connect,
+             addr='tcp://127.0.0.1:%d' % c.scheduler.port,
+             connection_args=security.get_connection_args('client'),
+             exception_class=RuntimeError,
+             )
 
 
 if sys.version_info >= (3, 5):

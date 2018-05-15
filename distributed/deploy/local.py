@@ -50,6 +50,7 @@ class LocalCluster(Cluster):
         Extra worker arguments, will be passed to the Worker constructor.
     service_kwargs: Dict[str, Dict]
         Extra keywords to hand to the running services
+    security : Security
 
     Examples
     --------
@@ -75,7 +76,7 @@ class LocalCluster(Cluster):
                  loop=None, start=None, ip=None, scheduler_port=0,
                  silence_logs=logging.WARN, diagnostics_port=8787,
                  services={}, worker_services={}, service_kwargs=None,
-                 asynchronous=False, **worker_kwargs):
+                 asynchronous=False, security=None, **worker_kwargs):
         if start is not None:
             msg = ("The start= parameter is deprecated. "
                    "LocalCluster always starts. "
@@ -87,6 +88,7 @@ class LocalCluster(Cluster):
         self.processes = processes
         self.silence_logs = silence_logs
         self._asynchronous = asynchronous
+        self.security = security
         if silence_logs:
             self._old_logging_level = silence_logging(level=silence_logs)
         if n_workers is None and threads_per_worker is None:
@@ -121,11 +123,14 @@ class LocalCluster(Cluster):
                 worker_services[('bokeh', 0)] = BokehWorker
 
         self.scheduler = Scheduler(loop=self.loop,
-                                   services=services)
+                                   services=services,
+                                   security=security)
         self.scheduler_port = scheduler_port
 
         self.workers = []
         self.worker_kwargs = worker_kwargs
+        if security:
+            self.worker_kwargs['security'] = security
 
         self.start(ip=ip, n_workers=n_workers)
 
@@ -154,9 +159,11 @@ class LocalCluster(Cluster):
         """
         if self.status == 'running':
             return
-        if ip is None and not self.scheduler_port and not self.processes:
+        if (ip is None) and (not self.scheduler_port) and (not self.processes):
             # Use inproc transport for optimization
             scheduler_address = 'inproc://'
+        elif ip is not None and ip.startswith('tls://'):
+            scheduler_address = ('%s:%d' % (ip, self.scheduler_port))
         else:
             if ip is None:
                 ip = '127.0.0.1'
