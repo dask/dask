@@ -321,8 +321,10 @@ Create and Store Arrays
    from_array
    from_delayed
    from_npy_stack
+   from_zarr
    store
    to_hdf5
+   to_zarr
    to_npy_stack
 
 Internal functions

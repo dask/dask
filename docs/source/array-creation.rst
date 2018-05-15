@@ -11,6 +11,7 @@ supports Numpy-style slicing.
    from_array
    from_delayed
    from_npy_stack
+   from_zarr
    stack
    concatenate
 
@@ -306,6 +307,7 @@ Store Dask Arrays
    store
    to_hdf5
    to_npy_stack
+   to_zarr
    compute
 
 In Memory
@@ -370,6 +372,36 @@ Store several arrays in one computation with the function
 .. code-block:: Python
 
    >>> da.to_hdf5('myfile.hdf5', {'/x': x, '/y': y})  # doctest: +SKIP
+
+
+Zarr
+----
+
+The `zarr`_ format is a chunk-wise binary array storage file format, with a good selection
+of encoding and compression options. Due to each chunk being stored in a separate file, it
+is ideal for parallel access i both reading and writing (for the latter, if the dask array
+chunks are alligned with the target). Furthermore, storage in
+:doc:`remote data services<remote_data_services>`_ such as
+S3 and GCS is supported.
+
+.. _zarr: https://zarr.readthedocs.io
+
+For example, to save data to a local zarr dataset:
+
+.. code-block:: Python
+
+   >>> arr.to_zarr('output.zarr')
+
+or to save to a particular bucket on S3:
+
+.. code-block:: Python
+
+   >>> arr.to_zarr('s3://mybucket/output.zarr', storage_option={'key': 'mykey',
+                   'secret': 'mysecret'})
+
+To retrieve those data, you would do ``da.read_zarr`` with exactly the same arguments. The
+chunking of the resultant dask.Array is defined by how the files were saved, unless
+otherwise specified.
 
 
 Plugins
