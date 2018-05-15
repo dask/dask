@@ -112,11 +112,11 @@ def apply_gufunc(func, signature, *args, **kwargs):
         the style of NumPy universal functions [1]_ (if this is not the case,
         set ``vectorize=True``). If this function returns multiple outputs,
         ``output_core_dims`` has to be set as well.
-    *args : numeric
-        Input arrays or scalars to the callable function.
     signature: String
         Specifies what core dimensions are consumed and produced by ``func``.
         According to the specification of numpy.gufunc signature [2]_
+    *args : numeric
+        Input arrays or scalars to the callable function.
     output_dtypes : dtype or list of dtypes, keyword only
         dtype or list of output dtypes.
     output_sizes : dict, optional, keyword only
