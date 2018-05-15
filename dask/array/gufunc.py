@@ -219,11 +219,6 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ## Apply function - use atop here
     arginds = list(concat(zip(args, input_dimss)))
 
-    ### Treat direct output
-    if nout is None:
-        core_output_dimss = [core_output_dimss]
-        output_dtypes = [output_dtypes]
-
     ### Use existing `atop` but only with loopdims to enforce
     ### concatenation for coredims that appear also at the output
     ### Modifying `atop` could improve things here.
@@ -239,6 +234,11 @@ def apply_gufunc(func, signature, *args, **kwargs):
     keys = list(flatten(tmp.__dask_keys__()))
     _anykey = keys[0]
     name, token = _anykey[0].split('-')
+
+    ### *) Treat direct output
+    if nout is None:
+        core_output_dimss = [core_output_dimss]
+        output_dtypes = [output_dtypes]
 
     ## Split output
     leaf_arrs = []
@@ -256,7 +256,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
                          dtype=odt)
         leaf_arrs.append(leaf_arr)
 
-    return leaf_arrs if nout else leaf_arrs[0]
+    return leaf_arrs if nout else leaf_arrs[0]  # Undo *) from above
 
 
 class gufunc(object):
@@ -333,13 +333,13 @@ class gufunc(object):
 
         self.__doc__ = """
         Bound ``dask.array.gufunc``
-        func: {func}
-        signature: '{signature}'
+        func: ``{func}``
+        signature: ``'{signature}'``
 
         Parameters
         ----------
         *args : numpy/dask arrays or scalars
-            Arrays to which to apply the function. Core dimensions as specified in
+            Arrays to which to apply to ``func``. Core dimensions as specified in
             ``signature`` need to come last.
         **kwargs : dict
             Extra keyword arguments to pass to ``func``
