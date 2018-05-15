@@ -41,6 +41,8 @@ def test_write_json_basic(orient):
 
 def test_read_json_error():
     with tmpfile('json') as f:
+        with pytest.raises(ValueError):
+            df.to_json(f, orient='split', lines=True)
         df.to_json(f, orient='split', lines=False)
         with pytest.raises(ValueError):
             dd.read_json(f, orient='split', blocksize=1)

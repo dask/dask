@@ -6,7 +6,7 @@ from dask.bytes import open_files, read_bytes
 import dask
 
 
-def to_json(df, url_path, orient='records', lines=True, storage_options=None,
+def to_json(df, url_path, orient='records', lines=None, storage_options=None,
             compute=True, encoding='utf-8', errors='strict', **kwargs):
     """Write dataframe into JSON text files
 
@@ -30,7 +30,8 @@ def to_json(df, url_path, orient='records', lines=True, storage_options=None,
         The text encoding to implement, e.g., "utf-8" and how to respond
         to errors in the conversion (see ``str.encode()``).
     orient, lines, kwargs
-        passed to pandas
+        passed to pandas; if not specified, lines=True when orient='records',
+        False otherwise.
     storage_options: dict
         Passed to backend file-system implementation
     compute: bool
@@ -39,6 +40,11 @@ def to_json(df, url_path, orient='records', lines=True, storage_options=None,
     encoding, errors:
         Text conversion, ``see str.encode()``
     """
+    if lines is None:
+        lines = orient == 'records'
+    if orient != 'records' and lines:
+        raise ValueError('Line-delimited JSON is only available with'
+                         'orient="records".')
     kwargs['orient'] = orient
     kwargs['lines'] = lines and orient == 'records'
     outfiles = open_files(
@@ -61,7 +67,7 @@ def write_json_partition(df, openfile, kwargs):
         df.to_json(f, **kwargs)
 
 
-def read_json(url_path, orient='records', lines=True, storage_options=None,
+def read_json(url_path, orient='records', lines=None, storage_options=None,
               blocksize=None, sample=2**20, encoding='utf-8', errors='strict',
               **kwargs):
     """Create a dataframe from a set of JSON files
@@ -86,7 +92,8 @@ def read_json(url_path, orient='records', lines=True, storage_options=None,
         The text encoding to implement, e.g., "utf-8" and how to respond
         to errors in the conversion (see ``str.encode()``).
     orient, lines, kwargs
-        passed to pandas
+        passed to pandas; if not specified, lines=True when orient='records',
+        False otherwise.
     storage_options: dict
         Passed to backend file-system implementation
     blocksize: None or int
@@ -122,10 +129,14 @@ def read_json(url_path, orient='records', lines=True, storage_options=None,
     >> dd.read_json('data/file*.csv', blocksize=2**28)
     """
     import dask.dataframe as dd
+    if lines is None:
+        lines = orient == 'records'
+    if orient != 'records' and lines:
+        raise ValueError('Line-delimited JSON is only available with'
+                         'orient="records".')
     if blocksize and (orient != 'records' or not lines):
         raise ValueError("JSON file chunking only allowed for JSON-lines"
                          "input (orient='records', lines=True).")
-    lines = lines and orient == 'records'
     storage_options = storage_options or {}
     if blocksize:
         first, chunks = read_bytes(url_path, b'\n', blocksize=blocksize,
