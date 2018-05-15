@@ -1620,6 +1620,7 @@ class Scheduler(ServerNode):
                 del self.host_info[host]
 
             del self.worker_comms[address]
+            self.rpc.remove(address)
             del self.aliases[ws.name]
             self.idle.discard(ws)
             self.saturated.discard(ws)

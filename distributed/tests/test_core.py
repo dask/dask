@@ -540,6 +540,44 @@ def test_connection_pool_tls():
 
 
 @gen_test()
+def test_connection_pool_remove():
+
+    @gen.coroutine
+    def ping(comm, delay=0.01):
+        yield gen.sleep(delay)
+        raise gen.Return('pong')
+
+    servers = [Server({'ping': ping}) for i in range(5)]
+    for server in servers:
+        server.listen(0)
+
+    rpc = ConnectionPool(limit=10)
+    serv = servers.pop()
+    yield [rpc(s.address).ping() for s in servers]
+    yield [rpc(serv.address).ping() for i in range(3)]
+    yield rpc.connect(serv.address)
+    assert sum(map(len, rpc.available.values())) == 6
+    assert sum(map(len, rpc.occupied.values())) == 1
+    assert rpc.active == 1
+    assert rpc.open == 7
+
+    rpc.remove(serv.address)
+    assert serv.address not in rpc.available
+    assert serv.address not in rpc.occupied
+    assert sum(map(len, rpc.available.values())) == 4
+    assert sum(map(len, rpc.occupied.values())) == 0
+    assert rpc.active == 0
+    assert rpc.open == 4
+
+    rpc.collect()
+    comm = yield rpc.connect(serv.address)
+    rpc.remove(serv.address)
+    rpc.reuse(serv.address, comm)
+
+    rpc.close()
+
+
+@gen_test()
 def test_counters():
     server = Server({'div': stream_div})
     server.listen('tcp://')

@@ -724,14 +724,18 @@ class ConnectionPool(object):
         """
         Reuse an open communication to the given address.  For internal use.
         """
-        self.occupied[addr].remove(comm)
-        self.active -= 1
-        if comm.closed():
-            self.open -= 1
-            if self.open < self.limit:
-                self.event.set()
+        try:
+            self.occupied[addr].remove(comm)
+        except KeyError:
+            pass
         else:
-            self.available[addr].add(comm)
+            self.active -= 1
+            if comm.closed():
+                self.open -= 1
+                if self.open < self.limit:
+                    self.event.set()
+            else:
+                self.available[addr].add(comm)
 
     def collect(self):
         """
@@ -744,6 +748,25 @@ class ConnectionPool(object):
                 comm.close()
             comms.clear()
         self.open = self.active
+        if self.open < self.limit:
+            self.event.set()
+
+    def remove(self, addr):
+        """
+        Remove all Comms to a given address.
+        """
+        logger.info("Removing comms to %s", addr)
+        if addr in self.available:
+            comms = self.available.pop(addr)
+            for comm in comms:
+                comm.close()
+                self.open -= 1
+        if addr in self.occupied:
+            comms = self.occupied.pop(addr)
+            for comm in comms:
+                comm.close()
+                self.open -= 1
+                self.active -= 1
         if self.open < self.limit:
             self.event.set()
 
