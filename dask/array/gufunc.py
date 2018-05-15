@@ -99,6 +99,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
         dimensions are to consist only of one chunk.
         Warning: enabling this can increase memory usage significantly.
         Defaults to ``False``.
+    **kwargs : dict
+        Extra keyword arguments to pass to `func`
 
     Returns
     -------
@@ -337,6 +339,8 @@ class gufunc(object):
         *args : numpy/dask arrays or scalars
             Arrays to which to apply the function. Core dimensions as specified in
             ``signature`` need to come last.
+        **kwargs : dict
+            Extra keyword arguments to pass to ``func``
 
         Returns
         -------

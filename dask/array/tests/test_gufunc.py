@@ -74,6 +74,14 @@ def test_apply_gufunc_output_dtypes_string(vectorize):
     assert mean.compute().shape == (10, 20)
 
 
+def test_apply_gufunc_pass_additional_kwargs():
+    def foo(x, bar):
+        assert bar == 2
+        return x
+    ret = apply_gufunc(foo, "()->()", 1., output_dtypes="f", bar=2)
+    assert_eq(ret, np.array(1., dtype="f"))
+
+
 @pytest.mark.parametrize('vectorize', [False, True])
 def test_apply_gufunc_output_dtypes_string_many_outputs(vectorize):
     def stats(x):
