@@ -103,8 +103,9 @@ def collect_yaml(paths=paths):
         if os.path.exists(path):
             if os.path.isdir(path):
                 file_paths.extend(sorted([
-                    p for p in os.listdir(path)
-                    if os.path.splitext(p)[1].lower() in ('json', 'yaml', 'yml')
+                    os.path.join(path, p)
+                    for p in os.listdir(path)
+                    if os.path.splitext(p)[1].lower() in ('.json', '.yaml', '.yml')
                 ]))
             else:
                 file_paths.append(path)
