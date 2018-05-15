@@ -5,7 +5,6 @@ from __future__ import absolute_import, division, print_function
 
 import threading
 from functools import partial
-from collections import defaultdict
 from . import config
 
 _globals = config.config
