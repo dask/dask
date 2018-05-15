@@ -9,12 +9,12 @@ try:
 except ImportError:
     from toolz import curry, pluck
 
-from . import threaded
+from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
 from .base import tokenize as _tokenize
 from .compatibility import apply
 from .core import quote
-from .context import _globals, globalmethod
+from .context import globalmethod
 from .utils import funcname, methodcaller, OperatorMethodMixin
 from . import sharedict
 
@@ -111,7 +111,7 @@ def tokenize(*args, **kwargs):
     """
     pure = kwargs.pop('pure', None)
     if pure is None:
-        pure = _globals.get('delayed_pure', False)
+        pure = config.get('delayed_pure', False)
 
     if pure:
         return _tokenize(*args, **kwargs)
