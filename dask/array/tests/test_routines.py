@@ -1407,6 +1407,19 @@ def test_einsum_casting(casting):
               da.einsum(sig, *np_inputs, casting=casting))
 
 
+@pytest.mark.parametrize('split_every', [None, 2])
+def test_einsum_split_every(split_every):
+    np_inputs, da_inputs = _numpy_and_dask_inputs('a')
+    assert_eq(np.einsum('a', *np_inputs),
+              da.einsum('a', *da_inputs, split_every=split_every))
+
+
+def test_einsum_invalid_args():
+    _, da_inputs = _numpy_and_dask_inputs('a')
+    with pytest.raises(TypeError):
+        da.einsum('a', *da_inputs, foo=1, bar=2)
+
+
 def test_einsum_broadcasting_contraction():
     a = np.random.rand(1, 5, 4)
     b = np.random.rand(4, 6)
