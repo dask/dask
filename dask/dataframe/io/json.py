@@ -7,7 +7,7 @@ import dask
 
 
 def to_json(df, url_path, orient='records', lines=True, storage_options=None,
-            compute=True, **kwargs):
+            compute=True, encoding='utf-8', errors='strict', **kwargs):
     """Write dataframe into JSON text files
 
     This utilises ``pandas.DataFrame.to_json()``, and most parameters are
@@ -36,12 +36,14 @@ def to_json(df, url_path, orient='records', lines=True, storage_options=None,
     compute: bool
         If true, immediately executes. If False, returns a set of delayed
         objects, which can be computed at a later time.
+    encoding, errors:
+        Text conversion, ``see str.encode()``
     """
     kwargs['orient'] = orient
     kwargs['lines'] = lines and orient == 'records'
     outfiles = open_files(
-        url_path, 'wt', encoding=kwargs.pop('encoding', 'utf-8'),
-        errors=kwargs.pop('errors', 'strict'),
+        url_path, 'wt', encoding=encoding,
+        errors=errors,
         name_function=kwargs.pop('name_funciton', None),
         num=df.npartitions,
         **(storage_options or {})
@@ -60,7 +62,8 @@ def write_json_partition(df, openfile, kwargs):
 
 
 def read_json(url_path, orient='records', lines=True, storage_options=None,
-              blocksize=None, sample=2**20, **kwargs):
+              blocksize=None, sample=2**20, encoding='utf-8', errors='strict',
+              **kwargs):
     """Create a dataframe from a set of JSON files
 
     This utilises ``pandas.read_json()``, and most parameters are
@@ -94,6 +97,8 @@ def read_json(url_path, orient='records', lines=True, storage_options=None,
     sample: int
         Number of bytes to pre-load, to provide an empty dataframe structure
         to any blocks wihout data. Only relevant is using blocksize.
+    encoding, errors:
+        Text conversion, ``see bytes.decode()``
 
     Returns
     -------
@@ -120,9 +125,7 @@ def read_json(url_path, orient='records', lines=True, storage_options=None,
     if blocksize and (orient != 'records' or not lines):
         raise ValueError("JSON file chunking only allowed for JSON-lines"
                          "input (orient='records', lines=True).")
-    encoding = kwargs.pop('encoding', 'utf-8')
     lines = lines and orient == 'records'
-    errors = kwargs.pop('errors', 'strict')
     storage_options = storage_options or {}
     if blocksize:
         first, chunks = read_bytes(url_path, b'\n', blocksize=blocksize,
