@@ -1,16 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
-from functools import partial
 from itertools import count
-from operator import itemgetter
 import re
 
 try:
-    from cytoolz import concat, merge, groupby, valmap, compose, unique
+    from cytoolz import concat, merge, unique
 
 except ImportError:
-    from toolz import concat, merge, groupby, valmap, compose, unique
+    from toolz import concat, merge, unique
 
 from .core import Array, asarray, atop, getitem
 from .. import sharedict
@@ -190,29 +188,33 @@ def apply_gufunc(func, signature, *args, **kwargs):
     loop_output_dims = max(loop_input_dimss, key=len) if loop_input_dimss else set()
 
     ## Assess input args for same size and chunk sizes
-    ### Check that the arrays have same length for same dimensions or dimension `1`
-    _temp = groupby(0, concat(zip(ad, s) for ad, s in zip(input_dimss, input_shapes)))
-    dimsizess = valmap(compose(set, partial(map, itemgetter(1))), _temp)
+    ### Collect sizes and chunksizes of all dims in all arrays
+    dimsizess = {}
+    chunksizess = {}
+    for dims, shape, chunksizes in zip(input_dimss, input_shapes, input_chunkss):
+        for dim, size, chunksize in zip(dims, shape, chunksizes):
+            _dimsizes = dimsizess.get(dim, [])
+            _dimsizes.append(size)
+            dimsizess[dim] = _dimsizes
+            _chunksizes = chunksizess.get(dim, [])
+            _chunksizes.append(chunksize)
+            chunksizess[dim] = _chunksizes
+    ### Assert correct partitioning, for case:
     if not allow_rechunk:
         for dim, sizes in dimsizess.items():
-            if sizes.union({1}) != {1, max(sizes)}:
+            ### Check that the arrays have same length for same dimensions or dimension `1`
+            if set(sizes).union({1}) != {1, max(sizes)}:
                 raise ValueError("Dimension ``{}`` with different lengths in arrays".format(dim))
-
-    # Check if arrays have same chunk size for the same dimension
-    _temp = groupby(0, concat(zip(ad, s, c) for ad, s, c in zip(input_dimss, input_shapes, input_chunkss)))
-    dimchunksizess = valmap(compose(tuple, unique,
-                                    partial(map, itemgetter(1)),
-                                    partial(filter, lambda e: e != (1, 1)),
-                                    partial(map, lambda tpl: tpl[1:])),
-                            _temp)
-    if not allow_rechunk:
-        for dim, dimchunksizes in dimchunksizess.items():
-            if len(dimchunksizes) > 1:
-                raise ValueError('Dimension ``{}`` with different chunksize present'.format(dim))
-            if (dim in core_shapes) and (dimchunksizes[0] < core_shapes[dim]):
+            chunksizes = chunksizess[dim]
+            ### Check if core dimensions consist of only one chunk
+            if (dim in core_shapes) and (chunksizes[0] < core_shapes[dim]):
                 raise ValueError('Core dimension ``{}`` consists of multiple chunks. To fix, rechunk into a single \
-chunk along this dimension or set `allow_rechunk=True`, but beware that this may increase memory usage \
-significantly.'.format(dim))
+            chunk along this dimension or set `allow_rechunk=True`, but beware that this may increase memory usage \
+            significantly.'.format(dim))
+            ### Check if loop dimensions consist of same chunksizes, when they have sizes > 1
+            relevant_chunksizes = list(unique(c for s, c in zip(sizes, chunksizes) if s > 1))
+            if len(relevant_chunksizes) > 1:
+                raise ValueError('Dimension ``{}`` with different chunksize present'.format(dim))
 
     ## Apply function - use atop here
     arginds = list(concat(zip(args, input_dimss)))
