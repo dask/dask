@@ -48,8 +48,7 @@ def _parse_gufunc_signature(signature):
     """
     signature = signature.replace(' ', '')
     if not re.match(_SIGNATURE, signature):
-        raise ValueError(
-            'not a valid gufunc signature: {}'.format(signature))
+        raise ValueError('Not a valid gufunc signature: {}'.format(signature))
     in_txt, out_txt = signature.split('->')
     ins = [tuple(re.findall(_DIMENSION_NAME, arg))
            for arg in re.findall(_ARGUMENT, in_txt)]
@@ -57,36 +56,6 @@ def _parse_gufunc_signature(signature):
             for arg in re.findall(_ARGUMENT, out_txt)]
     outs = outs[0] if ((len(outs) == 1) and (out_txt[-1] != ',')) else outs
     return ins, outs
-
-
-def _compile_gufunc_signature(ins, outs):
-    """"
-    Compile gufunc signature from nested tuples/lists structures
-    of the dimension names.
-
-    Parameters
-    ----------
-    ins: List[Tuple[str, ...]]
-        Each input is a tuple of dimension names
-    outs: List[Tuple[str, ...]] or Tuple[str, ...]
-        For one output: tuple of dimension names;
-        For many outputs: list of tuple of dimension names
-
-    Returns
-    -------
-    Signature according to the specification of numpy.gufunc signature [2]_
-
-    Examples
-    --------
-    >>> _compile_gufunc_signature([('i',), ('i', 'j')], ('i', 'j'))
-    '(i),(i,j)->(i,j)'
-    >>> _compile_gufunc_signature([('i', 'j')], [('i',), ('j',)])
-    '(i,j)->(i),(j)'
-    """
-    in_txt = ",".join(("({0})".format(",".join(dims)) for dims in ins))
-    out_txt = ",".join(("({0})".format(",".join(dims)) for dims in
-                        (outs if isinstance(outs, list) else [outs])))
-    return "{0}->{1}".format(in_txt, out_txt)
 
 
 def apply_gufunc(func, signature, *args, **kwargs):
@@ -112,7 +81,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
         the style of NumPy universal functions [1]_ (if this is not the case,
         set ``vectorize=True``). If this function returns multiple outputs,
         ``output_core_dims`` has to be set as well.
-    signature: String
+    signature: string
         Specifies what core dimensions are consumed and produced by ``func``.
         According to the specification of numpy.gufunc signature [2]_
     *args : numeric
@@ -169,10 +138,9 @@ def apply_gufunc(func, signature, *args, **kwargs):
 
     # Input processing:
     ## Signature
-    if isinstance(signature, str):
-        core_input_dimss, core_output_dimss = _parse_gufunc_signature(signature)
-    else:
-        core_input_dimss, core_output_dimss = signature
+    if not isinstance(signature, str):
+        raise ValueError('`signature` has to be of type string')
+    core_input_dimss, core_output_dimss = _parse_gufunc_signature(signature)
 
     ## Determine nout
     nout = None if not isinstance(core_output_dimss, list) else len(core_output_dimss)
@@ -183,9 +151,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
     if nout is None and (isinstance(output_dtypes, tuple) or isinstance(output_dtypes, list)):
         raise ValueError("Must specify single dtype for `output_dtypes` for function with one output")
 
-    ## Use top to apply func
+    ## Vectorize function, if required
     if vectorize:
-        signature = _compile_gufunc_signature(core_input_dimss, core_output_dimss)
         func = np.vectorize(func, signature=signature)
 
     ## Miscellaneous
