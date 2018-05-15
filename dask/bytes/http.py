@@ -150,16 +150,26 @@ class HTTPFile(object):
             file. If the server has not supplied the filesize, attempting to
             read only part of the data will raise a ValueError.
         """
+        if length == 0:
+            # asked for no data, so supply no data and shortcut doing work
+            return b''
         if self.size is None:
             if length >= 0:
+                # asked for specific amount of data, but we don't know how
+                # much is available
                 raise ValueError('File size is unknown, must read all data')
             else:
+                # asked for whole file
                 return self._fetch_all()
+        if length < 0 and self.loc == 0:
+            # size was provided, but asked for whole file, so shortcut
+            return self._fetch_all()
         if length < 0 or self.loc + length > self.size:
             end = self.size
         else:
             end = self.loc + length
         if self.loc >= self.size:
+            # EOF (python files don't error, just return no data)
             return b''
         self. _fetch(self.loc, end)
         data = self.cache[self.loc - self.start:end - self.start]
@@ -197,12 +207,22 @@ class HTTPFile(object):
     def _fetch_all(self):
         """Read whole file in one shot, without caching
 
-        This is only called when size is None and read() is called without a
-        byte-count.
+        This is only called when size is None or position is still at zero,
+        and read() is called without a byte-count.
         """
         r = self.session.get(self.url, **self.kwargs)
         r.raise_for_status()
-        return r.content
+        out = r.content
+        # set position to end of data; actually expect file might close shortly
+        l = len(out)
+        if l < self.blocksize:
+            # actually all data fits in one block, so cache
+            self.start = 0
+            self.end = l
+            self.cache = out
+            self.size = l
+        self.loc = len(out)
+        return out
 
     def _fetch_range(self, start, end):
         """Download a block of data
