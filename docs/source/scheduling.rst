@@ -39,7 +39,7 @@ Local Threads
 .. code-block:: python
 
    import dask
-   dask.set_options(scheduler='threads')  # overwrite default with threaded scheduler
+   dask.config.set(scheduler='threads')  # overwrite default with threaded scheduler
 
 The threaded scheduler executes computations with a local ``multiprocessing.pool.ThreadPool``.
 It is lightweight and requires no setup.
@@ -68,7 +68,7 @@ we encourage readers to continue reading after this section*
 .. code-block:: python
 
    import dask.multiprocessing
-   dask.set_options(scheduler='processes')  # overwrite default with multiprocessing scheduler
+   dask.config.set(scheduler='processes')  # overwrite default with multiprocessing scheduler
 
 
 The multiprocessing scheduler executes computations with a local ``multiprocessing.Pool``.
@@ -108,7 +108,7 @@ Single Thread
 .. code-block:: python
 
    import dask
-   dask.set_options(scheduler='synchronous')  # overwrite default with single-threaded scheduler
+   dask.config.set(scheduler='synchronous')  # overwrite default with single-threaded scheduler
 
 The single-threaded synchronous scheduler executes all computations in the local thread,
 with no parallelism at all.
@@ -159,12 +159,12 @@ We recommend referring to the :doc:`setup documentation <setup>` for more inform
 Configuration
 -------------
 
-You can configure the global default scheduler by using the ``dask.set_options(scheduler...)`` command.
+You can configure the global default scheduler by using the ``dask.config.set(scheduler...)`` command.
 This can be done globally,
 
 .. code-block:: python
 
-   dask.set_options(scheduler='threads')
+   dask.config.set(scheduler='threads')
 
    x.compute()
 
@@ -172,7 +172,7 @@ or as a context manager
 
 .. code-block:: python
 
-   with dask.set_options(scheduler='threads'):
+   with dask.config.set(scheduler='threads'):
        x.compute()
 
 or within a single compute call
@@ -188,8 +188,8 @@ or specify the desired number of workers.
 .. code-block:: python
 
    from multiprocessing.pool import ThreadPool
-   with dask.set_options(pool=ThreadPool(4)):
+   with dask.config.set(pool=ThreadPool(4)):
        ...
 
-   with dask.set_options(num_workers=4):
+   with dask.config.set(num_workers=4):
        ...
