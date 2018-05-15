@@ -1075,6 +1075,11 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
 
+    def to_json(self, filename, *args, **kwargs):
+        """ See dd.to_json docstring for more information """
+        from .io import to_json
+        return to_json(self, filename, *args, **kwargs)
+
     def to_delayed(self, optimize_graph=True):
         """Convert into a list of ``dask.delayed`` objects, one per partition.
 
