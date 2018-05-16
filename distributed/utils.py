@@ -1001,7 +1001,7 @@ def import_file(path):
         cache_file = cache_from_source(path)
         with ignoring(OSError):
             os.remove(cache_file)
-    if ext in ('.egg', '.zip'):
+    if ext in ('.egg', '.zip', '.pyz'):
         if path not in sys.path:
             sys.path.insert(0, path)
         if ext == '.egg':
@@ -1009,7 +1009,7 @@ def import_file(path):
             pkgs = pkg_resources.find_distributions(path)
             for pkg in pkgs:
                 names_to_import.append(pkg.project_name)
-        elif ext == '.zip':
+        elif ext in ('.zip', '.pyz'):
             names_to_import.append(name)
 
     loaded = []
