@@ -1304,3 +1304,13 @@ def test_dont_recompute_if_erred(c, s, a, b):
 
     yield gen.sleep(0.100)
     assert list(s.transition_log) == old
+
+
+@gen_cluster()
+def test_closing_scheduler_closes_workers(s, a, b):
+    yield s.close()
+
+    start = time()
+    while a.status != 'closed' or b.status != 'closed':
+        yield gen.sleep(0.01)
+        assert time() < start + 2

@@ -593,7 +593,8 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
                 del workers[:]
 
                 for fn in glob('_test_worker-*'):
-                    shutil.rmtree(fn)
+                    with ignoring(OSError):
+                        shutil.rmtree(fn)
 
                 _globals.clear()
                 _globals.update(old_globals)

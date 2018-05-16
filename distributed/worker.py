@@ -256,6 +256,8 @@ class WorkerBase(ServerNode):
                     return
                 self.scheduler_delay = response['time'] - middle
                 self.periodic_callbacks['heartbeat'].callback_time = response['heartbeat-interval'] * 1000
+            except CommClosedError:
+                logger.warn("Heartbeat to scheduler failed")
             finally:
                 self.heartbeat_active = False
         else:
@@ -332,6 +334,7 @@ class WorkerBase(ServerNode):
             raise
         finally:
             if self.reconnect:
+                logger.info("Connection to scheduler broken.  Reconnecting...")
                 self.loop.add_callback(self._register_with_scheduler)
             else:
                 yield self._close(report=False)

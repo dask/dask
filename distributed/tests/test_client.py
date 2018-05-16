@@ -3970,19 +3970,20 @@ def test_persist_workers(e, s, a, b, c):
     L1 = [delayed(inc)(i) for i in range(4)]
     total = delayed(sum)(L1)
     L2 = [delayed(add)(i, total) for i in L1]
+    total2 = delayed(sum)(L2)
 
-    out = e.persist(L1 + L2 + [total],
+    out = e.persist(L1 + L2 + [total, total2],
                     workers={tuple(L1): a.address,
                              total: b.address,
-                             tuple(L2): [c.address]},
-                    allow_other_workers=L1 + [total])
+                             tuple(L2): [c.address],
+                             total2: b.address},
+                    allow_other_workers=L2 + [total2])
 
     yield wait(out)
     assert all(v.key in a.data for v in L1)
     assert total.key in b.data
-    assert all(v.key in c.data for v in L2)
 
-    assert s.loose_restrictions == {total.key} | {v.key for v in L1}
+    assert s.loose_restrictions == {total2.key} | {v.key for v in L2}
 
 
 @gen_cluster(ncores=[('127.0.0.1', 1)] * 3, client=True)

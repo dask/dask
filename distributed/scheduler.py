@@ -1120,6 +1120,7 @@ class Scheduler(ServerNode):
         futures = []
         for w, comm in list(self.worker_comms.items()):
             if not comm.closed():
+                comm.send({'op': 'close', 'report': False})
                 comm.send({'op': 'close-stream'})
             with ignoring(AttributeError):
                 futures.append(comm.close())
