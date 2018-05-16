@@ -2020,7 +2020,7 @@ def auto_chunks(chunks, shape, limit, itemsize):
         return auto_chunks(chunks, shape, limit, itemsize)
 
     for i in autos:
-        chunks[i] = size
+        chunks[i] = int(size)
 
     return tuple(chunks)
 
@@ -2067,7 +2067,7 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
 
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
     """
-    chunks = normalize_chunks(chunks, x.shape)
+    chunks = normalize_chunks(chunks, x.shape, itemsize=x.dtype.itemsize)
     if name in (None, True):
         token = tokenize(x, chunks)
         original_name = 'array-original-' + token

@@ -3295,3 +3295,10 @@ def test_constructors_chunks_dict():
 
     x = da.ones((20, 20), chunks={0: 10, 1: "auto"})
     assert x.chunks == ((10, 10), (20,))
+
+
+def test_from_array_chunks_dict():
+    x = np.empty((100, 100, 100))
+    y = da.from_array(x, chunks={0: 10, 1: -1, 2: 'auto'})
+    z = da.from_array(x, chunks=(10, 100, 100))
+    assert y.chunks == z.chunks
