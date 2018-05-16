@@ -18,7 +18,7 @@ import toolz
 from toolz import accumulate, reduce
 
 from ..base import tokenize
-from .core import concatenate3, Array, normalize_chunks
+from .core import concatenate3, Array, normalize_chunks, DEFAULT_BLOCK_SIZE
 from .wrap import empty
 from .. import sharedict
 
@@ -206,31 +206,15 @@ def blockshape_dict_to_tuple(old_chunks, d):
 
 
 DEFAULT_THRESHOLD = 4
-DEFAULT_BLOCK_SIZE_LIMIT = 1e8
 
 
 def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
-            block_size_limit=DEFAULT_BLOCK_SIZE_LIMIT):
+            block_size_limit=DEFAULT_BLOCK_SIZE):
     """
     Convert blocks in dask array x for new chunks.
 
-    >>> import dask.array as da
-    >>> a = np.random.uniform(0, 1, 7**4).reshape((7,) * 4)
-    >>> x = da.from_array(a, chunks=((2, 3, 2),)*4)
-    >>> x.chunks
-    ((2, 3, 2), (2, 3, 2), (2, 3, 2), (2, 3, 2))
-
-    >>> y = rechunk(x, chunks=((2, 4, 1), (4, 2, 1), (4, 3), (7,)))
-    >>> y.chunks
-    ((2, 4, 1), (4, 2, 1), (4, 3), (7,))
-
-    chunks also accept dict arguments mapping axis to blockshape
-
-    >>> y = rechunk(x, chunks={1: 2})  # rechunk axis 1 with blockshape 2
-
     Parameters
     ----------
-
     x: dask array
         Array to be rechunked.
     chunks:  int, tuple or dict
@@ -242,9 +226,28 @@ def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
     block_size_limit: int
         The maximum block size (in bytes) we want to produce during an
         intermediate step.
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> x = da.ones((1000, 1000), chunks=(100, 100))
+
+    Specify uniform chunk sizes with a tuple
+
+    >>> y = x.rechunk((1000, 10))
+
+    Or chunk only specific dimensions with a dictionary
+
+    >>> y = x.rechunk({0: 1000})
+
+    Use the value ``-1`` to specify that you don't want to chunk along a
+    dimension or the value ``"auto"`` to specify that dask can freely rechunk a
+    dimension to attain blocks of a uniform block size
+
+    >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
     """
     threshold = threshold or DEFAULT_THRESHOLD
-    block_size_limit = block_size_limit or DEFAULT_BLOCK_SIZE_LIMIT
+    block_size_limit = block_size_limit or DEFAULT_BLOCK_SIZE
 
     if isinstance(chunks, dict):
         if not chunks or isinstance(next(iter(chunks.values())), int):
@@ -254,7 +257,7 @@ def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
     if isinstance(chunks, (tuple, list)):
         chunks = tuple(lc if lc is not None else rc
                        for lc, rc in zip(chunks, x.chunks))
-    chunks = normalize_chunks(chunks, x.shape)
+    chunks = normalize_chunks(chunks, x.shape, limit=block_size_limit, itemsize=x.dtype.itemsize)
     if chunks == x.chunks:
         return x
     ndim = x.ndim
@@ -462,7 +465,7 @@ def find_split_rechunk(old_chunks, new_chunks, graph_size_limit):
 
 def plan_rechunk(old_chunks, new_chunks, itemsize,
                  threshold=DEFAULT_THRESHOLD,
-                 block_size_limit=DEFAULT_BLOCK_SIZE_LIMIT):
+                 block_size_limit=DEFAULT_BLOCK_SIZE):
     """ Plan an iterative rechunking from *old_chunks* to *new_chunks*.
     The plan aims to minimize the rechunk graph size.
 

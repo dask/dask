@@ -48,6 +48,9 @@ from ..sharedict import ShareDict
 from .numpy_compat import _Recurser
 
 
+DEFAULT_BLOCK_SIZE = 2 ** 27  # 128MiB
+
+
 concatenate_lookup = Dispatch('concatenate')
 tensordot_lookup = Dispatch('tensordot')
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
@@ -134,7 +137,7 @@ def slices_from_chunks(chunks):
 
 
 def getem(arr, chunks, getitem=getter, shape=None, out_name=None, lock=False,
-          asarray=True):
+          asarray=True, itemsize=None):
     """ Dask getting various chunks from an array-like
 
     >>> getem('X', chunks=(2, 3), shape=(4, 6))  # doctest: +SKIP
@@ -150,7 +153,7 @@ def getem(arr, chunks, getitem=getter, shape=None, out_name=None, lock=False,
      ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
     """
     out_name = out_name or arr
-    chunks = normalize_chunks(chunks, shape)
+    chunks = normalize_chunks(chunks, shape, itemsize=itemsize)
 
     keys = list(product([out_name], *[range(len(bds)) for bds in chunks]))
     slices = slices_from_chunks(chunks)
@@ -1035,12 +1038,14 @@ class Array(DaskMethodsMixin):
             dask = s
         self.dask = dask
         self.name = name
-        self._chunks = normalize_chunks(chunks, shape)
-        if self._chunks is None:
-            raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
         if dtype is None:
             raise ValueError("You must specify the dtype of the array")
         self.dtype = np.dtype(dtype)
+
+        self._chunks = normalize_chunks(chunks, shape,
+                                        itemsize=self.dtype.itemsize)
+        if self._chunks is None:
+            raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
 
         for plugin in config.get('array_plugins', ()):
             result = plugin(self)
@@ -1887,25 +1892,58 @@ def ensure_int(f):
     return i
 
 
-def normalize_chunks(chunks, shape=None):
+def normalize_chunks(chunks, shape=None, limit=DEFAULT_BLOCK_SIZE, itemsize=None):
     """ Normalize chunks to tuple of tuples
+
+    Parameters
+    ----------
+    chunks: tuple, int, or string
+        The chunks to be normalized.  See example below for more details
+    shape: Tuple[int]
+        The shape of the array
+    limit: int (optional)
+        The maximum block size to target in bytes,
+        if freedom is given to choose
+    itemsize: int (optional)
+        The size in bytes of the dtype to be used if this determines chunk sizes
+
+    Examples
+    --------
+    Specify uniform chunk sizes
 
     >>> normalize_chunks((2, 2), shape=(5, 6))
     ((2, 2, 1), (2, 2, 2))
 
-    >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(5, 6))  # Idempotent
+    Also passes through fully explicit tuple-of-tuples
+
+    >>> normalize_chunks(((2, 2, 1), (2, 2, 2)), shape=(5, 6))
     ((2, 2, 1), (2, 2, 2))
 
-    >>> normalize_chunks([[2, 2], [3, 3]])  # Cleans up lists to tuples
+    Cleans up lists to tuples
+
+    >>> normalize_chunks([[2, 2], [3, 3]])
     ((2, 2), (3, 3))
 
-    >>> normalize_chunks(10, shape=(30, 5))  # Supports integer inputs
+    Expands integer inputs 10 -> (10, 10)
+
+    >>> normalize_chunks(10, shape=(30, 5))
     ((10, 10, 10), (5,))
 
-    >>> normalize_chunks((-1,), shape=(10,))  # -1 gets mapped to full size
+    The value -1 gets mapped to full size
+
+    >>> normalize_chunks((-1,), shape=(10,))
     ((10,),)
 
-    >>> normalize_chunks((), shape=(0, 0))  #  respects null dimensions
+    Use the value "auto" to automatically determine chunk sizes along certain
+    dimensions.  This uses the ``limit=`` and ``itemsize=`` keywords to
+    determine how large to make the chunks
+
+    >>> normalize_chunks(("auto",), shape=(20,), limit=5, itemsize=1)
+    ((5, 5, 5, 5),)
+
+    Respects null dimensions
+
+    >>> normalize_chunks((), shape=(0, 0))
     ((0,), (0,))
     """
     if chunks is None:
@@ -1913,7 +1951,7 @@ def normalize_chunks(chunks, shape=None):
     if type(chunks) is not tuple:
         if type(chunks) is list:
             chunks = tuple(chunks)
-        if isinstance(chunks, Number):
+        if isinstance(chunks, (Number, str)):
             chunks = (chunks,) * len(shape)
     if not chunks and shape and all(s == 0 for s in shape):
         chunks = ((0,),) * len(shape)
@@ -1923,6 +1961,9 @@ def normalize_chunks(chunks, shape=None):
             raise ValueError(
                 "Chunks and shape must be of the same length/dimension. "
                 "Got chunks=%s, shape=%s" % (chunks, shape))
+
+    if any(c == 'auto' for c in chunks):
+        chunks = auto_chunks(chunks, shape, limit, itemsize)
 
     if shape is not None:
         chunks = tuple(c if c not in {None, -1} else s
@@ -1948,6 +1989,35 @@ def normalize_chunks(chunks, shape=None):
                              "Got chunks=%s, shape=%s" % (chunks, shape))
 
     return tuple(tuple(int(x) if not math.isnan(x) else x for x in c) for c in chunks)
+
+
+def auto_chunks(chunks, shape, limit, itemsize):
+    """ Determine automatic chunks
+
+    See also
+    --------
+    normalize_chunks: for full docstring and parameters
+    """
+    assert limit and itemsize
+    limit = limit // itemsize
+    chunks = list(chunks)
+
+    autos = [i for i, c in enumerate(chunks) if c == 'auto']
+
+    largest_block = np.prod([cs if isinstance(cs, Number) else max(cs)
+                             for cs in chunks if cs != 'auto'])
+    size = (limit / largest_block) ** (1 / len(autos))
+
+    small = [i for i in autos if shape[i] < size]
+    if small:
+        for i in small:
+            chunks[i] = (shape[i],)
+        return auto_chunks(chunks, shape, limit, itemsize)
+
+    for i in autos:
+        chunks[i] = size
+
+    return tuple(chunks)
 
 
 def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
@@ -2008,7 +2078,8 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
         getitem = getter if fancy else getter_nofancy
 
     dsk = getem(original_name, chunks, getitem=getitem, shape=x.shape,
-                out_name=name, lock=lock, asarray=asarray)
+                out_name=name, lock=lock, asarray=asarray,
+                itemsize=x.dtype.itemsize)
     dsk[original_name] = x
 
     return Array(dsk, name, chunks, dtype=x.dtype)
@@ -3097,7 +3168,7 @@ def broadcast_to(x, shape, chunks=None):
                   tuple(bd if old > 1 else (new,)
                   for bd, old, new in zip(x.chunks, x.shape, shape[ndim_new:])))
     else:
-        chunks = normalize_chunks(chunks, shape)
+        chunks = normalize_chunks(chunks, shape, itemsize=x.dtype.itemsize)
         for old_bd, new_bd in zip(x.chunks, chunks[ndim_new:]):
             if old_bd != new_bd and old_bd != (1,):
                 raise ValueError('cannot broadcast chunks %s to chunks %s: '

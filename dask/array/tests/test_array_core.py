@@ -1915,7 +1915,7 @@ def test_slicing_with_non_ndarrays():
             return np.arange(self.start, self.stop)
 
     class ARangeSlicable(object):
-        dtype = 'i8'
+        dtype = np.dtype('i8')
 
         def __init__(self, n):
             self.n = n
@@ -3257,3 +3257,38 @@ def test_meta(dtype):
     assert a._meta.dtype == a.dtype
     assert isinstance(a._meta, np.ndarray)
     assert a.nbytes < 1000
+
+
+@pytest.mark.parametrize('shape,limit,expected', [
+    (100, 10, (10,) * 10),
+    (20, 10, (10, 10)),
+    (20, 5, (5, 5, 5, 5)),
+])
+def test_normalize_chunks_auto_1d(shape, limit, expected):
+    result = normalize_chunks('auto', (shape,), limit=limit * 8, itemsize=8)
+    assert result == (expected,)
+
+
+@pytest.mark.parametrize('shape,chunks,limit,expected', [
+    ((20, 20), ('auto', 2), 20, ((10, 10), (2,) * 10)),
+    ((20, 20), ('auto', (2, 2, 2, 2, 2, 5, 5)), 20, ((4, 4, 4, 4, 4), (2, 2, 2, 2, 2, 5, 5))),
+    ((1, 20), 'auto', 10, ((1,), (10, 10))),
+])
+def test_normalize_chunks_auto_2d(shape, chunks, limit, expected):
+    result = normalize_chunks(chunks, shape, limit=limit, itemsize=1)
+    assert result == expected
+
+
+def test_normalize_chunks_auto_3d():
+    result = normalize_chunks(('auto', 'auto', 2), (20, 20, 20), limit=200, itemsize=1)
+    expected = ((10, 10), (10, 10), (2,) * 10)
+    assert result == expected
+
+    result = normalize_chunks('auto', (20, 20, 20), limit=8, itemsize=1)
+    expected = ((2,) * 10,) * 3
+    assert result == expected
+
+
+def test_normalize_chunks_dict():
+    x = da.ones((20, 20), chunks={0: 10, 1: "auto"})
+    assert x.chunks == ((10, 10), (20,))

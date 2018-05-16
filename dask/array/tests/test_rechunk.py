@@ -597,3 +597,38 @@ def test_rechunk_zero_dim():
 
     x = da.ones((0, 10, 100), chunks=(0, 10, 10)).rechunk((0, 10, 50))
     assert len(x.compute()) == 0
+
+
+@pytest.mark.parametrize('shape,chunks,bs,expected', [
+    (100, 1, 10, (10,) * 10),
+    (100, 50, 10, (10,) * 10),
+    (100, 100, 10, (10,) * 10),
+    # (20, 7, 10, (7, 7, 6)),
+    (20, 7, 10, (10, 10)),
+    # (20, (1, 1, 1, 1, 10, 2, 1, 7), 5, (4, 5, 5, 3, 4, 3)),
+    (20, (1, 1, 1, 1, 6, 2, 1, 7), 5, (5, 5, 5, 5)),
+])
+def test_rechunk_auto_1d(shape, chunks, bs, expected):
+    x = da.ones(shape, chunks=(chunks,))
+    y = x.rechunk({0: 'auto'}, block_size_limit=bs * x.dtype.itemsize)
+    assert y.chunks == (expected,)
+
+
+def test_rechunk_auto_2d():
+    x = da.ones((20, 20), chunks=((2, 2)))
+    y = x.rechunk({0: 'auto'}, block_size_limit=20 * x.dtype.itemsize)
+    assert y.chunks[1] == x.chunks[1]
+    assert y.chunks[0] == (10, 10)
+
+    x = da.ones((20, 20), chunks=((2,) * 10, (2, 2, 2, 2, 2, 5, 5)))
+    y = x.rechunk({0: 'auto'}, block_size_limit=20 * x.dtype.itemsize)
+    assert y.chunks[1] == x.chunks[1]
+    assert y.chunks[0] == (4, 4, 4, 4, 4)  # limited by largest
+
+
+def test_rechunk_auto_3d():
+    x = da.ones((20, 20, 20), chunks=((2, 2, 2)))
+    y = x.rechunk({0: 'auto', 1: 'auto'}, block_size_limit=200 * x.dtype.itemsize)
+    assert y.chunks[2] == x.chunks[2]
+    assert y.chunks[0] == (10, 10)
+    assert y.chunks[1] == (10, 10)  # even split
