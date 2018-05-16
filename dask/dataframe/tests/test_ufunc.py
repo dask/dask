@@ -345,17 +345,17 @@ def test_2args_with_array(ufunc, pandas, darray):
     assert isinstance(dafunc(dask, darray), dask_type)
     assert isinstance(dafunc(darray, dask), dask_type)
 
-    tm.assert_numpy_array_equal(dafunc(dask, darray).compute().as_matrix(),
-                                npfunc(pandas.as_matrix(), darray).compute())
+    tm.assert_numpy_array_equal(dafunc(dask, darray).compute().values,
+                                npfunc(pandas.values, darray).compute())
 
     # applying NumPy ufunc is lazy
     assert isinstance(npfunc(dask, darray), dask_type)
     assert isinstance(npfunc(darray, dask), dask_type)
 
-    tm.assert_numpy_array_equal(npfunc(dask, darray).compute().as_matrix(),
-                                npfunc(pandas.as_matrix(), darray.compute()))
-    tm.assert_numpy_array_equal(npfunc(darray, dask).compute().as_matrix(),
-                                npfunc(darray.compute(), pandas.as_matrix()))
+    tm.assert_numpy_array_equal(npfunc(dask, darray).compute().values,
+                                npfunc(pandas.values, darray.compute()))
+    tm.assert_numpy_array_equal(npfunc(darray, dask).compute().values,
+                                npfunc(darray.compute(), pandas.values))
 
 
 @pytest.mark.parametrize('redfunc', ['sum', 'prod', 'min', 'max', 'mean'])
