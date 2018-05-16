@@ -65,6 +65,8 @@ def test_apply_gufunc_01c():
                      output_dtypes=2 * (a.dtype,))
 
 
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
+                    reason="`np.vectorize(..., signature=...)` not supported yet")
 @pytest.mark.parametrize('vectorize', [False, True])
 def test_apply_gufunc_output_dtypes_string(vectorize):
     def stats(x):
@@ -74,14 +76,8 @@ def test_apply_gufunc_output_dtypes_string(vectorize):
     assert mean.compute().shape == (10, 20)
 
 
-def test_apply_gufunc_pass_additional_kwargs():
-    def foo(x, bar):
-        assert bar == 2
-        return x
-    ret = apply_gufunc(foo, "()->()", 1., output_dtypes="f", bar=2)
-    assert_eq(ret, np.array(1., dtype="f"))
-
-
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
+                    reason="`np.vectorize(..., signature=...)` not supported yet")
 @pytest.mark.parametrize('vectorize', [False, True])
 def test_apply_gufunc_output_dtypes_string_many_outputs(vectorize):
     def stats(x):
@@ -90,6 +86,14 @@ def test_apply_gufunc_output_dtypes_string_many_outputs(vectorize):
     mean, std = apply_gufunc(stats, "(i)->(),()", a, output_dtypes="ff", vectorize=vectorize)
     assert mean.compute().shape == (10, 20)
     assert std.compute().shape == (10, 20)
+
+
+def test_apply_gufunc_pass_additional_kwargs():
+    def foo(x, bar):
+        assert bar == 2
+        return x
+    ret = apply_gufunc(foo, "()->()", 1., output_dtypes="f", bar=2)
+    assert_eq(ret, np.array(1., dtype="f"))
 
 
 @pytest.mark.xfail(reason="Currently np.einsum doesn't seem to broadcast correctly for this case")
