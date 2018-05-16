@@ -1962,6 +1962,8 @@ def normalize_chunks(chunks, shape=None, limit=DEFAULT_BLOCK_SIZE, itemsize=None
             raise ValueError(
                 "Chunks and shape must be of the same length/dimension. "
                 "Got chunks=%s, shape=%s" % (chunks, shape))
+    if -1 in chunks:
+        chunks = tuple(s if c == -1 else c for c, s in zip(chunks, shape))
 
     if any(c == 'auto' for c in chunks):
         chunks = auto_chunks(chunks, shape, limit, itemsize)

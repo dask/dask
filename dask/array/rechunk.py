@@ -174,37 +174,6 @@ def intersect_chunks(old_chunks, new_chunks):
     return cross
 
 
-def blockdims_dict_to_tuple(old, new):
-    """
-
-    >>> blockdims_dict_to_tuple((4, 5, 6), {1: 10})
-    (4, 10, 6)
-    """
-    newlist = list(old)
-    for k, v in new.items():
-        newlist[k] = v
-    return tuple(newlist)
-
-
-def blockshape_dict_to_tuple(old_chunks, d):
-    """
-
-    >>> blockshape_dict_to_tuple(((4, 4), (5, 5)), {1: 3})
-    ((4, 4), (3, 3, 3, 1))
-    >>> blockshape_dict_to_tuple(((4, 4), (5, 5)), {1: -1})
-    ((4, 4), (10,))
-
-    """
-    shape = tuple(map(sum, old_chunks))
-    new_chunks = list(old_chunks)
-    for k, v in d.items():
-        if v == -1:
-            v = shape[k]
-        div, mod = divmod(shape[k], v)
-        new_chunks[k] = (v,) * div + ((mod,) if mod else ())
-    return tuple(new_chunks)
-
-
 DEFAULT_THRESHOLD = 4
 
 

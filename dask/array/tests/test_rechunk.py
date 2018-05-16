@@ -615,6 +615,14 @@ def test_rechunk_auto_1d(shape, chunks, bs, expected):
 
 
 def test_rechunk_auto_2d():
+    x = da.ones((20, 20), chunks=(2, 2))
+    y = x.rechunk({0: -1, 1: "auto"}, block_size_limit=20 * x.dtype.itemsize)
+    assert y.chunks == ((20,), (1,) * 20)
+
+    x = da.ones((20, 20), chunks=(2, 2))
+    y = x.rechunk({0: -1, 1: "auto"}, block_size_limit=80 * x.dtype.itemsize)
+    assert y.chunks == ((20,), (4,) * 5)
+
     x = da.ones((20, 20), chunks=((2, 2)))
     y = x.rechunk({0: 'auto'}, block_size_limit=20 * x.dtype.itemsize)
     assert y.chunks[1] == x.chunks[1]
