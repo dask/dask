@@ -208,10 +208,10 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     >>> @delayed
     ... def mul(a, b):
     ...     return a * b
-    >>> with dask.set_options(delayed_pure=True):
+    >>> with dask.config.set(delayed_pure=True):
     ...     print(mul(1, 2).key == mul(1, 2).key)
     True
-    >>> with dask.set_options(delayed_pure=False):
+    >>> with dask.config.set(delayed_pure=False):
     ...     print(mul(1, 2).key == mul(1, 2).key)
     False
 
@@ -299,7 +299,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
 
     >>> a.count(2, dask_key_name="count_2")
     Delayed('count_2')
-    >>> with dask.set_options(delayed_pure=True):
+    >>> with dask.config.set(delayed_pure=True):
     ...     print(a.count(2).key == a.count(2).key)
     True
     """
