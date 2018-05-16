@@ -1948,11 +1948,12 @@ def normalize_chunks(chunks, shape=None, limit=DEFAULT_BLOCK_SIZE, itemsize=None
     """
     if chunks is None:
         raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
-    if type(chunks) is not tuple:
-        if type(chunks) is list:
-            chunks = tuple(chunks)
-        if isinstance(chunks, (Number, str)):
-            chunks = (chunks,) * len(shape)
+    if type(chunks) is list:
+        chunks = tuple(chunks)
+    if isinstance(chunks, (Number, str)):
+        chunks = (chunks,) * len(shape)
+    if isinstance(chunks, dict):
+        chunks = tuple(chunks.get(i, None) for i in range(len(shape)))
     if not chunks and shape and all(s == 0 for s in shape):
         chunks = ((0,),) * len(shape)
 
@@ -1983,7 +1984,7 @@ def normalize_chunks(chunks, shape=None, limit=DEFAULT_BLOCK_SIZE, itemsize=None
             raise ValueError("Input array has %d dimensions but the supplied "
                              "chunks has only %d dimensions" %
                              (len(shape), len(chunks)))
-        if not all(c == s or (math.isnan(c) and math.isnan(s))
+        if not all(c == s or (math.isnan(c) or math.isnan(s))
                    for c, s in zip(map(sum, chunks), shape)):
             raise ValueError("Chunks do not add up to shape. "
                              "Got chunks=%s, shape=%s" % (chunks, shape))
@@ -2003,6 +2004,8 @@ def auto_chunks(chunks, shape, limit, itemsize):
     chunks = list(chunks)
 
     autos = [i for i, c in enumerate(chunks) if c == 'auto']
+    if not autos:
+        return tuple(chunks)
 
     largest_block = np.prod([cs if isinstance(cs, Number) else max(cs)
                              for cs in chunks if cs != 'auto'])

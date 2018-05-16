@@ -134,7 +134,7 @@ def _old_to_new(old_chunks, new_chunks):
     sums2 = [sum(n) for n in new_known]
 
     if not sums == sums2:
-        raise ValueError('Cannot change dimensions from to %r' % sums2)
+        raise ValueError('Cannot change dimensions from %r to %r' % (sums, sums2))
     if not n_missing == n_missing2:
         raise ValueError('Chunks must be unchanging along unknown dimensions')
 
@@ -250,10 +250,10 @@ def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
     block_size_limit = block_size_limit or DEFAULT_BLOCK_SIZE
 
     if isinstance(chunks, dict):
-        if not chunks or isinstance(next(iter(chunks.values())), int):
-            chunks = blockshape_dict_to_tuple(x.chunks, chunks)
-        else:
-            chunks = blockdims_dict_to_tuple(x.chunks, chunks)
+        chunks = dict(chunks)
+        for i in range(x.ndim):
+            if i not in chunks:
+                chunks[i] = x.chunks[i]
     if isinstance(chunks, (tuple, list)):
         chunks = tuple(lc if lc is not None else rc
                        for lc, rc in zip(chunks, x.chunks))
