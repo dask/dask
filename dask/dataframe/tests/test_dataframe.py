@@ -1,4 +1,5 @@
 import sys
+import textwrap
 from distutils.version import LooseVersion
 from itertools import product
 from operator import add
@@ -1612,12 +1613,19 @@ def test_select_dtypes(include, exclude):
 
     # count dtypes
     tm.assert_series_equal(a.get_dtype_counts(), df.get_dtype_counts())
-    tm.assert_series_equal(a.get_ftype_counts(), df.get_ftype_counts())
 
     tm.assert_series_equal(result.get_dtype_counts(),
                            expected.get_dtype_counts())
-    tm.assert_series_equal(result.get_ftype_counts(),
-                           expected.get_ftype_counts())
+
+    if PANDAS_VERSION >= '0.23.0':
+        ctx = pytest.warns(FutureWarning)
+    else:
+        ctx = pytest.warns(None)
+
+    with ctx:
+        tm.assert_series_equal(a.get_ftype_counts(), df.get_ftype_counts())
+        tm.assert_series_equal(result.get_ftype_counts(),
+                               expected.get_ftype_counts())
 
 
 def test_deterministic_apply_concat_apply_names():
@@ -2097,7 +2105,7 @@ def test_cov_corr_stable():
 
 def test_cov_corr_mixed():
     size = 1000
-    d = {'dates' : pd.date_range('2015-01-01', periods=size, frequency='1T'),
+    d = {'dates' : pd.date_range('2015-01-01', periods=size, freq='1T'),
          'unique_id' : np.arange(0, size),
          'ints' : np.random.randint(0, size, size=size),
          'floats' : np.random.randn(size),
@@ -2415,9 +2423,11 @@ dtypes: int64(1)""")
 
     buf = StringIO()
     g.info(buf, verbose=False)
-    assert buf.getvalue() == unicode("""<class 'dask.dataframe.core.DataFrame'>
-Columns: 2 entries, (C, count) to (C, sum)
-dtypes: int64(2)""")
+    expected = unicode(textwrap.dedent("""\
+    <class 'dask.dataframe.core.DataFrame'>
+    Columns: 2 entries, ('C', 'count') to ('C', 'sum')
+    dtypes: int64(2)"""))
+    assert buf.getvalue() == expected
 
 
 def test_categorize_info():

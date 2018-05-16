@@ -498,6 +498,22 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
                              errmsg))
 
 
+def index_summary(idx, name=None):
+    """Summarized representation of an Index.
+    """
+    n = len(idx)
+    if name is None:
+        name = idx.__class__.__name__
+    if n:
+        head = idx[0]
+        tail = idx[-1]
+        summary = ', {} to {}'.format(head, tail)
+    else:
+        summary = ''
+
+    return "{}: {} entries{}".format(name, n, summary)
+
+
 ###############################################################
 # Testing
 ###############################################################
