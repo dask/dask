@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 
 N = 40
 df = pd.DataFrame({'a': np.random.randn(N).cumsum(),
@@ -122,16 +122,26 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
     # DataFrame
     prolling = df.rolling(window, center=center)
     drolling = ddf.rolling(window, center=center)
-    assert_eq(getattr(prolling, method)(*args),
-              getattr(drolling, method)(*args),
+    if method == 'apply' and PANDAS_VERSION >= '0.23.0':
+        kwargs = {'raw': False}
+    else:
+        kwargs = {}
+    assert_eq(getattr(prolling, method)(*args, **kwargs),
+              getattr(drolling, method)(*args, **kwargs),
               check_less_precise=check_less_precise)
 
     # Series
     prolling = df.a.rolling(window, center=center)
     drolling = ddf.a.rolling(window, center=center)
-    assert_eq(getattr(prolling, method)(*args),
-              getattr(drolling, method)(*args),
+    assert_eq(getattr(prolling, method)(*args, **kwargs),
+              getattr(drolling, method)(*args, **kwargs),
               check_less_precise=check_less_precise)
+
+
+@pytest.mark.skipif(PANDAS_VERSION >= '0.23.0', reason="Raw is allowed.")
+def test_rolling_raw_pandas_lt_0230_raises():
+    with pytest.raises(TypeError):
+        df.rolling(2).apply(mad, raw=True)
 
 
 def test_rolling_raises():
@@ -209,17 +219,21 @@ def test_time_rolling_constructor():
 @pytest.mark.parametrize('window', ['1S', '2S', '3S', pd.offsets.Second(5)])
 def test_time_rolling_methods(method, args, window, check_less_precise):
     # DataFrame
+    if method == 'apply' and PANDAS_VERSION >= '0.23.0':
+        kwargs = {"raw": False}
+    else:
+        kwargs = {}
     prolling = ts.rolling(window)
     drolling = dts.rolling(window)
-    assert_eq(getattr(prolling, method)(*args),
-              getattr(drolling, method)(*args),
+    assert_eq(getattr(prolling, method)(*args, **kwargs),
+              getattr(drolling, method)(*args, **kwargs),
               check_less_precise=check_less_precise)
 
     # Series
     prolling = ts.a.rolling(window)
     drolling = dts.a.rolling(window)
-    assert_eq(getattr(prolling, method)(*args),
-              getattr(drolling, method)(*args),
+    assert_eq(getattr(prolling, method)(*args, **kwargs),
+              getattr(drolling, method)(*args, **kwargs),
               check_less_precise=check_less_precise)
 
 
