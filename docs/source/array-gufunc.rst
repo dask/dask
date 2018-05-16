@@ -75,7 +75,7 @@ This experimental generalized ufunc integration is not complete:
 API
 ---
 
-.. currentmodule:: dask.array
+.. currentmodule:: dask.array.gufunc
 
 .. autosummary::
    apply_gufunc
