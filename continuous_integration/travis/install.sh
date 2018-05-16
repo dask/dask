@@ -56,7 +56,6 @@ conda install -q -c conda-forge \
 
 pip install --upgrade --no-deps git+https://github.com/dask/partd
 pip install --upgrade --no-deps git+https://github.com/dask/zict
-pip install --upgrade --no-deps git+https://github.com/dask/distributed
 pip install --upgrade --no-deps git+https://github.com/mrocklin/sparse
 pip install --upgrade --no-deps git+https://github.com/dask/s3fs
 

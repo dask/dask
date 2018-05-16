@@ -31,7 +31,6 @@ echo pandas %PANDAS% >> %CONDA_PREFIX%\conda-meta\pinned
 
 %PIP_INSTALL% git+https://github.com/dask/partd --upgrade
 %PIP_INSTALL% git+https://github.com/dask/cachey --upgrade
-%PIP_INSTALL% git+https://github.com/dask/distributed --upgrade
 %PIP_INSTALL% git+https://github.com/mrocklin/sparse --upgrade
 %PIP_INSTALL% blosc --upgrade
 %PIP_INSTALL% moto
