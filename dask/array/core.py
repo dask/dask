@@ -2021,7 +2021,8 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
         if isinstance(limit, str):
             limit = parse_bytes(limit)
 
-    assert limit and dtype
+    if dtype is None:
+        raise TypeError("DType must be known for auto-chunking")
     if dtype.hasobject:
         raise NotImplementedError("Can not use auto rechunking with object dtype")
     limit = max(1, limit // dtype.itemsize)
