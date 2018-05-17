@@ -1898,7 +1898,8 @@ def ensure_int(f):
     return i
 
 
-def normalize_chunks(chunks, shape=None, limit=None, itemsize=None):
+def normalize_chunks(chunks, shape=None, limit=None, itemsize=None,
+                     previous_chunks=None):
     """ Normalize chunks to tuple of tuples
 
     Parameters
@@ -1912,6 +1913,9 @@ def normalize_chunks(chunks, shape=None, limit=None, itemsize=None):
         if freedom is given to choose
     itemsize: int (optional)
         The size in bytes of the dtype to be used if this determines chunk sizes
+    previous_chunks: Tuple[Tuple[int]] optional
+        Chunks from a previous array that we should use for inspiration when
+        rechunking auto dimensions
 
     Examples
     --------
@@ -1972,7 +1976,7 @@ def normalize_chunks(chunks, shape=None, limit=None, itemsize=None):
         chunks = tuple(s if c == -1 else c for c, s in zip(chunks, shape))
 
     if any(c == 'auto' for c in chunks):
-        chunks = auto_chunks(chunks, shape, limit, itemsize)
+        chunks = auto_chunks(chunks, shape, limit, itemsize, previous_chunks)
 
     if shape is not None:
         chunks = tuple(c if c not in {None, -1} else s
@@ -2000,7 +2004,7 @@ def normalize_chunks(chunks, shape=None, limit=None, itemsize=None):
     return tuple(tuple(int(x) if not math.isnan(x) else x for x in c) for c in chunks)
 
 
-def auto_chunks(chunks, shape, limit, itemsize):
+def auto_chunks(chunks, shape, limit, itemsize, previous_chunks=None):
     """ Determine automatic chunks
 
     See also
@@ -2013,31 +2017,59 @@ def auto_chunks(chunks, shape, limit, itemsize):
             limit = parse_bytes(limit)
 
     assert limit and itemsize
-    limit = limit // itemsize
+    limit = max(1, limit // itemsize)
     chunks = list(chunks)
 
-    autos = [i for i, c in enumerate(chunks) if c == 'auto']
+    autos = {i for i, c in enumerate(chunks) if c == 'auto'}
     if not autos:
         return tuple(chunks)
 
     largest_block = np.prod([cs if isinstance(cs, Number) else max(cs)
                              for cs in chunks if cs != 'auto'])
-    size = (limit / largest_block) ** (1 / len(autos))
 
-    small = [i for i in autos if shape[i] < size]
-    if small:
-        for i in small:
-            chunks[i] = (shape[i],)
-        return auto_chunks(chunks, shape, limit, itemsize)
+    if previous_chunks:
+        result = {a: np.median(previous_chunks[a]) for a in autos}
+        multiplier = limit / largest_block / np.prod(list(result.values()))
+        last = 0
+        while (multiplier, autos) != last:  # while things improve
+            last = (multiplier, set(autos))  # record last value for stopping condition
+            for a in sorted(autos):
+                proposed = result[a] * multiplier ** (1 / len(autos))
+                if proposed > shape[a]:  # we've hit the shape boundary
+                    autos.remove(a)
+                    largest_block *= shape[a]
+                    chunks[a] = shape[a]
+                    del result[a]
+                else:
+                    result[a] = round_to(proposed, shape[a])
 
-    for i in autos:
-        try:
-            s = max(f for f in factors(shape[i]) if size / 2 <= f <= size)
-        except ValueError:
-            s = int(size)
-        chunks[i] = s
+            # recompute how much multiplier we have left, repeat
+            multiplier = limit / largest_block / np.prod(list(result.values()))
 
-    return tuple(chunks)
+        for k, v in result.items():
+            chunks[k] = v
+        return tuple(chunks)
+
+    else:
+        size = (limit / largest_block) ** (1 / len(autos))
+        small = [i for i in autos if shape[i] < size]
+        if small:
+            for i in small:
+                chunks[i] = (shape[i],)
+            return auto_chunks(chunks, shape, limit, itemsize)
+
+        for i in autos:
+            chunks[i] = round_to(size, shape[i])
+
+        return tuple(chunks)
+
+
+def round_to(c, s):
+    """ Return a chunk dimension that is close to an even multiple """
+    try:
+        return max(f for f in factors(s) if c / 2 <= f <= c)
+    except ValueError:
+        return int(c)
 
 
 def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
@@ -3188,7 +3220,8 @@ def broadcast_to(x, shape, chunks=None):
                   tuple(bd if old > 1 else (new,)
                   for bd, old, new in zip(x.chunks, x.shape, shape[ndim_new:])))
     else:
-        chunks = normalize_chunks(chunks, shape, itemsize=x.dtype.itemsize)
+        chunks = normalize_chunks(chunks, shape, itemsize=x.dtype.itemsize,
+                                  previous_chunks=x.chunks)
         for old_bd, new_bd in zip(x.chunks, chunks[ndim_new:]):
             if old_bd != new_bd and old_bd != (1,):
                 raise ValueError('cannot broadcast chunks %s to chunks %s: '

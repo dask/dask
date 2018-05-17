@@ -221,7 +221,10 @@ def rechunk(x, chunks, threshold=None,
     if isinstance(chunks, (tuple, list)):
         chunks = tuple(lc if lc is not None else rc
                        for lc, rc in zip(chunks, x.chunks))
-    chunks = normalize_chunks(chunks, x.shape, limit=block_size_limit, itemsize=x.dtype.itemsize)
+    chunks = normalize_chunks(chunks, x.shape, limit=block_size_limit,
+                              itemsize=x.dtype.itemsize,
+                              previous_chunks=x.chunks)
+
     if chunks == x.chunks:
         return x
     ndim = x.ndim
