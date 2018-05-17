@@ -136,7 +136,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     # Input processing:
     ## Signature
     if not isinstance(signature, str):
-        raise ValueError('`signature` has to be of type string')
+        raise TypeError('`signature` has to be of type string')
     core_input_dimss, core_output_dimss = _parse_gufunc_signature(signature)
 
     ## Determine nout: nout = None for functions of one direct return; nout = int for return tuples
