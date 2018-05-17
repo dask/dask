@@ -71,7 +71,7 @@ class RandomState(object):
             shapes += [size]
         # broadcast to the final size(shape)
         size = broadcast_shapes(*shapes)
-        chunks = normalize_chunks(chunks, size)
+        chunks = normalize_chunks(chunks, size, itemsize=8)  # ideally we would use dtype.itemsize here
         slices = slices_from_chunks(chunks)
 
         def _broadcast_any(ar, shape, chunks):
