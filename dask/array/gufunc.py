@@ -213,7 +213,7 @@ significantly.".format(dim))
             ### Check if loop dimensions consist of same chunksizes, when they have sizes > 1
             relevant_chunksizes = list(unique(c for s, c in zip(sizes, chunksizes) if s > 1))
             if len(relevant_chunksizes) > 1:
-                raise ValueError("Dimension `'{}'` with different chunksize present".format(dim))
+                raise TypeError("Dimension `'{}'` with different chunksize present".format(dim))
 
     ## Apply function - use atop here
     arginds = list(concat(zip(args, input_dimss)))
