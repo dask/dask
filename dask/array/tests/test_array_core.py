@@ -3268,7 +3268,7 @@ def test_meta(dtype):
     (1000, 167, (125,) * 8),  # find close value
 ])
 def test_normalize_chunks_auto_1d(shape, limit, expected):
-    result = normalize_chunks('auto', (shape,), limit=limit * 8, itemsize=8)
+    result = normalize_chunks('auto', (shape,), limit=limit * 8, dtype=np.float64)
     assert result == (expected,)
 
 
@@ -3278,16 +3278,16 @@ def test_normalize_chunks_auto_1d(shape, limit, expected):
     ((1, 20), 'auto', 10, ((1,), (10, 10))),
 ])
 def test_normalize_chunks_auto_2d(shape, chunks, limit, expected):
-    result = normalize_chunks(chunks, shape, limit=limit, itemsize=1)
+    result = normalize_chunks(chunks, shape, limit=limit, dtype='uint8')
     assert result == expected
 
 
 def test_normalize_chunks_auto_3d():
-    result = normalize_chunks(('auto', 'auto', 2), (20, 20, 20), limit=200, itemsize=1)
+    result = normalize_chunks(('auto', 'auto', 2), (20, 20, 20), limit=200, dtype='uint8')
     expected = ((10, 10), (10, 10), (2,) * 10)
     assert result == expected
 
-    result = normalize_chunks('auto', (20, 20, 20), limit=8, itemsize=1)
+    result = normalize_chunks('auto', (20, 20, 20), limit=8, dtype='uint8')
     expected = ((2,) * 10,) * 3
     assert result == expected
 
@@ -3306,3 +3306,10 @@ def test_from_array_chunks_dict():
         y = da.from_array(x, chunks={0: 10, 1: -1, 2: 'auto'})
         z = da.from_array(x, chunks=(10, 100, 10))
         assert y.chunks == z.chunks
+
+
+@pytest.mark.parametrize('dtype', [object, [('a', object), ('b', int)]])
+def test_normalize_chunks_object_dtype(dtype):
+    x = np.array(['a', 'abc'], dtype=object)
+    with pytest.raises(NotImplementedError):
+        da.from_array(x, chunks='auto')

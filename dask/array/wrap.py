@@ -33,7 +33,7 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
         dtype = func(shape, *args, **kwargs).dtype
     dtype = np.dtype(dtype)
 
-    chunks = normalize_chunks(chunks, shape, itemsize=dtype.itemsize)
+    chunks = normalize_chunks(chunks, shape, dtype=dtype)
     name = kwargs.pop('name', None)
 
     name = name or 'wrapped-' + tokenize(func, shape, chunks, dtype, args, kwargs)

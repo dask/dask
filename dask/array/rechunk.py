@@ -222,8 +222,7 @@ def rechunk(x, chunks, threshold=None,
         chunks = tuple(lc if lc is not None else rc
                        for lc, rc in zip(chunks, x.chunks))
     chunks = normalize_chunks(chunks, x.shape, limit=block_size_limit,
-                              itemsize=x.dtype.itemsize,
-                              previous_chunks=x.chunks)
+                              dtype=x.dtype, previous_chunks=x.chunks)
 
     if chunks == x.chunks:
         return x
