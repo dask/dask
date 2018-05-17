@@ -54,6 +54,16 @@ faithfully in your local thread, allowing you to use normal tools like ``pdb``,
 all of your normal Python debugging tricks in Dask computations, as long as you
 don't need parallelism.
 
+The single-threaded scheduler can be used, for example, by setting
+``scheduler='single-threaded'`` in a compute call
+
+.. code-block:: python
+
+    >>> x.compute(scheduler='single-threaded')
+
+For more ways to configure schedulers, see the :ref:`scheduler configuration
+documentation <scheduling-configuration>`.
+
 This only works for single-machine schedulers.  It does not work with
 dask.distributed unless you are comfortable using the Tornado API (look at the
 `testing infrastructure
@@ -76,7 +86,7 @@ keyword.
 
 .. code-block:: python
 
-   x.compute(rerun_exceptions_locally=True)
+   >>> x.compute(rerun_exceptions_locally=True)
 
 On the distributed scheduler use the ``recreate_error_locally`` method on
 anything that contains ``Futures`` :
