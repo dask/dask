@@ -18,9 +18,10 @@ import toolz
 from toolz import accumulate, reduce
 
 from ..base import tokenize
-from .core import concatenate3, Array, normalize_chunks, DEFAULT_BLOCK_SIZE
+from ..utils import parse_bytes
+from .core import concatenate3, Array, normalize_chunks
 from .wrap import empty
-from .. import sharedict
+from .. import config, sharedict
 
 
 def cumdims_label(chunks, const):
@@ -174,11 +175,8 @@ def intersect_chunks(old_chunks, new_chunks):
     return cross
 
 
-DEFAULT_THRESHOLD = 4
-
-
-def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
-            block_size_limit=DEFAULT_BLOCK_SIZE):
+def rechunk(x, chunks, threshold=None,
+            block_size_limit=None):
     """
     Convert blocks in dask array x for new chunks.
 
@@ -215,9 +213,6 @@ def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
 
     >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
     """
-    threshold = threshold or DEFAULT_THRESHOLD
-    block_size_limit = block_size_limit or DEFAULT_BLOCK_SIZE
-
     if isinstance(chunks, dict):
         chunks = dict(chunks)
         for i in range(x.ndim):
@@ -433,8 +428,8 @@ def find_split_rechunk(old_chunks, new_chunks, graph_size_limit):
 
 
 def plan_rechunk(old_chunks, new_chunks, itemsize,
-                 threshold=DEFAULT_THRESHOLD,
-                 block_size_limit=DEFAULT_BLOCK_SIZE):
+                 threshold=None,
+                 block_size_limit=None):
     """ Plan an iterative rechunking from *old_chunks* to *new_chunks*.
     The plan aims to minimize the rechunk graph size.
 
@@ -454,6 +449,11 @@ def plan_rechunk(old_chunks, new_chunks, itemsize,
     No intermediate steps will be planned if any dimension of ``old_chunks``
     is unknown.
     """
+    threshold = threshold or config.get('array.rechunk-threshold')
+    block_size_limit = block_size_limit or config.get('array.chunk-size')
+    if isinstance(block_size_limit, str):
+        block_size_limit = parse_bytes(block_size_limit)
+
     ndim = len(new_chunks)
     steps = []
     has_nans = [any(math.isnan(y) for y in x) for x in old_chunks]

@@ -38,7 +38,8 @@ from ..base import (DaskMethodsMixin, tokenize, dont_optimize,
 from ..context import globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
-                     SerializableLock, ensure_dict, Dispatch, factors)
+                     SerializableLock, ensure_dict, Dispatch, factors,
+                     parse_bytes)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..core import quote
 from ..delayed import Delayed, to_task_dask
@@ -48,7 +49,12 @@ from ..sharedict import ShareDict
 from .numpy_compat import _Recurser
 
 
-DEFAULT_BLOCK_SIZE = 2 ** 27  # 128MiB
+defaults = {'array': {
+    'chunk-size': '128MiB',
+    'rechunk-threshold': 4
+}}
+
+config.update(config.config, defaults, priority='old')
 
 
 concatenate_lookup = Dispatch('concatenate')
@@ -1892,7 +1898,7 @@ def ensure_int(f):
     return i
 
 
-def normalize_chunks(chunks, shape=None, limit=DEFAULT_BLOCK_SIZE, itemsize=None):
+def normalize_chunks(chunks, shape=None, limit=None, itemsize=None):
     """ Normalize chunks to tuple of tuples
 
     Parameters
@@ -2001,6 +2007,11 @@ def auto_chunks(chunks, shape, limit, itemsize):
     --------
     normalize_chunks: for full docstring and parameters
     """
+    if limit is None:
+        limit = config.get('array.chunk-size')
+        if isinstance(limit, str):
+            limit = parse_bytes(limit)
+
     assert limit and itemsize
     limit = limit // itemsize
     chunks = list(chunks)
