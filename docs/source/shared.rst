@@ -84,11 +84,11 @@ mediated by using a global or contextual pool:
 
    >>> from multiprocessing.pool import ThreadPool
    >>> pool = ThreadPool()
-   >>> da.set_options(pool=pool)  # set global threadpool
+   >>> dask.config.set(pool=pool)  # set global threadpool
 
    or
 
-   >>> with set_options(pool=pool)  # use threadpool throughout with block
+   >>> with dask.config.set(pool=pool)  # use threadpool throughout with block
    ...     ...
 
 We now measure scaling the number of tasks and scaling the density of the

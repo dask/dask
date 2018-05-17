@@ -11,8 +11,8 @@ from multiprocessing.pool import ThreadPool
 import threading
 from threading import current_thread, Lock
 
+from . import config
 from .local import get_async
-from .context import _globals
 from .utils_test import inc, add  # noqa: F401
 
 
@@ -55,7 +55,7 @@ def get(dsk, result, cache=None, num_workers=None, **kwargs):
     (4, 2)
     """
     global default_pool
-    pool = _globals['pool']
+    pool = config.get('pool', None)
     thread = current_thread()
 
     with pools_lock:

@@ -215,7 +215,7 @@ def test_groupby_on_index(scheduler):
     def func2(df):
         return df[['b']] - df[['b']].mean()
 
-    with dask.set_options(scheduler=scheduler):
+    with dask.config.set(scheduler=scheduler):
         with pytest.warns(None):
             assert_eq(ddf.groupby('a').apply(func),
                       pdf.groupby('a').apply(func))
@@ -689,7 +689,7 @@ def test_groupby_apply_tasks():
     df['B'] = df.B // 0.1
     ddf = dd.from_pandas(df, npartitions=10)
 
-    with dask.set_options(shuffle='tasks'):
+    with dask.config.set(shuffle='tasks'):
         for ind in [lambda x: 'A', lambda x: x.A]:
             a = df.groupby(ind(df)).apply(len)
             with pytest.warns(UserWarning):
@@ -708,7 +708,7 @@ def test_groupby_multiprocessing():
     df = pd.DataFrame({'A': [1, 2, 3, 4, 5],
                        'B': ['1','1','a','a','a']})
     ddf = dd.from_pandas(df, npartitions=3)
-    with dask.set_options(scheduler='processes'):
+    with dask.config.set(scheduler='processes'):
         assert_eq(ddf.groupby('B').apply(lambda x: x, meta={"A": int,
                                                             "B": object}),
                   df.groupby('B').apply(lambda x: x))

@@ -42,7 +42,7 @@ def test_fuse_ave_width():
 
     s = ((df.x + 1) + (df.x + 2))
 
-    with dask.set_options(fuse_ave_width=4):
+    with dask.config.set(fuse_ave_width=4):
         a = s.__dask_optimize__(s.dask, s.__dask_keys__())
 
     b = s.__dask_optimize__(s.dask, s.__dask_keys__())

@@ -385,7 +385,7 @@ all dask.arrays to the global ``array_plugins=`` value:
    >>> def f(x):
    ...     print(x.nbytes)
 
-   >>> with dask.set_options(array_plugins=[f]):
+   >>> with dask.config.set(array_plugins=[f]):
    ...     x = da.ones((10, 1), chunks=(5, 1))
    ...     y = x.dot(x.T)
    80
@@ -409,7 +409,7 @@ hidden by Dask's lazy semantics.
 
 .. code-block:: python
 
-   >>> with dask.set_options(array_plugins=[lambda x: x.compute()]):
+   >>> with dask.config.set(array_plugins=[lambda x: x.compute()]):
    ...     x = da.arange(5, chunks=2)
 
    >>> x  # this was automatically converted into a numpy array
@@ -428,7 +428,7 @@ We may wish to warn users if they are creating chunks that are too large
        if any(nb > 1e9 for nb in nbytes):
            warnings.warn("Array contains very large chunks")
 
-   with dask.set_options(array_plugins=[warn_on_large_chunks]):
+   with dask.config.set(array_plugins=[warn_on_large_chunks]):
        ...
 
 Combine
@@ -439,5 +439,5 @@ other, chaining results through them.
 
 .. code-block:: python
 
-   with dask.set_options(array_plugins=[warn_on_large_chunks, lambda x: x.compute()]):
+   with dask.config.set(array_plugins=[warn_on_large_chunks, lambda x: x.compute()]):
        ...

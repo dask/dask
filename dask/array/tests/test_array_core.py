@@ -1216,7 +1216,7 @@ def test_blockdims_from_blockshape():
 def test_coerce():
     d0 = da.from_array(np.array(1), chunks=(1,))
     d1 = da.from_array(np.array([1]), chunks=(1,))
-    with dask.set_options(scheduler='sync'):
+    with dask.config.set(scheduler='sync'):
         for d in d0, d1:
             assert bool(d) is True
             assert int(d) == 1
@@ -3187,13 +3187,13 @@ def test_elemwise_with_lists(chunks, other):
 def test_constructor_plugin():
     L = []
     L2 = []
-    with dask.set_options(array_plugins=[L.append, L2.append]):
+    with dask.config.set(array_plugins=[L.append, L2.append]):
         x = da.ones(10, chunks=5)
         y = x + 1
 
     assert L == L2 == [x, y]
 
-    with dask.set_options(array_plugins=[lambda x: x.compute()]):
+    with dask.config.set(array_plugins=[lambda x: x.compute()]):
         x = da.ones(10, chunks=5)
         y = x + 1
 

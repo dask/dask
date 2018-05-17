@@ -18,9 +18,8 @@ from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
 from ..compatibility import getargspec, builtins
 from ..base import tokenize
-from ..context import _globals
 from ..utils import ignoring, funcname, Dispatch
-from .. import sharedict
+from .. import config, sharedict
 
 
 # Generic functions to support chunks of different types
@@ -76,7 +75,7 @@ def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
     Lower level, users should use ``reduction`` or ``arg_reduction`` directly.
     """
     # Normalize split_every
-    split_every = split_every or _globals.get('split_every', 4)
+    split_every = split_every or config.get('split_every', 4)
     if isinstance(split_every, dict):
         split_every = dict((k, split_every.get(k, 2)) for k in axis)
     elif isinstance(split_every, int):
