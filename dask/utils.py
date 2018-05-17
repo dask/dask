@@ -931,9 +931,8 @@ def factors(n):
 
     https://stackoverflow.com/a/6800214/616616
     """
-    return set(functools.reduce(list.__add__,
-               ([i, n//i] for i in range(1, int(pow(n, 0.5) + 1))
-               if n % i == 0)))
+    seq = ([i, n // i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)
+    return set(functools.reduce(list.__add__, seq))
 
 
 def parse_bytes(s):
@@ -979,18 +978,18 @@ def parse_bytes(s):
 
 
 byte_sizes = {
-        'kB': 10**3,
-        'MB': 10**6,
-        'GB': 10**9,
-        'TB': 10**12,
-        'PB': 10**15,
-        'KiB': 2**10,
-        'MiB': 2**20,
-        'GiB': 2**30,
-        'TiB': 2**40,
-        'PiB': 2**50,
-        'B': 1,
-        '': 1,
+    'kB': 10**3,
+    'MB': 10**6,
+    'GB': 10**9,
+    'TB': 10**12,
+    'PB': 10**15,
+    'KiB': 2**10,
+    'MiB': 2**20,
+    'GiB': 2**30,
+    'TiB': 2**40,
+    'PiB': 2**50,
+    'B': 1,
+    '': 1,
 }
 byte_sizes = {k.lower(): v for k, v in byte_sizes.items()}
 byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and 'i' not in k})
