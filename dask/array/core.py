@@ -38,7 +38,7 @@ from ..base import (DaskMethodsMixin, tokenize, dont_optimize,
 from ..context import globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
-                     SerializableLock, ensure_dict, Dispatch)
+                     SerializableLock, ensure_dict, Dispatch, factors)
 from ..compatibility import unicode, long, getargspec, zip_longest, apply
 from ..core import quote
 from ..delayed import Delayed, to_task_dask
@@ -2020,7 +2020,11 @@ def auto_chunks(chunks, shape, limit, itemsize):
         return auto_chunks(chunks, shape, limit, itemsize)
 
     for i in autos:
-        chunks[i] = int(size)
+        try:
+            s = max(f for f in factors(shape[i]) if size / 2 <= f <= size)
+        except ValueError:
+            s = int(size)
+        chunks[i] = s
 
     return tuple(chunks)
 

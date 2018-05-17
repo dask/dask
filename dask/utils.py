@@ -924,3 +924,13 @@ def natural_sort_key(s):
     """
     return [int(part) if part.isdigit() else part
             for part in re.split('(\d+)', s)]
+
+
+def factors(n):
+    """ Return the factors of an integer
+
+    https://stackoverflow.com/a/6800214/616616
+    """
+    return set(functools.reduce(list.__add__,
+               ([i, n//i] for i in range(1, int(pow(n, 0.5) + 1))
+               if n % i == 0)))
