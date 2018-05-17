@@ -54,27 +54,15 @@ faithfully in your local thread, allowing you to use normal tools like ``pdb``,
 all of your normal Python debugging tricks in Dask computations, as long as you
 don't need parallelism.
 
-This single-threaded scheduler can be used by setting
-``scheduler='synchronous'`` in a compute call
+The single-threaded scheduler can be used, for example, by setting
+``scheduler='single-threaded'`` in a compute call
 
 .. code-block:: python
 
-    >>> x.compute(scheduler='synchronous')
+    >>> x.compute(scheduler='single-threaded')
 
-set globally using ``dask.config.set``
-
-.. code-block:: python
-
-    >>> dask.config.set(scheduler='synchronous')
-
-or as a context manager
-
-.. code-block:: python
-
-    >>> with dask.config.set(scheduler='synchronous'):
-    ...     x.compute()
-
-
+For more ways to configure schedulers, see the :ref:`scheduler configuration
+documentation <scheduling-configuration>`.
 
 This only works for single-machine schedulers.  It does not work with
 dask.distributed unless you are comfortable using the Tornado API (look at the

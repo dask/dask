@@ -155,6 +155,7 @@ You can also run Dask on a distributed cluster.
 There are a variety of ways to set this up depending on your cluster.
 We recommend referring to the :doc:`setup documentation <setup>` for more information.
 
+.. _scheduling-configuration:
 
 Configuration
 -------------
