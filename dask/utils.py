@@ -934,3 +934,64 @@ def factors(n):
     return set(functools.reduce(list.__add__,
                ([i, n//i] for i in range(1, int(pow(n, 0.5) + 1))
                if n % i == 0)))
+
+
+def parse_bytes(s):
+    """ Parse byte string to numbers
+
+    >>> parse_bytes('100')
+    100
+    >>> parse_bytes('100 MB')
+    100000000
+    >>> parse_bytes('100M')
+    100000000
+    >>> parse_bytes('5kB')
+    5000
+    >>> parse_bytes('5.4 kB')
+    5400
+    >>> parse_bytes('1kiB')
+    1024
+    >>> parse_bytes('1e6')
+    1000000
+    >>> parse_bytes('1e6 kB')
+    1000000000
+    >>> parse_bytes('MB')
+    1000000
+    """
+    s = s.replace(' ', '')
+    if not s[0].isdigit():
+        s = '1' + s
+
+    for i in range(len(s) - 1, -1, -1):
+        if not s[i].isalpha():
+            break
+    index = i + 1
+
+    prefix = s[:index]
+    suffix = s[index:]
+
+    n = float(prefix)
+
+    multiplier = byte_sizes[suffix.lower()]
+
+    result = n * multiplier
+    return int(result)
+
+
+byte_sizes = {
+        'kB': 10**3,
+        'MB': 10**6,
+        'GB': 10**9,
+        'TB': 10**12,
+        'PB': 10**15,
+        'KiB': 2**10,
+        'MiB': 2**20,
+        'GiB': 2**30,
+        'TiB': 2**40,
+        'PiB': 2**50,
+        'B': 1,
+        '': 1,
+}
+byte_sizes = {k.lower(): v for k, v in byte_sizes.items()}
+byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and 'i' not in k})
+byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and 'i' in k})
