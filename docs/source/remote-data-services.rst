@@ -99,7 +99,7 @@ Spark.
 
 HDFS support can be provided by either hdfs3_ or pyarrow_, defaulting to the
 first library installed in that order. To explicitly set which library to use,
-set ``hdfs_driver`` using ``dask.set_options``:
+set ``hdfs_driver`` using ``dask.config.set``:
 
 .. code-block:: python
 
@@ -107,15 +107,15 @@ set ``hdfs_driver`` using ``dask.set_options``:
     dd.read_csv('hdfs:///path/to/*.csv')
 
    # Use hdfs3 for HDFS I/O
-   with dask.set_options(hdfs_driver='hdfs3'):
+   with dask.config.set(hdfs_driver='hdfs3'):
        dd.read_csv('hdfs:///path/to/*.csv')
 
    # Use pyarrow for HDFS I/O
-   with dask.set_options(hdfs_driver='pyarrow'):
+   with dask.config.set(hdfs_driver='pyarrow'):
        dd.read_csv('hdfs:///path/to/*.csv')
 
    # Set pyarrow as the global hdfs driver
-   dask.set_options(hdfs_driver='pyarrow')
+   dask.config.set(hdfs_driver='pyarrow')
 
 
 By default, both libraries attempt to read the default server and port from

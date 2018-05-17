@@ -53,7 +53,7 @@ You can specify these functions in any of the following ways:
 
     .. code-block:: python
 
-       with dask.set_options(scheduler='threads'):
+       with dask.config.set(scheduler='threads'):
            x.compute()
            y.compute()
 
@@ -61,7 +61,7 @@ You can specify these functions in any of the following ways:
 
     .. code-block:: python
 
-       dask.set_options(scheduler='threads')
+       dask.config.set(scheduler='threads')
 
 
 Use the Distributed Scheduler

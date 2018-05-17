@@ -27,7 +27,7 @@ def test_with_get():
 def test_set_options_context_manger():
     with set_options(foo='bar'):
         assert _globals['foo'] == 'bar'
-    assert _globals['foo'] is None
+    assert _globals.get('foo', None) is None
 
     try:
         set_options(foo='baz')

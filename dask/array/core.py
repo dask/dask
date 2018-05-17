@@ -32,9 +32,10 @@ import numpy as np
 from . import chunk
 from .numpy_compat import _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
+from .. import config
 from ..base import (DaskMethodsMixin, tokenize, dont_optimize,
                     compute_as_if_collection, persist, is_dask_collection)
-from ..context import _globals, globalmethod
+from ..context import globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict, Dispatch)
@@ -1041,7 +1042,7 @@ class Array(DaskMethodsMixin):
             raise ValueError("You must specify the dtype of the array")
         self.dtype = np.dtype(dtype)
 
-        for plugin in _globals.get('array_plugins', ()):
+        for plugin in config.get('array_plugins', ()):
             result = plugin(self)
             if result is not None:
                 self = result

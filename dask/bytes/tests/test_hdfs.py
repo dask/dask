@@ -47,7 +47,7 @@ def hdfs(request):
         hdfs.rm(basedir, recursive=True)
     hdfs.mkdir(basedir)
 
-    with dask.set_options(hdfs_driver=request.param):
+    with dask.config.set(hdfs_driver=request.param):
         yield hdfs
 
     if hdfs.exists(basedir):
@@ -68,14 +68,14 @@ def test_fs_driver_backends():
     fs1, token1 = get_fs('hdfs')
     assert isinstance(fs1, HDFS3HadoopFileSystem)
 
-    with dask.set_options(hdfs_driver='pyarrow'):
+    with dask.config.set(hdfs_driver='pyarrow'):
         fs2, token2 = get_fs('hdfs')
     assert isinstance(fs2, PyArrowHadoopFileSystem)
 
     assert token1 != token2
 
     with pytest.raises(ValueError):
-        with dask.set_options(hdfs_driver='not-a-valid-driver'):
+        with dask.config.set(hdfs_driver='not-a-valid-driver'):
             get_fs('hdfs')
 
 
@@ -193,13 +193,13 @@ def test_read_text(hdfs):
         f.write('a b\nc d'.encode())
 
     b = db.read_text('hdfs://%s/text.*.txt' % basedir)
-    with dask.set_options(pool=pool):
+    with dask.config.set(pool=pool):
         result = b.str.strip().str.split().map(len).compute()
 
     assert result == [2, 2, 2, 2, 2, 2]
 
     b = db.read_text('hdfs://%s/other.txt' % basedir)
-    with dask.set_options(pool=pool):
+    with dask.config.set(pool=pool):
         result = b.str.split().flatten().compute()
 
     assert result == ['a', 'b', 'c', 'd']

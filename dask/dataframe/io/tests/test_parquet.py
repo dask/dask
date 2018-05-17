@@ -1185,7 +1185,7 @@ def test_writing_parquet_with_kwargs(tmpdir, engine):
     assert_eq(out, ddf, check_index=(engine != 'fastparquet'), check_divisions=should_check_divs(engine))
 
     # Avoid race condition in pyarrow 0.8.0 on writing partitioned datasets
-    with dask.set_options(scheduler='sync'):
+    with dask.config.set(scheduler='sync'):
         ddf.to_parquet(path2, engine=engine, partition_on=['a'],
                        **engine_kwargs[engine])
     out = dd.read_parquet(path2, engine=engine).compute()

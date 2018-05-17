@@ -482,7 +482,7 @@ def test_hdf_globbing():
         df.to_hdf(os.path.join(tdir, 'two.h5'), '/bar/data', format='table')
         df.to_hdf(os.path.join(tdir, 'two.h5'), '/foo/data', format='table')
 
-        with dask.set_options(scheduler='sync'):
+        with dask.config.set(scheduler='sync'):
             res = dd.read_hdf(os.path.join(tdir, 'one.h5'), '/*/data',
                               chunksize=2)
             assert res.npartitions == 2
@@ -516,7 +516,7 @@ def test_hdf_file_list():
         df.iloc[:2].to_hdf(os.path.join(tdir, 'one.h5'), 'dataframe', format='table')
         df.iloc[2:].to_hdf(os.path.join(tdir, 'two.h5'), 'dataframe', format='table')
 
-        with dask.set_options(scheduler='sync'):
+        with dask.config.set(scheduler='sync'):
             input_files = [os.path.join(tdir, 'one.h5'), os.path.join(tdir, 'two.h5')]
             res = dd.read_hdf(input_files, 'dataframe')
             tm.assert_frame_equal(res.compute(), df)

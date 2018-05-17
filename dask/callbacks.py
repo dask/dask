@@ -2,8 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 from contextlib import contextmanager
 
-from .context import _globals
-
 __all__ = ['Callback', 'add_callbacks']
 
 
@@ -46,6 +44,7 @@ class Callback(object):
     >>> with PrintKeys():  # doctest: +SKIP
     ...     x.compute()  # doctest: +SKIP
     """
+    active = set()
 
     def __init__(self, start=None, start_state=None, pretask=None, posttask=None, finish=None):
         if start:
@@ -73,10 +72,10 @@ class Callback(object):
         self._cm.__exit__(*args)
 
     def register(self):
-        _globals['callbacks'].add(self._callback)
+        Callback.active.add(self._callback)
 
     def unregister(self):
-        _globals['callbacks'].remove(self._callback)
+        Callback.active.remove(self._callback)
 
 
 def unpack_callbacks(cbs):
@@ -95,12 +94,12 @@ def local_callbacks(callbacks=None):
     This means that only the outermost scheduler will use global callbacks."""
     global_callbacks = callbacks is None
     if global_callbacks:
-        callbacks, _globals['callbacks'] = _globals['callbacks'], set()
+        callbacks, Callback.active = Callback.active, set()
     try:
         yield callbacks or ()
     finally:
         if global_callbacks:
-            _globals['callbacks'] = callbacks
+            Callback.active = callbacks
 
 
 def normalize_callback(cb):
@@ -130,11 +129,11 @@ class add_callbacks(object):
     """
     def __init__(self, *callbacks):
         self.callbacks = [normalize_callback(c) for c in callbacks]
-        _globals['callbacks'].update(self.callbacks)
+        Callback.active.update(self.callbacks)
 
     def __enter__(self):
         return
 
     def __exit__(self, type, value, traceback):
         for c in self.callbacks:
-            _globals['callbacks'].discard(c)
+            Callback.active.discard(c)

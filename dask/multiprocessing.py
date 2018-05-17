@@ -5,8 +5,8 @@ import traceback
 import pickle
 import sys
 
+from . import config
 from .local import get_async  # TODO: get better get
-from .context import _globals
 from .optimization import fuse, cull
 
 import cloudpickle
@@ -146,7 +146,7 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
     optimize_graph : bool
         If True [default], `fuse` is applied to the graph before computation.
     """
-    pool = _globals['pool']
+    pool = config.get('pool', None)
     if pool is None:
         pool = multiprocessing.Pool(num_workers,
                                     initializer=initialize_worker_process)
@@ -163,8 +163,8 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
 
     # We specify marshalling functions in order to catch serialization
     # errors and report them to the user.
-    loads = func_loads or _globals.get('func_loads') or _loads
-    dumps = func_dumps or _globals.get('func_dumps') or _dumps
+    loads = func_loads or config.get('func_loads', None) or _loads
+    dumps = func_dumps or config.get('func_dumps', None) or _dumps
 
     # Note former versions used a multiprocessing Manager to share
     # a Queue between parent and workers, but this is fragile on Windows

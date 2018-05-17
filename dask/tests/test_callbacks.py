@@ -1,5 +1,4 @@
 from dask.local import get_sync
-from dask.context import _globals
 from dask.threaded import get as get_threaded
 from dask.callbacks import Callback
 from dask.utils_test import add
@@ -88,7 +87,7 @@ def test_nested_schedulers():
                  'y': (add, 'x', 3)}
 
     def nested_call(x):
-        assert not _globals['callbacks']
+        assert not Callback.active
         with inner_callback:
             return get_threaded(inner_dsk, 'y') + x
 
@@ -99,18 +98,16 @@ def test_nested_schedulers():
     with outer_callback:
         get_threaded(outer_dsk, 'b')
 
-    assert not _globals['callbacks']
+    assert not Callback.active
     assert outer_callback.dsk == outer_dsk
     assert inner_callback.dsk == inner_dsk
-    assert not _globals['callbacks']
+    assert not Callback.active
 
 
 def test_add_remove_mutates_not_replaces():
-    g = _globals.copy()
-
-    assert not g['callbacks']
+    assert not Callback.active
 
     with Callback():
-        pass
+        assert Callback.active
 
-    assert not g['callbacks']
+    assert not Callback.active

@@ -12,11 +12,10 @@ from toolz import merge
 from .io import _link
 from ...base import get_scheduler
 from ..core import DataFrame, new_dd_object
-from ... import multiprocessing
+from ... import config, multiprocessing
 from ...base import tokenize, compute_as_if_collection
 from ...bytes.utils import build_name_function
 from ...compatibility import PY3
-from ...context import _globals
 from ...delayed import Delayed, delayed
 from ...utils import get_scheduler_lock
 
@@ -163,9 +162,9 @@ def to_hdf(df, path, key, mode='a', append=False, get=None, scheduler=None,
     # If user did not specify scheduler and write is sequential default to the
     # sequential scheduler. otherwise let the _get method choose the scheduler
     if (get is None and
-            'get' not in _globals and
+            not config.get('get', None) and
             scheduler is None and
-            'scheduler' not in _globals and
+            not config.get('scheduler', None) and
             single_node and single_file):
         scheduler = 'single-threaded'
 

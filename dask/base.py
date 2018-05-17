@@ -15,11 +15,11 @@ from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
 from .compatibility import long, unicode
-from .context import _globals, thread_state
+from .context import thread_state
 from .core import flatten, quote
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict
-from . import threaded, local
+from . import config, local, threaded
 
 
 __all__ = ("DaskMethodsMixin",
@@ -179,7 +179,7 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
     Convert many collections into a single dask graph, after optimization
     """
     optimizations = (kwargs.pop('optimizations', None) or
-                     _globals.get('optimizations', []))
+                     config.get('optimizations', []))
 
     if optimize_graph:
         groups = groupby(optimization_function, collections)
@@ -866,12 +866,12 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         # else:  # try to connect to remote scheduler with this name
         #     return get_client(scheduler).get
 
-    if _globals.get('scheduler'):
-        return get_scheduler(scheduler=_globals['scheduler'])
+    if config.get('scheduler', None):
+        return get_scheduler(scheduler=config.get('scheduler', None))
 
-    if _globals.get('get'):
-        warn_on_get(_globals['get'])
-        return _globals['get']
+    if config.get('get', None):
+        warn_on_get(config.get('get', None))
+        return config.get('get', None)
 
     if getattr(thread_state, 'key', False):
         from distributed.worker import get_worker

@@ -2,8 +2,7 @@
 from __future__ import absolute_import, division, print_function
 
 from ..optimization import cull, fuse_getitem, fuse
-from ..context import _globals
-from .. import core
+from .. import config, core
 
 try:
     import fastparquet  # noqa: F401
@@ -22,6 +21,6 @@ def optimize(dsk, keys, **kwargs):
         from .io.parquet import _read_parquet_row_group
         dsk = fuse_getitem(dsk, _read_parquet_row_group, 4)
     dsk, dependencies = fuse(dsk, keys, dependencies=dependencies,
-                             ave_width=_globals.get('fuse_ave_width', 0))
+                             ave_width=config.get('fuse_ave_width', 0))
     dsk, _ = cull(dsk, keys)
     return dsk
