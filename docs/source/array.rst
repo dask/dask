@@ -14,6 +14,7 @@ Array
    array-linear-operator.rst
    array-slicing.rst
    array-stack.rst
+   array-gufunc.rst
 
 Dask Array implements a subset of the NumPy ndarray interface using blocked
 algorithms, cutting up the large array into many small arrays. This lets us

@@ -1126,7 +1126,11 @@ class Array(DaskMethodsMixin):
 
         if method == '__call__':
             if numpy_ufunc.signature is not None:
-                return NotImplemented
+                from .gufunc import apply_gufunc
+                return apply_gufunc(numpy_ufunc,
+                                    numpy_ufunc.signature,
+                                    *inputs,
+                                    **kwargs)
             if numpy_ufunc.nout > 1:
                 from . import ufunc
                 try:
@@ -2164,6 +2168,9 @@ def unify_chunks(*args, **kwargs):
     --------
     common_blockdim
     """
+    if not args:
+        return {}, []
+
     arginds = [(asarray(a) if ind is not None else a, ind)
                for a, ind in partition(2, args)]  # [x, ij, y, jk]
     args = list(concat(arginds))  # [(x, ij), (y, jk)]
