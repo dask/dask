@@ -1918,7 +1918,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
         The size in bytes of the dtype to be used if this determines chunk sizes
     previous_chunks: Tuple[Tuple[int]] optional
         Chunks from a previous array that we should use for inspiration when
-        rechunking auto dimensions
+        rechunking auto dimensions.  If not provided but auto-chunking exists
+        then auto-dimensions will prefer square-like chunk shapes.
 
     Examples
     --------
@@ -2016,6 +2017,12 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
     --------
     normalize_chunks: for full docstring and parameters
     """
+    chunks = list(chunks)
+
+    autos = {i for i, c in enumerate(chunks) if c == 'auto'}
+    if not autos:
+        return tuple(chunks)
+
     if limit is None:
         limit = config.get('array.chunk-size')
         if isinstance(limit, str):
@@ -2023,14 +2030,13 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
     if dtype is None:
         raise TypeError("DType must be known for auto-chunking")
-    if dtype.hasobject:
-        raise NotImplementedError("Can not use auto rechunking with object dtype")
-    limit = max(1, limit // dtype.itemsize)
-    chunks = list(chunks)
 
-    autos = {i for i, c in enumerate(chunks) if c == 'auto'}
-    if not autos:
-        return tuple(chunks)
+    if dtype.hasobject:
+        raise NotImplementedError(
+            "Can not use auto rechunking with object dtype. "
+            "We are unable to estimate the size in bytes of object data")
+
+    limit = max(1, limit // dtype.itemsize)
 
     largest_block = np.prod([cs if isinstance(cs, Number) else max(cs)
                              for cs in chunks if cs != 'auto'])
@@ -2073,7 +2079,13 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
 
 def round_to(c, s):
-    """ Return a chunk dimension that is close to an even multiple """
+    """ Return a chunk dimension that is close to an even multiple
+
+    We want the largest factor of the dimension size (s) that is less than the
+    desired chunk size, but not less than half, which is too much.  If no such
+    factor exists then we just go with the original chunk size and accept an
+    uneven chunk at the end.
+    """
     try:
         return max(f for f in factors(s) if c / 2 <= f <= c)
     except ValueError:

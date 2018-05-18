@@ -620,7 +620,7 @@ def test_rechunk_auto_2d():
     assert y.chunks == ((20,), (1,) * 20)
 
     x = da.ones((20, 20), chunks=(2, 2))
-    y = x.rechunk({0: -1, 1: "auto"}, block_size_limit=80 * x.dtype.itemsize)
+    y = x.rechunk((-1, 'auto'), block_size_limit=80 * x.dtype.itemsize)
     assert y.chunks == ((20,), (4,) * 5)
 
     x = da.ones((20, 20), chunks=((2, 2)))

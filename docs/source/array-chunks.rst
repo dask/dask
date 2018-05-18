@@ -36,29 +36,45 @@ For performance, a good choice of ``chunks`` follows the following rules:
 2.  A chunk must be large enough so that computations on that chunk take
     significantly longer than the 1ms overhead per task that dask scheduling
     incurs.  A task should take longer than 100ms.
-3.  Chunks should align with the computation that you want to do.  For example
-    if you plan to frequently slice along a particular dimension then it's more
-    efficient if your chunks are aligned so that you have to touch fewer
-    chunks.  If you want to add two arrays then its convenient if those arrays
-    have matching chunks patterns.
-4.  Chunk sizes between 10MB-1GB are common, depending on the availability of
+3.  Chunk sizes between 10MB-1GB are common, depending on the availability of
     RAM and the duration of computations
+4.  Chunks should align with the computation that you want to do.
+
+    For example if you plan to frequently slice along a particular dimension
+    then it's more efficient if your chunks are aligned so that you have to
+    touch fewer chunks.  If you want to add two arrays then its convenient if
+    those arrays have matching chunks patterns.
+
+5.  Chunks should align with your storage, if applicable
+
+    Array data formats are often chunked as well.  When loading or saving data
+    if it useful to have dask array chunks that are aligned with the chunking
+    of your storage, often an even multiple times larger in each direction.
 
 
 Unknown Chunks
 --------------
 
-Some arrays have unknown chunk sizes.  These are designated using ``np.nan``
-rather than an integer.  These arrays support many but not all operations.  In
-particular, operations like slicing are not possible and will result in an
-error.
+Some arrays have unknown chunk sizes.  This arises whenever the size of an
+array depends on lazy computations that we haven't yet performed like the
+following:
+
+.. code-block:: python
+
+   x = x[x > 100]  # don't know how many values are greater than 100 ahead of time
+
+Operations like the above result in arrays with unknown shapes and also unknown
+chunk sizes.  Unknown values within shape or chunks are designated using
+``np.nan`` rather than an integer.  These arrays support many but not all
+operations.  In particular, operations like slicing are not possible and will
+result in an error.
 
 .. code-block:: python
 
    >>> x.shape
    (np.nan, np.nan)
 
-   >>> x[0]
+   >>> x[100]
    ValueError: Array chunk sizes unknown
 
 

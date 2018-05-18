@@ -191,8 +191,7 @@ def rechunk(x, chunks, threshold=None,
         The graph growth factor under which we don't bother introducing an
         intermediate step.
     block_size_limit: int
-        The maximum block size (in bytes) we want to produce during an
-        intermediate step.
+        The maximum block size (in bytes) we want to produce
 
     Examples
     --------
@@ -207,7 +206,7 @@ def rechunk(x, chunks, threshold=None,
 
     >>> y = x.rechunk({0: 1000})
 
-    Use the value ``-1`` to specify that you don't want to chunk along a
+    Use the value ``-1`` to specify that you want a single chunk along a
     dimension or the value ``"auto"`` to specify that dask can freely rechunk a
     dimension to attain blocks of a uniform block size
 
