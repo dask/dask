@@ -4,7 +4,8 @@ import os
 import pytest
 
 from dask.config import (update, merge, collect_yaml, collect_env, get,
-                         ensure_file, set, config, rename)
+                         ensure_file, set, config, rename, update_defaults,
+                         refresh)
 from dask.utils import tmpfile
 
 
@@ -193,3 +194,17 @@ def test_rename():
     config = {'foo-bar': 123}
     rename(aliases, config=config)
     assert config == {'foo': {'bar': 123}}
+
+
+def test_refresh():
+    defaults = []
+    config = {}
+
+    update_defaults({'a': 1}, config=config, defaults=defaults)
+    assert config == {'a': 1}
+
+    refresh(paths=[], env={'DASK_B': '2'}, config=config, defaults=defaults)
+    assert config == {'a': 1, 'b': 2}
+
+    refresh(paths=[], env={'DASK_C': '3'}, config=config, defaults=defaults)
+    assert config == {'a': 1, 'c': 3}

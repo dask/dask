@@ -252,6 +252,7 @@ Downstream Libraries
 .. autosummary::
    dask.config.ensure_file
    dask.config.update
+   dask.config.update_defaults
 
 Downstream Dask libraries often follow a standard convention to use the central
 Dask configuration.  This section provides recommendations for integration,
@@ -296,7 +297,7 @@ Downstream projects typically follow the following convention:
        with open(fn) as f:
            defaults = yaml.load(f)
 
-       dask.config.update(dask.config.config, defaults, priority='old')
+       dask.config.update_defaults(defaults)
 
 4.  Within that same config.py file, copy the ``'foo.yaml'`` file to the user's
     configuration directory if it doesn't already exist.
@@ -321,7 +322,7 @@ Downstream projects typically follow the following convention:
 
        from . import config
 
-5.  Within ``dask_foo`` code, use the ``dask.config.get`` function to access
+6.  Within ``dask_foo`` code, use the ``dask.config.get`` function to access
     configuration values
 
     .. code-block:: python
@@ -330,6 +331,22 @@ Downstream projects typically follow the following convention:
 
        def process(fn, color=dask.config.get('foo.color')):
            ...
+
+7.  You may also want to ensure that your yaml configuration files are included
+    in your package.  This can be accomplished by including the following line
+    in your MANIFEST.in::
+
+       recursive-include <PACKAGE_NAME> *.yaml
+
+    and the following in your setup.py ``setup`` call
+
+    .. code-block:: python
+
+        from setuptools import setup
+
+        setup(...,
+              include_package_data=True,
+              ...)
 
 This process keeps configuration in a central place, but also keeps it safe
 within namespaces.  It places config files in an easy to access location
