@@ -2089,7 +2089,7 @@ def round_to(c, s):
     try:
         return max(f for f in factors(s) if c / 2 <= f <= c)
     except ValueError:
-        return int(c)
+        return max(1, int(c))
 
 
 def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,

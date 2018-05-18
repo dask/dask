@@ -654,6 +654,11 @@ def test_rechunk_auto_image_stack(n):
         z = x.rechunk('auto')
         assert z.chunks == ((5,) * (n // 5), (1000,), (1000,))
 
+    with dask.config.set({'array.chunk-size': '1MiB'}):
+        x = da.ones((n, 1000, 1000), chunks=(1, 1000, 1000), dtype='float64')
+        z = x.rechunk('auto')
+        assert z.chunks == ((1,) * n , (250,) * 4, (250,) * 4)
+
 
 def test_rechunk_down():
     with dask.config.set({'array.chunk-size': '10MiB'}):
