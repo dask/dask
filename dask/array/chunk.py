@@ -246,3 +246,43 @@ def einsum(*operands, **kwargs):
     # Avoid concatenate=True in atop by adding 1's
     # for the contracted dimensions
     return chunk.reshape(chunk.shape + (1,) * ncontract_inds)
+
+
+def slice_with_int_dask_array(x, idx, offset, axis):
+    """Chunk kernel of `slice_with_int_dask_array_on_axis`.
+    Slice one chunk of x by one chunk of idx.
+
+    Returns ``x`` sliced along ``axis``, using only the elements of
+    ``idx`` that fall inside the current chunk.
+    """
+    idx = idx - offset[0]
+    idx_filter = (idx >= 0) & (idx < x.shape[axis])
+    idx = idx[idx_filter]
+    return x[[
+        idx if i == axis else slice(None)
+        for i in range(x.ndim)
+    ]]
+
+
+def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
+    """Final aggregation kernel of `slice_with_int_dask_array_on_axis`.
+    Aggregate all chunks of x by one chunk of idx.
+    """
+    x_chunk_offset = 0
+    chunk_output_offset = 0
+
+    # Assemble the final index that picks from the output of the previous
+    # kernel by adding together one layer per chunk of x
+    idx_final = np.zeros_like(idx)
+    for x_chunk in x_chunks:
+        idx_filter = (idx >= x_chunk_offset) & (idx < x_chunk_offset + x_chunk)
+        idx_cum = np.cumsum(idx_filter)
+        idx_final += np.where(idx_filter, idx_cum - 1 + chunk_output_offset, 0)
+        x_chunk_offset += x_chunk
+        if idx_cum.size > 0:
+            chunk_output_offset += idx_cum[-1]
+
+    return chunk_outputs[[
+        idx_final if i == axis else slice(None)
+        for i in range(chunk_outputs.ndim)
+    ]]
