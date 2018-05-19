@@ -27,6 +27,9 @@ if 'DASK_CONFIG' in os.environ:
 global_config = config = {}
 
 
+defaults = []
+
+
 def update(old, new, priority='new'):
     """ Update a nested dictionary with values from another
 
@@ -103,8 +106,9 @@ def collect_yaml(paths=paths):
         if os.path.exists(path):
             if os.path.isdir(path):
                 file_paths.extend(sorted([
-                    p for p in os.listdir(path)
-                    if os.path.splitext(p)[1].lower() in ('json', 'yaml', 'yml')
+                    os.path.join(path, p)
+                    for p in os.listdir(path)
+                    if os.path.splitext(p)[1].lower() in ('.json', '.yaml', '.yml')
                 ]))
             else:
                 file_paths.append(path)
@@ -274,17 +278,35 @@ def collect(paths=paths, env=None):
     return merge(*configs)
 
 
-def refresh(config=config, **kwargs):
+def refresh(config=config, defaults=defaults, **kwargs):
     """
     Update configuration by re-reading yaml files and env variables
 
     This mutates the global dask.config.config, or the config parameter if
     passed in.
 
+    This goes through the following stages:
+
+    1.  Clearing out all old configuration
+    2.  Updating from the stored defaults from downstream libraries
+        (see update_defaults)
+    3.  Updating from yaml files and environment variables
+
+    Note that some functionality only checks configuration once at startup and
+    may not change behavior, even if configuration changes.  It is recommended
+    to restart your python process if convenient to ensure that new
+    configuration changes take place.
+
     See Also
     --------
     dask.config.collect: for parameters
+    dask.config.update_defaults
     """
+    config.clear()
+
+    for d in defaults:
+        update(config, d, priority='old')
+
     update(config, collect(**kwargs))
 
 
@@ -340,6 +362,19 @@ def rename(aliases, config=config):
         del config[k]  # TODO: support nested keys
 
     set(new, config=config)
+
+
+def update_defaults(new, config=config, defaults=defaults):
+    """ Add a new set of defaults to the configuration
+
+    It does two things:
+
+    1.  Add the defaults to a global collection to be used by refresh later
+    2.  Updates the global config with the new configuration
+        prioritizing older values over newer ones
+    """
+    defaults.append(new)
+    update(config, new, priority='old')
 
 
 refresh()

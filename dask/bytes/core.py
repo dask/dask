@@ -11,8 +11,8 @@ from .compression import seekable_files, files as compress_files
 from .utils import (SeekableFile, read_block, infer_compression,
                     infer_storage_options, build_name_function,
                     update_storage_options)
+from .. import config
 from ..compatibility import unicode
-from ..context import _globals
 from ..base import tokenize
 from ..delayed import delayed
 from ..utils import import_required, is_integer
@@ -447,7 +447,7 @@ def get_fs(protocol, storage_options=None):
         cls = _filesystems[protocol]
 
     elif protocol == 'hdfs':
-        cls = get_hdfs_driver(_globals.get("hdfs_driver", "auto"))
+        cls = get_hdfs_driver(config.get("hdfs_driver", "auto"))
 
     elif protocol in ['http', 'https']:
         import_required('requests',

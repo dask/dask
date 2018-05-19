@@ -636,7 +636,7 @@ def test_optimizations_keyword():
     x = dask.delayed(inc)(1)
     assert x.compute() == 2
 
-    with dask.set_options(optimizations=[inc_to_dec]):
+    with dask.config.set(optimizations=[inc_to_dec]):
         assert x.compute() == 0
 
     assert x.compute() == 2
@@ -665,7 +665,7 @@ def test_optimize():
     assert dask.compute(x3, y3, z3) == sols
 
     # Optimize respects global optimizations as well
-    with dask.set_options(optimizations=[inc_to_dec]):
+    with dask.config.set(optimizations=[inc_to_dec]):
         x4, y4, z4 = optimize(x, y, z)
     for a, b in zip([x3, y3, z3], [x4, y4, z4]):
         assert dict(a.dask) == dict(b.dask)
@@ -799,14 +799,14 @@ def test_optimize_globals():
 
     assert_eq(x + 1, np.ones(10) + 1)
 
-    with dask.set_options(array_optimize=optimize_double):
+    with dask.config.set(array_optimize=optimize_double):
         assert_eq(x + 1, (np.ones(10) * 2 + 1) * 2)
 
     assert_eq(x + 1, np.ones(10) + 1)
 
     b = db.range(10, npartitions=2)
 
-    with dask.set_options(array_optimize=optimize_double):
+    with dask.config.set(array_optimize=optimize_double):
         xx, bb = dask.compute(x + 1, b.map(inc), scheduler='single-threaded')
         assert_eq(xx, (np.ones(10) * 2 + 1) * 2)
 
@@ -821,7 +821,7 @@ def test_optimize_None():
         assert dsk == dict(y.dask)  # but they aren't
         return dask.get(dsk, keys)
 
-    with dask.set_options(array_optimize=None, get=my_get):
+    with dask.config.set(array_optimize=None, get=my_get):
         y.compute()
 
 
@@ -837,11 +837,11 @@ def test_scheduler_keyword():
         assert x.compute() == 2
         assert x.compute(scheduler='foo') == 123
 
-        with dask.set_options(scheduler='foo'):
+        with dask.config.set(scheduler='foo'):
             assert x.compute() == 123
         assert x.compute() == 2
 
-        with dask.set_options(scheduler='foo'):
+        with dask.config.set(scheduler='foo'):
             assert x.compute(scheduler='threads') == 2
 
         with pytest.raises(ValueError):
@@ -863,6 +863,6 @@ def test_get_scheduler():
     assert get_scheduler() is None
     assert get_scheduler(scheduler='threads') is dask.threaded.get
     assert get_scheduler(scheduler='sync') is dask.local.get_sync
-    with dask.set_options(scheduler='threads'):
+    with dask.config.set(scheduler='threads'):
         assert get_scheduler(scheduler='threads') is dask.threaded.get
     assert get_scheduler() is None
