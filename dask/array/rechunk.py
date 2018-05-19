@@ -192,6 +192,7 @@ def rechunk(x, chunks, threshold=None,
         intermediate step.
     block_size_limit: int
         The maximum block size (in bytes) we want to produce
+        Defaults to the configuration value ``array.chunk-size``
 
     Examples
     --------

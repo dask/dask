@@ -956,6 +956,8 @@ def parse_bytes(s):
     1000000000
     >>> parse_bytes('MB')
     1000000
+    >>> parse_bytes('5 foos')  # doctest: +SKIP
+    ValueError: Could not interpret 'foos' as a byte unit
     """
     s = s.replace(' ', '')
     if not s[0].isdigit():
@@ -969,9 +971,15 @@ def parse_bytes(s):
     prefix = s[:index]
     suffix = s[index:]
 
-    n = float(prefix)
+    try:
+        n = float(prefix)
+    except ValueError:
+        raise ValueError("Could not interpret '%s' as a number" % prefix)
 
-    multiplier = byte_sizes[suffix.lower()]
+    try:
+        multiplier = byte_sizes[suffix.lower()]
+    except KeyError:
+        raise ValueError("Could not interpret '%s' as a byte unit" % suffix)
 
     result = n * multiplier
     return int(result)

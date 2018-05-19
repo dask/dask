@@ -3313,3 +3313,18 @@ def test_normalize_chunks_object_dtype(dtype):
     x = np.array(['a', 'abc'], dtype=object)
     with pytest.raises(NotImplementedError):
         da.from_array(x, chunks='auto')
+
+
+def test_normalize_chunks_tuples_of_tuples():
+    result = normalize_chunks(((2, 3, 5), 'auto'), (10, 10), limit=10, dtype=np.uint8)
+    expected = ((2, 3, 5), (2, 2, 2, 2, 2))
+    assert result == expected
+
+
+def test_normalize_chunks_nan():
+    with pytest.raises(ValueError) as info:
+        normalize_chunks('auto', (np.nan,), limit=10, dtype=np.uint8)
+    assert "auto" in str(info.value)
+    with pytest.raises(ValueError) as info:
+        normalize_chunks(((np.nan, np.nan), 'auto'), (10, 10), limit=10, dtype=np.uint8)
+    assert "auto" in str(info.value)

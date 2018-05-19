@@ -2013,6 +2013,16 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
 def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
     """ Determine automatic chunks
 
+    Parameters
+    ----------
+    chunks: Tuple
+        A tuple of either dimensions or tuples of explicit chunk dimensions
+        Some entries should be "auto"
+    shape: Tuple[int]
+    limit: int
+        The maximum allowable size of a chunk
+    previous_chunks: Tuple[Tuple[int]]
+
     See also
     --------
     normalize_chunks: for full docstring and parameters
@@ -2035,6 +2045,12 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
         raise NotImplementedError(
             "Can not use auto rechunking with object dtype. "
             "We are unable to estimate the size in bytes of object data")
+
+    for x in tuple(chunks) + tuple(shape):
+        if (isinstance(x, Number) and np.isnan(x) or
+                isinstance(x, tuple) and np.isnan(x).any()):
+            raise ValueError("Can not perform automatic rechunking with unknown "
+                             "(nan) chunk sizes")
 
     limit = max(1, limit // dtype.itemsize)
 
@@ -2088,7 +2104,7 @@ def round_to(c, s):
     """
     try:
         return max(f for f in factors(s) if c / 2 <= f <= c)
-    except ValueError:
+    except ValueError:  # no matching factors within factor of two
         return max(1, int(c))
 
 
