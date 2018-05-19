@@ -520,33 +520,60 @@ def test_oob_check():
         x[0, 0]
 
 
-def test_index_with_int_dask_array():
+@pytest.mark.parametrize('idx_chunks', [None, 3, 2, 1])
+@pytest.mark.parametrize('x_chunks', [None, (3, 5), (2, 3), (1, 2), (1, 1)])
+def test_index_with_int_dask_array(x_chunks, idx_chunks):
+    # test data is crafted to stress use cases:
+    # - pick from different chunks of x out of order
+    # - a chunk of x contains no matches
+    # - only one chunk of x
     x = np.array([[10, 20, 30, 40, 50],
                   [60, 70, 80, 90, 100],
                   [110, 120, 130, 140, 150]])
-    d = da.from_array(x, chunks=2)
-    idx = np.array([2, 0, 2])
-    idx_d = da.from_array(idx, chunks=2)
+    idx = np.array([3, 0, 1])
+    expect = np.array([[40, 10, 20],
+                       [90, 60, 70],
+                       [140, 110, 120]])
 
-    assert_eq(x[idx, :], d[idx_d, :])
-    assert_eq(x[:, idx], d[:, idx_d])
-    assert_eq(x[0, idx], d[0, idx_d])
+    if x_chunks is not None:
+        x = da.from_array(x, chunks=x_chunks)
+    if idx_chunks is not None:
+        idx = da.from_array(idx, chunks=idx_chunks)
 
-    # Slice by 0-dimensional arrays
-    idx0 = np.array(1)
-    idx0_d = da.from_array(idx0, chunks=1)
-    assert_eq(x[idx0, :], d[idx0_d, :])
-    assert_eq(x[:, idx0], d[:, idx0_d])
-    assert_eq(x[idx0, idx0], d[idx0_d, idx0_d])
-    assert_eq(x[idx0, idx], d[idx0_d, idx])
-    assert_eq(x[idx0, idx], d[idx0_d, idx_d])
-    # Unsupported: 0d numpy array slicers (#3406)
-    # assert_eq(x[idx0, idx0], d[idx0, idx0_d])
-    # assert_eq(x[idx0, idx], d[idx0, idx_d])
+    assert_eq(x[:, idx], expect)
+    assert_eq(x.T[idx, :], expect.T)
 
-    # Slice by array with nan chunks
-    a = da.arange(-2, 3, chunks=2)
+
+@pytest.mark.parametrize('chunks', [1, 2, 3])
+def test_index_with_int_dask_array_0d(chunks):
+    # Slice by 0-dimensional array
+    x = da.from_array(np.array([[10, 20, 30],
+                                [40, 50, 60]]), chunks=chunks)
+    idx0 = da.from_array(np.array(1), chunks=1)
+    assert_eq(x[idx0, :], x[1, :])
+    assert_eq(x[:, idx0], x[:, 1])
+
+
+@pytest.mark.parametrize('chunks', [1, 2, 3, 4, 5])
+def test_index_with_int_dask_array_nanchunks(chunks):
+    # Slice by array with nan-sized chunks
+    a = da.arange(-2, 3, chunks=chunks)
     assert_eq(a[a.nonzero()], np.array([-2, -1,  1,  2]))
+    # Edge case: the nan-sized chunks resolve to size 0
+    a = da.zeros(5, chunks=chunks)
+    assert_eq(a[a.nonzero()], np.array([]))
+
+
+@pytest.mark.parametrize('chunks', [2, 4])
+def test_index_with_int_dask_array_indexerror(chunks):
+    # Slice by array with nan-sized chunks
+    a = da.arange(4, chunks=chunks)
+    idx = da.from_array(np.array([-1]), chunks=1)
+    with pytest.raises(IndexError):
+        a[idx].compute()
+    idx = da.from_array(np.array([4]), chunks=1)
+    with pytest.raises(IndexError):
+        a[idx].compute()
 
 
 def test_index_with_bool_dask_array():
