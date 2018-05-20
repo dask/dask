@@ -32,9 +32,10 @@ import numpy as np
 from . import chunk
 from .numpy_compat import _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
+from .. import config
 from ..base import (DaskMethodsMixin, tokenize, dont_optimize,
                     compute_as_if_collection, persist, is_dask_collection)
-from ..context import _globals, globalmethod
+from ..context import globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict, Dispatch)
@@ -1041,7 +1042,7 @@ class Array(DaskMethodsMixin):
             raise ValueError("You must specify the dtype of the array")
         self.dtype = np.dtype(dtype)
 
-        for plugin in _globals.get('array_plugins', ()):
+        for plugin in config.get('array_plugins', ()):
             result = plugin(self)
             if result is not None:
                 self = result
@@ -1125,7 +1126,11 @@ class Array(DaskMethodsMixin):
 
         if method == '__call__':
             if numpy_ufunc.signature is not None:
-                return NotImplemented
+                from .gufunc import apply_gufunc
+                return apply_gufunc(numpy_ufunc,
+                                    numpy_ufunc.signature,
+                                    *inputs,
+                                    **kwargs)
             if numpy_ufunc.nout > 1:
                 from . import ufunc
                 try:
@@ -2163,6 +2168,9 @@ def unify_chunks(*args, **kwargs):
     --------
     common_blockdim
     """
+    if not args:
+        return {}, []
+
     arginds = [(asarray(a) if ind is not None else a, ind)
                for a, ind in partition(2, args)]  # [x, ij, y, jk]
     args = list(concat(arginds))  # [(x, ij), (y, jk)]

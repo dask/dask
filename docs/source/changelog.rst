@@ -1,6 +1,30 @@
 Changelog
 =========
 
+
+0.18.0 / 2018-MM-DD
+-------------------
+
+Array
++++++
+
+- Experimental addition of generalized ufunc support, ``apply_gufunc``, ``gufunc``, and ``as_gufunc`` (:pr:`#3109`) `Markus Gonser`_
+
+Dataframe
++++++++++
+
+- Add to/read_json (:pr:`3494`) `Martin Durant`_
+
+Bag
++++
+
+-
+
+Core
+++++
+
+-
+
 0.17.5 / 2018-05-16
 -------------------
 
@@ -76,6 +100,7 @@ Core
 ++++
 
 - Support traversing collections in persist, visualize, and optimize (:pr:`3410`) `Jim Crist`_
+- Add schedule= keyword to compute and persist.  This replaces common use of the get= keyword (:pr:`3448`) `Matthew Rocklin`_
 
 
 0.17.2 / 2018-03-21

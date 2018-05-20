@@ -20,7 +20,6 @@ import dask
 import dask.array as da
 from dask.base import tokenize, compute_as_if_collection
 from dask.delayed import Delayed, delayed
-from dask.local import get_sync
 from dask.utils import ignoring, tmpfile, tmpdir
 from dask.utils_test import inc
 
@@ -216,6 +215,32 @@ def test_Array_computation():
     assert_eq(np.array(a), np.eye(3))
     assert isinstance(a.compute(), np.ndarray)
     assert float(a[0, 0]) == 1
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.14.0',
+                    reason="NumPy doesn't have `np.linalg._umath_linalg` yet")
+@pytest.mark.xfail(reason="Protect from `np.linalg._umath_linalg.inv` breaking")
+def test_Array_numpy_gufunc_call__array_ufunc__01():
+    x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
+    nx = x.compute()
+    ny = np.linalg._umath_linalg.inv(nx)
+    y = np.linalg._umath_linalg.inv(x, output_dtypes=float)
+    vy = y.compute()
+    assert_eq(ny, vy)
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.14.0',
+                    reason="NumPy doesn't have `np.linalg._umath_linalg` yet")
+@pytest.mark.xfail(reason="Protect from `np.linalg._umath_linalg.eig` breaking")
+def test_Array_numpy_gufunc_call__array_ufunc__02():
+    x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
+    nx = x.compute()
+    nw, nv = np.linalg._umath_linalg.eig(nx)
+    w, v = np.linalg._umath_linalg.eig(x, output_dtypes=(float, float))
+    vw = w.compute()
+    vv = v.compute()
+    assert_eq(nw, vw)
+    assert_eq(nv, vv)
 
 
 def test_stack():
@@ -1217,7 +1242,7 @@ def test_blockdims_from_blockshape():
 def test_coerce():
     d0 = da.from_array(np.array(1), chunks=(1,))
     d1 = da.from_array(np.array([1]), chunks=(1,))
-    with dask.set_options(get=dask.get):
+    with dask.config.set(scheduler='sync'):
         for d in d0, d1:
             assert bool(d) is True
             assert int(d) == 1
@@ -1517,18 +1542,18 @@ def test_store_locks():
     # Ensure same lock applies over multiple stores
     at = NonthreadSafeStore()
     v = store([a, b], [at, at], lock=lock,
-              get=dask.threaded.get, num_workers=10)
+              scheduler='threads', num_workers=10)
     assert v is None
 
     # Don't assume thread safety by default
     at = NonthreadSafeStore()
-    assert store(a, at, get=dask.threaded.get, num_workers=10) is None
-    assert a.store(at, get=dask.threaded.get, num_workers=10) is None
+    assert store(a, at, scheduler='threads', num_workers=10) is None
+    assert a.store(at, scheduler='threads', num_workers=10) is None
 
     # Ensure locks can be removed
     at = ThreadSafeStore()
     for i in range(10):
-        st = a.store(at, lock=False, get=dask.threaded.get, num_workers=10)
+        st = a.store(at, lock=False, scheduler='threads', num_workers=10)
         assert st is None
         if at.max_concurrent_uses > 1:
             break
@@ -1565,7 +1590,7 @@ def test_store_method_return():
         for return_stored in [False, True]:
             at = np.zeros(shape=(10, 10))
             r = a.store(
-                at, get=dask.threaded.get,
+                at, scheduler='threads',
                 compute=compute, return_stored=return_stored
             )
 
@@ -1583,7 +1608,7 @@ def test_store_multiprocessing_lock():
     a = d + 1
 
     at = np.zeros(shape=(10, 10))
-    st = a.store(at, get=dask.multiprocessing.get, num_workers=10)
+    st = a.store(at, scheduler='processes', num_workers=10)
     assert st is None
 
 
@@ -2168,9 +2193,9 @@ def test_h5py_newaxis():
         with h5py.File(fn) as f:
             x = f.create_dataset('/x', shape=(10, 10), dtype='f8')
             d = da.from_array(x, chunks=(5, 5))
-            assert d[None, :, :].compute(get=get_sync).shape == (1, 10, 10)
-            assert d[:, None, :].compute(get=get_sync).shape == (10, 1, 10)
-            assert d[:, :, None].compute(get=get_sync).shape == (10, 10, 1)
+            assert d[None, :, :].compute(scheduler='sync').shape == (1, 10, 10)
+            assert d[:, None, :].compute(scheduler='sync').shape == (10, 1, 10)
+            assert d[:, :, None].compute(scheduler='sync').shape == (10, 10, 1)
             assert same_keys(d[:, :, None], d[:, :, None])
 
 
@@ -3188,13 +3213,13 @@ def test_elemwise_with_lists(chunks, other):
 def test_constructor_plugin():
     L = []
     L2 = []
-    with dask.set_options(array_plugins=[L.append, L2.append]):
+    with dask.config.set(array_plugins=[L.append, L2.append]):
         x = da.ones(10, chunks=5)
         y = x + 1
 
     assert L == L2 == [x, y]
 
-    with dask.set_options(array_plugins=[lambda x: x.compute()]):
+    with dask.config.set(array_plugins=[lambda x: x.compute()]):
         x = da.ones(10, chunks=5)
         y = x + 1
 

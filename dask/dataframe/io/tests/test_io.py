@@ -12,7 +12,6 @@ from dask.dataframe.io.io import _meta_from_array
 from dask.delayed import Delayed, delayed
 
 from dask.utils import tmpfile
-from dask.local import get_sync
 
 from dask.dataframe.utils import assert_eq, is_categorical_dtype
 
@@ -126,11 +125,11 @@ def test_from_bcolz_multiple_threads():
         d = dd.from_bcolz(t, chunksize=2)
         assert d.npartitions == 2
         assert is_categorical_dtype(d.dtypes['a'])
-        assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
-        assert list(d.a.compute(get=get_sync)) == ['a', 'b', 'a']
+        assert list(d.x.compute(scheduler='sync')) == [1, 2, 3]
+        assert list(d.a.compute(scheduler='sync')) == ['a', 'b', 'a']
 
         d = dd.from_bcolz(t, chunksize=2, index='x')
-        L = list(d.index.compute(get=get_sync))
+        L = list(d.index.compute(scheduler='sync'))
         assert L == [1, 2, 3] or L == [1, 3, 2]
 
         # Names
@@ -150,13 +149,13 @@ def test_from_bcolz():
     d = dd.from_bcolz(t, chunksize=2)
     assert d.npartitions == 2
     assert is_categorical_dtype(d.dtypes['a'])
-    assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
-    assert list(d.a.compute(get=get_sync)) == ['a', 'b', 'a']
-    L = list(d.index.compute(get=get_sync))
+    assert list(d.x.compute(scheduler='sync')) == [1, 2, 3]
+    assert list(d.a.compute(scheduler='sync')) == ['a', 'b', 'a']
+    L = list(d.index.compute(scheduler='sync'))
     assert L == [0, 1, 2]
 
     d = dd.from_bcolz(t, chunksize=2, index='x')
-    L = list(d.index.compute(get=get_sync))
+    L = list(d.index.compute(scheduler='sync'))
     assert L == [1, 2, 3] or L == [1, 3, 2]
 
     # Names
@@ -324,7 +323,7 @@ def test_DataFrame_from_dask_array():
     assert isinstance(df, dd.DataFrame)
     tm.assert_index_equal(df.columns, pd.Index(['a', 'b', 'c']))
     assert list(df.divisions) == [0, 4, 8, 9]
-    assert (df.compute(get=get_sync).values == x.compute(get=get_sync)).all()
+    assert (df.compute(scheduler='sync').values == x.compute(scheduler='sync')).all()
 
     # dd.from_array should re-route to from_dask_array
     df2 = dd.from_array(x, columns=['a', 'b', 'c'])
@@ -340,7 +339,7 @@ def test_Series_from_dask_array():
     assert isinstance(ser, dd.Series)
     assert ser.name == 'a'
     assert list(ser.divisions) == [0, 4, 8, 9]
-    assert (ser.compute(get=get_sync).values == x.compute(get=get_sync)).all()
+    assert (ser.compute(scheduler='sync').values == x.compute(scheduler='sync')).all()
 
     ser = dd.from_dask_array(x)
     assert isinstance(ser, dd.Series)

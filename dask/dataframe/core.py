@@ -1061,10 +1061,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return new_dd_object(merge(self.dask, dsk), name,
                              self._meta, self.divisions)
 
-    def to_hdf(self, path_or_buf, key, mode='a', append=False, get=None, **kwargs):
+    def to_hdf(self, path_or_buf, key, mode='a', append=False, **kwargs):
         """ See dd.to_hdf docstring for more information """
         from .io import to_hdf
-        return to_hdf(self, path_or_buf, key, mode, append, get=get, **kwargs)
+        return to_hdf(self, path_or_buf, key, mode, append, **kwargs)
 
     def to_parquet(self, path, *args, **kwargs):
         """ See dd.to_parquet docstring for more information """
@@ -1075,6 +1075,11 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         """ See dd.to_csv docstring for more information """
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
+
+    def to_json(self, filename, *args, **kwargs):
+        """ See dd.to_json docstring for more information """
+        from .io import to_json
+        return to_json(self, filename, *args, **kwargs)
 
     def to_delayed(self, optimize_graph=True):
         """Convert into a list of ``dask.delayed`` objects, one per partition.

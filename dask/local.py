@@ -120,7 +120,7 @@ import sys
 from .compatibility import Queue, Empty, reraise
 from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
                    has_tasks)
-from .context import _globals
+from . import config
 from .order import order
 from .callbacks import unpack_callbacks, local_callbacks
 from .optimization import cull
@@ -184,7 +184,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     if sortkey is None:
         sortkey = order(dsk).get
     if cache is None:
-        cache = _globals['cache']
+        cache = config.get('cache', None)
     if cache is None:
         cache = dict()
     data_keys = set()
@@ -481,7 +481,7 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                     start_state(dsk, state)
 
             if rerun_exceptions_locally is None:
-                rerun_exceptions_locally = _globals.get('rerun_exceptions_locally', False)
+                rerun_exceptions_locally = config.get('rerun_exceptions_locally', False)
 
             if state['waiting'] and not state['ready']:
                 raise ValueError("Found no accessible jobs in dask")

@@ -35,7 +35,7 @@ jobs:
 
     - env:
       - PYTHON=3.4
-      - NUMPY=1.12.1
+      - NUMPY=1.11.3
       - PANDAS=0.19.1
       - *test_and_lint
       - *no_coverage

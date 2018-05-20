@@ -7,7 +7,6 @@ import dask.array as da
 from dask.array.core import Array
 from dask.array.random import random, exponential, normal
 from dask.array.utils import assert_eq
-from dask.multiprocessing import get as mpget
 from dask.multiprocessing import _dumps, _loads
 
 
@@ -27,7 +26,7 @@ def test_concurrency():
 
     state = da.random.RandomState(5)
     y = state.normal(10, 1, size=10, chunks=2)
-    assert (x.compute(get=mpget) == y.compute(get=mpget)).all()
+    assert (x.compute(scheduler='processes') == y.compute(scheduler='processes')).all()
 
 
 def test_doc_randomstate():
