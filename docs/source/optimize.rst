@@ -304,7 +304,7 @@ you prefer and it will be used instead of the default scheme.
 
 .. code-block:: python
 
-   with dask.set_options(array_optimize=my_optimize_function):
+   with dask.config.set(array_optimize=my_optimize_function):
        x, y = dask.compute(x, y)
 
 You can register separate optimization functions for different collections, or
@@ -313,9 +313,9 @@ be optimized.
 
 .. code-block:: python
 
-   with dask.set_options(array_optimize=my_optimize_function,
-                         dataframe_optimize=None,
-                         delayed_optimize=my_other_optimize_function):
+   with dask.config.set(array_optimize=my_optimize_function,
+                        dataframe_optimize=None,
+                        delayed_optimize=my_other_optimize_function):
        ...
 
 You need not specify all collections.  Collections will default to their

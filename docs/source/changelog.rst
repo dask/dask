@@ -8,9 +8,11 @@ Changelog
 Array
 +++++
 
+<<<<<<< HEAD
 - Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
 - ``einsum`` now accepts the ``split_every`` parameter (:pr:`3396`) `Guido Imperiale`_
 - Add to/read_zarr for Zarr-format datasets and arrays (:pr:`3460`) `Martin Durant`_
+- Experimental addition of generalized ufunc support, ``apply_gufunc``, ``gufunc``, and ``as_gufunc`` (:pr:`#3109`) `Markus Gonser`_
 
 Dataframe
 +++++++++
@@ -26,6 +28,22 @@ Core
 ++++
 
 -
+
+0.17.5 / 2018-05-16
+-------------------
+
+Array
++++++
+
+- Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
+- ``einsum`` now accepts the ``split_every`` parameter (:pr:`3396`) `Guido Imperiale`_
+- Improved slicing performance (:pr:`3469`) `Yu Feng`_
+
+DataFrame
++++++++++
+
+- Compatibility with pandas 0.23.0 (:pr:`3499`) `Tom Augspurger`_
+
 
 0.17.4 / 2018-05-03
 -------------------

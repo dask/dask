@@ -549,7 +549,7 @@ def test_take_npartitions():
 def test_take_npartitions_warn():
     # Use single-threaded scheduler so warnings are properly captured in the
     # same process
-    with dask.set_options(scheduler='sync'):
+    with dask.config.set(scheduler='sync'):
         with pytest.warns(UserWarning):
             b.take(100)
 
@@ -1288,7 +1288,7 @@ def test_repeated_groupby():
 def test_temporary_directory(tmpdir):
     b = db.range(10, npartitions=4)
 
-    with dask.set_options(temporary_directory=str(tmpdir)):
+    with dask.config.set(temporary_directory=str(tmpdir)):
         b2 = b.groupby(lambda x: x % 2)
         b2.compute()
         assert any(fn.endswith('.partd') for fn in os.listdir(str(tmpdir)))

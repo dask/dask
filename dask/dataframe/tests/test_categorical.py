@@ -119,12 +119,14 @@ def test_is_categorical_dtype():
 
 
 def test_categorize():
-    meta = clear_known_categories(frames4[0])
+    # rename y to y_ to avoid pandas future warning about ambiguous
+    # levels
+    meta = clear_known_categories(frames4[0]).rename(columns={'y': 'y_'})
     ddf = dd.DataFrame({('unknown', i): df for (i, df) in enumerate(frames3)},
-                       'unknown', meta, [None] * 4)
+                       'unknown', meta, [None] * 4).rename(columns={'y': 'y_'})
     ddf = ddf.assign(w=ddf.w.cat.set_categories(['x', 'y', 'z']))
     assert ddf.w.cat.known
-    assert not ddf.y.cat.known
+    assert not ddf.y_.cat.known
     assert not ddf.index.cat.known
     df = ddf.compute()
 
@@ -132,27 +134,27 @@ def test_categorize():
         known_index = index is not False
         # By default categorize object and unknown cat columns
         ddf2 = ddf.categorize(index=index)
-        assert ddf2.y.cat.known
+        assert ddf2.y_.cat.known
         assert ddf2.v.cat.known
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df.astype({'v': 'category'}), check_categorical=False)
 
         # Specifying split_every works
         ddf2 = ddf.categorize(index=index, split_every=2)
-        assert ddf2.y.cat.known
+        assert ddf2.y_.cat.known
         assert ddf2.v.cat.known
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df.astype({'v': 'category'}), check_categorical=False)
 
         # Specifying one column doesn't affect others
         ddf2 = ddf.categorize('v', index=index)
-        assert not ddf2.y.cat.known
+        assert not ddf2.y_.cat.known
         assert ddf2.v.cat.known
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df.astype({'v': 'category'}), check_categorical=False)
 
-        ddf2 = ddf.categorize('y', index=index)
-        assert ddf2.y.cat.known
+        ddf2 = ddf.categorize('y_', index=index)
+        assert ddf2.y_.cat.known
         assert ddf2.v.dtype == 'object'
         assert ddf2.index.cat.known == known_index
         assert_eq(ddf2, df)
@@ -188,7 +190,7 @@ def test_categorize_index():
     assert ddf.categorize(index=False) is ddf
 
     # Non-object dtype
-    ddf = dd.from_pandas(df.set_index(df.A), npartitions=5)
+    ddf = dd.from_pandas(df.set_index(df.A.rename('idx')), npartitions=5)
     df = ddf.compute()
 
     ddf2 = ddf.categorize(index=True)
@@ -205,7 +207,7 @@ def test_categorical_set_index(shuffle):
     df['y'] = pd.Categorical(df['y'], categories=['a', 'b', 'c'], ordered=True)
     a = dd.from_pandas(df, npartitions=2)
 
-    with dask.set_options(scheduler='sync', shuffle=shuffle):
+    with dask.config.set(scheduler='sync', shuffle=shuffle):
         b = a.set_index('y', npartitions=a.npartitions)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ['a']

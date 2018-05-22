@@ -288,7 +288,7 @@ def test_set_index_with_explicit_divisions():
     def throw(*args, **kwargs):
         raise Exception()
 
-    with dask.set_options(get=throw):
+    with dask.config.set(get=throw):
         ddf2 = ddf.set_index('x', divisions=[1, 3, 5])
     assert ddf2.divisions == (1, 3, 5)
 
@@ -341,11 +341,11 @@ def test_set_index_divisions_sorted():
     def throw(*args, **kwargs):
         raise Exception("Shouldn't have computed")
 
-    with dask.set_options(get=throw):
+    with dask.config.set(get=throw):
         res = ddf.set_index('x', divisions=[10, 13, 16, 18], sorted=True)
     assert_eq(res, df.set_index('x'))
 
-    with dask.set_options(get=throw):
+    with dask.config.set(get=throw):
         res = ddf.set_index('y', divisions=['a', 'b', 'd', 'e'], sorted=True)
     assert_eq(res, df.set_index('y'))
 
@@ -664,8 +664,8 @@ def test_temporary_directory(tmpdir):
                        'z': np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=10, name='x', sort=False)
 
-    with dask.set_options(temporary_directory=str(tmpdir),
-                          scheduler='processes'):
+    with dask.config.set(temporary_directory=str(tmpdir),
+                         scheduler='processes'):
         ddf2 = ddf.set_index('x', shuffle='disk')
         ddf2.compute()
         assert any(fn.endswith('.partd') for fn in os.listdir(str(tmpdir)))
@@ -721,7 +721,7 @@ def test_gh_2730():
     dd_left = dd.from_pandas(small, npartitions=3)
     dd_right = dd.from_pandas(large, npartitions=257)
 
-    with dask.set_options(shuffle='tasks', scheduler='sync'):
+    with dask.config.set(shuffle='tasks', scheduler='sync'):
         dd_merged = dd_left.merge(dd_right, how='inner', on='KEY')
         result = dd_merged.compute()
 
