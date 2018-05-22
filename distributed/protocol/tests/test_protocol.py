@@ -71,7 +71,7 @@ def test_maybe_compress():
 
     payload = b'123'
 
-    with dask.set_options(compression=None):
+    with dask.config.set({'distributed.comm.compression': None}):
         for f in try_converters:
             assert maybe_compress(f(payload)) == (None, payload)
 
@@ -81,7 +81,7 @@ def test_maybe_compress():
         except ImportError:
             continue
 
-        with dask.set_options(compression=compression):
+        with dask.config.set({'distributed.comm.compression': compression}):
             for f in try_converters:
                 payload = b'123'
                 assert maybe_compress(f(payload)) == (None, payload)

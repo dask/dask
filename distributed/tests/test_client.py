@@ -27,7 +27,6 @@ from tornado.ioloop import IOLoop
 
 import dask
 from dask import delayed
-from dask.context import _globals
 from distributed import (Worker, Nanny, fire_and_forget, LocalCluster,
                          get_client, secede, get_worker, Executor, profile,
                          TimeoutError)
@@ -3303,25 +3302,25 @@ def test_cancel_clears_processing(c, s, *workers):
 def test_default_get():
     with cluster() as (s, [a, b]):
         pre_get = dask.base.get_scheduler()
-        pre_shuffle = _globals.get('shuffle')
+        pre_shuffle = dask.config.get('shuffle', None)
         with Client(s['address'], set_as_default=True) as c:
             assert dask.base.get_scheduler() == c.get
-            assert _globals['shuffle'] == 'tasks'
+            assert dask.config.get('shuffle') == 'tasks'
 
         assert dask.base.get_scheduler() == pre_get
-        assert _globals['shuffle'] == pre_shuffle
+        assert dask.config.get('shuffle') == pre_shuffle
 
         c = Client(s['address'], set_as_default=False)
         assert dask.base.get_scheduler() == pre_get
-        assert _globals['shuffle'] == pre_shuffle
+        assert dask.config.get('shuffle') == pre_shuffle
         c.close()
 
         c = Client(s['address'], set_as_default=True)
-        assert _globals['shuffle'] == 'tasks'
+        assert dask.config.get('shuffle') == 'tasks'
         assert dask.base.get_scheduler() == c.get
         c.close()
         assert dask.base.get_scheduler() == pre_get
-        assert _globals['shuffle'] == pre_shuffle
+        assert dask.config.get('shuffle') == pre_shuffle
 
         with Client(s['address']) as c:
             assert dask.base.get_scheduler() == c.get
@@ -3595,7 +3594,7 @@ def test_persist_optimize_graph(c, s, a, b):
 @gen_cluster(client=True, ncores=[])
 def test_scatter_raises_if_no_workers(c, s):
     with pytest.raises(gen.TimeoutError):
-        yield c.scatter([1])
+        yield c.scatter(1, timeout=0.5)
 
 
 @slow
@@ -4194,7 +4193,7 @@ def test_auto_normalize_collection(c, s, a, b):
     x = da.ones(10, chunks=5)
     assert len(x.dask) == 2
 
-    with dask.set_options(optimizations=[c._optimize_insert_futures]):
+    with dask.config.set(optimizations=[c._optimize_insert_futures]):
         y = x.map_blocks(slowinc, delay=1, dtype=x.dtype)
         yy = c.persist(y)
 
@@ -4224,7 +4223,7 @@ def test_auto_normalize_collection_sync(loop):
 
             wait(yy)
 
-            with dask.set_options(optimizations=[c._optimize_insert_futures]):
+            with dask.config.set(optimizations=[c._optimize_insert_futures]):
                 start = time()
                 y.sum().compute()
                 end = time()

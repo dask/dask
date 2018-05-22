@@ -27,7 +27,6 @@ import dask
 from dask.base import tokenize, normalize_token, collections_to_dsk
 from dask.core import flatten, get_dependencies
 from dask.compatibility import apply, unicode
-from dask.context import _globals
 try:
     from cytoolz import first, groupby, merge, valmap, keymap
 except ImportError:
@@ -576,11 +575,11 @@ class Client(Node):
 
         self._start_arg = address
         if set_as_default:
-            self._previous_scheduler = _globals.get('scheduler')
-            dask.set_options(scheduler='dask.distributed')
+            self._previous_scheduler = dask.config.get('scheduler', None)
+            dask.config.set(scheduler='dask.distributed')
 
-            self._previous_shuffle = _globals.get('shuffle')
-            dask.set_options(shuffle='tasks')
+            self._previous_shuffle = dask.config.get('shuffle', None)
+            dask.config.set(shuffle='tasks')
 
         self._handlers = {
             'key-in-memory': self._handle_key_in_memory,
@@ -1020,11 +1019,11 @@ class Client(Node):
                 pc.stop()
             self._scheduler_identity = {}
             with ignoring(AttributeError):
-                dask.set_options(scheduler=self._previous_scheduler)
+                dask.config.set(scheduler=self._previous_scheduler)
             with ignoring(AttributeError):
-                dask.set_options(shuffle=self._previous_shuffle)
-            if self.get == _globals.get('get'):
-                del _globals['get']
+                dask.config.set(shuffle=self._previous_shuffle)
+            if self.get == dask.config.get('get', None):
+                del dask.config.config['get']
             if self.status == 'closed':
                 raise gen.Return()
             if self.scheduler_comm and self.scheduler_comm.comm and not self.scheduler_comm.comm.closed():
@@ -1096,11 +1095,11 @@ class Client(Node):
             self._loop_runner.stop()
 
         with ignoring(AttributeError):
-            dask.set_options(scheduler=self._previous_scheduler)
+            dask.config.set(scheduler=self._previous_scheduler)
         with ignoring(AttributeError):
-            dask.set_options(shuffle=self._previous_shuffle)
-        if self.get == _globals.get('get'):
-            del _globals['get']
+            dask.config.set(shuffle=self._previous_shuffle)
+        if self.get == dask.config.get('get', None):
+            del dask.config.config['get']
 
     def shutdown(self, *args, **kwargs):
         """ Deprecated, see close instead
@@ -3590,7 +3589,7 @@ def default_client(c=None):
 
 
 def ensure_default_get(client):
-    _globals['scheduler'] = 'dask.distributed'
+    dask.config.set(scheduler='dask.distributed')
     _set_global_client(client)
 
 

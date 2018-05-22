@@ -621,7 +621,7 @@ def test_tick_logging(s, a, b):
 @pytest.mark.parametrize('compression', list(compressions))
 @pytest.mark.parametrize('serialize', [echo_serialize, echo_no_serialize])
 def test_compression(compression, serialize, loop):
-    with dask.set_options(compression=compression):
+    with dask.config.set(compression=compression):
 
         @gen.coroutine
         def f():

@@ -9,7 +9,6 @@ import logging
 import random
 
 import dask
-from dask.context import _globals
 from toolz import identity, partial
 
 try:
@@ -140,7 +139,9 @@ def maybe_compress(payload, min_size=1e4, sample_size=1e4, nsamples=5):
         return the original
     4.  We return the compressed result
     """
-    compression = _globals.get('compression', default_compression)
+    compression = dask.config.get('distributed.comm.compression')
+    if compression == 'auto':
+        compression = default_compression
 
     if not compression:
         return None, payload

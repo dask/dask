@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 import collections
 from contextlib import contextmanager
+import copy
 from datetime import timedelta
 import functools
 import gc
@@ -33,7 +34,6 @@ import pytest
 import six
 
 import dask
-from dask.context import _globals
 from toolz import merge, memoize
 from tornado import gen, queues
 from tornado.gen import TimeoutError
@@ -180,6 +180,14 @@ def mock_ipython():
     for kc in remote_magic._clients.values():
         kc.stop_channels()
     remote_magic._clients.clear()
+
+
+original_config = copy.deepcopy(dask.config.config)
+
+
+def reset_config():
+    dask.config.config.clear()
+    dask.config.config.update(copy.deepcopy(original_config))
 
 
 def nodebug(func):
@@ -503,7 +511,8 @@ def check_active_rpc(loop, active_rpc_timeout=1):
 def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
             scheduler_kwargs={}):
     ws = weakref.WeakSet()
-    old_globals = _globals.copy()
+
+    reset_config()
 
     for name, level in logging_levels.items():
         logging.getLogger(name).setLevel(level)
@@ -596,8 +605,6 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
                     with ignoring(OSError):
                         shutil.rmtree(fn)
 
-                _globals.clear()
-                _globals.update(old_globals)
     assert not ws
 
 
@@ -719,6 +726,9 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
         end
     """
     del _global_workers[:]
+
+    reset_config()
+
     dask.config.set({'distributed.comm.timeouts.connect': '5s'})
     worker_kwargs = merge({'memory_limit': TOTAL_MEMORY, 'death_timeout': 5},
                           worker_kwargs)
@@ -733,7 +743,6 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
             for name, level in logging_levels.items():
                 logging.getLogger(name).setLevel(level)
 
-            old_globals = _globals.copy()
             result = None
             workers = []
 
@@ -771,8 +780,6 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                             yield end_cluster(s, workers)
                             yield gen.with_timeout(timedelta(seconds=1),
                                                    cleanup_global_workers())
-                            _globals.clear()
-                            _globals.update(old_globals)
 
                         raise gen.Return(result)
 

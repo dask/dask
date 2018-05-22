@@ -44,16 +44,16 @@ def test_gen_cluster(c, s, a, b):
 @pytest.mark.skip(reason="This hangs on travis")
 def test_gen_cluster_cleans_up_client(loop):
     import dask.context
-    assert not dask.context._globals.get('get')
+    assert not dask.config.get('get', None)
 
     @gen_cluster(client=True)
     def f(c, s, a, b):
-        assert dask.context._globals.get('get')
+        assert dask.config.get('get', None)
         yield c.submit(inc, 1)
 
     f()
 
-    assert not dask.context._globals.get('get')
+    assert not dask.config.get('get', None)
 
 
 @gen_cluster(client=False)

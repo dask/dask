@@ -681,11 +681,12 @@ def test_hold_onto_dependents(c, s, a, b):
 @slow
 @gen_cluster(client=False, ncores=[])
 def test_worker_death_timeout(s):
-    yield s.close()
-    w = Worker(s.address, death_timeout=1)
-    yield w._start()
+    with dask.config.set({'distributed.comm.timeouts.connect': '1s'}):
+        yield s.close()
+        w = Worker(s.address, death_timeout=1)
+        yield w._start()
 
-    yield gen.sleep(3)
+    yield gen.sleep(2)
     assert w.status == 'closed'
 
 
