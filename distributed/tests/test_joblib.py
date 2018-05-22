@@ -69,14 +69,18 @@ def test_dont_assume_function_purity(loop, joblib):
                 assert x != y
 
 
-def test_joblib_funcname(joblib):
-    BatchedCalls = joblib.parallel.BatchedCalls
-    if LooseVersion(joblib.__version__) <= "0.11.0":
-        func = BatchedCalls([(random2,), (random2,)])
-    else:
-        func = BatchedCalls([(random2,), (random2,)], None)
-    assert joblib_funcname(func) == 'random2'
-    assert joblib_funcname(random2) == 'random2'
+def test_joblib_funcname(loop, joblib):
+    Parallel = joblib.Parallel
+    delayed = joblib.delayed
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as client:
+            with joblib.parallel_backend('dask') as (ba, _):
+                x, y = Parallel()(delayed(inc)(i) for i in range(2))
+
+            def f(dask_scheduler):
+                return list(dask_scheduler.transition_log)
+            log = client.run_on_scheduler(f)
+            assert all(tup[0].startswith('inc-batch') for tup in log)
 
 
 def test_joblib_backend_subclass(joblib):
