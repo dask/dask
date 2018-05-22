@@ -78,8 +78,8 @@ def test_recompute_released_results(c, s, a, b):
 
 @gen_cluster(client=True)
 def test_decide_worker_with_many_independent_leaves(c, s, a, b):
-    xs = yield [c._scatter(list(range(0, 100, 2)), workers=a.address),
-                c._scatter(list(range(1, 100, 2)), workers=b.address)]
+    xs = yield [c.scatter(list(range(0, 100, 2)), workers=a.address),
+                c.scatter(list(range(1, 100, 2)), workers=b.address)]
     xs = list(concat(zip(*xs)))
     ys = [delayed(inc)(x) for x in xs]
 
@@ -101,7 +101,7 @@ def test_decide_worker_with_restrictions(client, s, a, b, c):
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)
 def test_move_data_over_break_restrictions(client, s, a, b, c):
-    [x] = yield client._scatter([1], workers=b.address)
+    [x] = yield client.scatter([1], workers=b.address)
     y = client.submit(inc, x, workers=[a.address, b.address])
     yield wait(y)
     assert y.key in a.data or y.key in b.data
@@ -109,8 +109,8 @@ def test_move_data_over_break_restrictions(client, s, a, b, c):
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)
 def test_balance_with_restrictions(client, s, a, b, c):
-    [x], [y] = yield [client._scatter([[1, 2, 3]], workers=a.address),
-                      client._scatter([1], workers=c.address)]
+    [x], [y] = yield [client.scatter([[1, 2, 3]], workers=a.address),
+                      client.scatter([1], workers=c.address)]
     z = client.submit(inc, 1, workers=[a.address, c.address])
     yield wait(z)
 
@@ -556,11 +556,16 @@ def test_scatter_no_workers(c, s):
     with pytest.raises(gen.TimeoutError):
         yield s.scatter(data={'x': 1}, client='alice', timeout=0.1)
 
+    start = time()
+    with pytest.raises(gen.TimeoutError):
+        yield c.scatter(123, timeout=0.1)
+    assert time() < start + 1.5
+
     w = Worker(s.ip, s.port, ncores=3)
-    yield [c._scatter(data={'x': 1}),
+    yield [c.scatter(data={'y': 2}, timeout=5),
            w._start()]
 
-    assert w.data['x'] == 1
+    assert w.data['y'] == 2
     yield w._close()
 
 
@@ -575,8 +580,8 @@ def test_scheduler_sees_memory_limits(s):
 
 @gen_cluster(client=True, timeout=1000)
 def test_retire_workers(c, s, a, b):
-    [x] = yield c._scatter([1], workers=a.address)
-    [y] = yield c._scatter([list(range(1000))], workers=b.address)
+    [x] = yield c.scatter([1], workers=a.address)
+    [y] = yield c.scatter([list(range(1000))], workers=b.address)
 
     assert s.workers_to_close() == [a.address]
 
@@ -672,6 +677,8 @@ def test_retire_workers_no_suspicious_tasks(c, s, a, b):
 @slow
 @pytest.mark.skipif(sys.platform.startswith('win'),
                     reason="file descriptors not really a thing")
+@pytest.mark.skipif(sys.version_info < (3, 6),
+                    reason="intermittent failure")
 @gen_cluster(client=True, ncores=[], timeout=240)
 def test_file_descriptors(c, s):
     yield gen.sleep(0.1)
@@ -714,10 +721,14 @@ def test_file_descriptors(c, s):
 
     yield [n._close() for n in nannies]
 
+    assert not s.rpc.open
+    assert not c.rpc.open
+    assert not s.worker_comms
+
     start = time()
     while proc.num_fds() > num_fds_1 + N:
         yield gen.sleep(0.01)
-        assert time() < start + 1
+        assert time() < start + 3
 
 
 @nodebug

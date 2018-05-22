@@ -1617,7 +1617,8 @@ class Client(Node):
             else:
                 yield self.scheduler.scatter(data=data2, workers=workers,
                                              client=self.id,
-                                             broadcast=broadcast)
+                                             broadcast=broadcast,
+                                             timeout=timeout)
 
         out = {k: Future(k, self, inform=False) for k in data}
         for key, typ in types.items():

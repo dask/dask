@@ -240,6 +240,7 @@ def test_large_traffic_jam():
     yield run_traffic_jam(500, 1500000)
 
 
+@pytest.mark.skipif(sys.version_info[0] < 3, reason="intermittent failure")
 @gen_cluster(client=True)
 def test_dont_hold_on_to_large_messages(c, s, a, b):
     np = pytest.importorskip('numpy')
@@ -253,7 +254,7 @@ def test_dont_hold_on_to_large_messages(c, s, a, b):
 
     start = time()
     while xr() is not None:
-        if time() > start + 1:
+        if time() > start + 5:
             # Help diagnosing
             from types import FrameType
             x = xr()
