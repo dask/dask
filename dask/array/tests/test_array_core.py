@@ -3269,15 +3269,6 @@ def test_zarr_roundtrip():
         assert a2.chunks == a.chunks
 
 
-def test_zarr_rechunk():
-    pytest.importorskip('zarr')
-    a = da.zeros((3, ), chunks=((1, 2), ))
-    with tmpdir() as d:
-        with pytest.raises(ValueError):
-            a.to_zarr(d)
-        a.to_zarr(d, rechunk=(1, ))
-
-
 def test_read_zarr_chunks():
     pytest.importorskip('zarr')
     a = da.zeros((9, ), chunks=(3, ))

@@ -2065,7 +2065,7 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
 
 
 def to_zarr(arr, url, component=None, storage_options=None,
-            overwrite_group=False, rechunk=False, compute=True,
+            overwrite_group=False, compute=True,
             return_stored=False, **kwargs):
     """Save array to the zarr storage format
 
@@ -2089,20 +2089,13 @@ def to_zarr(arr, url, component=None, storage_options=None,
         If component is not none, this controls whether to create/overwrite the
         zarr group, or if the group must exits already (but the specific
         dataset is always overwritten)
-    rechunk: see ``Array.rechunk``
-        Rechunking to be applied to the array before storage, since zarr
-        requires a regular chunks scheme - passed to ``.rechunk()``.
-        If False, no rechunk operation is performed;
-        if the chunks are not regular, an exception is raised.
     compute, return_stored: see ``store()``
     kwargs: passed to zarr's open functions, e.g., compression options
     """
     import zarr
-    if rechunk is not False:
-        arr = arr.rechunk(rechunk)
     if not _check_regular_chunks(arr.chunks):
         raise ValueError('Attempt to save array to zarr with irregular '
-                         'chunking')
+                         'chunking, please call `arr.rechunk(...)` first.')
     storage_options = storage_options or {}
     if isinstance(url, str):
         fs, fs_token, path = get_fs_token_paths(
