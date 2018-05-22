@@ -224,7 +224,13 @@ def rechunk_preserve_number(x, *args, **kwargs):
     return tuple(out)
 
 
-rechunkers = {'preserve_number': rechunk_preserve_number}
+def simple_rechunk(x, *args, **kwargs):
+    """Rechunk using the shape of the very first chunk"""
+    return tuple(ch[0] for ch in x.chunks)
+
+
+rechunkers = {'number': rechunk_preserve_number,
+              'simple': simple_rechunk}
 
 
 def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
@@ -263,7 +269,7 @@ def rechunk(x, chunks, threshold=DEFAULT_THRESHOLD,
         intermediate step.
     """
     if chunks is None or chunks == 'default':
-        chunks = 'preserve_number'
+        chunks = 'simple'
     if isinstance(chunks, str) and chunks in rechunkers:
         chunks = rechunkers[chunks](x, threshold=DEFAULT_THRESHOLD,
                                     block_size_limit=DEFAULT_BLOCK_SIZE_LIMIT)
