@@ -379,7 +379,7 @@ Zarr
 
 The `zarr`_ format is a chunk-wise binary array storage file format, with a good selection
 of encoding and compression options. Due to each chunk being stored in a separate file, it
-is ideal for parallel access i both reading and writing (for the latter, if the dask array
+is ideal for parallel access in both reading and writing (for the latter, if the dask array
 chunks are alligned with the target). Furthermore, storage in
 :doc:`remote data services<remote_data_services>`_ such as
 S3 and GCS is supported.
