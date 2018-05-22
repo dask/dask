@@ -27,10 +27,11 @@ except ImportError:
     from toolz import (frequencies, merge_with, join, reduceby,
                        count, pluck, groupby, topk)
 
+from .. import config
 from ..base import tokenize, dont_optimize, is_dask_collection, DaskMethodsMixin
 from ..bytes import open_files
 from ..compatibility import apply, urlopen
-from ..context import _globals, globalmethod
+from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict
 from ..delayed import Delayed
 from ..multiprocessing import get as mpget
@@ -1226,9 +1227,9 @@ class Bag(DaskMethodsMixin):
         if method is not None:
             raise Exception("The method= keyword has been moved to shuffle=")
         if shuffle is None:
-            shuffle = _globals.get('shuffle')
+            shuffle = config.get('shuffle', None)
         if shuffle is None:
-            if 'distributed' in _globals.get('scheduler', ''):
+            if 'distributed' in config.get('scheduler', ''):
                 shuffle = 'tasks'
             else:
                 shuffle = 'disk'
@@ -2022,7 +2023,7 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
 
     import partd
     p = ('partd-' + token,)
-    dirname = _globals.get('temporary_directory', None)
+    dirname = config.get('temporary_directory', None)
     if dirname:
         file = (apply, partd.File, (), {'dir': dirname})
     else:

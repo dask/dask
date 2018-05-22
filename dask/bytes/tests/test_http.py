@@ -71,6 +71,8 @@ def test_ops_blocksize(dir_server):
     with f as f:
         # it's OK to read the whole file
         assert f.read() == data
+        # and now the file magically has a size
+        assert f.size == len(data)
 
     # note that if we reuse f from above, because it is tokenized, we get
     # the same open file - where is this cached?

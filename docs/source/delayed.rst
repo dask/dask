@@ -69,7 +69,7 @@ execution, placing the function and its arguments into a task graph.
 .. autosummary::
     delayed
 
-We slightly modify our code our code by wrapping functions in ``delayed``.
+We slightly modify our code by wrapping functions in ``delayed``.
 This delays the execution of the function and generates a dask graph instead.
 
 .. code-block:: python

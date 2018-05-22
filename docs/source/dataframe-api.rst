@@ -79,6 +79,7 @@ Dataframe
     DataFrame.to_csv
     DataFrame.to_delayed
     DataFrame.to_hdf
+    DataFrame.to_json
     DataFrame.to_records
     DataFrame.truediv
     DataFrame.values
@@ -281,6 +282,7 @@ Create DataFrames
    read_table
    read_parquet
    read_hdf
+   read_json
    read_orc
    read_sql_table
    from_array
