@@ -4,6 +4,7 @@ import ast
 import copy
 import os
 import sys
+import threading
 try:
     import yaml
 except ImportError:
@@ -25,6 +26,9 @@ if 'DASK_CONFIG' in os.environ:
 
 
 global_config = config = {}
+
+
+config_lock = threading.Lock()
 
 
 defaults = []
@@ -219,24 +223,25 @@ class set(object):
     --------
     dask.config.get
     """
-    def __init__(self, arg=None, config=config, **kwargs):
+    def __init__(self, arg=None, config=config, lock=config_lock, **kwargs):
         if arg and not kwargs:
             kwargs = arg
 
-        self.config = config
-        self.old = copy.deepcopy(config)
+        with lock:
+            self.config = config
+            self.old = copy.deepcopy(config)
 
-        def assign(keys, value, d):
-            key = keys[0]
-            if len(keys) == 1:
-                d[keys[0]] = value
-            else:
-                if key not in d:
-                    d[key] = {}
-                assign(keys[1:], value, d[key])
+            def assign(keys, value, d):
+                key = keys[0]
+                if len(keys) == 1:
+                    d[keys[0]] = value
+                else:
+                    if key not in d:
+                        d[key] = {}
+                    assign(keys[1:], value, d[key])
 
-        for key, value in kwargs.items():
-            assign(key.split('.'), value, config)
+            for key, value in kwargs.items():
+                assign(key.split('.'), value, config)
 
     def __enter__(self):
         return config
