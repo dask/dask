@@ -99,12 +99,13 @@ As an example, consider loading a stack of images using ``skimage.io.imread``:
 
     filenames = sorted(glob.glob('*.jpg'))
 
-    lazy_images = [imread(url) for url in urls]     # Lazily evaluate imread on each url
-
+    lazy_images = [imread(path) for path in filenames]     # Lazily evaluate imread on each path
+    sample = lazy_images[0].compute() # load the first image (assume rest are same shape/dtype)
+   
     arrays = [da.from_delayed(lazy_image,           # Construct a small Dask array
                               dtype=sample.dtype,   # for every lazy value
                               shape=sample.shape)
-              for lazy_value in lazy_values]
+              for lazy_image in lazy_images]
 
     stack = da.stack(arrays, axis=0)                # Stack all small Dask arrays into one
 
