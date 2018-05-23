@@ -2045,7 +2045,7 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
         Passed to ``da.from_array``, allows setting the chunks on
         initialisation, if the chunking scheme in the on-disc dataset is not
         optimal for the calculations to follow.
-    kwargs: passed to zarr's open functions.
+    kwargs: passed to ``zarr.Array``.
     """
     import zarr
     storage_options = storage_options or {}
@@ -2056,10 +2056,7 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
         mapper = get_mapper(fs, path[0])
     else:
         mapper = url
-    if component is None:
-        z = zarr.open_array(mapper, mode='r', **kwargs)
-    else:
-        z = zarr.open_group(mapper, mode='r', **kwargs)[component]
+    z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     chunks = chunks if chunks is not None else z.chunks
     return from_array(z, chunks, name='zarr-%s' % url)
 
@@ -2088,7 +2085,7 @@ def to_zarr(arr, url, component=None, storage_options=None,
         If given array already exists, overwrite=False will cause an error,
         where overwrite=True will replace the existing data.
     compute, return_stored: see ``store()``
-    kwargs: passed to zarr's open functions, e.g., compression options
+    kwargs: passed to the ``zarr.create()`` function, e.g., compression options
     """
     import zarr
     if not _check_regular_chunks(arr.chunks):

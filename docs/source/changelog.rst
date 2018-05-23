@@ -8,7 +8,6 @@ Changelog
 Array
 +++++
 
-<<<<<<< HEAD
 - Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
 - ``einsum`` now accepts the ``split_every`` parameter (:pr:`3396`) `Guido Imperiale`_
 - Add to/read_zarr for Zarr-format datasets and arrays (:pr:`3460`) `Martin Durant`_

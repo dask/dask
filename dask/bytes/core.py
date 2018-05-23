@@ -319,7 +319,7 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
 
 
 def get_mapper(fs, path):
-    # This is not the right wayt o do this.
+    # This is not the right way to do this.
     # At the very least, we should have the correct failed import messages
     if fs.protocol == 'file':
         from zarr.storage import DirectoryStore
