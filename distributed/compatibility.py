@@ -79,6 +79,8 @@ if sys.version_info[0] == 3:
     logging_names.update(logging._nameToLevel)
 
 
+import platform
+PYPY = platform.python_implementation().lower() == 'pypy'
 WINDOWS = sys.platform.startswith('win')
 
 

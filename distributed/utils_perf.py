@@ -5,7 +5,7 @@ import gc
 import logging
 import threading
 
-from .compatibility import PY2
+from .compatibility import PY2, PYPY
 from .metrics import thread_time
 from .utils import format_bytes
 
@@ -140,7 +140,7 @@ class GCDiagnosis(object):
         self._enabled = False
 
     def enable(self):
-        if PY2:
+        if PY2 or PYPY:
             return
         assert not self._enabled
         self._fractional_timer = FractionalTimer(n_samples=self.N_SAMPLES)
@@ -158,7 +158,7 @@ class GCDiagnosis(object):
         self._enabled = True
 
     def disable(self):
-        if PY2:
+        if PY2 or PYPY:
             return
         assert self._enabled
         gc.callbacks.remove(self._gc_callback)
@@ -215,7 +215,7 @@ def enable_gc_diagnosis():
     """
     Ask to enable global GC diagnosis.
     """
-    if PY2:
+    if PY2 or PYPY:
         return
     global _gc_diagnosis_users
     with _gc_diagnosis_lock:
@@ -230,7 +230,7 @@ def disable_gc_diagnosis(force=False):
     """
     Ask to disable global GC diagnosis.
     """
-    if PY2:
+    if PY2 or PYPY:
         return
     global _gc_diagnosis_users
     with _gc_diagnosis_lock:
