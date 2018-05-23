@@ -14,6 +14,7 @@ Dataframe
 +++++++++
 
 - Add to/read_json (:pr:`3494`) `Martin Durant`_
+- Adds ``index`` to unsupported arguments for ``DataFrame.rename`` method (:pr:`3522`) `James Bourbeau`_
 
 Bag
 +++
