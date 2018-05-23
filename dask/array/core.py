@@ -1914,8 +1914,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
     limit: int (optional)
         The maximum block size to target in bytes,
         if freedom is given to choose
-    itemsize: int (optional)
-        The size in bytes of the dtype to be used if this determines chunk sizes
+    dtype: np.dtype
     previous_chunks: Tuple[Tuple[int]] optional
         Chunks from a previous array that we should use for inspiration when
         rechunking auto dimensions.  If not provided but auto-chunking exists
@@ -1949,8 +1948,10 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
     ((10,),)
 
     Use the value "auto" to automatically determine chunk sizes along certain
-    dimensions.  This uses the ``limit=`` and ``itemsize=`` keywords to
-    determine how large to make the chunks
+    dimensions.  This uses the ``limit=`` and ``dtype=`` keywords to
+    determine how large to make the chunks.  The term "auto" can be used
+    anywhere an integer can be used.  See array chunking documentation for more
+    information.
 
     >>> normalize_chunks(("auto",), shape=(20,), limit=5, dtype='uint8')
     ((5, 5, 5, 5),)
@@ -1964,7 +1965,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
         dtype = np.dtype(dtype)
     if chunks is None:
         raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
-    if type(chunks) is list:
+    if isinstance(chunks, list):
         chunks = tuple(chunks)
     if isinstance(chunks, (Number, str)):
         chunks = (chunks,) * len(shape)
@@ -2013,6 +2014,13 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
 def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
     """ Determine automatic chunks
 
+    This takes in a chunks value that contains ``"auto"`` values in certain
+    dimensions and replaces those values with concrete dimension sizes that try
+    to get chunks to be of a certain size in bytes, provided by the ``limit=``
+    keyword.  If multiple dimensions are marked as ``"auto"`` then they will
+    all respond to meet the desired byte limit, trying to respect the aspect
+    ratio of their dimensions in ``previous_chunks=``, if given.
+
     Parameters
     ----------
     chunks: Tuple
@@ -2020,7 +2028,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
         Some entries should be "auto"
     shape: Tuple[int]
     limit: int
-        The maximum allowable size of a chunk
+        The maximum allowable size of a chunk in bytes
     previous_chunks: Tuple[Tuple[int]]
 
     See also
@@ -2058,11 +2066,21 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                              for cs in chunks if cs != 'auto'])
 
     if previous_chunks:
+
+        # Base ideal ratio on the median chunk size of the previous chunks
         result = {a: np.median(previous_chunks[a]) for a in autos}
+
+        # How much larger or smaller the ideal chunk size is relative to what we have now
         multiplier = limit / largest_block / np.prod(list(result.values()))
-        last = 0
-        while (multiplier, autos) != last:  # while things improve
-            last = (multiplier, set(autos))  # record last value for stopping condition
+        last_multiplier = 0
+        last_autos = set()
+
+        while (multiplier != last_multiplier or
+               autos != last_autos):  # while things change
+            last_multiplier = multiplier  # record previous values
+            last_autos = set(autos)  # record previous values
+
+            # Expand or contract each of the dimensions appropriately
             for a in sorted(autos):
                 proposed = result[a] * multiplier ** (1 / len(autos))
                 if proposed > shape[a]:  # we've hit the shape boundary
