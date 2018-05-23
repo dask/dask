@@ -2565,7 +2565,7 @@ class DataFrame(_Frame):
         df2 = self._meta.assign(**_extract_meta(kwargs))
         return elemwise(methods.assign, self, *pairs, meta=df2)
 
-    @derived_from(pd.DataFrame)
+    @derived_from(pd.DataFrame, ua_args=['index'])
     def rename(self, index=None, columns=None):
         if index is not None:
             raise ValueError("Cannot rename index.")
