@@ -2065,8 +2065,7 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
 
 
 def to_zarr(arr, url, component=None, storage_options=None,
-            overwrite_group=False, compute=True,
-            return_stored=False, **kwargs):
+            overwrite=False, compute=True, return_stored=False, **kwargs):
     """Save array to the zarr storage format
 
     See https://zarr.readthedocs.io for details about the format.
@@ -2085,10 +2084,9 @@ def to_zarr(arr, url, component=None, storage_options=None,
     storage_options: dict
         Any additional parameters for the storage backend (ignored for local
         paths)
-    overwrite_group: bool
-        If component is not none, this controls whether to create/overwrite the
-        zarr group, or if the group must exits already (but the specific
-        dataset is always overwritten)
+    overwrite: bool
+        If given array already exists, overwrite=False will cause an error,
+        where overwrite=True will replace the existing data.
     compute, return_stored: see ``store()``
     kwargs: passed to zarr's open functions, e.g., compression options
     """
@@ -2106,15 +2104,8 @@ def to_zarr(arr, url, component=None, storage_options=None,
         # assume the object passed is already a mapper
         mapper = url
     chunks = [c[0] for c in arr.chunks]
-    if component is None:
-        z = zarr.open_array(
-            mapper, mode='w', shape=arr.shape, chunks=chunks, dtype=arr.dtype,
-            **kwargs)
-    else:
-        mode = 'w' if overwrite_group else 'r+'
-        z = zarr.open_group(mapper, mode=mode).create_dataset(
-            component, shape=arr.shape, chunks=chunks, dtype=arr.dtype,
-            **kwargs)
+    z = zarr.create(shape=arr.shape, chunks=chunks, dtype=arr.dtype,
+                    store=mapper, path=component, overwrite=overwrite, **kwargs)
     return store(arr, z, compute=compute, return_stored=return_stored)
 
 
