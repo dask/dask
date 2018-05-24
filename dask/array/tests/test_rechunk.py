@@ -604,8 +604,8 @@ def test_rechunk_avoid_needless_chunking():
     y = x.rechunk(8)
     dsk = y.__dask_graph__()
     assert len(dsk) <= 8 + 2
-    
-    
+
+
 @pytest.mark.parametrize('shape,chunks,bs,expected', [
     (100, 1, 10, (10,) * 10),
     (100, 50, 10, (10,) * 10),
