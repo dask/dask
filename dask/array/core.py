@@ -49,12 +49,10 @@ from ..sharedict import ShareDict
 from .numpy_compat import _Recurser
 
 
-defaults = {'array': {
+config.update_defaults({'array': {
     'chunk-size': '128MiB',
     'rechunk-threshold': 4
-}}
-
-config.update(config.config, defaults, priority='old')
+}})
 
 
 concatenate_lookup = Dispatch('concatenate')
