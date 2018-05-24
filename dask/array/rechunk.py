@@ -548,10 +548,16 @@ def _compute_rechunk(x, chunks):
         for rec_cat_index, ind_slices in enumerate(cross1):
             old_block_index, slices = zip(*ind_slices)
             name = (split_temp_name, next(split_name_suffixes))
-            intermediates[name] = (getitem, old_blocks[old_block_index], slices)
-            rec_cat_arg_flat[rec_cat_index] = name
+            old_index = old_blocks[old_block_index][1:]
+            if all(slc.start == 0 and slc.stop == x.chunks[i][ind]
+                   for i, (slc, ind) in enumerate(zip(slices, old_index))):
+                rec_cat_arg_flat[rec_cat_index] = old_blocks[old_block_index]
+            else:
+                intermediates[name] = (getitem, old_blocks[old_block_index], slices)
+                rec_cat_arg_flat[rec_cat_index] = name
 
         assert rec_cat_index == rec_cat_arg.size - 1
+
         # New block is formed by concatenation of sliced old blocks
         if all(d == 1 for d in rec_cat_arg.shape):
             x2[key] = rec_cat_arg.flat[0]
