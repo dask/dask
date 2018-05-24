@@ -70,9 +70,9 @@ def test_intersect_2():
 
 def test_rechunk_1d():
     """Try rechunking a random 1d matrix"""
-    a = np.random.uniform(0, 1, 300)
-    x = da.from_array(a, chunks=((100, ) * 3, ))
-    new = ((50, ) * 6,)
+    a = np.random.uniform(0, 1, 30)
+    x = da.from_array(a, chunks=((10, ) * 3, ))
+    new = ((5, ) * 6,)
     x2 = rechunk(x, chunks=new)
     assert x2.chunks == new
     assert np.all(x2.compute() == a)
@@ -597,6 +597,13 @@ def test_rechunk_zero_dim():
 
     x = da.ones((0, 10, 100), chunks=(0, 10, 10)).rechunk((0, 10, 50))
     assert len(x.compute()) == 0
+
+
+def test_rechunk_avoid_needless_chunking():
+    x = da.ones(16, chunks=2)
+    y = x.rechunk(8)
+    dsk = y.__dask_graph__()
+    assert len(dsk) <= 8 + 2
 
 
 @pytest.mark.parametrize('shape,chunks,bs,expected', [
