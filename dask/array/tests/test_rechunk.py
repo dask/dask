@@ -597,3 +597,87 @@ def test_rechunk_zero_dim():
 
     x = da.ones((0, 10, 100), chunks=(0, 10, 10)).rechunk((0, 10, 50))
     assert len(x.compute()) == 0
+
+
+@pytest.mark.parametrize('shape,chunks,bs,expected', [
+    (100, 1, 10, (10,) * 10),
+    (100, 50, 10, (10,) * 10),
+    (100, 100, 10, (10,) * 10),
+    (20, 7, 10, (10, 10)),
+    (20, (1, 1, 1, 1, 6, 2, 1, 7), 5, (5, 5, 5, 5)),
+])
+def test_rechunk_auto_1d(shape, chunks, bs, expected):
+    x = da.ones(shape, chunks=(chunks,))
+    y = x.rechunk({0: 'auto'}, block_size_limit=bs * x.dtype.itemsize)
+    assert y.chunks == (expected,)
+
+
+def test_rechunk_auto_2d():
+    x = da.ones((20, 20), chunks=(2, 2))
+    y = x.rechunk({0: -1, 1: "auto"}, block_size_limit=20 * x.dtype.itemsize)
+    assert y.chunks == ((20,), (1,) * 20)
+
+    x = da.ones((20, 20), chunks=(2, 2))
+    y = x.rechunk((-1, 'auto'), block_size_limit=80 * x.dtype.itemsize)
+    assert y.chunks == ((20,), (4,) * 5)
+
+    x = da.ones((20, 20), chunks=((2, 2)))
+    y = x.rechunk({0: 'auto'}, block_size_limit=20 * x.dtype.itemsize)
+    assert y.chunks[1] == x.chunks[1]
+    assert y.chunks[0] == (10, 10)
+
+    x = da.ones((20, 20), chunks=((2,) * 10, (2, 2, 2, 2, 2, 5, 5)))
+    y = x.rechunk({0: 'auto'}, block_size_limit=20 * x.dtype.itemsize)
+    assert y.chunks[1] == x.chunks[1]
+    assert y.chunks[0] == (4, 4, 4, 4, 4)  # limited by largest
+
+
+def test_rechunk_auto_3d():
+    x = da.ones((20, 20, 20), chunks=((2, 2, 2)))
+    y = x.rechunk({0: 'auto', 1: 'auto'}, block_size_limit=200 * x.dtype.itemsize)
+    assert y.chunks[2] == x.chunks[2]
+    assert y.chunks[0] == (10, 10)
+    assert y.chunks[1] == (10, 10)  # even split
+
+
+@pytest.mark.parametrize('n', [100, 1000])
+def test_rechunk_auto_image_stack(n):
+    with dask.config.set({'array.chunk-size': '10MiB'}):
+        x = da.ones((n, 1000, 1000), chunks=(1, 1000, 1000), dtype='uint8')
+        y = x.rechunk('auto')
+        assert y.chunks == ((10,) * (n // 10), (1000,), (1000,))
+        assert y.rechunk('auto').chunks == y.chunks  # idempotent
+
+    with dask.config.set({'array.chunk-size': '7MiB'}):
+        z = x.rechunk('auto')
+        assert z.chunks == ((5,) * (n // 5), (1000,), (1000,))
+
+    with dask.config.set({'array.chunk-size': '1MiB'}):
+        x = da.ones((n, 1000, 1000), chunks=(1, 1000, 1000), dtype='float64')
+        z = x.rechunk('auto')
+        assert z.chunks == ((1,) * n , (250,) * 4, (250,) * 4)
+
+
+def test_rechunk_down():
+    with dask.config.set({'array.chunk-size': '10MiB'}):
+        x = da.ones((100, 1000, 1000), chunks=(1, 1000, 1000), dtype='uint8')
+        y = x.rechunk('auto')
+        assert y.chunks == ((10,) * 10, (1000,), (1000,))
+
+    with dask.config.set({'array.chunk-size': '1MiB'}):
+        z = y.rechunk('auto')
+        assert z.chunks == ((5,) * 20, (250,) * 4, (250,) * 4)
+
+    with dask.config.set({'array.chunk-size': '1MiB'}):
+        z = y.rechunk({0: 'auto'})
+        assert z.chunks == ((1,) * 100, (1000,),  (1000,))
+
+        z = y.rechunk({1: 'auto'})
+        assert z.chunks == ((10,) * 10, (100,) * 10,  (1000,))
+
+
+def test_rechunk_zero():
+    with dask.config.set({'array.chunk-size': '1B'}):
+        x = da.ones(10, chunks=(5,))
+        y = x.rechunk('auto')
+        assert y.chunks == ((1,) * 10,)
