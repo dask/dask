@@ -26,6 +26,7 @@ File Formats:
     read_parquet
     read_hdf
     read_orc
+    read_json
     read_sql_table
     from_bcolz
     from_array
