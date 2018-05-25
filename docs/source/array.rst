@@ -6,6 +6,7 @@ Array
    :hidden:
 
    array-api.rst
+   array-chunks.rst
    array-creation.rst
    array-ghost.rst
    array-design.rst

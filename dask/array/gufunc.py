@@ -199,18 +199,18 @@ def apply_gufunc(func, signature, *args, **kwargs):
             _chunksizes.append(chunksize)
             chunksizess[dim] = _chunksizes
     ### Assert correct partitioning, for case:
-    if not allow_rechunk:
-        for dim, sizes in dimsizess.items():
-            ### Check that the arrays have same length for same dimensions or dimension `1`
-            if set(sizes).union({1}) != {1, max(sizes)}:
-                raise ValueError("Dimension `'{}'` with different lengths in arrays".format(dim))
+    for dim, sizes in dimsizess.items():
+        #### Check that the arrays have same length for same dimensions or dimension `1`
+        if set(sizes).union({1}) != {1, max(sizes)}:
+            raise ValueError("Dimension `'{}'` with different lengths in arrays".format(dim))
+        if not allow_rechunk:
             chunksizes = chunksizess[dim]
-            ### Check if core dimensions consist of only one chunk
+            #### Check if core dimensions consist of only one chunk
             if (dim in core_shapes) and (chunksizes[0] < core_shapes[dim]):
                 raise ValueError("Core dimension `'{}'` consists of multiple chunks. To fix, rechunk into a single \
 chunk along this dimension or set `allow_rechunk=True`, but beware that this may increase memory usage \
 significantly.".format(dim))
-            ### Check if loop dimensions consist of same chunksizes, when they have sizes > 1
+            #### Check if loop dimensions consist of same chunksizes, when they have sizes > 1
             relevant_chunksizes = list(unique(c for s, c in zip(sizes, chunksizes) if s > 1))
             if len(relevant_chunksizes) > 1:
                 raise ValueError("Dimension `'{}'` with different chunksize present".format(dim))

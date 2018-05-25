@@ -297,11 +297,12 @@ Store DataFrames
 
 .. autosummary::
 
-    to_csv
-    to_parquet
-    to_hdf
-    to_records
-    to_bag
+   to_csv
+   to_parquet
+   to_hdf
+   to_records
+   to_bag
+   to_json
 
 DataFrame Methods
 ~~~~~~~~~~~~~~~~~
@@ -344,6 +345,7 @@ Storage and Conversion
 .. autofunction:: read_table
 .. autofunction:: read_parquet
 .. autofunction:: read_hdf
+.. autofunction:: read_json
 .. autofunction:: read_sql_table
 .. autofunction:: from_array
 .. autofunction:: from_pandas
@@ -355,6 +357,7 @@ Storage and Conversion
 .. autofunction:: to_bag
 .. autofunction:: to_hdf
 .. autofunction:: to_parquet
+.. autofunction:: to_json
 
 Rolling
 ~~~~~~~
