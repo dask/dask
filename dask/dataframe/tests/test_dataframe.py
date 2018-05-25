@@ -2621,6 +2621,14 @@ def test_getitem_string_subclass():
     assert_eq(df[column_1], ddf[column_1])
 
 
+def test_getitem_index():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    ddf = dd.from_pandas(df, 2)
+    index = pd.Index(['C', 'A', 'B'])
+
+    assert_eq(df[index], ddf[index])
+
+
 def test_diff():
     df = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
     ddf = dd.from_pandas(df, 5)
