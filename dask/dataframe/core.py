@@ -2359,7 +2359,7 @@ class DataFrame(_Frame):
         elif isinstance(key, slice):
             return self.loc[key]
 
-        if isinstance(key, (list, pd.Index)):
+        if isinstance(key, (pd.Series, np.ndarray, pd.Index, list)):
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
 

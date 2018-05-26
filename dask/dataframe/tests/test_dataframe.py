@@ -2621,12 +2621,13 @@ def test_getitem_string_subclass():
     assert_eq(df[column_1], ddf[column_1])
 
 
-def test_getitem_index():
-    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+@pytest.mark.parametrize('col_type', [list, np.array, pd.Series, pd.Index])
+def test_getitem_column_types(col_type):
+    df = pd.DataFrame({'A': [1, 2], 'B': [3, 4], 'C': [5, 6]})
     ddf = dd.from_pandas(df, 2)
-    index = pd.Index(['C', 'A', 'B'])
+    cols = col_type(['C', 'A', 'B'])
 
-    assert_eq(df[index], ddf[index])
+    assert_eq(df[cols], ddf[cols])
 
 
 def test_diff():
