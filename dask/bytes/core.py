@@ -313,8 +313,28 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
 
     else:
         raise TypeError('url type not understood: %s' % urlpath)
+    fs.protocol = protocol
 
     return fs, fs_token, paths
+
+
+def get_mapper(fs, path):
+    # This is not the right way to do this.
+    # At the very least, we should have the correct failed import messages
+    if fs.protocol == 'file':
+        from zarr.storage import DirectoryStore
+        return DirectoryStore(path)
+    elif fs.protocol == 's3':
+        from s3fs.mapping import S3Map
+        return S3Map(path, fs)
+    elif fs.protocol in ['gcs', 'gs']:
+        from gcsfs.mapping import GCSMap
+        return GCSMap(path, fs)
+    elif fs.protocol == 'hdfs':
+        from hdfs3.mapping import HDFSMap
+        return HDFSMap(fs, path)
+    else:
+        raise ValueError('No mapper for protocol "%s"' % fs.protocol)
 
 
 def open_text_files(urlpath, compression=None, mode='rt', encoding='utf8',
