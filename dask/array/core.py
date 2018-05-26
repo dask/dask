@@ -47,6 +47,7 @@ from .. import threaded, core
 from .. import sharedict
 from ..sharedict import ShareDict
 from .numpy_compat import _Recurser
+from ..bytes.core import get_mapper, get_fs_token_paths
 
 
 config.update_defaults({'array': {
@@ -1887,6 +1888,15 @@ class Array(DaskMethodsMixin):
         from .routines import nonzero
         return nonzero(self)
 
+    def to_zarr(self, *args, **kwargs):
+        """Save array to the zarr storage format
+
+        See https://zarr.readthedocs.io for details about the format.
+
+        See function ``to_zarr()`` for parameters.
+        """
+        return to_zarr(self, *args, **kwargs)
+
 
 def ensure_int(f):
     i = int(f)
@@ -2187,6 +2197,128 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     dsk[original_name] = x
 
     return Array(dsk, name, chunks, dtype=x.dtype)
+
+
+def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
+    """Load array from the zarr storage format
+
+    See https://zarr.readthedocs.io for details about the format.
+
+    Parameters
+    ----------
+    url: str or MutableMapping
+        Location of the data. A URL can include a protocol specifier like s3://
+        for remote data. Can also be any MutableMapping instance, which should
+        be serializable if used in multiple processes.
+    component: str or None
+        If the location is a zarr group rather than an array, this is the
+        subcomponent that should be loaded, something like ``'foo/bar'``.
+    storage_options: dict
+        Any additional parameters for the storage backend (ignored for local
+        paths)
+    chunks: tuple of ints or tuples of ints
+        Passed to ``da.from_array``, allows setting the chunks on
+        initialisation, if the chunking scheme in the on-disc dataset is not
+        optimal for the calculations to follow.
+    kwargs: passed to ``zarr.Array``.
+    """
+    import zarr
+    storage_options = storage_options or {}
+    if isinstance(url, str):
+        fs, fs_token, path = get_fs_token_paths(
+            url, 'rb', storage_options=storage_options)
+        assert len(path) == 1
+        mapper = get_mapper(fs, path[0])
+    else:
+        mapper = url
+    z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
+    chunks = chunks if chunks is not None else z.chunks
+    return from_array(z, chunks, name='zarr-%s' % url)
+
+
+def to_zarr(arr, url, component=None, storage_options=None,
+            overwrite=False, compute=True, return_stored=False, **kwargs):
+    """Save array to the zarr storage format
+
+    See https://zarr.readthedocs.io for details about the format.
+
+    Parameters
+    ----------
+    arr: dask.array
+        Data to store
+    url: str or MutableMapping
+        Location of the data. A URL can include a protocol specifier like s3://
+        for remote data. Can also be any MutableMapping instance, which should
+        be serializable if used in multiple processes.
+    component: str or None
+        If the location is a zarr group rather than an array, this is the
+        subcomponent that should be created/over-written.
+    storage_options: dict
+        Any additional parameters for the storage backend (ignored for local
+        paths)
+    overwrite: bool
+        If given array already exists, overwrite=False will cause an error,
+        where overwrite=True will replace the existing data.
+    compute, return_stored: see ``store()``
+    kwargs: passed to the ``zarr.create()`` function, e.g., compression options
+    """
+    import zarr
+    if not _check_regular_chunks(arr.chunks):
+        raise ValueError('Attempt to save array to zarr with irregular '
+                         'chunking, please call `arr.rechunk(...)` first.')
+    storage_options = storage_options or {}
+    if isinstance(url, str):
+        fs, fs_token, path = get_fs_token_paths(
+            url, 'rb', storage_options=storage_options)
+        assert len(path) == 1
+        mapper = get_mapper(fs, path[0])
+    else:
+        # assume the object passed is already a mapper
+        mapper = url
+    chunks = [c[0] for c in arr.chunks]
+    z = zarr.create(shape=arr.shape, chunks=chunks, dtype=arr.dtype,
+                    store=mapper, path=component, overwrite=overwrite, **kwargs)
+    return store(arr, z, compute=compute, return_stored=return_stored)
+
+
+def _check_regular_chunks(chunkset):
+    """Check if the chunks are regular
+
+    "Regular" in this context means that along every axis, the chunks all
+    have the same size, except the last one, which may be smaller
+
+    Parameters
+    ----------
+    chunkset: tuple of tuples of ints
+        From the ``.chunks`` attribute of an ``Array``
+
+    Returns
+    -------
+    True if chunkset passes, else False
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> arr = da.zeros(10, chunks=(5, ))
+    >>> _check_regular_chunks(arr.chunks)
+    True
+
+    >>> arr = da.zeros(10, chunks=((3, 3, 3, 1), ))
+    >>> _check_regular_chunks(arr.chunks)
+    True
+
+    >>> arr = da.zeros(10, chunks=((3, 1, 3, 3), ))
+    >>> _check_regular_chunks(arr.chunks)
+    False
+    """
+    for chunks in chunkset:
+        if len(chunks) == 1:
+            continue
+        if len(set(chunks[:-1])) > 1:
+            return False
+        if chunks[-1] > chunks[0]:
+            return False
+    return True
 
 
 def from_delayed(value, shape, dtype, name=None):
