@@ -18,6 +18,7 @@ Dataframe
 
 - Add to/read_json (:pr:`3494`) `Martin Durant`_
 - Adds ``index`` to unsupported arguments for ``DataFrame.rename`` method (:pr:`3522`) `James Bourbeau`_
+- Adds support to subset Dask DataFrame columns using ``numpy.ndarray``, ``pandas.Series``, and ``pandas.Index`` objects (:pr:`3536`) `James Bourbeau`_
 
 Bag
 +++
