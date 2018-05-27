@@ -49,6 +49,11 @@ from .utils import (ignoring, log_errors, mp_context, get_ip, get_ipv6,
                     DequeHandler, reset_logger_locks, sync)
 from .worker import Worker, TOTAL_MEMORY, _global_workers
 
+try:
+    import dask.array  # register config
+except ImportError:
+    pass
+
 
 logger = logging.getLogger(__name__)
 

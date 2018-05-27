@@ -161,7 +161,7 @@ def test_dataframe_groupby_tasks(loop):
                 assert_equal(a, b.compute(scheduler='sync').sort_index())
                 assert not any('partd' in k[0] for k in b.dask)
 
-            with pytest.raises(NotImplementedError):
+            with pytest.raises((NotImplementedError, ValueError)):
                 ddf.groupby(ddf[['A', 'B']]).apply(len, meta=int)
 
             a = df.groupby(['A', 'B']).apply(len)
