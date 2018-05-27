@@ -56,13 +56,13 @@ def test_apply_gufunc_01b():
     assert std.compute().shape == (10, 20)
 
 
-def test_apply_gufunc_01c():
-    def stats(x):
-        return np.mean(x, axis=-1), np.std(x, axis=-1)
-    a = da.random.normal(size=(10, 20, 30), chunks=5)
-    with assert_raises(ValueError):
-        apply_gufunc(stats, "(i)->(),()", a,
-                     output_dtypes=2 * (a.dtype,))
+def test_apply_gufunc_check_coredim_chunksize():
+    def foo(x):
+        return np.sum(x, axis=-1)
+    a = da.random.normal(size=(8,), chunks=3)
+    with assert_raises(ValueError) as excinfo:
+        da.apply_gufunc(foo, "(i)->()", a, output_dtypes=float, allow_rechunk=False)
+    assert "consists of multiple chunks" in str(excinfo.value)
 
 
 @pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
