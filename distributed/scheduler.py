@@ -47,6 +47,7 @@ from .publish import PublishExtension
 from .queues import QueueExtension
 from .recreate_exceptions import ReplayExceptionScheduler
 from .lock import LockExtension
+from .pubsub import PubSubSchedulerExtension
 from .stealing import WorkStealing
 from .variable import VariableExtension
 
@@ -66,6 +67,7 @@ DEFAULT_EXTENSIONS = [
     ReplayExceptionScheduler,
     QueueExtension,
     VariableExtension,
+    PubSubSchedulerExtension,
 ]
 
 if dask.config.get('distributed.scheduler.work-stealing'):
@@ -716,7 +718,7 @@ class Scheduler(ServerNode):
     * **client_comms:** ``{client key: Comm}``
         For each client, a Comm object used to receive task requests and
         report task status updates.
-    * **worker_comms:** ``{worker key: Comm}``
+    * **stream_comms:** ``{worker key: Comm}``
         For each worker, a Comm object from which we both accept stimuli and
         report results
     * **task_duration:** ``{key-prefix: time}``
@@ -764,8 +766,8 @@ class Scheduler(ServerNode):
 
         # Communication state
         self.loop = loop or IOLoop.current()
-        self.worker_comms = dict()
         self.client_comms = dict()
+        self.stream_comms = dict()
         self.coroutines = []
         self._worker_coroutines = []
         self._ipython_kernel = None
@@ -1118,7 +1120,7 @@ class Scheduler(ServerNode):
         logger.info("Scheduler closing all comms")
 
         futures = []
-        for w, comm in list(self.worker_comms.items()):
+        for w, comm in list(self.stream_comms.items()):
             if not comm.closed():
                 comm.send({'op': 'close', 'report': False})
                 comm.send({'op': 'close-stream'})
@@ -1254,7 +1256,7 @@ class Scheduler(ServerNode):
             # for key in keys:  # TODO
             #     self.mark_key_in_memory(key, [address])
 
-            self.worker_comms[address] = BatchedSend(interval='5ms', loop=self.loop)
+            self.stream_comms[address] = BatchedSend(interval='5ms', loop=self.loop)
 
             if ws.ncores > len(ws.processing):
                 self.idle.add(ws)
@@ -1609,7 +1611,7 @@ class Scheduler(ServerNode):
             logger.info("Remove worker %s", address)
             if close:
                 with ignoring(AttributeError, CommClosedError):
-                    self.worker_comms[address].send({'op': 'close'})
+                    self.stream_comms[address].send({'op': 'close'})
 
             self.remove_resources(address)
 
@@ -1620,8 +1622,8 @@ class Scheduler(ServerNode):
             if not self.host_info[host]['addresses']:
                 del self.host_info[host]
 
-            del self.worker_comms[address]
             self.rpc.remove(address)
+            del self.stream_comms[address]
             del self.aliases[ws.name]
             self.idle.discard(ws)
             self.saturated.discard(ws)
@@ -1825,8 +1827,7 @@ class Scheduler(ServerNode):
     def validate_state(self, allow_overlap=False):
         validate_state(self.tasks, self.workers, self.clients)
 
-        if not (set(self.workers) ==
-                set(self.worker_comms)):
+        if not (set(self.workers) == set(self.stream_comms)):
             raise ValueError("Workers not the same in all collections")
 
         for w, ws in self.workers.items():
@@ -2088,13 +2089,13 @@ class Scheduler(ServerNode):
         --------
         Scheduler.handle_client: Equivalent coroutine for clients
         """
-        worker_comm = self.worker_comms[worker]
+        worker_comm = self.stream_comms[worker]
         worker_comm.start(comm)
         logger.info("Starting worker compute stream, %s", worker)
         try:
             yield self.handle_stream(comm=comm, extra={'worker': worker})
         finally:
-            if worker in self.worker_comms:
+            if worker in self.stream_comms:
                 worker_comm.abort()
                 self.remove_worker(address=worker)
 
@@ -2117,7 +2118,7 @@ class Scheduler(ServerNode):
         the worker on the next cycle.
         """
         try:
-            self.worker_comms[worker].send(msg)
+            self.stream_comms[worker].send(msg)
         except (CommClosedError, AttributeError):
             self.loop.add_callback(self.remove_worker, address=worker)
 

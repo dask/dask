@@ -17,7 +17,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.locks import Event
 
-from .compatibility import PY3
+from .compatibility import PY3, get_thread_identity
 from .comm import (connect, listen, CommClosedError,
                    normalize_address,
                    unparse_host_port, get_address_host_port)
@@ -114,7 +114,7 @@ class Server(object):
 
         self.listener = None
         self.io_loop = io_loop or IOLoop.current()
-        self.loop = io_loop
+        self.loop = self.io_loop
 
         # Statistics counters for various events
         with ignoring(ImportError):
@@ -139,6 +139,14 @@ class Server(object):
         )
         self.periodic_callbacks['tick'] = pc
 
+        self.thread_id = 0
+
+        @gen.coroutine
+        def set_thread_ident():
+            self.thread_id = get_thread_identity()
+
+        self.io_loop.add_callback(set_thread_ident)
+
         self.__stopped = False
 
     def start_periodic_callbacks(self):
@@ -153,7 +161,7 @@ class Server(object):
             for pc in self.periodic_callbacks.values():
                 if not pc.is_running():
                     pc.start()
-        self.loop.add_callback(start_pcs)
+        self.io_loop.add_callback(start_pcs)
 
     def stop(self):
         if not self.__stopped:

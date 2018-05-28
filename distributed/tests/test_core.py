@@ -9,7 +9,7 @@ from tornado import gen
 import pytest
 
 import dask
-from distributed.compatibility import finalize
+from distributed.compatibility import finalize, get_thread_identity
 from distributed.core import (pingpong, Server, rpc, connect, send_recv,
                                coerce_to_address, ConnectionPool)
 from distributed.protocol.compression import compressions
@@ -653,3 +653,8 @@ def test_rpc_serialization(loop):
             assert result == {'result': inc}
 
     loop.run_sync(f)
+
+
+@gen_cluster()
+def test_thread_id(s, a, b):
+    assert s.thread_id == a.thread_id == b.thread_id == get_thread_identity()

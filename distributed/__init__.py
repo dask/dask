@@ -10,6 +10,7 @@ from .client import (Client, Executor, CompatibleExecutor,
                      Future, futures_of)
 from .lock import Lock
 from .nanny import Nanny
+from .pubsub import Pub, Sub
 from .queues import Queue
 from .scheduler import Scheduler
 from .threadpoolexecutor import rejoin

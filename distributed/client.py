@@ -52,6 +52,7 @@ from .node import Node
 from .protocol import to_serialize
 from .protocol.pickle import dumps, loads
 from .publish import Datasets
+from .pubsub import PubSubClientExtension
 from .security import Security
 from .sizeof import sizeof
 from .threadpoolexecutor import rejoin
@@ -67,6 +68,11 @@ logger = logging.getLogger(__name__)
 
 _global_clients = weakref.WeakValueDictionary()
 _global_client_index = [0]
+
+
+DEFAULT_EXTENSIONS = [
+        PubSubClientExtension,
+]
 
 
 def _get_global_client():
@@ -506,7 +512,9 @@ class Client(Node):
                  set_as_default=True, scheduler_file=None,
                  security=None, asynchronous=False,
                  name=None, heartbeat_interval=None,
-                 serializers=None, deserializers=None, **kwargs):
+                 serializers=None, deserializers=None,
+                 extensions=DEFAULT_EXTENSIONS,
+                 **kwargs):
         if timeout == no_default:
             timeout = dask.config.get('distributed.comm.timeouts.connect')
         if timeout is not None:
@@ -581,7 +589,7 @@ class Client(Node):
             self._previous_shuffle = dask.config.get('shuffle', None)
             dask.config.set(shuffle='tasks')
 
-        self._handlers = {
+        self._stream_handlers = {
             'key-in-memory': self._handle_key_in_memory,
             'lost-data': self._handle_lost_data,
             'cancelled-key': self._handle_cancelled_key,
@@ -600,6 +608,9 @@ class Client(Node):
                                      io_loop=self.loop,
                                      serializers=serializers,
                                      deserializers=deserializers)
+
+        for ext in extensions:
+            ext(self)
 
         self.start(timeout=timeout)
 
@@ -958,7 +969,7 @@ class Client(Node):
                             break
 
                         try:
-                            handler = self._handlers[op]
+                            handler = self._stream_handlers[op]
                             handler(**msg)
                         except Exception as e:
                             logger.exception(e)

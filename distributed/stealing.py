@@ -173,7 +173,7 @@ class WorkStealing(SchedulerPlugin):
                 self.scheduler.get_comm_cost(ts, thief)
             )
 
-            self.scheduler.worker_comms[victim.address].send(
+            self.scheduler.stream_comms[victim.address].send(
                 {'op': 'steal-request', 'key': key})
 
             self.in_flight[ts] = {'victim': victim,

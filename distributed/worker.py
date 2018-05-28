@@ -39,6 +39,7 @@ from .preloading import preload_modules
 from .proctitle import setproctitle
 from .protocol import (pickle, to_serialize, deserialize_bytes,
                        serialize_bytelist)
+from .pubsub import PubSubWorkerExtension
 from .security import Security
 from .sizeof import safe_sizeof as sizeof
 from .threadpoolexecutor import ThreadPoolExecutor, secede as tpe_secede
@@ -73,6 +74,10 @@ PROCESSING = ('waiting', 'ready', 'constrained', 'executing', 'long-running')
 READY = ('ready', 'constrained')
 
 
+DEFAULT_EXTENSIONS = [
+    PubSubWorkerExtension,
+]
+
 _global_workers = []
 
 
@@ -83,7 +88,8 @@ class WorkerBase(ServerNode):
                  reconnect=True, memory_limit='auto',
                  executor=None, resources=None, silence_logs=None,
                  death_timeout=None, preload=(), preload_argv=[], security=None,
-                 contact_address=None, memory_monitor_interval='200ms', **kwargs):
+                 contact_address=None, memory_monitor_interval='200ms',
+                 extensions=None, **kwargs):
 
         self._setup_logging()
 
@@ -105,6 +111,7 @@ class WorkerBase(ServerNode):
         self.preload_argv = preload_argv,
         self.contact_address = contact_address
         self.memory_monitor_interval = parse_timedelta(memory_monitor_interval, default='ms')
+        self.extensions = dict()
         if silence_logs:
             silence_logging(level=silence_logs)
 
@@ -159,6 +166,7 @@ class WorkerBase(ServerNode):
         self.scheduler = rpc(scheduler_addr, connection_args=self.connection_args)
         self.name = name
         self.scheduler_delay = 0
+        self.stream_comms = dict()
         self.heartbeat_active = False
         self.execution_state = {'scheduler': self.scheduler.address,
                                 'ioloop': self.loop,
@@ -216,6 +224,11 @@ class WorkerBase(ServerNode):
                                   self.memory_monitor_interval * 1000,
                                   io_loop=self.io_loop)
             self.periodic_callbacks['memory'] = pc
+
+        if extensions is None:
+            extensions = DEFAULT_EXTENSIONS
+        for ext in extensions:
+            ext(self)
 
         self._throttled_gc = ThrottledGC(logger=logger)
 
@@ -353,6 +366,23 @@ class WorkerBase(ServerNode):
             self.services[k] = v(self, io_loop=self.loop, **kwargs)
             self.services[k].listen((listen_ip, port))
             self.service_ports[k] = self.services[k].port
+
+    def send_to_worker(self, address, msg):
+        if address not in self.stream_comms:
+            bcomm = BatchedSend(interval='1ms', loop=self.loop)
+            self.stream_comms[address] = bcomm
+
+            @gen.coroutine
+            def batched_send_connect():
+                comm = yield connect(address,  # TODO, serialization
+                                     connection_args=self.connection_args)
+                yield comm.write({'op': 'connection_stream'})
+
+                bcomm.start(comm)
+
+            self.loop.add_callback(batched_send_connect)
+
+        self.stream_comms[address].send(msg)
 
     @gen.coroutine
     def _start(self, addr_or_port=0):
@@ -1104,7 +1134,6 @@ class Worker(WorkerBase):
         self.who_has = dict()
         self.has_what = defaultdict(set)
         self.pending_data_per_worker = defaultdict(deque)
-        self.extensions = {}
         self._lock = threading.Lock()
 
         self.data_needed = deque()  # TODO: replace with heap?
