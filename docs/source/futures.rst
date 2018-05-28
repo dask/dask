@@ -321,6 +321,8 @@ Submit Tasks from Tasks
    rejoin
    secede
 
+*This is an advanced feature and is rarely necessary in the common case.*
+
 Tasks can launch other tasks by getting their own client.  This enables complex
 and highly dynamic workloads.
 
@@ -410,17 +412,39 @@ task.  This will automatically call ``secede`` and ``rejoin`` appropriately.
        return result
 
 
-Coordinate Data Between Clients
--------------------------------
+Coordination Primitives
+-----------------------
 
 .. autosummary::
    Queue
    Variable
+   Lock
+   Pub
+   Sub
 
-In the section above we saw that you could have multiple clients running at the
-same time, each of which generated and manipulated futures.  These clients can
-coordinate with each other using Dask ``Queue`` and ``Variable`` objects, which
-can communicate futures or small bits of data between clients sensibly.
+*These are advanced features and are rarely necessary in the common case.*
+
+Sometimes situations arise where tasks, workers, or clients need to coordinate
+with each other in ways beyond normal task scheduling with futures.  In these
+cases Dask provides additional primitives to help in complex situations.
+
+Dask provides distributed versions of coordination primitives like locks,
+queues, global variables, and pub-sub systems that, where appropriate, match
+their in-memory counterparts.  These can be used to control access to external
+resources, track progress of ongoing computations, or share data in
+side-channels between many workers, clients, and tasks sensibly.
+
+These features are rarely necessary for common use of Dask.  We recommend that
+beginning users stick with using the simpler futures found above (like
+``Client.submit`` and ``Client.gather``) rather than embracing needlessly
+complex techniques.
+
+
+Queues
+~~~~~~
+
+.. autosummary::
+   Queue
 
 Dask queues follow the API for the standard Python Queue, but now move futures
 or small messages between clients.  Queues serialize sensibly and reconnect
@@ -463,6 +487,34 @@ send back small scores or administrative messages:
 
    error_queue = Queue()
 
+Queues are mediated by the central scheduler, and so they are not ideal for
+sending large amounts of data (everything you send will be routed through a
+central point).  They are well suited to move around small bits of metadata, or
+futures.  These futures may point to much larger pieces of data safely.
+
+.. code-block:: python
+
+   >>> x = ... # my large numpy array
+
+   # Don't do this!
+   >>> q.put(x)
+
+   # Do this instead
+   >>> future = client.scatter(x)
+   >>> q.put(future)
+
+   # Or use futures for metadata
+   >>> q.put({'status': 'OK', 'stage=': 1234})
+
+If you're looking to move large amounts of data between workers then you might
+also want to consider the Pub/Sub system described a few sections below.
+
+Global Variables
+~~~~~~~~~~~~~~~~
+
+.. autosummary::
+   Variable
+
 Variables are like Queues in that they communicate futures and small data
 between clients.  However variables hold only a single value.  You can get or
 set that value at any time.
@@ -488,14 +540,25 @@ If you want to share large pieces of information then scatter the data first
 
 
 Locks
------
+~~~~~
 
 .. autosummary::
    Lock
 
 You can also hold onto cluster-wide locks using the ``Lock`` object.
-This lock can either be given a consistent name, or you can pass the lock
-object around itself.
+Dask Locks have the same API as normal ``threading.Lock`` objects, except that
+they work across the cluster:
+
+.. code-block:: python
+
+       from dask.distributed import Lock
+       lock = Lock()
+
+       with lock:
+           # access protected resource
+
+You can manage several locks at the same time.  Lock can either be given a
+consistent name, or you can pass the lock object around itself.
 
 Using a consistent name is convenient when you want to lock some known named resource.
 
@@ -504,7 +567,7 @@ Using a consistent name is convenient when you want to lock some known named res
    from dask.distributed import Lock
 
    def load(fn):
-       with Lock('production-database'):
+       with Lock('the-production-database'):
            # read data from filename using some sensitive source
            return ...
 
@@ -526,6 +589,20 @@ Passing around a lock works as well, and is easier when you want to create short
 
 This can be useful if you want to control concurrent access to some external
 resource like a database or un-thread-safe library.
+
+
+Publish-Subscribe
+~~~~~~~~~~~~~~~~~
+
+.. autosummary::
+   Pub
+   Sub
+
+Dask implements the `Publish Subscribe pattern <https://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern>`_,
+providing an additional channel of communication between ongoing tasks.
+
+.. autoclass:: Pub
+   :members:
 
 
 API
@@ -606,4 +683,10 @@ API
    :members:
 
 .. autoclass:: Lock
+   :members:
+
+.. autoclass:: Pub
+   :members:
+
+.. autoclass:: Sub
    :members:
