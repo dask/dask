@@ -39,6 +39,7 @@ from tornado import gen, queues
 from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 
+from .client import default_client
 from .compatibility import PY3, iscoroutinefunction, Empty
 from .config import initialize_logging
 from .core import connect, rpc, CommClosedError
@@ -610,6 +611,13 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
                     with ignoring(OSError):
                         shutil.rmtree(fn)
 
+            try:
+                client = default_client()
+            except ValueError:
+                pass
+            else:
+                client.close()
+
     assert not ws
 
 
@@ -785,6 +793,13 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                             yield end_cluster(s, workers)
                             yield gen.with_timeout(timedelta(seconds=1),
                                                    cleanup_global_workers())
+
+                        try:
+                            c = yield default_client()
+                        except ValueError:
+                            pass
+                        else:
+                            yield c._close(fast=True)
 
                         raise gen.Return(result)
 
