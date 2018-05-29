@@ -8,6 +8,7 @@ from random import random
 from time import sleep
 
 from distributed import Client
+from distributed.metrics import time
 from distributed.utils_test import cluster, inc
 from distributed.utils_test import loop # noqa F401
 from toolz import identity
@@ -204,3 +205,16 @@ def test_keywords(loop, joblib):
             with joblib.parallel_backend('dask', workers=b['address']) as (ba, _):
                 seq = joblib.Parallel()(joblib.delayed(_test_keywords_f)(i) for i in range(10))
                 assert seq == [b['address']] * 10
+
+
+def test_cleanup(loop, joblib):
+    with Client(processes=False, loop=loop) as client:
+        with joblib.parallel_backend('dask'):
+            joblib.Parallel()(joblib.delayed(inc)(i) for i in range(10))
+
+        start = time()
+        while client.cluster.scheduler.tasks:
+            sleep(0.01)
+            assert time() < start + 5
+
+        assert not client.futures

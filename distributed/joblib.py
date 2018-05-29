@@ -4,6 +4,7 @@ import contextlib
 
 from distutils.version import LooseVersion
 from uuid import uuid4
+import weakref
 
 from tornado import gen
 
@@ -161,7 +162,12 @@ class DaskDistributedBackend(ParallelBackendBase, AutoBatchingMixin):
 
         self.client.loop.add_callback(callback_wrapper)
 
-        future.get = future.result  # monkey patch to achieve AsyncResult API
+        ref = weakref.ref(future)  # avoid reference cycle
+
+        def get():
+            return ref().result()
+
+        future.get = get # monkey patch to achieve AsyncResult API
         return future
 
     def abort_everything(self, ensure_ready=True):
