@@ -175,7 +175,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
 
     ## Assess input args for loop dims
     input_shapes = [a.shape for a in args]
-    input_chunkss = [tuple(c[0] for c in a.chunks) for a in args]
+    input_chunkss = [a.chunks for a in args]
     num_loopdims = [len(s) - len(cd) for s, cd in zip(input_shapes, core_input_dimss)]
     max_loopdims = max(num_loopdims) if num_loopdims else None
     _core_input_shapes = [dict(zip(cid, s[n:])) for s, n, cid in zip(input_shapes, num_loopdims, core_input_dimss)]
@@ -206,7 +206,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
         if not allow_rechunk:
             chunksizes = chunksizess[dim]
             #### Check if core dimensions consist of only one chunk
-            if (dim in core_shapes) and (chunksizes[0] < core_shapes[dim]):
+            if (dim in core_shapes) and (chunksizes[0][0] < core_shapes[dim]):
                 raise ValueError("Core dimension `'{}'` consists of multiple chunks. To fix, rechunk into a single \
 chunk along this dimension or set `allow_rechunk=True`, but beware that this may increase memory usage \
 significantly.".format(dim))
