@@ -2359,7 +2359,7 @@ class DataFrame(_Frame):
         elif isinstance(key, slice):
             return self.loc[key]
 
-        if isinstance(key, list):
+        if isinstance(key, (pd.Series, np.ndarray, pd.Index, list)):
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
 
@@ -2565,7 +2565,7 @@ class DataFrame(_Frame):
         df2 = self._meta.assign(**_extract_meta(kwargs))
         return elemwise(methods.assign, self, *pairs, meta=df2)
 
-    @derived_from(pd.DataFrame)
+    @derived_from(pd.DataFrame, ua_args=['index'])
     def rename(self, index=None, columns=None):
         if index is not None:
             raise ValueError("Cannot rename index.")
@@ -3536,7 +3536,17 @@ def apply_and_enforce(func, args, kwargs, meta):
     if isinstance(df, (pd.DataFrame, pd.Series, pd.Index)):
         if len(df) == 0:
             return meta
-        c = meta.columns if isinstance(df, pd.DataFrame) else meta.name
+
+        if isinstance(df, pd.DataFrame):
+            # Need nan_to_num otherwise nan comparison gives False
+            if not np.array_equal(np.nan_to_num(meta.columns),
+                                  np.nan_to_num(df.columns)):
+                raise ValueError("The columns in the computed data do not match"
+                                 " the columns in the provided metadata")
+            else:
+                c = meta.columns
+        else:
+            c = meta.name
         return _rename(c, df)
     return df
 

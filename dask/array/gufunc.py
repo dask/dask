@@ -175,7 +175,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
 
     ## Assess input args for loop dims
     input_shapes = [a.shape for a in args]
-    input_chunkss = [tuple(c[0] for c in a.chunks) for a in args]
+    input_chunkss = [a.chunks for a in args]
     num_loopdims = [len(s) - len(cd) for s, cd in zip(input_shapes, core_input_dimss)]
     max_loopdims = max(num_loopdims) if num_loopdims else None
     _core_input_shapes = [dict(zip(cid, s[n:])) for s, n, cid in zip(input_shapes, num_loopdims, core_input_dimss)]
@@ -199,18 +199,18 @@ def apply_gufunc(func, signature, *args, **kwargs):
             _chunksizes.append(chunksize)
             chunksizess[dim] = _chunksizes
     ### Assert correct partitioning, for case:
-    if not allow_rechunk:
-        for dim, sizes in dimsizess.items():
-            ### Check that the arrays have same length for same dimensions or dimension `1`
-            if set(sizes).union({1}) != {1, max(sizes)}:
-                raise ValueError("Dimension `'{}'` with different lengths in arrays".format(dim))
+    for dim, sizes in dimsizess.items():
+        #### Check that the arrays have same length for same dimensions or dimension `1`
+        if set(sizes).union({1}) != {1, max(sizes)}:
+            raise ValueError("Dimension `'{}'` with different lengths in arrays".format(dim))
+        if not allow_rechunk:
             chunksizes = chunksizess[dim]
-            ### Check if core dimensions consist of only one chunk
-            if (dim in core_shapes) and (chunksizes[0] < core_shapes[dim]):
+            #### Check if core dimensions consist of only one chunk
+            if (dim in core_shapes) and (chunksizes[0][0] < core_shapes[dim]):
                 raise ValueError("Core dimension `'{}'` consists of multiple chunks. To fix, rechunk into a single \
 chunk along this dimension or set `allow_rechunk=True`, but beware that this may increase memory usage \
 significantly.".format(dim))
-            ### Check if loop dimensions consist of same chunksizes, when they have sizes > 1
+            #### Check if loop dimensions consist of same chunksizes, when they have sizes > 1
             relevant_chunksizes = list(unique(c for s, c in zip(sizes, chunksizes) if s > 1))
             if len(relevant_chunksizes) > 1:
                 raise ValueError("Dimension `'{}'` with different chunksize present".format(dim))

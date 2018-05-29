@@ -9,8 +9,9 @@ Array
 +++++
 
 - Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
-- Experimental addition of generalized ufunc support, ``apply_gufunc``, ``gufunc``, and ``as_gufunc`` (:pr:`#3109`) `Markus Gonser`_
 - ``einsum`` now accepts the ``split_every`` parameter (:pr:`3396`) `Guido Imperiale`_
+- Add to/read_zarr for Zarr-format datasets and arrays (:pr:`3460`) `Martin Durant`_
+- Experimental addition of generalized ufunc support, ``apply_gufunc``, ``gufunc``, and ``as_gufunc`` (:pr:`#3109`) `Markus Gonser`_
 - Allow slicing a Dask Array by another one-dimensional Dask Array of integers
   (:pr:`3396`) `Guido Imperiale`_
 
@@ -18,6 +19,8 @@ Dataframe
 +++++++++
 
 - Add to/read_json (:pr:`3494`) `Martin Durant`_
+- Adds ``index`` to unsupported arguments for ``DataFrame.rename`` method (:pr:`3522`) `James Bourbeau`_
+- Adds support to subset Dask DataFrame columns using ``numpy.ndarray``, ``pandas.Series``, and ``pandas.Index`` objects (:pr:`3536`) `James Bourbeau`_
 
 Bag
 +++
@@ -31,6 +34,13 @@ Core
 
 0.17.5 / 2018-05-16
 -------------------
+
+Array
++++++
+
+- Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
+- ``einsum`` now accepts the ``split_every`` parameter (:pr:`3396`) `Guido Imperiale`_
+- Improved slicing performance (:pr:`3469`) `Yu Feng`_
 
 DataFrame
 +++++++++

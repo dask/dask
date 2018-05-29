@@ -56,15 +56,6 @@ def test_apply_gufunc_01b():
     assert std.compute().shape == (10, 20)
 
 
-def test_apply_gufunc_01c():
-    def stats(x):
-        return np.mean(x, axis=-1), np.std(x, axis=-1)
-    a = da.random.normal(size=(10, 20, 30), chunks=5)
-    with assert_raises(ValueError):
-        apply_gufunc(stats, "(i)->(),()", a,
-                     output_dtypes=2 * (a.dtype,))
-
-
 @pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
                     reason="`np.vectorize(..., signature=...)` not supported yet")
 @pytest.mark.parametrize('vectorize', [False, True])
@@ -260,3 +251,36 @@ def test_apply_gufunc_broadcasting_loopdims():
     assert x.compute().shape == (20, 10, 30)
     assert y.compute().shape == (20, 10, 30)
     assert z.compute().shape == (20, 10, 30)
+
+
+def test_apply_gufunc_check_same_dimsizes():
+    def foo(x, y):
+        return x + y
+
+    a = da.random.normal(size=(3,), chunks=(2,))
+    b = da.random.normal(size=(4,), chunks=(2,))
+
+    with assert_raises(ValueError) as excinfo:
+        apply_gufunc(foo, "(),()->()", a, b, output_dtypes=float, allow_rechunk=True)
+    assert "different lengths in arrays" in str(excinfo.value)
+
+
+def test_apply_gufunc_check_coredim_chunksize():
+    def foo(x):
+        return np.sum(x, axis=-1)
+    a = da.random.normal(size=(8,), chunks=3)
+    with assert_raises(ValueError) as excinfo:
+        da.apply_gufunc(foo, "(i)->()", a, output_dtypes=float, allow_rechunk=False)
+    assert "consists of multiple chunks" in str(excinfo.value)
+
+
+def test_apply_gufunc_check_inhomogeneous_chunksize():
+    def foo(x, y):
+        return x + y
+
+    a = da.random.normal(size=(8,), chunks=((2, 2, 2, 2),))
+    b = da.random.normal(size=(8,), chunks=((2, 3, 3),))
+
+    with assert_raises(ValueError) as excinfo:
+        da.apply_gufunc(foo, "(),()->()", a, b, output_dtypes=float, allow_rechunk=False)
+    assert "with different chunksize present" in str(excinfo.value)

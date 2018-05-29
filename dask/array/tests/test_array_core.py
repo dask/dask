@@ -1915,7 +1915,7 @@ def test_slicing_with_non_ndarrays():
             return np.arange(self.start, self.stop)
 
     class ARangeSlicable(object):
-        dtype = 'i8'
+        dtype = np.dtype('i8')
 
         def __init__(self, n):
             self.n = n
@@ -3257,3 +3257,152 @@ def test_meta(dtype):
     assert a._meta.dtype == a.dtype
     assert isinstance(a._meta, np.ndarray)
     assert a.nbytes < 1000
+
+
+@pytest.mark.parametrize('shape,limit,expected', [
+    (100, 10, (10,) * 10),
+    (20, 10, (10, 10)),
+    (20, 5, (5, 5, 5, 5)),
+    (24, 5, (4, 4, 4, 4, 4, 4)),  # common factor is close, use it
+    (23, 5, (5, 5, 5, 5, 3)),  # relatively prime, don't use 1s
+    (1000, 167, (125,) * 8),  # find close value
+])
+def test_normalize_chunks_auto_1d(shape, limit, expected):
+    result = normalize_chunks('auto', (shape,), limit=limit * 8, dtype=np.float64)
+    assert result == (expected,)
+
+
+@pytest.mark.parametrize('shape,chunks,limit,expected', [
+    ((20, 20), ('auto', 2), 20, ((10, 10), (2,) * 10)),
+    ((20, 20), ('auto', (2, 2, 2, 2, 2, 5, 5)), 20, ((4, 4, 4, 4, 4), (2, 2, 2, 2, 2, 5, 5))),
+    ((1, 20), 'auto', 10, ((1,), (10, 10))),
+])
+def test_normalize_chunks_auto_2d(shape, chunks, limit, expected):
+    result = normalize_chunks(chunks, shape, limit=limit, dtype='uint8')
+    assert result == expected
+
+
+def test_normalize_chunks_auto_3d():
+    result = normalize_chunks(('auto', 'auto', 2), (20, 20, 20), limit=200, dtype='uint8')
+    expected = ((10, 10), (10, 10), (2,) * 10)
+    assert result == expected
+
+    result = normalize_chunks('auto', (20, 20, 20), limit=8, dtype='uint8')
+    expected = ((2,) * 10,) * 3
+    assert result == expected
+
+
+def test_constructors_chunks_dict():
+    x = da.ones((20, 20), chunks={0: 10, 1: 5})
+    assert x.chunks == ((10, 10), (5, 5, 5, 5))
+
+    x = da.ones((20, 20), chunks={0: 10, 1: "auto"})
+    assert x.chunks == ((10, 10), (20,))
+
+
+def test_from_array_chunks_dict():
+    with dask.config.set({'array.chunk-size': '128kiB'}):
+        x = np.empty((100, 100, 100))
+        y = da.from_array(x, chunks={0: 10, 1: -1, 2: 'auto'})
+        z = da.from_array(x, chunks=(10, 100, 10))
+        assert y.chunks == z.chunks
+
+
+@pytest.mark.parametrize('dtype', [object, [('a', object), ('b', int)]])
+def test_normalize_chunks_object_dtype(dtype):
+    x = np.array(['a', 'abc'], dtype=object)
+    with pytest.raises(NotImplementedError):
+        da.from_array(x, chunks='auto')
+
+
+def test_normalize_chunks_tuples_of_tuples():
+    result = normalize_chunks(((2, 3, 5), 'auto'), (10, 10), limit=10, dtype=np.uint8)
+    expected = ((2, 3, 5), (2, 2, 2, 2, 2))
+    assert result == expected
+
+
+def test_normalize_chunks_nan():
+    with pytest.raises(ValueError) as info:
+        normalize_chunks('auto', (np.nan,), limit=10, dtype=np.uint8)
+    assert "auto" in str(info.value)
+    with pytest.raises(ValueError) as info:
+        normalize_chunks(((np.nan, np.nan), 'auto'), (10, 10), limit=10, dtype=np.uint8)
+    assert "auto" in str(info.value)
+
+
+def test_zarr_roundtrip():
+    pytest.importorskip('zarr')
+    with tmpdir() as d:
+        a = da.zeros((3, 3), chunks=(1, 1))
+        a.to_zarr(d)
+        a2 = da.from_zarr(d)
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
+
+
+def test_read_zarr_chunks():
+    pytest.importorskip('zarr')
+    a = da.zeros((9, ), chunks=(3, ))
+    with tmpdir() as d:
+        a.to_zarr(d)
+        arr = da.from_zarr(d, chunks=(5, ))
+        assert arr.chunks == ((5, 4), )
+
+
+def test_zarr_pass_mapper():
+    pytest.importorskip('zarr')
+    import zarr.storage
+    with tmpdir() as d:
+        mapper = zarr.storage.DirectoryStore(d)
+        a = da.zeros((3, 3), chunks=(1, 1))
+        a.to_zarr(mapper)
+        a2 = da.from_zarr(mapper)
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
+
+
+def test_zarr_group():
+    zarr = pytest.importorskip('zarr')
+    with tmpdir() as d:
+        a = da.zeros((3, 3), chunks=(1, 1))
+        a.to_zarr(d, component='test')
+        with pytest.raises((OSError, ValueError)):
+            a.to_zarr(d, component='test', overwrite=False)
+        a.to_zarr(d, component='test', overwrite=True)
+
+        # second time is fine, group exists
+        a.to_zarr(d, component='test2', overwrite=False)
+        a.to_zarr(d, component='nested/test', overwrite=False)
+        group = zarr.open_group(d, mode='r')
+        assert list(group) == ['nested', 'test', 'test2']
+        assert 'test' in group['nested']
+
+        a2 = da.from_zarr(d, component='test')
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
+
+
+@pytest.mark.parametrize('data', [[( ), True],
+                                  [((1, ),), True],
+                                  [((1, 1, 1),), True],
+                                  [((1, ), (1, )), True],
+                                  [((2, 2, 1), ), True],
+                                  [((2, 2, 3), ), False],
+                                  [((1, 1, 1), (2, 2, 3)), False],
+                                  [((1, 2, 1), ), False]
+                                  ])
+def test_regular_chunks(data):
+    chunkset, expected = data
+    assert da.core._check_regular_chunks(chunkset) == expected
+
+
+def test_zarr_nocompute():
+    pytest.importorskip('zarr')
+    with tmpdir() as d:
+        a = da.zeros((3, 3), chunks=(1, 1))
+        out = a.to_zarr(d, compute=False)
+        assert isinstance(out, Delayed)
+        dask.compute(out)
+        a2 = da.from_zarr(d)
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
