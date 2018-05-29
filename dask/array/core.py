@@ -3052,7 +3052,7 @@ def insert_to_ooc(arr, out, lock=True, region=None,
     if region:
         slices = [fuse_slice(region, slc) for slc in slices]
 
-    name = 'store-%s' % arr.name
+    name = 'store-%s' % arr.name + tokenize(region)
     func = store_chunk
     args = ()
     if return_stored and load_stored:
