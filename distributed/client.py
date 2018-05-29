@@ -855,13 +855,21 @@ class Client(Node):
         try:
             comm = yield connect(self.scheduler.address, timeout=timeout,
                                  connection_args=self.connection_args)
-            yield self._update_scheduler_info()
+            if timeout is not None:
+                yield gen.with_timeout(timedelta(seconds=timeout),
+                                       self._update_scheduler_info())
+            else:
+                yield self._update_scheduler_info()
             yield comm.write({'op': 'register-client',
                               'client': self.id,
                               'reply': False})
         finally:
             self._connecting_to_scheduler = False
-        msg = yield comm.read()
+        if timeout is not None:
+            msg = yield gen.with_timeout(timedelta(seconds=timeout),
+                                         comm.read())
+        else:
+            msg = yield comm.read()
         assert len(msg) == 1
         assert msg[0]['op'] == 'stream-start'
 

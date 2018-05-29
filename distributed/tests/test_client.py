@@ -5288,6 +5288,23 @@ def test_client_timeout_2():
         assert stop - start < 1
 
 
+@gen_test()
+def test_client_active_bad_port():
+    import tornado.web
+    import tornado.httpserver
+    application = tornado.web.Application([
+        (r"/", tornado.web.RequestHandler),
+    ])
+    http_server = tornado.httpserver.HTTPServer(application)
+    http_server.listen(8080)
+    with dask.config.set({'distributed.comm.timeouts.connect': '10ms'}):
+        c = Client('127.0.0.1:8080', asynchronous=True)
+        with pytest.raises((TimeoutError, IOError)):
+            yield c
+        yield c._close(fast=True)
+    http_server.stop()
+
+
 @gen_cluster()
 def test_turn_off_pickle(s, a, b):
     import numpy as np
