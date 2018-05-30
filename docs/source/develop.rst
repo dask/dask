@@ -115,7 +115,7 @@ processes:
 
    def test_submit_sync(loop):
        with cluster() as (s, [a, b]):
-           with Client(('127.0.0.1', s['port']), loop=loop) as c:
+           with Client(s['address'], loop=loop) as c:
                future = c.submit(inc, 1)
                assert future.key in c.futures
 
