@@ -924,9 +924,10 @@ def store(sources, targets, lock=True, regions=None, compute=True,
     targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
 
     load_stored = (return_stored and not compute)
+    toks = [str(uuid.uuid1()) for _ in range(len(sources))]
     store_dsk = sharedict.merge(*[
-        insert_to_ooc(s, t, lock, r, return_stored, load_stored)
-        for s, t, r in zip(sources2, targets2, regions)
+        insert_to_ooc(s, t, lock, r, return_stored, load_stored, tok)
+        for s, t, r, tok in zip(sources2, targets2, regions, toks)
     ])
     store_keys = list(store_dsk.keys())
 
@@ -944,13 +945,13 @@ def store(sources, targets, lock=True, regions=None, compute=True,
             )
 
         result = tuple(
-            Array(load_store_dsk, 'load-store-%s' % s.name, s.chunks, s.dtype)
-            for s in sources
+            Array(load_store_dsk, 'load-store-%s' % t, s.chunks, s.dtype)
+            for s, t in zip(sources, toks)
         )
 
         return result
     else:
-        name = 'store-' + tokenize(*store_keys)
+        name = 'store-' + str(uuid.uuid1())
         dsk = sharedict.merge({name: store_keys}, store_dsk)
         result = Delayed(name, dsk)
 
@@ -3013,7 +3014,7 @@ def load_chunk(out, index, lock):
 
 
 def insert_to_ooc(arr, out, lock=True, region=None,
-                  return_stored=False, load_stored=False):
+                  return_stored=False, load_stored=False, tok=None):
     """
     Creates a Dask graph for storing chunks from ``arr`` in ``out``.
 
@@ -3036,6 +3037,8 @@ def insert_to_ooc(arr, out, lock=True, region=None,
         Whether to handling loading from ``out`` at the same time.
         Ignored if ``return_stored`` is not ``True``.
         (default is ``False``, meaning defer to ``return_stored``).
+    tok: str, optional
+        Token to use when naming keys
 
     Examples
     --------
@@ -3052,7 +3055,7 @@ def insert_to_ooc(arr, out, lock=True, region=None,
     if region:
         slices = [fuse_slice(region, slc) for slc in slices]
 
-    name = 'store-%s' % tokenize(arr.name, region)
+    name = 'store-%s' % (tok or str(uuid.uuid1()))
     func = store_chunk
     args = ()
     if return_stored and load_stored:
