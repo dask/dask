@@ -131,9 +131,9 @@ def test_adaptive_scale_down_override(c, s, *workers):
             self.min_size = kwargs.pop("min_size", 0)
             Adaptive.__init__(self, *args, **kwargs)
 
-        def workers_to_close(self):
+        def workers_to_close(self, **kwargs):
             num_workers = len(self.scheduler.workers)
-            to_close = self.scheduler.workers_to_close()
+            to_close = self.scheduler.workers_to_close(**kwargs)
             if num_workers - len(to_close) < self.min_size:
                 to_close = to_close[:num_workers - self.min_size]
 
@@ -359,4 +359,36 @@ def test_target_duration():
 
     finally:
         yield client._close()
+        yield cluster._close()
+
+
+@gen_test(timeout=None)
+def test_worker_keys():
+    """ Ensure that redefining adapt with a lower maximum removes workers """
+    cluster = yield LocalCluster(0, asynchronous=True, processes=False,
+                                 scheduler_port=0, silence_logs=False,
+                                 diagnostics_port=None)
+
+    try:
+        yield [cluster.start_worker(name='a-1'),
+               cluster.start_worker(name='a-2'),
+               cluster.start_worker(name='b-1'),
+               cluster.start_worker(name='b-2')]
+
+        while len(cluster.scheduler.workers) != 4:
+            yield gen.sleep(0.01)
+
+        def key(ws):
+            return ws.name.split('-')[0]
+        cluster._adaptive_options = {'worker_key': key}
+
+        adaptive = cluster.adapt(minimum=1)
+        yield adaptive._adapt()
+
+        while len(cluster.scheduler.workers) == 4:
+            yield gen.sleep(0.01)
+
+        names = {ws.name for ws in cluster.scheduler.workers.values()}
+        assert names == {'a-1', 'a-2'} or names == {'b-1', 'b-2'}
+    finally:
         yield cluster._close()

@@ -41,6 +41,9 @@ class Adaptive(object):
     target_duration: timedelta or str, default "5s"
         Amount of time we want a computation to take.
         This affects how aggressively we scale up.
+    worker_key: Callable[WorkerState]
+        Function to group workers together when scaling down
+        See Scheduler.workers_to_close for more information
     minimum: int
         Minimum number of workers to keep around
     maximum: int
@@ -84,8 +87,9 @@ class Adaptive(object):
 
     def __init__(self, scheduler, cluster, interval='1s', startup_cost='1s',
                  scale_factor=2, minimum=0, maximum=None, wait_count=3,
-                 target_duration='5s', **kwargs):
+                 target_duration='5s', worker_key=lambda x: x, **kwargs):
         interval = parse_timedelta(interval, default='ms')
+        self.worker_key = worker_key
         self.scheduler = scheduler
         self.cluster = cluster
         self.startup_cost = parse_timedelta(startup_cost, default='s')
@@ -223,7 +227,8 @@ class Adaptive(object):
     @gen.coroutine
     def _retire_workers(self, workers=None):
         if workers is None:
-            workers = self.workers_to_close()
+            workers = self.workers_to_close(key=self.worker_key,
+                                            minimum=self.minimum)
         if not workers:
             raise gen.Return(workers)
         with log_errors():
@@ -275,7 +280,8 @@ class Adaptive(object):
         self._adapting = True
         try:
             should_scale_up = self.should_scale_up()
-            workers = set(self.workers_to_close())
+            workers = set(self.workers_to_close(key=self.worker_key,
+                                                minimum=self.minimum))
             if should_scale_up and workers:
                 logger.info("Attempting to scale up and scale down simultaneously.")
                 return

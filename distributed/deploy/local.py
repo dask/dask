@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import atexit
+from datetime import timedelta
 import logging
 import math
 from time import sleep
@@ -12,7 +13,7 @@ from tornado import gen
 from .cluster import Cluster
 from ..core import CommClosedError
 from ..utils import (sync, ignoring, All, silence_logging, LoopRunner,
-        log_errors)
+        log_errors, thread_state)
 from ..nanny import Nanny
 from ..scheduler import Scheduler
 from ..worker import Worker, _ncores
@@ -145,12 +146,24 @@ class LocalCluster(Cluster):
     def __await__(self):
         return self._started.__await__()
 
+    def sync(self, func, *args, **kwargs):
+        asynchronous = kwargs.pop('asynchronous', None)
+        if asynchronous or self._asynchronous or getattr(thread_state, 'asynchronous', False):
+            callback_timeout = kwargs.pop('callback_timeout', None)
+            future = func(*args, **kwargs)
+            if callback_timeout is not None:
+                future = gen.with_timeout(timedelta(seconds=callback_timeout),
+                                          future)
+            return future
+        else:
+            return sync(self.loop, func, *args, **kwargs)
+
     def start(self, **kwargs):
         self._loop_runner.start()
         if self._asynchronous:
             self._started = self._start(**kwargs)
         else:
-            sync(self.loop, self._start, **kwargs)
+            self.sync(self._start, **kwargs)
 
     @gen.coroutine
     def _start(self, ip=None, n_workers=0):
@@ -219,7 +232,7 @@ class LocalCluster(Cluster):
         -------
         The created Worker or Nanny object.  Can be discarded.
         """
-        return sync(self.loop, self._start_worker, **kwargs)
+        return self.sync(self._start_worker, **kwargs)
 
     @gen.coroutine
     def _stop_worker(self, w):
@@ -236,7 +249,7 @@ class LocalCluster(Cluster):
         >>> w = c.start_worker(ncores=2)  # doctest: +SKIP
         >>> c.stop_worker(w)  # doctest: +SKIP
         """
-        sync(self.loop, self._stop_worker, w)
+        self.sync(self._stop_worker, w)
 
     @gen.coroutine
     def _close(self):

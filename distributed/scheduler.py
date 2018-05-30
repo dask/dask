@@ -2523,7 +2523,8 @@ class Scheduler(ServerNode):
                                'key-count': len(keys),
                                'branching-factor': branching_factor})
 
-    def workers_to_close(self, memory_ratio=None, n=None, key=None):
+    def workers_to_close(self, memory_ratio=None, n=None, key=None,
+                         minimum=None):
         """
         Find workers that we can close with low cost
 
@@ -2543,6 +2544,8 @@ class Scheduler(ServerNode):
             currently have data.
         n: int
             Number of workers to close
+        minimum: int
+            Minimum number of workers to keep around
         key: Callable(WorkerState)
             An optional callable mapping a WorkerState object to a group
             affiliation.  Groups will be closed together.  This is useful when
@@ -2598,26 +2601,29 @@ class Scheduler(ServerNode):
                 is_idle = not any(ws.processing for ws in groups[group])
                 bytes = -group_bytes[group]
                 return (is_idle, bytes)
+
             idle = sorted(groups, key=key)
 
             to_close = []
+            n_remain = len(self.workers)
 
             while idle:
                 group = idle.pop()
                 if n is None and any(ws.processing for ws in groups[group]):
                     break
 
+                if minimum and n_remain - len(groups[group]) < minimum:
+                    break
+
                 limit -= limit_bytes[group]
 
-                if n is not None and len(to_close) < n:
+                if ((n is not None and len(to_close) < n) or
+                    (memory_ratio is not None and limit >= memory_ratio * total)):
                     to_close.append(group)
-                    continue
+                    n_remain -= len(groups[group])
 
-                if memory_ratio is not None and limit >= memory_ratio * total:
-                    to_close.append(group)
-                    continue
-
-                break
+                else:
+                    break
 
             result = [ws.address for g in to_close for ws in groups[g]]
             if result:
