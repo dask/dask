@@ -576,8 +576,10 @@ Other functions
 .. autofunction:: from_array
 .. autofunction:: from_delayed
 .. autofunction:: from_npy_stack
+.. autofunction:: from_zarr
 .. autofunction:: store
 .. autofunction:: to_hdf5
+.. autofunction:: to_zarr
 .. autofunction:: to_npy_stack
 
 .. currentmodule:: dask.array.fft
