@@ -250,11 +250,21 @@ class ASTDaskBuilder:
         # This section is not strictly necessary - if you remove it,
         # these types will be processed as constant kwargs.
         if vtype in (slice, range):
-            return ast.Call(
-                ast.Name(vtype.__name__, ast.Load()),
-                [self._to_ast(x) for x in (v.start, v.stop, v.step)], [])
+            if v.start is None and v.step is None:
+                args = (v.stop, )
+            elif v.step is None:
+                args = (v.start, v.stop)
+            else:
+                args = (v.start, v.step, v.stop)
+            return self._to_ast((vtype, ) + args)
 
         if vtype is numpy.dtype:
+            # Attempt a numba.jit-friendly version first
+            try:
+                if getattr(numpy, v.name) == v:
+                    return self._to_ast(getattr(numpy, v.name))
+            except AttributeError:
+                pass
             return self._to_ast((numpy.dtype, v.name))
 
         # Generic object - processed as import or constant kwarg
