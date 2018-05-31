@@ -1,6 +1,6 @@
 import operator
-import pickle
 import re
+import sys
 from functools import partial
 from inspect import ismodule
 
@@ -380,35 +380,32 @@ class ASTDaskBuilder:
             pass
 
         try:
-            pik = pickle.dumps(obj, pickle.HIGHEST_PROTOCOL)
-            if pickle.loads(pik) is not obj:
-                raise AttributeError()
-        except (AttributeError, pickle.PicklingError):
-            # Can't be pickled, or it's not an object existing
-            # in a module (e.g. it's an instance)
+            in_module = getattr(sys.modules[obj.__module__], obj.__name__) is obj
+        except (KeyError, AttributeError):
+            in_module = False
+
+        if in_module and obj.__module__ == 'builtins':
+            res = ast.Name(obj.__name__, ast.Load())
+        elif in_module:
+            mod = obj.__module__
+            try:
+                try_mod = MODULE_REPLACEMENTS[mod]
+                if getattr(try_mod, obj.__name__) is obj:
+                    mod = try_mod.__name__
+            except (KeyError, AttributeError):
+                pass
+
+            self.imports.add(mod)
+            path = mod.split('.') + [obj.__name__]
+            path[0] = ast.Name(path[0], ast.Load())
+            while len(path) > 1:
+                path = [ast.Attribute(path[0], path[1], ast.Load())] + path[2:]
+            res = path[0]
+        else:
+            # It's not an object existing in a module (e.g. it's an instance)
             name = self._unique_name(obj)
             self.constant_kwargs[name] = obj
             res = ast.Name(name, ast.Load())
-        else:
-            # pickle->unpickle round-trip returns identical object
-            # use a simple import
-            mod = obj.__module__
-            if mod == 'builtins':
-                res = ast.Name(obj.__name__, ast.Load())
-            else:
-                try:
-                    try_mod = MODULE_REPLACEMENTS[mod]
-                    if getattr(try_mod, obj.__name__) is obj:
-                        mod = try_mod.__name__
-                except (KeyError, AttributeError):
-                    pass
-
-                self.imports.add(mod)
-                path = mod.split('.') + [obj.__name__]
-                path[0] = ast.Name(path[0], ast.Load())
-                while len(path) > 1:
-                    path = [ast.Attribute(path[0], path[1], ast.Load())] + path[2:]
-                res = path[0]
 
         self.obj_names[lookup_key] = res
         return res
