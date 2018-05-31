@@ -49,8 +49,9 @@ COMPARE_OP_MAP = {
 
 
 MODULE_REPLACEMENTS = {
-    'numpy.core.numeric': numpy,
+    'numpy.core.multiarray': numpy,
     'numpy.core.fromnumeric': numpy,
+    'numpy.core.numeric': numpy,
 }
 
 
@@ -203,6 +204,9 @@ class ASTDaskBuilder:
                 name = type(obj).__name__
 
         name = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+        name = re.sub(r'__*', '_', name)
+        name = name.lower()
+
         cnt = self.name_counters.get(name, -1)
         cnt += 1
         self.name_counters[name] = cnt
