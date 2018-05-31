@@ -15,3 +15,4 @@ log
 .cache/
 hdfs-initialized-indicator
 .ipynb_checkpoints
+mydask.png
