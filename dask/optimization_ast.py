@@ -7,6 +7,7 @@ from inspect import ismodule
 import ast
 import numpy
 from toolz.functoolz import Compose
+from . import config
 from .array.core import getter, getter_inline, getter_nofancy
 from .compatibility import apply
 from .core import flatten
@@ -67,43 +68,38 @@ def compile_ast(dsk, keys):
 
 
 class ASTFunction:
-    __slots__ = ('_code', '_source', '_func')
-
+    __slots__ = ('_tree', '_code', '_func')
 
     def __init__(self, tree):
-        # Do not store the AST tree as an attribute, because it takes ages to
-        # pickle. Besides, its only purpose is to generate the source - which
-        # is only used for debugging, but it's much faster to generate and
-        # instantaneous to pickle.
-        # FIXME: is there a way to generate the source code from the compiled
-        # code?
-        try:
-            import astor
-        except ImportError:
-            self._source = None
+        # The tree is huge and takes ages to pickle - only store it if a
+        # debugging flag is on
+        if config.get('ast.debug', False):
+            self._tree = tree
         else:
-            self._source = astor.to_source(tree)
+            self._tree = None
 
         self._code = compile(tree, filename='<ast>', mode='exec')
         self._setup()
 
+    @property
+    def tree(self):
+        if self._tree is None:
+            raise ValueError("AST tree missing. You must run compile_ast "
+                             "with dask.config.set({'ast.debug': True})")
+        return self._tree
 
     @property
     def source(self):
-        if self._source is None:
-            raise ImportError("AST source inspection requires astor")
-        return self._source
-
+        import astor
+        return astor.to_source(self.tree)
 
     def __getstate__(self):
         # Compiled bytecode is hashable; functions extracted from it aren't
-        return self._code, self._source
-
+        return self._tree, self._code
 
     def __setstate__(self, state):
-        self._code, self._source = state
+        self._tree, self._code = state
         self._setup()
-
 
     def _setup(self):
         exec(self._code)
@@ -112,14 +108,11 @@ class ASTFunction:
                 globals()[k] = v
         self._func = locals()['_ast_compiled']
 
-
     def __call__(self, *args):
         return self._func(*args)
 
-
     def __hash__(self):
         return hash(self._code)
-
 
     def __repr__(self):
         return "<ASTFunction %d>" % hash(self)
@@ -171,7 +164,6 @@ class ASTDaskBuilder:
         self.dsk[key] = tuple([func] + self.constant_arg_values +
                               self.arg_keys)
 
-
     def _traverse(self, key):
         # Avoid try... except Keyerror to keep stack traces clean
         if key in self.dsk_key_map:
@@ -193,7 +185,6 @@ class ASTDaskBuilder:
 
         return ast.Name(name, ast.Load())
 
-
     def _unique_name(self, obj):
         if isinstance(obj, tuple):
             name = "dsk_" + obj[0].split('-')[0]
@@ -211,7 +202,6 @@ class ASTDaskBuilder:
         cnt += 1
         self.name_counters[name] = cnt
         return "%s_%d" % (name, cnt)
-
 
     def _to_ast(self, v):
         # print(f"to_ast({v})")
@@ -269,7 +259,6 @@ class ASTDaskBuilder:
 
         # Generic object - processed as import or constant kwarg
         return self._add_local(v)
-
 
     def _dsk_function_to_ast(self, func, args, kwargs):
         args = tuple(args)
@@ -341,7 +330,7 @@ class ASTDaskBuilder:
                     return ast.ExtSlice([slice_to_ast(i) for i in s])
                 if isinstance(s, slice):
                     return ast.Slice(*(ast.Num(i) if i is not None else None
-                                     for i in (s.start, s.stop, s.step)))
+                                       for i in (s.start, s.stop, s.step)))
                 return ast.Index(self._to_ast(s))
 
             return ast.Subscript(self._to_ast(args[0]), slice_to_ast(args[1]),
@@ -366,7 +355,6 @@ class ASTDaskBuilder:
                         [self._to_ast(x) for x in args],
                         [ast.keyword(arg=key, value=self._to_ast(val))
                          for key, val in kwargs.items()])
-
 
     def _add_local(self, obj):
         try:
