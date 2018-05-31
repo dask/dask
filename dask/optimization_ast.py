@@ -66,12 +66,10 @@ def compile_ast(dsk, keys):
 
 
 class ASTFunction:
-    __slots__ = ('_code', '_source', '_func', 'constant_kwargs')
+    __slots__ = ('_code', '_source', '_func')
 
 
-    def __init__(self, tree, constant_kwargs):
-        self.constant_kwargs = constant_kwargs
-
+    def __init__(self, tree):
         # Do not store the AST tree as an attribute, because it takes ages to
         # pickle. Besides, its only purpose is to generate the source - which
         # is only used for debugging, but it's much faster to generate and
@@ -98,11 +96,11 @@ class ASTFunction:
 
     def __getstate__(self):
         # Compiled bytecode is hashable; functions extracted from it aren't
-        return self._code, self._source, self.constant_kwargs
+        return self._code, self._source
 
 
     def __setstate__(self, state):
-        self._code, self._source, self.constant_kwargs = state
+        self._code, self._source = state
         self._setup()
 
 
@@ -115,22 +113,15 @@ class ASTFunction:
 
 
     def __call__(self, *args):
-        return self._func(*args, **self.constant_kwargs)
+        return self._func(*args)
 
 
     def __hash__(self):
-        kwargs = []
-        for k, v in self.constant_kwargs.items():
-            try:
-                kwargs += [k, hash(v)]
-            except TypeError:
-                # Unhashable type
-                kwargs += [k, id(v)]
-        return hash((self._code, ) + tuple(kwargs))
+        return hash(self._code)
 
 
     def __repr__(self):
-        return "<ASTFunction>"
+        return "<ASTFunction %d>" % hash(self)
 
 
 class ASTDaskBuilder:
@@ -138,9 +129,10 @@ class ASTDaskBuilder:
         self.dsk = ensure_dict(dsk)
         self.imports = set()
         self.assigns = []
-        self.args = []
+        self.arg_names = []
         self.arg_keys = []
-        self.constant_kwargs = {}
+        self.constant_arg_names = []
+        self.constant_arg_values = []
         self.obj_names = {}
         self.name_counters = {}
         self.dsk_key_map = {}
@@ -156,8 +148,8 @@ class ASTDaskBuilder:
         func = ast.FunctionDef(
             name='_ast_compiled',
             args=ast.arguments(
-                args=[ast.arg(a, None) for a in self.args + list(
-                    self.constant_kwargs.keys())],
+                args=[ast.arg(a, None) for a in
+                      self.constant_arg_names + self.arg_names],
                 defaults=[],
                 kwarg=None,
                 kwonlyargs=[],
@@ -170,12 +162,13 @@ class ASTDaskBuilder:
         self.tree = ast.fix_missing_locations(
             ast.Module(body=imports + [func]))
 
-        func = ASTFunction(self.tree, self.constant_kwargs)
+        func = ASTFunction(self.tree)
         self.dsk = {
             k: v for k, v in self.dsk.items()
             if k not in self.delete_keys
         }
-        self.dsk[key] = (func, ) + tuple(self.arg_keys)
+        self.dsk[key] = tuple([func] + self.constant_arg_values +
+                              self.arg_keys)
 
 
     def _traverse(self, key):
@@ -189,7 +182,7 @@ class ASTDaskBuilder:
             # Stop recursion when a ASTFunction is found
             if (isinstance(val, tuple) and val and
                     isinstance(val[0], ASTFunction)):
-                self.args.append(name)
+                self.arg_names.append(name)
                 self.arg_keys.append(key)
             else:
                 ast_code = ast.Assign([ast.Name(name, ast.Store())],
@@ -207,14 +200,13 @@ class ASTDaskBuilder:
             try:
                 name = obj.__name__
             except AttributeError:
-                name = 'noname'
+                name = type(obj).__name__
 
         name = re.sub(r'[^a-zA-Z0-9_]', '_', name)
-        if name not in self.name_counters:
-            self.name_counters[name] = 0
-            return name
-        self.name_counters[name] += 1
-        return name + '_' + str(self.name_counters[name])
+        cnt = self.name_counters.get(name, -1)
+        cnt += 1
+        self.name_counters[name] = cnt
+        return "%s_%d" % (name, cnt)
 
 
     def _to_ast(self, v):
@@ -408,7 +400,8 @@ class ASTDaskBuilder:
         else:
             # It's not an object existing in a module (e.g. it's an instance)
             name = self._unique_name(obj)
-            self.constant_kwargs[name] = obj
+            self.constant_arg_names.append(name)
+            self.constant_arg_values.append(obj)
             res = ast.Name(name, ast.Load())
 
         self.obj_names[lookup_key] = res
