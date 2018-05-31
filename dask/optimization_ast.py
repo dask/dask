@@ -5,8 +5,9 @@ from functools import partial
 from inspect import ismodule
 
 import ast
-from numpy import dtype
+import numpy
 from toolz.functoolz import Compose
+from .array.core import getter, getter_inline, getter_nofancy
 from .compatibility import apply
 from .core import flatten
 from .optimization import cull
@@ -44,6 +45,12 @@ COMPARE_OP_MAP = {
     operator.le: ast.LtE,
     operator.gt: ast.Gt,
     operator.ge: ast.GtE,
+}
+
+
+MODULE_REPLACEMENTS = {
+    'numpy.core.numeric': numpy,
+    'numpy.core.fromnumeric': numpy,
 }
 
 
@@ -246,10 +253,15 @@ class ASTDaskBuilder:
             return ast.Tuple([self._to_ast(x) for x in v], ast.Load())
 
         # Additional objects explicitly handled for convenience
-        # This is unnecessary - if you remove this section, they
-        # will be processed as constant kwargs
-        if vtype is dtype:
-            return ast.Str(v.name)
+        # This section is not strictly necessary - if you remove it,
+        # these types will be processed as constant kwargs.
+        if vtype in (slice, range):
+            return ast.Call(
+                ast.Name(vtype.__name__, ast.Load()),
+                [self._to_ast(x) for x in (v.start, v.stop, v.step)], [])
+
+        if vtype is numpy.dtype:
+            return self._to_ast((numpy.dtype, v.name))
 
         # Generic object - processed as import or constant kwarg
         return self._add_local(v)
@@ -258,6 +270,11 @@ class ASTDaskBuilder:
     def _dsk_function_to_ast(self, func, args, kwargs):
         args = tuple(args)
         kwargs = kwargs.copy()
+
+        # Objects explicitly handled for convenience This is not strictly
+        # necessary - you could remove everything but the final section
+        # "Generic Callable" and these types would be processed as
+        # either imports or constant kwargs.
 
         # Unpack partials
         if func is apply:
@@ -310,6 +327,36 @@ class ASTDaskBuilder:
             return ast.Compare(self._to_ast(args[0]), [op()],
                                [self._to_ast(args[1])])
 
+        # operator.getitem
+        if func is operator.getitem:
+            assert len(args) == 2
+            assert not kwargs
+
+            def slice_to_ast(s):
+                if s in (tuple, list):
+                    return ast.ExtSlice([slice_to_ast(i) for i in s])
+                if isinstance(s, slice):
+                    return ast.Slice(*(ast.Num(i) if i is not None else None
+                                     for i in (s.start, s.stop, s.step)))
+                return ast.Index(self._to_ast(s))
+
+            return ast.Subscript(self._to_ast(args[0]), slice_to_ast(args[1]),
+                                 ast.Load())
+
+        # dask getters
+        if func in (getter, getter_nofancy, getter_inline):
+            assert 1 < len(args) < 5
+            a, b = args[:2]
+            asarray = args[2] if len(args) > 2 else kwargs.get('asarray', True)
+            lock = args[3] if len(args) > 3 else kwargs.get('lock', False)
+            nested = isinstance(b, tuple) and any(x is None for x in b)
+
+            if not lock and not nested:
+                tup = (operator.getitem, a, b)
+                if asarray:
+                    tup = (numpy.asarray, tup)
+                return self._to_ast(tup)
+
         # Generic callable
         return ast.Call(self._to_ast(func),
                         [self._to_ast(x) for x in args],
@@ -329,7 +376,8 @@ class ASTDaskBuilder:
             pass
 
         try:
-            if pickle.loads(pickle.dumps(obj)) is not obj:
+            pik = pickle.dumps(obj, pickle.HIGHEST_PROTOCOL)
+            if pickle.loads(pik) is not obj:
                 raise AttributeError()
         except (AttributeError, pickle.PicklingError):
             # Can't be pickled, or it's not an object existing
@@ -340,12 +388,23 @@ class ASTDaskBuilder:
         else:
             # pickle->unpickle round-trip returns identical object
             # use a simple import
-            self.imports.add(obj.__module__)
-            path = obj.__module__.split('.') + [obj.__name__]
-            path[0] = ast.Name(path[0], ast.Load())
-            while len(path) > 1:
-                path = [ast.Attribute(path[0], path[1], ast.Load())] + path[2:]
-            res = path[0]
+            mod = obj.__module__
+            if mod == 'builtins':
+                res = ast.Name(obj.__name__, ast.Load())
+            else:
+                try:
+                    try_mod = MODULE_REPLACEMENTS[mod]
+                    if getattr(try_mod, obj.__name__) is obj:
+                        mod = try_mod.__name__
+                except (KeyError, AttributeError):
+                    pass
+
+                self.imports.add(mod)
+                path = mod.split('.') + [obj.__name__]
+                path[0] = ast.Name(path[0], ast.Load())
+                while len(path) > 1:
+                    path = [ast.Attribute(path[0], path[1], ast.Load())] + path[2:]
+                res = path[0]
 
         self.obj_names[lookup_key] = res
         return res
