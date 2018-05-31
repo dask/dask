@@ -397,6 +397,11 @@ class ASTDaskBuilder:
             while len(path) > 1:
                 path = [ast.Attribute(path[0], path[1], ast.Load())] + path[2:]
             res = path[0]
+        elif isinstance(obj, numpy.ufunc):
+            assert getattr(numpy, obj.__name__) is obj
+            self.imports.add('numpy')
+            res = ast.Attribute(ast.Name('numpy', ast.Load()),
+                                obj.__name__, ast.Load())
         else:
             # It's not an object existing in a module (e.g. it's an instance)
             name = self._unique_name(obj)
