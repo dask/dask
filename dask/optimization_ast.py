@@ -222,6 +222,10 @@ class ASTDaskBuilder:
         vtype = type(v)
 
         if vtype in (int, float):
+            if numpy.isnan(v):
+                self.imports.add('numpy')
+                return ast.Attribute(ast.Name('numpy', ast.Load()),
+                                     'nan', ast.Load())
             return ast.Num(v)
         if vtype is bool or v is None:
             return ast.NameConstant(v)
