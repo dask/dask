@@ -129,6 +129,10 @@ class ASTFunction:
         return hash((self._code, ) + tuple(kwargs))
 
 
+    def __repr__(self):
+        return "<ASTFunction>"
+
+
 class ASTDaskBuilder:
     def __init__(self, dsk, key):
         self.dsk = ensure_dict(dsk)
