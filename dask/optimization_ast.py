@@ -389,17 +389,26 @@ class ASTDaskBuilder:
             while len(path) > 1:
                 path = [ast.Attribute(path[0], path[1], ast.Load())] + path[2:]
             res = path[0]
-        elif isinstance(obj, numpy.ufunc):
-            assert getattr(numpy, obj.__name__) is obj
-            self.imports.add('numpy')
-            res = ast.Attribute(ast.Name('numpy', ast.Load()),
-                                obj.__name__, ast.Load())
         else:
-            # It's not an object existing in a module (e.g. it's an instance)
-            name = self._unique_name(obj)
-            self.constant_arg_names.append(name)
-            self.constant_arg_values.append(obj)
-            res = ast.Name(name, ast.Load())
+            if isinstance(obj, numpy.ufunc):
+                try:
+                    is_ufunc = getattr(numpy, obj.__name__) is obj
+                except AttributeError:
+                    is_ufunc = False
+            else:
+                is_ufunc = False
+
+            if is_ufunc:
+                self.imports.add('numpy')
+                res = ast.Attribute(ast.Name('numpy', ast.Load()),
+                                    obj.__name__, ast.Load())
+            else:
+                # It's not an object existing in a module
+                # (e.g. it's an instance)
+                name = self._unique_name(obj)
+                self.constant_arg_names.append(name)
+                self.constant_arg_values.append(obj)
+                res = ast.Name(name, ast.Load())
 
         self.obj_names[lookup_key] = res
         return res
