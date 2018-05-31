@@ -14,3 +14,4 @@ log
 *.swo
 .cache/
 hdfs-initialized-indicator
+.ipynb_checkpoints
