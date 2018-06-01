@@ -21,7 +21,7 @@ import zipfile
 
 import pytest
 from toolz import (identity, isdistinct, concat, pluck, valmap,
-                   partial, first)
+                   partial, first, merge)
 from tornado import gen
 from tornado.ioloop import IOLoop
 
@@ -5386,6 +5386,21 @@ def test_client_repr_closed_sync(loop):
     with Client(loop=loop, processes=False) as c:
         c.close()
         c._repr_html_()
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
+def test_nested_prioritization(c, s, w):
+    x = delayed(inc)(1, dask_key_name=('a', 2))
+    y = delayed(inc)(2, dask_key_name=('a', 10))
+
+    o = dask.order.order(merge(x.__dask_graph__(), y.__dask_graph__()))
+
+    fx, fy = c.compute([x, y])
+
+    yield wait([fx, fy])
+
+    assert ((o[x.key] < o[y.key]) ==
+            (s.tasks[tokey(fx.key)].priority < s.tasks[tokey(fy.key)].priority))
 
 
 if sys.version_info >= (3, 5):

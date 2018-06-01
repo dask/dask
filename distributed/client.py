@@ -2068,27 +2068,31 @@ class Client(Node):
             if loose_restrictions is not None:
                 loose_restrictions = list(map(tokey, loose_restrictions))
 
-            dependencies = {tokey(k): set(map(tokey, v[1])) for k, v in d.items()}
+            future_dependencies = {tokey(k): set(map(tokey, v[1])) for k, v in d.items()}
 
-            for s in dependencies.values():
+            for s in future_dependencies.values():
                 for v in s:
                     if v not in self.futures:
                         raise CancelledError(v)
 
-            for k, v in dsk3.items():
-                dependencies[k] |= get_dependencies(dsk3, task=v)
+            dependencies = {k: get_dependencies(dsk, k) for k in dsk}
 
             if priority is None:
-                dependencies2 = {key: {dep for dep in deps if dep in dependencies}
-                                 for key, deps in dependencies.items()}
-                priority = dask.order.order(dsk3, dependencies2)
+                priority = dask.order.order(dsk, dependencies=dependencies)
+                priority = keymap(tokey, priority)
+
+            dependencies = {tokey(k): [tokey(dep) for dep in deps]
+                            for k, deps in dependencies.items()}
+            for k, deps in future_dependencies.items():
+                if deps:
+                    dependencies[k] = list(set(dependencies.get(k, ())) | deps)
 
             if isinstance(retries, Number) and retries > 0:
                 retries = {k: retries for k in dsk3}
 
             self._send_to_scheduler({'op': 'update-graph',
                                      'tasks': valmap(dumps_task, dsk3),
-                                     'dependencies': valmap(list, dependencies),
+                                     'dependencies': dependencies,
                                      'keys': list(flatkeys),
                                      'restrictions': restrictions or {},
                                      'loose_restrictions': loose_restrictions,
