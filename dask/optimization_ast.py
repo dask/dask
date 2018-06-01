@@ -165,24 +165,35 @@ class ASTDaskBuilder:
                               self.arg_keys)
 
     def _traverse(self, key):
-        # Avoid try... except Keyerror to keep stack traces clean
         if key in self.dsk_key_map:
+            # Already existing variable
             name = self.dsk_key_map[key]
-        else:
+            return ast.Name(name, ast.Load())
+
+        val = self.dsk[key]
+
+        # Stop recursion when a ASTFunction is found and add it as a new arg
+        if (isinstance(val, tuple) and val and
+                isinstance(val[0], ASTFunction)):
             name = self._unique_name(key)
             self.dsk_key_map[key] = name
-            val = self.dsk[key]
-            # Stop recursion when a ASTFunction is found
-            if (isinstance(val, tuple) and val and
-                    isinstance(val[0], ASTFunction)):
-                self.arg_names.append(name)
-                self.arg_keys.append(key)
-            else:
-                ast_code = ast.Assign([ast.Name(name, ast.Store())],
-                                      self._to_ast(val))
-                self.assigns.append(ast_code)
-                self.delete_keys.add(key)
+            self.arg_names.append(name)
+            self.arg_keys.append(key)
+            return ast.Name(name, ast.Load())
 
+        # Recursively convert dsk value to an AST tree
+        ast_val = self._to_ast(val)
+
+        if isinstance(ast_val, ast.Name):
+            # constant arg
+            return ast.Name(ast_val.id, ast.Load())
+
+        # AST is an expression; assign it to a new variable name
+        name = self._unique_name(key)
+        self.dsk_key_map[key] = name
+        ast_code = ast.Assign([ast.Name(name, ast.Store())], ast_val)
+        self.assigns.append(ast_code)
+        self.delete_keys.add(key)
         return ast.Name(name, ast.Load())
 
     def _unique_name(self, obj):
@@ -267,7 +278,7 @@ class ASTDaskBuilder:
                 pass
             return self._to_ast((numpy.dtype, v.name))
 
-        # Generic object - processed as import or constant kwarg
+        # Generic object - processed as import or constant arg
         return self._add_local(v)
 
     def _dsk_function_to_ast(self, func, args, kwargs):
@@ -277,7 +288,7 @@ class ASTDaskBuilder:
         # Objects explicitly handled for convenience This is not strictly
         # necessary - you could remove everything but the final section
         # "Generic Callable" and these types would be processed as
-        # either imports or constant kwargs.
+        # either imports or constant args.
 
         # Unpack partials
         if func is apply:
