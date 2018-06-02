@@ -4,10 +4,8 @@ import sys
 from functools import partial
 from inspect import ismodule
 
-import ast
 import numpy
 from toolz.functoolz import Compose
-from . import config
 from .array.core import getter, getter_inline, getter_nofancy
 from .compatibility import apply
 from .core import flatten
@@ -15,36 +13,29 @@ from .optimization import cull
 from .utils import ensure_dict
 
 
-__all__ = ('compile_ast', )
+__all__ = ('compiled', )
 
-
-UNARY_OP_MAP = {
-    operator.invert: ast.Invert,
-}
 
 BINARY_OP_MAP = {
-    operator.add: ast.Add,
-    operator.sub: ast.Sub,
-    operator.mul: ast.Mult,
-    operator.truediv: ast.Div,
-    operator.floordiv: ast.FloorDiv,
-    operator.mod: ast.Mod,
-    operator.pow: ast.Pow,
-    operator.lshift: ast.LShift,
-    operator.rshift: ast.RShift,
-    operator.or_: ast.BitOr,
-    operator.xor: ast.BitXor,
-    operator.and_: ast.BitAnd,
-    operator.matmul: ast.MatMult,
-}
-
-COMPARE_OP_MAP = {
-    operator.eq: ast.Eq,
-    operator.ne: ast.NotEq,
-    operator.lt: ast.Lt,
-    operator.le: ast.LtE,
-    operator.gt: ast.Gt,
-    operator.ge: ast.GtE,
+    operator.add: ' + ',
+    operator.sub: ' - ',
+    operator.mul: ' * ',
+    operator.truediv: ' / ',
+    operator.floordiv: ' // ',
+    operator.mod: ' % ',
+    operator.pow: '**',
+    operator.lshift: ' << ',
+    operator.rshift: ' >> ',
+    operator.or_: ' | ',
+    operator.xor: ' ^ ',
+    operator.and_: ' & ',
+    operator.matmul: ' @ ',
+    operator.eq: ' == ',
+    operator.ne: ' != ',
+    operator.lt: ' < ',
+    operator.le: ' <= ',
+    operator.gt: ' > ',
+    operator.ge: ' >= ',
 }
 
 
@@ -55,69 +46,51 @@ MODULE_REPLACEMENTS = {
 }
 
 
-def compile_ast(dsk, keys):
+def compiled(dsk, keys):
     dsk = ensure_dict(dsk)
     keys = set(flatten(keys))
     result = {}
     for key in keys:
         dsk_i, _ = cull(dsk, [key])
-        builder = ASTDaskBuilder(dsk_i, key)
+        builder = SourceBuilder(dsk_i, key)
         result.update(builder.dsk)
     return result
 
 
-class ASTFunction:
-    __slots__ = ('_tree', '_code', '_func')
+class CompiledFunction:
+    __slots__ = ('source', '_code', '_func')
 
-    def __init__(self, tree):
-        # The tree is huge and takes ages to pickle - only store it if a
-        # debugging flag is on
-        if config.get('ast.debug', False):
-            self._tree = tree
-        else:
-            self._tree = None
-
-        self._code = compile(tree, filename='<ast>', mode='exec')
+    def __init__(self, source):
+        self.source = source
         self._setup()
-
-    @property
-    def tree(self):
-        if self._tree is None:
-            raise ValueError("AST tree missing. You must run compile_ast "
-                             "with dask.config.set({'ast.debug': True})")
-        return self._tree
-
-    @property
-    def source(self):
-        import astor
-        return astor.to_source(self.tree)
 
     def __getstate__(self):
         # Compiled bytecode is hashable; functions extracted from it aren't
-        return self._tree, self._code
+        return self.source
 
     def __setstate__(self, state):
-        self._tree, self._code = state
+        self.source = state
         self._setup()
 
     def _setup(self):
-        exec(self._code)
+        # print(self.source)
+        exec(self.source)
         for k, v in locals().items():
             if ismodule(v):
                 globals()[k] = v
-        self._func = locals()['_ast_compiled']
+        self._func = locals()['_compiled']
 
     def __call__(self, *args):
         return self._func(*args)
 
     def __hash__(self):
-        return hash(self._code)
+        return hash(self.source)
 
     def __repr__(self):
-        return "<ASTFunction %d>" % hash(self)
+        return "<CompiledFunction %d>" % hash(self)
 
 
-class ASTDaskBuilder:
+class SourceBuilder:
     def __init__(self, dsk, key):
         self.dsk = ensure_dict(dsk)
         self.imports = set()
@@ -133,29 +106,20 @@ class ASTDaskBuilder:
 
         # Start recursion
         root = self._traverse(key)
-        self.assigns.append(ast.Return(root))
+        self.assigns.append('return ' + root)
 
-        imports = [ast.Import([ast.alias(modname, None)])
-                   for modname in sorted(self.imports)]
+        rows = []
+        for modname in self.imports:
+            rows.append('import ' + modname)
+        if self.imports:
+            rows += ['', '']
+        rows.append('def _compiled(%s):' % ', '.join(
+            self.constant_arg_names + self.arg_names))
+        for assign in self.assigns:
+            rows.append('    ' + assign)
 
-        func = ast.FunctionDef(
-            name='_ast_compiled',
-            args=ast.arguments(
-                args=[ast.arg(a, None) for a in
-                      self.constant_arg_names + self.arg_names],
-                defaults=[],
-                kwarg=None,
-                kwonlyargs=[],
-                kw_defaults=[],
-                vararg=None),
-            body=self.assigns,
-            decorator_list=[],
-            returns=None)
-
-        self.tree = ast.fix_missing_locations(
-            ast.Module(body=imports + [func]))
-
-        func = ASTFunction(self.tree)
+        source = '\n'.join(rows) + '\n'
+        func = CompiledFunction(source)
         self.dsk = {
             k: v for k, v in self.dsk.items()
             if k not in self.delete_keys
@@ -166,34 +130,33 @@ class ASTDaskBuilder:
     def _traverse(self, key):
         if key in self.dsk_key_map:
             # Already existing variable
-            name = self.dsk_key_map[key]
-            return ast.Name(name, ast.Load())
+            return self.dsk_key_map[key]
 
         val = self.dsk[key]
 
-        # Stop recursion when a ASTFunction is found and add it as a new arg
+        # Stop recursion when a CompiledFunction is found
+        # and add it as a new arg
         if (isinstance(val, tuple) and val and
-                isinstance(val[0], ASTFunction)):
+                isinstance(val[0], CompiledFunction)):
             name = self._unique_name(key)
             self.dsk_key_map[key] = name
             self.arg_names.append(name)
             self.arg_keys.append(key)
-            return ast.Name(name, ast.Load())
+            return name
 
-        # Recursively convert dsk value to an AST tree
-        ast_val = self._to_ast(val)
+        # Recursively convert dsk value to a line of source code
+        source = self._to_source(val)
 
-        if isinstance(ast_val, ast.Name):
+        if self.constant_arg_names and self.constant_arg_names[-1] == source:
             # constant arg
-            return ast.Name(ast_val.id, ast.Load())
+            return source
 
-        # AST is an expression; assign it to a new variable name
+        # row is an expression; assign it to a new variable name
         name = self._unique_name(key)
         self.dsk_key_map[key] = name
-        ast_code = ast.Assign([ast.Name(name, ast.Store())], ast_val)
-        self.assigns.append(ast_code)
+        self.assigns.append("%s = %s" % (name, source))
         self.delete_keys.add(key)
-        return ast.Name(name, ast.Load())
+        return name
 
     def _unique_name(self, obj):
         if isinstance(obj, tuple):
@@ -213,32 +176,39 @@ class ASTDaskBuilder:
         self.name_counters[name] = cnt
         return "%s_%d" % (name, cnt)
 
-    def _to_ast(self, v):
-        # print(f"to_ast({v})")
+    def _to_source(self, v):
+        # print(f"to_source({v})")
         vtype = type(v)
 
         if vtype in (int, float):
             if numpy.isnan(v):
                 self.imports.add('numpy')
-                return ast.Attribute(ast.Name('numpy', ast.Load()),
-                                     'nan', ast.Load())
-            return ast.Num(v)
-        if vtype is bool or v is None:
-            return ast.NameConstant(v)
-        if vtype is bytes:
-            return ast.Bytes(v)
+                return 'numpy.nan'
+            return repr(v)  # Prevent improper rounding in Python 2
+        if vtype in (bool, bytes, slice, range) or v is None:
+            return repr(v)
         if vtype is str:
             # Is it a reference to another dask graph node?
             if v in self.dsk:
                 return self._traverse(v)
-            return ast.Str(v)
+            return v
         if vtype is set:
-            return ast.Set([self._to_ast(x) for x in v])
+            if not v:
+                return 'set()'
+            if sys.version < '3':
+                return 'set([%s])' % ', '.join(self._to_source(x) for x in v)
+            return '{%s}' % ', '.join(self._to_source(x) for x in v)
         if vtype is list:
-            return ast.List([self._to_ast(x) for x in v], ast.Load())
+            return '[%s]' % ', '.join(self._to_source(x) for x in v)
         if vtype is dict:
-            return ast.Dict([self._to_ast(k) for k in v.keys()],
-                            [self._to_ast(k) for k in v.values()])
+            if sys.version < '3':
+                return 'dict(%s)' % ', '.join(
+                    '(%s, %s)' % (self._to_source(key), self._to_source(val))
+                    for key, val in v.items())
+            return '{%s}' % ', '.join(
+                '%s: %s' % (self._to_source(key), self._to_source(val))
+                for key, val in v.items())
+
         if vtype is tuple:
             # Is it a reference to another dask graph node?
             try:
@@ -251,36 +221,29 @@ class ASTDaskBuilder:
                     return self._traverse(v)
 
             if v and callable(v[0]):
-                return self._dsk_function_to_ast(v[0], v[1:], {})
+                return self._dsk_function_to_source(v[0], v[1:], {})
 
             # Generic tuple
-            return ast.Tuple([self._to_ast(x) for x in v], ast.Load())
+            if len(v) == 1:
+                return '(%s, )' % self._to_source(v[0])
+            return '(%s)' % ', '.join(self._to_source(x) for x in v)
 
         # Additional objects explicitly handled for convenience
         # This section is not strictly necessary - if you remove it,
         # these types will be processed as constant args.
-        if vtype in (slice, range):
-            if v.start is None and v.step is None:
-                args = (v.stop, )
-            elif v.step is None:
-                args = (v.start, v.stop)
-            else:
-                args = (v.start, v.step, v.stop)
-            return self._to_ast((vtype, ) + args)
-
         if vtype is numpy.dtype:
             # Attempt a numba.jit-friendly version first
             try:
                 if getattr(numpy, v.name) == v:
-                    return self._to_ast(getattr(numpy, v.name))
+                    return 'numpy.' + v.name
             except AttributeError:
                 pass
-            return self._to_ast((numpy.dtype, v.name))
+            return repr(v)  # str and repr aren't equivalent
 
         # Generic object - processed as import or constant arg
         return self._add_local(v)
 
-    def _dsk_function_to_ast(self, func, args, kwargs):
+    def _dsk_function_to_source(self, func, args, kwargs):
         args = tuple(args)
         kwargs = kwargs.copy()
 
@@ -293,12 +256,12 @@ class ASTDaskBuilder:
         if func is apply:
             if len(args) == 3:
                 kwargs.update(args[2])
-            return self._dsk_function_to_ast(args[0], args[1], kwargs)
+            return self._dsk_function_to_source(args[0], args[1], kwargs)
 
         if isinstance(func, partial):
             kwargs.update(func.keywords)
-            return self._dsk_function_to_ast(func.func, func.args + args,
-                                             kwargs)
+            return self._dsk_function_to_source(func.func, func.args + args,
+                                                kwargs)
 
         if isinstance(func, Compose):
             assert not kwargs
@@ -306,17 +269,7 @@ class ASTDaskBuilder:
             tup = (funcs[0],) + args
             for func in funcs[1:]:
                 tup = (func, tup)
-            return self._to_ast(tup)
-
-        # Convert unary ops
-        try:
-            op = UNARY_OP_MAP[func]
-        except KeyError:
-            pass
-        else:
-            assert not kwargs
-            assert len(args) == 1
-            return ast.UnaryOp(op(), self._to_ast(args[0]))
+            return self._to_source(tup)
 
         # Convert binary ops
         try:
@@ -326,35 +279,34 @@ class ASTDaskBuilder:
         else:
             assert not kwargs
             assert len(args) == 2
-            return ast.BinOp(self._to_ast(args[0]), op(),
-                             self._to_ast(args[1]))
+            return self._to_source(args[0]) + op + self._to_source(args[1])
 
-        # Convert comparison ops
-        try:
-            op = COMPARE_OP_MAP[func]
-        except KeyError:
-            pass
-        else:
+        # operator.invert
+        if func is operator.invert:
             assert not kwargs
-            assert len(args) == 2
-            return ast.Compare(self._to_ast(args[0]), [op()],
-                               [self._to_ast(args[1])])
+            assert len(args) == 1
+            return '~' + self._to_source(args[0])
 
         # operator.getitem
         if func is operator.getitem:
             assert len(args) == 2
             assert not kwargs
 
-            def slice_to_ast(s):
-                if s in (tuple, list):
-                    return ast.ExtSlice([slice_to_ast(i) for i in s])
-                if isinstance(s, slice):
-                    return ast.Slice(*(ast.Num(i) if i is not None else None
-                                       for i in (s.start, s.stop, s.step)))
-                return ast.Index(self._to_ast(s))
+            def idx_to_source(idx):
+                if isinstance(idx, tuple):
+                    return ', '.join(idx_to_source(i) for i in args[1])
+                if isinstance(idx, slice):
+                    start, stop, step = [
+                        self._to_source(s) if s is not None else ''
+                        for s in (idx.start, idx.stop, idx.step)
+                    ]
+                    if step:
+                        return '%s:%s:%s' % (start, stop, step)
+                    return '%s:%s' % (start, stop)
+                return self._to_source(idx)
 
-            return ast.Subscript(self._to_ast(args[0]), slice_to_ast(args[1]),
-                                 ast.Load())
+            return '%s[%s]' % (self._to_source(args[0]),
+                               idx_to_source(args[1]))
 
         # dask getters
         if func in (getter, getter_nofancy, getter_inline):
@@ -368,13 +320,16 @@ class ASTDaskBuilder:
                 tup = (operator.getitem, a, b)
                 if asarray:
                     tup = (numpy.asarray, tup)
-                return self._to_ast(tup)
+                return self._to_source(tup)
 
         # Generic callable
-        return ast.Call(self._to_ast(func),
-                        [self._to_ast(x) for x in args],
-                        [ast.keyword(arg=key, value=self._to_ast(val))
-                         for key, val in kwargs.items()])
+        args_source = [
+            self._to_source(x) for x in args
+        ] + [
+            '%s=%s' % (key, self._to_source(val))
+            for key, val in kwargs.items()
+        ]
+        return '%s(%s)' % (self._to_source(func), ', '.join(args_source))
 
     def _add_local(self, obj):
         try:
@@ -393,7 +348,7 @@ class ASTDaskBuilder:
             in_module = False
 
         if in_module and obj.__module__ == 'builtins':
-            res = ast.Name(obj.__name__, ast.Load())
+            res = obj.__name__
         elif in_module:
             mod = obj.__module__
             try:
@@ -404,11 +359,7 @@ class ASTDaskBuilder:
                 pass
 
             self.imports.add(mod)
-            path = mod.split('.') + [obj.__name__]
-            path[0] = ast.Name(path[0], ast.Load())
-            while len(path) > 1:
-                path = [ast.Attribute(path[0], path[1], ast.Load())] + path[2:]
-            res = path[0]
+            res = mod + '.' + obj.__name__
         else:
             if isinstance(obj, numpy.ufunc):
                 try:
@@ -420,15 +371,14 @@ class ASTDaskBuilder:
 
             if is_ufunc:
                 self.imports.add('numpy')
-                res = ast.Attribute(ast.Name('numpy', ast.Load()),
-                                    obj.__name__, ast.Load())
+                res = 'numpy.' + obj.__name__
             else:
                 # It's not an object existing in a module
                 # (e.g. it's an instance)
                 name = self._unique_name(obj)
                 self.constant_arg_names.append(name)
                 self.constant_arg_values.append(obj)
-                res = ast.Name(name, ast.Load())
+                res = name
 
         self.obj_names[lookup_key] = res
         return res
