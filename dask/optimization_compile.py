@@ -109,7 +109,7 @@ class SourceBuilder:
         self.assigns.append('return ' + root)
 
         rows = []
-        for modname in self.imports:
+        for modname in sorted(self.imports):
             rows.append('import ' + modname)
         if self.imports:
             rows += ['', '']
@@ -191,7 +191,7 @@ class SourceBuilder:
             # Is it a reference to another dask graph node?
             if v in self.dsk:
                 return self._traverse(v)
-            return v
+            return repr(v)  # Add quotes
         if vtype is set:
             if not v:
                 return 'set()'
@@ -294,7 +294,9 @@ class SourceBuilder:
 
             def idx_to_source(idx):
                 if isinstance(idx, tuple):
-                    return ', '.join(idx_to_source(i) for i in args[1])
+                    if not idx:
+                        return ':'
+                    return ', '.join(idx_to_source(i) for i in idx)
                 if isinstance(idx, slice):
                     start, stop, step = [
                         self._to_source(s) if s is not None else ''
