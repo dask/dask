@@ -297,7 +297,7 @@ class SourceBuilder:
             def idx_to_source(idx):
                 if isinstance(idx, tuple):
                     if not idx:
-                        return ':'
+                        return None
                     return ', '.join(idx_to_source(i) for i in idx)
                 if isinstance(idx, slice):
                     start, stop, step = [
@@ -309,8 +309,10 @@ class SourceBuilder:
                     return '%s:%s' % (start, stop)
                 return self._to_source(idx)
 
-            return '%s[%s]' % (self._to_source(args[0]),
-                               idx_to_source(args[1]))
+            idx = idx_to_source(args[1])
+            if idx:
+                return '%s[%s]' % (self._to_source(args[0]), idx)
+            return self._to_source(args[0])
 
         # dask getters
         if func in (getter, getter_nofancy, getter_inline):
