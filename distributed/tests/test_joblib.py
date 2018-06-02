@@ -218,3 +218,22 @@ def test_cleanup(loop, joblib):
             assert time() < start + 5
 
         assert not client.futures
+
+
+def test_auto_scatter(loop, joblib):
+    base_type = joblib._parallel_backends.ParallelBackendBase
+    if not hasattr(base_type, 'start_call'):
+        raise pytest.skip('joblib version does not support backend callbacks')
+
+    np = pytest.importorskip('numpy')
+    data = np.ones(int(1e7), dtype=np.uint8)
+
+    Parallel = joblib.Parallel
+    delayed = joblib.delayed
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as client:
+            with joblib.parallel_backend('dask') as (ba, _):
+                Parallel()(delayed(id)(data) for i in range(2))
+            worker_logs = client.run(lambda dask_worker: str(dask_worker.log))
+            for log in worker_logs.values():
+                assert 'scatter' in log
