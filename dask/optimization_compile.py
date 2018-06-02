@@ -96,9 +96,7 @@ class SourceBuilder:
         self.imports = set()
         self.assigns = []
         self.arg_names = []
-        self.arg_keys = []
-        self.constant_arg_names = []
-        self.constant_arg_values = []
+        self.arg_values = []
         self.obj_names = {}
         self.name_counters = {}
         self.dsk_key_map = {}
@@ -108,13 +106,20 @@ class SourceBuilder:
         root = self._traverse(key)
         self.assigns.append('return ' + root)
 
+        # Python does not support more than 255 args in a function - handle
+        # the special case where there's more.
+        if len(self.arg_names) > 255:
+            row = ", ".join(self.arg_names[254:]) + " = __long_args__"
+            self.assigns.insert(0, row)
+            self.arg_names = self.arg_names[:254] + ['__long_args__']
+            self.arg_values = self.arg_values[:254] + [self.arg_values[254:]]
+
         rows = []
         for modname in sorted(self.imports):
             rows.append('import ' + modname)
         if self.imports:
             rows += ['', '']
-        rows.append('def _compiled(%s):' % ', '.join(
-            self.constant_arg_names + self.arg_names))
+        rows.append('def _compiled(%s):' % ', '.join(self.arg_names))
         for assign in self.assigns:
             rows.append('    ' + assign)
 
@@ -124,8 +129,7 @@ class SourceBuilder:
             k: v for k, v in self.dsk.items()
             if k not in self.delete_keys
         }
-        self.dsk[key] = tuple([func] + self.constant_arg_values +
-                              self.arg_keys)
+        self.dsk[key] = tuple([func] + self.arg_values)
 
     def _traverse(self, key):
         if key in self.dsk_key_map:
@@ -138,16 +142,14 @@ class SourceBuilder:
         # and add it as a new arg
         if (isinstance(val, tuple) and val and
                 isinstance(val[0], CompiledFunction)):
-            name = self._unique_name(key)
+            name = self._add_arg(key)
             self.dsk_key_map[key] = name
-            self.arg_names.append(name)
-            self.arg_keys.append(key)
             return name
 
         # Recursively convert dsk value to a line of source code
         source = self._to_source(val)
 
-        if self.constant_arg_names and self.constant_arg_names[-1] == source:
+        if self.arg_names[-1:] == [source]:
             # constant arg
             return source
 
@@ -377,10 +379,13 @@ class SourceBuilder:
             else:
                 # It's not an object existing in a module
                 # (e.g. it's an instance)
-                name = self._unique_name(obj)
-                self.constant_arg_names.append(name)
-                self.constant_arg_values.append(obj)
-                res = name
+                res = self._add_arg(obj)
 
         self.obj_names[lookup_key] = res
         return res
+
+    def _add_arg(self, val):
+        name = self._unique_name(val)
+        self.arg_names.append(name)
+        self.arg_values.append(val)
+        return name
