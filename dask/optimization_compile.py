@@ -57,34 +57,53 @@ def compiled(dsk, keys):
     return result
 
 
-class CompiledFunction:
-    __slots__ = ('source', '_code', '_func')
+compiled_function_cache = {}
 
-    def __init__(self, source):
-        self.source = source
-        self._setup()
+
+class CompiledFunction:
+    __slots__ = ('_source', '_base', '_func')
+
+    def __init__(self, source, base=None):
+        if not base:
+            base = compiled_function_cache.get(source)
+
+        if base:
+            self._source = None
+            self._base = base
+            self._func = None
+        else:
+            assert source
+            # print(source)
+            exec(source)
+            for k, v in locals().items():
+                if ismodule(v):
+                    globals()[k] = v
+            self._source = source
+            self._base = None
+            self._func = locals()['_compiled']
+            compiled_function_cache[source] = self
 
     def __getstate__(self):
-        # Compiled bytecode is hashable; functions extracted from it aren't
-        return self.source
+        return self._source, self._base
 
     def __setstate__(self, state):
-        self.source = state
-        self._setup()
-
-    def _setup(self):
-        # print(self.source)
-        exec(self.source)
-        for k, v in locals().items():
-            if ismodule(v):
-                globals()[k] = v
-        self._func = locals()['_compiled']
+        self.__init__(*state)
 
     def __call__(self, *args):
+        if self._base:
+            return self._base(*args)
         return self._func(*args)
 
     def __hash__(self):
-        return hash(self.source)
+        if self._base:
+            return hash(self._base)
+        return hash(self._source)
+
+    @property
+    def source(self):
+        if self._base:
+            return self._base.source
+        return self._source
 
     def __repr__(self):
         return "<CompiledFunction %d>" % hash(self)
