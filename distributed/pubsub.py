@@ -1,5 +1,6 @@
 from collections import defaultdict, deque
 import datetime
+import logging
 import weakref
 
 import tornado.locks
@@ -9,6 +10,8 @@ from .compatibility import finalize, get_thread_identity
 from .core import CommClosedError
 from .utils import sync
 from .protocol.serialize import to_serialize
+
+logger = logging.getLogger(__name__)
 
 
 class PubSubSchedulerExtension(object):
@@ -33,6 +36,7 @@ class PubSubSchedulerExtension(object):
         self.scheduler.extensions['pubsub'] = self
 
     def add_publisher(self, comm=None, name=None, worker=None):
+        logger.debug("Add publisher: %s %s", name, worker)
         self.publishers[name].add(worker)
         return {'subscribers': {addr: {} for addr in self.subscribers[name]},
                 'publish-scheduler': name in self.client_subscribers and
@@ -40,12 +44,14 @@ class PubSubSchedulerExtension(object):
 
     def add_subscriber(self, comm=None, name=None, worker=None, client=None):
         if worker:
+            logger.debug("Add worker subscriber: %s %s", name, worker)
             self.subscribers[name].add(worker)
             for pub in self.publishers[name]:
                 self.scheduler.worker_send(pub, {'op': 'pubsub-add-subscriber',
                                                  'address': worker,
                                                  'name': name})
         elif client:
+            logger.debug("Add client subscriber: %s %s", name, client)
             for pub in self.publishers[name]:
                 self.scheduler.worker_send(pub, {'op': 'pubsub-publish-scheduler',
                                                  'name': name,
@@ -53,20 +59,24 @@ class PubSubSchedulerExtension(object):
             self.client_subscribers[name].add(client)
 
     def remove_publisher(self, comm=None, name=None, worker=None):
-        self.publishers[name].remove(worker)
+        if worker in self.publishers[name]:
+            logger.debug("Remove publisher: %s %s", name, worker)
+            self.publishers[name].remove(worker)
 
-        if not self.subscribers[name] and not self.publishers[name]:
-            del self.subscribers[name]
-            del self.publishers[name]
+            if not self.subscribers[name] and not self.publishers[name]:
+                del self.subscribers[name]
+                del self.publishers[name]
 
     def remove_subscriber(self, comm=None, name=None, worker=None, client=None):
         if worker:
+            logger.debug("Add worker subscriber: %s %s", name, worker)
             self.subscribers[name].remove(worker)
             for pub in self.publishers[name]:
                 self.scheduler.worker_send(pub, {'op': 'pubsub-remove-subscriber',
                                                  'address': worker,
                                                  'name': name})
         elif client:
+            logger.debug("Add client subscriber: %s %s", name, client)
             self.client_subscribers[name].remove(client)
             if not self.client_subscribers[name]:
                 del self.client_subscribers[name]
@@ -76,6 +86,7 @@ class PubSubSchedulerExtension(object):
                                                      'publish': False})
 
         if not self.subscribers[name] and not self.publishers[name]:
+            logger.debug("Remove PubSub topic %s", name)
             del self.subscribers[name]
             del self.publishers[name]
 
@@ -291,8 +302,8 @@ class Pub(object):
                     name=self.name,
                     worker=self.worker.address
             )
-            self.subscribers.update(result['subscribers'])
             pubsub = self.worker.extensions['pubsub']
+            self.subscribers.update(result['subscribers'])
             pubsub.publish_to_scheduler[self.name] = result['publish-scheduler']
 
         self._started = True

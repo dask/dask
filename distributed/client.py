@@ -1061,7 +1061,8 @@ class Client(Node):
             for f in self.coroutines:
                 # cancel() works on asyncio futures (Tornado 5)
                 # but is a no-op on Tornado futures
-                f.cancel()
+                with ignoring(RuntimeError):
+                    f.cancel()
                 if f.cancelled():
                     coroutines.remove(f)
             del self.coroutines[:]
