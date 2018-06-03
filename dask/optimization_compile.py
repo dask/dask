@@ -43,6 +43,7 @@ MODULE_REPLACEMENTS = {
     'numpy.core.multiarray': numpy,
     'numpy.core.fromnumeric': numpy,
     'numpy.core.numeric': numpy,
+    'numpy.lib.stride_tricks': numpy,
 }
 
 
@@ -58,12 +59,26 @@ def compiled(dsk, keys):
 
 
 compiled_function_cache = {}
+replacement_funcs = set()
+
+
+def add_replacement(func):
+    replacement_funcs.add(func)
+
+
+def add_replacement_regex(pattern, repl, count=0, flags=0):
+    func = partial(re.sub, pattern, repl, count=count, flags=flags)
+    replacement_funcs.add(func)
 
 
 class CompiledFunction:
     __slots__ = ('_source', '_base', '_func')
 
     def __init__(self, source, base=None):
+        if source:
+            for func in replacement_funcs:
+                source = func(source)
+
         if not base:
             base = compiled_function_cache.get(source)
 
