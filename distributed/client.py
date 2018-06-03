@@ -2503,7 +2503,7 @@ class Client(Node):
                                                 'data': to_serialize(data)})
 
         if any(v['status'] == 'error' for v in d.values()):
-            exceptions = [loads(v['exception']) for v in d.values()
+            exceptions = [v['exception'] for v in d.values()
                           if v['status'] == 'error']
             if raise_on_error:
                 raise exceptions[0]

@@ -685,7 +685,7 @@ class WorkerBase(ServerNode):
             except Exception as e:
                 logger.exception(e)
                 raise gen.Return({'status': 'error',
-                                  'exception': pickle.dumps(e)})
+                                  'exception': to_serialize(e)})
 
         raise gen.Return({'status': 'OK', 'nbytes': len(data)})
 
@@ -2162,7 +2162,7 @@ class Worker(WorkerBase):
                                    str(funcname(function))[:1000],
                                    convert_args_to_str(args2, max_len=1000),
                                    convert_kwargs_to_str(kwargs2, max_len=1000),
-                                   repr(pickle.loads(result['exception'])))
+                                   repr(result['exception'].data))
                     self.transition(key, 'error')
 
             logger.debug("Send compute response to scheduler: %s, %s", key,

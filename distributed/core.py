@@ -819,18 +819,19 @@ def error_message(e, status='error'):
         e3 = protocol.pickle.dumps(e2)
         protocol.pickle.loads(e3)
     except Exception:
-        e3 = Exception(str(e2))
-        e3 = protocol.pickle.dumps(e3)
+        e2 = Exception(str(e2))
+    e4 = protocol.to_serialize(e2)
     try:
         tb2 = protocol.pickle.dumps(tb)
     except Exception:
-        tb2 = ''.join(traceback.format_tb(tb))
-        tb2 = protocol.pickle.dumps(tb2)
+        tb = tb2 = ''.join(traceback.format_tb(tb))
 
     if len(tb2) > 10000:
-        tb2 = None
+        tb_result = None
+    else:
+        tb_result = protocol.to_serialize(tb)
 
-    return {'status': status, 'exception': e3, 'traceback': tb2}
+    return {'status': status, 'exception': e4, 'traceback': tb_result}
 
 
 def clean_exception(exception, traceback, **kwargs):
