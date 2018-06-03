@@ -6,7 +6,6 @@ from inspect import ismodule
 
 import numpy
 from toolz.functoolz import Compose
-from .array.core import getter, getter_inline, getter_nofancy
 from .compatibility import apply
 from .core import flatten
 from .optimization import cull
@@ -347,20 +346,6 @@ class SourceBuilder:
             if idx:
                 return '%s[%s]' % (self._to_source(args[0]), idx)
             return self._to_source(args[0])
-
-        # dask getters
-        if func in (getter, getter_nofancy, getter_inline):
-            assert 1 < len(args) < 5
-            a, b = args[:2]
-            asarray = args[2] if len(args) > 2 else kwargs.get('asarray', True)
-            lock = args[3] if len(args) > 3 else kwargs.get('lock', False)
-            nested = isinstance(b, tuple) and any(x is None for x in b)
-
-            if not lock and not nested:
-                tup = (operator.getitem, a, b)
-                if asarray:
-                    tup = (numpy.asarray, tup)
-                return self._to_source(tup)
 
         # Generic callable
         args_source = [
