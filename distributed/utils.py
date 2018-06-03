@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import atexit
-from collections import Iterable, deque
+from collections import deque
 from contextlib import contextmanager
 from datetime import timedelta
 import functools
@@ -188,19 +188,41 @@ def ignore_exceptions(coroutines, *exceptions):
 
 
 @gen.coroutine
-def All(*args):
+def All(args, quiet_exceptions=()):
     """ Wait on many tasks at the same time
 
     Err once any of the tasks err.
 
     See https://github.com/tornadoweb/tornado/issues/1546
+
+    Parameters
+    ----------
+    args: futures to wait for
+    quiet_exceptions: tuple, Exception
+        Exception types to avoid logging if they fail
     """
-    if len(args) == 1 and isinstance(args[0], Iterable):
-        args = args[0]
     tasks = gen.WaitIterator(*args)
     results = [None for _ in args]
     while not tasks.done():
-        result = yield tasks.next()
+        try:
+            result = yield tasks.next()
+        except Exception:
+            @gen.coroutine
+            def quiet():
+                """ Watch unfinished tasks
+
+                Otherwise if they err they get logged in a way that is hard to
+                control.  They need some other task to watch them so that they
+                are not orphaned
+                """
+                for task in list(tasks._unfinished):
+                    try:
+                        yield task
+                    except quiet_exceptions:
+                        pass
+            quiet()
+            raise
+
         results[tasks.current_index] = result
     raise gen.Return(results)
 

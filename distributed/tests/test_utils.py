@@ -23,7 +23,8 @@ from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
                                set_thread_state, thread_state, LoopRunner,
                                parse_bytes, parse_timedelta)
 from distributed.utils_test import loop, loop_in_thread  # noqa: F401
-from distributed.utils_test import div, has_ipv6, inc, throws, gen_test
+from distributed.utils_test import (div, has_ipv6, inc, throws, gen_test,
+        captured_logger)
 
 
 def test_All(loop):
@@ -42,7 +43,7 @@ def test_All(loop):
     @gen.coroutine
     def f():
 
-        results = yield All(*[inc(i) for i in range(10)])
+        results = yield All([inc(i) for i in range(10)])
         assert results == list(range(1, 11))
 
         start = time()
@@ -513,3 +514,22 @@ def test_parse_timedelta():
     assert parse_timedelta('1', default='seconds') == 1
     assert parse_timedelta('1', default='ms') == 0.001
     assert parse_timedelta(1, default='ms') == 0.001
+
+
+@gen_test()
+def test_all_exceptions_logging():
+    @gen.coroutine
+    def throws():
+        raise Exception('foo')
+
+    with captured_logger('') as sio:
+        try:
+            yield All([throws() for _ in range(5)],
+                    quiet_exceptions=Exception)
+        except Exception:
+            pass
+
+        import gc; gc.collect()
+        yield gen.sleep(0.1)
+
+    assert not sio.getvalue()
