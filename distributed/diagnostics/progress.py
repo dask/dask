@@ -72,6 +72,7 @@ class Progress(SchedulerPlugin):
         self._start_time = default_timer()
         self._running = False
         self.status = None
+        self.extra = {}
 
     @gen.coroutine
     def setup(self):
@@ -125,6 +126,8 @@ class Progress(SchedulerPlugin):
             self.scheduler.plugins.remove(self)
         if exception:
             self.status = 'error'
+            self.extra.update({'exception': self.scheduler.exceptions[key],
+                               'key': key})
         else:
             self.status = 'finished'
         logger.debug("Remove Progress plugin")

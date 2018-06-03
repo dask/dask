@@ -52,9 +52,12 @@ class ProgressBar(object):
             raise gen.Return(p)
 
         def function(scheduler, p):
-            return {'all': len(p.all_keys),
-                    'remaining': len(p.keys),
-                    'status': p.status}
+            result = {'all': len(p.all_keys),
+                      'remaining': len(p.keys),
+                      'status': p.status}
+            if p.status == 'error':
+                result.update(p.extra)
+            return result
 
         self.comm = yield connect(self.scheduler)
         logger.debug("Progressbar Connected to scheduler")
@@ -137,11 +140,15 @@ class ProgressWidget(ProgressBar):
         IOLoop.current().add_callback(self.listen)
         return self.widget._ipython_display_(**kwargs)
 
-    def _draw_stop(self, remaining, status, **kwargs):
+    def _draw_stop(self, remaining, status, exception=None, **kwargs):
         if status == 'error':
             self.bar.bar_style = 'danger'
-            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Exception:</b> ' + \
-                format_time(self.elapsed) + '</div>'
+            self.elapsed_time.value = (
+                    '<div style="padding: 0px 10px 5px 10px"><b>Exception</b> '
+                    '<tt>' + repr(exception) + '</tt>:' +
+                    format_time(self.elapsed) + ' ' +
+                    '</div>'
+            )
         elif not remaining:
             self.bar.bar_style = 'success'
             self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Finished:</b> ' + \
@@ -182,9 +189,12 @@ class MultiProgressBar(object):
             raise gen.Return(p)
 
         def function(scheduler, p):
-            return {'all': valmap(len, p.all_keys),
-                    'remaining': valmap(len, p.keys),
-                    'status': p.status}
+            result = {'all': valmap(len, p.all_keys),
+                      'remaining': valmap(len, p.keys),
+                      'status': p.status}
+            if p.status == 'error':
+                result.update(p.extra)
+            return result
 
         self.comm = yield connect(self.scheduler)
         logger.debug("Progressbar Connected to scheduler")
@@ -273,8 +283,12 @@ class MultiProgressWidget(MultiProgressBar):
 
         if status == 'error':
             # self.bars[self.func(key)].bar_style = 'danger'  # TODO
-            self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Exception:</b> ' + \
-                format_time(self.elapsed) + '</div>'
+            self.elapsed_time.value = (
+                '<div style="padding: 0px 10px 5px 10px"><b>Exception</b> ' +
+                '<tt>' + repr(exception) + '</tt>:' +
+                format_time(self.elapsed) + ' ' +
+                '</div>'
+            )
         else:
             self.elapsed_time.value = '<div style="padding: 0px 10px 5px 10px"><b>Finished:</b> ' + \
                 format_time(self.elapsed) + '</div>'

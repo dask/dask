@@ -130,6 +130,11 @@ def test_multi_progressbar_widget(c, s, a, b):
     assert p.status == 'error'
     assert 'Exception' in p.elapsed_time.value
 
+    try:
+        throws(1)
+    except Exception as e:
+        assert repr(e) in p.elapsed_time.value
+
     capacities = [int(re.search(r'\d+ / \d+', row.children[0].value)
                       .group().split(' / ')[1])
                   for row in p.bar_widgets.children]
@@ -196,6 +201,11 @@ def test_progressbar_done(loop):
             assert p.bar.value == 0.0
             assert p.bar.bar_style == 'danger'
             assert 'Exception' in p.elapsed_time.value
+
+            try:
+                throws(1)
+            except Exception as e:
+                assert repr(e) in p.elapsed_time.value
 
 
 def test_progressbar_cancel(loop):
