@@ -230,10 +230,38 @@ def test_auto_scatter(loop, joblib):
 
     Parallel = joblib.Parallel
     delayed = joblib.delayed
+
+    def noop(*args, **kwargs):
+        pass
+
+    def count_events(event_name, client):
+        worker_events = client.run(lambda dask_worker: dask_worker.log)
+        event_counts = {}
+        for w, events in worker_events.items():
+            event_counts[w] = len([event for event in list(events)
+                                   if event[1] == event_name])
+        return event_counts
+
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as client:
             with joblib.parallel_backend('dask') as (ba, _):
-                Parallel()(delayed(id)(data) for i in range(2))
-            worker_logs = client.run(lambda dask_worker: str(dask_worker.log))
-            for log in worker_logs.values():
-                assert 'scatter' in log
+                # Passing the same data as arg and kwarg triggers a single
+                # scatter operation whose result is reused.
+                Parallel()(delayed(noop)(data, data, i, opt=data)
+                           for i in range(5))
+            # By default large array are automatically scattered with
+            # broadcast=3 which means that each worker can directly receive
+            # the data from the scatter operation once.
+            counts = count_events('receive-from-scatter', client)
+            assert counts[a['address']] == 1
+            assert counts[b['address']] == 1
+
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as client:
+            with joblib.parallel_backend('dask') as (ba, _):
+                Parallel()(delayed(noop)(data[:3], i) for i in range(5))
+            # Small arrays are passed within the task definition without going
+            # through a scatter operation.
+            counts = count_events('receive-from-scatter', client)
+            assert counts[a['address']] == 0
+            assert counts[b['address']] == 0
