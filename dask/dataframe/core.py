@@ -1035,7 +1035,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         Parameters
         ----------
-        frac : float, optional
+        frac : float
             Fraction of axis items to return.
         replace: boolean, optional
             Sample with or without replacement. Default = False.
