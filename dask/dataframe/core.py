@@ -1037,9 +1037,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         ----------
         frac : float
             Fraction of axis items to return.
-        replace: boolean, optional
+        replace : boolean, optional
             Sample with or without replacement. Default = False.
-        random_state: int or ``np.random.RandomState``
+        random_state : int or ``np.random.RandomState``
             If int we create a new RandomState with this as the seed
             Otherwise we draw from the passed RandomState
 
