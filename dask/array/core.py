@@ -1343,9 +1343,9 @@ class Array(DaskMethodsMixin):
                 "got {}".format(key))
         if all(isinstance(k, slice) for k in key):
             slices = (k.indices(num_dim) for k, num_dim in zip(key, self.shape))
-            identity = all(slice_ == (0, num_dim, 1)
-                           for slice_, num_dim in zip(slices, self.shape))
-            if identity:
+            identity_slices = ((0, num_in_dim, 1)   # i.e, x[:]
+                               for num_in_dim in self.shape)
+            if all(slice_ == identity for slice_, identity in zip(slices, identity_slices)):
                 return self
             raise IndexError(
                 "vindex requires at least one non-slice to vectorize over "
