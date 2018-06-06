@@ -45,7 +45,7 @@ class MemoryFileSystem(core.FileSystem):
 
     def walk(self, path):
         path = self._trim(path)
-        files = [f for f in self.store if s.startswith(path)]
+        files = [f for f in self.store if f.startswith(path)]
         return sorted(files)
 
     def rm(self, path, recursive=False):
