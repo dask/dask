@@ -333,6 +333,9 @@ def get_mapper(fs, path):
     elif fs.protocol == 'hdfs':
         from hdfs3.mapping import HDFSMap
         return HDFSMap(fs, path)
+    elif fs.protocol == 'memory':
+        from dask.bytes.memory import MemoryMapping, MemoryFileSystem
+        return MemoryMapping(path, MemoryFileSystem())
     else:
         raise ValueError('No mapper for protocol "%s"' % fs.protocol)
 
