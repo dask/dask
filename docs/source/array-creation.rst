@@ -11,6 +11,7 @@ supports Numpy-style slicing.
    from_array
    from_delayed
    from_npy_stack
+   from_zarr
    stack
    concatenate
 
@@ -61,10 +62,10 @@ Often we store data in several different locations and want to stitch them toget
     for fn in filenames:
         f = h5py.File(fn)
         d = f['/data']
-        x = da.from_array(d, chunks=(1000, 1000))
-        dask_arrays.append(x)
+        array = da.from_array(d, chunks=(1000, 1000))
+        dask_arrays.append(array)
 
-    x = da.concatenate(arrays, axis=0)  # concatenate arrays along first axis
+    x = da.concatenate(dask_arrays, axis=0)  # concatenate arrays along first axis
 
 For more information see :doc:`concatenation and stacking <array-stack>` docs.
 
@@ -99,12 +100,13 @@ As an example, consider loading a stack of images using ``skimage.io.imread``:
 
     filenames = sorted(glob.glob('*.jpg'))
 
-    lazy_images = [imread(url) for url in urls]     # Lazily evaluate imread on each url
-
+    lazy_images = [imread(path) for path in filenames]     # Lazily evaluate imread on each path
+    sample = lazy_images[0].compute() # load the first image (assume rest are same shape/dtype)
+   
     arrays = [da.from_delayed(lazy_image,           # Construct a small Dask array
                               dtype=sample.dtype,   # for every lazy value
                               shape=sample.shape)
-              for lazy_value in lazy_values]
+              for lazy_image in lazy_images]
 
     stack = da.stack(arrays, axis=0)                # Stack all small Dask arrays into one
 
@@ -166,135 +168,7 @@ shape and dtype attributes and implements NumPy slicing syntax.
 Chunks
 ------
 
-We always specify a ``chunks`` argument to tell dask.array how to break up the
-underlying array into chunks.  This strongly impacts performance.  We can
-specify ``chunks`` in one of three ways
-
-*  a blocksize like ``1000``
-*  a blockshape like ``(1000, 1000)``
-*  explicit sizes of all blocks along all dimensions,
-   like ``((1000, 1000, 500), (400, 400))``
-
-Your chunks input will be normalized and stored in the third and most explicit
-form.
-
-For performance, a good choice of ``chunks`` follows the following rules:
-
-1.  A chunk should be small enough to fit comfortably in memory.  We'll
-    have many chunks in memory at once.
-2.  A chunk must be large enough so that computations on that chunk take
-    significantly longer than the 1ms overhead per task that dask scheduling
-    incurs.  A task should take longer than 100ms.
-3.  Chunks should align with the computation that you want to do.  For example
-    if you plan to frequently slice along a particular dimension then it's more
-    efficient if your chunks are aligned so that you have to touch fewer
-    chunks.  If you want to add two arrays then its convenient if those arrays
-    have matching chunks patterns.
-
-
-Unknown Chunks
-~~~~~~~~~~~~~~
-
-Some arrays have unknown chunk sizes.  These are designated using ``np.nan``
-rather than an integer.  These arrays support many but not all operations.  In
-particular, operations like slicing are not possible and will result in an
-error.
-
-.. code-block:: python
-
-   >>> x.shape
-   (np.nan, np.nan)
-
-   >>> x[0]
-   ValueError: Array chunk sizes unknown
-
-
-Chunks Examples
-~~~~~~~~~~~~~~~
-
-We show of how different inputs for ``chunks=`` cut up the following array::
-
-   1 2 3 4 5 6
-   7 8 9 0 1 2
-   3 4 5 6 7 8
-   9 0 1 2 3 4
-   5 6 7 8 9 0
-   1 2 3 4 5 6
-
-We show how different ``chunks=`` arguments split the array into different blocks
-
-**chunks=3**: Symmetric blocks of size 3::
-
-   1 2 3  4 5 6
-   7 8 9  0 1 2
-   3 4 5  6 7 8
-
-   9 0 1  2 3 4
-   5 6 7  8 9 0
-   1 2 3  4 5 6
-
-**chunks=2**: Symmetric blocks of size 2::
-
-   1 2  3 4  5 6
-   7 8  9 0  1 2
-
-   3 4  5 6  7 8
-   9 0  1 2  3 4
-
-   5 6  7 8  9 0
-   1 2  3 4  5 6
-
-**chunks=(3, 2)**: Asymmetric but repeated blocks of size ``(3, 2)``::
-
-   1 2  3 4  5 6
-   7 8  9 0  1 2
-   3 4  5 6  7 8
-
-   9 0  1 2  3 4
-   5 6  7 8  9 0
-   1 2  3 4  5 6
-
-**chunks=(1, 6)**: Asymmetric but repeated blocks of size ``(1, 6)``::
-
-   1 2 3 4 5 6
-
-   7 8 9 0 1 2
-
-   3 4 5 6 7 8
-
-   9 0 1 2 3 4
-
-   5 6 7 8 9 0
-
-   1 2 3 4 5 6
-
-**chunks=((2, 4), (3, 3))**: Asymmetric and non-repeated blocks::
-
-   1 2 3  4 5 6
-   7 8 9  0 1 2
-
-   3 4 5  6 7 8
-   9 0 1  2 3 4
-   5 6 7  8 9 0
-   1 2 3  4 5 6
-
-**chunks=((2, 2, 1, 1), (3, 2, 1))**: Asymmetric and non-repeated blocks::
-
-   1 2 3  4 5  6
-   7 8 9  0 1  2
-
-   3 4 5  6 7  8
-   9 0 1  2 3  4
-
-   5 6 7  8 9  0
-
-   1 2 3  4 5  6
-
-**Discussion**
-
-The latter examples are rarely provided by users on original data but arise from complex slicing and broadcasting operations.  Generally people use the simplest form until they need more complex forms.  The choice of chunks should align with the computations you want to do.
-
-For example, if you plan to take out thin slices along the first dimension then you might want to make that dimension skinnier than the others.  If you plan to do linear algebra then you might want more symmetric blocks.
+See :doc:`documentation on Array Chunks <array-chunks>` for more information.
 
 
 Store Dask Arrays
@@ -304,6 +178,7 @@ Store Dask Arrays
    store
    to_hdf5
    to_npy_stack
+   to_zarr
    compute
 
 In Memory
@@ -370,6 +245,36 @@ Store several arrays in one computation with the function
    >>> da.to_hdf5('myfile.hdf5', {'/x': x, '/y': y})  # doctest: +SKIP
 
 
+Zarr
+----
+
+The `zarr`_ format is a chunk-wise binary array storage file format, with a good selection
+of encoding and compression options. Due to each chunk being stored in a separate file, it
+is ideal for parallel access in both reading and writing (for the latter, if the dask array
+chunks are alligned with the target). Furthermore, storage in
+:doc:`remote data services<remote_data_services>`_ such as
+S3 and GCS is supported.
+
+.. _zarr: https://zarr.readthedocs.io
+
+For example, to save data to a local zarr dataset:
+
+.. code-block:: Python
+
+   >>> arr.to_zarr('output.zarr')
+
+or to save to a particular bucket on S3:
+
+.. code-block:: Python
+
+   >>> arr.to_zarr('s3://mybucket/output.zarr', storage_option={'key': 'mykey',
+                   'secret': 'mysecret'})
+
+To retrieve those data, you would do ``da.read_zarr`` with exactly the same arguments. The
+chunking of the resultant dask.Array is defined by how the files were saved, unless
+otherwise specified.
+
+
 Plugins
 =======
 
@@ -383,7 +288,7 @@ all dask.arrays to the global ``array_plugins=`` value:
    >>> def f(x):
    ...     print(x.nbytes)
 
-   >>> with dask.set_options(array_plugins=[f]):
+   >>> with dask.config.set(array_plugins=[f]):
    ...     x = da.ones((10, 1), chunks=(5, 1))
    ...     y = x.dot(x.T)
    80
@@ -407,7 +312,7 @@ hidden by Dask's lazy semantics.
 
 .. code-block:: python
 
-   >>> with dask.set_options(array_plugins=[lambda x: x.compute()]):
+   >>> with dask.config.set(array_plugins=[lambda x: x.compute()]):
    ...     x = da.arange(5, chunks=2)
 
    >>> x  # this was automatically converted into a numpy array
@@ -426,7 +331,7 @@ We may wish to warn users if they are creating chunks that are too large
        if any(nb > 1e9 for nb in nbytes):
            warnings.warn("Array contains very large chunks")
 
-   with dask.set_options(array_plugins=[warn_on_large_chunks]):
+   with dask.config.set(array_plugins=[warn_on_large_chunks]):
        ...
 
 Combine
@@ -437,5 +342,5 @@ other, chaining results through them.
 
 .. code-block:: python
 
-   with dask.set_options(array_plugins=[warn_on_large_chunks, lambda x: x.compute()]):
+   with dask.config.set(array_plugins=[warn_on_large_chunks, lambda x: x.compute()]):
        ...

@@ -4,7 +4,6 @@ pytest.importorskip('numpy')
 from dask.array.wrap import ones
 import dask.array as da
 import numpy as np
-import dask
 
 
 def test_ones():
@@ -35,7 +34,7 @@ def test_full():
     a = da.full((3, 3), 100, chunks=(2, 2), dtype='i8')
 
     assert (a.compute() == 100).all()
-    assert a.dtype == a.compute(get=dask.get).dtype == 'i8'
+    assert a.dtype == a.compute(scheduler='sync').dtype == 'i8'
 
 
 def test_can_make_really_big_array_of_ones():
@@ -50,5 +49,5 @@ def test_wrap_consistent_names():
             sorted(ones(10, chunks=(4,)).dask))
     assert (sorted(da.full((3, 3), 100, chunks=(2, 2), dtype='f8').dask) ==
             sorted(da.full((3, 3), 100, chunks=(2, 2), dtype='f8').dask))
-    assert (sorted(da.full((3, 3), 100, chunks=(2, 2), dtype='f8').dask) !=
+    assert (sorted(da.full((3, 3), 100, chunks=(2, 2), dtype='i2').dask) !=
             sorted(da.full((3, 3), 100, chunks=(2, 2)).dask))

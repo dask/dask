@@ -1,20 +1,20 @@
 Dataframes from HDF5 files
 ===========================
 
-This section provides working examples of ``dask.dataframe`` methods to read HDF5 files. HDF5 is a unique technology suite that makes possible the management of large and complex data collections. To learn more about HDF5, visit the `HDF Group Tutorial page <https://www.hdfgroup.org/HDF5/whatishdf5.html>`_.  For an overview of ``dask.dataframe``, its limitations, scope, and use, see the :doc:`DataFrame overview section<../dataframe-overview>`.  
+This section provides working examples of ``dask.dataframe`` methods to read HDF5 files. HDF5 is a unique technology suite that makes possible the management of large and complex data collections. To learn more about HDF5, visit the `HDF Group Tutorial page <https://www.hdfgroup.org/HDF5/whatishdf5.html>`_.  For an overview of ``dask.dataframe``, its limitations, scope, and use, see the :doc:`DataFrame overview section<../dataframe>`.
 
-**Important Note** -- ``dask.dataframe.read_hdf`` uses ``pandas.read_hdf``, thereby inheriting its abilities and limitations.  See `pandas HDF5 documentation <http://pandas.pydata.org/pandas-docs/stable/io.html#hdf5-pytables>`_ for more information. 
-    
+**Important Note** -- ``dask.dataframe.read_hdf`` uses ``pandas.read_hdf``, thereby inheriting its abilities and limitations.  See `pandas HDF5 documentation <http://pandas.pydata.org/pandas-docs/stable/io.html#hdf5-pytables>`_ for more information.
+
 Examples Covered
 ----------------------------------------------
 
 *  Use ``dask.dataframe`` to:
 
 1.  Create dask DataFrame by loading a specific dataset (key) from a single HDF5 file
-2.  Create dask DataFrame from a single HDF5 file with multiple datasets (keys)  
+2.  Create dask DataFrame from a single HDF5 file with multiple datasets (keys)
 3.  Create dask DataFrame by loading multiple HDF5 files with different datasets (keys)
 
-  
+
 Generate Example Data
 ----------------------------------------------
 
@@ -44,7 +44,7 @@ Here is some code to generate sample HDF5 files.
         # Write hdf5 to current directory
         df.to_hdf(filename, key='/' + groupkey, format='table')
         fileKeys[filename] = groupkey
-    
+
     print(fileKeys) # prints hdf5 filenames and keys for each
 
 
@@ -57,9 +57,9 @@ The first order of ``dask.dataframe`` business is creating a dask DataFrame usin
 
     import dask.dataframe as dd
     df = dd.read_hdf('my86.h5', key='/c')
-    
+
 Load multiple datasets from single HDF5 file
-------------------------------------------------- 
+-------------------------------------------------
 
 Loading multiple datasets from a single file requires a small tweak and use of the wildcard character:
 
@@ -67,11 +67,11 @@ Loading multiple datasets from a single file requires a small tweak and use of t
 
     import dask.dataframe as dd
     df = dd.read_hdf('my86.h5', key='/*')
-    
+
 Learn more about ``dask.dataframe`` methods by visiting the :doc:`API documentation<../dataframe-api>`.
 
 Create dask DataFrame from multiple HDF5 files
---------------------------------------------------    
+--------------------------------------------------
 
 The next example is a natural progression from the previous example (e.g. using a wildcard). Add a wildcard for the `key` and `path` parameters to read multiple files and multiple keys:
 
@@ -79,5 +79,5 @@ The next example is a natural progression from the previous example (e.g. using 
 
     import dask.dataframe as dd
     df = dd.read_hdf('./*.h5', key='/*')
-    
+
 These exercises cover the basics of using ``dask.dataframe`` to work with HDF5 data.  For more information on the user functions to manipulate and explore dataframes (visualize, describe, compute, etc.) see :doc:`API documentation<../dataframe-api>`.  To explore the other data formats supported by ``dask.dataframe``, visit the :doc:`section on creating dataframes<../dataframe-create>` .

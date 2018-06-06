@@ -38,19 +38,19 @@ Alternatively you may want to experiment with Kubernetes locally using
 Helm Install Dask
 -----------------
 
-Dask maintains a Helm repository at https://dask.github.io/helm-chart . You can
-add this to your local helm installation as follows (you should have installed
-Helm as part of the instructions above)::
+Dask maintains a Helm chart in the default stable channel at
+https://kubernetes-charts.storage.googleapis.com .
+This should be added to your helm installation by default.
+You can update the known channels to make sure you have up-to-date charts as follows::
 
-   helm repo add dask https://dask.github.io/helm-chart
    helm repo update
 
 Now you can launch Dask on your Kubernetes cluster using the Dask Helm_ chart::
 
-   helm install dask/dask
+   helm install stable/dask
 
 This deploys a ``dask-scheduler``, several ``dask-worker`` processes, and
-also a Jupyter server.
+also an optional Jupyter server.
 
 
 Verify Deployment
@@ -146,26 +146,27 @@ environments should be matched).
 
    worker:
      replicas: 8
-     limits:
-       cpu: 2
-       memory: 7.5 GiB
-     pipPackages: >-
-       git+https://github.com/gcsfs/gcsfs.git
-       git+https://github.com/xarray/xarray.git
-     condaPackages: >-
-       -c conda-forge
-       zarr
-       blosc
+     resources:
+       limits:
+         cpu: 2
+         memory: 7.5G
+       requests:
+         cpu: 2
+         memory: 7.5G
+     env:
+       - name: EXTRA_CONDA_PACKAGES
+         value: numba xarray -c conda-forge
+       - name: EXTRA_PIP_PACKAGES
+         value: s3fs dask-ml --upgrade
 
    # We want to keep the same packages on the worker and jupyter environments
    jupyter:
-     pipPackages: >-
-       git+https://github.com/gcsfs/gcsfs.git
-    git+https://github.com/xarray/xarray.git
-     condaPackages: >-
-       -c conda-forge
-       zarr
-       blosc
+     enabled: true
+     env:
+       - name: EXTRA_CONDA_PACKAGES
+         value: numba xarray matplotlib -c conda-forge
+       - name: EXTRA_PIP_PACKAGES
+         value: s3fs dask-ml --upgrade
 
 This config file overrides configuration for number and size of workers and the
 conda and pip packages installed on the worker and Jupyter containers.  In
@@ -176,7 +177,7 @@ use helm install* for this stage.   That would create a *new* deployment on the
 same Kubernetes cluster.  Instead you will upgrade your existing deployment by
 using the current name::
 
-    helm upgrade bald-eel dask/dask -f config.yaml
+    helm upgrade bald-eel stable/dask -f config.yaml
 
 This will update those containers that need to be updated.  It may take a minute or so.
 
@@ -232,7 +233,7 @@ Delete Helm deployment
 
 You can always delete a helm deployment using its name::
 
-   helm delete bald-eel
+   helm delete bald-eel --purge
 
 Note that this does not destroy any clusters that you may have allocated on a
 Cloud service, you will need to delete those explicitly.
@@ -242,10 +243,8 @@ Avoid the Jupyter Server
 ------------------------
 
 Sometimes you do not need to run a Jupyter server alongside your Dask cluster.
-A simple way to avoid the extra pod is to set ``replicas: 0`` within your
-config.yaml file under the ``jupyter`` section.
 
 .. code-block:: yaml
 
    jupyter:
-     replicas: 0
+     enabled: false

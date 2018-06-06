@@ -22,6 +22,7 @@ Top level user functions:
    arctanh
    argmax
    argmin
+   argtopk
    argwhere
    around
    array
@@ -31,7 +32,12 @@ Top level user functions:
    atleast_2d
    atleast_3d
    bincount
+   bitwise_and
+   bitwise_not
+   bitwise_or
+   bitwise_xor
    block
+   broadcast_arrays
    broadcast_to
    coarsen
    ceil
@@ -56,6 +62,7 @@ Top level user functions:
    dot
    dstack
    ediff1d
+   einsum
    empty
    empty_like
    exp
@@ -76,6 +83,7 @@ Top level user functions:
    frompyfunc
    full
    full_like
+   gradient
    histogram
    hstack
    hypot
@@ -85,6 +93,7 @@ Top level user functions:
    isclose
    iscomplex
    isfinite
+   isin
    isinf
    isnan
    isnull
@@ -102,6 +111,7 @@ Top level user functions:
    logical_or
    logical_xor
    map_blocks
+   map_overlap
    matmul
    max
    maximum
@@ -128,6 +138,7 @@ Top level user functions:
    ones
    ones_like
    percentile
+   piecewise
    prod
    ptp
    rad2deg
@@ -310,9 +321,22 @@ Create and Store Arrays
    from_array
    from_delayed
    from_npy_stack
+   from_zarr
    store
    to_hdf5
+   to_zarr
    to_npy_stack
+
+Generalized Ufuncs
+~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.array
+
+.. autosummary::
+   apply_gufunc
+   as_gufunc
+   gufunc
+
 
 Internal functions
 ~~~~~~~~~~~~~~~~~~
@@ -332,7 +356,6 @@ Other functions
 .. autofunction:: from_array
 .. autofunction:: from_delayed
 .. autofunction:: store
-.. autofunction:: topk
 .. autofunction:: coarsen
 .. autofunction:: stack
 .. autofunction:: concatenate
@@ -353,6 +376,7 @@ Other functions
 .. autofunction:: arctanh
 .. autofunction:: argmax
 .. autofunction:: argmin
+.. autofunction:: argtopk
 .. autofunction:: argwhere
 .. autofunction:: around
 .. autofunction:: array
@@ -362,7 +386,12 @@ Other functions
 .. autofunction:: atleast_2d
 .. autofunction:: atleast_3d
 .. autofunction:: bincount
+.. autofunction:: bitwise_and
+.. autofunction:: bitwise_not
+.. autofunction:: bitwise_or
+.. autofunction:: bitwise_xor
 .. autofunction:: block
+.. autofunction:: broadcast_arrays
 .. autofunction:: broadcast_to
 .. autofunction:: coarsen
 .. autofunction:: ceil
@@ -389,6 +418,7 @@ Other functions
 .. autofunction:: ediff1d
 .. autofunction:: empty
 .. autofunction:: empty_like
+.. autofunction:: einsum
 .. autofunction:: exp
 .. autofunction:: expm1
 .. autofunction:: eye
@@ -407,6 +437,7 @@ Other functions
 .. autofunction:: frompyfunc
 .. autofunction:: full
 .. autofunction:: full_like
+.. autofunction:: gradient
 .. autofunction:: histogram
 .. autofunction:: hstack
 .. autofunction:: hypot
@@ -416,6 +447,7 @@ Other functions
 .. autofunction:: isclose
 .. autofunction:: iscomplex
 .. autofunction:: isfinite
+.. autofunction:: isin
 .. autofunction:: isinf
 .. autofunction:: isnan
 .. autofunction:: isnull
@@ -458,6 +490,7 @@ Other functions
 .. autofunction:: ones
 .. autofunction:: ones_like
 .. autofunction:: percentile
+.. autofunction:: piecewise
 .. autofunction:: prod
 .. autofunction:: ptp
 .. autofunction:: rad2deg
@@ -543,8 +576,10 @@ Other functions
 .. autofunction:: from_array
 .. autofunction:: from_delayed
 .. autofunction:: from_npy_stack
+.. autofunction:: from_zarr
 .. autofunction:: store
 .. autofunction:: to_hdf5
+.. autofunction:: to_zarr
 .. autofunction:: to_npy_stack
 
 .. currentmodule:: dask.array.fft
@@ -624,6 +659,12 @@ Other functions
 .. currentmodule:: dask.array.image
 
 .. autofunction:: imread
+
+.. currentmodule:: dask.array.gufunc
+
+.. autofunction:: apply_gufunc
+.. autofunction:: as_gufunc
+.. autofunction:: gufunc
 
 .. currentmodule:: dask.array.core
 

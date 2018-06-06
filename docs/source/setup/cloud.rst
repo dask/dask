@@ -2,7 +2,7 @@ Cloud Deployments
 =================
 
 To get started running Dask on common Cloud providers
-like Amazon, Google, or Mircosoft
+like Amazon, Google, or Microsoft
 we currently recommend deploying
 :doc:`Dask with Kubernetes and Helm <kubernetes-helm>`.
 

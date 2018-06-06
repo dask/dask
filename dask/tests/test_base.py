@@ -5,13 +5,16 @@ import pytest
 from operator import add, mul
 import subprocess
 import sys
+import warnings
+
 from toolz import merge
 
 import dask
 from dask import delayed
 from dask.base import (compute, tokenize, normalize_token, normalize_function,
                        visualize, persist, function_cache, is_dask_collection,
-                       DaskMethodsMixin, optimize)
+                       DaskMethodsMixin, optimize, unpack_collections,
+                       named_schedulers, get_scheduler)
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
@@ -342,6 +345,51 @@ def test_is_dask_collection():
     assert not is_dask_collection(DummyCollection)
 
 
+def test_unpack_collections():
+    a = delayed(1) + 5
+    b = a + 1
+    c = a + 2
+
+    def build(a, b, c, iterator):
+        return (a, b,               # Top-level collections
+                {'a': a,            # dict
+                 a: b,              # collections as keys
+                 'b': [1, 2, [b]],  # list
+                 'c': 10,           # other builtins pass through unchanged
+                 'd': (c, 2),       # tuple
+                 'e': {a, 2, 3}},   # set
+                iterator)           # Iterator
+
+    args = build(a, b, c, (i for i in [a, b, c]))
+
+    collections, repack = unpack_collections(*args)
+    assert len(collections) == 3
+
+    # Replace collections with `'~a'` strings
+    result = repack(['~a', '~b', '~c'])
+    sol = build('~a', '~b', '~c', ['~a', '~b', '~c'])
+    assert result == sol
+
+    # traverse=False
+    collections, repack = unpack_collections(*args, traverse=False)
+    assert len(collections) == 2  # just a and b
+    assert repack(collections) == args
+
+    # No collections
+    collections, repack = unpack_collections(1, 2, {'a': 3})
+    assert not collections
+    assert repack(collections) == (1, 2, {'a': 3})
+
+    # Result that looks like a task
+    def fail(*args):
+        raise ValueError("Shouldn't have been called")
+
+    collections, repack = unpack_collections(a, (fail, 1), [(fail, 2, 3)],
+                                             traverse=False)
+    repack(collections)  # Smoketest task literals
+    repack([(fail, 1)])  # Smoketest results that look like tasks
+
+
 class Tuple(DaskMethodsMixin):
     __slots__ = ('_dask', '_keys')
     __dask_scheduler__ = staticmethod(dask.threaded.get)
@@ -425,17 +473,17 @@ def test_compute_no_opt():
     # Check that with the kwarg, the optimization doesn't happen
     keys = []
     with Callback(pretask=lambda key, *args: keys.append(key)):
-        o.compute(get=dask.get, optimize_graph=False)
-    assert len([k for k in keys if 'mul' in k[0]]) == 4
-    assert len([k for k in keys if 'add' in k[0]]) == 4
+        o.compute(scheduler='single-threaded', optimize_graph=False)
+    assert len([k for k in keys if '-mul-' in k[0]]) == 4
+    assert len([k for k in keys if '-add-' in k[0]]) == 4
     # Check that without the kwarg, the optimization does happen
     keys = []
     with Callback(pretask=lambda key, *args: keys.append(key)):
-        o.compute(get=dask.get)
+        o.compute(scheduler='single-threaded')
     # Names of fused tasks have been merged, and the original key is an alias.
     # Otherwise, the lengths below would be 4 and 0.
-    assert len([k for k in keys if 'mul' in k[0]]) == 8
-    assert len([k for k in keys if 'add' in k[0]]) == 4
+    assert len([k for k in keys if '-mul-' in k[0]]) == 8
+    assert len([k for k in keys if '-add-' in k[0]]) == 4
     assert len([k for k in keys if 'add-map-mul' in k[0]]) == 4  # See? Renamed
 
 
@@ -492,7 +540,7 @@ def test_compute_array_bag():
 
     pytest.raises(ValueError, lambda: compute(x, b))
 
-    xx, bb = compute(x, b, get=dask.get)
+    xx, bb = compute(x, b, scheduler='single-threaded')
     assert np.allclose(xx, np.arange(5))
     assert bb == [1, 2, 3]
 
@@ -588,7 +636,7 @@ def test_optimizations_keyword():
     x = dask.delayed(inc)(1)
     assert x.compute() == 2
 
-    with dask.set_options(optimizations=[inc_to_dec]):
+    with dask.config.set(optimizations=[inc_to_dec]):
         assert x.compute() == 0
 
     assert x.compute() == 2
@@ -617,10 +665,33 @@ def test_optimize():
     assert dask.compute(x3, y3, z3) == sols
 
     # Optimize respects global optimizations as well
-    with dask.set_options(optimizations=[inc_to_dec]):
+    with dask.config.set(optimizations=[inc_to_dec]):
         x4, y4, z4 = optimize(x, y, z)
     for a, b in zip([x3, y3, z3], [x4, y4, z4]):
         assert dict(a.dask) == dict(b.dask)
+
+
+def test_optimize_nested():
+    a = dask.delayed(inc)(1)
+    b = dask.delayed(inc)(a)
+    c = a + b
+
+    result = optimize({'a': a, 'b': [1, 2, b]}, (c, 2))
+
+    a2 = result[0]['a']
+    b2 = result[0]['b'][2]
+    c2 = result[1][0]
+
+    assert isinstance(a2, Delayed)
+    assert isinstance(b2, Delayed)
+    assert isinstance(c2, Delayed)
+    assert dict(a2.dask) == dict(b2.dask) == dict(c2.dask)
+    assert compute(*result) == ({'a': 2, 'b': [1, 2, 3]}, (5, 2))
+
+    res = optimize([a, b], c, traverse=False)
+    assert res[0][0] is a
+    assert res[0][1] is b
+    assert res[1].compute() == 5
 
 
 # TODO: remove after deprecation cycle of `dask.optimize` module is completed
@@ -657,6 +728,22 @@ def test_persist_literals():
     assert persist(1, 2, 3) == (1, 2, 3)
 
 
+def test_persist_nested():
+    a = delayed(1) + 5
+    b = a + 1
+    c = a + 2
+    result = persist({'a': a, 'b': [1, 2, b]}, (c, 2))
+    assert isinstance(result[0]['a'], Delayed)
+    assert isinstance(result[0]['b'][2], Delayed)
+    assert isinstance(result[1][0], Delayed)
+    assert compute(*result) == ({'a': 6, 'b': [1, 2, 7]}, (8, 2))
+
+    res = persist([a, b], c, traverse=False)
+    assert res[0][0] is a
+    assert res[0][1] is b
+    assert res[1].compute() == 8
+
+
 def test_persist_delayed():
     x1 = delayed(1)
     x2 = delayed(inc)(x1)
@@ -678,7 +765,7 @@ def test_persist_array_bag():
     with pytest.raises(ValueError):
         persist(x, b)
 
-    xx, bb = persist(x, b, get=dask.get)
+    xx, bb = persist(x, b, scheduler='single-threaded')
 
     assert isinstance(xx, da.Array)
     assert isinstance(bb, db.Bag)
@@ -712,15 +799,15 @@ def test_optimize_globals():
 
     assert_eq(x + 1, np.ones(10) + 1)
 
-    with dask.set_options(array_optimize=optimize_double):
+    with dask.config.set(array_optimize=optimize_double):
         assert_eq(x + 1, (np.ones(10) * 2 + 1) * 2)
 
     assert_eq(x + 1, np.ones(10) + 1)
 
     b = db.range(10, npartitions=2)
 
-    with dask.set_options(array_optimize=optimize_double):
-        xx, bb = dask.compute(x + 1, b.map(inc), get=dask.get)
+    with dask.config.set(array_optimize=optimize_double):
+        xx, bb = dask.compute(x + 1, b.map(inc), scheduler='single-threaded')
         assert_eq(xx, (np.ones(10) * 2 + 1) * 2)
 
 
@@ -734,5 +821,48 @@ def test_optimize_None():
         assert dsk == dict(y.dask)  # but they aren't
         return dask.get(dsk, keys)
 
-    with dask.set_options(array_optimize=None, get=my_get):
+    with dask.config.set(array_optimize=None, get=my_get):
         y.compute()
+
+
+def test_scheduler_keyword():
+    def schedule(dsk, keys, **kwargs):
+        return [[123]]
+
+    named_schedulers['foo'] = schedule
+
+    x = delayed(inc)(1)
+
+    try:
+        assert x.compute() == 2
+        assert x.compute(scheduler='foo') == 123
+
+        with dask.config.set(scheduler='foo'):
+            assert x.compute() == 123
+        assert x.compute() == 2
+
+        with dask.config.set(scheduler='foo'):
+            assert x.compute(scheduler='threads') == 2
+
+        with pytest.raises(ValueError):
+            x.compute(get=dask.threaded.get, scheduler='foo')
+    finally:
+        del named_schedulers['foo']
+
+
+def test_warn_get_keyword():
+    x = delayed(inc)(1)
+
+    with warnings.catch_warnings(record=True) as record:
+        x.compute(get=dask.get)
+
+    assert 'scheduler=' in str(record[0].message)
+
+
+def test_get_scheduler():
+    assert get_scheduler() is None
+    assert get_scheduler(scheduler='threads') is dask.threaded.get
+    assert get_scheduler(scheduler='sync') is dask.local.get_sync
+    with dask.config.set(scheduler='threads'):
+        assert get_scheduler(scheduler='threads') is dask.threaded.get
+    assert get_scheduler() is None

@@ -36,6 +36,8 @@ Dataframe
     DataFrame.groupby
     DataFrame.head
     DataFrame.index
+    DataFrame.isna
+    DataFrame.isnull
     DataFrame.iterrows
     DataFrame.itertuples
     DataFrame.join
@@ -77,6 +79,7 @@ Dataframe
     DataFrame.to_csv
     DataFrame.to_delayed
     DataFrame.to_hdf
+    DataFrame.to_json
     DataFrame.to_records
     DataFrame.truediv
     DataFrame.values
@@ -134,6 +137,7 @@ Series
    Series.idxmax
    Series.idxmin
    Series.isin
+   Series.isna
    Series.isnull
    Series.iteritems
    Series.known_divisions
@@ -219,6 +223,8 @@ Groupby Operations
    DataFrameGroupBy.std
    DataFrameGroupBy.sum
    DataFrameGroupBy.var
+   DataFrameGroupBy.first
+   DataFrameGroupBy.last
 
 .. autosummary::
    SeriesGroupBy.aggregate
@@ -236,6 +242,8 @@ Groupby Operations
    SeriesGroupBy.std
    SeriesGroupBy.sum
    SeriesGroupBy.var
+   SeriesGroupBy.first
+   SeriesGroupBy.last
 
 Rolling Operations
 ~~~~~~~~~~~~~~~~~~
@@ -274,6 +282,8 @@ Create DataFrames
    read_table
    read_parquet
    read_hdf
+   read_json
+   read_orc
    read_sql_table
    from_array
    from_bcolz
@@ -287,11 +297,12 @@ Store DataFrames
 
 .. autosummary::
 
-    to_csv
-    to_parquet
-    to_hdf
-    to_records
-    to_bag
+   to_csv
+   to_parquet
+   to_hdf
+   to_records
+   to_bag
+   to_json
 
 DataFrame Methods
 ~~~~~~~~~~~~~~~~~
@@ -334,6 +345,7 @@ Storage and Conversion
 .. autofunction:: read_table
 .. autofunction:: read_parquet
 .. autofunction:: read_hdf
+.. autofunction:: read_json
 .. autofunction:: read_sql_table
 .. autofunction:: from_array
 .. autofunction:: from_pandas
@@ -345,6 +357,7 @@ Storage and Conversion
 .. autofunction:: to_bag
 .. autofunction:: to_hdf
 .. autofunction:: to_parquet
+.. autofunction:: to_json
 
 Rolling
 ~~~~~~~

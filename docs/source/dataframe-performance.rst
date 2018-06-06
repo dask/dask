@@ -194,7 +194,7 @@ instead.  `Apache Parquet <http://parquet.apache.org/>`_ is a columnar binary
 format that is easy to split into multiple files (easier for parallel loading)
 and is generally much simpler to deal with than HDF5 (from the library's
 perspective).  It is also a common format used by other big data systems like
-`Apache Spark <http://spark.apache.org/>`_ and `Apache Impala (incubating)
+`Apache Spark <http://spark.apache.org/>`_ and `Apache Impala
 <http://impala.apache.org/>`_ and so is useful to interchange with other
 systems.
 
@@ -209,7 +209,7 @@ format for Python.
 .. code-block:: python
 
    df1 = dd.read_parquet('path/to/my-results/', engine='fastparquet')
-   df2 = dd.read_parquet('path/to/my-results/', engine='arrow')
+   df2 = dd.read_parquet('path/to/my-results/', engine='pyarrow')
 
 These libraries be installed using
 

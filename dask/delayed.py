@@ -9,12 +9,12 @@ try:
 except ImportError:
     from toolz import curry, pluck
 
-from . import threaded
-from .base import Base, is_dask_collection, dont_optimize
+from . import config, threaded
+from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
 from .base import tokenize as _tokenize
 from .compatibility import apply
 from .core import quote
-from .context import _globals, globalmethod
+from .context import globalmethod
 from .utils import funcname, methodcaller, OperatorMethodMixin
 from . import sharedict
 
@@ -111,7 +111,7 @@ def tokenize(*args, **kwargs):
     """
     pure = kwargs.pop('pure', None)
     if pure is None:
-        pure = _globals.get('delayed_pure', False)
+        pure = config.get('delayed_pure', False)
 
     if pure:
         return _tokenize(*args, **kwargs)
@@ -132,7 +132,9 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         The function or object to wrap
     name : string or hashable, optional
         The key to use in the underlying graph for the wrapped object. Defaults
-        to hashing content.
+        to hashing content. Note that this only affects the name of the object
+        wrapped by this call to delayed, and *not* the output of delayed
+        function calls - for that use ``dask_key_name=`` as described below.
     pure : bool, optional
         Indicates whether calling the resulting ``Delayed`` object is a pure
         operation. If True, arguments to the call are hashed to produce
@@ -206,10 +208,10 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     >>> @delayed
     ... def mul(a, b):
     ...     return a * b
-    >>> with dask.set_options(delayed_pure=True):
+    >>> with dask.config.set(delayed_pure=True):
     ...     print(mul(1, 2).key == mul(1, 2).key)
     True
-    >>> with dask.set_options(delayed_pure=False):
+    >>> with dask.config.set(delayed_pure=False):
     ...     print(mul(1, 2).key == mul(1, 2).key)
     False
 
@@ -297,7 +299,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
 
     >>> a.count(2, dask_key_name="count_2")
     Delayed('count_2')
-    >>> with dask.set_options(delayed_pure=True):
+    >>> with dask.config.set(delayed_pure=True):
     ...     print(a.count(2).key == a.count(2).key)
     True
     """
@@ -340,7 +342,7 @@ def rebuild(dsk, key, length):
     return Delayed(key, dsk, length)
 
 
-class Delayed(Base, OperatorMethodMixin):
+class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     """Represents a value to be computed by dask.
 
     Equivalent to the output from a single key in a dask graph.

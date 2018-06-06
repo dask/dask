@@ -8,7 +8,7 @@ from pandas.core.window import Rolling as pd_Rolling
 from ..base import tokenize
 from ..utils import M, funcname, derived_from
 from .core import _emulate
-from .utils import make_meta
+from .utils import make_meta, PANDAS_VERSION
 
 
 def overlap_chunk(func, prev_part, current_part, next_part, before, after,
@@ -292,8 +292,19 @@ class Rolling(object):
         return self._call_method('quantile', quantile)
 
     @derived_from(pd_Rolling)
-    def apply(self, func, args=(), kwargs={}):
-        return self._call_method('apply', func, args=args, kwargs=kwargs)
+    def apply(self, func, args=(), kwargs={}, **kwds):
+        # TODO: In a future version of pandas this will change to
+        # raw=False. Think about inspecting the function signature and setting
+        # to that?
+        if PANDAS_VERSION >= '0.23.0':
+            kwds.setdefault("raw", None)
+        else:
+            if kwargs:
+                msg = ("Invalid argument to 'apply'. Keyword arguments "
+                       "should be given as a dict to the 'kwargs' arugment. ")
+                raise TypeError(msg)
+        return self._call_method('apply', func, args=args,
+                                 kwargs=kwargs, **kwds)
 
     def __repr__(self):
 

@@ -14,6 +14,7 @@ import dask.multiprocessing
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet import _parse_pandas_metadata
+from dask.utils import natural_sort_key
 
 try:
     import fastparquet
@@ -25,11 +26,30 @@ try:
 except ImportError:
     pq = False
 
-df = pd.DataFrame({'x': [6, 2, 3, 4, 5],
-                   'y': [1.0, 2.0, 1.0, 2.0, 1.0]},
-                  index=pd.Index([10, 20, 30, 40, 50], name='myindex'))
 
-ddf = dd.from_pandas(df, npartitions=3)
+try:
+    import pyarrow as pa
+    check_pa_divs = pa.__version__ >= LooseVersion('0.9.0')
+except ImportError:
+    check_pa_divs = False
+
+
+def should_check_divs(engine):
+    if engine == 'fastparquet':
+        return True
+    elif engine == 'pyarrow' and check_pa_divs:
+        return True
+    return False
+
+
+nrows = 40
+npartitions = 15
+df = pd.DataFrame({'x': [i * 7 % 5 for i in range(nrows)],  # Not sorted
+                   'y': [i * 2.5 for i in range(nrows)]  # Sorted
+                   },
+                  index=pd.Index([10 * i for i in range(nrows)], name='myindex'))
+
+ddf = dd.from_pandas(df, npartitions=npartitions)
 
 
 @pytest.fixture(params=[pytest.mark.skipif(not fastparquet, 'fastparquet',
@@ -109,7 +129,7 @@ def test_local(tmpdir, write_engine, read_engine):
 
     assert len(df2.divisions) > 1
 
-    out = df2.compute(get=dask.get).reset_index()
+    out = df2.compute(scheduler='sync').reset_index()
 
     for column in df.columns:
         assert (data[column] == out[column]).all()
@@ -119,8 +139,26 @@ def test_local(tmpdir, write_engine, read_engine):
 def test_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
-    ddf2 = dd.read_parquet(fn, engine=read_engine)
-    assert_eq(df, ddf2)
+
+    # Infer divisions for engines/versions that support it
+    ddf2 = dd.read_parquet(fn, engine=read_engine, infer_divisions=should_check_divs(read_engine))
+    assert_eq(ddf, ddf2, check_divisions=should_check_divs(read_engine))
+
+    # infer_divisions False
+    ddf2_no_divs = dd.read_parquet(fn, engine=read_engine, infer_divisions=False)
+    assert_eq(ddf.clear_divisions(), ddf2_no_divs, check_divisions=True)
+
+    # infer_divisions unspecified
+    ddf2_default = dd.read_parquet(fn, engine=read_engine)
+
+    if read_engine == 'fastparquet':
+        # The fastparquet engine infers divisions by default because it only supports reading datasets that have a
+        # global _metadata file
+        assert_eq(ddf, ddf2_default, check_divisions=True)
+    else:
+        # pyarrow does not infer divisions by default because doing so requires reading metadata from each file in
+        # the dataset, which could be expensive
+        assert_eq(ddf.clear_divisions(), ddf2_default, check_divisions=True)
 
 
 @pytest.mark.parametrize('index', [False, True])
@@ -134,7 +172,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
 
     ddf.to_parquet(fn, write_index=index, engine=write_engine)
     read_df = dd.read_parquet(fn, engine=read_engine)
-    assert_eq(df, read_df)
+    assert_eq(ddf, read_df)
 
 
 @write_read_engines()
@@ -147,38 +185,137 @@ def test_read_glob(tmpdir, write_engine, read_engine):
     files = os.listdir(fn)
     assert '_metadata' not in files
 
-    ddf2 = dd.read_parquet(os.path.join(fn, '*'), engine=read_engine)
-    assert_eq(df, ddf2)
+    # Infer divisions for engines/versions that support it
+
+    ddf2 = dd.read_parquet(os.path.join(fn, '*'), engine=read_engine,
+                           infer_divisions=should_check_divs(write_engine) and should_check_divs(read_engine))
+    assert_eq(ddf, ddf2, check_divisions=should_check_divs(write_engine) and should_check_divs(read_engine))
+
+    # No divisions
+    ddf2_no_divs = dd.read_parquet(os.path.join(fn, '*'), engine=read_engine, infer_divisions=False)
+    assert_eq(ddf.clear_divisions(), ddf2_no_divs, check_divisions=True)
 
 
 @write_read_engines()
 def test_read_list(tmpdir, write_engine, read_engine):
     tmpdir = str(tmpdir)
     ddf.to_parquet(tmpdir, engine=write_engine)
-    files = sorted(os.path.join(tmpdir, f)
+    files = sorted([os.path.join(tmpdir, f)
                    for f in os.listdir(tmpdir)
-                   if not f.endswith('_metadata'))
-    ddf2 = dd.read_parquet(files, engine=read_engine)
-    assert_eq(df, ddf2)
+                   if not f.endswith('_metadata')],
+                   key=natural_sort_key)
+
+    # Infer divisions for engines/versions that support it
+    ddf2 = dd.read_parquet(files, engine=read_engine,
+                           infer_divisions=should_check_divs(write_engine) and should_check_divs(read_engine))
+    assert_eq(ddf, ddf2, check_divisions=should_check_divs(write_engine) and should_check_divs(read_engine))
+
+    # No divisions
+    ddf2_no_divs = dd.read_parquet(files, engine=read_engine, infer_divisions=False)
+    assert_eq(ddf.clear_divisions(), ddf2_no_divs, check_divisions=True)
 
 
 @write_read_engines_xfail
 def test_columns_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
-    df2 = df.reset_index()
 
-    assert_eq(dd.read_parquet(fn, columns=[], engine=read_engine), df[[]])
-    assert_eq(dd.read_parquet(fn, columns=['x'], engine=read_engine), df[['x']])
-    assert_eq(dd.read_parquet(fn, index='myindex', columns=['x'], engine=read_engine), df[['x']])
-    assert_eq(dd.read_parquet(fn, index='myindex', columns=['x', 'y'], engine=read_engine), df)
+    # With Index
+    # ----------
+    # ### Emtpy columns ###
+    # With divisions if supported
+    assert_eq(dd.read_parquet(fn, columns=[], engine=read_engine, infer_divisions=should_check_divs(read_engine)),
+              ddf[[]], check_divisions=should_check_divs(read_engine))
 
-    assert_eq(dd.read_parquet(fn, index=False, engine=read_engine),
-              df2, check_index=False)
-    assert_eq(dd.read_parquet(fn, index=False, columns=['x', 'y'], engine=read_engine),
-              df, check_index=False)
-    assert_eq(dd.read_parquet(fn, index=False, columns=['myindex', 'x'], engine=read_engine),
-              df2[['myindex', 'x']], check_index=False)
+    # No divisions
+    assert_eq(dd.read_parquet(fn, columns=[], engine=read_engine, infer_divisions=False),
+              ddf[[]].clear_divisions(), check_divisions=True)
+
+    # ### Single column, auto select index ###
+    # With divisions if supported
+    assert_eq(dd.read_parquet(fn, columns=['x'], engine=read_engine, infer_divisions=should_check_divs(read_engine)),
+              ddf[['x']], check_divisions=should_check_divs(read_engine))
+
+    # No divisions
+    assert_eq(dd.read_parquet(fn, columns=['x'], engine=read_engine, infer_divisions=False),
+              ddf[['x']].clear_divisions(), check_divisions=True)
+
+    # ### Single column, specify index ###
+    # With divisions if supported
+    assert_eq(dd.read_parquet(fn, index='myindex', columns=['x'], engine=read_engine,
+                              infer_divisions=should_check_divs(read_engine)),
+              ddf[['x']], check_divisions=should_check_divs(read_engine))
+
+    # No divisions
+    assert_eq(dd.read_parquet(fn, index='myindex', columns=['x'], engine=read_engine,
+                              infer_divisions=False),
+              ddf[['x']].clear_divisions(), check_divisions=True)
+
+    # ### Two columns, specify index ###
+    # With divisions if supported
+    assert_eq(dd.read_parquet(fn, index='myindex', columns=['x', 'y'], engine=read_engine,
+                              infer_divisions=should_check_divs(read_engine)),
+              ddf, check_divisions=should_check_divs(read_engine))
+
+    # No divisions
+    assert_eq(dd.read_parquet(fn, index='myindex', columns=['x', 'y'], engine=read_engine,
+                              infer_divisions=False),
+              ddf.clear_divisions(), check_divisions=True)
+
+
+@write_read_engines_xfail
+def test_columns_no_index(tmpdir, write_engine, read_engine):
+    fn = str(tmpdir)
+    ddf.to_parquet(fn, engine=write_engine)
+    ddf2 = ddf.reset_index()
+
+    # No Index
+    # --------
+    # All columns, none as index
+    assert_eq(dd.read_parquet(fn, index=False, engine=read_engine, infer_divisions=False),
+              ddf2, check_index=False, check_divisions=True)
+
+    # Two columns, none as index
+    assert_eq(dd.read_parquet(fn, index=False, columns=['x', 'y'], engine=read_engine,
+                              infer_divisions=False),
+              ddf2[['x', 'y']], check_index=False, check_divisions=True)
+
+    # One column and one index, all as columns
+    assert_eq(dd.read_parquet(fn, index=False, columns=['myindex', 'x'], engine=read_engine,
+                              infer_divisions=False),
+              ddf2[['myindex', 'x']], check_index=False, check_divisions=True)
+
+
+@write_read_engines_xfail
+def test_infer_divisions_not_sorted(tmpdir, write_engine, read_engine):
+    fn = str(tmpdir)
+    ddf.to_parquet(fn, engine=write_engine)
+
+    if read_engine == 'pyarrow' and not check_pa_divs:
+        match = 'requires pyarrow >=0.9.0'
+        ex = NotImplementedError
+    else:
+        match = 'not known to be sorted across partitions'
+        ex = ValueError
+
+    with pytest.raises(ex, match=match):
+        dd.read_parquet(fn, index='x', engine=read_engine, infer_divisions=True)
+
+
+@write_read_engines_xfail
+def test_infer_divisions_no_index(tmpdir, write_engine, read_engine):
+    fn = str(tmpdir)
+    ddf.to_parquet(fn, engine=write_engine, write_index=False)
+
+    if read_engine == 'pyarrow' and not check_pa_divs:
+        match = 'requires pyarrow >=0.9.0'
+        ex = NotImplementedError
+    else:
+        match = 'no index column was discovered'
+        ex = ValueError
+
+    with pytest.raises(ex, match=match):
+        dd.read_parquet(fn, engine=read_engine, infer_divisions=True)
 
 
 def test_columns_index_with_multi_index(tmpdir, engine):
@@ -258,11 +395,11 @@ def test_no_index(tmpdir, write_engine, read_engine):
 def test_read_series(tmpdir, engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=engine)
-    ddf2 = dd.read_parquet(fn, columns=['x'], engine=engine)
-    assert_eq(df[['x']], ddf2)
+    ddf2 = dd.read_parquet(fn, columns=['x'], engine=engine, infer_divisions=should_check_divs(engine))
+    assert_eq(ddf[['x']], ddf2, check_divisions=should_check_divs(engine))
 
-    ddf2 = dd.read_parquet(fn, columns='x', index='myindex', engine=engine)
-    assert_eq(df.x, ddf2)
+    ddf2 = dd.read_parquet(fn, columns='x', index='myindex', engine=engine, infer_divisions=should_check_divs(engine))
+    assert_eq(ddf.x, ddf2, check_divisions=should_check_divs(engine))
 
 
 def test_names(tmpdir, engine):
@@ -306,29 +443,30 @@ def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
     assert_eq(df, ddf)
 
 
-def test_categorical(tmpdir):
-    check_fastparquet()
+@write_read_engines_xfail
+def test_categorical(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     df = pd.DataFrame({'x': ['a', 'b', 'c'] * 100}, dtype='category')
     ddf = dd.from_pandas(df, npartitions=3)
-    dd.to_parquet(ddf, tmp)
+    dd.to_parquet(ddf, tmp, engine=write_engine)
 
-    ddf2 = dd.read_parquet(tmp, categories='x')
+    ddf2 = dd.read_parquet(tmp, categories='x', engine=read_engine)
     assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
 
-    ddf2 = dd.read_parquet(tmp, categories=['x'])
+    ddf2 = dd.read_parquet(tmp, categories=['x'], engine=read_engine)
     assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
 
     # autocat
-    ddf2 = dd.read_parquet(tmp)
-    assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
+    if read_engine != 'pyarrow':
+        ddf2 = dd.read_parquet(tmp, engine=read_engine)
+        assert ddf2.compute().x.cat.categories.tolist() == ['a', 'b', 'c']
 
-    ddf2.loc[:1000].compute()
-    df.index.name = 'index'  # defaults to 'index' in this case
-    assert assert_eq(df, ddf2)
+        ddf2.loc[:1000].compute()
+        df.index.name = 'index'  # defaults to 'index' in this case
+        assert assert_eq(df, ddf2)
 
     # dereference cats
-    ddf2 = dd.read_parquet(tmp, categories=[])
+    ddf2 = dd.read_parquet(tmp, categories=[], engine=read_engine)
 
     ddf2.loc[:1000].compute()
     assert (df.x == ddf2.x).all()
@@ -396,6 +534,32 @@ def test_append_with_partition(tmpdir):
     # sort required since partitioning breaks index order
     assert_eq(out.sort_values('value'), pd.concat([df0, df1])[out.columns],
               check_index=False)
+
+
+def test_partition_on_cats(tmpdir):
+    check_fastparquet()
+    tmp = str(tmpdir)
+    d = pd.DataFrame({'a': np.random.rand(50),
+                      'b': np.random.choice(['x', 'y', 'z'], size=50),
+                      'c': np.random.choice(['x', 'y', 'z'], size=50)})
+    d = dd.from_pandas(d, 2)
+    d.to_parquet(tmp, partition_on=['b'], engine='fastparquet')
+    df = dd.read_parquet(tmp, engine='fastparquet')
+    assert set(df.b.cat.categories) == {'x', 'y', 'z'}
+
+    d.to_parquet(tmp, partition_on=['b', 'c'], engine='fastparquet')
+    df = dd.read_parquet(tmp, engine='fastparquet')
+    assert set(df.b.cat.categories) == {'x', 'y', 'z'}
+    assert set(df.c.cat.categories) == {'x', 'y', 'z'}
+    df = dd.read_parquet(tmp, columns=['a', 'c'], engine='fastparquet')
+    assert set(df.c.cat.categories) == {'x', 'y', 'z'}
+    assert 'b' not in df.columns
+    df = dd.read_parquet(tmp, index='c', engine='fastparquet')
+    assert set(df.index.categories) == {'x', 'y', 'z'}
+    assert 'c' not in df.columns
+    # series
+    df = dd.read_parquet(tmp, columns='b', engine='fastparquet')
+    assert set(df.cat.categories) == {'x', 'y', 'z'}
 
 
 def test_append_wo_index(tmpdir):
@@ -494,11 +658,19 @@ def test_read_parquet_custom_columns(tmpdir, engine):
     df = dd.from_pandas(data, chunksize=50)
     df.to_parquet(tmp)
 
-    df2 = dd.read_parquet(tmp, columns=['i32', 'f'], engine=engine)
-    assert_eq(df2, df2, check_index=False)
+    df2 = dd.read_parquet(tmp,
+                          columns=['i32', 'f'],
+                          engine=engine,
+                          infer_divisions=should_check_divs(engine))
+    assert_eq(df[['i32', 'f']], df2,
+              check_index=False, check_divisions=should_check_divs(engine))
 
-    df3 = dd.read_parquet(tmp, columns=['f', 'i32'], engine=engine)
-    assert_eq(df3, df3, check_index=False)
+    df3 = dd.read_parquet(tmp,
+                          columns=['f', 'i32'],
+                          engine=engine,
+                          infer_divisions=should_check_divs(engine))
+    assert_eq(df[['f', 'i32']], df3,
+              check_index=False, check_divisions=should_check_divs(engine))
 
 
 @pytest.mark.parametrize('df,write_kwargs,read_kwargs', [
@@ -584,8 +756,8 @@ def test_timestamp_index(tmpdir, engine):
     df.index.name = 'foo'
     ddf = dd.from_pandas(df, npartitions=5)
     ddf.to_parquet(fn, engine=engine)
-    ddf2 = dd.read_parquet(fn, engine=engine)
-    assert_eq(df, ddf2)
+    ddf2 = dd.read_parquet(fn, engine=engine, infer_divisions=should_check_divs(engine))
+    assert_eq(ddf, ddf2, check_divisions=should_check_divs(engine))
 
 
 def test_to_parquet_default_writes_nulls(tmpdir):
@@ -647,23 +819,22 @@ def test_filters(tmpdir):
     assert len(ddf2) > 0
 
 
-@pytest.mark.parametrize('get', [dask.threaded.get, dask.multiprocessing.get])
-def test_to_parquet_lazy(tmpdir, get):
-    check_fastparquet()
+@pytest.mark.parametrize('scheduler', ['threads', 'processes'])
+def test_to_parquet_lazy(tmpdir, scheduler, engine):
     tmpdir = str(tmpdir)
     df = pd.DataFrame({'a': [1, 2, 3, 4],
                        'b': [1., 2., 3., 4.]})
     df.index.name = 'index'
     ddf = dd.from_pandas(df, npartitions=2)
-    value = ddf.to_parquet(tmpdir, compute=False)
+    value = ddf.to_parquet(tmpdir, compute=False, engine=engine)
 
     assert hasattr(value, 'dask')
-    value.compute(get=get)
+    value.compute(scheduler=scheduler)
     assert os.path.exists(tmpdir)
 
-    ddf2 = dd.read_parquet(tmpdir)
+    ddf2 = dd.read_parquet(tmpdir, engine=engine, infer_divisions=should_check_divs(engine))
 
-    assert_eq(ddf, ddf2)
+    assert_eq(ddf, ddf2, check_divisions=should_check_divs(engine))
 
 
 def test_timestamp96(tmpdir):
@@ -726,7 +897,7 @@ def test_parquet_select_cats(tmpdir):
     xfail_fastparquet_pyarrow="fastparquet gh#251"
 )
 def test_columns_name(tmpdir, write_engine, read_engine):
-    if write_engine == read_engine == 'fastparquet':
+    if write_engine == 'fastparquet':
         pytest.skip('Fastparquet does not write column_indexes')
 
     if write_engine == 'pyarrow':
@@ -749,7 +920,7 @@ def test_columns_name(tmpdir, write_engine, read_engine):
 def test_writing_parquet_with_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
 
-    if engine == 'fastparquet' and compression == 'snappy':
+    if engine == 'fastparquet' and compression in ['snappy', 'default']:
         pytest.importorskip('snappy')
 
     df = pd.DataFrame({'x': ['a', 'b', 'c'] * 10,
@@ -757,8 +928,14 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     ddf = dd.from_pandas(df, npartitions=3)
 
     ddf.to_parquet(fn, compression=compression, engine=engine)
-    out = dd.read_parquet(fn, engine=engine)
-    assert_eq(out, df, check_index=(engine != 'fastparquet'))
+    if engine == 'fastparquet' and compression == 'default':
+        # ensure default compression for fastparquet is Snappy
+        import fastparquet
+        pf = fastparquet.ParquetFile(fn)
+        assert pf.row_groups[0].columns[0].meta_data.codec == 1
+
+    out = dd.read_parquet(fn, engine=engine, infer_divisions=should_check_divs(engine))
+    assert_eq(out, ddf, check_index=(engine != 'fastparquet'), check_divisions=should_check_divs(engine))
 
 
 @pytest.fixture(params=[
@@ -888,13 +1065,8 @@ def test_pyarrow_raises_filters_categoricals(tmpdir):
 
     df.to_parquet(tmp, write_index=False, engine="pyarrow")
 
-    with pytest.raises(NotImplementedError) as m:
+    with pytest.raises(NotImplementedError):
         dd.read_parquet(tmp, engine="pyarrow", filters=["A>1"])
-
-    with pytest.raises(NotImplementedError) as m:
-        dd.read_parquet(tmp, engine="pyarrow", categories=['A'])
-
-    assert m.match("Categorical reads not yet ")
 
 
 def test_read_no_metadata(tmpdir, engine):
@@ -1009,11 +1181,11 @@ def test_writing_parquet_with_kwargs(tmpdir, engine):
     }
 
     ddf.to_parquet(path1,  engine=engine, **engine_kwargs[engine])
-    out = dd.read_parquet(path1, engine=engine)
-    assert_eq(out, df, check_index=(engine != 'fastparquet'))
+    out = dd.read_parquet(path1, engine=engine, infer_divisions=should_check_divs(engine))
+    assert_eq(out, ddf, check_index=(engine != 'fastparquet'), check_divisions=should_check_divs(engine))
 
     # Avoid race condition in pyarrow 0.8.0 on writing partitioned datasets
-    with dask.set_options(get=dask.get):
+    with dask.config.set(scheduler='sync'):
         ddf.to_parquet(path2, engine=engine, partition_on=['a'],
                        **engine_kwargs[engine])
     out = dd.read_parquet(path2, engine=engine).compute()
@@ -1028,9 +1200,12 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
         ddf.to_parquet(fn,  engine=engine, unknown_key='unknown_value')
 
 
-def test_setect_partitioned_column(tmpdir, engine):
+def test_select_partitioned_column(tmpdir, engine):
     if engine == 'pyarrow':
-        pytest.xfail()
+        import pyarrow as pa
+        if pa.__version__ < LooseVersion('0.9.0'):
+            pytest.skip("pyarrow<0.9.0 did not support this")
+
     fn = str(tmpdir)
     size = 20
     d = {'signal1': np.random.normal(0, 0.3, size=size).cumsum() + 50,

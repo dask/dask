@@ -35,9 +35,10 @@ non-exhaustive list follows:
 *  http://github.com/dask/dask: The main code repository holding parallel
    algorithms, the single-machine scheduler, and most documentation.
 *  http://github.com/dask/distributed: The distributed memory scheduler
-*  http://github.com/dask/hdfs3: Hadoop Filesystem interface
+*  http://github.com/dask/dask-ml: Machine learning algorithms
 *  http://github.com/dask/s3fs: S3 Filesystem interface
-*  http://github.com/dask/dask-ec2: AWS launching
+*  http://github.com/dask/gcsfs: GCS Filesystem interface
+*  http://github.com/dask/hdfs3: Hadoop Filesystem interface
 *  ...
 
 Git and Github can be challenging at first.  Fortunately good materials exist
@@ -80,7 +81,7 @@ binary package manager, like conda_.  You can skip this step if you already
 have these libraries, don't care to use them, or have sufficient build
 environment on your computer to compile them when installing with ``pip``::
 
-   conda install -y numpy pandas scipy bokeh cytoolz pytables h5py
+   conda install -y numpy pandas scipy bokeh
 
 .. _conda: http://conda.pydata.org/docs/
 
@@ -114,7 +115,7 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 2.7, 3.3, 3.4, and 3.5 in a single codebase.
+Dask supports Python versions 2.7, 3.4, 3.5, and 3.6 in a single codebase.
 Name changes are handled by the :file:`dask/compatibility.py` file.
 
 Test

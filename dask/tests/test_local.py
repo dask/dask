@@ -112,7 +112,7 @@ def test_cache_options():
         assert 'y' in cache
         return x + 1
 
-    with dask.set_options(cache=cache):
+    with dask.config.set(cache=cache):
         get_sync({'x': (inc2, 'y'), 'y': 1}, 'x')
 
 
@@ -176,4 +176,4 @@ def test_ordering():
 
     get_sync(dsk, 'y')
 
-    assert L == sorted(L, reverse=True)
+    assert L == sorted(L)

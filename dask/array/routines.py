@@ -1,27 +1,29 @@
 from __future__ import division, print_function, absolute_import
 
 import inspect
+import math
 import warnings
 from collections import Iterable
 from distutils.version import LooseVersion
 from functools import wraps, partial
-from itertools import product
-from numbers import Integral
-from operator import getitem
+from numbers import Number, Real, Integral
 
 import numpy as np
-from toolz import concat, sliding_window, interleave
+from toolz import concat, merge, sliding_window, interleave
 
 from .. import sharedict
 from ..core import flatten
 from ..base import tokenize
-from . import numpy_compat, chunk
+from . import chunk
 from .creation import arange
+from .utils import safe_wraps
 from .wrap import ones
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    asanyarray, concatenate, stack, atop, broadcast_shapes,
                    is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
+
+from .einsumfuncs import einsum  # noqa
 
 
 @wraps(np.array)
@@ -240,16 +242,6 @@ def vdot(a, b):
     return dot(a.conj().ravel(), b.ravel())
 
 
-def _inner_apply_along_axis(arr,
-                            func1d,
-                            func1d_axis,
-                            func1d_args,
-                            func1d_kwargs):
-    return np.apply_along_axis(
-        func1d, func1d_axis, arr, *func1d_args, **func1d_kwargs
-    )
-
-
 @wraps(np.matmul)
 def matmul(a, b):
     a = asanyarray(a)
@@ -289,6 +281,16 @@ def matmul(a, b):
     return out
 
 
+def _inner_apply_along_axis(arr,
+                            func1d,
+                            func1d_axis,
+                            func1d_args,
+                            func1d_kwargs):
+    return np.apply_along_axis(
+        func1d, func1d_axis, arr, *func1d_args, **func1d_kwargs
+    )
+
+
 @wraps(np.apply_along_axis)
 def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     arr = asarray(arr)
@@ -303,10 +305,10 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
 
     if (LooseVersion(np.__version__) < LooseVersion("1.13.0") and
             (np.array(test_result.shape) > 1).sum(dtype=int) > 1):
-            raise ValueError(
-                "No more than one non-trivial dimension allowed in result. "
-                "Need NumPy 1.13.0+ for this functionality."
-            )
+        raise ValueError(
+            "No more than one non-trivial dimension allowed in result. "
+            "Need NumPy 1.13.0+ for this functionality."
+        )
 
     # Rechunk so that func1d is applied over the full axis.
     arr = arr.rechunk(
@@ -403,6 +405,71 @@ def ediff1d(ary, to_end=None, to_begin=None):
     return r
 
 
+def _gradient_kernel(f, grad_varargs, grad_kwargs):
+    return np.gradient(f, *grad_varargs, **grad_kwargs)
+
+
+@wraps(np.gradient)
+def gradient(f, *varargs, **kwargs):
+    f = asarray(f)
+
+    if not all([isinstance(e, Number) for e in varargs]):
+        raise NotImplementedError("Only numeric scalar spacings supported.")
+
+    if varargs == ():
+        varargs = (1,)
+    if len(varargs) == 1:
+        varargs = f.ndim * varargs
+    if len(varargs) != f.ndim:
+        raise TypeError(
+            "Spacing must either be a scalar or a scalar per dimension."
+        )
+
+    kwargs["edge_order"] = math.ceil(kwargs.get("edge_order", 1))
+    if kwargs["edge_order"] > 2:
+        raise ValueError("edge_order must be less than or equal to 2.")
+
+    drop_result_list = False
+    axis = kwargs.pop("axis", None)
+    if axis is None:
+        axis = tuple(range(f.ndim))
+    elif isinstance(axis, Integral):
+        drop_result_list = True
+        axis = (axis,)
+
+    for e in axis:
+        if not isinstance(e, Integral):
+            raise TypeError("%s, invalid value for axis" % repr(e))
+        if not (-f.ndim <= e < f.ndim):
+            raise ValueError("axis, %s, is out of bounds" % repr(e))
+
+    if len(axis) != len(set(axis)):
+        raise ValueError("duplicate axes not allowed")
+
+    axis = tuple(ax % f.ndim for ax in axis)
+
+    if issubclass(f.dtype.type, (np.bool8, Integral)):
+        f = f.astype(float)
+    elif issubclass(f.dtype.type, Real) and f.dtype.itemsize < 4:
+        f = f.astype(float)
+
+    r = [
+        f.map_overlap(
+            _gradient_kernel,
+            dtype=f.dtype,
+            depth={j: 1 if j == ax else 0 for j in range(f.ndim)},
+            boundary="none",
+            grad_varargs=(varargs[i],),
+            grad_kwargs=merge(kwargs, {"axis": ax}),
+        )
+        for i, ax in enumerate(axis)
+    ]
+    if drop_result_list:
+        r = r[0]
+
+    return r
+
+
 @wraps(np.bincount)
 def bincount(x, weights=None, minlength=None):
     if minlength is None:
@@ -467,8 +534,8 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     >>> x = da.from_array(np.arange(10000), chunks=10)
     >>> h, bins = da.histogram(x, bins=10, range=[0, 10000])
     >>> bins
-    array([     0.,   1000.,   2000.,   3000.,   4000.,   5000.,   6000.,
-             7000.,   8000.,   9000.,  10000.])
+    array([    0.,  1000.,  2000.,  3000.,  4000.,  5000.,  6000.,  7000.,
+            8000.,  9000., 10000.])
     >>> h.compute()
     array([1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000])
 
@@ -781,6 +848,30 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     return result
 
 
+def _isin_kernel(element, test_elements, assume_unique=False):
+    values = np.in1d(element.ravel(), test_elements,
+                     assume_unique=assume_unique)
+    return values.reshape(element.shape + (1,) * test_elements.ndim)
+
+
+@safe_wraps(getattr(np, 'isin', None))
+def isin(element, test_elements, assume_unique=False, invert=False):
+    element = asarray(element)
+    test_elements = asarray(test_elements)
+    element_axes = tuple(range(element.ndim))
+    test_axes = tuple(i + element.ndim for i in range(test_elements.ndim))
+    mapped = atop(_isin_kernel, element_axes + test_axes,
+                  element, element_axes,
+                  test_elements, test_axes,
+                  adjust_chunks={axis: lambda _: 1 for axis in test_axes},
+                  dtype=bool,
+                  assume_unique=assume_unique)
+    result = mapped.any(axis=test_axes)
+    if invert:
+        result = ~result
+    return result
+
+
 @wraps(np.roll)
 def roll(array, shift, axis=None):
     result = array
@@ -836,52 +927,23 @@ def ravel(array):
 
 @wraps(np.squeeze)
 def squeeze(a, axis=None):
-    if 1 not in a.shape:
-        return a
     if axis is None:
         axis = tuple(i for i, d in enumerate(a.shape) if d == 1)
-    b = a.map_blocks(partial(np.squeeze, axis=axis), dtype=a.dtype)
-    chunks = tuple(bd for bd in b.chunks if bd != (1,))
+    elif not isinstance(axis, tuple):
+        axis = (axis,)
 
-    name = 'squeeze-' + tokenize(a, axis)
-    old_keys = list(product([b.name], *[range(len(bd)) for bd in b.chunks]))
-    new_keys = list(product([name], *[range(len(bd)) for bd in chunks]))
+    if any(a.shape[i] != 1 for i in axis):
+        raise ValueError("cannot squeeze axis with size other than one")
 
-    dsk = {n: b.dask[o] for o, n in zip(old_keys, new_keys)}
+    for i in axis:
+        if not (-a.ndim <= i < a.ndim):
+            raise ValueError("%i out of bounds for %i-D array" % (i, a.ndim))
 
-    return Array(sharedict.merge(b.dask, (name, dsk)), name, chunks, dtype=a.dtype)
+    axis = tuple(i % a.ndim for i in axis)
 
+    sl = tuple(0 if i in axis else slice(None) for i, s in enumerate(a.shape))
 
-def topk(k, x):
-    """ The top k elements of an array
-
-    Returns the k greatest elements of the array in sorted order.  Only works
-    on arrays of a single dimension.
-
-    This assumes that ``k`` is small.  All results will be returned in a single
-    chunk.
-
-    Examples
-    --------
-
-    >>> x = np.array([5, 1, 3, 6])
-    >>> d = from_array(x, chunks=2)
-    >>> d.topk(2).compute()
-    array([6, 5])
-    """
-    if x.ndim != 1:
-        raise ValueError("Topk only works on arrays of one dimension")
-
-    token = tokenize(k, x)
-    name = 'chunk.topk-' + token
-    dsk = {(name, i): (chunk.topk, k, key)
-           for i, key in enumerate(x.__dask_keys__())}
-    name2 = 'topk-' + token
-    dsk[(name2, 0)] = (getitem, (np.sort, (np.concatenate, list(dsk))),
-                       slice(-1, -k - 1, -1))
-    chunks = ((k,),)
-
-    return Array(sharedict.merge((name2, dsk), x.dask), name2, chunks, dtype=x.dtype)
+    return a[sl]
 
 
 @wraps(np.compress)
@@ -966,9 +1028,9 @@ def notnull(values):
     return ~isnull(values)
 
 
-@wraps(numpy_compat.isclose)
+@wraps(np.isclose)
 def isclose(arr1, arr2, rtol=1e-5, atol=1e-8, equal_nan=False):
-    func = partial(numpy_compat.isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
+    func = partial(np.isclose, rtol=rtol, atol=atol, equal_nan=equal_nan)
     return elemwise(func, arr1, arr2, dtype='bool')
 
 
@@ -1061,6 +1123,24 @@ def nonzero(a):
         return tuple(ind[:, i] for i in range(ind.shape[1]))
     else:
         return (ind,)
+
+
+def _int_piecewise(x, *condlist, **kwargs):
+    return np.piecewise(
+        x, list(condlist), kwargs["funclist"],
+        *kwargs["func_args"], **kwargs["func_kw"]
+    )
+
+
+@wraps(np.piecewise)
+def piecewise(x, condlist, funclist, *args, **kw):
+    return map_blocks(
+        _int_piecewise,
+        x, *condlist,
+        dtype=x.dtype,
+        token="piecewise",
+        funclist=funclist, func_args=args, func_kw=kw
+    )
 
 
 @wraps(chunk.coarsen)

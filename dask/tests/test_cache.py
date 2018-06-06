@@ -1,8 +1,8 @@
+from dask.callbacks import Callback
 from dask.cache import Cache
 from dask.local import get_sync
 from dask.threaded import get
 from operator import add
-from dask.context import _globals
 from time import sleep
 import pytest
 
@@ -38,7 +38,7 @@ def test_cache():
 
     assert flag == [2]  # no x present
 
-    assert not _globals['callbacks']
+    assert not Callback.active
 
 
 def test_cache_with_number():

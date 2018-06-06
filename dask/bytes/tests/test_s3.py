@@ -8,16 +8,17 @@ import pytest
 s3fs = pytest.importorskip('s3fs')
 boto3 = pytest.importorskip('boto3')
 moto = pytest.importorskip('moto')
+httpretty = pytest.importorskip('httpretty')
 
 from toolz import concat, valmap, partial
 
-from dask import compute, get
+from dask import compute
 from dask.bytes.s3 import DaskS3FileSystem
 from dask.bytes.core import read_bytes, open_files, get_pyarrow_filesystem
 from dask.bytes.compression import compress, files as compress_files, seekable_files
 
 
-compute = partial(compute, get=get)
+compute = partial(compute, scheduler='sync')
 
 
 test_bucket_name = 'test'
@@ -34,12 +35,17 @@ files = {'test/accounts.1.json':  (b'{"amount": 100, "name": "Alice"}\n'
 @pytest.yield_fixture
 def s3():
     # writable local S3 system
-    with moto.mock_s3():
-        client = boto3.client('s3')
-        client.create_bucket(Bucket=test_bucket_name, ACL='public-read-write')
-        for f, data in files.items():
-            client.put_object(Bucket=test_bucket_name, Key=f, Body=data)
-        yield s3fs.S3FileSystem(anon=True)
+    import moto
+    try:
+        with moto.mock_s3():
+            client = boto3.client('s3')
+            client.create_bucket(Bucket=test_bucket_name, ACL='public-read-write')
+            for f, data in files.items():
+                client.put_object(Bucket=test_bucket_name, Key=f, Body=data)
+            yield s3fs.S3FileSystem(anon=True)
+    finally:
+        httpretty.HTTPretty.disable()
+        httpretty.HTTPretty.reset()
 
 
 @contextmanager
@@ -58,7 +64,11 @@ def s3_context(bucket, files):
             client.delete_object(Bucket=bucket, Key=f, Body=data)
         except Exception:
             pass
-    m.stop()
+        finally:
+            m.stop()
+            httpretty = pytest.importorskip('httpretty')
+            httpretty.HTTPretty.disable()
+            httpretty.HTTPretty.reset()
 
 
 def test_get_s3():
@@ -234,7 +244,7 @@ def test_read_text_passes_through_options():
     db = pytest.importorskip('dask.bag')
     with s3_context('csv', {'a.csv': b'a,b\n1,2\n3,4'}) as s3:
         df = db.read_text('s3://csv/*.csv', storage_options={'s3': s3})
-        assert df.count().compute(get=get) == 3
+        assert df.count().compute(scheduler='sync') == 3
 
 
 @pytest.mark.parametrize("engine", ['pyarrow', 'fastparquet'])

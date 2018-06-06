@@ -13,9 +13,8 @@ from .core import DataFrame, Series, _Frame, _concat, map_partitions
 from .hashing import hash_pandas_object
 from .utils import PANDAS_VERSION
 
-from .. import base
+from .. import base, config
 from ..base import tokenize, compute, compute_as_if_collection
-from ..context import _globals
 from ..delayed import delayed
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
@@ -203,6 +202,7 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32,
     """
     if not isinstance(index, _Frame):
         index = df._select_columns_or_index(index)
+
     partitions = index.map_partitions(partitioning_index,
                                       npartitions=npartitions or df.npartitions,
                                       meta=pd.Series([0]))
@@ -228,7 +228,7 @@ def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None)
 
 def rearrange_by_column(df, col, npartitions=None, max_branch=None,
                         shuffle=None, compute=None):
-    shuffle = shuffle or _globals.get('shuffle', 'disk')
+    shuffle = shuffle or config.get('shuffle', 'disk')
     if shuffle == 'disk':
         return rearrange_by_column_disk(df, col, npartitions, compute=compute)
     elif shuffle == 'tasks':
@@ -241,7 +241,7 @@ class maybe_buffered_partd(object):
     """If serialized, will return non-buffered partd. Otherwise returns a
     buffered partd"""
     def __init__(self, buffer=True, tempdir=None):
-        self.tempdir = tempdir or _globals.get('temporary_directory')
+        self.tempdir = tempdir or config.get('temporary_directory', None)
         self.buffer = buffer
 
     def __reduce__(self):
@@ -363,6 +363,7 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
     if npartitions is not None and npartitions != df.npartitions:
         parts = [i % df.npartitions for i in range(npartitions)]
         token = tokenize(df2, npartitions)
+
         dsk = {('repartition-group-' + token, i): (shuffle_group_2, k, column)
                for i, k in enumerate(df2.__dask_keys__())}
         for p in range(npartitions):
@@ -442,6 +443,11 @@ def shuffle_group_get(g_head, i):
 
 
 def shuffle_group(df, col, stage, k, npartitions):
+    """ Splits dataframe into groups
+
+    The group is determined by their final partition, and which stage we are in
+    in the shuffle
+    """
     if col == '_partitions':
         ind = df[col]
     else:
@@ -449,12 +455,11 @@ def shuffle_group(df, col, stage, k, npartitions):
 
     c = ind._values
     typ = np.min_scalar_type(npartitions * 2)
-    c = c.astype(typ)
 
     npartitions, k, stage = [np.array(x, dtype=np.min_scalar_type(x))[()]
                              for x in [npartitions, k, stage]]
 
-    c = np.mod(c, npartitions, out=c)
+    c = np.mod(c, npartitions).astype(typ, copy=False)
     c = np.floor_divide(c, k ** stage, out=c)
     c = np.mod(c, k, out=c)
 

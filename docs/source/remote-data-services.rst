@@ -1,67 +1,76 @@
-Remote Data Services
-====================
+Remote Data
+===========
 
-As described in Section :doc:`Internal Data Ingestion <bytes>`, various
-user-facing functions (such as ``dataframe.read_csv``,
-``dataframe.read_parquet``, ``bag.read_text``) and lower level
-byte-manipulating functions may point to data
-that lives not on the local storage of the workers, but on a remote system
-such as Amazon S3.
-
-In this section we describe how to use the various known back-end storage
-systems. Below we give some details for interested developers on how further
-storage back-ends may be provided for dask's use.
-
-
-Known Storage Implementations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-When specifying a storage location, a URL should be provided using the general
-form ``protocol://path/to/data``.
-If no protocol is provided, the local file-system is assumed (same as
-``file://``). Two methods exist for passing parameters to the backend
-file-system driver: extending the URL to include username, password, server,
-port, etc.; and providing ``storage_options``, a dictionary of parameters
-to pass on. Examples:
+Dask can read data from a variety data stores including local file systems,
+network file systems, cloud object stores, and Hadoop.  Typically this is done
+by prepending a protocol like ``"s3://"`` to paths used in common data access
+functions like ``dd.read_csv``
 
 .. code-block:: python
 
-   df = dd.read_csv('hdfs://user@server:port/path/*.csv')
+   import dask.dataframe as dd
+   df = dd.read_csv('s3://bucket/path/to/data-*.csv')
+   df = dd.read_parquet('gcs://bucket/path/to/data-*.parq')
 
-   df = dd.read_parquet('s3://bucket/path',
-        storage_options={'anon': True, 'use_ssl': False})
+   import dask.bag as db
+   b = db.read_text('hdfs://path/to/*.json').map(json.loads)
 
-Further details on how to provide configuration for each backend
-is listed next.
+The following remote services are well supported and tested against the main
+codebase:
 
-Each back-end has additional installation requirements and may not be
-available at runtime. The dictionary ``dask.bytes.core._filesystems``
-contains the currently available file-systems. Some require
-appropriate imports before use.
+- **Local or Network File System**: ``file://`` - the local file system, default in the absence of any protocol
 
-The following list gives the protocol shorthands and the back-ends they refer
-to:
+- **Hadoop File System**: ``hdfs://`` - Hadoop Distributed File System, for resilient, replicated
+  files within a cluster. Can use either hdfs3_ or pyarrow_.
 
-    - ``file:`` - the local file system, default in the absence of any protocol
+- **Amazon S3**: ``s3://`` - Amazon S3 remote binary store, often used with Amazon EC2,
+  using the library s3fs_
 
-    - ``hdfs:`` - Hadoop Distributed File System, for resilient, replicated
-      files within a cluster. Can use either hdfs3_ or pyarrow_.
+- **Google Cloud Storage**: ``gcs://`` or ``gs:`` - Google Cloud Storage, typically used with Google Compute
+  resource, using gcsfs_ (in development)
 
-    - ``s3:`` - Amazon S3 remote binary store, often used with Amazon EC2,
-      using the library s3fs_
+- **HTTP(s)**: ``http://`` or ``https://`` for reading data directly from HTTP web servers
 
-    - ``gcs:`` or ``gs:`` - Google Cloud Storage, typically used with Google Compute
-      resource, using gcsfs_ (in development)
+.. - # ``adlfs:`` - Azure Data-lake cloud storage, for use with the Microsoft
+  Azure platform, using azure-data-lake-store-python_
 
-    .. - # ``adlfs:`` - Azure Data-lake cloud storage, for use with the Microsoft
-      Azure platform, using azure-data-lake-store-python_
-
+When specifying a storage location, a URL should be provided using the general
+form ``protocol://path/to/data``.  If no protocol is provided, the local
+file-system is assumed (same as ``file://``).
 
 .. _hdfs3: http://hdfs3.readthedocs.io/
 .. _s3fs: http://s3fs.readthedocs.io/
 .. .. _azure-data-lake-store-python: https://github.com/Azure/azure-data-lake-store-python
 .. _gcsfs: https://github.com/dask/gcsfs/
 .. _pyarrow: https://arrow.apache.org/docs/python/
+
+Lower-level details on how Dask handles remote data is described in Section
+:doc:`Internal Data Ingestion <bytes>`.
+
+Optional Parameters
+-------------------
+
+Two methods exist for passing parameters to the backend file-system driver:
+extending the URL to include username, password, server, port, etc.; and
+providing ``storage_options``, a dictionary of parameters to pass on. Examples:
+
+.. code-block:: python
+
+   df = dd.read_csv('hdfs://user@server:port/path/*.csv')
+
+   df = dd.read_parquet('s3://bucket/path',
+                        storage_options={'anon': True, 'use_ssl': False})
+
+Further details on how to provide configuration for each backend
+is listed next.
+
+Each back-end has additional installation requirements and may not be available
+at runtime. The dictionary ``dask.bytes.core._filesystems`` contains the
+currently available file-systems. Some require appropriate imports before use.
+
+The following list gives the protocol shorthands and the back-ends to which
+they refer.
+
 
 Local File System
 -----------------
@@ -81,8 +90,8 @@ general, be respected (as they would be with the built-in python ``open``),
 but this may fail in the case that the client and worker processes do not
 necessarily have the same working directory.
 
-HDFS
-----
+Hadoop File System
+------------------
 
 The Hadoop File System (HDFS) is a widely deployed, distributed, data-local file
 system written in Java. This file system backs many clusters running Hadoop and
@@ -90,7 +99,7 @@ Spark.
 
 HDFS support can be provided by either hdfs3_ or pyarrow_, defaulting to the
 first library installed in that order. To explicitly set which library to use,
-set ``hdfs_driver`` using ``dask.set_options``:
+set ``hdfs_driver`` using ``dask.config.set``:
 
 .. code-block:: python
 
@@ -98,15 +107,15 @@ set ``hdfs_driver`` using ``dask.set_options``:
     dd.read_csv('hdfs:///path/to/*.csv')
 
    # Use hdfs3 for HDFS I/O
-   with dask.set_options(hdfs_driver='hdfs3'):
+   with dask.config.set(hdfs_driver='hdfs3'):
        dd.read_csv('hdfs:///path/to/*.csv')
 
    # Use pyarrow for HDFS I/O
-   with dask.set_options(hdfs_driver='pyarrow'):
+   with dask.config.set(hdfs_driver='pyarrow'):
        dd.read_csv('hdfs:///path/to/*.csv')
 
    # Set pyarrow as the global hdfs driver
-   dask.set_options(hdfs_driver='pyarrow')
+   dask.config.set(hdfs_driver='pyarrow')
 
 
 By default, both libraries attempt to read the default server and port from
@@ -145,8 +154,8 @@ variables. For information on these see the `pyarrow documentation`_.
 .. _pyarrow documentation: https://arrow.apache.org/docs/python/filesystems.html#hadoop-file-system-hdfs
 
 
-S3
------
+Amazon S3
+---------
 
 Amazon S3 (Simple Storage Service) is a web service offered by Amazon Web
 Services.
@@ -224,8 +233,8 @@ Possible additional storage options:
       a JSON file created by gcloud.
 
 
-HTTP
-----
+HTTP(s)
+-------
 
 Direct file-like access to arbitrary URLs is available over HTTP and HTTPS. However,
 there is no such thing as ``glob`` functionality over HTTP, so only explicit lists
@@ -242,7 +251,7 @@ Note that, currently, ``http://`` and ``https://`` are treated as separate proto
 and cannot be mixed.
 
 Developer API
-~~~~~~~~~~~~~
+-------------
 
 The prototype for any file-system back-end can be found in
 ``bytes.local.LocalFileSystem``. Any new implementation should provide the

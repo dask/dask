@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import io
 import itertools
 import math
-import types
 import uuid
 import warnings
 from collections import Iterable, Iterator, defaultdict
@@ -28,10 +27,11 @@ except ImportError:
     from toolz import (frequencies, merge_with, join, reduceby,
                        count, pluck, groupby, topk)
 
-from ..base import Base, tokenize, dont_optimize, is_dask_collection
+from .. import config
+from ..base import tokenize, dont_optimize, is_dask_collection, DaskMethodsMixin
 from ..bytes import open_files
 from ..compatibility import apply, urlopen
-from ..context import _globals, globalmethod
+from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict
 from ..delayed import Delayed
 from ..multiprocessing import get as mpget
@@ -134,8 +134,8 @@ def _to_textfiles_chunk(data, lazy_file):
 
 
 def to_textfiles(b, path, name_function=None, compression='infer',
-                 encoding=system_encoding, compute=True, get=None,
-                 storage_options=None):
+                 encoding=system_encoding, compute=True, storage_options=None,
+                 **kwargs):
     """ Write dask Bag to disk, one filename per partition, one line per element.
 
     **Paths**: This will create one file for each partition in your bag. You
@@ -200,7 +200,7 @@ def to_textfiles(b, path, name_function=None, compression='infer',
     out = type(b)(merge(dsk, b.dask), name, b.npartitions)
 
     if compute:
-        out.compute(get=get)
+        out.compute(**kwargs)
         return [f.path for f in files]
     else:
         return out.to_delayed()
@@ -285,7 +285,7 @@ def robust_wraps(wrapper):
     return _
 
 
-class Item(Base):
+class Item(DaskMethodsMixin):
     def __init__(self, dsk, key):
         self.dask = dsk
         self.key = key
@@ -337,7 +337,7 @@ class Item(Base):
         dsk = {name: (func, self.key)}
         return Item(merge(self.dask, dsk), name)
 
-    __int__ = __float__ = __complex__ = __bool__ = Base.compute
+    __int__ = __float__ = __complex__ = __bool__ = DaskMethodsMixin.compute
 
     def to_delayed(self, optimize_graph=True):
         """Convert into a ``dask.delayed`` object.
@@ -355,7 +355,7 @@ class Item(Base):
         return Delayed(self.key, dsk)
 
 
-class Bag(Base):
+class Bag(DaskMethodsMixin):
     """ Parallel collection of Python objects
 
     Examples
@@ -691,10 +691,10 @@ class Bag(Base):
 
     @wraps(to_textfiles)
     def to_textfiles(self, path, name_function=None, compression='infer',
-                     encoding=system_encoding, compute=True, get=None,
-                     storage_options=None):
+                     encoding=system_encoding, compute=True,
+                     storage_options=None, **kwargs):
         return to_textfiles(self, path, name_function, compression, encoding,
-                            compute, get=get, storage_options=storage_options)
+                            compute, storage_options=storage_options, **kwargs)
 
     def fold(self, binop, combine=None, initial=no_default, split_every=None):
         """ Parallelizable reduction
@@ -918,21 +918,65 @@ class Bag(Base):
     def join(self, other, on_self, on_other=None):
         """ Joins collection with another collection.
 
-        Other collection must be an Iterable, and not a Bag.
+        Other collection must be one of the following:
 
+        1.  An iterable.  We recommend tuples over lists for internal
+            performance reasons.
+        2.  A delayed object, pointing to a tuple.  This is recommended if the
+            other collection is sizable and you're using the distributed
+            scheduler.  Dask is able to pass around data wrapped in delayed
+            objects with greater sophistication.
+        3.  A Bag with a single partition
+
+        You might also consider Dask Dataframe, whose join operations are much
+        more heavily optimized.
+
+        Parameters
+        ----------
+        other: Iterable, Delayed, Bag
+            Other collection on which to join
+        on_self: callable
+            Function to call on elements in this collection to determine a
+            match
+        on_other: callable (defaults to on_self)
+            Function to call on elements in the other collection to determine a
+            match
+
+        Examples
+        --------
         >>> people = from_sequence(['Alice', 'Bob', 'Charlie'])
         >>> fruit = ['Apple', 'Apricot', 'Banana']
         >>> list(people.join(fruit, lambda x: x[0]))  # doctest: +SKIP
         [('Apple', 'Alice'), ('Apricot', 'Alice'), ('Banana', 'Bob')]
         """
-        assert isinstance(other, Iterable)
-        assert not isinstance(other, Bag)
+        name = 'join-' + tokenize(self, other, on_self, on_other)
+        dsk = {}
+        if isinstance(other, Bag):
+            if other.npartitions == 1:
+                dsk.update(other.dask)
+                other = other.__dask_keys__()[0]
+                dsk['join-%s-other' % name] = (list, other)
+            else:
+                msg = ("Multi-bag joins are not implemented. "
+                       "We recommend Dask dataframe if appropriate")
+                raise NotImplementedError(msg)
+        elif isinstance(other, Delayed):
+            dsk.update(other.dask)
+            other = other._key
+        elif isinstance(other, Iterable):
+            other = other
+        else:
+            msg = ("Joined argument must be single-partition Bag, "
+                   " delayed object, or Iterable, got %s" %
+                   type(other).__name)
+            raise TypeError(msg)
+
         if on_other is None:
             on_other = on_self
-        name = 'join-' + tokenize(self, other, on_self, on_other)
-        dsk = dict(((name, i), (list, (join, on_other, other,
-                                       on_self, (self.name, i))))
-                   for i in range(self.npartitions))
+
+        dsk.update({(name, i): (list, (join, on_other, other,
+                                       on_self, (self.name, i)))
+                   for i in range(self.npartitions)})
         return type(self)(merge(self.dask, dsk), name, self.npartitions)
 
     def product(self, other):
@@ -1146,7 +1190,7 @@ class Bag(Base):
         return iter(self.compute())
 
     def groupby(self, grouper, method=None, npartitions=None, blocksize=2**20,
-                max_branch=None):
+                max_branch=None, shuffle=None):
         """ Group collection by key function
 
         This requires a full dataset read, serialization and shuffle.
@@ -1156,7 +1200,7 @@ class Bag(Base):
         ----------
         grouper: function
             Function on which to group elements
-        method: str
+        shuffle: str
             Either 'disk' for an on-disk shuffle or 'tasks' to use the task
             scheduling framework.  Use 'disk' if you are on a single machine
             and 'tasks' if you are on a distributed cluster.
@@ -1180,20 +1224,22 @@ class Bag(Base):
         --------
         Bag.foldby
         """
-        if method is None:
-            get = _globals.get('get')
-            if (isinstance(get, types.MethodType) and
-               'distributed' in get.__func__.__module__):
-                method = 'tasks'
+        if method is not None:
+            raise Exception("The method= keyword has been moved to shuffle=")
+        if shuffle is None:
+            shuffle = config.get('shuffle', None)
+        if shuffle is None:
+            if 'distributed' in config.get('scheduler', ''):
+                shuffle = 'tasks'
             else:
-                method = 'disk'
-        if method == 'disk':
+                shuffle = 'disk'
+        if shuffle == 'disk':
             return groupby_disk(self, grouper, npartitions=npartitions,
                                 blocksize=blocksize)
-        elif method == 'tasks':
+        elif shuffle == 'tasks':
             return groupby_tasks(self, grouper, max_branch=max_branch)
         else:
-            msg = "Shuffle method must be 'disk' or 'tasks'"
+            msg = "Shuffle must be 'disk' or 'tasks'"
             raise NotImplementedError(msg)
 
     def to_dataframe(self, meta=None, columns=None):
@@ -1977,7 +2023,7 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
 
     import partd
     p = ('partd-' + token,)
-    dirname = _globals.get('temporary_directory', None)
+    dirname = config.get('temporary_directory', None)
     if dirname:
         file = (apply, partd.File, (), {'dir': dirname})
     else:

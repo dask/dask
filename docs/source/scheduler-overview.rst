@@ -109,19 +109,19 @@ may want to use a different scheduler. There are two ways to do this.
 
     .. code-block:: python
 
-        >>> x.sum().compute(get=dask.multiprocessing.get)
+        >>> x.sum().compute(scheduler='processes')
 
-2. Using ``dask.set_options``. This can be used either as a context manager, or to
+2. Using ``dask.config.set``. This can be used either as a context manager, or to
    set the scheduler globally:
 
     .. code-block:: python
 
         # As a context manager
-        >>> with dask.set_options(get=dask.multiprocessing.get):
+        >>> with dask.config.set(scheduler='processes'):
         ...     x.sum().compute()
 
         # Set globally
-        >>> dask.set_options(get=dask.multiprocessing.get)
+        >>> dask.config.set(scheduler='processes')
         >>> x.sum().compute()
 
 
@@ -137,12 +137,12 @@ calling ``compute``:
     >>> x.compute(num_workers=4)
 
 Alternatively, the multiprocessing and threaded schedulers will check for a
-global pool set with ``dask.set_options``:
+global pool set with ``dask.config.set``:
 
 .. code-block:: python
 
     >>> from multiprocessing.pool import ThreadPool
-    >>> with dask.set_options(pool=ThreadPool(4)):
+    >>> with dask.config.set(pool=ThreadPool(4)):
     ...     x.compute()
 
 For more information on the individual options for each scheduler, see the
@@ -160,13 +160,13 @@ well with ``pdb``:
 
 .. code-block:: python
 
-    >>> dask.set_options(get=dask.get)
+    >>> dask.config.set(scheduler='single-threaded')
     >>> x.sum().compute()    # This computation runs serially instead of in parallel
 
 
 The shared memory schedulers also provide a set of callbacks that can be used
 for diagnosing and profiling. You can learn more about scheduler callbacks and
-diagnostics :doc:`here <diagnostics>`.
+diagnostics :doc:`here <diagnostics-local>`.
 
 
 More Information

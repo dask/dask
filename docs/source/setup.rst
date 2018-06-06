@@ -78,3 +78,5 @@ how to set up Dask on a variety of local and distributed hardware.
    setup/kubernetes.rst
    setup/python-advanced.rst
    setup/cloud.rst
+   setup/adaptive.rst
+   setup/docker.rst

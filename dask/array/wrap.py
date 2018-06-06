@@ -12,7 +12,6 @@ except ImportError:
 
 from ..base import tokenize
 from .core import Array, normalize_chunks
-from .numpy_compat import full
 
 
 def wrap_func_shape_as_first_arg(func, *args, **kwargs):
@@ -28,12 +27,14 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
         shape = (shape,)
 
     chunks = kwargs.pop('chunks', None)
-    chunks = normalize_chunks(chunks, shape)
-    name = kwargs.pop('name', None)
 
     dtype = kwargs.pop('dtype', None)
     if dtype is None:
         dtype = func(shape, *args, **kwargs).dtype
+    dtype = np.dtype(dtype)
+
+    chunks = normalize_chunks(chunks, shape, dtype=dtype)
+    name = kwargs.pop('name', None)
 
     name = name or 'wrapped-' + tokenize(func, shape, chunks, dtype, args, kwargs)
 
@@ -68,4 +69,4 @@ w = wrap(wrap_func_shape_as_first_arg)
 ones = w(np.ones, dtype='f8')
 zeros = w(np.zeros, dtype='f8')
 empty = w(np.empty, dtype='f8')
-full = w(full)
+full = w(np.full)

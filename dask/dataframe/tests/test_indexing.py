@@ -4,11 +4,10 @@ import numpy as np
 
 import pytest
 
-import dask
 import dask.dataframe as dd
 
 from dask.dataframe.indexing import _coerce_loc_index
-from dask.dataframe.utils import assert_eq, make_meta
+from dask.dataframe.utils import assert_eq, make_meta, PANDAS_VERSION
 
 
 dsk = {('x', 0): pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]},
@@ -33,18 +32,30 @@ def test_loc():
     assert_eq(d.loc[:8], full.loc[:8])
     assert_eq(d.loc[3:], full.loc[3:])
     assert_eq(d.loc[[5]], full.loc[[5]])
-    assert_eq(d.loc[[3, 4, 1, 8]], full.loc[[3, 4, 1, 8]])
-    assert_eq(d.loc[[3, 4, 1, 9]], full.loc[[3, 4, 1, 9]])
-    assert_eq(d.loc[np.array([3, 4, 1, 9])], full.loc[np.array([3, 4, 1, 9])])
+
+    if PANDAS_VERSION >= '0.23.0':
+        expected_warning = FutureWarning
+    else:
+        expected_warning = None
+
+    with pytest.warns(expected_warning):
+        assert_eq(d.loc[[3, 4, 1, 8]], full.loc[[3, 4, 1, 8]])
+    with pytest.warns(expected_warning):
+        assert_eq(d.loc[[3, 4, 1, 9]], full.loc[[3, 4, 1, 9]])
+    with pytest.warns(expected_warning):
+        assert_eq(d.loc[np.array([3, 4, 1, 9])], full.loc[np.array([3, 4, 1, 9])])
 
     assert_eq(d.a.loc[5], full.a.loc[5:5])
     assert_eq(d.a.loc[3:8], full.a.loc[3:8])
     assert_eq(d.a.loc[:8], full.a.loc[:8])
     assert_eq(d.a.loc[3:], full.a.loc[3:])
     assert_eq(d.a.loc[[5]], full.a.loc[[5]])
-    assert_eq(d.a.loc[[3, 4, 1, 8]], full.a.loc[[3, 4, 1, 8]])
-    assert_eq(d.a.loc[[3, 4, 1, 9]], full.a.loc[[3, 4, 1, 9]])
-    assert_eq(d.a.loc[np.array([3, 4, 1, 9])], full.a.loc[np.array([3, 4, 1, 9])])
+    with pytest.warns(expected_warning):
+        assert_eq(d.a.loc[[3, 4, 1, 8]], full.a.loc[[3, 4, 1, 8]])
+    with pytest.warns(expected_warning):
+        assert_eq(d.a.loc[[3, 4, 1, 9]], full.a.loc[[3, 4, 1, 9]])
+    with pytest.warns(expected_warning):
+        assert_eq(d.a.loc[np.array([3, 4, 1, 9])], full.a.loc[np.array([3, 4, 1, 9])])
     assert_eq(d.a.loc[[]], full.a.loc[[]])
     assert_eq(d.a.loc[np.array([])], full.a.loc[np.array([])])
 
@@ -62,7 +73,7 @@ def test_loc_non_informative_index():
     ddf.divisions = (None,) * 3
     assert not ddf.known_divisions
 
-    ddf.loc[20:30].compute(get=dask.get)
+    ddf.loc[20:30].compute(scheduler='sync')
 
     assert_eq(ddf.loc[20:30], df.loc[20:30])
 

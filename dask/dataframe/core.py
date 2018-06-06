@@ -10,6 +10,7 @@ import warnings
 from toolz import merge, first, unique, partition_all, remove
 import pandas as pd
 import numpy as np
+from numbers import Number
 
 try:
     from chest import Chest as Cache
@@ -18,14 +19,18 @@ except ImportError:
 
 from .. import array as da
 from .. import core
+
 from ..utils import partial_by_order
 from .. import threaded
-from ..compatibility import apply, operator_div, bind_method
+from ..compatibility import apply, operator_div, bind_method, string_types
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
                      is_arraylike)
-from ..base import Base, tokenize, dont_optimize, is_dask_collection
+from ..array import Array
+from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
+from ..delayed import Delayed, to_task_dask
+
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
@@ -33,7 +38,8 @@ from .hashing import hash_pandas_object
 from .optimize import optimize
 from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
                     raise_on_meta_error, clear_known_categories,
-                    is_categorical_dtype, has_known_categories, PANDAS_VERSION)
+                    is_categorical_dtype, has_known_categories, PANDAS_VERSION,
+                    index_summary)
 
 no_default = '__no_default__'
 
@@ -101,7 +107,7 @@ def finalize(results):
     return _concat(results)
 
 
-class Scalar(Base, OperatorMethodMixin):
+class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     """ A Dask object to represent a pandas scalar"""
     def __init__(self, dsk, name, meta, divisions=None):
         # divisions is ignored, only present to be compatible with other
@@ -242,7 +248,7 @@ def _scalar_binary(op, self, other, inv=False):
         return Scalar(dsk, name, meta)
 
 
-class _Frame(Base, OperatorMethodMixin):
+class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     """ Superclass for DataFrame and Series
 
     Parameters
@@ -335,6 +341,30 @@ class _Frame(Base, OperatorMethodMixin):
 
     def __array_wrap__(self, array, context=None):
         raise NotImplementedError
+
+    def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
+        out = kwargs.get('out', ())
+        for x in inputs + out:
+            # ufuncs work with 0-dimensional NumPy ndarrays
+            # so we don't want to raise NotImplemented
+            if isinstance(x, np.ndarray) and x.shape == ():
+                continue
+            elif not isinstance(x, (Number, Scalar, _Frame, Array,
+                                    pd.DataFrame, pd.Series, pd.Index)):
+                return NotImplemented
+
+        if method == '__call__':
+            if numpy_ufunc.signature is not None:
+                return NotImplemented
+            if numpy_ufunc.nout > 1:
+                # ufuncs with multiple output values
+                # are not yet supported for frames
+                return NotImplemented
+            else:
+                return elemwise(numpy_ufunc, *inputs, **kwargs)
+        else:
+            # ufunc methods are not yet supported for frames
+            return NotImplemented
 
     @property
     def _elemwise(self):
@@ -476,7 +506,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             Function applied to each partition.
         args, kwargs :
             Arguments and keywords to pass to the function. The partition will
-            be the first argument, and these will be passed *after*.
+            be the first argument, and these will be passed *after*. Arguments
+            and keywords may contain ``Scalar``, ``Delayed`` or regular
+            python objects.
         $META
 
         Examples
@@ -630,8 +662,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         3  3.0  1.0
         4  4.0  1.0
 
-        If you have a ``DatetimeIndex``, you can use a `timedelta` for time-
+        If you have a ``DatetimeIndex``, you can use a ``pd.Timedelta`` for time-
         based windows.
+
         >>> ts = pd.Series(range(10), index=pd.date_range('2017', periods=10))
         >>> dts = dd.from_pandas(ts, npartitions=2)
         >>> dts.map_overlap(lambda df: df.rolling('2D').sum(),
@@ -911,8 +944,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             List of partitions to be used. If specified npartitions will be
             ignored.
         npartitions : int, optional
-            Number of partitions of output, must be less than npartitions of
-            input. Only used if divisions isn't specified.
+            Number of partitions of output. Only used if divisions isn't
+            specified.
         freq : str, pd.Timedelta
             A period on which to partition timeseries data like ``'7D'`` or
             ``'12h'`` or ``pd.Timedelta(hours=12)``.  Assumes a datetime index.
@@ -1028,10 +1061,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return new_dd_object(merge(self.dask, dsk), name,
                              self._meta, self.divisions)
 
-    def to_hdf(self, path_or_buf, key, mode='a', append=False, get=None, **kwargs):
+    def to_hdf(self, path_or_buf, key, mode='a', append=False, **kwargs):
         """ See dd.to_hdf docstring for more information """
         from .io import to_hdf
-        return to_hdf(self, path_or_buf, key, mode, append, get=get, **kwargs)
+        return to_hdf(self, path_or_buf, key, mode, append, **kwargs)
 
     def to_parquet(self, path, *args, **kwargs):
         """ See dd.to_parquet docstring for more information """
@@ -1042,6 +1075,11 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         """ See dd.to_csv docstring for more information """
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
+
+    def to_json(self, filename, *args, **kwargs):
+        """ See dd.to_json docstring for more information """
+        from .io import to_json
+        return to_json(self, filename, *args, **kwargs)
 
     def to_delayed(self, optimize_graph=True):
         """Convert into a list of ``dask.delayed`` objects, one per partition.
@@ -1163,7 +1201,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return maybe_shift_divisions(out, periods, freq=freq)
 
     def _reduction_agg(self, name, axis=None, skipna=True,
-                       split_every=False):
+                       split_every=False, out=None):
         axis = self._validate_axis(axis)
 
         meta = getattr(self._meta_nonempty, name)(axis=axis, skipna=skipna)
@@ -1171,15 +1209,16 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         method = getattr(M, name)
         if axis == 1:
-            return self.map_partitions(method, meta=meta,
-                                       token=token, skipna=skipna, axis=axis)
+            result = self.map_partitions(method, meta=meta,
+                                         token=token, skipna=skipna, axis=axis)
+            return handle_out(out, result)
         else:
             result = self.reduction(method, meta=meta, token=token,
                                     skipna=skipna, axis=axis,
                                     split_every=split_every)
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
-            return result
+            return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
     def abs(self):
@@ -1188,34 +1227,34 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return self.map_partitions(M.abs, meta=meta)
 
     @derived_from(pd.DataFrame)
-    def all(self, axis=None, skipna=True, split_every=False):
+    def all(self, axis=None, skipna=True, split_every=False, out=None):
         return self._reduction_agg('all', axis=axis, skipna=skipna,
-                                   split_every=split_every)
+                                   split_every=split_every, out=out)
 
     @derived_from(pd.DataFrame)
-    def any(self, axis=None, skipna=True, split_every=False):
+    def any(self, axis=None, skipna=True, split_every=False, out=None):
         return self._reduction_agg('any', axis=axis, skipna=skipna,
-                                   split_every=split_every)
+                                   split_every=split_every, out=out)
 
     @derived_from(pd.DataFrame)
-    def sum(self, axis=None, skipna=True, split_every=False):
+    def sum(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
         return self._reduction_agg('sum', axis=axis, skipna=skipna,
-                                   split_every=split_every)
+                                   split_every=split_every, out=out)
 
     @derived_from(pd.DataFrame)
-    def prod(self, axis=None, skipna=True, split_every=False):
+    def prod(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
         return self._reduction_agg('prod', axis=axis, skipna=skipna,
-                                   split_every=split_every)
+                                   split_every=split_every, out=out)
 
     @derived_from(pd.DataFrame)
-    def max(self, axis=None, skipna=True, split_every=False):
+    def max(self, axis=None, skipna=True, split_every=False, out=None):
         return self._reduction_agg('max', axis=axis, skipna=skipna,
-                                   split_every=split_every)
+                                   split_every=split_every, out=out)
 
     @derived_from(pd.DataFrame)
-    def min(self, axis=None, skipna=True, split_every=False):
+    def min(self, axis=None, skipna=True, split_every=False, out=None):
         return self._reduction_agg('min', axis=axis, skipna=skipna,
-                                   split_every=split_every)
+                                   split_every=split_every, out=out)
 
     @derived_from(pd.DataFrame)
     def idxmax(self, axis=None, skipna=True, split_every=False):
@@ -1274,14 +1313,15 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             return result
 
     @derived_from(pd.DataFrame)
-    def mean(self, axis=None, skipna=True, split_every=False):
+    def mean(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "mean")
         meta = self._meta_nonempty.mean(axis=axis, skipna=skipna)
         if axis == 1:
-            return map_partitions(M.mean, self, meta=meta,
-                                  token=self._token_prefix + 'mean',
-                                  axis=axis, skipna=skipna)
+            result = map_partitions(M.mean, self, meta=meta,
+                                    token=self._token_prefix + 'mean',
+                                    axis=axis, skipna=skipna)
+            return handle_out(out, result)
         else:
             num = self._get_numeric_data()
             s = num.sum(skipna=skipna, split_every=split_every)
@@ -1291,17 +1331,18 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                     token=name, meta=meta)
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
-            return result
+            return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
-    def var(self, axis=None, skipna=True, ddof=1, split_every=False):
+    def var(self, axis=None, skipna=True, ddof=1, split_every=False, dtype=None, out=None):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
         meta = self._meta_nonempty.var(axis=axis, skipna=skipna)
         if axis == 1:
-            return map_partitions(M.var, self, meta=meta,
-                                  token=self._token_prefix + 'var',
-                                  axis=axis, skipna=skipna, ddof=ddof)
+            result = map_partitions(M.var, self, meta=meta,
+                                    token=self._token_prefix + 'var',
+                                    axis=axis, skipna=skipna, ddof=ddof)
+            return handle_out(out, result)
         else:
             num = self._get_numeric_data()
             x = 1.0 * num.sum(skipna=skipna, split_every=split_every)
@@ -1312,21 +1353,23 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                     token=name, meta=meta, ddof=ddof)
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
-            return result
+            return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
-    def std(self, axis=None, skipna=True, ddof=1, split_every=False):
+    def std(self, axis=None, skipna=True, ddof=1, split_every=False, dtype=None, out=None):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
         meta = self._meta_nonempty.std(axis=axis, skipna=skipna)
         if axis == 1:
-            return map_partitions(M.std, self, meta=meta,
-                                  token=self._token_prefix + 'std',
-                                  axis=axis, skipna=skipna, ddof=ddof)
+            result = map_partitions(M.std, self, meta=meta,
+                                    token=self._token_prefix + 'std',
+                                    axis=axis, skipna=skipna, ddof=ddof)
+            return handle_out(out, result)
         else:
             v = self.var(skipna=skipna, ddof=ddof, split_every=split_every)
             name = self._token_prefix + 'std'
-            return map_partitions(np.sqrt, v, meta=meta, token=name)
+            result = map_partitions(np.sqrt, v, meta=meta, token=name)
+            return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
     def sem(self, axis=None, skipna=None, ddof=1, split_every=False):
@@ -1410,14 +1453,15 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return new_dd_object(dsk, name, num._meta, divisions=[None, None])
 
     def _cum_agg(self, op_name, chunk, aggregate, axis, skipna=True,
-                 chunk_kwargs=None):
+                 chunk_kwargs=None, out=None):
         """ Wrapper for cumulative operation """
 
         axis = self._validate_axis(axis)
 
         if axis == 1:
             name = '{0}{1}(axis=1)'.format(self._token_prefix, op_name)
-            return self.map_partitions(chunk, token=name, **chunk_kwargs)
+            result = self.map_partitions(chunk, token=name, **chunk_kwargs)
+            return handle_out(out, result)
         else:
             # cumulate each partitions
             name1 = '{0}{1}-map'.format(self._token_prefix, op_name)
@@ -1446,40 +1490,45 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                     dask[(cname, i)] = (aggregate, (cname, i - 1),
                                         (cumlast._name, i - 1))
                 dask[(name, i)] = (aggregate, (cumpart._name, i), (cname, i))
-            return new_dd_object(merge(dask, cumpart.dask, cumlast.dask),
-                                 name, chunk(self._meta), self.divisions)
+            result = new_dd_object(merge(dask, cumpart.dask, cumlast.dask),
+                                   name, chunk(self._meta), self.divisions)
+            return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
-    def cumsum(self, axis=None, skipna=True):
+    def cumsum(self, axis=None, skipna=True, dtype=None, out=None):
         return self._cum_agg('cumsum',
                              chunk=M.cumsum,
                              aggregate=operator.add,
                              axis=axis, skipna=skipna,
-                             chunk_kwargs=dict(axis=axis, skipna=skipna))
+                             chunk_kwargs=dict(axis=axis, skipna=skipna),
+                             out=out)
 
     @derived_from(pd.DataFrame)
-    def cumprod(self, axis=None, skipna=True):
+    def cumprod(self, axis=None, skipna=True, dtype=None, out=None):
         return self._cum_agg('cumprod',
                              chunk=M.cumprod,
                              aggregate=operator.mul,
                              axis=axis, skipna=skipna,
-                             chunk_kwargs=dict(axis=axis, skipna=skipna))
+                             chunk_kwargs=dict(axis=axis, skipna=skipna),
+                             out=out)
 
     @derived_from(pd.DataFrame)
-    def cummax(self, axis=None, skipna=True):
+    def cummax(self, axis=None, skipna=True, out=None):
         return self._cum_agg('cummax',
                              chunk=M.cummax,
                              aggregate=methods.cummax_aggregate,
                              axis=axis, skipna=skipna,
-                             chunk_kwargs=dict(axis=axis, skipna=skipna))
+                             chunk_kwargs=dict(axis=axis, skipna=skipna),
+                             out=out)
 
     @derived_from(pd.DataFrame)
-    def cummin(self, axis=None, skipna=True):
+    def cummin(self, axis=None, skipna=True, out=None):
         return self._cum_agg('cummin',
                              chunk=M.cummin,
                              aggregate=methods.cummin_aggregate,
                              axis=axis, skipna=skipna,
-                             chunk_kwargs=dict(axis=axis, skipna=skipna))
+                             chunk_kwargs=dict(axis=axis, skipna=skipna),
+                             out=out)
 
     @derived_from(pd.DataFrame)
     def where(self, cond, other=np.nan):
@@ -1498,6 +1547,15 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @derived_from(pd.DataFrame)
     def isnull(self):
         return self.map_partitions(M.isnull)
+
+    @derived_from(pd.DataFrame)
+    def isna(self):
+        if hasattr(pd, 'isna'):
+            return self.map_partitions(M.isna)
+        else:
+            raise NotImplementedError("Need more recent version of Pandas "
+                                      "to support isna. "
+                                      "Please use isnull instead.")
 
     @derived_from(pd.DataFrame)
     def isin(self, values):
@@ -1703,7 +1761,10 @@ class Series(_Frame):
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
-            index = context[1][0].index
+            if isinstance(context[1][0], np.ndarray) and context[1][0].shape == ():
+                index = None
+            else:
+                index = context[1][0].index
 
         return pd.Series(array, index=index, name=self.name)
 
@@ -1955,7 +2016,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                enumerate(self.__dask_keys__())}
         dsk.update(self.dask)
         if meta is no_default:
-            meta = _emulate(M.map, self, arg, na_action=na_action)
+            meta = _emulate(M.map, self, arg, na_action=na_action, udf=True)
         else:
             meta = make_meta(meta)
 
@@ -1994,6 +2055,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     def combine(self, other, func, fill_value=None):
         return self.map_partitions(M.combine, other, func,
                                    fill_value=fill_value)
+
+    @derived_from(pd.Series)
+    def squeeze(self):
+        return self
 
     @derived_from(pd.Series)
     def combine_first(self, other):
@@ -2106,7 +2171,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
             meta = _emulate(M.apply, self._meta_nonempty, func,
                             convert_dtype=convert_dtype,
-                            args=args, **kwds)
+                            args=args, udf=True, **kwds)
 
         return map_partitions(M.apply, self, func,
                               convert_dtype, args, meta=meta, **kwds)
@@ -2242,7 +2307,7 @@ class DataFrame(_Frame):
 
     Parameters
     ----------
-    dask: dict
+    dsk: dict
         The dask graph to compute this DataFrame
     name: str
         The key prefix that specifies which keys in the dask comprise this
@@ -2259,7 +2324,10 @@ class DataFrame(_Frame):
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
-            index = context[1][0].index
+            if isinstance(context[1][0], np.ndarray) and context[1][0].shape == ():
+                index = None
+            else:
+                index = context[1][0].index
 
         return pd.DataFrame(array, index=index, columns=self.columns)
 
@@ -2276,7 +2344,7 @@ class DataFrame(_Frame):
 
     def __getitem__(self, key):
         name = 'getitem-%s' % tokenize(self, key)
-        if np.isscalar(key) or isinstance(key, tuple):
+        if np.isscalar(key) or isinstance(key, (tuple, string_types)):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
@@ -2291,7 +2359,7 @@ class DataFrame(_Frame):
         elif isinstance(key, slice):
             return self.loc[key]
 
-        if isinstance(key, list):
+        if isinstance(key, (pd.Series, np.ndarray, pd.Index, list)):
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
 
@@ -2497,7 +2565,7 @@ class DataFrame(_Frame):
         df2 = self._meta.assign(**_extract_meta(kwargs))
         return elemwise(methods.assign, self, *pairs, meta=df2)
 
-    @derived_from(pd.DataFrame)
+    @derived_from(pd.DataFrame, ua_args=['index'])
     def rename(self, index=None, columns=None):
         if index is not None:
             raise ValueError("Cannot rename index.")
@@ -2552,6 +2620,22 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def clip_upper(self, threshold):
         return self.map_partitions(M.clip_upper, threshold=threshold)
+
+    @derived_from(pd.DataFrame)
+    def squeeze(self, axis=None):
+        if axis in [None, 1]:
+            if len(self.columns) == 1:
+                return self[self.columns[0]]
+            else:
+                return self
+
+        elif axis == 0:
+            raise NotImplementedError("{0} does not support "
+                                      "squeeze along axis 0".format(type(self)))
+
+        elif axis not in [0, 1, None]:
+            raise ValueError('No axis {0} for object type {1}'.format(
+                axis, type(self)))
 
     @derived_from(pd.DataFrame)
     def to_timestamp(self, freq=None, how='start', axis=0):
@@ -2702,7 +2786,8 @@ class DataFrame(_Frame):
         bind_method(cls, name, meth)
 
     @insert_meta_param_description(pad=12)
-    def apply(self, func, axis=0, args=(), meta=no_default, **kwds):
+    def apply(self, func, axis=0, broadcast=None, raw=False, reduce=None,
+              args=(), meta=no_default, **kwds):
         """ Parallel version of pandas.DataFrame.apply
 
         This mimics the pandas version except for the following:
@@ -2764,6 +2849,17 @@ class DataFrame(_Frame):
         """
 
         axis = self._validate_axis(axis)
+        pandas_kwargs = {
+            'axis': axis,
+            'broadcast': broadcast,
+            'raw': raw,
+            'reduce': None,
+        }
+
+        if PANDAS_VERSION >= '0.23.0':
+            kwds.setdefault('result_type', None)
+
+        kwds.update(pandas_kwargs)
 
         if axis == 0:
             msg = ("dd.DataFrame.apply only supports axis=1\n"
@@ -2779,10 +2875,9 @@ class DataFrame(_Frame):
             warnings.warn(msg)
 
             meta = _emulate(M.apply, self._meta_nonempty, func,
-                            axis=axis, args=args, **kwds)
+                            args=args, udf=True, **kwds)
 
-        return map_partitions(M.apply, self, func, axis,
-                              False, False, None, args, meta=meta, **kwds)
+        return map_partitions(M.apply, self, func, args=args, meta=meta, **kwds)
 
     @derived_from(pd.DataFrame)
     def applymap(self, func, meta='__no_default__'):
@@ -2831,7 +2926,7 @@ class DataFrame(_Frame):
         if verbose:
             index = computations['index']
             counts = computations['count']
-            lines.append(index.summary())
+            lines.append(index_summary(index))
             lines.append('Data columns (total {} columns):'.format(len(self.columns)))
 
             if PANDAS_VERSION >= '0.20.0':
@@ -2843,7 +2938,7 @@ class DataFrame(_Frame):
             column_info = [column_template.format(pprint_thing(x[0]), x[1], x[2])
                            for x in zip(self.columns, counts, self.dtypes)]
         else:
-            column_info = [self.columns.summary(name='Columns')]
+            column_info = [index_summary(self.columns, name='Columns')]
 
         lines.extend(column_info)
         dtype_counts = ['%s(%d)' % k for k in sorted(self.dtypes.value_counts().iteritems(), key=str)]
@@ -3017,29 +3112,61 @@ def is_broadcastable(dfs, s):
 
 
 def elemwise(op, *args, **kwargs):
-    """ Elementwise operation for dask.Dataframes """
-    meta = kwargs.pop('meta', no_default)
+    """ Elementwise operation for Dask dataframes
 
-    _name = funcname(op) + '-' + tokenize(op, kwargs, *args)
+    Parameters
+    ----------
+    op: callable
+        Function to apply across input dataframes
+    *args: DataFrames, Series, Scalars, Arrays,
+        The arguments of the operation
+    **kwrags: scalars
+    meta: pd.DataFrame, pd.Series (optional)
+        Valid metadata for the operation.  Will evaluate on a small piece of
+        data if not provided.
+
+    Examples
+    --------
+    >>> elemwise(operator.add, df.x, df.y)  # doctest: +SKIP
+    """
+    meta = kwargs.pop('meta', no_default)
+    out = kwargs.pop('out', None)
+
+    _name = funcname(op) + '-' + tokenize(op, *args, **kwargs)
 
     args = _maybe_from_pandas(args)
 
     from .multi import _maybe_align_partitions
     args = _maybe_align_partitions(args)
-    dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar))]
+    dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar, Array))]
     dfs = [df for df in dasks if isinstance(df, _Frame)]
+
+    # Clean up dask arrays if present
+    for i, a in enumerate(dasks):
+        if not isinstance(a, Array):
+            continue
+        # Ensure that they have similar-ish chunk structure
+        if not all(len(a.chunks[0]) == df.npartitions for df in dfs):
+            msg = ("When combining dask arrays with dataframes they must "
+                   "match chunking exactly.  Operation: %s" % funcname(op))
+            raise ValueError(msg)
+        # Rechunk to have a single chunk along all other axes
+        if a.ndim > 1:
+            a = a.rechunk({i + 1: d for i, d in enumerate(a.shape[1:])})
+            dasks[i] = a
+
     divisions = dfs[0].divisions
     _is_broadcastable = partial(is_broadcastable, dfs)
     dfs = list(remove(_is_broadcastable, dfs))
     n = len(divisions) - 1
 
     other = [(i, arg) for i, arg in enumerate(args)
-             if not isinstance(arg, (_Frame, Scalar))]
+             if not isinstance(arg, (_Frame, Scalar, Array))]
 
     # adjust the key length of Scalar
     keys = [d.__dask_keys__() * n
             if isinstance(d, Scalar) or _is_broadcastable(d)
-            else d.__dask_keys__() for d in dasks]
+            else core.flatten(d.__dask_keys__()) for d in dasks]
 
     if other:
         dsk = {(_name, i):
@@ -3051,17 +3178,58 @@ def elemwise(op, *args, **kwargs):
     dsk = merge(dsk, *[d.dask for d in dasks])
 
     if meta is no_default:
-        if len(dfs) >= 2 and len(dasks) != len(dfs):
+        if len(dfs) >= 2 and not all(hasattr(d, 'npartitions') for d in dasks):
             # should not occur in current funcs
             msg = 'elemwise with 2 or more DataFrames and Scalar is not supported'
             raise NotImplementedError(msg)
         # For broadcastable series, use no rows.
-        parts = [d._meta if _is_broadcastable(d)
+        parts = [d._meta if _is_broadcastable(d) or isinstance(d, Array)
                  else d._meta_nonempty for d in dasks]
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
 
-    return new_dd_object(dsk, _name, meta, divisions)
+    result = new_dd_object(dsk, _name, meta, divisions)
+    return handle_out(out, result)
+
+
+def handle_out(out, result):
+    """ Handle out parameters
+
+    If out is a dask.DataFrame, dask.Series or dask.Scalar then
+    this overwrites the contents of it with the result
+    """
+    if isinstance(out, tuple):
+        if len(out) == 1:
+            out = out[0]
+        elif len(out) > 1:
+            raise NotImplementedError("The out parameter is not fully supported")
+        else:
+            out = None
+
+    if out is not None and type(out) != type(result):
+        raise TypeError(
+            "Mismatched types between result and out parameter. "
+            "out=%s, result=%s" % (str(type(out)), str(type(result))))
+
+    if isinstance(out, DataFrame):
+        if len(out.columns) != len(result.columns):
+            raise ValueError(
+                "Mismatched columns count between result and out parameter. "
+                "out=%s, result=%s" % (str(len(out.columns)), str(len(result.columns))))
+
+    if isinstance(out, (Series, DataFrame, Scalar)):
+        out._meta = result._meta
+        out._name = result._name
+        out.dask = result.dask
+
+        if not isinstance(out, Scalar):
+            out.divisions = result.divisions
+    elif out is not None:
+        msg = ("The out parameter is not fully supported."
+               " Received type %s, expected %s " % ( type(out).__name__, type(result).__name__))
+        raise NotImplementedError(msg)
+    else:
+        return result
 
 
 def _maybe_from_pandas(dfs):
@@ -3245,8 +3413,8 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
             dsk[(b, j)] = (aggregate, conc)
 
     if meta is no_default:
-        meta_chunk = _emulate(chunk, *args, **chunk_kwargs)
-        meta = _emulate(aggregate, _concat([meta_chunk]),
+        meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
+        meta = _emulate(aggregate, _concat([meta_chunk]), udf=True,
                         **aggregate_kwargs)
     meta = make_meta(meta)
 
@@ -3286,7 +3454,7 @@ def _emulate(func, *args, **kwargs):
     Apply a function using args / kwargs. If arguments contain dd.DataFrame /
     dd.Series, using internal cache (``_meta``) for calculation
     """
-    with raise_on_meta_error(funcname(func)):
+    with raise_on_meta_error(funcname(func), udf=kwargs.pop('udf', False)):
         return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
 
 
@@ -3300,10 +3468,12 @@ def map_partitions(func, *args, **kwargs):
         Function applied to each partition.
     args, kwargs :
         Arguments and keywords to pass to the function.  At least one of the
-        args should be a Dask.dataframe.
+        args should be a Dask.dataframe. Arguments and keywords may contain
+        ``Scalar``, ``Delayed`` or regular python objects.
     $META
     """
     meta = kwargs.pop('meta', no_default)
+
     if meta is not no_default:
         meta = make_meta(meta)
 
@@ -3321,7 +3491,7 @@ def map_partitions(func, *args, **kwargs):
     args = _maybe_align_partitions(args)
 
     if meta is no_default:
-        meta = _emulate(func, *args, **kwargs)
+        meta = _emulate(func, *args, udf=True, **kwargs)
 
     if all(isinstance(arg, Scalar) for arg in args):
         dask = {(name, 0):
@@ -3333,15 +3503,29 @@ def map_partitions(func, *args, **kwargs):
         meta = _concat([meta])
     meta = make_meta(meta)
 
+    args, args_dasks = _process_lazy_args(args)
+    kwargs_task, kwargs_dsk = to_task_dask(kwargs)
+    args_dasks.append(kwargs_dsk)
+
     dfs = [df for df in args if isinstance(df, _Frame)]
     dsk = {}
     for i in range(dfs[0].npartitions):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
                   if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
-        dsk[(name, i)] = (apply_and_enforce, func, values, kwargs, meta)
+        dsk[(name, i)] = (apply_and_enforce, func, values, kwargs_task, meta)
 
-    dasks = [arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))]
-    return new_dd_object(merge(dsk, *dasks), name, meta, args[0].divisions)
+    args_dasks.extend([arg.dask for arg in args if isinstance(arg, (_Frame, Scalar))])
+
+    return new_dd_object(merge(dsk, *args_dasks), name, meta, args[0].divisions)
+
+
+def _process_lazy_args(args):
+    # NOTE: we use this function instead of to_task_dask to avoid
+    # manipulating _Frame instances that need to be aligned
+    dsk = [arg.dask for arg in args if isinstance(arg, Delayed)]
+    args = [arg._key if isinstance(arg, Delayed) else arg for arg in args ]
+
+    return args, dsk
 
 
 def apply_and_enforce(func, args, kwargs, meta):
@@ -3352,7 +3536,17 @@ def apply_and_enforce(func, args, kwargs, meta):
     if isinstance(df, (pd.DataFrame, pd.Series, pd.Index)):
         if len(df) == 0:
             return meta
-        c = meta.columns if isinstance(df, pd.DataFrame) else meta.name
+
+        if isinstance(df, pd.DataFrame):
+            # Need nan_to_num otherwise nan comparison gives False
+            if not np.array_equal(np.nan_to_num(meta.columns),
+                                  np.nan_to_num(df.columns)):
+                raise ValueError("The columns in the computed data do not match"
+                                 " the columns in the provided metadata")
+            else:
+                c = meta.columns
+        else:
+            c = meta.name
         return _rename(c, df)
     return df
 
@@ -4089,6 +4283,12 @@ def to_timedelta(arg, unit='ns', errors='raise'):
     meta = pd.Series([pd.Timedelta(1, unit=unit)])
     return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors,
                           meta=meta)
+
+
+if hasattr(pd, 'isna'):
+    @wraps(pd.isna)
+    def isna(arg):
+        return map_partitions(pd.isna, arg)
 
 
 def _repr_data_series(s, index):

@@ -2,6 +2,7 @@ import os
 import pytest
 import requests
 import subprocess
+import sys
 import time
 
 from dask.bytes.core import open_files
@@ -19,9 +20,9 @@ def dir_server():
                 f.write(b'a' * 10000)
 
         if PY2:
-            cmd = ['python', '-m', 'SimpleHTTPServer', '8999']
+            cmd = [sys.executable, '-m', 'SimpleHTTPServer', '8999']
         else:
-            cmd = ['python', '-m', 'http.server', '8999']
+            cmd = [sys.executable, '-m', 'http.server', '8999']
         p = subprocess.Popen(cmd, cwd=d)
         timeout = 10
         while True:
@@ -70,6 +71,8 @@ def test_ops_blocksize(dir_server):
     with f as f:
         # it's OK to read the whole file
         assert f.read() == data
+        # and now the file magically has a size
+        assert f.size == len(data)
 
     # note that if we reuse f from above, because it is tokenized, we get
     # the same open file - where is this cached?

@@ -8,7 +8,6 @@ import dask.array as da
 from dask.array.ghost import (fractional_slice, getitem, trim_internal,
                               ghost_internal, nearest, constant, boundaries,
                               reflect, periodic, ghost)
-from dask.core import get
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -31,7 +30,7 @@ def test_ghost_internal():
     d = da.from_array(x, chunks=(4, 4))
 
     g = ghost_internal(d, {0: 2, 1: 1})
-    result = g.compute(get=get)
+    result = g.compute(scheduler='sync')
     assert g.chunks == ((6, 6), (5, 5))
 
     expected = np.array([
@@ -195,8 +194,11 @@ def test_map_overlap():
     exp1 = d.map_overlap(lambda x: x + x.size, depth=1, dtype=d.dtype)
     exp2 = d.map_overlap(lambda x: x + x.size, depth={0: 1, 1: 1},
                          boundary={0: 'reflect', 1: 'none'}, dtype=d.dtype)
+    exp3 = d.map_overlap(lambda x: x + x.size, depth={1: 1},
+                         boundary={1: 'reflect'}, dtype=d.dtype)
     assert_eq(exp1, x + 16)
     assert_eq(exp2, x + 12)
+    assert_eq(exp3, x + 8)
 
 
 @pytest.mark.parametrize("boundary", [

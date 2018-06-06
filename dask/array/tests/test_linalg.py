@@ -500,10 +500,6 @@ def test_norm_1dim(shape, chunks, axis, norm, keepdims):
 
     a_r = np.linalg.norm(a, ord=norm, axis=axis, keepdims=keepdims)
     d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
-
-    # Fix a type mismatch on NumPy 1.10.
-    a_r = a_r.astype(float)
-
     assert_eq(a_r, d_r)
 
 

@@ -41,10 +41,11 @@ source_suffix = '.rst'
 #source_encoding = 'utf-8-sig'
 
 # The master toctree document.
-master_doc = 'index'
+master_doc = 'docs'
+html_extra_path = ['index.html']
 
 # General information about the project.
-project = u'dask'
+project = u'Dask'
 copyright = u'2014-2018, Anaconda, Inc. and contributors'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -87,7 +88,7 @@ exclude_patterns = []
 #show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+pygments_style = 'default'
 
 # A list of ignored prefixes for module index sorting.
 #modindex_common_prefix = []
@@ -95,19 +96,14 @@ pygments_style = 'sphinx'
 
 # -- Options for HTML output ---------------------------------------------------
 
-# Taken from docs.readthedocs.io:
-# on_rtd is whether we are on readthedocs.io
-on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
-
-if not on_rtd:  # only import and set the theme if we're building docs locally
-    import sphinx_rtd_theme
-    html_theme = 'sphinx_rtd_theme'
-    html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+html_theme = 'sphinx_rtd_theme'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-#html_theme_options = {}
+html_theme_options = {
+    'logo_only': True
+}
 
 # Add any paths that contain custom themes here, relative to this directory.
 #html_theme_path = []
@@ -121,7 +117,8 @@ if not on_rtd:  # only import and set the theme if we're building docs locally
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-#html_logo = None
+html_logo = "images/dask_horizontal_white_no_pad.svg"
+
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
@@ -194,7 +191,7 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'dask.tex', u'dask Documentation',
+  ('docs', 'dask.tex', u'dask Documentation',
    u'Dask Development Team', 'manual'),
 ]
 
@@ -224,7 +221,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'dask', u'dask Documentation',
+    ('docs', 'dask', u'dask Documentation',
      [u'Dask Development Team'], 1)
 ]
 
@@ -238,8 +235,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'dask', u'dask Documentation',
-   u'Dask Development Team', 'dask', 'One line description of project.',
+  ('docs', 'Dask', u'dask Documentation',
+   u'Dask Development Team', 'Dask', 'One line description of project.',
    'Miscellaneous'),
 ]
 
@@ -256,7 +253,7 @@ texinfo_documents = [
 # -- Options for Epub output ---------------------------------------------------
 
 # Bibliographic Dublin Core info.
-epub_title = u'dask'
+epub_title = u'Dask'
 epub_author = u'Dask Development Team'
 epub_publisher = u'Anaconda Inc'
 epub_copyright = u'2014-2018, Anaconda, Inc. and contributors'
@@ -307,13 +304,6 @@ intersphinx_mapping = {'pandas': ('http://pandas.pydata.org/pandas-docs/stable/'
                        'numpy': ('https://docs.scipy.org/doc/numpy/',
                                  'https://docs.scipy.org/doc/numpy/objects.inv')}
 
-#  --Options for sphinx extensions -----------------------------------------------
-
-intersphinx_mapping = {'pandas': ('http://pandas.pydata.org/pandas-docs/stable/',
-                                  'http://pandas.pydata.org/pandas-docs/stable/objects.inv'),
-                       'numpy': ('https://docs.scipy.org/doc/numpy/',
-                                 'https://docs.scipy.org/doc/numpy/objects.inv')}
-
 # Redirects
 # https://tech.signavio.com/2017/managing-sphinx-redirects
 redirect_files = [
@@ -321,6 +311,10 @@ redirect_files = [
     ('array-overview.html', 'array.html'),
     ('dataframe-overview.html', 'dataframe.html'),
     ('delayed-overview.html', 'delayed.html'),
+    ('scheduler-choice.html', 'setup.html'),
+    ('diagnostics.html', 'diagnostics-local.html'),
+    ('inspect.html', 'graphviz.html'),
+    ('faq.html', 'https://stackoverflow.com/questions/tagged/dask?sort=frequent'),
 ]
 
 

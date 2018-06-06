@@ -1,6 +1,8 @@
 import sys
-from operator import add
+import textwrap
+from distutils.version import LooseVersion
 from itertools import product
+from operator import add
 
 import pandas as pd
 import pandas.util.testing as tm
@@ -8,6 +10,7 @@ import numpy as np
 import pytest
 
 import dask
+import dask.array as da
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.utils import put_lines, M
@@ -315,7 +318,10 @@ def test_describe_empty():
 
 def test_cumulative():
     df = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
+    df_out = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
+
     ddf = dd.from_pandas(df, 5)
+    ddf_out = dd.from_pandas(df_out, 5)
 
     assert_eq(ddf.cumsum(), df.cumsum())
     assert_eq(ddf.cumprod(), df.cumprod())
@@ -326,6 +332,26 @@ def test_cumulative():
     assert_eq(ddf.cumprod(axis=1), df.cumprod(axis=1))
     assert_eq(ddf.cummin(axis=1), df.cummin(axis=1))
     assert_eq(ddf.cummax(axis=1), df.cummax(axis=1))
+
+    # testing out parameter if out parameter supported
+    if LooseVersion(np.__version__) >= '1.13.0':
+        np.cumsum(ddf, out=ddf_out)
+        assert_eq(ddf_out, df.cumsum())
+        np.cumprod(ddf, out=ddf_out)
+        assert_eq(ddf_out, df.cumprod())
+        ddf.cummin(out=ddf_out)
+        assert_eq(ddf_out, df.cummin())
+        ddf.cummax(out=ddf_out)
+        assert_eq(ddf_out, df.cummax())
+
+        np.cumsum(ddf, out=ddf_out, axis=1)
+        assert_eq(ddf_out, df.cumsum(axis=1))
+        np.cumprod(ddf, out=ddf_out, axis=1)
+        assert_eq(ddf_out, df.cumprod(axis=1))
+        ddf.cummin(out=ddf_out, axis=1)
+        assert_eq(ddf_out, df.cummin(axis=1))
+        ddf.cummax(out=ddf_out, axis=1)
+        assert_eq(ddf_out, df.cummax(axis=1))
 
     assert_eq(ddf.a.cumsum(), df.a.cumsum())
     assert_eq(ddf.a.cumprod(), df.a.cumprod())
@@ -407,6 +433,35 @@ def test_clip(lower, upper):
     assert_eq(ds.clip_lower(upper), s.clip_lower(upper))
     assert_eq(ds.clip_upper(lower), s.clip_upper(lower))
     assert_eq(ds.clip_upper(upper), s.clip_upper(upper))
+
+
+def test_squeeze():
+    df = pd.DataFrame({'x': [1, 3, 6]})
+    df2 = pd.DataFrame({'x':[0]})
+    s = pd.Series({'test': 0, 'b': 100})
+
+    ddf = dd.from_pandas(df, 3)
+    ddf2 = dd.from_pandas(df2, 3)
+    ds = dd.from_pandas(s, 2)
+
+    assert_eq(df.squeeze(), ddf.squeeze())
+    assert_eq(pd.Series([0], name='x'), ddf2.squeeze())
+    assert_eq(ds.squeeze(), s.squeeze())
+
+    with pytest.raises(NotImplementedError) as info:
+        ddf.squeeze(axis=0)
+    msg = "{0} does not support squeeze along axis 0".format(type(ddf))
+    assert msg in str(info.value)
+
+    with pytest.raises(ValueError) as info:
+        ddf.squeeze(axis=2)
+    msg = 'No axis {0} for object type {1}'.format(2, type(ddf))
+    assert msg in str(info.value)
+
+    with pytest.raises(ValueError) as info:
+        ddf.squeeze(axis='test')
+    msg = 'No axis test for object type {0}'.format(type(ddf))
+    assert msg in str(info.value)
 
 
 def test_where_mask():
@@ -550,7 +605,7 @@ def test_map_partitions_method_names():
     assert b.dtype == 'i8'
 
 
-def test_map_partitions_keeps_kwargs_in_dict():
+def test_map_partitions_keeps_kwargs_readable():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     a = dd.from_pandas(df, npartitions=2)
 
@@ -559,7 +614,9 @@ def test_map_partitions_keeps_kwargs_in_dict():
 
     b = a.x.map_partitions(f, x=5)
 
-    assert "'x': 5" in str(b.dask)
+    # NOTE: we'd like to ensure that we keep the keyword arguments readable
+    # in the dask graph
+    assert "['x', 5]" in str(b.dask)
     assert_eq(df.x + 5, b)
 
     assert a.x.map_partitions(f, x=5)._name != a.x.map_partitions(f, x=6)._name
@@ -900,7 +957,7 @@ def test_unknown_divisions():
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
     meta = make_meta({'a': 'i8', 'b': 'i8'})
     d = dd.DataFrame(dsk, 'x', meta, [None, None, None, None])
-    full = d.compute(get=dask.get)
+    full = d.compute(scheduler='sync')
 
     assert_eq(d.a.sum(), full.a.sum())
     assert_eq(d.a + d.b + 1, full.a + full.b + 1)
@@ -997,17 +1054,17 @@ def test_combine():
     first = lambda a, b: a
 
     # DataFrame
-    for da, db, a, b in [(ddf1, ddf2, df1, df2),
-                         (ddf1.A, ddf2.A, df1.A, df2.A),
-                         (ddf1.B, ddf2.B, df1.B, df2.B)]:
+    for dda, ddb, a, b in [(ddf1, ddf2, df1, df2),
+                           (ddf1.A, ddf2.A, df1.A, df2.A),
+                           (ddf1.B, ddf2.B, df1.B, df2.B)]:
         for func, fill_value in [(add, None), (add, 100), (first, None)]:
             sol = a.combine(b, func, fill_value=fill_value)
-            assert_eq(da.combine(db, func, fill_value=fill_value), sol)
-            assert_eq(da.combine(b, func, fill_value=fill_value), sol)
+            assert_eq(dda.combine(ddb, func, fill_value=fill_value), sol)
+            assert_eq(dda.combine(b, func, fill_value=fill_value), sol)
 
     assert_eq(ddf1.combine(ddf2, add, overwrite=False),
               df1.combine(df2, add, overwrite=False))
-    assert da.combine(db, add)._name == da.combine(db, add)._name
+    assert dda.combine(ddb, add)._name == dda.combine(ddb, add)._name
 
 
 def test_combine_first():
@@ -1556,12 +1613,19 @@ def test_select_dtypes(include, exclude):
 
     # count dtypes
     tm.assert_series_equal(a.get_dtype_counts(), df.get_dtype_counts())
-    tm.assert_series_equal(a.get_ftype_counts(), df.get_ftype_counts())
 
     tm.assert_series_equal(result.get_dtype_counts(),
                            expected.get_dtype_counts())
-    tm.assert_series_equal(result.get_ftype_counts(),
-                           expected.get_ftype_counts())
+
+    if PANDAS_VERSION >= '0.23.0':
+        ctx = pytest.warns(FutureWarning)
+    else:
+        ctx = pytest.warns(None)
+
+    with ctx:
+        tm.assert_series_equal(a.get_ftype_counts(), df.get_ftype_counts())
+        tm.assert_series_equal(result.get_ftype_counts(),
+                               expected.get_ftype_counts())
 
 
 def test_deterministic_apply_concat_apply_names():
@@ -2041,7 +2105,7 @@ def test_cov_corr_stable():
 
 def test_cov_corr_mixed():
     size = 1000
-    d = {'dates' : pd.date_range('2015-01-01', periods=size, frequency='1T'),
+    d = {'dates' : pd.date_range('2015-01-01', periods=size, freq='1T'),
          'unique_id' : np.arange(0, size),
          'ints' : np.random.randint(0, size, size=size),
          'floats' : np.random.randn(size),
@@ -2359,9 +2423,11 @@ dtypes: int64(1)""")
 
     buf = StringIO()
     g.info(buf, verbose=False)
-    assert buf.getvalue() == unicode("""<class 'dask.dataframe.core.DataFrame'>
-Columns: 2 entries, (C, count) to (C, sum)
-dtypes: int64(2)""")
+    expected = unicode(textwrap.dedent("""\
+    <class 'dask.dataframe.core.DataFrame'>
+    Columns: 2 entries, ('C', 'count') to ('C', 'sum')
+    dtypes: int64(2)"""))
+    assert buf.getvalue() == expected
 
 
 def test_categorize_info():
@@ -2544,6 +2610,26 @@ def test_getitem_multilevel():
     assert_eq(pdf[[('A', '0'), ('B', '1')]], ddf[[('A', '0'), ('B', '1')]])
 
 
+def test_getitem_string_subclass():
+    df = pd.DataFrame({'column_1': list(range(10))})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    class string_subclass(str):
+        pass
+    column_1 = string_subclass('column_1')
+
+    assert_eq(df[column_1], ddf[column_1])
+
+
+@pytest.mark.parametrize('col_type', [list, np.array, pd.Series, pd.Index])
+def test_getitem_column_types(col_type):
+    df = pd.DataFrame({'A': [1, 2], 'B': [3, 4], 'C': [5, 6]})
+    ddf = dd.from_pandas(df, 2)
+    cols = col_type(['C', 'A', 'B'])
+
+    assert_eq(df[cols], ddf[cols])
+
+
 def test_diff():
     df = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
     ddf = dd.from_pandas(df, 5)
@@ -2674,7 +2760,7 @@ def test_hash_split_unique(npartitions, split_every, split_out):
 
     assert len([k for k, v in dependencies.items() if not v]) == npartitions
     assert dropped.npartitions == (split_out or 1)
-    assert sorted(dropped.compute(get=dask.get)) == sorted(s.unique())
+    assert sorted(dropped.compute(scheduler='sync')) == sorted(s.unique())
 
 
 @pytest.mark.parametrize('split_every', [None, 2])
@@ -2810,6 +2896,16 @@ def test_to_timedelta():
               dd.to_timedelta(ds, errors='coerce'))
 
 
+@pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
+                    reason="No isna method")
+@pytest.mark.parametrize('values', [[np.NaN, 0], [1, 1]])
+def test_isna(values):
+    s = pd.Series(values)
+    ds = dd.from_pandas(s, npartitions=2)
+
+    assert_eq(pd.isna(s), dd.isna(ds))
+
+
 @pytest.mark.parametrize('drop', [0, 9])
 def test_slice_on_filtered_boundary(drop):
     # https://github.com/dask/dask/issues/2211
@@ -2943,7 +3039,6 @@ def test_cumulative_multiple_columns():
 
 @pytest.mark.parametrize('func', [np.asarray, M.to_records])
 def test_map_partition_array(func):
-    import dask.array as da
     from dask.array.utils import assert_eq
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
                        'y': [6.0, 7.0, 8.0, 9.0, 10.0]},
@@ -2968,7 +3063,6 @@ def test_map_partition_array(func):
 
 def test_map_partition_sparse():
     sparse = pytest.importorskip('sparse')
-    import dask.array as da
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
                        'y': [6.0, 7.0, 8.0, 9.0, 10.0]},
                       index=['a', 'b', 'c', 'd', 'e'])
@@ -2985,3 +3079,70 @@ def test_map_partition_sparse():
         computed = result.compute()
         assert (computed.data == expected.data).all()
         assert (computed.coords == expected.coords).all()
+
+
+def test_mixed_dask_array_operations():
+    df = pd.DataFrame({'x': [1, 2, 3]}, index=[4, 5, 6])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(df.x + df.x.values,
+              ddf.x + ddf.x.values)
+    assert_eq(df.x.values + df.x,
+              ddf.x.values + ddf.x)
+
+    assert_eq(df.x + df.index.values,
+              ddf.x + ddf.index.values)
+    assert_eq(df.index.values + df.x,
+              ddf.index.values + ddf.x)
+
+
+def test_mixed_dask_array_operations_errors():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5]}, index=[4, 5, 6, 7, 8])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    x = da.arange(5, chunks=((1, 4),))
+    x._chunks = ((np.nan, np.nan),)
+
+    with pytest.raises(ValueError):
+        (ddf.x + x).compute()
+
+    x = da.arange(5, chunks=((2, 2, 1),))
+    with pytest.raises(ValueError) as info:
+        ddf.x + x
+
+    assert 'add' in str(info.value)
+
+
+def test_mixed_dask_array_multi_dimensional():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
+                       'y': [5., 6., 7., 8., 9.]},
+                      columns=['x', 'y'])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    x = (df.values + 1).astype(float)
+    dx = (ddf.values + 1).astype(float)
+
+    assert_eq(ddf + dx + 1, df + x + 1)
+    assert_eq(ddf + dx.rechunk((None, 1)) + 1, df + x + 1)
+    assert_eq(ddf[['y', 'x']] + dx + 1, df[['y', 'x']] + x + 1)
+
+
+def test_meta_raises():
+    # Raise when we use a user defined fucntion
+    s = pd.Series(['abcd', 'abcd'])
+    ds = dd.from_pandas(s, npartitions=2)
+    try:
+        ds.map(lambda x: x[3])
+    except ValueError as e:
+        assert "meta=" in str(e)
+
+    # But not otherwise
+    df = pd.DataFrame({'a': ['x', 'y', 'y'],
+                       'b': ['x', 'y', 'z'],
+                       'c': [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    with pytest.raises(Exception) as info:
+        ddf.a + ddf.c
+
+    assert "meta=" not in str(info.value)

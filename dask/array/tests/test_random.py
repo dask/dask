@@ -3,11 +3,11 @@ pytest.importorskip('numpy')
 
 import numpy as np
 
+import dask
 import dask.array as da
 from dask.array.core import Array
 from dask.array.random import random, exponential, normal
 from dask.array.utils import assert_eq
-from dask.multiprocessing import get as mpget
 from dask.multiprocessing import _dumps, _loads
 
 
@@ -27,7 +27,7 @@ def test_concurrency():
 
     state = da.random.RandomState(5)
     y = state.normal(10, 1, size=10, chunks=2)
-    assert (x.compute(get=mpget) == y.compute(get=mpget)).all()
+    assert (x.compute(scheduler='processes') == y.compute(scheduler='processes')).all()
 
 
 def test_doc_randomstate():
@@ -265,3 +265,12 @@ def test_choice():
     for (a, p) in errs:
         with pytest.raises(ValueError):
             da.random.choice(a, size=size, chunks=chunks, p=p)
+
+
+def test_create_with_auto_dimensions():
+    with dask.config.set({'array.chunk-size': '128MiB'}):
+        x = da.random.random((10000, 10000), chunks=(-1, "auto"))
+        assert x.chunks == ((10000,), (1250,) * 8)
+
+        y = da.random.random((10000, 10000), chunks="auto")
+        assert y.chunks == ((2500,) * 4, (2500,) * 4)
