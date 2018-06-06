@@ -8,27 +8,36 @@ from distributed.comm import (parse_address, unparse_address,
 
 
 py3_err_msg = """
-Your terminal does not properly support unicode text required by command line
-utilities running Python 3.  This is commonly solved by specifying encoding
-environment variables, though exact solutions may depend on your system:
+Warning: Your terminal does not set locales.
+
+If you use unicode text inputs for command line options then this may cause
+undesired behavior.  This is rare.
+
+If you don't use unicode characters in command line options then you can safely
+ignore this message.  This is the common case.
+
+You can support unicode inputs by specifying encoding environment variables,
+though exact solutions may depend on your system:
 
     $ export LC_ALL=C.UTF-8
     $ export LANG=C.UTF-8
 
 For more information see: http://click.pocoo.org/5/python3/
-""".strip()
+""".lstrip()
 
 
 def check_python_3():
     """Ensures that the environment is good for unicode on Python 3."""
+    # https://github.com/pallets/click/issues/448#issuecomment-246029304
+    import click.core
+    click.core._verify_python3_env = lambda: None
+
     try:
         from click import _unicodefun
         _unicodefun._verify_python3_env()
     except (TypeError, RuntimeError) as e:
-        import sys
         import click
         click.echo(py3_err_msg, err=True)
-        sys.exit(1)
 
 
 def install_signal_handlers(loop=None, cleanup=None):
