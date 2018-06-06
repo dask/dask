@@ -9,9 +9,9 @@ Array
 +++++
 
 - Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
-- ``einsum`` now accepts the ``split_every`` parameter (:pr:`3396`) `Guido Imperiale`_
 - Add to/read_zarr for Zarr-format datasets and arrays (:pr:`3460`) `Martin Durant`_
-- Experimental addition of generalized ufunc support, ``apply_gufunc``, ``gufunc``, and ``as_gufunc`` (:pr:`#3109`) `Markus Gonser`_
+- Experimental addition of generalized ufunc support, ``apply_gufunc``, ``gufunc``, and
+  ``as_gufunc`` (:pr:`#3109`) `Markus Gonser`_
 - Allow slicing a Dask Array by another one-dimensional Dask Array of integers
   (:pr:`3396`) `Guido Imperiale`_
 
@@ -20,7 +20,8 @@ Dataframe
 
 - Add to/read_json (:pr:`3494`) `Martin Durant`_
 - Adds ``index`` to unsupported arguments for ``DataFrame.rename`` method (:pr:`3522`) `James Bourbeau`_
-- Adds support to subset Dask DataFrame columns using ``numpy.ndarray``, ``pandas.Series``, and ``pandas.Index`` objects (:pr:`3536`) `James Bourbeau`_
+- Adds support to subset Dask DataFrame columns using ``numpy.ndarray``, ``pandas.Series``, and
+  ``pandas.Index`` objects (:pr:`3536`) `James Bourbeau`_
 
 Bag
 +++
@@ -31,6 +32,7 @@ Core
 ++++
 
 -
+
 
 0.17.5 / 2018-05-16
 -------------------
@@ -53,7 +55,6 @@ DataFrame
 
 Dataframe
 +++++++++
-
 
 -  Add support for indexing Dask DataFrames with string subclasses (:pr:`3461`) `James Bourbeau`_
 -  Allow using both sorted_index and chunksize in read_hdf (:pr:`3463`) `Pierre Bartet`_
@@ -96,11 +97,6 @@ DataFrame
 - Remove outdated requirement from repartition docstring (:pr:`3440`) `Jörg Dietrich`_
 - Fixed bug in aggregation when only a Series is selected (:pr:`3446`) `Jörg Dietrich`_
 - Add default values to make_timeseries (:pr:`3421`) `Matthew Rocklin`_
-
-Bag
-+++
-
--
 
 Core
 ++++
@@ -158,10 +154,6 @@ DataFrame
 
 - Bugfix to allow column assignment of pandas datetimes(:pr:`3164`) `Max Epstein`_
 
-Bag
-+++
-
-
 Core
 ++++
 
@@ -183,7 +175,6 @@ Array
 - Fix a bug in ``optimization.fuse_slice`` to properly handle when first input is ``None`` (:pr:`3076`) `James Bourbeau`_
 - Support arrays with unknown chunk sizes in percentile (:pr:`3107`) `Matthew Rocklin`_
 - Tokenize scipy.sparse arrays and np.matrix (:pr:`3060`) `Roman Yurchak`_
-
 
 DataFrame
 +++++++++
@@ -263,7 +254,6 @@ DataFrame
 - Fix metadata inference bug in which single-partition series were mistakenly special cased (:pr:`3035`) `Jim Crist`_
 - Add support for ``Series.str.cat`` (:pr:`3028`) `Jim Crist`_
 
-
 Core
 ++++
 
@@ -313,7 +303,6 @@ DataFrame
 - Support repartitioning even if there are no divisions (:pr:`2873`) `@Ced4`_
 - Support reading/writing to hdfs using ``pyarrow`` in ``dd.to_parquet`` (:pr:`2894`, :pr:`2881`) `Jim Crist`_
 
-
 Core
 ++++
 
@@ -343,7 +332,6 @@ Array
 -  Support -1 as an alias for "size of the dimension" in ``chunks`` (:pr:`2749`)
 -  Call mkdir in array.to_npy_stack (:pr:`2709`)
 
-
 DataFrame
 +++++++++
 
@@ -351,7 +339,6 @@ DataFrame
 -  Support int96 (spark) datetimes in parquet writer (:pr:`2711`)
 -  Pass on file scheme to fastparquet (:pr:`2714`)
 -  Support Pandas 0.21 (:pr:`2737`)
-
 
 Bag
 +++
@@ -544,9 +531,6 @@ Array
 -  Support deepcopy python protocol (:pr:`2090`)
 -  Allow user-provided FFT implementations in ``da.fft`` (:pr:`2093`)
 
-Bag
-+++
-
 DataFrame
 +++++++++
 
@@ -566,6 +550,7 @@ Delayed
 
 Core
 ++++
+
 -   Improve naming of nodes in dot visuals to avoid generic ``apply``
     (:pr:`2070`)
 -   Ensure that worker processes have different random seeds (:pr:`2094`)
@@ -747,7 +732,6 @@ Administration
 - Micro-optimize get_dependencies (:pr:`1722`)
 
 
-
 0.11.0 / 2016-08-24
 -------------------
 
@@ -774,6 +758,7 @@ Breaking Changes
 - ``Dask.array.reshape`` now errs in some cases where previously it would have
   create a very large number of tasks
 
+
 0.10.2 / 2016-07-27
 -------------------
 
@@ -794,6 +779,7 @@ Breaking Changes
   analysis
 - Improvements to ``dask.dataframe.read_hdf``, especially when reading from
   multiple files and docs
+
 
 0.10.0 / 2016-06-13
 -------------------
@@ -850,6 +836,7 @@ Other
   if explicitly given secret/key.  The default now is to rely on managed
   environments.  This can be changed back by explicitly providing a keyword
   argument.  Anonymous mode must be explicitly declared if desired.
+
 
 0.9.0 / 2016-05-11
 ------------------
@@ -911,6 +898,7 @@ Other
 - Add new callback method for start state
 - General performance tuning
 
+
 0.8.1 / 2016-03-11
 ------------------
 
@@ -931,6 +919,7 @@ DataFrame
 - Add ``corr`` and ``cov`` functions
 - Add ``melt`` function
 - Bugfixes for io to bcolz and hdf5
+
 
 0.8.0 / 2016-02-20
 ------------------
@@ -968,6 +957,7 @@ Other
 - Aesthetic changes to profiler plots
 - Moved the dask project to a new dask organization
 
+
 0.7.6 / 2016-01-05
 ------------------
 
@@ -995,6 +985,7 @@ Core
 - Serialization improvements
 - Test Python 3.5
 
+
 0.7.4 / 2015-10-23
 ------------------
 
@@ -1021,6 +1012,7 @@ Future development in distributed computing for dask is happening here:
 https://distributed.readthedocs.io . General feedback on that project is most
 welcome from this community.
 
+
 0.7.3 / 2015-09-25
 ------------------
 
@@ -1036,6 +1028,7 @@ it includes ``nunique``, ``nlargest``, ``quantile``. Fixes encoding issues
 with reading non-ascii csv files. Performance improvements and  bug fixes
 with resample. More flexible read_hdf with globbing. And many more. Various
 bug fixes in ``dask.imperative`` and ``dask.bag``.
+
 
 0.7.0 / 2015-08-15
 ------------------
@@ -1064,6 +1057,7 @@ Infrastructure
   These tend to be longer (hash strings) but should be consistent between
   computations.  This will be useful for caching in the future.
 - All collections (Array, Bag, DataFrame) inherit from common subclass
+
 
 0.6.1 / 2015-07-23
 ------------------
@@ -1106,7 +1100,6 @@ Other
 .. _`James Munroe`: https://github.com/jmunroe
 .. _`Thomas Caswell`: https://github.com/tacaswell
 .. _`Tom Augspurger`: https://github.com/tomaugspurger
-.. _`Jesse Vogt`: https://github.com/jessevogt
 .. _`Uwe Korn`: https://github.com/xhochy
 .. _`Christopher Prohm`: https://github.com/chmp
 .. _`@xwang777`: https://github.com/xwang777
