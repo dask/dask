@@ -2036,7 +2036,8 @@ def test_from_array_list(x):
                       np.ndarray)
 
 
-@pytest.mark.parametrize('type_', set(np.ScalarType) - set((memoryview, )))
+@pytest.mark.parametrize(
+    'type_', [t for t in np.ScalarType if t is not memoryview])
 def test_from_array_scalar(type_):
     """Python and numpy scalars are automatically converted to ndarray
     """

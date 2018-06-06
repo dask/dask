@@ -2176,7 +2176,7 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
 
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
     """
-    if isinstance(x, (list, tuple) + np.ScalarType):
+    if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
         x = np.array(x)
 
     chunks = normalize_chunks(chunks, x.shape, dtype=x.dtype)
