@@ -145,7 +145,9 @@ class WorkerBase(ServerNode):
         else:
             self.memory_pause_fraction = dask.config.get('distributed.worker.memory.pause')
 
-        if self.memory_limit:
+        if (self.memory_limit and
+                (self.memory_target_fraction or
+                 self.memory_spill_fraction)):
             try:
                 from zict import Buffer, File, Func
             except ImportError:

@@ -1125,6 +1125,13 @@ def test_avoid_memory_monitor_if_zero_limit(c, s):
     yield worker._close()
 
 
+@gen_cluster(ncores=[('127.0.0.1', 1)],
+             config={'distributed.worker.memory.spill': False,
+                     'distributed.worker.memory.target': False})
+def test_dict_data_if_no_spill_to_disk(s, w):
+    assert type(w.data) is dict
+
+
 def test_get_worker_name(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
