@@ -1368,7 +1368,7 @@ def test_store_regions():
     a, b = d + 1, d + 2
     a = a[:, 1:, :].astype(float)
 
-    region = (slice(None,None,2), slice(None), [1, 2, 4, 5])
+    region = (slice(None, None, 2), slice(None), [1, 2, 4, 5])
 
     # Single region:
     at = np.zeros(shape=(8, 3, 6))
@@ -1478,6 +1478,14 @@ def test_store_compute_false():
     assert (at == 0).all() and (bt == 0).all()
     assert (dat.compute() == at).all() and (dbt.compute() == bt).all()
     assert (at == 2).all() and (bt == 3).all()
+
+
+def test_store_nocompute_regions():
+    x = da.ones(10, chunks=1)
+    y = np.zeros((2, 10))
+    d1 = da.store(x, y, regions=(0,), compute=False)
+    d2 = da.store(x, y, regions=(1,), compute=False)
+    assert d1.key != d2.key
 
 
 class ThreadSafetyError(Exception):
