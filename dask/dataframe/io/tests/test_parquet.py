@@ -819,6 +819,31 @@ def test_filters(tmpdir):
     assert len(ddf2) > 0
 
 
+def test_read_from_fastparquet_parquetfile(tmpdir):
+    check_fastparquet()
+    fn = str(tmpdir)
+
+    df = pd.DataFrame({'a': np.random.choice(['A', 'B', 'C'], size=100),
+                    'b': np.random.random(size=100),
+                    'c': np.random.randint(1, 5, size=100)})
+    d = dd.from_pandas(df, npartitions=2)
+    d.to_parquet(fn, partition_on=['a'], engine='fastparquet')
+
+    pq_f = fastparquet.ParquetFile(fn)
+
+    # OK with no filters
+    out = dd.read_parquet(pq_f).compute()
+    for val in df.a.unique():
+        assert set(df.b[df.a == val]) == set(out.b[out.a == val])
+
+
+    # OK with  filters
+    out = dd.read_parquet(pq_f, filters=[('a', '==', 'B')]).compute()
+    assert set(df.b[df.a == 'B']) == set(out.b)
+
+
+
+
 @pytest.mark.parametrize('scheduler', ['threads', 'processes'])
 def test_to_parquet_lazy(tmpdir, scheduler, engine):
     tmpdir = str(tmpdir)
