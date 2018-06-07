@@ -3,9 +3,9 @@ import os
 
 import pytest
 
-from dask.config import (update, merge, collect_yaml, collect_env, get,
-                         ensure_file, set, config, rename, update_defaults,
-                         refresh)
+from dask.config import (update, merge, collect, collect_yaml, collect_env,
+                         get, ensure_file, set, config, rename,
+                         update_defaults, refresh)
 from dask.utils import tmpfile
 
 
@@ -98,6 +98,38 @@ def test_env():
     }
 
     assert collect_env(env) == expected
+
+
+def test_collect():
+    a = {'x': 1, 'y': {'a': 1}}
+    b = {'x': 2, 'z': 3, 'y': {'b': 2}}
+    env = {'DASK_W': 4}
+
+    expected = {
+        'w': 4,
+        'x': 2,
+        'y': {'a': 1, 'b': 2},
+        'z': 3,
+    }
+
+    with tmpfile(extension='yaml') as fn1:
+        with tmpfile(extension='yaml') as fn2:
+            with open(fn1, 'w') as f:
+                yaml.dump(a, f)
+            with open(fn2, 'w') as f:
+                yaml.dump(b, f)
+
+            config = collect([fn1, fn2], env=env)
+            assert config == expected
+
+
+def test_collect_env_none():
+    os.environ['DASK_FOO'] = 'bar'
+    try:
+        config = collect([])
+        assert config == {'foo': 'bar'}
+    finally:
+        del os.environ['DASK_FOO']
 
 
 def test_get():
