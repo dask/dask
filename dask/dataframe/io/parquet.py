@@ -965,7 +965,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
             paths = sorted(paths, key=natural_sort_key)
 
     return read(fs, fs_token, paths, columns=columns, filters=filters,
-                categories=categories, index=index, infer_divisions=infer_divisions), fs, fs_token, paths
+                categories=categories, index=index, infer_divisions=infer_divisions)
 
 
 def to_parquet(df, path, engine='auto', compression='default', write_index=None,
