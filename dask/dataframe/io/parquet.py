@@ -179,7 +179,9 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     import fastparquet
     from fastparquet.util import check_column_names
 
-    if len(paths) > 1:
+    if isinstance(paths,fastparquet.api.ParquetFile):
+        pf = paths
+    elif len(paths) > 1:
         pf = fastparquet.ParquetFile(paths, open_with=fs.open, sep=fs.sep)
     else:
         try:
@@ -939,18 +941,31 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     --------
     to_parquet
     """
-    read = get_engine(engine)['read']
+    is_ParquetFile = False
+    try:
+        import fastparquet
+        if isinstance(path,fastparquet.api.ParquetFile):
+            assert (path.file_scheme=='hive'), "Only 'hive' is currently supported as the ParquetFile's file scheme"
+            is_ParquetFile = True
+    except ImportError:
+            pass
 
-    fs, fs_token, paths = get_fs_token_paths(path, mode='rb',
-                                             storage_options=storage_options)
+    if is_ParquetFile:
+        read = get_engine('fastparquet')['read']
+        fs, fs_token, paths = get_fs_token_paths(path.fn.split('_metadata')[0], mode='rb',
+                                                storage_options=storage_options)
+    else:
+        read = get_engine(engine)['read']
+        fs, fs_token, paths = get_fs_token_paths(path, mode='rb',
+                                                storage_options=storage_options)
 
-    if isinstance(path, string_types) and len(paths) > 1:
-        # Sort paths naturally if multiple paths resulted from a single
-        # specification (by '*' globbing)
-        paths = sorted(paths, key=natural_sort_key)
+        if isinstance(path, string_types) and len(paths) > 1:
+            # Sort paths naturally if multiple paths resulted from a single
+            # specification (by '*' globbing)
+            paths = sorted(paths, key=natural_sort_key)
 
     return read(fs, fs_token, paths, columns=columns, filters=filters,
-                categories=categories, index=index, infer_divisions=infer_divisions)
+                categories=categories, index=index, infer_divisions=infer_divisions), fs, fs_token, paths
 
 
 def to_parquet(df, path, engine='auto', compression='default', write_index=None,
