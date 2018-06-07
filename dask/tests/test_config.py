@@ -123,6 +123,15 @@ def test_collect():
             assert config == expected
 
 
+def test_collect_env_none():
+    os.environ['DASK_FOO'] = 'bar'
+    try:
+        config = collect([])
+        assert config == {'foo': 'bar'}
+    finally:
+        del os.environ['DASK_FOO']
+
+
 def test_get():
     d = {'x': 1, 'y': {'a': 2}}
 
