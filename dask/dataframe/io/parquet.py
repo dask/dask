@@ -945,6 +945,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     try:
         import fastparquet
         if isinstance(path, fastparquet.api.ParquetFile):
+            assert (path.open == fastparquet.util.default_open), "ParquetFile: Only local files with default filesystem are currently implemented"
             assert (path.file_scheme == 'hive'), "Only 'hive' is currently supported as the ParquetFile's file scheme"
             is_ParquetFile = True
     except ImportError:
