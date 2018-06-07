@@ -944,20 +944,25 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     is_ParquetFile = False
     try:
         import fastparquet
-        if isinstance(path,fastparquet.api.ParquetFile):
-            assert (path.file_scheme=='hive'), "Only 'hive' is currently supported as the ParquetFile's file scheme"
+        if isinstance(path, fastparquet.api.ParquetFile):
+            assert (path.file_scheme == 'hive'), "Only 'hive' is currently supported as the ParquetFile's file scheme"
             is_ParquetFile = True
     except ImportError:
             pass
 
     if is_ParquetFile:
         read = get_engine('fastparquet')['read']
-        fs, fs_token, paths = get_fs_token_paths(path.fn.split('_metadata')[0], mode='rb',
-                                                storage_options=storage_options)
+        fs, fs_token, paths = get_fs_token_paths(
+                                            path.fn.split('_metadata')[0],
+                                            mode='rb',
+                                            storage_options=storage_options
+                                                )
     else:
         read = get_engine(engine)['read']
-        fs, fs_token, paths = get_fs_token_paths(path, mode='rb',
-                                                storage_options=storage_options)
+        fs, fs_token, paths = get_fs_token_paths(
+                                            path, mode='rb',
+                                            storage_options=storage_options
+                                                )
 
         if isinstance(path, string_types) and len(paths) > 1:
             # Sort paths naturally if multiple paths resulted from a single

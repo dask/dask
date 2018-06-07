@@ -836,7 +836,6 @@ def test_read_from_fastparquet_parquetfile(tmpdir):
     for val in df.a.unique():
         assert set(df.b[df.a == val]) == set(out.b[out.a == val])
 
-
     # OK with  filters
     out = dd.read_parquet(pq_f, filters=[('a', '==', 'B')]).compute()
     assert set(df.b[df.a == 'B']) == set(out.b)
