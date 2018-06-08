@@ -413,3 +413,58 @@ def test_tile_array_reps(shape, chunks, reps):
 
     with pytest.raises(NotImplementedError):
         da.tile(d, reps)
+
+
+@pytest.mark.parametrize('shape, chunks, pad_width, mode, kwargs', [
+    ((10,), (3,), 1, 'constant', {}),
+    ((10,), (3,), 2, 'constant', {'constant_values': -1}),
+    ((10,), (3,), ((2, 3)), 'constant', {'constant_values': (-1, -2)}),
+    (
+        (10, 11), (4, 5), ((1, 4), (2, 3)), 'constant',
+        {'constant_values': ((-1, -2), (2, 1))}
+    ),
+    ((10,), (3,), 3, 'edge', {}),
+    ((10,), (3,), 3, 'linear_ramp', {}),
+    ((10,), (3,), 3, 'linear_ramp', {'end_values': 0}),
+    ((10, 11), (4, 5), ((1, 4), (2, 3)), 'reflect', {}),
+    ((10, 11), (4, 5), ((1, 4), (2, 3)), 'symmetric', {}),
+    ((10, 11), (4, 5), ((1, 4), (2, 3)), 'wrap', {}),
+    ((10,), (3,), ((2, 3)), 'maximum', {'stat_length': (1, 2)}),
+    (
+        (10, 11), (4, 5), ((1, 4), (2, 3)), 'mean',
+        {'stat_length': ((3, 4), (2, 1))}
+    ),
+    ((10,), (3,), ((2, 3)), 'minimum', {'stat_length': (2, 3)}),
+])
+def test_pad(shape, chunks, pad_width, mode, kwargs):
+    np_a = np.random.random(shape)
+    da_a = da.from_array(np_a, chunks=chunks)
+
+    np_r = np.pad(np_a, pad_width, mode, **kwargs)
+    da_r = da.pad(da_a, pad_width, mode, **kwargs)
+
+    assert_eq(np_r, da_r)
+
+
+@pytest.mark.parametrize('kwargs', [
+    {},
+    {"scaler": 2},
+])
+def test_pad_udf(kwargs):
+    def udf_pad(vector, pad_width, iaxis, kwargs):
+        scaler = kwargs.get("scaler", 1)
+        vector[:pad_width[0]] = -scaler * pad_width[0]
+        vector[-pad_width[1]:] = scaler * pad_width[1]
+        return vector
+
+    shape = (10, 11)
+    chunks = (4, 5)
+    pad_width = ((1, 2), (2, 3))
+
+    np_a = np.random.random(shape)
+    da_a = da.from_array(np_a, chunks=chunks)
+
+    np_r = np.pad(np_a, pad_width, udf_pad, kwargs=kwargs)
+    da_r = da.pad(da_a, pad_width, udf_pad, kwargs=kwargs)
+
+    assert_eq(np_r, da_r)
