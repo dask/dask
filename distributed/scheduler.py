@@ -1355,8 +1355,9 @@ class Scheduler(ServerNode):
                 ts = self.tasks[key]
                 for dep in dependencies[key]:
                     if all(d in done for d in dependents[dep]):
-                        done.add(dep)
-                        stack.append(dep)
+                        if dep in self.tasks:
+                            done.add(dep)
+                            stack.append(dep)
 
             for d in done:
                 del tasks[d]
