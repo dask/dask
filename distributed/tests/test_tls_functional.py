@@ -10,14 +10,8 @@ from tornado import gen
 
 from distributed import Nanny, worker_client, Queue
 from distributed.client import wait
-from distributed.utils_test import (gen_cluster, tls_only_security,
-                                    inc, double, slowinc, slowadd)
-
-
-def gen_tls_cluster(**kwargs):
-    kwargs.setdefault('ncores', [('tls://127.0.0.1', 1), ('tls://127.0.0.1', 2)])
-    return gen_cluster(scheduler='tls://127.0.0.1',
-                       security=tls_only_security(), **kwargs)
+from distributed.utils_test import (gen_tls_cluster, inc, double, slowinc,
+        slowadd)
 
 
 @gen_tls_cluster(client=True)

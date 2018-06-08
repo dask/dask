@@ -78,7 +78,8 @@ from toolz import valmap
 
 from distributed.client import Client, wait
 from distributed.worker import dumps_task
-from distributed.utils_test import (cluster, inc, dec, throws, gen_cluster)
+from distributed.utils_test import (cluster, inc, dec, throws, gen_cluster,
+        gen_tls_cluster)
 from distributed.utils_test import loop  # noqa: F401
 from distributed.utils import sync
 from distributed.diagnostics.progressbar import (ProgressWidget,
@@ -92,13 +93,13 @@ def test_progressbar_widget(c, s, a, b):
     z = c.submit(inc, y)
     yield wait(z)
 
-    progress = ProgressWidget([z.key], scheduler=(s.ip, s.port), complete=True)
+    progress = ProgressWidget([z.key], scheduler=s.address, complete=True)
     yield progress.listen()
 
     assert progress.bar.value == 1.0
     assert '3 / 3' in progress.bar_text.value
 
-    progress = ProgressWidget([z.key], scheduler=(s.ip, s.port))
+    progress = ProgressWidget([z.key], scheduler=s.address)
     yield progress.listen()
 
 
@@ -113,7 +114,7 @@ def test_multi_progressbar_widget(c, s, a, b):
     other = c.submit(inc, 123)
     yield wait([other, e])
 
-    p = MultiProgressWidget([e.key], scheduler=(s.ip, s.port), complete=True)
+    p = MultiProgressWidget([e.key], scheduler=s.address, complete=True)
     yield p.listen()
 
     assert p.bars['inc'].value == 1.0
@@ -155,7 +156,7 @@ def test_multi_progressbar_widget_after_close(s, a, b):
                                  'y-1': {'x-3'}, 'y-2': {'y-1'},
                                  'e': {'y-2'}})
 
-    p = MultiProgressWidget(['x-1', 'x-2', 'x-3'], scheduler=(s.ip, s.port))
+    p = MultiProgressWidget(['x-1', 'x-2', 'x-3'], scheduler=s.address)
     yield p.listen()
 
     assert 'x' in p.bars
@@ -235,7 +236,7 @@ def test_multibar_complete(s, a, b):
                                  'y-1': {'x-3'}, 'y-2': {'y-1'},
                                  'e': {'y-2'}})
 
-    p = MultiProgressWidget(['e'], scheduler=(s.ip, s.port), complete=True)
+    p = MultiProgressWidget(['e'], scheduler=s.address, complete=True)
     yield p.listen()
 
     assert p._last_response['all'] == {'x': 3, 'y': 2, 'e': 1}
@@ -253,3 +254,31 @@ def test_fast(loop):
             p = progress(L3, multi=True, complete=True, notebook=True)
             sync(loop, p.listen)
             assert set(p._last_response['all']) == {'inc', 'dec', 'add'}
+
+
+@gen_cluster(client=True, client_kwargs={'serializers': ['msgpack']})
+def test_serializers(c, s, a, b):
+    x = c.submit(inc, 1)
+    y = c.submit(inc, x)
+    z = c.submit(inc, y)
+    yield wait(z)
+
+    progress = ProgressWidget([z], scheduler=s.address, complete=True)
+    yield progress.listen()
+
+    assert progress.bar.value == 1.0
+    assert '3 / 3' in progress.bar_text.value
+
+
+@gen_tls_cluster(client=True)
+def test_tls(c, s, a, b):
+    x = c.submit(inc, 1)
+    y = c.submit(inc, x)
+    z = c.submit(inc, y)
+    yield wait(z)
+
+    progress = ProgressWidget([z], scheduler=s.address, complete=True)
+    yield progress.listen()
+
+    assert progress.bar.value == 1.0
+    assert '3 / 3' in progress.bar_text.value

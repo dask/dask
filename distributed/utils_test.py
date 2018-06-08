@@ -726,7 +726,8 @@ def iscoroutinefunction(f):
 def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                 scheduler='127.0.0.1', timeout=10, security=None,
                 Worker=Worker, client=False, scheduler_kwargs={},
-                worker_kwargs={}, active_rpc_timeout=1, config={}):
+                worker_kwargs={}, client_kwargs={}, active_rpc_timeout=1,
+                config={}):
     from distributed import Client
     """ Coroutine test with small cluster
 
@@ -778,7 +779,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                             args = [s] + workers
                             if client:
                                 c = yield Client(s.address, loop=loop, security=security,
-                                                 asynchronous=True)
+                                                 asynchronous=True, **client_kwargs)
                                 args = [c] + args
                             try:
                                 future = func(*args)
@@ -1265,3 +1266,9 @@ def bump_rlimit(limit, desired):
     except Exception as e:
         pytest.skip("rlimit too low (%s) and can't be increased: %s"
                     % (soft, e))
+
+
+def gen_tls_cluster(**kwargs):
+    kwargs.setdefault('ncores', [('tls://127.0.0.1', 1), ('tls://127.0.0.1', 2)])
+    return gen_cluster(scheduler='tls://127.0.0.1',
+                       security=tls_only_security(), **kwargs)
