@@ -2198,8 +2198,7 @@ class Scheduler(ServerNode):
                     if not workers:
                         continue
                     ts = self.tasks[key]
-                    logger.exception("Workers don't have promised key. "
-                                     "This should never occur: %s, %s",
+                    logger.exception("Workers don't have promised key: %s, %s",
                                      str(workers), str(key))
                     for worker in workers:
                         ws = self.workers.get(worker)

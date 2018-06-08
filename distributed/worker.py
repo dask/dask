@@ -1955,9 +1955,10 @@ class Worker(WorkerBase):
                 del self.waiting_for_data[key]
 
             for dep in self.dependencies.pop(key, ()):
-                self.dependents[dep].remove(key)
-                if not self.dependents[dep] and self.dep_state[dep] in ('waiting', 'flight'):
-                    self.release_dep(dep)
+                if dep in self.dependents:
+                    self.dependents[dep].remove(key)
+                    if not self.dependents[dep] and self.dep_state[dep] in ('waiting', 'flight'):
+                        self.release_dep(dep)
 
             if key in self.threads:
                 del self.threads[key]
@@ -2016,7 +2017,6 @@ class Worker(WorkerBase):
                 self.in_flight_workers[worker].remove(dep)
 
             for key in self.dependents.pop(dep, ()):
-                self.dependencies[key].remove(dep)
                 if self.task_state[key] != 'memory':
                     self.release_key(key, cause=dep)
 

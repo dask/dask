@@ -6,7 +6,7 @@ import random
 from time import sleep
 
 import pytest
-from toolz import partition_all
+from toolz import partition_all, first
 from tornado import gen
 
 from dask import delayed
@@ -69,26 +69,25 @@ def test_gather_after_failed_worker(loop):
             assert result == list(map(inc, range(10)))
 
 
-@slow
-def test_gather_then_submit_after_failed_workers(loop):
-    with cluster(nworkers=4, active_rpc_timeout=10) as (s, [w, x, y, z]):
-        with Client(s['address'], loop=loop) as c:
-            L = c.map(inc, range(20))
-            wait(L)
-            w['proc']().terminate()
-            total = c.submit(sum, L)
-            wait([total])
+@gen_cluster(client=True, Worker=Nanny, ncores=[('127.0.0.1', 1)] * 4,
+             config={'distributed.comm.timeouts.connect': '1s'})
+def test_gather_then_submit_after_failed_workers(c, s, w, x, y, z):
+    L = c.map(inc, range(20))
+    yield wait(L)
 
-            addr = c.who_has()[total.key][0]
-            for d in [x, y, z]:
-                if d['address'] == addr:
-                    d['proc']().terminate()
-                    break
-            else:
-                assert 0, "Could not find worker %r" % (addr,)
+    w.process.process._process.terminate()
+    total = c.submit(sum, L)
 
-            result = c.gather([total])
-            assert result == [sum(map(inc, range(20)))]
+    for i in range(3):
+        yield wait(total)
+        addr = first(s.tasks[total.key].who_has).address
+        for worker in [x, y, z]:
+            if worker.worker_address == addr:
+                worker.process.process._process.terminate()
+                break
+
+        result = yield c.gather([total])
+        assert result == [sum(map(inc, range(20)))]
 
 
 @gen_cluster(Worker=Nanny, timeout=60, client=True)
