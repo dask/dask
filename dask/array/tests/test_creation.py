@@ -282,9 +282,12 @@ def test_tril_triu_errors():
     dA = da.from_array(A, chunks=(5, 5, 5))
     pytest.raises(ValueError, lambda: da.triu(dA))
 
+
+def test_tril_triu_non_square_arrays():
     A = np.random.randint(0, 11, (30, 35))
     dA = da.from_array(A, chunks=(5, 5))
-    pytest.raises(NotImplementedError, lambda: da.triu(dA))
+    assert_eq(da.triu(dA), np.triu(A))
+    assert_eq(da.tril(dA), np.tril(A))
 
 
 def test_eye():
