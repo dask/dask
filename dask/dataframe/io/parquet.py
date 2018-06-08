@@ -945,6 +945,12 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     try:
         import fastparquet
         if isinstance(path, fastparquet.api.ParquetFile):
+            if path.open != fastparquet.util.default_open:
+                assert (re.match('.*://', path.fn)), \
+                       ("ParquetFile: Path must contain protocol" +
+                        " (e.g., s3://...) when using other than the default" + 
+                        " LocalFileSystem. Path given: " + path.fn)
+
             assert (path.file_scheme == 'hive'), "Only 'hive' is currently supported as the ParquetFile's file scheme"
             is_ParquetFile = True
     except ImportError:
