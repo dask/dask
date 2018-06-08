@@ -47,18 +47,16 @@ def tsqr(data, name=None, compute_svd=False):
 
     Parameters
     ----------
-
     data: Array
     compute_svd: bool
         Whether to compute the SVD rather than the QR decomposition
 
     See Also
     --------
-
     dask.array.linalg.qr - Powered by this algorithm
     dask.array.linalg.svd - Powered by this algorithm
+    dask.array.linalg.sfqr - Variant for short-and-fat arrays
     """
-
     if not (data.ndim == 2 and                    # Is a matrix
             len(data.chunks[1]) == 1):         # Only one column block
         raise ValueError(
@@ -218,15 +216,13 @@ def sfqr(data, name=None):
 
     Parameters
     ----------
-
     data: Array
 
     See Also
     --------
-
-    dask.array.linalg.qr - Supported by this
+    dask.array.linalg.qr - Main user API that uses this function
+    dask.array.linalg.tsqr - Variant for tall-and-skinny case
     """
-
     nr, nc = len(data.chunks[0]), len(data.chunks[1])
     cr, cc = data.chunks[0][0], data.chunks[1][0]
 
@@ -425,8 +421,8 @@ def qr(a, name=None):
     --------
 
     np.linalg.qr : Equivalent NumPy Operation
-    dask.array.linalg.tsqr: Actual implementation for len(a.chunks[1]) == 1 (with citation)
-    dask.array.linalg.sfqr: Actual implementation for len(a.chunks[0]) == 1
+    dask.array.linalg.tsqr: Implementation for tall-and-skinny arrays
+    dask.array.linalg.sfqr: Implementation for short-and-fat arrays
     """
 
     if len(a.chunks[1]) == 1:
@@ -464,7 +460,7 @@ def svd(a, name=None):
     --------
 
     np.linalg.svd : Equivalent NumPy Operation
-    dask.array.linalg.tsqr: Actual implementation with citation
+    dask.array.linalg.tsqr: Implementation for tall-and-skinny arrays
     """
     return tsqr(a, name, compute_svd=True)
 

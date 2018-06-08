@@ -19,9 +19,9 @@ def test_tsqr_regular_blocks():
 
     q, r = tsqr(data)
 
-    assert_eq(mat, np.dot(q, r))  # accuracy check
-    assert_eq(np.eye(n, n), np.dot(q.T, q))  # q must be orthonormal
-    assert_eq(r, np.triu(r))  # r must be upper triangular
+    assert_eq(mat, da.dot(q, r))  # accuracy check
+    assert_eq(np.eye(n, n), da.dot(q.T, q))  # q must be orthonormal
+    assert_eq(r, da.triu(r))  # r must be upper triangular
 
 
 def test_tsqr_irregular_blocks():
@@ -32,9 +32,9 @@ def test_tsqr_irregular_blocks():
 
     q, r = tsqr(data)
 
-    assert_eq(mat2, np.dot(q, r))  # accuracy check
-    assert_eq(np.eye(n, n), np.dot(q.T, q))  # q must be orthonormal
-    assert_eq(r, np.triu(r))  # r must be upper triangular
+    assert_eq(mat2, da.dot(q, r))  # accuracy check
+    assert_eq(np.eye(n, n), da.dot(q.T, q))  # q must be orthonormal
+    assert_eq(r, da.triu(r))  # r must be upper triangular
 
 
 @pytest.mark.parametrize('m_n_chunks', [
@@ -52,9 +52,9 @@ def test_sfqr(m_n_chunks):
 
     m_qtq = min(m, n)
 
-    assert_eq(mat, np.dot(q, r))  # accuracy check
-    assert_eq(np.eye(m_qtq, m_qtq), np.dot(q.T, q))  # q must be orthonormal
-    assert_eq(r, np.triu(r))  # r must be upper triangular
+    assert_eq(mat, da.dot(q, r))  # accuracy check
+    assert_eq(np.eye(m_qtq, m_qtq), da.dot(q.T, q))  # q must be orthonormal
+    assert_eq(r, da.triu(r.rechunk(r.shape[0])))  # r must be upper triangular
 
 
 def test_tsqr_svd_regular_blocks():
@@ -63,16 +63,13 @@ def test_tsqr_svd_regular_blocks():
     data = da.from_array(mat, chunks=(10, n), name='A')
 
     u, s, vt = tsqr(data, compute_svd=True)
-    u = np.array(u)
-    s = np.array(s)
-    vt = np.array(vt)
-    usvt = np.dot(u, np.dot(np.diag(s), vt))
+    usvt = da.dot(u, da.dot(da.diag(s), vt))
 
     s_exact = np.linalg.svd(mat)[1]
 
     assert_eq(mat, usvt)  # accuracy check
-    assert_eq(np.eye(n, n), np.dot(u.T, u))  # u must be orthonormal
-    assert_eq(np.eye(n, n), np.dot(vt, vt.T))  # v must be orthonormal
+    assert_eq(np.eye(n, n), da.dot(u.T, u))  # u must be orthonormal
+    assert_eq(np.eye(n, n), da.dot(vt, vt.T))  # v must be orthonormal
     assert_eq(s, s_exact)  # s must contain the singular values
 
 
@@ -83,16 +80,13 @@ def test_tsqr_svd_irregular_blocks():
     mat2 = mat[1:, :]
 
     u, s, vt = tsqr(data, compute_svd=True)
-    u = np.array(u)
-    s = np.array(s)
-    vt = np.array(vt)
-    usvt = np.dot(u, np.dot(np.diag(s), vt))
+    usvt = da.dot(u, da.dot(da.diag(s), vt))
 
     s_exact = np.linalg.svd(mat2)[1]
 
     assert_eq(mat2, usvt)  # accuracy check
-    assert_eq(np.eye(n, n), np.dot(u.T, u))  # u must be orthonormal
-    assert_eq(np.eye(n, n), np.dot(vt, vt.T))  # v must be orthonormal
+    assert_eq(np.eye(n, n), da.dot(u.T, u))  # u must be orthonormal
+    assert_eq(np.eye(n, n), da.dot(vt, vt.T))  # v must be orthonormal
     assert_eq(s, s_exact)  # s must contain the singular values
 
 
@@ -124,12 +118,11 @@ def test_svd_compressed():
     data = da.from_array(mat, chunks=(500, 50))
 
     u, s, vt = svd_compressed(data, r, seed=4321, n_power_iter=2)
-    u, s, vt = da.compute(u, s, vt)
 
-    usvt = np.dot(u, np.dot(np.diag(s), vt))
+    usvt = da.dot(u, da.dot(da.diag(s), vt))
 
     tol = 0.2
-    assert_eq(np.linalg.norm(usvt),
+    assert_eq(da.linalg.norm(usvt),
               np.linalg.norm(mat),
               rtol=tol, atol=tol)  # average accuracy check
 
@@ -140,8 +133,8 @@ def test_svd_compressed():
     s_exact = np.linalg.svd(mat)[1]
     s_exact = s_exact[:r]
 
-    assert_eq(np.eye(r, r), np.dot(u.T, u))  # u must be orthonormal
-    assert_eq(np.eye(r, r), np.dot(vt, vt.T))  # v must be orthonormal
+    assert_eq(np.eye(r, r), da.dot(u.T, u))  # u must be orthonormal
+    assert_eq(np.eye(r, r), da.dot(vt, vt.T))  # v must be orthonormal
     assert_eq(s, s_exact)  # s must contain the singular values
 
 
@@ -158,8 +151,8 @@ def _check_lu_result(p, l, u, A):
     assert np.allclose(p.dot(l).dot(u), A)
 
     # check triangulars
-    assert np.allclose(l, np.tril(l.compute()))
-    assert np.allclose(u, np.triu(u.compute()))
+    assert_eq(l, da.tril(l))
+    assert_eq(u, da.triu(u))
 
 
 def test_lu_1():
