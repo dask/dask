@@ -18,8 +18,6 @@ def test_tsqr_regular_blocks():
     data = da.from_array(mat, chunks=(10, n), name='A')
 
     q, r = tsqr(data)
-    q = np.array(q)
-    r = np.array(r)
 
     assert_eq(mat, np.dot(q, r))  # accuracy check
     assert_eq(np.eye(n, n), np.dot(q.T, q))  # q must be orthonormal
@@ -33,54 +31,29 @@ def test_tsqr_irregular_blocks():
     mat2 = mat[1:, :]
 
     q, r = tsqr(data)
-    q = np.array(q)
-    r = np.array(r)
 
     assert_eq(mat2, np.dot(q, r))  # accuracy check
     assert_eq(np.eye(n, n), np.dot(q.T, q))  # q must be orthonormal
     assert_eq(r, np.triu(r))  # r must be upper triangular
 
 
-def test_sfqr_regular_blocks():
-    m, n = 10, 40
+@pytest.mark.parametrize('m_n_chunks', [
+    (10, 40, (10, 10)),  # regular blocks
+    (10, 40, (10, 15)),  # irregular blocks
+    (10, 40, ((10), (15, 5, 5, 8, 7))),  # non-uniform chunks (why?)
+    (10, 5, 10),         # thin
+])
+def test_sfqr(m_n_chunks):
+    m, n, chunks = m_n_chunks
     mat = np.random.rand(m, n)
-    data = da.from_array(mat, chunks=(10, 10), name='A')
+    data = da.from_array(mat, chunks=chunks, name='A')
 
     q, r = sfqr(data)
-    q = np.array(q)
-    r = np.array(r)
+
+    m_qtq = min(m, n)
 
     assert_eq(mat, np.dot(q, r))  # accuracy check
-    assert_eq(np.eye(m, m), np.dot(q.T, q))  # q must be orthonormal
-    assert_eq(r, np.triu(r))  # r must be upper triangular
-
-
-def test_sfqr_thin():
-    m, n = 10,5
-    mat = np.random.rand(m, n)
-    data = da.from_array(mat, chunks=(10, 5), name='A')
-
-    q, r = sfqr(data)
-    q = np.array(q)
-    r = np.array(r)
-
-    assert_eq(mat, np.dot(q, r))  # accuracy check
-    assert_eq(np.eye(n, n), np.dot(q.T, q))  # q must be orthonormal
-    assert_eq(r, np.triu(r))  # r must be upper triangular
-
-
-def test_sfqr_irregular_blocks():
-    m, n = 10, 40
-    mat = np.random.rand(m, n)
-    data = da.from_array(mat, chunks=(10, 10), name='A')[1:]
-    mat2 = mat[1:, :]
-
-    q, r = sfqr(data)
-    q = np.array(q)
-    r = np.array(r)
-
-    assert_eq(mat2, np.dot(q, r))  # accuracy check
-    assert_eq(np.eye(m - 1, m - 1), np.dot(q.T, q))  # q must be orthonormal
+    assert_eq(np.eye(m_qtq, m_qtq), np.dot(q.T, q))  # q must be orthonormal
     assert_eq(r, np.triu(r))  # r must be upper triangular
 
 

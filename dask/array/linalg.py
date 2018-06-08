@@ -62,9 +62,12 @@ def tsqr(data, name=None, compute_svd=False):
     if not (data.ndim == 2 and                    # Is a matrix
             len(data.chunks[1]) == 1):         # Only one column block
         raise ValueError(
-            "[tsqr] Input must have the following properties:\n"
+            "Input must have the following properties:\n"
             "  1. Have two dimensions\n"
-            "  2. Have only one column of blocks")
+            "  2. Have only one column of blocks\n\n"
+            "Note: This function (tsqr) supports QR decomposition in the case of\n"
+            "tall-and-skinny matrices (single column chunk/block; see qr)"
+        )
 
     prefix = name or 'tsqr-' + tokenize(data, compute_svd)
     prefix += '_'
@@ -232,10 +235,15 @@ def sfqr(data, name=None):
             ((cr <= cc) or        # Chunking dimension on rows is at least that on cols or...
              (nc == 1))):         # ... only one block col
         raise ValueError(
-            "[sfqr] Input must have the following properties:\n"
+            "Input must have the following properties:\n"
             "  1. Have two dimensions\n"
             "  2. Have only one row of blocks\n"
-            "  3. Either one column of blocks or chunking dimension on rows is at most that on cols"
+            "  3. Either one column of blocks or (first) chunk size on cols\n"
+            "     is at most that on rows (e.g.: for a 5x20 matrix,\n"
+            "     chunks=((5), (8,4,8)) is fine, but chunks=((5), (4,8,8)) is not;\n"
+            "     still, prefer something simple like chunks=(5,10) or chunks=5)\n\n"
+            "Note: This function (sfqr) supports QR decomposition in the case\n"
+            "of short-and-fat matrices (single row chunk/block; see qr)"
         )
 
     prefix = name or 'sfqr-' + tokenize(data)
@@ -283,7 +291,7 @@ def sfqr(data, name=None):
 
     if nc > 1:
         A_rest = Array(dsk, name_A_rest,
-                       shape=(min(m, n), n - cc), chunks=(cr, cc), dtype=rr.dtype)
+                       shape=(min(m, n), n - cc), chunks=((cr), data.chunks[1][1:]), dtype=rr.dtype)
         Rs.append(Q.T.dot(A_rest))
 
     R = concatenate(Rs, axis=1)
@@ -418,9 +426,22 @@ def qr(a, name=None):
 
     np.linalg.qr : Equivalent NumPy Operation
     dask.array.linalg.tsqr: Actual implementation for len(a.chunks[1]) == 1 (with citation)
-    dask.array.linalg.sfqr: Actual implementation otherwise
+    dask.array.linalg.sfqr: Actual implementation for len(a.chunks[0]) == 1
     """
-    return tsqr(a, name) if len(a.chunks[1]) == 1 else sfqr(a, name)
+
+    if len(a.chunks[1]) == 1:
+        return tsqr(a, name)
+    elif len(a.chunks[0]) == 1:
+        return sfqr(a, name)
+    else:
+        raise NotImplemented(
+            "qr currently supports only tall-and-skinny (single column chunk/block; see tsqr)\n"
+            "and short-and-fat (single row chunk/block; see sfqr) matrices\n\n"
+            "Consider use of the rechunk method. For example,\n\n"
+            "x.rechunk({0: -1, 1: 'auto'}) or x.rechunk({0: 'auto', 1: -1})\n\n"
+            "which rechunk one shorter axis to a single chunk, while allowing\n"
+            "the other axis to automatically grow/shrink appropriately."
+        )
 
 
 def svd(a, name=None):
