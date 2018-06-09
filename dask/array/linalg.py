@@ -429,8 +429,7 @@ def qr(a, name=None):
     dask.array.linalg.sfqr: Implementation for short-and-fat arrays
     """
 
-    # if len(a.chunks[1]) == 1 and a.shape[0] >= a.shape[1]:
-    if len(a.chunks[1]) == 1: # and a.shape[0] >= a.shape[1]:
+    if len(a.chunks[1]) == 1 and len(a.chunks[0]) > 1:
         return tsqr(a, name)
     elif len(a.chunks[0]) == 1:
         return sfqr(a, name)
