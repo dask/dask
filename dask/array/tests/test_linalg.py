@@ -12,49 +12,91 @@ from dask.array.linalg import tsqr, sfqr, svd_compressed, qr, svd
 from dask.array.utils import assert_eq, same_keys
 
 
-def test_tsqr_regular_blocks():
-    m, n = 20, 10
-    mat = np.random.rand(m, n)
-    data = da.from_array(mat, chunks=(10, n), name='A')
-
-    q, r = tsqr(data)
-
-    assert_eq(mat, da.dot(q, r))  # accuracy check
-    assert_eq(np.eye(n, n), da.dot(q.T, q))  # q must be orthonormal
-    assert_eq(r, da.triu(r))  # r must be upper triangular
-
-
-def test_tsqr_irregular_blocks():
-    m, n = 20, 10
-    mat = np.random.rand(m, n)
-    data = da.from_array(mat, chunks=(3, n), name='A')[1:]
-    mat2 = mat[1:, :]
-
-    q, r = tsqr(data)
-
-    assert_eq(mat2, da.dot(q, r))  # accuracy check
-    assert_eq(np.eye(n, n), da.dot(q.T, q))  # q must be orthonormal
-    assert_eq(r, da.triu(r))  # r must be upper triangular
-
-
-@pytest.mark.parametrize('m_n_chunks', [
-    (10, 40, (10, 10)),  # regular blocks
-    (10, 40, (10, 15)),  # irregular blocks
-    (10, 40, ((10), (15, 5, 5, 8, 7))),  # non-uniform chunks (why?)
-    (10, 5, 10),         # thin
+@pytest.mark.parametrize('m_n_chunks_err', [
+    (20, 10, 10, None),        # tall-skinny regular blocks
+    (20, 10, (3, 10), None),   # tall-skinny regular fat layers
+    (20, 10, (3, 10), None),   # tall-skinny irregular fat layers
+    (40, 10, ((15, 5, 5, 8, 7), (10)), None),  # tall-skinny non-uniform chunks (why?)
+    (10, 5, 10, None),         # single block tall
+    (5, 10, 10, None),         # single block short
+    (10, 10, 10, None),        # single block square
+    (10, 40, (10, 10), ValueError),  # short-fat regular blocks
+    (10, 40, (10, 15), ValueError),  # short-fat irregular blocks
+    (10, 40, ((10), (15, 5, 5, 8, 7)), ValueError),  # short-fat non-uniform chunks (why?)
+    (20, 20, 10, ValueError),  # 2x2 regular blocks
 ])
-def test_sfqr(m_n_chunks):
-    m, n, chunks = m_n_chunks
+def test_tsqr(m_n_chunks_err):
+    m, n, chunks, error_type = m_n_chunks_err
     mat = np.random.rand(m, n)
     data = da.from_array(mat, chunks=chunks, name='A')
-
-    q, r = sfqr(data)
-
     m_qtq = min(m, n)
 
-    assert_eq(mat, da.dot(q, r))  # accuracy check
-    assert_eq(np.eye(m_qtq, m_qtq), da.dot(q.T, q))  # q must be orthonormal
-    assert_eq(r, da.triu(r.rechunk(r.shape[0])))  # r must be upper triangular
+    if error_type is None:
+        q, r = tsqr(data)
+        assert_eq(mat, da.dot(q, r))  # accuracy check
+        assert_eq(np.eye(m_qtq, m_qtq), da.dot(q.T, q))  # q must be orthonormal
+        assert_eq(r, da.triu(r.rechunk(r.shape[0])))  # r must be upper triangular
+    else:
+        with pytest.raises(error_type):
+            q, r = tsqr(data)
+
+
+@pytest.mark.parametrize('m_n_chunks_err', [
+    (20, 10, 10, ValueError),        # tall-skinny regular blocks
+    (20, 10, (3, 10), ValueError),   # tall-skinny regular fat layers
+    (20, 10, (3, 10), ValueError),   # tall-skinny irregular fat layers
+    (40, 10, ((15, 5, 5, 8, 7), (10)), ValueError),  # tall-skinny non-uniform chunks (why?)
+    (10, 5, 10, None),         # single block thin
+    (5, 10, 10, None),         # single block fat
+    (10, 10, 10, None),        # single block square
+    (10, 40, (10, 10), None),  # short-fat regular blocks
+    (10, 40, (10, 15), None),  # short-fat irregular blocks
+    (10, 40, ((10), (15, 5, 5, 8, 7)), None),  # short-fat non-uniform chunks (why?)
+    (20, 20, 10, ValueError),  # 2x2 regular blocks
+])
+def test_sfqr(m_n_chunks_err):
+    m, n, chunks, error_type = m_n_chunks_err
+    mat = np.random.rand(m, n)
+    data = da.from_array(mat, chunks=chunks, name='A')
+    m_qtq = min(m, n)
+
+    if error_type is None:
+        q, r = sfqr(data)
+        assert_eq(mat, da.dot(q, r))  # accuracy check
+        assert_eq(np.eye(m_qtq, m_qtq), da.dot(q.T, q))  # q must be orthonormal
+        assert_eq(r, da.triu(r.rechunk(r.shape[0])))  # r must be upper triangular
+    else:
+        with pytest.raises(error_type):
+            q, r = sfqr(data)
+
+
+@pytest.mark.parametrize('m_n_chunks_err', [
+    (20, 10, 10, None),        # tall-skinny regular blocks
+    (20, 10, (3, 10), None),   # tall-skinny regular fat layers
+    (20, 10, (3, 10), None),   # tall-skinny irregular fat layers
+    (40, 10, ((15, 5, 5, 8, 7), (10)), None),  # tall-skinny non-uniform chunks (why?)
+    (10, 5, 10, None),         # single block tall
+    (5, 10, 10, None),   # single block short
+    (10, 10, 10, None),        # single block square
+    (10, 40, (10, 10), None),  # short-fat regular blocks
+    (10, 40, (10, 15), None),  # short-fat irregular blocks
+    (10, 40, ((10), (15, 5, 5, 8, 7)), None),  # short-fat non-uniform chunks (why?)
+    (20, 20, 10, NotImplementedError),  # 2x2 regular blocks
+])
+def test_qr(m_n_chunks_err):
+    m, n, chunks, error_type = m_n_chunks_err
+    mat = np.random.rand(m, n)
+    data = da.from_array(mat, chunks=chunks, name='A')
+    m_qtq = min(m, n)
+
+    if error_type is None:
+        q, r = qr(data)
+        assert_eq(mat, da.dot(q, r))  # accuracy check
+        assert_eq(np.eye(m_qtq, m_qtq), da.dot(q.T, q))  # q must be orthonormal
+        assert_eq(r, da.triu(r.rechunk(r.shape[0])))  # r must be upper triangular
+    else:
+        with pytest.raises(error_type):
+            q, r = qr(data)
 
 
 def test_tsqr_svd_regular_blocks():
