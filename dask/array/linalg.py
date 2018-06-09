@@ -163,6 +163,12 @@ def tsqr(data, name=None, compute_svd=False):
                   shape=(n, n), chunks=(n, n), dtype=rr.dtype)
         return q, r
     else:
+        k = np.nanmin([m, n])
+
+        # Force to int if a nan was present.
+        if not np.isnan(k):
+            k = int(k)
+
         # In-core SVD computation
         name_svd_st2 = prefix + 'SVD_st2'
         dsk_svd_st2 = top(np.linalg.svd, name_svd_st2, 'ij', name_r_st2, 'ij',
@@ -193,9 +199,9 @@ def tsqr(data, name=None, compute_svd=False):
 
         uu, ss, vv = np.linalg.svd(np.ones(shape=(1, 1), dtype=data.dtype))
 
-        u = Array(dsk, name_u_st4, shape=data.shape, chunks=data.chunks,
+        u = Array(dsk, name_u_st4, shape=(m, k), chunks=(data.chunks[0], (k,)),
                   dtype=uu.dtype)
-        s = Array(dsk, name_s_st2, shape=(n,), chunks=((n,),), dtype=ss.dtype)
+        s = Array(dsk, name_s_st2, shape=(k,), chunks=((k,),), dtype=ss.dtype)
         v = Array(dsk, name_v_st2, shape=(n, n), chunks=((n,), (n,)),
                   dtype=vv.dtype)
         return u, s, v
