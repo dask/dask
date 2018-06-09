@@ -430,7 +430,7 @@ def qr(a, name=None):
     elif len(a.chunks[0]) == 1:
         return sfqr(a, name)
     else:
-        raise NotImplemented(
+        raise NotImplementedError(
             "qr currently supports only tall-and-skinny (single column chunk/block; see tsqr)\n"
             "and short-and-fat (single row chunk/block; see sfqr) matrices\n\n"
             "Consider use of the rechunk method. For example,\n\n"
