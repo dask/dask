@@ -158,10 +158,14 @@ def tsqr(data, name=None, compute_svd=False):
 
     if not compute_svd:
         qq, rr = np.linalg.qr(np.ones(shape=(1, 1), dtype=data.dtype))
+        q_shape = data.shape if data.shape[0] >= data.shape[1] else (data.shape[0], data.shape[0])
+        q_chunks = data.chunks if data.shape[0] >= data.shape[1] else (data.chunks[0], data.chunks[0])
+        r_shape = (n, n) if data.shape[0] >= data.shape[1] else data.shape
+        r_chunks = (n, n) if data.shape[0] >= data.shape[1] else data.chunks
         q = Array(dsk, name_q_st3,
-                  shape=data.shape, chunks=data.chunks, dtype=qq.dtype)
+                  shape=q_shape, chunks=q_chunks, dtype=qq.dtype)
         r = Array(dsk, name_r_st2,
-                  shape=(n, n), chunks=(n, n), dtype=rr.dtype)
+                  shape=r_shape, chunks=r_chunks, dtype=rr.dtype)
         return q, r
     else:
         # In-core SVD computation
@@ -425,7 +429,8 @@ def qr(a, name=None):
     dask.array.linalg.sfqr: Implementation for short-and-fat arrays
     """
 
-    if len(a.chunks[1]) == 1:
+    # if len(a.chunks[1]) == 1 and a.shape[0] >= a.shape[1]:
+    if len(a.chunks[1]) == 1: # and a.shape[0] >= a.shape[1]:
         return tsqr(a, name)
     elif len(a.chunks[0]) == 1:
         return sfqr(a, name)
