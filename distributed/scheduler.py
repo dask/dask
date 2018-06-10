@@ -14,7 +14,7 @@ import random
 import six
 
 import psutil
-from sortedcontainers import SortedSet, SortedDict
+import sortedcontainers
 try:
     from cytoolz import frequencies, merge, pluck, merge_sorted, first
 except ImportError:
@@ -836,7 +836,7 @@ class Scheduler(ServerNode):
         self.clients['fire-and-forget'] = ClientState('fire-and-forget')
 
         # Worker state
-        self.workers = SortedDict()
+        self.workers = sortedcontainers.SortedDict()
         for old_attr, new_attr, wrap in [
                 ('ncores', 'ncores', None),
                 ('worker_bytes', 'nbytes', None),
@@ -852,7 +852,7 @@ class Scheduler(ServerNode):
             setattr(self, old_attr,
                     _StateLegacyMapping(self.workers, func))
 
-        self.idle = SortedSet(key=operator.attrgetter('address'))
+        self.idle = sortedcontainers.SortedSet(key=operator.attrgetter('address'))
         self.saturated = set()
 
         self.total_ncores = 0
@@ -3146,7 +3146,7 @@ class Scheduler(ServerNode):
                 worker = min(self.workers.values(),
                              key=operator.attrgetter('occupancy'))
             else:  # dumb but fast in large case
-                worker = self.workers[self.workers.iloc[self.n_tasks % len(self.workers)]]
+                worker = self.workers.values()[self.n_tasks % len(self.workers)]
 
         if self.validate:
             assert worker is None or isinstance(worker, WorkerState), (type(worker), worker)
