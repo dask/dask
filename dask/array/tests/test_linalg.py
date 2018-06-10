@@ -12,7 +12,7 @@ from dask.array.linalg import tsqr, sfqr, svd_compressed, qr, svd
 from dask.array.utils import assert_eq, same_keys
 
 
-@pytest.mark.parametrize('m_n_chunks_err', [
+@pytest.mark.parametrize('m,n,chunks,error_type', [
     (20, 10, 10, None),        # tall-skinny regular blocks
     (20, 10, (3, 10), None),   # tall-skinny regular fat layers
     (20, 10, (3, 10), None),   # tall-skinny irregular fat layers
@@ -25,8 +25,7 @@ from dask.array.utils import assert_eq, same_keys
     (10, 40, ((10), (15, 5, 5, 8, 7)), ValueError),  # short-fat non-uniform chunks (why?)
     (20, 20, 10, ValueError),  # 2x2 regular blocks
 ])
-def test_tsqr(m_n_chunks_err):
-    m, n, chunks, error_type = m_n_chunks_err
+def test_tsqr(m, n, chunks, error_type):
     mat = np.random.rand(m, n)
     data = da.from_array(mat, chunks=chunks, name='A')
     m_qtq = min(m, n)
@@ -41,7 +40,7 @@ def test_tsqr(m_n_chunks_err):
             q, r = tsqr(data)
 
 
-@pytest.mark.parametrize('m_n_chunks_err', [
+@pytest.mark.parametrize('m,n,chunks,error_type', [
     (20, 10, 10, ValueError),        # tall-skinny regular blocks
     (20, 10, (3, 10), ValueError),   # tall-skinny regular fat layers
     (20, 10, (3, 10), ValueError),   # tall-skinny irregular fat layers
@@ -54,8 +53,7 @@ def test_tsqr(m_n_chunks_err):
     (10, 40, ((10), (15, 5, 5, 8, 7)), None),  # short-fat non-uniform chunks (why?)
     (20, 20, 10, ValueError),  # 2x2 regular blocks
 ])
-def test_sfqr(m_n_chunks_err):
-    m, n, chunks, error_type = m_n_chunks_err
+def test_sfqr(m, n, chunks, error_type):
     mat = np.random.rand(m, n)
     data = da.from_array(mat, chunks=chunks, name='A')
     m_qtq = min(m, n)
@@ -70,7 +68,7 @@ def test_sfqr(m_n_chunks_err):
             q, r = sfqr(data)
 
 
-@pytest.mark.parametrize('m_n_chunks_err', [
+@pytest.mark.parametrize('m,n,chunks,error_type', [
     (20, 10, 10, None),        # tall-skinny regular blocks
     (20, 10, (3, 10), None),   # tall-skinny regular fat layers
     (20, 10, (3, 10), None),   # tall-skinny irregular fat layers
@@ -83,8 +81,7 @@ def test_sfqr(m_n_chunks_err):
     (10, 40, ((10), (15, 5, 5, 8, 7)), None),  # short-fat non-uniform chunks (why?)
     (20, 20, 10, NotImplementedError),  # 2x2 regular blocks
 ])
-def test_qr(m_n_chunks_err):
-    m, n, chunks, error_type = m_n_chunks_err
+def test_qr(m, n, chunks, error_type):
     mat = np.random.rand(m, n)
     data = da.from_array(mat, chunks=chunks, name='A')
     m_qtq = min(m, n)
