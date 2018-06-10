@@ -12,7 +12,7 @@ from dask.array.linalg import tsqr, sfqr, svd_compressed, qr, svd
 from dask.array.utils import assert_eq, same_keys
 
 
-@pytest.mark.parametrize('m_n_chunks_err', [
+@pytest.mark.parametrize('m,n,chunks,error_type', [
     (20, 10, 10, None),        # tall-skinny regular blocks
     (144, 3, (16, 3), None),   # tall-skinny regular thin layers (with scope for recursion)
     (145, 3, (16, 3), None),   # tall-skinny regular thin layers (with scope for recursion)
@@ -36,8 +36,7 @@ from dask.array.utils import assert_eq, same_keys
     (300, 10, (30, 10), None),  # tall-skinny regular thin layers; depth=3 (with scope for recursion)
     (300, 10, (20, 10), None),  # tall-skinny regular thin layers; depth=4 (with scope for recursion)
 ])
-def test_tsqr(m_n_chunks_err):
-    m, n, chunks, error_type = m_n_chunks_err
+def test_tsqr(m, n, chunks, error_type):
     mat = np.random.rand(m, n)
     data = da.from_array(mat, chunks=chunks, name='A')
     m_qtq = min(m, n)
@@ -52,7 +51,7 @@ def test_tsqr(m_n_chunks_err):
             q, r = tsqr(data)
 
 
-@pytest.mark.parametrize('m_n_chunks_err', [
+@pytest.mark.parametrize('m,n,chunks,error_type', [
     (20, 10, 10, ValueError),        # tall-skinny regular blocks
     (144, 3, (16, 3), ValueError),   # tall-skinny regular thin layers
     (145, 3, (16, 3), ValueError),   # tall-skinny regular thin layers
@@ -76,8 +75,7 @@ def test_tsqr(m_n_chunks_err):
     (300, 10, (30, 10), ValueError),  # tall-skinny regular thin layers; depth=3 (with scope for recursion)
     (300, 10, (20, 10), ValueError),  # tall-skinny regular thin layers; depth=4 (with scope for recursion)
 ])
-def test_sfqr(m_n_chunks_err):
-    m, n, chunks, error_type = m_n_chunks_err
+def test_sfqr(m, n, chunks, error_type):
     mat = np.random.rand(m, n)
     data = da.from_array(mat, chunks=chunks, name='A')
     m_qtq = min(m, n)
@@ -92,7 +90,7 @@ def test_sfqr(m_n_chunks_err):
             q, r = sfqr(data)
 
 
-@pytest.mark.parametrize('m_n_chunks_err', [
+@pytest.mark.parametrize('m,n,chunks,error_type', [
     (20, 10, 10, None),        # tall-skinny regular blocks
     (144, 3, (16, 3), None),   # tall-skinny regular thin layers (with scope for recursion)
     (145, 3, (16, 3), None),   # tall-skinny regular thin layers (with scope for recursion)
@@ -116,8 +114,7 @@ def test_sfqr(m_n_chunks_err):
     (300, 10, (30, 10), None),  # tall-skinny regular thin layers; depth=3 (with scope for recursion)
     (300, 10, (20, 10), None),  # tall-skinny regular thin layers; depth=4 (with scope for recursion)
 ])
-def test_qr(m_n_chunks_err):
-    m, n, chunks, error_type = m_n_chunks_err
+def test_qr(m, n, chunks, error_type):
     mat = np.random.rand(m, n)
     data = da.from_array(mat, chunks=chunks, name='A')
     m_qtq = min(m, n)
