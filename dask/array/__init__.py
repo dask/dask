@@ -24,8 +24,8 @@ from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
         greater_equal, less, less_equal, not_equal, equal, maximum,
         bitwise_and, bitwise_or, bitwise_xor, bitwise_not, minimum,
         logical_and, logical_or, logical_xor, logical_not, fmax, fmin,
-        isreal, iscomplex, isfinite, isinf, isnan, signbit, copysign,
-        nextafter, spacing, ldexp, fmod, floor, ceil, trunc, degrees,
+        isreal, iscomplex, isfinite, isinf, isneginf, isposinf, isnan, signbit,
+        copysign, nextafter, spacing, ldexp, fmod, floor, ceil, trunc, degrees,
         radians, rint, fix, angle, real, imag, clip, fabs, sign, absolute,
         i0, sinc, nan_to_num, frexp, modf, divide, frompyfunc)
 try:

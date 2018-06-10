@@ -95,8 +95,10 @@ Top level user functions:
    isfinite
    isin
    isinf
+   isneginf
    isnan
    isnull
+   isposinf
    isreal
    ldexp
    linspace
@@ -449,8 +451,10 @@ Other functions
 .. autofunction:: isfinite
 .. autofunction:: isin
 .. autofunction:: isinf
+.. autofunction:: isneginf
 .. autofunction:: isnan
 .. autofunction:: isnull
+.. autofunction:: isposinf
 .. autofunction:: isreal
 .. autofunction:: ldexp
 .. autofunction:: linspace
