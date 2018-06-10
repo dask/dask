@@ -14,8 +14,11 @@ from dask.array.utils import assert_eq, same_keys
 
 @pytest.mark.parametrize('m_n_chunks_err', [
     (20, 10, 10, None),        # tall-skinny regular blocks
+    (144, 3, (16, 3), None),   # tall-skinny regular thin layers (with scope for recursion)
+    (145, 3, (16, 3), None),   # tall-skinny regular thin layers (with scope for recursion)
+    (146, 3, (16, 3), None),   # tall-skinny regular thin layers (with scope for recursion)
     (20, 10, (3, 10), None),   # tall-skinny regular fat layers
-    (20, 10, (3, 10), None),   # tall-skinny irregular fat layers
+    (20, 10, ((8, 4, 8), 10), None),   # tall-skinny irregular fat layers
     (40, 10, ((15, 5, 5, 8, 7), (10)), None),  # tall-skinny non-uniform chunks (why?)
     (10, 5, 10, None),         # single block tall
     (5, 10, 10, None),         # single block short
@@ -24,6 +27,14 @@ from dask.array.utils import assert_eq, same_keys
     (10, 40, (10, 15), ValueError),  # short-fat irregular blocks
     (10, 40, ((10), (15, 5, 5, 8, 7)), ValueError),  # short-fat non-uniform chunks (why?)
     (20, 20, 10, ValueError),  # 2x2 regular blocks
+    (40, 2, (8, 2), None),      # tall-skinny regular thin layers; recursion_depth=2
+    (150, 2, (8, 2), None),     # tall-skinny regular thin layers; recursion_depth=3
+    (600, 2, (8, 2), None),     # tall-skinny regular thin layers; recursion_depth=4
+    (300, 10, (60, 10), None),  # tall-skinny regular thin layers; depth=1 (with scope for recursion)
+    (300, 10, (50, 10), None),  # tall-skinny regular thin layers; depth=2 (with scope for recursion)
+    (300, 10, (40, 10), None),  # tall-skinny regular thin layers; depth=2 (with scope for recursion)
+    (300, 10, (30, 10), None),  # tall-skinny regular thin layers; depth=3 (with scope for recursion)
+    (300, 10, (20, 10), None),  # tall-skinny regular thin layers; depth=4 (with scope for recursion)
 ])
 def test_tsqr(m_n_chunks_err):
     m, n, chunks, error_type = m_n_chunks_err
@@ -43,8 +54,11 @@ def test_tsqr(m_n_chunks_err):
 
 @pytest.mark.parametrize('m_n_chunks_err', [
     (20, 10, 10, ValueError),        # tall-skinny regular blocks
+    (144, 3, (16, 3), ValueError),   # tall-skinny regular thin layers
+    (145, 3, (16, 3), ValueError),   # tall-skinny regular thin layers
+    (146, 3, (16, 3), ValueError),   # tall-skinny regular thin layers
     (20, 10, (3, 10), ValueError),   # tall-skinny regular fat layers
-    (20, 10, (3, 10), ValueError),   # tall-skinny irregular fat layers
+    (20, 10, ((8, 4, 8), 10), ValueError),   # tall-skinny irregular fat layers
     (40, 10, ((15, 5, 5, 8, 7), (10)), ValueError),  # tall-skinny non-uniform chunks (why?)
     (10, 5, 10, None),         # single block thin
     (5, 10, 10, None),         # single block fat
@@ -53,6 +67,14 @@ def test_tsqr(m_n_chunks_err):
     (10, 40, (10, 15), None),  # short-fat irregular blocks
     (10, 40, ((10), (15, 5, 5, 8, 7)), None),  # short-fat non-uniform chunks (why?)
     (20, 20, 10, ValueError),  # 2x2 regular blocks
+    (40, 2, (8, 2), ValueError),      # tall-skinny regular thin layers; recursion_depth=2
+    (150, 2, (8, 2), ValueError),     # tall-skinny regular thin layers; recursion_depth=3
+    (600, 2, (8, 2), ValueError),     # tall-skinny regular thin layers; recursion_depth=4
+    (300, 10, (60, 10), ValueError),  # tall-skinny regular thin layers; depth=1 (with scope for recursion)
+    (300, 10, (50, 10), ValueError),  # tall-skinny regular thin layers; depth=2 (with scope for recursion)
+    (300, 10, (40, 10), ValueError),  # tall-skinny regular thin layers; depth=2 (with scope for recursion)
+    (300, 10, (30, 10), ValueError),  # tall-skinny regular thin layers; depth=3 (with scope for recursion)
+    (300, 10, (20, 10), ValueError),  # tall-skinny regular thin layers; depth=4 (with scope for recursion)
 ])
 def test_sfqr(m_n_chunks_err):
     m, n, chunks, error_type = m_n_chunks_err
@@ -72,8 +94,11 @@ def test_sfqr(m_n_chunks_err):
 
 @pytest.mark.parametrize('m_n_chunks_err', [
     (20, 10, 10, None),        # tall-skinny regular blocks
+    (144, 3, (16, 3), None),   # tall-skinny regular thin layers (with scope for recursion)
+    (145, 3, (16, 3), None),   # tall-skinny regular thin layers (with scope for recursion)
+    (146, 3, (16, 3), None),   # tall-skinny regular thin layers (with scope for recursion)
     (20, 10, (3, 10), None),   # tall-skinny regular fat layers
-    (20, 10, (3, 10), None),   # tall-skinny irregular fat layers
+    (20, 10, ((8, 4, 8), 10), None),   # tall-skinny irregular fat layers
     (40, 10, ((15, 5, 5, 8, 7), (10)), None),  # tall-skinny non-uniform chunks (why?)
     (10, 5, 10, None),         # single block tall
     (5, 10, 10, None),   # single block short
@@ -82,6 +107,14 @@ def test_sfqr(m_n_chunks_err):
     (10, 40, (10, 15), None),  # short-fat irregular blocks
     (10, 40, ((10), (15, 5, 5, 8, 7)), None),  # short-fat non-uniform chunks (why?)
     (20, 20, 10, NotImplementedError),  # 2x2 regular blocks
+    (40, 2, (8, 2), None),      # tall-skinny regular thin layers; recursion_depth=2
+    (150, 2, (8, 2), None),     # tall-skinny regular thin layers; recursion_depth=3
+    (600, 2, (8, 2), None),     # tall-skinny regular thin layers; recursion_depth=4
+    (300, 10, (60, 10), None),  # tall-skinny regular thin layers; depth=1 (with scope for recursion)
+    (300, 10, (50, 10), None),  # tall-skinny regular thin layers; depth=2 (with scope for recursion)
+    (300, 10, (40, 10), None),  # tall-skinny regular thin layers; depth=2 (with scope for recursion)
+    (300, 10, (30, 10), None),  # tall-skinny regular thin layers; depth=3 (with scope for recursion)
+    (300, 10, (20, 10), None),  # tall-skinny regular thin layers; depth=4 (with scope for recursion)
 ])
 def test_qr(m_n_chunks_err):
     m, n, chunks, error_type = m_n_chunks_err

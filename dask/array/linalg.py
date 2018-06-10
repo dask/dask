@@ -27,7 +27,7 @@ def _cumsum_part(last, new):
     return (last[1], last[1] + new)
 
 
-def tsqr(data, name=None, compute_svd=False):
+def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
     """ Direct Tall-and-Skinny QR algorithm
 
     As presented in:
@@ -57,8 +57,11 @@ def tsqr(data, name=None, compute_svd=False):
     dask.array.linalg.svd - Powered by this algorithm
     dask.array.linalg.sfqr - Variant for short-and-fat arrays
     """
-    if not (data.ndim == 2 and                    # Is a matrix
-            len(data.chunks[1]) == 1):         # Only one column block
+    nr, nc = len(data.chunks[0]), len(data.chunks[1])
+    cr_max, cc = max(data.chunks[0]), data.chunks[1][0]
+
+    if not (data.ndim == 2 and  # Is a matrix
+            nc == 1):           # Only one column block
         raise ValueError(
             "Input must have the following properties:\n"
             "  1. Have two dimensions\n"
@@ -71,93 +74,188 @@ def tsqr(data, name=None, compute_svd=False):
     prefix += '_'
 
     m, n = data.shape
-    numblocks = (len(data.chunks[0]), 1)
+    numblocks = (nr, 1)
 
+    qq, rr = np.linalg.qr(np.ones(shape=(1, 1), dtype=data.dtype))
+
+    dsk = sharedict.ShareDict()
+    dsk.update(data.dask)
+
+    # Block qr
     name_qr_st1 = prefix + 'QR_st1'
     dsk_qr_st1 = top(np.linalg.qr, name_qr_st1, 'ij', data.name, 'ij',
                      numblocks={data.name: numblocks})
-    # qr[0]
+    dsk.update_with_key(dsk_qr_st1, key=name_qr_st1)
+
+    # Block qr[0]
     name_q_st1 = prefix + 'Q_st1'
     dsk_q_st1 = dict(((name_q_st1, i, 0),
                       (operator.getitem, (name_qr_st1, i, 0), 0))
                      for i in range(numblocks[0]))
-    # qr[1]
+    dsk.update_with_key(dsk_q_st1, key=name_q_st1)
+
+    # Block qr[1]
     name_r_st1 = prefix + 'R_st1'
     dsk_r_st1 = dict(((name_r_st1, i, 0),
                       (operator.getitem, (name_qr_st1, i, 0), 1))
                      for i in range(numblocks[0]))
-
-    # Stacking for in-core QR computation
-    to_stack = [(name_r_st1, i, 0) for i in range(numblocks[0])]
-    name_r_st1_stacked = prefix + 'R_st1_stacked'
-    dsk_r_st1_stacked = {(name_r_st1_stacked, 0, 0): (np.vstack,
-                                                      (tuple, to_stack))}
-    # In-core QR computation
-    name_qr_st2 = prefix + 'QR_st2'
-    dsk_qr_st2 = top(np.linalg.qr, name_qr_st2, 'ij', name_r_st1_stacked, 'ij',
-                     numblocks={name_r_st1_stacked: (1, 1)})
-    # qr[0]
-    name_q_st2_aux = prefix + 'Q_st2_aux'
-    dsk_q_st2_aux = {(name_q_st2_aux, 0, 0): (operator.getitem,
-                                              (name_qr_st2, 0, 0), 0)}
-    if not any(np.isnan(c) for cs in data.chunks for c in cs):
-        q2_block_sizes = [min(e, n) for e in data.chunks[0]]
-        block_slices = [(slice(e[0], e[1]), slice(0, n))
-                        for e in _cumsum_blocks(q2_block_sizes)]
-        dsk_q_blockslices = {}
-    else:
-        name_q2bs = prefix + 'q2-shape'
-        dsk_q2_shapes = {(name_q2bs, i): (min, (getattr, (data.name, i, 0), 'shape'))
-                         for i in range(numblocks[0])}
-        dsk_n = {prefix + 'n': (operator.getitem,
-                                (getattr, (data.name, 0, 0), 'shape'), 1)}
-        name_q2cs = prefix + 'q2-shape-cumsum'
-        dsk_q2_cumsum = {(name_q2cs, 0): [0, (name_q2bs, 0)]}
-        dsk_q2_cumsum.update({(name_q2cs, i): (_cumsum_part,
-                                               (name_q2cs, i - 1),
-                                               (name_q2bs, i))
-                              for i in range(1, numblocks[0])})
-
-        name_blockslice = prefix + 'q2-blockslice'
-        dsk_block_slices = {(name_blockslice, i): (tuple, [
-            (apply, slice, (name_q2cs, i)), (slice, 0, prefix + 'n')])
-            for i in range(numblocks[0])}
-
-        dsk_q_blockslices = toolz.merge(dsk_n,
-                                        dsk_q2_shapes,
-                                        dsk_q2_cumsum,
-                                        dsk_block_slices)
-
-        block_slices = [(name_blockslice, i) for i in range(numblocks[0])]
-
-    name_q_st2 = prefix + 'Q_st2'
-    dsk_q_st2 = dict(((name_q_st2, i, 0),
-                      (operator.getitem, (name_q_st2_aux, 0, 0), b))
-                     for i, b in enumerate(block_slices))
-    # qr[1]
-    name_r_st2 = prefix + 'R'
-    dsk_r_st2 = {(name_r_st2, 0, 0): (operator.getitem, (name_qr_st2, 0, 0), 1)}
-
-    name_q_st3 = prefix + 'Q'
-    dsk_q_st3 = top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
-                    name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
-                                                 name_q_st2: numblocks})
-
-    dsk = sharedict.ShareDict()
-    dsk.update(data.dask)
-    dsk.update_with_key(dsk_qr_st1, key=name_qr_st1)
-    dsk.update_with_key(dsk_q_st1, key=name_q_st1)
     dsk.update_with_key(dsk_r_st1, key=name_r_st1)
-    dsk.update_with_key(dsk_r_st1_stacked, key=name_r_st1_stacked)
-    dsk.update_with_key(dsk_qr_st2, key=name_qr_st2)
-    dsk.update_with_key(dsk_q_st2_aux, key=name_q_st2_aux)
-    dsk.update_with_key(dsk_q_st2, key=name_q_st2)
-    dsk.update_with_key(dsk_q_st3, key=name_q_st3)
-    dsk.update_with_key(dsk_q_blockslices, key=prefix + '-q-blockslices')
-    dsk.update_with_key(dsk_r_st2, key=name_r_st2)
+
+    # Next step is to obtain a QR decomposition for the stacked R factors, so either:
+    # - gather R factors into a single core and do a QR decomposition
+    # - recurse with tsqr (if single core computation too large and a-priori meaningful
+    #   reduction possible, meaning that chunks have to be well defined)
+
+    single_core_compute_m = nr * cc
+    chunks_well_defined = not any(np.isnan(c) for cs in data.chunks for c in cs)
+    prospective_blocks = np.ceil(single_core_compute_m / cr_max)
+    meaningful_reduction_possible = (cr_max if _max_vchunk_size is None else _max_vchunk_size) >= 2 * cc
+    can_distribute = chunks_well_defined and int(prospective_blocks) > 1
+
+    if chunks_well_defined and meaningful_reduction_possible and can_distribute:
+        # stack chunks into blocks and recurse using tsqr
+
+        # Prepare to stack chunks into blocks (from block qr[1])
+        all_blocks = []
+        curr_block = []
+        curr_block_sz = 0
+        for idx, a_m in enumerate(data.chunks[0]):
+            m_q = a_m
+            n_q = min(m_q, cc)
+            m_r = n_q
+            # n_r = cc
+            if curr_block_sz + m_r > cr_max:
+                all_blocks.append(curr_block)
+                curr_block = []
+                curr_block_sz = 0
+            curr_block.append((idx, m_r))
+            curr_block_sz += m_r
+        if len(curr_block) > 0:
+            all_blocks.append(curr_block)
+
+        # R_stacked
+        name_r_stacked = prefix + 'R_stacked'
+        dsk_r_stacked = dict(((name_r_stacked, i, 0),
+                              (np.vstack, (tuple,
+                                           [(name_r_st1, idx, 0)
+                                            for idx, _ in sub_block_info])))
+                             for i, sub_block_info in enumerate(all_blocks))
+        dsk.update_with_key(dsk_r_stacked, key=name_r_stacked)
+
+        # retrieve R_stacked for recursion with tsqr
+        vchunks_rstacked = tuple([sum(map(lambda x: x[1], sub_block_info)) for sub_block_info in all_blocks])
+        r_stacked = Array(dsk, name_r_stacked,
+                          shape=(sum(vchunks_rstacked), n), chunks=(vchunks_rstacked, (n)), dtype=rr.dtype)
+
+        # recurse
+        q_inner, r_inner = tsqr(r_stacked, name=prefix + 'tsqr__', _max_vchunk_size=cr_max)
+        dsk.update(q_inner.dask)
+        dsk.update(r_inner.dask)
+
+        # Q_inner: "unstack"
+        name_q_st2 = prefix + 'Q_st2'
+        dsk_q_st2 = dict(((name_q_st2, j, 0),
+                          (operator.getitem,
+                           (q_inner.name, i, 0),
+                           ((slice(e[0], e[1])), (slice(0, n)))))
+                         for i, sub_block_info in enumerate(all_blocks)
+                         for j, e in zip([x[0] for x in sub_block_info],
+                                         _cumsum_blocks([x[1] for x in sub_block_info])))
+        dsk.update_with_key(dsk_q_st2, key=name_q_st2)
+
+        # R: R_inner
+        name_r_st2 = prefix + 'R'
+        dsk_r_st2 = {(name_r_st2, 0, 0): (r_inner.name, 0, 0)}
+        dsk.update_with_key(dsk_r_st2, key=name_r_st2)
+
+        # Q: Block qr[0] (*) Q_inner
+        name_q_st3 = prefix + 'Q'
+        dsk_q_st3 = top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
+                        name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
+                                                     name_q_st2: numblocks})
+        dsk.update_with_key(dsk_q_st3, key=name_q_st3)
+    else:
+        # Do single core computation
+
+        # Stacking for in-core QR computation
+        to_stack = [(name_r_st1, i, 0) for i in range(numblocks[0])]
+        name_r_st1_stacked = prefix + 'R_st1_stacked'
+        dsk_r_st1_stacked = {(name_r_st1_stacked, 0, 0): (np.vstack,
+                                                          (tuple, to_stack))}
+        dsk.update_with_key(dsk_r_st1_stacked, key=name_r_st1_stacked)
+
+        # In-core QR computation
+        name_qr_st2 = prefix + 'QR_st2'
+        dsk_qr_st2 = top(np.linalg.qr, name_qr_st2, 'ij', name_r_st1_stacked, 'ij',
+                         numblocks={name_r_st1_stacked: (1, 1)})
+        dsk.update_with_key(dsk_qr_st2, key=name_qr_st2)
+
+        # In-core qr[0]
+        name_q_st2_aux = prefix + 'Q_st2_aux'
+        dsk_q_st2_aux = {(name_q_st2_aux, 0, 0): (operator.getitem,
+                                                  (name_qr_st2, 0, 0), 0)}
+        dsk.update_with_key(dsk_q_st2_aux, key=name_q_st2_aux)
+
+        if not any(np.isnan(c) for cs in data.chunks for c in cs):
+            # when chunks are all known...
+            # obtain slices on q from in-core compute (e.g.: (slice(10, 20), slice(0, 5)))
+            q2_block_sizes = [min(e, n) for e in data.chunks[0]]
+            block_slices = [(slice(e[0], e[1]), slice(0, n))
+                            for e in _cumsum_blocks(q2_block_sizes)]
+            dsk_q_blockslices = {}
+        else:
+            # when chunks are not already known...
+
+            # request shape information: vertical chunk sizes & column dimension (n)
+            name_q2bs = prefix + 'q2-shape'
+            dsk_q2_shapes = {(name_q2bs, i): (min, (getattr, (data.name, i, 0), 'shape'))
+                             for i in range(numblocks[0])}
+            dsk_n = {prefix + 'n': (operator.getitem,
+                                    (getattr, (data.name, 0, 0), 'shape'), 1)}
+
+            # cumulative sums (start, end)
+            name_q2cs = prefix + 'q2-shape-cumsum'
+            dsk_q2_cumsum = {(name_q2cs, 0): [0, (name_q2bs, 0)]}
+            dsk_q2_cumsum.update({(name_q2cs, i): (_cumsum_part,
+                                                   (name_q2cs, i - 1),
+                                                   (name_q2bs, i))
+                                  for i in range(1, numblocks[0])})
+
+            # obtain slices on q from in-core compute (e.g.: (slice(10, 20), slice(0, 5)))
+            name_blockslice = prefix + 'q2-blockslice'
+            dsk_block_slices = {(name_blockslice, i): (tuple, [
+                (apply, slice, (name_q2cs, i)), (slice, 0, prefix + 'n')])
+                for i in range(numblocks[0])}
+
+            dsk_q_blockslices = toolz.merge(dsk_n,
+                                            dsk_q2_shapes,
+                                            dsk_q2_cumsum,
+                                            dsk_block_slices)
+
+            block_slices = [(name_blockslice, i) for i in range(numblocks[0])]
+
+        dsk.update_with_key(dsk_q_blockslices, key=prefix + '-q-blockslices')
+
+        # In-core qr[0] unstacking
+        name_q_st2 = prefix + 'Q_st2'
+        dsk_q_st2 = dict(((name_q_st2, i, 0),
+                          (operator.getitem, (name_q_st2_aux, 0, 0), b))
+                         for i, b in enumerate(block_slices))
+        dsk.update_with_key(dsk_q_st2, key=name_q_st2)
+
+        # Q: Block qr[0] (*) In-core qr[0]
+        name_q_st3 = prefix + 'Q'
+        dsk_q_st3 = top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
+                        name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
+                                                     name_q_st2: numblocks})
+        dsk.update_with_key(dsk_q_st3, key=name_q_st3)
+
+        # R: In-core qr[1]
+        name_r_st2 = prefix + 'R'
+        dsk_r_st2 = {(name_r_st2, 0, 0): (operator.getitem, (name_qr_st2, 0, 0), 1)}
+        dsk.update_with_key(dsk_r_st2, key=name_r_st2)
 
     if not compute_svd:
-        qq, rr = np.linalg.qr(np.ones(shape=(1, 1), dtype=data.dtype))
         q_shape = data.shape if data.shape[0] >= data.shape[1] else (data.shape[0], data.shape[0])
         q_chunks = data.chunks if data.shape[0] >= data.shape[1] else (data.chunks[0], data.chunks[0])
         r_shape = (n, n) if data.shape[0] >= data.shape[1] else data.shape
