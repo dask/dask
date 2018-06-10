@@ -1343,8 +1343,12 @@ class Array(DaskMethodsMixin):
                 "vindex does not support indexing with None (np.newaxis), "
                 "got {}".format(key))
         if all(isinstance(k, slice) for k in key):
+            if all(k.indices(d) == slice(0, d).indices(d)
+                   for k, d in zip(key, self.shape)):
+                return self
             raise IndexError(
-                "vindex requires at least one non-slice to vectorize over. "
+                "vindex requires at least one non-slice to vectorize over "
+                "when the slices are not over the entire array (i.e, x[:]). "
                 "Use normal slicing instead when only using slices. Got: {}"
                 .format(key))
         return _vindex(self, *key)
