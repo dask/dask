@@ -161,11 +161,10 @@ def tsqr(data, name=None, compute_svd=False):
         q_shape = data.shape if data.shape[0] >= data.shape[1] else (data.shape[0], data.shape[0])
         q_chunks = data.chunks if data.shape[0] >= data.shape[1] else (data.chunks[0], data.chunks[0])
         r_shape = (n, n) if data.shape[0] >= data.shape[1] else data.shape
-        r_chunks = (n, n) if data.shape[0] >= data.shape[1] else data.chunks
         q = Array(dsk, name_q_st3,
                   shape=q_shape, chunks=q_chunks, dtype=qq.dtype)
         r = Array(dsk, name_r_st2,
-                  shape=r_shape, chunks=r_chunks, dtype=rr.dtype)
+                  shape=r_shape, chunks=n, dtype=rr.dtype)
         return q, r
     else:
         # In-core SVD computation
