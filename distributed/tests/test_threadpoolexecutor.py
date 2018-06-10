@@ -107,3 +107,15 @@ def test_secede_rejoin_quiet():
 
         future = e.submit(f)
         result = future.result()
+
+
+def test_rejoin_idempotent():
+    with ThreadPoolExecutor(2) as e:
+        def f():
+            secede()
+            for i in range(5):
+                rejoin()
+            return 1
+
+        future = e.submit(f)
+        result = future.result()

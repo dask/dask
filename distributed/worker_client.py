@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import warnings
 
-from .threadpoolexecutor import secede
+from .threadpoolexecutor import secede, rejoin
 from .worker import thread_state, get_client, get_worker
 
 
@@ -47,6 +47,9 @@ def worker_client(timeout=3, separate_thread=True):
         worker.loop.add_callback(worker.transition, thread_state.key, 'long-running')
 
     yield client
+
+    if separate_thread:
+        rejoin()
 
 
 def local_client(*args, **kwargs):

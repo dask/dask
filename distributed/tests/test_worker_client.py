@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import random
+import threading
 from time import sleep
 import warnings
 
@@ -284,3 +285,15 @@ def test_compute_within_worker_client(c, s, a, b):
 
     result = yield c.compute(f())
     assert result == 1
+
+
+@gen_cluster(client=True)
+def test_worker_client_rejoins(c, s, a, b):
+    def f():
+        with worker_client():
+            pass
+
+        return threading.current_thread() in get_worker().executor._threads
+
+    result = yield c.submit(f)
+    assert result
