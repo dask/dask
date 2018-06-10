@@ -28,10 +28,16 @@ from dask.array.utils import assert_eq, same_keys
 def test_tsqr(m, n, chunks, error_type):
     mat = np.random.rand(m, n)
     data = da.from_array(mat, chunks=chunks, name='A')
-    m_qtq = min(m, n)
+    m_q = m
+    n_q = min(m, n)
+    m_r = n_q
+    n_r = n
+    m_qtq = n_q
 
     if error_type is None:
         q, r = tsqr(data)
+        assert_eq((m_q, n_q), q.shape)  # shape check
+        assert_eq((m_r, n_r), r.shape)  # shape check
         assert_eq(mat, da.dot(q, r))  # accuracy check
         assert_eq(np.eye(m_qtq, m_qtq), da.dot(q.T, q))  # q must be orthonormal
         assert_eq(r, da.triu(r.rechunk(r.shape[0])))  # r must be upper triangular
@@ -56,10 +62,16 @@ def test_tsqr(m, n, chunks, error_type):
 def test_sfqr(m, n, chunks, error_type):
     mat = np.random.rand(m, n)
     data = da.from_array(mat, chunks=chunks, name='A')
-    m_qtq = min(m, n)
+    m_q = m
+    n_q = min(m, n)
+    m_r = n_q
+    n_r = n
+    m_qtq = n_q
 
     if error_type is None:
         q, r = sfqr(data)
+        assert_eq((m_q, n_q), q.shape)  # shape check
+        assert_eq((m_r, n_r), r.shape)  # shape check
         assert_eq(mat, da.dot(q, r))  # accuracy check
         assert_eq(np.eye(m_qtq, m_qtq), da.dot(q.T, q))  # q must be orthonormal
         assert_eq(r, da.triu(r.rechunk(r.shape[0])))  # r must be upper triangular
@@ -84,10 +96,16 @@ def test_sfqr(m, n, chunks, error_type):
 def test_qr(m, n, chunks, error_type):
     mat = np.random.rand(m, n)
     data = da.from_array(mat, chunks=chunks, name='A')
-    m_qtq = min(m, n)
+    m_q = m
+    n_q = min(m, n)
+    m_r = n_q
+    n_r = n
+    m_qtq = n_q
 
     if error_type is None:
         q, r = qr(data)
+        assert_eq((m_q, n_q), q.shape)  # shape check
+        assert_eq((m_r, n_r), r.shape)  # shape check
         assert_eq(mat, da.dot(q, r))  # accuracy check
         assert_eq(np.eye(m_qtq, m_qtq), da.dot(q.T, q))  # q must be orthonormal
         assert_eq(r, da.triu(r.rechunk(r.shape[0])))  # r must be upper triangular
