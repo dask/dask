@@ -505,8 +505,6 @@ def triu(m, k=0):
     """
     if m.ndim != 2:
         raise ValueError('input must be 2 dimensional')
-    if m.shape[0] != m.shape[1]:
-        raise NotImplementedError('input must be a square matrix')
     if m.chunks[0][0] != m.chunks[1][0]:
         msg = ('chunks must be a square. '
                'Use .rechunk method to change the size of chunks.')
@@ -555,8 +553,6 @@ def tril(m, k=0):
     """
     if m.ndim != 2:
         raise ValueError('input must be 2 dimensional')
-    if m.shape[0] != m.shape[1]:
-        raise NotImplementedError('input must be a square matrix')
     if not len(set(m.chunks[0] + m.chunks[1])) == 1:
         msg = ('All chunks must be a square matrix to perform lu decomposition. '
                'Use .rechunk method to change the size of chunks.')

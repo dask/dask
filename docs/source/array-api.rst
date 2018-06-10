@@ -221,6 +221,7 @@ Linear Algebra
    linalg.solve_triangular
    linalg.svd
    linalg.svd_compressed
+   linalg.sfqr
    linalg.tsqr
 
 Masked Arrays
