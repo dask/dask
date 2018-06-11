@@ -293,14 +293,20 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
         dsk.update_with_key(dsk_s_st2, key=name_s_st2)
         dsk.update_with_key(dsk_v_st2, key=name_v_st2)
 
-        uu, ss, vv = np.linalg.svd(np.ones(shape=(1, 1), dtype=data.dtype))
+        uu, ss, vvh = np.linalg.svd(np.ones(shape=(1, 1), dtype=data.dtype))
 
-        u = Array(dsk, name_u_st4, shape=data.shape, chunks=data.chunks,
+        m_u = m
+        n_u = min(m, n)
+        n_s = n_u
+        m_vh = n_u
+        n_vh = n
+        d_vh = max(m_vh, n_vh)  # full matrix returned
+        u = Array(dsk, name_u_st4, shape=(m_u, n_u), chunks=(data.chunks[0], (n_u,)),
                   dtype=uu.dtype)
-        s = Array(dsk, name_s_st2, shape=(n,), chunks=((n,),), dtype=ss.dtype)
-        v = Array(dsk, name_v_st2, shape=(n, n), chunks=((n,), (n,)),
-                  dtype=vv.dtype)
-        return u, s, v
+        s = Array(dsk, name_s_st2, shape=(n_s,), chunks=n_s, dtype=ss.dtype)
+        vh = Array(dsk, name_v_st2, shape=(d_vh, d_vh), chunks=n,
+                   dtype=vvh.dtype)
+        return u, s, vh
 
 
 def sfqr(data, name=None):

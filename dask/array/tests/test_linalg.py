@@ -35,22 +35,45 @@ from dask.array.utils import assert_eq, same_keys
 def test_tsqr(m, n, chunks, error_type):
     mat = np.random.rand(m, n)
     data = da.from_array(mat, chunks=chunks, name='A')
+
+    # qr
     m_q = m
     n_q = min(m, n)
     m_r = n_q
     n_r = n
-    m_qtq = n_q
+
+    # svd
+    m_u = m
+    n_u = min(m, n)
+    n_s = n_q
+    m_vh = n_q
+    n_vh = n
+    d_vh = max(m_vh, n_vh)  # full matrix returned
 
     if error_type is None:
+        # test QR
         q, r = tsqr(data)
         assert_eq((m_q, n_q), q.shape)  # shape check
         assert_eq((m_r, n_r), r.shape)  # shape check
-        assert_eq(mat, da.dot(q, r))  # accuracy check
-        assert_eq(np.eye(m_qtq, m_qtq), da.dot(q.T, q))  # q must be orthonormal
+        assert_eq(mat, q @ r)  # accuracy check
+        assert_eq(np.eye(n_q, n_q), q.T @ q)  # q must be orthonormal
         assert_eq(r, da.triu(r.rechunk(r.shape[0])))  # r must be upper triangular
+
+        # test SVD
+        u, s, vh = tsqr(data, compute_svd=True)
+        s_exact = np.linalg.svd(mat)[1]
+        assert_eq(s, s_exact)  # s must contain the singular values
+        assert_eq((m_u, n_u), u.shape)  # shape check
+        assert_eq((n_s,), s.shape)  # shape check
+        assert_eq((d_vh, d_vh), vh.shape)  # shape check
+        assert_eq(np.eye(n_u, n_u), u.T @ u)  # u must be orthonormal
+        assert_eq(np.eye(d_vh, d_vh), vh @ vh.T)  # vh must be orthonormal
+        assert_eq(mat, u @ da.diag(s) @ vh[:n_q])  # accuracy check
     else:
         with pytest.raises(error_type):
             q, r = tsqr(data)
+        with pytest.raises(error_type):
+            u, s, vh = tsqr(data, compute_svd=True)
 
 
 @pytest.mark.parametrize('m,n,chunks,error_type', [
@@ -133,39 +156,6 @@ def test_qr(m, n, chunks, error_type):
     else:
         with pytest.raises(error_type):
             q, r = qr(data)
-
-
-def test_tsqr_svd_regular_blocks():
-    m, n = 20, 10
-    mat = np.random.rand(m, n)
-    data = da.from_array(mat, chunks=(10, n), name='A')
-
-    u, s, vt = tsqr(data, compute_svd=True)
-    usvt = da.dot(u, da.dot(da.diag(s), vt))
-
-    s_exact = np.linalg.svd(mat)[1]
-
-    assert_eq(mat, usvt)  # accuracy check
-    assert_eq(np.eye(n, n), da.dot(u.T, u))  # u must be orthonormal
-    assert_eq(np.eye(n, n), da.dot(vt, vt.T))  # v must be orthonormal
-    assert_eq(s, s_exact)  # s must contain the singular values
-
-
-def test_tsqr_svd_irregular_blocks():
-    m, n = 20, 10
-    mat = np.random.rand(m, n)
-    data = da.from_array(mat, chunks=(3, n), name='A')[1:]
-    mat2 = mat[1:, :]
-
-    u, s, vt = tsqr(data, compute_svd=True)
-    usvt = da.dot(u, da.dot(da.diag(s), vt))
-
-    s_exact = np.linalg.svd(mat2)[1]
-
-    assert_eq(mat2, usvt)  # accuracy check
-    assert_eq(np.eye(n, n), da.dot(u.T, u))  # u must be orthonormal
-    assert_eq(np.eye(n, n), da.dot(vt, vt.T))  # v must be orthonormal
-    assert_eq(s, s_exact)  # s must contain the singular values
 
 
 def test_linalg_consistent_names():
