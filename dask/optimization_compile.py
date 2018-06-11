@@ -9,10 +9,11 @@ from toolz.functoolz import Compose
 from .compatibility import apply
 from .core import flatten
 from .optimization import cull
+from .sharedict import ShareDict
 from .utils import ensure_dict
 
 
-__all__ = ('compiled', )
+__all__ = ('compiled', 'preserve_key', 'preserve_keys')
 
 
 BINARY_OP_MAP = {
@@ -44,6 +45,55 @@ MODULE_REPLACEMENTS = {
     'numpy.core.numeric': numpy,
     'numpy.lib.stride_tricks': numpy,
 }
+
+
+def preserve_key(arg):
+    """Marker used by optimizer functions to
+    prevent optimizing a dask key away
+    """
+    return arg
+
+
+def preserve_keys(dsk, keys, fast=True):
+    """Mark selected keys of the target dask graph to prevent them from
+    being optimized away by optimization functions.
+
+    Parameters
+    ----------
+    dsk : dict-like
+        Dask graph
+    keys: list
+        Keys of the graph that need to be preserved
+    fast: bool
+        If True and dsk is a :class:`~dask.sharedict.ShareDict`, do not inspect
+        dicts that are not expected to contain the keys. This is safe only
+        if all keys are top-level keys of dask collections and the ShareDict
+        was built in a standard way.
+
+    Returns
+    -------
+    If fast is True and dsk is a ShareDict, a new ShareDict where some of
+    the dicts have been replaced with new ones. Otherwise, a new dict.
+    In both cases, the original is unaltered.
+    """
+    keys = set(flatten(keys))
+
+    def _pk(this_dsk):
+        return {
+            k: ((preserve_key, v) if k in keys else v)
+            for k, v in this_dsk.items()
+        }
+
+    if not fast or not isinstance(dsk, ShareDict):
+        return _pk(ensure_dict(dsk))
+
+    names = {k[0] if type(k) is tuple else k for k in keys}
+    out = ShareDict()
+    out.dicts = {
+        key_i: (_pk(dsk_i) if key_i in names else dsk_i)
+        for key_i, dsk_i in dsk.dicts.items()
+    }
+    return out
 
 
 def compiled(dsk, keys):
