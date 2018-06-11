@@ -5407,5 +5407,21 @@ def test_nested_prioritization(c, s, w):
             (s.tasks[tokey(fx.key)].priority < s.tasks[tokey(fy.key)].priority))
 
 
+@gen_cluster(client=True)
+def test_scatter_error_cancel(c, s, a, b):
+    # https://github.com/dask/distributed/issues/2038
+    def bad_fn(x):
+        raise Exception('lol')
+
+    x = yield c.scatter(1)
+    y = c.submit(bad_fn, x)
+    del x
+
+    yield wait(y)
+    assert y.status == 'error'
+    yield gen.sleep(0.1)
+    assert y.status == 'error'  # not cancelled
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401

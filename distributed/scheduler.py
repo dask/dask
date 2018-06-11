@@ -3338,8 +3338,8 @@ class Scheduler(ServerNode):
                 ws.has_what.remove(ts)
                 ws.nbytes -= ts.get_nbytes()
                 self.worker_send(ws.address, {'op': 'delete-data',
-                                                 'keys': [key],
-                                                 'report': False})
+                                              'keys': [key],
+                                              'report': False})
             ts.who_has.clear()
 
             ts.state = 'released'
@@ -3580,7 +3580,7 @@ class Scheduler(ServerNode):
             dts.has_lost_dependencies = True
             dts.dependencies.remove(ts)
             dts.waiting_on.discard(ts)
-            if dts.state not in ('memory', 'error'):
+            if dts.state not in ('memory', 'erred'):
                 # Cannot compute task anymore
                 recommendations[dts.key] = 'forgotten'
         ts.dependents.clear()
