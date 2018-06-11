@@ -17,11 +17,10 @@ from dask.array.utils import assert_eq, same_keys
     (20, 10, (3, 10), None),   # tall-skinny regular fat layers
     (20, 10, ((8, 4, 8), 10), None),   # tall-skinny irregular fat layers
     (40, 10, ((15, 5, 5, 8, 7), (10)), None),  # tall-skinny non-uniform chunks (why?)
-    (40, 2, (8, 2), None),      # tall-skinny regular thin layers; recursion_depth=2
-    (150, 2, (8, 2), None),     # tall-skinny regular thin layers; recursion_depth=3
-    (600, 2, (8, 2), None),     # tall-skinny regular thin layers; recursion_depth=4
-    (300, 10, (60, 10), None),  # tall-skinny regular thin layers; recursion_depth=1
-    (300, 10, (50, 10), None),  # tall-skinny regular thin layers; recursion_depth=2
+    (128, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=1
+    (129, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=2 --> 17x2
+    (130, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=2 --> 18x2 next
+    (131, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=2 --> 18x2 next
     (300, 10, (40, 10), None),  # tall-skinny regular thin layers; recursion_depth=2
     (300, 10, (30, 10), None),  # tall-skinny regular thin layers; recursion_depth=3
     (300, 10, (20, 10), None),  # tall-skinny regular thin layers; recursion_depth=4
@@ -59,11 +58,10 @@ def test_tsqr(m, n, chunks, error_type):
     (20, 10, (3, 10), ValueError),   # tall-skinny regular fat layers
     (20, 10, ((8, 4, 8), 10), ValueError),   # tall-skinny irregular fat layers
     (40, 10, ((15, 5, 5, 8, 7), (10)), ValueError),  # tall-skinny non-uniform chunks (why?)
-    (40, 2, (8, 2), ValueError),      # tall-skinny regular thin layers; recursion_depth=2
-    (150, 2, (8, 2), ValueError),     # tall-skinny regular thin layers; recursion_depth=3
-    (600, 2, (8, 2), ValueError),     # tall-skinny regular thin layers; recursion_depth=4
-    (300, 10, (60, 10), ValueError),  # tall-skinny regular thin layers; recursion_depth=1
-    (300, 10, (50, 10), ValueError),  # tall-skinny regular thin layers; recursion_depth=2
+    (128, 2, (16, 2), ValueError),    # tall-skinny regular thin layers; recursion_depth=1
+    (129, 2, (16, 2), ValueError),    # tall-skinny regular thin layers; recursion_depth=2 --> 17x2
+    (130, 2, (16, 2), ValueError),    # tall-skinny regular thin layers; recursion_depth=2 --> 18x2 next
+    (131, 2, (16, 2), ValueError),    # tall-skinny regular thin layers; recursion_depth=2 --> 18x2 next
     (300, 10, (40, 10), ValueError),  # tall-skinny regular thin layers; recursion_depth=2
     (300, 10, (30, 10), ValueError),  # tall-skinny regular thin layers; recursion_depth=3
     (300, 10, (20, 10), ValueError),  # tall-skinny regular thin layers; recursion_depth=4
@@ -101,11 +99,10 @@ def test_sfqr(m, n, chunks, error_type):
     (20, 10, (3, 10), None),   # tall-skinny regular fat layers
     (20, 10, ((8, 4, 8), 10), None),   # tall-skinny irregular fat layers
     (40, 10, ((15, 5, 5, 8, 7), (10)), None),  # tall-skinny non-uniform chunks (why?)
-    (40, 2, (8, 2), None),      # tall-skinny regular thin layers; recursion_depth=2
-    (150, 2, (8, 2), None),     # tall-skinny regular thin layers; recursion_depth=3
-    (600, 2, (8, 2), None),     # tall-skinny regular thin layers; recursion_depth=4
-    (300, 10, (60, 10), None),  # tall-skinny regular thin layers; recursion_depth=1
-    (300, 10, (50, 10), None),  # tall-skinny regular thin layers; recursion_depth=2
+    (128, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=1
+    (129, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=2 --> 17x2
+    (130, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=2 --> 18x2 next
+    (131, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=2 --> 18x2 next
     (300, 10, (40, 10), None),  # tall-skinny regular thin layers; recursion_depth=2
     (300, 10, (30, 10), None),  # tall-skinny regular thin layers; recursion_depth=3
     (300, 10, (20, 10), None),  # tall-skinny regular thin layers; recursion_depth=4
