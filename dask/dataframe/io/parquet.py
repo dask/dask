@@ -948,27 +948,31 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
             if path.open != fastparquet.util.default_open:
                 assert (re.match('.*://', path.fn)), \
                        ("ParquetFile: Path must contain protocol" +
-                        " (e.g., s3://...) when using other than the default" + 
+                        " (e.g., s3://...) when using other than the default" +
                         " LocalFileSystem. Path given: " + path.fn)
 
-            assert (path.file_scheme == 'hive'), "Only 'hive' is currently supported as the ParquetFile's file scheme"
             is_ParquetFile = True
     except ImportError:
             pass
 
     if is_ParquetFile:
         read = get_engine('fastparquet')['read']
+        if path.file_scheme == 'hive':
+            urlpath = path.fn.split('_metadata')[0]
+        else:
+            urlpath = path.fn
+
         fs, fs_token, paths = get_fs_token_paths(
-                                            path.fn.split('_metadata')[0],
-                                            mode='rb',
-                                            storage_options=storage_options
-                                                )
+            urlpath,
+            mode='rb',
+            storage_options=storage_options
+        )
     else:
         read = get_engine(engine)['read']
         fs, fs_token, paths = get_fs_token_paths(
-                                            path, mode='rb',
-                                            storage_options=storage_options
-                                                )
+            path, mode='rb',
+            storage_options=storage_options
+        )
 
         if isinstance(path, string_types) and len(paths) > 1:
             # Sort paths naturally if multiple paths resulted from a single
