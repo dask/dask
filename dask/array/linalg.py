@@ -148,7 +148,7 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
                           shape=(sum(vchunks_rstacked), n), chunks=(vchunks_rstacked, (n)), dtype=rr.dtype)
 
         # recurse
-        q_inner, r_inner = tsqr(r_stacked, name=prefix + 'tsqr__', _max_vchunk_size=cr_max)
+        q_inner, r_inner = tsqr(r_stacked, name=prefix + 'tsqr', _max_vchunk_size=cr_max)
         dsk.update(q_inner.dask)
         dsk.update(r_inner.dask)
 
