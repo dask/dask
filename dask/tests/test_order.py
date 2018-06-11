@@ -409,3 +409,95 @@ def test_string_ordering_dependents():
                  ('a', 1): 1,
                  ('a', 2): 2,
                  ('a', 3): 3}
+
+
+def test_prefer_short_narrow():
+    """
+    From https://github.com/dask/dask-ml/issues/206#issuecomment-395869929
+
+    Two cases, one where chunks of an array or indepented, and one where the
+    chunks of an array of a shared source. We handled the independent one
+    "well" earlier.
+
+    Good:
+                b2
+               / | \
+              /  |  \
+            b1   X1  y1
+           / | \
+          /  |  \
+        b0  X0   y0
+    """
+    dsk = {
+        ('X', 0): 0,
+        ('y', 0): 0,
+        ('b', 0): 0,
+        ('b', 1): (f, ('b', 0), ('X', 0), ('y', 0)),
+        ('X', 1): 1,
+        ('y', 1): 1,
+        ('b', 2): (f, ('b', 1), ('X', 1), ('y', 1)),
+    }
+    o = order(dsk)
+    expected = {
+        ('X', 0): 0,
+        ('b', 0): 1,
+        ('y', 0): 2,
+        ('b', 1): 3,
+        ('X', 1): 4,
+        ('y', 1): 5,
+        ('b', 2): 6,
+    }
+
+    assert o == expected
+
+
+def test_prefer_short_fan_out():
+    """
+    From https://github.com/dask/dask-ml/issues/206#issuecomment-395869929
+
+    Two cases, one where chunks of an array or indepented, and one where the
+    chunks of an array of a shared source. We handled the independent one
+    "well" earlier.
+
+    Bad:
+
+                b2
+               / | \
+              /  |  \
+            b1   X1  y1
+           / | \   \   \
+          /  |  \   \   \
+        b0  X0   y0  \   \
+             |    |   |  |
+              \   |  /  /
+               \  | /  /
+                  Xy
+
+    We would like to choose X0 and b1 before X1.
+    """
+    dsk = {
+        'Xy': 0,
+        ('X', 0): (f, 'Xy', 0, 0),
+        ('y', 0): (f, 'Xy', 0, 1),
+        ('b', 0): 0,
+        ('b', 1): (f, ('b', 0), ('X', 0), ('y', 0)),
+        ('X', 1): (f, 'Xy', 1, 0),
+        ('y', 1): (f, 'Xy', 1, 1),
+        ('b', 2): (f, ('b', 1), ('X', 1), ('y', 1)),
+    }
+    o = order(dsk)
+    assert o[('X', 0)] < o[('X', 1)]
+    assert o[('b', 1)] < o[('X', 1)]
+
+    expected = {
+        'Xy': 0,
+        ('X', 0): 1,
+        ('b', 0): 2,
+        ('y', 0): 3,
+        ('b', 1): 4,
+        ('X', 1): 5,
+        ('y', 1): 6,
+        ('b', 2): 7
+    }
+
+    assert o == expected
