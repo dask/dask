@@ -2021,10 +2021,9 @@ def test_from_array_ndarray_getitem():
     assert dx.dask[dx.name, 0, 0][0] == operator.getitem
 
 
-
 @pytest.mark.parametrize(
     'x', [[1, 2], (1, 2), memoryview(b'abc')] +
-    ([buffer(b'abc')] if sys.version_info[0] == 2 else []))
+    ([buffer(b'abc')] if sys.version_info[0] == 2 else []))  # noqa: F821
 def test_from_array_list(x):
     """Lists, tuples, and memoryviews are automatically converted to ndarray
     """
@@ -2040,8 +2039,8 @@ def test_from_array_list(x):
 
 
 @pytest.mark.parametrize(
-    'type_', [t for t in np.ScalarType if t not in
-              [memoryview] + ([buffer] if sys.version_info[0] == 2 else [])])
+    'type_', [t for t in np.ScalarType if t not in [memoryview] +
+              ([buffer] if sys.version_info[0] == 2 else [])])  # noqa: F821
 def test_from_array_scalar(type_):
     """Python and numpy scalars are automatically converted to ndarray
     """
