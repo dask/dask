@@ -411,7 +411,7 @@ def test_string_ordering_dependents():
                  ('a', 3): 3}
 
 
-def test_prefer_short_narrow():
+def test_prefer_short_narrow(abcde):
     """
     From https://github.com/dask/dask-ml/issues/206#issuecomment-395869929
 
@@ -420,38 +420,31 @@ def test_prefer_short_narrow():
     "well" earlier.
 
     Good:
-                b2
+                c2
                / | \
               /  |  \
-            b1   X1  y1
+            c1   a1  b1
            / | \
           /  |  \
-        b0  X0   y0
+        c0  a0   b0
     """
+    a, b, c, _, _ = abcde
     dsk = {
-        ('X', 0): 0,
-        ('y', 0): 0,
-        ('b', 0): 0,
-        ('b', 1): (f, ('b', 0), ('X', 0), ('y', 0)),
-        ('X', 1): 1,
-        ('y', 1): 1,
-        ('b', 2): (f, ('b', 1), ('X', 1), ('y', 1)),
+        (a, 0): 0,
+        (b, 0): 0,
+        (c, 0): 0,
+        (c, 1): (f, (c, 0), (a, 0), (b, 0)),
+        (a, 1): 1,
+        (b, 1): 1,
+        (c, 2): (f, (c, 1), (a, 1), (b, 1)),
     }
     o = order(dsk)
-    expected = {
-        ('X', 0): 0,
-        ('b', 0): 1,
-        ('y', 0): 2,
-        ('b', 1): 3,
-        ('X', 1): 4,
-        ('y', 1): 5,
-        ('b', 2): 6,
-    }
-
-    assert o == expected
+    assert o[(b, 0)] < o[(b, 1)]
+    assert o[(b, 0)] < o[(c, 2)]
+    assert o[(c, 1)] < o[(c, 2)]
 
 
-def test_prefer_short_fan_out():
+def test_prefer_short_fan_out(abcde):
     """
     From https://github.com/dask/dask-ml/issues/206#issuecomment-395869929
 
@@ -475,29 +468,20 @@ def test_prefer_short_fan_out():
 
     We would like to choose X0 and b1 before X1.
     """
+    a, b, c, _, _ = abcde
     dsk = {
-        'Xy': 0,
-        ('X', 0): (f, 'Xy', 0, 0),
-        ('y', 0): (f, 'Xy', 0, 1),
-        ('b', 0): 0,
-        ('b', 1): (f, ('b', 0), ('X', 0), ('y', 0)),
-        ('X', 1): (f, 'Xy', 1, 0),
-        ('y', 1): (f, 'Xy', 1, 1),
-        ('b', 2): (f, ('b', 1), ('X', 1), ('y', 1)),
+        ('ab'): 0,
+        (a, 0): (f, 'ab', 0, 0),
+        (b, 0): (f, 'ab', 0, 1),
+        (c, 0): 0,
+        (c, 1): (f, (c, 0), (a, 0), (b, 0)),
+        (a, 1): (f, 'ab', 1, 0),
+        (b, 1): (f, 'ab', 1, 1),
+        (c, 2): (f, (c, 1), (a, 1), (b, 1)),
     }
     o = order(dsk)
-    assert o[('X', 0)] < o[('X', 1)]
-    assert o[('b', 1)] < o[('X', 1)]
 
-    expected = {
-        'Xy': 0,
-        ('X', 0): 1,
-        ('b', 0): 2,
-        ('y', 0): 3,
-        ('b', 1): 4,
-        ('X', 1): 5,
-        ('y', 1): 6,
-        ('b', 2): 7
-    }
+    assert o[(b, 0)] < o[(b, 1)]
+    assert o[(b, 0)] < o[(c, 2)]
+    assert o[(c, 1)] < o[(c, 2)]
 
-    assert o == expected
