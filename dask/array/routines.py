@@ -14,6 +14,7 @@ from toolz import concat, merge, sliding_window, interleave
 from .. import sharedict
 from ..core import flatten
 from ..base import tokenize
+from ..utils import funcname
 from . import chunk
 from .creation import arange
 from .utils import safe_wraps
@@ -319,7 +320,7 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     # Adds other axes as needed.
     result = arr.map_blocks(
         _inner_apply_along_axis,
-        token="apply_along_axis",
+        name=funcname(func1d) + '-along-axis',
         dtype=test_result.dtype,
         chunks=(arr.chunks[:axis] + test_result.shape + arr.chunks[axis + 1:]),
         drop_axis=axis,
@@ -1138,7 +1139,7 @@ def piecewise(x, condlist, funclist, *args, **kw):
         _int_piecewise,
         x, *condlist,
         dtype=x.dtype,
-        token="piecewise",
+        name="piecewise",
         funclist=funclist, func_args=args, func_kw=kw
     )
 

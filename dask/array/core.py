@@ -659,7 +659,7 @@ def map_blocks(func, *args, **kwargs):
     You may specify the key name prefix of the resulting task in the graph with
     the optional ``token`` keyword argument.
 
-    >>> x.map_blocks(lambda x: x + 1, token='increment')  # doctest: +SKIP
+    >>> x.map_blocks(lambda x: x + 1, name='increment')  # doctest: +SKIP
     dask.array<increment, shape=(100,), dtype=int64, chunksize=(10,)>
     """
     if not callable(func):
@@ -669,9 +669,11 @@ def map_blocks(func, *args, **kwargs):
         raise TypeError(msg % type(func).__name__)
     name = kwargs.pop('name', None)
     token = kwargs.pop('token', None)
-    if not name:
-        name = '%s-%s' % (token or funcname(func),
-                          tokenize(token or func, args, **kwargs))
+    if token:
+        warnings.warn("The token= keyword to map_blocks has been moved to name=")
+        name = token
+
+    name = '%s-%s' % (name or funcname(func), tokenize(func, *args, **kwargs))
     dtype = kwargs.pop('dtype', None)
     chunks = kwargs.pop('chunks', None)
     drop_axis = kwargs.pop('drop_axis', [])
