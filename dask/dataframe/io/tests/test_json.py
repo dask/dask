@@ -1,8 +1,6 @@
-import gzip
 import os
 import pandas as pd
 import pytest
-import shutil
 
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
