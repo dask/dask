@@ -56,3 +56,20 @@ def test_read_chunked(block):
         d = dd.read_json(fn, blocksize=block, sample=10)
         assert (d.npartitions > 1) or (block > 50)
         assert_eq(d, df, check_index=False)
+
+
+@pytest.mark.parametrize('compression', [None, 'gzip', 'bz2', 'xz'])
+def test_json_compressed(compression):
+    filename = 'test.json'
+    compressions = {'gzip': 'gz', 'bz2': 'bz2', 'xz': 'xz'}
+    if compression is not None:
+        filename += '.' + compressions[compression]
+
+    with tmpfile(filename) as f:
+        df.to_json(f, orient='records', lines=True, compression=compression)
+
+        # test reading of both explicit and inferred compression
+        actual = dd.read_json(f, compression=compression)
+        actual_inferred_compression = dd.read_json(f)
+        assert_eq(df, actual.compute())
+        assert_eq(df, actual_inferred_compression.compute())
