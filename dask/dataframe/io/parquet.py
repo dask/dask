@@ -957,8 +957,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
     if is_ParquetFile:
         read = get_engine('fastparquet')['read']
-        if path.file_scheme == 'hive':
-            urlpath = path.fn.split('_metadata')[0]
+        if path.fn.endswith('_metadata'):
+            # remove '_metadata' from path
+            urlpath = path.fn[:-len('_metadata')]
         else:
             urlpath = path.fn
 
