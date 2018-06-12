@@ -92,10 +92,10 @@ def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
             depth = int(builtins.max(depth, ceil(log(n, split_every[i]))))
     func = compose(partial(combine or aggregate, axis=axis, keepdims=True),
                    partial(_concatenate2, axes=axis))
-    for i in range(depth - 1):
-        x = partial_reduce(func, x, split_every, True, dtype=dtype,
+    for level in range(depth - 1):
+        x = partial_reduce(func, x, split_every, keepdims=True, dtype=dtype,
                            name=(name or funcname(combine or aggregate)) + '-partial',
-                           level=i)
+                           level=level)
     func = compose(partial(aggregate, axis=axis, keepdims=keepdims),
                    partial(_concatenate2, axes=axis))
     return partial_reduce(func, x, split_every, keepdims=keepdims, dtype=dtype,
