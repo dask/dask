@@ -134,6 +134,7 @@ Top level user functions:
    nanstd
    nansum
    nanvar
+   nan_to_num
    nextafter
    nonzero
    notnull
@@ -489,6 +490,7 @@ Other functions
 .. autofunction:: nanstd
 .. autofunction:: nansum
 .. autofunction:: nanvar
+.. autofunction:: nan_to_num
 .. autofunction:: nextafter
 .. autofunction:: nonzero
 .. autofunction:: notnull
