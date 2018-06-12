@@ -7,7 +7,8 @@ import dask
 
 
 def to_json(df, url_path, orient='records', lines=None, storage_options=None,
-            compute=True, encoding='utf-8', errors='strict', **kwargs):
+            compute=True, encoding='utf-8', errors='strict',
+            compression=None, **kwargs):
     """Write dataframe into JSON text files
 
     This utilises ``pandas.DataFrame.to_json()``, and most parameters are
@@ -39,6 +40,8 @@ def to_json(df, url_path, orient='records', lines=None, storage_options=None,
         objects, which can be computed at a later time.
     encoding, errors:
         Text conversion, ``see str.encode()``
+    compression : string or None
+        String like 'gzip' or 'xz'.
     """
     if lines is None:
         lines = orient == 'records'
@@ -52,12 +55,14 @@ def to_json(df, url_path, orient='records', lines=None, storage_options=None,
         errors=errors,
         name_function=kwargs.pop('name_function', None),
         num=df.npartitions,
+        compression=compression,
         **(storage_options or {})
     )
     parts = [dask.delayed(write_json_partition)(d, outfile, kwargs)
              for outfile, d in zip(outfiles, df.to_delayed())]
     if compute:
-        return dask.compute(parts)
+        dask.compute(parts)
+        return [f.path for f in outfiles]
     else:
         return parts
 
