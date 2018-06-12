@@ -27,6 +27,12 @@ def _cumsum_part(last, new):
     return (last[1], last[1] + new)
 
 
+def _nanmin(m, n):
+    k_0 = min([m, n])
+    k_1 = m if np.isnan(n) else n
+    return k_1 if np.isnan(k_0) else k_0
+
+
 def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
     """ Direct Tall-and-Skinny QR algorithm
 
@@ -256,13 +262,37 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
         dsk.update_with_key(dsk_r_st2, key=name_r_st2)
 
     if not compute_svd:
-        q_shape = data.shape if data.shape[0] >= data.shape[1] else (data.shape[0], data.shape[0])
-        q_chunks = data.chunks if data.shape[0] >= data.shape[1] else (data.chunks[0], data.chunks[0])
-        r_shape = (n, n) if data.shape[0] >= data.shape[1] else data.shape
+        is_unknown_m = np.isnan(data.shape[0]) or any(np.isnan(c) for c in data.chunks[0])
+        is_unknown_n = np.isnan(data.shape[1]) or any(np.isnan(c) for c in data.chunks[1])
+
+        if is_unknown_m and is_unknown_n:
+            # assumption: m >= n
+            q_shape = data.shape
+            q_chunks = (data.chunks[0], (np.nan,))
+            r_shape = (np.nan, np.nan)
+            r_chunks = ((np.nan,), (np.nan,))
+        elif is_unknown_m and not is_unknown_n:
+            # assumption: m >= n
+            q_shape = data.shape
+            q_chunks = (data.chunks[0], (n,))
+            r_shape = (n, n)
+            r_chunks = (n, n)
+        elif not is_unknown_m and is_unknown_n:
+            # assumption: m >= n
+            q_shape = data.shape
+            q_chunks = (data.chunks[0], (np.nan,))
+            r_shape = (np.nan, np.nan)
+            r_chunks = ((np.nan,), (np.nan,))
+        else:
+            q_shape = data.shape if data.shape[0] >= data.shape[1] else (data.shape[0], data.shape[0])
+            q_chunks = data.chunks if data.shape[0] >= data.shape[1] else (data.chunks[0], data.chunks[0])
+            r_shape = (n, n) if data.shape[0] >= data.shape[1] else data.shape
+            r_chunks = r_shape
+
         q = Array(dsk, name_q_st3,
                   shape=q_shape, chunks=q_chunks, dtype=qq.dtype)
         r = Array(dsk, name_r_st2,
-                  shape=r_shape, chunks=n, dtype=rr.dtype)
+                  shape=r_shape, chunks=r_chunks, dtype=rr.dtype)
         return q, r
     else:
         # In-core SVD computation
@@ -295,7 +325,7 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
 
         uu, ss, vvh = np.linalg.svd(np.ones(shape=(1, 1), dtype=data.dtype))
 
-        k = np.nanmin([m, n])
+        k = _nanmin(m, n)  # avoid RuntimeWarning with np.nanmin([m, n])
 
         m_u = m
         n_u = int(k) if not np.isnan(k) else k
@@ -305,7 +335,7 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
         d_vh = max(m_vh, n_vh)  # full matrix returned: but basically n
         u = Array(dsk, name_u_st4, shape=(m_u, n_u), chunks=(data.chunks[0], (n_u,)),
                   dtype=uu.dtype)
-        s = Array(dsk, name_s_st2, shape=(n_s,), chunks=n_s, dtype=ss.dtype)
+        s = Array(dsk, name_s_st2, shape=(n_s,), chunks=((n_s,),), dtype=ss.dtype)
         vh = Array(dsk, name_v_st2, shape=(d_vh, d_vh), chunks=((n,), (n,)),
                    dtype=vvh.dtype)
         return u, s, vh
