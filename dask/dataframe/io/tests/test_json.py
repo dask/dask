@@ -73,12 +73,7 @@ def test_json_compressed(compression):
 
 def test_read_json_inferred_compression():
     with tmpdir() as path:
-        fn = os.path.join(path, 'test.json')
-        # pandas < 0.21.0 doesn't support compression in to_json
-        # so do it manually here to allow testing for all versions
-        df.to_json(fn, orient='records', lines=True)
-        with open(fn, 'rb') as f_in:
-            with gzip.open(fn + '.gz', 'wb') as f_out:
-                shutil.copyfileobj(f_in, f_out)
-        actual = dd.read_json(fn + '.gz')
+        fn = os.path.join(path, '*.json.gz')
+        dd.to_json(ddf, fn, compression='gzip')
+        actual = dd.read_json(fn)
         assert_eq(df, actual.compute(), check_index=False)
