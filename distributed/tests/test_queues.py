@@ -48,10 +48,10 @@ def test_queue_with_data(c, s, a, b):
     xx = yield Queue('x')
     assert x.client is c
 
-    yield x.put([1, 'hello'])
+    yield x.put((1, 'hello'))
     data = yield xx.get()
 
-    assert data == [1, 'hello']
+    assert data == (1, 'hello')
 
     with pytest.raises(gen.TimeoutError):
         yield x.get(timeout=0.1)

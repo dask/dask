@@ -3340,7 +3340,7 @@ def test_default_get():
 @gen_cluster(client=True)
 def test_get_processing(c, s, a, b):
     processing = yield c.processing()
-    assert processing == valmap(list, s.processing)
+    assert processing == valmap(tuple, s.processing)
 
     futures = c.map(slowinc, range(10), delay=0.1, workers=[a.address],
                     allow_other_workers=True)
@@ -3351,7 +3351,7 @@ def test_get_processing(c, s, a, b):
     assert set(x) == {a.address, b.address}
 
     x = yield c.processing(workers=[a.address])
-    assert isinstance(x[a.address], list)
+    assert isinstance(x[a.address], (list, tuple))
 
 
 @gen_cluster(client=True)
@@ -3384,6 +3384,14 @@ def test_get_foo(c, s, a, b):
     assert valmap(sorted, x) == {futures[0].key: sorted(s.who_has[futures[0].key])}
 
 
+def assert_dict_key_equal(expected, actual):
+    assert set(expected.keys()) == set(actual.keys())
+    for k in actual.keys():
+        ev = expected[k]
+        av = actual[k]
+        assert list(ev) == list(av)
+
+
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 3)
 def test_get_foo_lost_keys(c, s, u, v, w):
     x = c.submit(inc, 1, workers=[u.address])
@@ -3393,27 +3401,27 @@ def test_get_foo_lost_keys(c, s, u, v, w):
     ua, va, wa = u.address, v.address, w.address
 
     d = yield c.scheduler.has_what()
-    assert d == {ua: [x.key], va: [y.key], wa: []}
+    assert_dict_key_equal(d, {ua: [x.key], va: [y.key], wa: []})
     d = yield c.scheduler.has_what(workers=[ua, va])
-    assert d == {ua: [x.key], va: [y.key]}
+    assert_dict_key_equal(d, {ua: [x.key], va: [y.key]})
     d = yield c.scheduler.who_has()
-    assert d == {x.key: [ua], y.key: [va]}
+    assert_dict_key_equal(d,  {x.key: [ua], y.key: [va]})
     d = yield c.scheduler.who_has(keys=[x.key, y.key])
-    assert d == {x.key: [ua], y.key: [va]}
+    assert_dict_key_equal(d, {x.key: [ua], y.key: [va]})
 
     yield u._close()
     yield v._close()
 
     d = yield c.scheduler.has_what()
-    assert d == {wa: []}
+    assert_dict_key_equal(d, {wa: []})
     d = yield c.scheduler.has_what(workers=[ua, va])
-    assert d == {ua: [], va: []}
+    assert_dict_key_equal(d, {ua: [], va: []})
     # The scattered key cannot be recomputed so it is forgotten
     d = yield c.scheduler.who_has()
-    assert d == {x.key: []}
+    assert_dict_key_equal(d, {x.key: []})
     # ... but when passed explicitly, it is included in the result
     d = yield c.scheduler.who_has(keys=[x.key, y.key])
-    assert d == {x.key: [], y.key: []}
+    assert_dict_key_equal(d, {x.key: [], y.key: []})
 
 
 @slow

@@ -170,6 +170,13 @@ def test_empty_loads():
     assert isinstance(e2[0], Empty)
 
 
+def test_empty_loads_deep():
+    from distributed.protocol import loads, dumps
+    e = Empty()
+    e2 = loads(dumps([[[to_serialize(e)]]]))
+    assert isinstance(e2[0][0][0], Empty)
+
+
 def test_serialize_bytes():
     for x in [1, 'abc', np.arange(5)]:
         b = serialize_bytes(x)

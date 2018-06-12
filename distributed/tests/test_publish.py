@@ -28,10 +28,10 @@ def test_publish_simple(s, a, b):
     assert "data" in str(exc_info.value)
 
     result = yield c.scheduler.publish_list()
-    assert result == ['data']
+    assert result == ('data',)
 
     result = yield f.scheduler.publish_list()
-    assert result == ['data']
+    assert result == ('data',)
 
     yield c.close()
     yield f.close()
@@ -221,7 +221,7 @@ def test_pickle_safe(c, s, a, b):
     try:
         yield c2.publish_dataset(x=[1, 2, 3])
         result = yield c2.get_dataset('x')
-        assert result == [1, 2, 3]
+        assert result == (1, 2, 3)
 
         with pytest.raises(TypeError):
             yield c2.publish_dataset(y=lambda x: x)

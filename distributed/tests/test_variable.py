@@ -44,10 +44,10 @@ def test_queue_with_data(c, s, a, b):
     xx = Variable('x')
     assert x.client is c
 
-    yield x.set([1, 'hello'])
+    yield x.set((1, 'hello'))
     data = yield xx.get()
 
-    assert data == [1, 'hello']
+    assert data == (1, 'hello')
 
 
 def test_sync(loop):

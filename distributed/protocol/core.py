@@ -1,13 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
+import operator
 
 import msgpack
 
 try:
-    from cytoolz import get_in
+    from cytoolz import reduce
 except ImportError:
-    from toolz import get_in
+    from toolz import reduce
 
 from .compression import compressions, maybe_compress, decompress
 from .serialize import (serialize, deserialize, Serialize, Serialized,
@@ -122,7 +123,19 @@ def loads(frames, deserialize=True, deserializers=None):
             else:
                 value = Serialized(head, fs)
 
-            get_in(key[:-1], msg)[key[-1]] = value
+            def put_in(keys, coll, val):
+                """Inverse of get_in, but does type promotion in the case of lists"""
+                if keys:
+                    holder = reduce(operator.getitem, keys[:-1], coll)
+                    if isinstance(holder, tuple):
+                        holder = list(holder)
+                        coll = put_in(keys[:-1], coll, holder)
+                    holder[keys[-1]] = val
+                else:
+                    coll = val
+                return coll
+
+            msg = put_in(key, msg, value)
 
         return msg
     except Exception:
@@ -160,7 +173,7 @@ def loads_msgpack(header, payload):
         dumps_msgpack
     """
     if header:
-        header = msgpack.loads(header, encoding='utf8')
+        header = msgpack.loads(header, encoding='utf8', use_list=False)
     else:
         header = {}
 
@@ -172,4 +185,4 @@ def loads_msgpack(header, payload):
             raise ValueError("Data is compressed as %s but we don't have this"
                              " installed" % str(header['compression']))
 
-    return msgpack.loads(payload, encoding='utf8')
+    return msgpack.loads(payload, encoding='utf8', use_list=False)

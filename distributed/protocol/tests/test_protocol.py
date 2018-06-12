@@ -56,7 +56,7 @@ def test_small():
 
 
 def test_small_and_big():
-    d = {'x': [1, 2, 3], 'y': b'0' * 10000000}
+    d = {'x': (1, 2, 3), 'y': b'0' * 10000000}
     L = dumps(d)
     assert loads(L) == d
     # assert loads([small_header, small]) == {'x': [1, 2, 3]}

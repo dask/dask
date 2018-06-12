@@ -69,9 +69,9 @@ def test_BatchedSend():
         b.send('HELLO')
 
         result = yield comm.read()
-        assert result == ['hello', 'hello', 'world']
+        assert result == ('hello', 'hello', 'world')
         result = yield comm.read()
-        assert result == ['HELLO', 'HELLO']
+        assert result == ('HELLO', 'HELLO')
 
         assert b.byte_count > 1
 
@@ -88,7 +88,7 @@ def test_send_before_start():
 
         b.start(comm)
         result = yield comm.read()
-        assert result == ['hello', 'world']
+        assert result == ('hello', 'world')
 
 
 @gen_test()
@@ -104,7 +104,7 @@ def test_send_after_stream_start():
         result = yield comm.read()
         if len(result) < 2:
             result += yield comm.read()
-        assert result == ['hello', 'world']
+        assert result == ('hello', 'world')
 
 
 @gen_test()
@@ -295,7 +295,7 @@ def test_serializers():
         assert 'function' in value
 
         msg = yield comm.read()
-        assert msg == [{'x': 123}, {'x': 'hello'}]
+        assert list(msg) == [{'x': 123}, {'x': 'hello'}]
 
         with pytest.raises(gen.TimeoutError):
             msg = yield gen.with_timeout(timedelta(milliseconds=100), comm.read())

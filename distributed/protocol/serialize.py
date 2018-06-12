@@ -63,7 +63,7 @@ def msgpack_dumps(x):
 
 
 def msgpack_loads(header, frames):
-    return msgpack.loads(b''.join(frames), encoding='utf8')
+    return msgpack.loads(b''.join(frames), encoding='utf8', use_list=False)
 
 
 def serialization_error_loads(header, frames):
@@ -441,7 +441,7 @@ def deserialize_bytes(b):
     frames = unpack_frames(b)
     header, frames = frames[0], frames[1:]
     if header:
-        header = msgpack.loads(header, encoding='utf8')
+        header = msgpack.loads(header, encoding='utf8', use_list=False)
     else:
         header = {}
     frames = decompress(header, frames)

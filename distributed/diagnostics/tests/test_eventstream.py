@@ -57,7 +57,7 @@ def test_eventstream_remote(c, s, a, b):
     total = []
     while len(total) < 10:
         msgs = yield comm.read()
-        assert isinstance(msgs, list)
+        assert isinstance(msgs, tuple)
         total.extend(msgs)
         assert time() < start + 5
 
