@@ -11,7 +11,7 @@ from dask.utils import tmpfile, tmpdir
 
 df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                    'y': [1, 2, 3, 4]})
-ddf = dd.from_pandas(df, npartitions=1)
+ddf = dd.from_pandas(df, npartitions=2)
 
 
 @pytest.mark.parametrize('orient', ['split', 'records', 'index', 'columns',
