@@ -135,8 +135,8 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
         dummy = dict(i for i in enumerate(p) if i[0] not in decided)
         g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
         if isinstance(g, list):
-            from ..optimization_compile import preserve_key
-            dsk[(name,) + k] = (preserve_key, False, (func, g))
+            from ..optimization_compile import __preserve_deps__
+            dsk[(name,) + k] = (__preserve_deps__, (func, g))
         else:
             dsk[(name,) + k] = (func, g)
     return Array(sharedict.merge(x.dask, (name, dsk)), name, out_chunks, dtype=dtype)

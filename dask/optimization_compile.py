@@ -12,7 +12,7 @@ from .sharedict import ShareDict
 from .utils import ensure_dict
 
 
-__all__ = ('compiled', 'preserve_key', 'preserve_keys')
+__all__ = ('compiled', 'preserve_keys', 'preserve_deps')
 
 
 BINARY_OP_MAP = {
@@ -46,14 +46,20 @@ MODULE_REPLACEMENTS = {
 }
 
 
-def preserve_key(do_compile, arg):
-    """Marker used by :func:`compiled` to
-    prevent optimizing a dask key away
+def __preserve_key__(arg):
+    """Marker used by :func:`compiled` to prevent optimizing a dask key away.
     """
     return arg
 
 
-def preserve_keys(dsk, keys, do_compile=False, fast=True):
+def __preserve_deps__(arg):
+    """Marker used by :func:`compiled` to
+    prevent optimizing the dependencies of a dask key away
+    """
+    return arg
+
+
+def apply_marker(dsk, keys, marker, fast=True):
     """Mark selected keys of the target dask graph to prevent them from
     being optimized away by :func:`compiled`.
 
@@ -63,11 +69,8 @@ def preserve_keys(dsk, keys, do_compile=False, fast=True):
         Dask graph
     keys: list
         Keys of the graph that need to be preserved
-    do_compile: bool
-        If True, the value of the preserved key will be compiled into a
-        CompiledFunction.
-        If False, :func:`compiled` will entirely skip the graph node and
-        resume from its dependencies.
+    marker: callable
+        A dummy function to add on top of the graph callable
     fast: bool
         If True and dsk is a :class:`~dask.sharedict.ShareDict`, do not inspect
         dicts that are not expected to contain the keys. This is safe only
@@ -84,7 +87,7 @@ def preserve_keys(dsk, keys, do_compile=False, fast=True):
 
     def _pk(this_dsk):
         return {
-            k: ((preserve_key, do_compile, v) if k in keys else v)
+            k: ((marker, v) if k in keys else v)
             for k, v in this_dsk.items()
         }
 
@@ -100,6 +103,10 @@ def preserve_keys(dsk, keys, do_compile=False, fast=True):
     return out
 
 
+preserve_keys = partial(apply_marker, marker=__preserve_key__)
+preserve_deps = partial(apply_marker, marker=__preserve_deps__)
+
+
 def compiled(dsk, keys):
     dsk = ensure_dict(dsk, copy=True)
     if not isinstance(keys, (list, set)):
@@ -112,10 +119,10 @@ def compiled(dsk, keys):
             new_keys |= builder.sourcebuilder_keys
         assert not new_keys & keys
         keys = new_keys
-    # Discard remaining preserve_key markers
+    # Discard remaining __preserve_key__ markers
     for k, v in dsk.items():
-        if type(v) is tuple and v[:2] == (preserve_key, False):
-            dsk[k] = v[2]
+        if type(v) is tuple and v and v[0] is __preserve_key__:
+            dsk[k] = v[1]
     return dsk
 
 
@@ -132,7 +139,7 @@ def add_replacement_regex(pattern, repl, count=0, flags=0):
     replacement_funcs.add(func)
 
 
-class CompiledFunction:
+class Compiled:
     __slots__ = ('_source', '_base', '_func')
 
     def __init__(self, source, base=None):
@@ -182,7 +189,13 @@ class CompiledFunction:
         return self._source
 
     def __repr__(self):
-        return "<CompiledFunction %d>" % hash(self)
+        h = abs(hash(self)) % 2**32
+        try:
+            h = h.to_bytes(4, 'little').hex()
+        except AttributeError:
+            # Python 2
+            pass
+        return "<Compiled-%s>" % h
 
 
 class SourceBuilder:
@@ -199,21 +212,20 @@ class SourceBuilder:
         self.sourcebuilder_keys = set()
 
         val = dsk[key]
-        if val[:1] == (CompiledFunction, ):
+        if not(type(val) is tuple and val and callable(val[0])):
             return
-        if val[:2] == (preserve_key, False):
-            for dep_key in get_dependencies(self.dsk, key, as_list=False):
-                dep_val = dsk[dep_key]
-                if type(dep_val) is tuple and dep_val and callable(dep_val[0]):
-                    self.sourcebuilder_keys.add(dep_key)
+        if val[0] is Compiled:
             return
-        if val[:2] == (preserve_key, True):
-            dsk[key] = val[2]
+        if val[0] is __preserve_key__:
+            # convert to Compiled
+            dsk[key] = val[1]
 
         # Start recursion
         self._traverse(key)
         if not self.assigns:
-            # Avoid building a function for def f(x): return x
+            # Avoid building trivial functions
+            # def f(x):
+            #     return x
             return
 
         self.assigns[-1] = 'return ' + self.assigns[-1].partition(' = ')[2]
@@ -236,7 +248,7 @@ class SourceBuilder:
             rows.append('    ' + assign)
 
         source = '\n'.join(rows) + '\n'
-        func = CompiledFunction(source)
+        func = Compiled(source)
         self.dsk[key] = tuple([func] + self.arg_values)
 
     def _traverse(self, key):
@@ -246,16 +258,27 @@ class SourceBuilder:
 
         val = self.dsk[key]
 
-        # When encountering preserve_key or CompiledFunction, stop recursion
+        # When encountering preserve_key or Compiled, stop recursion
         # and add it as a new arg. For preserve_key, recursively spawn a new
         # SourceBuilder for all the dependencies of the node.
-        if (type(val) is tuple and val and
-                val[0] in (preserve_key, CompiledFunction)):
-            name = self._add_arg(key)
-            self.dsk_key_map[key] = name
-            if val[0] is preserve_key:
+        if type(val) is tuple and val:
+            if val[0] is Compiled:
+                name = self._add_arg(key)
+                self.dsk_key_map[key] = name
+                return name
+            if val[0] is __preserve_key__:
                 self.sourcebuilder_keys.add(key)
-            return name
+                name = self._add_arg(key)
+                self.dsk_key_map[key] = name
+                return name
+            if val[0] is __preserve_deps__:
+                for dep_key in get_dependencies(self.dsk, key,
+                                                as_list=False):
+                    dep_val = self.dsk[dep_key]
+                    if type(dep_val) is tuple and dep_val and callable(
+                            dep_val[0]):
+                        self.dsk[dep_key] = __preserve_key__, dep_val
+                val = val[1]
 
         # Recursively convert dsk value to a line of source code
         source = self._to_source(val)
@@ -273,15 +296,6 @@ class SourceBuilder:
         self.dsk_key_map[key] = name
         self.assigns.append("%s = %s" % (name, source))
         return name
-
-    def _skip_and_build_deps(self, key):
-        for dep_key in get_dependencies(self.dsk, key, as_list=False):
-            dep_val = self.dsk[dep_key]
-            if type(dep_val) is tuple and dep_val and callable(dep_val[0]):
-                if dep_val[0] is preserve_key:
-                    self._skip_and_build_deps(dep_key)
-                elif dep_val[0] is not CompiledFunction:
-                    self.sourcebuilder_keys.add(dep_key)
 
     def _unique_name(self, obj):
         if isinstance(obj, tuple):
