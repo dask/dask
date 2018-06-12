@@ -6,13 +6,15 @@ from inspect import ismodule
 
 import numpy
 from toolz.functoolz import Compose
+from . import config
 from .compatibility import apply
 from .core import get_dependencies, flatten
 from .sharedict import ShareDict
 from .utils import ensure_dict
 
 
-__all__ = ('compiled', 'preserve_keys', 'preserve_deps')
+__all__ = ('compiled', 'preserve_keys', 'preserve_deps', 'should_apply_marker',
+           '__preserve_key__', '__preserve_deps__')
 
 
 BINARY_OP_MAP = {
@@ -59,7 +61,57 @@ def __preserve_deps__(arg):
     return arg
 
 
-def apply_marker(dsk, keys, marker, fast=True):
+def should_apply_marker(level):
+    """Test level and return True if the marker functions should be applied to
+    the graph; False otherwise.
+
+    Parameters
+    ----------
+    level: int, 'always', or 'force'
+        Minimum condition to apply the marker. See
+    Returns
+    -------
+    True or False
+
+    By default, markers are not applied. In order to enable them, one needs to
+    set the dask config setting ``optimization.apply_marker`` to either True or
+    a number. Setting it to True means that markers are always applied. Setting
+    it to a number greater than zero will cause the marker to be applied only
+    if the level parameter of this function is equal or greater to the marker.
+    Notably, in recursive aggregation such as
+    :func:`dask.array.reduction.reduce`, level 0 is the bottom iteration of
+    aggregation (controlled by the ``split_every`` parameter); level 1 is the
+    one above it and so on. Set level to 'always' to always apply the marker as
+    long as the global config is not False. Set it to 'force' to apply the
+    marker regardless of the global config setting.
+
+    ========================= ======== ===============
+    optimization.apply_marker level    marker applied
+    ========================= ======== ===============
+    \*                        'force'  Yes
+    False                     'always' No
+    False                     number   No
+    True                      'always' Yes
+    <number>                  'always' Yes
+    <number>                  <number> level >= config
+    ========================= ======== ===============
+    """
+    if level not in ('always', 'force') and not isinstance(level, int):
+        raise ValueError('level must be "always", "force", or a int')
+    if level == 'force':
+        return True
+    cfg = config.get('optimization.apply_marker', False)
+    if not isinstance(cfg, (bool, int)):
+        raise ValueError("optimization.apply_marker must be True, False, "
+                         "or a number")
+    if cfg is False:
+        return False
+    if cfg is True or level == 'always':
+        return True
+    return level >= cfg
+
+
+def apply_marker(dsk, keys, marker, level='always', fast=True):
     """Mark selected keys of the target dask graph to prevent them from
     being optimized away by :func:`compiled`.
 
@@ -71,6 +123,8 @@ def apply_marker(dsk, keys, marker, fast=True):
         Keys of the graph that need to be preserved
     marker: callable
         A dummy function to add on top of the graph callable
+    level: int, 'always', or 'force'
+        Minimum condition to apply the marker. See :func`:should_apply_marker`.
     fast: bool
         If True and dsk is a :class:`~dask.sharedict.ShareDict`, do not inspect
         dicts that are not expected to contain the keys. This is safe only
@@ -83,6 +137,9 @@ def apply_marker(dsk, keys, marker, fast=True):
     the dicts have been replaced with new ones. Otherwise, a new dict.
     In both cases, the original is unaltered.
     """
+    if not should_apply_marker(level):
+        return dsk
+
     keys = set(flatten(keys))
 
     def _pk(this_dsk):

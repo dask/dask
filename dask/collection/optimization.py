@@ -20,6 +20,8 @@ def get_name_from_keys(keys):
 
 
 def postpersist(x, dsk):
+    if dsk is x.__dask_graph__():
+        return x
     if isinstance(dsk, ShareDict):
         sharedsk = dsk
     else:
