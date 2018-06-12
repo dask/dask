@@ -1,3 +1,5 @@
+import operator
+
 from distributed.utils_test import gen_cluster, inc
 from distributed.diagnostics import GraphLayout
 from distributed import wait
@@ -79,3 +81,16 @@ def test_forget(c, s, a, b):
     assert not gl.y
     assert not gl.index
     assert not gl.index_edge
+    assert not gl.collision
+
+
+@gen_cluster(client=True)
+def test_unique_positions(c, s, a, b):
+    gl = GraphLayout(s)
+
+    x = c.submit(inc, 1)
+    ys = [c.submit(operator.add, x, i) for i in range(5)]
+    yield wait(ys)
+
+    y_positions = [(gl.x[k], gl.y[k]) for k in gl.x]
+    assert len(y_positions) == len(set(y_positions))

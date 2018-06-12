@@ -15,6 +15,7 @@ class GraphLayout(SchedulerPlugin):
     def __init__(self, scheduler):
         self.x = {}
         self.y = {}
+        self.collision = {}
         self.scheduler = scheduler
         self.index = {}
         self.index_edge = {}
@@ -62,6 +63,14 @@ class GraphLayout(SchedulerPlugin):
                 y = self.next_y
                 self.next_y += 1
 
+            if (x, y) in self.collision:
+                old_x, old_y = x, y
+                x, y = self.collision[(x, y)]
+                y += 0.1
+                self.collision[old_x, old_y] = (x, y)
+            else:
+                self.collision[(x, y)] = (x, y)
+
             self.x[key] = x
             self.y[key] = y
             self.index[key] = self.next_index
@@ -84,6 +93,11 @@ class GraphLayout(SchedulerPlugin):
                 self.visible_edge_updates.append((self.index_edge.pop((key, dep.key)), 'False'))
             for dep in task.dependencies:
                 self.visible_edge_updates.append((self.index_edge.pop((dep.key, key)), 'False'))
+
+            try:
+                del self.collision[(self.x[key], self.y[key])]
+            except KeyError:
+                pass
 
             for collection in [self.x, self.y, self.index]:
                 del collection[key]
