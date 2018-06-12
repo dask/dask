@@ -951,6 +951,9 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                         " (e.g., s3://...) when using other than the default" +
                         " LocalFileSystem. Path given: " + path.fn)
 
+            assert (engine in ['auto', 'fastparquet']), \
+                   ("'engine' should be set to 'auto' or 'fastparquet' " +
+                    'when reading from fastparquet.ParquetFile')
             is_ParquetFile = True
     except ImportError:
             pass

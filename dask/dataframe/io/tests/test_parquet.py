@@ -842,6 +842,10 @@ def test_read_from_fastparquet_parquetfile(tmpdir):
     out = dd.read_parquet(pq_f, filters=[('a', '==', 'B')]).compute()
     assert set(df.b[df.a == 'B']) == set(out.b)
 
+    # Engine should not be set to 'pyarrow'
+    with pytest.raises(AssertionError):
+        out = dd.read_parquet(pq_f, engine='pyarrow')
+
 
 @pytest.mark.parametrize('scheduler', ['threads', 'processes'])
 def test_to_parquet_lazy(tmpdir, scheduler, engine):
