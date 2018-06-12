@@ -295,16 +295,18 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
 
         uu, ss, vvh = np.linalg.svd(np.ones(shape=(1, 1), dtype=data.dtype))
 
+        k = np.nanmin([m, n])
+
         m_u = m
-        n_u = min(m, n)
+        n_u = int(k) if not np.isnan(k) else k
         n_s = n_u
         m_vh = n_u
         n_vh = n
-        d_vh = max(m_vh, n_vh)  # full matrix returned
+        d_vh = max(m_vh, n_vh)  # full matrix returned: but basically n
         u = Array(dsk, name_u_st4, shape=(m_u, n_u), chunks=(data.chunks[0], (n_u,)),
                   dtype=uu.dtype)
         s = Array(dsk, name_s_st2, shape=(n_s,), chunks=n_s, dtype=ss.dtype)
-        vh = Array(dsk, name_v_st2, shape=(d_vh, d_vh), chunks=n,
+        vh = Array(dsk, name_v_st2, shape=(d_vh, d_vh), chunks=((n,), (n,)),
                    dtype=vvh.dtype)
         return u, s, vh
 
