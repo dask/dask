@@ -33,7 +33,7 @@ def dask_dumps(x):
     elif _find_lazy_registration(typ):
         return dask_dumps(x)  # recurse
     else:
-        raise TypeError(typ)
+        raise NotImplementedError(typ)
 
 
 def dask_loads(header, frames):
@@ -196,6 +196,8 @@ def serialize(x, serializers=None, on_error='message'):
             header, frames = dumps(x)
             header['serializer'] = name
             return header, frames
+        except NotImplementedError:
+            continue
         except Exception:
             tb = traceback.format_exc()
             continue
