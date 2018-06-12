@@ -564,7 +564,6 @@ def _compute_rechunk(x, chunks):
         else:
             x2[key] = (concatenate3, rec_cat_arg.tolist())
 
-    assert new_idx == tuple(len(c) - 1 for c in chunks)
     del old_blocks, new_index
 
     x2 = sharedict.merge(x.dask, (merge_temp_name, toolz.merge(x2, intermediates)))
