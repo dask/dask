@@ -17,18 +17,21 @@ as we go.
 .. code-block:: python
 
    >>> import dask.array as da
-   >>> data = [da.from_array(np.ones((4, 4)), chunks=(2, 2))
-   ...          for i in range(3)]  # A small stack of dask arrays
+
+   >>> arr0 = da.from_array(np.zeros((3, 4)), chunks=(1, 2))
+   >>> arr1 = da.from_array(np.ones((3, 4)), chunks=(1, 2))
+
+   >>> data = [arr0, arr1]
 
    >>> x = da.stack(data, axis=0)
    >>> x.shape
-   (3, 4, 4)
+   (2, 3, 4)
 
    >>> da.stack(data, axis=1).shape
-   (4, 3, 4)
+   (3, 2, 4)
 
    >>> da.stack(data, axis=-1).shape
-   (4, 4, 3)
+   (3, 4, 2)
 
 This creates a new dimension with length equal to the number of slices
 
@@ -43,12 +46,14 @@ existing dimension
    >>> import dask.array as da
    >>> import numpy as np
 
-   >>> data = [da.from_array(np.ones((4, 4)), chunks=(2, 2))
-   ...          for i in range(3)]  # small stack of dask arrays
+   >>> arr0 = da.from_array(np.zeros((3, 4)), chunks=(1, 2))
+   >>> arr1 = da.from_array(np.ones((3, 4)), chunks=(1, 2))
+
+   >>> data = [arr0, arr1]
 
    >>> x = da.concatenate(data, axis=0)
    >>> x.shape
-   (12, 4)
+   (6, 4)
 
    >>> da.concatenate(data, axis=1).shape
-   (4, 12)
+   (3, 8)
