@@ -2283,7 +2283,8 @@ def to_zarr(arr, url, component=None, storage_options=None,
     chunks = [c[0] for c in arr.chunks]
     z = zarr.create(shape=arr.shape, chunks=chunks, dtype=arr.dtype,
                     store=mapper, path=component, overwrite=overwrite, **kwargs)
-    return store(arr, z, compute=compute, return_stored=return_stored)
+    return store(arr, z, lock=False, compute=compute,
+                 return_stored=return_stored)
 
 
 def _check_regular_chunks(chunkset):
