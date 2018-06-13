@@ -1368,7 +1368,7 @@ def test_store_regions():
     a, b = d + 1, d + 2
     a = a[:, 1:, :].astype(float)
 
-    region = (slice(None,None,2), slice(None), [1, 2, 4, 5])
+    region = (slice(None, None, 2), slice(None), [1, 2, 4, 5])
 
     # Single region:
     at = np.zeros(shape=(8, 3, 6))
@@ -1478,6 +1478,14 @@ def test_store_compute_false():
     assert (at == 0).all() and (bt == 0).all()
     assert (dat.compute() == at).all() and (dbt.compute() == bt).all()
     assert (at == 2).all() and (bt == 3).all()
+
+
+def test_store_nocompute_regions():
+    x = da.ones(10, chunks=1)
+    y = np.zeros((2, 10))
+    d1 = da.store(x, y, regions=(0,), compute=False)
+    d2 = da.store(x, y, regions=(1,), compute=False)
+    assert d1.key != d2.key
 
 
 class ThreadSafetyError(Exception):
@@ -2317,7 +2325,6 @@ def test_vindex_negative():
 def test_vindex_errors():
     d = da.ones((5, 5, 5), chunks=(3, 3, 3))
     pytest.raises(IndexError, lambda: d.vindex[np.newaxis])
-    pytest.raises(IndexError, lambda: d.vindex[:5])
     pytest.raises(IndexError, lambda: d.vindex[[1, 2], [1, 2, 3]])
     pytest.raises(IndexError, lambda: d.vindex[[True] * 5])
     pytest.raises(IndexError, lambda: d.vindex[[0], [5]])
@@ -2333,6 +2340,25 @@ def test_vindex_merge():
     assert (_vindex_merge(locations, values) == np.array([[40, 50, 60],
                                                           [1, 2, 3],
                                                           [10, 20, 30]])).all()
+
+
+def test_vindex_identity():
+    rng = da.random.RandomState(42)
+    a, b = 10, 20
+
+    x = rng.random(a, chunks=a // 2)
+    assert x is x.vindex[:]
+    assert x is x.vindex[:a]
+    pytest.raises(IndexError, lambda: x.vindex[:a - 1])
+    pytest.raises(IndexError, lambda: x.vindex[1:])
+    pytest.raises(IndexError, lambda: x.vindex[0:a:2])
+
+    x = rng.random((a, b), chunks=(a // 2, b // 2))
+    assert x is x.vindex[:, :]
+    assert x is x.vindex[:a, :b]
+    pytest.raises(IndexError, lambda: x.vindex[:, :b - 1])
+    pytest.raises(IndexError, lambda: x.vindex[:, 1:])
+    pytest.raises(IndexError, lambda: x.vindex[:, 0:b:2])
 
 
 def test_empty_array():

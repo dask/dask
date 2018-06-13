@@ -7,7 +7,8 @@ import dask
 
 
 def to_json(df, url_path, orient='records', lines=None, storage_options=None,
-            compute=True, encoding='utf-8', errors='strict', **kwargs):
+            compute=True, encoding='utf-8', errors='strict',
+            compression=None, **kwargs):
     """Write dataframe into JSON text files
 
     This utilises ``pandas.DataFrame.to_json()``, and most parameters are
@@ -39,6 +40,8 @@ def to_json(df, url_path, orient='records', lines=None, storage_options=None,
         objects, which can be computed at a later time.
     encoding, errors:
         Text conversion, ``see str.encode()``
+    compression : string or None
+        String like 'gzip' or 'xz'.
     """
     if lines is None:
         lines = orient == 'records'
@@ -50,14 +53,16 @@ def to_json(df, url_path, orient='records', lines=None, storage_options=None,
     outfiles = open_files(
         url_path, 'wt', encoding=encoding,
         errors=errors,
-        name_function=kwargs.pop('name_funciton', None),
+        name_function=kwargs.pop('name_function', None),
         num=df.npartitions,
+        compression=compression,
         **(storage_options or {})
     )
     parts = [dask.delayed(write_json_partition)(d, outfile, kwargs)
              for outfile, d in zip(outfiles, df.to_delayed())]
     if compute:
-        return dask.compute(parts)
+        dask.compute(parts)
+        return [f.path for f in outfiles]
     else:
         return parts
 
@@ -69,14 +74,14 @@ def write_json_partition(df, openfile, kwargs):
 
 def read_json(url_path, orient='records', lines=None, storage_options=None,
               blocksize=None, sample=2**20, encoding='utf-8', errors='strict',
-              **kwargs):
+              compression='infer', **kwargs):
     """Create a dataframe from a set of JSON files
 
     This utilises ``pandas.read_json()``, and most parameters are
     passed through - see its docstring.
 
     Differences: orient is 'records' by default, with lines=True; this
-    is apropriate for line-delimited "JSON-lines" data, the kind of JSON output
+    is appropriate for line-delimited "JSON-lines" data, the kind of JSON output
     that is most common in big-data scenarios, and which can be chunked when
     reading (see ``read_json()``). All other options require blocksize=None,
     i.e., one partition per input file.
@@ -106,6 +111,8 @@ def read_json(url_path, orient='records', lines=None, storage_options=None,
         to any blocks wihout data. Only relevant is using blocksize.
     encoding, errors:
         Text conversion, ``see bytes.decode()``
+    compression : string or None
+        String like 'gzip' or 'xz'.
 
     Returns
     -------
@@ -140,7 +147,8 @@ def read_json(url_path, orient='records', lines=None, storage_options=None,
     storage_options = storage_options or {}
     if blocksize:
         first, chunks = read_bytes(url_path, b'\n', blocksize=blocksize,
-                                   sample=sample, **storage_options)
+                                   sample=sample, compression=compression,
+                                   **storage_options)
         chunks = list(dask.core.flatten(chunks))
         first = read_json_chunk(first, encoding, errors, kwargs)
         parts = [dask.delayed(read_json_chunk)(
@@ -149,7 +157,7 @@ def read_json(url_path, orient='records', lines=None, storage_options=None,
 
     else:
         files = open_files(url_path, 'rt', encoding=encoding, errors=errors,
-                           **storage_options)
+                           compression=compression, **storage_options)
         parts = [dask.delayed(read_json_file)(f, orient, lines, kwargs)
                  for f in files]
     return dd.from_delayed(parts)

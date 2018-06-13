@@ -1,6 +1,5 @@
 import os
 import pytest
-import requests
 import subprocess
 import sys
 import time
@@ -10,6 +9,7 @@ from dask.compatibility import PY2
 from dask.utils import tmpdir
 
 files = ['a', 'b']
+requests = pytest.importorskip('requests')
 
 
 @pytest.fixture(scope='module')
