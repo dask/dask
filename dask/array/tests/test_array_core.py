@@ -21,7 +21,7 @@ import dask.array as da
 from dask.base import tokenize, compute_as_if_collection
 from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir
-from dask.utils_test import inc
+from dask.utils_test import inc, dec
 
 from dask.array import chunk
 
@@ -1097,11 +1097,9 @@ def test_map_blocks():
     assert_eq(e, x + 1)
 
     e = d.map_blocks(inc, name='increment')
-    assert e.name == 'increment'
+    assert e.name.startswith('increment-')
 
-    e = d.map_blocks(inc, token='increment')
-    assert e.name != 'increment'
-    assert e.name.startswith('increment')
+    assert d.map_blocks(inc, name='foo').name != d.map_blocks(dec, name='foo').name
 
     d = from_array(x, chunks=(10, 10))
     e = d.map_blocks(lambda x: x[::2, ::2], chunks=(5, 5), dtype=d.dtype)
