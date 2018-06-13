@@ -76,8 +76,7 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
             "tall-and-skinny matrices (single column chunk/block; see qr)"
         )
 
-    prefix = name or 'tsqr-' + tokenize(data, compute_svd)
-    prefix += '_'
+    token = '-' + tokenize(data, compute_svd)
 
     m, n = data.shape
     numblocks = (nr, 1)
@@ -88,20 +87,20 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
     dsk.update(data.dask)
 
     # Block qr
-    name_qr_st1 = prefix + 'QR_st1'
+    name_qr_st1 = 'qr' + token
     dsk_qr_st1 = top(np.linalg.qr, name_qr_st1, 'ij', data.name, 'ij',
                      numblocks={data.name: numblocks})
     dsk.update_with_key(dsk_qr_st1, key=name_qr_st1)
 
     # Block qr[0]
-    name_q_st1 = prefix + 'Q_st1'
+    name_q_st1 = 'getitem' + token + '-q1'
     dsk_q_st1 = dict(((name_q_st1, i, 0),
                       (operator.getitem, (name_qr_st1, i, 0), 0))
                      for i in range(numblocks[0]))
     dsk.update_with_key(dsk_q_st1, key=name_q_st1)
 
     # Block qr[1]
-    name_r_st1 = prefix + 'R_st1'
+    name_r_st1 = 'getitem' + token + '-r1'
     dsk_r_st1 = dict(((name_r_st1, i, 0),
                       (operator.getitem, (name_qr_st1, i, 0), 1))
                      for i in range(numblocks[0]))
@@ -140,7 +139,7 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
             all_blocks.append(curr_block)
 
         # R_stacked
-        name_r_stacked = prefix + 'R_stacked'
+        name_r_stacked = 'stack' + token + '-r1'
         dsk_r_stacked = dict(((name_r_stacked, i, 0),
                               (np.vstack, (tuple,
                                            [(name_r_st1, idx, 0)
@@ -154,12 +153,12 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
                           shape=(sum(vchunks_rstacked), n), chunks=(vchunks_rstacked, (n)), dtype=rr.dtype)
 
         # recurse
-        q_inner, r_inner = tsqr(r_stacked, name=prefix + 'tsqr', _max_vchunk_size=cr_max)
+        q_inner, r_inner = tsqr(r_stacked, _max_vchunk_size=cr_max)
         dsk.update(q_inner.dask)
         dsk.update(r_inner.dask)
 
         # Q_inner: "unstack"
-        name_q_st2 = prefix + 'Q_st2'
+        name_q_st2 = 'getitem-' + token + '-q2'
         dsk_q_st2 = dict(((name_q_st2, j, 0),
                           (operator.getitem,
                            (q_inner.name, i, 0),
@@ -170,12 +169,12 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
         dsk.update_with_key(dsk_q_st2, key=name_q_st2)
 
         # R: R_inner
-        name_r_st2 = prefix + 'R'
+        name_r_st2 = 'r-inner-' + token
         dsk_r_st2 = {(name_r_st2, 0, 0): (r_inner.name, 0, 0)}
         dsk.update_with_key(dsk_r_st2, key=name_r_st2)
 
         # Q: Block qr[0] (*) Q_inner
-        name_q_st3 = prefix + 'Q'
+        name_q_st3 = 'dot-' + token + '-q3'
         dsk_q_st3 = top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
                         name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
                                                      name_q_st2: numblocks})
@@ -185,19 +184,19 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
 
         # Stacking for in-core QR computation
         to_stack = [(name_r_st1, i, 0) for i in range(numblocks[0])]
-        name_r_st1_stacked = prefix + 'R_st1_stacked'
+        name_r_st1_stacked = 'stack' + token + '-r1'
         dsk_r_st1_stacked = {(name_r_st1_stacked, 0, 0): (np.vstack,
                                                           (tuple, to_stack))}
         dsk.update_with_key(dsk_r_st1_stacked, key=name_r_st1_stacked)
 
         # In-core QR computation
-        name_qr_st2 = prefix + 'QR_st2'
+        name_qr_st2 = 'qr' + token + '-qr2'
         dsk_qr_st2 = top(np.linalg.qr, name_qr_st2, 'ij', name_r_st1_stacked, 'ij',
                          numblocks={name_r_st1_stacked: (1, 1)})
         dsk.update_with_key(dsk_qr_st2, key=name_qr_st2)
 
         # In-core qr[0]
-        name_q_st2_aux = prefix + 'Q_st2_aux'
+        name_q_st2_aux = 'getitem' + token + '-q2-aux'
         dsk_q_st2_aux = {(name_q_st2_aux, 0, 0): (operator.getitem,
                                                   (name_qr_st2, 0, 0), 0)}
         dsk.update_with_key(dsk_q_st2_aux, key=name_q_st2_aux)
@@ -213,14 +212,15 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
             # when chunks are not already known...
 
             # request shape information: vertical chunk sizes & column dimension (n)
-            name_q2bs = prefix + 'q2-shape'
+            name_q2bs = 'shape' + token + '-q2'
             dsk_q2_shapes = {(name_q2bs, i): (min, (getattr, (data.name, i, 0), 'shape'))
                              for i in range(numblocks[0])}
-            dsk_n = {prefix + 'n': (operator.getitem,
-                                    (getattr, (data.name, 0, 0), 'shape'), 1)}
+            name_n = 'getitem' + token + '-n'
+            dsk_n = {name_n: (operator.getitem,
+                              (getattr, (data.name, 0, 0), 'shape'), 1)}
 
             # cumulative sums (start, end)
-            name_q2cs = prefix + 'q2-shape-cumsum'
+            name_q2cs = 'cumsum' + token + '-q2'
             dsk_q2_cumsum = {(name_q2cs, 0): [0, (name_q2bs, 0)]}
             dsk_q2_cumsum.update({(name_q2cs, i): (_cumsum_part,
                                                    (name_q2cs, i - 1),
@@ -228,9 +228,9 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
                                   for i in range(1, numblocks[0])})
 
             # obtain slices on q from in-core compute (e.g.: (slice(10, 20), slice(0, 5)))
-            name_blockslice = prefix + 'q2-blockslice'
+            name_blockslice = 'slice' + token + '-q'
             dsk_block_slices = {(name_blockslice, i): (tuple, [
-                (apply, slice, (name_q2cs, i)), (slice, 0, prefix + 'n')])
+                (apply, slice, (name_q2cs, i)), (slice, 0, name_n)])
                 for i in range(numblocks[0])}
 
             dsk_q_blockslices = toolz.merge(dsk_n,
@@ -240,24 +240,24 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
 
             block_slices = [(name_blockslice, i) for i in range(numblocks[0])]
 
-        dsk.update_with_key(dsk_q_blockslices, key=prefix + '-q-blockslices')
+        dsk.update_with_key(dsk_q_blockslices, key='q-blocksizes' + token)
 
         # In-core qr[0] unstacking
-        name_q_st2 = prefix + 'Q_st2'
+        name_q_st2 = 'getitem' + token + '-q2'
         dsk_q_st2 = dict(((name_q_st2, i, 0),
                           (operator.getitem, (name_q_st2_aux, 0, 0), b))
                          for i, b in enumerate(block_slices))
         dsk.update_with_key(dsk_q_st2, key=name_q_st2)
 
         # Q: Block qr[0] (*) In-core qr[0]
-        name_q_st3 = prefix + 'Q'
+        name_q_st3 = 'dot' + token + '-q3'
         dsk_q_st3 = top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
                         name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
                                                      name_q_st2: numblocks})
         dsk.update_with_key(dsk_q_st3, key=name_q_st3)
 
         # R: In-core qr[1]
-        name_r_st2 = prefix + 'R'
+        name_r_st2 = 'getitem' + token + '-r2'
         dsk_r_st2 = {(name_r_st2, 0, 0): (operator.getitem, (name_qr_st2, 0, 0), 1)}
         dsk.update_with_key(dsk_r_st2, key=name_r_st2)
 
@@ -296,23 +296,23 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
         return q, r
     else:
         # In-core SVD computation
-        name_svd_st2 = prefix + 'SVD_st2'
+        name_svd_st2 = 'svd' + token + '-2'
         dsk_svd_st2 = top(np.linalg.svd, name_svd_st2, 'ij', name_r_st2, 'ij',
                           numblocks={name_r_st2: (1, 1)})
         # svd[0]
-        name_u_st2 = prefix + 'U_st2'
+        name_u_st2 = 'getitem' + token + '-u2'
         dsk_u_st2 = {(name_u_st2, 0, 0): (operator.getitem,
                                           (name_svd_st2, 0, 0), 0)}
         # svd[1]
-        name_s_st2 = prefix + 'S'
+        name_s_st2 = 'getitem' + token + '-s2'
         dsk_s_st2 = {(name_s_st2, 0): (operator.getitem,
                                        (name_svd_st2, 0, 0), 1)}
         # svd[2]
-        name_v_st2 = prefix + 'V'
+        name_v_st2 = 'getitem' + token + '-v2'
         dsk_v_st2 = {(name_v_st2, 0, 0): (operator.getitem,
                                           (name_svd_st2, 0, 0), 2)}
         # Q * U
-        name_u_st4 = prefix + 'U'
+        name_u_st4 = 'getitem' + token + '-u4'
         dsk_u_st4 = top(dotmany, name_u_st4, 'ij', name_q_st3, 'ik',
                         name_u_st2, 'kj', numblocks={name_q_st3: numblocks,
                                                      name_u_st2: (1, 1)})
