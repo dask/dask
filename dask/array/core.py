@@ -1304,7 +1304,6 @@ class Array(DaskMethodsMixin):
         if (isinstance(index, (str, unicode)) or
                 (isinstance(index, list) and index and
                  all(isinstance(i, (str, unicode)) for i in index))):
-            out = 'getitem-' + tokenize(self, index)
             if isinstance(index, (str, unicode)):
                 dt = self.dtype[index]
             else:
@@ -1313,10 +1312,12 @@ class Array(DaskMethodsMixin):
             if dt.shape:
                 new_axis = list(range(self.ndim, self.ndim + len(dt.shape)))
                 chunks = self.chunks + tuple((i,) for i in dt.shape)
-                return self.map_blocks(getitem, index, dtype=dt.base, name=out,
-                                       chunks=chunks, new_axis=new_axis)
+                return self.map_blocks(getitem, index, dtype=dt.base,
+                                       name='getitem', chunks=chunks,
+                                       new_axis=new_axis)
             else:
-                return self.map_blocks(getitem, index, dtype=dt, name=out)
+                return self.map_blocks(getitem, index, dtype=dt,
+                                       name='getitem')
 
         if not isinstance(index, tuple):
             index = (index,)
