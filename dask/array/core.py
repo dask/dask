@@ -1313,11 +1313,9 @@ class Array(DaskMethodsMixin):
                 new_axis = list(range(self.ndim, self.ndim + len(dt.shape)))
                 chunks = self.chunks + tuple((i,) for i in dt.shape)
                 return self.map_blocks(getitem, index, dtype=dt.base,
-                                       name='getitem', chunks=chunks,
-                                       new_axis=new_axis)
+                                       chunks=chunks, new_axis=new_axis)
             else:
-                return self.map_blocks(getitem, index, dtype=dt,
-                                       name='getitem')
+                return self.map_blocks(getitem, index, dtype=dt)
 
         if not isinstance(index, tuple):
             index = (index,)
@@ -1466,7 +1464,6 @@ class Array(DaskMethodsMixin):
             raise TypeError("astype does not take the following keyword "
                             "arguments: {0!s}".format(list(extra)))
         casting = kwargs.get('casting', 'unsafe')
-        copy = kwargs.get('copy', True)
         dtype = np.dtype(dtype)
         if self.dtype == dtype:
             return self
@@ -1474,8 +1471,7 @@ class Array(DaskMethodsMixin):
             raise TypeError("Cannot cast array from {0!r} to {1!r}"
                             " according to the rule "
                             "{2!r}".format(self.dtype, dtype, casting))
-        name = 'astype-' + tokenize(self, dtype, casting, copy)
-        return self.map_blocks(chunk.astype, dtype=dtype, name=name,
+        return self.map_blocks(chunk.astype, dtype=dtype,
                                astype_dtype=dtype, **kwargs)
 
     def __abs__(self):
