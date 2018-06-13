@@ -64,7 +64,7 @@ Block
 
 We can handle a larger variety of cases with ``da.block`` as it allows
 concatenation to be applied over multiple dimensions at once. This is useful if
-your chunks tile a space. For example, small squares from a larger 2-D plane.
+your chunks tile a space. For example, small squares tiling a larger 2-D plane.
 
 .. code-block:: python
 
