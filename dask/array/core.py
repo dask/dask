@@ -659,7 +659,7 @@ def map_blocks(func, *args, **kwargs):
     You may specify the key name prefix of the resulting task in the graph with
     the optional ``token`` keyword argument.
 
-    >>> x.map_blocks(lambda x: x + 1, token='increment')  # doctest: +SKIP
+    >>> x.map_blocks(lambda x: x + 1, name='increment')  # doctest: +SKIP
     dask.array<increment, shape=(100,), dtype=int64, chunksize=(10,)>
     """
     if not callable(func):
@@ -669,9 +669,11 @@ def map_blocks(func, *args, **kwargs):
         raise TypeError(msg % type(func).__name__)
     name = kwargs.pop('name', None)
     token = kwargs.pop('token', None)
-    if not name:
-        name = '%s-%s' % (token or funcname(func),
-                          tokenize(token or func, args, **kwargs))
+    if token:
+        warnings.warn("The token= keyword to map_blocks has been moved to name=")
+        name = token
+
+    name = '%s-%s' % (name or funcname(func), tokenize(func, *args, **kwargs))
     dtype = kwargs.pop('dtype', None)
     chunks = kwargs.pop('chunks', None)
     drop_axis = kwargs.pop('drop_axis', [])
@@ -1302,7 +1304,6 @@ class Array(DaskMethodsMixin):
         if (isinstance(index, (str, unicode)) or
                 (isinstance(index, list) and index and
                  all(isinstance(i, (str, unicode)) for i in index))):
-            out = 'getitem-' + tokenize(self, index)
             if isinstance(index, (str, unicode)):
                 dt = self.dtype[index]
             else:
@@ -1311,10 +1312,10 @@ class Array(DaskMethodsMixin):
             if dt.shape:
                 new_axis = list(range(self.ndim, self.ndim + len(dt.shape)))
                 chunks = self.chunks + tuple((i,) for i in dt.shape)
-                return self.map_blocks(getitem, index, dtype=dt.base, name=out,
+                return self.map_blocks(getitem, index, dtype=dt.base,
                                        chunks=chunks, new_axis=new_axis)
             else:
-                return self.map_blocks(getitem, index, dtype=dt, name=out)
+                return self.map_blocks(getitem, index, dtype=dt)
 
         if not isinstance(index, tuple):
             index = (index,)
@@ -1463,7 +1464,6 @@ class Array(DaskMethodsMixin):
             raise TypeError("astype does not take the following keyword "
                             "arguments: {0!s}".format(list(extra)))
         casting = kwargs.get('casting', 'unsafe')
-        copy = kwargs.get('copy', True)
         dtype = np.dtype(dtype)
         if self.dtype == dtype:
             return self
@@ -1471,8 +1471,7 @@ class Array(DaskMethodsMixin):
             raise TypeError("Cannot cast array from {0!r} to {1!r}"
                             " according to the rule "
                             "{2!r}".format(self.dtype, dtype, casting))
-        name = 'astype-' + tokenize(self, dtype, casting, copy)
-        return self.map_blocks(chunk.astype, dtype=dtype, name=name,
+        return self.map_blocks(chunk.astype, dtype=dtype,
                                astype_dtype=dtype, **kwargs)
 
     def __abs__(self):
