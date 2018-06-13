@@ -453,14 +453,13 @@ def test_prefer_short_fan_out(abcde):
     "well" earlier.
 
     Bad:
-
-                b2
+                c2
                / | \
               /  |  \
-            b1   X1  y1
+            c1   a1  b1
            / | \   \   \
           /  |  \   \   \
-        b0  X0   y0  \   \
+        c0  a0   b0  \   |
              |    |   |  |
               \   |  /  /
                \  | /  /
@@ -469,6 +468,8 @@ def test_prefer_short_fan_out(abcde):
     We would like to choose X0 and b1 before X1.
     """
     a, b, c, _, _ = abcde
+    from dask import config
+
     dsk = {
         ('ab'): 0,
         (a, 0): (f, 'ab', 0, 0),
@@ -479,9 +480,12 @@ def test_prefer_short_fan_out(abcde):
         (b, 1): (f, 'ab', 1, 1),
         (c, 2): (f, (c, 1), (a, 1), (b, 1)),
     }
-    o = order(dsk)
+
+    with config.set(**{'order.reverse': False}):
+        o = order(dsk)
 
     assert o[(b, 0)] < o[(b, 1)]
     assert o[(b, 0)] < o[(c, 2)]
     assert o[(c, 1)] < o[(c, 2)]
-
+    assert o[(c, 1)] < o[(a, 1)]
+    assert o[(c, 1)] < o[(a, 2)]

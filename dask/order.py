@@ -60,9 +60,10 @@ from __future__ import absolute_import, division, print_function
 
 from .core import get_dependencies, reverse_dict, get_deps  # noqa: F401
 from .utils_test import add, inc  # noqa: F401
+from . import config
 
 
-def order(dsk, dependencies=None):
+def order(dsk, dependencies=None, reverse=None):
     """ Order nodes in dask graph
 
     This produces an ordering over our tasks that we use to break ties when
@@ -85,6 +86,9 @@ def order(dsk, dependencies=None):
     >>> order(dsk)
     {'a': 0, 'c': 1, 'b': 2, 'd': 3}
     """
+    if reverse is None:
+        reverse = config.get("order.reverse", default=True)
+
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
 
@@ -108,6 +112,16 @@ def order(dsk, dependencies=None):
     result = dict()
     seen = set()  # tasks that should not be added again to the stack
     i = 0
+    from pprint import pprint  # noqa
+
+    # print("Starting ordering", end='\n\n')
+    # print('Setup')
+
+    # print("total dependencies")
+    # pprint(total_dependencies)
+
+    # print("total dependents")
+    # pprint(total_dependents)
 
     stack = [k for k, v in dependents.items() if not v]
     if len(stack) < 10000:
@@ -122,6 +136,7 @@ def order(dsk, dependencies=None):
             continue
 
         deps = waiting[item]
+
         if deps:
             stack.append(item)
             seen.add(item)
@@ -139,8 +154,14 @@ def order(dsk, dependencies=None):
         deps = [d for d in dependents[item]
                 if d not in result and not (d in seen and waiting[d])]
         if len(deps) < 1000:
-            deps = sorted(deps, key=dependents_key, reverse=True)
+
+            deps = sorted(deps, key=dependents_key, reverse=reverse)
+
         stack.extend(deps)
+
+    # print("#" * 30, 'result', '#' * 30)
+    # pprint(result)
+    # print("#" * 80)
 
     return result
 

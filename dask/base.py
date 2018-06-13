@@ -466,7 +466,8 @@ def visualize(*args, **kwargs):
     if color == 'order':
         from .order import order
         import matplotlib.pyplot as plt
-        o = order(dsk)
+        reverse = kwargs.pop('reverse', None)
+        o = order(dsk, reverse=reverse)
         try:
             cmap = kwargs.pop('cmap')
         except KeyError:
