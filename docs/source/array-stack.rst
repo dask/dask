@@ -62,9 +62,9 @@ existing dimension
 Block
 -----
 
-We can handle a larger variety of cases with ``da.block``. Basically it allows
-concatenation to applied over multiple dimensions at once. This is useful if
-your chunks tile a space (e.g. small squares from a larger 2-D plane).
+We can handle a larger variety of cases with ``da.block`` as it allows
+concatenation to be applied over multiple dimensions at once. This is useful if
+your chunks tile a space. For example, small squares from a larger 2-D plane.
 
 .. code-block:: python
 
