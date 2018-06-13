@@ -1,12 +1,13 @@
-Stack and Concatenate
-=====================
+Stack, Concatenate, and Block
+=============================
 
 Often we have many arrays stored on disk that we want to stack together and
 think of as one large array.  This is common with geospatial data in which we
 might have many HDF5/NetCDF files on disk, one for every day, but we want to do
 operations that span multiple days.
 
-To solve this problem we use the functions ``da.stack`` and ``da.concatenate``.
+To solve this problem we use the functions ``da.stack``, ``da.concatenate``,
+and ``da.block``.
 
 Stack
 -----
@@ -57,3 +58,27 @@ existing dimension
 
    >>> da.concatenate(data, axis=1).shape
    (3, 8)
+
+Block
+-----
+
+We can handle a larger variety of cases with ``da.block``. Basically it allows
+concatenation to applied over multiple dimensions at once. This is useful if
+your chunks tile a space (e.g. small squares from a larger 2-D plane).
+
+.. code-block:: python
+
+   >>> import dask.array as da
+   >>> import numpy as np
+
+   >>> arr0 = da.from_array(np.zeros((3, 4)), chunks=(1, 2))
+   >>> arr1 = da.from_array(np.ones((3, 4)), chunks=(1, 2))
+
+   >>> data = [
+   ...     [arr0, arr1],
+   ...     [arr1, arr0]
+   ... ]
+
+   >>> x = da.block(data)
+   >>> x.shape
+   (6, 8)
