@@ -163,3 +163,15 @@ def test_zarr_distributed_roundtrip(loop):
                 a2 = da.from_zarr(d)
                 assert_eq(a, a2)
                 assert a2.chunks == a.chunks
+
+
+def test_zarr_in_memory_distributed_err(loop):
+    da = pytest.importorskip('dask.array')
+    zarr = pytest.importorskip('zarr')
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            with pytest.raises(RuntimeError):
+                c = (1, 1)
+                a = da.ones((3, 3), chunks=c)
+                z = zarr.zeros_like(a, chunks=c)
+                a.to_zarr(z)
