@@ -15,7 +15,6 @@ Array
 - Faster slice_1d in dask.array (:pr:`3479`) `Yu Feng`_
 - Add split_every parameter to einsum (:pr:`3472`) `Guido Imperiale`_
 - Avoid unnecessary rechunking tasks (:pr:`3529`) `Matthew Rocklin`_
-- add to/read_zarr (:pr:`3460`) `Matthew Rocklin`_
 - Compute dtypes at runtime for fft (:pr:`3511`) `Matthew Rocklin`_
 - Include "region" in key names for da.store (:pr:`3540`) `Martin Durant`_
 - Correct internal dimension of Dask's SVD (:pr:`3517`) `John A Kirkham`_
