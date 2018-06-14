@@ -344,6 +344,7 @@ Storage and Conversion
 .. autofunction:: read_csv
 .. autofunction:: read_table
 .. autofunction:: read_parquet
+.. autofunction:: read_orc
 .. autofunction:: read_hdf
 .. autofunction:: read_json
 .. autofunction:: read_sql_table
