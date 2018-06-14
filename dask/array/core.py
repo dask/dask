@@ -2210,7 +2210,7 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
 
     Parameters
     ----------
-    url: str or MutableMapping
+    url: Zarr Array or str or MutableMapping
         Location of the data. A URL can include a protocol specifier like s3://
         for remote data. Can also be any MutableMapping instance, which should
         be serializable if used in multiple processes.
@@ -2228,14 +2228,17 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
     """
     import zarr
     storage_options = storage_options or {}
-    if isinstance(url, str):
+    if isinstance(url, zarr.Array):
+        z = url
+    elif isinstance(url, str):
         fs, fs_token, path = get_fs_token_paths(
             url, 'rb', storage_options=storage_options)
         assert len(path) == 1
         mapper = get_mapper(fs, path[0])
+        z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     else:
         mapper = url
-    z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
+        z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     chunks = chunks if chunks is not None else z.chunks
     return from_array(z, chunks, name='zarr-%s' % url)
 
@@ -2250,7 +2253,7 @@ def to_zarr(arr, url, component=None, storage_options=None,
     ----------
     arr: dask.array
         Data to store
-    url: str or MutableMapping
+    url: Zarr Array or str or MutableMapping
         Location of the data. A URL can include a protocol specifier like s3://
         for remote data. Can also be any MutableMapping instance, which should
         be serializable if used in multiple processes.
@@ -2267,10 +2270,19 @@ def to_zarr(arr, url, component=None, storage_options=None,
     kwargs: passed to the ``zarr.create()`` function, e.g., compression options
     """
     import zarr
+
+    if isinstance(url, zarr.Array):
+        z = url
+        arr = arr.rechunk(z.chunks)
+        return store(arr, z, lock=False, compute=compute,
+                     return_stored=return_stored)
+
     if not _check_regular_chunks(arr.chunks):
         raise ValueError('Attempt to save array to zarr with irregular '
                          'chunking, please call `arr.rechunk(...)` first.')
+
     storage_options = storage_options or {}
+
     if isinstance(url, str):
         fs, fs_token, path = get_fs_token_paths(
             url, 'rb', storage_options=storage_options)
@@ -2279,6 +2291,7 @@ def to_zarr(arr, url, component=None, storage_options=None,
     else:
         # assume the object passed is already a mapper
         mapper = url
+
     chunks = [c[0] for c in arr.chunks]
     z = zarr.create(shape=arr.shape, chunks=chunks, dtype=arr.dtype,
                     store=mapper, path=component, overwrite=overwrite, **kwargs)
