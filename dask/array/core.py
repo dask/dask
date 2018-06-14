@@ -2273,6 +2273,10 @@ def to_zarr(arr, url, component=None, storage_options=None,
 
     if isinstance(url, zarr.Array):
         z = url
+        if (isinstance(z.store, (dict, zarr.DictStore)) and
+                'distributed' in config.get('scheduler', '')):
+            raise RuntimeError('Cannot store into in memory Zarr Array using '
+                               'the Distributed Scheduler.')
         arr = arr.rechunk(z.chunks)
         return store(arr, z, lock=False, compute=compute,
                      return_stored=return_stored)
