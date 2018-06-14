@@ -60,7 +60,7 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
     Notes
     ----------
     With ``k`` blocks of size ``(m, n)``, this algorithm has memory use that
-    scales as ``m * n * k * log (km)``.
+    scales as ``m * n * k``.
 
     The implementation here is the recursive variant due to the ultimate
     need for one "single core" QR decomposition. Given m blocks, the
