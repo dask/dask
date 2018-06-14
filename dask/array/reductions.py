@@ -38,7 +38,8 @@ def divide(a, b, dtype=None):
 
 
 def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
-              split_every=None, combine=None, name=None, out=None):
+              split_every=None, combine=None, name=None, out=None,
+              concatenate=True, output_size=1):
     """ General version of reductions
 
     >>> reduction(my_array, np.sum, np.sum, axis=0, keepdims=False)  # doctest: +SKIP
@@ -60,16 +61,18 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
     inds = tuple(range(x.ndim))
     # The dtype of `tmp` doesn't actually matter, and may be incorrect.
     tmp = atop(chunk, inds, x, inds, axis=axis, keepdims=True, dtype=x.dtype)
-    tmp._chunks = tuple((1, ) * len(c) if i in axis else c for (i, c)
-                        in enumerate(tmp.chunks))
-
+    tmp._chunks = tuple((output_size, ) * len(c) if i in axis else c
+                        for i, c in enumerate(tmp.chunks))
     result = _tree_reduce(tmp, aggregate, axis, keepdims, dtype, split_every,
-                          combine, name=name)
+                          combine, name=name, concatenate=concatenate)
+    if keepdims and output_size != 1:
+        result._chunks = tuple((output_size, ) if i in axis else c
+                               for i, c in enumerate(tmp.chunks))
     return handle_out(out, result)
 
 
 def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
-                 combine=None, name=None):
+                 combine=None, name=None, concatenate=True):
     """Perform the tree reduction step of a reduction.
 
     Lower level, users should use ``reduction`` or ``arg_reduction`` directly.
@@ -89,13 +92,15 @@ def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
     for i, n in enumerate(x.numblocks):
         if i in split_every and split_every[i] != 1:
             depth = int(builtins.max(depth, ceil(log(n, split_every[i]))))
-    func = compose(partial(combine or aggregate, axis=axis, keepdims=True),
-                   partial(_concatenate2, axes=axis))
+    func = partial(combine or aggregate, axis=axis, keepdims=True)
+    if concatenate:
+        func = compose(func, partial(_concatenate2, axes=axis))
     for i in range(depth - 1):
         x = partial_reduce(func, x, split_every, True, dtype=dtype,
                            name=(name or funcname(combine or aggregate)) + '-partial')
-    func = compose(partial(aggregate, axis=axis, keepdims=keepdims),
-                   partial(_concatenate2, axes=axis))
+    func = partial(aggregate, axis=axis, keepdims=keepdims)
+    if concatenate:
+        func = compose(func, partial(_concatenate2, axes=axis))
     return partial_reduce(func, x, split_every, keepdims=keepdims, dtype=dtype,
                           name=(name or funcname(aggregate)) + '-aggregate')
 
@@ -750,15 +755,11 @@ def topk(a, k, axis=-1, split_every=None):
     axis = validate_axis(a.ndim, axis)
 
     kernel = partial(chunk.topk, k=k)
-    res = reduction(a, kernel, kernel, axis=axis, keepdims=True,
-                    dtype=a.dtype, split_every=split_every)
-    # reduction(keepdims=True) sets shape[axis] to 1. Fix it.
-    chunks = list(res.chunks)
-    chunks[axis] = (abs(k), )
-    res = Array(res.dask, res.name, chunks, res.dtype)
-
-    # Sort result internally
-    return res.map_blocks(chunk.topk_postprocess, k=k, axis=axis, dtype=a.dtype)
+    aggregate = partial(chunk.topk_aggregate, k=k)
+    return reduction(
+        a, chunk=kernel, combine=kernel, aggregate=aggregate,
+        axis=axis, keepdims=True, dtype=a.dtype, split_every=split_every,
+        output_size=abs(k))
 
 
 def argtopk(a, k, axis=-1, split_every=None):
@@ -784,11 +785,14 @@ def argtopk(a, k, axis=-1, split_every=None):
 
     # Convert a to a recarray that contains its index
     idx = arange(a.shape[axis], chunks=a.chunks[axis], dtype=np.int64)
-    idx = idx[tuple(slice(None) if i == axis else np.newaxis for i in range(a.ndim))]
-    a_rec = a.map_blocks(chunk.argtopk_preprocess, idx,
-                         dtype=[('a', a.dtype), ('idx', idx.dtype)])
+    idx = idx[tuple(slice(None) if i == axis else np.newaxis
+                    for i in range(a.ndim))]
+    a_plus_idx = a.map_blocks(chunk.argtopk_preprocess, idx,
+                              dtype=object)
 
-    res = topk(a_rec, k, axis=axis, split_every=split_every)
-
-    # Discard values
-    return res['idx']
+    kernel = partial(chunk.argtopk, k=k)
+    aggregate = partial(chunk.argtopk_aggregate, k=k)
+    return reduction(
+        a_plus_idx, chunk=kernel, combine=kernel, aggregate=aggregate,
+        axis=axis, keepdims=True, dtype=np.int64, split_every=split_every,
+        concatenate=False, output_size=abs(k))

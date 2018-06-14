@@ -11,6 +11,16 @@ from . import numpy_compat as npcompat
 from ..compatibility import getargspec
 from ..utils import ignoring
 
+try:
+    from numpy import broadcast_to
+except ImportError:  # pragma: no cover
+    broadcast_to = npcompat.broadcast_to
+
+try:
+    from numpy import take_along_axis
+except ImportError:  # pragma: no cover
+    take_along_axis = npcompat.take_along_axis
+
 
 def keepdims_wrapper(a_callable):
     """
@@ -169,54 +179,91 @@ def trim(x, axes=None):
     return x[tuple(slice(ax, -ax if ax else None) for ax in axes)]
 
 
-try:
-    from numpy import broadcast_to
-except ImportError:  # pragma: no cover
-    broadcast_to = npcompat.broadcast_to
+def takeslice(a, indices, axis):
+    """Like `numpy.take`, but allows for indices to be a slice
+    """
+    assert 0 <= axis < a.ndim
+    return a[tuple(indices if i == axis else slice(None)
+                   for i in range(a.ndim))]
 
 
 def topk(a, k, axis, keepdims):
-    """Kernel of topk and argtopk.
+    """chunk and combine kernel of topk.
     Extract the k largest elements from a on the given axis.
     If k is negative, extract the -k smallest elements instead.
     Note that, unlike in the parent function, the returned elements
     are not sorted internally.
     """
+    assert keepdims is True
     axis = axis[0]
     if abs(k) >= a.shape[axis]:
         return a
+
     a = np.partition(a, -k, axis=axis)
-    # return a[-k:] if k>0 else a[:-k], on arbitrary axis
-    return a[[
-        (slice(-k, None) if k > 0 else slice(None, -k))
-        if i == axis else slice(None)
-        for i in range(a.ndim)
-    ]]
+    k_slice = slice(-k, None) if k > 0 else slice(-k)
+    return takeslice(a, k_slice, axis=axis)
 
 
-def topk_postprocess(a, k, axis):
-    """Kernel of topk and argtopk.
+def topk_aggregate(a, k, axis, keepdims):
+    """aggregate kernel of topk.
     Post-processes the output of topk, sorting the results internally.
     """
+    assert keepdims is True
+    a = topk(a, k, axis, keepdims)
+    axis = axis[0]
     a = np.sort(a, axis=axis)
-    if k > 0:
-        # a = a[::-1] on arbitrary axis
-        a = a[[
-            slice(None, None, -1) if i == axis else slice(None)
-            for i in range(a.ndim)
-        ]]
-    return a
+    if k < 0:
+        return a
+    return takeslice(a, slice(None, None, -1), axis=axis)
 
 
 def argtopk_preprocess(a, idx):
-    """Kernel of argtopk.
-    Preprocess data, by putting it together with its indexes in a recarray
+    """Preparatory step for argtopk.
+    Put data together with its indexes in a tuple
     """
-    # np.core.records.fromarrays won't work if a and idx don't have the same shape
-    res = np.recarray(a.shape, dtype=[('values', a.dtype), ('idx', idx.dtype)])
-    res.values = a
-    res.idx = idx
-    return res
+    return a, idx
+
+
+def argtopk(a_plus_idx, k, axis, keepdims):
+    """chunk and combine kernel of topk.
+    Extract the k largest elements from a on the given axis.
+    If k is negative, extract the -k smallest elements instead.
+    Note that, unlike in the parent function, the returned elements
+    are not sorted internally.
+    """
+    assert keepdims is True
+    axis = axis[0]
+
+    if isinstance(a_plus_idx, list):
+        a = np.concatenate([ai for ai, _ in a_plus_idx], axis)
+        idx = np.concatenate([broadcast_to(idxi, ai.shape)
+                              for ai, idxi in a_plus_idx], axis)
+    else:
+        a, idx = a_plus_idx
+
+    if abs(k) >= a.shape[axis]:
+        return a_plus_idx
+
+    idx2 = np.argpartition(a, -k, axis=axis)
+    k_slice = slice(-k, None) if k > 0 else slice(-k)
+    idx2 = takeslice(idx2, k_slice, axis=axis)
+    return take_along_axis(a, idx2, axis), take_along_axis(idx, idx2, axis)
+
+
+def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
+    """aggregate kernel of topk.
+    Post-processes the output of topk, sorting the results internally and
+    dropping the index
+    """
+    assert keepdims is True
+    a, idx = argtopk(a_plus_idx, k, axis, keepdims)
+    axis = axis[0]
+
+    idx2 = np.argsort(a, axis=axis)
+    idx = take_along_axis(idx, idx2, axis)
+    if k < 0:
+        return idx
+    return takeslice(idx, slice(None, None, -1), axis=axis)
 
 
 def arange(start, stop, step, length, dtype):

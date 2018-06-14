@@ -12,6 +12,7 @@ Array
 - Add to/read_zarr for Zarr-format datasets and arrays (:pr:`3460`) `Martin Durant`_
 - Experimental addition of generalized ufunc support, ``apply_gufunc``, ``gufunc``, and
   ``as_gufunc`` (:pr:`#3109`) `Markus Gonser`_
+- Reimplemented ``argtopk`` to make it release the GIL (:pr:`3596`) `Guido Imperiale`
 
 Dataframe
 +++++++++
