@@ -6,13 +6,15 @@ from inspect import ismodule
 
 import numpy
 from toolz.functoolz import Compose
+from . import config
 from .compatibility import apply
-from .core import flatten
-from .optimization import cull
+from .core import get_dependencies, flatten
+from .sharedict import ShareDict
 from .utils import ensure_dict
 
 
-__all__ = ('compiled', )
+__all__ = ('compiled', 'preserve_keys', 'preserve_deps', 'should_apply_marker',
+           '__preserve_key__', '__preserve_deps__')
 
 
 BINARY_OP_MAP = {
@@ -46,15 +48,135 @@ MODULE_REPLACEMENTS = {
 }
 
 
-def compiled(dsk, keys):
-    dsk = ensure_dict(dsk)
+def __preserve_key__(arg):
+    """Marker used by :func:`compiled` to prevent optimizing a dask key away.
+    """
+    return arg
+
+
+def __preserve_deps__(arg):
+    """Marker used by :func:`compiled` to
+    prevent optimizing the dependencies of a dask key away
+    """
+    return arg
+
+
+def should_apply_marker(level):
+    """Test level and return True if the marker functions should be applied to
+    the graph; False otherwise.
+
+    Parameters
+    ----------
+    level: int, 'always', or 'force'
+        Minimum condition to apply the marker. See
+    Returns
+    -------
+    True or False
+
+    By default, markers are not applied. In order to enable them, one needs to
+    set the dask config setting ``optimization.apply_marker`` to either True or
+    a number. Setting it to True means that markers are always applied. Setting
+    it to a number greater than zero will cause the marker to be applied only
+    if the level parameter of this function is equal or greater to the marker.
+    Notably, in recursive aggregation such as
+    :func:`dask.array.reduction.reduce`, level 0 is the bottom iteration of
+    aggregation (controlled by the ``split_every`` parameter); level 1 is the
+    one above it and so on. Set level to 'always' to always apply the marker as
+    long as the global config is not False. Set it to 'force' to apply the
+    marker regardless of the global config setting.
+
+    ========================= ======== ===============
+    optimization.apply_marker level    marker applied
+    ========================= ======== ===============
+    \*                        'force'  Yes
+    False                     'always' No
+    False                     number   No
+    True                      'always' Yes
+    <number>                  'always' Yes
+    <number>                  <number> level >= config
+    ========================= ======== ===============
+    """
+    if level not in ('always', 'force') and not isinstance(level, int):
+        raise ValueError('level must be "always", "force", or a int')
+    if level == 'force':
+        return True
+    cfg = config.get('optimization.apply_marker', False)
+    if not isinstance(cfg, (bool, int)):
+        raise ValueError("optimization.apply_marker must be True, False, "
+                         "or a number")
+    if cfg is False:
+        return False
+    if cfg is True or level == 'always':
+        return True
+    return level >= cfg
+
+
+def apply_marker(dsk, keys, marker, level='always', fast=True):
+    """Mark selected keys of the target dask graph to prevent them from
+    being optimized away by :func:`compiled`.
+
+    Parameters
+    ----------
+    dsk : dict-like
+        Dask graph
+    keys: list
+        Keys of the graph that need to be preserved
+    marker: callable
+        A dummy function to add on top of the graph callable
+    level: int, 'always', or 'force'
+        Minimum condition to apply the marker. See :func`:should_apply_marker`.
+    fast: bool
+        If True and dsk is a :class:`~dask.sharedict.ShareDict`, do not inspect
+        dicts that are not expected to contain the keys. This is safe only
+        if all keys are top-level keys of dask collections and the ShareDict
+        was built in a standard way.
+
+    Returns
+    -------
+    If fast is True and dsk is a ShareDict, a new ShareDict where some of
+    the dicts have been replaced with new ones. Otherwise, a new dict.
+    In both cases, the original is unaltered.
+    """
+    if not should_apply_marker(level):
+        return dsk
+
     keys = set(flatten(keys))
-    result = {}
-    for key in keys:
-        dsk_i, _ = cull(dsk, [key])
-        builder = SourceBuilder(dsk_i, key)
-        result.update(builder.dsk)
-    return result
+
+    def _pk(this_dsk):
+        return {
+            k: ((marker, v) if k in keys else v)
+            for k, v in this_dsk.items()
+        }
+
+    if not fast or not isinstance(dsk, ShareDict):
+        return _pk(ensure_dict(dsk))
+
+    names = {k[0] if type(k) is tuple else k for k in keys}
+    out = ShareDict()
+    out.dicts = {
+        key_i: (_pk(dsk_i) if key_i in names else dsk_i)
+        for key_i, dsk_i in dsk.dicts.items()
+    }
+    return out
+
+
+preserve_keys = partial(apply_marker, marker=__preserve_key__)
+preserve_deps = partial(apply_marker, marker=__preserve_deps__)
+
+
+def compiled(dsk, keys):
+    dsk = ensure_dict(dsk, copy=True)
+    if not isinstance(keys, (list, set)):
+        keys = [keys]
+    seen = set()
+    for key in set(flatten(keys)):
+        SourceBuilder(dsk, key)
+
+    # Discard remaining __preserve_key__ markers
+    for k, v in dsk.items():
+        if type(v) is tuple and v and v[0] is __preserve_key__:
+            dsk[k] = v[1]
+    return dsk
 
 
 compiled_function_cache = {}
@@ -70,7 +192,7 @@ def add_replacement_regex(pattern, repl, count=0, flags=0):
     replacement_funcs.add(func)
 
 
-class CompiledFunction:
+class Compiled:
     __slots__ = ('_source', '_base', '_func')
 
     def __init__(self, source, base=None):
@@ -120,12 +242,19 @@ class CompiledFunction:
         return self._source
 
     def __repr__(self):
-        return "<CompiledFunction %d>" % hash(self)
+        h = abs(hash(self)) % 2**32
+        try:
+            h = h.to_bytes(4, 'little').hex()
+        except AttributeError:
+            # Python 2
+            pass
+        return "<Compiled-%s>" % h
 
 
 class SourceBuilder:
     def __init__(self, dsk, key):
-        self.dsk = ensure_dict(dsk)
+        # print(f'SourceBuilder {key}')
+        self.dsk = dsk
         self.imports = set()
         self.assigns = []
         self.arg_names = []
@@ -133,11 +262,25 @@ class SourceBuilder:
         self.obj_names = {}
         self.name_counters = {}
         self.dsk_key_map = {}
-        self.delete_keys = set()
+
+        val = dsk[key]
+        if type(val) is tuple and val:
+            if val[0] is Compiled:
+                # print(f'Encountered {val[0]}, aborting')
+                return
+            if val[0] is __preserve_key__:
+                # convert to Compiled
+                dsk[key] = val[1]
 
         # Start recursion
-        root = self._traverse(key)
-        self.assigns.append('return ' + root)
+        self._traverse(key)
+        if not self.assigns:
+            # Avoid building trivial functions
+            # def f(x):
+            #     return x
+            return
+
+        self.assigns[-1] = 'return ' + self.assigns[-1].partition(' = ')[2]
 
         # Python does not support more than 255 args in a function - handle
         # the special case where there's more.
@@ -157,30 +300,45 @@ class SourceBuilder:
             rows.append('    ' + assign)
 
         source = '\n'.join(rows) + '\n'
-        func = CompiledFunction(source)
-        self.dsk = {
-            k: v for k, v in self.dsk.items()
-            if k not in self.delete_keys
-        }
+        func = Compiled(source)
+        # print(f'Replacing {key} with {func}')
         self.dsk[key] = tuple([func] + self.arg_values)
 
     def _traverse(self, key):
-        if key in self.dsk_key_map:
+        try:
             # Already existing variable
             return self.dsk_key_map[key]
+        except KeyError:
+            pass
 
+        # print(f'_traverse({key})')
         val = self.dsk[key]
 
-        # Stop recursion when a CompiledFunction is found
-        # and add it as a new arg
-        if (isinstance(val, tuple) and val and
-                isinstance(val[0], CompiledFunction)):
-            name = self._add_arg(key)
-            self.dsk_key_map[key] = name
-            return name
+        # When encountering preserve_key or Compiled, stop recursion
+        # and add it as a new arg. For preserve_key, recursively spawn a new
+        # SourceBuilder for all the dependencies of the node.
+        if type(val) is tuple and val:
+            if type(val[0]) is Compiled:
+                # print(f'Encountered {val[0]}, stopping')
+                name = self._add_arg(key)
+                self.dsk_key_map[key] = name
+                return name
+            if val[0] is __preserve_key__:
+                name = self._add_arg(key)
+                self.dsk_key_map[key] = name
+                SourceBuilder(self.dsk, key)
+                return name
+            if val[0] is __preserve_deps__:
+                self.dsk[key] = val = val[1]
+                for dep in get_dependencies(self.dsk, key, as_list=False):
+                    SourceBuilder(self.dsk, dep)
 
         # Recursively convert dsk value to a line of source code
         source = self._to_source(val)
+
+        if re.match(r'^[a-zA-Z_]+[a-zA-Z0-9_]*$', source):
+            # a = b
+            return source
 
         if self.arg_names[-1:] == [source]:
             # constant arg
@@ -190,7 +348,6 @@ class SourceBuilder:
         name = self._unique_name(key)
         self.dsk_key_map[key] = name
         self.assigns.append("%s = %s" % (name, source))
-        self.delete_keys.add(key)
         return name
 
     def _unique_name(self, obj):
@@ -250,10 +407,9 @@ class SourceBuilder:
                 is_key = v in self.dsk
             except TypeError:
                 # Unhashable
-                pass
-            else:
-                if is_key:
-                    return self._traverse(v)
+                is_key = False
+            if is_key:
+                return self._traverse(v)
 
             if v and callable(v[0]):
                 return self._dsk_function_to_source(v[0], v[1:], {})
@@ -291,19 +447,20 @@ class SourceBuilder:
         if func is apply:
             if len(args) == 3:
                 kwargs.update(args[2])
+            else:
+                assert len(args) == 2
             return self._dsk_function_to_source(args[0], args[1], kwargs)
 
         if isinstance(func, partial):
             kwargs.update(func.keywords)
-            return self._dsk_function_to_source(func.func, func.args + args,
-                                                kwargs)
+            return self._dsk_function_to_source(
+                func.func, func.args + args, kwargs)
 
         if isinstance(func, Compose):
             assert not kwargs
-            funcs = ((func.first,) + func.funcs)
-            tup = (funcs[0],) + args
-            for func in funcs[1:]:
-                tup = (func, tup)
+            tup = (func.first,) + args
+            for f in func.funcs:
+                tup = (f, tup)
             return self._to_source(tup)
 
         # Convert binary ops

@@ -19,6 +19,7 @@ from .numpy_compat import ma_divide, divide as np_divide
 from ..compatibility import getargspec, builtins
 from ..base import tokenize
 from ..utils import ignoring, funcname, Dispatch
+from ..optimization_compile import __preserve_deps__, should_apply_marker
 from .. import config, sharedict
 
 
@@ -91,16 +92,19 @@ def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
             depth = int(builtins.max(depth, ceil(log(n, split_every[i]))))
     func = compose(partial(combine or aggregate, axis=axis, keepdims=True),
                    partial(_concatenate2, axes=axis))
-    for i in range(depth - 1):
-        x = partial_reduce(func, x, split_every, True, dtype=dtype,
-                           name=(name or funcname(combine or aggregate)) + '-partial')
+    for level in range(depth - 1):
+        x = partial_reduce(func, x, split_every, keepdims=True, dtype=dtype,
+                           name=(name or funcname(combine or aggregate)) + '-partial',
+                           level=level)
     func = compose(partial(aggregate, axis=axis, keepdims=keepdims),
                    partial(_concatenate2, axes=axis))
     return partial_reduce(func, x, split_every, keepdims=keepdims, dtype=dtype,
-                          name=(name or funcname(aggregate)) + '-aggregate')
+                          name=(name or funcname(aggregate)) + '-aggregate',
+                          level=depth - 1)
 
 
-def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
+def partial_reduce(func, x, split_every, level, keepdims=False,
+                   dtype=None, name=None):
     """Partial reduction across multiple axes.
 
     Parameters
@@ -109,6 +113,8 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
     x : Array
     split_every : dict
         Maximum reduction block sizes in each dimension.
+    level: int
+        Aggregation level (0=first round of recursive aggregation)
 
     Examples
     --------
@@ -134,7 +140,10 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
         decided = dict((i, j[0]) for (i, j) in enumerate(p) if len(j) == 1)
         dummy = dict(i for i in enumerate(p) if i[0] not in decided)
         g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
-        dsk[(name,) + k] = (func, g)
+        if isinstance(g, list) and should_apply_marker(level):
+            dsk[(name,) + k] = __preserve_deps__, (func, g)
+        else:
+            dsk[(name,) + k] = func, g
     return Array(sharedict.merge(x.dask, (name, dsk)), name, out_chunks, dtype=dtype)
 
 

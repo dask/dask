@@ -813,10 +813,12 @@ def get_scheduler_lock(get=None, collection=None, scheduler=None):
     return SerializableLock()
 
 
-def ensure_dict(d):
+def ensure_dict(d, copy=False):
     if type(d) is dict:
+        if copy:
+            return d.copy()
         return d
-    elif hasattr(d, 'dicts'):
+    if hasattr(d, 'dicts'):
         result = {}
         for dd in d.dicts.values():
             result.update(dd)
