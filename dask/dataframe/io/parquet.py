@@ -179,7 +179,9 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     import fastparquet
     from fastparquet.util import check_column_names
 
-    if len(paths) > 1:
+    if isinstance(paths,fastparquet.api.ParquetFile):
+        pf = paths
+    elif len(paths) > 1:
         pf = fastparquet.ParquetFile(paths, open_with=fs.open, sep=fs.sep)
     else:
         try:
@@ -939,15 +941,47 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     --------
     to_parquet
     """
-    read = get_engine(engine)['read']
+    is_ParquetFile = False
+    try:
+        import fastparquet
+        if isinstance(path, fastparquet.api.ParquetFile):
+            if path.open != fastparquet.util.default_open:
+                assert (re.match('.*://', path.fn)), \
+                       ("ParquetFile: Path must contain protocol" +
+                        " (e.g., s3://...) when using other than the default" +
+                        " LocalFileSystem. Path given: " + path.fn)
 
-    fs, fs_token, paths = get_fs_token_paths(path, mode='rb',
-                                             storage_options=storage_options)
+            assert (engine in ['auto', 'fastparquet']), \
+                   ("'engine' should be set to 'auto' or 'fastparquet' " +
+                    'when reading from fastparquet.ParquetFile')
+            is_ParquetFile = True
+    except ImportError:
+            pass
 
-    if isinstance(path, string_types) and len(paths) > 1:
-        # Sort paths naturally if multiple paths resulted from a single
-        # specification (by '*' globbing)
-        paths = sorted(paths, key=natural_sort_key)
+    if is_ParquetFile:
+        read = get_engine('fastparquet')['read']
+        if path.fn.endswith('_metadata'):
+            # remove '_metadata' from path
+            urlpath = path.fn[:-len('_metadata')]
+        else:
+            urlpath = path.fn
+
+        fs, fs_token, paths = get_fs_token_paths(
+            urlpath,
+            mode='rb',
+            storage_options=storage_options
+        )
+    else:
+        read = get_engine(engine)['read']
+        fs, fs_token, paths = get_fs_token_paths(
+            path, mode='rb',
+            storage_options=storage_options
+        )
+
+        if isinstance(path, string_types) and len(paths) > 1:
+            # Sort paths naturally if multiple paths resulted from a single
+            # specification (by '*' globbing)
+            paths = sorted(paths, key=natural_sort_key)
 
     return read(fs, fs_token, paths, columns=columns, filters=filters,
                 categories=categories, index=index, infer_divisions=infer_divisions)

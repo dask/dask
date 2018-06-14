@@ -8,7 +8,6 @@ import dask.array as da
 from dask.array.ghost import (fractional_slice, getitem, trim_internal,
                               ghost_internal, nearest, constant, boundaries,
                               reflect, periodic, ghost)
-from dask.core import get
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -31,7 +30,7 @@ def test_ghost_internal():
     d = da.from_array(x, chunks=(4, 4))
 
     g = ghost_internal(d, {0: 2, 1: 1})
-    result = g.compute(get=get)
+    result = g.compute(scheduler='sync')
     assert g.chunks == ((6, 6), (5, 5))
 
     expected = np.array([

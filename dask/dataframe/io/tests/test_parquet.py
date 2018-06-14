@@ -129,7 +129,7 @@ def test_local(tmpdir, write_engine, read_engine):
 
     assert len(df2.divisions) > 1
 
-    out = df2.compute(get=dask.get).reset_index()
+    out = df2.compute(scheduler='sync').reset_index()
 
     for column in df.columns:
         assert (data[column] == out[column]).all()
@@ -819,8 +819,36 @@ def test_filters(tmpdir):
     assert len(ddf2) > 0
 
 
-@pytest.mark.parametrize('get', [dask.threaded.get, dask.multiprocessing.get])
-def test_to_parquet_lazy(tmpdir, get, engine):
+def test_read_from_fastparquet_parquetfile(tmpdir):
+    check_fastparquet()
+    fn = str(tmpdir)
+
+    df = pd.DataFrame({
+        'a': np.random.choice(['A', 'B', 'C'], size=100),
+        'b': np.random.random(size=100),
+        'c': np.random.randint(1, 5, size=100)
+    })
+    d = dd.from_pandas(df, npartitions=2)
+    d.to_parquet(fn, partition_on=['a'], engine='fastparquet')
+
+    pq_f = fastparquet.ParquetFile(fn)
+
+    # OK with no filters
+    out = dd.read_parquet(pq_f).compute()
+    for val in df.a.unique():
+        assert set(df.b[df.a == val]) == set(out.b[out.a == val])
+
+    # OK with  filters
+    out = dd.read_parquet(pq_f, filters=[('a', '==', 'B')]).compute()
+    assert set(df.b[df.a == 'B']) == set(out.b)
+
+    # Engine should not be set to 'pyarrow'
+    with pytest.raises(AssertionError):
+        out = dd.read_parquet(pq_f, engine='pyarrow')
+
+
+@pytest.mark.parametrize('scheduler', ['threads', 'processes'])
+def test_to_parquet_lazy(tmpdir, scheduler, engine):
     tmpdir = str(tmpdir)
     df = pd.DataFrame({'a': [1, 2, 3, 4],
                        'b': [1., 2., 3., 4.]})
@@ -829,7 +857,7 @@ def test_to_parquet_lazy(tmpdir, get, engine):
     value = ddf.to_parquet(tmpdir, compute=False, engine=engine)
 
     assert hasattr(value, 'dask')
-    value.compute(get=get)
+    value.compute(scheduler=scheduler)
     assert os.path.exists(tmpdir)
 
     ddf2 = dd.read_parquet(tmpdir, engine=engine, infer_divisions=should_check_divs(engine))
@@ -1185,7 +1213,7 @@ def test_writing_parquet_with_kwargs(tmpdir, engine):
     assert_eq(out, ddf, check_index=(engine != 'fastparquet'), check_divisions=should_check_divs(engine))
 
     # Avoid race condition in pyarrow 0.8.0 on writing partitioned datasets
-    with dask.set_options(get=dask.get):
+    with dask.config.set(scheduler='sync'):
         ddf.to_parquet(path2, engine=engine, partition_on=['a'],
                        **engine_kwargs[engine])
     out = dd.read_parquet(path2, engine=engine).compute()

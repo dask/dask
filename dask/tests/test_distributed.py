@@ -9,6 +9,7 @@ from tornado import gen
 import dask
 from dask import persist, delayed, compute
 from dask.delayed import Delayed
+from dask.utils import tmpdir
 from distributed.client import wait, Client
 from distributed.utils_test import gen_cluster, inc, cluster, loop  # flake8: noqa
 
@@ -97,12 +98,12 @@ def test_futures_to_delayed_array(loop):
 
 @gen_cluster(client=True)
 def test_local_get_with_distributed_active(c, s, a, b):
-    with dask.set_options(get=dask.get):
+    with dask.config.set(scheduler='sync'):
         x = delayed(inc)(1).persist()
     yield gen.sleep(0.01)
     assert not s.tasks # scheduler hasn't done anything
 
-    y = delayed(inc)(2).persist(get=dask.get)
+    y = delayed(inc)(2).persist(scheduler='sync')
     yield gen.sleep(0.01)
     assert not s.tasks # scheduler hasn't done anything
 
@@ -147,4 +148,31 @@ def test_futures_in_graph(loop):
             xxyy2 = c.persist(xxyy)
             xxyy3 = delayed(add)(xxyy2, 10)
 
-            assert xxyy3.compute(get=c.get) == ((1 + 1) + (2 + 2)) + 10
+            assert xxyy3.compute(scheduler='dask.distributed') == ((1 + 1) + (2 + 2)) + 10
+
+
+def test_zarr_distributed_roundtrip(loop):
+    da = pytest.importorskip('dask.array')
+    zarr = pytest.importorskip('zarr')
+    assert_eq = da.utils.assert_eq
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            with tmpdir() as d:
+                a = da.zeros((3, 3), chunks=(1, 1))
+                a.to_zarr(d)
+                a2 = da.from_zarr(d)
+                assert_eq(a, a2)
+                assert a2.chunks == a.chunks
+
+
+def test_zarr_in_memory_distributed_err(loop):
+    da = pytest.importorskip('dask.array')
+    zarr = pytest.importorskip('zarr')
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop,
+                    client_kwargs={'set_as_default': True}) as c:
+            with pytest.raises(RuntimeError):
+                c = (1, 1)
+                a = da.ones((3, 3), chunks=c)
+                z = zarr.zeros_like(a, chunks=c)
+                a.to_zarr(z)

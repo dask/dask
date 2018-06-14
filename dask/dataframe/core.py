@@ -38,7 +38,8 @@ from .hashing import hash_pandas_object
 from .optimize import optimize
 from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
                     raise_on_meta_error, clear_known_categories,
-                    is_categorical_dtype, has_known_categories, PANDAS_VERSION)
+                    is_categorical_dtype, has_known_categories, PANDAS_VERSION,
+                    index_summary)
 
 no_default = '__no_default__'
 
@@ -1029,16 +1030,19 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     def bfill(self, axis=None, limit=None):
         return self.fillna(method='bfill', limit=limit, axis=axis)
 
-    def sample(self, frac, replace=False, random_state=None):
+    def sample(self, n=None, frac=None, replace=False, random_state=None):
         """ Random sample of items
 
         Parameters
         ----------
+        n : int, optional
+            Number of items to return is not supported by dask. Use frac
+            instead.
         frac : float, optional
             Fraction of axis items to return.
-        replace: boolean, optional
+        replace : boolean, optional
             Sample with or without replacement. Default = False.
-        random_state: int or ``np.random.RandomState``
+        random_state : int or ``np.random.RandomState``
             If int we create a new RandomState with this as the seed
             Otherwise we draw from the passed RandomState
 
@@ -1047,6 +1051,17 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         DataFrame.random_split
         pandas.DataFrame.sample
         """
+        if n is not None:
+            msg = ("sample does not support the number of sampled items "
+                   "parameter, 'n'. Please use the 'frac' parameter instead.")
+            if isinstance(n, Number) and 0 <= n <= 1:
+                warnings.warn(msg)
+                frac = n
+            else:
+                raise ValueError(msg)
+
+        if frac is None:
+            raise ValueError("frac must not be None")
 
         if random_state is None:
             random_state = np.random.RandomState()
@@ -1060,10 +1075,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return new_dd_object(merge(self.dask, dsk), name,
                              self._meta, self.divisions)
 
-    def to_hdf(self, path_or_buf, key, mode='a', append=False, get=None, **kwargs):
+    def to_hdf(self, path_or_buf, key, mode='a', append=False, **kwargs):
         """ See dd.to_hdf docstring for more information """
         from .io import to_hdf
-        return to_hdf(self, path_or_buf, key, mode, append, get=get, **kwargs)
+        return to_hdf(self, path_or_buf, key, mode, append, **kwargs)
 
     def to_parquet(self, path, *args, **kwargs):
         """ See dd.to_parquet docstring for more information """
@@ -1074,6 +1089,11 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         """ See dd.to_csv docstring for more information """
         from .io import to_csv
         return to_csv(self, filename, **kwargs)
+
+    def to_json(self, filename, *args, **kwargs):
+        """ See dd.to_json docstring for more information """
+        from .io import to_json
+        return to_json(self, filename, *args, **kwargs)
 
     def to_delayed(self, optimize_graph=True):
         """Convert into a list of ``dask.delayed`` objects, one per partition.
@@ -2353,7 +2373,7 @@ class DataFrame(_Frame):
         elif isinstance(key, slice):
             return self.loc[key]
 
-        if isinstance(key, list):
+        if isinstance(key, (pd.Series, np.ndarray, pd.Index, list)):
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
 
@@ -2559,7 +2579,7 @@ class DataFrame(_Frame):
         df2 = self._meta.assign(**_extract_meta(kwargs))
         return elemwise(methods.assign, self, *pairs, meta=df2)
 
-    @derived_from(pd.DataFrame)
+    @derived_from(pd.DataFrame, ua_args=['index'])
     def rename(self, index=None, columns=None):
         if index is not None:
             raise ValueError("Cannot rename index.")
@@ -2780,7 +2800,8 @@ class DataFrame(_Frame):
         bind_method(cls, name, meth)
 
     @insert_meta_param_description(pad=12)
-    def apply(self, func, axis=0, args=(), meta=no_default, **kwds):
+    def apply(self, func, axis=0, broadcast=None, raw=False, reduce=None,
+              args=(), meta=no_default, **kwds):
         """ Parallel version of pandas.DataFrame.apply
 
         This mimics the pandas version except for the following:
@@ -2842,6 +2863,17 @@ class DataFrame(_Frame):
         """
 
         axis = self._validate_axis(axis)
+        pandas_kwargs = {
+            'axis': axis,
+            'broadcast': broadcast,
+            'raw': raw,
+            'reduce': None,
+        }
+
+        if PANDAS_VERSION >= '0.23.0':
+            kwds.setdefault('result_type', None)
+
+        kwds.update(pandas_kwargs)
 
         if axis == 0:
             msg = ("dd.DataFrame.apply only supports axis=1\n"
@@ -2857,10 +2889,9 @@ class DataFrame(_Frame):
             warnings.warn(msg)
 
             meta = _emulate(M.apply, self._meta_nonempty, func,
-                            axis=axis, args=args, udf=True, **kwds)
+                            args=args, udf=True, **kwds)
 
-        return map_partitions(M.apply, self, func, axis,
-                              False, False, None, args, meta=meta, **kwds)
+        return map_partitions(M.apply, self, func, args=args, meta=meta, **kwds)
 
     @derived_from(pd.DataFrame)
     def applymap(self, func, meta='__no_default__'):
@@ -2909,7 +2940,7 @@ class DataFrame(_Frame):
         if verbose:
             index = computations['index']
             counts = computations['count']
-            lines.append(index.summary())
+            lines.append(index_summary(index))
             lines.append('Data columns (total {} columns):'.format(len(self.columns)))
 
             if PANDAS_VERSION >= '0.20.0':
@@ -2921,7 +2952,7 @@ class DataFrame(_Frame):
             column_info = [column_template.format(pprint_thing(x[0]), x[1], x[2])
                            for x in zip(self.columns, counts, self.dtypes)]
         else:
-            column_info = [self.columns.summary(name='Columns')]
+            column_info = [index_summary(self.columns, name='Columns')]
 
         lines.extend(column_info)
         dtype_counts = ['%s(%d)' % k for k in sorted(self.dtypes.value_counts().iteritems(), key=str)]
@@ -3519,7 +3550,17 @@ def apply_and_enforce(func, args, kwargs, meta):
     if isinstance(df, (pd.DataFrame, pd.Series, pd.Index)):
         if len(df) == 0:
             return meta
-        c = meta.columns if isinstance(df, pd.DataFrame) else meta.name
+
+        if isinstance(df, pd.DataFrame):
+            # Need nan_to_num otherwise nan comparison gives False
+            if not np.array_equal(np.nan_to_num(meta.columns),
+                                  np.nan_to_num(df.columns)):
+                raise ValueError("The columns in the computed data do not match"
+                                 " the columns in the provided metadata")
+            else:
+                c = meta.columns
+        else:
+            c = meta.name
         return _rename(c, df)
     return df
 

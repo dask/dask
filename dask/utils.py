@@ -19,7 +19,6 @@ from weakref import WeakValueDictionary
 
 from .compatibility import get_named_args, getargspec, PY3, unicode, bind_method
 from .core import get_deps
-from .context import _globals
 from .optimization import key_split    # noqa: F401
 
 
@@ -799,20 +798,18 @@ class SerializableLock(object):
     __repr__ = __str__
 
 
-def effective_get(get=None, collection=None):
-    """Get the effective get method used in a given situation"""
-    return (get or _globals.get('get') or
-            getattr(collection, '__dask_scheduler__', None))
-
-
-def get_scheduler_lock(get=None, collection=None):
+def get_scheduler_lock(get=None, collection=None, scheduler=None):
     """Get an instance of the appropriate lock for a certain situation based on
        scheduler used."""
     from . import multiprocessing
-    actual_get = effective_get(get, collection)
+    from .base import get_scheduler
+    actual_get = get_scheduler(get=get,
+                               collections=[collection],
+                               scheduler=scheduler)
 
     if actual_get == multiprocessing.get:
         return mp.Manager().Lock()
+
     return SerializableLock()
 
 
@@ -927,3 +924,81 @@ def natural_sort_key(s):
     """
     return [int(part) if part.isdigit() else part
             for part in re.split('(\d+)', s)]
+
+
+def factors(n):
+    """ Return the factors of an integer
+
+    https://stackoverflow.com/a/6800214/616616
+    """
+    seq = ([i, n // i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)
+    return set(functools.reduce(list.__add__, seq))
+
+
+def parse_bytes(s):
+    """ Parse byte string to numbers
+
+    >>> parse_bytes('100')
+    100
+    >>> parse_bytes('100 MB')
+    100000000
+    >>> parse_bytes('100M')
+    100000000
+    >>> parse_bytes('5kB')
+    5000
+    >>> parse_bytes('5.4 kB')
+    5400
+    >>> parse_bytes('1kiB')
+    1024
+    >>> parse_bytes('1e6')
+    1000000
+    >>> parse_bytes('1e6 kB')
+    1000000000
+    >>> parse_bytes('MB')
+    1000000
+    >>> parse_bytes('5 foos')  # doctest: +SKIP
+    ValueError: Could not interpret 'foos' as a byte unit
+    """
+    s = s.replace(' ', '')
+    if not s[0].isdigit():
+        s = '1' + s
+
+    for i in range(len(s) - 1, -1, -1):
+        if not s[i].isalpha():
+            break
+    index = i + 1
+
+    prefix = s[:index]
+    suffix = s[index:]
+
+    try:
+        n = float(prefix)
+    except ValueError:
+        raise ValueError("Could not interpret '%s' as a number" % prefix)
+
+    try:
+        multiplier = byte_sizes[suffix.lower()]
+    except KeyError:
+        raise ValueError("Could not interpret '%s' as a byte unit" % suffix)
+
+    result = n * multiplier
+    return int(result)
+
+
+byte_sizes = {
+    'kB': 10**3,
+    'MB': 10**6,
+    'GB': 10**9,
+    'TB': 10**12,
+    'PB': 10**15,
+    'KiB': 2**10,
+    'MiB': 2**20,
+    'GiB': 2**30,
+    'TiB': 2**40,
+    'PiB': 2**50,
+    'B': 1,
+    '': 1,
+}
+byte_sizes = {k.lower(): v for k, v in byte_sizes.items()}
+byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and 'i' not in k})
+byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and 'i' in k})

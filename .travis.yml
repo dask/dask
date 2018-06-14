@@ -7,7 +7,7 @@ _base_envs:
   - &test_and_lint TEST='true' LINT='true'
   - &coverage COVERAGE='true' PARALLEL='false'
   - &no_coverage COVERAGE='false' PARALLEL='true'
-  - &optimize PYTHONOPTIMIZE=2 XTRATESTARGS=--ignore=dask/diagnostics
+  - &optimize PYTHONOPTIMIZE=2 XTRATESTARGS='--ignore=dask/diagnostics'
   - &no_optimize XTRATESTARGS=
   - &imports TEST_IMPORTS='true'
   - &no_imports TEST_IMPORTS='false'
@@ -35,7 +35,7 @@ jobs:
 
     - env:
       - PYTHON=3.4
-      - NUMPY=1.12.1
+      - NUMPY=1.11.3
       - PANDAS=0.19.1
       - *test_and_lint
       - *no_coverage

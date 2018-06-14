@@ -95,8 +95,10 @@ Top level user functions:
    isfinite
    isin
    isinf
+   isneginf
    isnan
    isnull
+   isposinf
    isreal
    ldexp
    linspace
@@ -132,6 +134,7 @@ Top level user functions:
    nanstd
    nansum
    nanvar
+   nan_to_num
    nextafter
    nonzero
    notnull
@@ -219,6 +222,7 @@ Linear Algebra
    linalg.solve_triangular
    linalg.svd
    linalg.svd_compressed
+   linalg.sfqr
    linalg.tsqr
 
 Masked Arrays
@@ -321,9 +325,22 @@ Create and Store Arrays
    from_array
    from_delayed
    from_npy_stack
+   from_zarr
    store
    to_hdf5
+   to_zarr
    to_npy_stack
+
+Generalized Ufuncs
+~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.array
+
+.. autosummary::
+   apply_gufunc
+   as_gufunc
+   gufunc
+
 
 Internal functions
 ~~~~~~~~~~~~~~~~~~
@@ -436,8 +453,10 @@ Other functions
 .. autofunction:: isfinite
 .. autofunction:: isin
 .. autofunction:: isinf
+.. autofunction:: isneginf
 .. autofunction:: isnan
 .. autofunction:: isnull
+.. autofunction:: isposinf
 .. autofunction:: isreal
 .. autofunction:: ldexp
 .. autofunction:: linspace
@@ -471,6 +490,7 @@ Other functions
 .. autofunction:: nanstd
 .. autofunction:: nansum
 .. autofunction:: nanvar
+.. autofunction:: nan_to_num
 .. autofunction:: nextafter
 .. autofunction:: nonzero
 .. autofunction:: notnull
@@ -563,8 +583,10 @@ Other functions
 .. autofunction:: from_array
 .. autofunction:: from_delayed
 .. autofunction:: from_npy_stack
+.. autofunction:: from_zarr
 .. autofunction:: store
 .. autofunction:: to_hdf5
+.. autofunction:: to_zarr
 .. autofunction:: to_npy_stack
 
 .. currentmodule:: dask.array.fft
@@ -644,6 +666,12 @@ Other functions
 .. currentmodule:: dask.array.image
 
 .. autofunction:: imread
+
+.. currentmodule:: dask.array.gufunc
+
+.. autofunction:: apply_gufunc
+.. autofunction:: as_gufunc
+.. autofunction:: gufunc
 
 .. currentmodule:: dask.array.core
 
