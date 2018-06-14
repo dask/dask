@@ -33,7 +33,7 @@ def _nanmin(m, n):
     return k_1 if np.isnan(k_0) else k_0
 
 
-def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
+def tsqr(data, name=None, compute_svd=False, use_recursion=True, _max_vchunk_size=None):
     """ Direct Tall-and-Skinny QR algorithm
 
     As presented in:
@@ -48,14 +48,32 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
     Singular Value Decomposition.  It requires that the input array have a
     single column of blocks, each of which fit in memory.
 
-    If blocks are of size ``(n, k)`` then this algorithm has memory use that
-    scales as ``n**2 * k * nthreads``.
-
     Parameters
     ----------
     data: Array
     compute_svd: bool
         Whether to compute the SVD rather than the QR decomposition
+    use_recursion: bool
+        Whether to use recursion
+
+    Notes
+    ----------
+    If blocks are of size ``(n, k)`` then this algorithm has memory use that
+    scales as ``n**2 * k * nthreads``.
+
+    The implementation here is the recursive variant due to the need for a
+    "single core" QR decomposition. Given m blocks, the size of the required
+    "single core" QR decomposition will have to work with a ``(m * k, k)``
+    matrix, and ``m * k`` may be substantially larger than ``n``.
+
+    As such, if ``n / k >= gamma``, recursion will be applied as necessary
+    (unless prevented with the ``use_recursion`` flag) to ensure that single
+    core computations do not work on blocks larger than ``(n, k)``.
+
+    Where blocks are irregular, the above logic is applied with the "height" of
+    the "tallest" block used in place of ``n``.
+
+    Consider use of the ``rechunk`` method to control this behavior.
 
     See Also
     --------
@@ -108,8 +126,8 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
 
     # Next step is to obtain a QR decomposition for the stacked R factors, so either:
     # - gather R factors into a single core and do a QR decomposition
-    # - recurse with tsqr (if single core computation too large and a-priori meaningful
-    #   reduction possible, meaning that chunks have to be well defined)
+    # - recurse with tsqr (if single core computation too large and a-priori "meaningful
+    #   reduction" possible, meaning that chunks have to be well defined)
 
     single_core_compute_m = nr * cc
     chunks_well_defined = not any(np.isnan(c) for cs in data.chunks for c in cs)
@@ -117,7 +135,7 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
     meaningful_reduction_possible = (cr_max if _max_vchunk_size is None else _max_vchunk_size) >= 2 * cc
     can_distribute = chunks_well_defined and int(prospective_blocks) > 1
 
-    if chunks_well_defined and meaningful_reduction_possible and can_distribute:
+    if use_recursion and chunks_well_defined and meaningful_reduction_possible and can_distribute:
         # stack chunks into blocks and recurse using tsqr
 
         # Prepare to stack chunks into blocks (from block qr[1])
