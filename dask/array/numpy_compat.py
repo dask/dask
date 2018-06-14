@@ -132,7 +132,7 @@ if LooseVersion(np.__version__) < '1.12.0':
         >>> nancumsum([1, np.nan])
         array([ 1.,  1.])
         >>> a = np.array([[1, 2], [3, np.nan]])
-        >>> np.nancumsum(a)
+        >>> nancumsum(a)
         array([ 1.,  3.,  6.,  6.])
         >>> nancumsum(a, axis=0)
         array([[ 1.,  2.],

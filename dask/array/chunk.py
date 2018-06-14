@@ -188,7 +188,7 @@ def takeslice(a, indices, axis):
 
 
 def topk(a, k, axis, keepdims):
-    """chunk and combine kernel of topk.
+    """Chunk and combine kernel of topk.
     Extract the k largest elements from a on the given axis.
     If k is negative, extract the -k smallest elements instead.
     Note that, unlike in the parent function, the returned elements
@@ -205,8 +205,8 @@ def topk(a, k, axis, keepdims):
 
 
 def topk_aggregate(a, k, axis, keepdims):
-    """aggregate kernel of topk.
-    Post-processes the output of topk, sorting the results internally.
+    """Final aggregation kernel of topk.
+    Invoke topk one final time and then sort the results internally.
     """
     assert keepdims is True
     a = topk(a, k, axis, keepdims)
@@ -219,15 +219,15 @@ def topk_aggregate(a, k, axis, keepdims):
 
 def argtopk_preprocess(a, idx):
     """Preparatory step for argtopk.
-    Put data together with its indexes in a tuple
+    Put data together with its indices in a tuple.
     """
     return a, idx
 
 
 def argtopk(a_plus_idx, k, axis, keepdims):
-    """chunk and combine kernel of topk.
-    Extract the k largest elements from a on the given axis.
-    If k is negative, extract the -k smallest elements instead.
+    """Chunk and combine kernel of argtopk.
+    Extract the indices of the k largest elements from a on the given axis.
+    If k is negative, extract the indices of the -k smallest elements instead.
     Note that, unlike in the parent function, the returned elements
     are not sorted internally.
     """
@@ -251,9 +251,9 @@ def argtopk(a_plus_idx, k, axis, keepdims):
 
 
 def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
-    """aggregate kernel of topk.
-    Post-processes the output of topk, sorting the results internally and
-    dropping the index
+    """Final aggregation kernel of argtopk.
+    Invoke argtopk one final time, sort the results internally, drop the data
+    and return the index only.
     """
     assert keepdims is True
     a, idx = argtopk(a_plus_idx, k, axis, keepdims)
