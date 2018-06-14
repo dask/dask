@@ -270,13 +270,12 @@ class SourceBuilder:
         self.sourcebuilder_keys = set()
 
         val = dsk[key]
-        if not(type(val) is tuple and val and callable(val[0])):
-            return
-        if val[0] is Compiled:
-            return
-        if val[0] is __preserve_key__:
-            # convert to Compiled
-            dsk[key] = val[1]
+        if type(val) is tuple and val:
+            if val[0] is Compiled:
+                return
+            if val[0] is __preserve_key__:
+                # convert to Compiled
+                dsk[key] = val[1]
 
         # Start recursion
         self._traverse(key)
