@@ -11,6 +11,14 @@ import dask
 from dask.bytes.core import read_bytes, open_files, get_fs
 from dask.compatibility import unicode, PY2
 
+
+try:
+    import distributed
+    from distributed import Client
+    from distributed.utils_test import cluster, loop  # noqa: F401
+except ImportError:
+    distributed = None
+
 try:
     import hdfs3
 except ImportError:
@@ -297,8 +305,8 @@ def test_glob(hdfs):
             {basedir + p for p in ['/a', '/a1', '/a2', '/a3', '/b1', '/c', '/c2']})
 
 
-def test_distributed(hdfs):
-    dist = pytest.importorskip('distributed')
+@pytest.mark.skipif(not distributed)  # noqa: F811
+def test_distributed(hdfs, loop):     # noqa: F811
     dd = pytest.importorskip('dask.dataframe')
 
     with hdfs.open('%s/1.csv' % basedir, 'wb') as f:
@@ -307,6 +315,7 @@ def test_distributed(hdfs):
     with hdfs.open('%s/2.csv' % basedir, 'wb') as f:
         f.write(b'name,amount,id\nCharlie,300,3\nDennis,400,4')
 
-    with dist.Client(n_workers=2, threads_per_worker=1):
-        df = dd.read_csv('hdfs://%s/*.csv' % basedir)
-        assert df.id.sum().compute() == 1 + 2 + 3 + 4
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop):  # noqa: F811
+            df = dd.read_csv('hdfs://%s/*.csv' % basedir)
+            assert df.id.sum().compute() == 1 + 2 + 3 + 4
