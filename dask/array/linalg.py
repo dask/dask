@@ -58,7 +58,7 @@ def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
         of chunks in subsequent recursive calls.
 
     Notes
-    ----------
+    -----
     With ``k`` blocks of size ``(m, n)``, this algorithm has memory use that
     scales as ``m * n * k``.
 
