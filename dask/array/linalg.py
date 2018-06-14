@@ -33,7 +33,7 @@ def _nanmin(m, n):
     return k_1 if np.isnan(k_0) else k_0
 
 
-def tsqr(data, name=None, compute_svd=False, use_recursion=True, _max_vchunk_size=None):
+def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
     """ Direct Tall-and-Skinny QR algorithm
 
     As presented in:
@@ -53,27 +53,29 @@ def tsqr(data, name=None, compute_svd=False, use_recursion=True, _max_vchunk_siz
     data: Array
     compute_svd: bool
         Whether to compute the SVD rather than the QR decomposition
-    use_recursion: bool
-        Whether to use recursion
+    _max_vchunk_size: Integer
+        Used internally in recursion to set the maximum row dimension
+        of chunks in subsequent recursive calls.
 
     Notes
     ----------
-    If blocks are of size ``(n, k)`` then this algorithm has memory use that
-    scales as ``n**2 * k * nthreads``.
+    With ``k`` blocks of size ``(m, n)``, this algorithm has memory use that
+    scales as ``m * n * k * log (km)``.
 
-    The implementation here is the recursive variant due to the need for a
-    "single core" QR decomposition. Given m blocks, the size of the required
-    "single core" QR decomposition will have to work with a ``(m * k, k)``
-    matrix, and ``m * k`` may be substantially larger than ``n``.
+    The implementation here is the recursive variant due to the ultimate
+    need for one "single core" QR decomposition. Given m blocks, the
+    "single core" QR decomposition will have to work with a ``(k * n, n)``
+    matrix, and ``k * n`` may be substantially larger than ``m``.
 
-    As such, if ``n / k >= 2``, recursion will be applied as necessary
-    (unless prevented with the ``use_recursion`` flag) to ensure that single
-    core computations do not work on blocks larger than ``(n, k)``.
+    As such, (if ``m / n >= 2``) recursion will be applied as necessary
+    to ensure that single core computations do not have to work on blocks
+    larger than ``(m, n)``.
 
     Where blocks are irregular, the above logic is applied with the "height" of
-    the "tallest" block used in place of ``n``.
+    the "tallest" block used in place of ``m``.
 
-    Consider use of the ``rechunk`` method to control this behavior.
+    Consider use of the ``rechunk`` method to control this behavior. Blocks
+    that are as tall as possible are recommended.
 
     See Also
     --------
@@ -135,7 +137,7 @@ def tsqr(data, name=None, compute_svd=False, use_recursion=True, _max_vchunk_siz
     meaningful_reduction_possible = (cr_max if _max_vchunk_size is None else _max_vchunk_size) >= 2 * cc
     can_distribute = chunks_well_defined and int(prospective_blocks) > 1
 
-    if use_recursion and chunks_well_defined and meaningful_reduction_possible and can_distribute:
+    if chunks_well_defined and meaningful_reduction_possible and can_distribute:
         # stack chunks into blocks and recurse using tsqr
 
         # Prepare to stack chunks into blocks (from block qr[1])
