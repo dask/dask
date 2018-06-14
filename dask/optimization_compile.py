@@ -169,13 +169,14 @@ def compiled(dsk, keys):
     if not isinstance(keys, (list, set)):
         keys = [keys]
     keys = set(flatten(keys))
+    seen = set()
     while keys:
-        new_keys = set()
-        for key in keys:
+        key = keys.pop()
+        if key not in seen:
+            seen.add(key)
             builder = SourceBuilder(dsk, key)
-            new_keys |= builder.sourcebuilder_keys
-        assert not new_keys & keys
-        keys = new_keys
+            keys |= builder.sourcebuilder_keys
+
     # Discard remaining __preserve_key__ markers
     for k, v in dsk.items():
         if type(v) is tuple and v and v[0] is __preserve_key__:
