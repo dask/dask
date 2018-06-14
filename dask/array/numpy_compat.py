@@ -125,19 +125,19 @@ if LooseVersion(np.__version__) < '1.12.0':
 
         Examples
         --------
-        >>> np.nancumsum(1) #doctest: +SKIP
+        >>> nancumsum(1)
         array([1])
-        >>> np.nancumsum([1]) #doctest: +SKIP
+        >>> nancumsum([1])
         array([1])
-        >>> np.nancumsum([1, np.nan]) #doctest: +SKIP
+        >>> nancumsum([1, np.nan])
         array([ 1.,  1.])
         >>> a = np.array([[1, 2], [3, np.nan]])
-        >>> np.nancumsum(a) #doctest: +SKIP
+        >>> np.nancumsum(a)
         array([ 1.,  3.,  6.,  6.])
-        >>> np.nancumsum(a, axis=0) #doctest: +SKIP
+        >>> nancumsum(a, axis=0)
         array([[ 1.,  2.],
                [ 4.,  2.]])
-        >>> np.nancumsum(a, axis=1) #doctest: +SKIP
+        >>> nancumsum(a, axis=1)
         array([[ 1.,  3.],
                [ 3.,  3.]])
 
@@ -186,19 +186,19 @@ if LooseVersion(np.__version__) < '1.12.0':
 
         Examples
         --------
-        >>> np.nancumprod(1) #doctest: +SKIP
+        >>> nancumprod(1)
         array([1])
-        >>> np.nancumprod([1]) #doctest: +SKIP
+        >>> nancumprod([1])
         array([1])
-        >>> np.nancumprod([1, np.nan]) #doctest: +SKIP
+        >>> nancumprod([1, np.nan])
         array([ 1.,  1.])
         >>> a = np.array([[1, 2], [3, np.nan]])
-        >>> np.nancumprod(a) #doctest: +SKIP
+        >>> nancumprod(a)
         array([ 1.,  2.,  6.,  6.])
-        >>> np.nancumprod(a, axis=0) #doctest: +SKIP
+        >>> nancumprod(a, axis=0)
         array([[ 1.,  2.],
                [ 3.,  2.]])
-        >>> np.nancumprod(a, axis=1) #doctest: +SKIP
+        >>> nancumprod(a, axis=1)
         array([[ 1.,  2.],
                [ 3.,  3.]])
 
@@ -282,16 +282,16 @@ if LooseVersion(np.__version__) < '1.15.0':
             Put values into the destination array by matching 1d index and data slices
         Examples
         --------
-        For this sample array
+        For this sample array, we can sort either by using sort directly,
+        or argsort and this function:
         >>> a = np.array([[10, 30, 20], [60, 40, 50]])
-        We can sort either by using sort directly, or argsort and this function
         >>> np.sort(a, axis=1)
         array([[10, 20, 30],
                [40, 50, 60]])
         >>> ai = np.argsort(a, axis=1); ai
         array([[0, 2, 1],
                [1, 2, 0]], dtype=int64)
-        >>> np.take_along_axis(a, ai, axis=1)
+        >>> take_along_axis(a, ai, axis=1)
         array([[10, 20, 30],
                [40, 50, 60]])
         The same works for max and min, if you expand the dimensions:
@@ -302,7 +302,7 @@ if LooseVersion(np.__version__) < '1.15.0':
         >>> ai
         array([[1],
                [0], dtype=int64)
-        >>> np.take_along_axis(a, ai, axis=1)
+        >>> take_along_axis(a, ai, axis=1)
         array([[30],
                [60]])
         If we want to get the max and min at the same time, we can stack the
@@ -313,7 +313,7 @@ if LooseVersion(np.__version__) < '1.15.0':
         >> ai
         array([[0, 1],
                [1, 0]], dtype=int64)
-        >>> np.take_along_axis(a, ai, axis=1)
+        >>> take_along_axis(a, ai, axis=1)
         array([[10, 30],
                [40, 60]])
         """
