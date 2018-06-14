@@ -290,7 +290,7 @@ if LooseVersion(np.__version__) < '1.15.0':
                [40, 50, 60]])
         >>> ai = np.argsort(a, axis=1); ai
         array([[0, 2, 1],
-               [1, 2, 0]], dtype=int64)
+               [1, 2, 0]])
         >>> take_along_axis(a, ai, axis=1)
         array([[10, 20, 30],
                [40, 50, 60]])
@@ -301,7 +301,7 @@ if LooseVersion(np.__version__) < '1.15.0':
         >>> ai = np.expand_dims(np.argmax(a, axis=1), axis=1)
         >>> ai
         array([[1],
-               [0], dtype=int64)
+               [0]])
         >>> take_along_axis(a, ai, axis=1)
         array([[30],
                [60]])
@@ -312,7 +312,7 @@ if LooseVersion(np.__version__) < '1.15.0':
         >>> ai = np.concatenate([ai_min, ai_max], axis=axis)
         >> ai
         array([[0, 1],
-               [1, 0]], dtype=int64)
+               [1, 0]])
         >>> take_along_axis(a, ai, axis=1)
         array([[10, 30],
                [40, 60]])
