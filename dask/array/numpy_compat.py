@@ -282,9 +282,10 @@ if LooseVersion(np.__version__) < '1.15.0':
             Put values into the destination array by matching 1d index and data slices
         Examples
         --------
-        For this sample array, we can sort either by using sort directly,
-        or argsort and this function:
+        For this sample array
         >>> a = np.array([[10, 30, 20], [60, 40, 50]])
+
+        We can sort either by using sort directly, or argsort and this function
         >>> np.sort(a, axis=1)
         array([[10, 20, 30],
                [40, 50, 60]])
@@ -294,6 +295,7 @@ if LooseVersion(np.__version__) < '1.15.0':
         >>> take_along_axis(a, ai, axis=1)
         array([[10, 20, 30],
                [40, 50, 60]])
+
         The same works for max and min, if you expand the dimensions:
         >>> np.expand_dims(np.max(a, axis=1), axis=1)
         array([[30],
@@ -305,12 +307,13 @@ if LooseVersion(np.__version__) < '1.15.0':
         >>> take_along_axis(a, ai, axis=1)
         array([[30],
                [60]])
-        If we want to get the max and min at the same time, we can stack the
-        indices first
+
+        If we want to get the max and min at the same time,
+        we can stack the indices first:
         >>> ai_min = np.expand_dims(np.argmin(a, axis=1), axis=1)
         >>> ai_max = np.expand_dims(np.argmax(a, axis=1), axis=1)
-        >>> ai = np.concatenate([ai_min, ai_max], axis=axis)
-        >> ai
+        >>> ai = np.concatenate([ai_min, ai_max], axis=1)
+        >>> ai
         array([[0, 1],
                [1, 0]])
         >>> take_along_axis(a, ai, axis=1)
