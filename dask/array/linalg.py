@@ -66,7 +66,7 @@ def tsqr(data, name=None, compute_svd=False, use_recursion=True, _max_vchunk_siz
     "single core" QR decomposition will have to work with a ``(m * k, k)``
     matrix, and ``m * k`` may be substantially larger than ``n``.
 
-    As such, if ``n / k >= gamma``, recursion will be applied as necessary
+    As such, if ``n / k >= 2``, recursion will be applied as necessary
     (unless prevented with the ``use_recursion`` flag) to ensure that single
     core computations do not work on blocks larger than ``(n, k)``.
 
