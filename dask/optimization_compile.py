@@ -168,14 +168,9 @@ def compiled(dsk, keys):
     dsk = ensure_dict(dsk, copy=True)
     if not isinstance(keys, (list, set)):
         keys = [keys]
-    keys = set(flatten(keys))
     seen = set()
-    while keys:
-        key = keys.pop()
-        if key not in seen:
-            seen.add(key)
-            builder = SourceBuilder(dsk, key)
-            keys |= builder.sourcebuilder_keys
+    for key in set(flatten(keys)):
+        SourceBuilder(dsk, key)
 
     # Discard remaining __preserve_key__ markers
     for k, v in dsk.items():
@@ -267,11 +262,11 @@ class SourceBuilder:
         self.obj_names = {}
         self.name_counters = {}
         self.dsk_key_map = {}
-        self.sourcebuilder_keys = set()
 
         val = dsk[key]
         if type(val) is tuple and val:
             if val[0] is Compiled:
+                # print(f'Encountered {val[0]}, aborting')
                 return
             if val[0] is __preserve_key__:
                 # convert to Compiled
@@ -306,36 +301,37 @@ class SourceBuilder:
 
         source = '\n'.join(rows) + '\n'
         func = Compiled(source)
+        # print(f'Replacing {key} with {func}')
         self.dsk[key] = tuple([func] + self.arg_values)
 
     def _traverse(self, key):
-        if key in self.dsk_key_map:
+        try:
             # Already existing variable
             return self.dsk_key_map[key]
+        except KeyError:
+            pass
 
+        # print(f'_traverse({key})')
         val = self.dsk[key]
 
         # When encountering preserve_key or Compiled, stop recursion
         # and add it as a new arg. For preserve_key, recursively spawn a new
         # SourceBuilder for all the dependencies of the node.
         if type(val) is tuple and val:
-            if val[0] is Compiled:
+            if type(val[0]) is Compiled:
+                # print(f'Encountered {val[0]}, stopping')
                 name = self._add_arg(key)
                 self.dsk_key_map[key] = name
                 return name
             if val[0] is __preserve_key__:
-                self.sourcebuilder_keys.add(key)
                 name = self._add_arg(key)
                 self.dsk_key_map[key] = name
+                SourceBuilder(self.dsk, key)
                 return name
             if val[0] is __preserve_deps__:
-                for dep_key in get_dependencies(self.dsk, key,
-                                                as_list=False):
-                    dep_val = self.dsk[dep_key]
-                    if type(dep_val) is tuple and dep_val and callable(
-                            dep_val[0]):
-                        self.dsk[dep_key] = __preserve_key__, dep_val
-                val = val[1]
+                self.dsk[key] = val = val[1]
+                for dep in get_dependencies(self.dsk, key, as_list=False):
+                    SourceBuilder(self.dsk, dep)
 
         # Recursively convert dsk value to a line of source code
         source = self._to_source(val)
