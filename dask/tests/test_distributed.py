@@ -169,7 +169,8 @@ def test_zarr_in_memory_distributed_err(loop):
     da = pytest.importorskip('dask.array')
     zarr = pytest.importorskip('zarr')
     with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
+        with Client(s['address'], loop=loop,
+                    client_kwargs={'set_as_default': True}) as c:
             with pytest.raises(RuntimeError):
                 c = (1, 1)
                 a = da.ones((3, 3), chunks=c)
