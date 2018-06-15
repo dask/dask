@@ -1,6 +1,61 @@
 Changelog
 =========
 
+1.21.1 - 2018-XX-XX
+-------------------
+
+-
+
+1.22.0 - 2018-06-14
+-------------------
+
+-  Overhaul configuration (:pr:`1948`) `Matthew Rocklin`_
+-  Replace get= keyword with scheduler= (:pr:`1959`) `Matthew Rocklin`_
+-  Use tuples in msgpack (:pr:`2000`) `Matthew Rocklin`_ and `Marius van Niekerk`_
+-  Unify handling of high-volume connections (:pr:`1970`) `Matthew Rocklin`_
+-  Automatically scatter large arguments in joblib connector (:pr:`2020`) (:pr:`2030`) `Olivier Grisel`_
+-  Turn click Python 3 locales failure into a warning (:pr:`2001`) `Matthew Rocklin`_
+-  Rely on dask implementation of sizeof (:pr:`2042`) `Matthew Rocklin`_
+-  Replace deprecated workers.iloc with workers.values() (:pr:`2013`) `Grant Jenks`_
+-  Introduce serialization families (:pr:`1912`) `Matthew Rocklin`_
+
+-  Add PubSub (:pr:`1999`) `Matthew Rocklin`_
+-  Add Dask stylesheet to documentation `Matthew Rocklin`_
+-  Avoid recomputation on partially-complete results (:pr:`1840`) `Matthew Rocklin`_
+-  Use sys.prefix in popen for testing (:pr:`1954`) `Matthew Rocklin`_
+-  Include yaml files in manifest `Matthew Rocklin`_
+-  Use self.sync so Client.processing works in asynchronous context (:pr:`1962`) `Henry Doupe`_
+-  Fix bug with bad repr on closed client (:pr:`1965`) `Matthew Rocklin`_
+-  Parse --death-timeout keyword in dask-worker (:pr:`1967`) `Matthew Rocklin`_
+-  Support serializers in BatchedSend (:pr:`1964`) `Matthew Rocklin`_
+-  Use normal serialization mechanisms to serialize published datasets (:pr:`1972`) `Matthew Rocklin`_
+-  Add security support to LocalCluster. (:pr:`1855`) `Marius van Niekerk`_
+-  add ConnectionPool.remove method (:pr:`1977`) `Tony Lorenzo`_
+-  Cleanly close workers when scheduler closes (:pr:`1981`) `Matthew Rocklin`_
+-  Add .pyz support in upload_file  (:pr:`1781`) `@bmaisson`_
+-  add comm to packages (:pr:`1980`) `Matthew Rocklin`_
+-  Replace dask.set_options with dask.config.set `Matthew Rocklin`_
+-  Exclude versions of sortedcontainers which do not have .iloc. (:pr:`1993`) `Russ Bubley`_
+-  Exclude gc statistics under PyPy (:pr:`1997`) `Marius van Niekerk`_
+-  Manage recent config and dataframe changes in dask (:pr:`2009`) `Matthew Rocklin`_
+-  Cleanup lingering clients in tests (:pr:`2012`) `Matthew Rocklin`_
+-  Use timeouts during `Client._ensure_connected` (:pr:`2011`) `Martin Durant`_
+-  Avoid reference cycle in joblib backend (:pr:`2014`) `Matthew Rocklin`_, also `Olivier Grisel`_
+-  DOC: fixed test example (:pr:`2017`) `Tom Augspurger`_
+-  Add worker_key parameter to Adaptive (:pr:`1992`) `Matthew Rocklin`_
+-  Prioritize tasks with their true keys, before stringifying (:pr:`2006`) `Matthew Rocklin`_
+-  Serialize worker exceptions through normal channels (:pr:`2016`) `Matthew Rocklin`_
+-  Include exception in progress bar (:pr:`2028`) `Matthew Rocklin`_
+-  Avoid logging orphaned futures in All (:pr:`2008`) `Matthew Rocklin`_
+-  Don't use spill-to-disk dictionary if we're not spilling to disk `Matthew Rocklin`_
+-  Only avoid recomputation if key exists (:pr:`2036`) `Matthew Rocklin`_
+-  Use client connection and serialization arguments in progress (:pr:`2035`) `Matthew Rocklin`_
+-  Rejoin worker client on closing context manager (:pr:`2041`) `Matthew Rocklin`_
+-  Avoid forgetting erred tasks when losing dependencies (:pr:`2047`) `Matthew Rocklin`_
+-  Avoid collisions in graph_layout (:pr:`2050`) `Matthew Rocklin`_
+-  Avoid recursively calling bokeh callback in profile plot (:pr:`2048`) `Matthew Rocklin`_
+
+
 1.21.8 - 2018-05-03
 -------------------
 
@@ -623,3 +678,8 @@ significantly without many new features.
 .. _`Loïc Estève`: https://github.com/lesteve
 .. _`Kenneth Koski`: https://github.com/knkski
 .. _`Tony Lorenzo`: https://github.com/alorenzo175
+.. _`Henry Doupe`: https://github.com/hdoupe
+.. _`Marius van Niekerk`: https://github.com/mariusvniekerk
+.. _`@bmaisson`: https://github.com/bmaisson
+.. _`Martin Durant`: https://github.com/martindurant
+.. _`Grant Jenks`: https://github.com/grantjenks
