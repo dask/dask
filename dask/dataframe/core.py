@@ -2311,6 +2311,11 @@ class Index(Series):
             freq = meta.freq
         return maybe_shift_divisions(out, periods, freq=freq)
 
+    @derived_from(pd.Index)
+    def to_series(self):
+        return self.map_partitions(M.to_series,
+                                   meta=self._meta.to_series())
+
 
 class DataFrame(_Frame):
     """
