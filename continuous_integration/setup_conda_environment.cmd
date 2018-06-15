@@ -31,7 +31,7 @@ call deactivate
     jupyter_client ^
     mock ^
     psutil ^
-    pytest=3.1 ^
+    pytest ^
     python=%PYTHON% ^
     requests ^
     toolz ^
