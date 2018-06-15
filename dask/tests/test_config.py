@@ -3,6 +3,7 @@ import os
 
 import pytest
 
+import dask.config
 from dask.config import (update, merge, collect, collect_yaml, collect_env,
                          get, ensure_file, set, config, rename,
                          update_defaults, refresh)
@@ -219,6 +220,25 @@ def test_ensure_file_directory(mkdir):
             assert os.path.isdir(destination)
             [fn] = os.listdir(destination)
             assert os.path.split(fn)[1] == os.path.split(source)[1]
+
+
+def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmpdir):
+    a = {'x': 1, 'y': {'a': 1}}
+    source = os.path.join(str(tmpdir), 'source.yaml')
+    with open(source, 'w') as f:
+        yaml.dump(a, f)
+
+    destination = os.path.join(str(tmpdir), 'dask')
+    DASK_CONFIG = dask.config.DASK_CONFIG
+    try:
+        dask.config.DASK_CONFIG = destination
+        ensure_file(source=source)
+    finally:
+        dask.config.DASK_CONFIG = DASK_CONFIG
+
+    assert os.path.isdir(destination)
+    [fn] = os.listdir(destination)
+    assert os.path.split(fn)[1] == os.path.split(source)[1]
 
 
 def test_rename():

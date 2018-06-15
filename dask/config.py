@@ -22,7 +22,10 @@ paths = [
 ]
 
 if 'DASK_CONFIG' in os.environ:
-    paths.append(os.environ['DASK_CONFIG'])
+    DASK_CONFIG = os.environ['DASK_CONFIG']
+    paths.append(DASK_CONFIG)
+else:
+    DASK_CONFIG = os.path.join(os.path.expanduser('~'), '.config', 'dask')
 
 
 global_config = config = {}
@@ -159,7 +162,7 @@ def collect_env(env=None):
 
 def ensure_file(
         source,
-        destination=os.path.join(os.path.expanduser('~'), '.config', 'dask'),
+        destination=None,
         comment=True):
     """
     Copy file to default location if it does not already exist
@@ -173,13 +176,16 @@ def ensure_file(
 
     Parameters
     ----------
-    source: string, filename
-        source configuration file, typically within a source directory
-    destination: string, filename
-        destination filename, typically ~/.config/dask
-    comment: bool, True by default
-        Whether or not to comment out the config file when copying
+    source : string, filename
+        Source configuration file, typically within a source directory.
+    destination : string, directory or filename
+        Destination directory or filename. Configurable by ``DASK_CONFIG``
+        environment variable, falling back to ~/.config/dask.
+    comment : bool, True by default
+        Whether or not to comment out the config file when copying.
     """
+    if destination is None:
+        destination = DASK_CONFIG
     if not os.path.splitext(destination)[1].strip('.'):
         _, filename = os.path.split(source)
         destination = os.path.join(destination, filename)
