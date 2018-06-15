@@ -33,7 +33,7 @@ def _nanmin(m, n):
     return k_1 if np.isnan(k_0) else k_0
 
 
-def tsqr(data, name=None, compute_svd=False, _max_vchunk_size=None):
+def tsqr(data, compute_svd=False, _max_vchunk_size=None):
     """ Direct Tall-and-Skinny QR algorithm
 
     As presented in:
@@ -511,7 +511,7 @@ def compression_matrix(data, q, n_power_iter=0, seed=None):
     return q.T
 
 
-def svd_compressed(a, k, n_power_iter=0, seed=None, name=None):
+def svd_compressed(a, k, n_power_iter=0, seed=None):
     """ Randomly compressed rank-k thin Singular Value Decomposition.
 
     This computes the approximate singular value decomposition of a large
@@ -552,7 +552,7 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, name=None):
     """
     comp = compression_matrix(a, k, n_power_iter=n_power_iter, seed=seed)
     a_compressed = comp.dot(a)
-    v, s, u = tsqr(a_compressed.T, name, compute_svd=True)
+    v, s, u = tsqr(a_compressed.T, compute_svd=True)
     u = comp.T.dot(u)
     v = v.T
     u = u[:, :k]
@@ -561,7 +561,7 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, name=None):
     return u, s, v
 
 
-def qr(a, name=None):
+def qr(a):
     """
     Compute the qr factorization of a matrix.
 
@@ -585,9 +585,9 @@ def qr(a, name=None):
     """
 
     if len(a.chunks[1]) == 1 and len(a.chunks[0]) > 1:
-        return tsqr(a, name)
+        return tsqr(a)
     elif len(a.chunks[0]) == 1:
-        return sfqr(a, name)
+        return sfqr(a)
     else:
         raise NotImplementedError(
             "qr currently supports only tall-and-skinny (single column chunk/block; see tsqr)\n"
@@ -599,7 +599,7 @@ def qr(a, name=None):
         )
 
 
-def svd(a, name=None):
+def svd(a):
     """
     Compute the singular value decomposition of a matrix.
 
@@ -621,7 +621,7 @@ def svd(a, name=None):
     np.linalg.svd : Equivalent NumPy Operation
     dask.array.linalg.tsqr: Implementation for tall-and-skinny arrays
     """
-    return tsqr(a, name, compute_svd=True)
+    return tsqr(a, compute_svd=True)
 
 
 def _solve_triangular_lower(a, b):
