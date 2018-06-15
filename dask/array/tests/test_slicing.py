@@ -130,6 +130,16 @@ def test_slice_1d():
     result = _slice_1d(104, [20, 23, 27, 13, 21], slice(100, 27, -3))
     assert expected == result
 
+    # x=range(1000000000000)
+    # x[1000:]
+    expected = {0: slice(1000, 1000000000, 1)}
+    expected.update({ii: slice(None, None, None) for ii in range(1, 1000)})
+    # This array is large
+    result = _slice_1d(1000000000000,
+                       [1000000000] * 1000,
+                       slice(1000, None, None))
+    assert expected == result
+
 
 def test_slice_singleton_value_on_boundary():
     assert _slice_1d(15, [5, 5, 5], 10) == {2: 0}

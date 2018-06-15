@@ -372,7 +372,7 @@ def _slice_1d(dim_shape, lengths, index):
     >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, -12, -3))
     {4: slice(-1, -12, -3)}
     """
-    chunk_boundaries = np.cumsum(lengths)
+    chunk_boundaries = np.cumsum(lengths, dtype=np.int64)
 
     if isinstance(index, Integral):
         # use right-side search to be consistent with previous result
