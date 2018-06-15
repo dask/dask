@@ -34,7 +34,7 @@ except ImportError:
 
 import dask
 from dask import istask
-from toolz import memoize, valmap
+from toolz import memoize
 import tornado
 from tornado import gen
 from tornado.ioloop import IOLoop, PollIOLoop
@@ -798,22 +798,23 @@ def _maybe_complex(task):
             type(task) is dict and any(map(_maybe_complex, task.values())))
 
 
-def str_graph(dsk, extra_values=()):
-    def convert(task):
-        if type(task) is list:
-            return [convert(v) for v in task]
-        if type(task) is dict:
-            return valmap(convert, task)
-        if istask(task):
-            return (task[0],) + tuple(map(convert, task[1:]))
-        try:
-            if task in dsk or task in extra_values:
-                return tokey(task)
-        except TypeError:
-            pass
-        return task
+def convert(task, dsk, extra_values):
+    if type(task) is list:
+        return [convert(v, dsk, extra_values) for v in task]
+    if type(task) is dict:
+        return {k: convert(v, dsk, extra_values) for k, v in task.items()}
+    if istask(task):
+        return (task[0],) + tuple(convert(x, dsk, extra_values) for x in task[1:])
+    try:
+        if task in dsk or task in extra_values:
+            return tokey(task)
+    except TypeError:
+        pass
+    return task
 
-    return {tokey(k): convert(v) for k, v in dsk.items()}
+
+def str_graph(dsk, extra_values=()):
+    return {tokey(k): convert(v, dsk, extra_values) for k, v in dsk.items()}
 
 
 def seek_delimiter(file, delimiter, blocksize):
