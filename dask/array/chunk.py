@@ -179,14 +179,6 @@ def trim(x, axes=None):
     return x[tuple(slice(ax, -ax if ax else None) for ax in axes)]
 
 
-def takeslice(a, indices, axis):
-    """Like `numpy.take`, but allows for indices to be a slice
-    """
-    assert 0 <= axis < a.ndim
-    return a[tuple(indices if i == axis else slice(None)
-                   for i in range(a.ndim))]
-
-
 def topk(a, k, axis, keepdims):
     """Chunk and combine kernel of topk.
     Extract the k largest elements from a on the given axis.
@@ -201,7 +193,8 @@ def topk(a, k, axis, keepdims):
 
     a = np.partition(a, -k, axis=axis)
     k_slice = slice(-k, None) if k > 0 else slice(-k)
-    return takeslice(a, k_slice, axis=axis)
+    return a[tuple(k_slice if i == axis else slice(None)
+                   for i in range(a.ndim))]
 
 
 def topk_aggregate(a, k, axis, keepdims):
@@ -214,7 +207,8 @@ def topk_aggregate(a, k, axis, keepdims):
     a = np.sort(a, axis=axis)
     if k < 0:
         return a
-    return takeslice(a, slice(None, None, -1), axis=axis)
+    return a[tuple(slice(None, None, -1) if i == axis else slice(None)
+                   for i in range(a.ndim))]
 
 
 def argtopk_preprocess(a, idx):
@@ -246,7 +240,8 @@ def argtopk(a_plus_idx, k, axis, keepdims):
 
     idx2 = np.argpartition(a, -k, axis=axis)
     k_slice = slice(-k, None) if k > 0 else slice(-k)
-    idx2 = takeslice(idx2, k_slice, axis=axis)
+    idx2 = idx2[tuple(k_slice if i == axis else slice(None)
+                      for i in range(a.ndim))]
     return take_along_axis(a, idx2, axis), take_along_axis(idx, idx2, axis)
 
 
@@ -263,7 +258,8 @@ def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
     idx = take_along_axis(idx, idx2, axis)
     if k < 0:
         return idx
-    return takeslice(idx, slice(None, None, -1), axis=axis)
+    return idx[tuple(slice(None, None, -1) if i == axis else slice(None)
+                     for i in range(idx.ndim))]
 
 
 def arange(start, stop, step, length, dtype):
