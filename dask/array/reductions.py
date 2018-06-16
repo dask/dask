@@ -37,7 +37,7 @@ def divide(a, b, dtype=None):
     return f(a, b, dtype=dtype)
 
 
-def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
+def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
               split_every=None, combine=None, name=None, out=None,
               concatenate=True, output_size=1):
     """ General version of reductions
@@ -165,7 +165,7 @@ def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
         n = builtins.max(int(split_every ** (1 / (len(axis) or 1))), 2)
         split_every = dict.fromkeys(axis, n)
     else:
-        split_every = dict((k, v) for (k, v) in enumerate(x.numblocks) if k in axis)
+        raise ValueError("split_every must be a int or a dict")
 
     # Reduce across intermediates
     depth = 1
