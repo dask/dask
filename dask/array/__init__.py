@@ -24,8 +24,8 @@ from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
         greater_equal, less, less_equal, not_equal, equal, maximum,
         bitwise_and, bitwise_or, bitwise_xor, bitwise_not, minimum,
         logical_and, logical_or, logical_xor, logical_not, fmax, fmin,
-        isreal, iscomplex, isfinite, isinf, isnan, signbit, copysign,
-        nextafter, spacing, ldexp, fmod, floor, ceil, trunc, degrees,
+        isreal, iscomplex, isfinite, isinf, isneginf, isposinf, isnan, signbit,
+        copysign, nextafter, spacing, ldexp, fmod, floor, ceil, trunc, degrees,
         radians, rint, fix, angle, real, imag, clip, fabs, sign, absolute,
         i0, sinc, nan_to_num, frexp, modf, divide, frompyfunc)
 try:
@@ -45,7 +45,7 @@ with ignoring(ImportError):
     from .reductions import nanprod, nancumprod, nancumsum
 with ignoring(ImportError):
     from . import ma
-from . import random, linalg, ghost, learn, fft
+from . import random, linalg, ghost, fft
 from .ghost import map_overlap
 from .wrap import ones, zeros, empty, full
 from .creation import ones_like, zeros_like, empty_like, full_like
@@ -54,5 +54,5 @@ from ..context import set_options
 from ..base import compute
 from .optimization import optimize
 from .creation import (arange, linspace, meshgrid, indices, diag, eye,
-                       triu, tril, fromfunction, tile, repeat)
+                       triu, tril, fromfunction, tile, repeat, pad)
 from .gufunc import apply_gufunc, gufunc, as_gufunc
