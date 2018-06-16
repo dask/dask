@@ -1379,7 +1379,7 @@ def test_embarrassingly_parallel_operations():
     assert_eq(a.notnull(), df.notnull())
     assert_eq(a.isnull(), df.isnull())
 
-    assert len(a.sample(0.5).compute()) < len(df)
+    assert len(a.sample(frac=0.5).compute()) < len(df)
 
 
 def test_fillna():
@@ -1452,24 +1452,44 @@ def test_sample():
                       index=[10, 20, 30, 40, 50, 60])
     a = dd.from_pandas(df, 2)
 
-    b = a.sample(0.5)
+    b = a.sample(frac=0.5)
 
     assert_eq(b, b)
 
-    c = a.sample(0.5, random_state=1234)
-    d = a.sample(0.5, random_state=1234)
+    c = a.sample(frac=0.5, random_state=1234)
+    d = a.sample(frac=0.5, random_state=1234)
     assert_eq(c, d)
 
-    assert a.sample(0.5)._name != a.sample(0.5)._name
+    assert a.sample(frac=0.5)._name != a.sample(frac=0.5)._name
 
 
 def test_sample_without_replacement():
     df = pd.DataFrame({'x': [1, 2, 3, 4, None, 6], 'y': list('abdabd')},
                       index=[10, 20, 30, 40, 50, 60])
     a = dd.from_pandas(df, 2)
-    b = a.sample(0.7, replace=False)
+    b = a.sample(frac=0.7, replace=False)
     bb = b.index.compute()
     assert len(bb) == len(set(bb))
+
+
+def test_sample_raises():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, None, 6], 'y': list('abdabd')},
+                      index=[10, 20, 30, 40, 50, 60])
+    a = dd.from_pandas(df, 2)
+
+    # Make sure frac is replaced with n when 0 <= n <= 1
+    # This is so existing code (i.e. ddf.sample(0.5)) won't break
+    with pytest.warns(UserWarning):
+        b = a.sample(0.5, random_state=1234)
+    c = a.sample(frac=0.5, random_state=1234)
+    assert_eq(b, c)
+
+    with pytest.raises(ValueError):
+        a.sample(n=10)
+
+    # Make sure frac is provided
+    with pytest.raises(ValueError):
+        a.sample(frac=None)
 
 
 def test_datetime_accessor():

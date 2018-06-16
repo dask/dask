@@ -271,7 +271,7 @@ def collect(paths=paths, env=None):
     --------
     dask.config.refresh: collect configuration and update into primary config
     """
-    if os is None:
+    if env is None:
         env = os.environ
     configs = []
 
