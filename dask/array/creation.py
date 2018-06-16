@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import Sequence
 from functools import partial, wraps
 from itertools import product
 from operator import add
@@ -13,8 +14,8 @@ from ..base import tokenize
 from ..utils import ignoring
 from . import chunk
 from .core import (Array, asarray, normalize_chunks,
-                   stack, concatenate,
-                   broadcast_arrays)
+                   stack, concatenate, block,
+                   broadcast_to, broadcast_arrays)
 from .wrap import empty, ones, zeros, full
 
 
@@ -675,3 +676,293 @@ def tile(A, reps):
         return A
 
     return concatenate(reps * [A], axis=-1)
+
+
+def expand_pad_width(array, pad_width):
+    if isinstance(pad_width, Integral):
+        pad_width = array.ndim * ((pad_width, pad_width),)
+    elif (isinstance(pad_width, Sequence) and
+          all(isinstance(pw, Integral) for pw in pad_width) and
+          len(pad_width) == 1):
+        pad_width = array.ndim * ((pad_width[0], pad_width[0]),)
+    elif (isinstance(pad_width, Sequence) and
+          len(pad_width) == 2 and
+          all(isinstance(pw, Integral) for pw in pad_width)):
+            pad_width = tuple(
+                (pad_width[0], pad_width[1]) for _ in range(array.ndim)
+            )
+    elif (isinstance(pad_width, Sequence) and
+          len(pad_width) == array.ndim and
+          all(isinstance(pw, Sequence) for pw in pad_width) and
+          all((len(pw) == 2) for pw in pad_width) and
+          all(all(isinstance(w, Integral) for w in pw) for pw in pad_width)):
+            pad_width = tuple((pw[0], pw[1]) for pw in pad_width)
+    else:
+        raise TypeError(
+            "`pad_width` must be composed of integral typed values."
+        )
+
+    return pad_width
+
+
+def np_pad(array, pad_width, mode, extra_arg=None):
+    if mode in ["maximum", "mean", "median", "minimum"]:
+        extra_arg = extra_arg or None
+        return np.pad(array, pad_width, mode, stat_length=extra_arg)
+    elif mode == "constant":
+        extra_arg = extra_arg or 0
+        return np.pad(array, pad_width, mode, constant_values=extra_arg)
+    elif mode == "linear_ramp":
+        extra_arg = extra_arg or 0
+        return np.pad(array, pad_width, mode, end_values=extra_arg)
+    elif mode in ["reflect", "symmetric"]:
+        extra_arg = extra_arg or "even"
+        return np.pad(array, pad_width, mode, reflect_type=extra_arg)
+    else:
+        return np.pad(array, pad_width, mode)
+
+
+def pad_edge(array, pad_width, mode, *args):
+    """
+    Helper function for padding edges.
+
+    Handles the cases where the only the values on the edge are needed.
+    """
+
+    token = tokenize(array, pad_width, mode, args)
+    name = 'pad-' + token
+    numblocks = array.numblocks
+
+    chunks = list()
+    for d, c in enumerate(array.chunks):
+        c = list(c)
+        c[0] += pad_width[d][0]
+        c[-1] += pad_width[d][-1]
+        c = tuple(c)
+        chunks.append(c)
+    chunks = tuple(chunks)
+
+    dsk = {}
+    for idx in product(*(range(n) for n in numblocks)):
+        pad_chunk_width = []
+        for d, i in enumerate(idx):
+            ith_pad_chunk_width = [0, 0]
+            if i == 0:
+                ith_pad_chunk_width[0] = pad_width[d][0]
+            if i == numblocks[d] - 1:
+                ith_pad_chunk_width[1] = pad_width[d][1]
+
+            ith_pad_chunk_width = tuple(ith_pad_chunk_width)
+            pad_chunk_width.append(ith_pad_chunk_width)
+
+        pad_chunk_width = tuple(pad_chunk_width)
+
+        array_chunk_key = (array.name,) + idx
+        result_chunk_key = (name,) + idx
+
+        if any(map(any, pad_chunk_width)):
+            dsk[result_chunk_key] = (
+                np_pad, array_chunk_key, pad_chunk_width, mode
+            )
+            dsk[result_chunk_key] += args
+        else:
+            dsk[result_chunk_key] = array_chunk_key
+
+    dsk = sharedict.merge((name, dsk))
+    dsk = sharedict.merge(dsk, array.dask)
+
+    result = Array(dsk, name, chunks=chunks, dtype=array.dtype)
+
+    return result
+
+
+def pad_reuse(array, pad_width, mode, *args):
+    """
+    Helper function for padding boundaries with values in the array.
+
+    Handles the cases where the padding is constructed from values in
+    the array. Namely by reflecting them or tiling them to create periodic
+    boundary constraints.
+    """
+
+    if mode in ["reflect", "symmetric"] and "odd" in args:
+        raise NotImplementedError(
+            "`pad` does not support `reflect_type` of `odd`."
+        )
+
+    result = np.empty(array.ndim * (3,), dtype=object)
+    for idx in np.ndindex(result.shape):
+        select = []
+        orient = []
+        for i, s, pw in zip(idx, array.shape, pad_width):
+            if mode == "wrap":
+                pw = pw[::-1]
+
+            if i < 1:
+                if mode == "reflect":
+                    select.append(slice(1, pw[0] + 1, None))
+                else:
+                    select.append(slice(None, pw[0], None))
+            elif i > 1:
+                if mode == "reflect":
+                    select.append(slice(s - pw[1] - 1, s - 1, None))
+                else:
+                    select.append(slice(s - pw[1], None, None))
+            else:
+                select.append(slice(None))
+
+            if i != 1 and mode in ["reflect", "symmetric"]:
+                orient.append(slice(None, None, -1))
+            else:
+                orient.append(slice(None))
+
+        select = tuple(select)
+        orient = tuple(orient)
+
+        if mode == "wrap":
+            idx = tuple(2 - i for i in idx)
+
+        result[idx] = array[select][orient]
+
+    result = block(result.tolist())
+
+    return result
+
+
+def pad_stats(array, pad_width, mode, *args):
+    """
+    Helper function for padding boundaries with statistics from the array.
+
+    In cases where the padding requires computations of statistics from part
+    or all of the array, this function helps compute those statistics as
+    requested and then adds those statistics onto the boundaries of the array.
+    """
+
+    if mode == "median":
+        raise NotImplementedError("`pad` does not support `mode` of `median`.")
+
+    stat_length = expand_pad_width(array, args[0])
+
+    result = np.empty(array.ndim * (3,), dtype=object)
+    for idx in np.ndindex(result.shape):
+        axes = []
+        select = []
+        pad_shape = []
+        pad_chunks = []
+        for d, (i, s, c, w, l) in enumerate(zip(
+            idx, array.shape, array.chunks, pad_width, stat_length
+        )):
+            if i < 1:
+                axes.append(d)
+                select.append(slice(None, l[0], None))
+                pad_shape.append(w[0])
+                pad_chunks.append(w[0])
+            elif i > 1:
+                axes.append(d)
+                select.append(slice(s - l[1], None, None))
+                pad_shape.append(w[1])
+                pad_chunks.append(w[1])
+            else:
+                select.append(slice(None))
+                pad_shape.append(s)
+                pad_chunks.append(c)
+
+        axes = tuple(axes)
+        select = tuple(select)
+        pad_shape = tuple(pad_shape)
+        pad_chunks = tuple(pad_chunks)
+
+        result_idx = array[select]
+        if mode == "maximum":
+            result_idx = result_idx.max(axis=axes, keepdims=True)
+        elif mode == "mean":
+            result_idx = result_idx.mean(axis=axes, keepdims=True)
+        elif mode == "minimum":
+            result_idx = result_idx.min(axis=axes, keepdims=True)
+
+        result_idx = broadcast_to(result_idx, pad_shape, chunks=pad_chunks)
+
+        result[idx] = result_idx
+
+    result = block(result.tolist())
+
+    return result
+
+
+def wrapped_pad_func(array, pad_func, iaxis_pad_width, iaxis, pad_func_kwargs):
+    result = array.copy()
+    for i in np.ndindex(array.shape[:iaxis] + array.shape[iaxis + 1:]):
+        i = i[:iaxis] + (slice(None),) + i[iaxis:]
+        result[i] = pad_func(array[i], iaxis_pad_width, iaxis, pad_func_kwargs)
+
+    return result
+
+
+def pad_udf(array, pad_width, mode, **kwargs):
+    """
+    Helper function for padding boundaries with a user defined function.
+
+    In cases where the padding requires a custom user defined function be
+    applied to the array, this function assists in the prepping and
+    application of this function to the Dask Array to construct the desired
+    boundaries.
+    """
+
+    result = pad_edge(array, pad_width, "constant", 0)
+
+    chunks = result.chunks
+    for d in range(result.ndim):
+        result = result.rechunk(
+            chunks[:d] + (result.shape[d:d + 1],) + chunks[d + 1:]
+        )
+
+        result = result.map_blocks(
+            wrapped_pad_func,
+            token="pad",
+            dtype=result.dtype,
+            pad_func=mode,
+            iaxis_pad_width=pad_width[d],
+            iaxis=d,
+            pad_func_kwargs=kwargs,
+        )
+
+        result = result.rechunk(chunks)
+
+    return result
+
+
+@wraps(np.pad)
+def pad(array, pad_width, mode, **kwargs):
+    array = asarray(array)
+
+    pad_width = expand_pad_width(array, pad_width)
+
+    if mode in ["maximum", "mean", "median", "minimum"]:
+        kwargs.setdefault("stat_length", array.shape)
+    elif mode == "constant":
+        kwargs.setdefault("constant_values", 0)
+    elif mode == "linear_ramp":
+        kwargs.setdefault("end_values", 0)
+    elif mode in ["reflect", "symmetric"]:
+        kwargs.setdefault("reflect_type", "even")
+    elif mode in ["edge", "wrap"]:
+        if kwargs:
+            raise TypeError("Got unsupported keyword arguments.")
+    elif callable(mode):
+        kwargs.setdefault("kwargs", {})
+    else:
+        raise ValueError("Got an unsupported `mode`.")
+
+    if not callable(mode) and len(kwargs) > 1:
+        raise TypeError("Got too many keyword arguments.")
+
+    if mode in ["maximum", "mean", "median", "minimum"]:
+        return pad_stats(array, pad_width, mode, *kwargs.values())
+    elif mode in ["constant", "edge", "linear_ramp"]:
+        return pad_edge(array, pad_width, mode, *kwargs.values())
+    elif mode in ["reflect", "symmetric", "wrap"]:
+        return pad_reuse(array, pad_width, mode, *kwargs.values())
+    elif callable(mode):
+        return pad_udf(array, pad_width, mode, **kwargs)
+    else:
+        raise ValueError("Unsupported mode selected.")
