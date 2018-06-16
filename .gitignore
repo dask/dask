@@ -14,3 +14,5 @@ log
 *.swo
 .cache/
 hdfs-initialized-indicator
+mydask.png
+.ipynb_checkpoints
