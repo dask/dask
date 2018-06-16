@@ -140,6 +140,7 @@ Top level user functions:
    notnull
    ones
    ones_like
+   pad
    percentile
    piecewise
    prod
@@ -496,6 +497,7 @@ Other functions
 .. autofunction:: notnull
 .. autofunction:: ones
 .. autofunction:: ones_like
+.. autofunction:: pad
 .. autofunction:: percentile
 .. autofunction:: piecewise
 .. autofunction:: prod
