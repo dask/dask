@@ -270,6 +270,13 @@ or to save to a particular bucket on S3:
    >>> arr.to_zarr('s3://mybucket/output.zarr', storage_option={'key': 'mykey',
                    'secret': 'mysecret'})
 
+or your own custom zarr Array:
+
+.. code-block:: Python
+
+   >>> z = zarr.create((10,), dtype=float, store=zarr.ZipStore("output.zarr"))
+   >>> arr.to_zarr(z)
+
 To retrieve those data, you would do ``da.read_zarr`` with exactly the same arguments. The
 chunking of the resultant dask.Array is defined by how the files were saved, unless
 otherwise specified.

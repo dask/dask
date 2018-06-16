@@ -1030,16 +1030,19 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     def bfill(self, axis=None, limit=None):
         return self.fillna(method='bfill', limit=limit, axis=axis)
 
-    def sample(self, frac, replace=False, random_state=None):
+    def sample(self, n=None, frac=None, replace=False, random_state=None):
         """ Random sample of items
 
         Parameters
         ----------
+        n : int, optional
+            Number of items to return is not supported by dask. Use frac
+            instead.
         frac : float, optional
             Fraction of axis items to return.
-        replace: boolean, optional
+        replace : boolean, optional
             Sample with or without replacement. Default = False.
-        random_state: int or ``np.random.RandomState``
+        random_state : int or ``np.random.RandomState``
             If int we create a new RandomState with this as the seed
             Otherwise we draw from the passed RandomState
 
@@ -1048,6 +1051,17 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         DataFrame.random_split
         pandas.DataFrame.sample
         """
+        if n is not None:
+            msg = ("sample does not support the number of sampled items "
+                   "parameter, 'n'. Please use the 'frac' parameter instead.")
+            if isinstance(n, Number) and 0 <= n <= 1:
+                warnings.warn(msg)
+                frac = n
+            else:
+                raise ValueError(msg)
+
+        if frac is None:
+            raise ValueError("frac must not be None")
 
         if random_state is None:
             random_state = np.random.RandomState()
@@ -2296,6 +2310,11 @@ class Index(Series):
         if freq is None:
             freq = meta.freq
         return maybe_shift_divisions(out, periods, freq=freq)
+
+    @derived_from(pd.Index)
+    def to_series(self):
+        return self.map_partitions(M.to_series,
+                                   meta=self._meta.to_series())
 
 
 class DataFrame(_Frame):

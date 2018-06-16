@@ -375,3 +375,20 @@ def test_getitem_period_str():
 
     assert_eq(df['2011-01':'2012-05'], ddf['2011-01':'2012-05'])
     assert_eq(df['2011':'2015'], ddf['2011':'2015'])
+
+
+def test_to_series():
+
+    # Test for time index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=pd.date_range('2011-01-01', freq='H', periods=100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_series(), ddf.index.to_series())
+
+    # Test for numerical index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=range(100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_series(), ddf.index.to_series())
