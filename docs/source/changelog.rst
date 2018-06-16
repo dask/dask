@@ -1,26 +1,18 @@
 Changelog
 =========
 
-
-0.18.0 / 2018-MM-DD
+0.18.1 / 2018-XX-XX
 -------------------
 
 Array
 +++++
 
-- Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
-- Add to/read_zarr for Zarr-format datasets and arrays (:pr:`3460`) `Martin Durant`_
-- Experimental addition of generalized ufunc support, ``apply_gufunc``, ``gufunc``, and
-  ``as_gufunc`` (:pr:`#3109`) `Markus Gonser`_
-- Reimplemented ``argtopk`` to make it release the GIL (:pr:`3596`) `Guido Imperiale`
+-
 
-Dataframe
+DataFrame
 +++++++++
 
-- Add to/read_json (:pr:`3494`) `Martin Durant`_
-- Adds ``index`` to unsupported arguments for ``DataFrame.rename`` method (:pr:`3522`) `James Bourbeau`_
-- Adds support to subset Dask DataFrame columns using ``numpy.ndarray``, ``pandas.Series``, and
-  ``pandas.Index`` objects (:pr:`3536`) `James Bourbeau`_
+-
 
 Bag
 +++
@@ -31,6 +23,75 @@ Core
 ++++
 
 -
+
+
+0.18.0 / 2018-MM-DD
+-------------------
+
+Array
++++++
+
+- Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
+- Add to/read_zarr for Zarr-format datasets and arrays (:pr:`3460`) `Martin Durant`_
+- Experimental addition of generalized ufunc support, ``apply_gufunc``, ``gufunc``, and
+  ``as_gufunc`` (:pr:`3109`) (:pr:`3526`) (:pr:`3539`) `Markus Gonser`_
+- Faster slice_1d in dask.array (:pr:`3479`) `Yu Feng`_
+- Add split_every parameter to einsum (:pr:`3472`) `Guido Imperiale`_
+- Avoid unnecessary rechunking tasks (:pr:`3529`) `Matthew Rocklin`_
+- Compute dtypes at runtime for fft (:pr:`3511`) `Matthew Rocklin`_
+- Generate UUIDs for all da.store operations (:pr:`3540`) `Martin Durant`_
+- Correct internal dimension of Dask's SVD (:pr:`3517`) `John A Kirkham`_
+- BUG: do not raise IndexError for identity slice in array.vindex (:pr:`3559`) `Scott Sievert`_
+- Adds `isneginf` and `isposinf` (:pr:`3581`) `John A Kirkham`_
+- Drop Dask Array's `learn` module (:pr:`3580`) `John A Kirkham`_
+- added sfqr (short-and-fat) as a counterpart to tsqr… (:pr:`3575`) `Jeremy Chen`_
+- Allow 0-width chunks in dask.array.rechunk (:pr:`3591`) `Marc Pfister`_
+- Document Dask Array's `nan_to_num` in public API (:pr:`3599`) `John A Kirkham`_
+- Show block example (:pr:`3601`) `John A Kirkham`_
+- Replace token= keyword with name= in map_blocks (:pr:`3597`) `Matthew Rocklin`_
+- Disable locking in to_zarr (needed for using to_zarr in a distributed context) (:pr:`3607`) `John A Kirkham`_
+- Support Zarr Arrays in `to_zarr`/`from_zarr` (:pr:`3561`) `John A Kirkham`_
+- Added recursion to array/linalg/tsqr to better manage the single core bottleneck (:pr:`3586`) `Jeremy Chan`_
+- Reimplemented ``argtopk`` to make it release the GIL (:pr:`3596`) `Guido Imperiale`
+
+
+Dataframe
++++++++++
+
+- Add to/read_json (:pr:`3494`) `Martin Durant`_
+- Adds ``index`` to unsupported arguments for ``DataFrame.rename`` method (:pr:`3522`) `James Bourbeau`_
+- Adds support to subset Dask DataFrame columns using ``numpy.ndarray``, ``pandas.Series``, and
+  ``pandas.Index`` objects (:pr:`3536`) `James Bourbeau`_
+- Pandas 0.23.0 compat (:pr:`3499`) `Tom Augspurger`_
+- Raise error if meta columns do not match dataframe (:pr:`3485`) `Christopher Ren`_
+- Add index to unsupprted argument for DataFrame.rename (:pr:`3522`) `James Bourbeau`_
+- Adds support for subsetting DataFrames with pandas Index/Series and numpy ndarrays (:pr:`3536`) `James Bourbeau`_
+- Dataframe sample method docstring fix (:pr:`3566`) `James Bourbeau`_
+- fixes dd.read_json to infer file compression (:pr:`3594`) `Matt Lee`_
+- Adds n to sample method (:pr:`3606`) `James Bourbeau`_
+- Add fastparquet ParquetFile object support (:pr:`3573`) `@andrethrill`_
+
+Bag
++++
+
+-  Rename method= keyword to shuffle= in bag.groupby (:pr:`3470`) `Matthew Rocklin`_
+
+Core
+++++
+
+-  Replace get= keyword with scheduler= keyword (:pr:`3448`) `Matthew Rocklin`_
+-  Add centralized dask.config module to handle configuration for all Dask
+   subprojects (:pr:`3432`) (:pr:`3513`) (:pr:`3520`) `Matthew Rocklin`_
+-  Add `dask-ssh` CLI Options and Description. (:pr:`3476`) `@beomi`_
+-  Read whole files fix regardless of header for HTTP (:pr:`3496`) `Martin Durant`_
+-  Adds synchronous scheduler syntax to debugging docs (:pr:`3509`) `James Bourbeau`_
+-  Replace dask.set_options with dask.config.set (:pr:`3502`) `Matthew Rocklin`_
+-  Update sphinx readthedocs-theme (:pr:`3516`) `Matthew Rocklin`_
+-  Introduce "auto" value for normalize_chunks (:pr:`3507`) `Matthew Rocklin`_
+-  Fix check in configuration with env=None (:pr:`3562`) `Simon Perkins`_
+-  Update sizeof definitions (:pr:`3582`) `Matthew Rocklin`_
+-  Remove --verbose flag from travis-ci (:pr:`3477`) `Matthew Rocklin`_
+-  Remove "da.random" from random array keys (:pr:`3604`) `Matthew Rocklin`_
 
 
 0.17.5 / 2018-05-16
@@ -58,7 +119,7 @@ Dataframe
 -  Add support for indexing Dask DataFrames with string subclasses (:pr:`3461`) `James Bourbeau`_
 -  Allow using both sorted_index and chunksize in read_hdf (:pr:`3463`) `Pierre Bartet`_
 -  Pass filesystem to arrow piece reader (:pr:`3466`) `Martin Durant`_
--  Switches to using dask.compat string_types (#3462) `James Bourbeau`_
+-  Switches to using dask.compat string_types (:pr:`3462`) `James Bourbeau`_
 
 
 0.17.3 / 2018-05-02
@@ -1127,3 +1188,10 @@ Other
 .. _`Apostolos Vlachopoulos`: https://github.com/avlahop
 .. _`Jesse Vogt`: https://github.com/jessevogt
 .. _`Pierre Bartet`: https://github.com/Pierre-Bartet
+.. _`Scott Sievert`: https://github.com/stsievert
+.. _`Jeremy Chen`: https://github.com/convexset
+.. _`Marc Pfister`: https://github.com/drwelby
+.. _`Matt Lee`: https://github.com/mathewlee11
+.. _`Yu Feng`: https://github.com/rainwoodman
+.. _`@andrethrill`: https://github.com/andrethrill
+.. _`@beomi`: https://github.com/beomi

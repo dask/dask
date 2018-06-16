@@ -8,76 +8,234 @@ import numpy as np
 import scipy.linalg
 
 import dask.array as da
-from dask.array.linalg import tsqr, svd_compressed, qr, svd
+from dask.array.linalg import tsqr, sfqr, svd_compressed, qr, svd
 from dask.array.utils import assert_eq, same_keys
 
 
-def test_tsqr_regular_blocks():
-    m, n = 20, 10
+@pytest.mark.parametrize('m,n,chunks,error_type', [
+    (20, 10, 10, None),        # tall-skinny regular blocks
+    (20, 10, (3, 10), None),   # tall-skinny regular fat layers
+    (20, 10, ((8, 4, 8), 10), None),   # tall-skinny irregular fat layers
+    (40, 10, ((15, 5, 5, 8, 7), (10)), None),  # tall-skinny non-uniform chunks (why?)
+    (128, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=1
+    (129, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=2 --> 17x2
+    (130, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=2 --> 18x2 next
+    (131, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=2 --> 18x2 next
+    (300, 10, (40, 10), None),  # tall-skinny regular thin layers; recursion_depth=2
+    (300, 10, (30, 10), None),  # tall-skinny regular thin layers; recursion_depth=3
+    (300, 10, (20, 10), None),  # tall-skinny regular thin layers; recursion_depth=4
+    (10, 5, 10, None),         # single block tall
+    (5, 10, 10, None),         # single block short
+    (10, 10, 10, None),        # single block square
+    (10, 40, (10, 10), ValueError),  # short-fat regular blocks
+    (10, 40, (10, 15), ValueError),  # short-fat irregular blocks
+    (10, 40, ((10), (15, 5, 5, 8, 7)), ValueError),  # short-fat non-uniform chunks (why?)
+    (20, 20, 10, ValueError),  # 2x2 regular blocks
+])
+def test_tsqr(m, n, chunks, error_type):
     mat = np.random.rand(m, n)
-    data = da.from_array(mat, chunks=(10, n), name='A')
+    data = da.from_array(mat, chunks=chunks, name='A')
 
-    q, r = tsqr(data)
-    q = np.array(q)
-    r = np.array(r)
+    # qr
+    m_q = m
+    n_q = min(m, n)
+    m_r = n_q
+    n_r = n
 
-    assert_eq(mat, np.dot(q, r))  # accuracy check
-    assert_eq(np.eye(n, n), np.dot(q.T, q))  # q must be orthonormal
-    assert_eq(r, np.triu(r))  # r must be upper triangular
+    # svd
+    m_u = m
+    n_u = min(m, n)
+    n_s = n_q
+    m_vh = n_q
+    n_vh = n
+    d_vh = max(m_vh, n_vh)  # full matrix returned
+
+    if error_type is None:
+        # test QR
+        q, r = tsqr(data)
+        assert_eq((m_q, n_q), q.shape)  # shape check
+        assert_eq((m_r, n_r), r.shape)  # shape check
+        assert_eq(mat, da.dot(q, r))  # accuracy check
+        assert_eq(np.eye(n_q, n_q), da.dot(q.T, q))  # q must be orthonormal
+        assert_eq(r, da.triu(r.rechunk(r.shape[0])))  # r must be upper triangular
+
+        # test SVD
+        u, s, vh = tsqr(data, compute_svd=True)
+        s_exact = np.linalg.svd(mat)[1]
+        assert_eq(s, s_exact)  # s must contain the singular values
+        assert_eq((m_u, n_u), u.shape)  # shape check
+        assert_eq((n_s,), s.shape)  # shape check
+        assert_eq((d_vh, d_vh), vh.shape)  # shape check
+        assert_eq(np.eye(n_u, n_u), da.dot(u.T, u))  # u must be orthonormal
+        assert_eq(np.eye(d_vh, d_vh), da.dot(vh, vh.T))  # vh must be orthonormal
+        assert_eq(mat, da.dot(da.dot(u, da.diag(s)), vh[:n_q]))  # accuracy check
+    else:
+        with pytest.raises(error_type):
+            q, r = tsqr(data)
+        with pytest.raises(error_type):
+            u, s, vh = tsqr(data, compute_svd=True)
 
 
-def test_tsqr_irregular_blocks():
-    m, n = 20, 10
+@pytest.mark.parametrize('m_min,n_max,chunks,vary_rows,vary_cols,error_type', [
+    (10, 5, (10, 5), True, False, None),   # single block tall
+    (10, 5, (10, 5), False, True, None),   # single block tall
+    (10, 5, (10, 5), True, True, None),    # single block tall
+    (40, 5, (10, 5), True, False, None),   # multiple blocks tall
+    (40, 5, (10, 5), False, True, None),   # multiple blocks tall
+    (40, 5, (10, 5), True, True, None),    # multiple blocks tall
+    (300, 10, (40, 10), True, False, None),  # tall-skinny regular thin layers; recursion_depth=2
+    (300, 10, (30, 10), True, False, None),  # tall-skinny regular thin layers; recursion_depth=3
+    (300, 10, (20, 10), True, False, None),  # tall-skinny regular thin layers; recursion_depth=4
+    (300, 10, (40, 10), False, True, None),  # tall-skinny regular thin layers; recursion_depth=2
+    (300, 10, (30, 10), False, True, None),  # tall-skinny regular thin layers; recursion_depth=3
+    (300, 10, (20, 10), False, True, None),  # tall-skinny regular thin layers; recursion_depth=4
+    (300, 10, (40, 10), True, True, None),  # tall-skinny regular thin layers; recursion_depth=2
+    (300, 10, (30, 10), True, True, None),  # tall-skinny regular thin layers; recursion_depth=3
+    (300, 10, (20, 10), True, True, None),  # tall-skinny regular thin layers; recursion_depth=4
+])
+def test_tsqr_uncertain(m_min, n_max, chunks, vary_rows, vary_cols, error_type):
+    mat = np.random.rand(m_min * 2, n_max)
+    m, n = m_min * 2, n_max
+    mat[0:m_min, 0] += 1
+    _c0 = mat[:, 0]
+    _r0 = mat[0, :]
+    c0 = da.from_array(_c0, chunks=m_min, name='c')
+    r0 = da.from_array(_r0, chunks=n_max, name='r')
+    data = da.from_array(mat, chunks=chunks, name='A')
+    if vary_rows:
+        data = data[c0 > 0.5, :]
+        mat = mat[_c0 > 0.5, :]
+        m = mat.shape[0]
+    if vary_cols:
+        data = data[:, r0 > 0.5]
+        mat = mat[:, _r0 > 0.5]
+        n = mat.shape[1]
+
+    # qr
+    m_q = m
+    n_q = min(m, n)
+    m_r = n_q
+    n_r = n
+
+    # svd
+    m_u = m
+    n_u = min(m, n)
+    n_s = n_q
+    m_vh = n_q
+    n_vh = n
+    d_vh = max(m_vh, n_vh)  # full matrix returned
+
+    if error_type is None:
+        # test QR
+        q, r = tsqr(data)
+        q = q.compute()  # because uncertainty
+        r = r.compute()
+        assert_eq((m_q, n_q), q.shape)  # shape check
+        assert_eq((m_r, n_r), r.shape)  # shape check
+        assert_eq(mat, np.dot(q, r))  # accuracy check
+        assert_eq(np.eye(n_q, n_q), np.dot(q.T, q))  # q must be orthonormal
+        assert_eq(r, np.triu(r))  # r must be upper triangular
+
+        # test SVD
+        u, s, vh = tsqr(data, compute_svd=True)
+        u = u.compute()  # because uncertainty
+        s = s.compute()
+        vh = vh.compute()
+        s_exact = np.linalg.svd(mat)[1]
+        assert_eq(s, s_exact)  # s must contain the singular values
+        assert_eq((m_u, n_u), u.shape)  # shape check
+        assert_eq((n_s,), s.shape)  # shape check
+        assert_eq((d_vh, d_vh), vh.shape)  # shape check
+        assert_eq(np.eye(n_u, n_u), np.dot(u.T, u))  # u must be orthonormal
+        assert_eq(np.eye(d_vh, d_vh), np.dot(vh, vh.T))  # vh must be orthonormal
+        assert_eq(mat, np.dot(np.dot(u, np.diag(s)), vh[:n_q]))  # accuracy check
+    else:
+        with pytest.raises(error_type):
+            q, r = tsqr(data)
+        with pytest.raises(error_type):
+            u, s, vh = tsqr(data, compute_svd=True)
+
+
+@pytest.mark.parametrize('m,n,chunks,error_type', [
+    (20, 10, 10, ValueError),        # tall-skinny regular blocks
+    (20, 10, (3, 10), ValueError),   # tall-skinny regular fat layers
+    (20, 10, ((8, 4, 8), 10), ValueError),   # tall-skinny irregular fat layers
+    (40, 10, ((15, 5, 5, 8, 7), (10)), ValueError),  # tall-skinny non-uniform chunks (why?)
+    (128, 2, (16, 2), ValueError),    # tall-skinny regular thin layers; recursion_depth=1
+    (129, 2, (16, 2), ValueError),    # tall-skinny regular thin layers; recursion_depth=2 --> 17x2
+    (130, 2, (16, 2), ValueError),    # tall-skinny regular thin layers; recursion_depth=2 --> 18x2 next
+    (131, 2, (16, 2), ValueError),    # tall-skinny regular thin layers; recursion_depth=2 --> 18x2 next
+    (300, 10, (40, 10), ValueError),  # tall-skinny regular thin layers; recursion_depth=2
+    (300, 10, (30, 10), ValueError),  # tall-skinny regular thin layers; recursion_depth=3
+    (300, 10, (20, 10), ValueError),  # tall-skinny regular thin layers; recursion_depth=4
+    (10, 5, 10, None),         # single block tall
+    (5, 10, 10, None),         # single block short
+    (10, 10, 10, None),        # single block square
+    (10, 40, (10, 10), None),  # short-fat regular blocks
+    (10, 40, (10, 15), None),  # short-fat irregular blocks
+    (10, 40, ((10), (15, 5, 5, 8, 7)), None),  # short-fat non-uniform chunks (why?)
+    (20, 20, 10, ValueError),  # 2x2 regular blocks
+])
+def test_sfqr(m, n, chunks, error_type):
     mat = np.random.rand(m, n)
-    data = da.from_array(mat, chunks=(3, n), name='A')[1:]
-    mat2 = mat[1:, :]
+    data = da.from_array(mat, chunks=chunks, name='A')
+    m_q = m
+    n_q = min(m, n)
+    m_r = n_q
+    n_r = n
+    m_qtq = n_q
 
-    q, r = tsqr(data)
-    q = np.array(q)
-    r = np.array(r)
+    if error_type is None:
+        q, r = sfqr(data)
+        assert_eq((m_q, n_q), q.shape)  # shape check
+        assert_eq((m_r, n_r), r.shape)  # shape check
+        assert_eq(mat, da.dot(q, r))  # accuracy check
+        assert_eq(np.eye(m_qtq, m_qtq), da.dot(q.T, q))  # q must be orthonormal
+        assert_eq(r, da.triu(r.rechunk(r.shape[0])))  # r must be upper triangular
+    else:
+        with pytest.raises(error_type):
+            q, r = sfqr(data)
 
-    assert_eq(mat2, np.dot(q, r))  # accuracy check
-    assert_eq(np.eye(n, n), np.dot(q.T, q))  # q must be orthonormal
-    assert_eq(r, np.triu(r))  # r must be upper triangular
 
-
-def test_tsqr_svd_regular_blocks():
-    m, n = 20, 10
+@pytest.mark.parametrize('m,n,chunks,error_type', [
+    (20, 10, 10, None),        # tall-skinny regular blocks
+    (20, 10, (3, 10), None),   # tall-skinny regular fat layers
+    (20, 10, ((8, 4, 8), 10), None),   # tall-skinny irregular fat layers
+    (40, 10, ((15, 5, 5, 8, 7), (10)), None),  # tall-skinny non-uniform chunks (why?)
+    (128, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=1
+    (129, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=2 --> 17x2
+    (130, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=2 --> 18x2 next
+    (131, 2, (16, 2), None),    # tall-skinny regular thin layers; recursion_depth=2 --> 18x2 next
+    (300, 10, (40, 10), None),  # tall-skinny regular thin layers; recursion_depth=2
+    (300, 10, (30, 10), None),  # tall-skinny regular thin layers; recursion_depth=3
+    (300, 10, (20, 10), None),  # tall-skinny regular thin layers; recursion_depth=4
+    (10, 5, 10, None),         # single block tall
+    (5, 10, 10, None),         # single block short
+    (10, 10, 10, None),        # single block square
+    (10, 40, (10, 10), None),  # short-fat regular blocks
+    (10, 40, (10, 15), None),  # short-fat irregular blocks
+    (10, 40, ((10), (15, 5, 5, 8, 7)), None),  # short-fat non-uniform chunks (why?)
+    (20, 20, 10, NotImplementedError),  # 2x2 regular blocks
+])
+def test_qr(m, n, chunks, error_type):
     mat = np.random.rand(m, n)
-    data = da.from_array(mat, chunks=(10, n), name='A')
+    data = da.from_array(mat, chunks=chunks, name='A')
+    m_q = m
+    n_q = min(m, n)
+    m_r = n_q
+    n_r = n
+    m_qtq = n_q
 
-    u, s, vt = tsqr(data, compute_svd=True)
-    u = np.array(u)
-    s = np.array(s)
-    vt = np.array(vt)
-    usvt = np.dot(u, np.dot(np.diag(s), vt))
-
-    s_exact = np.linalg.svd(mat)[1]
-
-    assert_eq(mat, usvt)  # accuracy check
-    assert_eq(np.eye(n, n), np.dot(u.T, u))  # u must be orthonormal
-    assert_eq(np.eye(n, n), np.dot(vt, vt.T))  # v must be orthonormal
-    assert_eq(s, s_exact)  # s must contain the singular values
-
-
-def test_tsqr_svd_irregular_blocks():
-    m, n = 20, 10
-    mat = np.random.rand(m, n)
-    data = da.from_array(mat, chunks=(3, n), name='A')[1:]
-    mat2 = mat[1:, :]
-
-    u, s, vt = tsqr(data, compute_svd=True)
-    u = np.array(u)
-    s = np.array(s)
-    vt = np.array(vt)
-    usvt = np.dot(u, np.dot(np.diag(s), vt))
-
-    s_exact = np.linalg.svd(mat2)[1]
-
-    assert_eq(mat2, usvt)  # accuracy check
-    assert_eq(np.eye(n, n), np.dot(u.T, u))  # u must be orthonormal
-    assert_eq(np.eye(n, n), np.dot(vt, vt.T))  # v must be orthonormal
-    assert_eq(s, s_exact)  # s must contain the singular values
+    if error_type is None:
+        q, r = qr(data)
+        assert_eq((m_q, n_q), q.shape)  # shape check
+        assert_eq((m_r, n_r), r.shape)  # shape check
+        assert_eq(mat, da.dot(q, r))  # accuracy check
+        assert_eq(np.eye(m_qtq, m_qtq), da.dot(q.T, q))  # q must be orthonormal
+        assert_eq(r, da.triu(r.rechunk(r.shape[0])))  # r must be upper triangular
+    else:
+        with pytest.raises(error_type):
+            q, r = qr(data)
 
 
 def test_linalg_consistent_names():
@@ -125,12 +283,11 @@ def test_svd_compressed():
     data = da.from_array(mat, chunks=(500, 50))
 
     u, s, vt = svd_compressed(data, r, seed=4321, n_power_iter=2)
-    u, s, vt = da.compute(u, s, vt)
 
-    usvt = np.dot(u, np.dot(np.diag(s), vt))
+    usvt = da.dot(u, da.dot(da.diag(s), vt))
 
     tol = 0.2
-    assert_eq(np.linalg.norm(usvt),
+    assert_eq(da.linalg.norm(usvt),
               np.linalg.norm(mat),
               rtol=tol, atol=tol)  # average accuracy check
 
@@ -141,8 +298,8 @@ def test_svd_compressed():
     s_exact = np.linalg.svd(mat)[1]
     s_exact = s_exact[:r]
 
-    assert_eq(np.eye(r, r), np.dot(u.T, u))  # u must be orthonormal
-    assert_eq(np.eye(r, r), np.dot(vt, vt.T))  # v must be orthonormal
+    assert_eq(np.eye(r, r), da.dot(u.T, u))  # u must be orthonormal
+    assert_eq(np.eye(r, r), da.dot(vt, vt.T))  # v must be orthonormal
     assert_eq(s, s_exact)  # s must contain the singular values
 
 
@@ -159,8 +316,8 @@ def _check_lu_result(p, l, u, A):
     assert np.allclose(p.dot(l).dot(u), A)
 
     # check triangulars
-    assert np.allclose(l, np.tril(l.compute()))
-    assert np.allclose(u, np.triu(u.compute()))
+    assert_eq(l, da.tril(l))
+    assert_eq(u, da.triu(u))
 
 
 def test_lu_1():

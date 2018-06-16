@@ -659,7 +659,7 @@ def map_blocks(func, *args, **kwargs):
     You may specify the key name prefix of the resulting task in the graph with
     the optional ``token`` keyword argument.
 
-    >>> x.map_blocks(lambda x: x + 1, token='increment')  # doctest: +SKIP
+    >>> x.map_blocks(lambda x: x + 1, name='increment')  # doctest: +SKIP
     dask.array<increment, shape=(100,), dtype=int64, chunksize=(10,)>
     """
     if not callable(func):
@@ -669,9 +669,11 @@ def map_blocks(func, *args, **kwargs):
         raise TypeError(msg % type(func).__name__)
     name = kwargs.pop('name', None)
     token = kwargs.pop('token', None)
-    if not name:
-        name = '%s-%s' % (token or funcname(func),
-                          tokenize(token or func, args, **kwargs))
+    if token:
+        warnings.warn("The token= keyword to map_blocks has been moved to name=")
+        name = token
+
+    name = '%s-%s' % (name or funcname(func), tokenize(func, *args, **kwargs))
     dtype = kwargs.pop('dtype', None)
     chunks = kwargs.pop('chunks', None)
     drop_axis = kwargs.pop('drop_axis', [])
@@ -1302,7 +1304,6 @@ class Array(DaskMethodsMixin):
         if (isinstance(index, (str, unicode)) or
                 (isinstance(index, list) and index and
                  all(isinstance(i, (str, unicode)) for i in index))):
-            out = 'getitem-' + tokenize(self, index)
             if isinstance(index, (str, unicode)):
                 dt = self.dtype[index]
             else:
@@ -1311,10 +1312,10 @@ class Array(DaskMethodsMixin):
             if dt.shape:
                 new_axis = list(range(self.ndim, self.ndim + len(dt.shape)))
                 chunks = self.chunks + tuple((i,) for i in dt.shape)
-                return self.map_blocks(getitem, index, dtype=dt.base, name=out,
+                return self.map_blocks(getitem, index, dtype=dt.base,
                                        chunks=chunks, new_axis=new_axis)
             else:
-                return self.map_blocks(getitem, index, dtype=dt, name=out)
+                return self.map_blocks(getitem, index, dtype=dt)
 
         if not isinstance(index, tuple):
             index = (index,)
@@ -1343,8 +1344,12 @@ class Array(DaskMethodsMixin):
                 "vindex does not support indexing with None (np.newaxis), "
                 "got {}".format(key))
         if all(isinstance(k, slice) for k in key):
+            if all(k.indices(d) == slice(0, d).indices(d)
+                   for k, d in zip(key, self.shape)):
+                return self
             raise IndexError(
-                "vindex requires at least one non-slice to vectorize over. "
+                "vindex requires at least one non-slice to vectorize over "
+                "when the slices are not over the entire array (i.e, x[:]). "
                 "Use normal slicing instead when only using slices. Got: {}"
                 .format(key))
         return _vindex(self, *key)
@@ -1459,7 +1464,6 @@ class Array(DaskMethodsMixin):
             raise TypeError("astype does not take the following keyword "
                             "arguments: {0!s}".format(list(extra)))
         casting = kwargs.get('casting', 'unsafe')
-        copy = kwargs.get('copy', True)
         dtype = np.dtype(dtype)
         if self.dtype == dtype:
             return self
@@ -1467,8 +1471,7 @@ class Array(DaskMethodsMixin):
             raise TypeError("Cannot cast array from {0!r} to {1!r}"
                             " according to the rule "
                             "{2!r}".format(self.dtype, dtype, casting))
-        name = 'astype-' + tokenize(self, dtype, casting, copy)
-        return self.map_blocks(chunk.astype, dtype=dtype, name=name,
+        return self.map_blocks(chunk.astype, dtype=dtype,
                                astype_dtype=dtype, **kwargs)
 
     def __abs__(self):
@@ -2207,7 +2210,7 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
 
     Parameters
     ----------
-    url: str or MutableMapping
+    url: Zarr Array or str or MutableMapping
         Location of the data. A URL can include a protocol specifier like s3://
         for remote data. Can also be any MutableMapping instance, which should
         be serializable if used in multiple processes.
@@ -2225,14 +2228,17 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
     """
     import zarr
     storage_options = storage_options or {}
-    if isinstance(url, str):
+    if isinstance(url, zarr.Array):
+        z = url
+    elif isinstance(url, str):
         fs, fs_token, path = get_fs_token_paths(
             url, 'rb', storage_options=storage_options)
         assert len(path) == 1
         mapper = get_mapper(fs, path[0])
+        z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     else:
         mapper = url
-    z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
+        z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     chunks = chunks if chunks is not None else z.chunks
     return from_array(z, chunks, name='zarr-%s' % url)
 
@@ -2247,7 +2253,7 @@ def to_zarr(arr, url, component=None, storage_options=None,
     ----------
     arr: dask.array
         Data to store
-    url: str or MutableMapping
+    url: Zarr Array or str or MutableMapping
         Location of the data. A URL can include a protocol specifier like s3://
         for remote data. Can also be any MutableMapping instance, which should
         be serializable if used in multiple processes.
@@ -2264,10 +2270,23 @@ def to_zarr(arr, url, component=None, storage_options=None,
     kwargs: passed to the ``zarr.create()`` function, e.g., compression options
     """
     import zarr
+
+    if isinstance(url, zarr.Array):
+        z = url
+        if (isinstance(z.store, (dict, zarr.DictStore)) and
+                'distributed' in config.get('scheduler', '')):
+            raise RuntimeError('Cannot store into in memory Zarr Array using '
+                               'the Distributed Scheduler.')
+        arr = arr.rechunk(z.chunks)
+        return store(arr, z, lock=False, compute=compute,
+                     return_stored=return_stored)
+
     if not _check_regular_chunks(arr.chunks):
         raise ValueError('Attempt to save array to zarr with irregular '
                          'chunking, please call `arr.rechunk(...)` first.')
+
     storage_options = storage_options or {}
+
     if isinstance(url, str):
         fs, fs_token, path = get_fs_token_paths(
             url, 'rb', storage_options=storage_options)
@@ -2276,10 +2295,12 @@ def to_zarr(arr, url, component=None, storage_options=None,
     else:
         # assume the object passed is already a mapper
         mapper = url
+
     chunks = [c[0] for c in arr.chunks]
     z = zarr.create(shape=arr.shape, chunks=chunks, dtype=arr.dtype,
                     store=mapper, path=component, overwrite=overwrite, **kwargs)
-    return store(arr, z, compute=compute, return_stored=return_stored)
+    return store(arr, z, lock=False, compute=compute,
+                 return_stored=return_stored)
 
 
 def _check_regular_chunks(chunkset):
