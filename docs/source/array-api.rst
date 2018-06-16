@@ -95,8 +95,10 @@ Top level user functions:
    isfinite
    isin
    isinf
+   isneginf
    isnan
    isnull
+   isposinf
    isreal
    ldexp
    linspace
@@ -132,11 +134,13 @@ Top level user functions:
    nanstd
    nansum
    nanvar
+   nan_to_num
    nextafter
    nonzero
    notnull
    ones
    ones_like
+   pad
    percentile
    piecewise
    prod
@@ -219,6 +223,7 @@ Linear Algebra
    linalg.solve_triangular
    linalg.svd
    linalg.svd_compressed
+   linalg.sfqr
    linalg.tsqr
 
 Masked Arrays
@@ -449,8 +454,10 @@ Other functions
 .. autofunction:: isfinite
 .. autofunction:: isin
 .. autofunction:: isinf
+.. autofunction:: isneginf
 .. autofunction:: isnan
 .. autofunction:: isnull
+.. autofunction:: isposinf
 .. autofunction:: isreal
 .. autofunction:: ldexp
 .. autofunction:: linspace
@@ -484,11 +491,13 @@ Other functions
 .. autofunction:: nanstd
 .. autofunction:: nansum
 .. autofunction:: nanvar
+.. autofunction:: nan_to_num
 .. autofunction:: nextafter
 .. autofunction:: nonzero
 .. autofunction:: notnull
 .. autofunction:: ones
 .. autofunction:: ones_like
+.. autofunction:: pad
 .. autofunction:: percentile
 .. autofunction:: piecewise
 .. autofunction:: prod

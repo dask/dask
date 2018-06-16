@@ -124,7 +124,7 @@ class RandomState(object):
         sizes = list(product(*chunks))
         state_data = random_state_data(len(sizes), self._numpy_state)
         token = tokenize(state_data, size, chunks, args, kwargs)
-        name = 'da.random.{0}-{1}'.format(func.__name__, token)
+        name = '{0}-{1}'.format(func.__name__, token)
 
         keys = product([name], *([range(len(bd)) for bd in chunks] +
                                  [[0]] * len(extra_chunks)))

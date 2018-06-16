@@ -3,12 +3,13 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-from dask.utils import tmpfile, tmpdir
 from dask.dataframe.utils import assert_eq
+from dask.utils import tmpfile, tmpdir
 
 
 df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                    'y': [1, 2, 3, 4]})
+ddf = dd.from_pandas(df, npartitions=2)
 
 
 @pytest.mark.parametrize('orient', ['split', 'records', 'index', 'columns',
@@ -56,3 +57,21 @@ def test_read_chunked(block):
         d = dd.read_json(fn, blocksize=block, sample=10)
         assert (d.npartitions > 1) or (block > 50)
         assert_eq(d, df, check_index=False)
+
+
+@pytest.mark.parametrize('compression', [None, 'gzip', 'xz'])
+def test_json_compressed(compression):
+
+    with tmpdir() as path:
+        dd.to_json(ddf, path, compression=compression)
+        actual = dd.read_json(os.path.join(path, '*'),
+                              compression=compression)
+        assert_eq(df, actual.compute(), check_index=False)
+
+
+def test_read_json_inferred_compression():
+    with tmpdir() as path:
+        fn = os.path.join(path, '*.json.gz')
+        dd.to_json(ddf, fn, compression='gzip')
+        actual = dd.read_json(fn)
+        assert_eq(df, actual.compute(), check_index=False)

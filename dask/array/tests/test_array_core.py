@@ -21,7 +21,7 @@ import dask.array as da
 from dask.base import tokenize, compute_as_if_collection
 from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir
-from dask.utils_test import inc
+from dask.utils_test import inc, dec
 
 from dask.array import chunk
 
@@ -1097,11 +1097,9 @@ def test_map_blocks():
     assert_eq(e, x + 1)
 
     e = d.map_blocks(inc, name='increment')
-    assert e.name == 'increment'
+    assert e.name.startswith('increment-')
 
-    e = d.map_blocks(inc, token='increment')
-    assert e.name != 'increment'
-    assert e.name.startswith('increment')
+    assert d.map_blocks(inc, name='foo').name != d.map_blocks(dec, name='foo').name
 
     d = from_array(x, chunks=(10, 10))
     e = d.map_blocks(lambda x: x[::2, ::2], chunks=(5, 5), dtype=d.dtype)
@@ -2325,7 +2323,6 @@ def test_vindex_negative():
 def test_vindex_errors():
     d = da.ones((5, 5, 5), chunks=(3, 3, 3))
     pytest.raises(IndexError, lambda: d.vindex[np.newaxis])
-    pytest.raises(IndexError, lambda: d.vindex[:5])
     pytest.raises(IndexError, lambda: d.vindex[[1, 2], [1, 2, 3]])
     pytest.raises(IndexError, lambda: d.vindex[[True] * 5])
     pytest.raises(IndexError, lambda: d.vindex[[0], [5]])
@@ -2341,6 +2338,25 @@ def test_vindex_merge():
     assert (_vindex_merge(locations, values) == np.array([[40, 50, 60],
                                                           [1, 2, 3],
                                                           [10, 20, 30]])).all()
+
+
+def test_vindex_identity():
+    rng = da.random.RandomState(42)
+    a, b = 10, 20
+
+    x = rng.random(a, chunks=a // 2)
+    assert x is x.vindex[:]
+    assert x is x.vindex[:a]
+    pytest.raises(IndexError, lambda: x.vindex[:a - 1])
+    pytest.raises(IndexError, lambda: x.vindex[1:])
+    pytest.raises(IndexError, lambda: x.vindex[0:a:2])
+
+    x = rng.random((a, b), chunks=(a // 2, b // 2))
+    assert x is x.vindex[:, :]
+    assert x is x.vindex[:a, :b]
+    pytest.raises(IndexError, lambda: x.vindex[:, :b - 1])
+    pytest.raises(IndexError, lambda: x.vindex[:, 1:])
+    pytest.raises(IndexError, lambda: x.vindex[:, 0:b:2])
 
 
 def test_empty_array():
@@ -3346,6 +3362,17 @@ def test_zarr_roundtrip():
         a2 = da.from_zarr(d)
         assert_eq(a, a2)
         assert a2.chunks == a.chunks
+
+
+def test_zarr_existing_array():
+    zarr = pytest.importorskip('zarr')
+    c = (1, 1)
+    a = da.ones((3, 3), chunks=c)
+    z = zarr.zeros_like(a, chunks=c)
+    a.to_zarr(z)
+    a2 = da.from_zarr(z)
+    assert_eq(a, a2)
+    assert a2.chunks == a.chunks
 
 
 def test_read_zarr_chunks():
