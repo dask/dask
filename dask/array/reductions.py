@@ -42,7 +42,87 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
               concatenate=True, output_size=1):
     """ General version of reductions
 
-    >>> reduction(my_array, np.sum, np.sum, axis=0, keepdims=False)  # doctest: +SKIP
+    Parameters
+    ----------
+    x: Array
+        Data being reduced along one or more axes
+    chunk: callable(x_chunk, axis, keepdims)
+        First kernel function to be executed when resolving the dask graph.
+        This function is applied in parallel to all original chunks of x.
+        See below for kernel parameters.
+    combine: callable(x_chunk, axis, keepdims), optional
+        Kernel function used for intermediate recursive aggregation (see
+        split_every below). If omitted, it defaults to aggregate.
+        If the reduction can be performed in less than 3 steps, it will not
+        be invoked at all.
+    aggregate: callable(x_chunk, axis, keepdims)
+        Last kernel function to be executed when resolving the dask graph,
+        producing the final output. It is always invoked, even when the reduced
+        Array counts a single chunk along the reduced axes.
+    axis: int or sequence of ints, optional
+        Axis or axes to aggregate upon. If omitted, aggregate along all axes.
+    keepdims: boolean, optional
+        Whether the reduction function should preserve the reduced axes,
+        leaving them at size ``output_size``, or remove them.
+    dtype: np.dtype, optional
+        Force output dtype. Defaults to x.dtype if omitted.
+    split_every: int >= 2 or dict(axis: int), optional
+        Determines the depth of the recursive aggregation. If set to or more
+        than the number of input chunks, the aggregation will be performed in
+        two steps, one ``chunk ``kernel per input chunk and a single
+        ``aggregate`` kernel at the end. If set to less than that, an
+        intermediate ``combine`` kernel will be used, so that any one
+        ``combine`` or ``aggregate`` kernel has no more than ``split_every``
+        inputs. The depth of the aggregation graph will be
+        :math:`log_{split_every}(input chunks along reduced axes)`. Setting to
+        a low value can reduce cache size and network transfers, at the cost of
+        more CPU and a larger dask graph.
+
+        Omit to let dask heuristically decide a good default. A default can
+        also be set globally with the ``split_every`` key in
+        :mod:`dask.config`.
+    name: str, optional
+        Prefix of the keys of the intermediate and output nodes. If omitted it
+        defaults to the kernel function names.
+    out: Array, optional
+        Another dask array whose contents will be replaced. Omit to create a
+        new one. Note that, unlike in numpy, this setting gives no performance
+        benefits whatsoever, but can still be useful  if one needs to preserve
+        the references to a previously existing Array.
+    concatenate: bool, optional
+        If True (the default), the output of the kernels is concatenated into a
+        single np.array before being passed to the ``combine`` and
+        ``aggregate`` kernels. If False, the input of ``combine`` and
+        ``aggregate`` will be either a list of the raw outputs of the previous
+        step or a single output, and the kernel will have to concatenate it
+        itself. It can be useful to set this to False if the chunk and/or
+        combine steps do not produce np.arrays.
+    output_size: int >= 1, optional
+        Size of the output of the ``aggregate`` kernel along the reduced axes.
+        Ignored if keepdims is False.
+
+    Returns
+    -------
+    dask array
+
+    Kernel Parameters
+    -----------------
+    x_chunk: numpy.ndarray
+        Individual input chunk. For chunk kernels, it is one of the original
+        chunks of x. For combine and aggregate kernels, it's the concatenation
+        of the outputs produced by the previous chunk or combine kernels.
+        If concatenate=False, it's a list of the raw outputs from the previous
+        kernels.
+    axis: list
+        Normalized list of axes to reduce upon, e.g. ``[0, ]``
+        Scalar, negative, and None axes have been normalized away.
+
+        Note that some numpy reduction functions cannot reduce along multiple
+        axes at once and strictly require an int in input. Such functions have
+        to be wrapped to cope.
+    keepdims: bool
+        Whether the reduction function should preserve the reduced axes or
+        remove them.
     """
     if axis is None:
         axis = tuple(range(x.ndim))
@@ -73,7 +153,7 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=None, dtype=None,
 
 def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
                  combine=None, name=None, concatenate=True):
-    """Perform the tree reduction step of a reduction.
+    """ Perform the tree reduction step of a reduction.
 
     Lower level, users should use ``reduction`` or ``arg_reduction`` directly.
     """
@@ -106,7 +186,7 @@ def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
 
 
 def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
-    """Partial reduction across multiple axes.
+    """ Partial reduction across multiple axes.
 
     Parameters
     ----------
@@ -470,7 +550,7 @@ def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False, split_every=None,
 
 
 def _arg_combine(data, axis, argfunc, keepdims=False):
-    """Merge intermediate results from ``arg_*`` functions"""
+    """ Merge intermediate results from ``arg_*`` functions"""
     axis = None if len(axis) == data.ndim or data.ndim == 1 else axis[0]
     vals = data['vals']
     arg = data['arg']
@@ -537,7 +617,7 @@ def nanarg_agg(func, argfunc, data, axis=None, **kwargs):
 
 
 def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None):
-    """Generic function for argreduction.
+    """ Generic function for argreduction.
 
     Parameters
     ----------
@@ -588,7 +668,7 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
 
 
 def make_arg_reduction(func, argfunc, is_nan_func=False):
-    """Create a argreduction callable.
+    """ Create an argreduction callable
 
     Parameters
     ----------
@@ -730,13 +810,30 @@ def validate_axis(ndim, axis):
 
 
 def topk(a, k, axis=-1, split_every=None):
-    """Extract the k largest elements from a on the given axis,
+    """ Extract the k largest elements from a on the given axis,
     and return them sorted from largest to smallest.
     If k is negative, extract the -k smallest elements instead,
     and return them sorted from smallest to largest.
 
-    This assumes that ``k`` is small.  All results will be returned in a single
-    chunk along the given axis.
+    This performs best when ``k`` is much smaller than the chunk size. All
+    results will be returned in a single chunk along the given axis.
+
+    Parameters
+    ----------
+    x: Array
+        Data being sorted
+    k: int
+    axis: int, optional
+    split_every: int >=2, optional
+        See :func:`reduce`. This parameter becomes very important when k is
+        on the same order of magnitude of the chunk size or more, as it
+        prevents getting the whole or a significant portion of the input array
+        in memory all at once, with a negative impact on network transfer
+        too when running on distributed.
+
+    Returns
+    -------
+    Selection of x with size abs(k) along the given axis.
 
     Examples
     --------
@@ -749,13 +846,20 @@ def topk(a, k, axis=-1, split_every=None):
     array([1, 3])
     """
     if isinstance(a, int) and isinstance(k, Array):
-        warnings.warn("DeprecationWarning: topk(k, a) has been replaced with topk(a, k)")
+        warnings.warn("DeprecationWarning: topk(k, a) has been replaced with "
+                      "topk(a, k)")
         a, k = k, a
 
     axis = validate_axis(a.ndim, axis)
 
+    # chunk and combine steps of the reduction, which recursively invoke
+    # np.partition to pick the top/bottom k elements from the previous step.
+    # The selection is not sorted internally.
     kernel = partial(chunk.topk, k=k)
+    # aggregate step of the reduction. Internally invokes the chunk/combine
+    # kernel, then sorts the results internally.
     aggregate = partial(chunk.topk_aggregate, k=k)
+
     return reduction(
         a, chunk=kernel, combine=kernel, aggregate=aggregate,
         axis=axis, keepdims=True, dtype=a.dtype, split_every=split_every,
@@ -763,13 +867,27 @@ def topk(a, k, axis=-1, split_every=None):
 
 
 def argtopk(a, k, axis=-1, split_every=None):
-    """Extract the indices of the k largest elements from a on the given axis,
-    and return them sorted from largest to smallest.
-    If k is negative, extract the indices of the -k smallest elements instead,
-    and return them sorted from smallest to largest.
+    """ Extract the indices of the k largest elements from a on the given axis,
+    and return them sorted from largest to smallest. If k is negative, extract
+    the indices of the -k smallest elements instead, and return them sorted
+    from smallest to largest.
 
-    This assumes that ``k`` is small.  All results will be returned in a single
-    chunk along the given axis.
+    This performs best when ``k`` is much smaller than the chunk size. All
+    results will be returned in a single chunk along the given axis.
+
+    Parameters
+    ----------
+    x: Array
+        Data being sorted
+    k: int
+    axis: int, optional
+    split_every: int >=2, optional
+        See :func:`topk`. The performance considerations for topk also apply
+        here.
+
+    Returns
+    -------
+    Selection of int64 indices of x with size abs(k) along the given axis.
 
     Examples
     --------
@@ -783,15 +901,23 @@ def argtopk(a, k, axis=-1, split_every=None):
     """
     axis = validate_axis(a.ndim, axis)
 
-    # Convert a to a recarray that contains its index
+    # Generate nodes where every chunk is a tuple of (a, original index of a)
     idx = arange(a.shape[axis], chunks=a.chunks[axis], dtype=np.int64)
     idx = idx[tuple(slice(None) if i == axis else np.newaxis
                     for i in range(a.ndim))]
     a_plus_idx = a.map_blocks(chunk.argtopk_preprocess, idx,
                               dtype=object)
 
+    # chunk and combine steps of the reduction. They acquire in input a tuple
+    # of (a, original indices of a) and return another tuple containing the top
+    # k elements of a and the matching original indices. The selection is not
+    # sorted internally, as in np.argpartition.
     kernel = partial(chunk.argtopk, k=k)
+    # aggregate step of the reduction. Internally invokes the chunk/combine
+    # kernel, then sorts the results internally, drops a and returns the index
+    # only.
     aggregate = partial(chunk.argtopk_aggregate, k=k)
+
     return reduction(
         a_plus_idx, chunk=kernel, combine=kernel, aggregate=aggregate,
         axis=axis, keepdims=True, dtype=np.int64, split_every=split_every,

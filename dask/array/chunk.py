@@ -180,7 +180,8 @@ def trim(x, axes=None):
 
 
 def topk(a, k, axis, keepdims):
-    """Chunk and combine kernel of topk.
+    """ Chunk and combine kernel of topk
+
     Extract the k largest elements from a on the given axis.
     If k is negative, extract the -k smallest elements instead.
     Note that, unlike in the parent function, the returned elements
@@ -198,7 +199,8 @@ def topk(a, k, axis, keepdims):
 
 
 def topk_aggregate(a, k, axis, keepdims):
-    """Final aggregation kernel of topk.
+    """ Final aggregation kernel of topk
+
     Invoke topk one final time and then sort the results internally.
     """
     assert keepdims is True
@@ -212,14 +214,16 @@ def topk_aggregate(a, k, axis, keepdims):
 
 
 def argtopk_preprocess(a, idx):
-    """Preparatory step for argtopk.
-    Put data together with its indices in a tuple.
+    """ Preparatory step for argtopk
+
+    Put data together with its original indices in a tuple.
     """
     return a, idx
 
 
 def argtopk(a_plus_idx, k, axis, keepdims):
-    """Chunk and combine kernel of argtopk.
+    """ Chunk and combine kernel of argtopk
+
     Extract the indices of the k largest elements from a on the given axis.
     If k is negative, extract the indices of the -k smallest elements instead.
     Note that, unlike in the parent function, the returned elements
@@ -246,7 +250,8 @@ def argtopk(a_plus_idx, k, axis, keepdims):
 
 
 def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
-    """Final aggregation kernel of argtopk.
+    """ Final aggregation kernel of argtopk
+
     Invoke argtopk one final time, sort the results internally, drop the data
     and return the index only.
     """
