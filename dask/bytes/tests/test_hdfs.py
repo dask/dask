@@ -305,7 +305,8 @@ def test_glob(hdfs):
             {basedir + p for p in ['/a', '/a1', '/a2', '/a3', '/b1', '/c', '/c2']})
 
 
-@pytest.mark.skipif(not distributed)  # noqa: F811
+@pytest.mark.skipif(not distributed,                                    # noqa: F811
+                    reason="Skipped as distributed is not installed.")  # noqa: F811
 def test_distributed(hdfs, loop):     # noqa: F811
     dd = pytest.importorskip('dask.dataframe')
 
