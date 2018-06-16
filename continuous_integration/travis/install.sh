@@ -105,11 +105,6 @@ if [[ ${UPSTREAM_DEV} ]]; then
     pip install --pre --no-deps --upgrade --timeout=60 -f $PRE_WHEELS numpy pandas
 fi;
 
-# quick fix for a bug in requests==2.19.0 that makes it not work with PYTHONOPTIMIZE=2
-if [[ $PYTHONOPTIMIZE = '2' ]]; then
-    echo "Forcing requests==2.18.4"
-    pip install requests==2.18.4
-fi;
 
 # Install dask
 pip install --no-deps -e .[complete]
