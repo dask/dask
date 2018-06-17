@@ -2192,6 +2192,33 @@ def test_long_slice():
     assert_eq(d[8000:8200], x[8000:8200])
 
 
+@pytest.mark.parametrize("ndim", [0, 1, 2])
+@pytest.mark.parametrize("dtype", [bool, int, float, complex])
+def test_item_singleton(ndim, dtype):
+    for s in range(ndim):
+        a = np.ones(s * (1,), dtype=dtype)
+        d = da.from_array(a, chunks=1)
+        assert_eq(a.item(), d.item())
+
+
+@pytest.mark.parametrize("dtype", [int, float, complex])
+def test_item_non_singleton(dtype):
+    s, c = (4, 5), (2, 2)
+
+    a = np.arange(np.prod(s), dtype=dtype).reshape(s)
+    d = da.from_array(a, chunks=c)
+
+    with pytest.raises(ValueError):
+        d.item()
+
+    assert_eq(a.item(9), d.item(9))
+    assert_eq(a.item(3, 2), d.item(3, 2))
+    assert_eq(a.item((2, 4)), d.item((2, 4)))
+
+    with pytest.raises(ValueError):
+        d.item((1, 2, 3))
+
+
 def test_h5py_newaxis():
     h5py = pytest.importorskip('h5py')
 
