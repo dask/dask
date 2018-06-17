@@ -47,6 +47,16 @@ def test_cache_with_number():
     assert c.cache.available_bytes == 10000
     assert c.cache.limit == 1
 
+def test_cache_correctness():
+    # https://github.com/dask/dask/issues/3631
+    c = Cache(10000)
+    da = pytest.importorskip('dask.array')
+    from numpy import ones, zeros
+    z = da.from_array(zeros(1), chunks=10)
+    o = da.from_array(ones(1), chunks=10)
+    with c:
+        assert (z.compute() == 0).all()
+        assert (o.compute() == 1).all()
 
 def f(duration, size, *args):
     sleep(duration)
