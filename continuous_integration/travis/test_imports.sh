@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 test_import () {
     # Install dependencies
     if [[ -n "$2" ]]; then

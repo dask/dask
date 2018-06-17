@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Need to make test order deterministic when parallelizing tests, hence PYTHONHASHSEED
 # (see https://github.com/pytest-dev/pytest-xdist/issues/63)
 if [[ $PARALLEL == 'true' ]]; then
