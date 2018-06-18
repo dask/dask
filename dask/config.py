@@ -22,10 +22,10 @@ paths = [
 ]
 
 if 'DASK_CONFIG' in os.environ:
-    DASK_CONFIG = os.environ['DASK_CONFIG']
-    paths.append(DASK_CONFIG)
+    PATH = os.environ['DASK_CONFIG']
+    paths.append(PATH)
 else:
-    DASK_CONFIG = os.path.join(os.path.expanduser('~'), '.config', 'dask')
+    PATH = os.path.join(os.path.expanduser('~'), '.config', 'dask')
 
 
 global_config = config = {}
@@ -185,7 +185,7 @@ def ensure_file(
         Whether or not to comment out the config file when copying.
     """
     if destination is None:
-        destination = DASK_CONFIG
+        destination = PATH
     if not os.path.splitext(destination)[1].strip('.'):
         _, filename = os.path.split(source)
         destination = os.path.join(destination, filename)

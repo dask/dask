@@ -229,12 +229,12 @@ def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmpdir):
         yaml.dump(a, f)
 
     destination = os.path.join(str(tmpdir), 'dask')
-    DASK_CONFIG = dask.config.DASK_CONFIG
+    PATH = dask.config.PATH
     try:
-        dask.config.DASK_CONFIG = destination
+        dask.config.PATH = destination
         ensure_file(source=source)
     finally:
-        dask.config.DASK_CONFIG = DASK_CONFIG
+        dask.config.PATH = PATH
 
     assert os.path.isdir(destination)
     [fn] = os.listdir(destination)
