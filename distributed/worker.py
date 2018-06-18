@@ -31,7 +31,7 @@ from .comm import get_address_host, get_local_address_for, connect
 from .comm.utils import offload
 from .compatibility import unicode, get_thread_identity, finalize
 from .core import (error_message, CommClosedError,
-                   rpc, pingpong, coerce_to_address)
+                   pingpong, coerce_to_address)
 from .diskutils import WorkSpace
 from .metrics import time
 from .node import ServerNode
@@ -165,14 +165,10 @@ class WorkerBase(ServerNode):
         self._closed = Event()
         self.reconnect = reconnect
         self.executor = executor or ThreadPoolExecutor(self.ncores)
-        self.scheduler = rpc(scheduler_addr, connection_args=self.connection_args)
         self.name = name
         self.scheduler_delay = 0
         self.stream_comms = dict()
         self.heartbeat_active = False
-        self.execution_state = {'scheduler': self.scheduler.address,
-                                'ioloop': self.loop,
-                                'worker': self}
         self._ipython_kernel = None
 
         if self.local_dir not in sys.path:
@@ -215,6 +211,11 @@ class WorkerBase(ServerNode):
                 io_loop=self.loop,
                 connection_args=self.connection_args,
                 **kwargs)
+
+        self.scheduler = self.rpc(scheduler_addr)
+        self.execution_state = {'scheduler': self.scheduler.address,
+                                'ioloop': self.loop,
+                                'worker': self}
 
         pc = PeriodicCallback(self.heartbeat, 1000, io_loop=self.io_loop)
         self.periodic_callbacks['heartbeat'] = pc

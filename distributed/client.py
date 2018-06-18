@@ -46,7 +46,7 @@ from .utils_comm import (WrappedKey, unpack_remotedata, pack_data,
                          scatter_to_workers, gather_from_workers)
 from .cfexecutor import ClientExecutor
 from .compatibility import Queue as pyQueue, Empty, isqueue, html_escape
-from .core import connect, rpc, clean_exception, CommClosedError
+from .core import connect, rpc, clean_exception, CommClosedError, PooledRPCCall
 from .metrics import time
 from .node import Node
 from .protocol import to_serialize
@@ -575,7 +575,7 @@ class Client(Node):
                 logger.info("Config value `scheduler-address` found: %s",
                             address)
 
-        if isinstance(address, rpc):
+        if isinstance(address, (rpc, PooledRPCCall)):
             self.scheduler = address
         elif hasattr(address, "scheduler_address"):
             # It's a LocalCluster or LocalCluster-compatible object

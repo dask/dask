@@ -3706,7 +3706,7 @@ def test_open_close_many_workers(loop, worker, count, repeat):
             sleep(1)
 
             for i in range(count):
-                done.acquire(timeout=20)
+                done.acquire()
                 gc.collect()
                 if not running:
                     break

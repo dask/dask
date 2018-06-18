@@ -598,6 +598,10 @@ class PooledRPCCall(object):
         self.serializers = serializers
         self.deserializers = deserializers if deserializers is not None else serializers
 
+    @property
+    def address(self):
+        return self.addr
+
     def __getattr__(self, key):
         @gen.coroutine
         def send_recv_from_rpc(**kwargs):
