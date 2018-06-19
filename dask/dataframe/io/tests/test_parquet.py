@@ -1249,6 +1249,7 @@ def test_select_partitioned_column(tmpdir, engine):
 
 def test_arrow_partitioning(tmpdir):
     # Issue #3518
+    pytest.importorskip('pyarrow')
     path = str(tmpdir)
     data = {
         'p': np.repeat(np.arange(3), 2).astype(np.int8),
