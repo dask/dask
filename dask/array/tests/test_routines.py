@@ -449,6 +449,8 @@ def test_gradient(shape, varargs, axis, edge_order):
         for e_r, e_r_a in zip(r, r_a):
             assert_eq(e_r, e_r_a)
 
+        assert_eq(sum(r), sum(r_a))
+
 
 def test_bincount():
     x = np.array([2, 1, 5, 2, 1])
