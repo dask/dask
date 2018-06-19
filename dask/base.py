@@ -246,11 +246,13 @@ def unpack_collections(*args, **kwargs):
     collections = []
     repack_dsk = {}
 
+    colltok = uuid.uuid4().hex
+
     def _unpack(expr):
         if is_dask_collection(expr):
             tok = tokenize(expr)
             if tok not in repack_dsk:
-                repack_dsk[tok] = (getitem, 'collections', len(collections))
+                repack_dsk[tok] = (getitem, colltok, len(collections))
                 collections.append(expr)
             return tok
 
@@ -277,7 +279,7 @@ def unpack_collections(*args, **kwargs):
 
     def repack(results):
         dsk = repack_dsk.copy()
-        dsk['collections'] = quote(results)
+        dsk[colltok] = quote(results)
         return local.get_sync(dsk, out)
 
     return collections, repack
