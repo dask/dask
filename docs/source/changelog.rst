@@ -31,12 +31,9 @@ Core
 Array
 +++++
 
-- Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
 - Add to/read_zarr for Zarr-format datasets and arrays (:pr:`3460`) `Martin Durant`_
 - Experimental addition of generalized ufunc support, ``apply_gufunc``, ``gufunc``, and
   ``as_gufunc`` (:pr:`3109`) (:pr:`3526`) (:pr:`3539`) `Markus Gonser`_
-- Faster slice_1d in dask.array (:pr:`3479`) `Yu Feng`_
-- Add split_every parameter to einsum (:pr:`3472`) `Guido Imperiale`_
 - Avoid unnecessary rechunking tasks (:pr:`3529`) `Matthew Rocklin`_
 - Compute dtypes at runtime for fft (:pr:`3511`) `Matthew Rocklin`_
 - Generate UUIDs for all da.store operations (:pr:`3540`) `Martin Durant`_
@@ -60,7 +57,6 @@ Dataframe
 - Adds ``index`` to unsupported arguments for ``DataFrame.rename`` method (:pr:`3522`) `James Bourbeau`_
 - Adds support to subset Dask DataFrame columns using ``numpy.ndarray``, ``pandas.Series``, and
   ``pandas.Index`` objects (:pr:`3536`) `James Bourbeau`_
-- Pandas 0.23.0 compat (:pr:`3499`) `Tom Augspurger`_
 - Raise error if meta columns do not match dataframe (:pr:`3485`) `Christopher Ren`_
 - Add index to unsupprted argument for DataFrame.rename (:pr:`3522`) `James Bourbeau`_
 - Adds support for subsetting DataFrames with pandas Index/Series and numpy ndarrays (:pr:`3536`) `James Bourbeau`_
@@ -99,8 +95,8 @@ Array
 +++++
 
 - Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
-- ``einsum`` now accepts the ``split_every`` parameter (:pr:`3396`) `Guido Imperiale`_
-- Improved slicing performance (:pr:`3469`) `Yu Feng`_
+- ``einsum`` now accepts the ``split_every`` parameter (:pr:`3471`) `Guido Imperiale`_
+- Improved slicing performance (:pr:`3479`) `Yu Feng`_
 
 DataFrame
 +++++++++
