@@ -10,6 +10,8 @@ try:
 except ImportError:
     yaml = None
 
+from .compatibility import makedirs
+
 
 no_default = '__no_default__'
 
@@ -178,42 +180,50 @@ def ensure_file(
     ----------
     source : string, filename
         Source configuration file, typically within a source directory.
-    destination : string, directory or filename
-        Destination directory or filename. Configurable by ``DASK_CONFIG``
-        environment variable, falling back to ~/.config/dask.
+    destination : string, directory
+        Destination directory. Configurable by ``DASK_CONFIG`` environment
+        variable, falling back to ~/.config/dask.
     comment : bool, True by default
         Whether or not to comment out the config file when copying.
     """
     if destination is None:
         destination = PATH
-    if not os.path.splitext(destination)[1].strip('.'):
-        _, filename = os.path.split(source)
-        destination = os.path.join(destination, filename)
 
-    if not os.path.exists(os.path.dirname(destination)):
-        os.makedirs(os.path.dirname(destination))
+    # destination is a file and already exists, never overwrite
+    if os.path.isfile(destination):
+        return
 
-    if not os.path.exists(destination):
-        # Atomically create destination.  Parallel testing discovered
-        # a race condition where a process can be busy creating the
-        # destination while another process reads an empty config file.
-        tmp = '%s.tmp.%d' % (destination, os.getpid())
-        with open(source) as f:
-            lines = list(f)
+    # If destination is not an existing file, interpret as a directory,
+    # use the source basename as the filename
+    directory = destination
+    destination = os.path.join(directory, os.path.basename(source))
 
-        if comment:
-            lines = ['# ' + line
-                     if line.strip() and not line.startswith('#')
-                     else line
-                     for line in lines]
+    try:
+        if not os.path.exists(destination):
+            makedirs(directory, exist_ok=True)
 
-        with open(tmp, 'w') as f:
-            f.write(''.join(lines))
+            # Atomically create destination.  Parallel testing discovered
+            # a race condition where a process can be busy creating the
+            # destination while another process reads an empty config file.
+            tmp = '%s.tmp.%d' % (destination, os.getpid())
+            with open(source) as f:
+                lines = list(f)
 
-        try:
-            os.rename(tmp, destination)
-        except OSError:
-            os.remove(tmp)
+            if comment:
+                lines = ['# ' + line
+                         if line.strip() and not line.startswith('#')
+                         else line
+                         for line in lines]
+
+            with open(tmp, 'w') as f:
+                f.write(''.join(lines))
+
+            try:
+                os.rename(tmp, destination)
+            except OSError:
+                os.remove(tmp)
+    except OSError:
+        pass
 
 
 class set(object):
