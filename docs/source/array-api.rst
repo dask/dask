@@ -31,6 +31,7 @@ Top level user functions:
    atleast_1d
    atleast_2d
    atleast_3d
+   average
    bincount
    bitwise_and
    bitwise_not
@@ -390,6 +391,7 @@ Other functions
 .. autofunction:: atleast_1d
 .. autofunction:: atleast_2d
 .. autofunction:: atleast_3d
+.. autofunction:: average
 .. autofunction:: bincount
 .. autofunction:: bitwise_and
 .. autofunction:: bitwise_not
