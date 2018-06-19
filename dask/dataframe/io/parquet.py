@@ -506,7 +506,8 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
 
     dataset = pq.ParquetDataset(paths, filesystem=get_pyarrow_filesystem(fs))
     if dataset.partitions is not None:
-        partitions = list(dataset.partitions.partition_names)
+        partitions = [n for n in dataset.partitions.partition_names
+                      if n is not None]
     else:
         partitions = []
     schema = dataset.schema.to_arrow_schema()
@@ -532,8 +533,9 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
             index_names = [name_storage_mapping.get(name, name)
                            for name in index_names]
 
+    column_names += [p for p in partitions if p not in column_names]
     column_names, index_names, out_type = _normalize_index_columns(
-        columns, column_names + partitions, index, index_names)
+        columns, column_names, index, index_names)
 
     all_columns = index_names + column_names
 
@@ -768,7 +770,7 @@ def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
     if is_series:
         return df[df.columns[0]]
     else:
-        return df
+        return df[columns]
 
 
 _pyarrow_write_table_kwargs = {'row_group_size', 'version', 'use_dictionary',
