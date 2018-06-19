@@ -505,6 +505,10 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
         columns = list(columns)
 
     dataset = pq.ParquetDataset(paths, filesystem=get_pyarrow_filesystem(fs))
+    if dataset.partitions is not None:
+        partitions = list(dataset.partitions.partition_names)
+    else:
+        partitions = []
     schema = dataset.schema.to_arrow_schema()
     has_pandas_metadata = schema.metadata is not None and b'pandas' in schema.metadata
 
@@ -529,7 +533,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
                            for name in index_names]
 
     column_names, index_names, out_type = _normalize_index_columns(
-        columns, column_names, index, index_names)
+        columns, column_names + partitions, index, index_names)
 
     all_columns = index_names + column_names
 
