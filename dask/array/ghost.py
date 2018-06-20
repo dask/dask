@@ -49,17 +49,28 @@ def fractional_slice(task, axes):
         return (getitem, rounded, index)
 
 
-def expand_key(k, dims):
+def expand_key(k, dims, name=None):
     """ Get all neighboring keys around center
 
-    >>> expand_key(('x', 2, 3), dims=[5, 5])  # doctest: +NORMALIZE_WHITESPACE
-    [[('x', 1.1, 2.1), ('x', 1.1, 3), ('x', 1.1, 3.9)],
-     [('x',   2, 2.1), ('x',   2, 3), ('x',   2, 3.9)],
-     [('x', 2.9, 2.1), ('x', 2.9, 3), ('x', 2.9, 3.9)]]
+    Parameters
+    ----------
+    k: tuple
+        They key around which to generate new keys
+    dims: Sequence[int]
+        The number of chunks in each dimension
+    name: Option[str]
+        The name to include in the output keys, or none to include no name
 
-    >>> expand_key(('x', 0, 4), dims=[5, 5])  # doctest: +NORMALIZE_WHITESPACE
-    [[('x',   0, 3.1), ('x',   0,   4)],
-     [('x', 0.9, 3.1), ('x', 0.9,   4)]]
+    Examples
+    --------
+    >>> expand_key(('x', 2, 3), dims=[5, 5], name='y')  # doctest: +NORMALIZE_WHITESPACE
+    [[('y', 1.1, 2.1), ('y', 1.1, 3), ('y', 1.1, 3.9)],
+     [('y',   2, 2.1), ('y',   2, 3), ('y',   2, 3.9)],
+     [('y', 2.9, 2.1), ('y', 2.9, 3), ('y', 2.9, 3.9)]]
+
+    >>> expand_key(('x', 0, 4), dims=[5, 5], name='y')  # doctest: +NORMALIZE_WHITESPACE
+    [[('y',   0, 3.1), ('y',   0,   4)],
+     [('y', 0.9, 3.1), ('y', 0.9,   4)]]
     """
     def inds(i, ind):
         rv = []
@@ -79,8 +90,10 @@ def expand_key(k, dims):
             num += 1
         shape.append(num)
 
-    seq = list(product([k[0]], *[inds(i, ind)
-                                 for i, ind in enumerate(k[1:])]))
+    args = [inds(i, ind) for i, ind in enumerate(k[1:])]
+    if name is not None:
+        args = [[name]] + args
+    seq = list(product(*args))
     return reshapelist(shape, seq)
 
 
@@ -100,21 +113,23 @@ def ghost_internal(x, axes):
     """
     dims = list(map(len, x.chunks))
     expand_key2 = partial(expand_key, dims=dims)
+
+    # Make keys for each of the surrounding sub-arrays
     interior_keys = pipe(x.__dask_keys__(), flatten, map(expand_key2),
                          map(flatten), concat, list)
 
-    token = tokenize(x, axes)
-    name = 'ghost-' + token
+    name = 'ghost-' + tokenize(x, axes)
+    getitem_name = 'getitem-' + tokenize(x, axes)
     interior_slices = {}
     ghost_blocks = {}
     for k in interior_keys:
-        frac_slice = fractional_slice(k, axes)
-        if k != frac_slice:
-            interior_slices[k] = frac_slice
-
+        frac_slice = fractional_slice((x.name,) + k, axes)
+        if (x.name,) + k != frac_slice:
+            interior_slices[(getitem_name,) + k] = frac_slice
         else:
-            ghost_blocks[(name,) + k[1:]] = (concatenate3,
-                                             (concrete, expand_key2(k)))
+            interior_slices[(getitem_name,) + k] = (x.name,) + k
+            ghost_blocks[(name,) + k] = (concatenate3,
+                                         (concrete, expand_key2((None,) + k, name=getitem_name)))
 
     chunks = []
     for i, bds in enumerate(x.chunks):
