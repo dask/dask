@@ -30,7 +30,7 @@ except ImportError:
 from .. import config
 from ..base import tokenize, dont_optimize, is_dask_collection, DaskMethodsMixin
 from ..bytes import open_files
-from ..compatibility import apply, urlopen
+from ..compatibility import apply, urlopen, PY2
 from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict
 from ..delayed import Delayed
@@ -215,6 +215,17 @@ def finalize(results):
         results = toolz.concat(results)
     if isinstance(results, Iterator):
         results = list(results)
+
+    r = []
+    for i in results:
+        if isinstance(i, StopIteration):
+            if PY2:
+                raise StopIteration
+            else:
+                break
+        r.append(i)
+    results = r
+
     return results
 
 
@@ -1705,7 +1716,10 @@ def map_chunk(f, args, bag_kwargs, kwargs):
                 yield f(**k)
     else:
         for a in zip(*args):
-            yield f(*a)
+            try:
+                yield f(*a)
+            except StopIteration:
+                yield StopIteration()
 
     # Check that all iterators are fully exhausted
     if len(iters) > 1:
