@@ -52,6 +52,17 @@ def fractional_slice(task, axes):
 def expand_key(k, dims, name=None):
     """ Get all neighboring keys around center
 
+    Parameters
+    ----------
+    k: tuple
+        They key around which to generate new keys
+    dims: Sequence[int]
+        The number of chunks in each dimension
+    name: Option[str]
+        The name to include in the output keys, or none to include no name
+
+    Examples
+    --------
     >>> expand_key(('x', 2, 3), dims=[5, 5], name='y')  # doctest: +NORMALIZE_WHITESPACE
     [[('y', 1.1, 2.1), ('y', 1.1, 3), ('y', 1.1, 3.9)],
      [('y',   2, 2.1), ('y',   2, 3), ('y',   2, 3.9)],
@@ -102,6 +113,8 @@ def ghost_internal(x, axes):
     """
     dims = list(map(len, x.chunks))
     expand_key2 = partial(expand_key, dims=dims)
+
+    # Make keys for each of the surrounding sub-arrays
     interior_keys = pipe(x.__dask_keys__(), flatten, map(expand_key2),
                          map(flatten), concat, list)
 
