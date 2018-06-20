@@ -496,6 +496,25 @@ def issorted(seq):
     return np.all(seq[:-1] <= seq[1:])
 
 
+def slicing_plan(chunks, index):
+    index = np.asanyarray(index)
+    cum_chunks = np.cumsum(chunks)
+
+    chunk_locations = np.searchsorted(cum_chunks, index, side='right')
+    where = np.where(np.diff(chunk_locations))[0] + 1
+    where = np.concatenate([[0], where, [len(chunk_locations)]])
+
+    out = []
+    for i in range(len(where) - 1):
+        sub_index = index[where[i]:where[i + 1]]
+        chunk = chunk_locations[where[i]]
+        if chunk > 0:
+            sub_index = sub_index - cum_chunks[chunk - 1]
+        out.append((chunk, sub_index))
+
+    return out
+
+
 def take_sorted(outname, inname, blockdims, index, axis=0):
     """ Index array with sorted list index
 

@@ -10,7 +10,7 @@ import dask
 import dask.array as da
 from dask.array.slicing import (_sanitize_index_element, _slice_1d,
                                 new_blockdim, sanitize_index, slice_array,
-                                take, normalize_index)
+                                take, normalize_index, slicing_plan)
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -662,3 +662,41 @@ def test_normalize_index():
     (result,) = normalize_index([-5, -2, 1], (np.nan,))
     assert result.tolist() == [-5, -2, 1]
     assert normalize_index(slice(-5, -2), (np.nan,)) == (slice(-5, -2),)
+
+
+def test_take_semi_sorted():
+    x = da.ones(10, chunks=(5,))
+    index = np.arange(10) % 5
+
+    y = x[index]
+    assert y.chunks == ((5, 5),)
+
+
+@pytest.mark.parametrize('chunks,index,expected', [
+    (
+        (5, 5, 5),
+        np.arange(5, 15) % 10,
+        [(1, np.arange(5)),
+         (0, np.arange(5))]
+    ),
+    (
+        (5, 5, 5, 5),
+        np.arange(20) // 2,
+        [(0, np.arange(10) // 2),
+         (1, np.arange(10) // 2)]
+    ),
+    (
+        (10, 10),
+        [15, 2, 3, 15],
+        [(1, [5]),
+         (0, [2, 3]),
+         (1, [5])]
+    ),
+])
+def test_slicing_plan(chunks, index, expected):
+    plan = slicing_plan(chunks, index)
+    assert len(plan) == len(expected)
+    for (i, x), (j, y) in zip(plan, expected):
+        assert i == j
+        assert len(x) == len(y)
+        assert (x == y).all()
