@@ -14,7 +14,7 @@ from .routines import (take, choose, argwhere, where, coarsen, insert,
                        tensordot, transpose, dot, vdot, matmul,
                        apply_along_axis, apply_over_axes, result_type,
                        atleast_1d, atleast_2d, atleast_3d, piecewise, flip,
-                       flipud, fliplr, einsum)
+                       flipud, fliplr, einsum, average)
 from .reshape import reshape
 from .ufunc import (add, subtract, multiply, divide, logaddexp, logaddexp2,
         true_divide, floor_divide, negative, power, remainder, mod, conj, exp,
