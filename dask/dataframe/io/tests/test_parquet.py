@@ -1245,3 +1245,22 @@ def test_select_partitioned_column(tmpdir, engine):
 
     df_partitioned = dd.read_parquet(fn, engine=engine)
     df_partitioned[df_partitioned.fake_categorical1 == 'A'].compute()
+
+
+def test_arrow_partitioning(tmpdir):
+    # Issue #3518
+    pytest.importorskip('pyarrow')
+    path = str(tmpdir)
+    data = {
+        'p': np.repeat(np.arange(3), 2).astype(np.int8),
+        'b': np.repeat(-1, 6).astype(np.int16),
+        'c': np.repeat(-2, 6).astype(np.float32),
+        'd': np.repeat(-3, 6).astype(np.float64),
+    }
+    pdf = pd.DataFrame(data)
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    ddf.to_parquet(path, engine='pyarrow', partition_on='p')
+
+    ddf = dd.read_parquet(path, engine='pyarrow')
+
+    ddf.astype({'b': np.float32}).compute()
