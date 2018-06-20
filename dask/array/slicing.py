@@ -497,6 +497,20 @@ def issorted(seq):
 
 
 def slicing_plan(chunks, index):
+    """ Construct a plan to slice chunks with the given index
+
+    Parameters
+    ----------
+    chunks : Tuple[int]
+        One dimensions worth of chunking information
+    index : np.ndarray[int]
+        The index passed to slice on that dimension
+
+    Returns
+    -------
+    out : List[Tuple[int, np.ndarray]]
+        A list of chunk/sub-index pairs corresponding to each output chunk
+    """
     index = np.asanyarray(index)
     cum_chunks = np.cumsum(chunks)
 
@@ -515,62 +529,16 @@ def slicing_plan(chunks, index):
     return out
 
 
-def take_sorted(outname, inname, blockdims, index, axis=0):
-    """ Index array with sorted list index
-
-    Forms a dask for the following case
-
-        x[:, [1, 3, 5, 10], ...]
-
-    where the index, ``[1, 3, 5, 10]`` is sorted in non-decreasing order.
-
-    >>> blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
-    >>> blockdims
-    ((3, 1),)
-    >>> dsk  # doctest: +SKIP
-    {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
-     ('y', 1): (getitem, ('x', 2), ([7],))}
-
-    See Also
-    --------
-    take - calls this function
-    """
-    sizes = blockdims[axis]  # the blocksizes on the axis that we care about
-
-    index_lists = partition_by_size(sizes, index)
-    where_index = [i for i, il in enumerate(index_lists) if len(il)]
-    index_lists = [il for il in index_lists if len(il)]
-
-    dims = [range(len(bd)) for bd in blockdims]
-
-    indims = list(dims)
-    indims[axis] = list(range(len(where_index)))
-    keys = list(product([outname], *indims))
-
-    outdims = list(dims)
-    outdims[axis] = where_index
-    slices = [[colon] * len(bd) for bd in blockdims]
-    slices[axis] = index_lists
-    slices = list(product(*slices))
-    inkeys = list(product([inname], *outdims))
-    values = [(getitem, inkey, slc) for inkey, slc in zip(inkeys, slices)]
-
-    blockdims2 = list(blockdims)
-    blockdims2[axis] = tuple(map(len, index_lists))
-
-    return tuple(blockdims2), dict(zip(keys, values))
-
-
-def take(outname, inname, blockdims, index, axis=0):
+def take(outname, inname, chunks, index, axis=0):
     """ Index array with an iterable of index
 
     Handles a single index by a single list
 
     Mimics ``np.take``
 
-    >>> blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
-    >>> blockdims
-    ((4,),)
+    >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
+    >>> chunks
+    ((2, 1, 1),)
     >>> dsk  # doctest: +SKIP
     {('y', 0): (getitem, (np.concatenate, [(getitem, ('x', 0), ([1, 3, 5],)),
                                            (getitem, ('x', 2), ([7],))],
@@ -579,45 +547,36 @@ def take(outname, inname, blockdims, index, axis=0):
 
     When list is sorted we retain original block structure
 
-    >>> blockdims, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
-    >>> blockdims
+    >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
+    >>> chunks
     ((3, 1),)
     >>> dsk  # doctest: +SKIP
     {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
      ('y', 2): (getitem, ('x', 2), ([7],))}
     """
+    plan = slicing_plan(chunks[axis], index)
 
-    index = np.asanyarray(index)
+    index_lists = [idx for _, idx in plan]
+    where_index = [i for i, _ in plan]
 
-    if issorted(index):
-        return take_sorted(outname, inname, blockdims, index, axis)
+    dims = [range(len(bd)) for bd in chunks]
 
-    if isinstance(index, np.ndarray) and index.ndim > 0:
-        sorted_idx = np.sort(index)
-    else:
-        sorted_idx = index
+    indims = list(dims)
+    indims[axis] = list(range(len(where_index)))
+    keys = list(product([outname], *indims))
 
-    n = len(blockdims)
-    sizes = blockdims[axis]  # the blocksizes on the axis that we care about
+    outdims = list(dims)
+    outdims[axis] = where_index
+    slices = [[colon] * len(bd) for bd in chunks]
+    slices[axis] = index_lists
+    slices = list(product(*slices))
+    inkeys = list(product([inname], *outdims))
+    values = [(getitem, inkey, slc) for inkey, slc in zip(inkeys, slices)]
 
-    index_lists = partition_by_size(sizes, sorted_idx)
-
-    dims = [[0] if axis == i else list(range(len(bd)))
-            for i, bd in enumerate(blockdims)]
-    keys = list(product([outname], *dims))
-
-    rev_index = np.searchsorted(sorted_idx, index)
-    vals = [(getitem, (np.concatenate,
-                       [(getitem, ((inname, ) + d[:axis] + (i, ) + d[axis + 1:]),
-                         ((colon, ) * axis + (IL, ) + (colon, ) * (n - axis - 1)))
-                        for i, IL in enumerate(index_lists) if len(IL)], axis),
-             ((colon, ) * axis + (rev_index, ) + (colon, ) * (n - axis - 1)))
-            for d in product(*dims)]
-
-    blockdims2 = list(blockdims)
-    blockdims2[axis] = (len(index), )
-
-    return tuple(blockdims2), dict(zip(keys, vals))
+    chunks2 = list(chunks)
+    chunks2[axis] = tuple(map(len, index_lists))
+    dsk = dict(zip(keys, values))
+    return tuple(chunks2), dsk
 
 
 def posify_index(shape, ind):
