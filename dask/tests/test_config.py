@@ -3,6 +3,7 @@ import os
 
 import pytest
 
+import dask.config
 from dask.config import (update, merge, collect, collect_yaml, collect_env,
                          get, ensure_file, set, config, rename,
                          update_defaults, refresh)
@@ -142,47 +143,45 @@ def test_get():
         get('y.b', config=d)
 
 
-def test_ensure_file():
+def test_ensure_file(tmpdir):
     a = {'x': 1, 'y': {'a': 1}}
     b = {'x': 123}
 
-    with tmpfile(extension='yaml') as source:
-        with tmpfile(extension='yaml') as destination:
-            with open(source, 'w') as f:
-                yaml.dump(a, f)
+    source = os.path.join(str(tmpdir), 'source.yaml')
+    dest = os.path.join(str(tmpdir), 'dest')
+    destination = os.path.join(dest, 'source.yaml')
 
-            ensure_file(source=source, destination=destination, comment=False)
+    with open(source, 'w') as f:
+        yaml.dump(a, f)
 
-            with open(destination) as f:
-                result = yaml.load(f)
+    ensure_file(source=source, destination=dest, comment=False)
 
-            with open(source) as src:
-                with open(destination) as dst:
-                    assert src.read() == dst.read()
+    with open(destination) as f:
+        result = yaml.load(f)
+    assert result == a
 
-            assert result == a
+    # don't overwrite old config files
+    with open(source, 'w') as f:
+        yaml.dump(b, f)
 
-            # don't overwrite old config files
-            with open(source, 'w') as f:
-                yaml.dump(b, f)
-            ensure_file(source=source, destination=destination, comment=False)
-            with open(destination) as f:
-                result = yaml.load(f)
+    ensure_file(source=source, destination=dest, comment=False)
 
-            assert result == a
+    with open(destination) as f:
+        result = yaml.load(f)
+    assert result == a
 
-            os.remove(destination)
+    os.remove(destination)
 
-            # Write again, now with comments
-            ensure_file(source=source, destination=destination, comment=True)
-            with open(destination) as f:
-                text = f.read()
-            assert '123' in text
+    # Write again, now with comments
+    ensure_file(source=source, destination=dest, comment=True)
 
-            with open(destination) as f:
-                result = yaml.load(f)
+    with open(destination) as f:
+        text = f.read()
+    assert '123' in text
 
-            assert not result
+    with open(destination) as f:
+        result = yaml.load(f)
+    assert not result
 
 
 def test_set():
@@ -206,19 +205,41 @@ def test_set():
 
 
 @pytest.mark.parametrize('mkdir', [True, False])
-def test_ensure_file_directory(mkdir):
+def test_ensure_file_directory(mkdir, tmpdir):
     a = {'x': 1, 'y': {'a': 1}}
-    with tmpfile(extension='yaml') as source:
-        with tmpfile() as destination:
-            if mkdir:
-                os.mkdir(destination)
-            with open(source, 'w') as f:
-                yaml.dump(a, f)
 
-            ensure_file(source=source, destination=destination)
-            assert os.path.isdir(destination)
-            [fn] = os.listdir(destination)
-            assert os.path.split(fn)[1] == os.path.split(source)[1]
+    source = os.path.join(str(tmpdir), 'source.yaml')
+    dest = os.path.join(str(tmpdir), 'dest')
+
+    with open(source, 'w') as f:
+        yaml.dump(a, f)
+
+    if mkdir:
+        os.mkdir(dest)
+
+    ensure_file(source=source, destination=dest)
+
+    assert os.path.isdir(dest)
+    assert os.path.exists(os.path.join(dest, 'source.yaml'))
+
+
+def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmpdir):
+    a = {'x': 1, 'y': {'a': 1}}
+    source = os.path.join(str(tmpdir), 'source.yaml')
+    with open(source, 'w') as f:
+        yaml.dump(a, f)
+
+    destination = os.path.join(str(tmpdir), 'dask')
+    PATH = dask.config.PATH
+    try:
+        dask.config.PATH = destination
+        ensure_file(source=source)
+    finally:
+        dask.config.PATH = PATH
+
+    assert os.path.isdir(destination)
+    [fn] = os.listdir(destination)
+    assert os.path.split(fn)[1] == os.path.split(source)[1]
 
 
 def test_rename():

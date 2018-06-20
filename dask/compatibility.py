@@ -21,6 +21,7 @@ if PY3:
     from queue import Queue, Empty
     from itertools import zip_longest
     from io import StringIO, BytesIO
+    from os import makedirs
     from bz2 import BZ2File
     from gzip import (GzipFile, compress as gzip_compress,
             decompress as gzip_decompress)
@@ -73,6 +74,7 @@ else:
     from itertools import izip_longest as zip_longest, izip as zip
     from StringIO import StringIO
     from io import BytesIO, BufferedIOBase
+    import os
     import bz2
     import gzip
     from urllib2 import urlopen
@@ -87,6 +89,13 @@ else:
     operator_div = operator.div
     FileNotFoundError = IOError
     FileExistsError = OSError
+
+    def makedirs(name, mode=0o777, exist_ok=True):
+        try:
+            os.makedirs(name, mode=mode)
+        except OSError:
+            if not exist_ok or not os.path.isdir(name):
+                raise
 
     def _make_reraise():
         _code = ("def reraise(exc, tb=None):"
