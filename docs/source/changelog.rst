@@ -7,7 +7,9 @@ Changelog
 Array
 +++++
 
--
+- ``from_array`` now supports scalar types and nested lists/tuples in input, just like all numpy
+  functions do. It also produces a simpler graph when the input is a plain ndarray
+  (:pr:`#3556`) `Guido Imperiale`_
 
 DataFrame
 +++++++++
