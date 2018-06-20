@@ -459,7 +459,7 @@ def gradient(f, *varargs, **kwargs):
         f.map_overlap(
             _gradient_kernel,
             dtype=f.dtype,
-            depth={j: 1 if j == ax else 0 for j in range(f.ndim)},
+            depth=1,
             boundary="none",
             grad_varargs=(varargs[i],),
             grad_kwargs=merge(kwargs, {"axis": ax}),
