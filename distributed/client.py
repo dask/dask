@@ -1391,6 +1391,7 @@ class Client(Node):
         futures2, keys = unpack_remotedata(futures, byte_keys=True)
         keys = [tokey(key) for key in keys]
         bad_data = dict()
+        data = {}
 
         if direct is None:
             try:
@@ -1444,8 +1445,6 @@ class Client(Node):
                         raise ValueError("Bad value, `errors=%s`" % errors)
 
             keys = [k for k in keys if k not in bad_keys]
-
-            data = {}
 
             if local_worker:  # look inside local worker
                 data.update({k: local_worker.data[k]
