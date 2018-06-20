@@ -1514,5 +1514,5 @@ def test_average_raises():
     with pytest.raises(TypeError):
         da.average(d_a, weights=[1, 2, 3])
 
-    with pytest.raises(ZeroDivisionError):
-        da.average(d_a, weights=da.zeros_like(d_a))
+    with pytest.warns(RuntimeWarning):
+        da.average(d_a, weights=da.zeros_like(d_a)).compute()

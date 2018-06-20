@@ -1266,10 +1266,6 @@ def average(a, axis=None, weights=None, returned=False):
             wgt = wgt.swapaxes(-1, axis)
 
         scl = wgt.sum(axis=axis, dtype=result_dtype)
-        if (scl == 0.0).any():
-            raise ZeroDivisionError(
-                "Weights sum to zero, can't be normalized")
-
         avg = multiply(a, wgt, dtype=result_dtype).sum(axis) / scl
 
     if returned:
