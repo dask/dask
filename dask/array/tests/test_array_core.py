@@ -1991,39 +1991,91 @@ class MyArray(object):
         self.x = x
         self.dtype = x.dtype
         self.shape = x.shape
+        self.ndim = len(x.shape)
 
     def __getitem__(self, i):
         return self.x[i]
 
 
-def test_from_array_tasks_always_call_getter():
-    x1 = np.arange(25).reshape((5, 5))
-    x2 = np.array([[1]])
-    x3 = np.array(1)[()]
-
-    dx1a = da.from_array(MyArray(x1), chunks=(5, 5), asarray=False)
-    dx1b = da.from_array(MyArray(x1), chunks=x1.shape, asarray=False)
-    dx2 = da.from_array(MyArray(x2), chunks=1, asarray=False)
-    dx3 = da.from_array(MyArray(x3), chunks=1, asarray=False)
-
-    for res, sol in [(dx1a, x1), (dx1b, x1), (dx2, x2), (dx3, x3)]:
-        assert_eq(res, sol)
+@pytest.mark.parametrize('x,chunks', [
+    (np.arange(25).reshape((5, 5)), (5, 5)),
+    (np.arange(25).reshape((5, 5)), -1),
+    (np.array([[1]]), 1),
+    (np.array(1), 1),
+])
+def test_from_array_tasks_always_call_getter(x, chunks):
+    dx = da.from_array(MyArray(x), chunks=chunks, asarray=False)
+    assert_eq(x, dx)
 
 
-def test_from_array_no_asarray():
+def test_from_array_ndarray_onechunk():
+    """ndarray with a single chunk produces a minimal single key dict
+    """
+    x = np.array([[1, 2], [3, 4]])
+    dx = da.from_array(x, chunks=-1)
+    assert_eq(x, dx)
+    assert len(dx.dask) == 1
+    assert dx.dask[dx.name, 0, 0] is x
 
-    def assert_chunks_are_of_type(x, cls):
+
+def test_from_array_ndarray_getitem():
+    """For ndarray, don't use getter / getter_nofancy; use the cleaner
+    operator.getitem"""
+    x = np.array([[1, 2], [3, 4]])
+    dx = da.from_array(x, chunks=(1, 2))
+    assert_eq(x, dx)
+    assert dx.dask[dx.name, 0, 0][0] == operator.getitem
+
+
+@pytest.mark.parametrize(
+    'x', [[1, 2], (1, 2), memoryview(b'abc')] +
+    ([buffer(b'abc')] if sys.version_info[0] == 2 else []))  # noqa: F821
+def test_from_array_list(x):
+    """Lists, tuples, and memoryviews are automatically converted to ndarray
+    """
+    dx = da.from_array(x, chunks=-1)
+    assert_eq(np.array(x), dx)
+    assert isinstance(dx.dask[dx.name, 0], np.ndarray)
+
+    dx = da.from_array(x, chunks=1)
+    assert_eq(np.array(x), dx)
+    assert dx.dask[dx.name, 0][0] == operator.getitem
+    assert isinstance(dx.dask[dx.name.replace('array', 'array-original')],
+                      np.ndarray)
+
+
+@pytest.mark.parametrize(
+    'type_', [t for t in np.ScalarType if t not in [memoryview] +
+              ([buffer] if sys.version_info[0] == 2 else [])])  # noqa: F821
+def test_from_array_scalar(type_):
+    """Python and numpy scalars are automatically converted to ndarray
+    """
+    if type_ == np.datetime64:
+        x = np.datetime64('2000-01-01')
+    else:
+        x = type_(1)
+
+    dx = da.from_array(x, chunks=-1)
+    assert_eq(np.array(x), dx)
+    assert isinstance(dx.dask[dx.name, ], np.ndarray)
+
+
+@pytest.mark.parametrize('asarray,cls', [
+    (True, np.ndarray),
+    (False, np.matrix),
+])
+def test_from_array_no_asarray(asarray, cls):
+
+    def assert_chunks_are_of_type(x):
         chunks = compute_as_if_collection(Array, x.dask, x.__dask_keys__())
         for c in concat(chunks):
             assert type(c) is cls
 
     x = np.matrix(np.arange(100).reshape((10, 10)))
-
-    for asarray, cls in [(True, np.ndarray), (False, np.matrix)]:
-        dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
-        assert_chunks_are_of_type(dx, cls)
-        assert_chunks_are_of_type(dx[0:5], cls)
-        assert_chunks_are_of_type(dx[0:5][:, 0], cls)
+    dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
+    assert_chunks_are_of_type(dx)
+    assert_chunks_are_of_type(dx[0:5])
+    assert_chunks_are_of_type(dx[0:5][:, 0])
 
 
 def test_from_array_getitem():
