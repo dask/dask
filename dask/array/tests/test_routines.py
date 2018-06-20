@@ -438,16 +438,21 @@ def test_gradient(shape, varargs, axis, edge_order):
     a = np.random.randint(0, 10, shape)
     d_a = da.from_array(a, chunks=(len(shape) * (5,)))
 
-    r = np.gradient(a, *varargs, axis=axis, edge_order=edge_order)
-    r_a = da.gradient(d_a, *varargs, axis=axis, edge_order=edge_order)
+    r_a = np.gradient(a, *varargs, axis=axis, edge_order=edge_order)
+    r_d_a = da.gradient(d_a, *varargs, axis=axis, edge_order=edge_order)
 
     if isinstance(axis, Number):
-        assert_eq(r, r_a)
+        assert_eq(r_d_a, r_a)
     else:
-        assert len(r) == len(r_a)
+        assert len(r_d_a) == len(r_a)
 
-        for e_r, e_r_a in zip(r, r_a):
-            assert_eq(e_r, e_r_a)
+        for e_r_d_a, e_r_a in zip(r_d_a, r_a):
+            assert_eq(e_r_d_a, e_r_a)
+
+        assert_eq(
+            da.sqrt(sum(map(da.square, r_d_a))),
+            np.sqrt(sum(map(np.square, r_a)))
+        )
 
 
 def test_bincount():
