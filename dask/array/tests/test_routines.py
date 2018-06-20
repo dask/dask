@@ -1480,3 +1480,39 @@ def test_einsum_broadcasting_contraction3():
     np_res = np.einsum('ajk,kbl,jl,ab->ab', a, b, c, d)
     da_res = da.einsum('ajk,kbl,jl,ab->ab', d_a, d_b, d_c, d_d)
     assert_eq(np_res, da_res)
+
+
+@pytest.mark.parametrize('a', [np.arange(11),
+                               np.arange(6).reshape((3,2))
+                               ])
+@pytest.mark.parametrize('returned', [True, False])
+def test_average(a, returned):
+    d_a = da.from_array(a, chunks=2)
+
+    np_avg = np.average(a, returned=returned)
+    da_avg = da.average(d_a, returned=returned)
+
+    assert_eq(np_avg, da_avg)
+
+
+def test_average_weights():
+    a = np.arange(6).reshape((3,2))
+    d_a = da.from_array(a, chunks=2)
+
+    weights = np.array([0.25, 0.75])
+    d_weights = da.from_array(weights, chunks=2)
+
+    np_avg = np.average(a, weights=weights, axis=1)
+    da_avg = da.average(d_a, weights=d_weights, axis=1)
+
+    assert_eq(np_avg, da_avg)
+
+
+def test_average_raises():
+    d_a = da.arange(11, chunks=2)
+
+    with pytest.raises(TypeError):
+        da.average(d_a, weights=[1, 2, 3])
+
+    with pytest.warns(RuntimeWarning):
+        da.average(d_a, weights=da.zeros_like(d_a)).compute()
