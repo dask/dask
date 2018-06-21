@@ -108,16 +108,6 @@ def order(dsk, dependencies=None):
     result = dict()
     seen = set()  # tasks that should not be added again to the stack
     i = 0
-    from pprint import pprint  # noqa
-
-    # print("Starting ordering", end='\n\n')
-    # print('Setup')
-
-    # print("total dependencies")
-    # pprint(total_dependencies)
-
-    # print("total dependents")
-    # pprint(total_dependents)
 
     stack = [k for k, v in dependents.items() if not v]
     if len(stack) < 10000:
@@ -150,16 +140,9 @@ def order(dsk, dependencies=None):
         deps = [d for d in dependents[item]
                 if d not in result and not (d in seen and waiting[d])]
         if len(deps) < 1000:
-            if item == 'ab':
-                # import pdb; pdb.set_trace()
-                pass
             deps = sorted(deps, key=dependents_key, reverse=True)
 
         stack.extend(deps)
-
-    # print("#" * 30, 'result', '#' * 30)
-    # pprint(result)
-    # print("#" * 80)
 
     return result
 
