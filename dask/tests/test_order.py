@@ -412,22 +412,7 @@ def test_string_ordering_dependents():
 
 
 def test_prefer_short_narrow(abcde):
-    """
-    From https://github.com/dask/dask-ml/issues/206#issuecomment-395869929
-
-    Two cases, one where chunks of an array or indepented, and one where the
-    chunks of an array of a shared source. We handled the independent one
-    "well" earlier.
-
-    Good:
-                c2
-               / | \
-              /  |  \
-            c1   a1  b1
-           / | \
-          /  |  \
-        c0  a0   b0
-    """
+    # See test_prefer_short_ancestor for a fail case.
     a, b, c, _, _ = abcde
     dsk = {
         (a, 0): 0,
@@ -444,28 +429,42 @@ def test_prefer_short_narrow(abcde):
     assert o[(c, 1)] < o[(c, 2)]
 
 
-def test_prefer_short_fan_out(abcde):
+def test_prefer_short_ancestor(abcde):
     """
     From https://github.com/dask/dask-ml/issues/206#issuecomment-395869929
 
     Two cases, one where chunks of an array or indepented, and one where the
     chunks of an array of a shared source. We handled the independent one
     "well" earlier.
+    Good:
+
+                    c2
+                   / \ \
+                  /   \ \
+                c1     \ \
+              / | \     \ \
+             c  a0 b0   a1 b1
 
     Bad:
-                c2
-               / | \
-              /  |  \
-            c1   a1  b1
-           / | \   \   \
-          /  |  \   \   \
-        c0  a0   b0  \   |
-             |    |   |  |
-              \   |  /  /
-               \  | /  /
-                  Xy
 
-    We would like to choose X0 and b1 before X1.
+                    c2
+                   / \ \
+                  /   \ \
+                c1     \ \
+              / | \     \ \
+             c  a0 b0   a1 b1
+                   \ \   / /
+                    \ \ / /
+                      a-b
+
+
+    The difference is that all the `a` and `b` tasks now have a common
+    ancestor.
+
+    We would like to choose c1 *before* a1, and b1 because
+
+    * we can release a0 and b0 once c1 is done
+    * we don't need a1 and b1 to compute c1.
     """
     a, b, c, _, _ = abcde
     from dask import config
