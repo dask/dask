@@ -195,13 +195,31 @@ def test_set():
 
     with set({'abc': 123}):
         assert config['abc'] == 123
+    assert 'abc' not in config
 
     with set({'abc.x': 1, 'abc.y': 2, 'abc.z.a': 3}):
         assert config['abc'] == {'x': 1, 'y': 2, 'z': {'a': 3}}
+    assert 'abc' not in config
 
     d = {}
     set({'abc.x': 123}, config=d)
     assert d['abc']['x'] == 123
+
+
+def test_set_nested():
+    with set({'abc': {'x': 123}}):
+        assert config['abc'] == {'x': 123}
+        with set({'abc.y': 456}):
+            assert config['abc'] == {'x': 123, 'y': 456}
+        assert config['abc'] == {'x': 123}
+    assert 'abc' not in config
+
+
+def test_set_hard_to_copyables():
+    import threading
+    with set(x=threading.Lock()):
+        with set(y=1):
+            pass
 
 
 @pytest.mark.parametrize('mkdir', [True, False])
