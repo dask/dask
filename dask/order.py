@@ -60,10 +60,9 @@ from __future__ import absolute_import, division, print_function
 
 from .core import get_dependencies, reverse_dict, get_deps  # noqa: F401
 from .utils_test import add, inc  # noqa: F401
-from . import config
 
 
-def order(dsk, dependencies=None, reverse=None):
+def order(dsk, dependencies=None):
     """ Order nodes in dask graph
 
     This produces an ordering over our tasks that we use to break ties when
@@ -86,9 +85,6 @@ def order(dsk, dependencies=None, reverse=None):
     >>> order(dsk)
     {'a': 0, 'c': 1, 'b': 2, 'd': 3}
     """
-    if reverse is None:
-        reverse = config.get("order.reverse", default=True)
-
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
 
@@ -98,7 +94,7 @@ def order(dsk, dependencies=None, reverse=None):
     dependents = reverse_dict(dependencies)
 
     total_dependencies = ndependencies(dependencies, dependents)
-    total_dependents = ndependents(dependencies, dependents)
+    total_dependents = partial_ndependents(dependencies, dependents)
 
     waiting = {k: set(v) for k, v in dependencies.items()}
 
@@ -154,7 +150,10 @@ def order(dsk, dependencies=None, reverse=None):
         deps = [d for d in dependents[item]
                 if d not in result and not (d in seen and waiting[d])]
         if len(deps) < 1000:
-            deps = sorted(deps, key=dependents_key, reverse=reverse)
+            if item == 'ab':
+                # import pdb; pdb.set_trace()
+                pass
+            deps = sorted(deps, key=dependents_key, reverse=True)
 
         stack.extend(deps)
 
@@ -183,6 +182,21 @@ def ndependents(dependencies, dependents):
     result = dict()
     num_needed = {k: len(v) for k, v in dependents.items()}
     current = {k for k, v in num_needed.items() if v == 0}
+    while current:
+        key = current.pop()
+        result[key] = 1 + sum(result[parent] for parent in dependents[key])
+        for child in dependencies[key]:
+            num_needed[child] -= 1
+            if num_needed[child] == 0:
+                current.add(child)
+    return result
+
+
+def partial_ndependents(dependencies, dependents):
+    result = dict()
+    num_needed = {k: len(v) for k, v in dependents.items()}
+    current = {k for k, v in num_needed.items() if v == 0}
+    # import pdb; pdb.set_trace()
     while current:
         key = current.pop()
         result[key] = 1 + sum(result[parent] for parent in dependents[key])
