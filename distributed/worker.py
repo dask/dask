@@ -25,7 +25,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.locks import Event
 
-from . import profile
+from . import profile, comm
 from .batched import BatchedSend
 from .comm import get_address_host, get_local_address_for, connect
 from .comm.utils import offload
@@ -2597,10 +2597,24 @@ def get_worker():
         raise ValueError("No workers found")
 
 
-def get_client(address=None, timeout=3):
-    """ Get a client while within a task
+def get_client(address=None, timeout=3, resolve_address=True):
+    """Get a client while within a task.
 
     This client connects to the same scheduler to which the worker is connected
+
+    Parameters
+    ----------
+    address : str, optional
+        The address of the scheduler to connect to. Defaults to the scheduler
+        the worker is connected to.
+    timeout : int, default 3
+        Timeout (in seconds) for getting the Client
+    resolve_address : bool, default True
+        Whether to resolve `address` to its canonical form.
+
+    Returns
+    -------
+    Client
 
     Examples
     --------
@@ -2620,6 +2634,8 @@ def get_client(address=None, timeout=3):
     worker_client
     secede
     """
+    if address and resolve_address:
+        address = comm.resolve_address(address)
     try:
         worker = get_worker()
     except ValueError:  # could not find worker
