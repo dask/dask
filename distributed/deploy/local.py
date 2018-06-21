@@ -47,6 +47,9 @@ class LocalCluster(Cluster):
         to choose a random port, ``None`` to disable it, or an
         :samp:`({ip}:{port})` tuple to listen on a different IP address than
         the scheduler.
+    asynchronous: bool (False by default)
+        Set to True if using this cluster within async/await functions or within
+        Tornado gen.coroutines.  This should remain False for normal use.
     kwargs: dict
         Extra worker arguments, will be passed to the Worker constructor.
     service_kwargs: Dict[str, Dict]
