@@ -436,6 +436,7 @@ def test_prefer_short_ancestor(abcde):
     Two cases, one where chunks of an array or indepented, and one where the
     chunks of an array of a shared source. We handled the independent one
     "well" earlier.
+
     Good:
 
                     c2
@@ -443,7 +444,7 @@ def test_prefer_short_ancestor(abcde):
                   /   \ \
                 c1     \ \
               / | \     \ \
-             c  a0 b0   a1 b1
+            c0  a0 b0   a1 b1
 
     Bad:
 
@@ -452,7 +453,7 @@ def test_prefer_short_ancestor(abcde):
                   /   \ \
                 c1     \ \
               / | \     \ \
-             c  a0 b0   a1 b1
+            c0  a0 b0   a1 b1
                    \ \   / /
                     \ \ / /
                       a-b
@@ -480,8 +481,7 @@ def test_prefer_short_ancestor(abcde):
         (c, 2): (f, (c, 1), (a, 1), (b, 1)),
     }
 
-    with config.set(**{'order.reverse': False}):
-        o = order(dsk)
+    o = order(dsk)
 
     assert o[(b, 0)] < o[(b, 1)]
     assert o[(b, 0)] < o[(c, 2)]
