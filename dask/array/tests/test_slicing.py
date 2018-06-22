@@ -470,6 +470,7 @@ def test_slicing_consistent_names():
     assert same_keys(a[-11:11], a[:])
     assert same_keys(a[-11:-9], a[:1])
     assert same_keys(a[-1], a[9])
+    assert same_keys(a[0::-1], a[0:-11:-1])
 
 
 def test_slicing_consistent_names_after_normalization():
