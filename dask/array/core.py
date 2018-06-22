@@ -2540,7 +2540,7 @@ def unify_chunks(*args, **kwargs):
 
     if warn and nparts and nparts >= max_parts * 10:
         warnings.warn("Increasing number of chunks by factor of %d" %
-                      (nparts / max_parts), PerformanceWarning)
+                      (nparts / max_parts), PerformanceWarning, stacklevel=3)
 
     arrays = []
     for a, i in arginds:

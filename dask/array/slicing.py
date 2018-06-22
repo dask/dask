@@ -560,7 +560,8 @@ def take(outname, inname, chunks, index, axis=0):
         factor = math.ceil(len(plan) / len(chunks[axis]))
         from .core import PerformanceWarning
         warnings.warn("Slicing with an out-of-order index is generating %d "
-                      "times more chunks" % factor, PerformanceWarning)
+                      "times more chunks" % factor, PerformanceWarning,
+                      stacklevel=6)
 
     index_lists = [idx for _, idx in plan]
     where_index = [i for i, _ in plan]
