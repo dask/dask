@@ -49,7 +49,7 @@ def fractional_slice(task, axes):
         return (getitem, rounded, index)
 
 
-def expand_key(k, dims, name=None):
+def expand_key(k, dims, name=None, axes=None):
     """ Get all neighboring keys around center
 
     Parameters
@@ -60,15 +60,17 @@ def expand_key(k, dims, name=None):
         The number of chunks in each dimension
     name: Option[str]
         The name to include in the output keys, or none to include no name
+    axes: Dict[int, int]
+        The axes active in the expansion.  We don't expand on non-active axes
 
     Examples
     --------
-    >>> expand_key(('x', 2, 3), dims=[5, 5], name='y')  # doctest: +NORMALIZE_WHITESPACE
+    >>> expand_key(('x', 2, 3), dims=[5, 5], name='y', axes={0: 1, 1: 1})  # doctest: +NORMALIZE_WHITESPACE
     [[('y', 1.1, 2.1), ('y', 1.1, 3), ('y', 1.1, 3.9)],
      [('y',   2, 2.1), ('y',   2, 3), ('y',   2, 3.9)],
      [('y', 2.9, 2.1), ('y', 2.9, 3), ('y', 2.9, 3.9)]]
 
-    >>> expand_key(('x', 0, 4), dims=[5, 5], name='y')  # doctest: +NORMALIZE_WHITESPACE
+    >>> expand_key(('x', 0, 4), dims=[5, 5], name='y', axes={0: 1, 1: 1})  # doctest: +NORMALIZE_WHITESPACE
     [[('y',   0, 3.1), ('y',   0,   4)],
      [('y', 0.9, 3.1), ('y', 0.9,   4)]]
     """
@@ -90,11 +92,13 @@ def expand_key(k, dims, name=None):
             num += 1
         shape.append(num)
 
-    args = [inds(i, ind) for i, ind in enumerate(k[1:])]
+    args = [inds(i, ind) if axes.get(i, 0) else [ind] for i, ind in enumerate(k[1:])]
     if name is not None:
         args = [[name]] + args
     seq = list(product(*args))
-    return reshapelist(shape, seq)
+    shape2 = [d if axes.get(i, 0) else 1 for i, d in enumerate(shape)]
+    result = reshapelist(shape2, seq)
+    return result
 
 
 def ghost_internal(x, axes):
@@ -112,7 +116,7 @@ def ghost_internal(x, axes):
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
     """
     dims = list(map(len, x.chunks))
-    expand_key2 = partial(expand_key, dims=dims)
+    expand_key2 = partial(expand_key, dims=dims, axes=axes)
 
     # Make keys for each of the surrounding sub-arrays
     interior_keys = pipe(x.__dask_keys__(), flatten, map(expand_key2),
