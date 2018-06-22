@@ -4,6 +4,7 @@ from itertools import product
 import math
 from numbers import Integral, Number
 from operator import getitem, itemgetter
+import warnings
 
 import numpy as np
 from toolz import memoize, merge, pluck, concat
@@ -555,6 +556,10 @@ def take(outname, inname, chunks, index, axis=0):
      ('y', 2): (getitem, ('x', 2), ([7],))}
     """
     plan = slicing_plan(chunks[axis], index)
+    if len(plan) >= len(chunks[axis]) * 10:
+        factor = math.ceil(len(plan) / len(chunks[axis]))
+        warnings.warn("Slicing with an out-of-order index is generating %d "
+                      "times more chunks" % factor)
 
     index_lists = [idx for _, idx in plan]
     where_index = [i for i, _ in plan]
