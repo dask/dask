@@ -558,8 +558,9 @@ def take(outname, inname, chunks, index, axis=0):
     plan = slicing_plan(chunks[axis], index)
     if len(plan) >= len(chunks[axis]) * 10:
         factor = math.ceil(len(plan) / len(chunks[axis]))
+        from .core import PerformanceWarning
         warnings.warn("Slicing with an out-of-order index is generating %d "
-                      "times more chunks" % factor)
+                      "times more chunks" % factor, PerformanceWarning)
 
     index_lists = [idx for _, idx in plan]
     where_index = [i for i, _ in plan]
