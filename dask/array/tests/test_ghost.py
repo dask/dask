@@ -383,3 +383,35 @@ def test_no_shared_keys_with_different_depths():
 
     assert set(r[0].dask) & set(r[1].dask) == set(a.dask)
     da.compute(*r, scheduler='single-threaded')
+
+
+def test_overlap_few_dimensions_small():
+    x = da.ones((20, 20), chunks=(10, 10))
+
+    a = x.map_overlap(lambda x: x, depth={0: 1})
+    assert_eq(x, a)
+    assert any(isinstance(k[1], float) for k in a.dask)
+    assert all(isinstance(k[2], int) for k in a.dask)
+
+    b = x.map_overlap(lambda x: x, depth={1: 1})
+    assert_eq(x, b)
+    assert all(isinstance(k[1], int) for k in b.dask)
+    assert any(isinstance(k[2], float) for k in b.dask)
+
+    c = x.map_overlap(lambda x: x, depth={0: 1, 1: 1})
+    assert_eq(x, c)
+    assert any(isinstance(k[1], float) for k in c.dask)
+    assert any(isinstance(k[2], float) for k in c.dask)
+
+
+def test_overlap_few_dimensions():
+    x = da.ones((100, 100), chunks=(10, 10))
+
+    a = x.map_overlap(lambda x: x, depth={0: 1})
+    b = x.map_overlap(lambda x: x, depth={1: 1})
+    c = x.map_overlap(lambda x: x, depth={0: 1, 1: 1})
+
+    assert len(a.dask) == len(b.dask)
+    assert len(a.dask) < len(c.dask)
+
+    assert len(c.dask) < 10 * len(a.dask)
