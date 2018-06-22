@@ -283,6 +283,16 @@ def matmul(a, b):
     return out
 
 
+@wraps(np.outer)
+def outer(a, b):
+    a = a.flatten()
+    b = b.flatten()
+
+    dtype = np.outer(a.dtype.type(), b.dtype.type()).dtype
+
+    return atop(np.outer, "ij", a, "i", b, "j", dtype=dtype)
+
+
 def _inner_apply_along_axis(arr,
                             func1d,
                             func1d_axis,
