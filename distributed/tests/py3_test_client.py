@@ -3,8 +3,9 @@ from time import sleep
 import pytest
 from tornado import gen
 
-from distributed.utils_test import div, gen_cluster, inc, loop
+from distributed.utils_test import div, gen_cluster, inc, loop, cluster
 from distributed import as_completed, Client, Lock
+from distributed.utils import sync
 
 
 @gen_cluster(client=True)
@@ -111,3 +112,14 @@ def test_locks(loop):
                 assert result is False
 
     loop.run_sync(f)
+
+
+def test_client_sync_with_async_def(loop):
+    async def ff():
+        await gen.sleep(0.01)
+        return 1
+
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            assert sync(loop, ff) == 1
+            assert c.sync(ff) == 1

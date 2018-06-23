@@ -59,12 +59,6 @@ def test_All(loop):
     loop.run_sync(f)
 
 
-def test_sync(loop_in_thread):
-    loop = loop_in_thread
-    result = sync(loop, inc, 1)
-    assert result == 2
-
-
 def test_sync_error(loop_in_thread):
     loop = loop_in_thread
     try:

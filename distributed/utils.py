@@ -238,13 +238,6 @@ def sync(loop, func, *args, **kwargs):
 
     timeout = kwargs.pop('callback_timeout', None)
 
-    def make_coro():
-        coro = gen.maybe_future(func(*args, **kwargs))
-        if timeout is None:
-            return coro
-        else:
-            return gen.with_timeout(timedelta(seconds=timeout), coro)
-
     e = threading.Event()
     main_tid = get_thread_identity()
     result = [None]
@@ -257,7 +250,10 @@ def sync(loop, func, *args, **kwargs):
                 raise RuntimeError("sync() called from thread of running loop")
             yield gen.moment
             thread_state.asynchronous = True
-            result[0] = yield make_coro()
+            future = func(*args, **kwargs)
+            if timeout is not None:
+                future = gen.with_timeout(timedelta(seconds=timeout), future)
+            result[0] = yield future
         except Exception as exc:
             error[0] = sys.exc_info()
         finally:
