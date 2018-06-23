@@ -33,6 +33,20 @@ def _nanmin(m, n):
     return k_1 if np.isnan(k_0) else k_0
 
 
+def _wrapped_qr(a):
+    """
+    A wrapper for np.linalg.qr that handles arrays with 0 rows
+
+    Notes: Created for tsqr so as to manage cases with uncertain
+    array dimensions. In particular, the case where arrays have
+    (uncertain) chunks with 0 rows.
+    """
+    if a.shape[0] == 0:
+        return np.zeros((0, 0)), np.zeros((0, a.shape[1]))
+    else:
+        return np.linalg.qr(a)
+
+
 def tsqr(data, compute_svd=False, _max_vchunk_size=None):
     """ Direct Tall-and-Skinny QR algorithm
 
@@ -108,7 +122,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
     # Block qr
     name_qr_st1 = 'qr' + token
-    dsk_qr_st1 = top(np.linalg.qr, name_qr_st1, 'ij', data.name, 'ij',
+    dsk_qr_st1 = top(_wrapped_qr, name_qr_st1, 'ij', data.name, 'ij',
                      numblocks={data.name: numblocks})
     dsk.update_with_key(dsk_qr_st1, key=name_qr_st1)
 
