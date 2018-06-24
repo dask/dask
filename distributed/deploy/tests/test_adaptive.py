@@ -8,7 +8,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 
 from distributed import Client, wait, Adaptive, LocalCluster
-from distributed.utils_test import gen_cluster, gen_test, slowinc
+from distributed.utils_test import gen_cluster, gen_test, slowinc, inc
 from distributed.utils_test import loop, nodebug  # noqa: F401
 from distributed.metrics import time
 
@@ -215,7 +215,7 @@ def test_avoid_churn():
                                  diagnostics_port=None)
     client = yield Client(cluster, asynchronous=True)
     try:
-        adapt = Adaptive(cluster.scheduler, cluster, interval=20, wait_count=5)
+        adapt = Adaptive(cluster.scheduler, cluster, interval='20 ms', wait_count=5)
 
         for i in range(10):
             yield client.submit(slowinc, i, delay=0.040)
@@ -392,3 +392,15 @@ def test_worker_keys():
         assert names == {'a-1', 'a-2'} or names == {'b-1', 'b-2'}
     finally:
         yield cluster._close()
+
+
+@gen_cluster(client=True, ncores=[])
+def test_without_cluster(c, s):
+    adapt = Adaptive(scheduler=s)
+
+    future = c.submit(inc, 1)
+    while not s.tasks:
+        yield gen.sleep(0.01)
+
+    response = yield c.scheduler.adaptive_recommendations()
+    assert response['status'] == 'up'

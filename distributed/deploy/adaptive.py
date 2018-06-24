@@ -4,6 +4,7 @@ from collections import deque
 import logging
 import math
 
+import toolz
 from tornado import gen
 
 from ..metrics import time
@@ -85,7 +86,7 @@ class Adaptive(object):
     the cluster's ``scale_up`` method.
     '''
 
-    def __init__(self, scheduler, cluster, interval='1s', startup_cost='1s',
+    def __init__(self, scheduler, cluster=None, interval='1s', startup_cost='1s',
                  scale_factor=2, minimum=0, maximum=None, wait_count=3,
                  target_duration='5s', worker_key=lambda x: x, **kwargs):
         interval = parse_timedelta(interval, default='ms')
@@ -94,9 +95,10 @@ class Adaptive(object):
         self.cluster = cluster
         self.startup_cost = parse_timedelta(startup_cost, default='s')
         self.scale_factor = scale_factor
-        self._adapt_callback = PeriodicCallback(self._adapt, interval * 1000,
-                                                io_loop=scheduler.loop)
-        self.scheduler.loop.add_callback(self._adapt_callback.start)
+        if self.cluster:
+            self._adapt_callback = PeriodicCallback(self._adapt, interval * 1000,
+                                                    io_loop=scheduler.loop)
+            self.scheduler.loop.add_callback(self._adapt_callback.start)
         self._adapting = False
         self._workers_to_close_kwargs = kwargs
         self.minimum = minimum
@@ -106,10 +108,13 @@ class Adaptive(object):
         self.wait_count = wait_count
         self.target_duration = parse_timedelta(target_duration)
 
+        self.scheduler.handlers['adaptive_recommendations'] = self.recommendations
+
     def stop(self):
-        self._adapt_callback.stop()
-        self._adapt_callback = None
-        del self._adapt_callback
+        if self.cluster:
+            self._adapt_callback.stop()
+            self._adapt_callback = None
+            del self._adapt_callback
 
     def needs_cpu(self):
         """
@@ -272,27 +277,21 @@ class Adaptive(object):
         logger.info("Scaling up to %d workers", instances)
         return {'n': instances}
 
-    @gen.coroutine
-    def _adapt(self):
-        if self._adapting:  # Semaphore to avoid overlapping adapt calls
-            return
+    def recommendations(self, comm=None):
+        should_scale_up = self.should_scale_up()
+        workers = set(self.workers_to_close(key=self.worker_key,
+                                            minimum=self.minimum))
+        if should_scale_up and workers:
+            logger.info("Attempting to scale up and scale down simultaneously.")
+            self.close_counts.clear()
+            return {'status': 'error',
+                    'msg': 'Trying to scale up and down simultaneously'}
 
-        self._adapting = True
-        try:
-            should_scale_up = self.should_scale_up()
-            workers = set(self.workers_to_close(key=self.worker_key,
-                                                minimum=self.minimum))
-            if should_scale_up and workers:
-                logger.info("Attempting to scale up and scale down simultaneously.")
-                return
+        elif should_scale_up:
+            self.close_counts.clear()
+            return toolz.merge({'status': 'up'}, self.get_scale_up_kwargs())
 
-            if should_scale_up:
-                kwargs = self.get_scale_up_kwargs()
-                f = self.cluster.scale_up(**kwargs)
-                self.log.append((time(), 'up', kwargs))
-                if gen.is_future(f):
-                    yield f
-
+        elif workers:
             d = {}
             to_close = []
             for w, c in self.close_counts.items():
@@ -308,8 +307,31 @@ class Adaptive(object):
             self.close_counts = d
 
             if to_close:
-                self.log.append((time(), 'down', workers))
-                workers = yield self._retire_workers(workers=to_close)
+                return {'status': 'down', 'workers': to_close}
+        else:
+            self.close_counts.clear()
+            return None
+
+    @gen.coroutine
+    def _adapt(self):
+        if self._adapting:  # Semaphore to avoid overlapping adapt calls
+            return
+
+        self._adapting = True
+        try:
+            recommendations = self.recommendations()
+            if not recommendations:
+                return
+            status = recommendations.pop('status')
+            if status == 'up':
+                f = self.cluster.scale_up(**recommendations)
+                self.log.append((time(), 'up', recommendations))
+                if gen.is_future(f):
+                    yield f
+
+            elif status == 'down':
+                self.log.append((time(), 'down', recommendations['workers']))
+                workers = yield self._retire_workers(workers=recommendations['workers'])
         finally:
             self._adapting = False
 
