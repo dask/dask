@@ -30,7 +30,7 @@ from .batched import BatchedSend
 from .comm import get_address_host, get_local_address_for, connect
 from .comm.utils import offload
 from .compatibility import unicode, get_thread_identity, finalize
-from .core import (error_message, CommClosedError,
+from .core import (error_message, CommClosedError, send_recv,
                    pingpong, coerce_to_address)
 from .diskutils import WorkSpace
 from .metrics import time
@@ -604,14 +604,17 @@ class WorkerBase(ServerNode):
     def get_data(self, comm, keys=None, who=None, serializers=None):
         start = time()
 
-        msg = {k: to_serialize(self.data[k]) for k in keys if k in self.data}
-        nbytes = {k: self.nbytes.get(k) for k in keys if k in self.data}
+        data = {k: self.data[k] for k in keys if k in self.data}
+        msg = {k: to_serialize(v) for k, v in data.items()}
+        nbytes = {k: self.nbytes.get(k) for k in data}
         stop = time()
         if self.digests is not None:
             self.digests['get-data-load-duration'].add(stop - start)
         start = time()
         try:
             compressed = yield comm.write(msg, serializers=serializers)
+            response = yield comm.read(deserializers=serializers)
+            assert response == 'OK', response
         except EnvironmentError:
             logger.exception('failed during get data with %s -> %s',
                              self.address, who, exc_info=True)
@@ -1771,8 +1774,7 @@ class Worker(WorkerBase):
                 logger.debug("Request %d keys", len(deps))
 
                 start = time() + self.scheduler_delay
-                response = yield self.rpc(worker).get_data(keys=deps,
-                                                           who=self.address)
+                response = yield get_data_from_worker(self.rpc, deps, worker, self.address)
                 stop = time() + self.scheduler_delay
 
                 if cause:
@@ -2714,3 +2716,30 @@ def parse_memory_limit(memory_limit, ncores):
         return parse_bytes(memory_limit)
     else:
         return int(memory_limit)
+
+
+@gen.coroutine
+def get_data_from_worker(rpc, keys, worker, who=None):
+    """ Get keys from worker
+
+    The worker has a two step handshake to acknowledge when data has been fully
+    delivered.  This function implements that handshake.
+
+    See Also
+    --------
+    Worker.get_data
+    Worker.gather_deps
+    utils_comm.gather_data_from_workers
+    """
+    comm = yield rpc.connect(worker)
+    try:
+        response = yield send_recv(comm,
+                                   serializers=rpc.serializers,
+                                   deserializers=rpc.deserializers,
+                                   deserialize=rpc.deserialize,
+                                   op='get_data', keys=keys, who=who)
+        yield comm.write('OK')
+    finally:
+        rpc.reuse(worker, comm)
+
+    raise gen.Return(response)

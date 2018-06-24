@@ -30,6 +30,7 @@ def gather_from_workers(who_has, rpc, close=True, serializers=None):
     gather
     _gather
     """
+    from .worker import get_data_from_worker
     bad_addresses = set()
     missing_workers = set()
     original_who_has = who_has
@@ -55,10 +56,7 @@ def gather_from_workers(who_has, rpc, close=True, serializers=None):
 
         rpcs = {addr: rpc(addr) for addr in d}
         try:
-            coroutines = {address: rpcs[address].get_data(
-                                    keys=keys,
-                                    close=close,
-                                    serializers=serializers)
+            coroutines = {address: get_data_from_worker(rpc, keys, address)
                           for address, keys in d.items()}
             response = {}
             for worker, c in coroutines.items():

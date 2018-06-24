@@ -1162,3 +1162,21 @@ def test_scheduler_address_config(c, s):
         yield worker._start()
         assert worker.scheduler.address == s.address
     yield worker._close()
+
+
+@slow
+@gen_cluster(client=True)
+def test_wait_for_outgoing(c, s, a, b):
+    np = pytest.importorskip('numpy')
+    x = np.random.random(10000000)
+    future = yield c.scatter(x, workers=a.address)
+
+    y = c.submit(inc, future, workers=b.address)
+    yield wait(y)
+
+    assert len(b.incoming_transfer_log) == len(a.outgoing_transfer_log) == 1
+    bb = b.incoming_transfer_log[0]['duration']
+    aa = a.outgoing_transfer_log[0]['duration']
+    ratio = aa / bb
+
+    assert 1 / 3 < ratio < 3
