@@ -16,7 +16,7 @@ from toolz.functoolz import Compose
 
 from .compatibility import long, unicode
 from .context import thread_state
-from .core import flatten, quote
+from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict
 from . import config, local, threaded
@@ -280,7 +280,7 @@ def unpack_collections(*args, **kwargs):
     def repack(results):
         dsk = repack_dsk.copy()
         dsk[collections_token] = quote(results)
-        return local.get_sync(dsk, out)
+        return simple_get(dsk, out)
 
     return collections, repack
 

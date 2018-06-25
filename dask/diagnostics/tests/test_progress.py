@@ -18,9 +18,19 @@ dsk = {'a': 1,
 
 def check_bar_completed(capsys, width=40):
     out, err = capsys.readouterr()
+    assert out.count('100% Completed') == 1
     bar, percent, time = [i.strip() for i in out.split('\r')[-1].split('|')]
     assert bar == '[' + '#' * width + ']'
     assert percent == '100% Completed'
+
+
+def test_array_compute(capsys):
+    from dask.array import ones
+    data = ones((100,100),dtype='f4',chunks=(100,100))
+    with ProgressBar():
+        out = data.sum().compute()
+    assert out == 10000
+    check_bar_completed(capsys)
 
 
 def test_progressbar(capsys):
