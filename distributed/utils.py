@@ -1081,7 +1081,15 @@ def format_bytes(n):
     '12.35 MB'
     >>> format_bytes(1234567890)
     '1.23 GB'
+    >>> format_bytes(1234567890000)
+    '1.23 TB'
+    >>> format_bytes(1234567890000000)
+    '1.23 PB'
     """
+    if n > 1e15:
+        return '%0.2f PB' % (n / 1e15)
+    if n > 1e12:
+        return '%0.2f TB' % (n / 1e12)
     if n > 1e9:
         return '%0.2f GB' % (n / 1e9)
     if n > 1e6:
