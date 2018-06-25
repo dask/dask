@@ -8,10 +8,9 @@ from tornado import gen
 
 from distributed import Client
 from distributed.client import _as_completed, as_completed, _first_completed
-from distributed.compatibility import Empty
+from distributed.compatibility import Empty, StopAsyncIteration, Queue
 from distributed.utils_test import cluster, gen_cluster, inc
 from distributed.utils_test import loop  # noqa: F401
-from distributed.compatibility import Queue
 
 
 @gen_cluster(client=True)
@@ -152,3 +151,20 @@ def test_as_completed_cancel_last(loop):
             result = list(ac)
 
             assert result == [x]
+
+
+@gen_cluster(client=True)
+def test_async_for_py2_equivalent(c, s, a, b):
+    futures = c.map(sleep, [0.01] * 3, pure=False)
+    seq = as_completed(futures)
+    x = yield seq.__anext__()
+    y = yield seq.__anext__()
+    z = yield seq.__anext__()
+
+    assert x.done()
+    assert y.done()
+    assert z.done()
+    assert x.key != y.key
+
+    with pytest.raises(StopAsyncIteration):
+        yield seq.__anext__()

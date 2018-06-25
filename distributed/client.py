@@ -45,7 +45,8 @@ from .batched import BatchedSend
 from .utils_comm import (WrappedKey, unpack_remotedata, pack_data,
                          scatter_to_workers, gather_from_workers)
 from .cfexecutor import ClientExecutor
-from .compatibility import Queue as pyQueue, Empty, isqueue, html_escape
+from .compatibility import (Queue as pyQueue, Empty, isqueue, html_escape,
+        StopAsyncIteration)
 from .core import connect, rpc, clean_exception, CommClosedError, PooledRPCCall
 from .metrics import time
 from .node import Node

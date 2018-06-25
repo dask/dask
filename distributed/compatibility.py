@@ -18,6 +18,8 @@ if sys.version_info[0] == 2:
     PY3 = False
     ConnectionRefusedError = OSError
     FileExistsError = OSError
+    class StopAsyncIteration(Exception):
+        pass
 
     import gzip
 
@@ -71,6 +73,7 @@ if sys.version_info[0] == 3:
     from gzip import compress as gzip_compress
     ConnectionRefusedError = ConnectionRefusedError
     FileExistsError = FileExistsError
+    StopAsyncIteration = StopAsyncIteration
 
     def isqueue(o):
         return isinstance(o, Queue)
