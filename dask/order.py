@@ -137,7 +137,7 @@ def order(dsk, dependencies=None):
             waiting[dep].discard(item)
 
         deps = [d for d in dependents[item]
-                if d not in result and not (d in seen and waiting[d])]
+                if d not in result and not (d in seen and len(waiting[d]) > 1)]
         if len(deps) < 1000:
             deps = sorted(deps, key=dependents_key, reverse=True)
         stack.extend(deps)

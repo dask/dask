@@ -409,3 +409,44 @@ def test_string_ordering_dependents():
                  ('a', 1): 1,
                  ('a', 2): 2,
                  ('a', 3): 3}
+
+
+def test_map_overlap(abcde):
+    """
+      b1      b3      b5
+       |\    / | \  / |
+      c1  c2  c3  c4  c5
+       |/  | \ | / | \|
+      d1  d2  d3  d4  d5
+       |       |      |
+      e1      e2      e5
+
+    Want to finish b1 before we start on e5
+    """
+    a, b, c, d, e = abcde
+    dsk = {
+        (e, 1): (f,),
+        (d, 1): (f, (e, 1)),
+        (c, 1): (f, (d, 1)),
+        (b, 1): (f, (c, 1), (c, 2)),
+
+        (d, 2): (f,),
+        (c, 2): (f, (d, 1), (d, 2), (d, 3)),
+
+        (e, 3): (f,),
+        (d, 3): (f, (e, 3)),
+        (c, 3): (f, (d, 3)),
+        (b, 3): (f, (c, 2), (c, 3), (c, 4)),
+
+        (d, 4): (f,),
+        (c, 4): (f, (d, 3), (d, 4), (d, 5)),
+
+        (e, 5): (f,),
+        (d, 5): (f, (e, 5)),
+        (c, 5): (f, (d, 5)),
+        (b, 5): (f, (c, 4), (c, 5))
+    }
+
+    o = order(dsk)
+
+    assert o[(b, 1)] < o[(e, 5)] or o[(b, 5)] < o[(e, 1)]
