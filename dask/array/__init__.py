@@ -11,8 +11,8 @@ from .routines import (take, choose, argwhere, where, coarsen, insert,
                        dstack, vstack, hstack, compress, extract, round,
                        count_nonzero, flatnonzero, nonzero, around, isin,
                        isnull, notnull, isclose, allclose, corrcoef, swapaxes,
-                       tensordot, transpose, dot, vdot, matmul, outer,
-                       apply_along_axis, apply_over_axes, result_type,
+                       rollaxis, tensordot, transpose, dot, vdot, matmul,
+                       outer, apply_along_axis, apply_over_axes, result_type,
                        atleast_1d, atleast_2d, atleast_3d, piecewise, flip,
                        flipud, fliplr, einsum, average)
 from .reshape import reshape
