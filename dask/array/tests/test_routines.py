@@ -151,6 +151,23 @@ def test_swapaxes():
     assert d.swapaxes(0, 1).name != d.swapaxes(1, 0).name
 
 
+@pytest.mark.parametrize('shape', [
+    (),
+    (5,),
+    (5, 10, 15, 20),
+])
+def test_rollaxis(shape):
+    a = np.random.randint(0, 10, shape)
+    d = da.from_array(a, chunks=(len(shape) * (5,)))
+
+    for axis in range(-a.ndim, a.ndim):
+        for start in range(-a.ndim, a.ndim):
+            r_a = np.rollaxis(a, axis, start)
+            r_d = da.rollaxis(d, axis, start)
+
+            assert_eq(r_a, r_d)
+
+
 @pytest.mark.parametrize("funcname, kwargs", [
     ("flipud", {}),
     ("fliplr", {}),
