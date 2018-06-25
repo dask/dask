@@ -70,6 +70,10 @@ def register_sparse():
     tensordot_lookup.register(sparse.COO, sparse.tensordot)
 
 
+class PerformanceWarning(Warning):
+    """ A warning given when bad chunking may cause poor performance """
+
+
 def getter(a, b, asarray=True, lock=None):
     if isinstance(b, tuple) and any(x is None for x in b):
         b2 = tuple(x for x in b if x is not None)
@@ -2536,7 +2540,7 @@ def unify_chunks(*args, **kwargs):
 
     if warn and nparts and nparts >= max_parts * 10:
         warnings.warn("Increasing number of chunks by factor of %d" %
-                      (nparts / max_parts))
+                      (nparts / max_parts), PerformanceWarning, stacklevel=3)
 
     arrays = []
     for a, i in arginds:

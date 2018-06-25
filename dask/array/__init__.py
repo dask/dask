@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from ..utils import ignoring
 from .core import (Array, block, concatenate, stack, from_array, store,
                    map_blocks, atop, to_hdf5, to_npy_stack, from_npy_stack,
-                   from_delayed, asarray, asanyarray,
+                   from_delayed, asarray, asanyarray, PerformanceWarning,
                    broadcast_arrays, broadcast_to, from_zarr, to_zarr)
 from .routines import (take, choose, argwhere, where, coarsen, insert,
                        ravel, roll, unique, squeeze, ptp, diff, ediff1d,
