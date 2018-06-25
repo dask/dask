@@ -157,6 +157,7 @@ Top level user functions:
    result_type
    rint
    roll
+   rollaxis
    round
    sign
    signbit
@@ -516,6 +517,7 @@ Other functions
 .. autofunction:: result_type
 .. autofunction:: rint
 .. autofunction:: roll
+.. autofunction:: rollaxis
 .. autofunction:: round
 .. autofunction:: sign
 .. autofunction:: signbit
