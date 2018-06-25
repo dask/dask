@@ -133,6 +133,20 @@ def swapaxes(a, axis1, axis2):
                 dtype=a.dtype)
 
 
+@wraps(np.rollaxis)
+def rollaxis(a, axis, start=0):
+    a = asanyarray(a)
+
+    new_order = list(range(a.ndim))
+    del new_order[axis]
+    new_order.insert(start, axis)
+    new_order = tuple(new_order)
+
+    result = a.transpose(new_order)
+
+    return result
+
+
 @wraps(np.transpose)
 def transpose(a, axes=None):
     if axes:
