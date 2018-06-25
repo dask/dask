@@ -144,6 +144,7 @@ Top level user functions:
    outer
    pad
    percentile
+   PerformanceWarning
    piecewise
    prod
    ptp
