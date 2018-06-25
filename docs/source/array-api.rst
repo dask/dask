@@ -141,8 +141,10 @@ Top level user functions:
    notnull
    ones
    ones_like
+   outer
    pad
    percentile
+   PerformanceWarning
    piecewise
    prod
    ptp
@@ -499,6 +501,7 @@ Other functions
 .. autofunction:: notnull
 .. autofunction:: ones
 .. autofunction:: ones_like
+.. autofunction:: outer
 .. autofunction:: pad
 .. autofunction:: percentile
 .. autofunction:: piecewise

@@ -3,6 +3,7 @@ from __future__ import division, print_function, absolute_import
 import itertools
 from numbers import Number
 import textwrap
+import sys
 
 import pytest
 from distutils.version import LooseVersion
@@ -262,7 +263,9 @@ def test_tensordot():
 
     assert same_keys(da.tensordot(a, b, axes=(1, 0)),
                      da.tensordot(a, b, axes=(1, 0)))
-    with pytest.warns(None):  # Increasing number of chunks warning
+
+    # Increasing number of chunks warning
+    with pytest.warns(None if sys.version_info[0] == 2 else da.PerformanceWarning):
         assert not same_keys(da.tensordot(a, b, axes=0),
                              da.tensordot(a, b, axes=1))
 
@@ -312,6 +315,23 @@ def test_vdot(shape, chunks):
     assert_eq(np.vdot(x, y), da.vdot(a, b))
     assert_eq(np.vdot(y, x), da.vdot(b, a))
     assert_eq(da.vdot(a, b), da.vdot(b, a).conj())
+
+
+@pytest.mark.parametrize('shape1, shape2', [
+    ((20,), (6,)),
+    ((4, 5,), (2, 3)),
+])
+def test_inner(shape1, shape2):
+    np.random.random(1337)
+
+    x = 2 * np.random.random(shape1) - 1
+    y = 2 * np.random.random(shape2) - 1
+
+    a = da.from_array(x, chunks=3)
+    b = da.from_array(y, chunks=3)
+
+    assert_eq(np.outer(x, y), da.outer(a, b))
+    assert_eq(np.outer(y, x), da.outer(b, a))
 
 
 @pytest.mark.parametrize('func1d_name, func1d', [
@@ -701,8 +721,9 @@ def test_isin_rand(seed, low, high, elements_shape, elements_chunks,
     a2 = rng.randint(low, high, size=test_shape) - 5
     d2 = da.from_array(a2, chunks=test_chunks)
 
-    r_a = np.isin(a1, a2, invert=invert)
-    r_d = da.isin(d1, d2, invert=invert)
+    with pytest.warns(None):
+        r_a = np.isin(a1, a2, invert=invert)
+        r_d = da.isin(d1, d2, invert=invert)
     assert_eq(r_a, r_d)
 
 
@@ -1366,8 +1387,9 @@ def test_einsum(einsum_signature):
 
     np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
 
-    assert_eq(np.einsum(einsum_signature, *np_inputs),
-              da.einsum(einsum_signature, *da_inputs))
+    with pytest.warns(None):
+        assert_eq(np.einsum(einsum_signature, *np_inputs),
+                  da.einsum(einsum_signature, *da_inputs))
 
 
 @pytest.mark.skipif(not einsum_can_optimize,

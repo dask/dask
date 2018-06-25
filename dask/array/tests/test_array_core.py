@@ -20,7 +20,7 @@ import dask
 import dask.array as da
 from dask.base import tokenize, compute_as_if_collection
 from dask.delayed import Delayed, delayed
-from dask.utils import ignoring, tmpfile, tmpdir
+from dask.utils import ignoring, tmpfile, tmpdir, key_split
 from dask.utils_test import inc, dec
 
 from dask.array import chunk
@@ -1197,7 +1197,7 @@ def test_from_function_requires_block_args():
 
 def test_repr():
     d = da.ones((4, 4), chunks=(2, 2))
-    assert d.name[:5] in repr(d)
+    assert key_split(d.name) in repr(d)
     assert str(d.shape) in repr(d)
     assert str(d.dtype) in repr(d)
     d = da.ones((4000, 4), chunks=(4, 2))
@@ -2840,7 +2840,6 @@ def test_map_blocks_name():
 
 def test_from_array_names():
     pytest.importorskip('distributed')
-    from distributed.utils import key_split
 
     x = np.ones(10)
     d = da.from_array(x, chunks=2)
