@@ -41,7 +41,7 @@ process that has to take into account many different kinds of workflows, and
 operate efficiently in linear time.  We strongly recommend that readers look at
 the docstrings of tests in dask/tests/test_order.py.  These tests usually have
 graph types laid out very carefully to show the kinds of situations that often
-arise.
+arise, and the order we would like to be determined.
 
 
 Policy
@@ -51,9 +51,14 @@ Work towards *small goals* with *big steps*.
 
 1.  **Small goals**: prefer tasks whose final dependents have few dependencies.
 
-    By final dependent we mean a task that depends on this task that is the end
-    of the computation.  Typically a computation has many of these.  We choose
-    to prioritize tasks that work towards finishing shorter computations first.
+    We prefer to prioritize those tasks that help branches of computation that
+    can terminate quickly.
+
+    With more detail, we compute the total number of dependencies that each
+    task depends on (both its own dependencies, and the dependencies of its
+    dependencies, and so on), and then we choose those tasks that drive towards
+    results with a low number of total dependencies.  We choose to prioritize
+    tasks that work towards finishing shorter computations first.
 
 2.  **Big steps**: prefer tasks with many dependents
 

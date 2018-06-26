@@ -439,8 +439,8 @@ def test_prefer_short_ancestor(abcde):
     """
     From https://github.com/dask/dask-ml/issues/206#issuecomment-395869929
 
-    Two cases, one where chunks of an array or indepented, and one where the
-    chunks of an array of a shared source. We handled the independent one
+    Two cases, one where chunks of an array are independent, and one where the
+    chunks of an array have a shared source. We handled the independent one
     "well" earlier.
 
     Good:
