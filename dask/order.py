@@ -107,8 +107,7 @@ def order(dsk, dependencies=None):
     dependents = reverse_dict(dependencies)
 
     total_dependencies = ndependencies(dependencies, dependents)
-    total_dependents = ndependents(dependencies, dependents)
-    mn_dependencies = min_dependencies(dependencies, dependents, total_dependencies)
+    total_dependents, min_dependencies = ndependents(dependencies, dependents, total_dependencies)
 
     waiting = {k: set(v) for k, v in dependencies.items()}
 
@@ -116,7 +115,7 @@ def order(dsk, dependencies=None):
         return total_dependencies.get(x, 0), ReverseStrComparable(x)
 
     def dependents_key(x):
-        return (mn_dependencies[x],
+        return (min_dependencies[x],
                 -total_dependents.get(x, 0),
                 StrComparable(x))
 
@@ -162,55 +161,49 @@ def order(dsk, dependencies=None):
     return result
 
 
-def ndependents(dependencies, dependents):
+def ndependents(dependencies, dependents, total_dependencies):
     """ Number of total data elements that depend on key
 
-    For each key we return the number of data that can only be run after this
+    For each key we return the number of keys that can only be run after this
     key is run.  The root nodes have value 1 while deep child nodes will have
     larger values.
+
+    We also return the minimum value of the maximum number of dependencies of
+    all final dependencies (see module-level comment for more)
 
     Examples
     --------
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
 
-    >>> sorted(ndependents(dependencies, dependents).items())
+    >>> total_dependencies = ndependencies(dependencies, dependents)
+    >>> total_dependents, min_dependencies = ndependents(dependencies,
+    ...                                                  dependents,
+    ...                                                  total_dependencies)
+    >>> sorted(total_dependents.items())
     [('a', 3), ('b', 2), ('c', 1)]
+
+    Returns
+    -------
+    total_dependendents: Dict[key, int]
+    min_dependencies: Dict[key, int]
     """
     result = dict()
+    min_result = dict()
     num_needed = {k: len(v) for k, v in dependents.items()}
     current = {k for k, v in num_needed.items() if v == 0}
     while current:
         key = current.pop()
         result[key] = 1 + sum(result[parent] for parent in dependents[key])
+        try:
+            min_result[key] = min(min_result[parent] for parent in dependents[key])
+        except ValueError:
+            min_result[key] = total_dependencies[key]
         for child in dependencies[key]:
             num_needed[child] -= 1
             if num_needed[child] == 0:
                 current.add(child)
-    return result
-
-
-def min_dependencies(dependencies, dependents, total_dependencies):
-    """ The smallest value of total_dependencies among dependents """
-    result = dict()
-    stack = [k for k, v in dependents.items() if not v]
-    while stack:
-        key = stack.pop()
-        if key in result:
-            continue
-        deps = dependents[key]
-        if not deps:
-            result[key] = total_dependencies[key]
-            stack.extend(dependencies[key])
-        else:
-            not_yet_done = [dep for dep in deps if dep not in result]
-            if not_yet_done:
-                stack.append(key)
-                stack.extend(not_yet_done)
-            else:
-                result[key] = min(map(result.get, deps))
-                stack.extend(dependencies[key])
-    return result
+    return result, min_result
 
 
 def ndependencies(dependencies, dependents):

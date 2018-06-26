@@ -1,7 +1,7 @@
 import pytest
 
 import dask
-from dask.order import ndependencies, order, min_dependencies
+from dask.order import ndependencies, order
 from dask.core import get_deps, reverse_dict, get_dependencies
 from dask.utils_test import add, inc
 
@@ -533,21 +533,3 @@ def test_map_overlap(abcde):
     o = order(dsk)
 
     assert o[(b, 1)] < o[(e, 5)] or o[(b, 5)] < o[(e, 1)]
-
-
-def test_min_dependencies():
-    a, b, c, d, e = 'abcde'
-    dsk = {a: (f,),
-           b: (f, a),
-           c: (f, b),
-           d: (f, a),
-           e: (f,)}
-
-    dependencies = {k: get_dependencies(dsk, k) for k in dsk}
-    dependents = reverse_dict(dependencies)
-    total_dependencies = ndependencies(dependencies, dependents)
-    result = min_dependencies(dependencies, dependents, total_dependencies)
-
-    expected = {c: 3, b: 3, a: 2, d: 2, e: 1}
-
-    assert result == expected
