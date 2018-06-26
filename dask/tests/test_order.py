@@ -1,8 +1,8 @@
 import pytest
 
 import dask
-from dask.order import ndependencies, order
-from dask.core import get_deps
+from dask.order import ndependencies, order, min_dependencies
+from dask.core import get_deps, reverse_dict, get_dependencies
 from dask.utils_test import add, inc
 
 
@@ -232,7 +232,7 @@ def test_order_doesnt_fail_on_mixed_type_keys(abcde):
 def test_gh_3055():
     da = pytest.importorskip('dask.array')
     A, B = 20, 99
-    x = da.random.normal(size=(A, B), chunks=(1, None))
+    orig = x = da.random.normal(size=(A, B), chunks=(1, None))
     for _ in range(2):
         y = (x[:, None, :] * x[:, :, None]).cumsum(axis=0)
         x = x.cumsum(axis=0)
@@ -240,8 +240,14 @@ def test_gh_3055():
 
     dsk = dict(w.__dask_graph__())
     o = order(dsk)
+    # dask.visualize(dsk, color='order', node_attr={'penwidth': '6'},
+    #                filename='dask.pdf')
     L = [o[k] for k in w.__dask_keys__()]
     assert sum(x < len(o) / 2 for x in L) > len(L) / 3  # some complete quickly
+
+    L = [o[k] for kk in orig.__dask_keys__() for k in kk]
+    assert sum(x > len(o) / 2 for x in L) > len(L) / 3  # some start later
+
     assert sorted(L) == L  # operate in order
 
 
@@ -468,16 +474,17 @@ def test_prefer_short_ancestor(abcde):
     * we don't need a1 and b1 to compute c1.
     """
     a, b, c, _, _ = abcde
+    ab = a + b
     from dask import config
 
     dsk = {
-        ('ab'): 0,
-        (a, 0): (f, 'ab', 0, 0),
-        (b, 0): (f, 'ab', 0, 1),
+        ab: 0,
+        (a, 0): (f, ab, 0, 0),
+        (b, 0): (f, ab, 0, 1),
         (c, 0): 0,
         (c, 1): (f, (c, 0), (a, 0), (b, 0)),
-        (a, 1): (f, 'ab', 1, 0),
-        (b, 1): (f, 'ab', 1, 1),
+        (a, 1): (f, ab, 1, 0),
+        (b, 1): (f, ab, 1, 1),
         (c, 2): (f, (c, 1), (a, 1), (b, 1)),
     }
     o = order(dsk)
@@ -486,9 +493,8 @@ def test_prefer_short_ancestor(abcde):
     assert o[(b, 0)] < o[(c, 2)]
     assert o[(c, 1)] < o[(c, 2)]
     assert o[(c, 1)] < o[(a, 1)]
-    assert o[(c, 1)] < o[(a, 2)]
 
-      
+
 def test_map_overlap(abcde):
     """
       b1      b3      b5
@@ -528,3 +534,21 @@ def test_map_overlap(abcde):
     o = order(dsk)
 
     assert o[(b, 1)] < o[(e, 5)] or o[(b, 5)] < o[(e, 1)]
+
+
+def test_min_dependencies():
+    a, b, c, d, e = 'abcde'
+    dsk = {a: (f,),
+           b: (f, a),
+           c: (f, b),
+           d: (f, a),
+           e: (f,)}
+
+    dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+    dependents = reverse_dict(dependencies)
+    total_dependencies = ndependencies(dependencies, dependents)
+    result = min_dependencies(dependencies, dependents, total_dependencies)
+
+    expected = {c: 3, b: 3, a: 2, d: 2, e: 1}
+
+    assert result == expected

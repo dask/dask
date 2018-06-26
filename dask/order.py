@@ -94,7 +94,8 @@ def order(dsk, dependencies=None):
     dependents = reverse_dict(dependencies)
 
     total_dependencies = ndependencies(dependencies, dependents)
-    total_dependents = partial_ndependents(dependencies, dependents)
+    total_dependents = ndependents(dependencies, dependents)
+    mn_dependencies = min_dependencies(dependencies, dependents, total_dependencies)
 
     waiting = {k: set(v) for k, v in dependencies.items()}
 
@@ -102,7 +103,8 @@ def order(dsk, dependencies=None):
         return total_dependencies.get(x, 0), ReverseStrComparable(x)
 
     def dependents_key(x):
-        return (total_dependents.get(x, 0),
+        return (mn_dependencies[x],
+                -total_dependents.get(x, 0),
                 StrComparable(x))
 
     result = dict()
@@ -175,18 +177,26 @@ def ndependents(dependencies, dependents):
     return result
 
 
-def partial_ndependents(dependencies, dependents):
+def min_dependencies(dependencies, dependents, total_dependencies):
+    """ The smallest value of total_dependencies among dependents """
     result = dict()
-    num_needed = {k: len(v) for k, v in dependents.items()}
-    current = {k for k, v in num_needed.items() if v == 0}
-    # import pdb; pdb.set_trace()
-    while current:
-        key = current.pop()
-        result[key] = 1 + sum(result[parent] for parent in dependents[key])
-        for child in dependencies[key]:
-            num_needed[child] -= 1
-            if num_needed[child] == 0:
-                current.add(child)
+    stack = [k for k, v in dependents.items() if not v]
+    while stack:
+        key = stack.pop()
+        if key in result:
+            continue
+        deps = dependents[key]
+        if not deps:
+            result[key] = total_dependencies[key]
+            stack.extend(dependencies[key])
+        else:
+            not_yet_done = [dep for dep in deps if dep not in result]
+            if not_yet_done:
+                stack.append(key)
+                stack.extend(not_yet_done)
+            else:
+                result[key] = min(map(result.get, deps))
+                stack.extend(dependencies[key])
     return result
 
 
