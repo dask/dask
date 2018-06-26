@@ -1773,19 +1773,23 @@ class Worker(WorkerBase):
                 self.log.append(('request-dep', dep, worker, deps))
                 logger.debug("Request %d keys", len(deps))
 
-                start = time() + self.scheduler_delay
+                start = time()
                 response = yield get_data_from_worker(self.rpc, deps, worker, self.address)
-                stop = time() + self.scheduler_delay
+                stop = time()
 
                 if cause:
-                    self.startstops[cause].append(('transfer', start, stop))
+                    self.startstops[cause].append((
+                        'transfer',
+                        start + self.scheduler_delay,
+                        stop + self.scheduler_delay
+                    ))
 
                 total_bytes = sum(self.nbytes.get(dep, 0) for dep in response)
                 duration = (stop - start) or 0.5
                 self.incoming_transfer_log.append({
-                    'start': start,
-                    'stop': stop,
-                    'middle': (start + stop) / 2.0,
+                    'start': start + self.scheduler_delay,
+                    'stop': stop + self.scheduler_delay,
+                    'middle': (start + stop) / 2.0 + self.scheduler_delay,
                     'duration': duration,
                     'keys': {dep: self.nbytes.get(dep, None) for dep in response},
                     'total': total_bytes,
