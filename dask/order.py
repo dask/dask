@@ -16,45 +16,58 @@ ties in an intelligent way
       a
 
 For example after we finish ``a`` we can choose to run either ``b`` or ``c``
-next.  In this case we may prefer to start with ``c``, because it has other
-dependents.
+next.  Making small decisions like this can greatly affect our performance,
+especially because the order in which we run tasks affects the order in which
+we can release memory, which operationally we find to have a large affect on
+many computation.  We want to run tasks in such a way that we keep only a small
+amount of data in memory at any given time.
 
-This is particularly important at the beginning of the computation when we
-often dump hundreds of leaf nodes onto the scheduler at once.  The order in
-which we start this computation can significantly change performance.
 
-
-Breaking Ties
--------------
+Static Ordering
+---------------
 
 And so we create a total ordering over all nodes to serve as a tie breaker.  We
-represent this ordering with a dictionary.  Lower scores have higher priority.
+represent this ordering with a dictionary mapping keys to integer values.
+Lower scores have higher priority.  These scores correspond to the order in
+which a sequential scheduler would visit each node.
 
-    {'d': 0,
+    {'a': 0,
      'c': 1,
-     'a': 2,
+     'd': 2,
      'b': 3}
 
-There are several ways in which we might order our keys.  In practice we have
-found the following objectives important:
+There are several ways in which we might order our keys.  This is a nuanced
+process that has to take into account many different kinds of workflows, and
+operate efficiently in linear time.  We strongly recommend that readers look at
+the docstrings of tests in dask/tests/test_order.py.  These tests usually have
+graph types laid out very carefully to show the kinds of situations that often
+arise.
 
-1.  **Depth first**:  By traversing a tree deeply before broadly we encourage
-    the completion of cohesive parts of the computation before starting new
-    parts.  This helps to reduce memory footprint.
-2.  **Lean**: We avoid tasks that have multiple dependents.  These tend to
-    start new branches of computation that we would prefer to avoid until we
-    have finished our current work.
-3.  **Heavy-first**: When deciding between two possible dependencies we choose
-    the dependency that is likely to take the longest first.  That way after it
-    finishes it has to stay in memory only a short time while waiting for its
-    co-dependent task to finish
 
-So we perform a depth first search where we choose to traverse down children
-with the following priority:
+Policy
+------
 
-1.  Number of dependents (smaller is better)
-2.  Number of total downstream dependencies (larger is better)
-3.  Name of the task itself, as a tie breaker
+Work towards *small goals* with *big steps*.
+
+1.  **Small goals**: prefer tasks whose final dependents have few dependencies.
+
+    By final dependent we mean a task that depends on this task that is the end
+    of the computation.  Typically a computation has many of these.  We choose
+    to prioritize tasks that work towards finishing shorter computations first.
+
+2.  **Big steps**: prefer tasks with many dependents
+
+    However, many tasks work towards the same final dependents.  Among those,
+    we choose those tasks with the most work left to do.  We want to finish
+    the larger portions of a sub-computation before we start on the smaller
+    ones.
+
+3.  **Name comparison**: break ties with key name
+
+    Often graphs are made with regular keynames.  When no other structural
+    difference exists between two keys, use the key name to break ties.
+    This relies on the regularity of graph constructors like dask.array to be a
+    good proxy for ordering.  This is usually a good idea and a sane default.
 """
 from __future__ import absolute_import, division, print_function
 

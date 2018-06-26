@@ -475,7 +475,6 @@ def test_prefer_short_ancestor(abcde):
     """
     a, b, c, _, _ = abcde
     ab = a + b
-    from dask import config
 
     dsk = {
         ab: 0,
