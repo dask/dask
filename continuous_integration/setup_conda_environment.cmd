@@ -30,6 +30,7 @@ call deactivate
     joblib ^
     jupyter_client ^
     mock ^
+    msgpack-python ^
     psutil ^
     pytest ^
     python=%PYTHON% ^
@@ -48,7 +49,6 @@ call activate %CONDA_ENV%
 %PIP_INSTALL% git+https://github.com/dask/zict --upgrade
 
 %PIP_INSTALL% pytest-repeat pytest-timeout pytest-faulthandler sortedcollections
-%PIP_INSTALL% msgpack
 
 @rem Display final environment (for reproducing)
 %CONDA% list
