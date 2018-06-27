@@ -1799,19 +1799,34 @@ class Client(Node):
                          force=force)
 
     @gen.coroutine
-    def _publish_dataset(self, **kwargs):
+    def _publish_dataset(self, *args, **kwargs):
         with log_errors():
             coroutines = []
-            for name, data in kwargs.items():
+
+            def add_coro(name, data):
                 keys = [tokey(f.key) for f in futures_of(data)]
                 coroutines.append(self.scheduler.publish_put(keys=keys,
-                                                             name=tokey(name),
+                                                             name=name,
                                                              data=to_serialize(data),
                                                              client=self.id))
 
+            name = kwargs.pop('name', None)
+            if name:
+                if len(args) == 0:
+                    raise ValueError(
+                        "If name is provided, expecting call signature like"
+                        " publish_dataset(df, name='ds')")
+                # in case this is a singleton, collapse it
+                elif len(args) == 1:
+                    args = args[0]
+                add_coro(name, args)
+
+            for name, data in kwargs.items():
+                add_coro(name, data)
+
             yield coroutines
 
-    def publish_dataset(self, **kwargs):
+    def publish_dataset(self, *args, **kwargs):
         """
         Publish named datasets to scheduler
 
@@ -1824,6 +1839,8 @@ class Client(Node):
 
         Parameters
         ----------
+        args : list of objects to publish as name
+        name : optional name of the dataset to publish
         kwargs: dict
             named collections to publish on the scheduler
 
@@ -1834,6 +1851,9 @@ class Client(Node):
         >>> df = dd.read_csv('s3://...')  # doctest: +SKIP
         >>> df = c.persist(df) # doctest: +SKIP
         >>> c.publish_dataset(my_dataset=df)  # doctest: +SKIP
+
+        Alternative invocation
+        >>> c.publish_dataset(df, name='my_dataset')
 
         Receiving client:
 
@@ -1852,7 +1872,7 @@ class Client(Node):
         Client.unpublish_dataset
         Client.persist
         """
-        return self.sync(self._publish_dataset, **kwargs)
+        return self.sync(self._publish_dataset, *args, **kwargs)
 
     def unpublish_dataset(self, name, **kwargs):
         """
@@ -1902,7 +1922,7 @@ class Client(Node):
         Client.publish_dataset
         Client.list_datasets
         """
-        return self.sync(self._get_dataset, tokey(name), **kwargs)
+        return self.sync(self._get_dataset, name, **kwargs)
 
     @gen.coroutine
     def _run_on_scheduler(self, function, *args, **kwargs):

@@ -38,6 +38,26 @@ def test_publish_simple(s, a, b):
 
 
 @gen_cluster(client=False)
+def test_publish_non_string_key(s, a, b):
+    c = yield Client((s.ip, s.port), asynchronous=True)
+    f = yield Client((s.ip, s.port), asynchronous=True)
+
+    try:
+        for name in [('a', 'b'), 9.0, 8]:
+            data = yield c.scatter(range(3))
+            out = yield c.publish_dataset(data, name=name)
+            assert name in s.extensions['publish'].datasets
+            assert isinstance(s.extensions['publish'].datasets[name]['data'], Serialized)
+
+            datasets = yield c.scheduler.publish_list()
+            assert name in datasets
+
+    finally:
+        c.close()
+        f.close()
+
+
+@gen_cluster(client=False)
 def test_publish_roundtrip(s, a, b):
     c = yield Client((s.ip, s.port), asynchronous=True)
     f = yield Client((s.ip, s.port), asynchronous=True)
@@ -167,26 +187,29 @@ def test_publish_bag(s, a, b):
 def test_datasets_setitem(loop):
     with cluster() as (s, _):
         with Client(s['address'], loop=loop) as client:
-            key, value = 'key', 'value'
-            client.datasets[key] = value
-            assert client.get_dataset('key') == value
+            for key in ['key', ('key', 'key'), 1]:
+                value = 'value'
+                client.datasets[key] = value
+                assert client.get_dataset(key) == value
 
 
 def test_datasets_getitem(loop):
     with cluster() as (s, _):
         with Client(s['address'], loop=loop) as client:
-            key, value = 'key', 'value'
-            client.publish_dataset(key=value)
-            assert client.datasets[key] == value
+            for key in ['key', ('key', 'key'), 1]:
+                value = 'value'
+                client.publish_dataset(value, name=key)
+                assert client.datasets[key] == value
 
 
 def test_datasets_delitem(loop):
     with cluster() as (s, _):
         with Client(s['address'], loop=loop) as client:
-            key, value = 'key', 'value'
-            client.publish_dataset(key=value)
-            del client.datasets[key]
-            assert key not in client.list_datasets()
+            for key in ['key', ('key', 'key'), 1]:
+                value = 'value'
+                client.publish_dataset(value, name=key)
+                del client.datasets[key]
+                assert key not in client.list_datasets()
 
 
 def test_datasets_keys(loop):

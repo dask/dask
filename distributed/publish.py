@@ -1,5 +1,5 @@
 from collections import MutableMapping
-from distributed.utils import log_errors
+from distributed.utils import log_errors, tokey
 
 
 class PublishExtension(object):
@@ -27,18 +27,18 @@ class PublishExtension(object):
         with log_errors():
             if name in self.datasets:
                 raise KeyError("Dataset %s already exists" % name)
-            self.scheduler.client_desires_keys(keys, 'published-%s' % name)
+            self.scheduler.client_desires_keys(keys, 'published-%s' % tokey(name))
             self.datasets[name] = {'data': data, 'keys': keys}
             return {'status':  'OK', 'name': name}
 
     def delete(self, stream=None, name=None):
         with log_errors():
             out = self.datasets.pop(name, {'keys': []})
-            self.scheduler.client_releases_keys(out['keys'], 'published-%s' % name)
+            self.scheduler.client_releases_keys(out['keys'], 'published-%s' % tokey(name))
 
     def list(self, *args):
         with log_errors():
-            return list(sorted(self.datasets.keys()))
+            return list(sorted(self.datasets.keys(), key=str))
 
     def get(self, stream, name=None, client=None):
         with log_errors():
@@ -60,7 +60,7 @@ class Datasets(MutableMapping):
         return self.__client.get_dataset(key)
 
     def __setitem__(self, key, value):
-        self.__client.publish_dataset(**{key: value})
+        self.__client.publish_dataset(value, name=key)
 
     def __delitem__(self, key):
         self.__client.unpublish_dataset(key)
