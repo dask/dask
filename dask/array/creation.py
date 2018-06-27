@@ -173,12 +173,11 @@ def full_like(a, fill_value, dtype=None, chunks=None):
     )
 
 
-def linspace(start, stop, num=50, chunks=None, dtype=None):
+def linspace(start, stop, num=50, endpoint=True, retstep=False, chunks=None,
+             dtype=None):
     """
     Return `num` evenly spaced values over the closed interval [`start`,
     `stop`].
-
-    TODO: implement the `endpoint`, `restep`, and `dtype` keyword args
 
     Parameters
     ----------
@@ -188,14 +187,29 @@ def linspace(start, stop, num=50, chunks=None, dtype=None):
         The last value of the sequence.
     num : int, optional
         Number of samples to include in the returned dask array, including the
-        endpoints.
+        endpoints. Default is 50.
+    endpoint : bool, optional
+        If True, ``stop`` is the last sample. Otherwise, it is not included.
+        Default is True.
+
+        .. versionadded:: 0.18.2
+    retstep : bool, optional
+        If True, return (samples, step), where step is the spacing between
+        samples. Default is False.
+
+        .. versionadded:: 0.18.2
     chunks :  int
         The number of samples on each block. Note that the last block will have
         fewer samples if `num % blocksize != 0`
+    dtype : dtype, optional
+        The type of the output array. Default is given by ``numpy.dtype(float)``.
 
     Returns
     -------
     samples : dask array
+    step : float, optional
+        Only returned if ``retstep`` is True. Size of spacing between samples.
+
 
     See Also
     --------
@@ -210,23 +224,28 @@ def linspace(start, stop, num=50, chunks=None, dtype=None):
 
     range_ = stop - start
 
-    space = float(range_) / (num - 1)
+    div = (num - 1) if endpoint else num
+    step = float(range_) / div
 
     if dtype is None:
         dtype = np.linspace(0, 1, 1).dtype
 
-    name = 'linspace-' + tokenize((start, stop, num, chunks, dtype))
+    name = 'linspace-' + tokenize((start, stop, num, endpoint, chunks, dtype))
 
     dsk = {}
     blockstart = start
 
     for i, bs in enumerate(chunks[0]):
-        blockstop = blockstart + ((bs - 1) * space)
-        task = (partial(np.linspace, dtype=dtype), blockstart, blockstop, bs)
-        blockstart = blockstart + (space * bs)
+        bs_space = bs - 1 if endpoint else bs
+        blockstop = blockstart + (bs_space * step)
+        task = (partial(np.linspace, endpoint=endpoint, dtype=dtype), blockstart, blockstop, bs)
+        blockstart = blockstart + (step * bs)
         dsk[(name, i)] = task
 
-    return Array(dsk, name, chunks, dtype=dtype)
+    if retstep:
+        return Array(dsk, name, chunks, dtype=dtype), step
+    else:
+        return Array(dsk, name, chunks, dtype=dtype)
 
 
 def arange(*args, **kwargs):
