@@ -3,6 +3,7 @@ from __future__ import division, print_function, absolute_import
 import itertools
 from numbers import Number
 import textwrap
+import sys
 
 import pytest
 from distutils.version import LooseVersion
@@ -262,7 +263,9 @@ def test_tensordot():
 
     assert same_keys(da.tensordot(a, b, axes=(1, 0)),
                      da.tensordot(a, b, axes=(1, 0)))
-    with pytest.warns(None):  # Increasing number of chunks warning
+
+    # Increasing number of chunks warning
+    with pytest.warns(None if sys.version_info[0] == 2 else da.PerformanceWarning):
         assert not same_keys(da.tensordot(a, b, axes=0),
                              da.tensordot(a, b, axes=1))
 
@@ -312,6 +315,23 @@ def test_vdot(shape, chunks):
     assert_eq(np.vdot(x, y), da.vdot(a, b))
     assert_eq(np.vdot(y, x), da.vdot(b, a))
     assert_eq(da.vdot(a, b), da.vdot(b, a).conj())
+
+
+@pytest.mark.parametrize('shape1, shape2', [
+    ((20,), (6,)),
+    ((4, 5,), (2, 3)),
+])
+def test_inner(shape1, shape2):
+    np.random.random(1337)
+
+    x = 2 * np.random.random(shape1) - 1
+    y = 2 * np.random.random(shape2) - 1
+
+    a = da.from_array(x, chunks=3)
+    b = da.from_array(y, chunks=3)
+
+    assert_eq(np.outer(x, y), da.outer(a, b))
+    assert_eq(np.outer(y, x), da.outer(b, a))
 
 
 @pytest.mark.parametrize('func1d_name, func1d', [
@@ -438,16 +458,21 @@ def test_gradient(shape, varargs, axis, edge_order):
     a = np.random.randint(0, 10, shape)
     d_a = da.from_array(a, chunks=(len(shape) * (5,)))
 
-    r = np.gradient(a, *varargs, axis=axis, edge_order=edge_order)
-    r_a = da.gradient(d_a, *varargs, axis=axis, edge_order=edge_order)
+    r_a = np.gradient(a, *varargs, axis=axis, edge_order=edge_order)
+    r_d_a = da.gradient(d_a, *varargs, axis=axis, edge_order=edge_order)
 
     if isinstance(axis, Number):
-        assert_eq(r, r_a)
+        assert_eq(r_d_a, r_a)
     else:
-        assert len(r) == len(r_a)
+        assert len(r_d_a) == len(r_a)
 
-        for e_r, e_r_a in zip(r, r_a):
-            assert_eq(e_r, e_r_a)
+        for e_r_d_a, e_r_a in zip(r_d_a, r_a):
+            assert_eq(e_r_d_a, e_r_a)
+
+        assert_eq(
+            da.sqrt(sum(map(da.square, r_d_a))),
+            np.sqrt(sum(map(np.square, r_a)))
+        )
 
 
 def test_bincount():
@@ -696,8 +721,9 @@ def test_isin_rand(seed, low, high, elements_shape, elements_chunks,
     a2 = rng.randint(low, high, size=test_shape) - 5
     d2 = da.from_array(a2, chunks=test_chunks)
 
-    r_a = np.isin(a1, a2, invert=invert)
-    r_d = da.isin(d1, d2, invert=invert)
+    with pytest.warns(None):
+        r_a = np.isin(a1, a2, invert=invert)
+        r_d = da.isin(d1, d2, invert=invert)
     assert_eq(r_a, r_d)
 
 
@@ -1361,8 +1387,9 @@ def test_einsum(einsum_signature):
 
     np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
 
-    assert_eq(np.einsum(einsum_signature, *np_inputs),
-              da.einsum(einsum_signature, *da_inputs))
+    with pytest.warns(None):
+        assert_eq(np.einsum(einsum_signature, *np_inputs),
+                  da.einsum(einsum_signature, *da_inputs))
 
 
 @pytest.mark.skipif(not einsum_can_optimize,
@@ -1480,3 +1507,39 @@ def test_einsum_broadcasting_contraction3():
     np_res = np.einsum('ajk,kbl,jl,ab->ab', a, b, c, d)
     da_res = da.einsum('ajk,kbl,jl,ab->ab', d_a, d_b, d_c, d_d)
     assert_eq(np_res, da_res)
+
+
+@pytest.mark.parametrize('a', [np.arange(11),
+                               np.arange(6).reshape((3,2))
+                               ])
+@pytest.mark.parametrize('returned', [True, False])
+def test_average(a, returned):
+    d_a = da.from_array(a, chunks=2)
+
+    np_avg = np.average(a, returned=returned)
+    da_avg = da.average(d_a, returned=returned)
+
+    assert_eq(np_avg, da_avg)
+
+
+def test_average_weights():
+    a = np.arange(6).reshape((3,2))
+    d_a = da.from_array(a, chunks=2)
+
+    weights = np.array([0.25, 0.75])
+    d_weights = da.from_array(weights, chunks=2)
+
+    np_avg = np.average(a, weights=weights, axis=1)
+    da_avg = da.average(d_a, weights=d_weights, axis=1)
+
+    assert_eq(np_avg, da_avg)
+
+
+def test_average_raises():
+    d_a = da.arange(11, chunks=2)
+
+    with pytest.raises(TypeError):
+        da.average(d_a, weights=[1, 2, 3])
+
+    with pytest.warns(RuntimeWarning):
+        da.average(d_a, weights=da.zeros_like(d_a)).compute()

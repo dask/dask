@@ -16,7 +16,7 @@ from toolz.functoolz import Compose
 
 from .compatibility import long, unicode
 from .context import thread_state
-from .core import flatten, quote
+from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict
 from . import config, local, threaded
@@ -246,11 +246,13 @@ def unpack_collections(*args, **kwargs):
     collections = []
     repack_dsk = {}
 
+    collections_token = uuid.uuid4().hex
+
     def _unpack(expr):
         if is_dask_collection(expr):
             tok = tokenize(expr)
             if tok not in repack_dsk:
-                repack_dsk[tok] = (getitem, 'collections', len(collections))
+                repack_dsk[tok] = (getitem, collections_token, len(collections))
                 collections.append(expr)
             return tok
 
@@ -277,8 +279,8 @@ def unpack_collections(*args, **kwargs):
 
     def repack(results):
         dsk = repack_dsk.copy()
-        dsk['collections'] = quote(results)
-        return local.get_sync(dsk, out)
+        dsk[collections_token] = quote(results)
+        return simple_get(dsk, out)
 
     return collections, repack
 

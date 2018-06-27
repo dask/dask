@@ -5,11 +5,13 @@ import pickle
 import numpy as np
 import pytest
 
+import dask
 from dask.sharedict import ShareDict
 from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
                         memory_repr, methodcaller, M, skip_doctest,
                         SerializableLock, funcname, ndeepmap, ensure_dict,
-                        extra_titles, asciitable, itemgetter, partial_by_order)
+                        extra_titles, asciitable, itemgetter, partial_by_order,
+                        effective_get)
 from dask.utils_test import inc
 
 
@@ -316,3 +318,15 @@ def test_itemgetter():
 
 def test_partial_by_order():
     assert partial_by_order(5, function=operator.add, other=[(1, 20)]) == 25
+
+
+def test_effective_get():
+    da = pytest.importorskip('dask.array')
+    x = da.arange(10, chunks=(5,))
+
+    with pytest.warns(Warning) as record:
+        assert effective_get(collection=x) is dask.threaded.get
+        assert effective_get(get=dask.threaded.get) is dask.threaded.get
+
+    assert any('dask.base.get_scheduler' in str(warning)
+               for warning in record.list)

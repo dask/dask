@@ -1,7 +1,7 @@
 Changelog
 =========
 
-0.18.1 / 2018-XX-XX
+0.18.2 / 2018-MM-DD
 -------------------
 
 Array
@@ -9,13 +9,13 @@ Array
 
 - Reimplemented ``argtopk`` to make it release the GIL (:pr:`3596`) `Guido Imperiale`
 
-DataFrame
-+++++++++
+Bag
++++
 
 -
 
-Bag
-+++
+Dataframe
++++++++++
 
 -
 
@@ -25,7 +25,43 @@ Core
 -
 
 
-0.18.0 / 2018-MM-DD
+0.18.1 / 2018-06-22
+-------------------
+
+Array
++++++
+
+- ``from_array`` now supports scalar types and nested lists/tuples in input, just like all numpy functions do. It also produces a simpler graph when the input is a plain ndarray (:pr:`3556`) `Guido Imperiale`_
+-  Fix slicing of big arrays due to cumsum dtype bug (:pr:`3620`) `Marco Rossi`_
+-  Add Dask Array implementation of pad (:pr:`3578`) `John A Kirkham`_
+-  Fix array random API examples (:pr:`3625`) `James Bourbeau`_
+-  Add average function to dask array (:pr:`3640`) `James Bourbeau`_
+-  Tokenize ghost_internal with axes (:pr:`3643`)  `Matthew Rocklin`_
+-  from_array: special handling for ndarray, list, and scalar types (:pr:`3568`) `Guido Imperiale`_
+-  Add outer for Dask Arrays (:pr:`3658`) `John A Kirkham`_
+
+DataFrame
++++++++++
+
+- Add Index.to_series method (:pr:`3613`) `Henrique Ribeiro`_
+- Fix missing partition columns in pyarrow-parquet (:pr:`3636`) `Martin Durant`_
+
+Bag
++++
+
+-
+
+Core
+++++
+
+-  Minor tweaks to CI (:pr:`3629`) `Guido Imperiale`_
+-  Add back dask.utils.effective_get (:pr:`3642`) `Matthew Rocklin`_
+-  DASK_CONFIG dictates config write location (:pr:`3621`) `Jim Crist`_
+-  Replace 'collections' key in unpack_collections with unique key (:pr:`3632`) `Yu Feng`_
+-  Avoid deepcopy in dask.config.set (:pr:`3649`) `Matthew Rocklin`_
+
+
+0.18.0 / 2018-06-14
 -------------------
 
 Array
@@ -1189,3 +1225,5 @@ Other
 .. _`Yu Feng`: https://github.com/rainwoodman
 .. _`@andrethrill`: https://github.com/andrethrill
 .. _`@beomi`: https://github.com/beomi
+.. _`Henrique Ribeiro`: https://github.com/henriqueribeiro
+.. _`Marco Rossi`: https://github.com/m-rossi
