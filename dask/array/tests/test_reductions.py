@@ -99,7 +99,6 @@ def test_reduction_errors():
         x.sum(axis=-3)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize('dtype', ['f4', 'i4'])
 def test_reductions_2D(dtype):
     x = np.arange(1, 122).reshape((11, 11)).astype(dtype)
@@ -393,14 +392,18 @@ def test_array_reduction_out(func):
     assert_eq(x, func(np.ones((10, 10)), axis=0))
 
 
-@pytest.mark.parametrize("func", ["cumsum", "cumprod"])
+@pytest.mark.parametrize("func", ["cumsum", "cumprod",
+                                  "nancumsum", "nancumprod"])
+@pytest.mark.parametrize("use_nan", [False, True])
 @pytest.mark.parametrize("axis", [None, 0, 1, -1])
-def test_array_cumreduction_axis(func, axis):
+def test_array_cumreduction_axis(func, use_nan, axis):
     np_func = getattr(np, func)
     da_func = getattr(da, func)
 
     s = (10, 11, 12)
     a = np.arange(np.prod(s)).reshape(s)
+    if use_nan:
+        a[1] = np.nan
     d = da.from_array(a, chunks=(4, 5, 6))
 
     a_r = np_func(a, axis=axis)
