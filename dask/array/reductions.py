@@ -105,16 +105,16 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
     -------
     dask array
 
-    Function Parameters
-    -------------------
+    **Function Parameters**
+
     x_chunk: numpy.ndarray
         Individual input chunk. For ``chunk`` functions, it is one of the
         original chunks of x. For ``combine`` and ``aggregate`` functions, it's
         the concatenation of the outputs produced by the previous ``chunk`` or
         ``combine`` functions. If concatenate=False, it's a list of the raw
         outputs from the previous functions.
-    axis: list
-        Normalized list of axes to reduce upon, e.g. ``[0, ]``
+    axis: tuple
+        Normalized list of axes to reduce upon, e.g. ``(0, )``
         Scalar, negative, and None axes have been normalized away.
         Note that some numpy reduction functions cannot reduce along multiple
         axes at once and strictly require an int in input. Such functions have
