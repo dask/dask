@@ -252,8 +252,23 @@ def slice_with_int_dask_array(x, idx, offset, x_size, axis):
     """ Chunk function of `slice_with_int_dask_array_on_axis`.
     Slice one chunk of x by one chunk of idx.
 
-    Returns x sliced along axis, using only the elements of idx that fall
-    inside the current chunk.
+    Parameters
+    ----------
+    x: ndarray, any dtype, any shape
+        i-th chunk of x
+    idx: ndarray, ndim=1, dtype=any integer
+        j-th chunk of idx (cartesian product with the chunks of x)
+    offset: ndarray, shape=(1, ), dtype=int64
+        Index of the first element along axis of the current chunk of x
+    x_size: int
+        Total size of the x da.Array along axis
+    axis: int
+        normalized axis to take elements from (0 <= axis < x.ndim)
+
+    Returns
+    -------
+    x sliced along axis, using only the elements of idx that fall inside the
+    current chunk.
     """
     # Needed when idx is unsigned
     idx = idx.astype(np.int64)
@@ -280,9 +295,28 @@ def slice_with_int_dask_array(x, idx, offset, x_size, axis):
 
 def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
     """ Final aggregation function of `slice_with_int_dask_array_on_axis`.
-    Aggregate all chunks of x by one chunk of idx.
-    Note that there is no combine function, as a recursive aggregation
-    (e.g. with split_every) would not give any benefit.
+    Aggregate all chunks of x by one chunk of idx, reordering the output of
+    `slice_with_int_dask_array`.
+
+    Note that there is no combine function, as a recursive aggregation (e.g.
+    with split_every) would not give any benefit.
+
+    Parameters
+    ----------
+    idx: ndarray, ndim=1, dtype=any integer
+        j-th chunk of idx
+    chunk_outputs: ndarray
+        concatenation along axis of the outputs of `slice_with_int_dask_array`
+        for all chunks of x and the j-th chunk of idx
+    x_chunks: tuple
+        dask chunks of the x da.Array along axis, e.g. ``(3, 3, 2)``
+    axis: int
+        normalized axis to take elements from (0 <= axis < x.ndim)
+
+    Returns
+    -------
+    Selection from all chunks of x for the j-th chunk of idx, in the correct
+    order
     """
     # Needed when idx is unsigned
     idx = idx.astype(np.int64)
