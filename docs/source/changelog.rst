@@ -7,7 +7,7 @@ Changelog
 Array
 +++++
 
-- Allow slicing a Dask Array by another one-dimensional Dask Array of integers
+-
 
 Bag
 +++
