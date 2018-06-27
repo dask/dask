@@ -929,13 +929,13 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
     # Calculate the cartesian product of every chunk of x vs every chunk of idx
     p = atop(chunk.slice_with_int_dask_array,
              p_axes, x, x_axes, idx, idx_axes, offset, offset_axes,
-             axis=axis, dtype=x.dtype)
+             x_size=x.shape[axis], axis=axis, dtype=x.dtype)
 
     # Aggregate on the chunks of x along axis
     y = atop(chunk.slice_with_int_dask_array_aggregate,
              y_axes, idx, idx_axes, p, p_axes,
-             concatenate=True, x_chunks=x.chunks[axis],
-             axis=axis, dtype=x.dtype)
+             concatenate=True, x_chunks=x.chunks[axis], axis=axis,
+             dtype=x.dtype)
     return y
 
 

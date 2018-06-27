@@ -248,7 +248,7 @@ def einsum(*operands, **kwargs):
     return chunk.reshape(chunk.shape + (1,) * ncontract_inds)
 
 
-def slice_with_int_dask_array(x, idx, offset, axis):
+def slice_with_int_dask_array(x, idx, offset, x_size, axis):
     """ Chunk function of `slice_with_int_dask_array_on_axis`.
     Slice one chunk of x by one chunk of idx.
 
@@ -257,13 +257,19 @@ def slice_with_int_dask_array(x, idx, offset, axis):
     """
     # Needed when idx is unsigned
     idx = idx.astype(np.int64)
+
+    # Normalize negative indices
+    idx = np.where(idx < 0, idx + x_size, idx)
+
     # A chunk of the offset dask Array is a numpy array with shape (1, ).
     # It indicates the index of the first element along axis of the current
     # chunk of x.
     idx = idx - offset
+
     # Drop elements of idx that do not fall inside the current chunk of x
     idx_filter = (idx >= 0) & (idx < x.shape[axis])
     idx = idx[idx_filter]
+
     # np.take does not support slice indices
     # return np.take(x, idx, axis)
     return x[tuple(
@@ -280,6 +286,9 @@ def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
     """
     # Needed when idx is unsigned
     idx = idx.astype(np.int64)
+
+    # Normalize negative indices
+    idx = np.where(idx < 0, idx + sum(x_chunks), idx)
 
     x_chunk_offset = 0
     chunk_output_offset = 0

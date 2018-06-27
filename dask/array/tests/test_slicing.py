@@ -529,9 +529,9 @@ def test_index_with_int_dask_array(x_chunks, idx_chunks):
 @pytest.mark.parametrize('chunks', [1, 2, 3])
 def test_index_with_int_dask_array_0d(chunks):
     # Slice by 0-dimensional array
-    x = da.from_array(np.array([[10, 20, 30],
-                                [40, 50, 60]]), chunks=chunks)
-    idx0 = da.from_array(np.array(1), chunks=1)
+    x = da.from_array([[10, 20, 30],
+                       [40, 50, 60]], chunks=chunks)
+    idx0 = da.from_array(1, chunks=1)
     assert_eq(x[idx0, :], x[1, :])
     assert_eq(x[:, idx0], x[:, 1])
 
@@ -547,13 +547,19 @@ def test_index_with_int_dask_array_nanchunks(chunks):
 
 
 @pytest.mark.parametrize('chunks', [2, 4])
-def test_index_with_int_dask_array_indexerror(chunks):
-    # Slice by array with nan-sized chunks
+def test_index_with_int_dask_array_negindex(chunks):
     a = da.arange(4, chunks=chunks)
-    idx = da.from_array(np.array([-1]), chunks=1)
+    idx = da.from_array([-1, -4], chunks=1)
+    assert_eq(a[idx], np.array([3, 0]))
+
+
+@pytest.mark.parametrize('chunks', [2, 4])
+def test_index_with_int_dask_array_indexerror(chunks):
+    a = da.arange(4, chunks=chunks)
+    idx = da.from_array([4], chunks=1)
     with pytest.raises(IndexError):
         a[idx].compute()
-    idx = da.from_array(np.array([4]), chunks=1)
+    idx = da.from_array([-5], chunks=1)
     with pytest.raises(IndexError):
         a[idx].compute()
 
