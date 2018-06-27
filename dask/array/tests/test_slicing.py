@@ -572,6 +572,21 @@ def test_index_with_int_dask_array_dtypes(dtype):
     assert_eq(a[idx], np.array([20, 30]))
 
 
+def test_index_with_int_dask_array_nocompute():
+    """ Test that when the indices are a dask array
+    they are not accidentally computed
+    """
+    def crash():
+        raise NotImplementedError()
+
+    x = da.arange(5, chunks=-1)
+    idx = da.Array({('x', 0): (crash,)}, name='x',
+                   chunks=((2,), ), dtype=np.int64)
+    result = x[idx]
+    with pytest.raises(NotImplementedError):
+        result.compute()
+
+
 def test_index_with_bool_dask_array():
     x = np.arange(36).reshape((6, 6))
     d = da.from_array(x, chunks=(3, 3))
