@@ -841,9 +841,9 @@ def check_index(ind, dimension):
 
 
 def slice_with_int_dask_array(x, index):
-    """Slice x with at most one 1D dask arrays of ints.
+    """ Slice x with at most one 1D dask arrays of ints.
 
-    This is a helper function of `Array.__getitem__`.
+    This is a helper function of :meth:`Array.__getitem__`.
 
     Parameters
     ----------
@@ -896,13 +896,15 @@ def slice_with_int_dask_array(x, index):
 
 
 def slice_with_int_dask_array_on_axis(x, idx, axis):
-    """Slice a ND dask array with a 1D dask arrays of ints along the given
+    """ Slice a ND dask array with a 1D dask arrays of ints along the given
     axis.
 
-    This is a helper function of `slice_with_int_dask_array`.
+    This is a helper function of :func:`slice_with_int_dask_array`.
     """
     from .core import Array, atop, from_array
     from . import chunk
+
+    assert 0 <= axis < x.ndim
 
     if np.isnan(x.chunks[axis]).any():
         raise NotImplementedError("Slicing an array with unknown chunks with "
@@ -913,8 +915,8 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
     offset = np.roll(np.cumsum(x.chunks[axis]), 1)
     offset[0] = 0
     offset = from_array(offset, chunks=1)
-    # Tamper with the declared chunks of offset to make atop align it
-    # with x[axis]
+    # Tamper with the declared chunks of offset to make atop align it with
+    # x[axis]
     offset = Array(offset.dask, offset.name, (x.chunks[axis], ), offset.dtype)
 
     # Define axis labels for atop
@@ -938,7 +940,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
 
 
 def slice_with_bool_dask_array(x, index):
-    """Slice x with one or more dask arrays of bools
+    """ Slice x with one or more dask arrays of bools
 
     This is a helper function of `Array.__getitem__`.
 

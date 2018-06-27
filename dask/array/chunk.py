@@ -249,15 +249,21 @@ def einsum(*operands, **kwargs):
 
 
 def slice_with_int_dask_array(x, idx, offset, axis):
-    """Chunk kernel of `slice_with_int_dask_array_on_axis`.
+    """ Chunk function of `slice_with_int_dask_array_on_axis`.
     Slice one chunk of x by one chunk of idx.
 
-    Returns ``x`` sliced along ``axis``, using only the elements of
-    ``idx`` that fall inside the current chunk.
+    Returns x sliced along axis, using only the elements of idx that fall
+    inside the current chunk.
     """
-    idx = idx - offset[0]
+    # A chunk of the offset dask Array is a numpy array with shape (1, ).
+    # It indicates the index of the first element along axis of the current
+    # chunk of x.
+    idx = idx - offset
+    # Drop elements of idx that do not fall inside the current chunk of x
     idx_filter = (idx >= 0) & (idx < x.shape[axis])
     idx = idx[idx_filter]
+    # np.take does not support slice indices
+    # return np.take(x, idx, axis)
     return x[tuple(
         idx if i == axis else slice(None)
         for i in range(x.ndim)
@@ -265,8 +271,10 @@ def slice_with_int_dask_array(x, idx, offset, axis):
 
 
 def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
-    """Final aggregation kernel of `slice_with_int_dask_array_on_axis`.
+    """ Final aggregation function of `slice_with_int_dask_array_on_axis`.
     Aggregate all chunks of x by one chunk of idx.
+    Note that there is no combine function, as a recursive aggregation
+    (e.g. with split_every) would not give any benefit.
     """
     x_chunk_offset = 0
     chunk_output_offset = 0
@@ -282,6 +290,8 @@ def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
         if idx_cum.size > 0:
             chunk_output_offset += idx_cum[-1]
 
+    # np.take does not support slice indices
+    # return np.take(chunk_outputs, idx_final, axis)
     return chunk_outputs[tuple(
         idx_final if i == axis else slice(None)
         for i in range(chunk_outputs.ndim)
