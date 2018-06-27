@@ -258,10 +258,10 @@ def slice_with_int_dask_array(x, idx, offset, axis):
     idx = idx - offset[0]
     idx_filter = (idx >= 0) & (idx < x.shape[axis])
     idx = idx[idx_filter]
-    return x[[
+    return x[tuple(
         idx if i == axis else slice(None)
         for i in range(x.ndim)
-    ]]
+    )]
 
 
 def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
@@ -282,7 +282,7 @@ def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
         if idx_cum.size > 0:
             chunk_output_offset += idx_cum[-1]
 
-    return chunk_outputs[[
+    return chunk_outputs[tuple(
         idx_final if i == axis else slice(None)
         for i in range(chunk_outputs.ndim)
-    ]]
+    )]
