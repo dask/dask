@@ -329,6 +329,8 @@ def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
 
     # Assemble the final index that picks from the output of the previous
     # kernel by adding together one layer per chunk of x
+    # FIXME: this could probably be reimplemented with a faster search-based
+    # algorithm
     idx_final = np.zeros_like(idx)
     for x_chunk in x_chunks:
         idx_filter = (idx >= x_chunk_offset) & (idx < x_chunk_offset + x_chunk)
