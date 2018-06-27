@@ -191,13 +191,9 @@ def linspace(start, stop, num=50, endpoint=True, retstep=False, chunks=None,
     endpoint : bool, optional
         If True, ``stop`` is the last sample. Otherwise, it is not included.
         Default is True.
-
-        .. versionadded:: 0.18.2
     retstep : bool, optional
         If True, return (samples, step), where step is the spacing between
         samples. Default is False.
-
-        .. versionadded:: 0.18.2
     chunks :  int
         The number of samples on each block. Note that the last block will have
         fewer samples if `num % blocksize != 0`
@@ -238,7 +234,8 @@ def linspace(start, stop, num=50, endpoint=True, retstep=False, chunks=None,
     for i, bs in enumerate(chunks[0]):
         bs_space = bs - 1 if endpoint else bs
         blockstop = blockstart + (bs_space * step)
-        task = (partial(np.linspace, endpoint=endpoint, dtype=dtype), blockstart, blockstop, bs)
+        task = (partial(np.linspace, endpoint=endpoint, dtype=dtype),
+                blockstart, blockstop, bs)
         blockstart = blockstart + (step * bs)
         dsk[(name, i)] = task
 
