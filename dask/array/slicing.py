@@ -915,8 +915,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
     offset = from_array(offset, chunks=1)
     # Tamper with the declared chunks of offset to make atop align it
     # with x[axis]
-    offset = Array(offset.dask, name=offset.name,
-                   chunks=(x.chunks[axis], ), dtype=int)
+    offset = Array(offset.dask, offset.name, (x.chunks[axis], ), offset.dtype)
 
     # Define axis labels for atop
     x_axes = tuple(range(x.ndim))
