@@ -392,8 +392,10 @@ def test_array_reduction_out(func):
     assert_eq(x, func(np.ones((10, 10)), axis=0))
 
 
-@pytest.mark.parametrize("func", ["cumsum", "cumprod",
-                                  "nancumsum", "nancumprod"])
+cum_funcs = ["cumsum", "cumprod"]
+if np.__version__ >= '1.12.0':
+    cum_funcs += ["nancumsum", "nancumprod"]
+@pytest.mark.parametrize("func", cum_funcs)
 @pytest.mark.parametrize("use_nan", [False, True])
 @pytest.mark.parametrize("axis", [None, 0, 1, -1])
 def test_array_cumreduction_axis(func, use_nan, axis):
