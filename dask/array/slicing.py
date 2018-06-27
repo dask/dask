@@ -919,9 +919,9 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
                    chunks=(x.chunks[axis], ), dtype=int)
 
     # Define axis labels for atop
-    x_axes = 'abcdefghijklmnopqrstuvwxy'[:x.ndim]
-    idx_axes = 'z'
-    offset_axes = x_axes[axis]
+    x_axes = tuple(range(x.ndim))
+    idx_axes = (x.ndim, )  # arbitrary index not already in x_axes
+    offset_axes = (axis, )
     p_axes = x_axes[:axis + 1] + idx_axes + x_axes[axis + 1:]
     y_axes = x_axes[:axis] + idx_axes + x_axes[axis + 1:]
 
