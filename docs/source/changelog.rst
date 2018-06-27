@@ -1,7 +1,7 @@
 Changelog
 =========
 
-0.18.1 / 2018-XX-XX
+0.18.2 / 2018-MM-DD
 -------------------
 
 Array
@@ -9,13 +9,13 @@ Array
 
 - Allow slicing a Dask Array by another one-dimensional Dask Array of integers
 
-DataFrame
-+++++++++
+Bag
++++
 
 -
 
-Bag
-+++
+Dataframe
++++++++++
 
 -
 
@@ -25,18 +25,51 @@ Core
 -
 
 
-0.18.0 / 2018-MM-DD
+0.18.1 / 2018-06-22
 -------------------
 
 Array
 +++++
 
-- Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
+- ``from_array`` now supports scalar types and nested lists/tuples in input, just like all numpy functions do. It also produces a simpler graph when the input is a plain ndarray (:pr:`3556`) `Guido Imperiale`_
+-  Fix slicing of big arrays due to cumsum dtype bug (:pr:`3620`) `Marco Rossi`_
+-  Add Dask Array implementation of pad (:pr:`3578`) `John A Kirkham`_
+-  Fix array random API examples (:pr:`3625`) `James Bourbeau`_
+-  Add average function to dask array (:pr:`3640`) `James Bourbeau`_
+-  Tokenize ghost_internal with axes (:pr:`3643`)  `Matthew Rocklin`_
+-  from_array: special handling for ndarray, list, and scalar types (:pr:`3568`) `Guido Imperiale`_
+-  Add outer for Dask Arrays (:pr:`3658`) `John A Kirkham`_
+
+DataFrame
++++++++++
+
+- Add Index.to_series method (:pr:`3613`) `Henrique Ribeiro`_
+- Fix missing partition columns in pyarrow-parquet (:pr:`3636`) `Martin Durant`_
+
+Bag
++++
+
+-
+
+Core
+++++
+
+-  Minor tweaks to CI (:pr:`3629`) `Guido Imperiale`_
+-  Add back dask.utils.effective_get (:pr:`3642`) `Matthew Rocklin`_
+-  DASK_CONFIG dictates config write location (:pr:`3621`) `Jim Crist`_
+-  Replace 'collections' key in unpack_collections with unique key (:pr:`3632`) `Yu Feng`_
+-  Avoid deepcopy in dask.config.set (:pr:`3649`) `Matthew Rocklin`_
+
+
+0.18.0 / 2018-06-14
+-------------------
+
+Array
++++++
+
 - Add to/read_zarr for Zarr-format datasets and arrays (:pr:`3460`) `Martin Durant`_
 - Experimental addition of generalized ufunc support, ``apply_gufunc``, ``gufunc``, and
   ``as_gufunc`` (:pr:`3109`) (:pr:`3526`) (:pr:`3539`) `Markus Gonser`_
-- Faster slice_1d in dask.array (:pr:`3479`) `Yu Feng`_
-- Add split_every parameter to einsum (:pr:`3472`) `Guido Imperiale`_
 - Avoid unnecessary rechunking tasks (:pr:`3529`) `Matthew Rocklin`_
 - Compute dtypes at runtime for fft (:pr:`3511`) `Matthew Rocklin`_
 - Generate UUIDs for all da.store operations (:pr:`3540`) `Martin Durant`_
@@ -62,7 +95,6 @@ Dataframe
 - Adds ``index`` to unsupported arguments for ``DataFrame.rename`` method (:pr:`3522`) `James Bourbeau`_
 - Adds support to subset Dask DataFrame columns using ``numpy.ndarray``, ``pandas.Series``, and
   ``pandas.Index`` objects (:pr:`3536`) `James Bourbeau`_
-- Pandas 0.23.0 compat (:pr:`3499`) `Tom Augspurger`_
 - Raise error if meta columns do not match dataframe (:pr:`3485`) `Christopher Ren`_
 - Add index to unsupprted argument for DataFrame.rename (:pr:`3522`) `James Bourbeau`_
 - Adds support for subsetting DataFrames with pandas Index/Series and numpy ndarrays (:pr:`3536`) `James Bourbeau`_
@@ -101,8 +133,8 @@ Array
 +++++
 
 - Fix ``rechunk`` with chunksize of -1 in a dict (:pr:`3469`) `Stephan Hoyer`_
-- ``einsum`` now accepts the ``split_every`` parameter (:pr:`3396`) `Guido Imperiale`_
-- Improved slicing performance (:pr:`3469`) `Yu Feng`_
+- ``einsum`` now accepts the ``split_every`` parameter (:pr:`3471`) `Guido Imperiale`_
+- Improved slicing performance (:pr:`3479`) `Yu Feng`_
 
 DataFrame
 +++++++++
@@ -1195,3 +1227,5 @@ Other
 .. _`Yu Feng`: https://github.com/rainwoodman
 .. _`@andrethrill`: https://github.com/andrethrill
 .. _`@beomi`: https://github.com/beomi
+.. _`Henrique Ribeiro`: https://github.com/henriqueribeiro
+.. _`Marco Rossi`: https://github.com/m-rossi

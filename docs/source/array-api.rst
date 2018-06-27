@@ -31,6 +31,7 @@ Top level user functions:
    atleast_1d
    atleast_2d
    atleast_3d
+   average
    bincount
    bitwise_and
    bitwise_not
@@ -140,8 +141,10 @@ Top level user functions:
    notnull
    ones
    ones_like
+   outer
    pad
    percentile
+   PerformanceWarning
    piecewise
    prod
    ptp
@@ -390,6 +393,7 @@ Other functions
 .. autofunction:: atleast_1d
 .. autofunction:: atleast_2d
 .. autofunction:: atleast_3d
+.. autofunction:: average
 .. autofunction:: bincount
 .. autofunction:: bitwise_and
 .. autofunction:: bitwise_not
@@ -497,6 +501,7 @@ Other functions
 .. autofunction:: notnull
 .. autofunction:: ones
 .. autofunction:: ones_like
+.. autofunction:: outer
 .. autofunction:: pad
 .. autofunction:: percentile
 .. autofunction:: piecewise

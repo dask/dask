@@ -11,6 +11,8 @@ def test_ones():
     x = np.array(a)
     assert (x == np.ones((10, 10), 'i4')).all()
 
+    assert a.name.startswith('ones-')
+
 
 def test_size_as_list():
     a = ones([10, 10], dtype='i4', chunks=(4, 4))
@@ -35,6 +37,8 @@ def test_full():
 
     assert (a.compute() == 100).all()
     assert a.dtype == a.compute(scheduler='sync').dtype == 'i8'
+
+    assert a.name.startswith('full-')
 
 
 def test_can_make_really_big_array_of_ones():
