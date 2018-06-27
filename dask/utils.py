@@ -15,6 +15,7 @@ from numbers import Integral
 from threading import Lock
 import multiprocessing as mp
 import uuid
+import warnings
 from weakref import WeakValueDictionary
 
 from .compatibility import get_named_args, getargspec, PY3, unicode, bind_method
@@ -1004,3 +1005,11 @@ byte_sizes = {
 byte_sizes = {k.lower(): v for k, v in byte_sizes.items()}
 byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and 'i' not in k})
 byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and 'i' in k})
+
+
+def effective_get(get=None, collection=None):
+    """ Deprecated: see dask.base.get_scheduler """
+    warnings.warn("Deprecated, see dask.base.get_scheduler instead")
+
+    from dask.base import get_scheduler
+    return get_scheduler(get=get, collections=[collection])

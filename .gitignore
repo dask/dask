@@ -1,4 +1,5 @@
-*.pyc
+*.py[cod]
+__pycache__/
 *.egg-info
 dask-worker-space/
 docs/build

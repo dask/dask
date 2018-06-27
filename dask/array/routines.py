@@ -19,6 +19,7 @@ from . import chunk
 from .creation import arange
 from .utils import safe_wraps
 from .wrap import ones
+from .ufunc import multiply
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    asanyarray, concatenate, stack, atop, broadcast_shapes,
@@ -189,7 +190,16 @@ ALPHABET = alphabet.upper()
 def _tensordot(a, b, axes):
     x = max([a, b], key=lambda x: x.__array_priority__)
     tensordot = tensordot_lookup.dispatch(type(x))
-    x = tensordot(a, b, axes=axes)
+
+    # workaround may be removed when numpy version (currently 1.13.0) is bumped
+    a_dims = np.array([a.shape[i] for i in axes[0]])
+    b_dims = np.array([b.shape[i] for i in axes[1]])
+    if len(a_dims) > 0 and (a_dims == b_dims).all() and a_dims.min() == 0:
+        x = np.zeros(tuple([s for i, s in enumerate(a.shape) if i not in axes[0]] +
+                           [s for i, s in enumerate(b.shape) if i not in axes[1]]))
+    else:
+        x = tensordot(a, b, axes=axes)
+
     ind = [slice(None, None)] * x.ndim
     for a in sorted(axes[0]):
         ind.insert(a, None)
@@ -280,6 +290,16 @@ def matmul(a, b):
         out = out[..., 0]
 
     return out
+
+
+@wraps(np.outer)
+def outer(a, b):
+    a = a.flatten()
+    b = b.flatten()
+
+    dtype = np.outer(a.dtype.type(), b.dtype.type()).dtype
+
+    return atop(np.outer, "ij", a, "i", b, "j", dtype=dtype)
 
 
 def _inner_apply_along_axis(arr,
@@ -1227,3 +1247,49 @@ def insert(arr, obj, values, axis):
     interleaved = list(interleave([split_arr, split_values]))
     interleaved = [i for i in interleaved if i.nbytes]
     return concatenate(interleaved, axis=axis)
+
+
+@wraps(np.average)
+def average(a, axis=None, weights=None, returned=False):
+    # This was minimally modified from numpy.average
+    # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
+    # or NUMPY_LICENSE.txt within this directory
+    a = asanyarray(a)
+
+    if weights is None:
+        avg = a.mean(axis)
+        scl = avg.dtype.type(a.size / avg.size)
+    else:
+        wgt = asanyarray(weights)
+
+        if issubclass(a.dtype.type, (np.integer, np.bool_)):
+            result_dtype = result_type(a.dtype, wgt.dtype, 'f8')
+        else:
+            result_dtype = result_type(a.dtype, wgt.dtype)
+
+        # Sanity checks
+        if a.shape != wgt.shape:
+            if axis is None:
+                raise TypeError(
+                    "Axis must be specified when shapes of a and weights "
+                    "differ.")
+            if wgt.ndim != 1:
+                raise TypeError(
+                    "1D weights expected when shapes of a and weights differ.")
+            if wgt.shape[0] != a.shape[axis]:
+                raise ValueError(
+                    "Length of weights not compatible with specified axis.")
+
+            # setup wgt to broadcast along axis
+            wgt = broadcast_to(wgt, (a.ndim - 1) * (1,) + wgt.shape)
+            wgt = wgt.swapaxes(-1, axis)
+
+        scl = wgt.sum(axis=axis, dtype=result_dtype)
+        avg = multiply(a, wgt, dtype=result_dtype).sum(axis) / scl
+
+    if returned:
+        if scl.shape != avg.shape:
+            scl = broadcast_to(scl, avg.shape).copy()
+        return avg, scl
+    else:
+        return avg

@@ -70,6 +70,10 @@ def register_sparse():
     tensordot_lookup.register(sparse.COO, sparse.tensordot)
 
 
+class PerformanceWarning(Warning):
+    """ A warning given when bad chunking may cause poor performance """
+
+
 def getter(a, b, asarray=True, lock=None):
     if isinstance(b, tuple) and any(x is None for x in b):
         b2 = tuple(x for x in b if x is not None)
@@ -2180,6 +2184,9 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
 
     >>> a = da.from_array(x, chunks=(1000, 1000), lock=True)  # doctest: +SKIP
     """
+    if isinstance(x, (list, tuple, memoryview) + np.ScalarType):
+        x = np.array(x)
+
     chunks = normalize_chunks(chunks, x.shape, dtype=x.dtype)
     if name in (None, True):
         token = tokenize(x, chunks)
@@ -2192,13 +2199,25 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     if lock is True:
         lock = SerializableLock()
 
-    if getitem is None:
-        getitem = getter if fancy else getter_nofancy
+    # Always use the getter for h5py etc. Not using isinstance(x, np.ndarray)
+    # because np.matrix is a subclass of np.ndarray.
+    if type(x) is np.ndarray and all(len(c) == 1 for c in chunks):
+        # No slicing needed
+        dsk = {(name, ) + (0, ) * x.ndim: x}
+    else:
+        if getitem is None:
+            if type(x) is np.ndarray:
+                # simpler and cleaner, but missing all the nuances of getter
+                getitem = operator.getitem
+            elif fancy:
+                getitem = getter
+            else:
+                getitem = getter_nofancy
 
-    dsk = getem(original_name, chunks, getitem=getitem, shape=x.shape,
-                out_name=name, lock=lock, asarray=asarray,
-                dtype=x.dtype)
-    dsk[original_name] = x
+        dsk = getem(original_name, chunks, getitem=getitem, shape=x.shape,
+                    out_name=name, lock=lock, asarray=asarray,
+                    dtype=x.dtype)
+        dsk[original_name] = x
 
     return Array(dsk, name, chunks, dtype=x.dtype)
 
@@ -2521,7 +2540,7 @@ def unify_chunks(*args, **kwargs):
 
     if warn and nparts and nparts >= max_parts * 10:
         warnings.warn("Increasing number of chunks by factor of %d" %
-                      (nparts / max_parts))
+                      (nparts / max_parts), PerformanceWarning, stacklevel=3)
 
     arrays = []
     for a, i in arginds:

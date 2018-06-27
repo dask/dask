@@ -20,6 +20,21 @@ These images are large, around 1GB.
     part of a JupyterHub deployment.  It also includes a matching Dask software
     environment described above.  This image is about 2GB in size.
 
+Example
+-------
+
+Here is a simple example on the local host network
+
+.. code-block:: bash
+
+   docker run -it --network host daskdev/dask dask-scheduler  # start scheduler
+
+   docker run -it --network host daskdev/dask dask-worker localhost:8786 # start worker
+   docker run -it --network host daskdev/dask dask-worker localhost:8786 # start worker
+   docker run -it --network host daskdev/dask dask-worker localhost:8786 # start worker
+
+   docker run -it --network host daskdev/dask-notebook  # start Jupyter server
+
 
 Extensibility
 -------------

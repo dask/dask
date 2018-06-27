@@ -1,21 +1,21 @@
 Changelog
 =========
 
-0.18.1 / 2018-XX-XX
+0.18.2 / 2018-MM-DD
 -------------------
 
 Array
 +++++
 
--
-
-DataFrame
-+++++++++
-
--
+- Reimplemented ``argtopk`` to make it release the GIL (:pr:`3596`) `Guido Imperiale`_
 
 Bag
 +++
+
+-
+
+Dataframe
++++++++++
 
 -
 
@@ -25,7 +25,39 @@ Core
 -
 
 
-0.18.0 / 2018-MM-DD
+0.18.1 / 2018-06-22
+-------------------
+
+Array
++++++
+
+- ``from_array`` now supports scalar types and nested lists/tuples in input,
+  just like all numpy functions do; it also produces a simpler graph when the
+  input is a plain ndarray (:pr:`3568`) `Guido Imperiale`_
+- Fix slicing of big arrays due to cumsum dtype bug (:pr:`3620`) `Marco Rossi`_
+- Add Dask Array implementation of pad (:pr:`3578`) `John A Kirkham`_
+- Fix array random API examples (:pr:`3625`) `James Bourbeau`_
+- Add average function to dask array (:pr:`3640`) `James Bourbeau`_
+- Tokenize ghost_internal with axes (:pr:`3643`)  `Matthew Rocklin`_
+- Add outer for Dask Arrays (:pr:`3658`) `John A Kirkham`_
+
+DataFrame
++++++++++
+
+- Add Index.to_series method (:pr:`3613`) `Henrique Ribeiro`_
+- Fix missing partition columns in pyarrow-parquet (:pr:`3636`) `Martin Durant`_
+
+Core
+++++
+
+- Minor tweaks to CI (:pr:`3629`) `Guido Imperiale`_
+- Add back dask.utils.effective_get (:pr:`3642`) `Matthew Rocklin`_
+- DASK_CONFIG dictates config write location (:pr:`3621`) `Jim Crist`_
+- Replace 'collections' key in unpack_collections with unique key (:pr:`3632`) `Yu Feng`_
+- Avoid deepcopy in dask.config.set (:pr:`3649`) `Matthew Rocklin`_
+
+
+0.18.0 / 2018-06-14
 -------------------
 
 Array
@@ -50,7 +82,6 @@ Array
 - Support Zarr Arrays in `to_zarr`/`from_zarr` (:pr:`3561`) `John A Kirkham`_
 - Added recursion to array/linalg/tsqr to better manage the single core bottleneck (:pr:`3586`) `Jeremy Chan`_
 
-
 Dataframe
 +++++++++
 
@@ -69,24 +100,24 @@ Dataframe
 Bag
 +++
 
--  Rename method= keyword to shuffle= in bag.groupby (:pr:`3470`) `Matthew Rocklin`_
+- Rename method= keyword to shuffle= in bag.groupby (:pr:`3470`) `Matthew Rocklin`_
 
 Core
 ++++
 
--  Replace get= keyword with scheduler= keyword (:pr:`3448`) `Matthew Rocklin`_
--  Add centralized dask.config module to handle configuration for all Dask
-   subprojects (:pr:`3432`) (:pr:`3513`) (:pr:`3520`) `Matthew Rocklin`_
--  Add `dask-ssh` CLI Options and Description. (:pr:`3476`) `@beomi`_
--  Read whole files fix regardless of header for HTTP (:pr:`3496`) `Martin Durant`_
--  Adds synchronous scheduler syntax to debugging docs (:pr:`3509`) `James Bourbeau`_
--  Replace dask.set_options with dask.config.set (:pr:`3502`) `Matthew Rocklin`_
--  Update sphinx readthedocs-theme (:pr:`3516`) `Matthew Rocklin`_
--  Introduce "auto" value for normalize_chunks (:pr:`3507`) `Matthew Rocklin`_
--  Fix check in configuration with env=None (:pr:`3562`) `Simon Perkins`_
--  Update sizeof definitions (:pr:`3582`) `Matthew Rocklin`_
--  Remove --verbose flag from travis-ci (:pr:`3477`) `Matthew Rocklin`_
--  Remove "da.random" from random array keys (:pr:`3604`) `Matthew Rocklin`_
+- Replace get= keyword with scheduler= keyword (:pr:`3448`) `Matthew Rocklin`_
+- Add centralized dask.config module to handle configuration for all Dask
+  subprojects (:pr:`3432`) (:pr:`3513`) (:pr:`3520`) `Matthew Rocklin`_
+- Add `dask-ssh` CLI Options and Description. (:pr:`3476`) `@beomi`_
+- Read whole files fix regardless of header for HTTP (:pr:`3496`) `Martin Durant`_
+- Adds synchronous scheduler syntax to debugging docs (:pr:`3509`) `James Bourbeau`_
+- Replace dask.set_options with dask.config.set (:pr:`3502`) `Matthew Rocklin`_
+- Update sphinx readthedocs-theme (:pr:`3516`) `Matthew Rocklin`_
+- Introduce "auto" value for normalize_chunks (:pr:`3507`) `Matthew Rocklin`_
+- Fix check in configuration with env=None (:pr:`3562`) `Simon Perkins`_
+- Update sizeof definitions (:pr:`3582`) `Matthew Rocklin`_
+- Remove --verbose flag from travis-ci (:pr:`3477`) `Matthew Rocklin`_
+- Remove "da.random" from random array keys (:pr:`3604`) `Matthew Rocklin`_
 
 
 0.17.5 / 2018-05-16
@@ -111,10 +142,10 @@ DataFrame
 Dataframe
 +++++++++
 
--  Add support for indexing Dask DataFrames with string subclasses (:pr:`3461`) `James Bourbeau`_
--  Allow using both sorted_index and chunksize in read_hdf (:pr:`3463`) `Pierre Bartet`_
--  Pass filesystem to arrow piece reader (:pr:`3466`) `Martin Durant`_
--  Switches to using dask.compat string_types (:pr:`3462`) `James Bourbeau`_
+- Add support for indexing Dask DataFrames with string subclasses (:pr:`3461`) `James Bourbeau`_
+- Allow using both sorted_index and chunksize in read_hdf (:pr:`3463`) `Pierre Bartet`_
+- Pass filesystem to arrow piece reader (:pr:`3466`) `Martin Durant`_
+- Switches to using dask.compat string_types (:pr:`3462`) `James Bourbeau`_
 
 
 0.17.3 / 2018-05-02
@@ -1190,3 +1221,5 @@ Other
 .. _`Yu Feng`: https://github.com/rainwoodman
 .. _`@andrethrill`: https://github.com/andrethrill
 .. _`@beomi`: https://github.com/beomi
+.. _`Henrique Ribeiro`: https://github.com/henriqueribeiro
+.. _`Marco Rossi`: https://github.com/m-rossi
