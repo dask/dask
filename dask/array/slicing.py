@@ -874,7 +874,7 @@ def slice_with_int_dask_array(x, index):
     dropped_axis_cnt = 0
     for in_axis, idx in enumerate(index):
         out_axis = in_axis - dropped_axis_cnt
-        if isinstance(idx, Array) and idx.dtype.kind == 'i':
+        if isinstance(idx, Array) and idx.dtype.kind in 'iu':
             if idx.ndim == 0:
                 idx = idx[np.newaxis]
                 x = slice_with_int_dask_array_on_axis(x, idx, out_axis)

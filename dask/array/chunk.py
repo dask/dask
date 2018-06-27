@@ -255,6 +255,8 @@ def slice_with_int_dask_array(x, idx, offset, axis):
     Returns x sliced along axis, using only the elements of idx that fall
     inside the current chunk.
     """
+    # Needed when idx is unsigned
+    idx = idx.astype(np.int64)
     # A chunk of the offset dask Array is a numpy array with shape (1, ).
     # It indicates the index of the first element along axis of the current
     # chunk of x.
@@ -276,6 +278,9 @@ def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
     Note that there is no combine function, as a recursive aggregation
     (e.g. with split_every) would not give any benefit.
     """
+    # Needed when idx is unsigned
+    idx = idx.astype(np.int64)
+
     x_chunk_offset = 0
     chunk_output_offset = 0
 

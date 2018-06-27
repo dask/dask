@@ -1327,7 +1327,7 @@ class Array(DaskMethodsMixin):
         from .slicing import normalize_index, slice_with_int_dask_array, slice_with_bool_dask_array
         index2 = normalize_index(index, self.shape)
 
-        if any(isinstance(i, Array) and i.dtype.kind == 'i' for i in index2):
+        if any(isinstance(i, Array) and i.dtype.kind in 'iu' for i in index2):
             self, index2 = slice_with_int_dask_array(self, index2)
         if any(isinstance(i, Array) and i.dtype == bool for i in index2):
             self, index2 = slice_with_bool_dask_array(self, index2)
