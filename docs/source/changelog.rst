@@ -7,7 +7,7 @@ Changelog
 Array
 +++++
 
-- Reimplemented ``argtopk`` to make it release the GIL (:pr:`3596`) `Guido Imperiale`
+- Reimplemented ``argtopk`` to make it release the GIL (:pr:`3596`) `Guido Imperiale`_
 
 Bag
 +++
