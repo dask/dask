@@ -232,7 +232,7 @@ def test_order_doesnt_fail_on_mixed_type_keys(abcde):
 def test_gh_3055():
     da = pytest.importorskip('dask.array')
     A, B = 20, 99
-    x = da.random.normal(size=(A, B), chunks=(1, None))
+    orig = x = da.random.normal(size=(A, B), chunks=(1, None))
     for _ in range(2):
         y = (x[:, None, :] * x[:, :, None]).cumsum(axis=0)
         x = x.cumsum(axis=0)
@@ -242,6 +242,10 @@ def test_gh_3055():
     o = order(dsk)
     L = [o[k] for k in w.__dask_keys__()]
     assert sum(x < len(o) / 2 for x in L) > len(L) / 3  # some complete quickly
+
+    L = [o[k] for kk in orig.__dask_keys__() for k in kk]
+    assert sum(x > len(o) / 2 for x in L) > len(L) / 3  # some start later
+
     assert sorted(L) == L  # operate in order
 
 
@@ -409,6 +413,83 @@ def test_string_ordering_dependents():
                  ('a', 1): 1,
                  ('a', 2): 2,
                  ('a', 3): 3}
+
+
+def test_prefer_short_narrow(abcde):
+    # See test_prefer_short_ancestor for a fail case.
+    a, b, c, _, _ = abcde
+    dsk = {
+        (a, 0): 0,
+        (b, 0): 0,
+        (c, 0): 0,
+        (c, 1): (f, (c, 0), (a, 0), (b, 0)),
+        (a, 1): 1,
+        (b, 1): 1,
+        (c, 2): (f, (c, 1), (a, 1), (b, 1)),
+    }
+    o = order(dsk)
+    assert o[(b, 0)] < o[(b, 1)]
+    assert o[(b, 0)] < o[(c, 2)]
+    assert o[(c, 1)] < o[(c, 2)]
+
+
+def test_prefer_short_ancestor(abcde):
+    """
+    From https://github.com/dask/dask-ml/issues/206#issuecomment-395869929
+
+    Two cases, one where chunks of an array are independent, and one where the
+    chunks of an array have a shared source. We handled the independent one
+    "well" earlier.
+
+    Good:
+
+                    c2
+                   / \ \
+                  /   \ \
+                c1     \ \
+              / | \     \ \
+            c0  a0 b0   a1 b1
+
+    Bad:
+
+                    c2
+                   / \ \
+                  /   \ \
+                c1     \ \
+              / | \     \ \
+            c0  a0 b0   a1 b1
+                   \ \   / /
+                    \ \ / /
+                      a-b
+
+
+    The difference is that all the `a` and `b` tasks now have a common
+    ancestor.
+
+    We would like to choose c1 *before* a1, and b1 because
+
+    * we can release a0 and b0 once c1 is done
+    * we don't need a1 and b1 to compute c1.
+    """
+    a, b, c, _, _ = abcde
+    ab = a + b
+
+    dsk = {
+        ab: 0,
+        (a, 0): (f, ab, 0, 0),
+        (b, 0): (f, ab, 0, 1),
+        (c, 0): 0,
+        (c, 1): (f, (c, 0), (a, 0), (b, 0)),
+        (a, 1): (f, ab, 1, 0),
+        (b, 1): (f, ab, 1, 1),
+        (c, 2): (f, (c, 1), (a, 1), (b, 1)),
+    }
+    o = order(dsk)
+
+    assert o[(b, 0)] < o[(b, 1)]
+    assert o[(b, 0)] < o[(c, 2)]
+    assert o[(c, 1)] < o[(c, 2)]
+    assert o[(c, 1)] < o[(a, 1)]
 
 
 def test_map_overlap(abcde):
