@@ -29,7 +29,7 @@ def offload(fn, *args, **kwargs):
 
 
 @gen.coroutine
-def to_frames(msg, serializers=None, on_error='message'):
+def to_frames(msg, serializers=None, on_error='message', context=None):
     """
     Serialize a message into a list of Distributed protocol frames.
     """
@@ -37,7 +37,8 @@ def to_frames(msg, serializers=None, on_error='message'):
         try:
             return list(protocol.dumps(msg,
                                        serializers=serializers,
-                                       on_error=on_error))
+                                       on_error=on_error,
+                                       context=context))
         except Exception as e:
             logger.info("Unserializable Message: %s", msg)
             logger.exception(e)

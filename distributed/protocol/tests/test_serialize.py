@@ -3,14 +3,17 @@ from __future__ import print_function, division, absolute_import
 import copy
 import pickle
 
+import msgpack
 import numpy as np
 import pytest
 from toolz import identity
 
+from distributed import wait
 from distributed.protocol import (register_serialization, serialize,
                                   deserialize, nested_deserialize, Serialize,
                                   Serialized, to_serialize, serialize_bytes,
-                                  deserialize_bytes, serialize_bytelist,)
+                                  deserialize_bytes, serialize_bytelist,
+                                  register_serialization_family)
 from distributed.utils import nbytes
 from distributed.utils_test import inc, gen_test
 from distributed.comm.utils import to_frames, from_frames
@@ -245,3 +248,91 @@ def test_err_on_bad_deserializer():
 
     with pytest.raises(TypeError) as info:
         yield from_frames(frames, deserializers=['msgpack'])
+
+
+class MyObject(object):
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
+def my_dumps(obj, context=None):
+    if type(obj).__name__ == 'MyObject':
+        header = {'serializer': 'my-ser'}
+        frames = [msgpack.dumps(obj.__dict__, use_bin_type=True),
+                  msgpack.dumps(context, use_bin_type=True)]
+        return header, frames
+    else:
+        raise NotImplementedError()
+
+
+def my_loads(header, frames):
+    obj = MyObject(**msgpack.loads(frames[0], encoding='utf8'))
+
+    # to provide something to test against, lets just attach the context to
+    # the object itself
+    obj.context = msgpack.loads(frames[1], encoding='utf8')
+    return obj
+
+
+@gen_cluster(client=True,
+             client_kwargs={'serializers': ['my-ser', 'pickle']},
+             worker_kwargs={'serializers': ['my-ser', 'pickle']})
+def test_context_specific_serialization(c, s, a, b):
+    register_serialization_family('my-ser', my_dumps, my_loads)
+
+    try:
+        # Create the object on A, force communication to B
+        x = c.submit(MyObject, x=1, y=2, workers=a.address)
+        y = c.submit(lambda x: x, x, workers=b.address)
+
+        yield wait(y)
+
+        key = y.key
+
+        def check(dask_worker):
+            # Get the context from the object stored on B
+            my_obj = dask_worker.data[key]
+            return my_obj.context
+
+        result = yield c.run(check, workers=[b.address])
+        expected = {'sender': a.address, 'recipient': b.address}
+        assert result[b.address]['sender'] == a.address  # see origin worker
+
+        z = yield y  # bring object to local process
+
+        assert z.x == 1 and z.y == 2
+        assert z.context['sender'] == b.address
+    finally:
+        from distributed.protocol.serialize import families
+        del families['my-ser']
+
+
+@gen_cluster(client=True)
+def test_context_specific_serialization_class(c, s, a, b):
+    register_serialization(MyObject, my_dumps, my_loads)
+
+    try:
+        # Create the object on A, force communication to B
+        x = c.submit(MyObject, x=1, y=2, workers=a.address)
+        y = c.submit(lambda x: x, x, workers=b.address)
+
+        yield wait(y)
+
+        key = y.key
+
+        def check(dask_worker):
+            # Get the context from the object stored on B
+            my_obj = dask_worker.data[key]
+            return my_obj.context
+
+        result = yield c.run(check, workers=[b.address])
+        expected = {'sender': a.address, 'recipient': b.address}
+        assert result[b.address]['sender'] == a.address  # see origin worker
+
+        z = yield y  # bring object to local process
+
+        assert z.x == 1 and z.y == 2
+        assert z.context['sender'] == b.address
+    finally:
+        from distributed.protocol.serialize import class_serializers, typename
+        del class_serializers[typename(MyObject)]

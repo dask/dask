@@ -33,11 +33,14 @@ class ServerNode(Node, Server):
 
     def __init__(self, handlers=None, stream_handlers=None,
                  connection_limit=512, deserialize=True,
-                 connection_args=None, io_loop=None):
+                 connection_args=None, io_loop=None, serializers=None,
+                 deserializers=None):
         Node.__init__(self, deserialize=deserialize,
                       connection_limit=connection_limit,
                       connection_args=connection_args,
-                      io_loop=io_loop)
+                      io_loop=io_loop,
+                      serializers=serializers,
+                      deserializers=deserializers)
         Server.__init__(self, handlers=handlers,
                         stream_handlers=stream_handlers,
                         connection_limit=connection_limit,

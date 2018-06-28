@@ -216,7 +216,9 @@ class TCP(Comm):
 
         frames = yield to_frames(msg,
                                  serializers=serializers,
-                                 on_error=on_error)
+                                 on_error=on_error,
+                                 context={'sender': self._local_addr,
+                                          'recipient': self._peer_addr})
 
         try:
             lengths = ([struct.pack('Q', len(frames))] +

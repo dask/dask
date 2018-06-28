@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 from collections import defaultdict, deque
 from concurrent.futures import CancelledError
 from functools import partial
-import inspect
 import logging
 import six
 import traceback
@@ -17,14 +16,14 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 from tornado.locks import Event
 
-from .compatibility import PY3, get_thread_identity
+from .compatibility import get_thread_identity
 from .comm import (connect, listen, CommClosedError,
                    normalize_address,
                    unparse_host_port, get_address_host_port)
 from .metrics import time
 from .system_monitor import SystemMonitor
 from .utils import (get_traceback, truncate_exception, ignoring, shutting_down,
-                    PeriodicCallback, parse_timedelta)
+                    PeriodicCallback, parse_timedelta, has_keyword)
 from . import protocol
 
 
@@ -310,7 +309,7 @@ class Server(object):
                     logger.warning("No handler %s found in %s", op,
                                    type(self).__name__, exc_info=True)
                 else:
-                    if serializers is not None and has_serializers_keyword(handler):
+                    if serializers is not None and has_keyword(handler, 'serializers'):
                         msg['serializers'] = serializers  # add back in
 
                     logger.debug("Calling into handler %s", handler.__name__)
@@ -852,13 +851,3 @@ def clean_exception(exception, traceback, **kwargs):
     elif isinstance(traceback, string_types):
         traceback = None  # happens if the traceback failed serializing
     return type(exception), exception, traceback
-
-
-def has_serializers_keyword(func):
-    if PY3:
-        return 'serializers' in inspect.signature(func).parameters
-    else:
-        # https://stackoverflow.com/questions/50100498/determine-keywords-of-a-tornado-coroutine
-        if gen.is_coroutine_function(func):
-            func = func.__wrapped__
-        return 'serializers' in inspect.getargspec(func).args

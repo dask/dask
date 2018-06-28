@@ -5,6 +5,7 @@ from collections import deque
 from contextlib import contextmanager
 from datetime import timedelta
 import functools
+import inspect
 import json
 import logging
 import multiprocessing
@@ -1385,3 +1386,13 @@ def reset_logger_locks():
 # Only bother if asyncio has been loaded by Tornado
 if 'asyncio' in sys.modules:
     fix_asyncio_event_loop_policy(sys.modules['asyncio'])
+
+
+def has_keyword(func, keyword):
+    if PY3:
+        return keyword in inspect.signature(func).parameters
+    else:
+        # https://stackoverflow.com/questions/50100498/determine-keywords-of-a-tornado-coroutine
+        if gen.is_coroutine_function(func):
+            func = func.__wrapped__
+        return keyword in inspect.getargspec(func).args

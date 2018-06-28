@@ -22,7 +22,7 @@ _deserialize = deserialize
 logger = logging.getLogger(__name__)
 
 
-def dumps(msg, serializers=None, on_error='message'):
+def dumps(msg, serializers=None, on_error='message', context=None):
     """ Transform Python message to bytestream suitable for communication """
     try:
         data = {}
@@ -40,7 +40,8 @@ def dumps(msg, serializers=None, on_error='message'):
 
         data = {key: serialize(value.data,
                                serializers=serializers,
-                               on_error=on_error)
+                               on_error=on_error,
+                               context=context)
                 for key, value in data.items()
                 if type(value) is Serialize}
 

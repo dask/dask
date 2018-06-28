@@ -86,11 +86,39 @@ dictionary with an appropriate name.  Here is the definition of
            frame = frames[0]
        return pickle.loads(frame)
 
-   from distributed.protocol.serialize import families
-   families['pickle'] = (pickle_dumps, pickle_loads)
+   from distributed.protocol.serialize import register_serialization_family
+   register_serialization_family('pickle', pickle_dumps, pickle_loads)
 
 After this the name ``'pickle'`` can be used in the ``serializers=`` and
 ``deserializers=`` keywords in ``Client`` and other parts of Dask.
+
+
+Communication Context
++++++++++++++++++++++
+
+.. note:: This is an experimental feature and may change without notice
+
+Dask :doc:`Comms <communications>` can provide additional context to
+serialization family functions if they provide a ``context=`` keyword.
+This allows serialization to behave differently according to how it is being
+used.
+
+.. code-block:: python
+
+   def my_dumps(x, context=None):
+       if context and 'recipient' in context:
+           # check if we're sending to the same host or not
+
+The context depends on the kind of communication.  For example when sending
+over TCP, the address of the sender (us) and the recipient are available in a
+dictionary.
+
+.. code-block:: python
+
+   >>> context
+   {'sender': 'tcp://127.0.0.1:1234', 'recipient': 'tcp://127.0.0.1:5678'}
+
+Other comms may provide other information.
 
 
 Dask Serialization Family
