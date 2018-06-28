@@ -63,7 +63,7 @@ To install dask from source, clone the repository from `github
 
 or use ``pip`` locally if you want to install all dependencies as well::
 
-    pip install -e .[complete]
+    pip install -e ".[complete]"
 
 You can view the list of all dependencies within the ``extras_require`` field
 of ``setup.py``.
