@@ -1383,6 +1383,44 @@ class Array(DaskMethodsMixin):
         """
         return IndexCallable(self._vindex)
 
+    def _blocks(self, key):
+        from .slicing import normalize_index
+        if not isinstance(key, tuple):
+            key = (key,)
+        key = tuple([k] if isinstance(k, Number) else k for k in key)
+
+        new_keys = np.array(self.__dask_keys__(), dtype=object)[key]
+
+        idx = normalize_index(key, self.numblocks)
+        chunks = tuple(tuple(np.array(c)[i].tolist())
+                       for c, i in zip(self.chunks, idx))
+
+        name = 'getitem-' + tokenize(self, key)
+        keys = list(product(*[range(len(c)) for c in chunks]))
+
+        dsk = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+
+        return Array(sharedict.merge(self.dask, (name, dsk)), name, chunks, self.dtype)
+
+    @property
+    def blocks(self):
+        """ Slice an array by blocks
+
+        Examples
+        --------
+        >>> import dask.array as da
+        >>> x = da.arange(10, chunks=2)
+        >>> x.blocks[0].compute()
+        array([0, 1])
+        >>> x.blocks[:3].compute()
+        array([0, 1, 2, 3, 4, 5])
+        >>> x.blocks[::2].compute()
+        array([0, 1, 4, 5, 8, 9])
+        >>> x.blocks[[-1, 0]].compute()
+        array([8, 9, 0, 1])
+        """
+        return IndexCallable(self._blocks)
+
     @derived_from(np.ndarray)
     def dot(self, other):
         from .routines import tensordot

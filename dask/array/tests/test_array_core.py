@@ -3520,3 +3520,19 @@ def test_zarr_nocompute():
         a2 = da.from_zarr(d)
         assert_eq(a, a2)
         assert a2.chunks == a.chunks
+
+
+def test_blocks_indexer():
+    x = da.arange(10, chunks=2)
+
+    assert isinstance(x.blocks[0], da.Array)
+
+    assert_eq(x.blocks[0], x[:2])
+    assert_eq(x.blocks[-1], x[-2:])
+    assert_eq(x.blocks[:3], x[:6])
+    assert_eq(x.blocks[[0, 1, 2]], x[:6])
+
+    x = da.random.random((20, 20), chunks=(4, 5))
+    assert_eq(x.blocks[0], x[:4])
+    assert_eq(x.blocks[0, :3], x[:4, :15])
+    assert_eq(x.blocks[:, :3], x[:, :15])
