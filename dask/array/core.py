@@ -26,7 +26,7 @@ except ImportError:
     from toolz import (partition, concat, join, first,
                        groupby, valmap, accumulate, assoc)
     from toolz.curried import filter, pluck
-from toolz import pipe, map, reduce
+from toolz import pipe, map, reduce, frequencies
 import numpy as np
 
 from . import chunk
@@ -2051,6 +2051,9 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
     --------
     normalize_chunks: for full docstring and parameters
     """
+    if previous_chunks is not None:
+        previous_chunks = tuple(c if isinstance(c, tuple) else (c,)
+                                for c in previous_chunks)
     chunks = list(chunks)
 
     autos = {i for i, c in enumerate(chunks) if c == 'auto'}
@@ -2059,8 +2062,8 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
     if limit is None:
         limit = config.get('array.chunk-size')
-        if isinstance(limit, str):
-            limit = parse_bytes(limit)
+    if isinstance(limit, str):
+        limit = parse_bytes(limit)
 
     if dtype is None:
         raise TypeError("DType must be known for auto-chunking")
@@ -2082,9 +2085,17 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                              for cs in chunks if cs != 'auto'])
 
     if previous_chunks:
-
         # Base ideal ratio on the median chunk size of the previous chunks
         result = {a: np.median(previous_chunks[a]) for a in autos}
+
+        ideal_shape = []
+        for i, s in enumerate(shape):
+            chunk_frequencies = frequencies(previous_chunks[i])
+            mode, count = max(chunk_frequencies.items(), key=lambda kv: kv[1])
+            if mode > 1 and count >= len(previous_chunks[i]) / 2:
+                ideal_shape.append(mode)
+            else:
+                ideal_shape.append(s)
 
         # How much larger or smaller the ideal chunk size is relative to what we have now
         multiplier = limit / largest_block / np.prod(list(result.values()))
@@ -2105,7 +2116,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     chunks[a] = shape[a]
                     del result[a]
                 else:
-                    result[a] = round_to(proposed, shape[a])
+                    result[a] = round_to(proposed, ideal_shape[a])
 
             # recompute how much multiplier we have left, repeat
             multiplier = limit / largest_block / np.prod(list(result.values()))
@@ -2129,17 +2140,25 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
 
 def round_to(c, s):
-    """ Return a chunk dimension that is close to an even multiple
+    """ Return a chunk dimension that is close to an even multiple or factor
 
-    We want the largest factor of the dimension size (s) that is less than the
+    We want values for c that are nicely aligned with s.
+
+    If c is smaller than s then we want the largest factor of s that is less than the
     desired chunk size, but not less than half, which is too much.  If no such
     factor exists then we just go with the original chunk size and accept an
     uneven chunk at the end.
+
+    If c is larger than s then we want the largest multiple of s that is still
+    smaller than c.
     """
-    try:
-        return max(f for f in factors(s) if c / 2 <= f <= c)
-    except ValueError:  # no matching factors within factor of two
-        return max(1, int(c))
+    if c <= s:
+        try:
+            return max(f for f in factors(s) if c / 2 <= f <= c)
+        except ValueError:  # no matching factors within factor of two
+            return max(1, int(c))
+    else:
+        return c // s * s
 
 
 def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
