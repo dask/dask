@@ -40,7 +40,7 @@ from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict, Dispatch, factors,
                      parse_bytes, has_keyword)
-from ..compatibility import unicode, long, getargspec, zip_longest, apply
+from ..compatibility import unicode, long, zip_longest, apply
 from ..core import quote
 from ..delayed import Delayed, to_task_dask
 from .. import threaded, core
@@ -742,13 +742,12 @@ def map_blocks(func, *args, **kwargs):
 
         first_info = None
         for k in dsk.keys():
-            idx = k[1:]
             info = {i: {'shape': shapes[i],
                         'num-chunks': num_chunks[i],
                         'array-location': [(starts[i][ij][j], starts[i][ij][j + 1])
                                            for ij, j in enumerate(k[1:])],
                         'chunk-location': k[1:]}
-                     for i in shapes}
+                    for i in shapes}
             if first is None:
                 first_info = info  # for the dtype computation just below
 
