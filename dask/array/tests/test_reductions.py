@@ -395,6 +395,8 @@ def test_array_reduction_out(func):
 cum_funcs = ["cumsum", "cumprod"]
 if np.__version__ >= '1.12.0':
     cum_funcs += ["nancumsum", "nancumprod"]
+
+
 @pytest.mark.parametrize("func", cum_funcs)
 @pytest.mark.parametrize("use_nan", [False, True])
 @pytest.mark.parametrize("axis", [None, 0, 1, -1])
