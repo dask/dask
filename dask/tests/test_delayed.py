@@ -101,6 +101,14 @@ def test_operators():
     assert (a >> 1).compute() == 5
     assert (a > 2).compute()
     assert (a ** 2).compute() == 100
+    if PY3:
+        class dummy:
+            def __matmul__(self, other):
+                return 4
+        c = delayed(dummy())
+        d = delayed(dummy())
+
+        assert (c @ d).compute() == 4
 
 
 def test_methods():
