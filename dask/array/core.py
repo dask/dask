@@ -1407,6 +1407,11 @@ class Array(DaskMethodsMixin):
     def blocks(self):
         """ Slice an array by blocks
 
+        This allows blockwise slicing of a Dask array.  You can perform normal
+        Numpy-style slicing but now rather than slice elements of the array you
+        slice along blocks so, for example, ``x.blocks[0, ::2]`` produces a new
+        dask array with every other block in the first row of blocks.
+
         Examples
         --------
         >>> import dask.array as da
@@ -1419,6 +1424,10 @@ class Array(DaskMethodsMixin):
         array([0, 1, 4, 5, 8, 9])
         >>> x.blocks[[-1, 0]].compute()
         array([8, 9, 0, 1])
+
+        Returns
+        -------
+        A Dask array
         """
         return IndexCallable(self._blocks)
 
