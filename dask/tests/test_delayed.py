@@ -105,10 +105,10 @@ def test_operators():
         class dummy:
             def __matmul__(self, other):
                 return 4
-        c = delayed(dummy())
-        d = delayed(dummy())
+        c = delayed(dummy())  # noqa
+        d = delayed(dummy())  # noqa
 
-        assert (c @ d).compute() == 4
+        assert (eval('c @ d')).compute() == 4
 
 
 def test_methods():
