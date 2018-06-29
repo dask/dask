@@ -3536,3 +3536,6 @@ def test_blocks_indexer():
     assert_eq(x.blocks[0], x[:4])
     assert_eq(x.blocks[0, :3], x[:4, :15])
     assert_eq(x.blocks[:, :3], x[:, :15])
+
+    x = da.ones((40, 40, 40), chunks=(10, 10, 10))
+    assert_eq(x.blocks[0, :, 0], np.ones((10, 40, 10)))

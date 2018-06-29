@@ -1383,19 +1383,20 @@ class Array(DaskMethodsMixin):
         """
         return IndexCallable(self._vindex)
 
-    def _blocks(self, key):
+    def _blocks(self, index):
         from .slicing import normalize_index
-        if not isinstance(key, tuple):
-            key = (key,)
-        key = tuple([k] if isinstance(k, Number) else k for k in key)
+        if not isinstance(index, tuple):
+            index = (index,)
+        index = normalize_index(index, self.numblocks)
+        index = tuple(slice(k, k + 1) if isinstance(k, Number) else k
+                      for k in index)
+        name = 'getitem-' + tokenize(self, index)
 
-        new_keys = np.array(self.__dask_keys__(), dtype=object)[key]
+        new_keys = np.array(self.__dask_keys__(), dtype=object)[index]
 
-        idx = normalize_index(key, self.numblocks)
         chunks = tuple(tuple(np.array(c)[i].tolist())
-                       for c, i in zip(self.chunks, idx))
+                       for c, i in zip(self.chunks, index))
 
-        name = 'getitem-' + tokenize(self, key)
         keys = list(product(*[range(len(c)) for c in chunks]))
 
         dsk = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
