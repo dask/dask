@@ -661,7 +661,7 @@ def map_blocks(func, *args, **kwargs):
 
     This will receive the following information:
 
-    >>> block_info
+    >>> block_info  # doctest: +SKIP
     {0: {'shape': (1000,),
          'num-chunks': (10,),
          'chunk-location': (4,),
