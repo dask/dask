@@ -1,7 +1,7 @@
 """
 A threaded shared-memory scheduler
 
-See scheduler.py
+See local.py
 """
 from __future__ import absolute_import, division, print_function
 
