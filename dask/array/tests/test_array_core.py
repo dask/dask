@@ -3539,3 +3539,11 @@ def test_blocks_indexer():
 
     x = da.ones((40, 40, 40), chunks=(10, 10, 10))
     assert_eq(x.blocks[0, :, 0], np.ones((10, 40, 10)))
+
+    x = da.ones((2, 2), chunks=1)
+    with pytest.raises(ValueError):
+        x.blocks[[0, 1], [0, 1]]
+    with pytest.raises(ValueError):
+        x.blocks[np.array([0, 1]), [0, 1]]
+    with pytest.raises(ValueError):
+        x.blocks[np.array([0, 1]), np.array([0, 1])]

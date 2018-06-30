@@ -1387,10 +1387,13 @@ class Array(DaskMethodsMixin):
         from .slicing import normalize_index
         if not isinstance(index, tuple):
             index = (index,)
+        if sum(isinstance(ind, (np.ndarray, list)) for ind in index) > 1:
+            raise ValueError("Can only slice with a single list")
         index = normalize_index(index, self.numblocks)
         index = tuple(slice(k, k + 1) if isinstance(k, Number) else k
                       for k in index)
-        name = 'getitem-' + tokenize(self, index)
+
+        name = 'blocks-' + tokenize(self, index)
 
         new_keys = np.array(self.__dask_keys__(), dtype=object)[index]
 
