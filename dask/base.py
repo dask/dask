@@ -260,11 +260,17 @@ def unpack_collections(*args, **kwargs):
         if not traverse:
             tsk = quote(expr)
         else:
+            import numpy as np
             # Treat iterators like lists
             typ = list if isinstance(expr, Iterator) else type(expr)
 
             if typ in (list, tuple, set):
                 tsk = (typ, [_unpack(i) for i in expr])
+            elif typ is np.ndarray:
+                if expr.dtype == np.dtype('O'):
+                    tsk = (np.asarray, _unpack(expr.tolist()))
+                else:
+                    return expr
             elif typ is dict:
                 tsk = (dict, [[_unpack(k), _unpack(v)]
                               for k, v in expr.items()])
