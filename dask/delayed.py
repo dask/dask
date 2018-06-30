@@ -12,7 +12,7 @@ except ImportError:
 from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
 from .base import tokenize as _tokenize
-from .compatibility import apply
+from .compatibility import apply, PY3
 from .core import quote
 from .context import globalmethod
 from .utils import funcname, methodcaller, OperatorMethodMixin
@@ -518,6 +518,10 @@ for op in [operator.abs, operator.neg, operator.pos, operator.invert,
            operator.eq, operator.ge, operator.gt, operator.ne, operator.le,
            operator.lt, operator.getitem]:
     Delayed._bind_operator(op)
+
+
+if PY3:
+    Delayed._bind_operator(operator.matmul)
 
 
 def single_key(seq):
