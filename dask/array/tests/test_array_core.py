@@ -3531,6 +3531,7 @@ def test_blocks_indexer():
     assert_eq(x.blocks[-1], x[-2:])
     assert_eq(x.blocks[:3], x[:6])
     assert_eq(x.blocks[[0, 1, 2]], x[:6])
+    assert_eq(x.blocks[[3, 0, 2]], np.array([6, 7, 0, 1, 4, 5]))
 
     x = da.random.random((20, 20), chunks=(4, 5))
     assert_eq(x.blocks[0], x[:4])
