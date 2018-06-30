@@ -1389,6 +1389,8 @@ class Array(DaskMethodsMixin):
             index = (index,)
         if sum(isinstance(ind, (np.ndarray, list)) for ind in index) > 1:
             raise ValueError("Can only slice with a single list")
+        if any(ind is None for ind in index):
+            raise ValueError("Slicing with np.newaxis or None is not supported")
         index = normalize_index(index, self.numblocks)
         index = tuple(slice(k, k + 1) if isinstance(k, Number) else k
                       for k in index)
@@ -1414,6 +1416,12 @@ class Array(DaskMethodsMixin):
         Numpy-style slicing but now rather than slice elements of the array you
         slice along blocks so, for example, ``x.blocks[0, ::2]`` produces a new
         dask array with every other block in the first row of blocks.
+
+        You can index blocks in any way that could index a numpy array of shape
+        equal to the number of blocks in each dimension, (available as
+        array.numblocks).  The dimension of the output array will be the same
+        as the dimension of this array, even if integer indices are passed.
+        This does not support slicing with ``np.newaxis`` or multiple lists.
 
         Examples
         --------

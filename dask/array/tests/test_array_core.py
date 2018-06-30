@@ -3546,5 +3546,11 @@ def test_blocks_indexer():
         x.blocks[[0, 1], [0, 1]]
     with pytest.raises(ValueError):
         x.blocks[np.array([0, 1]), [0, 1]]
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError) as info:
         x.blocks[np.array([0, 1]), np.array([0, 1])]
+    assert "list" in str(info.value)
+    with pytest.raises(ValueError) as info:
+        x.blocks[None, :, :]
+    assert "newaxis" in str(info.value) and "not supported" in str(info.value)
+    with pytest.raises(IndexError) as info:
+        x.blocks[100, 100]
