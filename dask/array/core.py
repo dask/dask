@@ -1383,6 +1383,65 @@ class Array(DaskMethodsMixin):
         """
         return IndexCallable(self._vindex)
 
+    def _blocks(self, index):
+        from .slicing import normalize_index
+        if not isinstance(index, tuple):
+            index = (index,)
+        if sum(isinstance(ind, (np.ndarray, list)) for ind in index) > 1:
+            raise ValueError("Can only slice with a single list")
+        if any(ind is None for ind in index):
+            raise ValueError("Slicing with np.newaxis or None is not supported")
+        index = normalize_index(index, self.numblocks)
+        index = tuple(slice(k, k + 1) if isinstance(k, Number) else k
+                      for k in index)
+
+        name = 'blocks-' + tokenize(self, index)
+
+        new_keys = np.array(self.__dask_keys__(), dtype=object)[index]
+
+        chunks = tuple(tuple(np.array(c)[i].tolist())
+                       for c, i in zip(self.chunks, index))
+
+        keys = list(product(*[range(len(c)) for c in chunks]))
+
+        dsk = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+
+        return Array(sharedict.merge(self.dask, (name, dsk)), name, chunks, self.dtype)
+
+    @property
+    def blocks(self):
+        """ Slice an array by blocks
+
+        This allows blockwise slicing of a Dask array.  You can perform normal
+        Numpy-style slicing but now rather than slice elements of the array you
+        slice along blocks so, for example, ``x.blocks[0, ::2]`` produces a new
+        dask array with every other block in the first row of blocks.
+
+        You can index blocks in any way that could index a numpy array of shape
+        equal to the number of blocks in each dimension, (available as
+        array.numblocks).  The dimension of the output array will be the same
+        as the dimension of this array, even if integer indices are passed.
+        This does not support slicing with ``np.newaxis`` or multiple lists.
+
+        Examples
+        --------
+        >>> import dask.array as da
+        >>> x = da.arange(10, chunks=2)
+        >>> x.blocks[0].compute()
+        array([0, 1])
+        >>> x.blocks[:3].compute()
+        array([0, 1, 2, 3, 4, 5])
+        >>> x.blocks[::2].compute()
+        array([0, 1, 4, 5, 8, 9])
+        >>> x.blocks[[-1, 0]].compute()
+        array([8, 9, 0, 1])
+
+        Returns
+        -------
+        A Dask array
+        """
+        return IndexCallable(self._blocks)
+
     @derived_from(np.ndarray)
     def dot(self, other):
         from .routines import tensordot
