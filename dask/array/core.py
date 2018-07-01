@@ -26,7 +26,7 @@ except ImportError:
     from toolz import (partition, concat, join, first,
                        groupby, valmap, accumulate, assoc)
     from toolz.curried import filter, pluck
-from toolz import pipe, map, reduce
+from toolz import pipe, map, reduce, frequencies
 import numpy as np
 
 from . import chunk
@@ -68,6 +68,10 @@ def register_sparse():
     import sparse
     concatenate_lookup.register(sparse.COO, sparse.concatenate)
     tensordot_lookup.register(sparse.COO, sparse.tensordot)
+
+
+class PerformanceWarning(Warning):
+    """ A warning given when bad chunking may cause poor performance """
 
 
 def getter(a, b, asarray=True, lock=None):
@@ -1379,6 +1383,65 @@ class Array(DaskMethodsMixin):
         """
         return IndexCallable(self._vindex)
 
+    def _blocks(self, index):
+        from .slicing import normalize_index
+        if not isinstance(index, tuple):
+            index = (index,)
+        if sum(isinstance(ind, (np.ndarray, list)) for ind in index) > 1:
+            raise ValueError("Can only slice with a single list")
+        if any(ind is None for ind in index):
+            raise ValueError("Slicing with np.newaxis or None is not supported")
+        index = normalize_index(index, self.numblocks)
+        index = tuple(slice(k, k + 1) if isinstance(k, Number) else k
+                      for k in index)
+
+        name = 'blocks-' + tokenize(self, index)
+
+        new_keys = np.array(self.__dask_keys__(), dtype=object)[index]
+
+        chunks = tuple(tuple(np.array(c)[i].tolist())
+                       for c, i in zip(self.chunks, index))
+
+        keys = list(product(*[range(len(c)) for c in chunks]))
+
+        dsk = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+
+        return Array(sharedict.merge(self.dask, (name, dsk)), name, chunks, self.dtype)
+
+    @property
+    def blocks(self):
+        """ Slice an array by blocks
+
+        This allows blockwise slicing of a Dask array.  You can perform normal
+        Numpy-style slicing but now rather than slice elements of the array you
+        slice along blocks so, for example, ``x.blocks[0, ::2]`` produces a new
+        dask array with every other block in the first row of blocks.
+
+        You can index blocks in any way that could index a numpy array of shape
+        equal to the number of blocks in each dimension, (available as
+        array.numblocks).  The dimension of the output array will be the same
+        as the dimension of this array, even if integer indices are passed.
+        This does not support slicing with ``np.newaxis`` or multiple lists.
+
+        Examples
+        --------
+        >>> import dask.array as da
+        >>> x = da.arange(10, chunks=2)
+        >>> x.blocks[0].compute()
+        array([0, 1])
+        >>> x.blocks[:3].compute()
+        array([0, 1, 2, 3, 4, 5])
+        >>> x.blocks[::2].compute()
+        array([0, 1, 4, 5, 8, 9])
+        >>> x.blocks[[-1, 0]].compute()
+        array([8, 9, 0, 1])
+
+        Returns
+        -------
+        A Dask array
+        """
+        return IndexCallable(self._blocks)
+
     @derived_from(np.ndarray)
     def dot(self, other):
         from .routines import tensordot
@@ -2047,6 +2110,9 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
     --------
     normalize_chunks: for full docstring and parameters
     """
+    if previous_chunks is not None:
+        previous_chunks = tuple(c if isinstance(c, tuple) else (c,)
+                                for c in previous_chunks)
     chunks = list(chunks)
 
     autos = {i for i, c in enumerate(chunks) if c == 'auto'}
@@ -2055,8 +2121,8 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
     if limit is None:
         limit = config.get('array.chunk-size')
-        if isinstance(limit, str):
-            limit = parse_bytes(limit)
+    if isinstance(limit, str):
+        limit = parse_bytes(limit)
 
     if dtype is None:
         raise TypeError("DType must be known for auto-chunking")
@@ -2078,9 +2144,17 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                              for cs in chunks if cs != 'auto'])
 
     if previous_chunks:
-
         # Base ideal ratio on the median chunk size of the previous chunks
         result = {a: np.median(previous_chunks[a]) for a in autos}
+
+        ideal_shape = []
+        for i, s in enumerate(shape):
+            chunk_frequencies = frequencies(previous_chunks[i])
+            mode, count = max(chunk_frequencies.items(), key=lambda kv: kv[1])
+            if mode > 1 and count >= len(previous_chunks[i]) / 2:
+                ideal_shape.append(mode)
+            else:
+                ideal_shape.append(s)
 
         # How much larger or smaller the ideal chunk size is relative to what we have now
         multiplier = limit / largest_block / np.prod(list(result.values()))
@@ -2101,7 +2175,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     chunks[a] = shape[a]
                     del result[a]
                 else:
-                    result[a] = round_to(proposed, shape[a])
+                    result[a] = round_to(proposed, ideal_shape[a])
 
             # recompute how much multiplier we have left, repeat
             multiplier = limit / largest_block / np.prod(list(result.values()))
@@ -2125,17 +2199,25 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
 
 def round_to(c, s):
-    """ Return a chunk dimension that is close to an even multiple
+    """ Return a chunk dimension that is close to an even multiple or factor
 
-    We want the largest factor of the dimension size (s) that is less than the
+    We want values for c that are nicely aligned with s.
+
+    If c is smaller than s then we want the largest factor of s that is less than the
     desired chunk size, but not less than half, which is too much.  If no such
     factor exists then we just go with the original chunk size and accept an
     uneven chunk at the end.
+
+    If c is larger than s then we want the largest multiple of s that is still
+    smaller than c.
     """
-    try:
-        return max(f for f in factors(s) if c / 2 <= f <= c)
-    except ValueError:  # no matching factors within factor of two
-        return max(1, int(c))
+    if c <= s:
+        try:
+            return max(f for f in factors(s) if c / 2 <= f <= c)
+        except ValueError:  # no matching factors within factor of two
+            return max(1, int(c))
+    else:
+        return c // s * s
 
 
 def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
@@ -2536,7 +2618,7 @@ def unify_chunks(*args, **kwargs):
 
     if warn and nparts and nparts >= max_parts * 10:
         warnings.warn("Increasing number of chunks by factor of %d" %
-                      (nparts / max_parts))
+                      (nparts / max_parts), PerformanceWarning, stacklevel=3)
 
     arrays = []
     for a, i in arginds:
