@@ -79,7 +79,7 @@ When operating on a distributed cluster the Dask workers may not have access to
 a shared hard drive.  In this case we shuffle data by breaking input partitions
 into many pieces based on where they will end up and moving these pieces
 throughout the network.  This prolific expansion of intermediate partitions
-can stress the task scheduler.  To manage for many-partitioned datasets this we
+can stress the task scheduler.  To manage for many-partitioned datasets we
 sometimes shuffle in stages, causing undue copies but reducing the ``n**2``
 effect of shuffling to something closer to ``n log(n)`` with ``log(n)`` copies.
 
