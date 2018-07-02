@@ -268,9 +268,12 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     AttributeError("'list' object has no attribute 'not_a_real_method'")
 
     "Magic" methods (e.g. operators and attribute access) are assumed to be
-    pure, meaning that subsequent calls must return the same results.  This is
-    not overrideable. To invoke an impure attribute or operator, you'd need to
-    use it in a delayed function with ``pure=False``.
+    pure, meaning that subsequent calls must return the same results. This is
+    not overrideable through the ``delayed`` call, but this behavior can be
+    modified other ways described below.
+
+    To invoke an impure attribute or operator, you'd need to use it in a
+    delayed function with ``pure=False``:
 
     >>> class Incrementer(object):
     ...     def __init__(self):
