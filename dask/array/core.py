@@ -39,8 +39,8 @@ from ..context import globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict, Dispatch, factors,
-                     parse_bytes)
-from ..compatibility import unicode, long, getargspec, zip_longest, apply
+                     parse_bytes, has_keyword)
+from ..compatibility import unicode, long, zip_longest, apply
 from ..core import quote
 from ..delayed import Delayed, to_task_dask
 from .. import threaded, core
@@ -653,12 +653,25 @@ def map_blocks(func, *args, **kwargs):
     array([ 99,   9, 199,  19, 299,  29, 399,  39, 499,  49, 599,  59, 699,
             69, 799,  79, 899,  89, 999,  99])
 
-    Your block function can learn where in the array it is if it supports a
-    ``block_id`` keyword argument.  This will receive entries like (2, 0, 1),
-    the position of the block in the dask array.
+    Your block function get information about where it is in the array by
+    accepting a special ``block_info`` keyword argument.
 
-    >>> def func(block, block_id=None):
+    >>> def func(block, block_info=None):
     ...     pass
+
+    This will receive the following information:
+
+    >>> block_info  # doctest: +SKIP
+    {0: {'shape': (1000,),
+         'num-chunks': (10,),
+         'chunk-location': (4,),
+         'array-location': [(400, 500)]}}
+
+    For each argument and keyword arguments that are dask arrays (the positions
+    of which are the first index), you will receive the shape of the full
+    array, the number of chunks of the full array in each dimension, the chunk
+    location (for example the fourth chunk over in the first dimension), and
+    the array location (for example the slice corresponding to ``40:50``).
 
     You may specify the key name prefix of the resulting task in the graph with
     the optional ``token`` keyword argument.
@@ -697,29 +710,55 @@ def map_blocks(func, *args, **kwargs):
     arginds = list(concat(argpairs))
     out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
 
-    try:
-        spec = getargspec(func)
-        block_id = ('block_id' in spec.args or
-                    'block_id' in getattr(spec, 'kwonly_args', ()))
-    except Exception:
-        block_id = False
-
-    if block_id:
+    if has_keyword(func, 'block_id'):
         kwargs['block_id'] = '__dummy__'
+    if has_keyword(func, 'block_info'):
+        kwargs['block_info'] = '__dummy__'
 
     dsk = top(func, name, out_ind, *arginds, numblocks=numblocks,
               **kwargs)
 
     # If func has block_id as an argument, add it to the kwargs for each call
-    if block_id:
+    if has_keyword(func, 'block_id'):
         for k in dsk.keys():
             dsk[k] = dsk[k][:-1] + (assoc(dsk[k][-1], 'block_id', k[1:]),)
 
+    # If func has block_info as an argument, add it to the kwargs for each call
+    if has_keyword(func, 'block_info'):
+        starts = {}
+        num_chunks = {}
+        shapes = {}
+
+        for i, arg in enumerate(args):
+            if isinstance(arg, Array):
+                starts[i] = [np.cumsum((0,) + c) for c in arg.chunks]
+                shapes[i] = arg.shape
+                num_chunks[i] = arg.numblocks
+        for k, v in kwargs.items():
+            if isinstance(v, Array):
+                starts[k] = [np.cumsum((0,) + c) for c in v.chunks]
+                shapes[k] = arg.shape
+                num_chunks[i] = arg.numblocks
+
+        first_info = None
+        for k in dsk.keys():
+            info = {i: {'shape': shapes[i],
+                        'num-chunks': num_chunks[i],
+                        'array-location': [(starts[i][ij][j], starts[i][ij][j + 1])
+                                           for ij, j in enumerate(k[1:])],
+                        'chunk-location': k[1:]}
+                    for i in shapes}
+            if first is None:
+                first_info = info  # for the dtype computation just below
+
+            dsk[k] = dsk[k][:-1] + (assoc(dsk[k][-1], 'block_info', info),)
+
     if dtype is None:
-        if block_id:
+        kwargs2 = kwargs
+        if has_keyword(func, 'block_id'):
             kwargs2 = assoc(kwargs, 'block_id', first(dsk.keys())[1:])
-        else:
-            kwargs2 = kwargs
+        if has_keyword(func, 'block_info'):
+            kwargs2 = assoc(kwargs, 'block_info', first_info)
         dtype = apply_infer_dtype(func, args, kwargs2, 'map_blocks')
 
     if len(arrs) == 1:
