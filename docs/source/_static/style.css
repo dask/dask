@@ -1,5 +1,22 @@
 @import url("theme.css");
 
+.rst-content h1,h2,h3,h4,h5{
+  font-family: 'Garamond', 'Georgia', serif;
+  font-weight: normal;
+}
+
+.rst-content h1 {
+  font-size: 240%;
+}
+
+.rst-content h2 {
+  font-size: 180%;
+}
+
+.rst-content h3 {
+  font-size: 160%;
+}
+
 .wy-menu-vertical li ul li a,
 .wy-menu-vertical li.current a,
 .wy-menu-vertical a {
