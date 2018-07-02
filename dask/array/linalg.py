@@ -75,14 +75,16 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
     Notes
     -----
     With ``k`` blocks of size ``(m, n)``, this algorithm has memory use that
-    scales as ``m * n * k``.
+    scales as ``k * m * n``.
 
     The implementation here is the recursive variant due to the ultimate
-    need for one "single core" QR decomposition. Given m blocks, the
-    "single core" QR decomposition will have to work with a ``(k * n, n)``
-    matrix, and ``k * n`` may be substantially larger than ``m``.
+    need for one "single core" QR decomposition. In the non-recursive version
+    of the algorithm, given ``k`` blocks, after ``k`` ``m * n`` QR
+    decompositions, there will be a "single core" QR decomposition that will
+    have to work with a ``(k * n, n)`` matrix.
 
-    As such, (if ``m / n >= 2``) recursion will be applied as necessary
+    Here, recursion is applied as necessary to ensure that ``k * n`` is not
+    larger than ``m`` (if ``m / n >= 2``). In particular, this is done
     to ensure that single core computations do not have to work on blocks
     larger than ``(m, n)``.
 
