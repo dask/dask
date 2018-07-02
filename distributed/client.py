@@ -1165,7 +1165,7 @@ class Client(Node):
         key: str
             Unique identifier for the task.  Defaults to function-name and hash
         allow_other_workers: bool (defaults to False)
-            Used with `workers`. Inidicates whether or not the computations
+            Used with `workers`. Indicates whether or not the computations
             may be performed on workers that are not in the `workers` set(s).
         retries: int (default to 0)
             Number of allowed automatic retries if the task fails
