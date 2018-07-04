@@ -1180,3 +1180,15 @@ def test_wait_for_outgoing(c, s, a, b):
     ratio = aa / bb
 
     assert 1 / 3 < ratio < 3
+
+
+@gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 1), ('127.0.0.2', 1)],
+             client=True)
+def test_prefer_gather_from_local_address(c, s, w1, w2, w3):
+    x = yield c.scatter(123, workers=[w1.address, w3.address], broadcast=True)
+
+    y = c.submit(inc, x, workers=[w2.address])
+    yield wait(y)
+
+    assert any(d['who'] == w2.address for d in w1.outgoing_transfer_log)
+    assert not any(d['who'] == w2.address for d in w3.outgoing_transfer_log)

@@ -14,7 +14,7 @@ from .utils import All, tokey
 
 
 @gen.coroutine
-def gather_from_workers(who_has, rpc, close=True, serializers=None):
+def gather_from_workers(who_has, rpc, close=True, serializers=None, who=None):
     """ Gather data directly from peers
 
     Parameters
@@ -56,7 +56,8 @@ def gather_from_workers(who_has, rpc, close=True, serializers=None):
 
         rpcs = {addr: rpc(addr) for addr in d}
         try:
-            coroutines = {address: get_data_from_worker(rpc, keys, address)
+            coroutines = {address: get_data_from_worker(rpc, keys, address,
+                                                        who=who)
                           for address, keys in d.items()}
             response = {}
             for worker, c in coroutines.items():

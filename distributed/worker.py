@@ -704,7 +704,7 @@ class WorkerBase(ServerNode):
                    for k, v in who_has.items()
                    if k not in self.data}
         result, missing_keys, missing_workers = yield gather_from_workers(
-            who_has, rpc=self.rpc)
+            who_has, rpc=self.rpc, who=self.address)
         if missing_keys:
             logger.warning("Could not find data: %s on workers: %s (who_has: %s)",
                            missing_keys, missing_workers, who_has)
@@ -1662,7 +1662,12 @@ class Worker(WorkerBase):
                     if not workers:
                         in_flight = True
                         continue
-                    worker = random.choice(list(workers))
+                    host = get_address_host(self.address)
+                    local = [w for w in workers if get_address_host(w) == host]
+                    if local:
+                        worker = random.choice(local)
+                    else:
+                        worker = random.choice(list(workers))
                     to_gather, total_nbytes = self.select_keys_for_gather(worker, dep)
                     self.comm_nbytes += total_nbytes
                     self.in_flight_workers[worker] = to_gather
@@ -1774,7 +1779,8 @@ class Worker(WorkerBase):
                 logger.debug("Request %d keys", len(deps))
 
                 start = time()
-                response = yield get_data_from_worker(self.rpc, deps, worker, self.address)
+                response = yield get_data_from_worker(self.rpc, deps, worker,
+                                                      who=self.address)
                 stop = time()
 
                 if cause:

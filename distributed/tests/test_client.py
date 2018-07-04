@@ -4082,8 +4082,10 @@ def test_retire_many_workers(c, s, *workers):
     assert results == list(range(100))
 
     assert len(s.has_what) == len(s.ncores) == 3
+    assert all(future.done() for future in futures)
+    assert all(s.tasks[future.key].state == 'memory' for future in futures)
     for w, keys in s.has_what.items():
-        assert 20 < len(keys) < 50
+        assert 15 < len(keys) < 50
 
 
 @gen_cluster(client=True,
