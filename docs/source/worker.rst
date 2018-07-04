@@ -156,16 +156,19 @@ Workers use a few different policies to keep memory use beneath this limit:
 3.  At 80% of memory load, stop accepting new work on local thread pool
 4.  At 95% of memory load, terminate and restart the worker
 
-These values can be configured by modifying the ``~/.dask/config.yaml`` file
+These values can be configured by modifying the ``~/.config/dask/distributed.yaml`` file
 
 .. code-block:: yaml
 
-   # Fractions of worker memory at which we take action to avoid memory blowup
-   # Set any of the lower three values to False to turn off the behavior entirely
-   worker-memory-target: 0.60  # target fraction to stay below
-   worker-memory-spill: 0.70  # fraction at which we spill to disk
-   worker-memory-pause: 0.80  # fraction at which we pause worker threads
-   worker-memory-terminate: 0.95  # fraction at which we terminate the worker
+   distributed:
+     worker:
+       # Fractions of worker memory at which we take action to avoid memory blowup
+       # Set any of the lower three values to False to turn off the behavior entirely
+       memory:
+         target: 0.60  # target fraction to stay below
+         spill: 0.70  # fraction at which we spill to disk
+         pause: 0.80  # fraction at which we pause worker threads
+         terminate: 0.95  # fraction at which we terminate the worker
 
 
 Spill data to Disk
