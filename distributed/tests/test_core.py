@@ -23,7 +23,7 @@ from distributed.utils_test import (
     assert_can_connect_from_everywhere_4,
     assert_can_connect_from_everywhere_4_6, assert_can_connect_from_everywhere_6,
     assert_can_connect_locally_4, assert_can_connect_locally_6,
-    tls_security, captured_logger, inc)
+    tls_security, captured_logger, inc, throws)
 from distributed.utils_test import loop  # noqa F401
 
 
@@ -658,3 +658,17 @@ def test_rpc_serialization(loop):
 @gen_cluster()
 def test_thread_id(s, a, b):
     assert s.thread_id == a.thread_id == b.thread_id == get_thread_identity()
+
+
+@gen_test()
+def test_deserialize_error():
+    server = Server({'throws': throws})
+    server.listen(0)
+
+    comm = yield connect(server.address, deserialize=False)
+    with pytest.raises(Exception) as info:
+        yield send_recv(comm, op='throws')
+
+    assert type(info.value) == Exception
+    for c in str(info.value):
+        assert c.isalpha() or c in "(',!)"  # no crazy bytestrings

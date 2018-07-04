@@ -2740,7 +2740,6 @@ def get_data_from_worker(rpc, keys, worker, who=None):
         response = yield send_recv(comm,
                                    serializers=rpc.serializers,
                                    deserializers=rpc.deserializers,
-                                   deserialize=rpc.deserialize,
                                    op='get_data', keys=keys, who=who)
         yield comm.write('OK')
     finally:

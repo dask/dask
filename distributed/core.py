@@ -408,8 +408,8 @@ def pingpong(comm):
 
 
 @gen.coroutine
-def send_recv(comm, reply=True, deserialize=True, serializers=None,
-              deserializers=None, **kwargs):
+def send_recv(comm, reply=True, serializers=None, deserializers=None,
+              **kwargs):
     """ Send and recv with a Comm.
 
     Keyword arguments turn into the message
@@ -442,7 +442,10 @@ def send_recv(comm, reply=True, deserialize=True, serializers=None,
             comm.abort()
 
     if isinstance(response, dict) and response.get('status') == 'uncaught-error':
-        six.reraise(*clean_exception(**response))
+        if comm.deserialize:
+            six.reraise(*clean_exception(**response))
+        else:
+            raise Exception(response['text'])
     raise gen.Return(response)
 
 
@@ -834,7 +837,10 @@ def error_message(e, status='error'):
     else:
         tb_result = protocol.to_serialize(tb)
 
-    return {'status': status, 'exception': e4, 'traceback': tb_result}
+    return {'status': status,
+            'exception': e4,
+            'traceback': tb_result,
+            'text': str(e2)}
 
 
 def clean_exception(exception, traceback, **kwargs):
