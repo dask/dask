@@ -157,16 +157,19 @@ storage for this use case) and potentially dangerous to the file system itself.
 See `this page
 <http://distributed.readthedocs.io/en/latest/worker.html#memory-management>`_
 for more information on Dask's memory policies.  Consider changing the
-following values to your ``~/.dask/config.yaml`` file
+following values to your ``~/.config/dask/distributed.yaml`` file
 
 .. code-block:: yaml
 
-   # Fractions of worker memory at which we take action to avoid memory blowup
-   # Set any of the lower three values to False to turn off the behavior entirely
-   worker-memory-target: false  # don't spill to disk
-   worker-memory-spill: false  # don't spill to disk
-   worker-memory-pause: 0.80  # fraction at which we pause worker threads
-   worker-memory-terminate: 0.95  # fraction at which we terminate the worker
+   distributed:
+     worker:
+     # Fractions of worker memory at which we take action to avoid memory blowup
+     # Set any of the lower three values to False to turn off the behavior entirely
+     memory:
+       target: false  # don't spill to disk
+       spill: false  # don't spill to disk
+       pause: 0.80  # fraction at which we pause worker threads
+       terminate: 0.95  # fraction at which we terminate the worker
 
 This stops Dask workers from spilling to disk, and instead relies entirely on
 mechanisms to stop them from processing when they reach memory limits.
