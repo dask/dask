@@ -81,6 +81,7 @@ Array
 - Disable locking in to_zarr (needed for using to_zarr in a distributed context) (:pr:`3607`) `John A Kirkham`_
 - Support Zarr Arrays in `to_zarr`/`from_zarr` (:pr:`3561`) `John A Kirkham`_
 - Added recursion to array/linalg/tsqr to better manage the single core bottleneck (:pr:`3586`) `Jeremy Chan`_
+  (:pr:`3396`) `Guido Imperiale`_
 
 Dataframe
 +++++++++
