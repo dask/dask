@@ -269,7 +269,7 @@ def arange(*args, **kwargs):
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
     dtype : numpy.dtype
-        Output dtype. Omit to infer it from start,stop, step
+        Output dtype. Omit to infer it from start, stop, step
 
     Returns
     -------
@@ -304,10 +304,7 @@ def arange(*args, **kwargs):
 
     dtype = kwargs.pop('dtype', None)
     if dtype is None:
-        if num == 0:
-            dtype = np.arange(start, stop, step).dtype
-        else:
-            dtype = np.arange(start, stop, step * num).dtype
+        dtype = np.arange(start, stop, step * num if num else step).dtype
     if kwargs:
         raise TypeError("Unexpected keyword argument(s): %s" %
                         ",".join(kwargs.keys()))
