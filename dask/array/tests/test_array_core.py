@@ -1134,6 +1134,26 @@ def test_map_blocks2():
     assert same_keys(d.map_blocks(func, dtype='i8', c=1), out)
 
 
+def test_map_blocks_block_info():
+    x = da.arange(50, chunks=10)
+
+    def func(a, b, c, block_info=None):
+        for idx in [0, 2]:  # positions in args
+            assert block_info[idx]['shape'] == (50,)
+            assert block_info[idx]['num-chunks'] == (5,)
+            start, stop = block_info[idx]['array-location'][0]
+            assert stop - start == 10
+            assert 0 <= start <= 40
+            assert 10 <= stop <= 50
+
+            assert 0 <= block_info[idx]['chunk-location'][0] <= 4
+
+        return a + b + c
+
+    z = da.map_blocks(func, x, 100, x + 1, dtype=x.dtype)
+    assert_eq(z, x + x + 1 + 100)
+
+
 def test_map_blocks_with_constants():
     d = da.arange(10, chunks=3)
     e = d.map_blocks(add, 100, dtype=d.dtype)
@@ -2206,6 +2226,34 @@ def test_from_array_with_missing_chunks():
 
 def test_normalize_chunks():
     assert normalize_chunks(3, (4, 6)) == ((3, 1), (3, 3))
+
+
+def test_align_chunks_to_previous_chunks():
+    chunks = normalize_chunks('auto',
+                              shape=(2000,),
+                              previous_chunks=(512,),
+                              limit='600 B', dtype=np.uint8)
+    assert chunks == ((512, 512, 512, 2000 - 512 * 3),)
+
+    chunks = normalize_chunks('auto',
+                              shape=(2000,),
+                              previous_chunks=(128,),
+                              limit='600 B', dtype=np.uint8)
+    assert chunks == ((512, 512, 512, 2000 - 512 * 3),)
+
+    chunks = normalize_chunks('auto',
+                              shape=(2000,),
+                              previous_chunks=(512,),
+                              limit='1200 B', dtype=np.uint8)
+    assert chunks == ((1024, 2000 - 1024),)
+
+    chunks = normalize_chunks('auto',
+                              shape=(3, 10211, 10376),
+                              previous_chunks=(1, 512, 512),
+                              limit='1MiB', dtype=np.float32)
+    assert chunks[0] == (1, 1, 1)
+    assert all(c % 512 == 0 for c in chunks[1][:-1])
+    assert all(c % 512 == 0 for c in chunks[2][:-1])
 
 
 def test_raise_on_no_chunks():
@@ -3492,3 +3540,37 @@ def test_zarr_nocompute():
         a2 = da.from_zarr(d)
         assert_eq(a, a2)
         assert a2.chunks == a.chunks
+
+
+def test_blocks_indexer():
+    x = da.arange(10, chunks=2)
+
+    assert isinstance(x.blocks[0], da.Array)
+
+    assert_eq(x.blocks[0], x[:2])
+    assert_eq(x.blocks[-1], x[-2:])
+    assert_eq(x.blocks[:3], x[:6])
+    assert_eq(x.blocks[[0, 1, 2]], x[:6])
+    assert_eq(x.blocks[[3, 0, 2]], np.array([6, 7, 0, 1, 4, 5]))
+
+    x = da.random.random((20, 20), chunks=(4, 5))
+    assert_eq(x.blocks[0], x[:4])
+    assert_eq(x.blocks[0, :3], x[:4, :15])
+    assert_eq(x.blocks[:, :3], x[:, :15])
+
+    x = da.ones((40, 40, 40), chunks=(10, 10, 10))
+    assert_eq(x.blocks[0, :, 0], np.ones((10, 40, 10)))
+
+    x = da.ones((2, 2), chunks=1)
+    with pytest.raises(ValueError):
+        x.blocks[[0, 1], [0, 1]]
+    with pytest.raises(ValueError):
+        x.blocks[np.array([0, 1]), [0, 1]]
+    with pytest.raises(ValueError) as info:
+        x.blocks[np.array([0, 1]), np.array([0, 1])]
+    assert "list" in str(info.value)
+    with pytest.raises(ValueError) as info:
+        x.blocks[None, :, :]
+    assert "newaxis" in str(info.value) and "not supported" in str(info.value)
+    with pytest.raises(IndexError) as info:
+        x.blocks[100, 100]

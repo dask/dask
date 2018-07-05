@@ -1013,3 +1013,13 @@ def effective_get(get=None, collection=None):
 
     from dask.base import get_scheduler
     return get_scheduler(get=get, collections=[collection])
+
+
+def has_keyword(func, keyword):
+    try:
+        if PY3:
+            return keyword in inspect.signature(func).parameters
+        else:
+            return keyword in inspect.getargspec(func).args
+    except Exception:
+        return False
