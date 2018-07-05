@@ -1363,11 +1363,13 @@ class Array(DaskMethodsMixin):
         if not isinstance(index, tuple):
             index = (index,)
 
-        from .slicing import normalize_index, slice_with_dask_array
+        from .slicing import normalize_index, slice_with_int_dask_array, slice_with_bool_dask_array
         index2 = normalize_index(index, self.shape)
 
-        if any(isinstance(i, Array) for i in index2):
-            self, index2 = slice_with_dask_array(self, index2)
+        if any(isinstance(i, Array) and i.dtype.kind in 'iu' for i in index2):
+            self, index2 = slice_with_int_dask_array(self, index2)
+        if any(isinstance(i, Array) and i.dtype == bool for i in index2):
+            self, index2 = slice_with_bool_dask_array(self, index2)
 
         if all(isinstance(i, slice) and i == slice(None) for i in index2):
             return self
