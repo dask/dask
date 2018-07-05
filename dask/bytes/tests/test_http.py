@@ -126,6 +126,7 @@ def test_parquet():
                                    'n_comment']
 
 
+@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/3696")
 @pytest.mark.network
 def test_bag():
     # This test pulls from different hosts
