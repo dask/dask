@@ -120,10 +120,12 @@ def test_arange():
     assert_eq(darr, nparr)
 
     # Unexpected or missing kwargs
-    with pytest.raises(TypeError):
-        da.arange(10, chunks=-1, unexpected=True)
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError) as exc:
+        da.arange(10, chunks=-1, whatsthis=1)
+    assert 'whatsthis' in str(exc)
+    with pytest.raises(TypeError) as exc:
         da.arange(10)
+    assert 'chunks' in str(exc)
 
 
 @pytest.mark.parametrize("start,stop,step,dtype", [
@@ -147,7 +149,6 @@ def test_arange():
 def test_arange_dtypes(start, stop, step, dtype):
     a_np = np.arange(start, stop, step, dtype=dtype)
     a_da = da.arange(start, stop, step, dtype=dtype, chunks=-1)
-    assert a_np.dtype == a_da.dtype
     assert_eq(a_np, a_da)
 
 
