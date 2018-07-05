@@ -304,7 +304,10 @@ def arange(*args, **kwargs):
 
     dtype = kwargs.pop('dtype', None)
     if dtype is None:
-        dtype = np.arange(start, stop, step * num).dtype
+        if num == 0:
+            dtype = np.arange(start, stop, step).dtype
+        else:
+            dtype = np.arange(start, stop, step * num).dtype
     if kwargs:
         raise TypeError("Unexpected keyword argument(s): %s" %
                         ",".join(kwargs.keys()))
