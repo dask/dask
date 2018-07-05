@@ -56,3 +56,4 @@ from .optimization import optimize
 from .creation import (arange, linspace, meshgrid, indices, diag, eye,
                        triu, tril, fromfunction, tile, repeat, pad)
 from .gufunc import apply_gufunc, gufunc, as_gufunc
+from .utils import assert_eq
