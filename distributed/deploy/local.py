@@ -70,7 +70,7 @@ class LocalCluster(Cluster):
 
     Shut down the extra worker
 
-    >>> c.remove_worker(w)  # doctest: +SKIP
+    >>> c.stop_worker(w)  # doctest: +SKIP
 
     Pass extra keyword arguments to Bokeh
 
