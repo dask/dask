@@ -102,7 +102,7 @@ As an example, consider loading a stack of images using ``skimage.io.imread``:
 
     lazy_images = [imread(path) for path in filenames]     # Lazily evaluate imread on each path
     sample = lazy_images[0].compute() # load the first image (assume rest are same shape/dtype)
-   
+
     arrays = [da.from_delayed(lazy_image,           # Construct a small Dask array
                               dtype=sample.dtype,   # for every lazy value
                               shape=sample.shape)
@@ -248,14 +248,13 @@ Store several arrays in one computation with the function
 Zarr
 ----
 
-The `zarr`_ format is a chunk-wise binary array storage file format, with a good selection
-of encoding and compression options. Due to each chunk being stored in a separate file, it
-is ideal for parallel access in both reading and writing (for the latter, if the dask array
+The `Zarr <https://zarr.readthedocs.io>`_ format is a chunk-wise binary array
+storage file format, with a good selection of encoding and compression options.
+Due to each chunk being stored in a separate file, it is ideal for parallel
+access in both reading and writing (for the latter, if the dask array
 chunks are alligned with the target). Furthermore, storage in
-:doc:`remote data services<remote_data_services>`_ such as
-S3 and GCS is supported.
-
-.. _zarr: https://zarr.readthedocs.io
+:doc:`remote data services <remote-data-services>` such as S3 and GCS is
+supported.
 
 For example, to save data to a local zarr dataset:
 

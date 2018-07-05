@@ -5,7 +5,7 @@ import os
 
 try:
     from skimage.io import imread as sk_imread
-except ImportError:
+except (AttributeError, ImportError):
     pass
 
 from .core import Array
