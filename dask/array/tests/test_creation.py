@@ -3,7 +3,6 @@ pytest.importorskip('numpy')
 
 import numpy as np
 import pytest
-from pytest import raises as assert_raises
 from toolz import concat
 
 import dask.array as da
@@ -121,9 +120,9 @@ def test_arange():
     assert_eq(darr, nparr)
 
     # Unexpected or missing kwargs
-    with assert_raises(TypeError):
+    with pytest.raises(TypeError):
         da.arange(10, chunks=-1, unexpected=True)
-    with assert_raises(TypeError):
+    with pytest.raises(TypeError):
         da.arange(10)
 
 
