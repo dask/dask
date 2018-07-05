@@ -249,7 +249,7 @@ class Nanny(ServerNode):
             raise gen.Return('OK')
 
     def memory_monitor(self):
-        """ Track worker's memory.  Restart if it goes above 95% """
+        """ Track worker's memory.  Restart if it goes above terminate fraction """
         if self.status != 'running':
             return
         process = self.process.process
@@ -262,7 +262,8 @@ class Nanny(ServerNode):
         memory = proc.memory_info().rss
         frac = memory / self.memory_limit
         if self.memory_terminate_fraction and frac > self.memory_terminate_fraction:
-            logger.warning("Worker exceeded 95% memory budget.  Restarting")
+            logger.warning("Worker exceeded %d%% memory budget. Restarting",
+                           100 * self.memory_terminate_fraction)
             process.terminate()
 
     def is_alive(self):
