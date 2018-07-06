@@ -317,11 +317,11 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     arr = asarray(arr)
 
     # Validate and normalize axis.
-    axlen = arr.shape[axis]
+    arr.shape[axis]
     axis = len(arr.shape[:axis])
 
     # Test out some data with the function.
-    test_data = np.ones((axlen,), dtype=arr.dtype)
+    test_data = np.ones((1,), dtype=arr.dtype)
     test_result = np.array(func1d(test_data, *args, **kwargs))
 
     if (LooseVersion(np.__version__) < LooseVersion("1.13.0") and
