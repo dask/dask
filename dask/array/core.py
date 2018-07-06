@@ -3734,7 +3734,7 @@ def stack(seq, axis=0):
     """
     Stack arrays along a new axis
 
-    Given a sequence of dask Arrays form a new dask Array by stacking them
+    Given a sequence of dask arrays, form a new dask array by stacking them
     along a new dimension (axis=0 by default)
 
     Examples
