@@ -2018,7 +2018,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
     """ Normalize chunks to tuple of tuples
 
     This takes in a variety of input types and information and produces a full
-    tuple-of-tuples result for chunks, sutiable to be passed to Array or
+    tuple-of-tuples result for chunks, suitable to be passed to Array or
     rechunk or any other operation that creates a Dask array.
 
     Parameters
