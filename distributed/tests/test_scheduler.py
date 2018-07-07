@@ -1301,6 +1301,21 @@ def test_dont_recompute_if_persisted_4(c, s, a, b):
 
 
 @gen_cluster(client=True)
+def test_dont_forget_released_keys(c, s, a, b):
+    x = c.submit(inc, 1, key='x')
+    y = c.submit(inc, x, key='y')
+    z = c.submit(dec, x, key='z')
+    del x
+    yield wait([y, z])
+    del z
+
+    while 'z' in s.tasks:
+        yield gen.sleep(0.01)
+
+    assert 'x' in s.tasks
+
+
+@gen_cluster(client=True)
 def test_dont_recompute_if_erred(c, s, a, b):
     x = delayed(inc)(1, dask_key_name='x')
     y = delayed(div)(x, 0, dask_key_name='y')
