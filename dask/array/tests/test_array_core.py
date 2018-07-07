@@ -1239,7 +1239,7 @@ def test_slicing_with_ndarray():
     assert_eq(d[np.arange(8)], x)
     assert_eq(d[np.ones(8, dtype=bool)], x)
     assert_eq(d[np.array([1])], x[[1]])
-    assert_eq(d[np.array([True])], x[[0]])
+    assert_eq(d[np.array([True, False, True] + [False] * 5)], x[[0, 2]])
 
 
 def test_dtype():
