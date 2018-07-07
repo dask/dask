@@ -2061,7 +2061,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
     Expands dict inputs
 
     >>> normalize_chunks({0: 2, 1: 3}, shape=(6, 6))
-    ((2, 2, 2), (3, 3, 3))
+    ((2, 2, 2), (3, 3))
 
     The value -1 gets mapped to full size
 
