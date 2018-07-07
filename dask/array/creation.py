@@ -268,6 +268,8 @@ def arange(*args, **kwargs):
     chunks :  int
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
+    dtype : numpy.dtype
+        Output dtype. Omit to infer it from start, stop, step
 
     Returns
     -------
@@ -292,18 +294,22 @@ def arange(*args, **kwargs):
         arange takes 3 positional arguments: arange([start], stop, [step])
         ''')
 
-    if 'chunks' not in kwargs:
-        raise ValueError("Must supply a chunks= keyword argument")
-    chunks = kwargs['chunks']
+    try:
+        chunks = kwargs.pop('chunks')
+    except KeyError:
+        raise TypeError("Required argument 'chunks' not found")
 
-    dtype = kwargs.get('dtype', None)
-    if dtype is None:
-        dtype = np.arange(0, 1, step).dtype
-
-    num = max(np.ceil((stop - start) / step), 0)
+    num = int(max(np.ceil((stop - start) / step), 0))
     chunks = normalize_chunks(chunks, (num,))
 
-    name = 'arange-' + tokenize((start, stop, step, chunks, num))
+    dtype = kwargs.pop('dtype', None)
+    if dtype is None:
+        dtype = np.arange(start, stop, step * num if num else step).dtype
+    if kwargs:
+        raise TypeError("Unexpected keyword argument(s): %s" %
+                        ",".join(kwargs.keys()))
+
+    name = 'arange-' + tokenize((start, stop, step, chunks, dtype))
     dsk = {}
     elem_count = 0
 
