@@ -413,6 +413,8 @@ def test_multiple_list_slicing():
     assert_eq(x[:, [0, 1, 2]][[0, 1]], a[:, [0, 1, 2]][[0, 1]])
 
 
+@pytest.mark.skipif(np.__version__ < '1.13.0',
+                    reason='boolean lists are not treated as boolean indexes')
 def test_boolean_list_slicing():
     with pytest.raises(IndexError):
         da.asarray(range(2))[[True]]
@@ -422,7 +424,21 @@ def test_boolean_list_slicing():
     ind = [True, False, False, False, True]
     assert_eq(da.asarray(x)[ind], x[ind])
     # https://github.com/dask/dask/issues/3706
-    assert_eq(da.asarray([0])[[True]], np.arange(1)[[True]])
+    ind = [True]
+    assert_eq(da.asarray([0])[ind], np.arange(1)[ind])
+
+
+def test_boolean_numpy_array_slicing():
+    with pytest.raises(IndexError):
+        da.asarray(range(2))[np.array([True])]
+    with pytest.raises(IndexError):
+        da.asarray(range(2))[np.array([False, False, False])]
+    x = np.arange(5)
+    ind = np.array([True, False, False, False, True])
+    assert_eq(da.asarray(x)[ind], x[ind])
+    # https://github.com/dask/dask/issues/3706
+    ind = np.array([True])
+    assert_eq(da.asarray([0])[ind], np.arange(1)[ind])
 
 
 def test_empty_list():
