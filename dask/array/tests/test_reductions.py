@@ -426,7 +426,7 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
     k = 5
     # Test at least 3 levels of aggregation when split_every=2
     # to stress the different chunk, combine, aggregate kernels
-    a = da.random.random(800, chunks=100)
+    a = da.random.random(800, chunks=((120, 80, 100, 200, 300), ))
     b = da.random.random((10, 20, 30), chunks=(4, 8, 8))
 
     # 1-dimensional arrays

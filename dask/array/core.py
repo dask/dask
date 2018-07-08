@@ -2023,8 +2023,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
 
     Parameters
     ----------
-    chunks: tuple, int, or string
-        The chunks to be normalized.  See example below for more details
+    chunks: tuple, int, dict, or string
+        The chunks to be normalized.  See examples below for more details
     shape: Tuple[int]
         The shape of the array
     limit: int (optional)
@@ -2058,10 +2058,15 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
     >>> normalize_chunks(10, shape=(30, 5))
     ((10, 10, 10), (5,))
 
+    Expands dict inputs
+
+    >>> normalize_chunks({0: 2, 1: 3}, shape=(6, 6))
+    ((2, 2, 2), (3, 3))
+
     The value -1 gets mapped to full size
 
-    >>> normalize_chunks((-1,), shape=(10,))
-    ((10,),)
+    >>> normalize_chunks((5, -1), shape=(10, 10))
+    ((5, 5), (10,))
 
     Use the value "auto" to automatically determine chunk sizes along certain
     dimensions.  This uses the ``limit=`` and ``dtype=`` keywords to
@@ -2090,11 +2095,14 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
     if not chunks and shape and all(s == 0 for s in shape):
         chunks = ((0,),) * len(shape)
 
+    if (shape and len(shape) == 1 and len(chunks) > 1 and
+            all(isinstance(c, (Number, str)) for c in chunks)):
+        chunks = chunks,
+
     if shape and len(chunks) != len(shape):
-        if not (len(shape) == 1 and sum(chunks) == shape[0]):
-            raise ValueError(
-                "Chunks and shape must be of the same length/dimension. "
-                "Got chunks=%s, shape=%s" % (chunks, shape))
+        raise ValueError(
+            "Chunks and shape must be of the same length/dimension. "
+            "Got chunks=%s, shape=%s" % (chunks, shape))
     if -1 in chunks:
         chunks = tuple(s if c == -1 else c for c, s in zip(chunks, shape))
 
