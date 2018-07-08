@@ -2096,7 +2096,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
         chunks = ((0,),) * len(shape)
 
     if (shape and len(shape) == 1 and len(chunks) > 1 and
-            all(type(c) is not tuple for c in chunks)):
+            all(isinstance(c, (Number, str)) for c in chunks)):
         chunks = chunks,
 
     if shape and len(chunks) != len(shape):
