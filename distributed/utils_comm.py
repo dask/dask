@@ -57,7 +57,8 @@ def gather_from_workers(who_has, rpc, close=True, serializers=None, who=None):
         rpcs = {addr: rpc(addr) for addr in d}
         try:
             coroutines = {address: get_data_from_worker(rpc, keys, address,
-                                                        who=who)
+                                                        who=who,
+                                                        max_connections=False)
                           for address, keys in d.items()}
             response = {}
             for worker, c in coroutines.items():
@@ -66,7 +67,7 @@ def gather_from_workers(who_has, rpc, close=True, serializers=None, who=None):
                 except EnvironmentError:
                     missing_workers.add(worker)
                 else:
-                    response.update(r)
+                    response.update(r['data'])
         finally:
             for r in rpcs.values():
                 r.close_rpc()

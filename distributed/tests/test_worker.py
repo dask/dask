@@ -564,7 +564,7 @@ def test_clean_nbytes(c, s, a, b):
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 20)
 def test_gather_many_small(c, s, a, *workers):
-    a.total_connections = 2
+    a.total_out_connections = 2
     futures = yield c._scatter(list(range(100)))
 
     assert all(w.data for w in workers)
@@ -1192,3 +1192,22 @@ def test_prefer_gather_from_local_address(c, s, w1, w2, w3):
 
     assert any(d['who'] == w2.address for d in w1.outgoing_transfer_log)
     assert not any(d['who'] == w2.address for d in w3.outgoing_transfer_log)
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 20, timeout=30,
+             config={'distributed.worker.connections.incoming': 1})
+def test_avoid_oversubscription(c, s, *workers):
+    np = pytest.importorskip('numpy')
+    x = c.submit(np.random.random, 1000000, workers=[workers[0].address])
+    yield wait(x)
+
+    futures = [c.submit(len, x, pure=False, workers=[w.address])
+               for w in workers[1:]]
+
+    yield wait(futures)
+
+    # Original worker not responsible for all transfers
+    assert len(workers[0].outgoing_transfer_log) < len(workers) - 2
+
+    # Some other workers did some work
+    assert len([w for w in workers if len(w.outgoing_transfer_log) > 0]) >= 3

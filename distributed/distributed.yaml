@@ -19,6 +19,9 @@ distributed:
   worker:
     multiprocessing-method: forkserver
     use-file-locking: True
+    connections:            # Maximum concurrent connections for data
+      outgoing: 50          # This helps to control network saturation
+      incoming: 10
 
     profile:
       interval: 10ms        # Time between statistical profiling queries

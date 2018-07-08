@@ -159,7 +159,7 @@ class CommunicatingTimeSeries(DashboardComponent):
 
         fig = figure(title="Communication History",
                      x_axis_type='datetime',
-                     y_range=[-0.1, worker.total_connections + 0.5],
+                     y_range=[-0.1, worker.total_out_connections + 0.5],
                      height=150, tools='', x_range=x_range, **kwargs)
         fig.line(source=self.source, x='x', y='in', color='red')
         fig.line(source=self.source, x='x', y='out', color='blue')

@@ -601,11 +601,24 @@ class WorkerBase(ServerNode):
         raise Return('OK')
 
     @gen.coroutine
-    def get_data(self, comm, keys=None, who=None, serializers=None):
+    def get_data(self, comm, keys=None, who=None, serializers=None,
+                 max_connections=None):
         start = time()
 
+        if max_connections is None:
+            max_connections = self.total_in_connections
+
+        # Allow same-host connections more liberally
+        if max_connections and comm and get_address_host(comm.peer_address) == get_address_host(self.address):
+            max_connections = max_connections * 2
+
+        if max_connections is not False and self.outgoing_current_count > max_connections:
+            raise gen.Return({'status': 'busy'})
+
+        self.outgoing_current_count += 1
         data = {k: self.data[k] for k in keys if k in self.data}
-        msg = {k: to_serialize(v) for k, v in data.items()}
+        msg = {'status': 'OK',
+               'data': {k: to_serialize(v) for k, v in data.items()}}
         nbytes = {k: self.nbytes.get(k) for k in data}
         stop = time()
         if self.digests is not None:
@@ -620,6 +633,8 @@ class WorkerBase(ServerNode):
                              self.address, who, exc_info=True)
             comm.abort()
             raise
+        finally:
+            self.outgoing_current_count -= 1
         stop = time()
         if self.digests is not None:
             self.digests['get-data-send-duration'].add(stop - start)
@@ -1002,8 +1017,10 @@ class Worker(WorkerBase):
     * **services:** ``{str: Server}``:
         Auxiliary web servers running on this worker
     * **service_ports:** ``{str: port}``:
-    * **total_connections**: ``int``
-        The maximum number of concurrent connections we want to see
+    * **total_out_connections**: ``int``
+        The maximum number of concurrent outgoing requests for data
+    * **total_in_connections**: ``int``
+        The maximum number of concurrent incoming requests for data
     * **total_comm_nbytes**: ``int``
     * **batched_stream**: ``BatchedSend``
         A batched stream along which we communicate to the scheduler
@@ -1146,7 +1163,8 @@ class Worker(WorkerBase):
 
         self.in_flight_tasks = dict()
         self.in_flight_workers = dict()
-        self.total_connections = 50
+        self.total_out_connections = dask.config.get('distributed.worker.connections.outgoing')
+        self.total_in_connections = dask.config.get('distributed.worker.connections.incoming')
         self.total_comm_nbytes = 10e6
         self.comm_nbytes = 0
         self.suspicious_deps = defaultdict(lambda: 0)
@@ -1211,6 +1229,8 @@ class Worker(WorkerBase):
         self.incoming_count = 0
         self.outgoing_transfer_log = deque(maxlen=(100000))
         self.outgoing_count = 0
+        self.outgoing_current_count = 0
+        self.repetitively_busy = 0
         self._client = None
 
         profile_cycle_interval = kwargs.pop('profile_cycle_interval',
@@ -1381,20 +1401,21 @@ class Worker(WorkerBase):
                 pdb.set_trace()
             raise
 
-    def transition_dep_flight_waiting(self, dep, worker=None):
+    def transition_dep_flight_waiting(self, dep, worker=None, remove=True):
         try:
             if self.validate:
                 assert dep in self.in_flight_tasks
 
             del self.in_flight_tasks[dep]
-            try:
-                self.who_has[dep].remove(worker)
-            except KeyError:
-                pass
-            try:
-                self.has_what[worker].remove(dep)
-            except KeyError:
-                pass
+            if remove:
+                try:
+                    self.who_has[dep].remove(worker)
+                except KeyError:
+                    pass
+                try:
+                    self.has_what[worker].remove(dep)
+                except KeyError:
+                    pass
 
             if not self.who_has.get(dep):
                 if dep not in self._missing_dep_flight:
@@ -1402,7 +1423,10 @@ class Worker(WorkerBase):
                     self.loop.add_callback(self.handle_missing_dep, dep)
             for key in self.dependents.get(dep, ()):
                 if self.task_state[key] == 'waiting':
-                    self.data_needed.appendleft(key)
+                    if remove:  # try a new worker immediately
+                        self.data_needed.appendleft(key)
+                    else:  # worker was probably busy, wait a while
+                        self.data_needed.append(key)
 
             if not self.dependents[dep]:
                 self.release_dep(dep)
@@ -1608,12 +1632,12 @@ class Worker(WorkerBase):
     def ensure_communicating(self):
         changed = True
         try:
-            while changed and self.data_needed and len(self.in_flight_workers) < self.total_connections:
+            while changed and self.data_needed and len(self.in_flight_workers) < self.total_out_connections:
                 changed = False
                 logger.debug("Ensure communicating.  Pending: %d.  Connections: %d/%d",
                              len(self.data_needed),
                              len(self.in_flight_workers),
-                             self.total_connections)
+                             self.total_out_connections)
 
                 key = self.data_needed[0]
 
@@ -1650,7 +1674,7 @@ class Worker(WorkerBase):
 
                 in_flight = False
 
-                while deps and (len(self.in_flight_workers) < self.total_connections
+                while deps and (len(self.in_flight_workers) < self.total_out_connections
                                 or self.comm_nbytes < self.total_comm_nbytes):
                     dep = deps.pop()
                     if self.dep_state[dep] != 'waiting':
@@ -1783,6 +1807,12 @@ class Worker(WorkerBase):
                                                       who=self.address)
                 stop = time()
 
+                if response['status'] == 'busy':
+                    self.log.append(('busy-gather', worker, deps))
+                    for dep in deps:
+                        self.transition_dep(dep, 'waiting')
+                    return
+
                 if cause:
                     self.startstops[cause].append((
                         'transfer',
@@ -1790,14 +1820,14 @@ class Worker(WorkerBase):
                         stop + self.scheduler_delay
                     ))
 
-                total_bytes = sum(self.nbytes.get(dep, 0) for dep in response)
+                total_bytes = sum(self.nbytes.get(dep, 0) for dep in response['data'])
                 duration = (stop - start) or 0.5
                 self.incoming_transfer_log.append({
                     'start': start + self.scheduler_delay,
                     'stop': stop + self.scheduler_delay,
                     'middle': (start + stop) / 2.0 + self.scheduler_delay,
                     'duration': duration,
-                    'keys': {dep: self.nbytes.get(dep, None) for dep in response},
+                    'keys': {dep: self.nbytes.get(dep, None) for dep in response['data']},
                     'total': total_bytes,
                     'bandwidth': total_bytes / duration,
                     'who': worker
@@ -1805,14 +1835,14 @@ class Worker(WorkerBase):
                 if self.digests is not None:
                     self.digests['transfer-bandwidth'].add(total_bytes / duration)
                     self.digests['transfer-duration'].add(duration)
-                self.counters['transfer-count'].add(len(response))
+                self.counters['transfer-count'].add(len(response['data']))
                 self.incoming_count += 1
 
-                self.log.append(('receive-dep', worker, list(response)))
+                self.log.append(('receive-dep', worker, list(response['data'])))
 
-                if response:
+                if response['data']:
                     self.batched_stream.send({'op': 'add-keys',
-                                              'keys': list(response)})
+                                              'keys': list(response['data'])})
             except EnvironmentError as e:
                 logger.exception("Worker stream died during communication: %s",
                                  worker)
@@ -1830,14 +1860,16 @@ class Worker(WorkerBase):
                 raise
             finally:
                 self.comm_nbytes -= total_nbytes
+                busy = response['status'] == 'busy'
 
                 for d in self.in_flight_workers.pop(worker):
-                    if d in response:
-                        self.transition_dep(d, 'memory', value=response[d])
+                    if not busy and d in response['data']:
+                        self.transition_dep(d, 'memory', value=response['data'][d])
                     elif self.dep_state.get(d) != 'memory':
-                        self.transition_dep(d, 'waiting', worker=worker)
+                        self.transition_dep(d, 'waiting', worker=worker,
+                                            remove=not busy)
 
-                    if d not in response and d in self.dependents:
+                    if not busy and d not in response['data'] and d in self.dependents:
                         self.log.append(('missing-dep', d))
                         self.batched_stream.send({'op': 'missing-data',
                                                   'errant_worker': worker,
@@ -1847,7 +1879,18 @@ class Worker(WorkerBase):
                     self.validate_state()
 
                 self.ensure_computing()
-                self.ensure_communicating()
+
+                if not busy:
+                    self.repetitively_busy = 0
+                    self.ensure_communicating()
+                else:
+                    # Exponential backoff to avoid hammering scheduler/worker
+                    self.repetitively_busy += 1
+                    yield gen.sleep(0.100 * 1.5 ** self.repetitively_busy)
+
+                    # See if anyone new has the data
+                    yield self.query_who_has(dep)
+                    self.ensure_communicating()
 
     def bad_dep(self, dep):
         exc = ValueError("Could not find dependent %s.  Check worker logs" % str(dep))
@@ -2729,7 +2772,7 @@ def parse_memory_limit(memory_limit, ncores):
 
 
 @gen.coroutine
-def get_data_from_worker(rpc, keys, worker, who=None):
+def get_data_from_worker(rpc, keys, worker, who=None, max_connections=None):
     """ Get keys from worker
 
     The worker has a two step handshake to acknowledge when data has been fully
@@ -2746,8 +2789,10 @@ def get_data_from_worker(rpc, keys, worker, who=None):
         response = yield send_recv(comm,
                                    serializers=rpc.serializers,
                                    deserializers=rpc.deserializers,
-                                   op='get_data', keys=keys, who=who)
-        yield comm.write('OK')
+                                   op='get_data', keys=keys, who=who,
+                                   max_connections=max_connections)
+        if response['status'] == 'OK':
+            yield comm.write('OK')
     finally:
         rpc.reuse(worker, comm)
 
