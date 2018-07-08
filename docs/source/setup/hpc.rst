@@ -163,13 +163,11 @@ following values to your ``~/.config/dask/distributed.yaml`` file
 
    distributed:
      worker:
-     # Fractions of worker memory at which we take action to avoid memory blowup
-     # Set any of the lower three values to False to turn off the behavior entirely
-     memory:
-       target: false  # don't spill to disk
-       spill: false  # don't spill to disk
-       pause: 0.80  # fraction at which we pause worker threads
-       terminate: 0.95  # fraction at which we terminate the worker
+       memory:
+         target: false  # don't spill to disk
+         spill: false  # don't spill to disk
+         pause: 0.80  # pause execution at 80% memory use
+         terminate: 0.95  # restart the worker at 95% use
 
 This stops Dask workers from spilling to disk, and instead relies entirely on
 mechanisms to stop them from processing when they reach memory limits.
