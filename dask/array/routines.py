@@ -361,7 +361,7 @@ def apply_along_axis(func1d, axis, arr, dtype=None, shape=None, *args, **kwargs)
             "No more than one non-trivial dimension allowed in result. "
             "Need NumPy 1.13.0+ for this functionality."
         )
-    print(shape)
+    
     # Rechunk so that func1d is applied over the full axis.
     arr = arr.rechunk(
         arr.chunks[:axis] + (arr.shape[axis:axis + 1],) + arr.chunks[axis + 1:]
