@@ -192,7 +192,7 @@ Avoid too many tasks
 
 Every delayed task has an overhead of a few hundred microseconds.  Usually this
 is ok, but it can become a problem if you apply dask.delayed too finely.  In
-this case it's often best to break up your many tasks into batches, or use on
+this case it's often best to break up your many tasks into batches, or use one
 of the dask collections to help you.
 
 **Don't**
@@ -238,7 +238,7 @@ Often if you are new to using Dask.delayed you place dask.delayed calls
 everywhere and hope for the best.  While this may actually work it's usually
 slow and results in hard-to-understand solutions.
 
-Usually you only never call dask.delayed within dask.delayed functions.
+Usually you never call dask.delayed within dask.delayed functions.
 
 **Don't**
 
