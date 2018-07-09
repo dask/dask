@@ -1860,7 +1860,7 @@ class Worker(WorkerBase):
                 raise
             finally:
                 self.comm_nbytes -= total_nbytes
-                busy = response['status'] == 'busy'
+                busy = response.get('status', '') == 'busy'
 
                 for d in self.in_flight_workers.pop(worker):
                     if not busy and d in response['data']:
