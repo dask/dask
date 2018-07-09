@@ -7,6 +7,7 @@ Delayed
 
    delayed-api.rst
    delayed-collections.rst
+   delayed-best-practices.rst
 
 Sometimes problems don't fit into one of the collections like ``dask.array`` or
 ``dask.dataframe``. In these cases, users can parallelize custom algorithms
@@ -147,3 +148,10 @@ Real time
 
 Sometimes you want to create and destroy work during execution, launch tasks
 from other tasks, etc..  For this, see the :doc:`Futures <futures>` interface.
+
+
+Best Practices
+--------------
+
+For a list of common problems and recommendations see :doc:`Delayed Best
+Practices <delayed-best-practices>`
