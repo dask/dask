@@ -93,7 +93,11 @@ class Cluster(object):
             if n >= len(self.scheduler.workers):
                 self.scheduler.loop.add_callback(self.scale_up, n)
             else:
-                to_close = self.scheduler.workers_to_close(n=len(self.scheduler.workers) - n)
+                to_close = self.scheduler.retire_workers(
+                    remove=False,
+                    close_workers=True,
+                    n=len(self.scheduler.workers) - n
+                )
                 logger.debug("Closing workers: %s", to_close)
                 self.scheduler.loop.add_callback(self.scale_down, to_close)
 

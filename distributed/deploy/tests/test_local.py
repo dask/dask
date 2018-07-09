@@ -467,5 +467,37 @@ def test_local_tls(loop):
              )
 
 
+@gen_test()
+def test_scale_retires_workers():
+    class MyCluster(LocalCluster):
+        def scale_down(self, *args, **kwargs):
+            pass
+
+    loop = IOLoop.current()
+    cluster = yield MyCluster(0, scheduler_port=0, processes=False,
+                              silence_logs=False, diagnostics_port=None,
+                              loop=loop, asynchronous=True)
+    c = yield Client(cluster, loop=loop, asynchronous=True)
+
+    assert not cluster.workers
+
+    yield cluster.scale(2)
+
+    start = time()
+    while len(cluster.scheduler.workers) != 2:
+        yield gen.sleep(0.01)
+        assert time() < start + 3
+
+    yield cluster.scale(1)
+
+    start = time()
+    while len(cluster.scheduler.workers) != 1:
+        yield gen.sleep(0.01)
+        assert time() < start + 3
+
+    yield c._close()
+    yield cluster._close()
+
+
 if sys.version_info >= (3, 5):
     from distributed.deploy.tests.py3_test_deploy import *  # noqa F401
