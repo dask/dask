@@ -65,22 +65,14 @@ Examples
 >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
 >>> pprint.pprint(start_state_from_dask(dsk)) # doctest: +NORMALIZE_WHITESPACE
 {'cache': {'x': 1, 'y': 2},
- 'dependencies': {'w': set(['y', 'z']),
-                  'x': set([]),
-                  'y': set([]),
-                  'z': set(['x'])},
- 'dependents': {'w': set([]),
-                'x': set(['z']),
-                'y': set(['w']),
-                'z': set(['w'])},
- 'finished': set([]),
+ 'dependencies': {'w': {'z', 'y'}, 'x': set(), 'y': set(), 'z': {'x'}},
+ 'dependents': {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}},
+ 'finished': set(),
  'ready': ['z'],
- 'released': set([]),
- 'running': set([]),
- 'waiting': {'w': set(['z'])},
- 'waiting_data': {'x': set(['z']),
-                  'y': set(['w']),
-                  'z': set(['w'])}}
+ 'released': set(),
+ 'running': set(),
+ 'waiting': {'w': {'z'}},
+ 'waiting_data': {'x': {'z'}, 'y': {'w'}, 'z': {'w'}}}
 
 Optimizations
 =============
@@ -164,22 +156,14 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     >>> from pprint import pprint
     >>> pprint(start_state_from_dask(dsk)) # doctest: +NORMALIZE_WHITESPACE
     {'cache': {'x': 1, 'y': 2},
-     'dependencies': {'w': set(['y', 'z']),
-                      'x': set([]),
-                      'y': set([]),
-                      'z': set(['x'])},
-     'dependents': {'w': set([]),
-                    'x': set(['z']),
-                    'y': set(['w']),
-                    'z': set(['w'])},
-     'finished': set([]),
+     'dependencies': {'w': {'z', 'y'}, 'x': set(), 'y': set(), 'z': {'x'}},
+     'dependents': {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}},
+     'finished': set(),
      'ready': ['z'],
-     'released': set([]),
-     'running': set([]),
-     'waiting': {'w': set(['z'])},
-     'waiting_data': {'x': set(['z']),
-                      'y': set(['w']),
-                      'z': set(['w'])}}
+     'released': set(),
+     'running': set(),
+     'waiting': {'w': {'z'}},
+     'waiting_data': {'x': {'z'}, 'y': {'w'}, 'z': {'w'}}}
     """
     if sortkey is None:
         sortkey = order(dsk).get
