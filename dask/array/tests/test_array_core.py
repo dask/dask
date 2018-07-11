@@ -3591,3 +3591,14 @@ def test_blocks_indexer():
     assert "newaxis" in str(info.value) and "not supported" in str(info.value)
     with pytest.raises(IndexError) as info:
         x.blocks[100, 100]
+
+
+def test_dask_array_holds_scipy_sparse_containers():
+    sparse = pytest.importorskip('scipy.sparse')
+    x = da.random.random((1000, 10), chunks=(100, 10))
+    x[x < 0.9] = 0
+    y = x.map_blocks(sparse.csr_matrix)
+
+    vs = y.to_delayed().flatten().tolist()
+    values = dask.compute(*vs, scheduler='single-threaded')
+    assert all(isinstance(v, sparse.csr_matrix) for v in values)
