@@ -3166,3 +3166,18 @@ def test_meta_raises():
         ddf.a + ddf.c
 
     assert "meta=" not in str(info.value)
+
+
+def test_dask_dataframe_holds_scipy_sparse_containers():
+    sparse = pytest.importorskip('scipy.sparse')
+    da = pytest.importorskip('dask.array')
+    x = da.random.random((1000, 10), chunks=(100, 10))
+    x[x < 0.9] = 0
+    df = dd.from_dask_array(x)
+    y = df.map_partitions(sparse.csr_matrix)
+
+    assert isinstance(y, da.Array)
+
+    vs = y.to_delayed().flatten().tolist()
+    values = dask.compute(*vs, scheduler='single-threaded')
+    assert all(isinstance(v, sparse.csr_matrix) for v in values)
