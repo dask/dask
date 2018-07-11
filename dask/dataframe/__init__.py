@@ -12,6 +12,7 @@ from .multi import merge, concat
 from . import rolling
 from ..base import compute
 from .reshape import get_dummies, pivot_table, melt
+from .utils import assert_eq
 from .io.orc import read_orc
 try:
     from .io import read_parquet, to_parquet
