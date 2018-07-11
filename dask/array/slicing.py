@@ -364,15 +364,19 @@ def _slice_1d(dim_shape, lengths, index):
 
     And negative slicing
 
-    >>> exp_res = {0: slice(-2, -20, -3), 1: slice(-1, -21, -3), 2: slice(-3, -21, -3),
-    ...            3: slice(-2, -21, -3), 4: slice(-1, -21, -3)}
-    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 0, -3)) == exp_res
-    True
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 0, -3)) # doctest: +NORMALIZE_WHITESPACE
+    {4: slice(-1, -21, -3),
+     3: slice(-2, -21, -3),
+     2: slice(-3, -21, -3),
+     1: slice(-1, -21, -3),
+     0: slice(-2, -20, -3)}
 
-    >>> exp_res = {0: slice(-2, -8, -3), 1: slice(-1, -21, -3), 2: slice(-3, -21, -3),
-    ...            3: slice(-2, -21, -3), 4: slice(-1, -21, -3)}
-    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 12, -3)) == exp_res
-    True
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 12, -3)) # doctest: +NORMALIZE_WHITESPACE
+    {4: slice(-1, -21, -3),
+     3: slice(-2, -21, -3),
+     2: slice(-3, -21, -3),
+     1: slice(-1, -21, -3),
+     0: slice(-2, -8, -3)}
 
     >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, -12, -3))
     {4: slice(-1, -12, -3)}
