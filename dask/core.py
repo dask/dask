@@ -168,22 +168,22 @@ def get_dependencies(dsk, key=None, task=None, as_list=False):
     ...        'a': (add, (inc, 'x'), 1)}
 
     >>> get_dependencies(dsk, 'x')
-    set([])
+    set()
 
     >>> get_dependencies(dsk, 'y')
-    set(['x'])
+    {'x'}
 
     >>> get_dependencies(dsk, 'z')  # doctest: +SKIP
-    set(['x', 'y'])
+    {'x', 'y'}
 
     >>> get_dependencies(dsk, 'w')  # Only direct dependencies
-    set(['z'])
+    {'z'}
 
     >>> get_dependencies(dsk, 'a')  # Ignore non-keys
-    set(['x'])
+    {'x'}
 
     >>> get_dependencies(dsk, task=(inc, 'x'))  # provide tasks directly
-    set(['x'])
+    {'x'}
     """
     if key is not None:
         arg = dsk[key]
@@ -222,9 +222,9 @@ def get_deps(dsk):
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
     >>> dependencies
-    {'a': set([]), 'c': set(['b']), 'b': set(['a'])}
+    {'a': set(), 'b': {'a'}, 'c': {'b'}}
     >>> dependents
-    {'a': set(['b']), 'c': set([]), 'b': set(['c'])}
+    {'a': {'b'}, 'b': {'c'}, 'c': set()}
     """
     dependencies = {k: get_dependencies(dsk, task=v)
                     for k, v in dsk.items()}
