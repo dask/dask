@@ -36,11 +36,10 @@ They provide interfaces that look like the following:
 
    from dask_jobqueue import PBSCluster
 
-   cluster = PBSCluster(processes=18,
-                        threads=4, memory="6GB",
+   cluster = PBSCluster(cores=36,
+                        memory"100GB",
                         project='P48500028',
                         queue='premium',
-                        resource_spec='select=1:ncpus=36:mem=109G',
                         walltime='02:00:00')
 
    cluster.start_workers(100)  # Start 100 jobs that match the description above
@@ -48,9 +47,15 @@ They provide interfaces that look like the following:
    from dask.distributed import Client
    client = Client(cluster)    # Connect to that cluster
 
+We recommend reading the `dask-jobqueue documentation <https://dask-jobqueue.readthedocs.io>`_
+first to get a basic system running, and then returning this this documentation
+for fine-tuning.
+
 
 Using a Shared Network File System and a Job Scheduler
 ------------------------------------------------------
+
+.. note:: this section is not necessary if you use a tool like dask-jobqueue
 
 Some clusters benefit from a shared network file system (NFS) and can use this
 to communicate the scheduler location to the workers::
@@ -80,6 +85,8 @@ workers share a network file system.
 
 Using MPI
 ---------
+
+.. note:: this section is not necessary if you use a tool like dask-jobqueue
 
 You can launch a Dask network using ``mpirun`` or ``mpiexec`` and the
 ``dask-mpi`` command line executable.
@@ -117,7 +124,8 @@ High Performance Network
 Many HPC systems have both standard Ethernet networks as well as
 high-performance networks capable of increased bandwidth.  You can instruct
 Dask to use the high-performance network interface by using the ``--interface``
-keyword to the ``dask-worker``, ``dask-scheduler``, or ``dask-mpi`` commands
+keyword to the ``dask-worker``, ``dask-scheduler``, or ``dask-mpi`` commands or
+the ``interface=`` keyword to the dask-jobqueue ``Cluster`` objects.
 
 .. code-block:: bash
 
@@ -225,14 +233,3 @@ process with the following commands
        dask_scheduler.jlab_proc = proc
 
    client.run_on_scheduler(start_jlab)
-
-
-Concrete Example with PBS
--------------------------
-
-The Pangeo project maintains instructions on how to deploy Dask on various HPC
-systems maintained by NCAR using the PBS job scheduler.  Their more concrete
-instructions may not apply to your situation in particular, but it may be
-helpful to see a full solution.
-
-- https://pangeo-data.github.io/pangeo/setup_guides/index.html
