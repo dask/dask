@@ -890,10 +890,11 @@ def test_to_textfiles_inputs():
 def test_to_textfiles_endlines():
     b = db.from_sequence(['a', 'b', 'c'], npartitions=1)
     with tmpfile() as fn:
-        b.to_textfiles([fn])
-        with open(fn, 'r') as f:
-            result = f.readlines()
-        assert result == ['a\n', 'b\n', 'c']
+        for last_endline in False, True:
+            b.to_textfiles([fn], last_endline=last_endline)
+            with open(fn, 'r') as f:
+                result = f.readlines()
+            assert result == ['a\n', 'b\n', 'c\n' if last_endline else 'c']
 
 
 def test_string_namespace():
