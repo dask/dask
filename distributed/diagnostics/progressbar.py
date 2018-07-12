@@ -124,6 +124,10 @@ class TextProgressBar(ProgressBar):
             sys.stdout.write(msg)
             sys.stdout.flush()
 
+    def _draw_stop(self, **kwargs):
+        sys.stdout.write('\r')
+        sys.stdout.flush()
+
 
 class ProgressWidget(ProgressBar):
     """ ProgressBar that uses an IPython ProgressBar widget for the notebook
