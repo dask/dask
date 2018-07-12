@@ -195,7 +195,7 @@ after the line.
 
 .. _numpydoc: https://github.com/numpy/numpy/blob/master/doc/HOWTO_DOCUMENT.rst.txt
 
-Docstrings are currently tested under Python 2.7 on travis.ci.  You can test
+Docstrings are currently tested under Python 3.6 on travis.ci.  You can test
 docstrings with pytest as follows::
 
    py.test dask --doctest-modules
