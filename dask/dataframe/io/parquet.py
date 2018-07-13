@@ -899,12 +899,14 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
     Parameters
     ----------
-    path : string or list
+    path : string, list or fastparquet.ParquetFile
         Source directory for data, or path(s) to individual parquet files.
         Prefix with a protocol like ``s3://`` to read from alternative
         filesystems. To read from multiple files you can pass a globstring or a
         list of paths, with the caveat that they must all have the same
         protocol.
+        Alternatively, also accepts a previously opened
+        fastparquet.ParquetFile()
     columns : string, list or None (default)
         Field name(s) to read in as columns in the output. By default all
         non-index fields will be read (as determined by the pandas parquet
