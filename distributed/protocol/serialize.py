@@ -380,8 +380,8 @@ def register_serialization(cls, serialize, deserialize):
     Parameters
     ----------
     cls: type
-    serialize: function
-    deserialize: function
+    serialize: callable(cls) -> Tuple[Dict, List[bytes]]
+    deserialize: callable(header: Dict, frames: List[bytes]) -> cls
 
     Examples
     --------
