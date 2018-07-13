@@ -5,6 +5,7 @@ import numpy as np
 
 import dask
 import dask.array as da
+from dask.utils import key_split
 from dask.array.core import Array
 from dask.array.random import random, exponential, normal
 from dask.array.utils import assert_eq
@@ -103,6 +104,7 @@ def test_unique_names():
 def test_docs():
     assert 'exponential' in exponential.__doc__
     assert 'exponential' in exponential.__name__
+    assert "# doctest: +SKIP" in normal.__doc__
 
 
 def test_can_make_really_big_random_array():
@@ -274,3 +276,10 @@ def test_create_with_auto_dimensions():
 
         y = da.random.random((10000, 10000), chunks="auto")
         assert y.chunks == ((2500,) * 4, (2500,) * 4)
+
+
+def test_names():
+    name = da.random.normal(0, 1, size=(1000,), chunks=(500,)).name
+
+    assert name.startswith('normal')
+    assert len(key_split(name)) < 10

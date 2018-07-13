@@ -15,6 +15,7 @@ from numbers import Integral
 from threading import Lock
 import multiprocessing as mp
 import uuid
+import warnings
 from weakref import WeakValueDictionary
 
 from .compatibility import get_named_args, getargspec, PY3, unicode, bind_method
@@ -552,11 +553,11 @@ def ensure_bytes(s):
     """ Turn string or bytes to bytes
 
     >>> ensure_bytes(u'123')
-    '123'
+    b'123'
     >>> ensure_bytes('123')
-    '123'
+    b'123'
     >>> ensure_bytes(b'123')
-    '123'
+    b'123'
     """
     if isinstance(s, bytes):
         return s
@@ -570,11 +571,11 @@ def ensure_unicode(s):
     """ Turn string or bytes to bytes
 
     >>> ensure_unicode(u'123')
-    u'123'
+    '123'
     >>> ensure_unicode('123')
-    u'123'
+    '123'
     >>> ensure_unicode(b'123')
-    u'123'
+    '123'
     """
     if isinstance(s, unicode):
         return s
@@ -891,7 +892,7 @@ def is_arraylike(x):
     >>> is_arraylike('cat')
     False
     """
-    return (hasattr(x, '__array__') and
+    return (# hasattr(x, '__array__') and
             hasattr(x, 'shape') and x.shape and
             hasattr(x, 'dtype'))
 
@@ -1002,3 +1003,21 @@ byte_sizes = {
 byte_sizes = {k.lower(): v for k, v in byte_sizes.items()}
 byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and 'i' not in k})
 byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and 'i' in k})
+
+
+def effective_get(get=None, collection=None):
+    """ Deprecated: see dask.base.get_scheduler """
+    warnings.warn("Deprecated, see dask.base.get_scheduler instead")
+
+    from dask.base import get_scheduler
+    return get_scheduler(get=get, collections=[collection])
+
+
+def has_keyword(func, keyword):
+    try:
+        if PY3:
+            return keyword in inspect.signature(func).parameters
+        else:
+            return keyword in inspect.getargspec(func).args
+    except Exception:
+        return False

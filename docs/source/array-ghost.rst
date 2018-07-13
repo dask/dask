@@ -101,8 +101,8 @@ So an example boundary kind argument might look like the following
     1: 'reflect',
     2: np.nan}
 
-Alternatively you can use functions like ``da.fromfunction`` and
-``da.concatenate`` to pad arbitrarily.
+Alternatively you can use :py:func:`dask.array.pad` for other types of
+paddings.
 
 
 Map a function across blocks

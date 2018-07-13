@@ -52,7 +52,7 @@ such as is the case when operating on numeric data in NumPy arrays, Pandas dataf
 or using any of the other C/C++/Cython based projects in the ecosystem.
 
 The threaded scheduler is the default choice for
-:doc:`dask array <array>`, doc:`dask dataframe <dataframe>`, and :doc:`dask delayed <delayed>`.
+:doc:`dask array <array>`, :doc:`dask dataframe <dataframe>`, and :doc:`dask delayed <delayed>`.
 However if your computation is dominated by processing pure Python objects
 like strings, dicts, or lists,
 then you may want to try one of the process-based schedulers below

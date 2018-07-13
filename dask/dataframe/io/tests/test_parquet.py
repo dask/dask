@@ -819,6 +819,34 @@ def test_filters(tmpdir):
     assert len(ddf2) > 0
 
 
+def test_read_from_fastparquet_parquetfile(tmpdir):
+    check_fastparquet()
+    fn = str(tmpdir)
+
+    df = pd.DataFrame({
+        'a': np.random.choice(['A', 'B', 'C'], size=100),
+        'b': np.random.random(size=100),
+        'c': np.random.randint(1, 5, size=100)
+    })
+    d = dd.from_pandas(df, npartitions=2)
+    d.to_parquet(fn, partition_on=['a'], engine='fastparquet')
+
+    pq_f = fastparquet.ParquetFile(fn)
+
+    # OK with no filters
+    out = dd.read_parquet(pq_f).compute()
+    for val in df.a.unique():
+        assert set(df.b[df.a == val]) == set(out.b[out.a == val])
+
+    # OK with  filters
+    out = dd.read_parquet(pq_f, filters=[('a', '==', 'B')]).compute()
+    assert set(df.b[df.a == 'B']) == set(out.b)
+
+    # Engine should not be set to 'pyarrow'
+    with pytest.raises(AssertionError):
+        out = dd.read_parquet(pq_f, engine='pyarrow')
+
+
 @pytest.mark.parametrize('scheduler', ['threads', 'processes'])
 def test_to_parquet_lazy(tmpdir, scheduler, engine):
     tmpdir = str(tmpdir)
@@ -1217,3 +1245,22 @@ def test_select_partitioned_column(tmpdir, engine):
 
     df_partitioned = dd.read_parquet(fn, engine=engine)
     df_partitioned[df_partitioned.fake_categorical1 == 'A'].compute()
+
+
+def test_arrow_partitioning(tmpdir):
+    # Issue #3518
+    pytest.importorskip('pyarrow')
+    path = str(tmpdir)
+    data = {
+        'p': np.repeat(np.arange(3), 2).astype(np.int8),
+        'b': np.repeat(-1, 6).astype(np.int16),
+        'c': np.repeat(-2, 6).astype(np.float32),
+        'd': np.repeat(-3, 6).astype(np.float64),
+    }
+    pdf = pd.DataFrame(data)
+    ddf = dd.from_pandas(pdf, npartitions=2)
+    ddf.to_parquet(path, engine='pyarrow', partition_on='p')
+
+    ddf = dd.read_parquet(path, engine='pyarrow')
+
+    ddf.astype({'b': np.float32}).compute()

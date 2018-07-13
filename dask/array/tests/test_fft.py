@@ -9,9 +9,7 @@ import dask.array.fft
 from dask.array.fft import fft_wrap
 from dask.array.utils import assert_eq, same_keys
 
-from dask.array.core import (
-    normalize_chunks as _normalize_chunks,
-)
+from dask.array.core import normalize_chunks
 
 
 all_1d_funcnames = [
@@ -201,21 +199,21 @@ def test_fftfreq(n, d, c):
     r1 = np.fft.fftfreq(n, d)
     r2 = da.fft.fftfreq(n, d, chunks=c)
 
-    assert _normalize_chunks(c, r2.shape) == r2.chunks
+    assert normalize_chunks(c, r2.shape) == r2.chunks
 
     assert_eq(r1, r2)
 
 
 @pytest.mark.parametrize("n", [1, 2, 3, 6, 7])
 @pytest.mark.parametrize("d", [1.0, 0.5, 2 * np.pi])
-@pytest.mark.parametrize("c", [lambda m: m // 2 + 1, lambda m: (1, m // 2)])
+@pytest.mark.parametrize("c", [lambda m: (m // 2 + 1, ), lambda m: (1, m // 2)])
 def test_rfftfreq(n, d, c):
-    c = c(n)
+    c = [ci for ci in c(n) if ci != 0]
 
     r1 = np.fft.rfftfreq(n, d)
     r2 = da.fft.rfftfreq(n, d, chunks=c)
 
-    assert _normalize_chunks(c, r2.shape) == r2.chunks
+    assert normalize_chunks(c, r2.shape) == r2.chunks
 
     assert_eq(r1, r2)
 
