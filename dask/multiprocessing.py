@@ -4,6 +4,7 @@ import multiprocessing
 import traceback
 import pickle
 import sys
+from warnings import warn
 
 from . import config
 from .local import get_async  # TODO: get better get
@@ -125,10 +126,18 @@ def pack_exception(e, dumps):
     return result
 
 
+_CONTEXT_UNSUPPORTED = """\
+The 'multiprocessing.context' configuration option will be ignored on Python 2
+and on Windows, because they each only support a single context.
+"""
+
+
 def get_context():
     """ Return the current multiprocessing context."""
     if sys.platform == "win32" or sys.version_info.major == 2:
         # Just do the default, since we can't change it:
+        if config.get("multiprocessing.context", None) is not None:
+            warn(_CONTEXT_UNSUPPORTED, UserWarning)
         return multiprocessing
     context_name = config.get("multiprocessing.context", None)
     return multiprocessing.get_context(context_name)

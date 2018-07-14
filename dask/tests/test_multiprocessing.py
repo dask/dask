@@ -187,8 +187,10 @@ def test_custom_context_ignored_elsewhere():
     Presumption is it's not used since unsupported, but mostly we care about
     not breaking anything.
     """
-    with config.set({"multiprocessing.context": "forkserver"}):
-        assert get({'x': (inc, 1)}, 'x') == 2
+    assert get({'x': (inc, 1)}, 'x') == 2
+    with pytest.warns(UserWarning):
+        with config.set({"multiprocessing.context": "forkserver"}):
+            assert get({'x': (inc, 1)}, 'x') == 2
 
 
 @pytest.mark.skipif(sys.platform != 'win32' and sys.version_info.major > 2,
@@ -196,5 +198,6 @@ def test_custom_context_ignored_elsewhere():
 def test_get_context_always_default():
     """ On Python 2/Windows, get_context() always returns same context."""
     assert get_context() is multiprocessing
-    with config.set({"multiprocessing.context": "forkserver"}):
-        assert get_context() is multiprocessing
+    with pytest.warns(UserWarning):
+        with config.set({"multiprocessing.context": "forkserver"}):
+            assert get_context() is multiprocessing
