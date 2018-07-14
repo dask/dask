@@ -172,9 +172,6 @@ class RandomState(object):
     with ignoring(AttributeError):
         @doc_wraps(np.random.RandomState.choice)
         def choice(self, a, size=None, replace=True, p=None, chunks=None):
-            if not replace:
-                raise NotImplementedError('replace=False is not currently '
-                                          'supported for dask.array.choice')
             dsks = []
             # Normalize and validate `a`
             if isinstance(a, Integral):
@@ -220,6 +217,11 @@ class RandomState(object):
                 size = (size,)
 
             chunks = normalize_chunks(chunks, size, dtype=np.float64)
+            if not replace and len(chunks[0]) > 1:
+                    err_msg = ('replace=False is not currently supported for '
+                               'dask.array.choice with multi-chunk output '
+                               'arrays')
+                    raise NotImplementedError(err_msg)
             sizes = list(product(*chunks))
             state_data = random_state_data(len(sizes), self._numpy_state)
 
