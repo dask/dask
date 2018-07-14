@@ -535,6 +535,7 @@ def test_read_hdf_doesnt_segfault():
 
 
 def test_hdf_filenames():
+    pytest.importorskip('tables')
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd'],
                        'y': [1, 2, 3, 4]}, index=[1., 2., 3., 4.])
     ddf = dd.from_pandas(df, npartitions=2)
