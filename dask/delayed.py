@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
 import operator
+import types
 import uuid
 
 try:
@@ -433,6 +434,11 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         raise TypeError("Truth of Delayed objects is not supported")
 
     __nonzero__ = __bool__
+
+    def __get__(self, instance, cls):
+        if instance is None:
+            return self
+        return types.MethodType(self, instance)
 
     @classmethod
     def _get_binary_operator(cls, op, inv=False):
