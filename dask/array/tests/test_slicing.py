@@ -2,7 +2,7 @@ import itertools
 from operator import getitem
 
 import pytest
-from hypothesis import given, strategies as st, example
+from hypothesis import given, strategies as st, example, settings
 from toolz import merge
 
 np = pytest.importorskip('numpy')
@@ -813,7 +813,8 @@ def size_and_chunks(draw, elements=st.integers(min_value=1, max_value=100)):
 
 
 @given(params=size_and_chunks())
-@example(params=(5, 2, 3))
+@settings(max_examples=15)
+@example(params=(2, 2, 1))
 def test_slicing_of_same_size_preserves_shape(params):
     """ Reproducer for https://github.com/dask/dask/issues/3730.
 
@@ -821,6 +822,7 @@ def test_slicing_of_same_size_preserves_shape(params):
     """
     array_size, chunk_size1, chunk_size2 = params
     x = da.zeros(array_size, chunks=chunk_size1)
-    m = da.zeros(array_size, chunks=chunk_size2)
-    x[m > 0] = 1
-    assert x.shape == x.compute().shape
+    mask = da.zeros(array_size, chunks=chunk_size2)
+    x[mask] = 1
+    result = x.compute()
+    assert x.shape == result.shape
