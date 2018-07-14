@@ -4,5 +4,3 @@ To build a local copy of the dask docs, run the following commands::
   cd dask/docs
   make html
   open build/html/index.html
-
-Test
