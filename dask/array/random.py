@@ -172,6 +172,9 @@ class RandomState(object):
     with ignoring(AttributeError):
         @doc_wraps(np.random.RandomState.choice)
         def choice(self, a, size=None, replace=True, p=None, chunks=None):
+            if not replace:
+                raise NotImplementedError('replace=False is not currently '
+                                          'supported for dask.array.choice')
             dsks = []
             # Normalize and validate `a`
             if isinstance(a, Integral):

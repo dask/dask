@@ -268,6 +268,9 @@ def test_choice():
         with pytest.raises(ValueError):
             da.random.choice(a, size=size, chunks=chunks, p=p)
 
+    with pytest.raises(NotImplementedError):
+        da.random.choice(da_a, size=size, chunks=chunks, replace=False)
+
 
 def test_create_with_auto_dimensions():
     with dask.config.set({'array.chunk-size': '128MiB'}):
