@@ -2,6 +2,7 @@ import itertools
 from operator import getitem
 
 import pytest
+from hypothesis import given, strategies as st, example
 from toolz import merge
 
 np = pytest.importorskip('numpy')
@@ -798,3 +799,28 @@ def test_pathological_unsorted_slicing():
 
     assert '10' in str(info.list[0])
     assert 'out-of-order' in str(info.list[0])
+
+
+@st.composite
+def size_and_chunks(draw, elements=st.integers(min_value=1, max_value=100)):
+    """ Return 3 tuple of (array size, chunk size 1, chunk size 2).
+
+    Chunk sizes are always smaller than array size.
+    """
+    array_size = draw(elements)
+    chunks = st.integers(min_value=1, max_value=array_size)
+    return (array_size, draw(chunks), draw(chunks))
+
+
+@given(params=size_and_chunks())
+@example(params=(5, 2, 3))
+def test_slicing_of_same_size_preserves_shape(params):
+    """ Reproducer for https://github.com/dask/dask/issues/3730.
+
+    Use property-based testing to generate a variety of values to check.
+    """
+    array_size, chunk_size1, chunk_size2 = params
+    x = da.zeros(array_size, chunks=chunk_size1)
+    m = da.zeros(array_size, chunks=chunk_size2)
+    x[m > 0] = 1
+    assert x.shape == x.compute().shape
