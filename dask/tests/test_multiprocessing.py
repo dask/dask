@@ -11,7 +11,9 @@ import numpy as np
 import pytest
 from dask import compute, config, delayed
 from dask.context import set_options
-from dask.multiprocessing import get, _dumps, _loads, remote_exception
+from dask.multiprocessing import (
+    get, _dumps, _loads, remote_exception, get_context,
+)
 from dask.utils_test import inc
 
 
@@ -139,7 +141,7 @@ def test_random_seeds(random):
 @pytest.mark.skipif(sys.version_info.major == 2,
                     reason="Python 2 doesn't support different contexts")
 def test_custom_context_used_python3_posix():
-    """The 'multiprocessing.context' config is used to create the pool.
+    """ The 'multiprocessing.context' config is used to create the pool.
 
     We assume default is 'fork', and therefore test for 'spawn'.  If default
     context is changed this test will need to be modified to be different than
@@ -161,13 +163,38 @@ def test_custom_context_used_python3_posix():
         del sys.modules["FAKE_MODULE_FOR_TEST"]
 
 
+@pytest.mark.skipif(sys.platform == 'win32',
+                    reason="Windows doesn't support different contexts")
+@pytest.mark.skipif(sys.version_info.major == 2,
+                    reason="Python 2 doesn't support different contexts")
+def test_get_context_using_python3_posix():
+    """ get_context() respects configuration.
+
+    If default context is changed this test will need to change too.
+    """
+    assert get_context() is multiprocessing.get_context(None)
+    with config.set({"multiprocessing.context": "forkserver"}):
+        assert get_context() is multiprocessing.get_context("forkserver")
+    with config.set({"multiprocessing.context": "spawn"}):
+        assert get_context() is multiprocessing.get_context("spawn")
+
+
 @pytest.mark.skipif(sys.platform != 'win32' and sys.version_info.major > 2,
                     reason="Python 3 POSIX supports different contexts")
 def test_custom_context_ignored_elsewhere():
-    """On Python 2/Windows, setting 'multiprocessing.context' doesn't explode.
+    """ On Python 2/Windows, setting 'multiprocessing.context' doesn't explode.
 
     Presumption is it's not used since unsupported, but mostly we care about
     not breaking anything.
     """
     with config.set({"multiprocessing.context": "forkserver"}):
         assert get({'x': (inc, 1)}, 'x') == 2
+
+
+@pytest.mark.skipif(sys.platform != 'win32' and sys.version_info.major > 2,
+                    reason="Python 3 POSIX supports different contexts")
+def test_get_context_always_default():
+    """ On Python 2/Windows, get_context() always returns same context."""
+    assert get_context() is multiprocessing
+    with config.set({"multiprocessing.context": "forkserver"}):
+        assert get_context() is multiprocessing

@@ -125,8 +125,11 @@ def pack_exception(e, dumps):
     return result
 
 
-def _get_context():
+def get_context():
     """ Return the current multiprocessing context."""
+    if sys.platform == "win32" or sys.version_info.major == 2:
+        # Just do the default, since we can't change it:
+        return multiprocessing
     context_name = config.get("multiprocessing.context", None)
     return multiprocessing.get_context(context_name)
 
@@ -154,7 +157,7 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
     """
     pool = config.get('pool', None)
     if pool is None:
-        context = _get_context()
+        context = get_context()
         pool = context.Pool(num_workers,
                             initializer=initialize_worker_process)
         cleanup = True
