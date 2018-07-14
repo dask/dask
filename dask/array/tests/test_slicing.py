@@ -815,8 +815,12 @@ def size_and_chunks(draw, elements=st.integers(min_value=1, max_value=100)):
 @given(params=size_and_chunks())
 @settings(max_examples=15)
 @example(params=(2, 2, 1))
-def test_slicing_of_same_size_preserves_shape(params):
+def test_setitem_with_different_chunks_preserves_shape(params):
     """ Reproducer for https://github.com/dask/dask/issues/3730.
+
+    Mutating based on an array with different chunks can cause new chunks to be
+    used.  We need to ensure those new chunk sizes are applied to the mutated
+    array, otherwise the array won't generate the correct keys.
 
     Use property-based testing to generate a variety of values to check.
     """
