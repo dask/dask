@@ -22,7 +22,7 @@ Dataframe
 Core
 ++++
 
--
+- On Python 3 POSIX platforms, support configuring different ``multiprocessing`` contexts (:pr:`3763`) `Itamar Turner-Trauring`_
 
 
 0.18.1 / 2018-06-22
@@ -1192,7 +1192,7 @@ Other
 .. _`@xwang777`: https://github.com/xwang777
 .. _`@fjetter`: https://github.com/fjetter
 .. _`@Ced4`: https://github.com/Ced4
-.. _`Ian Hopkinson`: https://https://github.com/IanHopkinson
+.. _`Ian Hopkinson`: https://github.com/IanHopkinson
 .. _`Stephan Hoyer`: https://github.com/shoyer
 .. _`Albert DeFusco`: https://github.com/AlbertDeFusco
 .. _`Markus Gonser`: https://github.com/magonser
@@ -1224,3 +1224,4 @@ Other
 .. _`@beomi`: https://github.com/beomi
 .. _`Henrique Ribeiro`: https://github.com/henriqueribeiro
 .. _`Marco Rossi`: https://github.com/m-rossi
+.. _`Itamar Turner-Trauring`: https://github.com/itamarst
