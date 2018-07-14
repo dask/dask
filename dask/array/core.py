@@ -1958,7 +1958,10 @@ class Array(DaskMethodsMixin):
         """
         Copy array.  This is a no-op for dask.arrays, which are immutable
         """
-        return Array(self.dask, self.name, self.chunks, self.dtype)
+        if self.npartitions == 1:
+            return self.map_blocks(np.copy)
+        else:
+            return Array(self.dask, self.name, self.chunks, self.dtype)
 
     def __deepcopy__(self, memo):
         c = self.copy()
