@@ -125,6 +125,12 @@ def pack_exception(e, dumps):
     return result
 
 
+def _get_context():
+    """ Return the current multiprocessing context."""
+    context_name = config.get("multiprocessing.context", None)
+    return multiprocessing.get_context(context_name)
+
+
 def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
         optimize_graph=True, **kwargs):
     """ Multiprocessed get function appropriate for Bags
@@ -148,8 +154,9 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
     """
     pool = config.get('pool', None)
     if pool is None:
-        pool = multiprocessing.Pool(num_workers,
-                                    initializer=initialize_worker_process)
+        context = _get_context()
+        pool = context.Pool(num_workers,
+                            initializer=initialize_worker_process)
         cleanup = True
     else:
         cleanup = False

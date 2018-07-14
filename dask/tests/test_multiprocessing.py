@@ -1,3 +1,6 @@
+from __future__ import absolute_import, division, print_function
+
+import sys
 import multiprocessing
 from operator import add
 import pickle
@@ -6,8 +9,7 @@ import random
 import numpy as np
 
 import pytest
-
-from dask import compute, delayed
+from dask import compute, config, delayed
 from dask.context import set_options
 from dask.multiprocessing import get, _dumps, _loads, remote_exception
 from dask.utils_test import inc
@@ -130,3 +132,42 @@ def test_random_seeds(random):
         results, = compute([delayed(f, pure=False)() for i in range(N)])
 
     assert len(set(results)) == N
+
+
+@pytest.mark.skipif(sys.platform == 'win32',
+                    reason="Windows doesn't support different contexts")
+@pytest.mark.skipif(sys.version_info.major == 2,
+                    reason="Python 2 doesn't support different contexts")
+def test_custom_context_used_python3_posix():
+    """The 'multiprocessing.context' config is used to create the pool.
+
+    We assume default is 'fork', and therefore test for 'spawn'.  If default
+    context is changed this test will need to be modified to be different than
+    that.
+    """
+    # We check for spawn by ensuring subprocess doesn't have modules only
+    # parent process should have:
+    def check_for_pytest():
+        import sys
+        return "FAKE_MODULE_FOR_TEST" in sys.modules
+
+    import sys
+    sys.modules["FAKE_MODULE_FOR_TEST"] = 1
+    try:
+        with config.set({"multiprocessing.context": "spawn"}):
+            result = get({"x": (check_for_pytest,)}, "x")
+        assert not result
+    finally:
+        del sys.modules["FAKE_MODULE_FOR_TEST"]
+
+
+@pytest.mark.skipif(sys.platform != 'win32' and sys.version_info.major > 2,
+                    reason="Python 3 POSIX supports different contexts")
+def test_custom_context_ignored_elsewhere():
+    """On Python 2/Windows, setting 'multiprocessing.context' doesn't explode.
+
+    Presumption is it's not used since unsupported, but mostly we care about
+    not breaking anything.
+    """
+    with config.set({"multiprocessing.context": "forkserver"}):
+        assert get({'x': (inc, 1)}, 'x') == 2
