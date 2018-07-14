@@ -271,6 +271,11 @@ def test_choice():
     with pytest.raises(NotImplementedError):
         da.random.choice(da_a, size=size, chunks=chunks, replace=False)
 
+    # Want to make sure replace=False works for a single-partition output array
+    x = da.random.choice(da_a, size=da_a.shape[0], chunks=-1, replace=False)
+    res = x.compute()
+    assert len(res) == len(np.unique(res))
+
 
 def test_create_with_auto_dimensions():
     with dask.config.set({'array.chunk-size': '128MiB'}):
