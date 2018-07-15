@@ -1861,15 +1861,16 @@ class Worker(WorkerBase):
             finally:
                 self.comm_nbytes -= total_nbytes
                 busy = response.get('status', '') == 'busy'
+                data = response.get('data', {})
 
                 for d in self.in_flight_workers.pop(worker):
-                    if not busy and d in response['data']:
-                        self.transition_dep(d, 'memory', value=response['data'][d])
+                    if not busy and d in data:
+                        self.transition_dep(d, 'memory', value=data[d])
                     elif self.dep_state.get(d) != 'memory':
                         self.transition_dep(d, 'waiting', worker=worker,
                                             remove=not busy)
 
-                    if not busy and d not in response['data'] and d in self.dependents:
+                    if not busy and d not in data and d in self.dependents:
                         self.log.append(('missing-dep', d))
                         self.batched_stream.send({'op': 'missing-data',
                                                   'errant_worker': worker,
