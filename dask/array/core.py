@@ -1337,9 +1337,6 @@ class Array(DaskMethodsMixin):
             self.dtype = y.dtype
             self.dask = y.dask
             self.name = y.name
-            # In order to figure out what keys to use, __dask_keys__ needs to
-            # know what chunks to expect. The chunks to expect are y.chunks, so
-            # we need to change our chunks.
             self._chunks = y.chunks
             return self
         else:
