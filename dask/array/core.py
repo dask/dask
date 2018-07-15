@@ -1337,6 +1337,7 @@ class Array(DaskMethodsMixin):
             self.dtype = y.dtype
             self.dask = y.dask
             self.name = y.name
+            self._chunks = y.chunks
             return self
         else:
             raise NotImplementedError("Item assignment with %s not supported"
