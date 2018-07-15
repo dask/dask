@@ -338,7 +338,7 @@ Create and Store Arrays
 Generalized Ufuncs
 ~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask.array
+.. currentmodule:: dask.array.gufunc
 
 .. autosummary::
    apply_gufunc
