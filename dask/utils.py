@@ -553,11 +553,11 @@ def ensure_bytes(s):
     """ Turn string or bytes to bytes
 
     >>> ensure_bytes(u'123')
-    '123'
+    b'123'
     >>> ensure_bytes('123')
-    '123'
+    b'123'
     >>> ensure_bytes(b'123')
-    '123'
+    b'123'
     """
     if isinstance(s, bytes):
         return s
@@ -571,11 +571,11 @@ def ensure_unicode(s):
     """ Turn string or bytes to bytes
 
     >>> ensure_unicode(u'123')
-    u'123'
+    '123'
     >>> ensure_unicode('123')
-    u'123'
+    '123'
     >>> ensure_unicode(b'123')
-    u'123'
+    '123'
     """
     if isinstance(s, unicode):
         return s
@@ -894,7 +894,7 @@ def is_arraylike(x):
     >>> is_arraylike('cat')
     False
     """
-    return (hasattr(x, '__array__') and
+    return (# hasattr(x, '__array__') and
             hasattr(x, 'shape') and x.shape and
             hasattr(x, 'dtype'))
 

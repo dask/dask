@@ -910,7 +910,7 @@ def argtopk(a, k, axis=-1, split_every=None):
     axis = validate_axis(a.ndim, axis)
 
     # Generate nodes where every chunk is a tuple of (a, original index of a)
-    idx = arange(a.shape[axis], chunks=a.chunks[axis], dtype=np.int64)
+    idx = arange(a.shape[axis], chunks=(a.chunks[axis], ), dtype=np.int64)
     idx = idx[tuple(slice(None) if i == axis else np.newaxis
                     for i in range(a.ndim))]
     a_plus_idx = a.map_blocks(chunk.argtopk_preprocess, idx,

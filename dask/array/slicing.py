@@ -42,7 +42,7 @@ def sanitize_index(ind):
     >>> sanitize_index(np.array([False, True, True]))
     array([1, 2])
     >>> type(sanitize_index(np.int32(0)))
-    <type 'int'>
+    <class 'int'>
     >>> sanitize_index(1.0)
     1
     >>> sanitize_index(0.5)
@@ -364,11 +364,19 @@ def _slice_1d(dim_shape, lengths, index):
 
     And negative slicing
 
-    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 0, -3))
-    {0: slice(-2, -20, -3), 1: slice(-1, -21, -3), 2: slice(-3, -21, -3), 3: slice(-2, -21, -3), 4: slice(-1, -21, -3)}
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 0, -3)) # doctest: +NORMALIZE_WHITESPACE
+    {4: slice(-1, -21, -3),
+     3: slice(-2, -21, -3),
+     2: slice(-3, -21, -3),
+     1: slice(-1, -21, -3),
+     0: slice(-2, -20, -3)}
 
-    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 12, -3))
-    {0: slice(-2, -8, -3), 1: slice(-1, -21, -3), 2: slice(-3, -21, -3), 3: slice(-2, -21, -3), 4: slice(-1, -21, -3)}
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 12, -3)) # doctest: +NORMALIZE_WHITESPACE
+    {4: slice(-1, -21, -3),
+     3: slice(-2, -21, -3),
+     2: slice(-3, -21, -3),
+     1: slice(-1, -21, -3),
+     0: slice(-2, -8, -3)}
 
     >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, -12, -3))
     {4: slice(-1, -12, -3)}
@@ -816,13 +824,28 @@ def check_index(ind, dimension):
     IndexError: Index out of bounds 5
 
     >>> check_index(slice(0, 3), 5)
+
+    >>> check_index([True], 1)
+    >>> check_index([True, True], 3)
+    Traceback (most recent call last):
+    ...
+    IndexError: Boolean array length 2 doesn't equal dimension 3
+    >>> check_index([True, True, True], 1)
+    Traceback (most recent call last):
+    ...
+    IndexError: Boolean array length 3 doesn't equal dimension 1
     """
     # unknown dimension, assumed to be in bounds
     if np.isnan(dimension):
         return
     elif isinstance(ind, (list, np.ndarray)):
         x = np.asanyarray(ind)
-        if (x >= dimension).any() or (x < -dimension).any():
+        if x.dtype == bool:
+            if x.size != dimension:
+                raise IndexError(
+                    "Boolean array length %s doesn't equal dimension %s" %
+                    (x.size, dimension))
+        elif (x >= dimension).any() or (x < -dimension).any():
             raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
         return

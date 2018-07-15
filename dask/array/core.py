@@ -1958,7 +1958,10 @@ class Array(DaskMethodsMixin):
         """
         Copy array.  This is a no-op for dask.arrays, which are immutable
         """
-        return Array(self.dask, self.name, self.chunks, self.dtype)
+        if self.npartitions == 1:
+            return self.map_blocks(np.copy)
+        else:
+            return Array(self.dask, self.name, self.chunks, self.dtype)
 
     def __deepcopy__(self, memo):
         c = self.copy()
@@ -2018,13 +2021,13 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
     """ Normalize chunks to tuple of tuples
 
     This takes in a variety of input types and information and produces a full
-    tuple-of-tuples result for chunks, sutiable to be passed to Array or
+    tuple-of-tuples result for chunks, suitable to be passed to Array or
     rechunk or any other operation that creates a Dask array.
 
     Parameters
     ----------
-    chunks: tuple, int, or string
-        The chunks to be normalized.  See example below for more details
+    chunks: tuple, int, dict, or string
+        The chunks to be normalized.  See examples below for more details
     shape: Tuple[int]
         The shape of the array
     limit: int (optional)
@@ -2058,10 +2061,15 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
     >>> normalize_chunks(10, shape=(30, 5))
     ((10, 10, 10), (5,))
 
+    Expands dict inputs
+
+    >>> normalize_chunks({0: 2, 1: 3}, shape=(6, 6))
+    ((2, 2, 2), (3, 3))
+
     The value -1 gets mapped to full size
 
-    >>> normalize_chunks((-1,), shape=(10,))
-    ((10,),)
+    >>> normalize_chunks((5, -1), shape=(10, 10))
+    ((5, 5), (10,))
 
     Use the value "auto" to automatically determine chunk sizes along certain
     dimensions.  This uses the ``limit=`` and ``dtype=`` keywords to
@@ -2090,11 +2098,14 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
     if not chunks and shape and all(s == 0 for s in shape):
         chunks = ((0,),) * len(shape)
 
+    if (shape and len(shape) == 1 and len(chunks) > 1 and
+            all(isinstance(c, (Number, str)) for c in chunks)):
+        chunks = chunks,
+
     if shape and len(chunks) != len(shape):
-        if not (len(shape) == 1 and sum(chunks) == shape[0]):
-            raise ValueError(
-                "Chunks and shape must be of the same length/dimension. "
-                "Got chunks=%s, shape=%s" % (chunks, shape))
+        raise ValueError(
+            "Chunks and shape must be of the same length/dimension. "
+            "Got chunks=%s, shape=%s" % (chunks, shape))
     if -1 in chunks:
         chunks = tuple(s if c == -1 else c for c, s in zip(chunks, shape))
 
@@ -3734,7 +3745,7 @@ def stack(seq, axis=0):
     """
     Stack arrays along a new axis
 
-    Given a sequence of dask Arrays form a new dask Array by stacking them
+    Given a sequence of dask arrays, form a new dask array by stacking them
     along a new dimension (axis=0 by default)
 
     Examples

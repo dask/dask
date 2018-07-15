@@ -17,6 +17,7 @@ import dask.bag as db
 from dask.bag.core import (Bag, lazify, lazify_task, map, collect,
                            reduceby, reify, partition, inline_singleton_lists,
                            optimize, from_delayed)
+from dask.bag.utils import assert_eq
 from dask.compatibility import BZ2File, GzipFile, PY2
 from dask.delayed import Delayed
 from dask.utils import filetexts, tmpfile, tmpdir
@@ -30,15 +31,6 @@ dsk = {('x', 0): (range, 5),
 L = list(range(5)) * 3
 
 b = Bag(dsk, 'x', 3)
-
-
-def assert_eq(a, b):
-    if hasattr(a, 'compute'):
-        a = a.compute(scheduler='sync')
-    if hasattr(b, 'compute'):
-        b = b.compute(scheduler='sync')
-
-    assert a == b
 
 
 def iseven(x):
@@ -898,10 +890,11 @@ def test_to_textfiles_inputs():
 def test_to_textfiles_endlines():
     b = db.from_sequence(['a', 'b', 'c'], npartitions=1)
     with tmpfile() as fn:
-        b.to_textfiles([fn])
-        with open(fn, 'r') as f:
-            result = f.readlines()
-        assert result == ['a\n', 'b\n', 'c']
+        for last_endline in False, True:
+            b.to_textfiles([fn], last_endline=last_endline)
+            with open(fn, 'r') as f:
+                result = f.readlines()
+            assert result == ['a\n', 'b\n', 'c\n' if last_endline else 'c']
 
 
 def test_string_namespace():

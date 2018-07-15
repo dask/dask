@@ -1239,7 +1239,7 @@ def test_slicing_with_ndarray():
     assert_eq(d[np.arange(8)], x)
     assert_eq(d[np.ones(8, dtype=bool)], x)
     assert_eq(d[np.array([1])], x[[1]])
-    assert_eq(d[np.array([True])], x[[0]])
+    assert_eq(d[np.array([True, False, True] + [False] * 5)], x[[0, 2]])
 
 
 def test_dtype():
@@ -2120,6 +2120,16 @@ def test_from_array_minus_one():
     assert_eq(x, y)
 
 
+def test_from_array_copy():
+    # Regression test for https://github.com/dask/dask/issues/3751
+    x = np.arange(10)
+    y = da.from_array(x, -1)
+    assert y.npartitions == 1
+    y_c = y.copy()
+    assert y is not y_c
+    assert y.compute() is not y_c.compute()
+
+
 def test_asarray():
     assert_eq(da.asarray([1, 2, 3]), np.asarray([1, 2, 3]))
 
@@ -2226,6 +2236,23 @@ def test_from_array_with_missing_chunks():
 
 def test_normalize_chunks():
     assert normalize_chunks(3, (4, 6)) == ((3, 1), (3, 3))
+    assert normalize_chunks(((3, 3), (8,)), (6, 8)) == ((3, 3), (8, ))
+    assert normalize_chunks((4, 5), (9,)) == ((4, 5), )
+    assert normalize_chunks((4, 5), (9, 9)) == ((4, 4, 1), (5, 4))
+    assert normalize_chunks(-1, (5, 5)) == ((5,), (5, ))
+    assert normalize_chunks((3, -1), (5, 5)) == ((3, 2), (5, ))
+    assert normalize_chunks({0: 3}, (5, 5)) == ((3, 2), (5,))
+    assert normalize_chunks([[2, 2], [3, 3]]) == ((2, 2), (3, 3))
+    assert normalize_chunks(10, (30, 5)), ((10, 10, 10), (5,))
+    assert normalize_chunks((), (0, 0)), ((0,), (0,))
+    assert normalize_chunks(-1, (0, 3)), ((0,), (3,))
+    assert normalize_chunks("auto", shape=(20,), limit=5, dtype='uint8') == \
+        ((5, 5, 5, 5),)
+
+    with pytest.raises(ValueError):
+        normalize_chunks(((10,), ), (11, ))
+    with pytest.raises(ValueError):
+        normalize_chunks(((5, ), (5, )), (5, ))
 
 
 def test_align_chunks_to_previous_chunks():
@@ -3574,3 +3601,14 @@ def test_blocks_indexer():
     assert "newaxis" in str(info.value) and "not supported" in str(info.value)
     with pytest.raises(IndexError) as info:
         x.blocks[100, 100]
+
+
+def test_dask_array_holds_scipy_sparse_containers():
+    sparse = pytest.importorskip('scipy.sparse')
+    x = da.random.random((1000, 10), chunks=(100, 10))
+    x[x < 0.9] = 0
+    y = x.map_blocks(sparse.csr_matrix)
+
+    vs = y.to_delayed().flatten().tolist()
+    values = dask.compute(*vs, scheduler='single-threaded')
+    assert all(isinstance(v, sparse.csr_matrix) for v in values)
