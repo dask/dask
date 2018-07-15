@@ -2,7 +2,6 @@ import itertools
 from operator import getitem
 
 import pytest
-from hypothesis import given, strategies as st, example, settings
 from toolz import merge
 
 np = pytest.importorskip('numpy')
@@ -801,28 +800,13 @@ def test_pathological_unsorted_slicing():
     assert 'out-of-order' in str(info.list[0])
 
 
-@st.composite
-def size_and_chunks(draw, elements=st.integers(min_value=1, max_value=100)):
-    """ Return 3 tuple of (array size, chunk size 1, chunk size 2).
-
-    Chunk sizes are always smaller than array size.
-    """
-    array_size = draw(elements)
-    chunks = st.integers(min_value=1, max_value=array_size)
-    return (array_size, draw(chunks), draw(chunks))
-
-
-@given(params=size_and_chunks())
-@settings(max_examples=15)
-@example(params=(2, 2, 1))
+@pytest.mark.parametrize('params', [(2, 2, 1), (5, 3, 2)])
 def test_setitem_with_different_chunks_preserves_shape(params):
     """ Reproducer for https://github.com/dask/dask/issues/3730.
 
     Mutating based on an array with different chunks can cause new chunks to be
     used.  We need to ensure those new chunk sizes are applied to the mutated
     array, otherwise the array won't generate the correct keys.
-
-    Use property-based testing to generate a variety of values to check.
     """
     array_size, chunk_size1, chunk_size2 = params
     x = da.zeros(array_size, chunks=chunk_size1)
