@@ -3785,7 +3785,7 @@ def stack(seq, axis=0):
                          (ndim, axis))
     if not all(x.shape == seq[0].shape for x in seq):
         idx = np.where(np.asanyarray([x.shape for x in seq]) != seq[0].shape)[0]
-        raise ValueError("Stacked arrays must have the same shape.\n"
+        raise ValueError("Stacked arrays must have the same shape. "
                          "The first {0} had shape {1}, while array "
                          "{2} has shape {3}".format(idx[0],
                                                     seq[0].shape,
