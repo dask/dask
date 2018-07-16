@@ -59,8 +59,8 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 @click.option('--local-directory', default='', type=str,
               help="Directory to place scheduler files")
 @click.option('--preload', type=str, multiple=True, is_eager=True,
-              help='Module that should be loaded by each worker process '
-                   'like "foo.bar" or "/path/to/foo.py"')
+              help='Module that should be loaded by the scheduler process  '
+                   'like "foo.bar" or "/path/to/foo.py".')
 @click.argument('preload_argv', nargs=-1,
                 type=click.UNPROCESSED, callback=validate_preload_argv)
 def main(host, port, bokeh_port, show, _bokeh, bokeh_whitelist, bokeh_prefix,
