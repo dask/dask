@@ -3790,8 +3790,7 @@ def stack(seq, axis=0):
                          "{2} has shape {3}".format(idx[0],
                                                     seq[0].shape,
                                                     idx[0] + 1,
-                                                    seq[idx[0]].shape)
-                         )
+                                                    seq[idx[0]].shape))
 
     ind = list(range(ndim))
     uc_args = list(concat((x, ind) for x in seq))
