@@ -3784,8 +3784,13 @@ def stack(seq, axis=0):
                          "\nData has %d dimensions, but got axis=%d" %
                          (ndim, axis))
     if not all(x.shape == seq[0].shape for x in seq):
-        raise ValueError("Stacked arrays must have the same shape. Got %s",
-                         [x.shape for x in seq])
+        shapes = np.asanyarray([x.shape for x in seq])
+        idx = np.where(shapes != shapes[0])[0]
+        raise ValueError("Stacked arrays must have the same shape.\n"
+                         "The first {0} had shape {1}, while array "
+                         "{2} has shape {3}".format(idx[0], seq[0].shape,
+                                                    idx[0]+1, seq[idx[0]].shape)
+                         )
 
     ind = list(range(ndim))
     uc_args = list(concat((x, ind) for x in seq))
