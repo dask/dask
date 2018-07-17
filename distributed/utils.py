@@ -1266,7 +1266,10 @@ else:
         if isinstance(frame, _bytes_like):
             return len(frame)
         else:
-            return frame.nbytes
+            try:
+                return frame.nbytes
+            except AttributeError:
+                return len(frame)
 
 
 def PeriodicCallback(callback, callback_time, io_loop=None):

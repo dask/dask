@@ -6,3 +6,5 @@ docs/build
 continuous_integration/hdfs-initialized
 .cache
 .#*
+.idea/
+.pytest_cache/
