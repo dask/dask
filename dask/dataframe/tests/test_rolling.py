@@ -6,7 +6,6 @@ from warnings import catch_warnings
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 import pandas.util.testing as tm
-from pandas.core.base import SpecificationError
 
 N = 40
 df = pd.DataFrame({'a': np.random.randn(N).cumsum(),
