@@ -274,24 +274,24 @@ def test_rolling_agg():
     b_std = r_std['B']
     b_sum = r_sum['B']
 
-    result = r.aggregate([np.mean, np.std]).compute()
+    result = r.aggregate([np.mean, np.std])
     expected = pd.concat([a_mean, a_std, b_mean, b_std], axis=1)
     expected.columns = pd.MultiIndex.from_product([['A', 'B'], ['mean',
                                                                 'std']])
     assert_eq(result, expected)
 
-    result = r.aggregate({'A': np.mean, 'B': np.std}).compute()
+    result = r.aggregate({'A': np.mean, 'B': np.std})
 
     expected = pd.concat([a_mean, b_std], axis=1)
     assert_eq(result, expected, check_like=True)
 
-    result = r.aggregate({'A': ['mean', 'std']}).compute()
+    result = r.aggregate({'A': ['mean', 'std']})
     expected = pd.concat([a_mean, a_std], axis=1)
     expected.columns = pd.MultiIndex.from_tuples([('A', 'mean'), ('A', 'std')])
     assert_eq(result, expected)
 
     with catch_warnings(record=True):
-        result = r.aggregate({'A': {'mean': 'mean', 'sum': 'sum'}}).compute()
+        result = r.aggregate({'A': {'mean': 'mean', 'sum': 'sum'}})
     expected = pd.concat([a_mean, a_sum], axis=1)
     expected.columns = pd.MultiIndex.from_tuples([('A', 'mean'),
                                                   ('A', 'sum')])
@@ -302,13 +302,13 @@ def test_rolling_agg():
         result = r.aggregate({'A': {'mean': 'mean',
                                     'sum': 'sum'},
                               'B': {'mean2': 'mean',
-                                    'sum2': 'sum'}}).compute()
+                                    'sum2': 'sum'}})
     expected = pd.concat([a_mean, a_sum, b_mean, b_sum], axis=1)
     exp_cols = [('A', 'mean'), ('A', 'sum'), ('B', 'mean2'), ('B', 'sum2')]
     expected.columns = pd.MultiIndex.from_tuples(exp_cols)
     assert_eq(result, expected, check_like=True)
 
-    result = r.aggregate({'A': ['mean', 'std'], 'B': ['mean', 'std']}).compute()
+    result = r.aggregate({'A': ['mean', 'std'], 'B': ['mean', 'std']})
     expected = pd.concat([a_mean, a_std, b_mean, b_std], axis=1)
 
     exp_cols = [('A', 'mean'), ('A', 'std'), ('B', 'mean'), ('B', 'std')]
@@ -327,7 +327,7 @@ def test_rolling_agg_aggregate():
     b_mean = r_mean['B']
     b_std = r_std['B']
 
-    result = r.agg([np.mean, np.std]).compute()
+    result = r.agg([np.mean, np.std])
     expected = pd.concat([a_mean, a_std, b_mean, b_std], axis=1)
     expected.columns = pd.MultiIndex.from_product([['A', 'B'], ['mean', 'std']])
     assert_eq(result, expected)
@@ -346,7 +346,7 @@ def test_rolling_agg_apply():
     r_sum = r.sum().compute()
     a_sum = r_sum['A']
 
-    result = r.agg({'A': np.sum, 'B': lambda x: np.std(x, ddof=1)}).compute()
+    result = r.agg({'A': np.sum, 'B': lambda x: np.std(x, ddof=1)})
     rcustom = r.apply(lambda x: np.std(x, ddof=1), **kwargs).compute()
 
     expected = pd.concat([a_sum, rcustom['B']], axis=1)
@@ -387,6 +387,6 @@ def test_agg_nested_dicts():
 
     with catch_warnings(record=True):
         result = r.agg({'A': {'ra': ['mean', 'std']},
-                        'B': {'rb': ['mean', 'std']}}).compute()
+                        'B': {'rb': ['mean', 'std']}})
 
     assert_eq(result, expected, check_like=True)
