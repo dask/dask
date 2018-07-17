@@ -1,9 +1,12 @@
 import pandas as pd
 import pytest
 import numpy as np
+from warnings import catch_warnings
 
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
+import pandas.util.testing as tm
+from pandas.core.base import SpecificationError
 
 N = 40
 df = pd.DataFrame({'a': np.random.randn(N).cumsum(),
@@ -102,13 +105,13 @@ rolling_method_args_check_less_precise = [
     ('max', (), False),
     ('std', (), False),
     ('var', (), False),
-    ('skew', (), True),   # here and elsewhere, results for kurt and skew are
-    ('kurt', (), True),   # checked with check_less_precise=True so that we are
-                          # only looking at 3ish decimal places for the equality check
-                          # rather than 5ish. I have encountered a case where a test
-                          # seems to have failed due to numerical problems with kurt.
-                          # So far, I am only weakening the check for kurt and skew,
-                          # as they involve third degree powers and higher
+    ('skew', (), True),  # here and elsewhere, results for kurt and skew are
+    ('kurt', (), True),  # checked with check_less_precise=True so that we are
+    # only looking at 3ish decimal places for the equality check
+    # rather than 5ish. I have encountered a case where a test
+    # seems to have failed due to numerical problems with kurt.
+    # So far, I am only weakening the check for kurt and skew,
+    # as they involve third degree powers and higher
     ('quantile', (.38,), False),
     ('apply', (mad,), False),
 ]
@@ -255,3 +258,145 @@ def test_time_rolling(before, after):
     result = dts.map_overlap(lambda x: x.rolling(window).count(), before, after)
     expected = dts.compute().rolling(window).count()
     assert_eq(result, expected)
+
+
+def test_rolling_agg():
+    ddf = dd.from_pandas(pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)}), npartitions=3)
+
+    r = ddf.rolling(window=3)
+    r_mean = r.mean().compute()
+    r_std = r.std().compute()
+    r_sum = r.sum().compute()
+    a_mean = r_mean['A']
+    a_std = r_std['A']
+    a_sum = r_sum['A']
+    b_mean = r_mean['B']
+    b_std = r_std['B']
+    b_sum = r_sum['B']
+
+    result = r.aggregate([np.mean, np.std]).compute()
+    expected = pd.concat([a_mean, a_std, b_mean, b_std], axis=1)
+    expected.columns = pd.MultiIndex.from_product([['A', 'B'], ['mean',
+                                                                'std']])
+    tm.assert_frame_equal(result, expected)
+
+    result = r.aggregate({'A': np.mean, 'B': np.std}).compute()
+
+    expected = pd.concat([a_mean, b_std], axis=1)
+    tm.assert_frame_equal(result, expected, check_like=True)
+
+    result = r.aggregate({'A': ['mean', 'std']}).compute()
+    expected = pd.concat([a_mean, a_std], axis=1)
+    expected.columns = pd.MultiIndex.from_tuples([('A', 'mean'), ('A', 'std')])
+    tm.assert_frame_equal(result, expected)
+
+    with catch_warnings(record=True):
+        result = r.aggregate({'A': {'mean': 'mean', 'sum': 'sum'}}).compute()
+    expected = pd.concat([a_mean, a_sum], axis=1)
+    expected.columns = pd.MultiIndex.from_tuples([('A', 'mean'),
+                                                  ('A', 'sum')])
+
+    tm.assert_frame_equal(result, expected, check_like=True)
+
+    with catch_warnings(record=True):
+        result = r.aggregate({'A': {'mean': 'mean',
+                                    'sum': 'sum'},
+                              'B': {'mean2': 'mean',
+                                    'sum2': 'sum'}}).compute()
+    expected = pd.concat([a_mean, a_sum, b_mean, b_sum], axis=1)
+    exp_cols = [('A', 'mean'), ('A', 'sum'), ('B', 'mean2'), ('B', 'sum2')]
+    expected.columns = pd.MultiIndex.from_tuples(exp_cols)
+    tm.assert_frame_equal(result, expected, check_like=True)
+
+    result = r.aggregate({'A': ['mean', 'std'], 'B': ['mean', 'std']}).compute()
+    expected = pd.concat([a_mean, a_std, b_mean, b_std], axis=1)
+
+    exp_cols = [('A', 'mean'), ('A', 'std'), ('B', 'mean'), ('B', 'std')]
+    expected.columns = pd.MultiIndex.from_tuples(exp_cols)
+    tm.assert_frame_equal(result, expected, check_like=True)
+
+
+def test_rolling_agg_aggregate():
+    ddf = dd.from_pandas(pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)}), npartitions=3)
+
+    r = ddf.rolling(window=3)
+    r_mean = r.mean().compute()
+    r_std = r.std().compute()
+    a_mean = r_mean['A']
+    a_std = r_std['A']
+    b_mean = r_mean['B']
+    b_std = r_std['B']
+
+    result = r.agg([np.mean, np.std]).compute()
+    expected = pd.concat([a_mean, a_std, b_mean, b_std], axis=1)
+    expected.columns = pd.MultiIndex.from_product([['A', 'B'], ['mean', 'std']])
+    tm.assert_frame_equal(result, expected)
+
+
+def test_rolling_agg_apply():
+    if PANDAS_VERSION >= '0.23.0':
+        kwargs = {'raw': False}
+    else:
+        kwargs = {}
+
+    # passed lambda
+    ddf = dd.from_pandas(pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)}), npartitions=3)
+
+    r = ddf.rolling(window=3)
+    r_sum = r.sum().compute()
+    a_sum = r_sum['A']
+
+    result = r.agg({'A': np.sum, 'B': lambda x: np.std(x, ddof=1)}).compute()
+    rcustom = r.apply(lambda x: np.std(x, ddof=1), **kwargs).compute()
+
+    expected = pd.concat([a_sum, rcustom['B']], axis=1)
+    tm.assert_frame_equal(result, expected, check_like=True)
+
+
+def test_rolling_agg_consistency():
+    ddf = dd.from_pandas(pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)}), npartitions=3)
+    r = ddf.rolling(window=3)
+
+    result = r.agg([np.sum, np.mean]).compute()
+    result_cols = result.columns
+    expected = pd.MultiIndex.from_product([list('AB'), ['sum', 'mean']])
+    tm.assert_index_equal(result_cols, expected)
+
+    result = r.agg({'A': [np.sum, np.mean]}).compute()
+    result_cols = result.columns
+    expected = pd.MultiIndex.from_tuples([('A', 'sum'), ('A', 'mean')])
+    tm.assert_index_equal(result_cols, expected)
+
+
+def test_agg_nested_dicts():
+    # API change for disallowing these types of nested dicts
+    df = pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)})
+    ddf = dd.from_pandas(df, npartitions=3)
+    r = ddf.rolling(window=3)
+    r_pd = df.rolling(window=3)
+
+    def f():
+        r.aggregate({'r1': {'A': ['mean', 'sum']},
+                     'r2': {'B': ['mean', 'sum']}})
+
+    pytest.raises(SpecificationError, f)
+
+    with catch_warnings(record=True):
+        expected = r_pd.agg({'A': {'ra': ['mean', 'std']},
+                             'B': {'rb': ['mean', 'std']}})
+
+    with catch_warnings(record=True):
+        result = r.agg({'A': {'ra': ['mean', 'std']},
+                        'B': {'rb': ['mean', 'std']}}).compute()
+
+    tm.assert_frame_equal(result, expected, check_like=True)
+
+    with catch_warnings(record=True):
+        result = r.agg({'A': {'ra': ['mean', 'std']},
+                        'B': {'rb': ['mean', 'std']}}).compute()
+    expected.columns = pd.MultiIndex.from_tuples([('A', 'ra', 'mean'),
+                                                  ('A', 'ra', 'std'),
+                                                  ('B', 'rb', 'mean'),
+                                                  ('B', 'rb', 'std')])
+
+    tm.assert_frame_equal(result, expected, check_like=True)
