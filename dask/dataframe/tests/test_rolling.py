@@ -5,7 +5,6 @@ from warnings import catch_warnings
 
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
-import pandas.util.testing as tm
 
 N = 40
 df = pd.DataFrame({'a': np.random.randn(N).cumsum(),
@@ -315,20 +314,11 @@ def test_rolling_agg():
 
 
 def test_rolling_agg_aggregate():
-    ddf = dd.from_pandas(pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)}), npartitions=3)
+    df = pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)})
+    ddf = dd.from_pandas(df, npartitions=3)
 
-    r = ddf.rolling(window=3)
-    r_mean = r.mean().compute()
-    r_std = r.std().compute()
-    a_mean = r_mean['A']
-    a_std = r_std['A']
-    b_mean = r_mean['B']
-    b_std = r_std['B']
-
-    result = r.agg([np.mean, np.std])
-    expected = pd.concat([a_mean, a_std, b_mean, b_std], axis=1)
-    expected.columns = pd.MultiIndex.from_product([['A', 'B'], ['mean', 'std']])
-    assert_eq(result, expected)
+    assert_eq(df.rolling(window=3).agg([np.mean, np.std]),
+              ddf.rolling(window=3).agg([np.mean, np.std]))
 
 
 def test_rolling_agg_apply():
@@ -338,29 +328,25 @@ def test_rolling_agg_apply():
         kwargs = {}
 
     # passed lambda
-    ddf = dd.from_pandas(pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)}), npartitions=3)
+    df = pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)})
+    ddf = dd.from_pandas(df, npartitions=3)
 
-    r = ddf.rolling(window=3)
-    r_sum = r.sum().compute()
-    a_sum = r_sum['A']
+    assert_eq(df.rolling(window=3).sum(),
+              ddf.rolling(window=3).sum())
 
-    result = r.agg({'A': np.sum, 'B': lambda x: np.std(x, ddof=1)})
-    rcustom = r.apply(lambda x: np.std(x, ddof=1), **kwargs).compute()
+    assert_eq(df.rolling(window=3).agg({'A': np.sum, 'B': lambda x: np.std(x, ddof=1)}),
+              ddf.rolling(window=3).agg({'A': np.sum, 'B': lambda x: np.std(x, ddof=1)}))
 
-    expected = pd.concat([a_sum, rcustom['B']], axis=1)
-    assert_eq(result, expected, check_like=True)
+    assert_eq(df.rolling(window=3).apply(lambda x: np.std(x, ddof=1), **kwargs),
+              ddf.rolling(window=3).apply(lambda x: np.std(x, ddof=1), **kwargs))
 
 
 def test_rolling_agg_consistency():
-    ddf = dd.from_pandas(pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)}), npartitions=3)
-    r = ddf.rolling(window=3)
+    df = pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)})
+    ddf = dd.from_pandas(df, npartitions=3)
 
-    result = r.agg([np.sum, np.mean]).compute()
-    result_cols = result.columns
-    expected = pd.MultiIndex.from_product([list('AB'), ['sum', 'mean']])
-    tm.assert_index_equal(result_cols, expected)
+    assert_eq(df.rolling(window=3).agg([np.sum, np.mean]),
+              ddf.rolling(window=3).agg([np.sum, np.mean]))
 
-    result = r.agg({'A': [np.sum, np.mean]}).compute()
-    result_cols = result.columns
-    expected = pd.MultiIndex.from_tuples([('A', 'sum'), ('A', 'mean')])
-    tm.assert_index_equal(result_cols, expected)
+    assert_eq(df.rolling(window=3).agg({'A': [np.sum, np.mean]}),
+              ddf.rolling(window=3).agg({'A': [np.sum, np.mean]}))
