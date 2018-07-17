@@ -276,8 +276,7 @@ def test_rolling_agg():
 
     result = r.aggregate([np.mean, np.std])
     expected = pd.concat([a_mean, a_std, b_mean, b_std], axis=1)
-    expected.columns = pd.MultiIndex.from_product([['A', 'B'], ['mean',
-                                                                'std']])
+    expected.columns = pd.MultiIndex.from_product([['A', 'B'], ['mean', 'std']])
     assert_eq(result, expected)
 
     result = r.aggregate({'A': np.mean, 'B': np.std})
@@ -291,7 +290,8 @@ def test_rolling_agg():
     assert_eq(result, expected)
 
     with catch_warnings(record=True):
-        result = r.aggregate({'A': {'mean': 'mean', 'sum': 'sum'}})
+        result = r.aggregate({'A': ['mean', 'sum']})
+
     expected = pd.concat([a_mean, a_sum], axis=1)
     expected.columns = pd.MultiIndex.from_tuples([('A', 'mean'),
                                                   ('A', 'sum')])
@@ -299,12 +299,11 @@ def test_rolling_agg():
     assert_eq(result, expected, check_like=True)
 
     with catch_warnings(record=True):
-        result = r.aggregate({'A': {'mean': 'mean',
-                                    'sum': 'sum'},
-                              'B': {'mean2': 'mean',
-                                    'sum2': 'sum'}})
+        result = r.aggregate({'A': ['mean', 'sum'],
+                              'B': ['mean', 'sum']})
+
     expected = pd.concat([a_mean, a_sum, b_mean, b_sum], axis=1)
-    exp_cols = [('A', 'mean'), ('A', 'sum'), ('B', 'mean2'), ('B', 'sum2')]
+    exp_cols = [('A', 'mean'), ('A', 'sum'), ('B', 'mean'), ('B', 'sum')]
     expected.columns = pd.MultiIndex.from_tuples(exp_cols)
     assert_eq(result, expected, check_like=True)
 
@@ -366,27 +365,3 @@ def test_rolling_agg_consistency():
     result_cols = result.columns
     expected = pd.MultiIndex.from_tuples([('A', 'sum'), ('A', 'mean')])
     tm.assert_index_equal(result_cols, expected)
-
-
-def test_agg_nested_dicts():
-    # API change for disallowing these types of nested dicts
-    df = pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)})
-    ddf = dd.from_pandas(df, npartitions=3)
-    r = ddf.rolling(window=3)
-    r_pd = df.rolling(window=3)
-
-    def f():
-        r.aggregate({'r1': {'A': ['mean', 'sum']},
-                     'r2': {'B': ['mean', 'sum']}})
-
-    pytest.raises(SpecificationError, f)
-
-    with catch_warnings(record=True):
-        expected = r_pd.agg({'A': {'ra': ['mean', 'std']},
-                             'B': {'rb': ['mean', 'std']}})
-
-    with catch_warnings(record=True):
-        result = r.agg({'A': {'ra': ['mean', 'std']},
-                        'B': {'rb': ['mean', 'std']}})
-
-    assert_eq(result, expected, check_like=True)
