@@ -390,13 +390,3 @@ def test_agg_nested_dicts():
                         'B': {'rb': ['mean', 'std']}}).compute()
 
     tm.assert_frame_equal(result, expected, check_like=True)
-
-    with catch_warnings(record=True):
-        result = r.agg({'A': {'ra': ['mean', 'std']},
-                        'B': {'rb': ['mean', 'std']}}).compute()
-    expected.columns = pd.MultiIndex.from_tuples([('A', 'ra', 'mean'),
-                                                  ('A', 'ra', 'std'),
-                                                  ('B', 'rb', 'mean'),
-                                                  ('B', 'rb', 'std')])
-
-    tm.assert_frame_equal(result, expected, check_like=True)
