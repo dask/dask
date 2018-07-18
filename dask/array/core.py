@@ -1154,7 +1154,7 @@ class Array(DaskMethodsMixin):
     def shape(self):
         return tuple(map(sum, self.chunks))
     
-    @proprty
+    @property
     def chunksize(self):
         return tuple(c[0] for c in self.chunks)
 
