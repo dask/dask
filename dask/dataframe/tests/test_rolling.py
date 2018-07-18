@@ -258,61 +258,6 @@ def test_time_rolling(before, after):
     assert_eq(result, expected)
 
 
-def test_rolling_agg():
-    ddf = dd.from_pandas(pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)}), npartitions=3)
-
-    r = ddf.rolling(window=3)
-    r_mean = r.mean().compute()
-    r_std = r.std().compute()
-    r_sum = r.sum().compute()
-    a_mean = r_mean['A']
-    a_std = r_std['A']
-    a_sum = r_sum['A']
-    b_mean = r_mean['B']
-    b_std = r_std['B']
-    b_sum = r_sum['B']
-
-    result = r.aggregate([np.mean, np.std])
-    expected = pd.concat([a_mean, a_std, b_mean, b_std], axis=1)
-    expected.columns = pd.MultiIndex.from_product([['A', 'B'], ['mean', 'std']])
-    assert_eq(result, expected)
-
-    result = r.aggregate({'A': np.mean, 'B': np.std})
-
-    expected = pd.concat([a_mean, b_std], axis=1)
-    assert_eq(result, expected, check_like=True)
-
-    result = r.aggregate({'A': ['mean', 'std']})
-    expected = pd.concat([a_mean, a_std], axis=1)
-    expected.columns = pd.MultiIndex.from_tuples([('A', 'mean'), ('A', 'std')])
-    assert_eq(result, expected)
-
-    with catch_warnings(record=True):
-        result = r.aggregate({'A': ['mean', 'sum']})
-
-    expected = pd.concat([a_mean, a_sum], axis=1)
-    expected.columns = pd.MultiIndex.from_tuples([('A', 'mean'),
-                                                  ('A', 'sum')])
-
-    assert_eq(result, expected, check_like=True)
-
-    with catch_warnings(record=True):
-        result = r.aggregate({'A': ['mean', 'sum'],
-                              'B': ['mean', 'sum']})
-
-    expected = pd.concat([a_mean, a_sum, b_mean, b_sum], axis=1)
-    exp_cols = [('A', 'mean'), ('A', 'sum'), ('B', 'mean'), ('B', 'sum')]
-    expected.columns = pd.MultiIndex.from_tuples(exp_cols)
-    assert_eq(result, expected, check_like=True)
-
-    result = r.aggregate({'A': ['mean', 'std'], 'B': ['mean', 'std']})
-    expected = pd.concat([a_mean, a_std, b_mean, b_std], axis=1)
-
-    exp_cols = [('A', 'mean'), ('A', 'std'), ('B', 'mean'), ('B', 'std')]
-    expected.columns = pd.MultiIndex.from_tuples(exp_cols)
-    assert_eq(result, expected, check_like=True)
-
-
 def test_rolling_agg_aggregate():
     df = pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)})
     ddf = dd.from_pandas(df, npartitions=3)
@@ -320,33 +265,14 @@ def test_rolling_agg_aggregate():
     assert_eq(df.rolling(window=3).agg([np.mean, np.std]),
               ddf.rolling(window=3).agg([np.mean, np.std]))
 
-
-def test_rolling_agg_apply():
-    if PANDAS_VERSION >= '0.23.0':
-        kwargs = {'raw': False}
-    else:
-        kwargs = {}
-
-    # passed lambda
-    df = pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)})
-    ddf = dd.from_pandas(df, npartitions=3)
-
-    assert_eq(df.rolling(window=3).sum(),
-              ddf.rolling(window=3).sum())
-
     assert_eq(df.rolling(window=3).agg({'A': np.sum, 'B': lambda x: np.std(x, ddof=1)}),
               ddf.rolling(window=3).agg({'A': np.sum, 'B': lambda x: np.std(x, ddof=1)}))
-
-    assert_eq(df.rolling(window=3).apply(lambda x: np.std(x, ddof=1), **kwargs),
-              ddf.rolling(window=3).apply(lambda x: np.std(x, ddof=1), **kwargs))
-
-
-def test_rolling_agg_consistency():
-    df = pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)})
-    ddf = dd.from_pandas(df, npartitions=3)
 
     assert_eq(df.rolling(window=3).agg([np.sum, np.mean]),
               ddf.rolling(window=3).agg([np.sum, np.mean]))
 
     assert_eq(df.rolling(window=3).agg({'A': [np.sum, np.mean]}),
               ddf.rolling(window=3).agg({'A': [np.sum, np.mean]}))
+
+    assert_eq(df.rolling(window=3).apply(lambda x: np.std(x, ddof=1)),
+              ddf.rolling(window=3).apply(lambda x: np.std(x, ddof=1)))
