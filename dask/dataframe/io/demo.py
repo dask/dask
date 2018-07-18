@@ -42,7 +42,7 @@ make = {float: make_float,
 
 
 def make_timeseries_part(start, end, dtypes, freq, state_data):
-    index = pd.DatetimeIndex(start=start, end=end, freq=freq)
+    index = pd.DatetimeIndex(start=start, end=end, freq=freq, name='timestamp')
     state = np.random.RandomState(state_data)
     columns = dict((k, make[dt](len(index), state)) for k, dt in dtypes.items())
     df = pd.DataFrame(columns, index=index, columns=sorted(columns))

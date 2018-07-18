@@ -16,6 +16,8 @@ def test_make_timeseries():
     assert df['A'].head().dtype == float
     assert df['B'].head().dtype == int
     assert df['C'].head().dtype == object
+    assert df.index.name == 'timestamp'
+    assert df.head().index.name == df.index.name
     assert df.divisions == tuple(pd.DatetimeIndex(start='2000', end='2015',
                                                   freq='6M'))
 
