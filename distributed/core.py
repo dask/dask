@@ -851,9 +851,17 @@ def clean_exception(exception, traceback, **kwargs):
     error_message: create and serialize errors into message
     """
     if isinstance(exception, bytes):
-        exception = protocol.pickle.loads(exception)
+        try:
+            exception = protocol.pickle.loads(exception)
+        except Exception:
+            exception = Exception(exception)
+    elif isinstance(exception, str):
+        exception = Exception(exception)
     if isinstance(traceback, bytes):
-        traceback = protocol.pickle.loads(traceback)
+        try:
+            traceback = protocol.pickle.loads(traceback)
+        except (TypeError, AttributeError):
+            traceback = None
     elif isinstance(traceback, string_types):
         traceback = None  # happens if the traceback failed serializing
     return type(exception), exception, traceback

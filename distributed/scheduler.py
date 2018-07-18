@@ -182,6 +182,12 @@ class WorkerState(object):
        The last time we received a heartbeat from this worker, in local
        scheduler time.
 
+    .. attribute:: actors: {TaskState}
+
+       A set of all TaskStates on this worker that are actors.  This only
+       includes those actors whose state actually lives on this worker, not
+       actors to which this worker has a reference.
+
     """
     # XXX need a state field to signal active/removed?
 
@@ -200,6 +206,7 @@ class WorkerState(object):
         'used_resources',
         'status',
         'last_seen',
+        'actors',
     )
 
     def __init__(self, worker, ncores, memory_limit, name=None):
@@ -214,6 +221,7 @@ class WorkerState(object):
         self.resources = {}
         self.used_resources = {}
         self.last_seen = 0
+        self.actors = set()
 
         self.info = {'name': name,
                      'memory_limit': memory_limit,
@@ -453,10 +461,13 @@ class TaskState(object):
        into the "processing" state and be sent for execution to another
        connected worker.
 
-    """
+    .. attribute: actor: bool
 
+       Whether or not this task is an Actor.
+    """
     __slots__ = (
         # === General description ===
+        'actor',
         # Key name
         'key',
         # Key prefix (see key_split())
@@ -518,6 +529,7 @@ class TaskState(object):
         self.worker_restrictions = None
         self.resource_restrictions = None
         self.loose_restrictions = False
+        self.actor = None
 
     def get_nbytes(self):
         nbytes = self.nbytes
@@ -1301,7 +1313,7 @@ class Scheduler(ServerNode):
                      dependencies=None, restrictions=None, priority=None,
                      loose_restrictions=None, resources=None,
                      submitting_task=None, retries=None, user_priority=0,
-                     fifo_timeout=0):
+                     actors=None, fifo_timeout=0):
         """
         Add new computations to the internal dask graph
 
@@ -1400,6 +1412,12 @@ class Scheduler(ServerNode):
         # Compute priorities
         if isinstance(user_priority, Number):
             user_priority = {k: user_priority for k in tasks}
+
+        # Add actors
+        if actors is True:
+            actors = list(keys)
+        for actor in actors or []:
+            self.tasks[actor].actor = True
 
         priority = priority or dask.order.order(tasks)  # TODO: define order wrt old graph
 
@@ -1965,6 +1983,8 @@ class Scheduler(ServerNode):
                    'duration': self.get_task_duration(ts)}
             if ts.resource_restrictions:
                 msg['resource_restrictions'] = ts.resource_restrictions
+            if ts.actor:
+                msg['actor'] = True
 
             deps = ts.dependencies
             if deps:
@@ -3206,6 +3226,9 @@ class Scheduler(ServerNode):
             self.check_idle_saturated(ws)
             self.n_tasks += 1
 
+            if ts.actor:
+                ws.actors.add(ts)
+
             # logger.debug("Send job to worker: %s, %s", worker, key)
 
             self.send_task_to_worker(worker, key)
@@ -3345,6 +3368,14 @@ class Scheduler(ServerNode):
                 assert not ts.processing_on
                 if safe:
                     assert not ts.waiters
+
+            if ts.actor:
+                for ws in ts.who_has:
+                    ws.actors.discard(ts)
+                if ts.who_wants:
+                    ts.exception_blame = ts
+                    ts.exception = "Worker holding Actor was lost"
+                    return {ts.key: 'erred'}  # don't try to recreate
 
             recommendations = OrderedDict()
 
@@ -3509,6 +3540,10 @@ class Scheduler(ServerNode):
                 assert not ts.who_has
                 assert not ts.waiting_on
 
+            if ts.actor:
+                ws = ts.processing_on
+                ws.actors.remove(ts)
+
             self._remove_from_processing(ts)
 
             if exception is not None:
@@ -3650,6 +3685,11 @@ class Scheduler(ServerNode):
                     assert 0, (ts,)
 
             recommendations = {}
+
+            if ts.actor:
+                for ws in ts.who_has:
+                    ws.actors.discard(ts)
+
             self._propagate_forgotten(ts, recommendations)
 
             self.report_on_key(ts=ts)
@@ -3991,7 +4031,11 @@ class Scheduler(ServerNode):
                           if ws not in dts.who_has])
         stack_time = ws.occupancy / ws.ncores
         start_time = comm_bytes / BANDWIDTH + stack_time
-        return (start_time, ws.nbytes)
+
+        if ts.actor:
+            return (len(ws.actors), start_time, ws.nbytes)
+        else:
+            return (start_time, ws.nbytes)
 
     @gen.coroutine
     def get_profile(self, comm=None, workers=None, merge_workers=True,
@@ -4161,8 +4205,11 @@ def decide_worker(ts, all_workers, valid_workers, objective):
     """
     deps = ts.dependencies
     assert all(dts.who_has for dts in deps)
-    candidates = frequencies([ws for dts in deps
-                              for ws in dts.who_has])
+    if ts.actor:
+        candidates = all_workers
+    else:
+        candidates = frequencies([ws for dts in deps
+                                  for ws in dts.who_has])
     if valid_workers is True:
         if not candidates:
             candidates = all_workers
@@ -4239,6 +4286,21 @@ def validate_task_state(ts):
             assert ts in cs.wants_what, \
                 ("not in who_wants' wants_what", str(ts), str(cs), str(cs.wants_what))
 
+    if ts.actor:
+        if ts.state == 'memory':
+            assert sum([ts in ws.actors for ws in ts.who_has]) == 1
+        if ts.state == 'processing':
+            assert ts in ts.processing_on.actors
+
+
+def validate_worker_state(ws):
+    for ts in ws.has_what:
+        assert ws in ts.who_has, \
+            ("not in has_what' who_has", str(ws), str(ts), str(ts.who_has))
+
+    for ts in ws.actors:
+        assert ts.state in ('memory', 'processing')
+
 
 def validate_state(tasks, workers, clients):
     """
@@ -4251,9 +4313,7 @@ def validate_state(tasks, workers, clients):
         validate_task_state(ts)
 
     for ws in workers.values():
-        for ts in ws.has_what:
-            assert ws in ts.who_has, \
-                ("not in has_what' who_has", str(ws), str(ts), str(ts.who_has))
+        validate_worker_state(ws)
 
     for cs in clients.values():
         for ts in cs.wants_what:

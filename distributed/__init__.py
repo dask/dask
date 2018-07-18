@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from . import config
 from dask.config import config
+from .actor import Actor, ActorFuture
 from .core import connect, rpc
 from .deploy import LocalCluster, Adaptive
 from .diagnostics import progress

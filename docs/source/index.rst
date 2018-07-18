@@ -104,6 +104,7 @@ Contents
    :maxdepth: 1
    :caption: Additional Features
 
+   actors
    adaptive
    asynchronous
    configuration

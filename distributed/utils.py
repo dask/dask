@@ -1418,3 +1418,11 @@ def color_of(x, palette=palette):
     h = md5(str(x).encode())
     n = int(h.hexdigest()[:8], 16)
     return palette[n % len(palette)]
+
+
+def iscoroutinefunction(f):
+    if gen.is_coroutine_function(f):
+        return True
+    if sys.version_info >= (3, 5) and inspect.iscoroutinefunction(f):
+        return True
+    return False

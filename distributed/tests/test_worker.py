@@ -705,21 +705,6 @@ def test_stop_doing_unnecessary_work(c, s, a, b):
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
 def test_priorities(c, s, w):
-    a = delayed(slowinc)(1, dask_key_name='a', delay=0.05)
-    b = delayed(slowinc)(2, dask_key_name='b', delay=0.05)
-    a1 = delayed(slowinc)(a, dask_key_name='a1', delay=0.05)
-    a2 = delayed(slowinc)(a1, dask_key_name='a2', delay=0.05)
-    b1 = delayed(slowinc)(b, dask_key_name='b1', delay=0.05)
-
-    z = delayed(add)(a2, b1)
-    future = yield c.compute(z)
-
-    log = [t for t in w.log if t[1] == 'executing' and t[2] == 'memory']
-    assert [t[0] for t in log[:5]] == ['a', 'b', 'a1', 'b1', 'a2']
-
-
-@gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
-def test_priorities_2(c, s, w):
     values = []
     for i in range(10):
         a = delayed(slowinc)(i, dask_key_name='a-%d' % i, delay=0.01)

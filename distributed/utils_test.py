@@ -8,7 +8,6 @@ import functools
 import gc
 from glob import glob
 import itertools
-import inspect
 import logging
 import logging.config
 import os
@@ -40,14 +39,14 @@ from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 
 from .client import default_client, _global_clients
-from .compatibility import PY3, iscoroutinefunction, Empty, WINDOWS
+from .compatibility import PY3, Empty, WINDOWS
 from .config import initialize_logging
 from .core import connect, rpc, CommClosedError
 from .metrics import time
 from .proctitle import enable_proctitle_on_children
 from .security import Security
 from .utils import (ignoring, log_errors, mp_context, get_ip, get_ipv6,
-                    DequeHandler, reset_logger_locks, sync)
+                    DequeHandler, reset_logger_locks, sync, iscoroutinefunction)
 from .worker import Worker, TOTAL_MEMORY, _global_workers
 
 try:
@@ -717,12 +716,6 @@ def end_cluster(s, workers):
     yield [end_worker(w) for w in workers]
     yield s.close()  # wait until scheduler stops completely
     s.stop()
-
-
-def iscoroutinefunction(f):
-    if sys.version_info >= (3, 5) and inspect.iscoroutinefunction(f):
-        return True
-    return False
 
 
 def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
