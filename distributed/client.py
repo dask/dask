@@ -2069,6 +2069,15 @@ class Client(Node):
                           user_priority=0, resources=None, retries=None,
                           fifo_timeout=0):
         with self._lock:
+            if resources:
+                resources = self._expand_resources(resources,
+                                                   all_keys=itertools.chain(dsk, keys))
+
+            if retries:
+                retries = self._expand_retries(retries,
+                                               all_keys=itertools.chain(dsk, keys))
+
+            print(resources)
             keyset = set(keys)
             flatkeys = list(map(tokey, keys))
             futures = {key: Future(key, self, inform=False) for key in keyset}
@@ -2327,16 +2336,6 @@ class Client(Node):
         restrictions, loose_restrictions = self.get_restrictions(collections,
                                                                  workers, allow_other_workers)
 
-        if resources:
-            resources = self._expand_resources(resources,
-                                               all_keys=itertools.chain(dsk, dsk2))
-
-        if retries:
-            retries = self._expand_retries(retries,
-                                           all_keys=itertools.chain(dsk, dsk2))
-        else:
-            retries = None
-
         if not isinstance(priority, Number):
             priority = {k: p for c, p in priority.items()
                              for k in self._expand_key(c)}
@@ -2428,16 +2427,6 @@ class Client(Node):
 
         restrictions, loose_restrictions = self.get_restrictions(collections,
                                                                  workers, allow_other_workers)
-
-        if resources:
-            resources = self._expand_resources(resources,
-                                               all_keys=itertools.chain(dsk, names))
-
-        if retries:
-            retries = self._expand_retries(retries,
-                                           all_keys=itertools.chain(dsk, names))
-        else:
-            retries = None
 
         if not isinstance(priority, Number):
             priority = {k: p for c, p in priority.items()

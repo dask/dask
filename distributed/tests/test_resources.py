@@ -6,10 +6,10 @@ from dask import delayed
 import pytest
 from tornado import gen
 
-from distributed import Worker
+from distributed import Worker, Client
 from distributed.client import wait
 from distributed.utils import tokey
-from distributed.utils_test import (inc, gen_cluster,
+from distributed.utils_test import (inc, gen_cluster, cluster,
                                     slowinc, slowadd)
 from distributed.utils_test import loop # noqa: F401
 
@@ -260,3 +260,42 @@ def test_dont_optimize_out(c, s, a, b):
 
     for key in map(tokey, y.__dask_keys__()):
         assert 'executing' in str(a.story(key))
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1, {'resources': {'A': 1}}),
+                                  ('127.0.0.1', 1, {'resources': {'B': 1}})])
+def test_full_collections(c, s, a, b):
+    dd = pytest.importorskip('dask.dataframe')
+    df = dd.demo.make_timeseries(freq='60s', partition_freq='1d',
+            start='2000-01-01', end='2000-01-31')
+    z = df.x + df.y  # some extra nodes in the graph
+
+    yield c.compute(z, resources={tuple(z.dask): {'A': 1}})
+    assert a.log
+    assert not b.log
+
+
+@pytest.mark.parametrize('optimize_graph', [
+    pytest.mark.xfail(True, reason="don't track resources through optimization"),
+    False
+])
+def test_collections_get(loop, optimize_graph):
+    da = pytest.importorskip('dask.array')
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            def f(dask_worker):
+                dask_worker.set_resources(**{'A': 1})
+
+            c.run(f, workers=[a['address']])
+
+            x = da.random.random(100, chunks=(10,)) + 1
+
+            x.compute(resources={tuple(x.dask): {'A': 1}},
+                      optimize_graph=optimize_graph)
+
+            def g(dask_worker):
+                return len(dask_worker.log)
+
+            logs = c.run(g)
+            assert logs[a['address']]
+            assert not logs[b['address']]
