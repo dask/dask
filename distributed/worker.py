@@ -2605,6 +2605,7 @@ class Worker(WorkerBase):
                                   security=self.security,
                                   set_as_default=True,
                                   asynchronous=asynchronous,
+                                  direct_to_workers=True,
                                   name='worker',
                                   timeout=timeout)
             if not asynchronous:

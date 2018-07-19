@@ -482,6 +482,9 @@ class Client(Node):
     name: string (optional)
         Gives the client a name that will be included in logs generated on
         the scheduler for matters relating to this client
+    direct_to_workers: bool (optional)
+        Can this client connect directly to workers or should it proxy through
+        the scheduler?
     heartbeat_interval: int
         Time in milliseconds between heartbeats to scheduler
 
@@ -514,7 +517,7 @@ class Client(Node):
                  security=None, asynchronous=False,
                  name=None, heartbeat_interval=None,
                  serializers=None, deserializers=None,
-                 extensions=DEFAULT_EXTENSIONS,
+                 extensions=DEFAULT_EXTENSIONS, direct_to_workers=False,
                  **kwargs):
         if timeout == no_default:
             timeout = dask.config.get('distributed.comm.timeouts.connect')
@@ -544,6 +547,7 @@ class Client(Node):
         if deserializers is None:
             deserializers = serializers
         self._deserializers = deserializers
+        self.direct_to_workers = direct_to_workers
 
         # Communication
         self.security = security or Security()
@@ -1408,6 +1412,8 @@ class Client(Node):
             else:
                 if w.scheduler.address == self.scheduler.address:
                     direct = True
+        if direct is None:
+            direct = self.direct_to_workers
 
         @gen.coroutine
         def wait(k):
@@ -1610,6 +1616,8 @@ class Client(Node):
             else:
                 if w.scheduler.address == self.scheduler.address:
                     direct = True
+        if direct is None:
+            direct = self.direct_to_workers
 
         if local_worker:  # running within task
             local_worker.update_data(data=data, report=False)

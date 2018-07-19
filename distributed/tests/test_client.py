@@ -5440,5 +5440,27 @@ def test_no_threads_lingering():
     assert threading.active_count() < 30, list(active.values())
 
 
+@gen_cluster()
+def test_direct_async(s, a, b):
+    c = yield Client(s.address, asynchronous=True, direct_to_workers=True)
+    assert c.direct_to_workers
+    yield c.close()
+
+    c = yield Client(s.address, asynchronous=True, direct_to_workers=False)
+    assert not c.direct_to_workers
+    yield c.close()
+
+
+def test_direct_sync(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            assert not c.direct_to_workers
+
+            def f():
+                return get_client().direct_to_workers
+
+            assert c.submit(f).result()
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401
