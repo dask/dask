@@ -6,6 +6,7 @@ from datetime import timedelta
 import json
 from operator import add, mul
 import sys
+from time import sleep
 
 import dask
 from dask import delayed
@@ -1340,3 +1341,22 @@ def test_closing_scheduler_closes_workers(s, a, b):
     while a.status != 'closed' or b.status != 'closed':
         yield gen.sleep(0.01)
         assert time() < start + 2
+
+
+@gen_cluster(client=True, ncores=[('127.0.0.1', 1)],
+             worker_kwargs={'resources': {'A': 1}})
+def test_resources_reset_after_cancelled_task(c, s, w):
+    future = c.submit(sleep, 0.2, resources={'A': 1})
+
+    while not w.executing:
+        yield gen.sleep(0.01)
+
+    yield future.cancel()
+
+    while w.executing:
+        yield gen.sleep(0.01)
+
+    assert not s.workers[w.address].used_resources['A']
+    assert w.available_resources == {'A': 1}
+
+    yield c.submit(inc, 1, resources={'A': 1})

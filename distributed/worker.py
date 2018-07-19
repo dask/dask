@@ -2034,6 +2034,9 @@ class Worker(WorkerBase):
                 self.executing.remove(key)
 
             if key in self.resource_restrictions:
+                if state == 'executing':
+                    for resource, quantity in self.resource_restrictions[key].items():
+                        self.available_resources[resource] += quantity
                 del self.resource_restrictions[key]
 
             if report and state in PROCESSING:  # not finished
