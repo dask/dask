@@ -1156,7 +1156,7 @@ class Array(DaskMethodsMixin):
 
     @property
     def chunksize(self):
-        return tuple(c[0] for c in self.chunks)
+        return tuple(max(c) for c in self.chunks)
 
     @property
     def _meta(self):
