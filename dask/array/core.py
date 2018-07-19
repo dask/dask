@@ -1155,6 +1155,10 @@ class Array(DaskMethodsMixin):
         return tuple(map(sum, self.chunks))
 
     @property
+    def chunksize(self):
+        return tuple(max(c) for c in self.chunks)
+
+    @property
     def _meta(self):
         return np.empty(shape=(), dtype=self.dtype)
 
@@ -1212,7 +1216,7 @@ class Array(DaskMethodsMixin):
         >>> da.ones((10, 10), chunks=(5, 5), dtype='i4')
         dask.array<..., shape=(10, 10), dtype=int32, chunksize=(5, 5)>
         """
-        chunksize = str(tuple(c[0] for c in self.chunks))
+        chunksize = str(self.chunksize)
         name = self.name.rsplit('-', 1)[0]
         return ("dask.array<%s, shape=%s, dtype=%s, chunksize=%s>" %
                 (name, self.shape, self.dtype, chunksize))
