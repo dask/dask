@@ -233,7 +233,7 @@ class Server(object):
             _, self._port = get_address_host_port(self.address)
         return self._port
 
-    def identity(self, comm):
+    def identity(self, comm=None):
         return {'type': type(self).__name__, 'id': self.id}
 
     def listen(self, port_or_addr=None, listen_args=None):

@@ -903,6 +903,7 @@ class Scheduler(ServerNode):
             'feed': self.feed,
             'terminate': self.close,
             'broadcast': self.broadcast,
+            'proxy': self.proxy,
             'ncores': self.get_ncores,
             'has_what': self.get_has_what,
             'who_has': self.get_who_has,
@@ -2322,6 +2323,13 @@ class Scheduler(ServerNode):
                              if address is not None])
 
         raise Return(dict(zip(workers, results)))
+
+    @gen.coroutine
+    def proxy(self, comm=None, msg=None, worker=None, serializers=None):
+        """ Proxy a communication through the scheduler to some other worker """
+        d = yield self.broadcast(comm=comm, msg=msg, workers=[worker],
+                                 serializers=serializers)
+        raise gen.Return(d[worker])
 
     @gen.coroutine
     def rebalance(self, comm=None, keys=None, workers=None):

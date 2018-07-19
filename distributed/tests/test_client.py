@@ -2201,6 +2201,12 @@ def test_broadcast(loop):
 
 
 @gen_cluster(client=True)
+def test_proxy(c, s, a, b):
+    msg = yield c.scheduler.proxy(msg={'op': 'identity'}, worker=a.address)
+    assert msg['id'] == a.identity()['id']
+
+
+@gen_cluster(client=True)
 def test__cancel(c, s, a, b):
     x = c.submit(slowinc, 1)
     y = c.submit(slowinc, x)

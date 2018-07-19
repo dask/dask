@@ -450,7 +450,7 @@ class WorkerBase(ServerNode):
     def start(self, port=0):
         self.loop.add_callback(self._start, port)
 
-    def identity(self, comm):
+    def identity(self, comm=None):
         return {'type': type(self).__name__,
                 'id': self.id,
                 'scheduler': self.scheduler.address,
