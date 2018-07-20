@@ -16,16 +16,17 @@ from .utils import is_categorical_dtype, is_scalar, has_known_categories
 def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
                 columns=None, sparse=False, drop_first=False):
     """
-    Convert categorical variable into dummy/indicator variables. Data must
-    have category dtype to infer result's ``columns``
+    Convert categorical variable into dummy/indicator variables.
+
+    Data must have category dtype to infer result's ``columns``.
 
     Parameters
     ----------
-    data : Series or DataFrame with category dtype
+    data : array-like, Series, or DataFrame
     prefix : string, list of strings, or dict of strings, default None
-        String to append DataFrame column names
+        String to append DataFrame column names.
         Pass a list with length equal to the number of columns
-        when calling get_dummies on a DataFrame. Alternativly, `prefix`
+        when calling get_dummies on a DataFrame. Alternatively, `prefix`
         can be a dictionary mapping column names to prefixes.
     prefix_sep : string, default '_'
         If appending prefix, separator/delimiter to use. Or pass a
@@ -35,13 +36,54 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
     columns : list-like, default None
         Column names in the DataFrame to be encoded.
         If `columns` is None then all the columns with
-        `category` dtype will be converted.
+        `object` or `category` dtype will be converted.
+    sparse : bool, default False
+        Whether the dummy columns should be sparse or not.  Returns
+        SparseDataFrame if `data` is a Series or if all columns are included.
+        Otherwise returns a DataFrame with some SparseBlocks.
+
+        .. versionadded:: 0.18.2
+
     drop_first : bool, default False
         Whether to get k-1 dummies out of k categorical levels by removing the
         first level.
+
     Returns
     -------
     dummies : DataFrame
+
+    Examples
+    --------
+    Dask's version only works with Categorical data, as this is the only way to
+    know the output shape without computing all the data.
+
+    >>> s = dd.from_pandas(pd.Series(list('abca')), npartitions=2)
+    >>> dd.get_dummies(s)
+    Traceback (most recent call last):
+        ...
+    NotImplementedError: `get_dummies` with non-categorical dtypes is not supported...
+
+    With categorical data:
+
+    >>> s = dd.from_pandas(pd.Series(list('abca'), dtype='category'), npartitions=2)
+    >>> dd.get_dummies(s)
+    Dask DataFrame Structure:
+                       a      b      c
+    npartitions=2
+    0              uint8  uint8  uint8
+    2                ...    ...    ...
+    3                ...    ...    ...
+    Dask Name: get_dummies, 4 tasks
+    >>> dd.get_dummies(s).compute()
+       a  b  c
+    0  1  0  0
+    1  0  1  0
+    2  0  0  1
+    3  1  0  0
+
+    See Also
+    --------
+    pandas.get_dummies
     """
 
     if isinstance(data, (pd.Series, pd.DataFrame)):
