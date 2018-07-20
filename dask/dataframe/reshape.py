@@ -22,7 +22,9 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
 
     Parameters
     ----------
-    data : array-like, Series, or DataFrame
+    data : Series, or DataFrame
+        For Series, the dtype must be categorical.
+        For DataFrame, at least one column must be categorical.
     prefix : string, list of strings, or dict of strings, default None
         String to append DataFrame column names.
         Pass a list with length equal to the number of columns
@@ -36,7 +38,7 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
     columns : list-like, default None
         Column names in the DataFrame to be encoded.
         If `columns` is None then all the columns with
-        `object` or `category` dtype will be converted.
+        `category` dtype will be converted.
     sparse : bool, default False
         Whether the dummy columns should be sparse or not.  Returns
         SparseDataFrame if `data` is a Series or if all columns are included.
