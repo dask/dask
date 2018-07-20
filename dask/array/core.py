@@ -2432,8 +2432,8 @@ def to_zarr(arr, url, component=None, storage_options=None,
             raise RuntimeError('Cannot store into in memory Zarr Array using '
                                'the Distributed Scheduler.')
         arr = arr.rechunk(z.chunks)
-        return store(arr, z, lock=False, compute=compute,
-                     return_stored=return_stored)
+        return arr.store(z, lock=False, compute=compute,
+                         return_stored=return_stored)
 
     if not _check_regular_chunks(arr.chunks):
         raise ValueError('Attempt to save array to zarr with irregular '
@@ -2453,8 +2453,8 @@ def to_zarr(arr, url, component=None, storage_options=None,
     chunks = [c[0] for c in arr.chunks]
     z = zarr.create(shape=arr.shape, chunks=chunks, dtype=arr.dtype,
                     store=mapper, path=component, overwrite=overwrite, **kwargs)
-    return store(arr, z, lock=False, compute=compute,
-                 return_stored=return_stored)
+    return arr.store(z, lock=False, compute=compute,
+                     return_stored=return_stored)
 
 
 def _check_regular_chunks(chunkset):
