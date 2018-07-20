@@ -306,6 +306,13 @@ class Rolling(object):
         return self._call_method('apply', func, args=args,
                                  kwargs=kwargs, **kwds)
 
+    @derived_from(pd_Rolling)
+    def aggregate(self, func, args=(), kwargs={}, **kwds):
+        return self._call_method('agg', func, args=args,
+                                 kwargs=kwargs, **kwds)
+
+    agg = aggregate
+
     def __repr__(self):
 
         def order(item):
