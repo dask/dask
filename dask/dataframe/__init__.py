@@ -25,8 +25,8 @@ try:
         pass
 except ImportError as e:
     msg = ("Dask dataframe requirements are not installed.\n\n"
-           "Please either conda or pip install dask[dataframe]:\n\n"
-           "  conda install dask[dataframe]          # either conda install\n"
+           "Please either conda or pip install as follows:\n\n"
+           "  conda install dask                     # either conda install\n"
            "  pip install dask[dataframe] --upgrade  # or pip install")
     e.msg += "\n\n" + msg
     raise e

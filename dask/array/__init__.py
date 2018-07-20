@@ -60,8 +60,8 @@ try:
     from .utils import assert_eq
 except ImportError as e:
     msg = ("Dask array requirements are not installed.\n\n"
-           "Please either conda or pip install dask[array]:\n\n"
-           "  conda install dask[array]          # either conda install\n"
+           "Please either conda or pip install as follows:\n\n"
+           "  conda install dask                 # either conda install\n"
            "  pip install dask[array] --upgrade  # or pip install")
     e.msg += "\n\n" + msg
     raise e
