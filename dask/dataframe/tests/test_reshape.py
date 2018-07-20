@@ -78,10 +78,39 @@ def test_get_dummies_kwargs():
     assert_eq(res, exp)
     tm.assert_index_equal(res.columns, pd.Index([1, 2, 3, 5, np.nan]))
 
-    msg = 'sparse=True is not supported'
-    with pytest.raises(NotImplementedError) as err:
-        dd.get_dummies(ds, sparse=True)
-    assert msg in str(err.value)
+
+def test_get_dummies_sparse():
+    s = pd.Series(pd.Categorical(['a', 'b', 'a'], categories=['a', 'b', 'c']))
+    ds = dd.from_pandas(s, 2)
+
+    exp = pd.get_dummies(s, sparse=True)
+    res = dd.get_dummies(ds, sparse=True)
+    assert_eq(exp, res)
+
+    assert res.compute().a.dtype == 'uint8'
+    assert pd.api.types.is_sparse(res.a.compute())
+
+    exp = pd.get_dummies(s.to_frame(name='a'), sparse=True)
+    res = dd.get_dummies(ds.to_frame(name='a'), sparse=True)
+    assert_eq(exp, res)
+    assert pd.api.types.is_sparse(res.a_a.compute())
+
+
+def test_get_dummies_sparse_mix():
+    df = pd.DataFrame({
+        "A": pd.Categorical(['a', 'b', 'a'], categories=['a', 'b', 'c']),
+        "B": [0, 0, 1],
+    })
+    ddf = dd.from_pandas(df, 2)
+
+    exp = pd.get_dummies(df, sparse=True)
+    res = dd.get_dummies(ddf, sparse=True)
+    assert_eq(exp, res)
+
+    assert res.compute().A_a.dtype == 'uint8'
+    assert pd.api.types.is_sparse(res.A_a.compute())
+
+
 
 
 def test_get_dummies_errors():

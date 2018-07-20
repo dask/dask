@@ -76,13 +76,18 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
         if not all(has_known_categories(data[c]) for c in columns):
             raise NotImplementedError(unknown_cat_msg)
 
-    if sparse:
-        raise NotImplementedError('sparse=True is not supported')
+    # We explicitly create `meta` on `data._meta` (the empty version) to
+    # work around https://github.com/pandas-dev/pandas/issues/21993
+    meta = pd.get_dummies(data._meta, prefix=prefix,
+                          prefix_sep=prefix_sep, dummy_na=dummy_na,
+                          columns=columns, sparse=sparse, drop_first=drop_first)
 
     return map_partitions(pd.get_dummies, data, prefix=prefix,
                           prefix_sep=prefix_sep, dummy_na=dummy_na,
                           columns=columns, sparse=sparse,
-                          drop_first=drop_first)
+                          drop_first=drop_first,
+                          meta=meta)
+
 
 
 ###############################################################
