@@ -1,7 +1,6 @@
 import pandas as pd
 import pytest
 import numpy as np
-from warnings import catch_warnings
 
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
