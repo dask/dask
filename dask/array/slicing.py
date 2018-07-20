@@ -718,23 +718,21 @@ def normalize_slice(idx, dim):
     """
 
     if isinstance(idx, slice):
-        start, stop, step = idx.start, idx.stop, idx.step
-        if start is not None:
-            if start < 0 and not math.isnan(dim):
-                start = max(0, start + dim)
-            elif start > dim:
-                start = dim
-        if stop is not None:
-            if stop < 0 and not math.isnan(dim):
-                stop = max(0, stop + dim)
-            elif stop > dim:
-                stop = dim
-        if start == 0:
-            start = None
-        if stop == dim:
-            stop = None
-        if step == 1:
-            step = None
+        if math.isnan(dim):
+            return idx
+        start, stop, step = idx.indices(dim)
+        if step > 0:
+            if start == 0:
+                start = None
+            if stop >= dim:
+                stop = None
+            if step == 1:
+                step = None
+        elif step < 0:
+            if start >= dim - 1:
+                start = None
+            if stop < 0:
+                stop = None
         return slice(start, stop, step)
     return idx
 
