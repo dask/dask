@@ -2,6 +2,14 @@ import os
 import pandas as pd
 import pytest
 
+try:
+    import lzma
+except ImportError:
+    try:
+        import backports.lzma as lzma
+    except ImportError:
+        lzma = None
+
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 from dask.utils import tmpfile, tmpdir
@@ -61,6 +69,10 @@ def test_read_chunked(block):
 
 @pytest.mark.parametrize('compression', [None, 'gzip', 'xz'])
 def test_json_compressed(compression):
+    if compression == 'xz' and lzma is None:
+        pytest.skip(
+            "LZMA not available. Please install backports.lzma on Python 2."
+        )
 
     with tmpdir() as path:
         dd.to_json(ddf, path, compression=compression)
