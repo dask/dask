@@ -470,6 +470,7 @@ def test_slicing_consistent_names():
     assert same_keys(a[-11:11], a[:])
     assert same_keys(a[-11:-9], a[:1])
     assert same_keys(a[-1], a[9])
+    assert same_keys(a[0::-1], a[0:-11:-1])
 
 
 def test_slicing_consistent_names_after_normalization():
@@ -814,3 +815,8 @@ def test_setitem_with_different_chunks_preserves_shape(params):
     x[mask] = 1
     result = x.compute()
     assert x.shape == result.shape
+
+
+def test_gh3579():
+    assert_eq(np.arange(10)[0::-1], da.arange(10, chunks=3)[0::-1])
+    assert_eq(np.arange(10)[::-1], da.arange(10, chunks=3)[::-1])
