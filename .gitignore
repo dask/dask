@@ -8,3 +8,4 @@ continuous_integration/hdfs-initialized
 .#*
 .idea/
 .pytest_cache/
+dask-worker-space/
