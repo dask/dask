@@ -36,12 +36,12 @@ with ignoring(ImportError):
 try:
     import lz4.block
     compress['lz4'] = lz4.block.compress
-    compress['lz4'] = lz4.block.decompress
+    decompress['lz4'] = lz4.block.decompress
 except ImportError:
     try:
         import lz4
         compress['lz4'] = lz4.LZ4_compress
-        compress['lz4'] = lz4.LZ4_uncompress
+        decompress['lz4'] = lz4.LZ4_uncompress
     except ImportError:
         pass
 
