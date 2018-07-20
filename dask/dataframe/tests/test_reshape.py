@@ -97,6 +97,8 @@ def test_get_dummies_sparse():
 
 
 def test_get_dummies_sparse_mix():
+    pytest.importorskip('pandas', minversion="0.23.0")
+
     df = pd.DataFrame({
         "A": pd.Categorical(['a', 'b', 'a'], categories=['a', 'b', 'c']),
         "B": [0, 0, 1],

@@ -59,6 +59,8 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
     Dask's version only works with Categorical data, as this is the only way to
     know the output shape without computing all the data.
 
+    >>> import pandas as pd
+    >>> import dask.dataframe as dd
     >>> s = dd.from_pandas(pd.Series(list('abca')), npartitions=2)
     >>> dd.get_dummies(s)
     Traceback (most recent call last):
