@@ -111,8 +111,6 @@ def test_get_dummies_sparse_mix():
     assert pd.api.types.is_sparse(res.A_a.compute())
 
 
-
-
 def test_get_dummies_errors():
     with pytest.raises(NotImplementedError):
         # not Categorical
