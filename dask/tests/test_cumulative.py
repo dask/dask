@@ -63,8 +63,8 @@ def test_cum_caching():
         res0_a, res1_a = compute(getattr(dcum['ones'], op)(),
                                  getattr(dcum['twos'], op)())
         cum = df.groupby(['a'])
-        res0_b, res1_b = getattr(cum['ones'], op)(), \
-                         getattr(cum['twos'], op)()
+        res0_b, res1_b = (getattr(cum['ones'], op)(),
+                          getattr(cum['twos'], op)())
 
         assert res0_a.equals(res0_b)
         assert res1_a.equals(res1_b)
