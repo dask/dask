@@ -23,8 +23,10 @@ which is included as a comment at the end of this file:
 from __future__ import print_function, division, absolute_import
 
 from . import _concurrent_futures_thread as thread
+import os
 import logging
 import threading
+import itertools
 
 from .metrics import time
 
@@ -62,6 +64,9 @@ def _worker(executor, work_queue):
 
 
 class ThreadPoolExecutor(thread.ThreadPoolExecutor):
+    # Used to assign unique thread names
+    _counter = itertools.count()
+
     def __init__(self, *args, **kwargs):
         super(ThreadPoolExecutor, self).__init__(*args, **kwargs)
         self._rejoin_list = []
@@ -70,7 +75,7 @@ class ThreadPoolExecutor(thread.ThreadPoolExecutor):
     def _adjust_thread_count(self):
         if len(self._threads) < self._max_workers:
             t = threading.Thread(target=_worker,
-                                 name="ThreadPool worker %d" % len(self._threads,),
+                                 name="ThreadPoolExecutor-%d-%d" % (os.getpid(), next(self._counter)),
                                  args=(self, self._work_queue))
             t.daemon = True
             self._threads.add(t)
