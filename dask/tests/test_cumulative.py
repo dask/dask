@@ -38,7 +38,7 @@ def test_groupby_cum_caching():
         ddf1 = getattr(ddf1.groupby(['a']), op)()
 
         # _a and _b dataframe should be equal
-        res0_a, res1_a = compute(ddf0, ddf1, scheduler='sync')
+        res0_a, res1_a = compute(ddf0, ddf1)
         res0_b, res1_b = ddf0.compute(), ddf1.compute()
 
         assert res0_a.equals(res0_b)
