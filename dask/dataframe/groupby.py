@@ -847,7 +847,10 @@ class _GroupBy(object):
                                  meta=meta,
                                  token=name_last)
 
-        # aggregate cumulated partisions and its previous last element
+        # aggregate cumulated partitions and its previous last element
+        _hash = tokenize(self, token, chunk, aggregate, initial)
+        name += '-' + _hash
+        name_cum += '-' + _hash
         dask = {}
         dask[(name, 0)] = (cumpart_raw._name, 0)
 
