@@ -5,7 +5,9 @@ import pandas as pd
 
 from .core import Series, DataFrame, map_partitions, apply_concat_apply
 from . import methods
-from .utils import is_categorical_dtype, is_scalar, has_known_categories
+from .utils import (
+    is_categorical_dtype, is_scalar, has_known_categories, PANDAS_VERSION
+)
 
 
 ###############################################################
@@ -14,7 +16,8 @@ from .utils import is_categorical_dtype, is_scalar, has_known_categories
 
 
 def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
-                columns=None, sparse=False, drop_first=False):
+                columns=None, sparse=False, drop_first=False,
+                dtype=np.uint8):
     """
     Convert categorical variable into dummy/indicator variables.
 
@@ -49,6 +52,12 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
     drop_first : bool, default False
         Whether to get k-1 dummies out of k categorical levels by removing the
         first level.
+
+    dtype : dtype, default np.uint8
+        Data type for new columns. Only a single dtype is allowed.
+        Only valid if pandas is 0.23.0 or newer.
+
+        .. versionadded:: 0.18.2
 
     Returns
     -------
@@ -122,17 +131,29 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
         if not all(has_known_categories(data[c]) for c in columns):
             raise NotImplementedError(unknown_cat_msg)
 
+    if PANDAS_VERSION >= "0.23.0":
+        # dtype added to pandas
+        kwargs = {'dtype': dtype}
+    elif dtype != np.uint8:
+        # User specified something other than the default.
+        raise ValueError("Your version of pandas is '{}'. "
+                         "The 'dtype' keyword was added in pandas "
+                         "0.23.0.".format(PANDAS_VERSION))
+    else:
+        kwargs = {}
+
     # We explicitly create `meta` on `data._meta` (the empty version) to
     # work around https://github.com/pandas-dev/pandas/issues/21993
     meta = pd.get_dummies(data._meta, prefix=prefix,
                           prefix_sep=prefix_sep, dummy_na=dummy_na,
-                          columns=columns, sparse=sparse, drop_first=drop_first)
+                          columns=columns, sparse=sparse, drop_first=drop_first,
+                          **kwargs)
 
     return map_partitions(pd.get_dummies, data, prefix=prefix,
                           prefix_sep=prefix_sep, dummy_na=dummy_na,
                           columns=columns, sparse=sparse,
                           drop_first=drop_first,
-                          meta=meta)
+                          meta=meta, **kwargs)
 
 
 ###############################################################

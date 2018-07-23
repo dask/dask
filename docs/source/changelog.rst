@@ -17,7 +17,7 @@ Bag
 Dataframe
 +++++++++
 
--
+- Added `dtype` and `sparse` keywords to :func:`dask.dataframe.get_dummies` (:pr:`3792`) `Tom Augspurger`_
 
 Core
 ++++
