@@ -428,9 +428,8 @@ def test_iloc_raises():
 
     with pytest.raises(ValueError):
         ddf.iloc[[0, 1], [0, 1]]
-
-    with pytest.raises(ValueError):
+with pytest.raises(ValueError):
         ddf.iloc[[0, 1], [0, 1], [1, 2]]
-        
+
     with pytest.raises(IndexError):
         ddf.iloc[:, [5, 6]]
