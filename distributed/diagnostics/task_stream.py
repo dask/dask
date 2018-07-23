@@ -1,22 +1,23 @@
 from __future__ import print_function, division, absolute_import
 
+from collections import deque
 import logging
 
-from ..diagnostics.progress_stream import color_of
-from ..diagnostics.plugin import SchedulerPlugin
-from ..utils import key_split, format_time
+from .progress_stream import color_of
+from .plugin import SchedulerPlugin
+from ..utils import key_split, format_time, parse_timedelta
+from ..metrics import time
 
 
 logger = logging.getLogger(__name__)
 
 
 class TaskStreamPlugin(SchedulerPlugin):
-    def __init__(self, scheduler):
-        self.buffer = []
+    def __init__(self, scheduler, maxlen=100000):
+        self.buffer = deque(maxlen=maxlen)
         self.scheduler = scheduler
         scheduler.add_plugin(self)
         self.index = 0
-        self.maxlen = 100000
 
     def transition(self, key, start, finish, *args, **kwargs):
         if start == 'processing':
@@ -26,8 +27,48 @@ class TaskStreamPlugin(SchedulerPlugin):
             if finish == 'memory' or finish == 'erred':
                 self.buffer.append(kwargs)
                 self.index += 1
-                if len(self.buffer) > self.maxlen:
-                    self.buffer = self.buffer[len(self.buffer):]
+
+    def collect(self, start=None, stop=None, count=None):
+        def bisect(target, left, right):
+            if left == right:
+                return left
+
+            mid = (left + right) // 2
+            value = max(stop for _, start, stop in self.buffer[mid]['startstops'])
+
+            if value < target:
+                return bisect(target, mid + 1, right)
+            else:
+                return bisect(target, left, mid)
+
+        if isinstance(start, str):
+            start = time() - parse_timedelta(start)
+        if start is not None:
+            start = bisect(start, 0, len(self.buffer))
+
+        if isinstance(stop, str):
+            stop = time() - parse_timedelta(stop)
+        if stop is not None:
+            stop = bisect(stop, 0, len(self.buffer))
+
+        if count is not None:
+            if start is None and stop is None:
+                stop = len(self.buffer)
+                start = stop - count
+            elif start is None and stop is not None:
+                start = stop - count
+            elif start is not None and stop is None:
+                stop = start + count
+
+        if stop is None:
+            stop = len(self.buffer)
+        if start is None:
+            start = 0
+
+        start = max(0, start)
+        stop = min(stop, len(self.buffer))
+
+        return [self.buffer[i] for i in range(start, stop)]
 
     def rectangles(self, istart, istop=None, workers=None, start_boundary=0):
         L_start = []
@@ -42,7 +83,10 @@ class TaskStreamPlugin(SchedulerPlugin):
         L_y = []
 
         diff = self.index - len(self.buffer)
-        for msg in self.buffer[istart - diff: istop - diff if istop else istop]:
+        if istop is None:
+            istop = len(self.buffer)
+        for i in range((istart or 0) - diff, istop - diff if istop else istop):
+            msg = self.buffer[i]
             key = msg['key']
             name = key_split(key)
             startstops = msg.get('startstops', [])

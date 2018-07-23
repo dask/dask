@@ -765,6 +765,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                     @gen.coroutine
                     def coro():
                         with dask.config.set(config):
+                            s = False
                             for i in range(5):
                                 try:
                                     s, ws = yield start_cluster(
@@ -774,9 +775,11 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                                 except Exception as e:
                                     logger.error("Failed to start gen_cluster, retryng", exc_info=True)
                                 else:
+                                    workers[:] = ws
+                                    args = [s] + workers
                                     break
-                            workers[:] = ws
-                            args = [s] + workers
+                            if s is False:
+                                raise Exception("Could not start cluster")
                             if client:
                                 c = yield Client(s.address, loop=loop, security=security,
                                                  asynchronous=True, **client_kwargs)

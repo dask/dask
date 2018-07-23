@@ -39,7 +39,7 @@ from ..utils import log_errors, format_bytes, format_time
 from ..diagnostics.progress_stream import color_of, progress_quads, nbytes_bar
 from ..diagnostics.progress import AllProgress
 from ..diagnostics.graph_layout import GraphLayout
-from .task_stream import TaskStreamPlugin
+from ..diagnostics.task_stream import TaskStreamPlugin
 
 try:
     from cytoolz.curried import map, concat, groupby, valmap, first

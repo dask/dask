@@ -924,7 +924,8 @@ class Scheduler(ServerNode):
             'get_metadata': self.get_metadata,
             'set_metadata': self.set_metadata,
             'heartbeat_worker': self.heartbeat_worker,
-            'get_task_status': self.get_task_status
+            'get_task_status': self.get_task_status,
+            'get_task_stream': self.get_task_stream,
         }
 
         self._transitions = {
@@ -2100,12 +2101,18 @@ class Scheduler(ServerNode):
                 worker_comm.abort()
                 self.remove_worker(address=worker)
 
-    def add_plugin(self, plugin):
+    def add_plugin(self, plugin=None, idempotent=True, **kwargs):
         """
         Add external plugin to scheduler
 
         See https://distributed.readthedocs.io/en/latest/plugins.html
         """
+        if isinstance(plugin, type):
+            plugin = plugin(self, **kwargs)
+
+        if idempotent and any(isinstance(p, type(plugin)) for p in self.plugins):
+            return
+
         self.plugins.append(plugin)
 
     def remove_plugin(self, plugin):
@@ -2959,6 +2966,12 @@ class Scheduler(ServerNode):
         return {key: (self.tasks[key].state
                       if key in self.tasks else None)
                 for key in keys}
+
+    def get_task_stream(self, comm=None, start=None, stop=None, count=None):
+        from distributed.diagnostics.task_stream import TaskStreamPlugin
+        self.add_plugin(TaskStreamPlugin, idempotent=True)
+        ts = [p for p in self.plugins if isinstance(p, TaskStreamPlugin)][0]
+        return ts.collect(start=start, stop=stop, count=count)
 
     #####################
     # State Transitions #

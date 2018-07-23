@@ -19,6 +19,7 @@ API
    Client.get_executor
    Client.get_metadata
    Client.get_scheduler_logs
+   Client.get_task_stream
    Client.get_worker_logs
    Client.has_what
    Client.list_datasets
@@ -92,6 +93,7 @@ API
    wait
    fire_and_forget
    futures_of
+   get_task_stream
 
 
 Asynchronous methods
