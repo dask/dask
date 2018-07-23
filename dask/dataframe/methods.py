@@ -32,7 +32,6 @@ def iloc(df, cindexer=None):
     return df.iloc[:, cindexer]
 
 
-
 def try_loc(df, iindexer, cindexer=None):
     """
     .loc for unknown divisions
