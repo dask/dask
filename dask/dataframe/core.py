@@ -932,6 +932,16 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         from .indexing import _LocIndexer
         return _LocIndexer(self)
 
+    @property
+    def iloc(self):
+        """Purely integer-location based indexing for selection by position.
+
+        Only indexing the column positions is supported.
+        See :ref:`dataframe.indexing` for more.
+        """
+        from .indexing import _iLocIndexer
+        return _iLocIndexer(self)
+
     # NOTE: `iloc` is not implemented because of performance concerns.
     # see https://github.com/dask/dask/pull/507
 
