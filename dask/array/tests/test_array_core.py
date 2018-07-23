@@ -254,6 +254,7 @@ def test_stack():
 
     assert s.shape == (3, 4, 6)
     assert s.chunks == ((1, 1, 1), (2, 2), (3, 3))
+    assert s.chunksize == (1, 2, 3)
     assert s.dask[(s.name, 0, 1, 0)] == (getitem, ('A', 1, 0),
                                          (None, colon, colon))
     assert s.dask[(s.name, 2, 1, 0)] == (getitem, ('C', 1, 0),
@@ -263,6 +264,7 @@ def test_stack():
     s2 = stack([a, b, c], axis=1)
     assert s2.shape == (4, 3, 6)
     assert s2.chunks == ((2, 2), (1, 1, 1), (3, 3))
+    assert s2.chunksize == (2, 1, 3)
     assert s2.dask[(s2.name, 0, 1, 0)] == (getitem, ('B', 0, 0),
                                            (colon, None, colon))
     assert s2.dask[(s2.name, 1, 1, 0)] == (getitem, ('B', 1, 0),
@@ -272,6 +274,7 @@ def test_stack():
     s2 = stack([a, b, c], axis=2)
     assert s2.shape == (4, 6, 3)
     assert s2.chunks == ((2, 2), (3, 3), (1, 1, 1))
+    assert s2.chunksize == (2, 3, 1)
     assert s2.dask[(s2.name, 0, 1, 0)] == (getitem, ('A', 0, 1),
                                            (colon, colon, None))
     assert s2.dask[(s2.name, 1, 1, 2)] == (getitem, ('C', 1, 1),
@@ -3327,10 +3330,12 @@ def test_concatenate_errs():
 
 def test_stack_errs():
     with pytest.raises(ValueError) as e:
-        da.stack([da.zeros((2), chunks=(2)),
-                  da.zeros((3), chunks=(3))])
-    assert 'shape' in str(e).lower()
-    assert '(2,)' in str(e)
+        da.stack([da.zeros((2,), chunks=(2))] * 10 +
+                 [da.zeros((3,), chunks=(3))] * 10)
+
+    assert 'shape' in str(e.value).lower()
+    assert '(2,)' in str(e.value)
+    assert len(str(e.value)) < 105
 
 
 def test_atop_with_numpy_arrays():
@@ -3486,6 +3491,17 @@ def test_zarr_roundtrip():
         a = da.zeros((3, 3), chunks=(1, 1))
         a.to_zarr(d)
         a2 = da.from_zarr(d)
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
+
+
+@pytest.mark.parametrize('compute', [False, True])
+def test_zarr_return_stored(compute):
+    pytest.importorskip('zarr')
+    with tmpdir() as d:
+        a = da.zeros((3, 3), chunks=(1, 1))
+        a2 = a.to_zarr(d, compute=compute, return_stored=True)
+        assert isinstance(a2, Array)
         assert_eq(a, a2)
         assert a2.chunks == a.chunks
 

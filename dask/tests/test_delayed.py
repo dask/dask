@@ -13,6 +13,11 @@ from dask.compatibility import PY2, PY3
 from dask.delayed import delayed, to_task_dask, Delayed
 from dask.utils_test import inc
 
+try:
+    from operator import matmul
+except ImportError:
+    matmul = None
+
 
 class Tuple(object):
     __dask_scheduler__ = staticmethod(dask.threaded.get)
@@ -102,7 +107,8 @@ def test_operators():
     assert (a >> 1).compute() == 5
     assert (a > 2).compute()
     assert (a ** 2).compute() == 100
-    if PY3:
+
+    if matmul:
         class dummy:
             def __matmul__(self, other):
                 return 4

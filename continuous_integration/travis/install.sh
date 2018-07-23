@@ -45,6 +45,7 @@ conda install -q -c conda-forge \
     graphviz \
     h5py \
     ipython \
+    lz4 \
     partd \
     psutil \
     pytables \

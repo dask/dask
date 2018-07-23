@@ -1155,6 +1155,10 @@ class Array(DaskMethodsMixin):
         return tuple(map(sum, self.chunks))
 
     @property
+    def chunksize(self):
+        return tuple(max(c) for c in self.chunks)
+
+    @property
     def _meta(self):
         return np.empty(shape=(), dtype=self.dtype)
 
@@ -1212,7 +1216,7 @@ class Array(DaskMethodsMixin):
         >>> da.ones((10, 10), chunks=(5, 5), dtype='i4')
         dask.array<..., shape=(10, 10), dtype=int32, chunksize=(5, 5)>
         """
-        chunksize = str(tuple(c[0] for c in self.chunks))
+        chunksize = str(self.chunksize)
         name = self.name.rsplit('-', 1)[0]
         return ("dask.array<%s, shape=%s, dtype=%s, chunksize=%s>" %
                 (name, self.shape, self.dtype, chunksize))
@@ -2428,8 +2432,8 @@ def to_zarr(arr, url, component=None, storage_options=None,
             raise RuntimeError('Cannot store into in memory Zarr Array using '
                                'the Distributed Scheduler.')
         arr = arr.rechunk(z.chunks)
-        return store(arr, z, lock=False, compute=compute,
-                     return_stored=return_stored)
+        return arr.store(z, lock=False, compute=compute,
+                         return_stored=return_stored)
 
     if not _check_regular_chunks(arr.chunks):
         raise ValueError('Attempt to save array to zarr with irregular '
@@ -2449,8 +2453,8 @@ def to_zarr(arr, url, component=None, storage_options=None,
     chunks = [c[0] for c in arr.chunks]
     z = zarr.create(shape=arr.shape, chunks=chunks, dtype=arr.dtype,
                     store=mapper, path=component, overwrite=overwrite, **kwargs)
-    return store(arr, z, lock=False, compute=compute,
-                 return_stored=return_stored)
+    return arr.store(z, lock=False, compute=compute,
+                     return_stored=return_stored)
 
 
 def _check_regular_chunks(chunkset):
@@ -3785,8 +3789,13 @@ def stack(seq, axis=0):
                          "\nData has %d dimensions, but got axis=%d" %
                          (ndim, axis))
     if not all(x.shape == seq[0].shape for x in seq):
-        raise ValueError("Stacked arrays must have the same shape. Got %s",
-                         [x.shape for x in seq])
+        idx = np.where(np.asanyarray([x.shape for x in seq]) != seq[0].shape)[0]
+        raise ValueError("Stacked arrays must have the same shape. "
+                         "The first {0} had shape {1}, while array "
+                         "{2} has shape {3}".format(idx[0],
+                                                    seq[0].shape,
+                                                    idx[0] + 1,
+                                                    seq[idx[0]].shape))
 
     ind = list(range(ndim))
     uc_args = list(concat((x, ind) for x in seq))
