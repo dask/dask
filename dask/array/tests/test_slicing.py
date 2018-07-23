@@ -10,7 +10,8 @@ import dask
 import dask.array as da
 from dask.array.slicing import (_sanitize_index_element, _slice_1d,
                                 new_blockdim, sanitize_index, slice_array,
-                                take, normalize_index, slicing_plan)
+                                take, normalize_index, slicing_plan,
+                                shuffle_convert)
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -820,3 +821,36 @@ def test_setitem_with_different_chunks_preserves_shape(params):
 def test_gh3579():
     assert_eq(np.arange(10)[0::-1], da.arange(10, chunks=3)[0::-1])
     assert_eq(np.arange(10)[::-1], da.arange(10, chunks=3)[::-1])
+
+
+def test_shuffle_convert():
+    x = np.arange(8, dtype=int)[:, None] * np.ones(2, dtype=int)[None, :]
+    index = np.array([6, 0, 4, 2, 7, 1, 5, 3])
+    chunks = ((len(x) // 2, len(x) // 2), (5,))
+
+    index1, index2, index3 = shuffle_convert(index, chunks, 0)
+    assert_eq(index2, np.array([0, 2, 4, 6, 1, 3, 5, 7]))
+    assert_eq(index3, np.array([3, 0, 2, 1, 7, 4, 6, 5]))
+    assert_eq(x[index], x[index2][index3])
+
+
+def test_slice_with_random_index():
+    x = np.arange(100, dtype=int)[:, None] * np.ones(100, dtype=int)[None, :]
+    dx = da.from_array(x, chunks=(50, 50))
+    index = np.arange(x.shape[0])
+    np.random.shuffle(index)
+
+    assert_eq(x[index], dx[index])
+    assert len(dx[index].dask) < len(dx.dask) * 10
+
+    for ind in [(index,),
+                (slice(None, None), index),
+                (slice(0, 5), index),
+                (slice(0, None, 2), index),
+        #         (None, slice(None, None), index),
+        #         (None, index, slice(None, None)),
+                (index[::2],),
+                (slice(None, None), index[::2],),
+                (5, index)]:
+        assert_eq(x[ind], dx[ind])
+        assert len(dx[ind].dask) < len(dx.dask) * 10

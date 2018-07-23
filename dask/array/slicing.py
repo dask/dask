@@ -538,6 +538,20 @@ def slicing_plan(chunks, index):
     return out
 
 
+def shuffle_convert(index, chunks, axis):
+    cumchunks = np.cumsum((0,) + chunks[axis])
+    index1 = np.array(index)
+    index2 = np.empty(len(index), dtype=int)
+    index3 = np.empty(len(index), dtype=int)
+    for left, right in zip(cumchunks, cumchunks[1:]):
+        _index2 = np.argsort(index[left:right])
+        _index3 = np.zeros(len(_index2), dtype=int)
+        _index3[_index2] = np.arange(len(_index2))
+        index2[left:right] = index[left:right][_index2]
+        index3[left:right] = _index3 + left
+    return index, index2, index3
+
+
 def take(outname, inname, chunks, index, axis=0):
     """ Index array with an iterable of index
 

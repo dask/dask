@@ -1368,7 +1368,8 @@ class Array(DaskMethodsMixin):
         if not isinstance(index, tuple):
             index = (index,)
 
-        from .slicing import normalize_index, slice_with_int_dask_array, slice_with_bool_dask_array
+        from .slicing import (normalize_index, slice_with_int_dask_array,
+                slice_with_bool_dask_array, shuffle_convert)
         index2 = normalize_index(index, self.shape)
 
         if any(isinstance(i, Array) and i.dtype.kind in 'iu' for i in index2):
@@ -1378,6 +1379,23 @@ class Array(DaskMethodsMixin):
 
         if all(isinstance(i, slice) and i == slice(None) for i in index2):
             return self
+
+        for axis, ind in enumerate(index2):
+            if isinstance(ind, np.ndarray):
+                cum_chunks = np.cumsum(self.chunks[axis])
+                chunk_locations = np.searchsorted(cum_chunks, ind, side='right')
+                where = np.where(np.diff(chunk_locations))[0] + 1
+
+                if len(where) > len(self.chunks[axis]) ** 2:
+                    ind1, ind2, ind3 = shuffle_convert(ind, self.chunks, axis)
+                    index3 = index2[:axis] + (ind2,) + index2[axis + 1:]
+                    index4 = tuple([slice(None, None) for ax in index2[:axis] if not
+                            isinstance(ax, int)]) + (ind3,)
+                    index4 = (slice(None, None),) * index2[:axis].count(None) + index4
+                    locs = np.concatenate([[0], np.where(ind2[1:] <
+                        ind2[:-1])[0] + 1, [len(ind2)]])
+                    c = tuple(np.diff(locs).tolist())
+                    return self[index3].rechunk({axis: c})[index4]
 
         out = 'getitem-' + tokenize(self, index2)
         dsk, chunks = slice_array(out, self.name, self.chunks, index2)
