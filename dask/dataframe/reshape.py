@@ -70,7 +70,7 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
     With categorical data:
 
     >>> s = dd.from_pandas(pd.Series(list('abca'), dtype='category'), npartitions=2)
-    >>> dd.get_dummies(s)
+    >>> dd.get_dummies(s)  # doctest: +NORMALIZE_WHITESPACE
     Dask DataFrame Structure:
                        a      b      c
     npartitions=2
