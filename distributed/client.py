@@ -2077,7 +2077,6 @@ class Client(Node):
                 retries = self._expand_retries(retries,
                                                all_keys=itertools.chain(dsk, keys))
 
-            print(resources)
             keyset = set(keys)
             flatkeys = list(map(tokey, keys))
             futures = {key: Future(key, self, inform=False) for key in keyset}
