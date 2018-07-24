@@ -98,12 +98,23 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
     --------
     pandas.get_dummies
     """
+    if PANDAS_VERSION >= "0.23.0":
+        # dtype added to pandas
+        kwargs = {'dtype': dtype}
+    elif dtype != np.uint8:
+        # User specified something other than the default.
+        raise ValueError("Your version of pandas is '{}'. "
+                         "The 'dtype' keyword was added in pandas "
+                         "0.23.0.".format(PANDAS_VERSION))
+    else:
+        kwargs = {}
 
     if isinstance(data, (pd.Series, pd.DataFrame)):
         return pd.get_dummies(data, prefix=prefix,
                               prefix_sep=prefix_sep, dummy_na=dummy_na,
                               columns=columns, sparse=sparse,
-                              drop_first=drop_first)
+                              drop_first=drop_first,
+                              **kwargs)
 
     not_cat_msg = ("`get_dummies` with non-categorical dtypes is not "
                    "supported. Please use `df.categorize()` beforehand to "
@@ -130,17 +141,6 @@ def get_dummies(data, prefix=None, prefix_sep='_', dummy_na=False,
 
         if not all(has_known_categories(data[c]) for c in columns):
             raise NotImplementedError(unknown_cat_msg)
-
-    if PANDAS_VERSION >= "0.23.0":
-        # dtype added to pandas
-        kwargs = {'dtype': dtype}
-    elif dtype != np.uint8:
-        # User specified something other than the default.
-        raise ValueError("Your version of pandas is '{}'. "
-                         "The 'dtype' keyword was added in pandas "
-                         "0.23.0.".format(PANDAS_VERSION))
-    else:
-        kwargs = {}
 
     # We explicitly create `meta` on `data._meta` (the empty version) to
     # work around https://github.com/pandas-dev/pandas/issues/21993

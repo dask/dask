@@ -133,6 +133,10 @@ def test_get_dummies_dtype():
     assert_eq(exp, res)
     assert res.compute().A_a.dtype == 'float64'
 
+    # dask's get_dummies on a pandas dataframe.
+    assert_eq(dd.get_dummies(df, dtype='float64'), exp)
+    assert res.compute().A_a.dtype == 'float64'
+
 
 @skip_if_get_dummies_dtype
 def test_get_dummies_dtype_raises():
