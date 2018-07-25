@@ -1,3 +1,5 @@
+.. _dataframe.performance:
+
 Dask DataFrame Performance Tips
 ===============================
 

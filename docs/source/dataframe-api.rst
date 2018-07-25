@@ -35,6 +35,7 @@ Dataframe
     DataFrame.get_partition
     DataFrame.groupby
     DataFrame.head
+    DataFrame.iloc
     DataFrame.index
     DataFrame.isna
     DataFrame.isnull

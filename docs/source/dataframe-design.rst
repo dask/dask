@@ -1,3 +1,5 @@
+.. _dataframe.design:
+
 Internal Design
 ===============
 
