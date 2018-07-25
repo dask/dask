@@ -43,15 +43,9 @@ class _iLocIndexer(_IndexerBase):
 
     def __getitem__(self, key):
 
-        if self.obj.ndim == 1:
-            if key != slice(None):
-                raise ValueError("'Series.iloc' only supports 'slice(None)'.")
-            return self.obj
-
         # dataframe
-        msg = ("'DataFrame.iloc' does not support slicing rows. "
-               "The indexer must be a 2-tuple whose first item is "
-               "'slice(None)'.")
+        msg = ("'DataFrame.iloc' only supports selecting columns. "
+               "It must be used like 'df.iloc[:, column_indexer]'.")
         if not isinstance(key, tuple):
             raise ValueError(msg)
 

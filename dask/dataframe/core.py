@@ -932,18 +932,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         from .indexing import _LocIndexer
         return _LocIndexer(self)
 
-    @property
-    def iloc(self):
-        """Purely integer-location based indexing for selection by position.
-
-        Only indexing the column positions is supported.
-        See :ref:`dataframe.indexing` for more.
-        """
-        from .indexing import _iLocIndexer
-        return _iLocIndexer(self)
-
-    # NOTE: `iloc` is not implemented because of performance concerns.
-    # see https://github.com/dask/dask/pull/507
+    # Note: iloc is implemented only on DataFrame
 
     def repartition(self, divisions=None, npartitions=None, freq=None, force=False):
         """ Repartition dataframe along new divisions
@@ -2370,6 +2359,22 @@ class DataFrame(_Frame):
         self._meta = renamed._meta
         self._name = renamed._name
         self.dask.update(renamed.dask)
+
+    @property
+    def iloc(self):
+        """Purely integer-location based indexing for selection by position.
+
+        Only indexing the column positions is supported. Trying to select
+        row positions will raise a ValueError.
+
+        See :ref:`dataframe.indexing` for more.
+
+        Examples
+        --------
+        >>> df.iloc[:, [2, 0, 1]]  # doctest: +SKIP
+        """
+        from .indexing import _iLocIndexer
+        return _iLocIndexer(self)
 
     def __getitem__(self, key):
         name = 'getitem-%s' % tokenize(self, key)

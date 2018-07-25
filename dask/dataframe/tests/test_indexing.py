@@ -414,9 +414,8 @@ def test_iloc(indexer):
 def test_iloc_series():
     s = pd.Series([1, 2, 3])
     ds = dd.from_pandas(s, 2)
-
-    result = ds.iloc[:]
-    assert_eq(result, s)
+    with pytest.raises(AttributeError):
+        ds.iloc[:]
 
 
 def test_iloc_raises():
