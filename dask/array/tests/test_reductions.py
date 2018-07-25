@@ -460,7 +460,6 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
         daskfunc(b, -k, axis=3, split_every=split_every)
 
 
-
 @pytest.mark.parametrize('npfunc,daskfunc', [
     (np.sort, da.topk),
     (np.argsort, da.argtopk),
