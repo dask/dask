@@ -1,6 +1,15 @@
 Changelog
 =========
 
+0.18.3 / 2018-MM-DD
+-------------------
+
+DataFrame
+++++++++++
+
+- Added `dtype` and `sparse` keywords to :func:`dask.dataframe.get_dummies` (:pr:`3792`) `Tom Augspurger`_
+
+
 0.18.2 / 2018-07-23
 -------------------
 
