@@ -9,7 +9,18 @@ import numpy as np
 from . import numpy_compat as npcompat
 
 from ..compatibility import getargspec
+from ..core import flatten
 from ..utils import ignoring
+
+try:
+    from numpy import broadcast_to
+except ImportError:  # pragma: no cover
+    broadcast_to = npcompat.broadcast_to
+
+try:
+    from numpy import take_along_axis
+except ImportError:  # pragma: no cover
+    take_along_axis = npcompat.take_along_axis
 
 
 def keepdims_wrapper(a_callable):
@@ -169,54 +180,93 @@ def trim(x, axes=None):
     return x[tuple(slice(ax, -ax if ax else None) for ax in axes)]
 
 
-try:
-    from numpy import broadcast_to
-except ImportError:  # pragma: no cover
-    broadcast_to = npcompat.broadcast_to
-
-
 def topk(a, k, axis, keepdims):
-    """Kernel of topk and argtopk.
+    """ Chunk and combine function of topk
+
     Extract the k largest elements from a on the given axis.
     If k is negative, extract the -k smallest elements instead.
     Note that, unlike in the parent function, the returned elements
     are not sorted internally.
     """
+    assert keepdims is True
     axis = axis[0]
     if abs(k) >= a.shape[axis]:
         return a
+
     a = np.partition(a, -k, axis=axis)
-    # return a[-k:] if k>0 else a[:-k], on arbitrary axis
-    return a[[
-        (slice(-k, None) if k > 0 else slice(None, -k))
-        if i == axis else slice(None)
-        for i in range(a.ndim)
-    ]]
+    k_slice = slice(-k, None) if k > 0 else slice(-k)
+    return a[tuple(k_slice if i == axis else slice(None)
+                   for i in range(a.ndim))]
 
 
-def topk_postprocess(a, k, axis):
-    """Kernel of topk and argtopk.
-    Post-processes the output of topk, sorting the results internally.
+def topk_aggregate(a, k, axis, keepdims):
+    """ Final aggregation function of topk
+
+    Invoke topk one final time and then sort the results internally.
     """
+    assert keepdims is True
+    a = topk(a, k, axis, keepdims)
+    axis = axis[0]
     a = np.sort(a, axis=axis)
-    if k > 0:
-        # a = a[::-1] on arbitrary axis
-        a = a[[
-            slice(None, None, -1) if i == axis else slice(None)
-            for i in range(a.ndim)
-        ]]
-    return a
+    if k < 0:
+        return a
+    return a[tuple(slice(None, None, -1) if i == axis else slice(None)
+                   for i in range(a.ndim))]
 
 
 def argtopk_preprocess(a, idx):
-    """Kernel of argtopk.
-    Preprocess data, by putting it together with its indexes in a recarray
+    """ Preparatory step for argtopk
+
+    Put data together with its original indices in a tuple.
     """
-    # np.core.records.fromarrays won't work if a and idx don't have the same shape
-    res = np.recarray(a.shape, dtype=[('values', a.dtype), ('idx', idx.dtype)])
-    res.values = a
-    res.idx = idx
-    return res
+    return a, idx
+
+
+def argtopk(a_plus_idx, k, axis, keepdims):
+    """ Chunk and combine function of argtopk
+
+    Extract the indices of the k largest elements from a on the given axis.
+    If k is negative, extract the indices of the -k smallest elements instead.
+    Note that, unlike in the parent function, the returned elements
+    are not sorted internally.
+    """
+    assert keepdims is True
+    axis = axis[0]
+
+    if isinstance(a_plus_idx, list):
+        a_plus_idx = list(flatten(a_plus_idx))
+        a = np.concatenate([ai for ai, _ in a_plus_idx], axis)
+        idx = np.concatenate([broadcast_to(idxi, ai.shape)
+                              for ai, idxi in a_plus_idx], axis)
+    else:
+        a, idx = a_plus_idx
+
+    if abs(k) >= a.shape[axis]:
+        return a_plus_idx
+
+    idx2 = np.argpartition(a, -k, axis=axis)
+    k_slice = slice(-k, None) if k > 0 else slice(-k)
+    idx2 = idx2[tuple(k_slice if i == axis else slice(None)
+                      for i in range(a.ndim))]
+    return take_along_axis(a, idx2, axis), take_along_axis(idx, idx2, axis)
+
+
+def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
+    """ Final aggregation function of argtopk
+
+    Invoke argtopk one final time, sort the results internally, drop the data
+    and return the index only.
+    """
+    assert keepdims is True
+    a, idx = argtopk(a_plus_idx, k, axis, keepdims)
+    axis = axis[0]
+
+    idx2 = np.argsort(a, axis=axis)
+    idx = take_along_axis(idx, idx2, axis)
+    if k < 0:
+        return idx
+    return idx[tuple(slice(None, None, -1) if i == axis else slice(None)
+                     for i in range(idx.ndim))]
 
 
 def arange(start, stop, step, length, dtype):
@@ -235,3 +285,114 @@ def view(x, dtype, order='C'):
     else:
         x = np.asfortranarray(x)
         return x.T.view(dtype).T
+
+
+def einsum(*operands, **kwargs):
+    subscripts = kwargs.pop('subscripts')
+    ncontract_inds = kwargs.pop('ncontract_inds')
+    dtype = kwargs.pop('kernel_dtype')
+    chunk = np.einsum(subscripts, *operands, dtype=dtype, **kwargs)
+
+    # Avoid concatenate=True in atop by adding 1's
+    # for the contracted dimensions
+    return chunk.reshape(chunk.shape + (1,) * ncontract_inds)
+
+
+def slice_with_int_dask_array(x, idx, offset, x_size, axis):
+    """ Chunk function of `slice_with_int_dask_array_on_axis`.
+    Slice one chunk of x by one chunk of idx.
+
+    Parameters
+    ----------
+    x: ndarray, any dtype, any shape
+        i-th chunk of x
+    idx: ndarray, ndim=1, dtype=any integer
+        j-th chunk of idx (cartesian product with the chunks of x)
+    offset: ndarray, shape=(1, ), dtype=int64
+        Index of the first element along axis of the current chunk of x
+    x_size: int
+        Total size of the x da.Array along axis
+    axis: int
+        normalized axis to take elements from (0 <= axis < x.ndim)
+
+    Returns
+    -------
+    x sliced along axis, using only the elements of idx that fall inside the
+    current chunk.
+    """
+    # Needed when idx is unsigned
+    idx = idx.astype(np.int64)
+
+    # Normalize negative indices
+    idx = np.where(idx < 0, idx + x_size, idx)
+
+    # A chunk of the offset dask Array is a numpy array with shape (1, ).
+    # It indicates the index of the first element along axis of the current
+    # chunk of x.
+    idx = idx - offset
+
+    # Drop elements of idx that do not fall inside the current chunk of x
+    idx_filter = (idx >= 0) & (idx < x.shape[axis])
+    idx = idx[idx_filter]
+
+    # np.take does not support slice indices
+    # return np.take(x, idx, axis)
+    return x[tuple(
+        idx if i == axis else slice(None)
+        for i in range(x.ndim)
+    )]
+
+
+def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
+    """ Final aggregation function of `slice_with_int_dask_array_on_axis`.
+    Aggregate all chunks of x by one chunk of idx, reordering the output of
+    `slice_with_int_dask_array`.
+
+    Note that there is no combine function, as a recursive aggregation (e.g.
+    with split_every) would not give any benefit.
+
+    Parameters
+    ----------
+    idx: ndarray, ndim=1, dtype=any integer
+        j-th chunk of idx
+    chunk_outputs: ndarray
+        concatenation along axis of the outputs of `slice_with_int_dask_array`
+        for all chunks of x and the j-th chunk of idx
+    x_chunks: tuple
+        dask chunks of the x da.Array along axis, e.g. ``(3, 3, 2)``
+    axis: int
+        normalized axis to take elements from (0 <= axis < x.ndim)
+
+    Returns
+    -------
+    Selection from all chunks of x for the j-th chunk of idx, in the correct
+    order
+    """
+    # Needed when idx is unsigned
+    idx = idx.astype(np.int64)
+
+    # Normalize negative indices
+    idx = np.where(idx < 0, idx + sum(x_chunks), idx)
+
+    x_chunk_offset = 0
+    chunk_output_offset = 0
+
+    # Assemble the final index that picks from the output of the previous
+    # kernel by adding together one layer per chunk of x
+    # FIXME: this could probably be reimplemented with a faster search-based
+    # algorithm
+    idx_final = np.zeros_like(idx)
+    for x_chunk in x_chunks:
+        idx_filter = (idx >= x_chunk_offset) & (idx < x_chunk_offset + x_chunk)
+        idx_cum = np.cumsum(idx_filter)
+        idx_final += np.where(idx_filter, idx_cum - 1 + chunk_output_offset, 0)
+        x_chunk_offset += x_chunk
+        if idx_cum.size > 0:
+            chunk_output_offset += idx_cum[-1]
+
+    # np.take does not support slice indices
+    # return np.take(chunk_outputs, idx_final, axis)
+    return chunk_outputs[tuple(
+        idx_final if i == axis else slice(None)
+        for i in range(chunk_outputs.ndim)
+    )]

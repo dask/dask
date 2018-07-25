@@ -39,7 +39,7 @@ Local Threads
 .. code-block:: python
 
    import dask
-   dask.set_options(get=dask.threaded.get)  # overwrite default with threaded scheduler
+   dask.config.set(scheduler='threads')  # overwrite default with threaded scheduler
 
 The threaded scheduler executes computations with a local ``multiprocessing.pool.ThreadPool``.
 It is lightweight and requires no setup.
@@ -52,7 +52,7 @@ such as is the case when operating on numeric data in NumPy arrays, Pandas dataf
 or using any of the other C/C++/Cython based projects in the ecosystem.
 
 The threaded scheduler is the default choice for
-:doc:`dask array <array>`, doc:`dask dataframe <dataframe>`, and :doc:`dask delayed <delayed>`.
+:doc:`dask array <array>`, :doc:`dask dataframe <dataframe>`, and :doc:`dask delayed <delayed>`.
 However if your computation is dominated by processing pure Python objects
 like strings, dicts, or lists,
 then you may want to try one of the process-based schedulers below
@@ -68,7 +68,7 @@ we encourage readers to continue reading after this section*
 .. code-block:: python
 
    import dask.multiprocessing
-   dask.set_options(get=dask.multiprocessing.get)  # overwrite default with multiprocessing scheduler
+   dask.config.set(scheduler='processes')  # overwrite default with multiprocessing scheduler
 
 
 The multiprocessing scheduler executes computations with a local ``multiprocessing.Pool``.
@@ -108,7 +108,7 @@ Single Thread
 .. code-block:: python
 
    import dask
-   dask.set_options(get=dask.local.get_sync)  # overwrite default with single-threaded scheduler
+   dask.config.set(scheduler='synchronous')  # overwrite default with single-threaded scheduler
 
 The single-threaded synchronous scheduler executes all computations in the local thread,
 with no parallelism at all.
@@ -155,16 +155,17 @@ You can also run Dask on a distributed cluster.
 There are a variety of ways to set this up depending on your cluster.
 We recommend referring to the :doc:`setup documentation <setup>` for more information.
 
+.. _scheduling-configuration:
 
 Configuration
 -------------
 
-You can configure the global default scheduler by using the ``dask.set_options(get=...)`` command.
+You can configure the global default scheduler by using the ``dask.config.set(scheduler...)`` command.
 This can be done globally,
 
 .. code-block:: python
 
-   dask.set_options(get=dask.threaded.get)
+   dask.config.set(scheduler='threads')
 
    x.compute()
 
@@ -172,14 +173,14 @@ or as a context manager
 
 .. code-block:: python
 
-   with dask.set_options(get=dask.threaded.get):
+   with dask.config.set(scheduler='threads'):
        x.compute()
 
 or within a single compute call
 
 .. code-block:: python
 
-   x.compute(get=dask.threaded.get)
+   x.compute(scheduler='threads')
 
 Additionally some of the scheduler support other keyword arguments.
 For example the Pool-based single-machine scheduler allow you to provide custom pools,
@@ -188,8 +189,8 @@ or specify the desired number of workers.
 .. code-block:: python
 
    from multiprocessing.pool import ThreadPool
-   with dask.set_options(pool=ThreadPool(4)):
+   with dask.config.set(pool=ThreadPool(4)):
        ...
 
-   with dask.set_options(num_workers=4):
+   with dask.config.set(num_workers=4):
        ...

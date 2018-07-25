@@ -498,6 +498,22 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
                              errmsg))
 
 
+def index_summary(idx, name=None):
+    """Summarized representation of an Index.
+    """
+    n = len(idx)
+    if name is None:
+        name = idx.__class__.__name__
+    if n:
+        head = idx[0]
+        tail = idx[-1]
+        summary = ', {} to {}'.format(head, tail)
+    else:
+        summary = ''
+
+    return "{}: {} entries{}".format(name, n, summary)
+
+
 ###############################################################
 # Testing
 ###############################################################
@@ -507,7 +523,7 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
     import dask.dataframe as dd
     if hasattr(dsk, 'dask'):
         if result is None:
-            result = dsk.compute(get=get_sync)
+            result = dsk.compute(scheduler='sync')
         if isinstance(dsk, dd.Index):
             assert isinstance(result, pd.Index), type(result)
             assert isinstance(dsk._meta, pd.Index), type(dsk._meta)

@@ -1,4 +1,5 @@
 import sys
+import textwrap
 from distutils.version import LooseVersion
 from itertools import product
 from operator import add
@@ -966,7 +967,7 @@ def test_unknown_divisions():
            ('x', 2): pd.DataFrame({'a': [7, 8, 9], 'b': [0, 0, 0]})}
     meta = make_meta({'a': 'i8', 'b': 'i8'})
     d = dd.DataFrame(dsk, 'x', meta, [None, None, None, None])
-    full = d.compute(get=dask.get)
+    full = d.compute(scheduler='sync')
 
     assert_eq(d.a.sum(), full.a.sum())
     assert_eq(d.a + d.b + 1, full.a + full.b + 1)
@@ -1388,7 +1389,7 @@ def test_embarrassingly_parallel_operations():
     assert_eq(a.notnull(), df.notnull())
     assert_eq(a.isnull(), df.isnull())
 
-    assert len(a.sample(0.5).compute()) < len(df)
+    assert len(a.sample(frac=0.5).compute()) < len(df)
 
 
 def test_fillna():
@@ -1461,24 +1462,44 @@ def test_sample():
                       index=[10, 20, 30, 40, 50, 60])
     a = dd.from_pandas(df, 2)
 
-    b = a.sample(0.5)
+    b = a.sample(frac=0.5)
 
     assert_eq(b, b)
 
-    c = a.sample(0.5, random_state=1234)
-    d = a.sample(0.5, random_state=1234)
+    c = a.sample(frac=0.5, random_state=1234)
+    d = a.sample(frac=0.5, random_state=1234)
     assert_eq(c, d)
 
-    assert a.sample(0.5)._name != a.sample(0.5)._name
+    assert a.sample(frac=0.5)._name != a.sample(frac=0.5)._name
 
 
 def test_sample_without_replacement():
     df = pd.DataFrame({'x': [1, 2, 3, 4, None, 6], 'y': list('abdabd')},
                       index=[10, 20, 30, 40, 50, 60])
     a = dd.from_pandas(df, 2)
-    b = a.sample(0.7, replace=False)
+    b = a.sample(frac=0.7, replace=False)
     bb = b.index.compute()
     assert len(bb) == len(set(bb))
+
+
+def test_sample_raises():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, None, 6], 'y': list('abdabd')},
+                      index=[10, 20, 30, 40, 50, 60])
+    a = dd.from_pandas(df, 2)
+
+    # Make sure frac is replaced with n when 0 <= n <= 1
+    # This is so existing code (i.e. ddf.sample(0.5)) won't break
+    with pytest.warns(UserWarning):
+        b = a.sample(0.5, random_state=1234)
+    c = a.sample(frac=0.5, random_state=1234)
+    assert_eq(b, c)
+
+    with pytest.raises(ValueError):
+        a.sample(n=10)
+
+    # Make sure frac is provided
+    with pytest.raises(ValueError):
+        a.sample(frac=None)
 
 
 def test_datetime_accessor():
@@ -1622,12 +1643,19 @@ def test_select_dtypes(include, exclude):
 
     # count dtypes
     tm.assert_series_equal(a.get_dtype_counts(), df.get_dtype_counts())
-    tm.assert_series_equal(a.get_ftype_counts(), df.get_ftype_counts())
 
     tm.assert_series_equal(result.get_dtype_counts(),
                            expected.get_dtype_counts())
-    tm.assert_series_equal(result.get_ftype_counts(),
-                           expected.get_ftype_counts())
+
+    if PANDAS_VERSION >= '0.23.0':
+        ctx = pytest.warns(FutureWarning)
+    else:
+        ctx = pytest.warns(None)
+
+    with ctx:
+        tm.assert_series_equal(a.get_ftype_counts(), df.get_ftype_counts())
+        tm.assert_series_equal(result.get_ftype_counts(),
+                               expected.get_ftype_counts())
 
 
 def test_deterministic_apply_concat_apply_names():
@@ -2107,7 +2135,7 @@ def test_cov_corr_stable():
 
 def test_cov_corr_mixed():
     size = 1000
-    d = {'dates' : pd.date_range('2015-01-01', periods=size, frequency='1T'),
+    d = {'dates' : pd.date_range('2015-01-01', periods=size, freq='1T'),
          'unique_id' : np.arange(0, size),
          'ints' : np.random.randint(0, size, size=size),
          'floats' : np.random.randn(size),
@@ -2425,9 +2453,11 @@ dtypes: int64(1)""")
 
     buf = StringIO()
     g.info(buf, verbose=False)
-    assert buf.getvalue() == unicode("""<class 'dask.dataframe.core.DataFrame'>
-Columns: 2 entries, (C, count) to (C, sum)
-dtypes: int64(2)""")
+    expected = unicode(textwrap.dedent("""\
+    <class 'dask.dataframe.core.DataFrame'>
+    Columns: 2 entries, ('C', 'count') to ('C', 'sum')
+    dtypes: int64(2)"""))
+    assert buf.getvalue() == expected
 
 
 def test_categorize_info():
@@ -2621,6 +2651,15 @@ def test_getitem_string_subclass():
     assert_eq(df[column_1], ddf[column_1])
 
 
+@pytest.mark.parametrize('col_type', [list, np.array, pd.Series, pd.Index])
+def test_getitem_column_types(col_type):
+    df = pd.DataFrame({'A': [1, 2], 'B': [3, 4], 'C': [5, 6]})
+    ddf = dd.from_pandas(df, 2)
+    cols = col_type(['C', 'A', 'B'])
+
+    assert_eq(df[cols], ddf[cols])
+
+
 def test_diff():
     df = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
     ddf = dd.from_pandas(df, 5)
@@ -2751,7 +2790,7 @@ def test_hash_split_unique(npartitions, split_every, split_out):
 
     assert len([k for k, v in dependencies.items() if not v]) == npartitions
     assert dropped.npartitions == (split_out or 1)
-    assert sorted(dropped.compute(get=dask.get)) == sorted(s.unique())
+    assert sorted(dropped.compute(scheduler='sync')) == sorted(s.unique())
 
 
 @pytest.mark.parametrize('split_every', [None, 2])
@@ -3137,3 +3176,18 @@ def test_meta_raises():
         ddf.a + ddf.c
 
     assert "meta=" not in str(info.value)
+
+
+def test_dask_dataframe_holds_scipy_sparse_containers():
+    sparse = pytest.importorskip('scipy.sparse')
+    da = pytest.importorskip('dask.array')
+    x = da.random.random((1000, 10), chunks=(100, 10))
+    x[x < 0.9] = 0
+    df = dd.from_dask_array(x)
+    y = df.map_partitions(sparse.csr_matrix)
+
+    assert isinstance(y, da.Array)
+
+    vs = y.to_delayed().flatten().tolist()
+    values = dask.compute(*vs, scheduler='single-threaded')
+    assert all(isinstance(v, sparse.csr_matrix) for v in values)

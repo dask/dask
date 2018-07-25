@@ -5,7 +5,7 @@ Example docker images are maintained at https://github.com/dask/dask-docker
 and https://hub.docker.com/r/daskdev/ .
 
 Each image installs the full Dask conda package (including the distributed
-scheduler), numpy, and pandas on top of a miniconda installation on top of
+scheduler), Numpy, and Pandas on top of a Miniconda installation on top of
 a Debian image.
 
 These images are large, around 1GB.
@@ -16,9 +16,24 @@ These images are large, around 1GB.
 
 -   ``daskdev/dask-notebook``: This is based on the
     `Jupyter base-notebook image <https://hub.docker.com/r/jupyter/base-notebook/>`_
-    and so is appropriate for use both normally as a Jupyter server, but also as
+    and so is appropriate for use both normally as a Jupyter server, and also as
     part of a JupyterHub deployment.  It also includes a matching Dask software
     environment described above.  This image is about 2GB in size.
+
+Example
+-------
+
+Here is a simple example on the local host network
+
+.. code-block:: bash
+
+   docker run -it --network host daskdev/dask dask-scheduler  # start scheduler
+
+   docker run -it --network host daskdev/dask dask-worker localhost:8786 # start worker
+   docker run -it --network host daskdev/dask dask-worker localhost:8786 # start worker
+   docker run -it --network host daskdev/dask dask-worker localhost:8786 # start worker
+
+   docker run -it --network host daskdev/dask-notebook  # start Jupyter server
 
 
 Extensibility
@@ -36,6 +51,9 @@ trigger calls to the following respectively::
 Note that using these can significantly delay the container from starting,
 especially when using ``apt``, or ``conda`` (``pip`` is relatively fast).
 
+Remember that it is important for software versions to match between Dask
+workers and Dask clients.  As a result it is often useful to include the same
+extra packages in both Jupyter and Worker images.
 
 Source
 ------

@@ -10,14 +10,14 @@ from .core import (normalize_chunks, Array, slices_from_chunks, asarray,
                    broadcast_shapes, broadcast_to)
 from .. import sharedict
 from ..base import tokenize
-from ..utils import ignoring, random_state_data
+from ..utils import ignoring, random_state_data, skip_doctest
 
 
 def doc_wraps(func):
     """ Copy docstring from one function to another """
     def _(func2):
         if func.__doc__ is not None:
-            func2.__doc__ = func.__doc__.replace('>>>', '>>').replace('...', '..')
+            func2.__doc__ = skip_doctest(func.__doc__)
         return func2
     return _
 
@@ -71,7 +71,8 @@ class RandomState(object):
             shapes += [size]
         # broadcast to the final size(shape)
         size = broadcast_shapes(*shapes)
-        chunks = normalize_chunks(chunks, size)
+        chunks = normalize_chunks(chunks, size,  # ideally would use dtype here
+                                  dtype=kwargs.get('dtype', np.float64))
         slices = slices_from_chunks(chunks)
 
         def _broadcast_any(ar, shape, chunks):
@@ -123,7 +124,7 @@ class RandomState(object):
         sizes = list(product(*chunks))
         state_data = random_state_data(len(sizes), self._numpy_state)
         token = tokenize(state_data, size, chunks, args, kwargs)
-        name = 'da.random.{0}-{1}'.format(func.__name__, token)
+        name = '{0}-{1}'.format(func.__name__, token)
 
         keys = product([name], *([range(len(bd)) for bd in chunks] +
                                  [[0]] * len(extra_chunks)))
@@ -215,7 +216,12 @@ class RandomState(object):
             elif not isinstance(size, (tuple, list)):
                 size = (size,)
 
-            chunks = normalize_chunks(chunks, size)
+            chunks = normalize_chunks(chunks, size, dtype=np.float64)
+            if not replace and len(chunks[0]) > 1:
+                    err_msg = ('replace=False is not currently supported for '
+                               'dask.array.choice with multi-chunk output '
+                               'arrays')
+                    raise NotImplementedError(err_msg)
             sizes = list(product(*chunks))
             state_data = random_state_data(len(sizes), self._numpy_state)
 

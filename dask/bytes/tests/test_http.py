@@ -1,6 +1,5 @@
 import os
 import pytest
-import requests
 import subprocess
 import sys
 import time
@@ -10,6 +9,7 @@ from dask.compatibility import PY2
 from dask.utils import tmpdir
 
 files = ['a', 'b']
+requests = pytest.importorskip('requests')
 
 
 @pytest.fixture(scope='module')
@@ -71,6 +71,8 @@ def test_ops_blocksize(dir_server):
     with f as f:
         # it's OK to read the whole file
         assert f.read() == data
+        # and now the file magically has a size
+        assert f.size == len(data)
 
     # note that if we reuse f from above, because it is tokenized, we get
     # the same open file - where is this cached?
@@ -124,6 +126,7 @@ def test_parquet():
                                    'n_comment']
 
 
+@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/3696")
 @pytest.mark.network
 def test_bag():
     # This test pulls from different hosts

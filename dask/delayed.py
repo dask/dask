@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 
 from collections import Iterator
 import operator
+import types
 import uuid
 
 try:
@@ -9,12 +10,12 @@ try:
 except ImportError:
     from toolz import curry, pluck
 
-from . import threaded
+from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
 from .base import tokenize as _tokenize
 from .compatibility import apply
 from .core import quote
-from .context import _globals, globalmethod
+from .context import globalmethod
 from .utils import funcname, methodcaller, OperatorMethodMixin
 from . import sharedict
 
@@ -111,7 +112,7 @@ def tokenize(*args, **kwargs):
     """
     pure = kwargs.pop('pure', None)
     if pure is None:
-        pure = _globals.get('delayed_pure', False)
+        pure = config.get('delayed_pure', False)
 
     if pure:
         return _tokenize(*args, **kwargs)
@@ -208,10 +209,10 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     >>> @delayed
     ... def mul(a, b):
     ...     return a * b
-    >>> with dask.set_options(delayed_pure=True):
+    >>> with dask.config.set(delayed_pure=True):
     ...     print(mul(1, 2).key == mul(1, 2).key)
     True
-    >>> with dask.set_options(delayed_pure=False):
+    >>> with dask.config.set(delayed_pure=False):
     ...     print(mul(1, 2).key == mul(1, 2).key)
     False
 
@@ -299,7 +300,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
 
     >>> a.count(2, dask_key_name="count_2")
     Delayed('count_2')
-    >>> with dask.set_options(delayed_pure=True):
+    >>> with dask.config.set(delayed_pure=True):
     ...     print(a.count(2).key == a.count(2).key)
     True
     """
@@ -434,6 +435,11 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
     __nonzero__ = __bool__
 
+    def __get__(self, instance, cls):
+        if instance is None:
+            return self
+        return types.MethodType(self, instance)
+
     @classmethod
     def _get_binary_operator(cls, op, inv=False):
         method = delayed(right(op) if inv else op, pure=True)
@@ -518,6 +524,12 @@ for op in [operator.abs, operator.neg, operator.pos, operator.invert,
            operator.eq, operator.ge, operator.gt, operator.ne, operator.le,
            operator.lt, operator.getitem]:
     Delayed._bind_operator(op)
+
+
+try:
+    Delayed._bind_operator(operator.matmul)
+except AttributeError:
+    pass
 
 
 def single_key(seq):

@@ -10,7 +10,6 @@ import dask
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, assert_dask_graph, assert_max_deps, PANDAS_VERSION
 
-
 AGG_FUNCS = ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'nunique', 'first', 'last']
 
 
@@ -198,8 +197,8 @@ def test_groupby_dir():
     assert 'b c d e' not in dir(g)
 
 
-@pytest.mark.parametrize('get', [dask.get, dask.threaded.get])
-def test_groupby_on_index(get):
+@pytest.mark.parametrize('scheduler', ['sync', 'threads'])
+def test_groupby_on_index(scheduler):
     pdf = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6, 7, 8, 9],
                         'b': [4, 5, 6, 3, 2, 1, 0, 0, 0]},
                        index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
@@ -215,7 +214,7 @@ def test_groupby_on_index(get):
     def func2(df):
         return df[['b']] - df[['b']].mean()
 
-    with dask.set_options(get=get):
+    with dask.config.set(scheduler=scheduler):
         with pytest.warns(None):
             assert_eq(ddf.groupby('a').apply(func),
                       pdf.groupby('a').apply(func))
@@ -359,19 +358,19 @@ def test_series_groupby_errors():
 
     msg = "No group keys passed!"
     with pytest.raises(ValueError) as err:
-        s.groupby([])    # pandas
+        s.groupby([])  # pandas
     assert msg in str(err.value)
     with pytest.raises(ValueError) as err:
-        ss.groupby([])   # dask should raise the same error
+        ss.groupby([])  # dask should raise the same error
     assert msg in str(err.value)
 
     sss = dd.from_pandas(s, npartitions=3)
     pytest.raises(NotImplementedError, lambda: ss.groupby(sss))
 
     with pytest.raises(KeyError):
-        s.groupby('x')    # pandas
+        s.groupby('x')  # pandas
     with pytest.raises(KeyError):
-        ss.groupby('x')   # dask should raise the same error
+        ss.groupby('x')  # dask should raise the same error
 
 
 def test_groupby_index_array():
@@ -675,7 +674,7 @@ def test_numeric_column_names():
     # This ensures that we cast all column iterables to list beforehand.
     df = pd.DataFrame({0: [0, 1, 0, 1],
                        1: [1, 2, 3, 4],
-                       2: [0, 1, 0, 1],})
+                       2: [0, 1, 0, 1], })
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.groupby(0).sum(), df.groupby(0).sum())
     assert_eq(ddf.groupby([0, 2]).sum(), df.groupby([0, 2]).sum())
@@ -689,7 +688,7 @@ def test_groupby_apply_tasks():
     df['B'] = df.B // 0.1
     ddf = dd.from_pandas(df, npartitions=10)
 
-    with dask.set_options(shuffle='tasks'):
+    with dask.config.set(shuffle='tasks'):
         for ind in [lambda x: 'A', lambda x: x.A]:
             a = df.groupby(ind(df)).apply(len)
             with pytest.warns(UserWarning):
@@ -705,11 +704,10 @@ def test_groupby_apply_tasks():
 
 
 def test_groupby_multiprocessing():
-    from dask.multiprocessing import get
     df = pd.DataFrame({'A': [1, 2, 3, 4, 5],
-                       'B': ['1','1','a','a','a']})
+                       'B': ['1', '1', 'a', 'a', 'a']})
     ddf = dd.from_pandas(df, npartitions=3)
-    with dask.set_options(get=get):
+    with dask.config.set(scheduler='processes'):
         assert_eq(ddf.groupby('B').apply(lambda x: x, meta={"A": int,
                                                             "B": object}),
                   df.groupby('B').apply(lambda x: x))
@@ -736,8 +734,8 @@ def test_groupby_normalize_index():
     {'b': np.sum, 'c': ['min', np.max, np.std, np.var]},
     ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'first', 'last'],
     'var',
-    {'b':'mean', 'c': 'first', 'd': 'last', 'a': ['first', 'last']},
-    {'b': {'c': 'mean'}, 'c':{'a': 'first', 'b': 'last'}},
+    {'b': 'mean', 'c': 'first', 'd': 'last', 'a': ['first', 'last']},
+    {'b': {'c': 'mean'}, 'c': {'a': 'first', 'b': 'last'}},
 ])
 @pytest.mark.parametrize('split_every', [False, None])
 @pytest.mark.parametrize('grouper', [
@@ -932,6 +930,7 @@ def test_series_aggregations_multilevel(grouper, agg_func):
     similar to ``test_dataframe_aggregations_multilevel``, but series do not
     support all groupby args.
     """
+
     def call(g, m, **kwargs):
         return getattr(g, m)(**kwargs)
 
@@ -1101,7 +1100,7 @@ def test_groupby_not_supported():
 
 
 def test_groupby_numeric_column():
-    df = pd.DataFrame({'A' : ['foo', 'foo', 'bar'], 0: [1,2,3]})
+    df = pd.DataFrame({'A': ['foo', 'foo', 'bar'], 0: [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=3)
 
     assert_eq(ddf.groupby(ddf.A)[0].sum(),
@@ -1170,6 +1169,57 @@ def test_groupby_unaligned_index():
         assert_eq(res, sol)
 
 
+def test_groupby_dataframe_cum_caching():
+    """Test caching behavior of cumulative operations on grouped dataframes.
+
+    Relates to #3756.
+    """
+    df = pd.DataFrame(dict(a=list('aabbcc')),
+                      index=pd.date_range(start='20100101', periods=6))
+    df['ones'] = 1
+    df['twos'] = 2
+
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    ops = ['cumsum', 'cumprod']
+
+    for op in ops:
+        ddf0 = getattr(ddf.groupby(['a']), op)()
+        ddf1 = ddf.rename(columns={'ones': 'foo', 'twos': 'bar'})
+        ddf1 = getattr(ddf1.groupby(['a']), op)()
+
+        # _a and _b dataframe should be equal
+        res0_a, res1_a = dask.compute(ddf0, ddf1)
+        res0_b, res1_b = ddf0.compute(), ddf1.compute()
+
+        assert res0_a.equals(res0_b)
+        assert res1_a.equals(res1_b)
+
+
+def test_groupby_series_cum_caching():
+    """Test caching behavior of cumulative operations on grouped Series
+
+    Relates to #3755
+    """
+    df = pd.DataFrame(dict(a=list('aabbcc')),
+                      index=pd.date_range(start='20100101', periods=6))
+    df['ones'] = 1
+    df['twos'] = 2
+
+    ops = ['cumsum', 'cumprod']
+    for op in ops:
+        ddf = dd.from_pandas(df, npartitions=3)
+        dcum = ddf.groupby(['a'])
+        res0_a, res1_a = dask.compute(getattr(dcum['ones'], op)(),
+                                      getattr(dcum['twos'], op)())
+        cum = df.groupby(['a'])
+        res0_b, res1_b = (getattr(cum['ones'], op)(),
+                          getattr(cum['twos'], op)())
+
+        assert res0_a.equals(res0_b)
+        assert res1_a.equals(res1_b)
+
+
 def test_groupby_slice_agg_reduces():
     d = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2, 3, 4, 5]})
     a = dd.from_pandas(d, npartitions=2)
@@ -1209,7 +1259,6 @@ def test_groupby_agg_grouper_multiple(slice_):
     'std', 'min', 'max', 'first', 'last'
 ])
 def test_groupby_column_and_index_agg_funcs(agg_func):
-
     def call(g, m, **kwargs):
         return getattr(g, m)(**kwargs)
 

@@ -88,7 +88,7 @@ exclude_patterns = []
 #show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+pygments_style = 'default'
 
 # A list of ignored prefixes for module index sorting.
 #modindex_common_prefix = []
@@ -314,6 +314,7 @@ redirect_files = [
     ('scheduler-choice.html', 'setup.html'),
     ('diagnostics.html', 'diagnostics-local.html'),
     ('inspect.html', 'graphviz.html'),
+    ('faq.html', 'https://stackoverflow.com/questions/tagged/dask?sort=frequent'),
 ]
 
 

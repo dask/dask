@@ -8,7 +8,6 @@ import dask.array as da
 from dask.array.ghost import (fractional_slice, getitem, trim_internal,
                               ghost_internal, nearest, constant, boundaries,
                               reflect, periodic, ghost)
-from dask.core import get
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -31,7 +30,7 @@ def test_ghost_internal():
     d = da.from_array(x, chunks=(4, 4))
 
     g = ghost_internal(d, {0: 2, 1: 1})
-    result = g.compute(get=get)
+    result = g.compute(scheduler='sync')
     assert g.chunks == ((6, 6), (5, 5))
 
     expected = np.array([
@@ -366,3 +365,53 @@ def test_ghost_small():
 
     y = x.map_overlap(lambda x: x, depth=1, boundary='none')
     assert len(y.dask) < 100
+
+
+def test_no_shared_keys_with_different_depths():
+    da.random.seed(0)
+    a = da.random.random((9, 9), chunks=(3, 3))
+
+    def check(x):
+        assert x.shape == (3, 3)
+        return x
+
+    r = [a.map_overlap(lambda a: a + 1,
+                       dtype=a.dtype,
+                       depth={j: int(i == j) for j in range(a.ndim)},
+                       boundary="none").map_blocks(check, dtype=a.dtype)
+         for i in range(a.ndim)]
+
+    assert set(r[0].dask) & set(r[1].dask) == set(a.dask)
+    da.compute(*r, scheduler='single-threaded')
+
+
+def test_overlap_few_dimensions_small():
+    x = da.ones((20, 20), chunks=(10, 10))
+
+    a = x.map_overlap(lambda x: x, depth={0: 1})
+    assert_eq(x, a)
+    assert any(isinstance(k[1], float) for k in a.dask)
+    assert all(isinstance(k[2], int) for k in a.dask)
+
+    b = x.map_overlap(lambda x: x, depth={1: 1})
+    assert_eq(x, b)
+    assert all(isinstance(k[1], int) for k in b.dask)
+    assert any(isinstance(k[2], float) for k in b.dask)
+
+    c = x.map_overlap(lambda x: x, depth={0: 1, 1: 1})
+    assert_eq(x, c)
+    assert any(isinstance(k[1], float) for k in c.dask)
+    assert any(isinstance(k[2], float) for k in c.dask)
+
+
+def test_overlap_few_dimensions():
+    x = da.ones((100, 100), chunks=(10, 10))
+
+    a = x.map_overlap(lambda x: x, depth={0: 1})
+    b = x.map_overlap(lambda x: x, depth={1: 1})
+    c = x.map_overlap(lambda x: x, depth={0: 1, 1: 1})
+
+    assert len(a.dask) == len(b.dask)
+    assert len(a.dask) < len(c.dask)
+
+    assert len(c.dask) < 10 * len(a.dask)

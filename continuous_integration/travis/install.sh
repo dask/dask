@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Install conda
 case "$(uname -s)" in
     'Darwin')
@@ -44,10 +45,12 @@ conda install -q -c conda-forge \
     graphviz \
     h5py \
     ipython \
+    lz4 \
     partd \
     psutil \
     pytables \
     "pytest<=3.1.1" \
+    requests \
     scikit-image \
     scikit-learn \
     scipy \

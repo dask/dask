@@ -11,6 +11,7 @@ except ImportError:
     from toolz import curry
 
 from ..base import tokenize
+from ..utils import funcname
 from .core import Array, normalize_chunks
 
 
@@ -27,14 +28,16 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
         shape = (shape,)
 
     chunks = kwargs.pop('chunks', None)
-    chunks = normalize_chunks(chunks, shape)
-    name = kwargs.pop('name', None)
 
     dtype = kwargs.pop('dtype', None)
     if dtype is None:
         dtype = func(shape, *args, **kwargs).dtype
+    dtype = np.dtype(dtype)
 
-    name = name or 'wrapped-' + tokenize(func, shape, chunks, dtype, args, kwargs)
+    chunks = normalize_chunks(chunks, shape, dtype=dtype)
+    name = kwargs.pop('name', None)
+
+    name = name or funcname(func) + '-' + tokenize(func, shape, chunks, dtype, args, kwargs)
 
     keys = product([name], *[range(len(bd)) for bd in chunks])
     shapes = product(*chunks)

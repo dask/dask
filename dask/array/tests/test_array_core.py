@@ -20,9 +20,8 @@ import dask
 import dask.array as da
 from dask.base import tokenize, compute_as_if_collection
 from dask.delayed import Delayed, delayed
-from dask.local import get_sync
-from dask.utils import ignoring, tmpfile, tmpdir
-from dask.utils_test import inc
+from dask.utils import ignoring, tmpfile, tmpdir, key_split
+from dask.utils_test import inc, dec
 
 from dask.array import chunk
 
@@ -218,6 +217,32 @@ def test_Array_computation():
     assert float(a[0, 0]) == 1
 
 
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.14.0',
+                    reason="NumPy doesn't have `np.linalg._umath_linalg` yet")
+@pytest.mark.xfail(reason="Protect from `np.linalg._umath_linalg.inv` breaking")
+def test_Array_numpy_gufunc_call__array_ufunc__01():
+    x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
+    nx = x.compute()
+    ny = np.linalg._umath_linalg.inv(nx)
+    y = np.linalg._umath_linalg.inv(x, output_dtypes=float)
+    vy = y.compute()
+    assert_eq(ny, vy)
+
+
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.14.0',
+                    reason="NumPy doesn't have `np.linalg._umath_linalg` yet")
+@pytest.mark.xfail(reason="Protect from `np.linalg._umath_linalg.eig` breaking")
+def test_Array_numpy_gufunc_call__array_ufunc__02():
+    x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
+    nx = x.compute()
+    nw, nv = np.linalg._umath_linalg.eig(nx)
+    w, v = np.linalg._umath_linalg.eig(x, output_dtypes=(float, float))
+    vw = w.compute()
+    vv = v.compute()
+    assert_eq(nw, vw)
+    assert_eq(nv, vv)
+
+
 def test_stack():
     a, b, c = [Array(getem(name, chunks=(2, 3), shape=(4, 6)),
                      name, chunks=(2, 3), dtype='f8', shape=(4, 6))
@@ -229,6 +254,7 @@ def test_stack():
 
     assert s.shape == (3, 4, 6)
     assert s.chunks == ((1, 1, 1), (2, 2), (3, 3))
+    assert s.chunksize == (1, 2, 3)
     assert s.dask[(s.name, 0, 1, 0)] == (getitem, ('A', 1, 0),
                                          (None, colon, colon))
     assert s.dask[(s.name, 2, 1, 0)] == (getitem, ('C', 1, 0),
@@ -238,6 +264,7 @@ def test_stack():
     s2 = stack([a, b, c], axis=1)
     assert s2.shape == (4, 3, 6)
     assert s2.chunks == ((2, 2), (1, 1, 1), (3, 3))
+    assert s2.chunksize == (2, 1, 3)
     assert s2.dask[(s2.name, 0, 1, 0)] == (getitem, ('B', 0, 0),
                                            (colon, None, colon))
     assert s2.dask[(s2.name, 1, 1, 0)] == (getitem, ('B', 1, 0),
@@ -247,6 +274,7 @@ def test_stack():
     s2 = stack([a, b, c], axis=2)
     assert s2.shape == (4, 6, 3)
     assert s2.chunks == ((2, 2), (3, 3), (1, 1, 1))
+    assert s2.chunksize == (2, 3, 1)
     assert s2.dask[(s2.name, 0, 1, 0)] == (getitem, ('A', 0, 1),
                                            (colon, colon, None))
     assert s2.dask[(s2.name, 1, 1, 2)] == (getitem, ('C', 1, 1),
@@ -1072,11 +1100,9 @@ def test_map_blocks():
     assert_eq(e, x + 1)
 
     e = d.map_blocks(inc, name='increment')
-    assert e.name == 'increment'
+    assert e.name.startswith('increment-')
 
-    e = d.map_blocks(inc, token='increment')
-    assert e.name != 'increment'
-    assert e.name.startswith('increment')
+    assert d.map_blocks(inc, name='foo').name != d.map_blocks(dec, name='foo').name
 
     d = from_array(x, chunks=(10, 10))
     e = d.map_blocks(lambda x: x[::2, ::2], chunks=(5, 5), dtype=d.dtype)
@@ -1109,6 +1135,26 @@ def test_map_blocks2():
 
     assert_eq(out, expected)
     assert same_keys(d.map_blocks(func, dtype='i8', c=1), out)
+
+
+def test_map_blocks_block_info():
+    x = da.arange(50, chunks=10)
+
+    def func(a, b, c, block_info=None):
+        for idx in [0, 2]:  # positions in args
+            assert block_info[idx]['shape'] == (50,)
+            assert block_info[idx]['num-chunks'] == (5,)
+            start, stop = block_info[idx]['array-location'][0]
+            assert stop - start == 10
+            assert 0 <= start <= 40
+            assert 10 <= stop <= 50
+
+            assert 0 <= block_info[idx]['chunk-location'][0] <= 4
+
+        return a + b + c
+
+    z = da.map_blocks(func, x, 100, x + 1, dtype=x.dtype)
+    assert_eq(z, x + x + 1 + 100)
 
 
 def test_map_blocks_with_constants():
@@ -1174,7 +1220,7 @@ def test_from_function_requires_block_args():
 
 def test_repr():
     d = da.ones((4, 4), chunks=(2, 2))
-    assert d.name[:5] in repr(d)
+    assert key_split(d.name) in repr(d)
     assert str(d.shape) in repr(d)
     assert str(d.dtype) in repr(d)
     d = da.ones((4000, 4), chunks=(4, 2))
@@ -1196,7 +1242,7 @@ def test_slicing_with_ndarray():
     assert_eq(d[np.arange(8)], x)
     assert_eq(d[np.ones(8, dtype=bool)], x)
     assert_eq(d[np.array([1])], x[[1]])
-    assert_eq(d[np.array([True])], x[[0]])
+    assert_eq(d[np.array([True, False, True] + [False] * 5)], x[[0, 2]])
 
 
 def test_dtype():
@@ -1217,7 +1263,7 @@ def test_blockdims_from_blockshape():
 def test_coerce():
     d0 = da.from_array(np.array(1), chunks=(1,))
     d1 = da.from_array(np.array([1]), chunks=(1,))
-    with dask.set_options(get=dask.get):
+    with dask.config.set(scheduler='sync'):
         for d in d0, d1:
             assert bool(d) is True
             assert int(d) == 1
@@ -1343,7 +1389,7 @@ def test_store_regions():
     a, b = d + 1, d + 2
     a = a[:, 1:, :].astype(float)
 
-    region = (slice(None,None,2), slice(None), [1, 2, 4, 5])
+    region = (slice(None, None, 2), slice(None), [1, 2, 4, 5])
 
     # Single region:
     at = np.zeros(shape=(8, 3, 6))
@@ -1455,6 +1501,14 @@ def test_store_compute_false():
     assert (at == 2).all() and (bt == 3).all()
 
 
+def test_store_nocompute_regions():
+    x = da.ones(10, chunks=1)
+    y = np.zeros((2, 10))
+    d1 = da.store(x, y, regions=(0,), compute=False)
+    d2 = da.store(x, y, regions=(1,), compute=False)
+    assert d1.key != d2.key
+
+
 class ThreadSafetyError(Exception):
     pass
 
@@ -1517,18 +1571,18 @@ def test_store_locks():
     # Ensure same lock applies over multiple stores
     at = NonthreadSafeStore()
     v = store([a, b], [at, at], lock=lock,
-              get=dask.threaded.get, num_workers=10)
+              scheduler='threads', num_workers=10)
     assert v is None
 
     # Don't assume thread safety by default
     at = NonthreadSafeStore()
-    assert store(a, at, get=dask.threaded.get, num_workers=10) is None
-    assert a.store(at, get=dask.threaded.get, num_workers=10) is None
+    assert store(a, at, scheduler='threads', num_workers=10) is None
+    assert a.store(at, scheduler='threads', num_workers=10) is None
 
     # Ensure locks can be removed
     at = ThreadSafeStore()
     for i in range(10):
-        st = a.store(at, lock=False, get=dask.threaded.get, num_workers=10)
+        st = a.store(at, lock=False, scheduler='threads', num_workers=10)
         assert st is None
         if at.max_concurrent_uses > 1:
             break
@@ -1565,7 +1619,7 @@ def test_store_method_return():
         for return_stored in [False, True]:
             at = np.zeros(shape=(10, 10))
             r = a.store(
-                at, get=dask.threaded.get,
+                at, scheduler='threads',
                 compute=compute, return_stored=return_stored
             )
 
@@ -1583,7 +1637,7 @@ def test_store_multiprocessing_lock():
     a = d + 1
 
     at = np.zeros(shape=(10, 10))
-    st = a.store(at, get=dask.multiprocessing.get, num_workers=10)
+    st = a.store(at, scheduler='processes', num_workers=10)
     assert st is None
 
 
@@ -1890,7 +1944,7 @@ def test_slicing_with_non_ndarrays():
             return np.arange(self.start, self.stop)
 
     class ARangeSlicable(object):
-        dtype = 'i8'
+        dtype = np.dtype('i8')
 
         def __init__(self, n):
             self.n = n
@@ -1960,39 +2014,91 @@ class MyArray(object):
         self.x = x
         self.dtype = x.dtype
         self.shape = x.shape
+        self.ndim = len(x.shape)
 
     def __getitem__(self, i):
         return self.x[i]
 
 
-def test_from_array_tasks_always_call_getter():
-    x1 = np.arange(25).reshape((5, 5))
-    x2 = np.array([[1]])
-    x3 = np.array(1)[()]
-
-    dx1a = da.from_array(MyArray(x1), chunks=(5, 5), asarray=False)
-    dx1b = da.from_array(MyArray(x1), chunks=x1.shape, asarray=False)
-    dx2 = da.from_array(MyArray(x2), chunks=1, asarray=False)
-    dx3 = da.from_array(MyArray(x3), chunks=1, asarray=False)
-
-    for res, sol in [(dx1a, x1), (dx1b, x1), (dx2, x2), (dx3, x3)]:
-        assert_eq(res, sol)
+@pytest.mark.parametrize('x,chunks', [
+    (np.arange(25).reshape((5, 5)), (5, 5)),
+    (np.arange(25).reshape((5, 5)), -1),
+    (np.array([[1]]), 1),
+    (np.array(1), 1),
+])
+def test_from_array_tasks_always_call_getter(x, chunks):
+    dx = da.from_array(MyArray(x), chunks=chunks, asarray=False)
+    assert_eq(x, dx)
 
 
-def test_from_array_no_asarray():
+def test_from_array_ndarray_onechunk():
+    """ndarray with a single chunk produces a minimal single key dict
+    """
+    x = np.array([[1, 2], [3, 4]])
+    dx = da.from_array(x, chunks=-1)
+    assert_eq(x, dx)
+    assert len(dx.dask) == 1
+    assert dx.dask[dx.name, 0, 0] is x
 
-    def assert_chunks_are_of_type(x, cls):
+
+def test_from_array_ndarray_getitem():
+    """For ndarray, don't use getter / getter_nofancy; use the cleaner
+    operator.getitem"""
+    x = np.array([[1, 2], [3, 4]])
+    dx = da.from_array(x, chunks=(1, 2))
+    assert_eq(x, dx)
+    assert dx.dask[dx.name, 0, 0][0] == operator.getitem
+
+
+@pytest.mark.parametrize(
+    'x', [[1, 2], (1, 2), memoryview(b'abc')] +
+    ([buffer(b'abc')] if sys.version_info[0] == 2 else []))  # noqa: F821
+def test_from_array_list(x):
+    """Lists, tuples, and memoryviews are automatically converted to ndarray
+    """
+    dx = da.from_array(x, chunks=-1)
+    assert_eq(np.array(x), dx)
+    assert isinstance(dx.dask[dx.name, 0], np.ndarray)
+
+    dx = da.from_array(x, chunks=1)
+    assert_eq(np.array(x), dx)
+    assert dx.dask[dx.name, 0][0] == operator.getitem
+    assert isinstance(dx.dask[dx.name.replace('array', 'array-original')],
+                      np.ndarray)
+
+
+@pytest.mark.parametrize(
+    'type_', [t for t in np.ScalarType if t not in [memoryview] +
+              ([buffer] if sys.version_info[0] == 2 else [])])  # noqa: F821
+def test_from_array_scalar(type_):
+    """Python and numpy scalars are automatically converted to ndarray
+    """
+    if type_ == np.datetime64:
+        x = np.datetime64('2000-01-01')
+    else:
+        x = type_(1)
+
+    dx = da.from_array(x, chunks=-1)
+    assert_eq(np.array(x), dx)
+    assert isinstance(dx.dask[dx.name, ], np.ndarray)
+
+
+@pytest.mark.parametrize('asarray,cls', [
+    (True, np.ndarray),
+    (False, np.matrix),
+])
+def test_from_array_no_asarray(asarray, cls):
+
+    def assert_chunks_are_of_type(x):
         chunks = compute_as_if_collection(Array, x.dask, x.__dask_keys__())
         for c in concat(chunks):
             assert type(c) is cls
 
     x = np.matrix(np.arange(100).reshape((10, 10)))
-
-    for asarray, cls in [(True, np.ndarray), (False, np.matrix)]:
-        dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
-        assert_chunks_are_of_type(dx, cls)
-        assert_chunks_are_of_type(dx[0:5], cls)
-        assert_chunks_are_of_type(dx[0:5][:, 0], cls)
+    dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
+    assert_chunks_are_of_type(dx)
+    assert_chunks_are_of_type(dx[0:5])
+    assert_chunks_are_of_type(dx[0:5][:, 0])
 
 
 def test_from_array_getitem():
@@ -2015,6 +2121,16 @@ def test_from_array_minus_one():
     y = da.from_array(x, -1)
     assert y.chunks == ((10,),)
     assert_eq(x, y)
+
+
+def test_from_array_copy():
+    # Regression test for https://github.com/dask/dask/issues/3751
+    x = np.arange(10)
+    y = da.from_array(x, -1)
+    assert y.npartitions == 1
+    y_c = y.copy()
+    assert y is not y_c
+    assert y.compute() is not y_c.compute()
 
 
 def test_asarray():
@@ -2123,6 +2239,51 @@ def test_from_array_with_missing_chunks():
 
 def test_normalize_chunks():
     assert normalize_chunks(3, (4, 6)) == ((3, 1), (3, 3))
+    assert normalize_chunks(((3, 3), (8,)), (6, 8)) == ((3, 3), (8, ))
+    assert normalize_chunks((4, 5), (9,)) == ((4, 5), )
+    assert normalize_chunks((4, 5), (9, 9)) == ((4, 4, 1), (5, 4))
+    assert normalize_chunks(-1, (5, 5)) == ((5,), (5, ))
+    assert normalize_chunks((3, -1), (5, 5)) == ((3, 2), (5, ))
+    assert normalize_chunks({0: 3}, (5, 5)) == ((3, 2), (5,))
+    assert normalize_chunks([[2, 2], [3, 3]]) == ((2, 2), (3, 3))
+    assert normalize_chunks(10, (30, 5)), ((10, 10, 10), (5,))
+    assert normalize_chunks((), (0, 0)), ((0,), (0,))
+    assert normalize_chunks(-1, (0, 3)), ((0,), (3,))
+    assert normalize_chunks("auto", shape=(20,), limit=5, dtype='uint8') == \
+        ((5, 5, 5, 5),)
+
+    with pytest.raises(ValueError):
+        normalize_chunks(((10,), ), (11, ))
+    with pytest.raises(ValueError):
+        normalize_chunks(((5, ), (5, )), (5, ))
+
+
+def test_align_chunks_to_previous_chunks():
+    chunks = normalize_chunks('auto',
+                              shape=(2000,),
+                              previous_chunks=(512,),
+                              limit='600 B', dtype=np.uint8)
+    assert chunks == ((512, 512, 512, 2000 - 512 * 3),)
+
+    chunks = normalize_chunks('auto',
+                              shape=(2000,),
+                              previous_chunks=(128,),
+                              limit='600 B', dtype=np.uint8)
+    assert chunks == ((512, 512, 512, 2000 - 512 * 3),)
+
+    chunks = normalize_chunks('auto',
+                              shape=(2000,),
+                              previous_chunks=(512,),
+                              limit='1200 B', dtype=np.uint8)
+    assert chunks == ((1024, 2000 - 1024),)
+
+    chunks = normalize_chunks('auto',
+                              shape=(3, 10211, 10376),
+                              previous_chunks=(1, 512, 512),
+                              limit='1MiB', dtype=np.float32)
+    assert chunks[0] == (1, 1, 1)
+    assert all(c % 512 == 0 for c in chunks[1][:-1])
+    assert all(c % 512 == 0 for c in chunks[2][:-1])
 
 
 def test_raise_on_no_chunks():
@@ -2168,9 +2329,9 @@ def test_h5py_newaxis():
         with h5py.File(fn) as f:
             x = f.create_dataset('/x', shape=(10, 10), dtype='f8')
             d = da.from_array(x, chunks=(5, 5))
-            assert d[None, :, :].compute(get=get_sync).shape == (1, 10, 10)
-            assert d[:, None, :].compute(get=get_sync).shape == (10, 1, 10)
-            assert d[:, :, None].compute(get=get_sync).shape == (10, 10, 1)
+            assert d[None, :, :].compute(scheduler='sync').shape == (1, 10, 10)
+            assert d[:, None, :].compute(scheduler='sync').shape == (10, 1, 10)
+            assert d[:, :, None].compute(scheduler='sync').shape == (10, 10, 1)
             assert same_keys(d[:, :, None], d[:, :, None])
 
 
@@ -2292,7 +2453,6 @@ def test_vindex_negative():
 def test_vindex_errors():
     d = da.ones((5, 5, 5), chunks=(3, 3, 3))
     pytest.raises(IndexError, lambda: d.vindex[np.newaxis])
-    pytest.raises(IndexError, lambda: d.vindex[:5])
     pytest.raises(IndexError, lambda: d.vindex[[1, 2], [1, 2, 3]])
     pytest.raises(IndexError, lambda: d.vindex[[True] * 5])
     pytest.raises(IndexError, lambda: d.vindex[[0], [5]])
@@ -2308,6 +2468,25 @@ def test_vindex_merge():
     assert (_vindex_merge(locations, values) == np.array([[40, 50, 60],
                                                           [1, 2, 3],
                                                           [10, 20, 30]])).all()
+
+
+def test_vindex_identity():
+    rng = da.random.RandomState(42)
+    a, b = 10, 20
+
+    x = rng.random(a, chunks=a // 2)
+    assert x is x.vindex[:]
+    assert x is x.vindex[:a]
+    pytest.raises(IndexError, lambda: x.vindex[:a - 1])
+    pytest.raises(IndexError, lambda: x.vindex[1:])
+    pytest.raises(IndexError, lambda: x.vindex[0:a:2])
+
+    x = rng.random((a, b), chunks=(a // 2, b // 2))
+    assert x is x.vindex[:, :]
+    assert x is x.vindex[:a, :b]
+    pytest.raises(IndexError, lambda: x.vindex[:, :b - 1])
+    pytest.raises(IndexError, lambda: x.vindex[:, 1:])
+    pytest.raises(IndexError, lambda: x.vindex[:, 0:b:2])
 
 
 def test_empty_array():
@@ -2739,7 +2918,6 @@ def test_map_blocks_name():
 
 def test_from_array_names():
     pytest.importorskip('distributed')
-    from distributed.utils import key_split
 
     x = np.ones(10)
     d = da.from_array(x, chunks=2)
@@ -3152,10 +3330,12 @@ def test_concatenate_errs():
 
 def test_stack_errs():
     with pytest.raises(ValueError) as e:
-        da.stack([da.zeros((2), chunks=(2)),
-                  da.zeros((3), chunks=(3))])
-    assert 'shape' in str(e).lower()
-    assert '(2,)' in str(e)
+        da.stack([da.zeros((2,), chunks=(2))] * 10 +
+                 [da.zeros((3,), chunks=(3))] * 10)
+
+    assert 'shape' in str(e.value).lower()
+    assert '(2,)' in str(e.value)
+    assert len(str(e.value)) < 105
 
 
 def test_atop_with_numpy_arrays():
@@ -3188,13 +3368,13 @@ def test_elemwise_with_lists(chunks, other):
 def test_constructor_plugin():
     L = []
     L2 = []
-    with dask.set_options(array_plugins=[L.append, L2.append]):
+    with dask.config.set(array_plugins=[L.append, L2.append]):
         x = da.ones(10, chunks=5)
         y = x + 1
 
     assert L == L2 == [x, y]
 
-    with dask.set_options(array_plugins=[lambda x: x.compute()]):
+    with dask.config.set(array_plugins=[lambda x: x.compute()]):
         x = da.ones(10, chunks=5)
         y = x + 1
 
@@ -3232,3 +3412,219 @@ def test_meta(dtype):
     assert a._meta.dtype == a.dtype
     assert isinstance(a._meta, np.ndarray)
     assert a.nbytes < 1000
+
+
+@pytest.mark.parametrize('shape,limit,expected', [
+    (100, 10, (10,) * 10),
+    (20, 10, (10, 10)),
+    (20, 5, (5, 5, 5, 5)),
+    (24, 5, (4, 4, 4, 4, 4, 4)),  # common factor is close, use it
+    (23, 5, (5, 5, 5, 5, 3)),  # relatively prime, don't use 1s
+    (1000, 167, (125,) * 8),  # find close value
+])
+def test_normalize_chunks_auto_1d(shape, limit, expected):
+    result = normalize_chunks('auto', (shape,), limit=limit * 8, dtype=np.float64)
+    assert result == (expected,)
+
+
+@pytest.mark.parametrize('shape,chunks,limit,expected', [
+    ((20, 20), ('auto', 2), 20, ((10, 10), (2,) * 10)),
+    ((20, 20), ('auto', (2, 2, 2, 2, 2, 5, 5)), 20, ((4, 4, 4, 4, 4), (2, 2, 2, 2, 2, 5, 5))),
+    ((1, 20), 'auto', 10, ((1,), (10, 10))),
+])
+def test_normalize_chunks_auto_2d(shape, chunks, limit, expected):
+    result = normalize_chunks(chunks, shape, limit=limit, dtype='uint8')
+    assert result == expected
+
+
+def test_normalize_chunks_auto_3d():
+    result = normalize_chunks(('auto', 'auto', 2), (20, 20, 20), limit=200, dtype='uint8')
+    expected = ((10, 10), (10, 10), (2,) * 10)
+    assert result == expected
+
+    result = normalize_chunks('auto', (20, 20, 20), limit=8, dtype='uint8')
+    expected = ((2,) * 10,) * 3
+    assert result == expected
+
+
+def test_constructors_chunks_dict():
+    x = da.ones((20, 20), chunks={0: 10, 1: 5})
+    assert x.chunks == ((10, 10), (5, 5, 5, 5))
+
+    x = da.ones((20, 20), chunks={0: 10, 1: "auto"})
+    assert x.chunks == ((10, 10), (20,))
+
+
+def test_from_array_chunks_dict():
+    with dask.config.set({'array.chunk-size': '128kiB'}):
+        x = np.empty((100, 100, 100))
+        y = da.from_array(x, chunks={0: 10, 1: -1, 2: 'auto'})
+        z = da.from_array(x, chunks=(10, 100, 10))
+        assert y.chunks == z.chunks
+
+
+@pytest.mark.parametrize('dtype', [object, [('a', object), ('b', int)]])
+def test_normalize_chunks_object_dtype(dtype):
+    x = np.array(['a', 'abc'], dtype=object)
+    with pytest.raises(NotImplementedError):
+        da.from_array(x, chunks='auto')
+
+
+def test_normalize_chunks_tuples_of_tuples():
+    result = normalize_chunks(((2, 3, 5), 'auto'), (10, 10), limit=10, dtype=np.uint8)
+    expected = ((2, 3, 5), (2, 2, 2, 2, 2))
+    assert result == expected
+
+
+def test_normalize_chunks_nan():
+    with pytest.raises(ValueError) as info:
+        normalize_chunks('auto', (np.nan,), limit=10, dtype=np.uint8)
+    assert "auto" in str(info.value)
+    with pytest.raises(ValueError) as info:
+        normalize_chunks(((np.nan, np.nan), 'auto'), (10, 10), limit=10, dtype=np.uint8)
+    assert "auto" in str(info.value)
+
+
+def test_zarr_roundtrip():
+    pytest.importorskip('zarr')
+    with tmpdir() as d:
+        a = da.zeros((3, 3), chunks=(1, 1))
+        a.to_zarr(d)
+        a2 = da.from_zarr(d)
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
+
+
+@pytest.mark.parametrize('compute', [False, True])
+def test_zarr_return_stored(compute):
+    pytest.importorskip('zarr')
+    with tmpdir() as d:
+        a = da.zeros((3, 3), chunks=(1, 1))
+        a2 = a.to_zarr(d, compute=compute, return_stored=True)
+        assert isinstance(a2, Array)
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
+
+
+def test_zarr_existing_array():
+    zarr = pytest.importorskip('zarr')
+    c = (1, 1)
+    a = da.ones((3, 3), chunks=c)
+    z = zarr.zeros_like(a, chunks=c)
+    a.to_zarr(z)
+    a2 = da.from_zarr(z)
+    assert_eq(a, a2)
+    assert a2.chunks == a.chunks
+
+
+def test_read_zarr_chunks():
+    pytest.importorskip('zarr')
+    a = da.zeros((9, ), chunks=(3, ))
+    with tmpdir() as d:
+        a.to_zarr(d)
+        arr = da.from_zarr(d, chunks=(5, ))
+        assert arr.chunks == ((5, 4), )
+
+
+def test_zarr_pass_mapper():
+    pytest.importorskip('zarr')
+    import zarr.storage
+    with tmpdir() as d:
+        mapper = zarr.storage.DirectoryStore(d)
+        a = da.zeros((3, 3), chunks=(1, 1))
+        a.to_zarr(mapper)
+        a2 = da.from_zarr(mapper)
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
+
+
+def test_zarr_group():
+    zarr = pytest.importorskip('zarr')
+    with tmpdir() as d:
+        a = da.zeros((3, 3), chunks=(1, 1))
+        a.to_zarr(d, component='test')
+        with pytest.raises((OSError, ValueError)):
+            a.to_zarr(d, component='test', overwrite=False)
+        a.to_zarr(d, component='test', overwrite=True)
+
+        # second time is fine, group exists
+        a.to_zarr(d, component='test2', overwrite=False)
+        a.to_zarr(d, component='nested/test', overwrite=False)
+        group = zarr.open_group(d, mode='r')
+        assert list(group) == ['nested', 'test', 'test2']
+        assert 'test' in group['nested']
+
+        a2 = da.from_zarr(d, component='test')
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
+
+
+@pytest.mark.parametrize('data', [[( ), True],
+                                  [((1, ),), True],
+                                  [((1, 1, 1),), True],
+                                  [((1, ), (1, )), True],
+                                  [((2, 2, 1), ), True],
+                                  [((2, 2, 3), ), False],
+                                  [((1, 1, 1), (2, 2, 3)), False],
+                                  [((1, 2, 1), ), False]
+                                  ])
+def test_regular_chunks(data):
+    chunkset, expected = data
+    assert da.core._check_regular_chunks(chunkset) == expected
+
+
+def test_zarr_nocompute():
+    pytest.importorskip('zarr')
+    with tmpdir() as d:
+        a = da.zeros((3, 3), chunks=(1, 1))
+        out = a.to_zarr(d, compute=False)
+        assert isinstance(out, Delayed)
+        dask.compute(out)
+        a2 = da.from_zarr(d)
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
+
+
+def test_blocks_indexer():
+    x = da.arange(10, chunks=2)
+
+    assert isinstance(x.blocks[0], da.Array)
+
+    assert_eq(x.blocks[0], x[:2])
+    assert_eq(x.blocks[-1], x[-2:])
+    assert_eq(x.blocks[:3], x[:6])
+    assert_eq(x.blocks[[0, 1, 2]], x[:6])
+    assert_eq(x.blocks[[3, 0, 2]], np.array([6, 7, 0, 1, 4, 5]))
+
+    x = da.random.random((20, 20), chunks=(4, 5))
+    assert_eq(x.blocks[0], x[:4])
+    assert_eq(x.blocks[0, :3], x[:4, :15])
+    assert_eq(x.blocks[:, :3], x[:, :15])
+
+    x = da.ones((40, 40, 40), chunks=(10, 10, 10))
+    assert_eq(x.blocks[0, :, 0], np.ones((10, 40, 10)))
+
+    x = da.ones((2, 2), chunks=1)
+    with pytest.raises(ValueError):
+        x.blocks[[0, 1], [0, 1]]
+    with pytest.raises(ValueError):
+        x.blocks[np.array([0, 1]), [0, 1]]
+    with pytest.raises(ValueError) as info:
+        x.blocks[np.array([0, 1]), np.array([0, 1])]
+    assert "list" in str(info.value)
+    with pytest.raises(ValueError) as info:
+        x.blocks[None, :, :]
+    assert "newaxis" in str(info.value) and "not supported" in str(info.value)
+    with pytest.raises(IndexError) as info:
+        x.blocks[100, 100]
+
+
+def test_dask_array_holds_scipy_sparse_containers():
+    sparse = pytest.importorskip('scipy.sparse')
+    x = da.random.random((1000, 10), chunks=(100, 10))
+    x[x < 0.9] = 0
+    y = x.map_blocks(sparse.csr_matrix)
+
+    vs = y.to_delayed().flatten().tolist()
+    values = dask.compute(*vs, scheduler='single-threaded')
+    assert all(isinstance(v, sparse.csr_matrix) for v in values)

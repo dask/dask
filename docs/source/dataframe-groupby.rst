@@ -79,7 +79,7 @@ When operating on a distributed cluster the Dask workers may not have access to
 a shared hard drive.  In this case we shuffle data by breaking input partitions
 into many pieces based on where they will end up and moving these pieces
 throughout the network.  This prolific expansion of intermediate partitions
-can stress the task scheduler.  To manage for many-partitioned datasets this we
+can stress the task scheduler.  To manage for many-partitioned datasets we
 sometimes shuffle in stages, causing undue copies but reducing the ``n**2``
 effect of shuffling to something closer to ``n log(n)`` with ``log(n)`` copies.
 
@@ -89,15 +89,11 @@ Selecting methods
 Dask will use on-disk shuffling by default but will switch to task-based
 distributed shuffling if the default scheduler is set to use a
 ``dask.distributed.Client`` such as would be the case if the user sets the
-Client as default using one of the following two options:
+Client as default:
 
 .. code-block:: python
 
     client = Client('scheduler:8786', set_as_default=True)
-
-    or
-
-    dask.set_options(get=client.get)
 
 Alternatively, if you prefer to avoid defaults, you can specify a ``method=``
 keyword argument to ``groupby`` or ``set_index``

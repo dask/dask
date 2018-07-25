@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import io
 import itertools
 import math
-import types
 import uuid
 import warnings
 from collections import Iterable, Iterator, defaultdict
@@ -28,10 +27,11 @@ except ImportError:
     from toolz import (frequencies, merge_with, join, reduceby,
                        count, pluck, groupby, topk)
 
+from .. import config
 from ..base import tokenize, dont_optimize, is_dask_collection, DaskMethodsMixin
 from ..bytes import open_files
 from ..compatibility import apply, urlopen
-from ..context import _globals, globalmethod
+from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict
 from ..delayed import Delayed
 from ..multiprocessing import get as mpget
@@ -116,7 +116,7 @@ def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
     return dsk5
 
 
-def _to_textfiles_chunk(data, lazy_file):
+def _to_textfiles_chunk(data, lazy_file, last_endline):
     with lazy_file as f:
         if isinstance(f, io.TextIOWrapper):
             endline = u'\n'
@@ -131,11 +131,13 @@ def _to_textfiles_chunk(data, lazy_file):
             else:
                 started = True
             f.write(ensure(d))
+        if last_endline:
+            f.write(endline)
 
 
 def to_textfiles(b, path, name_function=None, compression='infer',
-                 encoding=system_encoding, compute=True, get=None,
-                 storage_options=None):
+                 encoding=system_encoding, compute=True, storage_options=None,
+                 last_endline=False, **kwargs):
     """ Write dask Bag to disk, one filename per partition, one line per element.
 
     **Paths**: This will create one file for each partition in your bag. You
@@ -188,6 +190,9 @@ def to_textfiles(b, path, name_function=None, compression='infer',
     then calling ``to_textfiles`` :
 
     >>> b_dict.map(json.dumps).to_textfiles("/path/to/data/*.json")  # doctest: +SKIP
+
+    **Last endline**: By default the last line does not end with a newline
+    character. Pass ``last_endline=True`` to invert the default.
     """
     mode = 'wb' if encoding is None else 'wt'
     files = open_files(path, compression=compression, mode=mode,
@@ -195,12 +200,12 @@ def to_textfiles(b, path, name_function=None, compression='infer',
                        num=b.npartitions, **(storage_options or {}))
 
     name = 'to-textfiles-' + uuid.uuid4().hex
-    dsk = {(name, i): (_to_textfiles_chunk, (b.name, i), f)
+    dsk = {(name, i): (_to_textfiles_chunk, (b.name, i), f, last_endline)
            for i, f in enumerate(files)}
     out = type(b)(merge(dsk, b.dask), name, b.npartitions)
 
     if compute:
-        out.compute(get=get)
+        out.compute(**kwargs)
         return [f.path for f in files]
     else:
         return out.to_delayed()
@@ -576,9 +581,9 @@ class Bag(DaskMethodsMixin):
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(5))
         >>> list(b.random_sample(0.5, 42))
-        [1, 4]
+        [1, 3]
         >>> list(b.random_sample(0.5, 42))
-        [1, 4]
+        [1, 3]
         """
         if not 0 <= prob <= 1:
             raise ValueError('prob must be a number in the interval [0, 1]')
@@ -691,10 +696,11 @@ class Bag(DaskMethodsMixin):
 
     @wraps(to_textfiles)
     def to_textfiles(self, path, name_function=None, compression='infer',
-                     encoding=system_encoding, compute=True, get=None,
-                     storage_options=None):
+                     encoding=system_encoding, compute=True,
+                     storage_options=None, last_endline=False, **kwargs):
         return to_textfiles(self, path, name_function, compression, encoding,
-                            compute, get=get, storage_options=storage_options)
+                            compute, storage_options=storage_options,
+                            last_endline=last_endline, **kwargs)
 
     def fold(self, binop, combine=None, initial=no_default, split_every=None):
         """ Parallelizable reduction
@@ -1190,7 +1196,7 @@ class Bag(DaskMethodsMixin):
         return iter(self.compute())
 
     def groupby(self, grouper, method=None, npartitions=None, blocksize=2**20,
-                max_branch=None):
+                max_branch=None, shuffle=None):
         """ Group collection by key function
 
         This requires a full dataset read, serialization and shuffle.
@@ -1200,7 +1206,7 @@ class Bag(DaskMethodsMixin):
         ----------
         grouper: function
             Function on which to group elements
-        method: str
+        shuffle: str
             Either 'disk' for an on-disk shuffle or 'tasks' to use the task
             scheduling framework.  Use 'disk' if you are on a single machine
             and 'tasks' if you are on a distributed cluster.
@@ -1224,20 +1230,22 @@ class Bag(DaskMethodsMixin):
         --------
         Bag.foldby
         """
-        if method is None:
-            get = _globals.get('get')
-            if (isinstance(get, types.MethodType) and
-               'distributed' in get.__func__.__module__):
-                method = 'tasks'
+        if method is not None:
+            raise Exception("The method= keyword has been moved to shuffle=")
+        if shuffle is None:
+            shuffle = config.get('shuffle', None)
+        if shuffle is None:
+            if 'distributed' in config.get('scheduler', ''):
+                shuffle = 'tasks'
             else:
-                method = 'disk'
-        if method == 'disk':
+                shuffle = 'disk'
+        if shuffle == 'disk':
             return groupby_disk(self, grouper, npartitions=npartitions,
                                 blocksize=blocksize)
-        elif method == 'tasks':
+        elif shuffle == 'tasks':
             return groupby_tasks(self, grouper, max_branch=max_branch)
         else:
-            msg = "Shuffle method must be 'disk' or 'tasks'"
+            msg = "Shuffle must be 'disk' or 'tasks'"
             raise NotImplementedError(msg)
 
     def to_dataframe(self, meta=None, columns=None):
@@ -2021,7 +2029,7 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
 
     import partd
     p = ('partd-' + token,)
-    dirname = _globals.get('temporary_directory', None)
+    dirname = config.get('temporary_directory', None)
     if dirname:
         file = (apply, partd.File, (), {'dir': dirname})
     else:
