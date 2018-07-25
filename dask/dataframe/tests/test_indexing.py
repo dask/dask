@@ -392,3 +392,44 @@ def test_to_series():
     ddf = dd.from_pandas(df, 10)
 
     assert_eq(df.index.to_series(), ddf.index.to_series())
+
+
+@pytest.mark.parametrize('indexer', [
+    0,
+    [0],
+    [0, 1],
+    [1, 0],
+    [False, True, True]
+])
+def test_iloc(indexer):
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    ddf = dd.from_pandas(df, 2)
+
+    result = ddf.iloc[:, indexer]
+    expected = df.iloc[:, indexer]
+
+    assert_eq(result, expected)
+
+
+def test_iloc_series():
+    s = pd.Series([1, 2, 3])
+    ds = dd.from_pandas(s, 2)
+    with pytest.raises(AttributeError):
+        ds.iloc[:]
+
+
+def test_iloc_raises():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    ddf = dd.from_pandas(df, 2)
+
+    with pytest.raises(ValueError):
+        ddf.iloc[[0, 1], :]
+
+    with pytest.raises(ValueError):
+        ddf.iloc[[0, 1], [0, 1]]
+
+    with pytest.raises(ValueError):
+        ddf.iloc[[0, 1], [0, 1], [1, 2]]
+
+    with pytest.raises(IndexError):
+        ddf.iloc[:, [5, 6]]
