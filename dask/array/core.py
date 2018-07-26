@@ -3436,7 +3436,13 @@ def elemwise(op, *args, **kwargs):
 
     args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
 
-    shapes = [getattr(arg, 'shape', ()) for arg in args]
+    shapes = []
+    for arg in args:
+        shape = getattr(arg, "shape", ())
+        if getattr(arg, "_unknown_shape", False):
+            shape = ()
+        shapes.append(shape)
+
     shapes = [s if isinstance(s, Iterable) else () for s in shapes]
     out_ndim = len(broadcast_shapes(*shapes))   # Raises ValueError if dimensions mismatch
     expr_inds = tuple(range(out_ndim))[::-1]
