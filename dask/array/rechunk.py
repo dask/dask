@@ -175,8 +175,7 @@ def intersect_chunks(old_chunks, new_chunks):
     return cross
 
 
-def rechunk(x, chunks, threshold=None,
-            block_size_limit=None):
+def rechunk(x, chunks, threshold=None, block_size_limit=None):
     """
     Convert blocks in dask array x for new chunks.
 
@@ -214,7 +213,16 @@ def rechunk(x, chunks, threshold=None,
     >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
     """
     if isinstance(chunks, dict):
-        chunks = dict(chunks)
+        new = {}
+        for k, v in chunks.items():
+            if not isinstance(k, int) or k >= x.ndim or k <= -x.ndim:
+                msg = ("Invalid dimension %s. Should be an integer from 0 to %d"
+                       % (k, x.ndim))
+                raise ValueError(msg)
+            if k < 0:
+                k += x.ndim
+            new[k] = v
+        chunks = new
         for i in range(x.ndim):
             if i not in chunks:
                 chunks[i] = x.chunks[i]
