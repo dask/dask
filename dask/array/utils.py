@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import difflib
 import functools
 import math
+import numbers
 import os
 
 import numpy as np
@@ -125,3 +126,14 @@ def safe_wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS):
         return functools.wraps(wrapped, assigned=assigned)
     else:
         return lambda x: x
+
+
+def validate_axis(ax, ndim):
+    if not isinstance(ax, numbers.Integral):
+        raise TypeError("Axis value must be an integer, got %s" % ax)
+    if ax < -ndim or ax >= ndim:
+        raise np.AxisError("Axis %d is out of bounds for array of dimension %d"
+                           % (ax, ndim))
+    if ax < 0:
+        ax += ndim
+    return ax

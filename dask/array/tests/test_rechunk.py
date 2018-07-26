@@ -700,8 +700,9 @@ def test_rechunk_zero():
 def test_rechunk_bad_keys():
     x = da.zeros((2, 3, 4), chunks=1)
     assert x.rechunk({-1: 4}).chunks == ((1, 1), (1, 1, 1), (4,))
+    assert x.rechunk({-x.ndim: 2}).chunks == ((2,), (1, 1, 1), (1, 1, 1, 1))
 
-    with pytest.raises(ValueError) as info:
+    with pytest.raises(TypeError) as info:
         x.rechunk({'blah': 4})
 
     assert 'blah' in str(info.value)

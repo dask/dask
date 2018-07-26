@@ -20,6 +20,7 @@ from toolz import accumulate, reduce
 from ..base import tokenize
 from ..utils import parse_bytes
 from .core import concatenate3, Array, normalize_chunks
+from .utils import validate_axis
 from .wrap import empty
 from .. import config, sharedict
 
@@ -213,16 +214,7 @@ def rechunk(x, chunks, threshold=None, block_size_limit=None):
     >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
     """
     if isinstance(chunks, dict):
-        new = {}
-        for k, v in chunks.items():
-            if not isinstance(k, int) or k >= x.ndim or k <= -x.ndim:
-                msg = ("Invalid dimension %s. Should be an integer from 0 to %d"
-                       % (k, x.ndim))
-                raise ValueError(msg)
-            if k < 0:
-                k += x.ndim
-            new[k] = v
-        chunks = new
+        chunks = {validate_axis(c, x.ndim): v for c, v in chunks.items()}
         for i in range(x.ndim):
             if i not in chunks:
                 chunks[i] = x.chunks[i]
