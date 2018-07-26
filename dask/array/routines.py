@@ -17,7 +17,7 @@ from ..base import tokenize
 from ..utils import funcname
 from . import chunk
 from .creation import arange
-from .utils import safe_wraps
+from .utils import safe_wraps, validate_axis
 from .wrap import ones
 from .ufunc import multiply
 
@@ -458,11 +458,7 @@ def gradient(f, *varargs, **kwargs):
         drop_result_list = True
         axis = (axis,)
 
-    for e in axis:
-        if not isinstance(e, Integral):
-            raise TypeError("%s, invalid value for axis" % repr(e))
-        if not (-f.ndim <= e < f.ndim):
-            raise ValueError("axis, %s, is out of bounds" % repr(e))
+    axis = validate_axis(axis, f.ndim)
 
     if len(axis) != len(set(axis)):
         raise ValueError("duplicate axes not allowed")
@@ -956,11 +952,7 @@ def squeeze(a, axis=None):
     if any(a.shape[i] != 1 for i in axis):
         raise ValueError("cannot squeeze axis with size other than one")
 
-    for i in axis:
-        if not (-a.ndim <= i < a.ndim):
-            raise ValueError("%i out of bounds for %i-D array" % (i, a.ndim))
-
-    axis = tuple(i % a.ndim for i in axis)
+    axis = validate_axis(axis, a.ndim)
 
     sl = tuple(0 if i in axis else slice(None) for i, s in enumerate(a.shape))
 
@@ -972,10 +964,7 @@ def compress(condition, a, axis=None):
     if axis is None:
         a = a.ravel()
         axis = 0
-    if not -a.ndim <= axis < a.ndim:
-        raise ValueError('axis=(%s) out of bounds' % axis)
-    if axis < 0:
-        axis += a.ndim
+    axis = validate_axis(axis, a.ndim)
 
     # Only coerce non-lazy values to numpy arrays
     if not isinstance(condition, Array):
@@ -1014,10 +1003,8 @@ def extract(condition, arr):
 
 @wraps(np.take)
 def take(a, indices, axis=0):
-    if not -a.ndim <= axis < a.ndim:
-        raise ValueError('axis=(%s) out of bounds' % axis)
-    if axis < 0:
-        axis += a.ndim
+    axis = validate_axis(axis, a.ndim)
+
     if isinstance(a, np.ndarray) and isinstance(indices, Array):
         return _take_dask_array_from_numpy(a, indices, axis)
     else:
@@ -1208,11 +1195,7 @@ def split_at_breaks(array, breaks, axis=0):
 def insert(arr, obj, values, axis):
     # axis is a required argument here to avoid needing to deal with the numpy
     # default case (which reshapes the array to make it flat)
-    if not -arr.ndim <= axis < arr.ndim:
-        raise IndexError('axis %r is out of bounds for an array of dimension '
-                         '%s' % (axis, arr.ndim))
-    if axis < 0:
-        axis += arr.ndim
+    axis = validate_axis(axis,arr.ndim)
 
     if isinstance(obj, slice):
         obj = np.arange(*obj.indices(arr.shape[axis]))

@@ -128,12 +128,15 @@ def safe_wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS):
         return lambda x: x
 
 
-def validate_axis(ax, ndim):
-    if not isinstance(ax, numbers.Integral):
-        raise TypeError("Axis value must be an integer, got %s" % ax)
-    if ax < -ndim or ax >= ndim:
+def validate_axis(axis, ndim):
+    """ Validate an input to axis= keywords """
+    if isinstance(axis, (tuple, list)):
+        return tuple(validate_axis(ax, ndim) for ax in axis)
+    if not isinstance(axis, numbers.Integral):
+        raise TypeError("Axis value must be an integer, got %s" % axis)
+    if axis < -ndim or axis >= ndim:
         raise np.AxisError("Axis %d is out of bounds for array of dimension %d"
-                           % (ax, ndim))
-    if ax < 0:
-        ax += ndim
-    return ax
+                           % (axis, ndim))
+    if axis < 0:
+        axis += ndim
+    return axis
