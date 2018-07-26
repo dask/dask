@@ -262,8 +262,7 @@ def unpack_collections(*args, **kwargs):
         else:
             # Treat iterators like lists
             typ = list if isinstance(expr, Iterator) else type(expr)
-            #if typ in (list, tuple, set):
-            if isinstance(expr, (list, tuple, set)):
+            if typ in (list, tuple, set):
                 tsk = (typ, [_unpack(i) for i in expr])
             elif typ is dict:
                 tsk = (dict, [[_unpack(k), _unpack(v)]
