@@ -892,14 +892,11 @@ def is_arraylike(x):
     >>> is_arraylike('cat')
     False
     """
-    import dask.dataframe as dd
-    if isinstance(x, (dd.DataFrame, dd.Series)):
-        return False
-    else:
-        return (
-            hasattr(x, 'shape') and x.shape and
-            hasattr(x, 'dtype')
-        )
+    return (
+        hasattr(x, 'shape') and x.shape and
+        hasattr(x, 'dtype') and
+        not getattr(x, '_unknown_shape', False)
+    )
 
 
 def natural_sort_key(s):
