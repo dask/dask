@@ -28,6 +28,17 @@ def test_percentile():
               np.array(['a', 'd', 'e'], dtype=x.dtype))
 
 
+def test_median():
+    rng = np.random.RandomState(42)
+    n = 1000
+    x = rng.rand(n)
+    d = da.from_array(x, chunks=n // 10)
+
+    assert_eq(d.median(), da.median(d))
+    assert_eq(da.percentile(d, 50), da.median(d))
+    assert np.abs(da.median(d).compute() - np.median(x)) < 0.07
+
+
 @pytest.mark.skip
 def test_percentile_with_categoricals():
     try:

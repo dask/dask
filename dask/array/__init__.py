@@ -41,7 +41,7 @@ try:
                              nanmax, nanargmin, nanargmax,
                              cumsum, cumprod,
                              topk, argtopk)
-    from .percentile import percentile
+    from .percentile import percentile, median
     with ignoring(ImportError):
         from .reductions import nanprod, nancumprod, nancumsum
     with ignoring(ImportError):

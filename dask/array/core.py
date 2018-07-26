@@ -1754,6 +1754,10 @@ class Array(DaskMethodsMixin):
         return mean(self, axis=axis, dtype=dtype, keepdims=keepdims,
                     split_every=split_every, out=out)
 
+    def median(self):
+        from .percentile import median
+        return median(self)
+
     @derived_from(np.ndarray)
     def std(self, axis=None, dtype=None, keepdims=False, ddof=0,
             split_every=None, out=None):

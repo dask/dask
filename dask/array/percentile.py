@@ -61,6 +61,14 @@ def percentile(a, q, interpolation='linear'):
     return Array(dsk, name2, chunks=((len(q),),), dtype=dtype)
 
 
+def median(x, interpolation='linear'):
+    """ Approximate the median function
+
+    See :func:`percentile` for more information.
+    """
+    return percentile(x, 50, interpolation=interpolation)
+
+
 def merge_percentiles(finalq, qs, vals, interpolation='lower', Ns=None):
     """ Combine several percentile calculations of different data.
 
