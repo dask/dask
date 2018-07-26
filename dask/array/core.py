@@ -3372,12 +3372,10 @@ def is_scalar_for_elemwise(arg):
     >>> is_scalar_for_elemwise(dd.from_pandas(pd.Series([1, 2]), 2))
     True
     """
-    arg_shape = getattr(arg, 'shape', None)
-    # the second half of shape_condition is essentially just to ensure
-    # that dask series / dataframes are treated as scalars for the
-    # purposes of elemwise operations between dask array and dask series.
-    shape_condition = (not isinstance(arg_shape, Iterable) or
-                       (len(arg_shape) and is_dask_collection(arg_shape[0])))
+    # the second half of shape_condition is essentially just to ensure that
+    # dask series / frame are treated as scalars in elemwise.
+    shape_condition = (not isinstance(getattr(arg, 'shape', None), Iterable) or
+                       getattr(arg, '_unknown_shape', False))
 
     return (np.isscalar(arg) or
             shape_condition or
