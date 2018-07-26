@@ -3369,8 +3369,6 @@ def is_scalar_for_elemwise(arg):
     False
     >>> is_scalar_for_elemwise(np.dtype('i4'))
     True
-    >>> is_scalar_for_elemwise(dd.from_pandas(pd.Series([1, 2]), 2))
-    True
     """
     # the second half of shape_condition is essentially just to ensure that
     # dask series / frame are treated as scalars in elemwise.
