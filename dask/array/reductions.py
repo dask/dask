@@ -886,7 +886,7 @@ def argtopk(a, k, axis=-1, split_every=None):
 
     Returns
     -------
-    Selection of int64 indices of x with size abs(k) along the given axis.
+    Selection of np.intp indices of x with size abs(k) along the given axis.
 
     Examples
     --------
@@ -901,7 +901,7 @@ def argtopk(a, k, axis=-1, split_every=None):
     axis = validate_axis(a.ndim, axis)
 
     # Generate nodes where every chunk is a tuple of (a, original index of a)
-    idx = arange(a.shape[axis], chunks=(a.chunks[axis], ), dtype=np.int64)
+    idx = arange(a.shape[axis], chunks=(a.chunks[axis], ), dtype=np.intp)
     idx = idx[tuple(slice(None) if i == axis else np.newaxis
                     for i in range(a.ndim))]
     a_plus_idx = a.map_blocks(chunk.argtopk_preprocess, idx,
@@ -919,5 +919,5 @@ def argtopk(a, k, axis=-1, split_every=None):
 
     return reduction(
         a_plus_idx, chunk=chunk_combine, combine=chunk_combine,
-        aggregate=aggregate, axis=axis, keepdims=True, dtype=np.int64,
+        aggregate=aggregate, axis=axis, keepdims=True, dtype=np.intp,
         split_every=split_every, concatenate=False, output_size=abs(k))
