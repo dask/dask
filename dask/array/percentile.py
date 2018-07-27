@@ -62,9 +62,9 @@ def percentile(a, q, interpolation='linear'):
 
 
 def median(x, interpolation='linear'):
-    """ Approximate the median function
-
-    See :func:`percentile` for more information.
+    """
+    Implements an approximate version of the median function.
+    See :func:`percentile` for more detail.
     """
     return percentile(x, 50, interpolation=interpolation)
 

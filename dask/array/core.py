@@ -1755,6 +1755,10 @@ class Array(DaskMethodsMixin):
                     split_every=split_every, out=out)
 
     def median(self):
+        """
+        Implements an approximate version of the median function.
+        See :func:`percentile` for more detail.
+        """
         from .percentile import median
         return median(self)
 
