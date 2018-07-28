@@ -16,7 +16,8 @@ Dask.delayed operates on functions, like ``dask.delayed(f)(x, y)``, not on their
 +------------------------------------------------+--------------------------------------------------------------+
 | .. code-block:: python                         | .. code-block:: python                                       |
 |                                                |                                                              |
-|    # this executes immediately                 |    # this makes a delayed function, acting lazily            |
+|    # This executes immediately                 |    # This makes a delayed function, acting lazily            |
+|                                                |                                                              |
 |    dask.delayed(f(x, y))                       |    dask.delayed(f)(x, y)                                     |
 |                                                |                                                              |
 +------------------------------------------------+--------------------------------------------------------------+
@@ -31,18 +32,20 @@ then only call ``dask.compute`` at the end.  It's ok to call ``dask.compute``
 in the middle of your computation as well, but everything will stop there as
 Dask computes those results before moving forward with your code.
 
-+--------------------------------------------------------+--------------------------------------+
-| **Don't**                                              | **Do**                               |
-+--------------------------------------------------------+--------------------------------------+
-| .. code-block:: python                                 | .. code-block:: python               |
-|                                                        |                                      |
-|    results = []                                        |    results = []                      |
-|    for x in L:                                         |    for x in L:                       |
-|        y = dask.delayed(f)(x)                          |        y = dask.delayed(f)(x)        |
-|        results.append(y.compute())                     |        results.append(y)             |
-|                                                        |                                      |
-|    results                                             |    results = dask.compute(*results)  |
-+--------------------------------------------------------+--------------------------------------+
++--------------------------------------------------------+-------------------------------------------+
+| **Don't**                                              | **Do**                                    |
++--------------------------------------------------------+-------------------------------------------+
+| .. code-block:: python                                 | .. code-block:: python                    |
+|                                                        |                                           |
+|    # Avoid calling compute repeatedly                  |    # Collect many calls for one compute   |
+|                                                        |                                           |
+|    results = []                                        |    results = []                           |
+|    for x in L:                                         |    for x in L:                            |
+|        y = dask.delayed(f)(x)                          |        y = dask.delayed(f)(x)             |
+|        results.append(y.compute())                     |        results.append(y)                  |
+|                                                        |                                           |
+|    results                                             |    results = dask.compute(*results)       |
++--------------------------------------------------------+-------------------------------------------+
 
 Calling `y.compute()` within the loop would await the result of the computation every time, and
 so inhibit parallelism.
@@ -52,17 +55,18 @@ Don't mutate inputs
 
 Your functions should not change the inputs directly
 
-+--------------------------------------------------+--------------------------------------+
-| **Don't**                                        | **Do**                               |
-+--------------------------------------------------+--------------------------------------+
-| .. code-block:: python                           | .. code-block:: python               |
-|                                                  |                                      |
-|    # the value of x is changed in-place          |    # x is used but unchanged         |
-|    @dask.delayed                                 |    @dask.delayed                     |
-|    def f(x):                                     |    def f(x):                         |
-|        x += 1                                    |        out = x + 1                   |
-|        return x                                  |        return out                    |
-+--------------------------------------------------+--------------------------------------+
++-----------------------------------------+--------------------------------------+
+| **Don't**                               | **Do**                               |
++-----------------------------------------+--------------------------------------+
+| .. code-block:: python                  | .. code-block:: python               |
+|                                         |                                      |
+|    # Mutate inputs in functions         |    # Return new values or copies     |
+|                                         |                                      |
+|    @dask.delayed                        |    @dask.delayed                     |
+|    def f(x):                            |    def f(x):                         |
+|        x += 1                           |        x = x + 1                     |
+|        return x                         |        return x                      |
++-----------------------------------------+--------------------------------------+
 
 If you need to use a mutable operation then make a copy within your function first
 
@@ -89,10 +93,12 @@ distributed computing then you will likely encounter confusing errors
 |                                           |
 |   L = []                                  |
 |                                           |
-|   # references global variable L          |
+|   # This references global variable L     |
+|                                           |
 |   @dask.delayed                           |
 |   def f(x):                               |
 |       L.append(x)                         |
+|                                           |
 +-------------------------------------------+
 
 
@@ -103,15 +109,17 @@ Don't rely on side effects
 Delayed functions only do something if they are computed.  You will always need
 to pass the output to something that eventually calls compute.
 
-+--------------------------------+--------------------------------------+
-| **Don't**                      | **Do**                               |
-+--------------------------------+--------------------------------------+
-| .. code-block:: python         | .. code-block:: python               |
-|                                |                                      |
-|    dask.delayed(f)(1, 2, 3)    |    x = dask.delayed(f)(1, 2, 3)      |
-|                                |    ...                               |
-|    ...                         |    dask.compute(x, ...)              |
-+--------------------------------+--------------------------------------+
++--------------------------------+-----------------------------------------+
+| **Don't**                      | **Do**                                  |
++--------------------------------+-----------------------------------------+
+| .. code-block:: python         | .. code-block:: python                  |
+|                                |                                         |
+|    # Forget to call compute    |    # Ensure delayed tasks are computed  |
+|                                |                                         |
+|    dask.delayed(f)(1, 2, 3)    |    x = dask.delayed(f)(1, 2, 3)         |
+|                                |    ...                                  |
+|    ...                         |    dask.compute(x, ...)                 |
++--------------------------------+-----------------------------------------+
 
 In the first case here, nothing happens, because ``compute()`` is never called.
 
@@ -129,27 +137,29 @@ to break up a computation.
 +------------------------------------+--------------------------------------+
 | .. code-block:: python             | .. code-block:: python               |
 |                                    |                                      |
-|    def load(filename):             |    @dask.delayed                     |
-|        ...                         |    def load(filename):               |
-|                                    |        ...                           |
+|    # One giant task                |    # Break up into many tasks        |
 |                                    |                                      |
-|    def process(filename):          |    @dask.delayed                     |
-|        ...                         |    def process(filename):            |
-|                                    |        ...                           |
+|                                    |    @dask.delayed                     |
+|    def load(filename):             |    def load(filename):               |
+|        ...                         |        ...                           |
 |                                    |                                      |
-|    def save(filename):             |    @dask.delayed                     |
-|        ...                         |    def save(filename):               |
-|                                    |        ...                           |
+|                                    |    @dask.delayed                     |
+|    def process(filename):          |    def process(filename):            |
+|        ...                         |        ...                           |
 |                                    |                                      |
-|    @dask.delayed                   |    def f(filenames):                 |
-|    def f(filenames):               |        results = []                  |
-|        results = []                |        for filename in filenames:    |
-|        for filename in filenames:  |            data = load(filename)     |
-|            data = load(filename)   |            data = process(data)      |
-|            data = process(data)    |            result = save(data)       |
-|            result = save(data)     |                                      |
-|                                    |        return results                |
-|        return results              |                                      |
+|                                    |    @dask.delayed                     |
+|    def save(filename):             |    def save(filename):               |
+|        ...                         |        ...                           |
+|                                    |                                      |
+|    @dask.delayed                   |                                      |
+|    def f(filenames):               |    def f(filenames):                 |
+|        results = []                |        results = []                  |
+|        for filename in filenames:  |        for filename in filenames:    |
+|            data = load(filename)   |            data = load(filename)     |
+|            data = process(data)    |            data = process(data)      |
+|            result = save(data)     |            result = save(data)       |
+|                                    |                                      |
+|        return results              |    return results                    |
 +------------------------------------+--------------------------------------+
 
 The first version only has one delayed task, and so cannot parallelize.
@@ -167,10 +177,13 @@ of the dask collections to help you.
 +------------------------------------+-------------------------------------------------------+
 | .. code-block:: python             | .. code-block:: python                                |
 |                                    |                                                       |
-|    results = []                    |    # collections                                      |
-|    for x in range(1000000000):     |    import dask.bag as db                              |
-|        y = dask.delayed(f)(x)      |    b = db.from_sequence(1000000000, npartitions=1000) |
-|        results.append(y)           |    b = b.map(f)                                       |
+|    # Too mamy tasks                |    # Use collections                                  |
+|                                    |                                                       |
+|    results = []                    |    import dask.bag as db                              |
+|    for x in range(1000000000):     |    b = db.from_sequence(1000000000, npartitions=1000) |
+|        y = dask.delayed(f)(x)      |    b = b.map(f)                                       |
+|        results.append(y)           |    ...                                                |
+|                                    |                                                       |
 +------------------------------------+-------------------------------------------------------+
 
 Here we use ``dask.bag`` to automatically batch applying our function. We could also have constructed
@@ -208,12 +221,13 @@ Usually you never call dask.delayed within dask.delayed functions.
 +----------------------------------------+--------------------------------------+
 | .. code-block:: python                 | .. code-block:: python               |
 |                                        |                                      |
-|    # delayed function calls delayed    |    # normal function calls delayed   |
-|    @dask.delayed                       |    def process_all(L):               |
-|    def process_all(L):                 |        result = []                   |
-|        result = []                     |        for x in L:                   |
-|        for x in L:                     |            y = dask.delayed(f)(x)    |
-|            y = dask.delayed(f)(x)      |                                      |
+|    # Delayed function calls delayed    |    # Normal function calls delayed   |
+|                                        |                                      |
+|    @dask.delayed                       |                                      |
+|    def process_all(L):                 |    def process_all(L):               |
+|        result = []                     |        result = []                   |
+|        for x in L:                     |        for x in L:                   |
+|            y = dask.delayed(f)(x)      |            y = dask.delayed(f)(x)    |
 |            result.append(y)            |            result.append(y)          |
 |        return result                   |        return result                 |
 +----------------------------------------+--------------------------------------+
@@ -231,16 +245,18 @@ large then this might crash your workers.
 Instead, it's more common to use methods like ``da.map_blocks`` or
 ``df.map_partitions``, or to
 
-+---------------------------------------+-----------------------------------------------------------------------+
-| **Don't**                             | **Do**                                                                |
-+---------------------------------------+-----------------------------------------------------------------------+
-| .. code-block:: python                | .. code-block:: python                                                |
-|                                       |                                                                       |
-|    import dask.dataframe as dd        |    import dask.dataframe as dd                                        |
-|    df = dd.read_csv('/path/to/*.csv') |    df = dd.read_csv('/path/to/*.csv')                                 |
-|                                       |                                                                       |
-|    dask.delayed(train)(df)            |    df.map_partitions(train)                                           |
-+---------------------------------------+-----------------------------------------------------------------------+
++--------------------------------------------------+---------------------------------------------+
+| **Don't**                                        | **Do**                                      |
++--------------------------------------------------+---------------------------------------------+
+| .. code-block:: python                           | .. code-block:: python                      |
+|                                                  |                                             |
+|    # Call delayed functions on Dask collections  |    # Use mapping methods if applicable      |
+|                                                  |                                             |
+|    import dask.dataframe as dd                   |    import dask.dataframe as dd              |
+|    df = dd.read_csv('/path/to/*.csv')            |    df = dd.read_csv('/path/to/*.csv')       |
+|                                                  |                                             |
+|    dask.delayed(train)(df)                       |    df.map_partitions(train)                 |
++--------------------------------------------------+---------------------------------------------+
 
 Alternatively, if the procedure doesn't fit into a mapping, you can always
 turn your arrays or dataframes into *many* delayed
