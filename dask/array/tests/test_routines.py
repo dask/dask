@@ -935,6 +935,14 @@ def test_isnull():
         assert_eq(da.notnull(a), ~np.isnan(x))
 
 
+def test_isnull_result_is_an_array():
+    # regression test for https://github.com/dask/dask/issues/3822
+    arr = da.from_array(np.arange(3, dtype=np.int64), chunks=-1)
+    with ignoring(ImportError):
+        result = da.isnull(arr[0]).compute()
+        assert type(result) is np.ndarray
+
+
 def test_isclose():
     x = np.array([0, np.nan, 1, 1.5])
     y = np.array([1e-9, np.nan, 1, 2])
