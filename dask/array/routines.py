@@ -1038,10 +1038,16 @@ def around(x, decimals=0):
     return map_blocks(partial(np.around, decimals=decimals), x, dtype=x.dtype)
 
 
+def _asarray_isnull(values):
+    import pandas as pd
+    return np.asarray(pd.isnull(values))
+
+
 def isnull(values):
     """ pandas.isnull for dask arrays """
-    import pandas as pd
-    return elemwise(pd.isnull, values, dtype='bool')
+    # eagerly raise ImportError, if pandas isn't available
+    import pandas as pd  # noqa
+    return elemwise(_asarray_isnull, values, dtype='bool')
 
 
 def notnull(values):
