@@ -5,6 +5,7 @@ from collections import deque
 from contextlib import contextmanager
 from datetime import timedelta
 import functools
+from hashlib import md5
 import inspect
 import json
 import logging
@@ -35,7 +36,7 @@ except ImportError:
 
 import dask
 from dask import istask
-from toolz import memoize
+import toolz
 import tornado
 from tornado import gen
 from tornado.ioloop import IOLoop, PollIOLoop
@@ -113,7 +114,7 @@ def get_fileno_limit():
         return 512
 
 
-@memoize
+@toolz.memoize
 def _get_ip(host, port, family, default):
     # By using a UDP socket, we don't actually try to connect but
     # simply select the local address through which *host* is reachable.
@@ -670,7 +671,7 @@ def silence_logging(level, root='distributed'):
     return old
 
 
-@memoize
+@toolz.memoize
 def ensure_ip(hostname):
     """ Ensure that address is an IP address
 
@@ -1399,3 +1400,17 @@ def has_keyword(func, keyword):
         if gen.is_coroutine_function(func):
             func = func.__wrapped__
         return keyword in inspect.getargspec(func).args
+
+
+# from bokeh.palettes import viridis
+# palette = viridis(18)
+palette = ['#440154', '#471669', '#472A79', '#433C84', '#3C4D8A', '#355D8C',
+           '#2E6C8E', '#287A8E', '#23898D', '#1E978A', '#20A585', '#2EB27C',
+           '#45BF6F', '#64CB5D', '#88D547', '#AFDC2E', '#D7E219', '#FDE724']
+
+
+@toolz.memoize
+def color_of(x, palette=palette):
+    h = md5(str(x).encode())
+    n = int(h.hexdigest()[:8], 16)
+    return palette[n % len(palette)]

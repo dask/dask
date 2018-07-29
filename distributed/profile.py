@@ -28,10 +28,8 @@ We represent this tree as a nested dictionary with the following form:
 
 from collections import defaultdict
 import linecache
-import itertools
-import toolz
 
-from .utils import format_time
+from .utils import format_time, color_of
 
 
 def identifier(frame):
@@ -190,7 +188,7 @@ def plot_data(state, profile_interval=0.010):
         try:
             colors.append(color_of(desc['filename']))
         except IndexError:
-            colors.append(palette[-1])
+            colors.append('gray')
 
         delta = (stop - start) / state['count']
 
@@ -216,18 +214,3 @@ def plot_data(state, profile_interval=0.010):
             'name': names,
             'time': times,
             'percentage': percentages}
-
-
-try:
-    from bokeh.palettes import viridis
-except ImportError:
-    palette = ['red', 'green', 'blue', 'yellow']
-else:
-    palette = viridis(10)
-
-counter = itertools.count()
-
-
-@toolz.memoize
-def color_of(x):
-    return palette[next(counter) % len(palette)]

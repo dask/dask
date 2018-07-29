@@ -7,7 +7,7 @@ pytest.importorskip('bokeh')
 from dask import delayed
 from distributed.client import wait
 from distributed.diagnostics.progress_stream import (progress_quads,
-                                                     nbytes_bar, progress_stream, _incrementing_index_cache)
+                                                     nbytes_bar, progress_stream)
 from distributed.utils_test import div, gen_cluster, inc
 
 
@@ -17,8 +17,6 @@ def test_progress_quads():
            'erred': {'inc': 0, 'dec': 1, 'add': 0},
            'released': {'inc': 1, 'dec': 0, 'add': 1},
            'processing': {'inc': 1, 'dec': 0, 'add': 2}}
-
-    _incrementing_index_cache.clear()
 
     d = progress_quads(msg, nrows=2)
     color = d.pop('color')

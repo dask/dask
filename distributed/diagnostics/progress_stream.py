@@ -1,25 +1,19 @@
 from __future__ import print_function, division, absolute_import
 
-import itertools
 import logging
-import random
 
-from bokeh.palettes import viridis
-from toolz import valmap, merge, memoize
+from toolz import valmap, merge
 from tornado import gen
 
 from .progress import AllProgress
 
 from ..core import connect, coerce_to_address
 from ..scheduler import Scheduler
-from ..utils import key_split
+from ..utils import key_split, color_of
 from ..worker import dumps_function
 
 
 logger = logging.getLogger(__name__)
-
-task_stream_palette = list(viridis(25))
-random.shuffle(task_stream_palette)
 
 
 def counts(scheduler, allprogress):
@@ -27,20 +21,6 @@ def counts(scheduler, allprogress):
                   'nbytes': allprogress.nbytes},
                  {state: valmap(len, allprogress.state[state])
                      for state in ['memory', 'erred', 'released', 'processing']})
-
-
-counter = itertools.count()
-
-_incrementing_index_cache = dict()
-
-
-@memoize(cache=_incrementing_index_cache)
-def incrementing_index(o):
-    return next(counter)
-
-
-def color_of(o, palette=task_stream_palette):
-    return palette[incrementing_index(o) % len(palette)]
 
 
 @gen.coroutine
@@ -206,7 +186,7 @@ prefix = {'transfer': 'transfer-',
           'compute': ''}
 
 
-def task_stream_append(lists, msg, workers, palette=task_stream_palette):
+def task_stream_append(lists, msg, workers):
     key = msg['key']
     name = key_split(key)
     startstops = msg.get('startstops', [])
