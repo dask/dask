@@ -24,7 +24,7 @@ The ``progress`` function takes a Dask object that is executing in the backgroun
 .. code-block:: python
 
    # Single machine progress bar
-   from dask.diagnosics import ProgressBar
+   from dask.diagnostics import ProgressBar
 
    with ProgressBar():
        x.compute()
