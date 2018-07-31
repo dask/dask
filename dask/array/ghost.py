@@ -113,7 +113,7 @@ def constant(x, axis, depth, value):
          'use overlap.constant.',
          DeprecationWarning)
 
-    return overlap.constant(x, axis, depth)
+    return overlap.constant(x, axis, depth, value)
 
 
 def _remove_ghost_boundaries(l, r, axis, depth):
