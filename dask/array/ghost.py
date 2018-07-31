@@ -1,4 +1,3 @@
-from operator import getitem
 from warnings import warn
 
 from . import overlap

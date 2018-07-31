@@ -4,8 +4,10 @@ pytest.importorskip('numpy')
 import numpy as np
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
+from operator import getitem
+
 import dask.array as da
-from dask.array.ghost import (fractional_slice, getitem, trim_internal,
+from dask.array.ghost import (fractional_slice, trim_internal,
                               ghost_internal, nearest, constant, boundaries,
                               reflect, periodic, ghost)
 from dask.array.utils import assert_eq, same_keys
