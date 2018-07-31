@@ -14,7 +14,7 @@ See :doc:`installation <install>` document for more information.
 Setup Dask.distributed the Easy Way
 -----------------------------------
 
-If you create an client without providing an address it will start up a local
+If you create a client without providing an address it will start up a local
 scheduler and worker for you.
 
 .. code-block:: python
@@ -41,7 +41,7 @@ Set up scheduler and worker processes on your local computer::
 .. note:: At least one ``dask-worker`` must be running after launching a
           scheduler.
 
-Launch an Client and point it to the IP/port of the scheduler.
+Launch a Client and point it to the IP/port of the scheduler.
 
 .. code-block:: python
 
