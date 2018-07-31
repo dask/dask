@@ -200,7 +200,7 @@ def add_dummy_padding(x, depth, boundary):
     array([..., 0, 1, 2, 3, 4, 5, ...])
     """
     warn('ghost module will be renamed to overlap, '
-         'use overlap.add)dummy_padding.',
+         'use overlap.add_dummy_padding.',
          DeprecationWarning)
 
     return overlap.add_dummy_padding(x, depth, boundary)
