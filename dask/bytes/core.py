@@ -294,9 +294,16 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
             raise ValueError("When specifying a list of paths, all paths must "
                              "share the same protocol and options")
         update_storage_options(options, storage_options)
-        paths = list(paths)
-
         fs, fs_token = get_fs(protocol, options)
+        expanded_paths = []
+        for curr_path in paths:
+            if 'w' in mode:
+                expanded_paths.extend(_expand_paths(curr_path, name_function, num))
+            elif '*' in curr_path:
+                expanded_paths.extend(fs.glob(curr_path))
+            else:
+                expanded_paths.append(curr_path)
+        paths = sorted(expanded_paths)
 
     elif isinstance(urlpath, (str, unicode)) or hasattr(urlpath, 'name'):
         urlpath, protocol, options = infer_options(urlpath)
