@@ -108,8 +108,9 @@ def test_urlpath_expand_write():
     assert paths == ['prefix-0.csv', 'prefix-1.csv']
     _, _, paths = get_fs_token_paths(['prefix-*.csv'], mode='wb', num=2)
     assert paths == ['prefix-0.csv', 'prefix-1.csv']
-    _, _, paths = get_fs_token_paths(['prefix1-*.csv', 'prefix2-*.csv'], mode='wb', num=2)
-    assert paths == ['prefix1-0.csv', 'prefix1-1.csv']
+    # we can read with multiple masks, but not write
+    with pytest.raises(ValueError):
+        _, _, paths = get_fs_token_paths(['prefix1-*.csv', 'prefix2-*.csv'], mode='wb', num=2)
 
 
 def test_read_bytes():
