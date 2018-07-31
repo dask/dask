@@ -267,12 +267,12 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
     """Expand paths if they have a ``*`` in them.
 
     :param paths: list of paths
-    mode : str, optional
+    mode : str
         Mode in which to open files.
-    num : int, optional
+    num : int
         If opening in writing mode, number of files we expect to create.
     fs : filesystem object
-    name_function : callable, optional
+    name_function : callable
         If opening in writing mode, this callable is used to generate path
         names. Names are generated for each partition by
         ``urlpath.replace('*', name_function(partition_index))``.
