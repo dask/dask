@@ -318,8 +318,8 @@ Slightly Overlapping Ghost Computations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. autosummary::
-   ghost.ghost
-   ghost.map_overlap
+   overlap.overlap
+   overlap.map_overlap
 
 
 Create and Store Arrays
@@ -580,9 +580,9 @@ Other functions
 .. autofunction:: masked_where
 .. autofunction:: set_fill_value
 
-.. currentmodule:: dask.array.ghost
+.. currentmodule:: dask.array.overlap
 
-.. autofunction:: ghost
+.. autofunction:: overlap
 .. autofunction:: map_overlap
 
 .. currentmodule:: dask.array
