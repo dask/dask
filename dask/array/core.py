@@ -1872,7 +1872,7 @@ class Array(DaskMethodsMixin):
                [20,  21,  22,  23],
                [24,  25,  26,  27]])
         """
-        from .ghost import map_overlap
+        from .overlap import map_overlap
         return map_overlap(self, func, depth, boundary, trim, **kwargs)
 
     def cumsum(self, axis, dtype=None, out=None):
