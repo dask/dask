@@ -6,8 +6,8 @@ from numpy.testing import assert_array_almost_equal, assert_array_equal
 
 import dask.array as da
 from dask.array.overlap import (fractional_slice, getitem, trim_internal,
-                              overlap_internal, nearest, constant, boundaries,
-                              reflect, periodic, overlap)
+                                overlap_internal, nearest, constant,
+                                boundaries, reflect, periodic, overlap)
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -155,7 +155,7 @@ def test_overlap():
          [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     assert_eq(g, expected)
     assert same_keys(g, overlap(d, depth={0: 2, 1: 1},
-                              boundary={0: 100, 1: 'reflect'}))
+                                boundary={0: 100, 1: 'reflect'}))
 
     g = overlap(d, depth={0: 2, 1: 1}, boundary={0: 100, 1: 'none'})
     expected = np.array(
@@ -221,7 +221,7 @@ def test_nearest_overlap():
 
     darr = da.from_array(a, chunks=(6, 6))
     garr = overlap(darr, depth={0: 5, 1: 5},
-                 boundary={0: 'nearest', 1: 'nearest'})
+                   boundary={0: 'nearest', 1: 'nearest'})
     tarr = trim_internal(garr, {0: 5, 1: 5})
     assert_array_almost_equal(tarr, a)
 
