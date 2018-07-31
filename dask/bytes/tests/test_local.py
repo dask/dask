@@ -92,14 +92,24 @@ def test_urlpath_inference_errors():
                             'should/not/be.csv' 'allowed.csv'})
 
 
-def test_urlpath_can_expand():
-    """Make sure * is expanded in file paths."""
+def test_urlpath_expand_read():
+    """Make sure * is expanded in file paths when reading."""
+    # when reading, globs should be expanded to read files by mask
     with filetexts(csv_files, mode='b'):
         _, _, paths = get_fs_token_paths('.*.csv')
         assert len(paths) == 2
-
         _, _, paths = get_fs_token_paths(['.*.csv'])
         assert len(paths) == 2
+
+
+def test_urlpath_expand_write():
+    """Make sure * is expanded in file paths when writing."""
+    _, _, paths = get_fs_token_paths('prefix-*.csv', mode='wb', num=2)
+    assert paths == ['prefix-0.csv', 'prefix-1.csv']
+    _, _, paths = get_fs_token_paths(['prefix-*.csv'], mode='wb', num=2)
+    assert paths == ['prefix-0.csv', 'prefix-1.csv']
+    _, _, paths = get_fs_token_paths(['prefix1-*.csv', 'prefix2-*.csv'], mode='wb', num=2)
+    assert paths == ['prefix1-0.csv', 'prefix1-1.csv']
 
 
 def test_read_bytes():
