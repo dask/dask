@@ -29,6 +29,12 @@ files = {'.test.accounts.1.json': (b'{"amount": 100, "name": "Alice"}\n'
                                    b'{"amount": 800, "name": "Dennis"}\n')}
 
 
+csv_files = {'.test.fakedata.1.csv': (b'a,b\n'
+                                      b'1,2\n'),
+             '.test.fakedata.2.csv': (b'a,b\n'
+                                      b'3,4\n')}
+
+
 try:
     # used only in test_with_urls - may be more generally useful
     import pathlib
@@ -84,6 +90,16 @@ def test_urlpath_inference_errors():
     with pytest.raises(TypeError):
         get_fs_token_paths({'sets/are.csv', 'unordered/so/they.csv',
                             'should/not/be.csv' 'allowed.csv'})
+
+
+def test_urlpath_can_expand():
+    """Make sure * is expanded in file paths."""
+    with filetexts(csv_files, mode='b'):
+        _, _, paths = get_fs_token_paths('.*.csv')
+        assert len(paths) == 2
+
+        _, _, paths = get_fs_token_paths(['.*.csv'])
+        assert len(paths) == 2
 
 
 def test_read_bytes():
