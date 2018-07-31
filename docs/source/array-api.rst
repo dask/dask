@@ -314,8 +314,8 @@ Image Support
 .. autosummary::
    image.imread
 
-Slightly Overlapping Ghost Computations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Slightly Overlapping Computations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. autosummary::
    overlap.overlap
