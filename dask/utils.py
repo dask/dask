@@ -892,10 +892,12 @@ def is_arraylike(x):
     >>> is_arraylike('cat')
     False
     """
+    from .base import is_dask_collection
+
     return (
         hasattr(x, 'shape') and x.shape and
         hasattr(x, 'dtype') and
-        not getattr(x, '_unknown_shape', False)
+        not any(is_dask_collection(n) for n in x.shape)
     )
 
 

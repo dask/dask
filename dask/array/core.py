@@ -3372,8 +3372,9 @@ def is_scalar_for_elemwise(arg):
     """
     # the second half of shape_condition is essentially just to ensure that
     # dask series / frame are treated as scalars in elemwise.
-    shape_condition = (not isinstance(getattr(arg, 'shape', None), Iterable) or
-                       getattr(arg, '_unknown_shape', False))
+    maybe_shape = getattr(arg, 'shape', None)
+    shape_condition = (not isinstance(maybe_shape, Iterable) or
+                       any(is_dask_collection(x) for x in maybe_shape))
 
     return (np.isscalar(arg) or
             shape_condition or
@@ -3435,7 +3436,8 @@ def elemwise(op, *args, **kwargs):
     shapes = []
     for arg in args:
         shape = getattr(arg, "shape", ())
-        if getattr(arg, "_unknown_shape", False):
+        if any(is_dask_collection(x) for x in shape):
+            # Want to excluded Delayed shapes and dd.Scalar
             shape = ()
         shapes.append(shape)
 

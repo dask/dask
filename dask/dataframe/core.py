@@ -304,10 +304,6 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         """Return number of partitions"""
         return len(self.divisions) - 1
 
-    # Hack to ensure that we aren't treated as an array (broadcast, etc)
-    # in ops between array and series.
-    _unknown_shape = True
-
     @property
     def size(self):
         """Size of the Series or DataFrame as a Delayed object.
