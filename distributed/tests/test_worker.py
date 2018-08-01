@@ -181,7 +181,7 @@ def test_upload_file(c, s, a, b):
     assert not os.path.exists(os.path.join(a.local_dir, 'foobar.py'))
 
 
-@pytest.mark.xfail(reason="don't yet support uploading pyc files")
+@pytest.mark.skip(reason="don't yet support uploading pyc files")
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)])
 def test_upload_file_pyc(c, s, w):
     with tmpfile() as dirname:

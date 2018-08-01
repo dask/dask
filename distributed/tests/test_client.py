@@ -46,7 +46,7 @@ from distributed.utils_test import (cluster, slow, slowinc, slowadd, slowdec,
                                     randominc, inc, dec, div, throws, geninc, asyncinc,
                                     gen_cluster, gen_test, double, deep, popen,
                                     captured_logger, varying, map_varying,
-                                    wait_for, async_wait_for)
+                                    wait_for, async_wait_for, pristine_loop)
 from distributed.utils_test import loop, loop_in_thread, nodebug  # noqa F401
 
 
@@ -2084,7 +2084,6 @@ def test_multi_client(s, a, b):
 
 
 def long_running_client_connection(address):
-    from distributed.utils_test import pristine_loop
     with pristine_loop():
         c = Client(address)
         x = c.submit(lambda x: x + 1, 10)
@@ -3425,7 +3424,7 @@ def test_get_foo_lost_keys(c, s, u, v, w):
 
 
 @slow
-@gen_cluster(client=True, Worker=Nanny)
+@gen_cluster(client=True, Worker=Nanny, check_new_threads=False)
 def test_bad_tasks_fail(c, s, a, b):
     f = c.submit(sys.exit, 1)
     with pytest.raises(KilledWorker):
@@ -4128,7 +4127,7 @@ def test_distribute_tasks_by_ncores(c, s, a, b):
     assert len(b.data) > 2 * len(a.data)
 
 
-@gen_cluster(client=True)
+@gen_cluster(client=True, check_new_threads=False)
 def test_add_done_callback(c, s, a, b):
     S = set()
 
@@ -4628,6 +4627,7 @@ def test_fire_and_forget_err(c, s, a, b):
         assert time() < start + 1
 
 
+@pytest.mark.xfail(reason='Other tests bleed into the logs of this one')
 def test_quiet_client_close(loop):
     with captured_logger(logging.getLogger('distributed')) as logger:
         with Client(loop=loop, processes=False, threads_per_worker=4) as c:
@@ -5103,12 +5103,10 @@ def test_future_auto_inform(c, s, a, b):
 
 
 def test_client_async_before_loop_starts():
-    loop = IOLoop()
-    client = Client(asynchronous=True, loop=loop)
-    assert client.asynchronous
-    client.close()
-    # Avoid long wait for cluster close at shutdown
-    loop.close()
+    with pristine_loop() as loop:
+        client = Client(asynchronous=True, loop=loop)
+        assert client.asynchronous
+        client.close()
 
 
 @slow
@@ -5431,6 +5429,11 @@ def test_scatter_error_cancel(c, s, a, b):
     assert y.status == 'error'
     yield gen.sleep(0.1)
     assert y.status == 'error'  # not cancelled
+
+
+def test_no_threads_lingering():
+    active = dict(threading._active)
+    assert threading.active_count() < 30, list(active.values())
 
 
 if sys.version_info >= (3, 5):

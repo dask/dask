@@ -478,6 +478,7 @@ class WorkerBase(ServerNode):
                                            self.scheduler.unregister(address=self.contact_address))
             self.scheduler.close_rpc()
             if isinstance(self.executor, ThreadPoolExecutor):
+                self.executor._work_queue.queue.clear()
                 self.executor.shutdown(wait=executor_wait, timeout=timeout)
             else:
                 self.executor.shutdown(wait=False)
@@ -2004,7 +2005,11 @@ class Worker(WorkerBase):
                 self.log.append((key, 'release-key'))
             del self.tasks[key]
             if key in self.data and key not in self.dep_state:
-                del self.data[key]
+                try:
+                    del self.data[key]
+                except FileNotFoundError:
+                    logger.error("Tried to delete %s but no file found",
+                                 exc_info=True)
                 del self.nbytes[key]
                 del self.types[key]
 
@@ -2266,7 +2271,7 @@ class Worker(WorkerBase):
         self._memory_monitoring = True
         total = 0
 
-        proc = psutil.Process()
+        proc = self.monitor.proc
         memory = proc.memory_info().rss
         frac = memory / self.memory_limit
 

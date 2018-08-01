@@ -39,8 +39,8 @@ from tornado import gen, queues
 from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 
-from .client import default_client
-from .compatibility import PY3, iscoroutinefunction, Empty
+from .client import default_client, _global_clients
+from .compatibility import PY3, iscoroutinefunction, Empty, WINDOWS
 from .config import initialize_logging
 from .core import connect, rpc, CommClosedError
 from .metrics import time
@@ -97,6 +97,7 @@ def cleanup_global_workers():
 @pytest.fixture
 def loop():
     del _global_workers[:]
+    _global_clients.clear()
     with pristine_loop() as loop:
         # Monkey-patch IOLoop.start to wait for loop stop
         orig_start = loop.start
@@ -125,6 +126,7 @@ def loop():
         else:
             is_stopped.wait()
     del _global_workers[:]
+    _global_clients.clear()
 
 
 @pytest.fixture
@@ -727,7 +729,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                 scheduler='127.0.0.1', timeout=10, security=None,
                 Worker=Worker, client=False, scheduler_kwargs={},
                 worker_kwargs={}, client_kwargs={}, active_rpc_timeout=1,
-                config={}):
+                config={}, check_new_threads=True):
     from distributed import Client
     """ Coroutine test with small cluster
 
@@ -739,11 +741,6 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
         start
         end
     """
-    del _global_workers[:]
-
-    reset_config()
-
-    dask.config.set({'distributed.comm.timeouts.connect': '5s'})
     worker_kwargs = merge({'memory_limit': TOTAL_MEMORY, 'death_timeout': 5},
                           worker_kwargs)
 
@@ -752,6 +749,13 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
             func = gen.coroutine(func)
 
         def test_func():
+            del _global_workers[:]
+            _global_clients.clear()
+            active_threads_start = set(threading._active)
+
+            reset_config()
+
+            dask.config.set({'distributed.comm.timeouts.connect': '5s'})
             # Restore default logging levels
             # XXX use pytest hooks/fixtures instead?
             for name, level in logging_levels.items():
@@ -810,22 +814,40 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
 
                     result = loop.run_sync(coro, timeout=timeout * 2 if timeout else timeout)
 
-            for w in workers:
-                if getattr(w, 'data', None):
-                    try:
-                        w.data.clear()
-                    except EnvironmentError:
-                        # zict backends can fail if their storage directory
-                        # was already removed
-                        pass
-                    del w.data
-            DequeHandler.clear_all_instances()
-            for w in _global_workers:
-                w = w()
-                w._close(report=False, executor_wait=False)
-                if w.status == 'running':
-                    w.close()
-            del _global_workers[:]
+                for w in workers:
+                    if getattr(w, 'data', None):
+                        try:
+                            w.data.clear()
+                        except EnvironmentError:
+                            # zict backends can fail if their storage directory
+                            # was already removed
+                            pass
+                        del w.data
+                DequeHandler.clear_all_instances()
+                for w in _global_workers:
+                    w = w()
+                    w._close(report=False, executor_wait=False)
+                    if w.status == 'running':
+                        w.close()
+                del _global_workers[:]
+
+            if PY3 and not WINDOWS and check_new_threads:
+                start = time()
+                while True:
+                    bad = [t for t, v in threading._active.items()
+                           if t not in active_threads_start and
+                          "Threaded" not in v.name and
+                          "watch message queue" not in v.name]
+                    if not bad:
+                        break
+                    else:
+                        sleep(0.01)
+                    if time() > start + 2:
+                        from distributed import profile
+                        tid = bad[0]
+                        thread = threading._active[tid]
+                        call_stacks = profile.call_stack(sys._current_frames()[tid])
+                        assert False, (thread, call_stacks)
             return result
 
         return test_func

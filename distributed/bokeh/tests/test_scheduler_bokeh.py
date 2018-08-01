@@ -258,7 +258,8 @@ def test_ProcessingHistogram(c, s, a, b):
     assert (ph.source.data['top'] != 0).sum() == 1
 
     futures = c.map(slowinc, range(10), delay=0.050)
-    yield gen.sleep(0.100)
+    while not s.tasks:
+        yield gen.sleep(0.01)
 
     ph.update()
     assert ph.source.data['right'][-1] > 2

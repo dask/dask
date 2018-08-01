@@ -23,6 +23,7 @@ which is included as a comment at the end of this file:
 from __future__ import print_function, division, absolute_import
 
 from . import _concurrent_futures_thread as thread
+from .compatibility import Empty
 import os
 import logging
 import threading
@@ -48,7 +49,10 @@ def _worker(executor, work_queue):
                     executor._threads.remove(threading.current_thread())
                     rejoin_event.set()
                     break
-            task = work_queue.get()
+            try:
+                task = work_queue.get(timeout=1)
+            except Empty:
+                continue
             if task is not None:  # sentinel
                 task.run()
                 del task

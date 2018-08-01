@@ -1160,7 +1160,7 @@ class Scheduler(ServerNode):
             nanny_addr = self.get_worker_service_addr(worker, 'nanny')
             address = nanny_addr or worker
 
-            self.worker_send(worker, {'op': 'close'})
+            self.worker_send(worker, {'op': 'close', 'report': False})
             self.remove_worker(address=worker, safe=safe)
 
     def _setup_logging(self):
@@ -1613,7 +1613,7 @@ class Scheduler(ServerNode):
             logger.info("Remove worker %s", address)
             if close:
                 with ignoring(AttributeError, CommClosedError):
-                    self.stream_comms[address].send({'op': 'close'})
+                    self.stream_comms[address].send({'op': 'close', 'report': False})
 
             self.remove_resources(address)
 

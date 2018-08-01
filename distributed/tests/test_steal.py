@@ -330,9 +330,11 @@ def test_steal_when_more_tasks(c, s, a, *rest):
 
     futures = [c.submit(slowidentity, x, pure=False, delay=0.2)
                for i in range(20)]
-    yield gen.sleep(0.1)
 
-    assert any(w.task_state for w in rest)
+    start = time()
+    while not any(w.task_state for w in rest):
+        yield gen.sleep(0.01)
+        assert time() < start + 1
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)

@@ -739,7 +739,13 @@ class Client(Node):
             sync(self.loop, self._start, **kwargs)
 
     def __await__(self):
-        return self._started.__await__()
+        if hasattr(self, '_started'):
+            return self._started.__await__()
+        else:
+            @gen.coroutine
+            def _():
+                raise gen.Return(self)
+            return _().__await__()
 
     def _send_to_scheduler_safe(self, msg):
         if self.status in ('running', 'closing'):
