@@ -55,6 +55,8 @@ how to set up Dask on a variety of local and distributed hardware.
       SLURM, SGE, TORQUE, LSF, and so on
     - :doc:`Kubernetes <setup/kubernetes>`: Deploy Dask with the
       popular Kubernetes resource manager using either Helm or a native deployment.
+    - `YARN <https://dask-yarn.readthedocs.io/en/latest/>`_: Deploy Dask on
+      YARN clusters, such as are found in traditional Hadoop installations.
     - :doc:`Python API (advanced) <setup/python-advanced>`: Create
       ``Scheduler`` and ``Worker`` objects from Python as part of a distributed
       Tornado TCP application.  This page is useful for those building custom
@@ -76,6 +78,7 @@ how to set up Dask on a variety of local and distributed hardware.
    setup/ssh.rst
    setup/hpc.rst
    setup/kubernetes.rst
+   YARN <https://dask-yarn.readthedocs.io/en/latest/>
    setup/python-advanced.rst
    setup/cloud.rst
    setup/adaptive.rst
