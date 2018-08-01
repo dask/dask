@@ -2781,7 +2781,8 @@ def parse_memory_limit(memory_limit, ncores):
 
 
 @gen.coroutine
-def get_data_from_worker(rpc, keys, worker, who=None, max_connections=None):
+def get_data_from_worker(rpc, keys, worker, who=None, max_connections=None,
+                         serializers=None, deserializers=None):
     """ Get keys from worker
 
     The worker has a two step handshake to acknowledge when data has been fully
@@ -2793,11 +2794,16 @@ def get_data_from_worker(rpc, keys, worker, who=None, max_connections=None):
     Worker.gather_deps
     utils_comm.gather_data_from_workers
     """
+    if serializers is None:
+        serializers = rpc.serializers
+    if deserializers is None:
+        deserializers = rpc.deserializers
+
     comm = yield rpc.connect(worker)
     try:
         response = yield send_recv(comm,
-                                   serializers=rpc.serializers,
-                                   deserializers=rpc.deserializers,
+                                   serializers=serializers,
+                                   deserializers=deserializers,
                                    op='get_data', keys=keys, who=who,
                                    max_connections=max_connections)
         if response['status'] == 'OK':
