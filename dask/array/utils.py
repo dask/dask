@@ -12,6 +12,14 @@ from toolz import frequencies, concat
 from .core import Array
 from ..sharedict import ShareDict
 
+try:
+    AxisError = np.AxisError
+except AttributeError:
+    try:
+        np.array([0]).sum(axis=5)
+    except Exception as e:
+        AxisError = type(e)
+
 
 def allclose(a, b, equal_nan=False, **kwargs):
     if getattr(a, 'dtype', None) != 'O':
@@ -135,8 +143,8 @@ def validate_axis(axis, ndim):
     if not isinstance(axis, numbers.Integral):
         raise TypeError("Axis value must be an integer, got %s" % axis)
     if axis < -ndim or axis >= ndim:
-        raise np.AxisError("Axis %d is out of bounds for array of dimension %d"
-                           % (axis, ndim))
+        raise AxisError("Axis %d is out of bounds for array of dimension %d"
+                        % (axis, ndim))
     if axis < 0:
         axis += ndim
     return axis
