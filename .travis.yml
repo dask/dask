@@ -98,7 +98,7 @@ install:
     else
       curl -fsSL https://testspace-client.s3.amazonaws.com/testspace-linux.tgz | tar -zxvf- -C $HOME/bin;
     fi
-  - testspace config url open.testspace.com
+  - testspace config url $TS_ORG.testspace.com
 
 script:
   - if [[ $TEST_HDFS == 'true' ]]; then source continuous_integration/hdfs/run_tests.sh; fi
