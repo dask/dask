@@ -16,17 +16,19 @@ def fractional_slice(task, axes):
     (getitem, ('x', 3, 5), (slice(0, 2), slice(-3, None)))
     """
 
-    warn('ghost module will be renamed to overlap, '
-         'use overlap.fractional_slice.',
-         DeprecationWarning)
+    warn('DeprecationWarning: the dask.array.ghost module has '
+         'been renamed to dask.array.overlap, '
+         'use dask.array.overlap.fractional_slice.',
+         Warning)
 
     return overlap.fractional_slice(task, axes)
 
 
 def expand_key(k, dims, name=None, axes=None):
-    warn('ghost module will be renamed to overlap, '
-         'use overlap.expand_keys.',
-         DeprecationWarning)
+    warn('DeprecationWarning: the dask.array.ghost module has '
+         'been renamed to dask.array.overlap, '
+         'use dask.array.overlap.expand_keys.',
+         Warning)
 
     return overlap.expand_key(k, dims, name, axes)
 
@@ -42,12 +44,13 @@ def ghost_internal(x, axes):
     axes: dict
         The size of the shared boundary per axis
 
-    The axes input informs how many cells to overlap between neighboring blocks
+    The axes input informs how many cells to dask.array.overlap between neighboring blocks
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
     """
-    warn('ghost module will be renamed to overlap, '
-         'use overlap.ghost_internal.',
-         DeprecationWarning)
+    warn('DeprecationWarning: the dask.array.ghost module has '
+         'been renamed to dask.array.overlap, '
+         'use dask.array.overlap.ghost_internal.',
+         Warning)
 
     return overlap.overlap_internal(x, axes)
 
@@ -63,9 +66,10 @@ def trim_internal(x, axes):
     dask.array.chunk.trim
     dask.array.map_blocks
     """
-    warn('ghost module will be renamed to overlap, '
-         'use overlap.trim_internal.',
-         DeprecationWarning)
+    warn('DeprecationWarning: the dask.array.ghost module has '
+         'been renamed to dask.array.overlap, '
+         'use dask.array.overlap.trim_internal.',
+         Warning)
 
     return overlap.trim_internal(x, axes)
 
@@ -75,9 +79,10 @@ def periodic(x, axis, depth):
 
     Useful to create periodic boundary conditions for ghost
     """
-    warn('ghost module will be renamed to overlap, '
-         'use overlap.periodic.',
-         DeprecationWarning)
+    warn('DeprecationWarning: the dask.array.ghost module has '
+         'been renamed to dask.array.overlap, '
+         'use dask.array.overlap.periodic.',
+         Warning)
 
     return overlap.periodic(x, axis, depth)
 
@@ -87,9 +92,10 @@ def reflect(x, axis, depth):
 
     This is the converse of ``periodic``
     """
-    warn('ghost module will be renamed to overlap, '
-         'use overlap.reflect.',
-         DeprecationWarning)
+    warn('DeprecationWarning: the dask.array.ghost module has '
+         'been renamed to dask.array.overlap, '
+         'use dask.array.overlap.reflect.',
+         Warning)
 
     return overlap.reflect(x, axis, depth)
 
@@ -100,18 +106,20 @@ def nearest(x, axis, depth):
     This mimics what the skimage.filters.gaussian_filter(... mode="nearest")
     does.
     """
-    warn('ghost module will be renamed to overlap, '
-         'use overlap.nearest.',
-         DeprecationWarning)
+    warn('DeprecationWarning: the dask.array.ghost module has '
+         'been renamed to dask.array.overlap, '
+         'use dask.array.overlap.nearest.',
+         Warning)
 
     return overlap.nearest(x, axis, depth)
 
 
 def constant(x, axis, depth, value):
     """ Add constant slice to either side of array """
-    warn('ghost module will be renamed to overlap, '
-         'use overlap.constant.',
-         DeprecationWarning)
+    warn('DeprecationWarning: the dask.array.ghost module has '
+         'been renamed to dask.array.overlap, '
+         'use dask.array.overlap.constant.',
+         Warning)
 
     return overlap.constant(x, axis, depth, value)
 
@@ -135,9 +143,10 @@ def boundaries(x, depth=None, kind=None):
     periodic
     constant
     """
-    warn('ghost module will be renamed to overlap, '
-         'use overlap.boundaries.',
-         DeprecationWarning)
+    warn('DeprecationWarning: the dask.array.ghost module has '
+         'been renamed to dask.array.overlap, '
+         'use dask.array.overlap.boundaries.',
+         Warning)
 
     return overlap.boundaries(x, depth, kind)
 
@@ -157,7 +166,7 @@ def ghost(x, depth, boundary):
         'nearest', 'none', or an array value.  Such a value will fill the
         boundary with that value.
 
-    The depth input informs how many cells to overlap between neighboring
+    The depth input informs how many cells to dask.array.overlap between neighboring
     blocks ``{0: 2, 2: 5}`` means share two cells in 0 axis, 5 cells in 2 axis.
     Axes missing from this input will not be overlapped.
 
@@ -194,9 +203,10 @@ def ghost(x, depth, boundary):
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     """
-    warn('ghost module will be renamed to overlap, '
-         'use overlap.ghost.',
-         DeprecationWarning)
+    warn('DeprecationWarning: the dask.array.ghost module has '
+         'been renamed to dask.array.overlap, '
+         'use dask.array.overlap.ghost.',
+         Warning)
 
     return overlap.overlap(x, depth, boundary)
 
@@ -211,9 +221,10 @@ def add_dummy_padding(x, depth, boundary):
     >>> add_dummy_padding(x, {0: 1}, {0: 'none'}).compute()  # doctest: +NORMALIZE_WHITESPACE
     array([..., 0, 1, 2, 3, 4, 5, ...])
     """
-    warn('ghost module will be renamed to overlap, '
-         'use overlap.add_dummy_padding.',
-         DeprecationWarning)
+    warn('DeprecationWarning: the dask.array.ghost module has '
+         'been renamed to dask.array.overlap, '
+         'use dask.array.overlap.add_dummy_padding.',
+         Warning)
 
     return overlap.add_dummy_padding(x, depth, boundary)
 
@@ -273,24 +284,27 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
            [20,  21,  22,  23],
            [24,  25,  26,  27]])
     """
-    warn('ghost module will be renamed to overlap, '
-         'use overlap.map_overlap.',
-         DeprecationWarning)
+    warn('DeprecationWarning: the dask.array.ghost module has '
+         'been renamed to dask.array.overlap, '
+         'use dask.array.overlap.map_overlap.',
+         Warning)
 
     return overlap.map_overlap(x, func, depth, boundary, trim, **kwargs)
 
 
 def coerce_depth(ndim, depth):
-    warn('ghost module will be renamed to overlap, '
-         'use overlap.coerce_depth.',
-         DeprecationWarning)
+    warn('DeprecationWarning: the dask.array.ghost module has '
+         'been renamed to dask.array.overlap, '
+         'use dask.array.overlap.coerce_depth.',
+         Warning)
 
     return overlap.coerce_depth(ndim, depth)
 
 
 def coerce_boundary(ndim, boundary):
-    warn('ghost module will be renamed to overlap, '
-         'use overlap.coerce_boundary.',
-         DeprecationWarning)
+    warn('DeprecationWarning: the dask.array.ghost module has '
+         'been renamed to dask.array.overlap, '
+         'use dask.array.overlap.coerce_boundary.',
+         Warning)
 
     return overlap.coerce_boundary(ndim, boundary)
