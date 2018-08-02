@@ -1824,13 +1824,6 @@ class Array(DaskMethodsMixin):
         return moment(self, order, axis=axis, dtype=dtype, keepdims=keepdims,
                       ddof=ddof, split_every=split_every, out=out)
 
-    def vnorm(self, ord=None, axis=None, keepdims=False, split_every=None,
-              out=None):
-        """ Vector norm """
-        from .reductions import vnorm
-        return vnorm(self, ord=ord, axis=axis, keepdims=keepdims,
-                     split_every=split_every, out=out)
-
     @wraps(map_blocks)
     def map_blocks(self, func, *args, **kwargs):
         return map_blocks(func, self, *args, **kwargs)
