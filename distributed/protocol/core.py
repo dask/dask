@@ -19,6 +19,14 @@ from ..utils import nbytes
 _deserialize = deserialize
 
 
+try:
+    msgpack.loads(msgpack.dumps(''), raw=False)
+    msgpack_raw_false = {'raw': False}
+except TypeError:
+    # Backward compat with old msgpack (prior to 0.5.2)
+    msgpack_raw_false = {'encoding': 'utf-8'}
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -102,7 +110,7 @@ def loads(frames, deserialize=True, deserializers=None):
             return msg
 
         header = frames.pop()
-        header = msgpack.loads(header, encoding='utf8', use_list=False)
+        header = msgpack.loads(header, use_list=False, **msgpack_raw_false)
         keys = header['keys']
         headers = header['headers']
         bytestrings = set(header['bytestrings'])
@@ -174,7 +182,7 @@ def loads_msgpack(header, payload):
         dumps_msgpack
     """
     if header:
-        header = msgpack.loads(header, encoding='utf8', use_list=False)
+        header = msgpack.loads(header, use_list=False, **msgpack_raw_false)
     else:
         header = {}
 
@@ -186,4 +194,4 @@ def loads_msgpack(header, payload):
             raise ValueError("Data is compressed as %s but we don't have this"
                              " installed" % str(header['compression']))
 
-    return msgpack.loads(payload, encoding='utf8', use_list=False)
+    return msgpack.loads(payload, use_list=False, **msgpack_raw_false)
