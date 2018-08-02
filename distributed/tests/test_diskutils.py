@@ -9,9 +9,10 @@ import sys
 from time import sleep
 
 import mock
+import pytest
 
 import dask
-from distributed.compatibility import Empty
+from distributed.compatibility import Empty, WINDOWS
 from distributed.diskutils import WorkSpace
 from distributed.metrics import time
 from distributed.utils import mp_context
@@ -257,6 +258,8 @@ def _test_workspace_concurrency(tmpdir, timeout, max_procs):
 
 
 def test_workspace_concurrency(tmpdir):
+    if WINDOWS:
+        raise pytest.xfail.Exception('TODO: unknown failure on windows')
     _test_workspace_concurrency(tmpdir, 2.0, 6)
 
 

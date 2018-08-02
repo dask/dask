@@ -30,7 +30,7 @@ def test_defaults(loop):
         def f():
             # Default behaviour is to listen on all addresses
             yield [
-                assert_can_connect_from_everywhere_4_6(8786, 2.0),  # main port
+                assert_can_connect_from_everywhere_4_6(8786, 5.0),  # main port
             ]
 
         loop.run_sync(f)
