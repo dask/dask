@@ -92,12 +92,29 @@ jobs:
 install:
   - if [[ $TEST_HDFS == 'true' ]]; then source continuous_integration/hdfs/install.sh; fi
   - if [[ $TEST == 'true' ]]; then source continuous_integration/travis/install.sh; fi
+  - mkdir -p $HOME/bin
+  - if [[ "${TRAVIS_OS_NAME}" = "osx" ]]; then
+      curl -fsSL https://testspace-client.s3.amazonaws.com/testspace-darwin.tgz | tar -zxvf- -C $HOME/bin;
+    else
+      curl -fsSL https://testspace-client.s3.amazonaws.com/testspace-linux.tgz | tar -zxvf- -C $HOME/bin;
+    fi
+  - testspace config url $TS_ORG.testspace.com
 
 script:
   - if [[ $TEST_HDFS == 'true' ]]; then source continuous_integration/hdfs/run_tests.sh; fi
   - if [[ $TEST == 'true' ]]; then source continuous_integration/travis/run_tests.sh; fi
   - if [[ $LINT == 'true' ]]; then flake8 dask; fi
   - if [[ $TEST_IMPORTS == 'true' ]]; then source continuous_integration/travis/test_imports.sh; fi
+
+after_script:
+  - ${TRAVIS_ALLOW_FAILURE} || if [[ $TEST_HDFS == 'true' ]]; then
+      docker cp $CONTAINER_ID:/working/testresults.xml $TRAVIS_BUILD_DIR/testresults.xml;
+      testspace [hdfs]testresults.xml{.};
+    elif [[ $UPSTREAM_DEV == 1 ]]; then
+      testspace [upstream-dev]testresults.xml{.} --link=coveralls;
+    else
+      testspace [py-${PYTHON}-numpy-${NUMPY}]testresults.xml{.} --link=coveralls;
+    fi
 
 after_success:
   - source continuous_integration/travis/after_success.sh

@@ -6,6 +6,8 @@ if [[ $PARALLEL == 'true' ]]; then
     export PYTHONHASHSEED=42
 fi
 
+export XTRATESTARGS="--junit-xml=testresults.xml $XTRATESTARGS"
+
 if [[ $COVERAGE == 'true' ]]; then
     echo "coverage run `which py.test` dask --runslow --doctest-modules $XTRATESTARGS"
     coverage run `which py.test` dask --runslow --doctest-modules $XTRATESTARGS
