@@ -1,11 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
-
+import operator
 from functools import partial, wraps
 from itertools import product, repeat
 from math import factorial, log, ceil
-import operator
 
 import numpy as np
 from toolz import compose, partition_all, get, accumulate, pluck
@@ -816,11 +814,6 @@ def topk(a, k, axis=-1, split_every=None):
     >>> d.topk(-2).compute()
     array([1, 3])
     """
-    if isinstance(a, int) and isinstance(k, Array):
-        warnings.warn("DeprecationWarning: topk(k, a) has been replaced with "
-                      "topk(a, k)")
-        a, k = k, a
-
     axis = validate_axis(a.ndim, axis)
 
     # chunk and combine steps of the reduction, which recursively invoke
