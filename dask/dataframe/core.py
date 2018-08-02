@@ -1646,9 +1646,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         raise NotImplementedError
 
     @derived_from(pd.DataFrame)
-    def resample(self, rule, how=None, closed=None, label=None):
-        from .tseries.resample import _resample
-        return _resample(self, rule, how=how, closed=closed, label=label)
+    def resample(self, rule, closed=None, label=None):
+        from .tseries.resample import Resampler
+        return Resampler(self, rule, closed=closed, label=label)
 
     @derived_from(pd.DataFrame)
     def first(self, offset):
