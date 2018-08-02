@@ -32,22 +32,22 @@ Explanation
 
 Consider two neighboring blocks in a Dask array.
 
-.. image:: images/unghosted-neighbors.png
+.. image:: images/unoverlapping-neighbors.png
    :width: 30%
-   :alt: un-overlapped neighbors
+   :alt: un-overlapping neighbors
 
 We extend each block by trading thin nearby slices between arrays
 
-.. image:: images/ghosted-neighbors.png
+.. image:: images/overlapping-neighbors.png
    :width: 30%
-   :alt: overlapped neighbors
+   :alt: overlapping neighbors
 
 We do this in all directions, including also diagonal interactions with the
 overlap function:
 
-.. image:: images/ghosted-blocks.png
+.. image:: images/overlapping-blocks.png
    :width: 40%
-   :alt: overlapped blocks
+   :alt: overlapping blocks
 
 .. code-block:: python
 
@@ -108,7 +108,7 @@ paddings.
 Map a function across blocks
 ----------------------------
 
-Ghosting goes hand-in-hand with mapping a function across blocks.  This
+Overlapping goes hand-in-hand with mapping a function across blocks.  This
 function can now use the additional information copied over from the neighbors
 that is not stored locally in each block
 
