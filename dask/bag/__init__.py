@@ -13,5 +13,4 @@ except ImportError as e:
            "Please either conda or pip install as follows:\n\n"
            "  conda install dask               # either conda install\n"
            "  pip install dask[bag] --upgrade  # or pip install")
-    e.msg += "\n\n" + msg
-    raise e
+    raise ImportError(str(e) + '\n\n' + msg)
