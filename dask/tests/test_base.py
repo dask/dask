@@ -22,7 +22,7 @@ from dask.compatibility import long, unicode
 
 
 def import_or_none(path):
-    with ignoring():
+    with ignoring(BaseException):
         return pytest.importorskip(path)
     return None
 

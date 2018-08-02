@@ -4286,26 +4286,6 @@ def maybe_shift_divisions(df, periods, freq):
     return df
 
 
-def to_delayed(df, optimize_graph=True):
-    """Convert into a list of ``dask.delayed`` objects, one per partition.
-
-    Deprecated, please use the equivalent ``df.to_delayed`` method instead.
-
-    Parameters
-    ----------
-    optimize_graph : bool, optional
-        If True [default], the graph is optimized before converting into
-        ``dask.delayed`` objects.
-
-    See Also
-    --------
-    dask.dataframe.from_delayed
-    """
-    warnings.warn("DeprecationWarning: The `dd.to_delayed` function is "
-                  "deprecated, please use the `.to_delayed()` method instead.")
-    return df.to_delayed(optimize_graph=optimize_graph)
-
-
 @wraps(pd.to_datetime)
 def to_datetime(arg, **kwargs):
     meta = pd.Series([pd.Timestamp('2000')])
