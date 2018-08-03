@@ -1182,6 +1182,8 @@ def test_wait_for_outgoing(c, s, a, b):
     assert 1 / 3 < ratio < 3
 
 
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
+                    reason="Need 127.0.0.2 to mean localhost")
 @gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 1), ('127.0.0.2', 1)],
              client=True)
 def test_prefer_gather_from_local_address(c, s, w1, w2, w3):

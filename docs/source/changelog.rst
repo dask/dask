@@ -1,10 +1,48 @@
 Changelog
 =========
 
-1.21.1 - 2018-XX-XX
+X.XX.X - 2018-XX-XX
 -------------------
 
--
+
+1.22.1 - 2018-08-03
+-------------------
+
+-  Add worker_class= keyword to Nanny to support different worker types (:pr:`2147`) `Martin Durant`_
+-  Cleanup intermittent worker failures (:pr:`2152`) (:pr:`2146`) `Matthew Rocklin`_
+-  Fix msgpack PendingDeprecationWarning for encoding='utf-8' (:pr:`2153`) `Olivier Grisel`_
+-  Make bokeh coloring deterministic using hash function (:pr:`2143`) `Matthew Rocklin`_
+-  Allow client to query the task stream plot (:pr:`2122`) `Matthew Rocklin`_
+-  Use PID and counter in thread names (:pr:`2084`) (:pr:`2128`) `Dror Birkman`_
+-  Test that worker restrictions are cleared after cancellation (:pr:`2107`) `Matthew Rocklin`_
+-  Expand resources in graph_to_futures (:pr:`2131`) `Matthew Rocklin`_
+-  Add custom serialization support for pyarrow  (:pr:`2115`) `Dave Hirschfeld`_
+-  Update dask-scheduler cli help text for preload (:pr:`2120`) `Matt Nicolls`_
+-  Added another nested parallelism test (:pr:`1710`) `Tom Augspurger`_
+-  insert newline by default after TextProgressBar (:pr:`1976`) `Phil Tooley`_
+-  Retire workers from scale (:pr:`2104`) `Matthew Rocklin`_
+-  Allow worker to refuse data requests with busy signal (:pr:`2092`) `Matthew Rocklin`_
+-  Don't forget released keys (:pr:`2098`) `Matthew Rocklin`_
+-  Update example for stopping a worker (:pr:`2088`) `John A Kirkham`_
+-  removed hardcoded value of memory terminate fraction from a log message (:pr:`2096`) `Bartosz Marcinkowski`_
+-  Adjust worker doc after change in config file location and treatment (:pr:`2094`) `Aurélien Ponte`_
+-  Prefer gathering data from same host (:pr:`2090`) `Matthew Rocklin`_
+-  Handle exceptions on deserialized comm with text error (:pr:`2093`) `Matthew Rocklin`_
+-  Fix typo in docstring (:pr:`2087`) `Loïc Estève`_
+-  Provide communication context to serialization functions (:pr:`2054`) `Matthew Rocklin`_
+-  Allow `name` to be explicitly passed in publish_dataset (:pr:`1995`) `Marius van Niekerk`_
+-  Avoid accessing Worker.scheduler_delay around yield point (:pr:`2074`) `Matthew Rocklin`_
+-  Support TB and PB in format bytes (:pr:`2072`) `Matthew Rocklin`_
+-  Add test for as_completed for loops in Python 2 (:pr:`2071`) `Matthew Rocklin`_
+-  Allow adaptive to exist without a cluster (:pr:`2064`) `Matthew Rocklin`_
+-  Have worker data transfer wait until recipient acknowledges (:pr:`2052`) `Matthew Rocklin`_
+-  Support async def functions in Client.sync (:pr:`2070`) `Matthew Rocklin`_
+-  Add asynchronous parameter to docstring of LocalCluster `Matthew Rocklin`_
+-  Normalize address before comparison (:pr:`2066`) `Tom Augspurger`_
+-  Use ConnectionPool for Worker.scheduler `Matthew Rocklin`_
+-  Avoid reference cycle in str_graph `Matthew Rocklin`_
+-  Pull data outside of while loop in gather (:pr:`2059`) `Matthew Rocklin`_
+
 
 1.22.0 - 2018-06-14
 -------------------
@@ -683,3 +721,9 @@ significantly without many new features.
 .. _`@bmaisson`: https://github.com/bmaisson
 .. _`Martin Durant`: https://github.com/martindurant
 .. _`Grant Jenks`: https://github.com/grantjenks
+.. _`Dror Birkman`: https://github.com/Dror-LightCyber
+.. _`Dave Hirschfeld`: https://github.com/dhirschfeld
+.. _`Matt Nicolls`: https://github.com/nicolls1
+.. _`Phil Tooley`: https://github.com/ptooley
+.. _`Bartosz Marcinkowski`: https://github.com/bm371613
+.. _`Aurélien Ponte`: https://github.com/apatlpo
