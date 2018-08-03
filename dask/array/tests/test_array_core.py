@@ -877,26 +877,6 @@ def test_T():
     assert_eq(x.T, a.T)
 
 
-def test_norm():
-    a = np.arange(200, dtype='f8').reshape((20, 10))
-    a = a + (a.max() - a) * 1j
-    b = from_array(a, chunks=(5, 5))
-
-    # TODO: Deprecated method, remove test when method removed
-    with pytest.warns(UserWarning):
-        assert_eq(b.vnorm(), np.linalg.norm(a))
-        assert_eq(b.vnorm(ord=1), np.linalg.norm(a.flatten(), ord=1))
-        assert_eq(b.vnorm(ord=4, axis=0), np.linalg.norm(a, ord=4, axis=0))
-        assert b.vnorm(ord=4, axis=0, keepdims=True).ndim == b.ndim
-        split_every = {0: 3, 1: 3}
-        assert_eq(b.vnorm(ord=1, axis=0, split_every=split_every),
-                  np.linalg.norm(a, ord=1, axis=0))
-        assert_eq(b.vnorm(ord=np.inf, axis=0, split_every=split_every),
-                  np.linalg.norm(a, ord=np.inf, axis=0))
-        assert_eq(b.vnorm(ord=np.inf, split_every=split_every),
-                  np.linalg.norm(a.flatten(), ord=np.inf))
-
-
 def test_broadcast_to():
     x = np.random.randint(10, size=(5, 1, 6))
     a = from_array(x, chunks=(3, 1, 3))

@@ -7,7 +7,7 @@ from . import core
 from ..base import tokenize
 
 
-class LocalFileSystem(core.FileSystem):
+class LocalFileSystem(object):
     """API spec for the methods a filesystem
 
     A filesystem must provide these methods, if it is to be registered as

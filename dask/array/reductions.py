@@ -1,11 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
-
+import operator
 from functools import partial, wraps
 from itertools import product, repeat
 from math import factorial, log, ceil
-import operator
 
 import numpy as np
 from toolz import compose, partition_all, get, accumulate, pluck
@@ -520,34 +518,6 @@ with ignoring(AttributeError):
     nanstd = wraps(chunk.nanstd)(nanstd)
 
 
-def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False, split_every=None,
-          out=None):
-    """ Vector norm
-
-    See np.linalg.norm
-    """
-
-    warnings.warn(
-        "DeprecationWarning: Please use `dask.array.linalg.norm` instead.",
-        UserWarning
-    )
-
-    if ord is None or ord == 'fro':
-        ord = 2
-    if ord == np.inf:
-        return max(abs(a), axis=axis, keepdims=keepdims,
-                   split_every=split_every, out=out)
-    elif ord == -np.inf:
-        return min(abs(a), axis=axis, keepdims=keepdims,
-                   split_every=split_every, out=out)
-    elif ord == 1:
-        return sum(abs(a), axis=axis, dtype=dtype, keepdims=keepdims,
-                   split_every=split_every, out=out)
-    else:
-        return sum(abs(a) ** ord, axis=axis, dtype=dtype, keepdims=keepdims,
-                   split_every=split_every, out=out) ** (1. / ord)
-
-
 def _arg_combine(data, axis, argfunc, keepdims=False):
     """ Merge intermediate results from ``arg_*`` functions"""
     axis = None if len(axis) == data.ndim or data.ndim == 1 else axis[0]
@@ -844,11 +814,6 @@ def topk(a, k, axis=-1, split_every=None):
     >>> d.topk(-2).compute()
     array([1, 3])
     """
-    if isinstance(a, int) and isinstance(k, Array):
-        warnings.warn("DeprecationWarning: topk(k, a) has been replaced with "
-                      "topk(a, k)")
-        a, k = k, a
-
     axis = validate_axis(a.ndim, axis)
 
     # chunk and combine steps of the reduction, which recursively invoke

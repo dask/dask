@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import re
 import copy
 import json
-import warnings
 import os
 from distutils.version import LooseVersion
 
@@ -880,13 +879,9 @@ def get_engine(engine):
                                      'write': _write_pyarrow}
         return eng
 
-    elif engine == 'arrow':
-        warnings.warn("parquet with `engine='arrow'` is deprecated, "
-                      "use `engine='pyarrow'` instead")
-        return get_engine('pyarrow')
-
     else:
-        raise ValueError('Unsupported engine type: {0}'.format(engine))
+        raise ValueError('Unsupported engine: "{0}".'.format(engine) +
+                         '  Valid choices include "pyarrow" and "fastparquet".')
 
 
 def read_parquet(path, columns=None, filters=None, categories=None, index=None,
@@ -1049,12 +1044,6 @@ def to_parquet(df, path, engine='auto', compression='default', write_index=None,
     --------
     read_parquet: Read parquet data to dask.dataframe
     """
-    # TODO: remove once deprecation cycle is finished
-    if isinstance(path, DataFrame):
-        warnings.warn("DeprecationWarning: The order of `df` and `path` in "
-                      "`dd.to_parquet` has switched, please update your code")
-        df, path = path, df
-
     partition_on = partition_on or []
 
     if set(partition_on) - set(df.columns):

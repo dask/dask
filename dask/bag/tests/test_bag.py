@@ -120,17 +120,6 @@ def test_map_method():
     assert (b.map(myadd, b.sum(), c=10).compute() ==
             [myadd(i, x_sum, 10) for i in x])
 
-    # check that map works with multiarg functions. Can be removed after
-    # deprecated behavior is removed
-    assert b.map(add, b2).compute() == list(map(add, x, x2))
-
-    # check that map works with vararg functions. Can be removed after
-    # deprecated behavior is removed
-    def vararg_inc(*args):
-        return inc(*args)
-
-    assert_eq(b.map(vararg_inc), list(map(inc, x)))
-
 
 def test_starmap():
     data = [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10)]
