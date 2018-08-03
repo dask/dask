@@ -72,6 +72,7 @@ Dataframe
     DataFrame.rtruediv
     DataFrame.sample
     DataFrame.set_index
+    DataFrame.shape
     DataFrame.std
     DataFrame.sub
     DataFrame.sum
@@ -181,6 +182,7 @@ Series
    Series.round
    Series.sample
    Series.sem
+   Series.shape
    Series.shift
    Series.size
    Series.std

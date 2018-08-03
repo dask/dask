@@ -306,7 +306,13 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     @property
     def size(self):
-        """ Size of the series """
+        """Size of the Series or DataFrame as a Delayed object.
+
+        Examples
+        --------
+        >>> series.size  # doctest: +SKIP
+        dd.Scalar<size-ag..., dtype=int64>
+        """
         return self.reduction(methods.size, np.sum, token='size', meta=int,
                               split_every=False)
 
@@ -1799,6 +1805,20 @@ class Series(_Frame):
         return 1
 
     @property
+    def shape(self):
+        """
+        Return a tuple representing the dimensionality of a Series.
+
+        The single element of the tuple is a Delayed result.
+
+        Examples
+        --------
+        >>> series.shape  # doctest: +SKIP
+        # (dd.Scalar<size-ag..., dtype=int64>,)
+        """
+        return (self.size,)
+
+    @property
     def dtype(self):
         """ Return data type """
         return self._meta.dtype
@@ -2464,6 +2484,24 @@ class DataFrame(_Frame):
     def ndim(self):
         """ Return dimensionality """
         return 2
+
+    @property
+    def shape(self):
+        """
+        Return a tuple representing the dimensionality of the DataFrame.
+
+        The number of rows is a Delayed result. The number of columns
+        is a concrete integer.
+
+        Examples
+        --------
+        >>> df.size  # doctest: +SKIP
+        (Delayed('int-07f06075-5ecc-4d77-817e-63c69a9188a8'), 2)
+        """
+        from dask.delayed import delayed
+        col_size = len(self.columns)
+        row_size = delayed(int)(self.size / col_size)
+        return (row_size, col_size)
 
     @property
     def dtypes(self):
