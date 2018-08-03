@@ -880,7 +880,8 @@ def get_engine(engine):
         return eng
 
     else:
-        raise ValueError('Unsupported engine type: {0}'.format(engine))
+        raise ValueError('Unsupported engine: "{0}".'.format(engine) +
+                         '  Valid choices include "pyarrow" and "fastparquet".')
 
 
 def read_parquet(path, columns=None, filters=None, categories=None, index=None,
