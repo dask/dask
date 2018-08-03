@@ -12,7 +12,7 @@ np = pytest.importorskip('numpy')
 import dask.array as da
 from dask.compatibility import PY2
 from dask.utils import ignoring
-from dask.array.utils import assert_eq, same_keys
+from dask.array.utils import assert_eq, same_keys, AxisError
 from dask.array.einsumfuncs import einsum_can_optimize
 
 
@@ -1296,10 +1296,10 @@ def test_insert():
     with pytest.raises(NotImplementedError):
         da.insert(a, [4, 2], -1, axis=0)
 
-    with pytest.raises(IndexError):
+    with pytest.raises(AxisError):
         da.insert(a, [3], -1, axis=2)
 
-    with pytest.raises(IndexError):
+    with pytest.raises(AxisError):
         da.insert(a, [3], -1, axis=-3)
 
 
