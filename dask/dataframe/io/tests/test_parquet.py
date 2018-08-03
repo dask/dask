@@ -1264,3 +1264,12 @@ def test_arrow_partitioning(tmpdir):
     ddf = dd.read_parquet(path, engine='pyarrow')
 
     ddf.astype({'b': np.float32}).compute()
+
+
+def test_informative_error_messages():
+    with pytest.raises(ValueError) as info:
+        dd.read_parquet('foo', engine='foo')
+
+    assert 'foo' in str(info.value)
+    assert 'arrow' in str(info.value)
+    assert 'fastparquet' in str(info.value)

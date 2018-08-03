@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 try:
     from .core import (DataFrame, Series, Index, _Frame, map_partitions,
-                       repartition, to_delayed, to_datetime, to_timedelta)
+                       repartition, to_datetime, to_timedelta)
     from .groupby import Aggregation
     from .io import (from_array, from_pandas, from_bcolz,
                      from_dask_array, read_hdf, read_sql_table,

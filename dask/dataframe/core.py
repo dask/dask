@@ -1646,9 +1646,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         raise NotImplementedError
 
     @derived_from(pd.DataFrame)
-    def resample(self, rule, how=None, closed=None, label=None):
-        from .tseries.resample import _resample
-        return _resample(self, rule, how=how, closed=closed, label=label)
+    def resample(self, rule, closed=None, label=None):
+        from .tseries.resample import Resampler
+        return Resampler(self, rule, closed=closed, label=label)
 
     @derived_from(pd.DataFrame)
     def first(self, offset):
@@ -4284,26 +4284,6 @@ def maybe_shift_divisions(df, periods, freq):
         divisions = divs.shift(periods, freq=freq).index
         return type(df)(df.dask, df._name, df._meta, divisions)
     return df
-
-
-def to_delayed(df, optimize_graph=True):
-    """Convert into a list of ``dask.delayed`` objects, one per partition.
-
-    Deprecated, please use the equivalent ``df.to_delayed`` method instead.
-
-    Parameters
-    ----------
-    optimize_graph : bool, optional
-        If True [default], the graph is optimized before converting into
-        ``dask.delayed`` objects.
-
-    See Also
-    --------
-    dask.dataframe.from_delayed
-    """
-    warnings.warn("DeprecationWarning: The `dd.to_delayed` function is "
-                  "deprecated, please use the `.to_delayed()` method instead.")
-    return df.to_delayed(optimize_graph=optimize_graph)
 
 
 @wraps(pd.to_datetime)

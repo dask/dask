@@ -371,41 +371,6 @@ def get_mapper(fs, path):
         raise ValueError('No mapper for protocol "%s"' % fs.protocol)
 
 
-def open_text_files(urlpath, compression=None, mode='rt', encoding='utf8',
-                    errors='strict', **kwargs):
-    """ Given path return dask.delayed file-like objects in text mode
-
-    This function is deprecated, use ``open_files(path, mode='rt', ...)``.
-
-    Parameters
-    ----------
-    urlpath: string
-        Absolute or relative filepath, URL (may include protocols like
-        ``s3://``), or globstring pointing to data.
-    encoding: string
-    errors: string
-    compression: string
-        Compression to use.  See ``dask.bytes.compression.files`` for options.
-    **kwargs: dict
-        Extra options that make sense to a particular storage connection, e.g.
-        host, port, username, password, etc.
-
-    Examples
-    --------
-    >>> files = open_text_files('2015-*-*.csv', encoding='utf-8')  # doctest: +SKIP
-    >>> files = open_text_files('s3://bucket/2015-*-*.csv')  # doctest: +SKIP
-
-    Returns
-    -------
-    List of ``dask.delayed`` objects that compute to text file-like objects
-    """
-    warn("DeprecationWarning: open_text_files is deprecated, use `open_files` "
-         "with mode='rt' or mode='wt'")
-    return open_files(urlpath, mode=mode.replace('b', 't'),
-                      compression=compression, encoding=encoding,
-                      errors=errors, **kwargs)
-
-
 def _expand_paths(path, name_function, num):
     if isinstance(path, (str, unicode)):
         if path.count('*') > 1:
@@ -523,12 +488,6 @@ def get_fs(protocol, storage_options=None):
 
 
 _filesystems = dict()
-
-
-class FileSystem(object):
-    """Deprecated, do not use. Implement filesystems by matching the interface
-    of `dask.bytes.local.LocalFileSystem` instead of subclassing."""
-    pass
 
 
 def logical_size(fs, path, compression='infer'):

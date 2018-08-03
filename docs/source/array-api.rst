@@ -182,7 +182,6 @@ Top level user functions:
    unique
    var
    vdot
-   vnorm
    vstack
    where
    zeros
@@ -541,7 +540,6 @@ Other functions
 .. autofunction:: unique
 .. autofunction:: var
 .. autofunction:: vdot
-.. autofunction:: vnorm
 .. autofunction:: vstack
 .. autofunction:: where
 .. autofunction:: zeros

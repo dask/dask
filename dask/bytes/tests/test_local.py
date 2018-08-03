@@ -13,9 +13,8 @@ from dask.compatibility import FileNotFoundError, unicode
 from dask.utils import filetexts
 from dask.bytes import compression
 from dask.bytes.local import LocalFileSystem
-from dask.bytes.core import (read_bytes, open_files, FileSystem,
-                             get_pyarrow_filesystem, logical_size,
-                             get_fs_token_paths)
+from dask.bytes.core import (read_bytes, open_files, get_pyarrow_filesystem,
+                             logical_size, get_fs_token_paths)
 
 compute = partial(compute, scheduler='sync')
 
@@ -392,7 +391,7 @@ def test_abs_paths(tmpdir):
     assert res == 'hi'
 
 
-class UnknownFileSystem(FileSystem):
+class UnknownFileSystem(object):
     pass
 
 

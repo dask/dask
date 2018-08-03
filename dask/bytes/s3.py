@@ -5,7 +5,7 @@ from s3fs import S3FileSystem
 from . import core
 
 
-class DaskS3FileSystem(S3FileSystem, core.FileSystem):
+class DaskS3FileSystem(S3FileSystem, object):
 
     sep = '/'
 

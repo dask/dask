@@ -8,7 +8,7 @@ from . import core
 DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
 
 
-class HTTPFileSystem(core.FileSystem):
+class HTTPFileSystem(object):
     """
     Simple File-System for fetching data via HTTP(S)
 

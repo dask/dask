@@ -22,7 +22,7 @@ from dask.compatibility import long, unicode, PY2
 
 
 def import_or_none(path):
-    with ignoring():
+    with ignoring(BaseException):
         return pytest.importorskip(path)
     return None
 
@@ -692,16 +692,6 @@ def test_optimize_nested():
     assert res[0][0] is a
     assert res[0][1] is b
     assert res[1].compute() == 5
-
-
-# TODO: remove after deprecation cycle of `dask.optimize` module is completed
-def test_optimize_has_deprecated_module_functions_as_attributes():
-    import dask.optimize as deprecated_optimize
-    # Function has method attributes
-    assert dask.optimize.cull is deprecated_optimize.cull
-    assert dask.optimize.inline is deprecated_optimize.inline
-    with pytest.warns(UserWarning):
-        dask.optimize.cull({}, [])
 
 
 def test_default_imports():

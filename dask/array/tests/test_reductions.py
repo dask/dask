@@ -482,10 +482,6 @@ def test_topk_argtopk2(npfunc, daskfunc, split_every, chunksize):
 def test_topk_argtopk3():
     a = da.random.random((10, 20, 30), chunks=(4, 8, 8))
 
-    # Support for deprecated API for topk
-    with pytest.warns(UserWarning):
-        assert_eq(da.topk(a, 5), da.topk(5, a))
-
     # As Array methods
     assert_eq(a.topk(5, axis=1, split_every=2),
               da.topk(a, 5, axis=1, split_every=2))

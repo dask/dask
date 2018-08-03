@@ -340,12 +340,6 @@ def optimize(*args, **kwargs):
     return repack([r(dsk, *s) for r, s in postpersists])
 
 
-# TODO: remove after deprecation cycle of `dask.optimize` module completes
-from . import optimize as _deprecated_optimize
-for _m in _deprecated_optimize.__all__:
-    setattr(optimize, _m, getattr(_deprecated_optimize, _m))
-
-
 def compute(*args, **kwargs):
     """Compute several dask collections at once.
 
