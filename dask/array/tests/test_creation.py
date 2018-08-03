@@ -18,6 +18,7 @@ from dask.array.utils import assert_eq, same_keys
     ]
 )
 @pytest.mark.parametrize("cast_shape", [tuple, list, np.asarray])
+@pytest.mark.parametrize("cast_chunks", [tuple, list, np.asarray])
 @pytest.mark.parametrize(
     "shape, chunks", [
         ((10, 10), (4, 4))
@@ -28,10 +29,11 @@ from dask.array.utils import assert_eq, same_keys
         "i4",
     ]
 )
-def test_arr_like(funcname, shape, cast_shape, dtype, chunks):
+def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks):
     np_func = getattr(np, funcname)
     da_func = getattr(da, funcname)
     shape = cast_shape(shape)
+    chunks = cast_chunks(chunks)
 
     if "full" in funcname:
         old_np_func = np_func
