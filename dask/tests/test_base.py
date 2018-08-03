@@ -18,7 +18,7 @@ from dask.base import (compute, tokenize, normalize_token, normalize_function,
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
-from dask.compatibility import long, unicode
+from dask.compatibility import long, unicode, PY2
 
 
 def import_or_none(path):
@@ -118,7 +118,7 @@ def test_tokenize_numpy_array_on_object_dtype():
             tokenize(np.array(['a', None, 'aaa'], dtype=object)))
     assert (tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object)) ==
             tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object)))
-    if sys.version_info[0] == 2:
+    if PY2:
         assert (tokenize(np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)) ==
                 tokenize(np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)))
 

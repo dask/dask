@@ -17,6 +17,7 @@ class LZMAFile:
 LZMA_AVAILABLE = False
 
 if PY3:
+    import copyreg
     import builtins
     from queue import Queue, Empty
     from itertools import zip_longest
@@ -70,6 +71,7 @@ if PY3:
 
 else:
     import __builtin__ as builtins
+    import copy_reg as copyreg
     from Queue import Queue, Empty
     from itertools import izip_longest as zip_longest, izip as zip
     from StringIO import StringIO

@@ -34,16 +34,6 @@ jobs:
       - *no_imports
 
     - env:
-      - PYTHON=3.4
-      - NUMPY=1.11.3
-      - PANDAS=0.19.1
-      - *test_and_lint
-      - *no_coverage
-      - *optimize
-      - *no_imports
-      if: type != pull_request
-
-    - env:
       - PYTHON=3.5
       - NUMPY=1.11.1
       - PANDAS=0.19.2

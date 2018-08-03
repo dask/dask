@@ -19,6 +19,7 @@ from toolz.curried import identity
 import dask
 import dask.array as da
 from dask.base import tokenize, compute_as_if_collection
+from dask.compatibility import PY2
 from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir, key_split
 from dask.utils_test import inc, dec
@@ -2052,7 +2053,7 @@ def test_from_array_ndarray_getitem():
 
 @pytest.mark.parametrize(
     'x', [[1, 2], (1, 2), memoryview(b'abc')] +
-    ([buffer(b'abc')] if sys.version_info[0] == 2 else []))  # noqa: F821
+    ([buffer(b'abc')] if PY2 else []))  # noqa: F821
 def test_from_array_list(x):
     """Lists, tuples, and memoryviews are automatically converted to ndarray
     """
@@ -2069,7 +2070,7 @@ def test_from_array_list(x):
 
 @pytest.mark.parametrize(
     'type_', [t for t in np.ScalarType if t not in [memoryview] +
-              ([buffer] if sys.version_info[0] == 2 else [])])  # noqa: F821
+              ([buffer] if PY2 else [])])  # noqa: F821
 def test_from_array_scalar(type_):
     """Python and numpy scalars are automatically converted to ndarray
     """

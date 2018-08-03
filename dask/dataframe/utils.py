@@ -19,6 +19,7 @@ except ImportError:
     # pandas < 0.19.2
     from pandas.core.common import is_datetime64tz_dtype
 
+from ..compatibility import PY2
 from ..core import get_deps
 from ..local import get_sync
 from ..utils import asciitable, is_arraylike
@@ -661,7 +662,7 @@ def assert_sane_keynames(ddf):
         assert isinstance(k, (str, bytes))
         assert len(k) < 100
         assert ' ' not in k
-        if sys.version_info[0] >= 3:
+        if not PY2:
             assert k.split('-')[0].isidentifier()
 
 
