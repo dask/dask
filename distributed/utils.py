@@ -39,7 +39,11 @@ from dask import istask
 import toolz
 import tornado
 from tornado import gen
-from tornado.ioloop import IOLoop, PollIOLoop
+from tornado.ioloop import IOLoop
+try:
+    from tornado.ioloop import PollIOLoop
+except ImportError:
+    PollIOLoop = None  # dropped in tornado 6.0
 
 from .compatibility import Queue, PY3, PY2, get_thread_identity, unicode
 from .metrics import time
@@ -234,7 +238,7 @@ def sync(loop, func, *args, **kwargs):
     Run coroutine in loop running in separate thread.
     """
     # Tornado's PollIOLoop doesn't raise when using closed, do it ourselves
-    if ((isinstance(loop, PollIOLoop) and getattr(loop, '_closing', False)) or
+    if PollIOLoop and ((isinstance(loop, PollIOLoop) and getattr(loop, '_closing', False)) or
         (hasattr(loop, 'asyncio_loop') and loop.asyncio_loop._closed)):
         raise RuntimeError("IOLoop is closed")
 
