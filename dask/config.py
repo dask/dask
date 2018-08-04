@@ -16,7 +16,7 @@ no_default = '__no_default__'
 
 
 paths = [
-    '/etc/dask',
+    os.getenv('DASK_ROOT_CONFIG', '/etc/dask'),
     os.path.join(sys.prefix, 'etc', 'dask'),
     os.path.join(os.path.expanduser('~'), '.config', 'dask'),
     os.path.join(os.path.expanduser('~'), '.dask')
