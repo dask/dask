@@ -82,7 +82,8 @@ These files can live in any of the following locations:
 
 1.  The ``~/.config/dask`` directory in the user's home directory
 2.  The ``{sys.prefix}/etc/dask`` directory local to Python
-3.  The root ``/etc/dask/`` directory
+3.  The root directory (specified by the ``DASK_ROOT_CONFIG`` environment
+    variable or ``/etc/dask/`` by default)
 
 Dask searches for *all* YAML files within each of these directories and merges
 them together, preferring configuration files closer to the user over system
