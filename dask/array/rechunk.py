@@ -20,6 +20,7 @@ from toolz import accumulate, reduce
 from ..base import tokenize
 from ..utils import parse_bytes
 from .core import concatenate3, Array, normalize_chunks
+from .utils import validate_axis
 from .wrap import empty
 from .. import config, sharedict
 
@@ -175,8 +176,7 @@ def intersect_chunks(old_chunks, new_chunks):
     return cross
 
 
-def rechunk(x, chunks, threshold=None,
-            block_size_limit=None):
+def rechunk(x, chunks, threshold=None, block_size_limit=None):
     """
     Convert blocks in dask array x for new chunks.
 
@@ -214,7 +214,7 @@ def rechunk(x, chunks, threshold=None,
     >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
     """
     if isinstance(chunks, dict):
-        chunks = dict(chunks)
+        chunks = {validate_axis(c, x.ndim): v for c, v in chunks.items()}
         for i in range(x.ndim):
             if i not in chunks:
                 chunks[i] = x.chunks[i]
