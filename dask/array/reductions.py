@@ -12,6 +12,7 @@ from . import chunk
 from .core import _concatenate2, Array, atop, lol_tuples, handle_out
 from .creation import arange
 from .ufunc import sqrt
+from .utils import validate_axis
 from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
 from ..compatibility import getargspec, builtins
@@ -125,7 +126,7 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
         axis = tuple(range(x.ndim))
     if isinstance(axis, int):
         axis = (axis,)
-    axis = tuple(validate_axis(x.ndim, a) for a in axis)
+    axis = validate_axis(axis, x.ndim)
 
     if dtype is None:
         raise ValueError("Must specify dtype")
@@ -604,10 +605,7 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
         axis = tuple(range(x.ndim))
         ravel = True
     elif isinstance(axis, int):
-        if axis < 0:
-            axis += x.ndim
-        if axis < 0 or axis >= x.ndim:
-            raise ValueError("axis entry is out of bounds")
+        axis = validate_axis(axis, x.ndim)
         axis = (axis,)
         ravel = x.ndim == 1
     else:
@@ -711,7 +709,7 @@ def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
     if dtype is None:
         dtype = getattr(func(np.empty((0,), dtype=x.dtype)), 'dtype', object)
     assert isinstance(axis, int)
-    axis = validate_axis(x.ndim, axis)
+    axis = validate_axis(axis, x.ndim)
 
     m = x.map_blocks(func, axis=axis, dtype=dtype)
 
@@ -767,17 +765,6 @@ def cumprod(x, axis=None, dtype=None, out=None):
     return cumreduction(np.cumprod, _cumprod_merge, 1, x, axis, dtype, out=out)
 
 
-def validate_axis(ndim, axis):
-    """ Validate single axis dimension against number of dimensions """
-    if axis > ndim - 1 or axis < -ndim:
-        raise ValueError("Axis must be between -%d and %d, got %d" %
-                         (ndim, ndim - 1, axis))
-    if axis < 0:
-        return axis + ndim
-    else:
-        return axis
-
-
 def topk(a, k, axis=-1, split_every=None):
     """ Extract the k largest elements from a on the given axis,
     and return them sorted from largest to smallest.
@@ -814,7 +801,7 @@ def topk(a, k, axis=-1, split_every=None):
     >>> d.topk(-2).compute()
     array([1, 3])
     """
-    axis = validate_axis(a.ndim, axis)
+    axis = validate_axis(axis, a.ndim)
 
     # chunk and combine steps of the reduction, which recursively invoke
     # np.partition to pick the top/bottom k elements from the previous step.
@@ -863,7 +850,7 @@ def argtopk(a, k, axis=-1, split_every=None):
     >>> d.argtopk(-2).compute()
     array([1, 2])
     """
-    axis = validate_axis(a.ndim, axis)
+    axis = validate_axis(axis, a.ndim)
 
     # Generate nodes where every chunk is a tuple of (a, original index of a)
     idx = arange(a.shape[axis], chunks=(a.chunks[axis], ), dtype=np.intp)
