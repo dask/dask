@@ -39,7 +39,7 @@ from ..context import globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict, Dispatch, factors,
-                     parse_bytes, has_keyword)
+                     parse_bytes, has_keyword, M)
 from ..compatibility import unicode, long, zip_longest, apply
 from ..core import quote
 from ..delayed import Delayed, to_task_dask
@@ -1973,7 +1973,7 @@ class Array(DaskMethodsMixin):
         Copy array.  This is a no-op for dask.arrays, which are immutable
         """
         if self.npartitions == 1:
-            return self.map_blocks(np.copy)
+            return self.map_blocks(M.copy)
         else:
             return Array(self.dask, self.name, self.chunks, self.dtype)
 
