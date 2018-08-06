@@ -532,6 +532,7 @@ def _arg_combine(data, axis, argfunc, keepdims=False):
         local_args = argfunc(vals, axis=axis)
         inds = np.ogrid[tuple(map(slice, local_args.shape))]
         inds.insert(axis, local_args)
+        inds = tuple(inds)
         vals = vals[inds]
         arg = arg[inds]
         if keepdims:
