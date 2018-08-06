@@ -1,3 +1,5 @@
+set -xe
+
 #!/usr/bin/env bash
 # Install conda
 case "$(uname -s)" in
@@ -113,3 +115,5 @@ fi;
 pip install --no-deps -e .[complete]
 echo conda list
 conda list
+
+set +xe
