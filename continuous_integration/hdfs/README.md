@@ -4,14 +4,10 @@ Dask & HDFS testing relies on a docker container. The tests are setup to run on
 Travis CI, but only under the following conditions:
 
 - Merges to master
-- PRs where the branch name contains the string `"__TEST_HDFS__"`
+- PRs where the commit message contains the string `"test-hdfs"`
 
 If you make a PR changing HDFS functionality it'd be good to have the HDFS
-tests run, please add `"__TEST_HDFS__"` to the end of your branch name.
-
-If you've already made a PR (and thus can't change the branch name), you can
-temporarily comment out the `if:` configuration in the `.travis.yml` for the
-HDFS tests.
+tests run, please add `"test-hdfs"` to your commit message.
 
 ## Setting up HDFS testing locally using Docker
 
