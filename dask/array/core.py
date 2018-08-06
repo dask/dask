@@ -2109,6 +2109,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
         chunks = (chunks,) * len(shape)
     if isinstance(chunks, dict):
         chunks = tuple(chunks.get(i, None) for i in range(len(shape)))
+    if isinstance(chunks, np.ndarray):
+        chunks = chunks.tolist()
     if not chunks and shape and all(s == 0 for s in shape):
         chunks = ((0,),) * len(shape)
 
