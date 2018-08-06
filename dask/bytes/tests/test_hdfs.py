@@ -238,9 +238,6 @@ def test_pyarrow_compat():
     assert isinstance(pa_hdfs, pyarrow.filesystem.FileSystem)
 
 
-@pytest.mark.skip(
-    reason='hdfs3 fails. See https://github.com/dask/dask/issues/3345.'
-)
 @require_pyarrow
 def test_parquet_pyarrow(hdfs):
     dd = pytest.importorskip('dask.dataframe')

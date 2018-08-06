@@ -67,7 +67,7 @@ jobs:
 
     - env:
       - TEST_HDFS='true'
-      if: type != pull_request OR head_branch =~ __TEST_HDFS__  # Skip on PRS unless the branch contains __TEST_HDFS__
+      if: type != pull_request OR commit_message =~ test-hdfs  # Skip on PRS unless the commit message contains "test-hdfs"
       sudo: true
       services:
         - docker
