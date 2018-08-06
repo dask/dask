@@ -309,6 +309,7 @@ intersphinx_mapping = {'pandas': ('http://pandas.pydata.org/pandas-docs/stable/'
 redirect_files = [
     # old html, new html
     ('array-overview.html', 'array.html'),
+    ('array-ghost.html', 'array-overlap.html'),
     ('dataframe-overview.html', 'dataframe.html'),
     ('delayed-overview.html', 'delayed.html'),
     ('scheduler-choice.html', 'setup.html'),

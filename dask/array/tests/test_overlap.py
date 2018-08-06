@@ -5,9 +5,9 @@ import numpy as np
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
 import dask.array as da
-from dask.array.ghost import (fractional_slice, getitem, trim_internal,
-                              ghost_internal, nearest, constant, boundaries,
-                              reflect, periodic, ghost)
+from dask.array.overlap import (fractional_slice, getitem, trim_internal,
+                                overlap_internal, nearest, constant,
+                                boundaries, reflect, periodic, overlap)
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -25,11 +25,11 @@ def test_fractional_slice():
     assert isinstance(fs[1][1], int)
 
 
-def test_ghost_internal():
+def test_overlap_internal():
     x = np.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=(4, 4))
 
-    g = ghost_internal(d, {0: 2, 1: 1})
+    g = overlap_internal(d, {0: 2, 1: 1})
     result = g.compute(scheduler='sync')
     assert g.chunks == ((6, 6), (5, 5))
 
@@ -49,7 +49,7 @@ def test_ghost_internal():
         [56, 57, 58, 59, 60,   59, 60, 61, 62, 63]])
 
     assert_eq(result, expected)
-    assert same_keys(ghost_internal(d, {0: 2, 1: 1}), g)
+    assert same_keys(overlap_internal(d, {0: 2, 1: 1}), g)
 
 
 def test_trim_internal():
@@ -131,10 +131,10 @@ def test_boundaries():
     assert_eq(e, expected)
 
 
-def test_ghost():
+def test_overlap():
     x = np.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=(4, 4))
-    g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100, 1: 'reflect'})
+    g = overlap(d, depth={0: 2, 1: 1}, boundary={0: 100, 1: 'reflect'})
     assert g.chunks == ((8, 8), (6, 6))
     expected = np.array(
         [[100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
@@ -154,10 +154,10 @@ def test_ghost():
          [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
          [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     assert_eq(g, expected)
-    assert same_keys(g, ghost(d, depth={0: 2, 1: 1},
-                              boundary={0: 100, 1: 'reflect'}))
+    assert same_keys(g, overlap(d, depth={0: 2, 1: 1},
+                                boundary={0: 100, 1: 'reflect'}))
 
-    g = ghost(d, depth={0: 2, 1: 1}, boundary={0: 100, 1: 'none'})
+    g = overlap(d, depth={0: 2, 1: 1}, boundary={0: 100, 1: 'none'})
     expected = np.array(
         [[100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
          [100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
@@ -216,12 +216,12 @@ def test_map_overlap_no_depth(boundary):
     assert_eq(y, x)
 
 
-def test_nearest_ghost():
+def test_nearest_overlap():
     a = np.arange(144).reshape(12, 12).astype(float)
 
     darr = da.from_array(a, chunks=(6, 6))
-    garr = ghost(darr, depth={0: 5, 1: 5},
-                 boundary={0: 'nearest', 1: 'nearest'})
+    garr = overlap(darr, depth={0: 5, 1: 5},
+                   boundary={0: 'nearest', 1: 'nearest'})
     tarr = trim_internal(garr, {0: 5, 1: 5})
     assert_array_almost_equal(tarr, a)
 
@@ -232,10 +232,10 @@ def test_0_depth():
 
     depth = {0: 0, 1: 0}
 
-    reflected = ghost(darr, depth=depth, boundary='reflect')
-    nearest = ghost(darr, depth=depth, boundary='nearest')
-    periodic = ghost(darr, depth=depth, boundary='periodic')
-    constant = ghost(darr, depth=depth, boundary=42)
+    reflected = overlap(darr, depth=depth, boundary='reflect')
+    nearest = overlap(darr, depth=depth, boundary='nearest')
+    periodic = overlap(darr, depth=depth, boundary='periodic')
+    constant = overlap(darr, depth=depth, boundary=42)
 
     result = trim_internal(reflected, depth)
     assert_array_equal(result, expected)
@@ -256,10 +256,10 @@ def test_some_0_depth():
 
     depth = {0: 4, 1: 0}
 
-    reflected = ghost(darr, depth=depth, boundary='reflect')
-    nearest = ghost(darr, depth=depth, boundary='nearest')
-    periodic = ghost(darr, depth=depth, boundary='periodic')
-    constant = ghost(darr, depth=depth, boundary=42)
+    reflected = overlap(darr, depth=depth, boundary='reflect')
+    nearest = overlap(darr, depth=depth, boundary='nearest')
+    periodic = overlap(darr, depth=depth, boundary='periodic')
+    constant = overlap(darr, depth=depth, boundary=42)
 
     result = trim_internal(reflected, depth)
     assert_array_equal(result, expected)
@@ -277,7 +277,7 @@ def test_some_0_depth():
 def test_one_chunk_along_axis():
     a = np.arange(2 * 9).reshape(2, 9)
     darr = da.from_array(a, chunks=((2,), (2, 2, 2, 3)))
-    g = ghost(darr, depth=0, boundary=0)
+    g = overlap(darr, depth=0, boundary=0)
     assert a.shape == g.shape
 
 
@@ -294,10 +294,10 @@ def test_depth_equals_boundary_length():
 
     depth = {0: 5, 1: 5}
 
-    reflected = ghost(darr, depth=depth, boundary='reflect')
-    nearest = ghost(darr, depth=depth, boundary='nearest')
-    periodic = ghost(darr, depth=depth, boundary='periodic')
-    constant = ghost(darr, depth=depth, boundary=42)
+    reflected = overlap(darr, depth=depth, boundary='reflect')
+    nearest = overlap(darr, depth=depth, boundary='nearest')
+    periodic = overlap(darr, depth=depth, boundary='periodic')
+    constant = overlap(darr, depth=depth, boundary=42)
 
     result = trim_internal(reflected, depth)
     assert_array_equal(result, expected)
@@ -319,10 +319,10 @@ def test_depth_greater_than_boundary_length():
 
     depth = {0: 8, 1: 7}
 
-    reflected = ghost(darr, depth=depth, boundary='reflect')
-    nearest = ghost(darr, depth=depth, boundary='nearest')
-    periodic = ghost(darr, depth=depth, boundary='periodic')
-    constant = ghost(darr, depth=depth, boundary=42)
+    reflected = overlap(darr, depth=depth, boundary='reflect')
+    nearest = overlap(darr, depth=depth, boundary='nearest')
+    periodic = overlap(darr, depth=depth, boundary='periodic')
+    constant = overlap(darr, depth=depth, boundary=42)
 
     result = trim_internal(reflected, depth)
     assert_array_equal(result, expected)
@@ -343,7 +343,7 @@ def test_bad_depth_raises():
 
     depth = {0: 4, 1: 2}
 
-    pytest.raises(ValueError, ghost, darr, depth=depth, boundary=1)
+    pytest.raises(ValueError, overlap, darr, depth=depth, boundary=1)
 
 
 def test_none_boundaries():
@@ -357,7 +357,7 @@ def test_none_boundaries():
     assert_eq(exp, res)
 
 
-def test_ghost_small():
+def test_overlap_small():
     x = da.ones((10, 10), chunks=(5, 5))
 
     y = x.map_overlap(lambda x: x, depth=1)
