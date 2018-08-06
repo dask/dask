@@ -46,8 +46,8 @@ try:
         from .reductions import nanprod, nancumprod, nancumsum
     with ignoring(ImportError):
         from . import ma
-    from . import random, linalg, ghost, fft
-    from .ghost import map_overlap
+    from . import random, linalg, overlap, fft
+    from .overlap import map_overlap
     from .wrap import ones, zeros, empty, full
     from .creation import ones_like, zeros_like, empty_like, full_like
     from .rechunk import rechunk
