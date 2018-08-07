@@ -47,7 +47,7 @@ def read_orc(path, columns=None, storage_options=None):
     if LooseVersion(pa.__version__) == '0.10.0':
         raise RuntimeError("Due to a bug in pyarrow 0.10.0, the ORC reader is "
                            "unavailable. Please either downgrade pyarrow to "
-                           "0.9.0, or use pyarrow the master branch (in which "
+                           "0.9.0, or use the pyarrow master branch (in which "
                            "this issue is fixed).\n\n"
                            "For more information see: "
                            "https://issues.apache.org/jira/browse/ARROW-3009")
