@@ -482,7 +482,6 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
                   categories=None, index=None, infer_divisions=None):
     from ...bytes.core import get_pyarrow_filesystem
     import pyarrow.parquet as pq
-    import pyarrow as pa
 
     # In pyarrow, the physical storage field names may differ from
     # the actual dataframe names. This is true for Index names when
@@ -522,15 +521,6 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
         column_names = schema.names
         storage_name_mapping = {k: k for k in column_names}
         column_index_names = [None]
-
-    if pa.__version__ < LooseVersion('0.8.0'):
-        # the pyarrow 0.7.0 *reader* expects the storage names for index names
-        # that are None.
-        if any(x is None for x in index_names):
-            name_storage_mapping = {v: k for
-                                    k, v in storage_name_mapping.items()}
-            index_names = [name_storage_mapping.get(name, name)
-                           for name in index_names]
 
     column_names += [p for p in partitions if p not in column_names]
     column_names, index_names, out_type = _normalize_index_columns(
@@ -707,7 +697,7 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
 
             # Handle conversion to pandas timestamp divisions
             index_field = pa_schema.field_by_name(divisions_name)
-            if isinstance(index_field.type, pa.TimestampType):
+            if pa.types.is_timestamp(index_field.type):
                 time_unit = index_field.type.unit
                 divisions_ns = [_to_ns(d, time_unit) for d in
                                 divisions]
@@ -873,7 +863,10 @@ def get_engine(engine):
         return eng
 
     elif engine == 'pyarrow':
-        import_required('pyarrow', "`pyarrow` not installed")
+        pa = import_required('pyarrow', "`pyarrow` not installed")
+
+        if LooseVersion(pa.__version__) < '0.8.0':
+            raise RuntimeError("PyArrow version >= 0.8.0 required")
 
         _ENGINES['pyarrow'] = eng = {'read': _read_pyarrow,
                                      'write': _write_pyarrow}
