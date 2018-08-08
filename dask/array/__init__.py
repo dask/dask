@@ -58,6 +58,10 @@ try:
                            triu, tril, fromfunction, tile, repeat, pad)
     from .gufunc import apply_gufunc, gufunc, as_gufunc
     from .utils import assert_eq
+
+    # TODO: remove this after the deprecation cycle of ghost is complete
+    from . import ghost
+
 except ImportError as e:
     msg = ("Dask array requirements are not installed.\n\n"
            "Please either conda or pip install as follows:\n\n"
