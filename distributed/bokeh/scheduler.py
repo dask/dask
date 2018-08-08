@@ -971,7 +971,7 @@ class WorkerTable(DashboardComponent):
             point_policy="follow_mouse",
             tooltips="""
                 <div>
-                  <span style="font-size: 10px; font-family: Monaco, monospace;">@host: </span>
+                  <span style="font-size: 10px; font-family: Monaco, monospace;">@worker: </span>
                   <span style="font-size: 10px; font-family: Monaco, monospace;">@memory_percent</span>
                 </div>
                 """
