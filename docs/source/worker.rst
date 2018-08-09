@@ -65,15 +65,18 @@ communication costs and generally simplifies deployment.
 
 If your computations are mostly Python code and don't release the GIL then it
 is advisable to run ``dask-worker`` processes with many processes and one
-thread per core::
+thread per process::
 
-   $ dask-worker scheduler:8786 --nprocs 8
+   $ dask-worker scheduler:8786 --nprocs 8 --nthreads 1
+
+This will launch 8 worker processes each of which has its own
+ThreadPoolExecutor of size 1. 
 
 If your computations are external to Python and long-running and don't release
 the GIL then beware that while the computation is running the worker process
 will not be able to communicate to other workers or to the scheduler.  This
 situation should be avoided.  If you don't link in your own custom C/Fortran
-code then this topic probably doesn't apply to you.
+code then this topic probably doesn't apply.
 
 Command Line tool
 -----------------
@@ -93,9 +96,9 @@ are the available options::
                             hopefully be visible from the scheduler network.
      --nthreads INTEGER     Number of threads per process. Defaults to number of
                             cores
-     --nprocs INTEGER       Number of worker processes.  Defaults to one.
+     --nprocs INTEGER       Number of worker processes to launch.  Defaults to one.
      --name TEXT            Alias
-     --memory-limit TEXT     Number of bytes before spilling data to disk
+     --memory-limit TEXT    Number of bytes (per worker process) before spilling data to disk
      --no-nanny
      --help                 Show this message and exit.
 
@@ -143,12 +146,13 @@ Memory Management
 
 Workers are given a target memory limit to stay under with the
 command line ``--memory-limit`` keyword or the ``memory_limit=`` Python
-keyword argument.::
+keyword argument, which sets the memory limit per worker processes launched
+by dask-workder ::
 
-    $ dask-worker tcp://scheduler:port --memory-limit=auto  # total available RAM
-    $ dask-worker tcp://scheduler:port --memory-limit=4e9  # four gigabytes
+    $ dask-worker tcp://scheduler:port --memory-limit=auto  # total available RAM on the machine
+    $ dask-worker tcp://scheduler:port --memory-limit=4e9  # four gigabytes per worker process.
 
-Workers use a few different policies to keep memory use beneath this limit:
+Workers use a few different heuristics to keep memory use beneath this limit:
 
 1.  At 60% of memory load (as estimated by ``sizeof``), spill least recently used data to disk
 2.  At 70% of memory load, spill least recently used data to disk regardless of
