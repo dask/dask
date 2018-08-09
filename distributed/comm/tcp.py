@@ -221,21 +221,26 @@ class TCP(Comm):
                                           'recipient': self._peer_addr})
 
         try:
-            lengths = ([struct.pack('Q', len(frames))] +
-                       [struct.pack('Q', nbytes(frame)) for frame in frames])
-            stream.write(b''.join(lengths))
+            lengths = [nbytes(frame) for frame in frames]
+            length_bytes = ([struct.pack('Q', len(frames))] +
+                            [struct.pack('Q', x) for x in lengths])
+            if PY3 and sum(lengths) < 2**17:  # 128kiB
+                b = b''.join(length_bytes + frames)  # small enough, send in one go
+                stream.write(b)
+            else:
+                stream.write(b''.join(length_bytes))  # avoid large memcpy, send in many
 
-            for frame in frames:
-                # Can't wait for the write() Future as it may be lost
-                # ("If write is called again before that Future has resolved,
-                #   the previous future will be orphaned and will never resolve")
-                if not self._iostream_allows_memoryview:
-                    frame = ensure_bytes(frame)
-                future = stream.write(frame)
-                bytes_since_last_yield += nbytes(frame)
-                if bytes_since_last_yield > 32e6:
-                    yield future
-                    bytes_since_last_yield = 0
+                for frame in frames:
+                    # Can't wait for the write() Future as it may be lost
+                    # ("If write is called again before that Future has resolved,
+                    #   the previous future will be orphaned and will never resolve")
+                    if not self._iostream_allows_memoryview:
+                        frame = ensure_bytes(frame)
+                    future = stream.write(frame)
+                    bytes_since_last_yield += nbytes(frame)
+                    if bytes_since_last_yield > 32e6:
+                        yield future
+                        bytes_since_last_yield = 0
         except StreamClosedError as e:
             stream = None
             convert_stream_closed_error(self, e)

@@ -985,7 +985,7 @@ def assert_can_connect(addr, timeout=None, connection_args=None):
     within the given *timeout*.
     """
     if timeout is None:
-        timeout = 0.2
+        timeout = 0.5
     comm = yield connect(addr, timeout=timeout,
                          connection_args=connection_args)
     comm.abort()
@@ -998,7 +998,7 @@ def assert_cannot_connect(addr, timeout=None, connection_args=None, exception_cl
     within the given *timeout*.
     """
     if timeout is None:
-        timeout = 0.2
+        timeout = 0.5
     with pytest.raises(exception_class):
         comm = yield connect(addr, timeout=timeout,
                              connection_args=connection_args)
