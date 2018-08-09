@@ -72,6 +72,13 @@ class Cluster(object):
     def scheduler_address(self):
         return self.scheduler.address
 
+    @property
+    def dashboard_link(self):
+        template = dask.config.get('distributed.dashboard.link')
+        host = self.scheduler.address.split('://')[1].split(':')[0]
+        port = self.scheduler.services['bokeh'].port
+        return template.format(host=host, port=port, **os.environ)
+
     def scale(self, n):
         """ Scale cluster to n workers
 
@@ -140,11 +147,7 @@ class Cluster(object):
         layout = Layout(width='150px')
 
         if 'bokeh' in self.scheduler.services:
-            template = dask.config.get('distributed.dashboard.link')
-
-            host = self.scheduler.address.split('://')[1].split(':')[0]
-            port = self.scheduler.services['bokeh'].port
-            link = template.format(host=host, port=port, **os.environ)
+            link = self.dashboard_link
             link = '<p><b>Dashboard: </b><a href="%s" target="_blank">%s</a></p>\n' % (link, link)
         else:
             link = ''
