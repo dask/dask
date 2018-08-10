@@ -40,6 +40,7 @@ from tornado.ioloop import IOLoop
 
 from .client import default_client, _global_clients
 from .compatibility import PY3, Empty, WINDOWS
+from .comm.utils import offload
 from .config import initialize_logging
 from .core import connect, rpc, CommClosedError
 from .metrics import time
@@ -61,6 +62,9 @@ logger = logging.getLogger(__name__)
 logging_levels = {name: logger.level for name, logger in
                   logging.root.manager.loggerDict.items()
                   if isinstance(logger, logging.Logger)}
+
+
+offload(lambda: None).result()  # create thread during import
 
 
 @pytest.fixture(scope='session')

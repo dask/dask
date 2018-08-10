@@ -25,7 +25,7 @@ def test_basic(Component):
     c.update(messages)
 
 
-@gen_cluster(client=True)
+@gen_cluster(client=True, check_new_threads=False)
 def test_profile_plot(c, s, a, b):
     p = ProfilePlot()
     assert len(p.source.data['left']) <= 1
@@ -34,7 +34,7 @@ def test_profile_plot(c, s, a, b):
     assert len(p.source.data['left']) > 1
 
 
-@gen_cluster(client=True)
+@gen_cluster(client=True, check_new_threads=False)
 def test_profile_time_plot(c, s, a, b):
     from bokeh.io import curdoc
     sp = ProfileTimePlot(s, doc=curdoc())

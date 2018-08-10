@@ -7,9 +7,8 @@ import socket
 from tornado import gen
 
 from .. import protocol
-from ..compatibility import finalize
-from ..sizeof import sizeof
-from ..utils import get_ip, get_ipv6, mp_context, nbytes
+from ..compatibility import finalize, PY3
+from ..utils import get_ip, get_ipv6, nbytes
 
 
 logger = logging.getLogger(__name__)
@@ -20,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 FRAME_OFFLOAD_THRESHOLD = 10 * 1024 ** 2   # 10 MB
 
-_offload_executor = ThreadPoolExecutor(max_workers=min(4, mp_context.cpu_count()))
+_offload_executor = ThreadPoolExecutor(max_workers=1)
 finalize(_offload_executor, _offload_executor.shutdown)
 
 
@@ -44,9 +43,9 @@ def to_frames(msg, serializers=None, on_error='message', context=None):
             logger.exception(e)
             raise
 
-    if sizeof(msg) > FRAME_OFFLOAD_THRESHOLD:
+    if PY3:
         res = yield offload(_to_frames)
-    else:
+    else:  # distributed/deploy/tests/test_adaptive.py::test_get_scale_up_kwargs fails on Py27.  Don't know why
         res = _to_frames()
 
     raise gen.Return(res)
