@@ -1,28 +1,80 @@
 Changelog
 =========
 
-0.18.2 / 2018-MM-DD
+0.18.3 / 2018-MM-DD
+-------------------
+
+DataFrame
+++++++++++
+
+- Added `dtype` and `sparse` keywords to :func:`dask.dataframe.get_dummies` (:pr:`3792`) `Tom Augspurger`_
+
+
+0.18.2 / 2018-07-23
 -------------------
 
 Array
 +++++
 
-- Reimplemented ``argtopk`` to make it release the GIL (:pr:`3596`) `Guido Imperiale`_
+- Reimplemented ``argtopk`` to make it release the GIL (:pr:`3610`)
+  `Guido Imperiale`_
+- Don't overlap on non-overlapped dimensions in ``map_overlap`` (:pr:`3653`)
+  `Matthew Rocklin`_
+- Fix ``linalg.tsqr`` for dimensions of uncertain length (:pr:`3662`)
+  `Jeremy Chen`_
+- Break apart uneven array-of-int slicing to separate chunks (:pr:`3648`)
+  `Matthew Rocklin`_
+- Align auto chunks to provided chunks, rather than shape (:pr:`3679`)
+  `Matthew Rocklin`_
+- Adds endpoint and retstep support for linspace (:pr:`3675`) `James Bourbeau`_
+- Implement ``.blocks`` accessor (:pr:`3689`) `Matthew Rocklin`_
+- Add ``block_info`` keyword to ``map_blocks`` functions (:pr:`3686`)
+  `Matthew Rocklin`_
+- Slice by dask array of ints (:pr:`3407`) `Guido Imperiale`_
+- Support ``dtype`` in ``arange`` (:pr:`3722`) `Guido Imperiale`_
+- Fix ``argtopk`` with uneven chunks (:pr:`3720`) `Guido Imperiale`_
+- Raise error when ``replace=False`` in ``da.choice`` (:pr:`3765`)
+  `James Bourbeau`_
+- Update chunks in ``Array.__setitem__`` (:pr:`3767`) `Itamar Turner-Trauring`_
+- Add a ``chunksize`` convenience property (:pr:`3777`) `Jacob Tomlinson`_
+- Fix and simplify array slicing behavior when ``step < 0`` (:pr:`3702`)
+  `Ziyao Wei`_
+- Ensure ``to_zarr`` with ``return_stored`` ``True`` returns a Dask Array (:pr:`3786`)
+  `John A Kirkham`_
 
 Bag
 +++
 
--
+- Add ``last_endline`` optional parameter in ``to_textfiles`` (:pr:`3745`)
+  `George Sakkis`_
 
 Dataframe
 +++++++++
 
--
+- Add aggregate function for rolling objects (:pr:`3772`) `Gerome Pistre`_
+- Properly tokenize cumulative groupby aggregations (:pr:`3799`) `Cloves Almeida`_
+
+Delayed
++++++++
+
+- Add the ``@`` operator to the delayed objects (:pr:`3691`) `Mark Harfouche`_
+- Add delayed best practices to documentation (:pr:`3737`) `Matthew Rocklin`_
+- Fix ``@delayed`` decorator for methods and add tests (:pr:`3757`)
+  `Ziyao Wei`_
 
 Core
 ++++
 
-- On Python 3 POSIX platforms, support configuring different ``multiprocessing`` contexts (:pr:`3763`) `Itamar Turner-Trauring`_
+- Fix extra progressbar (:pr:`3669`) `Mike Neish`_
+- Allow tasks back onto ordering stack if they have one dependency (:pr:`3652`)
+  `Matthew Rocklin`_
+- Prefer end-tasks with low numbers of dependencies when ordering (:pr:`3588`)
+  `Tom Augspurger`_
+- Add ``assert_eq`` to top-level modules (:pr:`3726`) `Matthew Rocklin`_
+- Test that dask collections can hold ``scipy.sparse`` arrays (:pr:`3738`)
+  `Matthew Rocklin`_
+- Fix setup of lz4 decompression functions (:pr:`3782`) `Elliott Sales de Andrade`_
+- Add datasets module (:pr:`3780`) `Matthew Rocklin`_
 
 
 0.18.1 / 2018-06-22
@@ -1225,3 +1277,12 @@ Other
 .. _`Henrique Ribeiro`: https://github.com/henriqueribeiro
 .. _`Marco Rossi`: https://github.com/m-rossi
 .. _`Itamar Turner-Trauring`: https://github.com/itamarst
+.. _`Mike Neish`: https://github.com/neishm
+.. _`Mark Harfouche`: https://github.com/hmaarrfk
+.. _`George Sakkis`: https://github.com/gsakkis
+.. _`Ziyao Wei`: https://github.com/ZiyaoWei
+.. _`Itamar Turner-Trauring`: https://github.com/itamarst
+.. _`Jacob Tomlinson`: https://github.com/jacobtomlinson
+.. _`Elliott Sales de Andrade`: https://github.com/QuLogic
+.. _`Gerome Pistre`: https://github.com/GPistre
+.. _`Cloves Almeida`: https://github.com/cjalmeida

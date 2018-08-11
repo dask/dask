@@ -262,7 +262,6 @@ def unpack_collections(*args, **kwargs):
         else:
             # Treat iterators like lists
             typ = list if isinstance(expr, Iterator) else type(expr)
-
             if typ in (list, tuple, set):
                 tsk = (typ, [_unpack(i) for i in expr])
             elif typ is dict:
@@ -338,12 +337,6 @@ def optimize(*args, **kwargs):
         postpersists.append(a.__dask_postpersist__())
 
     return repack([r(dsk, *s) for r, s in postpersists])
-
-
-# TODO: remove after deprecation cycle of `dask.optimize` module completes
-from . import optimize as _deprecated_optimize
-for _m in _deprecated_optimize.__all__:
-    setattr(optimize, _m, getattr(_deprecated_optimize, _m))
 
 
 def compute(*args, **kwargs):

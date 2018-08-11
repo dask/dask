@@ -891,9 +891,13 @@ def is_arraylike(x):
     >>> is_arraylike('cat')
     False
     """
-    return (# hasattr(x, '__array__') and
-            hasattr(x, 'shape') and x.shape and
-            hasattr(x, 'dtype'))
+    from .base import is_dask_collection
+
+    return (
+        hasattr(x, 'shape') and x.shape and
+        hasattr(x, 'dtype') and
+        not any(is_dask_collection(n) for n in x.shape)
+    )
 
 
 def natural_sort_key(s):

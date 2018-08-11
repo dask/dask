@@ -102,13 +102,13 @@ rolling_method_args_check_less_precise = [
     ('max', (), False),
     ('std', (), False),
     ('var', (), False),
-    ('skew', (), True),   # here and elsewhere, results for kurt and skew are
-    ('kurt', (), True),   # checked with check_less_precise=True so that we are
-                          # only looking at 3ish decimal places for the equality check
-                          # rather than 5ish. I have encountered a case where a test
-                          # seems to have failed due to numerical problems with kurt.
-                          # So far, I am only weakening the check for kurt and skew,
-                          # as they involve third degree powers and higher
+    ('skew', (), True),  # here and elsewhere, results for kurt and skew are
+    ('kurt', (), True),  # checked with check_less_precise=True so that we are
+    # only looking at 3ish decimal places for the equality check
+    # rather than 5ish. I have encountered a case where a test
+    # seems to have failed due to numerical problems with kurt.
+    # So far, I am only weakening the check for kurt and skew,
+    # as they involve third degree powers and higher
     ('quantile', (.38,), False),
     ('apply', (mad,), False),
 ]
@@ -255,3 +255,23 @@ def test_time_rolling(before, after):
     result = dts.map_overlap(lambda x: x.rolling(window).count(), before, after)
     expected = dts.compute().rolling(window).count()
     assert_eq(result, expected)
+
+
+def test_rolling_agg_aggregate():
+    df = pd.DataFrame({'A': range(5), 'B': range(0, 10, 2)})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    assert_eq(df.rolling(window=3).agg([np.mean, np.std]),
+              ddf.rolling(window=3).agg([np.mean, np.std]))
+
+    assert_eq(df.rolling(window=3).agg({'A': np.sum, 'B': lambda x: np.std(x, ddof=1)}),
+              ddf.rolling(window=3).agg({'A': np.sum, 'B': lambda x: np.std(x, ddof=1)}))
+
+    assert_eq(df.rolling(window=3).agg([np.sum, np.mean]),
+              ddf.rolling(window=3).agg([np.sum, np.mean]))
+
+    assert_eq(df.rolling(window=3).agg({'A': [np.sum, np.mean]}),
+              ddf.rolling(window=3).agg({'A': [np.sum, np.mean]}))
+
+    assert_eq(df.rolling(window=3).apply(lambda x: np.std(x, ddof=1)),
+              ddf.rolling(window=3).apply(lambda x: np.std(x, ddof=1)))

@@ -77,3 +77,19 @@ def test_unknown_divisions_error():
         assert False
     except ValueError as e:
         assert 'divisions' in str(e)
+
+
+def test_resample_index_name():
+    import numpy as np
+    from datetime import datetime, timedelta
+
+    date_today = datetime.now()
+    days = pd.date_range(date_today, date_today + timedelta(20), freq='D')
+    data = np.random.randint(1, high=100, size=len(days))
+
+    df = pd.DataFrame({'date': days, 'values': data})
+    df = df.set_index('date')
+
+    ddf = dd.from_pandas(df, npartitions=4)
+
+    assert ddf.resample('D').mean().head().index.name == "date"

@@ -13,9 +13,8 @@ from dask.compatibility import FileNotFoundError, unicode
 from dask.utils import filetexts
 from dask.bytes import compression
 from dask.bytes.local import LocalFileSystem
-from dask.bytes.core import (read_bytes, open_files, FileSystem,
-                             get_pyarrow_filesystem, logical_size,
-                             get_fs_token_paths)
+from dask.bytes.core import (read_bytes, open_files, get_pyarrow_filesystem,
+                             logical_size, get_fs_token_paths)
 
 compute = partial(compute, scheduler='sync')
 
@@ -27,6 +26,12 @@ files = {'.test.accounts.1.json': (b'{"amount": 100, "name": "Alice"}\n'
                                    b'{"amount": 600, "name": "Bob"}\n'
                                    b'{"amount": 700, "name": "Charlie"}\n'
                                    b'{"amount": 800, "name": "Dennis"}\n')}
+
+
+csv_files = {'.test.fakedata.1.csv': (b'a,b\n'
+                                      b'1,2\n'),
+             '.test.fakedata.2.csv': (b'a,b\n'
+                                      b'3,4\n')}
 
 
 try:
@@ -84,6 +89,27 @@ def test_urlpath_inference_errors():
     with pytest.raises(TypeError):
         get_fs_token_paths({'sets/are.csv', 'unordered/so/they.csv',
                             'should/not/be.csv' 'allowed.csv'})
+
+
+def test_urlpath_expand_read():
+    """Make sure * is expanded in file paths when reading."""
+    # when reading, globs should be expanded to read files by mask
+    with filetexts(csv_files, mode='b'):
+        _, _, paths = get_fs_token_paths('.*.csv')
+        assert len(paths) == 2
+        _, _, paths = get_fs_token_paths(['.*.csv'])
+        assert len(paths) == 2
+
+
+def test_urlpath_expand_write():
+    """Make sure * is expanded in file paths when writing."""
+    _, _, paths = get_fs_token_paths('prefix-*.csv', mode='wb', num=2)
+    assert paths == ['prefix-0.csv', 'prefix-1.csv']
+    _, _, paths = get_fs_token_paths(['prefix-*.csv'], mode='wb', num=2)
+    assert paths == ['prefix-0.csv', 'prefix-1.csv']
+    # we can read with multiple masks, but not write
+    with pytest.raises(ValueError):
+        _, _, paths = get_fs_token_paths(['prefix1-*.csv', 'prefix2-*.csv'], mode='wb', num=2)
 
 
 def test_read_bytes():
@@ -365,7 +391,7 @@ def test_abs_paths(tmpdir):
     assert res == 'hi'
 
 
-class UnknownFileSystem(FileSystem):
+class UnknownFileSystem(object):
     pass
 
 

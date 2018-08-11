@@ -5,7 +5,6 @@ import pytest
 import math
 import os
 import random
-import sys
 from collections import Iterator
 from itertools import repeat
 
@@ -120,17 +119,6 @@ def test_map_method():
     x_sum = sum(x)
     assert (b.map(myadd, b.sum(), c=10).compute() ==
             [myadd(i, x_sum, 10) for i in x])
-
-    # check that map works with multiarg functions. Can be removed after
-    # deprecated behavior is removed
-    assert b.map(add, b2).compute() == list(map(add, x, x2))
-
-    # check that map works with vararg functions. Can be removed after
-    # deprecated behavior is removed
-    def vararg_inc(*args):
-        return inc(*args)
-
-    assert_eq(b.map(vararg_inc), list(map(inc, x)))
 
 
 def test_starmap():
@@ -843,7 +831,6 @@ def test_to_textfiles_name_function_preserves_order():
         assert seq == out
 
 
-@pytest.mark.skipif(sys.version_info[:2] == (3,3), reason="Python3.3 uses pytest2.7.2, w/o warns method")
 def test_to_textfiles_name_function_warn():
     seq = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p']
     a = db.from_sequence(seq, npartitions=16)

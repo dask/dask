@@ -1,4 +1,3 @@
-import sys
 import textwrap
 from distutils.version import LooseVersion
 from itertools import product
@@ -13,6 +12,7 @@ import dask
 import dask.array as da
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
+from dask.compatibility import PY2
 from dask.utils import put_lines, M
 
 from dask.dataframe.core import repartition_divisions, aca, _concat, Scalar
@@ -92,8 +92,6 @@ def test_head_npartitions():
         d.head(2, npartitions=5)
 
 
-@pytest.mark.skipif(sys.version_info[:2] == (3, 3),
-                    reason="Python3.3 uses pytest2.7.2, w/o warns method")
 def test_head_npartitions_warn():
     with pytest.warns(None):
         d.head(100)
@@ -764,6 +762,16 @@ def test_size():
     assert_eq(d.size, full.size)
     assert_eq(d.a.size, full.a.size)
     assert_eq(d.index.size, full.index.size)
+
+
+def test_shape():
+    result = d.shape
+    assert_eq((result[0].compute(),result[1]), (len(full),len(full.columns)))
+    assert_eq(dd.compute(result)[0], (len(full),len(full.columns)))
+
+    result = d.a.shape
+    assert_eq(result[0].compute(), len(full.a))
+    assert_eq(dd.compute(result)[0], (len(full.a),))
 
 
 def test_nbytes():
@@ -1969,7 +1977,7 @@ def test_apply():
         ddf.apply(lambda xy: xy, axis='index')
 
 
-@pytest.mark.skipif(sys.version_info <= (3, 0),
+@pytest.mark.skipif(PY2,
                     reason="Global filter is applied by another library, and "
                            "not reset properly.")
 def test_apply_warns():

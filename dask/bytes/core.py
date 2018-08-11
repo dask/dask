@@ -263,6 +263,41 @@ def infer_options(urlpath):
     return urlpath, protocol, options
 
 
+def expand_paths_if_needed(paths, mode, num, fs, name_function):
+    """Expand paths if they have a ``*`` in them.
+
+    :param paths: list of paths
+    mode : str
+        Mode in which to open files.
+    num : int
+        If opening in writing mode, number of files we expect to create.
+    fs : filesystem object
+    name_function : callable
+        If opening in writing mode, this callable is used to generate path
+        names. Names are generated for each partition by
+        ``urlpath.replace('*', name_function(partition_index))``.
+    :return: list of paths
+    """
+    expanded_paths = []
+    paths = list(paths)
+    if 'w' in mode and sum([1 for p in paths if '*' in p]) > 1:
+        raise ValueError("When writing data, only one filename mask can be specified.")
+    for curr_path in paths:
+        if '*' in curr_path:
+            if 'w' in mode:
+                # expand using name_function
+                expanded_paths.extend(_expand_paths(curr_path, name_function, num))
+            else:
+                # expand using glob
+                expanded_paths.extend(fs.glob(curr_path))
+        else:
+            expanded_paths.append(curr_path)
+    # if we generated more paths that asked for, trim the list
+    if 'w' in mode and len(expanded_paths) > num:
+        expanded_paths = expanded_paths[:num]
+    return expanded_paths
+
+
 def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
                        storage_options=None):
     """Filesystem, deterministic token, and paths from a urlpath and options.
@@ -294,9 +329,8 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
             raise ValueError("When specifying a list of paths, all paths must "
                              "share the same protocol and options")
         update_storage_options(options, storage_options)
-        paths = list(paths)
-
         fs, fs_token = get_fs(protocol, options)
+        paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
 
     elif isinstance(urlpath, (str, unicode)) or hasattr(urlpath, 'name'):
         urlpath, protocol, options = infer_options(urlpath)
@@ -335,41 +369,6 @@ def get_mapper(fs, path):
         return HDFSMap(fs, path)
     else:
         raise ValueError('No mapper for protocol "%s"' % fs.protocol)
-
-
-def open_text_files(urlpath, compression=None, mode='rt', encoding='utf8',
-                    errors='strict', **kwargs):
-    """ Given path return dask.delayed file-like objects in text mode
-
-    This function is deprecated, use ``open_files(path, mode='rt', ...)``.
-
-    Parameters
-    ----------
-    urlpath: string
-        Absolute or relative filepath, URL (may include protocols like
-        ``s3://``), or globstring pointing to data.
-    encoding: string
-    errors: string
-    compression: string
-        Compression to use.  See ``dask.bytes.compression.files`` for options.
-    **kwargs: dict
-        Extra options that make sense to a particular storage connection, e.g.
-        host, port, username, password, etc.
-
-    Examples
-    --------
-    >>> files = open_text_files('2015-*-*.csv', encoding='utf-8')  # doctest: +SKIP
-    >>> files = open_text_files('s3://bucket/2015-*-*.csv')  # doctest: +SKIP
-
-    Returns
-    -------
-    List of ``dask.delayed`` objects that compute to text file-like objects
-    """
-    warn("DeprecationWarning: open_text_files is deprecated, use `open_files` "
-         "with mode='rt' or mode='wt'")
-    return open_files(urlpath, mode=mode.replace('b', 't'),
-                      compression=compression, encoding=encoding,
-                      errors=errors, **kwargs)
 
 
 def _expand_paths(path, name_function, num):
@@ -489,12 +488,6 @@ def get_fs(protocol, storage_options=None):
 
 
 _filesystems = dict()
-
-
-class FileSystem(object):
-    """Deprecated, do not use. Implement filesystems by matching the interface
-    of `dask.bytes.local.LocalFileSystem` instead of subclassing."""
-    pass
 
 
 def logical_size(fs, path, compression='infer'):

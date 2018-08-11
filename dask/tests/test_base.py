@@ -18,11 +18,11 @@ from dask.base import (compute, tokenize, normalize_token, normalize_function,
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
-from dask.compatibility import long, unicode
+from dask.compatibility import long, unicode, PY2
 
 
 def import_or_none(path):
-    with ignoring():
+    with ignoring(BaseException):
         return pytest.importorskip(path)
     return None
 
@@ -118,7 +118,7 @@ def test_tokenize_numpy_array_on_object_dtype():
             tokenize(np.array(['a', None, 'aaa'], dtype=object)))
     assert (tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object)) ==
             tokenize(np.array([(1, 'a'), (1, None), (1, 'aaa')], dtype=object)))
-    if sys.version_info[0] == 2:
+    if PY2:
         assert (tokenize(np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)) ==
                 tokenize(np.array([unicode("Rebeca Alón", encoding="utf-8")], dtype=object)))
 
@@ -692,16 +692,6 @@ def test_optimize_nested():
     assert res[0][0] is a
     assert res[0][1] is b
     assert res[1].compute() == 5
-
-
-# TODO: remove after deprecation cycle of `dask.optimize` module is completed
-def test_optimize_has_deprecated_module_functions_as_attributes():
-    import dask.optimize as deprecated_optimize
-    # Function has method attributes
-    assert dask.optimize.cull is deprecated_optimize.cull
-    assert dask.optimize.inline is deprecated_optimize.inline
-    with pytest.warns(UserWarning):
-        dask.optimize.cull({}, [])
 
 
 def test_default_imports():

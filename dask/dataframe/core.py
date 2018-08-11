@@ -306,7 +306,13 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     @property
     def size(self):
-        """ Size of the series """
+        """Size of the Series or DataFrame as a Delayed object.
+
+        Examples
+        --------
+        >>> series.size  # doctest: +SKIP
+        dd.Scalar<size-ag..., dtype=int64>
+        """
         return self.reduction(methods.size, np.sum, token='size', meta=int,
                               split_every=False)
 
@@ -932,8 +938,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         from .indexing import _LocIndexer
         return _LocIndexer(self)
 
-    # NOTE: `iloc` is not implemented because of performance concerns.
-    # see https://github.com/dask/dask/pull/507
+    # Note: iloc is implemented only on DataFrame
 
     def repartition(self, divisions=None, npartitions=None, freq=None, force=False):
         """ Repartition dataframe along new divisions
@@ -1647,9 +1652,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         raise NotImplementedError
 
     @derived_from(pd.DataFrame)
-    def resample(self, rule, how=None, closed=None, label=None):
-        from .tseries.resample import _resample
-        return _resample(self, rule, how=how, closed=closed, label=label)
+    def resample(self, rule, closed=None, label=None):
+        from .tseries.resample import Resampler
+        return Resampler(self, rule, closed=closed, label=label)
 
     @derived_from(pd.DataFrame)
     def first(self, offset):
@@ -1798,6 +1803,20 @@ class Series(_Frame):
     def ndim(self):
         """ Return dimensionality """
         return 1
+
+    @property
+    def shape(self):
+        """
+        Return a tuple representing the dimensionality of a Series.
+
+        The single element of the tuple is a Delayed result.
+
+        Examples
+        --------
+        >>> series.shape  # doctest: +SKIP
+        # (dd.Scalar<size-ag..., dtype=int64>,)
+        """
+        return (self.size,)
 
     @property
     def dtype(self):
@@ -2361,6 +2380,22 @@ class DataFrame(_Frame):
         self._name = renamed._name
         self.dask.update(renamed.dask)
 
+    @property
+    def iloc(self):
+        """Purely integer-location based indexing for selection by position.
+
+        Only indexing the column positions is supported. Trying to select
+        row positions will raise a ValueError.
+
+        See :ref:`dataframe.indexing` for more.
+
+        Examples
+        --------
+        >>> df.iloc[:, [2, 0, 1]]  # doctest: +SKIP
+        """
+        from .indexing import _iLocIndexer
+        return _iLocIndexer(self)
+
     def __getitem__(self, key):
         name = 'getitem-%s' % tokenize(self, key)
         if np.isscalar(key) or isinstance(key, (tuple, string_types)):
@@ -2449,6 +2484,24 @@ class DataFrame(_Frame):
     def ndim(self):
         """ Return dimensionality """
         return 2
+
+    @property
+    def shape(self):
+        """
+        Return a tuple representing the dimensionality of the DataFrame.
+
+        The number of rows is a Delayed result. The number of columns
+        is a concrete integer.
+
+        Examples
+        --------
+        >>> df.size  # doctest: +SKIP
+        (Delayed('int-07f06075-5ecc-4d77-817e-63c69a9188a8'), 2)
+        """
+        from dask.delayed import delayed
+        col_size = len(self.columns)
+        row_size = delayed(int)(self.size / col_size)
+        return (row_size, col_size)
 
     @property
     def dtypes(self):
@@ -4269,26 +4322,6 @@ def maybe_shift_divisions(df, periods, freq):
         divisions = divs.shift(periods, freq=freq).index
         return type(df)(df.dask, df._name, df._meta, divisions)
     return df
-
-
-def to_delayed(df, optimize_graph=True):
-    """Convert into a list of ``dask.delayed`` objects, one per partition.
-
-    Deprecated, please use the equivalent ``df.to_delayed`` method instead.
-
-    Parameters
-    ----------
-    optimize_graph : bool, optional
-        If True [default], the graph is optimized before converting into
-        ``dask.delayed`` objects.
-
-    See Also
-    --------
-    dask.dataframe.from_delayed
-    """
-    warnings.warn("DeprecationWarning: The `dd.to_delayed` function is "
-                  "deprecated, please use the `.to_delayed()` method instead.")
-    return df.to_delayed(optimize_graph=optimize_graph)
 
 
 @wraps(pd.to_datetime)
