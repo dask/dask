@@ -8,6 +8,7 @@ from tornado import gen
 
 import dask
 from dask import persist, delayed, compute
+from dask.core import TaskAnnotation
 from dask.delayed import Delayed
 from dask.utils import tmpdir
 from distributed.client import wait, Client
@@ -36,6 +37,21 @@ def test_persist(c, s, a, b):
 
     yield wait(y2)
     assert y2.key in a.data or y2.key in b.data
+
+
+@gen_cluster(client=True)
+def test_get_with_annotations(c, s, a, b):
+    def f(x):
+        return x + 1
+
+    an1 = TaskAnnotation(1)
+    an2 = TaskAnnotation(2)
+
+    dsk = {'x': (an1, f,  1, an2), 'y': (inc, 'x')}
+
+    futures = c.get(dsk, ['x', 'y'], sync=False)
+    result = yield futures
+    assert {'x': 2, 'y': 3} == result
 
 
 def test_persist_nested(loop):
