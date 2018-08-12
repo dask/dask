@@ -71,9 +71,9 @@ def has_tasks(dsk, x):
     return False
 
 
-def split_args_annotations(*args):
+def split_task_annotations(*args):
     """
-    Splits ``*args`` into arguments
+    Splits ``*args`` into task
     and annotations
     """
     nargs = []

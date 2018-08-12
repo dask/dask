@@ -47,11 +47,11 @@ def test_get_with_annotations(c, s, a, b):
     an1 = TaskAnnotation(1)
     an2 = TaskAnnotation(2)
 
-    dsk = {'x': (an1, f,  1, an2), 'y': (inc, 'x')}
+    dsk = {'x': (f,  an1, 1, an2), 'y': (inc, 'x')}
 
     futures = c.get(dsk, ['x', 'y'], sync=False)
     result = yield futures
-    assert {'x': 2, 'y': 3} == result
+    assert [2, 3] == result
 
 
 def test_persist_nested(loop):

@@ -37,7 +37,7 @@ def test_get_with_annotations():
     an1 = TaskAnnotation(1)
     an2 = TaskAnnotation(2)
 
-    dsk = {'x': (f, an1, 1, an2),
+    dsk = {'x': (f, 1, an1, an2),
            'y': (inc, 'x')}
 
     assert get(dsk, 'y') == 3
