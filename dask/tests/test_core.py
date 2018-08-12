@@ -5,8 +5,11 @@ import pickle
 
 from dask.utils_test import GetFunctionTestMixin, inc, add
 from dask import core
-from dask.core import (istask, get_dependencies, get_deps, flatten, subs,
-                       preorder_traversal, literal, quote, has_tasks)
+from dask.core import (istask, get_dependencies,
+                       get_deps, flatten, subs,
+                       preorder_traversal, literal, quote, has_tasks,
+                       isannotation, TaskAnnotation,
+                       split_args_annotations)
 
 
 def contains(a, b):
@@ -246,3 +249,28 @@ def test_quote():
 def test_literal_serializable():
     l = literal((add, 1, 2))
     assert pickle.loads(pickle.dumps(l)).data == (add, 1, 2)
+
+
+def test_isannotation():
+    a = TaskAnnotation(('resource', {'GPU': 1}))
+    assert isannotation(a)
+
+
+def test_split_args_annotations():
+    a1 = TaskAnnotation(('resource', {'GPU':1}))
+    a2 = TaskAnnotation(('foo', 'bar'))
+    args = (a1, 1, 'foo', a2)
+    assert split_args_annotations(*args) == ((1, 'foo'), (a1, a2))
+
+    args = ()
+    assert split_args_annotations(*args) == ((), ())
+
+    args = ('foo',)
+    assert split_args_annotations(*args) == (('foo',), ())
+
+    args = (a1, 'foo')
+    assert split_args_annotations(*args) == (('foo',), (a1,))
+
+    args = (a1,)
+    assert split_args_annotations(*args) == ((), (a1,))
+

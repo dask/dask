@@ -1,8 +1,12 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import namedtuple
 from itertools import chain
 
 from .utils_test import add, inc  # noqa: F401
+
+
+TaskAnnotation = namedtuple("TaskAnnotation", ["annotation"])
 
 
 def ishashable(x):
@@ -40,6 +44,11 @@ def istask(x):
     return type(x) is tuple and x and callable(x[0])
 
 
+def isannotation(x):
+    """ Is x an annotation? """
+    return isinstance(x, TaskAnnotation)
+
+
 def has_tasks(dsk, x):
     """Whether ``x`` has anything to compute.
 
@@ -60,6 +69,23 @@ def has_tasks(dsk, x):
             if has_tasks(dsk, i):
                 return True
     return False
+
+
+def split_args_annotations(*args):
+    """
+    Splits ``*args`` into arguments
+    and annotations
+    """
+    nargs = []
+    annots = []
+
+    for a in args:
+        if isannotation(a):
+            annots.append(a)
+        else:
+            nargs.append(a)
+
+    return tuple(nargs), tuple(annots)
 
 
 def preorder_traversal(task):

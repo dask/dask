@@ -7,6 +7,7 @@ from time import time, sleep
 
 import pytest
 
+from dask.core import TaskAnnotation
 from dask.context import set_options
 from dask.compatibility import PY2
 from dask.threaded import get
@@ -27,6 +28,32 @@ def test_nested_get():
 def test_get_without_computation():
     dsk = {'x': 1}
     assert get(dsk, 'x') == 1
+
+
+def test_get_with_annotations():
+    def f(x):
+        return x + 1
+
+    an1 = TaskAnnotation(1)
+    an2 = TaskAnnotation(2)
+
+    dsk = {'x': (f, an1, 1, an2),
+           'y': (inc, 'x')}
+
+    assert get(dsk, 'y') == 3
+
+
+def test_get_with_annotations_without_computation():
+    def f(x):
+        return x + 1
+
+    an1 = TaskAnnotation(1)
+    an2 = TaskAnnotation(2)
+
+    dsk = {'x': (f, an1, 1, an2)}
+    assert get(dsk, 'x') == 2
+
+
 
 
 def bad(x):
