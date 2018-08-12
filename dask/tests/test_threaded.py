@@ -54,8 +54,6 @@ def test_get_with_annotations_without_computation():
     assert get(dsk, 'x') == 2
 
 
-
-
 def bad(x):
     raise ValueError()
 

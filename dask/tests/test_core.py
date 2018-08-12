@@ -273,4 +273,3 @@ def test_split_args_annotations():
 
     args = (a1,)
     assert split_args_annotations(*args) == ((), (a1,))
-

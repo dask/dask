@@ -248,7 +248,7 @@ def _execute_task(arg, cache, dsk=None):
     if isinstance(arg, list):
         return [_execute_task(a, cache) for a in arg]
     elif istask(arg):
-        func, (args, _) = arg[0], split_args_annotations(*arg[1:])
+        func, args = arg[0], split_args_annotations(*arg[1:])[0]
         args2 = [_execute_task(a, cache) for a in args]
         return func(*args2)
     elif not ishashable(arg):
