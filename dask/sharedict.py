@@ -1,5 +1,6 @@
 from toolz import concat, unique, count
-from collections import Mapping
+
+from .compatibility import Mapping
 
 
 class ShareDict(Mapping):

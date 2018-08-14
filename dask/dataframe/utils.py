@@ -4,7 +4,6 @@ import re
 import textwrap
 from distutils.version import LooseVersion
 
-from collections import Iterator
 import sys
 import traceback
 from contextlib import contextmanager
@@ -19,7 +18,7 @@ except ImportError:
     # pandas < 0.19.2
     from pandas.core.common import is_datetime64tz_dtype
 
-from ..compatibility import PY2
+from ..compatibility import PY2, Iterator
 from ..core import get_deps
 from ..local import get_sync
 from ..utils import asciitable, is_arraylike

@@ -2,8 +2,8 @@ from toolz import merge
 from time import time
 import dask
 from dask import threaded, multiprocessing, local
+from dask.compatibility import Iterator
 from random import randint
-from collections import Iterator
 import matplotlib.pyplot as plt
 
 

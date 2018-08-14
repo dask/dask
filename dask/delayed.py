@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Iterator
 import operator
 import types
 import uuid
@@ -13,7 +12,7 @@ except ImportError:
 from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
 from .base import tokenize as _tokenize
-from .compatibility import apply
+from .compatibility import apply, Iterator
 from .core import quote
 from .context import globalmethod
 from .optimization import cull
