@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import collections
+from ..compatibility import Sequence
 from functools import wraps
 import inspect
 
@@ -257,7 +257,7 @@ def rfftfreq(n, d=1.0, chunks=None):
 def _fftshift_helper(x, axes=None, inverse=False):
     if axes is None:
         axes = list(range(x.ndim))
-    elif not isinstance(axes, collections.Sequence):
+    elif not isinstance(axes, Sequence):
         axes = (axes,)
 
     y = x

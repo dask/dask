@@ -5,7 +5,6 @@ import pytest
 import math
 import os
 import random
-from collections import Iterator
 from itertools import repeat
 
 import partd
@@ -17,7 +16,7 @@ from dask.bag.core import (Bag, lazify, lazify_task, map, collect,
                            reduceby, reify, partition, inline_singleton_lists,
                            optimize, from_delayed)
 from dask.bag.utils import assert_eq
-from dask.compatibility import BZ2File, GzipFile, PY2
+from dask.compatibility import BZ2File, GzipFile, PY2, Iterator
 from dask.delayed import Delayed
 from dask.utils import filetexts, tmpfile, tmpdir
 from dask.utils_test import inc, add
