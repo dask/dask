@@ -5,7 +5,8 @@ try:
     from .core import (Array, block, concatenate, stack, from_array, store,
                        map_blocks, atop, to_hdf5, to_npy_stack, from_npy_stack,
                        from_delayed, asarray, asanyarray, PerformanceWarning,
-                       broadcast_arrays, broadcast_to, from_zarr, to_zarr)
+                       broadcast_arrays, broadcast_to, from_zarr, to_zarr,
+                       normalize_chunks)
     from .routines import (take, choose, argwhere, where, coarsen, insert,
                            ravel, roll, unique, squeeze, ptp, diff, ediff1d,
                            gradient, bincount, digitize, histogram, cov, array,
