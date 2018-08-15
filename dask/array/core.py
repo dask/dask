@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 from bisect import bisect
-from collections import Iterator
 from functools import partial, wraps
 from itertools import product
 import math
@@ -40,7 +39,7 @@ from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      SerializableLock, ensure_dict, Dispatch, factors,
                      parse_bytes, has_keyword)
 from ..compatibility import (unicode, long, zip_longest, apply,
-                             Iterable, Mapping)
+                             Iterable, Iterator, Mapping)
 from ..core import quote
 from ..delayed import Delayed, to_task_dask
 from .. import threaded, core
