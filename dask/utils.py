@@ -8,7 +8,6 @@ import sys
 import tempfile
 import re
 from errno import ENOENT
-from collections import Iterator
 from contextlib import contextmanager
 from importlib import import_module
 from numbers import Integral
@@ -18,7 +17,8 @@ import uuid
 import warnings
 from weakref import WeakValueDictionary
 
-from .compatibility import get_named_args, getargspec, PY3, unicode, bind_method
+from .compatibility import (get_named_args, getargspec, PY3, unicode,
+                            bind_method, Iterator)
 from .core import get_deps
 from .optimization import key_split    # noqa: F401
 

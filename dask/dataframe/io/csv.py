@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
-import collections
 
 try:
     import psutil
@@ -19,7 +18,7 @@ except ImportError:
 
 from ...bytes import read_bytes, open_files
 from ...bytes.compression import seekable_files, files as cfiles
-from ...compatibility import PY2, PY3
+from ...compatibility import PY2, PY3, Mapping
 from ...delayed import delayed
 from ...utils import asciitable
 
@@ -197,7 +196,7 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
     unknown_categoricals = categoricals
 
     if _HAS_CDT:
-        if isinstance(specified_dtypes, collections.Mapping):
+        if isinstance(specified_dtypes, Mapping):
             known_categoricals = [
                 k for k in categoricals
                 if isinstance(specified_dtypes.get(k), CategoricalDtype) and

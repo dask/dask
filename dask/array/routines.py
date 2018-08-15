@@ -3,7 +3,6 @@ from __future__ import division, print_function, absolute_import
 import inspect
 import math
 import warnings
-from collections import Iterable
 from distutils.version import LooseVersion
 from functools import wraps, partial
 from numbers import Number, Real, Integral
@@ -12,6 +11,7 @@ import numpy as np
 from toolz import concat, merge, sliding_window, interleave
 
 from .. import sharedict
+from ..compatibility import Iterable
 from ..core import flatten
 from ..base import tokenize
 from ..utils import funcname

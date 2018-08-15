@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import OrderedDict, Iterator
+from collections import OrderedDict
 from functools import partial
 from hashlib import md5
 from operator import getitem
@@ -14,7 +14,7 @@ import warnings
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
-from .compatibility import long, unicode
+from .compatibility import long, unicode, Iterator
 from .context import thread_state
 from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex

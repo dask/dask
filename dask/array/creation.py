@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Sequence
 from functools import partial, wraps
 from itertools import product
 from operator import add
@@ -11,6 +10,7 @@ from toolz import accumulate, sliding_window
 
 from .. import sharedict
 from ..base import tokenize
+from ..compatibility import Sequence
 from ..utils import ignoring
 from . import chunk
 from .core import (Array, asarray, normalize_chunks,
