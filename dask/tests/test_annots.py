@@ -235,6 +235,8 @@ if __name__ == "__main__":
             t = timeit.timeit("dask.get(tasks, tasks.keys())",
                               setup=setup, number=nloops)
 
+        print(style, format_time(t / (nloops * ntasks)))
+
         assert etp.called
         assert htp.called
 
