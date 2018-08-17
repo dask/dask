@@ -226,13 +226,17 @@ if __name__ == "__main__":
                  .format(exec_fn=exec_fn, has_tasks_fn=htasks_fn,
                          ntasks=ntasks, style=style))
 
-        exec_task_patch = mock.patch("dask.local._execute_task", new=exec_fn)
-        has_tasks_patch = mock.patch("dask.local.has_tasks", new=htasks_fn)
+        exec_task_patch = mock.patch("dask.local._execute_task",
+                                     side_effect=exec_fn)
+        has_tasks_patch = mock.patch("dask.local.has_tasks",
+                                     side_effect=htasks_fn)
 
-        with exec_task_patch, has_tasks_patch:
+        with exec_task_patch as etp, has_tasks_patch as htp:
             t = timeit.timeit("dask.get(tasks, tasks.keys())",
                               setup=setup, number=nloops)
-        print(style, format_time(t / (nloops * ntasks)))
+
+        assert etp.called
+        assert htp.called
 
     print("\nTASK CREATION TIMING")
 
