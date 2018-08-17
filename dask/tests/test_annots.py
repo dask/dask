@@ -12,12 +12,17 @@ from __future__ import print_function
 import argparse
 import bz2
 from collections import namedtuple
+from functools import partial
 import timeit
 
+
 try:
-    from cPickle import dumps
+    from cloudpickle import dumps, HIGHEST_PROTOCOL
 except ImportError:
-    from pickle import dumps
+    try:
+        from cPickle import dumps, HIGHEST_PROTOCOL
+    except ImportError:
+        from pickle import dumps, HIGHEST_PROTOCOL
 
 import dask  # noqa
 from dask.core import istask, ishashable, has_tasks
@@ -26,55 +31,61 @@ import mock
 TaskAnnotation = namedtuple("TaskAnnotation", ["an"])
 
 
-class Task(tuple):
-    __slots__ = ()
+# class Task(tuple):
+#     __slots__ = ()
 
-    _index_names = ("function", "args", "kwargs", "annotations")
+#     _index_names = ("function", "args", "kwargs", "annotations")
 
-    def __new__(cls, fn, *args, **kwargs):
-        annots = kwargs.pop("annotations", None)
-        return tuple.__new__(Task, (fn, args, kwargs, annots))
+#     def __new__(cls, fn, *args, **kwargs):
+#         annots = kwargs.pop("annotations", None)
+#         return tuple.__new__(Task, (fn, args, kwargs, annots))
 
-    @property
-    def function(self):
-        return self[0]
+#     @property
+#     def function(self):
+#         return self[0]
 
-    @property
-    def args(self):
-        return self[1]
+#     @property
+#     def args(self):
+#         return self[1]
 
-    @property
-    def kwargs(self):
-        return self[2]
+#     @property
+#     def kwargs(self):
+#         return self[2]
 
-    @property
-    def annotations(self):
-        return self[3]
+#     @property
+#     def annotations(self):
+#         return self[3]
+
+#     def __repr__(self):
+#         details = ", ".join("%s=%s" % (n, repr(self[i]))
+#                             for i, n in enumerate(self._index_names)
+#                             if self[i])
+#         return 'Task({})'.format(details)
+
+
+class Task(object):
+    __slots__ = ("function", "args", "kwargs", "annotations")
+
+    def __init__(self, function, *args, **kwargs):
+        self.function = function
+        self.args = args
+        self.annotations = kwargs.pop("annotations", None)
+        self.kwargs = kwargs
+
+    def __getstate__(self):
+        return (self.function, self.args, self.kwargs, self.annotations)
+
+    def __setstate__(self, state):
+        self.function = state[0]
+        self.args = state[1]
+        self.kwargs = state[2]
+        self.annotations = state[3]
 
     def __repr__(self):
         details = ", ".join("%s=%s" % (n, repr(self[i]))
-                            for i, n in enumerate(self._index_names)
+                            for i, n in enumerate(self.__slots__)
                             if self[i])
         return 'Task({})'.format(details)
-
-
-# class Task(object):
-#     __slots___ = ("function", "args", "kwargs", "annotations")
-
-#     def __init__(self, function, *args, **kwargs):
-#         self.function = function
-#         self.args = args
-#         self.annotations = kwargs.pop("annotations", None)
-#         self.kwargs = kwargs
-
-#     def __getstate__(self):
-#         return (self.function, self.args, self.kwargs, self.annotations)
-
-#     def __setstate(self, state):
-#         self.function = state[0]
-#         self.args = state[1]
-#         self.kwargs = state[2]
-#         self.annotations = state[3]
 
 
 def execute_task_std(arg, cache, dsk=None):
@@ -231,6 +242,8 @@ if __name__ == "__main__":
                           setup=setup, number=nloops)
 
         print(style, format_time(t / (nloops * ntasks)))
+
+    dumps = partial(dumps, protocol=HIGHEST_PROTOCOL)
 
     print("\nPICKLING TASK TIMING")
 
