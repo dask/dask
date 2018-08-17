@@ -11,7 +11,6 @@ from __future__ import print_function
 
 import argparse
 import bz2
-from contextlib import nested
 from collections import namedtuple
 import timeit
 
@@ -219,7 +218,7 @@ if __name__ == "__main__":
         exec_task_patch = mock.patch("dask.local._execute_task", new=exec_fn)
         has_tasks_patch = mock.patch("dask.local.has_tasks", new=htasks_fn)
 
-        with nested(*[exec_task_patch, has_tasks_patch]):
+        with exec_task_patch, has_tasks_patch:
             t = timeit.timeit("dask.get(tasks, tasks.keys())",
                               setup=setup, number=nloops)
         print(style, format_time(t / (nloops * ntasks)))
