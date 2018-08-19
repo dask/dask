@@ -118,20 +118,3 @@ def test_CommunicatingStream(c, s, a, b):
             len(first(bb.outgoing.data.values())))
     assert (len(first(aa.incoming.data.values())) and
             len(first(bb.incoming.data.values())))
-
-
-@pytest.mark.skipif(sys.version_info[0] == 2,
-                    reason='https://github.com/bokeh/bokeh/issues/5494')
-@gen_cluster(client=True)
-def test_port_overlap(c, s, a, b):
-    # When the given port is unavailable, another one is chosen automatically
-    sa = BokehWorker(a)
-    sa.listen(57384)
-    sb = BokehWorker(b)
-    sb.listen(57384)
-    assert sa.port
-    assert sb.port
-    assert sa.port != sb.port
-
-    sa.stop()
-    sb.stop()

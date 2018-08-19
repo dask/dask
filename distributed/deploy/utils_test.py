@@ -3,9 +3,10 @@ from ..client import Client
 
 class ClusterTest(object):
     Cluster = None
+    kwargs = {}
 
     def setUp(self):
-        self.cluster = self.Cluster(2, scheduler_port=0)
+        self.cluster = self.Cluster(2, scheduler_port=0, **self.kwargs)
         self.client = Client(self.cluster.scheduler_address)
 
     def tearDown(self):
@@ -33,10 +34,10 @@ class ClusterTest(object):
         assert c == a
 
     def test_context_manager(self):
-        with self.Cluster() as c:
+        with self.Cluster(**self.kwargs) as c:
             with Client(c) as e:
                 assert e.ncores()
 
     def test_no_workers(self):
-        with self.Cluster(0, scheduler_port=0):
+        with self.Cluster(0, scheduler_port=0, **self.kwargs):
             pass

@@ -40,8 +40,8 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help="Serving computation port, defaults to random")
 @click.option('--nanny-port', type=int, default=0,
               help="Serving nanny port, defaults to random")
-@click.option('--bokeh-port', type=int, default=8789,
-              help="Bokeh port, defaults to 8789")
+@click.option('--bokeh-port', type=int, default=0,
+              help="Bokeh port, defaults to random port")
 @click.option('--bokeh/--no-bokeh', 'bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
 @click.option('--listen-address', type=str, default=None,

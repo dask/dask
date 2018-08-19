@@ -11,6 +11,7 @@ import itertools
 import logging
 import logging.config
 import os
+import psutil
 import re
 import shutil
 import signal
@@ -39,11 +40,12 @@ from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 
 from .client import default_client, _global_clients
-from .compatibility import PY3, Empty, WINDOWS
+from .compatibility import PY3, Empty, WINDOWS, PY2
 from .comm.utils import offload
 from .config import initialize_logging
 from .core import connect, rpc, CommClosedError
 from .metrics import time
+from .process import _cleanup_dangling
 from .proctitle import enable_proctitle_on_children
 from .security import Security
 from .utils import (ignoring, log_errors, mp_context, get_ip, get_ipv6,
@@ -129,6 +131,18 @@ def loop():
         else:
             is_stopped.wait()
     del _global_workers[:]
+
+    start = time()
+    while set(_global_clients):
+        sleep(0.1)
+        assert time() < start + 5
+
+    _cleanup_dangling()
+
+    if PY2:  # no forkserver, so no extra procs
+        for child in psutil.Process().children(recursive=True):
+            child.terminate()
+
     _global_clients.clear()
 
 
@@ -845,6 +859,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                         thread = threading._active[tid]
                         call_stacks = profile.call_stack(sys._current_frames()[tid])
                         assert False, (thread, call_stacks)
+            _cleanup_dangling()
             return result
 
         return test_func

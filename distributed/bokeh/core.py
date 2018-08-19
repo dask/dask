@@ -39,8 +39,16 @@ class BokehServer(object):
                 self.server._tornado.add_handlers(r'.*', handlers)
 
                 return
-            except (SystemExit, EnvironmentError):
-                port = 0
+            except (SystemExit, EnvironmentError) as exc:
+                if port != 0:
+                    if ("already in use" in str(exc) or  # Unix/Mac
+                            "Only one usage of" in str(exc)):  # Windows
+                        msg = ("Port %d is already in use. "
+                               "Perhaps you already have a cluster running?"
+                               % port)
+                    else:
+                        msg = "Failed to start diagnostics server on port %d. " % port + str(exc)
+                    raise type(exc)(msg)
                 if i == 4:
                     raise
 

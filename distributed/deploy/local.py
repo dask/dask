@@ -79,7 +79,7 @@ class LocalCluster(Cluster):
     def __init__(self, n_workers=None, threads_per_worker=None, processes=True,
                  loop=None, start=None, ip=None, scheduler_port=0,
                  silence_logs=logging.WARN, diagnostics_port=8787,
-                 services={}, worker_services={}, service_kwargs=None,
+                 services=None, worker_services=None, service_kwargs=None,
                  asynchronous=False, security=None, **worker_kwargs):
         if start is not None:
             msg = ("The start= parameter is deprecated. "
@@ -93,6 +93,8 @@ class LocalCluster(Cluster):
         self.silence_logs = silence_logs
         self._asynchronous = asynchronous
         self.security = security
+        services = services or {}
+        worker_services = worker_services or {}
         if silence_logs:
             self._old_logging_level = silence_logging(level=silence_logs)
         if n_workers is None and threads_per_worker is None:
@@ -116,7 +118,7 @@ class LocalCluster(Cluster):
         self._loop_runner = LoopRunner(loop=loop, asynchronous=asynchronous)
         self.loop = self._loop_runner.loop
 
-        if diagnostics_port is not None:
+        if diagnostics_port is not False and diagnostics_port is not None:
             try:
                 from distributed.bokeh.scheduler import BokehScheduler
                 from distributed.bokeh.worker import BokehWorker

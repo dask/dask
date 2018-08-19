@@ -125,6 +125,7 @@ def test_transports():
 @pytest.mark.skipif('sys.version_info[0] == 2', reason='')
 class LocalTest(ClusterTest, unittest.TestCase):
     Cluster = partial(LocalCluster, silence_logs=False, diagnostics_port=None)
+    kwargs = {'diagnostics_port': None}
 
 
 @pytest.mark.skipif('sys.version_info[0] == 2', reason='')
@@ -142,6 +143,18 @@ def test_Client_solo(loop):
     assert c.cluster.status == 'closed'
 
 
+@gen_test()
+def test_duplicate_clients():
+    c1 = yield Client(processes=False, silence_logs=False, diagnostics_port=9876)
+    with pytest.warns(Exception) as info:
+        yield Client(processes=False, silence_logs=False, diagnostics_port=9876)
+
+    assert any(all(word in str(msg.message).lower()
+                   for word in ['9876', 'running', 'already in use'])
+               for msg in info.list)
+    yield c1.close()
+
+
 def test_Client_kwargs(loop):
     with Client(loop=loop, processes=False, n_workers=2, silence_logs=False) as c:
         assert len(c.cluster.workers) == 2
@@ -150,8 +163,8 @@ def test_Client_kwargs(loop):
 
 
 def test_Client_twice(loop):
-    with Client(loop=loop, silence_logs=False) as c:
-        with Client(loop=loop, silence_logs=False) as f:
+    with Client(loop=loop, silence_logs=False, diagnostics_port=None) as c:
+        with Client(loop=loop, silence_logs=False, diagnostics_port=None) as f:
             assert c.cluster.scheduler.port != f.cluster.scheduler.port
 
 
@@ -367,7 +380,7 @@ def test_logging():
 def test_ipywidgets(loop):
     ipywidgets = pytest.importorskip('ipywidgets')
     with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
-                      diagnostics_port=0, processes=False) as cluster:
+                      diagnostics_port=False, processes=False) as cluster:
         cluster._ipython_display_()
         box = cluster._cached_widget
         assert isinstance(box, ipywidgets.Widget)
@@ -376,7 +389,7 @@ def test_ipywidgets(loop):
 def test_scale(loop):
     """ Directly calling scale both up and down works as expected """
     with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
-                      diagnostics_port=0, processes=False, n_workers=0) as cluster:
+                      diagnostics_port=False, processes=False, n_workers=0) as cluster:
         assert not cluster.scheduler.workers
         cluster.scale(3)
 
@@ -397,7 +410,7 @@ def test_scale(loop):
 
 def test_adapt(loop):
     with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
-                      diagnostics_port=0, processes=False, n_workers=0) as cluster:
+                      diagnostics_port=False, processes=False, n_workers=0) as cluster:
         cluster.adapt(minimum=0, maximum=2, interval='10ms')
         assert cluster._adaptive.minimum == 0
         assert cluster._adaptive.maximum == 2
@@ -423,7 +436,7 @@ def test_adapt(loop):
 def test_adapt_then_manual(loop):
     """ We can revert from adaptive, back to manual """
     with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
-                      diagnostics_port=0, processes=False, n_workers=8) as cluster:
+                      diagnostics_port=False, processes=False, n_workers=8) as cluster:
         sleep(0.1)
         cluster.adapt(minimum=0, maximum=4, interval='10ms')
 
@@ -454,7 +467,7 @@ def test_local_tls(loop):
     from distributed.utils_test import tls_only_security
     security = tls_only_security()
     with LocalCluster(scheduler_port=8786, silence_logs=False, security=security,
-                      diagnostics_port=0, ip='tls://0.0.0.0', loop=loop) as c:
+                      diagnostics_port=False, ip='tls://0.0.0.0', loop=loop) as c:
         sync(loop, assert_can_connect_from_everywhere_4, c.scheduler.port,
              connection_args=security.get_connection_args('client'),
              protocol='tls', timeout=3)

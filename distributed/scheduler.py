@@ -12,6 +12,7 @@ import os
 import pickle
 import random
 import six
+import warnings
 
 import psutil
 import sortedcontainers
@@ -1033,8 +1034,9 @@ class Scheduler(ServerNode):
                     service.listen((listen_ip, port))
                 self.services[k] = service
             except Exception as e:
-                logger.info("Could not launch service: %r", (k, port),
-                            exc_info=True)
+                warnings.warn("\nCould not launch service '%s' on port %d. " % (k, port) +
+                              "Got the following message:\n\n" + str(e),
+                              stacklevel=3)
 
     def stop_services(self):
         for service in self.services.values():

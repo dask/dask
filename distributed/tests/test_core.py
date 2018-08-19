@@ -401,7 +401,7 @@ def test_identity_inproc():
 
 
 def test_ports(loop):
-    port = 9876
+    port = 9877
     server = Server({}, io_loop=loop)
     server.listen(port)
     try:
