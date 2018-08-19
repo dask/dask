@@ -15,7 +15,7 @@ from bokeh.plotting import figure
 from bokeh.palettes import RdBu
 from toolz import merge, partition_all
 
-from .components import DashboardComponent, ProfileTimePlot
+from .components import DashboardComponent, ProfileTimePlot, ProfileServer
 from .core import BokehServer
 from .utils import transpose
 from ..compatibility import WINDOWS
@@ -616,6 +616,18 @@ def profile_doc(server, extra, doc):
         doc.template_variables.update(extra)
 
 
+def profile_server_doc(server, extra, doc):
+    with log_errors():
+        doc.title = "Dask: Profile of Event Loop"
+        prof = ProfileServer(server, sizing_mode='scale_width', doc=doc)
+        doc.add_root(prof.root)
+        doc.template = template
+        # doc.template_variables['active_page'] = ''
+        doc.template_variables.update(extra)
+
+        prof.trigger_update()
+
+
 class BokehWorker(BokehServer):
     def __init__(self, worker, io_loop=None, prefix='', **kwargs):
         self.worker = worker
@@ -636,12 +648,14 @@ class BokehWorker(BokehServer):
         systemmonitor = Application(FunctionHandler(partial(systemmonitor_doc, worker, extra)))
         counters = Application(FunctionHandler(partial(counters_doc, worker, extra)))
         profile = Application(FunctionHandler(partial(profile_doc, worker, extra)))
+        profile_server = Application(FunctionHandler(partial(profile_server_doc, worker, extra)))
 
         self.apps = {'/main': main,
                      '/counters': counters,
                      '/crossfilter': crossfilter,
                      '/system': systemmonitor,
-                     '/profile': profile}
+                     '/profile': profile,
+                     '/profile-server': profile_server}
 
         self.loop = io_loop or worker.loop
         self.server = None

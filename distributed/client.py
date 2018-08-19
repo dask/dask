@@ -1478,7 +1478,10 @@ class Client(Node):
                     self._send_to_scheduler({'op': 'report-key',
                                              'key': key})
                 for key in response['keys']:
-                    self.futures[key].reset()
+                    try:
+                        self.futures[key].reset()
+                    except KeyError:  # TODO: verify that this is safe
+                        pass
             else:
                 break
 

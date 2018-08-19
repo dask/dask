@@ -358,12 +358,11 @@ class LoopRunner(object):
             finally:
                 done_evt.set()
 
-        thread = threading.Thread(target=run_loop,
-                                  name="IO loop")
+        thread = threading.Thread(target=run_loop, name="IO loop")
         thread.daemon = True
         thread.start()
 
-        loop_evt.wait(timeout=1000)
+        loop_evt.wait(timeout=10)
         self._started = True
 
         actual_thread = in_thread[0]

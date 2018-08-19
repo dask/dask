@@ -733,8 +733,11 @@ def test_inproc_comm_closed_explicit_2():
 
     comm = yield connect(contact_addr)
     comm.write("foo")
-    yield gen.sleep(0.01)
-    assert comm.closed()
+
+    start = time()
+    while not comm.closed():
+        yield gen.sleep(0.01)
+        assert time() < start + 2
 
     comm.close()
     comm.close()

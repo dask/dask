@@ -13,6 +13,7 @@ from bokeh.palettes import Spectral9
 from bokeh.plotting import figure
 import dask
 from tornado import gen
+import toolz
 
 from ..diagnostics.progress_stream import nbytes_bar
 from .. import profile
@@ -437,6 +438,7 @@ class ProfileTimePlot(DashboardComponent):
         self.ts_source = ColumnDataSource({'time': [], 'count': []})
         self.ts_plot = figure(title='Activity over time', height=100,
                               x_axis_type='datetime', active_drag='xbox_select',
+                              y_range=[0, 1 / profile_interval],
                               tools='xpan,xwheel_zoom,xbox_select,reset',
                               **kwargs)
         self.ts_plot.line('time', 'count', source=self.ts_source)
@@ -511,3 +513,135 @@ class ProfileTimePlot(DashboardComponent):
                 self.doc().add_next_tick_callback(lambda: self.update(prof, metadata))
 
         self.server.loop.add_callback(cb)
+
+
+class ProfileServer(DashboardComponent):
+    """ Time plots of the current resource usage on the cluster
+
+    This is two plots, one for CPU and Memory and another for Network I/O
+    """
+
+    def __init__(self, server, doc=None, **kwargs):
+        if doc is not None:
+            self.doc = weakref.ref(doc)
+        self.server = server
+        self.log = self.server.io_loop.profile
+        self.start = None
+        self.stop = None
+        self.ts = {'count': [], 'time': []}
+        self.state = profile.get_profile(self.log)
+        data = profile.plot_data(self.state, profile_interval)
+        self.states = data.pop('states')
+        self.source = ColumnDataSource(data=data)
+
+        changing = [False]  # avoid repeated changes from within callback
+
+        def cb(attr, old, new):
+            if changing[0]:
+                return
+            with log_errors():
+                try:
+                    ind = new['1d']['indices'][0]
+                except IndexError:
+                    return
+                data = profile.plot_data(self.states[ind], profile_interval)
+                del self.states[:]
+                self.states.extend(data.pop('states'))
+                changing[0] = True  # don't recursively trigger callback
+                self.source.data.update(data)
+                self.source.selected = old
+                changing[0] = False
+
+        self.source.on_change('selected', cb)
+
+        self.profile_plot = figure(tools='tap', height=400, **kwargs)
+        r = self.profile_plot.quad('left', 'right', 'top', 'bottom', color='color',
+                                   line_color='black', source=self.source)
+        r.selection_glyph = None
+        r.nonselection_glyph = None
+
+        hover = HoverTool(
+            point_policy="follow_mouse",
+            tooltips="""
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Name:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@name</span>
+                </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Filename:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@filename</span>
+                </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Line number:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@line_number</span>
+                </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Line:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@line</span>
+                </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Time:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@time</span>
+                </div>
+                <div>
+                    <span style="font-size: 14px; font-weight: bold;">Percentage:</span>&nbsp;
+                    <span style="font-size: 10px; font-family: Monaco, monospace;">@percentage</span>
+                </div>
+                """
+        )
+        self.profile_plot.add_tools(hover)
+
+        self.profile_plot.xaxis.visible = False
+        self.profile_plot.yaxis.visible = False
+        self.profile_plot.grid.visible = False
+
+        self.ts_source = ColumnDataSource({'time': [], 'count': []})
+        self.ts_plot = figure(title='Activity over time', height=100,
+                              x_axis_type='datetime', active_drag='xbox_select',
+                              y_range=[0, 1 / profile_interval],
+                              tools='xpan,xwheel_zoom,xbox_select,reset',
+                              **kwargs)
+        self.ts_plot.line('time', 'count', source=self.ts_source)
+        self.ts_plot.circle('time', 'count', source=self.ts_source, color=None,
+                            selection_color='orange')
+        self.ts_plot.yaxis.visible = False
+        self.ts_plot.grid.visible = False
+
+        def ts_change(attr, old, new):
+            with log_errors():
+                selected = self.ts_source.selected['1d']['indices']
+                if selected:
+                    start = self.ts_source.data['time'][min(selected)] / 1000
+                    stop = self.ts_source.data['time'][max(selected)] / 1000
+                    self.start, self.stop = min(start, stop), max(start, stop)
+                else:
+                    self.start = self.stop = None
+                self.trigger_update()
+
+        self.ts_source.on_change('selected', ts_change)
+
+        self.reset_button = Button(label="Reset", button_type="success")
+        self.reset_button.on_click(lambda: self.update(self.state))
+
+        self.update_button = Button(label="Update", button_type="success")
+        self.update_button.on_click(self.trigger_update)
+
+        self.root = column(row(self.reset_button, self.update_button,
+                               sizing_mode='scale_width'),
+                           self.profile_plot, self.ts_plot, **kwargs)
+
+    def update(self, state):
+        with log_errors():
+            self.state = state
+            data = profile.plot_data(self.state, profile_interval)
+            self.states = data.pop('states')
+            self.source.data.update(data)
+
+    def trigger_update(self):
+        self.state = profile.get_profile(self.log, start=self.start, stop=self.stop)
+        data = profile.plot_data(self.state, profile_interval)
+        self.states = data.pop('states')
+        self.source.data.update(data)
+        times = [t * 1000 for t, _ in self.log]
+        counts = list(toolz.pluck('count', toolz.pluck(1, self.log)))
+        self.ts_source.data.update({'time': times, 'count': counts})

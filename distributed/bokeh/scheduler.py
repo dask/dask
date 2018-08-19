@@ -30,7 +30,7 @@ except ImportError:
     np = False
 
 from . import components
-from .components import DashboardComponent, ProfileTimePlot
+from .components import (DashboardComponent, ProfileTimePlot, ProfileServer)
 from .core import BokehServer
 from .worker import SystemMonitor, counters_doc
 from .utils import transpose
@@ -1164,6 +1164,18 @@ def profile_doc(scheduler, extra, doc):
         prof.trigger_update()
 
 
+def profile_server_doc(scheduler, extra, doc):
+    with log_errors():
+        doc.title = "Dask: Profile of Event Loop"
+        prof = ProfileServer(scheduler, sizing_mode='scale_width', doc=doc)
+        doc.add_root(prof.root)
+        doc.template = template
+        # doc.template_variables['active_page'] = 'profile'
+        doc.template_variables.update(extra)
+
+        prof.trigger_update()
+
+
 class BokehScheduler(BokehServer):
     def __init__(self, scheduler, io_loop=None, prefix='', **kwargs):
         self.scheduler = scheduler
@@ -1184,6 +1196,7 @@ class BokehScheduler(BokehServer):
         tasks = Application(FunctionHandler(partial(tasks_doc, scheduler, self.extra)))
         status = Application(FunctionHandler(partial(status_doc, scheduler, self.extra)))
         profile = Application(FunctionHandler(partial(profile_doc, scheduler, self.extra)))
+        profile_server = Application(FunctionHandler(partial(profile_server_doc, scheduler, self.extra)))
         graph = Application(FunctionHandler(partial(graph_doc, scheduler, self.extra)))
 
         self.apps = {
@@ -1195,6 +1208,7 @@ class BokehScheduler(BokehServer):
             '/tasks': tasks,
             '/status': status,
             '/profile': profile,
+            '/profile-server': profile_server,
             '/graph': graph,
         }
 

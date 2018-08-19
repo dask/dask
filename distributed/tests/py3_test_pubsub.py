@@ -13,7 +13,7 @@ def test_basic(c, s, a, b):
         i = 0
         while True:
             await gen.sleep(0.01)
-            pub.put(i)
+            pub._put(i)
             i += 1
 
     def f(_):
@@ -32,4 +32,4 @@ def test_basic(c, s, a, b):
         # assert r == [x, x + 1, x + 2, x + 3, x + 4]
 
         assert len(r) == 5
-        assert all(r[i] < r[i + 1] for i in range(0, 4))
+        assert all(r[i] < r[i + 1] for i in range(0, 4)), r

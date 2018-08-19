@@ -35,7 +35,7 @@ def test_process_time():
     t.start()
     t.join()
     dt = metrics.process_time() - start
-    assert dt >= 0.08
+    assert dt >= 0.05
 
     if PY3:
         # Sleep time not counted

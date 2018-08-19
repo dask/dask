@@ -119,7 +119,7 @@ class Actor(WrappedKey):
         attr = getattr(self._cls, key)
 
         if self._future and not self._future.status == 'finished':
-            raise ValueError("Worker holding Actor was lost")
+            raise ValueError("Worker holding Actor was lost.  Status: " + self._future.status)
 
         if callable(attr):
             @functools.wraps(attr)

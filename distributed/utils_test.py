@@ -637,7 +637,10 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
             else:
                 client.close()
 
-    assert not ws
+    start = time()
+    while list(ws):
+        sleep(0.01)
+        assert time() < start + 1, 'Workers still around after one second'
 
 
 @gen.coroutine

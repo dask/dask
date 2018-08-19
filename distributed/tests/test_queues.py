@@ -262,14 +262,14 @@ def test_timeout(c, s, a, b):
 
     start = time()
     with pytest.raises(gen.TimeoutError):
-        yield q.get(timeout=0.1)
+        yield q.get(timeout=0.3)
     stop = time()
-    assert 0.1 < stop - start < 2.0
+    assert 0.2 < stop - start < 2.0
 
     yield q.put(1)
 
     start = time()
     with pytest.raises(gen.TimeoutError):
-        yield q.put(2, timeout=0.1)
+        yield q.put(2, timeout=0.3)
     stop = time()
-    assert 0.05 < stop - start < 2.0
+    assert 0.1 < stop - start < 2.0

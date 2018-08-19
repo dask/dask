@@ -732,26 +732,28 @@ def test_file_descriptors(c, s):
         assert time() < start + 3
 
 
+@slow
 @nodebug
 @gen_cluster(client=True)
 def test_learn_occupancy(c, s, a, b):
-    futures = c.map(slowinc, range(1000), delay=0.01)
+    futures = c.map(slowinc, range(1000), delay=0.2)
     while sum(len(ts.who_has) for ts in s.tasks.values()) < 10:
         yield gen.sleep(0.01)
 
-    assert 1 < s.total_occupancy < 40
+    assert 100 < s.total_occupancy < 1000
     for w in [a, b]:
-        assert 1 < s.workers[w.address].occupancy < 20
+        assert 50 < s.workers[w.address].occupancy < 700
 
 
+@slow
 @nodebug
 @gen_cluster(client=True)
 def test_learn_occupancy_2(c, s, a, b):
-    future = c.map(slowinc, range(1000), delay=0.1)
+    future = c.map(slowinc, range(1000), delay=0.2)
     while not any(ts.who_has for ts in s.tasks.values()):
         yield gen.sleep(0.01)
 
-    assert 50 < s.total_occupancy < 200
+    assert 100 < s.total_occupancy < 1000
 
 
 @gen_cluster(client=True)

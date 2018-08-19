@@ -50,7 +50,7 @@ def test_hostport(loop):
         def f():
             yield [
                 # The scheduler's main port can't be contacted from the outside
-                assert_can_connect_locally_4(8978, 2.0),
+                assert_can_connect_locally_4(8978, 5.0),
             ]
 
         loop.run_sync(f)

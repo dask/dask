@@ -24,12 +24,18 @@ We represent this tree as a nested dictionary with the following form:
                    'children': {...}}}
     }
 """
-
-
-from collections import defaultdict
+import bisect
+from collections import defaultdict, deque
 import linecache
+import sys
+import threading
+from time import sleep
 
-from .utils import format_time, color_of
+import toolz
+
+from .metrics import time
+from .utils import format_time, color_of, parse_timedelta
+from .compatibility import get_thread_identity
 
 
 def identifier(frame):
@@ -64,7 +70,7 @@ def info_frame(frame):
             'line': line}
 
 
-def process(frame, child, state, stop=None):
+def process(frame, child, state, stop=None, omit=None):
     """ Add counts from a frame stack onto existing state
 
     This recursively adds counts to the existing state dictionary and creates
@@ -84,9 +90,14 @@ def process(frame, child, state, stop=None):
      'description': 'root',
      'children': {'...'}}
     """
+    if omit is not None and any(frame.f_code.co_filename.endswith(o) for o in omit):
+        return False
+
     prev = frame.f_back
     if prev is not None and (stop is None or not prev.f_code.co_filename.endswith(stop)):
         state = process(prev, frame, state, stop=stop)
+        if state is False:
+            return False
 
     ident = identifier(frame)
 
@@ -214,3 +225,77 @@ def plot_data(state, profile_interval=0.010):
             'name': names,
             'time': times,
             'percentage': percentages}
+
+
+def _watch(thread_id, log, interval='20ms', cycle='2s', omit=None,
+           stop=lambda: False):
+    interval = parse_timedelta(interval)
+    cycle = parse_timedelta(cycle)
+
+    recent = create()
+    last = time()
+
+    while not stop():
+        if time() > last + cycle:
+            log.append((time(), recent))
+            recent = create()
+            last = time()
+        try:
+            frame = sys._current_frames()[thread_id]
+        except KeyError:
+            return
+
+        process(frame, None, recent, omit=omit)
+        sleep(interval)
+
+
+def watch(thread_id=None, interval='20ms', cycle='2s', maxlen=1000, omit=None,
+          stop=lambda: False):
+    if thread_id is None:
+        thread_id = get_thread_identity()
+
+    log = deque(maxlen=maxlen)
+
+    thread = threading.Thread(target=_watch,
+                              name='Profile',
+                              kwargs={'thread_id': thread_id,
+                                      'interval': interval,
+                                      'cycle': cycle,
+                                      'log': log,
+                                      'omit': omit,
+                                      'stop': stop})
+    thread.daemon = True
+    thread.start()
+
+    return log
+
+
+def get_profile(history, recent=None, start=None, stop=None, key=None):
+    now = time()
+    if start is None:
+        istart = 0
+    else:
+        istart = bisect.bisect_left(history, (start,))
+
+    if stop is None:
+        istop = None
+    else:
+        istop = bisect.bisect_right(history, (stop,)) + 1
+        if istop >= len(history):
+            istop = None  # include end
+
+    if istart == 0 and istop is None:
+        history = list(history)
+    else:
+        iistop = len(history) if istop is None else istop
+        history = [history[i] for i in range(istart, iistop)]
+
+    prof = merge(*toolz.pluck(1, history))
+
+    if not history:
+        return create()
+
+    if recent:
+        prof = merge(prof, recent)
+
+    return prof

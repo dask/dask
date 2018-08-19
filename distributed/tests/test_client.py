@@ -2049,7 +2049,6 @@ def test_waiting_data(c, s, a, b):
 @gen_cluster()
 def test_multi_client(s, a, b):
     c = yield Client((s.ip, s.port), asynchronous=True)
-
     f = yield Client((s.ip, s.port), asynchronous=True)
 
     assert set(s.client_comms) == {c.id, f.id}
@@ -2080,7 +2079,10 @@ def test_multi_client(s, a, b):
 
     yield f.close()
 
-    assert not s.tasks
+    start = time()
+    while s.tasks:
+        yield gen.sleep(0.01)
+        assert time() < start + 2, s.tasks
 
 
 def long_running_client_connection(address):

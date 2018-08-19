@@ -5,7 +5,6 @@ from datetime import timedelta
 import logging
 import os
 import re
-import sys
 import threading
 import weakref
 
@@ -34,10 +33,10 @@ def _loop_add_callback(loop, func, *args):
 def _call_and_set_future(loop, future, func, *args, **kwargs):
     try:
         res = func(*args, **kwargs)
-    except Exception:
+    except Exception as exc:
         # Tornado futures are not thread-safe, need to
         # set_result() / set_exc_info() from the loop's thread
-        _loop_add_callback(loop, future.set_exc_info, sys.exc_info())
+        _loop_add_callback(loop, future.set_exception, exc)
     else:
         _loop_add_callback(loop, future.set_result, res)
 

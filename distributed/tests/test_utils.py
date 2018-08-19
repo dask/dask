@@ -514,16 +514,16 @@ def test_parse_timedelta():
 def test_all_exceptions_logging():
     @gen.coroutine
     def throws():
-        raise Exception('foo')
+        raise Exception('foo1234')
 
     with captured_logger('') as sio:
         try:
             yield All([throws() for _ in range(5)],
-                    quiet_exceptions=Exception)
+                      quiet_exceptions=Exception)
         except Exception:
             pass
 
         import gc; gc.collect()
         yield gen.sleep(0.1)
 
-    assert not sio.getvalue()
+    assert 'foo1234' not in sio.getvalue()

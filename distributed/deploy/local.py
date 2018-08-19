@@ -287,7 +287,10 @@ class LocalCluster(Cluster):
                 else:
                     sleep(0.01)
             del self.workers[:]
-            self._loop_runner.run_sync(self._close, callback_timeout=timeout)
+            try:
+                self._loop_runner.run_sync(self._close, callback_timeout=timeout)
+            except RuntimeError:  # IOLoop is closed
+                pass
             self._loop_runner.stop()
         finally:
             self.status = 'closed'

@@ -22,7 +22,7 @@ from distributed.bokeh.scheduler import (BokehScheduler, SystemMonitor,
                                          MemoryUse, CurrentLoad,
                                          ProcessingHistogram,
                                          NBytesHistogram, WorkerTable,
-                                         GraphPlot)
+                                         GraphPlot, ProfileServer)
 
 from distributed.bokeh import scheduler
 
@@ -389,3 +389,14 @@ def test_GraphPlot_order(c, s, a, b):
     gp.update()
 
     assert gp.node_source.data['state'][gp.layout.index[y.key]] == 'erred'
+
+
+@gen_cluster(client=True,
+             config={'distributed.worker.profile.interval': '10ms',
+                     'distributed.worker.profile.cycle': '50ms'})
+def test_profile_server(c, s, a, b):
+    ptp = ProfileServer(s)
+    ptp.trigger_update()
+    yield gen.sleep(0.200)
+    ptp.trigger_update()
+    assert 2 < len(ptp.ts_source.data['time']) < 20
