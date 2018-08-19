@@ -1,8 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
-from .serialize import register_serialization, serialize, deserialize
+from .serialize import dask_serialize, dask_deserialize, serialize, deserialize
+
+import keras
 
 
+@dask_serialize.register(keras.Model)
 def serialize_keras_model(model):
     import keras
     if keras.__version__ < '1.2.0':
@@ -18,6 +21,7 @@ def serialize_keras_model(model):
     return header, frames
 
 
+@dask_deserialize.register(keras.Model)
 def deserialize_keras_model(header, frames):
     from keras.models import model_from_config
     n = 0
@@ -29,9 +33,3 @@ def deserialize_keras_model(header, frames):
     model = model_from_config(header)
     model.set_weights(weights)
     return model
-
-
-for module in ['keras', 'tensorflow.contrib.keras.python.keras']:
-    for name in ['engine.training.Model', 'models.Model', 'models.Sequential']:
-        register_serialization('.'.join([module, name]), serialize_keras_model,
-                               deserialize_keras_model)

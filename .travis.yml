@@ -8,7 +8,7 @@ env:
   matrix:
     - PYTHON=2.7 TESTS=true PACKAGES="python-blosc futures faulthandler"
     - PYTHON=3.5.4 TESTS=true COVERAGE=true PACKAGES=python-blosc CRICK=true
-    - PYTHON=3.6 TESTS=true
+    - PYTHON=3.6 TESTS=true PACKAGES="scikit-learn"
 
 matrix:
   fast_finish: true

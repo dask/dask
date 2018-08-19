@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 from functools import partial
 import traceback
 
+import dask
 from dask.base import normalize_token
 try:
     from cytoolz import valmap, get_in
@@ -17,41 +18,35 @@ from .compression import maybe_compress, decompress
 from .utils import unpack_frames, pack_frames_prelude, frame_split_size
 
 
-class_serializers = {}
-
 lazy_registrations = {}
+
+
+dask_serialize = dask.utils.Dispatch('dask_serialize')
+dask_deserialize = dask.utils.Dispatch('dask_deserialize')
 
 
 def dask_dumps(x, context=None):
     """Serialise object using the class-based registry"""
-    typ = typename(type(x))
-    if typ in class_serializers:
-        dumps, loads, has_context = class_serializers[typ]
-        if has_context:
-            header, frames = dumps(x, context=context)
-        else:
-            header, frames = dumps(x)
-        header['type'] = typ
-        header['serializer'] = 'dask'
-        return header, frames
-    elif _find_lazy_registration(typ):
-        return dask_dumps(x)  # recurse
+    type_name = typename(type(x))
+    try:
+        dumps = dask_serialize.dispatch(type(x))
+    except TypeError:
+        raise NotImplementedError(type_name)
+    if has_keyword(dumps, 'context'):
+        header, frames = dumps(x, context=context)
     else:
-        raise NotImplementedError(typ)
+        header, frames = dumps(x)
+
+    header['type'] = type_name
+    header['type-serialized'] = pickle.dumps(type(x))
+    header['serializer'] = 'dask'
+    return header, frames
 
 
 def dask_loads(header, frames):
-    typ = header['type']
-
-    if typ not in class_serializers:
-        _find_lazy_registration(typ)
-
-    try:
-        dumps, loads, _ = class_serializers[typ]
-    except KeyError:
-        raise TypeError("Serialization for type %s not found" % typ)
-    else:
-        return loads(header, frames)
+    typ = pickle.loads(header['type-serialized'])
+    loads = dask_deserialize.dispatch(typ)
+    return loads(header, frames)
 
 
 def pickle_dumps(x):
@@ -406,20 +401,20 @@ def register_serialization(cls, serialize, deserialize):
     serialize
     deserialize
     """
-    if isinstance(cls, type):
-        name = typename(cls)
-    elif isinstance(cls, str):
-        name = cls
-    class_serializers[name] = (serialize,
-                               deserialize,
-                               has_keyword(serialize, 'context'))
+    if isinstance(cls, str):
+        raise TypeError(
+            "Strings are no longer accepted for type registration. "
+            "Use dask_serialize.register_lazy instead"
+        )
+    dask_serialize.register(cls)(serialize)
+    dask_deserialize.register(cls)(deserialize)
 
 
 def register_serialization_lazy(toplevel, func):
     """Register a registration function to be called if *toplevel*
     module is ever loaded.
     """
-    lazy_registrations[toplevel] = func
+    raise Exception("Serialization registration has changed. See documentation")
 
 
 def typename(typ):
@@ -434,33 +429,117 @@ def typename(typ):
     return typ.__module__ + '.' + typ.__name__
 
 
-def _find_lazy_registration(typename):
-    toplevel, _, _ = typename.partition('.')
-    if toplevel in lazy_registrations:
-        lazy_registrations.pop(toplevel)()
-        return True
-    else:
-        return False
-
-
 @partial(normalize_token.register, Serialized)
 def normalize_Serialized(o):
     return [o.header] + o.frames  # for dask.base.tokenize
 
 
 # Teach serialize how to handle bytestrings
+@dask_serialize.register((bytes, bytearray))
 def _serialize_bytes(obj):
     header = {}  # no special metadata
     frames = [obj]
     return header, frames
 
 
+@dask_deserialize.register((bytes, bytearray))
 def _deserialize_bytes(header, frames):
     return frames[0]
 
 
-# NOTE: using the same exact serialization means a bytes object may be
-# deserialized as bytearray or vice-versa...  Not sure this is a problem
-# in practice.
-register_serialization(bytes, _serialize_bytes, _deserialize_bytes)
-register_serialization(bytearray, _serialize_bytes, _deserialize_bytes)
+#########################
+# Descend into __dict__ #
+#########################
+
+
+def _is_msgpack_serializable(v):
+    typ = type(v)
+    return (typ is str or typ is int or typ is float or
+            isinstance(v, dict) and all(map(_is_msgpack_serializable, v.values()))
+                                and all(typ is str for x in v.keys()) or
+            isinstance(v, (list, tuple)) and all(map(_is_msgpack_serializable, v)))
+
+
+def serialize_object_with_dict(est):
+    header = {
+        'serializer': 'dask',
+        'type-serialized': pickle.dumps(type(est)),
+        'simple': {},
+        'complex': {}
+    }
+    frames = []
+
+    if isinstance(est, dict):
+        d = est
+    else:
+        d = est.__dict__
+
+    for k, v in d.items():
+        if _is_msgpack_serializable(v):
+            header['simple'][k] = v
+        else:
+            if isinstance(v, dict):
+                h, f = serialize_object_with_dict(v)
+            else:
+                h, f = serialize(v)
+            header['complex'][k] = {'header': h,
+                                    'start': len(frames),
+                                    'stop': len(frames) + len(f)}
+            frames += f
+    return header, frames
+
+
+def deserialize_object_with_dict(header, frames):
+    cls = pickle.loads(header['type-serialized'])
+    if issubclass(cls, dict):
+        dd = obj = {}
+    else:
+        obj = object.__new__(cls)
+        dd = obj.__dict__
+    dd.update(header['simple'])
+    for k, d in header['complex'].items():
+        h = d['header']
+        f = frames[d['start']: d['stop']]
+        v = deserialize(h, f)
+        dd[k] = v
+
+    return obj
+
+
+dask_deserialize.register(dict)(deserialize_object_with_dict)
+
+
+def register_generic(cls):
+    """ Register dask_(de)serialize to traverse through __dict__
+
+    Normally when registering new classes for Dask's custom serialization you
+    need to manage headers and frames, which can be tedious.  If all you want
+    to do is traverse through your object and apply serialize to all of your
+    object's attributes then this function may provide an easier path.
+
+    This registers a class for the custom Dask serialization family.  It
+    serializes it by traversing through its __dict__ of attributes and applying
+    ``serialize`` and ``deserialize`` recursively.  It collects a set of frames
+    and keeps small attributes in the header.  Deserialization reverses this
+    process.
+
+    This is a good idea if the following hold:
+
+    1.  Most of the bytes of your object are composed of data types that Dask's
+        custom serializtion already handles well, like Numpy arrays.
+    2.  Your object doesn't require any special constructor logic, other than
+        object.__new__(cls)
+
+    Examples
+    --------
+    >>> import sklearn.base
+    >>> from distributed.protocol import register_generic
+    >>> register_generic(sklearn.base.BaseEstimator)
+
+    See Also
+    --------
+    dask_serialize
+    dask_deserialize
+    """
+    dask_serialize.register(cls)(serialize_object_with_dict)
+    dask_deserialize.register(cls)(deserialize_object_with_dict)

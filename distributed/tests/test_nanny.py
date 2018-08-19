@@ -265,7 +265,8 @@ def test_nanny_timeout(c, s, a):
 
 
 @gen_cluster(ncores=[('127.0.0.1', 1)], client=True, Worker=Nanny,
-             worker_kwargs={'memory_limit': 1e8}, timeout=20)
+             worker_kwargs={'memory_limit': 1e8}, timeout=20,
+             check_new_threads=False)
 def test_nanny_terminate(c, s, a):
     from time import sleep
 

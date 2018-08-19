@@ -5,7 +5,6 @@ pa = pytest.importorskip('pyarrow')
 
 from distributed.utils_test import gen_cluster
 from distributed.protocol import deserialize, serialize
-from distributed.protocol.serialize import class_serializers, typename
 
 
 df = pd.DataFrame({'A': list('abc'), 'B': [1,2,3]})
@@ -20,13 +19,6 @@ def test_roundtrip(obj):
     header, frames = serialize(obj)
     new_obj = deserialize(header, frames)
     assert obj.equals(new_obj)
-
-
-@pytest.mark.parametrize('obj', [batch, tbl], ids=["RecordBatch", "Table"])
-def test_typename(obj):
-    # The typename used to register the custom serialization is hardcoded
-    # ensure that the typename hasn't changed
-    assert typename(type(obj)) in class_serializers
 
 
 def echo(arg):

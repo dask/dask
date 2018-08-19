@@ -311,28 +311,24 @@ def test_context_specific_serialization(c, s, a, b):
 def test_context_specific_serialization_class(c, s, a, b):
     register_serialization(MyObject, my_dumps, my_loads)
 
-    try:
-        # Create the object on A, force communication to B
-        x = c.submit(MyObject, x=1, y=2, workers=a.address)
-        y = c.submit(lambda x: x, x, workers=b.address)
+    # Create the object on A, force communication to B
+    x = c.submit(MyObject, x=1, y=2, workers=a.address)
+    y = c.submit(lambda x: x, x, workers=b.address)
 
-        yield wait(y)
+    yield wait(y)
 
-        key = y.key
+    key = y.key
 
-        def check(dask_worker):
-            # Get the context from the object stored on B
-            my_obj = dask_worker.data[key]
-            return my_obj.context
+    def check(dask_worker):
+        # Get the context from the object stored on B
+        my_obj = dask_worker.data[key]
+        return my_obj.context
 
-        result = yield c.run(check, workers=[b.address])
-        expected = {'sender': a.address, 'recipient': b.address}
-        assert result[b.address]['sender'] == a.address  # see origin worker
+    result = yield c.run(check, workers=[b.address])
+    expected = {'sender': a.address, 'recipient': b.address}
+    assert result[b.address]['sender'] == a.address  # see origin worker
 
-        z = yield y  # bring object to local process
+    z = yield y  # bring object to local process
 
-        assert z.x == 1 and z.y == 2
-        assert z.context['sender'] == b.address
-    finally:
-        from distributed.protocol.serialize import class_serializers, typename
-        del class_serializers[typename(MyObject)]
+    assert z.x == 1 and z.y == 2
+    assert z.context['sender'] == b.address

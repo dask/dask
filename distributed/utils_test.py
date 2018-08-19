@@ -856,7 +856,7 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                         break
                     else:
                         sleep(0.01)
-                    if time() > start + 2:
+                    if time() > start + 5:
                         from distributed import profile
                         tid = bad[0]
                         thread = threading._active[tid]

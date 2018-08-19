@@ -1,8 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
-from .serialize import register_serialization, serialize, deserialize
+from .serialize import dask_serialize, dask_deserialize, serialize, deserialize
+
+import sparse
 
 
+@dask_serialize.register(sparse.COO)
 def serialize_sparse(x):
     coords_header, coords_frames = serialize(x.coords)
     data_header, data_frames = serialize(x.data)
@@ -14,8 +17,8 @@ def serialize_sparse(x):
     return header, coords_frames + data_frames
 
 
+@dask_deserialize.register(sparse.COO)
 def deserialize_sparse(header, frames):
-    import sparse
 
     coords_frames = frames[:header['nframes'][0]]
     data_frames = frames[header['nframes'][0]:]
@@ -26,7 +29,3 @@ def deserialize_sparse(header, frames):
     shape = header['shape']
 
     return sparse.COO(coords, data, shape=shape)
-
-
-register_serialization('sparse.core.COO', serialize_sparse, deserialize_sparse)  # version 0.1
-register_serialization('sparse.coo.COO', serialize_sparse, deserialize_sparse)  # version 0.2

@@ -3860,12 +3860,12 @@ def test_scatter_compute_lose(c, s, a, b):
 
     yield a._close()
 
+    with pytest.raises(CancelledError):
+        yield wait(z)
+
     assert x.status == 'cancelled'
     assert y.status == 'finished'
     assert z.status == 'cancelled'
-
-    with pytest.raises(CancelledError):
-        yield wait(z)
 
 
 @gen_cluster(client=True)

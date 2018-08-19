@@ -11,7 +11,7 @@ except ImportError:
     blosc = False
 
 from .utils import frame_split_size, merge_frames
-from .serialize import register_serialization
+from .serialize import dask_serialize, dask_deserialize
 from . import pickle
 
 from ..utils import log_errors
@@ -28,6 +28,7 @@ def itemsize(dt):
     return result
 
 
+@dask_serialize.register(np.ndarray)
 def serialize_numpy_ndarray(x):
     if x.dtype.hasobject:
         header = {'pickle': True}
@@ -88,6 +89,7 @@ def serialize_numpy_ndarray(x):
     return header, frames
 
 
+@dask_deserialize.register(np.ndarray)
 def deserialize_numpy_ndarray(header, frames):
     with log_errors():
         if len(frames) > 1:
@@ -106,6 +108,3 @@ def deserialize_numpy_ndarray(header, frames):
                        strides=header['strides'])
 
         return x
-
-
-register_serialization(np.ndarray, serialize_numpy_ndarray, deserialize_numpy_ndarray)
