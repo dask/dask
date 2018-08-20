@@ -46,8 +46,8 @@ try:
         from .reductions import nanprod, nancumprod, nancumsum
     with ignoring(ImportError):
         from . import ma
-    from . import random, linalg, ghost, fft
-    from .ghost import map_overlap
+    from . import random, linalg, overlap, fft
+    from .overlap import map_overlap
     from .wrap import ones, zeros, empty, full
     from .creation import ones_like, zeros_like, empty_like, full_like
     from .rechunk import rechunk
@@ -58,6 +58,10 @@ try:
                            triu, tril, fromfunction, tile, repeat, pad)
     from .gufunc import apply_gufunc, gufunc, as_gufunc
     from .utils import assert_eq
+
+    # TODO: remove this after the deprecation cycle of ghost is complete
+    from . import ghost
+
 except ImportError as e:
     msg = ("Dask array requirements are not installed.\n\n"
            "Please either conda or pip install as follows:\n\n"

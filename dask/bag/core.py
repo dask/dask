@@ -5,7 +5,7 @@ import itertools
 import math
 import uuid
 import warnings
-from collections import Iterable, Iterator, defaultdict
+from collections import defaultdict
 from distutils.version import LooseVersion
 from functools import wraps, partial
 from operator import getitem
@@ -30,7 +30,7 @@ except ImportError:
 from .. import config
 from ..base import tokenize, dont_optimize, is_dask_collection, DaskMethodsMixin
 from ..bytes import open_files
-from ..compatibility import apply, urlopen
+from ..compatibility import apply, urlopen, Iterable, Iterator
 from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict
 from ..delayed import Delayed

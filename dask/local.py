@@ -114,7 +114,6 @@ from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
 from . import config
 from .order import order
 from .callbacks import unpack_callbacks, local_callbacks
-from .optimization import cull
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -452,8 +451,6 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                 if cb[0]:
                     cb[0](dsk)
                 started_cbs.append(cb)
-
-            dsk, dependencies = cull(dsk, list(results))
 
             keyorder = order(dsk)
 

@@ -8,7 +8,7 @@ Array
    array-api.rst
    array-chunks.rst
    array-creation.rst
-   array-ghost.rst
+   array-overlap.rst
    array-design.rst
    array-sparse.rst
    array-stats.rst
