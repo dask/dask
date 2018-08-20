@@ -1362,3 +1362,25 @@ def test_resources_reset_after_cancelled_task(c, s, w):
     assert w.available_resources == {'A': 1}
 
     yield c.submit(inc, 1, resources={'A': 1})
+
+
+@gen_cluster(client=True)
+def test_gh2187(c, s, a, b):
+    def foo():
+        return 'foo'
+
+    def bar(x):
+        return x + 'bar'
+
+    def baz(x):
+        sleep(0.1)
+        return x + 'baz'
+
+    x = c.submit(foo, key='x')
+    y = c.submit(bar, x, key='y')
+    yield y
+    z = c.submit(baz, y, key='z')
+    del y
+    yield gen.sleep(0.1)
+    f = c.submit(bar, x, key='y')
+    yield f

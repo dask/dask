@@ -1369,7 +1369,11 @@ class Scheduler(ServerNode):
             while stack:  # remove unnecessary dependencies
                 key = stack.pop()
                 ts = self.tasks[key]
-                for dep in dependencies[key]:
+                try:
+                    deps = dependencies[key]
+                except KeyError:
+                    deps = self.dependencies[key]
+                for dep in deps:
                     if all(d in done for d in dependents[dep]):
                         if dep in self.tasks:
                             done.add(dep)
@@ -1377,7 +1381,7 @@ class Scheduler(ServerNode):
 
             for d in done:
                 tasks.pop(d, None)
-                del dependencies[d]
+                dependencies.pop(d, None)
 
         # Get or create task states
         stack = list(keys)
