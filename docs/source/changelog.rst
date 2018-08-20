@@ -8,7 +8,12 @@ DataFrame
 ++++++++++
 
 - Added `dtype` and `sparse` keywords to :func:`dask.dataframe.get_dummies` (:pr:`3792`) `Tom Augspurger`_
-
+- Added :meth:`dask.dataframe.to_dask_array` for converting a Dask Series or DataFrame to a
+  Dask Array, possibly with known chunk sizes (:pr:`3884`) `Tom Augspurger`
+- Changed the behavior for :meth:`dask.array.asarray` for dask dataframe and series inputs. Previously,
+  the series was eagerly converted to an in-memory NumPy array before creating a dask array with known
+  chunks sizes. This caused unexpectedly high memory usage. Now, no intermediate NumPy array is created,
+  and a Dask array with unknown chunk sizes is returned (:pr:`3884`) `Tom Augspurger`
 
 0.18.2 / 2018-07-23
 -------------------

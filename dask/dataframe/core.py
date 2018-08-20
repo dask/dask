@@ -4,6 +4,7 @@ from functools import wraps, partial
 import operator
 from operator import getitem
 from pprint import pformat
+from collections import Sequence
 import warnings
 
 from toolz import merge, first, unique, partition_all, remove
@@ -1078,6 +1079,53 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         return new_dd_object(merge(self.dask, dsk), name,
                              self._meta, self.divisions)
+
+    def to_dask_array(self, lengths=None):
+        """Convert a dask DataFrame to a dask array.
+
+        Parameters
+        ----------
+        lengths : bool or Sequence of ints, optional
+            How to determine the chunks sizes for the output array.
+            By default, the output array will have unknown chunk lengths
+            along the first axis, which can cause some later operations
+            to fail.
+
+            * True : immediately compute the length of each partition
+            * Sequence : a sequence of integers to use for the chunk sizes
+              on the first axis. These values are *not* validated for
+              correctness, beyond ensuring that the number of items
+              matches the number of partitions.
+
+        Returns
+        -------
+        """
+        from dask.array.core import normalize_chunks
+
+        if lengths is True:
+            lengths = tuple(self.map_partitions(len).compute())
+
+        arr = self.map_partitions(np.array, )
+
+        if isinstance(lengths, Sequence):
+            lengths = tuple(lengths)
+
+            if len(lengths) != self.npartitions:
+                raise ValueError(
+                    "The number of items in 'lengths' does not match "
+                    "the number of partitions. "
+                    "{} != {}".format(len(lengths), self.npartitions)
+                )
+
+            if self.ndim == 1:
+                chunks = normalize_chunks((lengths,))
+            else:
+                chunks = normalize_chunks((lengths, (len(self.columns),)))
+
+            arr._chunks = chunks
+        elif lengths is not None:
+            raise ValueError("Unexpected value for 'lengths': '{}'".format(lengths))
+        return arr
 
     def to_hdf(self, path_or_buf, key, mode='a', append=False, **kwargs):
         """ See dd.to_hdf docstring for more information """
