@@ -433,7 +433,7 @@ read_csv = make_reader(pd.read_csv, 'read_csv', 'CSV')
 read_table = make_reader(pd.read_table, 'read_table', 'delimited')
 
 
-def _to_csv_chunk(df, fil, **kwargs):
+def _write_csv(df, fil, **kwargs):
     with fil as f:
         df.to_csv(f, **kwargs)
 
@@ -568,7 +568,7 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
                        encoding=encoding, name_function=name_function,
                        num=df.npartitions, **(storage_options or {}))
 
-    to_csv_chunk = delayed(_to_csv_chunk, pure=False)
+    to_csv_chunk = delayed(_write_csv, pure=False)
     values = [to_csv_chunk(d, f, **kwargs)
               for d, f in zip(df.to_delayed(), files)]
 
