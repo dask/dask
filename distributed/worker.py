@@ -1542,6 +1542,8 @@ class Worker(WorkerBase):
                 import pdb
                 pdb.set_trace()
             raise
+        if value is not no_value and dep not in self.data:
+            self.put_key_in_memory(dep, value, transition=False)
 
     def transition(self, key, finish, **kwargs):
         start = self.task_state[key]
@@ -1890,7 +1892,8 @@ class Worker(WorkerBase):
                 if response['status'] == 'busy':
                     self.log.append(('busy-gather', worker, deps))
                     for dep in deps:
-                        self.transition_dep(dep, 'waiting')
+                        if self.dep_state[dep] == 'flight':
+                            self.transition_dep(dep, 'waiting')
                     return
 
                 if cause:
