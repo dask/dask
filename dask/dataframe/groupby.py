@@ -1132,7 +1132,8 @@ class _GroupBy(object):
         # Perform embarrassingly parallel groupby-apply
         kwargs['meta'] = meta
         df5 = map_partitions(_groupby_slice_apply, df4, index2,
-                             self._slice, func, *args, **kwargs)
+                             self._slice, func, token=funcname(func), *args,
+                             **kwargs)
 
         return df5
 

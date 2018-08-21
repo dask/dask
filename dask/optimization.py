@@ -781,6 +781,8 @@ def key_split(s):
     'Other'
     >>> key_split('x-abcdefab')  # ignores hex
     'x'
+    >>> key_split('_(x)')  # strips unpleasant characters
+    'x'
     """
     if type(s) is bytes:
         s = s.decode()
@@ -789,7 +791,7 @@ def key_split(s):
     try:
         words = s.split('-')
         if not words[0][0].isalpha():
-            result = words[0].lstrip("'(\"")
+            result = words[0].strip("_'()\"")
         else:
             result = words[0]
         for word in words[1:]:
