@@ -11,17 +11,16 @@
         <th> Logs </th>
     </tr>
     {% for ws in worker_list %}
-    {% set wi = worker_info[ws.address] %}
     <tr>
         <td><a href="../worker/{{ url_escape(ws.address) }}.html">{{ws.address}}</a></td>
         <td> {{ ws.ncores }} </td>
-        <td> {{ format_bytes(wi['memory_limit']) }} </td>
-        <td> <progress class="progress" value="{{ wi['memory'] }}" max="{{ wi['memory_limit'] }}"></progress> </td>
+        <td> {{ format_bytes(ws.memory_limit) }} </td>
+        <td> <progress class="progress" value="{{ ws.metrics['memory'] }}" max="{{ ws.memory_limit }}"></progress> </td>
         <td> {{ format_time(ws.occupancy) }} </td>
         <td> {{ len(ws.processing) }} </td>
         <td> {{ len(ws.has_what) }} </td>
-        {% if 'bokeh' in wi['services'] %}
-        <td> <a href="http://{{ wi['host'] }}:{{ wi['services']['bokeh'] }}">bokeh</a> </td>
+        {% if 'bokeh' in ws.services %}
+        <td> <a href="http://{{ ws.host }}:{{ ws.services['bokeh'] }}">bokeh</a> </td>
         {% else %}
         <td> </td>
         {% end %}

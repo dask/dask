@@ -161,6 +161,30 @@ available in the ``workers/`` page.
 .. image:: https://raw.githubusercontent.com/dask/dask-org/master/images/bokeh-resources.gif
    :alt: Resources view of Dask web interface
 
+Per-worker resources
+~~~~~~~~~~~~~~~~~~~~
+
+The ``workers/`` page shows per-worker resources, the main ones being CPU and
+memory use. Custom metrics can be registered and displayed in this page. Here
+is an example showing how to display GPU utilization and GPU memory use:
+
+.. code-block:: python
+
+   import subprocess
+
+   def nvidia_data(name):
+       def dask_function(dask_worker):
+           cmd = 'nvidia-smi --query-gpu={} --format=csv,noheader'.format(name)
+           result = subprocess.check_output(cmd.split())
+           return result.strip().decode()
+       return dask_function
+
+   def register_metrics(dask_worker):
+       for name in ['utilization.gpu', 'utilization.memory']:
+           dask_worker.metrics[name] = nvidia_data(name)
+
+   client.run(register_metrics)
+
 Connecting to Web Interface
 ---------------------------
 

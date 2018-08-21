@@ -17,9 +17,9 @@ import dask
 from dask.core import istask
 from dask.compatibility import apply
 try:
-    from cytoolz import pluck, partial
+    from cytoolz import pluck, partial, merge
 except ImportError:
-    from toolz import pluck, partial
+    from toolz import pluck, partial, merge
 from tornado.gen import Return
 from tornado import gen
 from tornado.ioloop import IOLoop
@@ -89,7 +89,7 @@ class WorkerBase(ServerNode):
                  executor=None, resources=None, silence_logs=None,
                  death_timeout=None, preload=(), preload_argv=[], security=None,
                  contact_address=None, memory_monitor_interval='200ms',
-                 extensions=None, **kwargs):
+                 extensions=None, metrics=None, **kwargs):
 
         self._setup_logging()
 
@@ -179,6 +179,7 @@ class WorkerBase(ServerNode):
         self.services = {}
         self.service_ports = service_ports or {}
         self.service_specs = services or {}
+        self.metrics = metrics or {}
 
         handlers = {
             'gather': self.gather,
@@ -261,16 +262,12 @@ class WorkerBase(ServerNode):
                 start = time()
                 response = yield self.scheduler.heartbeat_worker(
                     address=self.contact_address,
-                    name=self.name,
                     now=time(),
-                    memory_limit=self.memory_limit,
-                    executing=len(self.executing),
-                    in_memory=len(self.data),
-                    ready=len(self.ready),
-                    in_flight=len(self.in_flight_tasks),
-                    **self.monitor.recent())
+                    metrics=self.get_metrics()
+                )
                 end = time()
                 middle = (start + end) / 2
+
                 if response['status'] == 'missing':
                     yield self._register_with_scheduler()
                     return
@@ -282,6 +279,15 @@ class WorkerBase(ServerNode):
                 self.heartbeat_active = False
         else:
             logger.debug("Heartbeat skipped: channel busy")
+
+    def get_metrics(self):
+        core = dict(executing=len(self.executing),
+                    in_memory=len(self.data),
+                    ready=len(self.ready),
+                    in_flight=len(self.in_flight_tasks))
+        custom = {k: metric(self) for k, metric in self.metrics.items()}
+
+        return merge(custom, self.monitor.recent(), core)
 
     @gen.coroutine
     def _register_with_scheduler(self):
@@ -301,20 +307,20 @@ class WorkerBase(ServerNode):
                 comm = yield connect(self.scheduler.address,
                                      connection_args=self.connection_args)
                 yield comm.write(dict(op='register-worker',
-                                         ncores=self.ncores,
-                                         address=self.contact_address,
-                                         keys=list(self.data),
-                                         name=self.name,
-                                         nbytes=self.nbytes,
-                                         now=time(),
-                                         services=self.service_ports,
-                                         memory_limit=self.memory_limit,
-                                         local_directory=self.local_dir,
-                                         resources=self.total_resources,
-                                         pid=os.getpid(),
-                                         reply=False,
-                                         **self.monitor.recent()),
-                                         serializers=['msgpack'])
+                                      reply=False,
+                                      address=self.contact_address,
+                                      keys=list(self.data),
+                                      ncores=self.ncores,
+                                      name=self.name,
+                                      nbytes=self.nbytes,
+                                      now=time(),
+                                      resources=self.total_resources,
+                                      memory_limit=self.memory_limit,
+                                      local_directory=self.local_dir,
+                                      services=self.service_ports,
+                                      pid=os.getpid(),
+                                      metrics=self.get_metrics()),
+                                 serializers=['msgpack'])
                 future = comm.read(deserializers=['msgpack'])
                 if self.death_timeout:
                     diff = self.death_timeout - (time() - start)

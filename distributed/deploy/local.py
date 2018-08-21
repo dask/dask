@@ -209,7 +209,7 @@ class LocalCluster(Cluster):
 
         self.workers.append(w)
 
-        while w.status != 'closed' and w.worker_address not in self.scheduler.worker_info:
+        while w.status != 'closed' and w.worker_address not in self.scheduler.workers:
             yield gen.sleep(0.01)
 
         if w.status == 'closed' and self.scheduler.status == 'running':

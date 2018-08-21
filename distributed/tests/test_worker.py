@@ -740,8 +740,7 @@ def test_worker_dir(worker):
     with tmpfile() as fn:
         @gen_cluster(client=True, worker_kwargs={'local_dir': fn})
         def test_worker_dir(c, s, a, b):
-            directories = [info['local_directory']
-                           for info in s.worker_info.values()]
+            directories = [w.local_directory for w in s.workers.values()]
             assert all(d.startswith(fn) for d in directories)
             assert len(set(directories)) == 2  # distinct
 
@@ -817,7 +816,7 @@ def test_fail_write_many_to_disk(c, s, a):
 
 @gen_cluster()
 def test_pid(s, a, b):
-    assert s.worker_info[a.address]['pid'] == os.getpid()
+    assert s.workers[a.address].pid == os.getpid()
 
 
 @gen_cluster(client=True)
@@ -1198,3 +1197,9 @@ def test_avoid_oversubscription(c, s, *workers):
 
     # Some other workers did some work
     assert len([w for w in workers if len(w.outgoing_transfer_log) > 0]) >= 3
+
+
+@gen_cluster(client=True, worker_kwargs={'metrics': {'my_port': lambda w: w.port}})
+def test_custom_metrics(c, s, a, b):
+    assert s.workers[a.address].metrics['my_port'] == a.port
+    assert s.workers[b.address].metrics['my_port'] == b.port

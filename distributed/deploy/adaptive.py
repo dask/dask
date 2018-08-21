@@ -144,8 +144,8 @@ class Adaptive(object):
         Returns ``True`` if  the required bytes in distributed memory is some
         factor larger than the actual distributed memory available.
         """
-        limit_bytes = {w: self.scheduler.worker_info[w]['memory_limit']
-                        for w in self.scheduler.worker_info}
+        limit_bytes = {addr: ws.memory_limit
+                       for addr, ws in self.scheduler.workers.items()}
         worker_bytes = [ws.nbytes for ws in self.scheduler.workers.values()]
 
         limit = sum(limit_bytes.values())

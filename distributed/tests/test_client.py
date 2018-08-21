@@ -897,7 +897,7 @@ def test_remove_worker(c, s, a, b):
 
     yield b._close()
 
-    assert b.address not in s.worker_info
+    assert b.address not in s.workers
 
     result = yield c.gather(L)
     assert result == list(map(inc, range(20)))
@@ -4076,7 +4076,7 @@ def test_retire_workers_2(c, s, a, b):
     assert s.who_has == {x.key: {b.address}}
     assert s.has_what == {b.address: {x.key}}
 
-    assert a.address not in s.worker_info
+    assert a.address not in s.workers
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10)

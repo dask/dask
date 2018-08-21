@@ -287,6 +287,148 @@ def test_WorkerTable(c, s, a, b):
 
 
 @gen_cluster(client=True)
+def test_WorkerTable_custom_metrics(c, s, a, b):
+    def metric_port(worker):
+        return worker.port
+
+    def metric_address(worker):
+        return worker.address
+
+    metrics = {'metric_port': metric_port,
+               'metric_address': metric_address}
+
+    for w in [a, b]:
+        for name, func in metrics.items():
+            w.metrics[name] = func
+
+    while not all('metric_port' in s.workers[w.address].metrics for w in [a, b]):
+        yield gen.sleep(0.01)
+
+    for w in [a, b]:
+        assert s.workers[w.address].metrics['metric_port'] == w.port
+        assert s.workers[w.address].metrics['metric_address'] == w.address
+
+    wt = WorkerTable(s)
+    wt.update()
+    data = wt.source.data
+
+    for name in metrics:
+        assert name in data
+
+    assert all(data.values())
+    assert all(len(v) == 2 for v in data.values())
+    my_index = data['worker'].index(a.address), data['worker'].index(b.address)
+    assert [data['metric_port'][i] for i in my_index] == [a.port, b.port]
+    assert [data['metric_address'][i] for i in my_index] == [a.address, b.address]
+
+
+@gen_cluster(client=True)
+def test_WorkerTable_different_metrics(c, s, a, b):
+    def metric_port(worker):
+        return worker.port
+
+    a.metrics['metric_a'] = metric_port
+    b.metrics['metric_b'] = metric_port
+
+    while not ('metric_a' in s.workers[a.address].metrics and
+               'metric_b' in s.workers[b.address].metrics):
+        yield gen.sleep(0.01)
+
+    assert s.workers[a.address].metrics['metric_a'] == a.port
+    assert s.workers[b.address].metrics['metric_b'] == b.port
+
+    wt = WorkerTable(s)
+    wt.update()
+    data = wt.source.data
+
+    assert 'metric_a' in data
+    assert 'metric_b' in data
+    assert all(data.values())
+    assert all(len(v) == 2 for v in data.values())
+    my_index = data['worker'].index(a.address), data['worker'].index(b.address)
+    assert [data['metric_a'][i] for i in my_index] == [a.port, None]
+    assert [data['metric_b'][i] for i in my_index] == [None, b.port]
+
+
+@gen_cluster(client=True)
+def test_WorkerTable_metrics_with_different_metric_2(c, s, a, b):
+    def metric_port(worker):
+        return worker.port
+
+    a.metrics['metric_a'] = metric_port
+
+    while 'metric_a' not in s.workers[a.address].metrics:
+        yield gen.sleep(0.01)
+
+    wt = WorkerTable(s)
+    wt.update()
+    data = wt.source.data
+
+    assert 'metric_a' in data
+    assert all(data.values())
+    assert all(len(v) == 2 for v in data.values())
+    my_index = data['worker'].index(a.address), data['worker'].index(b.address)
+    assert [data['metric_a'][i] for i in my_index] == [a.port, None]
+
+
+@gen_cluster(client=True, worker_kwargs={'metrics': {'my_port': lambda w: w.port}})
+def test_WorkerTable_add_and_remove_metrics(c, s, a, b):
+    def metric_port(worker):
+        return worker.port
+
+    a.metrics['metric_a'] = metric_port
+    a.metrics['metric_b'] = metric_port
+
+    while not ('metric_a' in s.workers[a.address].metrics and
+               'metric_b' in s.workers[b.address].metrics):
+        yield gen.sleep(0.01)
+
+    assert s.workers[a.address].metrics['metric_a'] == a.port
+    assert s.workers[b.address].metrics['metric_b'] == b.port
+
+    wt = WorkerTable(s)
+    wt.update()
+    assert 'metric_a' in wt.source.data
+    assert 'metric_b' in wt.source.data
+
+    # Remove 'metric_b' from worker b
+    del b.metrics['metric_b']
+
+    while 'metric_b' in s.workers[b.address].metrics:
+        yield gen.sleep(0.01)
+
+    wt = WorkerTable(s)
+    wt.update()
+    assert 'metric_a' in wt.source.data
+
+    del a.metrics['metric_a']
+
+    while 'metric_a' in s.workers[a.address].metrics:
+        yield gen.sleep(0.01)
+
+    wt = WorkerTable(s)
+    wt.update()
+    assert 'metric_a' not in wt.source.data
+
+
+@gen_cluster(client=True)
+def test_WorkerTable_custom_metric_overlap_with_core_metric(c, s, a, b):
+    def metric(worker):
+        return -999
+
+    a.metrics['executing'] = metric
+    a.metrics['cpu'] = metric
+    a.metrics['metric'] = metric
+
+    while 'metric' not in s.workers[a.address].metrics:
+        yield gen.sleep(0.01)
+
+    assert s.workers[a.address].metrics['executing'] != -999
+    assert s.workers[a.address].metrics['cpu'] != -999
+    assert s.workers[a.address].metrics['metric'] == -999
+
+
+@gen_cluster(client=True)
 def test_GraphPlot(c, s, a, b):
     gp = GraphPlot(s)
     futures = c.map(inc, range(5))

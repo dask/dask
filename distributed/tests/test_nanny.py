@@ -30,22 +30,22 @@ def test_nanny(s):
     with rpc(n.address) as nn:
         assert n.is_alive()
         assert s.ncores[n.worker_address] == 2
-        assert s.worker_info[n.worker_address]['services']['nanny'] > 1024
+        assert s.workers[n.worker_address].services['nanny'] > 1024
 
         yield nn.kill()
         assert not n.is_alive()
         assert n.worker_address not in s.ncores
-        assert n.worker_address not in s.worker_info
+        assert n.worker_address not in s.workers
 
         yield nn.kill()
         assert not n.is_alive()
         assert n.worker_address not in s.ncores
-        assert n.worker_address not in s.worker_info
+        assert n.worker_address not in s.workers
 
         yield nn.instantiate()
         assert n.is_alive()
         assert s.ncores[n.worker_address] == 2
-        assert s.worker_info[n.worker_address]['services']['nanny'] > 1024
+        assert s.workers[n.worker_address].services['nanny'] > 1024
 
         yield nn.terminate()
         assert not n.is_alive()
