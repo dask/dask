@@ -111,48 +111,44 @@ def test_aliases():
     assert len(g.body) - len(labels) == 1   # Single edge
 
 
-def test_dot_graph(tmpdir):
+@pytest.mark.parametrize('format,typ', [
+    ('png', Image),
+    pytest.mark.xfail(('jpeg', Image), reason='jpeg not always supported in dot'),
+    ('dot', type(None)),
+    ('pdf', type(None)),
+    ('svg', SVG),
+])
+def test_dot_graph(tmpdir, format, typ):
     # Use a name that the shell would interpret specially to ensure that we're
     # not vulnerable to shell injection when interacting with `dot`.
     filename = str(tmpdir.join('$(touch should_not_get_created.txt)'))
 
-    # Map from format extension to expected return type.
-    result_types = {
-        'png': Image,
-        'jpeg': Image,
-        'dot': type(None),
-        'pdf': type(None),
-        'svg': SVG,
-    }
-    for format in result_types:
-        target = '.'.join([filename, format])
+    target = '.'.join([filename, format])
+    ensure_not_exists(target)
+    try:
+        result = dot_graph(dsk, filename=filename, format=format)
+
+        assert not os.path.exists('should_not_get_created.txt')
+        assert os.path.isfile(target)
+        assert isinstance(result, typ)
+    finally:
         ensure_not_exists(target)
-        try:
-            result = dot_graph(dsk, filename=filename, format=format)
-
-            assert not os.path.exists('should_not_get_created.txt')
-            assert os.path.isfile(target)
-            assert isinstance(result, result_types[format])
-        finally:
-            ensure_not_exists(target)
 
 
-def test_dot_graph_no_filename(tmpdir):
-    # Map from format extension to expected return type.
-    result_types = {
-        'png': Image,
-        'jpeg': Image,
-        'dot': type(None),
-        'pdf': type(None),
-        'svg': SVG,
-    }
-    for format in result_types:
-        before = tmpdir.listdir()
-        result = dot_graph(dsk, filename=None, format=format)
-        # We shouldn't write any files if filename is None.
-        after = tmpdir.listdir()
-        assert before == after
-        assert isinstance(result, result_types[format])
+@pytest.mark.parametrize('format,typ', [
+    ('png', Image),
+    pytest.mark.xfail(('jpeg', Image), reason='jpeg not always supported in dot'),
+    ('dot', type(None)),
+    ('pdf', type(None)),
+    ('svg', SVG),
+])
+def test_dot_graph_no_filename(tmpdir, format, typ):
+    before = tmpdir.listdir()
+    result = dot_graph(dsk, filename=None, format=format)
+    # We shouldn't write any files if filename is None.
+    after = tmpdir.listdir()
+    assert before == after
+    assert isinstance(result, typ)
 
 
 def test_dot_graph_defaults():
