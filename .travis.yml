@@ -17,15 +17,6 @@ jobs:
   include:
     - env:
       - PYTHON=2.7
-      - NUMPY=1.14.1
-      - PANDAS=0.22.0
-      - *test_and_lint
-      - *no_coverage
-      - *no_optimize
-      - *no_imports
-
-    - env:
-      - PYTHON=2.7
       - NUMPY=1.13.0
       - PANDAS=0.20.2
       - *test_and_lint
@@ -48,6 +39,15 @@ jobs:
       - PANDAS=0.22.0
       - *test_and_lint
       - *coverage
+      - *no_optimize
+      - *imports
+
+    - env: &py37_env
+      - PYTHON=3.7
+      - NUMPY=1.15.0
+      - PANDAS=0.23.4
+      - *test_and_lint
+      - *no_coverage
       - *no_optimize
       - *imports
 
