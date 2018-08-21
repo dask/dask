@@ -9,6 +9,8 @@ try:
 except ImportError:
     yaml = None
 
+from collections import Mapping
+
 from .compatibility import makedirs
 
 
@@ -432,6 +434,28 @@ def update_defaults(new, config=config, defaults=defaults):
     """
     defaults.append(new)
     update(config, new, priority='old')
+
+
+def expand_environment_variables(config):
+    ''' Utility to expand environment variables in a config dictionary
+
+    This function will recursively search through any nested dictionaries
+    and/or lists.
+
+    config : dict, iterable, or str
+        Input object to search for environment variables
+    '''
+    if isinstance(config, Mapping):
+        for k, v in config.items():
+            config[k] = expand_environment_variables(v)
+    elif isinstance(config, str):
+        config = os.path.expandvars(config)
+    elif isinstance(config, (list, tuple, set)):
+        config = [expand_environment_variables(v) for v in config]
+    else:
+        # fail gracefully for objects that don't fall into these catagories
+        pass
+    return config
 
 
 refresh()

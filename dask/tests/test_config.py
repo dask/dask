@@ -6,7 +6,7 @@ import pytest
 import dask.config
 from dask.config import (update, merge, collect, collect_yaml, collect_env,
                          get, ensure_file, set, config, rename,
-                         update_defaults, refresh)
+                         update_defaults, refresh, expand_environment_variables)
 from dask.utils import tmpfile
 
 
@@ -279,3 +279,18 @@ def test_refresh():
 
     refresh(paths=[], env={'DASK_C': '3'}, config=config, defaults=defaults)
     assert config == {'a': 1, 'c': 3}
+
+
+def test_expand_environment_variables():
+
+    os.environ["ENV_A"] = "foo"
+    config = '$ENV_A'
+    assert expand_environment_variables(config) == 'foo'
+
+    os.environ["ENV_B"] = "bar"
+    config = {'a': '$ENV_B'}
+    assert expand_environment_variables(config)['a'] == 'bar'
+
+    os.environ["ENV_C"] = "spam"
+    config = {'a': 'A', 'b': ['1', 2, '$ENV_C']}
+    assert expand_environment_variables(config)['b'] == ['1', 2, 'spam']
