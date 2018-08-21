@@ -477,7 +477,10 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         errmsg = ("Expected partition of type `%s` but got "
                   "`%s`" % (type(meta).__name__, type(x).__name__))
     elif isinstance(meta, pd.DataFrame):
-        dtypes = pd.concat([x.dtypes, meta.dtypes], axis=1)
+        kwargs = dict()
+        if PANDAS_VERSION >= LooseVersion('0.23.0'):
+            kwargs['sort'] = True
+        dtypes = pd.concat([x.dtypes, meta.dtypes], axis=1, **kwargs)
         bad = [(col, a, b) for col, a, b in dtypes.fillna('-').itertuples()
                if not equal_dtypes(a, b)]
         if not bad:

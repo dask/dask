@@ -1,0 +1,2096 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.6.5, pytest-3.6.2, py-1.5.3, pluggy-0.6.0
+rootdir: /Users/taugspurger/sandbox/dask, inifile: setup.cfg
+plugins: xdist-1.22.2, repeat-0.4.1, mock-1.10.0, forked-0.2, cov-2.5.1
+collected 2496 items
+
+dask/dataframe/tests/test_arithmetics_reduction.py s.s.................. [  0%]
+...................                                                      [  1%]
+dask/dataframe/tests/test_categorical.py ............................... [  2%]
+......................                                                   [  3%]
+dask/dataframe/tests/test_dataframe.py ............x.................... [  5%]
+..................................s..................................... [  7%]
+........................................................................ [ 10%]
+........................................................................ [ 13%]
+...............sssssssssssssssssssssssssssssssssssssssssssssssssssssssss [ 16%]
+sssssssssssssssssssssssssssssssssssssssssssssssssss..................... [ 19%]
+.............................s.......................................... [ 22%]
+........................................................................ [ 25%]
+....................                                                     [ 26%]
+dask/dataframe/tests/test_format.py ..........                           [ 26%]
+dask/dataframe/tests/test_groupby.py ......x....x....................... [ 27%]
+........................................................................ [ 30%]
+...x.................................................................... [ 33%]
+........................................................................ [ 36%]
+.....................................................................x.. [ 39%]
+..x....x................................................................ [ 42%]
+...............................                                          [ 43%]
+dask/dataframe/tests/test_hashing.py ...............                     [ 44%]
+dask/dataframe/tests/test_hyperloglog.py ............................... [ 45%]
+..                                                                       [ 45%]
+dask/dataframe/tests/test_indexing.py ...........................        [ 46%]
+dask/dataframe/tests/test_merge_column_and_index.py .................... [ 47%]
+............................................................             [ 49%]
+dask/dataframe/tests/test_multi.py ..................................... [ 51%]
+..............................F..F......                                 [ 52%]
+dask/dataframe/tests/test_optimize_dataframe.py s.                       [ 52%]
+dask/dataframe/tests/test_reshape.py ........s......                     [ 53%]
+dask/dataframe/tests/test_rolling.py ................................... [ 54%]
+.................................................................s...... [ 57%]
+.......................................................                  [ 59%]
+dask/dataframe/tests/test_shuffle.py .................s................. [ 61%]
+...........................s                                             [ 62%]
+dask/dataframe/tests/test_ufunc.py ..................................... [ 63%]
+........................................................................ [ 66%]
+........................................................................ [ 69%]
+........................................................................ [ 72%]
+....s................................................................... [ 75%]
+........................................................................ [ 78%]
+........................................................................ [ 81%]
+........................................................................ [ 84%]
+........................................................................ [ 87%]
+........................................................................ [ 89%]
+........................................................................ [ 92%]
+........................................................................ [ 95%]
+........................................................................ [ 98%]
+.........................                                                [ 99%]
+dask/dataframe/tests/test_utils_dataframe.py ..........                  [100%]
+
+=================================== FAILURES ===================================
+___________________ test_concat_categorical[True-False-True] ___________________
+
+known = True, cat_index = False, divisions = True
+
+    @pytest.mark.parametrize('known, cat_index, divisions',
+                             [(True, True, False), (True, False, True),
+                              (True, False, False), (False, True, False),
+                              (False, False, True), (False, False, False)])
+    def test_concat_categorical(known, cat_index, divisions):
+        frames = [pd.DataFrame({'w': list('xxxxx'),
+                                'x': np.arange(5),
+                                'y': list('abcbc'),
+                                'z': np.arange(5, dtype='f8')}),
+                  pd.DataFrame({'w': list('yyyyy'),
+                                'x': np.arange(5, 10),
+                                'y': list('abbba'),
+                                'z': np.arange(5, 10, dtype='f8')}),
+                  pd.DataFrame({'w': list('zzzzz'),
+                                'x': np.arange(10, 15),
+                                'y': list('bcbcc'),
+                                'z': np.arange(10, 15, dtype='f8')})]
+        for df in frames:
+            df.w = df.w.astype('category')
+            df.y = df.y.astype('category')
+    
+        if cat_index:
+            frames = [df.set_index(df.y) for df in frames]
+    
+        dframes = [dd.from_pandas(p, npartitions=2, sort=divisions) for p in frames]
+    
+        if not known:
+            dframes[0]._meta = clear_known_categories(dframes[0]._meta, ['y'],
+                                                      index=True)
+    
+        def check_and_return(ddfs, dfs, join):
+            sol = concat(dfs, join=join)
+            res = dd.concat(ddfs, join=join, interleave_partitions=divisions)
+            assert_eq(res, sol)
+            if known:
+                parts = compute_as_if_collection(dd.DataFrame, res.dask,
+                                                 res.__dask_keys__())
+                for p in [i.iloc[:0] for i in parts]:
+                    res._meta == p  # will error if schemas don't align
+            assert not cat_index or has_known_categories(res.index) == known
+            return res
+    
+        for join in ['inner', 'outer']:
+            # Frame
+            res = check_and_return(dframes, frames, join)
+            assert has_known_categories(res.w)
+            assert has_known_categories(res.y) == known
+    
+            # Series
+            res = check_and_return([i.y for i in dframes],
+                                   [i.y for i in frames], join)
+            assert has_known_categories(res) == known
+    
+            # Non-cat series with cat index
+            if cat_index:
+                res = check_and_return([i.x for i in dframes],
+                                       [i.x for i in frames], join)
+    
+            # Partition missing columns
+            res = check_and_return([dframes[0][['x', 'y']]] + dframes[1:],
+>                                  [frames[0][['x', 'y']]] + frames[1:], join)
+
+dask/dataframe/tests/test_multi.py:1090: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+dask/dataframe/tests/test_multi.py:1063: in check_and_return
+    assert_eq(res, sol)
+dask/dataframe/utils.py:596: in assert_eq
+    a = _check_dask(a, check_names=check_names, check_dtypes=check_dtypes)
+dask/dataframe/utils.py:555: in _check_dask
+    tm.assert_index_equal(dsk.columns, result.columns)
+../../Envs/dask-dev/lib/python3.6/site-packages/pandas/util/testing.py:831: in assert_index_equal
+    raise_assert_detail(obj, msg1, msg2, msg3)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+obj = 'Index', message = 'Index length are different'
+left = "4, Index(['w', 'x', 'y', 'z'], dtype='object')"
+right = "2, Index(['x', 'y'], dtype='object')", diff = None
+
+    def raise_assert_detail(obj, message, left, right, diff=None):
+        if isinstance(left, np.ndarray):
+            left = pprint_thing(left)
+        elif is_categorical_dtype(left):
+            left = repr(left)
+    
+        if PY2 and isinstance(left, string_types):
+            # left needs to be printable in native text type in python2
+            left = left.encode('utf-8')
+    
+        if isinstance(right, np.ndarray):
+            right = pprint_thing(right)
+        elif is_categorical_dtype(right):
+            right = repr(right)
+    
+        if PY2 and isinstance(right, string_types):
+            # right needs to be printable in native text type in python2
+            right = right.encode('utf-8')
+    
+        msg = """{obj} are different
+    
+    {message}
+    [left]:  {left}
+    [right]: {right}""".format(obj=obj, message=message, left=left, right=right)
+    
+        if diff is not None:
+            msg += "\n[diff]: {diff}".format(diff=diff)
+    
+>       raise AssertionError(msg)
+E       AssertionError: Index are different
+E       
+E       Index length are different
+E       [left]:  4, Index(['w', 'x', 'y', 'z'], dtype='object')
+E       [right]: 2, Index(['x', 'y'], dtype='object')
+
+../../Envs/dask-dev/lib/python3.6/site-packages/pandas/util/testing.py:1035: AssertionError
+__________________ test_concat_categorical[False-False-True] ___________________
+
+known = False, cat_index = False, divisions = True
+
+    @pytest.mark.parametrize('known, cat_index, divisions',
+                             [(True, True, False), (True, False, True),
+                              (True, False, False), (False, True, False),
+                              (False, False, True), (False, False, False)])
+    def test_concat_categorical(known, cat_index, divisions):
+        frames = [pd.DataFrame({'w': list('xxxxx'),
+                                'x': np.arange(5),
+                                'y': list('abcbc'),
+                                'z': np.arange(5, dtype='f8')}),
+                  pd.DataFrame({'w': list('yyyyy'),
+                                'x': np.arange(5, 10),
+                                'y': list('abbba'),
+                                'z': np.arange(5, 10, dtype='f8')}),
+                  pd.DataFrame({'w': list('zzzzz'),
+                                'x': np.arange(10, 15),
+                                'y': list('bcbcc'),
+                                'z': np.arange(10, 15, dtype='f8')})]
+        for df in frames:
+            df.w = df.w.astype('category')
+            df.y = df.y.astype('category')
+    
+        if cat_index:
+            frames = [df.set_index(df.y) for df in frames]
+    
+        dframes = [dd.from_pandas(p, npartitions=2, sort=divisions) for p in frames]
+    
+        if not known:
+            dframes[0]._meta = clear_known_categories(dframes[0]._meta, ['y'],
+                                                      index=True)
+    
+        def check_and_return(ddfs, dfs, join):
+            sol = concat(dfs, join=join)
+            res = dd.concat(ddfs, join=join, interleave_partitions=divisions)
+            assert_eq(res, sol)
+            if known:
+                parts = compute_as_if_collection(dd.DataFrame, res.dask,
+                                                 res.__dask_keys__())
+                for p in [i.iloc[:0] for i in parts]:
+                    res._meta == p  # will error if schemas don't align
+            assert not cat_index or has_known_categories(res.index) == known
+            return res
+    
+        for join in ['inner', 'outer']:
+            # Frame
+            res = check_and_return(dframes, frames, join)
+            assert has_known_categories(res.w)
+            assert has_known_categories(res.y) == known
+    
+            # Series
+            res = check_and_return([i.y for i in dframes],
+                                   [i.y for i in frames], join)
+            assert has_known_categories(res) == known
+    
+            # Non-cat series with cat index
+            if cat_index:
+                res = check_and_return([i.x for i in dframes],
+                                       [i.x for i in frames], join)
+    
+            # Partition missing columns
+            res = check_and_return([dframes[0][['x', 'y']]] + dframes[1:],
+>                                  [frames[0][['x', 'y']]] + frames[1:], join)
+
+dask/dataframe/tests/test_multi.py:1090: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+dask/dataframe/tests/test_multi.py:1063: in check_and_return
+    assert_eq(res, sol)
+dask/dataframe/utils.py:596: in assert_eq
+    a = _check_dask(a, check_names=check_names, check_dtypes=check_dtypes)
+dask/dataframe/utils.py:555: in _check_dask
+    tm.assert_index_equal(dsk.columns, result.columns)
+../../Envs/dask-dev/lib/python3.6/site-packages/pandas/util/testing.py:831: in assert_index_equal
+    raise_assert_detail(obj, msg1, msg2, msg3)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+obj = 'Index', message = 'Index length are different'
+left = "4, Index(['w', 'x', 'y', 'z'], dtype='object')"
+right = "2, Index(['x', 'y'], dtype='object')", diff = None
+
+    def raise_assert_detail(obj, message, left, right, diff=None):
+        if isinstance(left, np.ndarray):
+            left = pprint_thing(left)
+        elif is_categorical_dtype(left):
+            left = repr(left)
+    
+        if PY2 and isinstance(left, string_types):
+            # left needs to be printable in native text type in python2
+            left = left.encode('utf-8')
+    
+        if isinstance(right, np.ndarray):
+            right = pprint_thing(right)
+        elif is_categorical_dtype(right):
+            right = repr(right)
+    
+        if PY2 and isinstance(right, string_types):
+            # right needs to be printable in native text type in python2
+            right = right.encode('utf-8')
+    
+        msg = """{obj} are different
+    
+    {message}
+    [left]:  {left}
+    [right]: {right}""".format(obj=obj, message=message, left=left, right=right)
+    
+        if diff is not None:
+            msg += "\n[diff]: {diff}".format(diff=diff)
+    
+>       raise AssertionError(msg)
+E       AssertionError: Index are different
+E       
+E       Index length are different
+E       [left]:  4, Index(['w', 'x', 'y', 'z'], dtype='object')
+E       [right]: 2, Index(['x', 'y'], dtype='object')
+
+../../Envs/dask-dev/lib/python3.6/site-packages/pandas/util/testing.py:1035: AssertionError
+=============================== warnings summary ===============================
+dask/dataframe/tests/test_arithmetics_reduction.py::test_reductions[False]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:109: RuntimeWarning: invalid value encountered in double_scalars
+    result = (x2 / n) - (x / n)**2
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:102: RuntimeWarning: invalid value encountered in double_scalars
+    return s / n
+
+dask/dataframe/tests/test_arithmetics_reduction.py::test_reductions[2]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:109: RuntimeWarning: invalid value encountered in double_scalars
+    result = (x2 / n) - (x / n)**2
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:102: RuntimeWarning: invalid value encountered in double_scalars
+    return s / n
+
+dask/dataframe/tests/test_arithmetics_reduction.py::test_reductions_frame_nan[False]
+  /Users/taugspurger/Envs/dask-dev/lib/python3.6/site-packages/numpy/core/_methods.py:29: RuntimeWarning: invalid value encountered in reduce
+    return umr_minimum(a, axis, None, out, keepdims)
+  /Users/taugspurger/Envs/dask-dev/lib/python3.6/site-packages/numpy/core/_methods.py:26: RuntimeWarning: invalid value encountered in reduce
+    return umr_maximum(a, axis, None, out, keepdims)
+
+dask/dataframe/tests/test_arithmetics_reduction.py::test_reductions_frame_nan[2]
+  /Users/taugspurger/Envs/dask-dev/lib/python3.6/site-packages/numpy/core/_methods.py:29: RuntimeWarning: invalid value encountered in reduce
+    return umr_minimum(a, axis, None, out, keepdims)
+  /Users/taugspurger/Envs/dask-dev/lib/python3.6/site-packages/numpy/core/_methods.py:26: RuntimeWarning: invalid value encountered in reduce
+    return umr_maximum(a, axis, None, out, keepdims)
+
+dask/dataframe/tests/test_dataframe.py::test_mixed_dask_array_operations
+  /Users/taugspurger/Envs/dask-dev/lib/python3.6/site-packages/numpy/core/_methods.py:26: RuntimeWarning: invalid value encountered in reduce
+    return umr_maximum(a, axis, None, out, keepdims)
+
+dask/dataframe/tests/test_dataframe.py::test_mixed_dask_array_multi_dimensional
+  /Users/taugspurger/Envs/dask-dev/lib/python3.6/site-packages/numpy/core/_methods.py:26: RuntimeWarning: invalid value encountered in reduce
+    return umr_maximum(a, axis, None, out, keepdims)
+
+dask/dataframe/tests/test_groupby.py::test_full_groupby
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:122: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby('a').apply(func))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_full_groupby_apply_multiarg
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:147: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby('a').apply(func, c))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:150: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby('a').apply(func, c, d=d))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:153: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby('a').apply(func, c_lazy), check_dtype=False)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:159: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby('a').apply(func, c, d=d_lazy))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:147: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby('a').apply(func, c))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:150: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby('a').apply(func, c, d=d))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:153: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby('a').apply(func, c_lazy), check_dtype=False)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:159: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby('a').apply(func, c, d=d_lazy))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_full_groupby_multilevel[True-<lambda>0]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:189: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby(grouper(ddf)).apply(func))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_full_groupby_multilevel[True-<lambda>1]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:189: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby(grouper(ddf)).apply(func))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_full_groupby_multilevel[True-<lambda>2]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:189: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby(grouper(ddf)).apply(func))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_full_groupby_multilevel[True-<lambda>3]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:189: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby(grouper(ddf)).apply(func))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_full_groupby_multilevel[True-<lambda>4]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:189: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby(grouper(ddf)).apply(func))
+
+dask/dataframe/tests/test_groupby.py::test_full_groupby_multilevel[False-<lambda>0]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:189: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby(grouper(ddf)).apply(func))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_full_groupby_multilevel[False-<lambda>1]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:189: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby(grouper(ddf)).apply(func))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_full_groupby_multilevel[False-<lambda>2]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:189: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby(grouper(ddf)).apply(func))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_full_groupby_multilevel[False-<lambda>3]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:189: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby(grouper(ddf)).apply(func))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_full_groupby_multilevel[False-<lambda>4]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:189: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    ddf.groupby(grouper(ddf)).apply(func))
+
+dask/dataframe/tests/test_groupby.py::test_split_apply_combine_on_series
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_dataframe_aggregations_multilevel[sum-<lambda>4]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_dataframe_aggregations_multilevel[mean-<lambda>4]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_dataframe_aggregations_multilevel[min-<lambda>4]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_dataframe_aggregations_multilevel[max-<lambda>4]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_dataframe_aggregations_multilevel[count-<lambda>4]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_dataframe_aggregations_multilevel[std-<lambda>4]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_dataframe_aggregations_multilevel[var-<lambda>4]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_dataframe_aggregations_multilevel[first-<lambda>4]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_dataframe_aggregations_multilevel[last-<lambda>4]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_groupby_meta_content[<lambda>0-<lambda>1]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_groupby_meta_content[<lambda>0-<lambda>3]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_groupby_meta_content[<lambda>0-<lambda>4]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_groupby_column_and_index_apply[amin-group_args0]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1351: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1362: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf_no_divs.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_groupby_column_and_index_apply[amin-group_args1]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1351: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1362: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf_no_divs.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_groupby_column_and_index_apply[amin-group_args2]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1351: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1362: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf_no_divs.groupby(group_args).apply(apply_func)
+
+dask/dataframe/tests/test_groupby.py::test_groupby_column_and_index_apply[amin-idx]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1351: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1362: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf_no_divs.groupby(group_args).apply(apply_func)
+
+dask/dataframe/tests/test_groupby.py::test_groupby_column_and_index_apply[mean-group_args0]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1351: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1362: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf_no_divs.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_groupby_column_and_index_apply[mean-group_args1]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1351: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1362: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf_no_divs.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_groupby_column_and_index_apply[mean-group_args2]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1351: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1362: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf_no_divs.groupby(group_args).apply(apply_func)
+
+dask/dataframe/tests/test_groupby.py::test_groupby_column_and_index_apply[mean-idx]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1351: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1362: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf_no_divs.groupby(group_args).apply(apply_func)
+
+dask/dataframe/tests/test_groupby.py::test_groupby_column_and_index_apply[<lambda>-group_args0]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1351: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1362: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf_no_divs.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_groupby_column_and_index_apply[<lambda>-group_args1]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1351: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1362: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf_no_divs.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'a' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_groupby.py::test_groupby_column_and_index_apply[<lambda>-group_args2]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1351: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1362: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf_no_divs.groupby(group_args).apply(apply_func)
+
+dask/dataframe/tests/test_groupby.py::test_groupby_column_and_index_apply[<lambda>-idx]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1351: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf.groupby(group_args).apply(apply_func)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1362: UserWarning: `meta` is not specified, inferred from partial data. Please provide `meta` if the result is unexpected.
+    Before: .apply(func)
+    After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result
+    or:     .apply(func, meta=('x', 'f8'))            for series result
+    result = ddf_no_divs.groupby(group_args).apply(apply_func)
+
+dask/dataframe/tests/test_groupby.py::test_groupby_agg_custom__mode
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1464: FutureWarning: 'argmax' is deprecated, use 'idxmax' instead. The behavior of 'argmax'
+  will be corrected to return the positional maximum in the future.
+  Use 'series.values.argmax' to get the position of the maximum now.
+    lambda s: s.map(lambda i: i[0].argmax()),
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_groupby.py:1464: FutureWarning: 'argmax' is deprecated, use 'idxmax' instead. The behavior of 'argmax'
+  will be corrected to return the positional maximum in the future.
+  Use 'series.values.argmax' to get the position of the maximum now.
+    lambda s: s.map(lambda i: i[0].argmax()),
+
+dask/dataframe/tests/test_indexing.py::test_loc2d
+  /Users/taugspurger/Envs/dask-dev/lib/python3.6/site-packages/pandas/core/indexing.py:1472: FutureWarning: 
+  Passing list-likes to .loc or [] with any missing label will raise
+  KeyError in the future, you can use .reindex() as an alternative.
+  
+  See the documentation here:
+  https://pandas.pydata.org/pandas-docs/stable/indexing.html#deprecate-loc-reindex-listlike
+    return self._getitem_tuple(key)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:28: FutureWarning: 
+  Passing list-likes to .loc or [] with any missing label will raise
+  KeyError in the future, you can use .reindex() as an alternative.
+  
+  See the documentation here:
+  https://pandas.pydata.org/pandas-docs/stable/indexing.html#deprecate-loc-reindex-listlike
+    return df.loc[iindexer, cindexer]
+
+dask/dataframe/tests/test_multi.py::test_indexed_concat[inner]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+
+dask/dataframe/tests/test_multi.py::test_indexed_concat[outer]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:253: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    expected = pd.concat([A, B], axis=0, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+
+dask/dataframe/tests/test_multi.py::test_concat2
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:894: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(pd.concat(pdcase), result)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:894: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(pd.concat(pdcase), result)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+
+dask/dataframe/tests/test_multi.py::test_concat3
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:918: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(result, pd.concat([pdf1, pdf2]))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:921: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    pd.concat([pdf1, pdf2]))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:928: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(result, pd.concat([pdf1, pdf2, pdf3]))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:931: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    pd.concat([pdf1, pdf2, pdf3]))
+
+dask/dataframe/tests/test_multi.py::test_concat4_interleave_partitions
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:960: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    pd.concat(pdcase))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:960: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    pd.concat(pdcase))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:960: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    pd.concat(pdcase))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:960: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    pd.concat(pdcase))
+
+dask/dataframe/tests/test_multi.py::test_concat5
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1005: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1005: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1005: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1005: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1005: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1005: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1005: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1005: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1005: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1005: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1005: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1005: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1005: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1005: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1005: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1019: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    pd.concat(pdcase))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1019: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    pd.concat(pdcase))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1024: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1019: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    pd.concat(pdcase))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1024: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1024: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1024: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1024: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1024: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_multi.py:1024: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    assert_eq(dd.concat(case, axis=1), pd.concat(pdcase, axis=1))
+
+dask/dataframe/tests/test_multi.py::test_concat_categorical[True-True-False]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'y' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'y' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_multi.py::test_concat_categorical[True-False-True]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:310: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:310: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join)
+
+dask/dataframe/tests/test_multi.py::test_concat_categorical[False-True-False]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'y' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'y' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'y' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:310: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:310: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:310: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:310: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'y' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_multi.py::test_concat_categorical[False-False-True]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:310: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:310: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join)
+
+dask/dataframe/tests/test_multi.py::test_concat_categorical[False-False-False]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:310: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:310: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:310: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:310: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join)
+
+dask/dataframe/tests/test_multi.py::test_append
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/Envs/dask-dev/lib/python3.6/site-packages/pandas/core/frame.py:6211: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    sort=sort)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/Envs/dask-dev/lib/python3.6/site-packages/pandas/core/frame.py:6211: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    sort=sort)
+
+dask/dataframe/tests/test_multi.py::test_append2
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/Envs/dask-dev/lib/python3.6/site-packages/pandas/core/frame.py:6211: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    sort=sort)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/Envs/dask-dev/lib/python3.6/site-packages/pandas/core/frame.py:6211: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    sort=sort)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/Envs/dask-dev/lib/python3.6/site-packages/pandas/core/frame.py:6211: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    sort=sort)
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:304: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    for df in dfs3], join=join).any()
+  /Users/taugspurger/sandbox/dask/dask/dataframe/methods.py:341: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    out = pd.concat(dfs3, join=join)
+  /Users/taugspurger/Envs/dask-dev/lib/python3.6/site-packages/pandas/core/frame.py:6211: FutureWarning: Sorting because non-concatenation axis is not aligned. A future version
+  of pandas will change to not sort by default.
+  
+  To accept the future behavior, pass 'sort=False'.
+  
+  To retain the current behavior and silence the warning, pass 'sort=True'.
+  
+    sort=sort)
+
+dask/dataframe/tests/test_multi.py::test_append_categorical
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'y' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'y' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_reshape.py::test_pivot_table_dtype
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'A' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_rolling.py::test_rolling_agg_aggregate
+  /Users/taugspurger/sandbox/dask/dask/dataframe/tests/test_rolling.py:276: FutureWarning: Currently, 'apply' passes the values as ndarrays to the applied function. In the future, this will change to passing it as Series objects. You need to specify 'raw=True' to keep the current behaviour, and you can pass 'raw=False' to silence this warning
+    assert_eq(df.rolling(window=3).apply(lambda x: np.std(x, ddof=1)),
+  /Users/taugspurger/sandbox/dask/dask/dataframe/rolling.py:179: FutureWarning: Currently, 'apply' passes the values as ndarrays to the applied function. In the future, this will change to passing it as Series objects. You need to specify 'raw=True' to keep the current behaviour, and you can pass 'raw=False' to silence this warning
+    return getattr(rolling, name)(*args, **kwargs)
+
+dask/dataframe/tests/test_shuffle.py::test_set_index_tasks[1]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'x' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_shuffle.py::test_set_index_tasks[4]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'x' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'x' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_shuffle.py::test_set_index_tasks[7]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'x' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'x' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_shuffle.py::test_set_index_divisions_compute
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_shuffle.py::test_set_index
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'b' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_shuffle.py::test_set_index_drop[True]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'A' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'B' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'C' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_shuffle.py::test_set_index_drop[False]
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'A' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'B' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'C' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'A' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'B' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'C' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: '0' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: '2' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+dask/dataframe/tests/test_shuffle.py::test_set_index_sorted_true
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'x' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'x' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'x' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'x' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+  /Users/taugspurger/sandbox/dask/dask/dataframe/utils.py:577: FutureWarning: 'x' is both an index level and a column label.
+  Defaulting to column, but this will raise an ambiguity error in a future version
+    a = a.sort_values(by=a.columns.tolist())
+
+-- Docs: http://doc.pytest.org/en/latest/warnings.html
+ 2 failed, 2369 passed, 118 skipped, 7 xfailed, 342 warnings in 338.86 seconds =
