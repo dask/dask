@@ -283,14 +283,17 @@ def test_refresh():
 
 def test_expand_environment_variables():
 
-    os.environ["ENV_A"] = "foo"
-    config = '$ENV_A'
-    assert expand_environment_variables(config) == 'foo'
+    try:
+        os.environ["DASK_FOO"] = "foo"
+        config = '$DASK_FOO'
+        assert expand_environment_variables(config) == 'foo'
 
-    os.environ["ENV_B"] = "bar"
-    config = {'a': '$ENV_B'}
-    assert expand_environment_variables(config)['a'] == 'bar'
+        os.environ["DASK_FOO"] = "bar"
+        config = {'a': '$DASK_FOO'}
+        assert expand_environment_variables(config)['a'] == 'bar'
 
-    os.environ["ENV_C"] = "spam"
-    config = {'a': 'A', 'b': ['1', 2, '$ENV_C']}
-    assert expand_environment_variables(config)['b'] == ['1', 2, 'spam']
+        os.environ["DASK_FOO"] = "spam"
+        config = {'a': 'A', 'b': ['1', 2, '$DASK_FOO']}
+        assert expand_environment_variables(config)['b'] == ['1', 2, 'spam']
+    finally:
+        del os.environ['DASK_FOO']

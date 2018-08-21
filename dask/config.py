@@ -442,20 +442,34 @@ def expand_environment_variables(config):
     This function will recursively search through any nested dictionaries
     and/or lists.
 
+    Parameters
+    ----------
     config : dict, iterable, or str
         Input object to search for environment variables
+
+    Returns
+    -------
+    config : same type as input
+
+    Examples
+    --------
+    >>> expand_environment_variables({'x': [1, 2, '$USER']})
+    {'x': [1, 2, 'my-username']}
     '''
+
+    orig_type = type(config)
     if isinstance(config, Mapping):
+        new_config = orig_type()
         for k, v in config.items():
-            config[k] = expand_environment_variables(v)
+            new_config[k] = expand_environment_variables(v)
     elif isinstance(config, str):
-        config = os.path.expandvars(config)
+        new_config = os.path.expandvars(config)
     elif isinstance(config, (list, tuple, set)):
-        config = [expand_environment_variables(v) for v in config]
+        new_config = [expand_environment_variables(v) for v in config]
     else:
-        # fail gracefully for objects that don't fall into these catagories
-        pass
-    return config
+        # pass through for objects that don't fall into these catagories
+        new_config = config
+    return orig_type(new_config)
 
 
 refresh()
