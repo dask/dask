@@ -453,7 +453,7 @@ def expand_environment_variables(config):
 
     Examples
     --------
-    >>> expand_environment_variables({'x': [1, 2, '$USER']})
+    >>> expand_environment_variables({'x': [1, 2, '$USER']})  # doctest: +SKIP
     {'x': [1, 2, 'my-username']}
     '''
 
