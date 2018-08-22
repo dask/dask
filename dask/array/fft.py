@@ -169,7 +169,10 @@ def fft_wrap(fft_func, kind=None, dtype=None):
         _dtype = dtype
         if _dtype is None:
             sample = np.ones(a.ndim * (8,), dtype=a.dtype)
-            _dtype = fft_func(sample).dtype
+            try:
+                _dtype = fft_func(sample, axes=axes).dtype
+            except TypeError:
+                _dtype = fft_func(sample).dtype
 
         for each_axis in axes:
             if len(a.chunks[each_axis]) != 1:
