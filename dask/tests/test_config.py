@@ -281,19 +281,19 @@ def test_refresh():
     assert config == {'a': 1, 'c': 3}
 
 
-def test_expand_environment_variables():
-
+@pytest.mark.parametrize('inp,out', [
+    ('1', '1'),
+    (1, 1),
+    ('$FOO', 'foo'),
+    ([1, '$FOO'], [1, 'foo']),
+    ((1, '$FOO'), (1, 'foo')),
+    ({1, '$FOO'}, {1, 'foo'}),
+    ({'a': '$FOO'}, {'a': 'foo'}),
+    ({'a': 'A', 'b': [1, '2', '$FOO']}, {'a': 'A', 'b': [1, '2', 'foo']})
+])
+def test_expand_environment_variables(inp, out):
     try:
-        os.environ["DASK_FOO"] = "foo"
-        config = '$DASK_FOO'
-        assert expand_environment_variables(config) == 'foo'
-
-        os.environ["DASK_FOO"] = "bar"
-        config = {'a': '$DASK_FOO'}
-        assert expand_environment_variables(config)['a'] == 'bar'
-
-        os.environ["DASK_FOO"] = "spam"
-        config = {'a': 'A', 'b': ['1', 2, '$DASK_FOO']}
-        assert expand_environment_variables(config)['b'] == ['1', 2, 'spam']
+        os.environ["FOO"] = "foo"
+        assert expand_environment_variables(inp) == out
     finally:
-        del os.environ['DASK_FOO']
+        del os.environ['FOO']

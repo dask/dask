@@ -11,7 +11,7 @@ except ImportError:
 
 from collections import Mapping
 
-from .compatibility import makedirs
+from .compatibility import makedirs, builtins
 
 
 no_default = '__no_default__'
@@ -437,7 +437,7 @@ def update_defaults(new, config=config, defaults=defaults):
 
 
 def expand_environment_variables(config):
-    ''' Utility to expand environment variables in a config dictionary
+    ''' Expand environment variables in a nested config dictionary
 
     This function will recursively search through any nested dictionaries
     and/or lists.
@@ -456,20 +456,14 @@ def expand_environment_variables(config):
     >>> expand_environment_variables({'x': [1, 2, '$USER']})  # doctest: +SKIP
     {'x': [1, 2, 'my-username']}
     '''
-
-    orig_type = type(config)
     if isinstance(config, Mapping):
-        new_config = orig_type()
-        for k, v in config.items():
-            new_config[k] = expand_environment_variables(v)
+        return {k: expand_environment_variables(v) for k, v in config.items()}
     elif isinstance(config, str):
-        new_config = os.path.expandvars(config)
-    elif isinstance(config, (list, tuple, set)):
-        new_config = [expand_environment_variables(v) for v in config]
+        return os.path.expandvars(config)
+    elif isinstance(config, (list, tuple, builtins.set)):
+        return type(config)([expand_environment_variables(v) for v in config])
     else:
-        # pass through for objects that don't fall into these catagories
-        new_config = config
-    return orig_type(new_config)
+        return config
 
 
 refresh()
