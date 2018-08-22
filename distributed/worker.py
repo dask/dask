@@ -179,7 +179,7 @@ class WorkerBase(ServerNode):
         self.services = {}
         self.service_ports = service_ports or {}
         self.service_specs = services or {}
-        self.metrics = metrics or {}
+        self.metrics = dict(metrics) if metrics else {}
 
         handlers = {
             'gather': self.gather,
