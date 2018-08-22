@@ -1051,7 +1051,7 @@ class Scheduler(ServerNode):
                     service.listen((listen_ip, port))
                 self.services[k] = service
             except Exception as e:
-                warnings.warn("\nCould not launch service '%s' on port %d. " % (k, port) +
+                warnings.warn("\nCould not launch service '%s' on port %s. " % (k, port) +
                               "Got the following message:\n\n" + str(e),
                               stacklevel=3)
 
