@@ -6,7 +6,7 @@ In Python we often rely on tools like
 the `CProfile module <https://docs.python.org/3/library/profile.html>`_,
 the `%%prun IPython magic <http://ipython.readthedocs.io/en/stable/interactive/magics.html#magic-prun>`_
 the `VMProf <https://vmprof.readthedocs.io/en/latest/>`_ module or
-the `snakeviz module <http://ipython.readthedocs.io/en/stable/interactive/magics.html#magic-prun>`_
+the `snakeviz module <https://jiffyclub.github.io/snakeviz/>`_
 to understand the costs associated with our code.
 However, few of these tools work well on multi-threaded or multi-process code,
 and fewer still on computations distributed among many machines.
