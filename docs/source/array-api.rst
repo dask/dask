@@ -278,6 +278,7 @@ Random
    random.random
    random.random_sample
    random.rayleigh
+   random.shuffle
    random.standard_cauchy
    random.standard_exponential
    random.standard_gamma
