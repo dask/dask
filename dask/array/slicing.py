@@ -1033,3 +1033,62 @@ def slice_with_bool_dask_array(x, index):
 
 def getitem_variadic(x, *index):
     return x[index]
+
+
+def make_block_sorted_slices(index, chunks):
+    # type: (ndarray, tuple) -> Tuple[ndarray, ndarray]
+    """Generate blockwise-sorted index pairs for shuffling an array.
+
+    Parameters
+    ----------
+    index : ndarray
+        An array of index positions.
+    chunks : tuple
+        Chunks from the original dask array
+
+    Returns
+    -------
+    index2 : ndarray
+        Same values as `index`, but each block has been sorted
+    index3 : ndarray
+        The location of the values of `index` in `index2`
+
+    Examples
+    --------
+    >>> index = np.array([6, 0, 4, 2, 7, 1, 5, 3])
+    >>> chunks = ((4, 4),)
+    >>> a, b = make_block_sorted_slices(index, chunks)
+    >>> a
+    array([0, 2, 4, 6, 1, 3, 5, 7])
+    >>> b
+    array([3, 0, 2, 1, 7, 4, 6, 5])
+    """
+    from .core import slices_from_chunks
+    slices = slices_from_chunks(chunks)
+
+    if len(slices[0]) > 1:
+        slices = [slice_[0] for slice_ in slices]
+
+    offsets = np.roll(np.cumsum(chunks[0]), 1)
+    offsets[0] = 0
+    offsets
+
+    index2 = np.empty_like(index)
+    index3 = np.empty_like(index)
+
+    for slice_, offset in zip(slices, offsets):
+        a = index[slice_]
+        b = np.sort(a)
+        c = offset + np.argsort(b.take(np.argsort(a)))
+        index2[slice_] = b
+        index3[slice_] = c
+
+    return index2, index3
+
+
+def shuffle_slice(x, index):
+    chunks1 = chunks2 = x.chunks
+    if x.ndim > 1:
+        chunks1 = (chunks1[0],)
+    index2, index3 = make_block_sorted_slices(index, chunks1)
+    return x[index2].rechunk(chunks2)[index3]

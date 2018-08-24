@@ -24,7 +24,7 @@ def test_series_resample(obj, method, npartitions, freq, closed, label):
     if obj == 'series':
         ps = pd.Series(range(len(index)), index=index)
     elif obj == 'frame':
-        ps = pd.DataFrame({'a':range(len(index))}, index=index)
+        ps = pd.DataFrame({'a': range(len(index))}, index=index)
     ds = dd.from_pandas(ps, npartitions=npartitions)
     # Series output
 

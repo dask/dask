@@ -291,3 +291,14 @@ def test_names():
 
     assert name.startswith('normal')
     assert len(key_split(name)) < 10
+
+
+def test_shuffle():
+    x = da.arange(12, chunks=3)
+    da.random.shuffle(x)
+
+    a = da.random.RandomState(0)
+    b = da.random.RandomState(0)
+    r1 = a.shuffle(x)
+    r2 = b.shuffle(x)
+    assert_eq(r1, r2)

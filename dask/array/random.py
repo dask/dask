@@ -352,6 +352,46 @@ class RandomState(object):
         return self._wrap(np.random.RandomState.rayleigh, scale,
                           size=size, chunks=chunks)
 
+    def shuffle(self, x):
+        """Shuffle an Array.
+
+        .. warning::
+
+           This does not modify `x` inplace.
+
+        Parameters
+        ----------
+        x : Array
+
+        Returns
+        -------
+        shuffled : Array
+
+        Examples
+        --------
+        >>> arr = da.arange(10, chunks=3)
+        >>> da.random.shuffle(arr).compute()
+        array([4, 3, 7, 9, 2, 1, 0, 6, 5, 8])
+
+        Unlike NumPy, the original array is unmodified
+
+        >>> arr.compute()
+        array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+        Multi-dimensional arrays are only shuffled along the first axis:
+
+        >>> arr = da.arange(9, chunks=3).reshape((3, 3))
+        >>> da.random.shuffle(arr).compute()
+        array([[0, 1, 2],
+               [6, 7, 8],
+               [3, 4, 5]])
+        """
+        from .slicing import shuffle_slice
+
+        index = np.arange(len(x))
+        self._numpy_state.shuffle(index)
+        return shuffle_slice(x, index)
+
     @doc_wraps(np.random.RandomState.standard_cauchy)
     def standard_cauchy(self, size=None, chunks=None):
         return self._wrap(np.random.RandomState.standard_cauchy,
@@ -460,6 +500,7 @@ random = random_sample
 randint = _state.randint
 random_integers = _state.random_integers
 triangular = _state.triangular
+shuffle = _state.shuffle
 uniform = _state.uniform
 vonmises = _state.vonmises
 wald = _state.wald
