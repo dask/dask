@@ -61,7 +61,7 @@ Direct Communication
 
 *   MPI4Py_: Wraps the Message Passing Interface popular in high performance
     computing.
-*   PyZMQ_: Wraps ZeroMQ, the gentleman's socket.
+*   PyZMQ_: Wraps ZeroMQ, the high-performance asynchronous messaging library.
 
 Venerable
 ~~~~~~~~~
