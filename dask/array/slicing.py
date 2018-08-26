@@ -1064,6 +1064,7 @@ def make_block_sorted_slices(index, chunks):
     array([3, 0, 2, 1, 7, 4, 6, 5])
     """
     from .core import slices_from_chunks
+
     slices = slices_from_chunks(chunks)
 
     if len(slices[0]) > 1:
@@ -1087,8 +1088,25 @@ def make_block_sorted_slices(index, chunks):
 
 
 def shuffle_slice(x, index):
+    """A relatively efficient way to shuffle `x` according to `index`.
+
+    Parameters
+    ----------
+    x : Array
+    index : ndarray
+        This should be an ndarray the same length as `x` containing
+        each index position in ``range(0, len(x))``.
+
+    Returns
+    -------
+    Array
+    """
+    from .core import PerformanceWarning
+
     chunks1 = chunks2 = x.chunks
     if x.ndim > 1:
         chunks1 = (chunks1[0],)
     index2, index3 = make_block_sorted_slices(index, chunks1)
-    return x[index2].rechunk(chunks2)[index3]
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', PerformanceWarning)
+        return x[index2].rechunk(chunks2)[index3]

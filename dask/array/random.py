@@ -357,7 +357,8 @@ class RandomState(object):
 
         .. warning::
 
-           This does not modify `x` inplace.
+           Unlike :meth:`numpy.random.shuffle`, this does
+           not modify `x` inplace.
 
         Parameters
         ----------
@@ -370,18 +371,18 @@ class RandomState(object):
         Examples
         --------
         >>> arr = da.arange(10, chunks=3)
-        >>> da.random.shuffle(arr).compute()
+        >>> da.random.shuffle(arr).compute()  # doctest: +SKIP
         array([4, 3, 7, 9, 2, 1, 0, 6, 5, 8])
 
         Unlike NumPy, the original array is unmodified
 
-        >>> arr.compute()
+        >>> arr.compute()  # doctest: +SKIP
         array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
 
         Multi-dimensional arrays are only shuffled along the first axis:
 
         >>> arr = da.arange(9, chunks=3).reshape((3, 3))
-        >>> da.random.shuffle(arr).compute()
+        >>> da.random.shuffle(arr).compute()  # doctest: +SKIP
         array([[0, 1, 2],
                [6, 7, 8],
                [3, 4, 5]])
