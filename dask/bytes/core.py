@@ -19,7 +19,7 @@ from ..utils import import_required, is_integer
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
-               sample=True, compression=None, **kwargs):
+               sample=True, compression=None, include_path=False, **kwargs):
     """Given a path or paths, return delayed objects that read from those paths.
 
     The path may be a filename like ``'2015-01-01.csv'`` or a globstring
@@ -50,6 +50,11 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     sample : bool or int
         Whether or not to return a header sample. If an integer is given it is
         used as sample size, otherwise the default sample size is 10kB.
+    include_path : bool
+        Whether or not to include the path with the bytes representing a particular file.
+        If True ``blocks`` is a list of tuples where the first item is path and the second
+        is a list of ``dask.Delayed`` where each delayed object computes to a
+        block of bytes from that file.
     **kwargs : dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
@@ -106,9 +111,13 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         token = tokenize(fs_token, delimiter, path, fs.ukey(path),
                          compression, offset)
         keys = ['read-block-%s-%s' % (o, token) for o in offset]
-        out.append([delayed_read(OpenFile(fs, path, compression=compression),
-                                 o, l, delimiter, dask_key_name=key)
-                    for o, key, l in zip(offset, keys, length)])
+        values = [delayed_read(OpenFile(fs, path, compression=compression),
+                               o, l, delimiter, dask_key_name=key)
+                  for o, key, l in zip(offset, keys, length)]
+        if include_path:
+            out.append((path, values))
+        else:
+            out.append(values)
 
     if sample:
         with OpenFile(fs, paths[0], compression=compression) as f:

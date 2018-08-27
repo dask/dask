@@ -35,7 +35,7 @@ else:
 
 
 def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
-                     write_header=True, enforce=False):
+                     write_header=True, enforce=False, path=None):
     """ Convert a block of bytes to a Pandas DataFrame
 
     Parameters
@@ -50,6 +50,9 @@ def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
         A dictionary of keyword arguments to be passed to ``reader``
     dtypes : dict
         DTypes to assign to columns
+    path: dict
+        A dictionary containing path into. Key is path column name and
+        value is path to file.
 
     See Also
     --------
@@ -68,6 +71,8 @@ def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
         raise ValueError("Columns do not match", df.columns, columns)
     elif columns:
         df.columns = columns
+    if path:
+        df = df.assign(**path)
     return df
 
 
@@ -157,7 +162,7 @@ def coerce_dtypes(df, dtypes):
 
 def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
                           collection=True, enforce=False,
-                          specified_dtypes=None):
+                          specified_dtypes=None, include_path_col=False):
     """ Convert blocks of bytes to a dask.dataframe or other high-level object
 
     This accepts a list of lists of values of bytes where each list corresponds
@@ -215,23 +220,34 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
     columns = list(head.columns)
     delayed_pandas_read_text = delayed(pandas_read_text, pure=True)
     dfs = []
+
+    path_col = 'path' if isinstance(include_path_col, bool) else include_path_col
+
     for blocks in block_lists:
         if not blocks:
             continue
+        if include_path_col:
+            path, blocks = blocks
+            path = {path_col: path}
+        else:
+            path = None
         df = delayed_pandas_read_text(reader, blocks[0], header, kwargs,
                                       dtypes, columns, write_header=False,
-                                      enforce=enforce)
+                                      enforce=enforce, path=path)
+
         dfs.append(df)
         rest_kwargs = kwargs.copy()
         rest_kwargs.pop('skiprows', None)
         for b in blocks[1:]:
             dfs.append(delayed_pandas_read_text(reader, b, header, rest_kwargs,
                                                 dtypes, columns,
-                                                enforce=enforce))
+                                                enforce=enforce, path=path))
 
     if collection:
         if len(unknown_categoricals):
             head = clear_known_categories(head, cols=unknown_categoricals)
+        if include_path_col:
+            head = head.assign(**{path_col: 'path_to_file'})
         return from_delayed(dfs, head)
     else:
         return dfs
@@ -257,6 +273,7 @@ else:
 def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                 lineterminator=None, compression=None, sample=256000,
                 enforce=False, assume_missing=False, storage_options=None,
+                include_path_col=False,
                 **kwargs):
     reader_name = reader.__name__
     if lineterminator is not None and len(lineterminator) == 1:
@@ -298,6 +315,7 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                                   blocksize=blocksize,
                                   sample=sample,
                                   compression=compression,
+                                  include_path=include_path_col,
                                   **(storage_options or {}))
 
     if not isinstance(values[0], (tuple, list)):
@@ -336,7 +354,8 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
 
     return text_blocks_to_pandas(reader, values, header, head, kwargs,
                                  collection=collection, enforce=enforce,
-                                 specified_dtypes=specified_dtypes)
+                                 specified_dtypes=specified_dtypes,
+                                 include_path_col=include_path_col)
 
 
 READ_DOC_TEMPLATE = """
@@ -384,6 +403,10 @@ assume_missing : bool, optional
 storage_options : dict, optional
     Extra options that make sense for a particular storage connection, e.g.
     host, port, username, password, etc.
+include_path_col: bool or str, optional
+    Whether or not to include the path to each particular file. If True a new
+    column is added to the dataframe called ``path``. If str, sets new column
+    name. Default is False.
 **kwargs
     Extra keyword arguments to forward to :func:`pandas.{reader}`.
 
@@ -415,6 +438,7 @@ def make_reader(reader, reader_name, file_type):
     def read(urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
              lineterminator=None, compression=None, sample=256000,
              enforce=False, assume_missing=False, storage_options=None,
+             include_path_col=False,
              **kwargs):
         return read_pandas(reader, urlpath, blocksize=blocksize,
                            collection=collection,
@@ -422,6 +446,7 @@ def make_reader(reader, reader_name, file_type):
                            compression=compression, sample=sample,
                            enforce=enforce, assume_missing=assume_missing,
                            storage_options=storage_options,
+                           include_path_col=include_path_col,
                            **kwargs)
     read.__doc__ = READ_DOC_TEMPLATE.format(reader=reader_name,
                                             file_type=file_type)
