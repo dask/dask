@@ -370,6 +370,7 @@ class RandomState(object):
 
         Examples
         --------
+        >>> import dask.array as da
         >>> arr = da.arange(10, chunks=3)
         >>> da.random.shuffle(arr).compute()  # doctest: +SKIP
         array([4, 3, 7, 9, 2, 1, 0, 6, 5, 8])
