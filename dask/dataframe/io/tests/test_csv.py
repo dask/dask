@@ -1094,7 +1094,7 @@ def test_to_csv_header():
     # Test normal header case (header=True, header_first_chunk not passed)
     ddf.to_csv("foo*.csv", index=False)
     for i in range(0, partition_count):
-        filename = f"foo{i}.csv"
+        filename = 'foo{}.csv'.format(i)
         with open(filename, 'r') as fp:
             line = fp.readline()
             assert line == 'x,y\n'
@@ -1103,7 +1103,7 @@ def test_to_csv_header():
     # Test header_first_chunk case FALSE (header=True, header_first_chunk = False)
     ddf.to_csv("foo*.csv", index=False, header_first_chunk=False)
     for i in range(0, partition_count):
-        filename = f"foo{i}.csv"
+        filename = 'foo{}.csv'.format(i)
         with open(filename, 'r') as fp:
             line = fp.readline()
             assert line == 'x,y\n'
@@ -1111,13 +1111,14 @@ def test_to_csv_header():
 
     # Test header_first_chunk case TRUE (header=True, header_first_chunk = True)
     ddf.to_csv("foo*.csv", index=False, header_first_chunk=True)
-    filename = f"foo0.csv"
+    filename = 'foo0.csv'
     with open(filename, 'r') as fp:
         line = fp.readline()
         assert line == 'x,y\n'
+    os.remove(filename)
 
     for i in range(1, partition_count):
-        filename = f"foo{i}.csv"
+        filename = 'foo{}.csv'.format(i)
         with open(filename, 'r') as fp:
             line = fp.readline()
             assert line != 'x,y\n'
