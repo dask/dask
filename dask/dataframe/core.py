@@ -2474,7 +2474,7 @@ class DataFrame(_Frame):
             if self.divisions != key.divisions:
                 from .multi import _maybe_align_partitions
                 self, key = _maybe_align_partitions([self, key])
-            dsk = {(name, i): (M._getitem_array, (self._name, i), (key._name, i))
+            dsk = {(name, i): (M.__getitem__, (self._name, i), (key._name, i))
                    for i in range(self.npartitions)}
             return new_dd_object(merge(self.dask, key.dask, dsk), name,
                                  self, self.divisions)
