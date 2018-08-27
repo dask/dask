@@ -284,6 +284,26 @@ def test_read_csv_files_list(dd_read, pd_read, files):
             dd_read([])
 
 
+@pytest.mark.parametrize('dd_read,files',
+                         [(dd.read_csv, csv_files),
+                          (dd.read_table, tsv_files)])
+def test_read_csv_include_path_col(dd_read, files):
+    with filetexts(files, mode='b'):
+        df = dd_read('2014-01-*.csv', include_path_col=True)
+        filenames = df.path.map(lambda x: x.split('/')[-1]).compute()
+        set(filenames) == set(files.keys())
+
+
+@pytest.mark.parametrize('dd_read,files',
+                         [(dd.read_csv, csv_files),
+                          (dd.read_table, tsv_files)])
+def test_read_csv_include_path_col_as_str(dd_read, files):
+    with filetexts(files, mode='b'):
+        df = dd_read('2014-01-*.csv', include_path_col='file_path')
+        filenames = df.file_path.map(lambda x: x.split('/')[-1]).compute()
+        set(filenames) == set(files.keys())
+
+
 # After this point, we test just using read_csv, as all functionality
 # for both is implemented using the same code.
 

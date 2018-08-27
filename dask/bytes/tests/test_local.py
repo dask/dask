@@ -159,6 +159,12 @@ def test_read_bytes_blocksize_float():
             read_bytes('.test.account*', blocksize=5.5)
 
 
+def test_read_bytes_include_path():
+    with filetexts(files, mode='b'):
+        sample, values = read_bytes('.test.accounts.*', include_path=True)
+        assert {path.split('/')[-1] for path, _ in values} == set(files.keys())
+
+
 def test_with_urls():
     with filetexts(files, mode='b'):
         # OS-independent file:// URI with glob *
