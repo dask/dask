@@ -507,6 +507,8 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
     header : boolean or list of string, default True
         Write out column names. If a list of string is given it is assumed
         to be aliases for the column names
+    header_first_chunk : boolean, default False
+        If set, only write the header row in the first output file
     index : boolean, default True
         Write row names (index)
     index_label : string or sequence, or False, default None
@@ -569,8 +571,16 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
                        num=df.npartitions, **(storage_options or {}))
 
     to_csv_chunk = delayed(_write_csv, pure=False)
-    values = [to_csv_chunk(d, f, **kwargs)
-              for d, f in zip(df.to_delayed(), files)]
+
+    # If we only want headers in the first file, turn headers off after the
+    # first chunk
+    values = []
+    for d, f in zip(df.to_delayed(), files):
+        header_first_chunk = kwargs.pop('header_first_chunk', None)
+        chunk = to_csv_chunk(d, f, **kwargs)
+        values.append(chunk)
+        if header_first_chunk is not None and header_first_chunk is True:
+            kwargs['header'] = None
 
     if compute:
         delayed(values).compute(get=get, scheduler=scheduler)
