@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from distutils.version import LooseVersion
 import os
+import warnings
 
 import bokeh
 from bokeh.server.server import Server
@@ -44,11 +45,13 @@ class BokehServer(object):
                     if ("already in use" in str(exc) or  # Unix/Mac
                             "Only one usage of" in str(exc)):  # Windows
                         msg = ("Port %d is already in use. "
-                               "Perhaps you already have a cluster running?"
+                               "\nPerhaps you already have a cluster running?"
+                               "\nHosting the diagnostics dashboard on a random port instead."
                                % port)
                     else:
                         msg = "Failed to start diagnostics server on port %d. " % port + str(exc)
-                    raise type(exc)(msg)
+                    warnings.warn('\n' + msg)
+                    port = 0
                 if i == 4:
                     raise
 

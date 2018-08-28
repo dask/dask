@@ -147,7 +147,10 @@ def test_Client_solo(loop):
 def test_duplicate_clients():
     c1 = yield Client(processes=False, silence_logs=False, diagnostics_port=9876)
     with pytest.warns(Exception) as info:
-        yield Client(processes=False, silence_logs=False, diagnostics_port=9876)
+        c2 = yield Client(processes=False, silence_logs=False, diagnostics_port=9876)
+
+    assert 'bokeh' in c1.cluster.scheduler.services
+    assert 'bokeh' in c2.cluster.scheduler.services
 
     assert any(all(word in str(msg.message).lower()
                    for word in ['9876', 'running', 'already in use'])
