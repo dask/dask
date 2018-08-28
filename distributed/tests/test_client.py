@@ -2347,6 +2347,8 @@ def test_map_queue(c, s, a, b):
     assert result == (1 + 1) * 2
 
 
+@pytest.mark.skipif(sys.version_info >= (3, 7),
+                    reason="replace StopIteration with return")
 @gen_cluster(client=True)
 def test_map_iterator_with_return(c, s, a, b):
     def g():

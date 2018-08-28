@@ -39,12 +39,11 @@ conda install -q \
     ipywidgets \
     joblib \
     jupyter_client \
-    lz4 \
     mock \
     netcdf4 \
     paramiko \
     psutil \
-    pytest=3.1 \
+    pytest=3.7 \
     pytest-timeout \
     python=$PYTHON \
     requests \
