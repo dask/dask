@@ -221,14 +221,12 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
     delayed_pandas_read_text = delayed(pandas_read_text, pure=True)
     dfs = []
 
-    path_col = 'path' if isinstance(include_path_col, bool) else include_path_col
-
     for blocks in block_lists:
         if not blocks:
             continue
         if include_path_col:
             path, blocks = blocks
-            path = {path_col: path}
+            path = {include_path_col: path}
         else:
             path = None
         df = delayed_pandas_read_text(reader, blocks[0], header, kwargs,
@@ -247,7 +245,7 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
         if len(unknown_categoricals):
             head = clear_known_categories(head, cols=unknown_categoricals)
         if include_path_col:
-            head = head.assign(**{path_col: 'path_to_file'})
+            head = head.assign(**{include_path_col: 'path_to_file'})
         return from_delayed(dfs, head)
     else:
         return dfs
@@ -280,6 +278,8 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
         kwargs['lineterminator'] = lineterminator
     else:
         lineterminator = '\n'
+    if include_path_col:
+        include_path_col = 'path' if isinstance(include_path_col, bool) else include_path_col
     if 'index' in kwargs or 'index_col' in kwargs:
         raise ValueError("Keyword 'index' not supported "
                          "dd.{0}(...).set_index('my-index') "
@@ -299,6 +299,10 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     if isinstance(kwargs.get('header'), list):
         raise TypeError("List of header rows not supported for "
                         "dd.{0}".format(reader_name))
+    if isinstance(kwargs.get('converters'), dict) and include_path_col:
+        path_converter = kwargs.get('converters').get(include_path_col, None)
+    else:
+        path_converter = None
 
     if blocksize and compression not in seekable_files:
         warn("Warning %s compression does not support breaking apart files\n"
@@ -320,6 +324,8 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
 
     if not isinstance(values[0], (tuple, list)):
         values = [values]
+    if include_path_col and path_converter:
+        values = [(path_converter(path), blocks) for path, blocks in values]
 
     # Get header row, and check that sample is long enough. If the file
     # contains a header row, we need at least 2 nonempty rows + the number of
