@@ -118,7 +118,7 @@ sends a request to the busy worker.  The worker inspects its current state of
 the task and sends a response to the scheduler:
 
 1.  If the task is not yet running, then the worker cancels the task and
-    informs the scheduler that it can reroute the ask elsewhere.
+    informs the scheduler that it can reroute the task elsewhere.
 2.  If the task is already running or complete then the worker tells the
     scheduler that it should not replicate the task elsewhere.
 
