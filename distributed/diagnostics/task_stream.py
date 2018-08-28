@@ -71,64 +71,74 @@ class TaskStreamPlugin(SchedulerPlugin):
         return [self.buffer[i] for i in range(start, stop)]
 
     def rectangles(self, istart, istop=None, workers=None, start_boundary=0):
-        L_start = []
-        L_duration = []
-        L_duration_text = []
-        L_key = []
-        L_name = []
-        L_color = []
-        L_alpha = []
-        L_worker = []
-        L_worker_thread = []
-        L_y = []
-
+        msgs = []
         diff = self.index - len(self.buffer)
         if istop is None:
             istop = len(self.buffer)
         for i in range((istart or 0) - diff, istop - diff if istop else istop):
             msg = self.buffer[i]
-            key = msg['key']
-            name = key_split(key)
-            startstops = msg.get('startstops', [])
-            try:
-                worker_thread = '%s-%d' % (msg['worker'], msg['thread'])
-            except Exception:
+            msgs.append(msg)
+
+        return rectangles(msgs, workers=workers, start_boundary=start_boundary)
+
+
+def rectangles(msgs, workers=None, start_boundary=0):
+    workers = workers or {}
+
+    L_start = []
+    L_duration = []
+    L_duration_text = []
+    L_key = []
+    L_name = []
+    L_color = []
+    L_alpha = []
+    L_worker = []
+    L_worker_thread = []
+    L_y = []
+
+    for msg in msgs:
+        key = msg['key']
+        name = key_split(key)
+        startstops = msg.get('startstops', [])
+        try:
+            worker_thread = '%s-%d' % (msg['worker'], msg['thread'])
+        except Exception:
+            continue
+            logger.warning("Message contained bad information: %s", msg,
+                           exc_info=True)
+            worker_thread = ''
+
+        if worker_thread not in workers:
+            workers[worker_thread] = len(workers) / 2
+
+        for action, start, stop in startstops:
+            if start < start_boundary:
                 continue
-                logger.warning("Message contained bad information: %s", msg,
-                               exc_info=True)
-                worker_thread = ''
+            color = colors[action]
+            if type(color) is not str:
+                color = color(msg)
 
-            if worker_thread not in workers:
-                workers[worker_thread] = len(workers) / 2
+            L_start.append((start + stop) / 2 * 1000)
+            L_duration.append(1000 * (stop - start))
+            L_duration_text.append(format_time(stop - start))
+            L_key.append(key)
+            L_name.append(prefix[action] + name)
+            L_color.append(color)
+            L_alpha.append(alphas[action])
+            L_worker.append(msg['worker'])
+            L_worker_thread.append(worker_thread)
+            L_y.append(workers[worker_thread])
 
-            for action, start, stop in startstops:
-                if start < start_boundary:
-                    continue
-                color = colors[action]
-                if type(color) is not str:
-                    color = color(msg)
-
-                L_start.append((start + stop) / 2 * 1000)
-                L_duration.append(1000 * (stop - start))
-                L_duration_text.append(format_time(stop - start))
-                L_key.append(key)
-                L_name.append(prefix[action] + name)
-                L_color.append(color)
-                L_alpha.append(alphas[action])
-                L_worker.append(msg['worker'])
-                L_worker_thread.append(worker_thread)
-                L_y.append(workers[worker_thread])
-
-        return {'start': L_start,
-                'duration': L_duration,
-                'duration_text': L_duration_text,
-                'key': L_key,
-                'name': L_name,
-                'color': L_color,
-                'alpha': L_alpha,
-                'worker': L_worker,
-                'worker_thread': L_worker_thread,
-                'y': L_y}
+    return {'start': L_start,
+            'duration': L_duration,
+            'duration_text': L_duration_text,
+            'key': L_key,
+            'name': L_name,
+            'color': L_color,
+            'alpha': L_alpha,
+            'worker': L_worker,
+            'worker_thread': L_worker_thread,
+            'y': L_y}
 
 
 def color_of_message(msg):

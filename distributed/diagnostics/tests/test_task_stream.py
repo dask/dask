@@ -1,7 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
+import os
 from time import sleep
 
+import pytest
 from toolz import frequencies
 
 from distributed import Client, get_task_stream
@@ -102,3 +104,31 @@ def test_client_sync(loop):
                 wait(futures)
 
             assert len(ts.data) == 10
+
+
+@gen_cluster(client=True)
+def test_get_task_stream_plot(c, s, a, b):
+    bokeh = pytest.importorskip('bokeh')
+    yield c.get_task_stream()
+
+    futures = c.map(slowinc, range(10), delay=0.1)
+    yield wait(futures)
+
+    data, figure = yield c.get_task_stream(plot=True)
+    assert isinstance(figure, bokeh.plotting.Figure)
+
+
+def test_get_task_stream_save(loop, tmpdir):
+    bokeh = pytest.importorskip('bokeh')
+    tmpdir = str(tmpdir)
+    fn = os.path.join(tmpdir, 'foo.html')
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            with get_task_stream(plot='save', filename=fn) as ts:
+                wait(c.map(inc, range(10)))
+            with open(fn) as f:
+                data = f.read()
+            assert 'inc' in data
+            assert 'bokeh' in data
+
+            assert isinstance(ts.figure, bokeh.plotting.Figure)
