@@ -111,6 +111,9 @@ if PY3:
             raise exc.with_traceback(tb)
         raise exc
 
+    def exec_(codestr, glbls):
+        exec(codestr, glbls)
+
 else:
     import __builtin__ as builtins
     import copy_reg as copyreg
@@ -150,6 +153,10 @@ else:
 
     reraise = _make_reraise()
     del _make_reraise
+
+    eval(compile(("def exec_(codestr, glbls):\n"
+                  "    exec codestr in glbls\n"),
+                  "<_exec>", "exec"))
 
     def _getargspec(func):
         return inspect.getargspec(func)
