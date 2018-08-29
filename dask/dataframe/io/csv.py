@@ -51,7 +51,7 @@ def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
         A dictionary of keyword arguments to be passed to ``reader``
     dtypes : dict
         DTypes to assign to columns
-    path: tuple
+    path : tuple
         A tuple containing path column name, path to file, and all paths.
 
     See Also
