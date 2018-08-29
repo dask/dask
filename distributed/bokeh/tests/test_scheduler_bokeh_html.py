@@ -30,6 +30,7 @@ def test_connect(c, s, a, b):
                    'json/counts.json',
                    'json/identity.json',
                    'json/index.html',
+                   'individual-plots.json',
                    ]:
         response = yield http_client.fetch('http://localhost:%d/%s'
                                            % (s.services['bokeh'].port, suffix))

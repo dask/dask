@@ -1,10 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
+import json
+import sys
 from time import sleep
 
 import pytest
 pytest.importorskip('bokeh')
-import sys
 from toolz import first
 from tornado import gen
 from tornado.httpclient import AsyncHTTPClient
@@ -35,16 +36,22 @@ scheduler.PROFILING = False
              scheduler_kwargs={'services': {('bokeh', 0):  BokehScheduler}})
 def test_simple(c, s, a, b):
     assert isinstance(s.services['bokeh'], BokehScheduler)
+    port = s.services['bokeh'].port
 
     future = c.submit(sleep, 1)
     yield gen.sleep(0.1)
 
     http_client = AsyncHTTPClient()
     for suffix in ['system', 'counters', 'workers', 'status', 'tasks',
-                   'stealing', 'graph']:
-        response = yield http_client.fetch('http://localhost:%d/%s'
-                                           % (s.services['bokeh'].port, suffix))
+                   'stealing', 'graph', 'individual-task-stream', 'individual-progress',
+                   'individual-graph', 'individual-load',
+                   'individual-profile']:
+        response = yield http_client.fetch('http://localhost:%d/%s' % (port, suffix))
         assert 'bokeh' in response.body.decode().lower()
+
+    response = yield http_client.fetch('http://localhost:%d/individual-plots.json' % port)
+    response = json.loads(response.body.decode())
+    assert response
 
 
 @gen_cluster(client=True, worker_kwargs=dict(services={'bokeh': BokehWorker}))

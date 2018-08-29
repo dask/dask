@@ -1173,6 +1173,58 @@ def status_doc(scheduler, extra, doc):
         doc.template_variables.update(extra)
 
 
+def individual_task_stream_doc(scheduler, extra, doc):
+    task_stream = TaskStream(scheduler, n_rectangles=1000,
+                             clear_interval='10s', sizing_mode='stretch_both')
+    task_stream.update()
+    doc.add_periodic_callback(task_stream.update, 100)
+    doc.add_root(task_stream.root)
+
+
+def individual_load_doc(scheduler, extra, doc):
+    current_load = CurrentLoad(scheduler, height=160, sizing_mode='stretch_both')
+    current_load.update()
+    doc.add_periodic_callback(current_load.update, 100)
+    doc.add_root(current_load.root)
+
+
+def individual_progress_doc(scheduler, extra, doc):
+    task_progress = TaskProgress(scheduler, height=160, sizing_mode='stretch_both')
+    task_progress.update()
+    doc.add_periodic_callback(task_progress.update, 100)
+    doc.add_root(task_progress.root)
+
+
+def individual_graph_doc(scheduler, extra, doc):
+    with log_errors():
+        graph = GraphPlot(scheduler, sizing_mode='stretch_both')
+        graph.update()
+        doc.add_periodic_callback(graph.update, 200)
+        doc.add_root(graph.root)
+
+
+def individual_profile_doc(scheduler, extra, doc):
+    with log_errors():
+        prof = ProfileTimePlot(scheduler, sizing_mode='scale_width', doc=doc)
+        doc.add_root(prof.root)
+        prof.trigger_update()
+
+
+def individual_profile_server_doc(scheduler, extra, doc):
+    with log_errors():
+        prof = ProfileServer(scheduler, sizing_mode='scale_width', doc=doc)
+        doc.add_root(prof.root)
+        prof.trigger_update()
+
+
+def individual_workers_doc(scheduler, extra, doc):
+    with log_errors():
+        table = WorkerTable(scheduler)
+        table.update()
+        doc.add_periodic_callback(table.update, 500)
+        doc.add_root(table.root)
+
+
 def profile_doc(scheduler, extra, doc):
     with log_errors():
         doc.title = "Dask: Profile"
@@ -1220,6 +1272,16 @@ class BokehScheduler(BokehServer):
         profile_server = Application(FunctionHandler(partial(profile_server_doc, scheduler, self.extra)))
         graph = Application(FunctionHandler(partial(graph_doc, scheduler, self.extra)))
 
+        individual_task_stream = Application(FunctionHandler(partial(
+            individual_task_stream_doc, scheduler, self.extra)))
+        individual_progress = Application(FunctionHandler(partial(individual_progress_doc, scheduler, self.extra)))
+        individual_graph = Application(FunctionHandler(partial(individual_graph_doc, scheduler, self.extra)))
+        individual_profile = Application(FunctionHandler(partial(individual_profile_doc, scheduler, self.extra)))
+        individual_profile_server = Application(FunctionHandler(partial(
+            individual_profile_server_doc, scheduler, self.extra)))
+        individual_load = Application(FunctionHandler(partial(individual_load_doc, scheduler, self.extra)))
+        individual_workers = Application(FunctionHandler(partial(individual_workers_doc, scheduler, self.extra)))
+
         self.apps = {
             '/system': systemmonitor,
             '/stealing': stealing,
@@ -1231,6 +1293,14 @@ class BokehScheduler(BokehServer):
             '/profile': profile,
             '/profile-server': profile_server,
             '/graph': graph,
+
+            '/individual-task-stream': individual_task_stream,
+            '/individual-progress': individual_progress,
+            '/individual-graph': individual_graph,
+            '/individual-profile': individual_profile,
+            '/individual-profile-server': individual_profile_server,
+            '/individual-load': individual_load,
+            '/individual-workers': individual_workers,
         }
 
         self.loop = io_loop or scheduler.loop

@@ -152,6 +152,16 @@ class IndexJSON(RequestHandler):
             self.render('json-index.html', routes=r, title='Index of JSON routes', **self.extra)
 
 
+class IndividualPlots(RequestHandler):
+    def get(self):
+        bokeh_server = self.server.services['bokeh']
+        result = {uri.strip('/').replace('-', ' ').title(): uri
+                  for uri in bokeh_server.apps
+                  if uri.lstrip('/').startswith('individual-')
+                  and not uri.endswith('.json')}
+        self.write(result)
+
+
 routes = [
         (r'info/main/workers.html', Workers),
         (r'info/worker/(.*).html', Worker),
@@ -163,6 +173,7 @@ routes = [
         (r'json/counts.json', CountsJSON),
         (r'json/identity.json', IdentityJSON),
         (r'json/index.html', IndexJSON),
+        (r'individual-plots.json', IndividualPlots),
 ]
 
 
