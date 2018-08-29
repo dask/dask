@@ -162,7 +162,7 @@ def test_read_bytes_blocksize_float():
 def test_read_bytes_include_path():
     with filetexts(files, mode='b'):
         sample, values = read_bytes('.test.accounts.*', include_path=True)
-        assert {path.split('/')[-1] for path, _ in values} == set(files.keys())
+        assert {os.path.split(path)[1] for path, _ in values} == set(files.keys())
 
 
 def test_with_urls():
