@@ -52,8 +52,8 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         used as sample size, otherwise the default sample size is 10kB.
     include_path : bool
         Whether or not to include the path with the bytes representing a particular file.
-        If True ``blocks`` is a list of tuples where the first item is path and the second
-        is a list of ``dask.Delayed`` where each delayed object computes to a
+        If True ``blocks`` is a tuple where the first item is a list of paths and the second
+        is a list of lists of ``dask.Delayed`` where each delayed object computes to a
         block of bytes from that file.
     **kwargs : dict
         Extra options that make sense to a particular storage connection, e.g.
@@ -63,6 +63,7 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     --------
     >>> sample, blocks = read_bytes('2015-*-*.csv', delimiter=b'\\n')  # doctest: +SKIP
     >>> sample, blocks = read_bytes('s3://bucket/2015-*-*.csv', delimiter=b'\\n')  # doctest: +SKIP
+    >>> sample, (paths, blocks) = read_bytes('2015-*-*.csv', include_path=True)  # doctest: +SKIP
 
     Returns
     -------
@@ -114,16 +115,14 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         values = [delayed_read(OpenFile(fs, path, compression=compression),
                                o, l, delimiter, dask_key_name=key)
                   for o, key, l in zip(offset, keys, length)]
-        if include_path:
-            out.append((path, values))
-        else:
-            out.append(values)
+        out.append(values)
 
     if sample:
         with OpenFile(fs, paths[0], compression=compression) as f:
             nbytes = 10000 if sample is True else sample
             sample = read_block(f, 0, nbytes, delimiter)
-
+    if include_path:
+        return sample, (paths, out)
     return sample, out
 
 

@@ -330,7 +330,7 @@ def test_read_csv_include_path_column_is_dtype_category(dd_read, files):
     with filetexts(files, mode='b'):
         df = dd_read('2014-01-*.csv', include_path_column=True)
         assert df.path.dtype == 'category'
-        assert not has_known_categories(df.path)
+        assert has_known_categories(df.path)
 
         dfs = dd_read('2014-01-*.csv', include_path_column=True, collection=False)
         result = dfs[0].compute()
