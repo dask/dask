@@ -52,9 +52,7 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         used as sample size, otherwise the default sample size is 10kB.
     include_path : bool
         Whether or not to include the path with the bytes representing a particular file.
-        If True ``blocks`` is a tuple where the first item is a list of paths and the second
-        is a list of lists of ``dask.Delayed`` where each delayed object computes to a
-        block of bytes from that file.
+        Default is False.
     **kwargs : dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
@@ -63,7 +61,7 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     --------
     >>> sample, blocks = read_bytes('2015-*-*.csv', delimiter=b'\\n')  # doctest: +SKIP
     >>> sample, blocks = read_bytes('s3://bucket/2015-*-*.csv', delimiter=b'\\n')  # doctest: +SKIP
-    >>> sample, (paths, blocks) = read_bytes('2015-*-*.csv', include_path=True)  # doctest: +SKIP
+    >>> sample, paths, blocks = read_bytes('2015-*-*.csv', include_path=True)  # doctest: +SKIP
 
     Returns
     -------
@@ -72,6 +70,10 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     blocks : list of lists of ``dask.Delayed``
         Each list corresponds to a file, and each delayed object computes to a
         block of bytes from that file.
+    paths : list of strings, only included if include_path is True
+        List of same length as blocks, where each item is the path to the file
+        represented in the corresponding block.
+
     """
     fs, fs_token, paths = get_fs_token_paths(urlpath, mode='rb',
                                              storage_options=kwargs)
@@ -122,7 +124,7 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
             nbytes = 10000 if sample is True else sample
             sample = read_block(f, 0, nbytes, delimiter)
     if include_path:
-        return sample, (paths, out)
+        return sample, out, paths
     return sample, out
 
 

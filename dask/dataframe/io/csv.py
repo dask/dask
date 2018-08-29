@@ -187,7 +187,7 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
     kwargs : dict
         Keyword arguments to pass down to ``reader``
     collection: boolean, optional (defaults to True)
-    path: tuple, optional
+    path : tuple, optional
         A tuple containing column name for path and list of all paths
 
     Returns
@@ -322,19 +322,20 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                                   compression)
 
     b_lineterminator = lineterminator.encode()
-    b_sample, values = read_bytes(urlpath, delimiter=b_lineterminator,
-                                  blocksize=blocksize,
-                                  sample=sample,
-                                  compression=compression,
-                                  include_path=include_path_column,
-                                  **(storage_options or {}))
+    b_out = read_bytes(urlpath, delimiter=b_lineterminator,
+                       blocksize=blocksize,
+                       sample=sample,
+                       compression=compression,
+                       include_path=include_path_column,
+                       **(storage_options or {}))
 
     if include_path_column:
-        paths, values = values
+        b_sample, values, paths = b_out
         if path_converter:
             paths = [path_converter(path) for path in paths]
         path = (include_path_column, paths)
     else:
+        b_sample, values = b_out
         path = None
 
     if not isinstance(values[0], (tuple, list)):
@@ -427,7 +428,7 @@ assume_missing : bool, optional
 storage_options : dict, optional
     Extra options that make sense for a particular storage connection, e.g.
     host, port, username, password, etc.
-include_path_column: bool or str, optional
+include_path_column : bool or str, optional
     Whether or not to include the path to each particular file. If True a new
     column is added to the dataframe called ``path``. If str, sets new column
     name. Default is False.
