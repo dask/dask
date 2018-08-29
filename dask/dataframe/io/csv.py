@@ -50,9 +50,8 @@ def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
         A dictionary of keyword arguments to be passed to ``reader``
     dtypes : dict
         DTypes to assign to columns
-    path: dict
-        A dictionary containing path into. Key is path column name and
-        value is path to file.
+    path: tuple
+        A tuple containing path column name and path to file.
 
     See Also
     --------
@@ -72,7 +71,8 @@ def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
     elif columns:
         df.columns = columns
     if path:
-        df = df.assign(**path)
+        df = df.assign(**{path[0]: path[1]})
+        df[path[0]] = df[path[0]].astype('category')
     return df
 
 
@@ -226,7 +226,7 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
             continue
         if include_path_column:
             path, blocks = blocks
-            path = {include_path_column: path}
+            path = (include_path_column, path)
         else:
             path = None
         df = delayed_pandas_read_text(reader, blocks[0], header, kwargs,
@@ -242,10 +242,12 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
                                                 enforce=enforce, path=path))
 
     if collection:
-        if len(unknown_categoricals):
-            head = clear_known_categories(head, cols=unknown_categoricals)
         if include_path_column:
             head = head.assign(**{include_path_column: 'path_to_file'})
+            head[include_path_column] = head[include_path_column].astype('category')
+            unknown_categoricals = head.select_dtypes(include=['category']).columns
+        if len(unknown_categoricals):
+            head = clear_known_categories(head, cols=unknown_categoricals)
         return from_delayed(dfs, head)
     else:
         return dfs

@@ -295,7 +295,10 @@ def test_read_csv_include_path_column(dd_read, files):
     with filetexts(files, mode='b'):
         df = dd_read('2014-01-*.csv', include_path_column=True,
                      converters={'path': parse_filename})
-        set(df.compute().path) == set(files.keys())
+        filenames = df.path.compute().unique()
+        assert '2014-01-01.csv' in filenames
+        assert '2014-01-02.csv' not in filenames
+        assert '2014-01-03.csv' in filenames
 
 
 @pytest.mark.parametrize('dd_read,files',
@@ -305,7 +308,10 @@ def test_read_csv_include_path_column_as_str(dd_read, files):
     with filetexts(files, mode='b'):
         df = dd_read('2014-01-*.csv', include_path_column='filename',
                      converters={'filename': parse_filename})
-        set(df.compute().filename) == set(files.keys())
+        filenames = df.filename.compute().unique()
+        assert '2014-01-01.csv' in filenames
+        assert '2014-01-02.csv' not in filenames
+        assert '2014-01-03.csv' in filenames
 
 
 @pytest.mark.parametrize('dd_read,files',
@@ -315,6 +321,21 @@ def test_read_csv_include_path_column_with_duplicate_name(dd_read, files):
     with filetexts(files, mode='b'):
         with pytest.raises(KeyError):
             dd_read('2014-01-*.csv', include_path_column='name')
+
+
+@pytest.mark.parametrize('dd_read,files',
+                         [(dd.read_csv, csv_files),
+                          (dd.read_table, tsv_files)])
+def test_read_csv_include_path_column_is_dtype_category(dd_read, files):
+    with filetexts(files, mode='b'):
+        df = dd_read('2014-01-*.csv', include_path_column=True)
+        assert df.path.dtype == 'category'
+        assert not has_known_categories(df.path)
+
+        dfs = dd_read('2014-01-*.csv', include_path_column=True, collection=False)
+        result = dfs[0].compute()
+        assert result.path.dtype == 'category'
+        assert has_known_categories(result.path)
 
 
 # After this point, we test just using read_csv, as all functionality
