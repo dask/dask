@@ -1093,20 +1093,11 @@ def test_SubgraphCallable():
     f = SubgraphCallable(dsk, 'h', ['in1', 'in2'], name='test')
     assert f.name == 'test'
     assert repr(f) == 'test'
-    nglobals = len(f.namespace)
-    glbls = list(f.namespace.values())
-    assert dontcall not in glbls
-    assert apply not in glbls
-    assert non_hashable in glbls
 
     dsk2 = dsk.copy()
     dsk2.update({'in1': 1, 'in2': 2})
     assert f(1, 2) == get_sync(cull(dsk2, ['h'])[0], ['h'])[0]
     assert f(1, 2) == f(1, 2)
 
-    assert len(f.namespace) == nglobals
     f2 = pickle.loads(pickle.dumps(f))
     assert f2(1, 2) == f(1, 2)
-    assert f2.name == f.name
-    assert f2.code == f.code
-    assert f2.namespace == f.namespace
