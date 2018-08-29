@@ -3039,7 +3039,7 @@ class Client(Node):
             key = (key,)
         return self.sync(self.scheduler.set_metadata, keys=key, value=value)
 
-    def get_versions(self, check=False):
+    def get_versions(self, check=False, packages=[]):
         """ Return version info for the scheduler, all workers and myself
 
         Parameters
@@ -3047,18 +3047,24 @@ class Client(Node):
         check : boolean, default False
             raise ValueError if all required & optional packages
             do not match
+        packages : List[str]
+            Extra package names to check
 
         Examples
         --------
         >>> c.get_versions()  # doctest: +SKIP
+
+        >>> c.get_versions(packages=['sklearn', 'geopandas'])  # doctest: +SKIP
         """
-        client = get_versions()
+        client = get_versions(packages=packages)
         try:
-            scheduler = sync(self.loop, self.scheduler.versions)
+            scheduler = sync(self.loop, self.scheduler.versions,
+                             packages=packages)
         except KeyError:
             scheduler = None
 
-        workers = sync(self.loop, self.scheduler.broadcast, msg={'op': 'versions'})
+        workers = sync(self.loop, self.scheduler.broadcast,
+                       msg={'op': 'versions', 'packages': packages})
         result = {'scheduler': scheduler, 'workers': workers, 'client': client}
 
         if check:

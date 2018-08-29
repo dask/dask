@@ -9,6 +9,8 @@ import sys
 import locale
 import importlib
 
+from .utils import ignoring
+
 
 required_packages = [('dask', lambda p: p.__version__),
                      ('distributed', lambda p: p.__version__),
@@ -21,16 +23,20 @@ optional_packages = [('numpy', lambda p: p.__version__),
                      ('pandas', lambda p: p.__version__),
                      ('bokeh', lambda p: p.__version__),
                      ('lz4', lambda p: p.__version__),
+                     ('dask_ml', lambda p: p.__version__),
                      ('blosc', lambda p: p.__version__)]
 
 
-def get_versions():
-    """ Return basic information on our software installation,
-    and out installed versions of packages. """
+def get_versions(packages=None):
+    """
+    Return basic information on our software installation, and out installed versions of packages.
+    """
+    if packages is None:
+        packages = []
 
     d = {'host': get_system_info(),
          'packages': {'required': get_package_info(required_packages),
-                      'optional': get_package_info(optional_packages)}
+                      'optional': get_package_info(optional_packages + list(packages))}
          }
     return d
 
@@ -53,11 +59,31 @@ def get_system_info():
     return host
 
 
+def version_of_package(pkg):
+    """ Try a variety of common ways to get the version of a package """
+    with ignoring(AttributeError):
+        return pkg.__version__
+    with ignoring(AttributeError):
+        return str(pkg.version)
+    with ignoring(AttributeError):
+        return '.'.join(map(str, pkg.version_info))
+    return None
+
+
 def get_package_info(pkgs):
     """ get package versions for the passed required & optional packages """
 
     pversions = []
-    for (modname, ver_f) in pkgs:
+    for pkg in pkgs:
+        if isinstance(pkg, (tuple, list)):
+            modname, ver_f = pkg
+        else:
+            modname = pkg
+            ver_f = version_of_package
+
+        if ver_f is None:
+            ver_f = version_of_package
+
         try:
             mod = importlib.import_module(modname)
             ver = ver_f(mod)

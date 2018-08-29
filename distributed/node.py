@@ -46,5 +46,5 @@ class ServerNode(Node, Server):
                         connection_limit=connection_limit,
                         deserialize=deserialize, io_loop=self.io_loop)
 
-    def versions(self, comm=None):
-        return get_versions()
+    def versions(self, comm=None, packages=None):
+        return get_versions(packages=packages)

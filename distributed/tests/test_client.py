@@ -3814,6 +3814,10 @@ def test_get_versions(loop):
             # smoke test for versions
             # that this does not raise
 
+            v = c.get_versions(packages=['requests'])
+            import requests
+            assert dict(v['client']['packages']['optional'])['requests'] == requests.__version__
+
 
 def test_threaded_get_within_distributed(loop):
     with cluster() as (s, [a, b]):
