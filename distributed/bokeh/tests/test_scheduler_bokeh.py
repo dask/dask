@@ -44,7 +44,8 @@ def test_simple(c, s, a, b):
     http_client = AsyncHTTPClient()
     for suffix in ['system', 'counters', 'workers', 'status', 'tasks',
                    'stealing', 'graph', 'individual-task-stream', 'individual-progress',
-                   'individual-graph', 'individual-load',
+                   'individual-graph', 'individual-nbytes',
+                   'individual-nprocessing',
                    'individual-profile']:
         response = yield http_client.fetch('http://localhost:%d/%s' % (port, suffix))
         assert 'bokeh' in response.body.decode().lower()

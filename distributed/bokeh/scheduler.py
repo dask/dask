@@ -10,8 +10,6 @@ from operator import add
 import os
 
 import bokeh
-from bokeh.application import Application
-from bokeh.application.handlers.function import FunctionHandler
 from bokeh.layouts import column, row
 from bokeh.models import (ColumnDataSource, DataRange1d, HoverTool, ResetTool,
                           PanTool, WheelZoomTool, TapTool, OpenURL, Range1d, Plot, Quad,
@@ -51,12 +49,8 @@ logger = logging.getLogger(__name__)
 
 PROFILING = False
 
-import jinja2
-
-with open(os.path.join(os.path.dirname(__file__), 'template.html')) as f:
-    template_source = f.read()
-
-template = jinja2.Template(template_source)
+from jinja2 import Environment, FileSystemLoader
+env = Environment(loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), 'templates')))
 
 template_variables = {'pages': ['status', 'workers', 'tasks', 'system', 'profile', 'graph']}
 
@@ -183,6 +177,7 @@ class ProcessingHistogram(DashboardComponent):
 
             self.root = figure(title='Tasks Processing',
                                id='bk-nprocessing-histogram-plot',
+                               name='processing_hist',
                                **kwargs)
 
             self.root.xaxis.minor_tick_line_alpha = 0
@@ -215,6 +210,7 @@ class NBytesHistogram(DashboardComponent):
                                             'top': [0, 0]})
 
             self.root = figure(title='Bytes Stored',
+                               name='nbytes_hist',
                                id='bk-nbytes-histogram-plot',
                                **kwargs)
             self.root.xaxis[0].formatter = NumeralTickFormatter(format='0.0 b')
@@ -258,7 +254,7 @@ class CurrentLoad(DashboardComponent):
                                             'bokeh_address': ['', '']})
 
             processing = figure(title='Tasks Processing', tools='', id='bk-nprocessing-plot',
-                                width=int(width / 2), **kwargs)
+                                name='processing_hist', width=int(width / 2), **kwargs)
             rect = processing.rect(source=self.source,
                                    x='nprocessing-half', y='y',
                                    width='nprocessing', height=1,
@@ -268,7 +264,7 @@ class CurrentLoad(DashboardComponent):
 
             nbytes = figure(title='Bytes stored', tools='',
                             id='bk-nbytes-worker-plot', width=int(width / 2),
-                            **kwargs)
+                            name='nbytes_hist',  **kwargs)
             rect = nbytes.rect(source=self.source,
                                x='nbytes-half', y='y',
                                width='nbytes', height=1,
@@ -306,7 +302,6 @@ class CurrentLoad(DashboardComponent):
             self.nbytes_figure = nbytes
 
             processing.y_range = nbytes.y_range
-            self.root = row(nbytes, processing, sizing_mode='scale_width')
 
     def update(self):
         with log_errors():
@@ -763,7 +758,7 @@ class TaskProgress(DashboardComponent):
         y_range = Range1d(-8, 0)
 
         self.root = figure(
-            id='bk-task-progress-plot', title='Progress',
+            id='bk-task-progress-plot', title='Progress', name='task_progress',
             x_range=x_range, y_range=y_range, toolbar_location=None, **kwargs
         )
         self.root.line(  # just to define early ranges
@@ -1061,7 +1056,7 @@ def systemmonitor_doc(scheduler, extra, doc):
         doc.add_periodic_callback(sysmon.update, 500)
 
         doc.add_root(column(sysmon.root, sizing_mode='scale_width'))
-        doc.template = template
+        doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'system'
         doc.template_variables.update(extra)
 
@@ -1081,7 +1076,7 @@ def stealing_doc(scheduler, extra, doc):
                             stealing_events.root,
                             sizing_mode='scale_width'))
 
-        doc.template = template
+        doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'stealing'
         doc.template_variables.update(extra)
 
@@ -1093,7 +1088,7 @@ def events_doc(scheduler, extra, doc):
         doc.add_periodic_callback(events.update, 500)
         doc.title = "Dask: Scheduler Events"
         doc.add_root(column(events.root, sizing_mode='scale_width'))
-        doc.template = template
+        doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'events'
         doc.template_variables.update(extra)
 
@@ -1105,7 +1100,7 @@ def workers_doc(scheduler, extra, doc):
         doc.add_periodic_callback(table.update, 500)
         doc.title = "Dask: Workers"
         doc.add_root(table.root)
-        doc.template = template
+        doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'workers'
         doc.template_variables.update(extra)
 
@@ -1118,7 +1113,7 @@ def tasks_doc(scheduler, extra, doc):
         doc.add_periodic_callback(ts.update, 5000)
         doc.title = "Dask: Task Stream"
         doc.add_root(ts.root)
-        doc.template = template
+        doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'tasks'
         doc.template_variables.update(extra)
 
@@ -1131,7 +1126,7 @@ def graph_doc(scheduler, extra, doc):
         doc.add_periodic_callback(graph.update, 200)
         doc.add_root(graph.root)
 
-        doc.template = template
+        doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'graph'
         doc.template_variables.update(extra)
 
@@ -1139,36 +1134,38 @@ def graph_doc(scheduler, extra, doc):
 def status_doc(scheduler, extra, doc):
     with log_errors():
         task_stream = TaskStream(scheduler, n_rectangles=1000,
-                                 clear_interval='10s', height=350)
+                                 clear_interval='10s', sizing_mode='stretch_both')
         task_stream.update()
         doc.add_periodic_callback(task_stream.update, 100)
 
-        task_progress = TaskProgress(scheduler, height=160)
+        task_progress = TaskProgress(scheduler, sizing_mode='stretch_both')
         task_progress.update()
         doc.add_periodic_callback(task_progress.update, 100)
 
         if len(scheduler.workers) < 50:
-            current_load = CurrentLoad(scheduler, height=160)
+            current_load = CurrentLoad(scheduler, sizing_mode='stretch_both')
             current_load.update()
             doc.add_periodic_callback(current_load.update, 100)
-            current_load_fig = current_load.root
+            doc.add_root(current_load.nbytes_figure)
+            doc.add_root(current_load.processing_figure)
         else:
-            nbytes_hist = NBytesHistogram(scheduler, width=300, height=160)
+            nbytes_hist = NBytesHistogram(scheduler, sizing_mode='stretch_both')
             nbytes_hist.update()
-            processing_hist = ProcessingHistogram(scheduler, width=300,
-                                                  height=160)
+            processing_hist = ProcessingHistogram(scheduler, sizing_mode='stretch_both')
             processing_hist.update()
             doc.add_periodic_callback(nbytes_hist.update, 100)
             doc.add_periodic_callback(processing_hist.update, 100)
             current_load_fig = row(nbytes_hist.root, processing_hist.root,
-                                   sizing_mode='scale_width')
+                                   sizing_mode='stretch_both')
+
+            doc.add_root(nbytes_hist.root)
+            doc.add_root(processing_hist.root)
 
         doc.title = "Dask: Status"
-        doc.add_root(column(current_load_fig,
-                            task_stream.root,
-                            task_progress.root,
-                            sizing_mode='scale_width'))
-        doc.template = template
+        doc.add_root(task_progress.root)
+        doc.add_root(task_stream.root)
+
+        doc.template = env.get_template('status.html')
         doc.template_variables['active_page'] = 'status'
         doc.template_variables.update(extra)
 
@@ -1181,11 +1178,18 @@ def individual_task_stream_doc(scheduler, extra, doc):
     doc.add_root(task_stream.root)
 
 
-def individual_load_doc(scheduler, extra, doc):
-    current_load = CurrentLoad(scheduler, height=160, sizing_mode='stretch_both')
+def individual_nbytes_doc(scheduler, extra, doc):
+    current_load = CurrentLoad(scheduler, sizing_mode='stretch_both')
     current_load.update()
     doc.add_periodic_callback(current_load.update, 100)
-    doc.add_root(current_load.root)
+    doc.add_root(current_load.nbytes_figure)
+
+
+def individual_nprocessing_doc(scheduler, extra, doc):
+    current_load = CurrentLoad(scheduler, sizing_mode='stretch_both')
+    current_load.update()
+    doc.add_periodic_callback(current_load.update, 100)
+    doc.add_root(current_load.processing_figure)
 
 
 def individual_progress_doc(scheduler, extra, doc):
@@ -1230,7 +1234,7 @@ def profile_doc(scheduler, extra, doc):
         doc.title = "Dask: Profile"
         prof = ProfileTimePlot(scheduler, sizing_mode='scale_width', doc=doc)
         doc.add_root(prof.root)
-        doc.template = template
+        doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'profile'
         doc.template_variables.update(extra)
 
@@ -1242,7 +1246,7 @@ def profile_server_doc(scheduler, extra, doc):
         doc.title = "Dask: Profile of Event Loop"
         prof = ProfileServer(scheduler, sizing_mode='scale_width', doc=doc)
         doc.add_root(prof.root)
-        doc.template = template
+        doc.template = env.get_template('simple.html')
         # doc.template_variables['active_page'] = 'profile'
         doc.template_variables.update(extra)
 
@@ -1261,47 +1265,30 @@ class BokehScheduler(BokehServer):
         self.server_kwargs = kwargs
         self.server_kwargs['prefix'] = prefix or None
 
-        systemmonitor = Application(FunctionHandler(partial(systemmonitor_doc, scheduler, self.extra)))
-        workers = Application(FunctionHandler(partial(workers_doc, scheduler, self.extra)))
-        stealing = Application(FunctionHandler(partial(stealing_doc, scheduler, self.extra)))
-        counters = Application(FunctionHandler(partial(counters_doc, scheduler, self.extra)))
-        events = Application(FunctionHandler(partial(events_doc, scheduler, self.extra)))
-        tasks = Application(FunctionHandler(partial(tasks_doc, scheduler, self.extra)))
-        status = Application(FunctionHandler(partial(status_doc, scheduler, self.extra)))
-        profile = Application(FunctionHandler(partial(profile_doc, scheduler, self.extra)))
-        profile_server = Application(FunctionHandler(partial(profile_server_doc, scheduler, self.extra)))
-        graph = Application(FunctionHandler(partial(graph_doc, scheduler, self.extra)))
-
-        individual_task_stream = Application(FunctionHandler(partial(
-            individual_task_stream_doc, scheduler, self.extra)))
-        individual_progress = Application(FunctionHandler(partial(individual_progress_doc, scheduler, self.extra)))
-        individual_graph = Application(FunctionHandler(partial(individual_graph_doc, scheduler, self.extra)))
-        individual_profile = Application(FunctionHandler(partial(individual_profile_doc, scheduler, self.extra)))
-        individual_profile_server = Application(FunctionHandler(partial(
-            individual_profile_server_doc, scheduler, self.extra)))
-        individual_load = Application(FunctionHandler(partial(individual_load_doc, scheduler, self.extra)))
-        individual_workers = Application(FunctionHandler(partial(individual_workers_doc, scheduler, self.extra)))
-
         self.apps = {
-            '/system': systemmonitor,
-            '/stealing': stealing,
-            '/workers': workers,
-            '/events': events,
-            '/counters': counters,
-            '/tasks': tasks,
-            '/status': status,
-            '/profile': profile,
-            '/profile-server': profile_server,
-            '/graph': graph,
+            '/system': systemmonitor_doc,
+            '/stealing': stealing_doc,
+            '/workers': workers_doc,
+            '/events': events_doc,
+            '/counters': counters_doc,
+            '/tasks': tasks_doc,
+            '/status': status_doc,
+            '/profile': profile_doc,
+            '/profile-server': profile_server_doc,
+            '/graph': graph_doc,
 
-            '/individual-task-stream': individual_task_stream,
-            '/individual-progress': individual_progress,
-            '/individual-graph': individual_graph,
-            '/individual-profile': individual_profile,
-            '/individual-profile-server': individual_profile_server,
-            '/individual-load': individual_load,
-            '/individual-workers': individual_workers,
+            '/individual-task-stream': individual_task_stream_doc,
+            '/individual-progress': individual_progress_doc,
+            '/individual-graph': individual_graph_doc,
+            '/individual-profile': individual_profile_doc,
+            '/individual-profile-server': individual_profile_server_doc,
+            '/individual-nbytes': individual_nbytes_doc,
+            '/individual-nprocessing': individual_nprocessing_doc,
+            '/individual-workers': individual_workers_doc,
         }
+
+        self.apps = {k: partial(v, scheduler, self.extra)
+                     for k, v in self.apps.items()}
 
         self.loop = io_loop or scheduler.loop
         self.server = None

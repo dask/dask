@@ -26,12 +26,12 @@ from ..utils import (log_errors, key_split, format_bytes, format_time)
 
 logger = logging.getLogger(__name__)
 
-import jinja2
-
-with open(os.path.join(os.path.dirname(__file__), 'template.html')) as f:
+with open(os.path.join(os.path.dirname(__file__), 'templates', 'base.html')) as f:
     template_source = f.read()
 
-template = jinja2.Template(template_source)
+from jinja2 import Environment, FileSystemLoader
+env = Environment(loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), 'templates')))
+
 template_variables = {'pages': ['main', 'system', 'profile', 'crossfilter']}
 
 
@@ -560,7 +560,7 @@ def main_doc(worker, extra, doc):
                             communicating_ts.root,
                             communicating_stream.root,
                             sizing_mode='scale_width'))
-        doc.template = template
+        doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'main'
         doc.template_variables.update(extra)
 
@@ -575,7 +575,7 @@ def crossfilter_doc(worker, extra, doc):
         doc.add_periodic_callback(crossfilter.update, 500)
 
         doc.add_root(column(statetable.root, crossfilter.root))
-        doc.template = template
+        doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'crossfilter'
         doc.template_variables.update(extra)
 
@@ -587,7 +587,7 @@ def systemmonitor_doc(worker, extra, doc):
         doc.add_periodic_callback(sysmon.update, 500)
 
         doc.add_root(sysmon.root)
-        doc.template = template
+        doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'system'
         doc.template_variables.update(extra)
 
@@ -599,7 +599,7 @@ def counters_doc(server, extra, doc):
         doc.add_periodic_callback(counter.update, 500)
 
         doc.add_root(counter.root)
-        doc.template = template
+        doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'counters'
         doc.template_variables.update(extra)
 
@@ -611,7 +611,7 @@ def profile_doc(server, extra, doc):
         profile.trigger_update()
 
         doc.add_root(profile.root)
-        doc.template = template
+        doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'profile'
         doc.template_variables.update(extra)
 
@@ -621,7 +621,7 @@ def profile_server_doc(server, extra, doc):
         doc.title = "Dask: Profile of Event Loop"
         prof = ProfileServer(server, sizing_mode='scale_width', doc=doc)
         doc.add_root(prof.root)
-        doc.template = template
+        doc.template = env.get_template('simple.html')
         # doc.template_variables['active_page'] = ''
         doc.template_variables.update(extra)
 

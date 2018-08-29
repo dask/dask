@@ -110,19 +110,35 @@ def task_stream_figure(clear_interval='20s', **kwargs):
         y_range = DataRange1d(range_padding=0)
 
         root = figure(
-            title="Task Stream", id='bk-task-stream-plot',
-            x_range=x_range, y_range=y_range, toolbar_location="above",
-            x_axis_type='datetime', min_border_right=35, tools='', **kwargs)
-        root.yaxis.axis_label = 'Worker Core'
+            name='task_stream',
+            title="Task Stream",
+            id='bk-task-stream-plot',
+            x_range=x_range,
+            y_range=y_range,
+            toolbar_location="above",
+            x_axis_type='datetime',
+            min_border_right=35,
+            tools='',
+            **kwargs
+        )
 
-        rect = root.rect(source=source, x="start", y="y",
-            width="duration", height=0.4, fill_color="color",
-            line_color="color", line_alpha=0.6, fill_alpha="alpha",
-            line_width=3)
+        rect = root.rect(
+            source=source,
+            x="start",
+            y="y",
+            width="duration",
+            height=0.4,
+            fill_color="color",
+            line_color="color",
+            line_alpha=0.6,
+            fill_alpha="alpha",
+            line_width=3
+        )
         rect.nonselection_glyph = None
 
         root.yaxis.major_label_text_alpha = 0
         root.yaxis.minor_tick_line_alpha = 0
+        root.yaxis.major_tick_line_alpha = 0
         root.xgrid.visible = False
 
         hover = HoverTool(
