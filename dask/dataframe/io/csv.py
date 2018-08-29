@@ -345,8 +345,13 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
 
     header = b'' if header is None else parts[skiprows] + b_lineterminator
 
-    # Use sample to infer dtypes
+    # Use sample to infer dtypes and check for presense of include_path_col
     head = reader(BytesIO(b_sample), **kwargs)
+    if include_path_col in head.columns:
+        raise KeyError("Files already contain the column name: %s, so the "
+                       "path column cannot use this name. Please set "
+                       "`include_path_col` to a unique name."
+                       % include_path_col)
 
     specified_dtypes = kwargs.get('dtype', {})
     if specified_dtypes is None:

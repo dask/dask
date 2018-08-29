@@ -308,6 +308,15 @@ def test_read_csv_include_path_col_as_str(dd_read, files):
         set(df.compute().filename) == set(files.keys())
 
 
+@pytest.mark.parametrize('dd_read,files',
+                         [(dd.read_csv, csv_files),
+                          (dd.read_table, tsv_files)])
+def test_read_csv_include_path_col_with_duplicate_name(dd_read, files):
+    with filetexts(files, mode='b'):
+        with pytest.raises(KeyError):
+            dd_read('2014-01-*.csv', include_path_col='name')
+
+
 # After this point, we test just using read_csv, as all functionality
 # for both is implemented using the same code.
 
