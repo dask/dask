@@ -291,9 +291,9 @@ def test_read_csv_files_list(dd_read, pd_read, files):
 @pytest.mark.parametrize('dd_read,files',
                          [(dd.read_csv, csv_files),
                           (dd.read_table, tsv_files)])
-def test_read_csv_include_path_col(dd_read, files):
+def test_read_csv_include_path_column(dd_read, files):
     with filetexts(files, mode='b'):
-        df = dd_read('2014-01-*.csv', include_path_col=True,
+        df = dd_read('2014-01-*.csv', include_path_column=True,
                      converters={'path': parse_filename})
         set(df.compute().path) == set(files.keys())
 
@@ -301,9 +301,9 @@ def test_read_csv_include_path_col(dd_read, files):
 @pytest.mark.parametrize('dd_read,files',
                          [(dd.read_csv, csv_files),
                           (dd.read_table, tsv_files)])
-def test_read_csv_include_path_col_as_str(dd_read, files):
+def test_read_csv_include_path_column_as_str(dd_read, files):
     with filetexts(files, mode='b'):
-        df = dd_read('2014-01-*.csv', include_path_col='filename',
+        df = dd_read('2014-01-*.csv', include_path_column='filename',
                      converters={'filename': parse_filename})
         set(df.compute().filename) == set(files.keys())
 
@@ -311,10 +311,10 @@ def test_read_csv_include_path_col_as_str(dd_read, files):
 @pytest.mark.parametrize('dd_read,files',
                          [(dd.read_csv, csv_files),
                           (dd.read_table, tsv_files)])
-def test_read_csv_include_path_col_with_duplicate_name(dd_read, files):
+def test_read_csv_include_path_column_with_duplicate_name(dd_read, files):
     with filetexts(files, mode='b'):
         with pytest.raises(KeyError):
-            dd_read('2014-01-*.csv', include_path_col='name')
+            dd_read('2014-01-*.csv', include_path_column='name')
 
 
 # After this point, we test just using read_csv, as all functionality
