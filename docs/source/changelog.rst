@@ -1,8 +1,41 @@
 Changelog
 =========
 
-X.XX.X - 2018-XX-XX
+1.23.1 - YYYY-MM-DD
 -------------------
+
+-
+
+1.23.0 - 2018-08-30
+-------------------
+
+-  Add direct_to_workers to Client `Matthew Rocklin`_
+-  Add Scheduler.proxy to workers `Matthew Rocklin`_
+-  Implement Actors `Matthew Rocklin`_
+-  Fix tooltip (#2168) `Loïc Estève`_
+-  Fix scale /  avoid returning coroutines (#2171) `Joe Hamman`_
+-  Clarify dask-worker --nprocs (#2173) `Yu Feng`_
+-  Concatenate all bytes of small messages in TCP comms (#2172) `Matthew Rocklin`_
+-  Add dashboard_link property (#2176) `Jacob Tomlinson`_
+-  Always offload to_frames (#2170) `Matthew Rocklin`_
+-  Warn if desired port is already in use (#2191) (#2199) `Matthew Rocklin`_
+-  Add profile page for event loop thread (#2144) `Matthew Rocklin`_
+-  Use dispatch for dask serialization, also add sklearn, pytorch (#2175) `Matthew Rocklin`_
+-  Handle corner cases with busy signal (#2182) `Matthew Rocklin`_
+-  Check self.dependencies when looking at tasks in memory (#2196) `Matthew Rocklin`_
+-  Add ability to log additional custom metrics from each worker (#2169) `Loïc Estève`_
+-  Fix formatting when port is a tuple (#2204) `Loïc Estève`_
+-  Describe what ZeroMQ is (#2211) `Mike DePalatis`_
+-  Tiny typo fix (#2214) `Anderson Banihirwe`_
+-  Add Python 3.7 to travis.yml (#2203) `Matthew Rocklin`_
+-  Add plot= keyword to get_task_stream (#2198) `Matthew Rocklin`_
+-  Add support for optional versions in Client.get_versions (#2216) `Matthew Rocklin`_
+-  Add routes for solo bokeh figures in dashboard (#2185) `Matthew Rocklin`_
+-  Be resilient to missing dep after busy signal (#2217) `Matthew Rocklin`_
+-  Use CSS Grid to layout status page on the dashboard (#2213) `Derek Ludwig`_ and `Luke Canavan`_
+-  Fix deserialization of queues on main ioloop thread (#2221) `Matthew Rocklin`_
+-  Add a worker initialization function (#2201) `Guillaume EB`_
+-  Collapse navbar in dashboard (#2223) `Luke Canavan`_
 
 
 1.22.1 - 2018-08-03
@@ -727,3 +760,8 @@ significantly without many new features.
 .. _`Phil Tooley`: https://github.com/ptooley
 .. _`Bartosz Marcinkowski`: https://github.com/bm371613
 .. _`Aurélien Ponte`: https://github.com/apatlpo
+.. _`Luke Canavan`: https://github.com/canavandl
+.. _`Derek Ludwig`: https://github.com/dsludwig
+.. _`Anderson Banihirwe`: https://github.com/andersy005
+.. _`Yu Feng`: https://github.com/rainwoodman
+.. _`Guillaume EB`: https://github.com/guillaumeeb
