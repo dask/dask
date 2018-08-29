@@ -587,9 +587,11 @@ def test_dont_steal_long_running_tasks(c, s, a, b):
 
     yield gen.sleep(0.2)
 
-    assert sum(1 for k in s.processing[b.address] if k.startswith('long')) <= nb
-
     yield wait(long_tasks)
+
+    for t in long_tasks:
+        assert (sum(log[1] == 'executing' for log in a.story(t)) +
+                sum(log[1] == 'executing' for log in b.story(t))) <= 1
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 5)] * 2)
