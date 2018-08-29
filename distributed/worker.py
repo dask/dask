@@ -1898,7 +1898,7 @@ class Worker(WorkerBase):
                 if response['status'] == 'busy':
                     self.log.append(('busy-gather', worker, deps))
                     for dep in deps:
-                        if self.dep_state[dep] == 'flight':
+                        if self.dep_state.get(dep, None) == 'flight':
                             self.transition_dep(dep, 'waiting')
                     return
 
