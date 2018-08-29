@@ -2,13 +2,12 @@ from __future__ import absolute_import, division, print_function
 
 import math
 import re
-from itertools import count
 from operator import getitem
 
 from . import config
-from .compatibility import unicode, exec_, apply
-from .core import (istask, has_tasks, get_dependencies, subs, toposort,
-                   flatten, reverse_dict, ishashable, _toposort)
+from .compatibility import unicode
+from .core import (istask, get_dependencies, subs, toposort,
+                   flatten, reverse_dict, ishashable, _get_recursive)
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -811,38 +810,6 @@ def key_split(s):
         return 'Other'
 
 
-def _gencode(x, dsk, names, namespace, cache):
-    """A helper for generating code for SubgraphCallable."""
-    if istask(x):
-        func, args = x[0], x[1:]
-        kwargs = {}
-        if func is apply:
-            if len(args) == 3:
-                func, args, kwargs = args
-            else:
-                func, args = args
-        func = _gencode(func, dsk, names, namespace, cache)
-        args = [_gencode(a, dsk, names, namespace, cache) for a in args]
-        if kwargs:
-            args.append('**(%s)' % _gencode(kwargs, dsk, names, namespace, cache))
-        return "%s(%s)" % (func, ', '.join(args))
-    elif isinstance(x, list) and has_tasks(dsk, x):
-        args = [_gencode(a, dsk, names, namespace, cache) for a in x]
-        return "[%s]" % ', '.join(args)
-    elif ishashable(x):
-        if x in cache:
-            sym = cache[x]
-        else:
-            sym = cache[x] = next(names)
-            if x not in dsk:
-                namespace[sym] = x
-        return sym
-    else:
-        sym = next(names)
-        namespace[sym] = x
-        return sym
-
-
 class SubgraphCallable(object):
     """Create a callable object from a dask graph.
 
@@ -857,39 +824,24 @@ class SubgraphCallable(object):
     name : str, optional
         The name to use for the function.
     """
-    __slots__ = ('code', 'namespace', 'name', 'func')
+    __slots__ = ('dsk', 'outkey', 'inkeys', 'name')
 
     def __init__(self, dsk, outkey, inkeys, name='subgraph_callable'):
-        dsk, _ = fuse(dsk, [outkey], ave_width=1000, rename_keys=False)
-        names = ('_%d' % i for i in count())
-        namespace = {}
-        cache = dict(zip(inkeys, names))
-        header = 'def %s(%s):' % (name, ', '.join(cache[a] for a in inkeys))
-        lines = [header]
-        for key in _toposort(dsk, outkey):
-            task = dsk[key]
-            lhs = _gencode(key, dsk, names, namespace, cache)
-            rhs = _gencode(task, dsk, names, namespace, cache)
-            lines.append('    %s = %s' % (lhs, rhs))
-        lines.append('    return %s' % cache[outkey])
-        self.code = '\n'.join(lines)
-        self.namespace = namespace
+        self.dsk = dsk
+        self.outkey = outkey
+        self.inkeys = inkeys
         self.name = name
-        self.func = None
 
     def __repr__(self):
         return self.name
 
     def __call__(self, *args):
-        if self.func is None:
-            n = self.namespace.copy()
-            exec_(self.code, n)
-            self.func = n[self.name]
-        return self.func(*args)
+        if not len(args) == len(self.inkeys):
+            raise ValueError("Expected %d args, got %d"
+                             % (len(self.inkeys), len(args)))
+        return _get_recursive(self.dsk, self.outkey,
+                              dict(zip(self.inkeys, args)))
 
-    def __getstate__(self):
-        return (self.code, self.namespace, self.name)
-
-    def __setstate__(self, state):
-        self.code, self.namespace, self.name = state
-        self.func = None
+    def __reduce__(self):
+        return (SubgraphCallable,
+                (self.dsk, self.outkey, self.inkeys, self.name))
