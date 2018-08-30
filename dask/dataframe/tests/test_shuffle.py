@@ -1,9 +1,11 @@
 import os
+import sys
 import pandas as pd
 import pytest
 import pickle
 import numpy as np
 import string
+import multiprocessing as mp
 from copy import copy
 import pandas.util.testing as tm
 
@@ -356,6 +358,28 @@ def test_set_index_divisions_sorted():
     # Divisions must be sorted
     with pytest.raises(ValueError):
         ddf.set_index('y', divisions=['a', 'b', 'd', 'c'], sorted=True)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(sys.version_info < (3, 4),
+                    reason="multiprocessing spawn only after Py3.4")
+def test_set_index_consistent_divisions():
+    # See https://github.com/dask/dask/issues/3867
+    df = pd.DataFrame({'x': np.random.random(100),
+                       'y': np.random.random(100) // 0.2},
+                      index=np.random.random(100))
+    ddf = dd.from_pandas(df, npartitions=4)
+    ddf = ddf.clear_divisions()
+
+    ctx = mp.get_context('spawn')
+    pool = ctx.Pool(processes=8)
+    results = [pool.apply_async(_set_index, (ddf, 'x')) for _ in range(100)]
+    divisions_set = set(result.get() for result in results)
+    assert len(divisions_set) == 1
+
+
+def _set_index(df, *args, **kwargs):
+    return df.set_index(*args, **kwargs).divisions
 
 
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
