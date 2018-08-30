@@ -319,7 +319,7 @@ def test_read_csv_include_path_column_as_str(dd_read, files):
                           (dd.read_table, tsv_files)])
 def test_read_csv_include_path_column_with_duplicate_name(dd_read, files):
     with filetexts(files, mode='b'):
-        with pytest.raises(KeyError):
+        with pytest.raises(ValueError):
             dd_read('2014-01-*.csv', include_path_column='name')
 
 

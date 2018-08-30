@@ -362,10 +362,10 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     # Use sample to infer dtypes and check for presense of include_path_column
     head = reader(BytesIO(b_sample), **kwargs)
     if include_path_column and (include_path_column in head.columns):
-        raise KeyError("Files already contain the column name: %s, so the "
-                       "path column cannot use this name. Please set "
-                       "`include_path_column` to a unique name."
-                       % include_path_column)
+        raise ValueError("Files already contain the column name: %s, so the "
+                         "path column cannot use this name. Please set "
+                         "`include_path_column` to a unique name."
+                         % include_path_column)
 
     specified_dtypes = kwargs.get('dtype', {})
     if specified_dtypes is None:
