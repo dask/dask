@@ -360,6 +360,7 @@ def test_set_index_divisions_sorted():
         ddf.set_index('y', divisions=['a', 'b', 'd', 'c'], sorted=True)
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(sys.version_info < (3, 4),
                     reason="multiprocessing spawn only after Py3.4")
 def test_set_index_consistent_divisions():
