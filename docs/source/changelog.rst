@@ -1,19 +1,70 @@
 Changelog
 =========
 
-0.18.3 / 2018-MM-DD
+0.19.0 / 2018-08-29
 -------------------
+
+Array
++++++
+
+-  Fix argtopk split_every bug (:pr:`3810`) `Guido Imperiale`_
+-  Ensure result computing dask.array.isnull(`) always gives a numpy array (:pr:`3825`) `Stephan Hoyer`_
+-  Support concatenate for scipy.sparse in dask array (:pr:`3836`) `Matthew Rocklin`_
+-  Fix argtopk on 32-bit systems. (:pr:`3823`) `Elliott Sales de Andrade`_
+-  Normalize keys in rechunk (:pr:`3820`) `Matthew Rocklin`_
+-  Allow shape of dask.array to be a numpy array (:pr:`3844`) `Mark Harfouche`_
+-  Fix numpy deprecation warning on tuple indexing (:pr:`3851`) `Tobias de Jong`_
+-  Rename ghost module to overlap (:pr:`3830`) `Robert Sare`_
+-  Re-add the ghost import to da __init__ (:pr:`3861`) `Jim Crist`_
+-  Ensure copy preserves masked arrays (:pr:`3852`) `Tobias de Jong`_
 
 DataFrame
 ++++++++++
 
-- Added `dtype` and `sparse` keywords to :func:`dask.dataframe.get_dummies` (:pr:`3792`) `Tom Augspurger`_
-- Added :meth:`dask.dataframe.to_dask_array` for converting a Dask Series or DataFrame to a
-  Dask Array, possibly with known chunk sizes (:pr:`3884`) `Tom Augspurger`
-- Changed the behavior for :meth:`dask.array.asarray` for dask dataframe and series inputs. Previously,
-  the series was eagerly converted to an in-memory NumPy array before creating a dask array with known
-  chunks sizes. This caused unexpectedly high memory usage. Now, no intermediate NumPy array is created,
-  and a Dask array with unknown chunk sizes is returned (:pr:`3884`) `Tom Augspurger`
+-  Added `dtype` and `sparse` keywords to :func:`dask.dataframe.get_dummies` (:pr:`3792`) `Tom Augspurger`_
+-  Added :meth:`dask.dataframe.to_dask_array` for converting a Dask Series or DataFrame to a
+   Dask Array, possibly with known chunk sizes (:pr:`3884`) `Tom Augspurger`
+-  Changed the behavior for :meth:`dask.array.asarray` for dask dataframe and series inputs. Previously,
+   the series was eagerly converted to an in-memory NumPy array before creating a dask array with known
+   chunks sizes. This caused unexpectedly high memory usage. Now, no intermediate NumPy array is created,
+   and a Dask array with unknown chunk sizes is returned (:pr:`3884`) `Tom Augspurger`
+-  DataFrame.iloc (:pr:`3805`) `Tom Augspurger`_
+-  When reading multiple paths, expand globs. (:pr:`3828`) `Irina Truong`_
+-  Added index column name after resample (:pr:`3833`) `Eric Bonfadini`_
+-  Add (lazy) shape property to dataframe and series (:pr:`3212`) `Henrique Ribeiro`_
+-  Fix failing hdfs test [test-hdfs] (:pr:`3858`) `Jim Crist`_
+-  Fixes for pyarrow 0.10.0 release (:pr:`3860`) `Jim Crist`_
+-  Rename to_csv keys for diagnostics (:pr:`3890`) `Matthew Rocklin`_
+-  Match pandas warnings for concat sort (:pr:`3897`) `Tom Augspurger`_
+
+Core
+++++
+
+-  Better error message on import when missing common dependencies (:pr:`3771`) `Danilo Horta`_
+-  Drop Python 3.4 support (:pr:`3840`) `Jim Crist`_
+-  Remove expired deprecation warnings (:pr:`3841`) `Jim Crist`_
+-  Add DASK_ROOT_CONFIG environment variable (:pr:`3849`) `Joe Hamman`_
+-  Don't cull in local scheduler, do cull in delayed (:pr:`3856`) `Jim Crist`_
+-  Increase conda download retries (:pr:`3857`) `Jim Crist`_
+-  Add python_requires and Trove classifiers (:pr:`3855`) `@hugovk`_
+-  Fix collections.abc deprecation warnings in Python 3.7.0 (:pr:`3876`) `Jan Margeta`_
+-  Allow dot jpeg to xfail in visualize tests (:pr:`3896`) `Matthew Rocklin`_
+-  Add Python 3.7 to travis.yml (:pr:`3894`) `Matthew Rocklin`_
+-  Add expand_environment_variables to dask.config (:pr:`3893`) `Joe Hamman`_
+
+Docs
+++++
+
+-  Fix typo in import statement of diagnostics (:pr:`3826`) `John Mrziglod`_
+-  Add link to YARN docs (:pr:`3838`) `Jim Crist`_
+-  fix of minor typos in landing page index.html (:pr:`3746`) `Christoph Moehl`_
+-  Update delayed-custom.rst (:pr:`3850`) `Anderson Banihirwe`_
+-  DOC: clarify delayed docstring (:pr:`3709`) `Scott Sievert`_
+-  Add new presentations (:pr:`3880`) `@javad94`_
+-  Add dask array normalize_chunks to documentation (:pr:`3878`) `Daniel Rothenberg`_
+-  Docs: Fix link to snakeviz (:pr:`3900`) `Hans Moritz Günther`_
+-  Add missing ` to docstring (:pr:`3915`) `@rtobar`_
+
 
 0.18.2 / 2018-07-23
 -------------------
@@ -1290,3 +1341,22 @@ Other
 .. _`Elliott Sales de Andrade`: https://github.com/QuLogic
 .. _`Gerome Pistre`: https://github.com/GPistre
 .. _`Cloves Almeida`: https://github.com/cjalmeida
+.. _`Tobias de Jong`: https://github.com/tadejong
+.. _`Irina Truong`: https://github.com/j-bennet
+.. _`Eric Bonfadini`: https://github.com/eric-bonfadini
+.. _`Danilo Horta`: https://github.com/horta
+.. _`@hugovk`: https://github.com/hugovk
+.. _`Jan Margeta`: https://github.com/jmargeta
+.. _`John Mrziglod`: https://github.com/JohnMrziglod
+.. _`Christoph Moehl`: https://github.com/cmohl2013
+.. _`Anderson Banihirwe`: https://github.com/andersy005
+.. _`@javad94`: https://github.com/javad94
+.. _`Daniel Rothenberg`: https://github.com/darothen
+.. _`Hans Moritz Günther`: https://github.com/hamogu
+.. _`@rtobar`: https://github.com/rtobar
+.. _``: https://github.com/
+.. _``: https://github.com/
+.. _``: https://github.com/
+.. _``: https://github.com/
+.. _``: https://github.com/
+.. _``: https://github.com/
