@@ -8,6 +8,7 @@ try:
 except ImportError:
     psutil = None
 
+import numpy as np
 import pandas as pd
 try:
     from pandas.api.types import CategoricalDtype
@@ -35,7 +36,7 @@ else:
 
 
 def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
-                     write_header=True, enforce=False):
+                     write_header=True, enforce=False, path=None):
     """ Convert a block of bytes to a Pandas DataFrame
 
     Parameters
@@ -50,6 +51,8 @@ def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
         A dictionary of keyword arguments to be passed to ``reader``
     dtypes : dict
         DTypes to assign to columns
+    path : tuple
+        A tuple containing path column name, path to file, and all paths.
 
     See Also
     --------
@@ -68,6 +71,11 @@ def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
         raise ValueError("Columns do not match", df.columns, columns)
     elif columns:
         df.columns = columns
+    if path:
+        colname, path, paths = path
+        code = paths.index(path)
+        df = df.assign(**{
+            colname: pd.Categorical.from_codes(np.full(len(df), code), paths)})
     return df
 
 
@@ -157,7 +165,7 @@ def coerce_dtypes(df, dtypes):
 
 def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
                           collection=True, enforce=False,
-                          specified_dtypes=None):
+                          specified_dtypes=None, path=None):
     """ Convert blocks of bytes to a dask.dataframe or other high-level object
 
     This accepts a list of lists of values of bytes where each list corresponds
@@ -179,6 +187,8 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
     kwargs : dict
         Keyword arguments to pass down to ``reader``
     collection: boolean, optional (defaults to True)
+    path : tuple, optional
+        A tuple containing column name for path and list of all paths
 
     Returns
     -------
@@ -215,21 +225,32 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
     columns = list(head.columns)
     delayed_pandas_read_text = delayed(pandas_read_text, pure=True)
     dfs = []
-    for blocks in block_lists:
+    colname, paths = path or (None, None)
+
+    for i, blocks in enumerate(block_lists):
         if not blocks:
             continue
+        if path:
+            path_info = (colname, paths[i], paths)
+        else:
+            path_info = None
         df = delayed_pandas_read_text(reader, blocks[0], header, kwargs,
                                       dtypes, columns, write_header=False,
-                                      enforce=enforce)
+                                      enforce=enforce, path=path_info)
+
         dfs.append(df)
         rest_kwargs = kwargs.copy()
         rest_kwargs.pop('skiprows', None)
         for b in blocks[1:]:
             dfs.append(delayed_pandas_read_text(reader, b, header, rest_kwargs,
                                                 dtypes, columns,
-                                                enforce=enforce))
+                                                enforce=enforce, path=path_info))
 
     if collection:
+        if path:
+            head = head.assign(**{
+                colname: pd.Categorical.from_codes(np.zeros(len(head)), paths)
+            })
         if len(unknown_categoricals):
             head = clear_known_categories(head, cols=unknown_categoricals)
         return from_delayed(dfs, head)
@@ -257,12 +278,15 @@ else:
 def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                 lineterminator=None, compression=None, sample=256000,
                 enforce=False, assume_missing=False, storage_options=None,
+                include_path_column=False,
                 **kwargs):
     reader_name = reader.__name__
     if lineterminator is not None and len(lineterminator) == 1:
         kwargs['lineterminator'] = lineterminator
     else:
         lineterminator = '\n'
+    if include_path_column and isinstance(include_path_column, bool):
+        include_path_column = 'path'
     if 'index' in kwargs or 'index_col' in kwargs:
         raise ValueError("Keyword 'index' not supported "
                          "dd.{0}(...).set_index('my-index') "
@@ -282,6 +306,10 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     if isinstance(kwargs.get('header'), list):
         raise TypeError("List of header rows not supported for "
                         "dd.{0}".format(reader_name))
+    if isinstance(kwargs.get('converters'), dict) and include_path_column:
+        path_converter = kwargs.get('converters').get(include_path_column, None)
+    else:
+        path_converter = None
 
     if blocksize and compression not in seekable_files:
         warn("Warning %s compression does not support breaking apart files\n"
@@ -294,11 +322,21 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                                   compression)
 
     b_lineterminator = lineterminator.encode()
-    b_sample, values = read_bytes(urlpath, delimiter=b_lineterminator,
-                                  blocksize=blocksize,
-                                  sample=sample,
-                                  compression=compression,
-                                  **(storage_options or {}))
+    b_out = read_bytes(urlpath, delimiter=b_lineterminator,
+                       blocksize=blocksize,
+                       sample=sample,
+                       compression=compression,
+                       include_path=include_path_column,
+                       **(storage_options or {}))
+
+    if include_path_column:
+        b_sample, values, paths = b_out
+        if path_converter:
+            paths = [path_converter(path) for path in paths]
+        path = (include_path_column, paths)
+    else:
+        b_sample, values = b_out
+        path = None
 
     if not isinstance(values[0], (tuple, list)):
         values = [values]
@@ -321,8 +359,13 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
 
     header = b'' if header is None else parts[skiprows] + b_lineterminator
 
-    # Use sample to infer dtypes
+    # Use sample to infer dtypes and check for presense of include_path_column
     head = reader(BytesIO(b_sample), **kwargs)
+    if include_path_column and (include_path_column in head.columns):
+        raise ValueError("Files already contain the column name: %s, so the "
+                         "path column cannot use this name. Please set "
+                         "`include_path_column` to a unique name."
+                         % include_path_column)
 
     specified_dtypes = kwargs.get('dtype', {})
     if specified_dtypes is None:
@@ -336,7 +379,8 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
 
     return text_blocks_to_pandas(reader, values, header, head, kwargs,
                                  collection=collection, enforce=enforce,
-                                 specified_dtypes=specified_dtypes)
+                                 specified_dtypes=specified_dtypes,
+                                 path=path)
 
 
 READ_DOC_TEMPLATE = """
@@ -384,6 +428,10 @@ assume_missing : bool, optional
 storage_options : dict, optional
     Extra options that make sense for a particular storage connection, e.g.
     host, port, username, password, etc.
+include_path_column : bool or str, optional
+    Whether or not to include the path to each particular file. If True a new
+    column is added to the dataframe called ``path``. If str, sets new column
+    name. Default is False.
 **kwargs
     Extra keyword arguments to forward to :func:`pandas.{reader}`.
 
@@ -415,6 +463,7 @@ def make_reader(reader, reader_name, file_type):
     def read(urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
              lineterminator=None, compression=None, sample=256000,
              enforce=False, assume_missing=False, storage_options=None,
+             include_path_column=False,
              **kwargs):
         return read_pandas(reader, urlpath, blocksize=blocksize,
                            collection=collection,
@@ -422,6 +471,7 @@ def make_reader(reader, reader_name, file_type):
                            compression=compression, sample=sample,
                            enforce=enforce, assume_missing=assume_missing,
                            storage_options=storage_options,
+                           include_path_column=include_path_column,
                            **kwargs)
     read.__doc__ = READ_DOC_TEMPLATE.format(reader=reader_name,
                                             file_type=file_type)
