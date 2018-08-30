@@ -342,6 +342,15 @@ class WorkerBase(ServerNode):
             raise ValueError("Unexpected response from register: %r" %
                              (response,))
         else:
+            # Retrieve eventual init functions and run them
+            for function_bytes in response['worker-setups']:
+                setup_function = pickle.loads(function_bytes)
+                if has_arg(setup_function, 'dask_worker'):
+                    result = setup_function(dask_worker=self)
+                else:
+                    result = setup_function()
+                logger.info('Init function %s ran: output=%s' % (setup_function, result))
+
             logger.info('        Registered to: %26s', self.scheduler.address)
             logger.info('-' * 49)
 
@@ -567,10 +576,11 @@ class WorkerBase(ServerNode):
         # logger.info("Finish job %d, %s", i, key)
         raise gen.Return(result)
 
-    def run(self, comm, function, args=(), kwargs={}):
+    def run(self, comm, function, args=(), kwargs=None):
+        kwargs = kwargs or {}
         return run(self, comm, function=function, args=args, kwargs=kwargs)
 
-    def run_coroutine(self, comm, function, args=(), kwargs={}, wait=True):
+    def run_coroutine(self, comm, function, args=(), kwargs=None, wait=True):
         return run(self, comm, function=function, args=args, kwargs=kwargs,
                    is_coro=True, wait=wait)
 

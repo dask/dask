@@ -1203,3 +1203,76 @@ def test_avoid_oversubscription(c, s, *workers):
 def test_custom_metrics(c, s, a, b):
     assert s.workers[a.address].metrics['my_port'] == a.port
     assert s.workers[b.address].metrics['my_port'] == b.port
+
+
+@gen_cluster(client=True)
+def test_register_worker_callbacks(c, s, a, b):
+    #preload function to run
+    def mystartup(dask_worker):
+        dask_worker.init_variable = 1
+
+    def mystartup2():
+        import os
+        os.environ['MY_ENV_VALUE'] = 'WORKER_ENV_VALUE'
+        return "Env set."
+
+    #Check that preload function has been run
+    def test_import(dask_worker):
+        return hasattr(dask_worker, 'init_variable')
+        #       and dask_worker.init_variable == 1
+
+    def test_startup2():
+        import os
+        return os.getenv('MY_ENV_VALUE', None) == 'WORKER_ENV_VALUE'
+
+    # Nothing has been run yet
+    assert len(s.worker_setups) == 0
+    result = yield c.run(test_import)
+    assert list(result.values()) == [False] * 2
+    result = yield c.run(test_startup2)
+    assert list(result.values()) == [False] * 2
+
+    # Start a worker and check that startup is not run
+    worker = Worker(s.address, loop=s.loop)
+    yield worker._start()
+    result = yield c.run(test_import, workers=[worker.address])
+    assert list(result.values()) == [False]
+    yield worker._close()
+
+    # Add a preload function
+    response = yield c.register_worker_callbacks(setup=mystartup)
+    assert len(response) == 2
+    assert len(s.worker_setups) == 1
+
+    # Check it has been ran on existing worker
+    result = yield c.run(test_import)
+    assert list(result.values()) == [True] * 2
+
+    # Start a worker and check it is ran on it
+    worker = Worker(s.address, loop=s.loop)
+    yield worker._start()
+    result = yield c.run(test_import, workers=[worker.address])
+    assert list(result.values()) == [True]
+    yield worker._close()
+
+    # Register another preload function
+    response = yield c.register_worker_callbacks(setup=mystartup2)
+    assert len(response) == 2
+    assert len(s.worker_setups) == 2
+
+    # Check it has been run
+    result = yield c.run(test_startup2)
+    assert list(result.values()) == [True] * 2
+
+    # Start a worker and check it is ran on it
+    worker = Worker(s.address, loop=s.loop)
+    yield worker._start()
+    result = yield c.run(test_import, workers=[worker.address])
+    assert list(result.values()) == [True]
+    result = yield c.run(test_startup2, workers=[worker.address])
+    assert list(result.values()) == [True]
+    yield worker._close()
+
+    # Final exception test
+    with pytest.raises(ZeroDivisionError):
+        yield c.register_worker_callbacks(setup=lambda: 1 / 0)

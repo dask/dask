@@ -3425,6 +3425,37 @@ class Client(Node):
         else:
             raise gen.Return(msgs)
 
+    @gen.coroutine
+    def _register_worker_callbacks(self, setup=None):
+        responses = yield self.scheduler.register_worker_callbacks(setup=dumps(setup))
+        results = {}
+        for key, resp in responses.items():
+            if resp['status'] == 'OK':
+                results[key] = resp['result']
+            elif resp['status'] == 'error':
+                six.reraise(*clean_exception(**resp))
+        raise gen.Return(results)
+
+    def register_worker_callbacks(self, setup=None):
+        """
+        Registers a setup callback function for all current and future workers.
+
+        This registers a new setup function for workers in this cluster. The
+        function will run immediately on all currently connected workers. It
+        will also be run upon connection by any workers that are added in the
+        future. Multiple setup functions can be registered - these will be
+        called in the order they were added.
+
+        If the function takes an input argument named ``dask_worker`` then
+        that variable will be populated with the worker itself.
+
+        Parameters
+        ----------
+        setup : callable(dask_worker: Worker) -> None
+            Function to register and run on all workers
+        """
+        return self.sync(self._register_worker_callbacks, setup=setup)
+
 
 class Executor(Client):
     """ Deprecated: see Client """
