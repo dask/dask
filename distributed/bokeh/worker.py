@@ -13,6 +13,7 @@ from bokeh.models import (ColumnDataSource, DataRange1d, HoverTool,
 from bokeh.models.widgets import DataTable, TableColumn
 from bokeh.plotting import figure
 from bokeh.palettes import RdBu
+from bokeh.themes import Theme
 from toolz import merge, partition_all
 
 from .components import DashboardComponent, ProfileTimePlot, ProfileServer
@@ -31,6 +32,8 @@ with open(os.path.join(os.path.dirname(__file__), 'templates', 'base.html')) as 
 
 from jinja2 import Environment, FileSystemLoader
 env = Environment(loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), 'templates')))
+
+BOKEH_THEME = Theme(os.path.join(os.path.dirname(__file__), 'theme.yaml'))
 
 template_variables = {'pages': ['main', 'system', 'profile', 'crossfilter']}
 
@@ -563,6 +566,7 @@ def main_doc(worker, extra, doc):
         doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'main'
         doc.template_variables.update(extra)
+        doc.theme = BOKEH_THEME
 
 
 def crossfilter_doc(worker, extra, doc):
@@ -578,6 +582,7 @@ def crossfilter_doc(worker, extra, doc):
         doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'crossfilter'
         doc.template_variables.update(extra)
+        doc.theme = BOKEH_THEME
 
 
 def systemmonitor_doc(worker, extra, doc):
@@ -590,6 +595,7 @@ def systemmonitor_doc(worker, extra, doc):
         doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'system'
         doc.template_variables.update(extra)
+        doc.theme = BOKEH_THEME
 
 
 def counters_doc(server, extra, doc):
@@ -602,6 +608,7 @@ def counters_doc(server, extra, doc):
         doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'counters'
         doc.template_variables.update(extra)
+        doc.theme = BOKEH_THEME
 
 
 def profile_doc(server, extra, doc):
@@ -614,6 +621,7 @@ def profile_doc(server, extra, doc):
         doc.template = env.get_template('simple.html')
         doc.template_variables['active_page'] = 'profile'
         doc.template_variables.update(extra)
+        doc.theme = BOKEH_THEME
 
 
 def profile_server_doc(server, extra, doc):
@@ -624,6 +632,7 @@ def profile_server_doc(server, extra, doc):
         doc.template = env.get_template('simple.html')
         # doc.template_variables['active_page'] = ''
         doc.template_variables.update(extra)
+        doc.theme = BOKEH_THEME
 
         prof.trigger_update()
 

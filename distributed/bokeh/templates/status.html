@@ -1,60 +1,11 @@
 {% extends "base.html" %}
 
+{% block extra_resources %}
+<link rel="stylesheet" href="statics/css/status.css">
+{% endblock %}
+
 {% block content %}
 {% from macros import embed %}
-<style type="text/css" media="screen">
-
-  #status-fluid {
-      display: grid;
-      height: 100%;
-  }
-
-  @media (min-width: 0px) {
-    #status-fluid {
-      grid-template-columns: 1fr 1fr;
-      grid-template-rows: 1fr 3fr 1fr;
-    }
-    #status-history {
-      grid-column: 1;
-      grid-row: 1;
-    }
-    #status-processing {
-      grid-column: 2;
-      grid-row: 1;
-    }
-    #status-tasks {
-      grid-column: 1 / span 2;
-      grid-row: 2;
-    }
-    #status-progress {
-      grid-column: 1 / span 2;
-      grid-row: 3;
-    }
-  }
-
-  @media (min-width: 992px) {
-    #status-fluid {
-      grid-template-columns: 1fr 3fr;
-      grid-template-rows: 1fr 1fr 1fr 1fr 1fr 1fr;
-    }
-    #status-history {
-      grid-column: 1;
-      grid-row: 1 / span 3;
-    }
-    #status-processing {
-      grid-column: 1;
-      grid-row: 4 / span 3;
-    }
-    #status-tasks {
-      grid-column: 2;
-      grid-row: 1 / span 4;
-    }
-    #status-progress {
-      grid-column: 2;
-      grid-row: 5 / span 2;
-    }
-  }
-</style>
 <div id="status-fluid">
 
   <div id="status-history">

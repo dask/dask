@@ -1,0 +1,5 @@
+### contents of theme.yaml
+attrs:
+    Plot:
+        background_fill_color: null
+        border_fill_color: null

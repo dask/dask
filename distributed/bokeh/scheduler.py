@@ -18,6 +18,7 @@ from bokeh.models import (ColumnDataSource, DataRange1d, HoverTool, ResetTool,
 from bokeh.models.widgets import DataTable, TableColumn
 from bokeh.plotting import figure
 from bokeh.palettes import Viridis11
+from bokeh.themes import Theme
 from bokeh.transform import factor_cmap
 from bokeh.io import curdoc
 from toolz import pipe, merge
@@ -54,6 +55,7 @@ env = Environment(loader=FileSystemLoader(os.path.join(os.path.dirname(__file__)
 
 template_variables = {'pages': ['status', 'workers', 'tasks', 'system', 'profile', 'graph']}
 
+BOKEH_THEME = Theme(os.path.join(os.path.dirname(__file__), 'theme.yaml'))
 
 nan = float('nan')
 
@@ -1057,8 +1059,8 @@ def systemmonitor_doc(scheduler, extra, doc):
 
         doc.add_root(column(sysmon.root, sizing_mode='scale_width'))
         doc.template = env.get_template('simple.html')
-        doc.template_variables['active_page'] = 'system'
         doc.template_variables.update(extra)
+        doc.theme = BOKEH_THEME
 
 
 def stealing_doc(scheduler, extra, doc):
@@ -1077,8 +1079,8 @@ def stealing_doc(scheduler, extra, doc):
                             sizing_mode='scale_width'))
 
         doc.template = env.get_template('simple.html')
-        doc.template_variables['active_page'] = 'stealing'
         doc.template_variables.update(extra)
+        doc.theme = BOKEH_THEME
 
 
 def events_doc(scheduler, extra, doc):
@@ -1089,8 +1091,8 @@ def events_doc(scheduler, extra, doc):
         doc.title = "Dask: Scheduler Events"
         doc.add_root(column(events.root, sizing_mode='scale_width'))
         doc.template = env.get_template('simple.html')
-        doc.template_variables['active_page'] = 'events'
         doc.template_variables.update(extra)
+        doc.theme = BOKEH_THEME
 
 
 def workers_doc(scheduler, extra, doc):
@@ -1101,8 +1103,8 @@ def workers_doc(scheduler, extra, doc):
         doc.title = "Dask: Workers"
         doc.add_root(table.root)
         doc.template = env.get_template('simple.html')
-        doc.template_variables['active_page'] = 'workers'
         doc.template_variables.update(extra)
+        doc.theme = BOKEH_THEME
 
 
 def tasks_doc(scheduler, extra, doc):
@@ -1114,8 +1116,8 @@ def tasks_doc(scheduler, extra, doc):
         doc.title = "Dask: Task Stream"
         doc.add_root(ts.root)
         doc.template = env.get_template('simple.html')
-        doc.template_variables['active_page'] = 'tasks'
         doc.template_variables.update(extra)
+        doc.theme = BOKEH_THEME
 
 
 def graph_doc(scheduler, extra, doc):
@@ -1127,8 +1129,8 @@ def graph_doc(scheduler, extra, doc):
         doc.add_root(graph.root)
 
         doc.template = env.get_template('simple.html')
-        doc.template_variables['active_page'] = 'graph'
         doc.template_variables.update(extra)
+        doc.theme = BOKEH_THEME
 
 
 def status_doc(scheduler, extra, doc):
@@ -1164,10 +1166,10 @@ def status_doc(scheduler, extra, doc):
         doc.title = "Dask: Status"
         doc.add_root(task_progress.root)
         doc.add_root(task_stream.root)
-
+        doc.theme = BOKEH_THEME
         doc.template = env.get_template('status.html')
-        doc.template_variables['active_page'] = 'status'
         doc.template_variables.update(extra)
+        doc.theme = BOKEH_THEME
 
 
 def individual_task_stream_doc(scheduler, extra, doc):
@@ -1176,6 +1178,7 @@ def individual_task_stream_doc(scheduler, extra, doc):
     task_stream.update()
     doc.add_periodic_callback(task_stream.update, 100)
     doc.add_root(task_stream.root)
+    doc.theme = BOKEH_THEME
 
 
 def individual_nbytes_doc(scheduler, extra, doc):
@@ -1183,6 +1186,7 @@ def individual_nbytes_doc(scheduler, extra, doc):
     current_load.update()
     doc.add_periodic_callback(current_load.update, 100)
     doc.add_root(current_load.nbytes_figure)
+    doc.theme = BOKEH_THEME
 
 
 def individual_nprocessing_doc(scheduler, extra, doc):
@@ -1190,6 +1194,7 @@ def individual_nprocessing_doc(scheduler, extra, doc):
     current_load.update()
     doc.add_periodic_callback(current_load.update, 100)
     doc.add_root(current_load.processing_figure)
+    doc.theme = BOKEH_THEME
 
 
 def individual_progress_doc(scheduler, extra, doc):
@@ -1197,6 +1202,7 @@ def individual_progress_doc(scheduler, extra, doc):
     task_progress.update()
     doc.add_periodic_callback(task_progress.update, 100)
     doc.add_root(task_progress.root)
+    doc.theme = BOKEH_THEME
 
 
 def individual_graph_doc(scheduler, extra, doc):
@@ -1205,6 +1211,7 @@ def individual_graph_doc(scheduler, extra, doc):
         graph.update()
         doc.add_periodic_callback(graph.update, 200)
         doc.add_root(graph.root)
+        doc.theme = BOKEH_THEME
 
 
 def individual_profile_doc(scheduler, extra, doc):
@@ -1212,6 +1219,7 @@ def individual_profile_doc(scheduler, extra, doc):
         prof = ProfileTimePlot(scheduler, sizing_mode='scale_width', doc=doc)
         doc.add_root(prof.root)
         prof.trigger_update()
+        doc.theme = BOKEH_THEME
 
 
 def individual_profile_server_doc(scheduler, extra, doc):
@@ -1219,6 +1227,7 @@ def individual_profile_server_doc(scheduler, extra, doc):
         prof = ProfileServer(scheduler, sizing_mode='scale_width', doc=doc)
         doc.add_root(prof.root)
         prof.trigger_update()
+        doc.theme = BOKEH_THEME
 
 
 def individual_workers_doc(scheduler, extra, doc):
@@ -1227,6 +1236,7 @@ def individual_workers_doc(scheduler, extra, doc):
         table.update()
         doc.add_periodic_callback(table.update, 500)
         doc.add_root(table.root)
+        doc.theme = BOKEH_THEME
 
 
 def profile_doc(scheduler, extra, doc):
@@ -1235,8 +1245,8 @@ def profile_doc(scheduler, extra, doc):
         prof = ProfileTimePlot(scheduler, sizing_mode='scale_width', doc=doc)
         doc.add_root(prof.root)
         doc.template = env.get_template('simple.html')
-        doc.template_variables['active_page'] = 'profile'
         doc.template_variables.update(extra)
+        doc.theme = BOKEH_THEME
 
         prof.trigger_update()
 
@@ -1247,8 +1257,8 @@ def profile_server_doc(scheduler, extra, doc):
         prof = ProfileServer(scheduler, sizing_mode='scale_width', doc=doc)
         doc.add_root(prof.root)
         doc.template = env.get_template('simple.html')
-        # doc.template_variables['active_page'] = 'profile'
         doc.template_variables.update(extra)
+        doc.theme = BOKEH_THEME
 
         prof.trigger_update()
 
