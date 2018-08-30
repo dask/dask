@@ -273,3 +273,19 @@ def test_timeout(c, s, a, b):
         yield q.put(2, timeout=0.3)
     stop = time()
     assert 0.1 < stop - start < 2.0
+
+
+@gen_cluster(client=True)
+def test_2220(c, s, a, b):
+    q = Queue()
+
+    def put():
+        q.put(55)
+
+    def get():
+        print(q.get())
+
+    fut = c.submit(put)
+    res = c.submit(get)
+
+    yield [res, fut]

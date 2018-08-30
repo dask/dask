@@ -402,6 +402,7 @@ class WorkerBase(ServerNode):
         assert self.status is None
 
         enable_gc_diagnosis()
+        thread_state.on_event_loop_thread = True
 
         # XXX Factor this out
         if not addr_or_port:

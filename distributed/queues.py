@@ -9,7 +9,7 @@ from tornado import gen
 import tornado.queues
 
 from .client import Future, _get_global_client, Client
-from .utils import tokey, sync
+from .utils import tokey, sync, thread_state
 from .worker import get_client
 
 logger = logging.getLogger(__name__)
@@ -165,7 +165,7 @@ class Queue(object):
     def __init__(self, name=None, client=None, maxsize=0):
         self.client = client or _get_global_client()
         self.name = name or 'queue-' + uuid.uuid4().hex
-        if self.client.asynchronous:
+        if self.client.asynchronous or getattr(thread_state, 'on_event_loop_thread', False):
             self._started = self.client.scheduler.queue_create(name=self.name,
                                                                maxsize=maxsize)
         else:
@@ -258,7 +258,7 @@ class Queue(object):
         name, address = state
         try:
             client = get_client(address)
-            assert client.address == address
+            assert client.scheduler.address == address
         except (AttributeError, AssertionError):
             client = Client(address, set_as_default=False)
         self.__init__(name=name, client=client)

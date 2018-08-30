@@ -49,7 +49,8 @@ from .process import _cleanup_dangling
 from .proctitle import enable_proctitle_on_children
 from .security import Security
 from .utils import (ignoring, log_errors, mp_context, get_ip, get_ipv6,
-                    DequeHandler, reset_logger_locks, sync, iscoroutinefunction)
+                    DequeHandler, reset_logger_locks, sync,
+                    iscoroutinefunction, thread_state)
 from .worker import Worker, TOTAL_MEMORY, _global_workers
 
 try:
@@ -863,6 +864,8 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                         call_stacks = profile.call_stack(sys._current_frames()[tid])
                         assert False, (thread, call_stacks)
             _cleanup_dangling()
+            with ignoring(AttributeError):
+                del thread_state.on_event_loop_thread
             return result
 
         return test_func

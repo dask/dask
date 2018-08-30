@@ -207,7 +207,7 @@ class Variable(object):
         name, address = state
         try:
             client = get_client(address)
-            assert client.address == address
+            assert client.scheduler.address == address
         except (AttributeError, AssertionError):
             client = Client(address, set_as_default=False)
         self.__init__(name=name, client=client)
