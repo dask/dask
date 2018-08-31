@@ -292,7 +292,6 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
                        if rg in rgs]
             divisions = [divisions['min'][i]
                          for i in idx_lst] + [divisions['max'][idx_lst[-1]]]
-            print(divisions)
         else:
             if infer_divisions is True:
                 raise ValueError(
