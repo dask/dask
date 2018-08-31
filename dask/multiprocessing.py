@@ -5,17 +5,12 @@ import traceback
 import pickle
 import sys
 
-from . import config
-from .local import get_async  # TODO: get better get
-from .optimization import fuse, cull
-
 import cloudpickle
 
-
-if sys.version_info.major < 3:
-    import copy_reg as copyreg
-else:
-    import copyreg
+from . import config
+from .compatibility import copyreg
+from .local import get_async  # TODO: get better get
+from .optimization import fuse, cull
 
 
 def _reduce_method_descriptor(m):

@@ -32,22 +32,22 @@ Explanation
 
 Consider two neighboring blocks in a Dask array.
 
-.. image:: images/unghosted-neighbors.png
+.. image:: images/unoverlapping-neighbors.png
    :width: 30%
-   :alt: un-ghosted neighbors
+   :alt: un-overlapping neighbors
 
 We extend each block by trading thin nearby slices between arrays
 
-.. image:: images/ghosted-neighbors.png
+.. image:: images/overlapping-neighbors.png
    :width: 30%
-   :alt: ghosted neighbors
+   :alt: overlapping neighbors
 
 We do this in all directions, including also diagonal interactions with the
-ghost function:
+overlap function:
 
-.. image:: images/ghosted-blocks.png
+.. image:: images/overlapping-blocks.png
    :width: 40%
-   :alt: ghosted blocks
+   :alt: overlapping blocks
 
 .. code-block:: python
 
@@ -59,7 +59,7 @@ ghost function:
    >>> d.chunks
    ((4, 4), (4, 4))
 
-   >>> g = da.ghost.ghost(d, depth={0: 2, 1: 1},
+   >>> g = da.overlap.overlap(d, depth={0: 2, 1: 1},
    ...                       boundary={0: 100, 1: 'reflect'})
    >>> g.chunks
    ((8, 8), (6, 6))
@@ -86,7 +86,7 @@ ghost function:
 Boundaries
 ----------
 
-While ghosting you can specify how to handle the boundaries.  Current policies
+While overlaping you can specify how to handle the boundaries.  Current policies
 include the following:
 
 *  ``periodic`` - wrap borders around to the other side
@@ -108,7 +108,7 @@ paddings.
 Map a function across blocks
 ----------------------------
 
-Ghosting goes hand-in-hand with mapping a function across blocks.  This
+Overlapping goes hand-in-hand with mapping a function across blocks.  This
 function can now use the additional information copied over from the neighbors
 that is not stored locally in each block
 
@@ -151,14 +151,14 @@ Trim Excess
 After mapping a blocked function you may want to trim off the borders from each
 block by the same amount by which they were expanded.  The function
 ``trim_internal`` is useful here and takes the same ``depth`` argument
-given to ``ghost``.
+given to ``overlap``.
 
 .. code-block:: python
 
    >>> x.chunks
    ((10, 10, 10, 10), (10, 10, 10, 10))
 
-   >>> y = da.ghost.trim_internal(x, {0: 2, 1: 1})
+   >>> y = da.overlap.trim_internal(x, {0: 2, 1: 1})
    >>> y.chunks
    ((6, 6, 6, 6), (8, 8, 8, 8))
 
@@ -166,16 +166,16 @@ given to ``ghost``.
 Full Workflow
 -------------
 
-And so a pretty typical ghosting workflow includes ``ghost``, ``map_blocks``,
+And so a pretty typical overlaping workflow includes ``overlap``, ``map_blocks``,
 and ``trim_internal``
 
 .. code-block:: python
 
    >>> x = ...
-   >>> g = da.ghost.ghost(x, depth={0: 2, 1: 2},
+   >>> g = da.overlap.overlap(x, depth={0: 2, 1: 2},
    ...                       boundary={0: 'periodic', 1: 'periodic'})
    >>> g2 = g.map_blocks(myfunc)
-   >>> result = da.ghost.trim_internal(g2, {0: 2, 1: 2})
+   >>> result = da.overlap.trim_internal(g2, {0: 2, 1: 2})
 
 .. _Life: http://en.wikipedia.org/wiki/Conway%27s_Game_of_Life
 .. _Numba: http://numba.pydata.org/

@@ -1,14 +1,14 @@
 """ A set of NumPy functions to apply per chunk """
 from __future__ import absolute_import, division, print_function
 
-from collections import Container, Iterable, Sequence
 from functools import wraps
 
 from toolz import concat
 import numpy as np
 from . import numpy_compat as npcompat
 
-from ..compatibility import getargspec
+from ..compatibility import getargspec, Container, Iterable, Sequence
+from ..core import flatten
 from ..utils import ignoring
 
 try:
@@ -233,6 +233,7 @@ def argtopk(a_plus_idx, k, axis, keepdims):
     axis = axis[0]
 
     if isinstance(a_plus_idx, list):
+        a_plus_idx = list(flatten(a_plus_idx))
         a = np.concatenate([ai for ai, _ in a_plus_idx], axis)
         idx = np.concatenate([broadcast_to(idxi, ai.shape)
                               for ai, idxi in a_plus_idx], axis)

@@ -1,8 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 from bisect import bisect
-from collections import Iterable, Mapping
-from collections import Iterator
 from functools import partial, wraps
 from itertools import product
 import math
@@ -39,8 +37,9 @@ from ..context import globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict, Dispatch, factors,
-                     parse_bytes, has_keyword)
-from ..compatibility import unicode, long, zip_longest, apply
+                     parse_bytes, has_keyword, M)
+from ..compatibility import (unicode, long, zip_longest, apply,
+                             Iterable, Iterator, Mapping)
 from ..core import quote
 from ..delayed import Delayed, to_task_dask
 from .. import threaded, core
@@ -68,6 +67,22 @@ def register_sparse():
     import sparse
     concatenate_lookup.register(sparse.COO, sparse.concatenate)
     tensordot_lookup.register(sparse.COO, sparse.tensordot)
+
+
+@concatenate_lookup.register_lazy('scipy')
+def register_scipy_sparse():
+    import scipy.sparse
+
+    def _concatenate(L, axis=0):
+        if axis == 0:
+            return scipy.sparse.vstack(L)
+        elif axis == 1:
+            return scipy.sparse.hstack(L)
+        else:
+            msg = ("Can only concatenate scipy sparse matrices for axis in "
+                   "{0, 1}.  Got %s" % axis)
+            raise ValueError(msg)
+    concatenate_lookup.register(scipy.sparse.spmatrix, _concatenate)
 
 
 class PerformanceWarning(Warning):
@@ -1155,6 +1170,10 @@ class Array(DaskMethodsMixin):
         return tuple(map(sum, self.chunks))
 
     @property
+    def chunksize(self):
+        return tuple(max(c) for c in self.chunks)
+
+    @property
     def _meta(self):
         return np.empty(shape=(), dtype=self.dtype)
 
@@ -1212,7 +1231,7 @@ class Array(DaskMethodsMixin):
         >>> da.ones((10, 10), chunks=(5, 5), dtype='i4')
         dask.array<..., shape=(10, 10), dtype=int32, chunksize=(5, 5)>
         """
-        chunksize = str(tuple(c[0] for c in self.chunks))
+        chunksize = str(self.chunksize)
         name = self.name.rsplit('-', 1)[0]
         return ("dask.array<%s, shape=%s, dtype=%s, chunksize=%s>" %
                 (name, self.shape, self.dtype, chunksize))
@@ -1337,6 +1356,7 @@ class Array(DaskMethodsMixin):
             self.dtype = y.dtype
             self.dask = y.dask
             self.name = y.name
+            self._chunks = y.chunks
             return self
         else:
             raise NotImplementedError("Item assignment with %s not supported"
@@ -1803,13 +1823,6 @@ class Array(DaskMethodsMixin):
         return moment(self, order, axis=axis, dtype=dtype, keepdims=keepdims,
                       ddof=ddof, split_every=split_every, out=out)
 
-    def vnorm(self, ord=None, axis=None, keepdims=False, split_every=None,
-              out=None):
-        """ Vector norm """
-        from .reductions import vnorm
-        return vnorm(self, ord=ord, axis=axis, keepdims=keepdims,
-                     split_every=split_every, out=out)
-
     @wraps(map_blocks)
     def map_blocks(self, func, *args, **kwargs):
         return map_blocks(func, self, *args, **kwargs)
@@ -1867,7 +1880,7 @@ class Array(DaskMethodsMixin):
                [20,  21,  22,  23],
                [24,  25,  26,  27]])
         """
-        from .ghost import map_overlap
+        from .overlap import map_overlap
         return map_overlap(self, func, depth, boundary, trim, **kwargs)
 
     def cumsum(self, axis, dtype=None, out=None):
@@ -1958,7 +1971,10 @@ class Array(DaskMethodsMixin):
         """
         Copy array.  This is a no-op for dask.arrays, which are immutable
         """
-        return Array(self.dask, self.name, self.chunks, self.dtype)
+        if self.npartitions == 1:
+            return self.map_blocks(M.copy)
+        else:
+            return Array(self.dask, self.name, self.chunks, self.dtype)
 
     def __deepcopy__(self, memo):
         c = self.copy()
@@ -2092,6 +2108,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
         chunks = (chunks,) * len(shape)
     if isinstance(chunks, dict):
         chunks = tuple(chunks.get(i, None) for i in range(len(shape)))
+    if isinstance(chunks, np.ndarray):
+        chunks = chunks.tolist()
     if not chunks and shape and all(s == 0 for s in shape):
         chunks = ((0,),) * len(shape)
 
@@ -2424,8 +2442,8 @@ def to_zarr(arr, url, component=None, storage_options=None,
             raise RuntimeError('Cannot store into in memory Zarr Array using '
                                'the Distributed Scheduler.')
         arr = arr.rechunk(z.chunks)
-        return store(arr, z, lock=False, compute=compute,
-                     return_stored=return_stored)
+        return arr.store(z, lock=False, compute=compute,
+                         return_stored=return_stored)
 
     if not _check_regular_chunks(arr.chunks):
         raise ValueError('Attempt to save array to zarr with irregular '
@@ -2445,8 +2463,8 @@ def to_zarr(arr, url, component=None, storage_options=None,
     chunks = [c[0] for c in arr.chunks]
     z = zarr.create(shape=arr.shape, chunks=chunks, dtype=arr.dtype,
                     store=mapper, path=component, overwrite=overwrite, **kwargs)
-    return store(arr, z, lock=False, compute=compute,
-                 return_stored=return_stored)
+    return arr.store(z, lock=False, compute=compute,
+                     return_stored=return_stored)
 
 
 def _check_regular_chunks(chunkset):
@@ -3296,10 +3314,18 @@ def asarray(a):
     >>> da.asarray(y)
     dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3)>
     """
+    try:
+        import dask.dataframe as dd
+        frame_types = (dd.Series, dd.DataFrame)
+    except ImportError:
+        frame_types = ()
+
     if isinstance(a, Array):
         return a
     if isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         a = stack(a)
+    elif isinstance(a, frame_types):
+        return a.to_dask_array()
     elif not isinstance(getattr(a, 'shape', None), Iterable):
         a = np.asarray(a)
     return from_array(a, chunks=a.shape, getitem=getter_inline)
@@ -3362,8 +3388,14 @@ def is_scalar_for_elemwise(arg):
     >>> is_scalar_for_elemwise(np.dtype('i4'))
     True
     """
+    # the second half of shape_condition is essentially just to ensure that
+    # dask series / frame are treated as scalars in elemwise.
+    maybe_shape = getattr(arg, 'shape', None)
+    shape_condition = (not isinstance(maybe_shape, Iterable) or
+                       any(is_dask_collection(x) for x in maybe_shape))
+
     return (np.isscalar(arg) or
-            not isinstance(getattr(arg, 'shape', None), Iterable) or
+            shape_condition or
             isinstance(arg, np.dtype) or
             (isinstance(arg, np.ndarray) and arg.ndim == 0))
 
@@ -3419,7 +3451,14 @@ def elemwise(op, *args, **kwargs):
 
     args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
 
-    shapes = [getattr(arg, 'shape', ()) for arg in args]
+    shapes = []
+    for arg in args:
+        shape = getattr(arg, "shape", ())
+        if any(is_dask_collection(x) for x in shape):
+            # Want to excluded Delayed shapes and dd.Scalar
+            shape = ()
+        shapes.append(shape)
+
     shapes = [s if isinstance(s, Iterable) else () for s in shapes]
     out_ndim = len(broadcast_shapes(*shapes))   # Raises ValueError if dimensions mismatch
     expr_inds = tuple(range(out_ndim))[::-1]
@@ -3781,8 +3820,13 @@ def stack(seq, axis=0):
                          "\nData has %d dimensions, but got axis=%d" %
                          (ndim, axis))
     if not all(x.shape == seq[0].shape for x in seq):
-        raise ValueError("Stacked arrays must have the same shape. Got %s",
-                         [x.shape for x in seq])
+        idx = np.where(np.asanyarray([x.shape for x in seq]) != seq[0].shape)[0]
+        raise ValueError("Stacked arrays must have the same shape. "
+                         "The first {0} had shape {1}, while array "
+                         "{2} has shape {3}".format(idx[0],
+                                                    seq[0].shape,
+                                                    idx[0] + 1,
+                                                    seq[idx[0]].shape))
 
     ind = list(range(ndim))
     uc_args = list(concat((x, ind) for x in seq))

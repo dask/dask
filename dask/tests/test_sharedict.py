@@ -1,8 +1,7 @@
-from collections import Mapping
-
 import pytest
 from toolz import merge
 
+from dask.compatibility import Mapping
 from dask.sharedict import ShareDict
 
 

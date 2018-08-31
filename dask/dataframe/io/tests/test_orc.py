@@ -1,13 +1,24 @@
 import os
-import pytest
 import shutil
 import tempfile
+from distutils.version import LooseVersion
+
+import pytest
 
 from dask.dataframe import read_orc
 from dask.dataframe.utils import assert_eq
 import dask.dataframe as dd
 
 pytest.importorskip('pyarrow.orc')
+
+# Skip for broken ORC reader
+import pyarrow as pa
+pytestmark = pytest.mark.skipif(
+    LooseVersion(pa.__version__) == '0.10.0',
+    reason=("PyArrow 0.10.0 release broke the ORC reader, see "
+            "https://issues.apache.org/jira/browse/ARROW-3009"))
+
+
 url = ('https://www.googleapis.com/download/storage/v1/b/anaconda-public-data/o'
        '/orc%2FTestOrcFile.testDate1900.orc?generation=1522611448751555&alt='
        'media')

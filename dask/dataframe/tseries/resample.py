@@ -1,7 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
-
 import pandas as pd
 import numpy as np
 
@@ -23,22 +21,12 @@ def getnanos(rule):
         return None
 
 
-def _resample(obj, rule, how, **kwargs):
-    resampler = Resampler(obj, rule, **kwargs)
-    if how is not None:
-        w = FutureWarning(("how in .resample() is deprecated "
-                           "the new syntax is .resample(...)"
-                           ".{0}()").format(how))
-        warnings.warn(w)
-        return getattr(resampler, how)()
-    return resampler
-
-
 def _resample_series(series, start, end, reindex_closed, rule,
                      resample_kwargs, how, fill_value, how_args, how_kwargs):
     out = getattr(series.resample(rule, **resample_kwargs), how)(*how_args, **how_kwargs)
     return out.reindex(pd.date_range(start, end, freq=rule,
-                                     closed=reindex_closed),
+                                     closed=reindex_closed,
+                                     name=out.index.name),
                        fill_value=fill_value)
 
 

@@ -19,6 +19,7 @@ from toolz.curried import identity
 import dask
 import dask.array as da
 from dask.base import tokenize, compute_as_if_collection
+from dask.compatibility import PY2
 from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir, key_split
 from dask.utils_test import inc, dec
@@ -254,6 +255,7 @@ def test_stack():
 
     assert s.shape == (3, 4, 6)
     assert s.chunks == ((1, 1, 1), (2, 2), (3, 3))
+    assert s.chunksize == (1, 2, 3)
     assert s.dask[(s.name, 0, 1, 0)] == (getitem, ('A', 1, 0),
                                          (None, colon, colon))
     assert s.dask[(s.name, 2, 1, 0)] == (getitem, ('C', 1, 0),
@@ -263,6 +265,7 @@ def test_stack():
     s2 = stack([a, b, c], axis=1)
     assert s2.shape == (4, 3, 6)
     assert s2.chunks == ((2, 2), (1, 1, 1), (3, 3))
+    assert s2.chunksize == (2, 1, 3)
     assert s2.dask[(s2.name, 0, 1, 0)] == (getitem, ('B', 0, 0),
                                            (colon, None, colon))
     assert s2.dask[(s2.name, 1, 1, 0)] == (getitem, ('B', 1, 0),
@@ -272,6 +275,7 @@ def test_stack():
     s2 = stack([a, b, c], axis=2)
     assert s2.shape == (4, 6, 3)
     assert s2.chunks == ((2, 2), (3, 3), (1, 1, 1))
+    assert s2.chunksize == (2, 3, 1)
     assert s2.dask[(s2.name, 0, 1, 0)] == (getitem, ('A', 0, 1),
                                            (colon, colon, None))
     assert s2.dask[(s2.name, 1, 1, 2)] == (getitem, ('C', 1, 1),
@@ -871,26 +875,6 @@ def test_T():
     a = from_array(x, chunks=(5, 5))
 
     assert_eq(x.T, a.T)
-
-
-def test_norm():
-    a = np.arange(200, dtype='f8').reshape((20, 10))
-    a = a + (a.max() - a) * 1j
-    b = from_array(a, chunks=(5, 5))
-
-    # TODO: Deprecated method, remove test when method removed
-    with pytest.warns(UserWarning):
-        assert_eq(b.vnorm(), np.linalg.norm(a))
-        assert_eq(b.vnorm(ord=1), np.linalg.norm(a.flatten(), ord=1))
-        assert_eq(b.vnorm(ord=4, axis=0), np.linalg.norm(a, ord=4, axis=0))
-        assert b.vnorm(ord=4, axis=0, keepdims=True).ndim == b.ndim
-        split_every = {0: 3, 1: 3}
-        assert_eq(b.vnorm(ord=1, axis=0, split_every=split_every),
-                  np.linalg.norm(a, ord=1, axis=0))
-        assert_eq(b.vnorm(ord=np.inf, axis=0, split_every=split_every),
-                  np.linalg.norm(a, ord=np.inf, axis=0))
-        assert_eq(b.vnorm(ord=np.inf, split_every=split_every),
-                  np.linalg.norm(a.flatten(), ord=np.inf))
 
 
 def test_broadcast_to():
@@ -2049,7 +2033,7 @@ def test_from_array_ndarray_getitem():
 
 @pytest.mark.parametrize(
     'x', [[1, 2], (1, 2), memoryview(b'abc')] +
-    ([buffer(b'abc')] if sys.version_info[0] == 2 else []))  # noqa: F821
+    ([buffer(b'abc')] if PY2 else []))  # noqa: F821
 def test_from_array_list(x):
     """Lists, tuples, and memoryviews are automatically converted to ndarray
     """
@@ -2066,7 +2050,7 @@ def test_from_array_list(x):
 
 @pytest.mark.parametrize(
     'type_', [t for t in np.ScalarType if t not in [memoryview] +
-              ([buffer] if sys.version_info[0] == 2 else [])])  # noqa: F821
+              ([buffer] if PY2 else [])])  # noqa: F821
 def test_from_array_scalar(type_):
     """Python and numpy scalars are automatically converted to ndarray
     """
@@ -2120,11 +2104,37 @@ def test_from_array_minus_one():
     assert_eq(x, y)
 
 
+def test_from_array_copy():
+    # Regression test for https://github.com/dask/dask/issues/3751
+    x = np.arange(10)
+    y = da.from_array(x, -1)
+    assert y.npartitions == 1
+    y_c = y.copy()
+    assert y is not y_c
+    assert y.compute() is not y_c.compute()
+
+
 def test_asarray():
     assert_eq(da.asarray([1, 2, 3]), np.asarray([1, 2, 3]))
 
     x = da.asarray([1, 2, 3])
     assert da.asarray(x) is x
+
+
+def test_asarray_dask_dataframe():
+    # https://github.com/dask/dask/issues/3885
+    dd = pytest.importorskip('dask.dataframe')
+    import pandas as pd
+
+    s = dd.from_pandas(pd.Series([1, 2, 3, 4]), 2)
+    result = da.asarray(s)
+    expected = s.values
+    assert_eq(result, expected)
+
+    df = s.to_frame(name='s')
+    result = da.asarray(df)
+    expected = df.values
+    assert_eq(result, expected)
 
 
 def test_asarray_h5py():
@@ -3317,10 +3327,12 @@ def test_concatenate_errs():
 
 def test_stack_errs():
     with pytest.raises(ValueError) as e:
-        da.stack([da.zeros((2), chunks=(2)),
-                  da.zeros((3), chunks=(3))])
-    assert 'shape' in str(e).lower()
-    assert '(2,)' in str(e)
+        da.stack([da.zeros((2,), chunks=(2))] * 10 +
+                 [da.zeros((3,), chunks=(3))] * 10)
+
+    assert 'shape' in str(e.value).lower()
+    assert '(2,)' in str(e.value)
+    assert len(str(e.value)) < 105
 
 
 def test_atop_with_numpy_arrays():
@@ -3480,6 +3492,17 @@ def test_zarr_roundtrip():
         assert a2.chunks == a.chunks
 
 
+@pytest.mark.parametrize('compute', [False, True])
+def test_zarr_return_stored(compute):
+    pytest.importorskip('zarr')
+    with tmpdir() as d:
+        a = da.zeros((3, 3), chunks=(1, 1))
+        a2 = a.to_zarr(d, compute=compute, return_stored=True)
+        assert isinstance(a2, Array)
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
+
+
 def test_zarr_existing_array():
     zarr = pytest.importorskip('zarr')
     c = (1, 1)
@@ -3594,11 +3617,30 @@ def test_blocks_indexer():
 
 
 def test_dask_array_holds_scipy_sparse_containers():
-    sparse = pytest.importorskip('scipy.sparse')
+    pytest.importorskip('scipy.sparse')
+    import scipy.sparse
     x = da.random.random((1000, 10), chunks=(100, 10))
     x[x < 0.9] = 0
-    y = x.map_blocks(sparse.csr_matrix)
+    xx = x.compute()
+    y = x.map_blocks(scipy.sparse.csr_matrix)
 
     vs = y.to_delayed().flatten().tolist()
     values = dask.compute(*vs, scheduler='single-threaded')
-    assert all(isinstance(v, sparse.csr_matrix) for v in values)
+    assert all(isinstance(v, scipy.sparse.csr_matrix) for v in values)
+
+    yy = y.compute(scheduler='single-threaded')
+    assert isinstance(yy, scipy.sparse.spmatrix)
+    assert (yy == xx).all()
+
+    z = x.T.map_blocks(scipy.sparse.csr_matrix)
+    zz = z.compute(scheduler='single-threaded')
+    assert isinstance(yy, scipy.sparse.spmatrix)
+    assert (zz == xx.T).all()
+
+
+def test_3851():
+    with warnings.catch_warnings() as record:
+        Y = da.random.random((10, 10), chunks='auto')
+        da.argmax(Y, axis=0).compute()
+
+    assert not record
