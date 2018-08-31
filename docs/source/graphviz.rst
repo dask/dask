@@ -18,6 +18,10 @@ the ``.compute`` method and ``dask.compute`` function,
 except that rather than computing the result,
 they produce an image of the task graph.
 
+By default the task graph is rendered from top to bottom.
+In the case that you prefer to visualize it from left to right, pass
+``rankdir="LR"`` as a keyword argument to ``.visualize``.
+
 .. code-block:: python
 
    import dask.array as da
