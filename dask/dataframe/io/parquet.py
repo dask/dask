@@ -289,7 +289,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
         if index_name in minmax:
             divisions = minmax[index_name]
             idx_lst = [i for i, rg in enumerate(pf.row_groups)
-                         if rg in rgs]
+                       if rg in rgs]
             divisions = [divisions['min'][i]
                          for i in idx_lst] + [divisions['max'][idx_lst[-1]]]
             print(divisions)
