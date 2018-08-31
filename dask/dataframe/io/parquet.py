@@ -288,10 +288,12 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
         index_name = meta.index.name
         minmax = fastparquet.api.sorted_partitioned_columns(pf)
         if index_name in minmax:
-            divisions = (list(minmax[index_name]['min']) +
-                         [minmax[index_name]['max'][-1]])
-            divisions = [divisions[i] for i, rg in enumerate(pf.row_groups)
-                         if rg in rgs] + [divisions[-1]]
+            divisions = minmax[index_name]
+            idx_lst = [i for i, rg in enumerate(pf.row_groups)
+                         if rg in rgs]
+            divisions = [divisions['min'][i]
+                         for i in idx_lst] + [divisions['max'][idx_lst[-1]]]
+            print(divisions)
         else:
             if infer_divisions is True:
                 raise ValueError(
