@@ -3552,7 +3552,7 @@ def _enforce_dtype(*args, **kwargs):
     function = kwargs.pop('enforce_dtype_function')
 
     result = function(*args, **kwargs)
-    if dtype != result.dtype and dtype != object:
+    if hasattr(result, 'dtype') and dtype != result.dtype and dtype != object:
         if not np.can_cast(result, dtype, casting='same_kind'):
             raise ValueError("Inferred dtype from function %r was %r "
                              "but got %r, which can't be cast using "
