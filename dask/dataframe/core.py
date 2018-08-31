@@ -1,10 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Iterator
 from functools import wraps, partial
 import operator
 from operator import getitem
 from pprint import pformat
+from collections import Sequence
 import warnings
 
 from toolz import merge, first, unique, partition_all, remove
@@ -22,7 +22,7 @@ from .. import core
 
 from ..utils import partial_by_order
 from .. import threaded
-from ..compatibility import apply, operator_div, bind_method, string_types
+from ..compatibility import apply, operator_div, bind_method, string_types, Iterator
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
@@ -306,7 +306,13 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     @property
     def size(self):
-        """ Size of the series """
+        """Size of the Series or DataFrame as a Delayed object.
+
+        Examples
+        --------
+        >>> series.size  # doctest: +SKIP
+        dd.Scalar<size-ag..., dtype=int64>
+        """
         return self.reduction(methods.size, np.sum, token='size', meta=int,
                               split_every=False)
 
@@ -932,8 +938,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         from .indexing import _LocIndexer
         return _LocIndexer(self)
 
-    # NOTE: `iloc` is not implemented because of performance concerns.
-    # see https://github.com/dask/dask/pull/507
+    # Note: iloc is implemented only on DataFrame
 
     def repartition(self, divisions=None, npartitions=None, freq=None, force=False):
         """ Repartition dataframe along new divisions
@@ -1074,6 +1079,53 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         return new_dd_object(merge(self.dask, dsk), name,
                              self._meta, self.divisions)
+
+    def to_dask_array(self, lengths=None):
+        """Convert a dask DataFrame to a dask array.
+
+        Parameters
+        ----------
+        lengths : bool or Sequence of ints, optional
+            How to determine the chunks sizes for the output array.
+            By default, the output array will have unknown chunk lengths
+            along the first axis, which can cause some later operations
+            to fail.
+
+            * True : immediately compute the length of each partition
+            * Sequence : a sequence of integers to use for the chunk sizes
+              on the first axis. These values are *not* validated for
+              correctness, beyond ensuring that the number of items
+              matches the number of partitions.
+
+        Returns
+        -------
+        """
+        from dask.array.core import normalize_chunks
+
+        if lengths is True:
+            lengths = tuple(self.map_partitions(len).compute())
+
+        arr = self.map_partitions(np.array, )
+
+        if isinstance(lengths, Sequence):
+            lengths = tuple(lengths)
+
+            if len(lengths) != self.npartitions:
+                raise ValueError(
+                    "The number of items in 'lengths' does not match "
+                    "the number of partitions. "
+                    "{} != {}".format(len(lengths), self.npartitions)
+                )
+
+            if self.ndim == 1:
+                chunks = normalize_chunks((lengths,))
+            else:
+                chunks = normalize_chunks((lengths, (len(self.columns),)))
+
+            arr._chunks = chunks
+        elif lengths is not None:
+            raise ValueError("Unexpected value for 'lengths': '{}'".format(lengths))
+        return arr
 
     def to_hdf(self, path_or_buf, key, mode='a', append=False, **kwargs):
         """ See dd.to_hdf docstring for more information """
@@ -1647,9 +1699,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         raise NotImplementedError
 
     @derived_from(pd.DataFrame)
-    def resample(self, rule, how=None, closed=None, label=None):
-        from .tseries.resample import _resample
-        return _resample(self, rule, how=how, closed=closed, label=label)
+    def resample(self, rule, closed=None, label=None):
+        from .tseries.resample import Resampler
+        return Resampler(self, rule, closed=closed, label=label)
 
     @derived_from(pd.DataFrame)
     def first(self, offset):
@@ -1798,6 +1850,20 @@ class Series(_Frame):
     def ndim(self):
         """ Return dimensionality """
         return 1
+
+    @property
+    def shape(self):
+        """
+        Return a tuple representing the dimensionality of a Series.
+
+        The single element of the tuple is a Delayed result.
+
+        Examples
+        --------
+        >>> series.shape  # doctest: +SKIP
+        # (dd.Scalar<size-ag..., dtype=int64>,)
+        """
+        return (self.size,)
 
     @property
     def dtype(self):
@@ -2361,6 +2427,22 @@ class DataFrame(_Frame):
         self._name = renamed._name
         self.dask.update(renamed.dask)
 
+    @property
+    def iloc(self):
+        """Purely integer-location based indexing for selection by position.
+
+        Only indexing the column positions is supported. Trying to select
+        row positions will raise a ValueError.
+
+        See :ref:`dataframe.indexing` for more.
+
+        Examples
+        --------
+        >>> df.iloc[:, [2, 0, 1]]  # doctest: +SKIP
+        """
+        from .indexing import _iLocIndexer
+        return _iLocIndexer(self)
+
     def __getitem__(self, key):
         name = 'getitem-%s' % tokenize(self, key)
         if np.isscalar(key) or isinstance(key, (tuple, string_types)):
@@ -2392,7 +2474,7 @@ class DataFrame(_Frame):
             if self.divisions != key.divisions:
                 from .multi import _maybe_align_partitions
                 self, key = _maybe_align_partitions([self, key])
-            dsk = {(name, i): (M._getitem_array, (self._name, i), (key._name, i))
+            dsk = {(name, i): (M.__getitem__, (self._name, i), (key._name, i))
                    for i in range(self.npartitions)}
             return new_dd_object(merge(self.dask, key.dask, dsk), name,
                                  self, self.divisions)
@@ -2449,6 +2531,24 @@ class DataFrame(_Frame):
     def ndim(self):
         """ Return dimensionality """
         return 2
+
+    @property
+    def shape(self):
+        """
+        Return a tuple representing the dimensionality of the DataFrame.
+
+        The number of rows is a Delayed result. The number of columns
+        is a concrete integer.
+
+        Examples
+        --------
+        >>> df.size  # doctest: +SKIP
+        (Delayed('int-07f06075-5ecc-4d77-817e-63c69a9188a8'), 2)
+        """
+        from dask.delayed import delayed
+        col_size = len(self.columns)
+        row_size = delayed(int)(self.size / col_size)
+        return (row_size, col_size)
 
     @property
     def dtypes(self):
@@ -4269,26 +4369,6 @@ def maybe_shift_divisions(df, periods, freq):
         divisions = divs.shift(periods, freq=freq).index
         return type(df)(df.dask, df._name, df._meta, divisions)
     return df
-
-
-def to_delayed(df, optimize_graph=True):
-    """Convert into a list of ``dask.delayed`` objects, one per partition.
-
-    Deprecated, please use the equivalent ``df.to_delayed`` method instead.
-
-    Parameters
-    ----------
-    optimize_graph : bool, optional
-        If True [default], the graph is optimized before converting into
-        ``dask.delayed`` objects.
-
-    See Also
-    --------
-    dask.dataframe.from_delayed
-    """
-    warnings.warn("DeprecationWarning: The `dd.to_delayed` function is "
-                  "deprecated, please use the `.to_delayed()` method instead.")
-    return df.to_delayed(optimize_graph=optimize_graph)
 
 
 @wraps(pd.to_datetime)

@@ -5,7 +5,7 @@ import itertools
 import math
 import uuid
 import warnings
-from collections import Iterable, Iterator, defaultdict
+from collections import defaultdict
 from distutils.version import LooseVersion
 from functools import wraps, partial
 from operator import getitem
@@ -30,7 +30,7 @@ except ImportError:
 from .. import config
 from ..base import tokenize, dont_optimize, is_dask_collection, DaskMethodsMixin
 from ..bytes import open_files
-from ..compatibility import apply, urlopen
+from ..compatibility import apply, urlopen, Iterable, Iterator
 from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict
 from ..delayed import Delayed
@@ -1295,17 +1295,12 @@ class Bag(DaskMethodsMixin):
         import pandas as pd
         import dask.dataframe as dd
         if meta is None:
-            if isinstance(columns, pd.DataFrame):
-                warnings.warn("Passing metadata to `columns` is deprecated. "
-                              "Please use the `meta` keyword instead.")
-                meta = columns
-            else:
-                head = self.take(1, warn=False)
-                if len(head) == 0:
-                    raise ValueError("`dask.bag.Bag.to_dataframe` failed to "
-                                     "properly infer metadata, please pass in "
-                                     "metadata via the `meta` keyword")
-                meta = pd.DataFrame(list(head), columns=columns)
+            head = self.take(1, warn=False)
+            if len(head) == 0:
+                raise ValueError("`dask.bag.Bag.to_dataframe` failed to "
+                                 "properly infer metadata, please pass in "
+                                 "metadata via the `meta` keyword")
+            meta = pd.DataFrame(list(head), columns=columns)
         elif columns is not None:
             raise ValueError("Can't specify both `meta` and `columns`")
         else:

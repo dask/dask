@@ -28,6 +28,10 @@ def loc(df, iindexer, cindexer=None):
         return df.loc[iindexer, cindexer]
 
 
+def iloc(df, cindexer=None):
+    return df.iloc[:, cindexer]
+
+
 def try_loc(df, iindexer, cindexer=None):
     """
     .loc for unknown divisions
@@ -218,7 +222,7 @@ else:
         return x._get_level_values(n)
 
 
-def concat(dfs, axis=0, join='outer', uniform=False):
+def concat(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
     """Concatenate, handling some edge cases:
 
     - Unions categoricals between partitions
@@ -235,7 +239,10 @@ def concat(dfs, axis=0, join='outer', uniform=False):
         necessarily categories). Default is False.
     """
     if axis == 1:
-        return pd.concat(dfs, axis=axis, join=join)
+        with warnings.catch_warnings():
+            if filter_warning:
+                warnings.simplefilter('ignore', FutureWarning)
+            return pd.concat(dfs, axis=axis, join=join)
 
     if len(dfs) == 1:
         return dfs[0]
@@ -291,11 +298,14 @@ def concat(dfs, axis=0, join='outer', uniform=False):
             # pandas may raise a RuntimeWarning for comparing ints and strs
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
+                if filter_warning:
+                    warnings.simplefilter('ignore', FutureWarning)
                 cat_mask = pd.concat([(df.dtypes == 'category').to_frame().T
                                       for df in dfs3], join=join).any()
 
         if cat_mask.any():
             not_cat = cat_mask[~cat_mask].index
+            # this should be aligned, so no need to filter warning
             out = pd.concat([df[df.columns.intersection(not_cat)]
                              for df in dfs3], join=join)
             temp_ind = out.index
@@ -326,6 +336,8 @@ def concat(dfs, axis=0, join='outer', uniform=False):
             # pandas may raise a RuntimeWarning for comparing ints and strs
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
+                if filter_warning:
+                    warnings.simplefilter("ignore", FutureWarning)
                 out = pd.concat(dfs3, join=join)
     else:
         if is_categorical_dtype(dfs2[0].dtype):
@@ -333,7 +345,10 @@ def concat(dfs, axis=0, join='outer', uniform=False):
                 ind = concat([df.index for df in dfs2])
             return pd.Series(union_categoricals(dfs2), index=ind,
                              name=dfs2[0].name)
-        out = pd.concat(dfs2, join=join)
+        with warnings.catch_warnings():
+            if filter_warning:
+                warnings.simplefilter('ignore', FutureWarning)
+            out = pd.concat(dfs2, join=join)
     # Re-add the index if needed
     if ind is not None:
         out.index = ind

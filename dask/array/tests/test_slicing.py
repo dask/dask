@@ -470,6 +470,7 @@ def test_slicing_consistent_names():
     assert same_keys(a[-11:11], a[:])
     assert same_keys(a[-11:-9], a[:1])
     assert same_keys(a[-1], a[9])
+    assert same_keys(a[0::-1], a[0:-11:-1])
 
 
 def test_slicing_consistent_names_after_normalization():
@@ -798,3 +799,24 @@ def test_pathological_unsorted_slicing():
 
     assert '10' in str(info.list[0])
     assert 'out-of-order' in str(info.list[0])
+
+
+@pytest.mark.parametrize('params', [(2, 2, 1), (5, 3, 2)])
+def test_setitem_with_different_chunks_preserves_shape(params):
+    """ Reproducer for https://github.com/dask/dask/issues/3730.
+
+    Mutating based on an array with different chunks can cause new chunks to be
+    used.  We need to ensure those new chunk sizes are applied to the mutated
+    array, otherwise the array won't generate the correct keys.
+    """
+    array_size, chunk_size1, chunk_size2 = params
+    x = da.zeros(array_size, chunks=chunk_size1)
+    mask = da.zeros(array_size, chunks=chunk_size2)
+    x[mask] = 1
+    result = x.compute()
+    assert x.shape == result.shape
+
+
+def test_gh3579():
+    assert_eq(np.arange(10)[0::-1], da.arange(10, chunks=3)[0::-1])
+    assert_eq(np.arange(10)[::-1], da.arange(10, chunks=3)[::-1])

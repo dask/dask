@@ -1,3 +1,5 @@
+set -xe
+
 #!/usr/bin/env bash
 # Install conda
 case "$(uname -s)" in
@@ -14,7 +16,7 @@ esac
 wget https://repo.continuum.io/miniconda/$MINICONDA_FILENAME -O miniconda.sh
 bash miniconda.sh -b -p $HOME/miniconda
 export PATH="$HOME/miniconda/bin:$PATH"
-conda config --set always_yes yes --set changeps1 no
+conda config --set always_yes yes --set changeps1 no --set remote_max_retries 10
 
 # Create conda environment
 conda create -q -n test-environment python=$PYTHON
@@ -45,6 +47,7 @@ conda install -q -c conda-forge \
     graphviz \
     h5py \
     ipython \
+    lz4 \
     partd \
     psutil \
     pytables \
@@ -112,3 +115,5 @@ fi;
 pip install --no-deps -e .[complete]
 echo conda list
 conda list
+
+set +xe
