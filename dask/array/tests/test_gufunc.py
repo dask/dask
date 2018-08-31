@@ -283,3 +283,48 @@ def test_apply_gufunc_check_inhomogeneous_chunksize():
     with pytest.raises(ValueError) as excinfo:
         da.apply_gufunc(foo, "(),()->()", a, b, output_dtypes=float, allow_rechunk=False)
     assert "with different chunksize present" in str(excinfo.value)
+
+
+def test_apply_gufunc_infer_dtype():
+    x = np.arange(50).reshape((5, 10))
+    y = np.arange(10)
+    dx = da.from_array(x, chunks=5)
+    dy = da.from_array(y, chunks=5)
+
+    def foo(x, *args, **kwargs):
+        cast = kwargs.pop('cast', 'i8')
+        return (x + sum(args)).astype(cast)
+
+    dz = apply_gufunc(foo, "(),(),()->()", dx, dy, 1)
+    z = foo(dx, dy, 1)
+    assert_eq(dz, z)
+
+    dz = apply_gufunc(foo, "(),(),()->()", dx, dy, 1, cast='f8')
+    z = foo(dx, dy, 1, cast='f8')
+    assert_eq(dz, z)
+
+    dz = apply_gufunc(foo, "(),(),()->()", dx, dy, 1, cast='f8', output_dtypes='f8')
+    z = foo(dx, dy, 1, cast='f8')
+    print(dz, z)
+    assert_eq(dz, z)
+
+    def foo(x):
+        raise RuntimeError("Woops")
+
+    try:
+        dz = apply_gufunc(foo, "()->()", dx)
+    except Exception as e:
+        assert e.args[0].startswith("`dtype` inference failed")
+        assert "Please specify the dtype explicitly" in e.args[0]
+        assert 'RuntimeError' in e.args[0]
+    else:
+        assert False, "Should have errored"
+
+    # Multiple outputs
+    def foo(x, y):
+        return x + y, x - y
+    
+    z0, z1 = apply_gufunc(foo, "(),()->(),()", dx, dy)
+
+    assert_eq(z0, dx + dy)
+    assert_eq(z1, dx - dy)

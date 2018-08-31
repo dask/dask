@@ -9,7 +9,7 @@ try:
 except ImportError:
     from toolz import concat, merge, unique
 
-from .core import Array, asarray, atop, getitem
+from .core import Array, asarray, atop, getitem, apply_infer_dtype
 from .. import sharedict
 from ..core import flatten
 
@@ -144,9 +144,10 @@ def apply_gufunc(func, signature, *args, **kwargs):
 
     ## Assert output_dtypes
     if output_dtypes is None:
-        raise ValueError("Must specify `output_dtypes` of output array(s)")
-    elif isinstance(output_dtypes, str):
-        otypes = list(output_dtypes)
+        output_dtypes = apply_infer_dtype(func, args, kwargs, "apply_gufunc", "output_dtypes", nout)
+        
+    if isinstance(output_dtypes, str):
+        otypes = [output_dtypes]
         output_dtypes = otypes[0] if nout is None else otypes
     elif isinstance(output_dtypes, (tuple, list)):
         if nout is None:
