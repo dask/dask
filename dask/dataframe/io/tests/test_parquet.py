@@ -824,7 +824,7 @@ def test_filters(tmpdir):
     xfail_pyarrow_pyarrow=("Race condition writing using pyarrow with partition_on. "
                            "Fixed on master, but not on pyarrow 0.8.0")
 )
-def test_division_read_with_filters(tmpdir, write_engine, read_engine):
+def test_divisions_read_with_filters(tmpdir, write_engine, read_engine):
     tmpdir = str(tmpdir)
     #generate dataframe
     size = 100
