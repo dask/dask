@@ -819,12 +819,8 @@ def test_filters(tmpdir):
     assert len(ddf2) > 0
 
 
-@write_read_engines(
-    xfail_pyarrow_fastparquet=pyarrow_fastparquet_msg,
-    xfail_pyarrow_pyarrow=("Race condition writing using pyarrow with partition_on. "
-                           "Fixed on master, but not on pyarrow 0.8.0")
-)
-def test_divisions_read_with_filters(tmpdir, write_engine, read_engine):
+def test_divisions_read_with_filters(tmpdir):
+    check_fastparquet()
     tmpdir = str(tmpdir)
     #generate dataframe
     size = 100
@@ -836,10 +832,10 @@ def test_divisions_read_with_filters(tmpdir, write_engine, read_engine):
                        'c': np.random.randint(1, 5, size=size)})
     d = dd.from_pandas(df, npartitions=4)
     #save it
-    d.to_parquet(tmpdir, partition_on=['a'], engine=write_engine)
+    d.to_parquet(tmpdir, partition_on=['a'], engine='fastparquet')
     #read it
     out = dd.read_parquet(tmpdir,
-                          engine=read_engine,
+                          engine='fastparquet',
                           filters=[('a', '==', 'b')])
     #test it
     expected_divisions = (25, 49)
