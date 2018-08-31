@@ -1,14 +1,18 @@
 from __future__ import print_function, division, absolute_import
 
+import re
 import requests
 import uuid
+from fsspec.spec import AbstractFileSystem
 
 from . import core
 
 DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
+# https://stackoverflow.com/a/15926317/3821154
+ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
 
 
-class HTTPFileSystem(object):
+class HTTPFileSystem(AbstractFileSystem):
     """
     Simple File-System for fetching data via HTTP(S)
 
@@ -29,9 +33,21 @@ class HTTPFileSystem(object):
         self.kwargs = storage_options
         self.session = requests.Session()
 
-    def glob(self, url):
-        """For a template path, return matching files"""
-        raise NotImplementedError
+    def ls(self, url, detail=True):
+        # ignoring URL-encoded arguments
+        r = requests.get(url, **self.kwargs)
+        links = ex.findall(r.text)
+        out = []
+        for u, l in links:
+            if l.startswith('http'):
+                if l.startswith(url):
+                    out.append(l)
+            else:
+                out.append('/'.join([url.rstrip('/'), l]))
+        if detail:
+            return [{'name': u, 'type': 'file'} for u in out]
+        else:
+            return out
 
     def mkdirs(self, url):
         """Make any intermediate directories to make path writable"""
@@ -46,17 +62,22 @@ class HTTPFileSystem(object):
             Full URL with protocol
         mode: string
             must be "rb"
+        block_size: int or None
+            Bytes to download in one request; use instance value if None.
         kwargs: key-value
             Any other parameters, passed to requests calls
         """
         if mode != 'rb':
             raise NotImplementedError
         block_size = block_size if block_size is not None else self.block_size
-        return HTTPFile(url, self.session, block_size, **self.kwargs)
+        kw = self.kwargs.copy()
+        kw.update(kwargs)
+        return HTTPFile(url, self.session, block_size, **kw)
 
     def ukey(self, url):
-        """Unique identifier, implied file might have changed every time"""
-        return uuid.uuid1().hex
+        """Unique identifier; assume HTTP files are static, unchanging"""
+        from dask.base import tokenize
+        return tokenize(url, self.kwargs)
 
     def size(self, url):
         """Size in bytes of the file at path"""
@@ -99,7 +120,7 @@ class HTTPFile(object):
         try:
             self.size = file_size(url, self.session, allow_redirects=True,
                                   **self.kwargs)
-        except ValueError:
+        except (ValueError, requests.HTTPError):
             # No size information - only allow read() and no seek()
             self.size = None
         self.cache = None
