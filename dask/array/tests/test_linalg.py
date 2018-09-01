@@ -659,10 +659,6 @@ def test_no_chunks_svd():
     [(5,), (2,), 0],
     [(5,), (2,), (0,)],
     [(5, 6), (2, 2), None],
-    [(5, 6), (2, 2), 0],
-    [(5, 6), (2, 2), 1],
-    [(5, 6), (2, 2), (0, 1)],
-    [(5, 6), (2, 2), (1, 0)],
 ])
 @pytest.mark.parametrize("norm", [
     None,
@@ -683,6 +679,39 @@ def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
     d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
 
     assert_eq(a_r, d_r)
+
+
+@pytest.mark.parametrize("shape, chunks", [
+    [(5,), (2,)],
+    [(5, 6), (2, 2)],
+    [(4, 5, 6), (2, 2, 2)],
+    [(4, 5, 6, 7), (2, 2, 2, 2)],
+    [(4, 5, 6, 7, 3), (2, 2, 2, 2, 2)],
+])
+@pytest.mark.parametrize("norm", [
+    None,
+    1,
+    -1,
+    np.inf,
+    -np.inf,
+])
+@pytest.mark.parametrize("keepdims", [
+    False,
+    True,
+])
+def test_norm_any_slice(shape, chunks, norm, keepdims):
+    a = np.random.random(shape)
+    d = da.from_array(a, chunks=chunks)
+
+    for firstaxis in range(len(shape)):
+        for secondaxis in range(len(shape)):
+            if firstaxis != secondaxis:
+                axis = (firstaxis, secondaxis)
+            else:
+                axis = firstaxis
+            a_r = np.linalg.norm(a, ord=norm, axis=axis, keepdims=keepdims)
+            d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
+            assert_eq(a_r, d_r)
 
 
 @pytest.mark.parametrize("shape, chunks, axis", [
@@ -713,6 +742,8 @@ def test_norm_1dim(shape, chunks, axis, norm, keepdims):
     [(5, 6), (2, 2), None],
     [(5, 6), (2, 2), (0, 1)],
     [(5, 6), (2, 2), (1, 0)],
+    [(4, 5, 6, 7), (2, 2, 2, 2), (1,2)],
+    [(4, 5, 6, 7), (2, 2, 2, 2), (-1,-2)],
 ])
 @pytest.mark.parametrize("norm", [
     "fro",
@@ -730,7 +761,7 @@ def test_norm_2dim(shape, chunks, axis, norm, keepdims):
 
     # Need one chunk on last dimension for svd.
     if norm == "nuc" or norm == 2 or norm == -2:
-        d = d.rechunk((d.chunks[0], d.shape[1]))
+        d = d.rechunk({axis[-1]: -1})
 
     a_r = np.linalg.norm(a, ord=norm, axis=axis, keepdims=keepdims)
     d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)

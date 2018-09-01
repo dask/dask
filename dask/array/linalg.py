@@ -1081,15 +1081,15 @@ def lstsq(a, b):
 
 @wraps(np.linalg.norm)
 def norm(x, ord=None, axis=None, keepdims=False):
-    if x.ndim > 2:
-        raise ValueError("Improper number of dimensions to norm.")
-
     if axis is None:
         axis = tuple(range(x.ndim))
     elif isinstance(axis, Number):
         axis = (int(axis),)
     else:
         axis = tuple(axis)
+
+    if len(axis) > 2:
+        raise ValueError("Improper number of dimensions to norm.")
 
     if ord == "fro":
         ord = None
@@ -1111,26 +1111,34 @@ def norm(x, ord=None, axis=None, keepdims=False):
         if len(axis) == 1:
             r = r.max(axis=axis, keepdims=keepdims)
         else:
-            r = r.sum(axis=axis[1], keepdims=keepdims).max(keepdims=keepdims)
+            r = r.sum(axis=axis[1], keepdims=True).max(axis=axis[0], keepdims=True)
+            if keepdims is False:
+                r = r.squeeze(axis=axis)
     elif ord == -np.inf:
         r = abs(r)
         if len(axis) == 1:
             r = r.min(axis=axis, keepdims=keepdims)
         else:
-            r = r.sum(axis=axis[1], keepdims=keepdims).min(keepdims=keepdims)
+            r = r.sum(axis=axis[1], keepdims=True).min(axis=axis[0], keepdims=True)
+            if keepdims is False:
+                r = r.squeeze(axis=axis)
     elif ord == 0:
         if len(axis) == 2:
             raise ValueError("Invalid norm order for matrices.")
 
-        r = (r != 0).astype(r.dtype).sum(axis=0, keepdims=keepdims)
+        r = (r != 0).astype(r.dtype).sum(axis=axis, keepdims=keepdims)
     elif ord == 1:
         r = abs(r)
         if len(axis) == 1:
             r = r.sum(axis=axis, keepdims=keepdims)
         else:
-            r = r.sum(axis=axis[0], keepdims=keepdims).max(keepdims=keepdims)
+            r = r.sum(axis=axis[0], keepdims=True).max(axis=axis[1], keepdims=True)
+            if keepdims is False:
+                r = r.squeeze(axis=axis)
     elif len(axis) == 2 and ord == -1:
-        r = abs(r).sum(axis=axis[0], keepdims=keepdims).min(keepdims=keepdims)
+        r = abs(r).sum(axis=axis[0], keepdims=True).min(axis=axis[1], keepdims=True)
+        if keepdims is False:
+            r = r.squeeze(axis=axis)
     elif len(axis) == 2 and ord == 2:
         r = svd(x)[1][None].max(keepdims=keepdims)
     elif len(axis) == 2 and ord == -2:
