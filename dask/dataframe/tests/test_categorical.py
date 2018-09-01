@@ -270,6 +270,14 @@ def assert_array_index_eq(left, right):
     """left and right are equal, treating index and array as equivalent"""
     assert_eq(left, pd.Index(right) if isinstance(right, np.ndarray) else right)
 
+def test_return_type_known_categories():
+        #need to understand properly and do the test.
+        df = pd.DataFrame({"A":['a','b','c']})
+        df['A'] = df['A'].astype('category')
+        dask_df = dd.from_pandas(df,2)
+        ret_type = dask_df.A.cat.as_known()
+        assert isinstance(ret_type, dd.core.Series)
+        
 
 class TestCategoricalAccessor:
 
