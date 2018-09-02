@@ -2527,6 +2527,9 @@ class DataFrame(_Frame):
                   pd.compat.isidentifier(c)))
         return list(o)
 
+    def _ipython_key_completions_(self):
+        return self.columns.tolist()
+
     @property
     def ndim(self):
         """ Return dimensionality """
