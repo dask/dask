@@ -2718,6 +2718,16 @@ def test_getitem_column_types(col_type):
     assert_eq(df[cols], ddf[cols])
 
 
+def test_ipython_completion():
+    df = pd.DataFrame({'a': [1], 'b': [2]})
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    completions = ddf._ipython_key_completions_()
+    assert 'a' in completions
+    assert 'b' in completions
+    assert 'c' not in completions
+
+
 def test_diff():
     df = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
     ddf = dd.from_pandas(df, 5)
