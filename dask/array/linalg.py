@@ -111,6 +111,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             "  2. Have only one column of blocks\n\n"
             "Note: This function (tsqr) supports QR decomposition in the case of\n"
             "tall-and-skinny matrices (single column chunk/block; see qr)"
+            "shape: {}, chunks: {}".format(data.shape, data.chunks)
         )
 
     token = '-' + tokenize(data, compute_svd)
@@ -1104,6 +1105,8 @@ def norm(x, ord=None, axis=None, keepdims=False):
     elif ord == "nuc":
         if len(axis) == 1:
             raise ValueError("Invalid norm order for vectors.")
+        if x.ndim > 2:
+            raise NotImplementedError("SVD based norm not implemented for ndim > 2")
 
         r = svd(x)[1][None].sum(keepdims=keepdims)
     elif ord == np.inf:
@@ -1140,8 +1143,12 @@ def norm(x, ord=None, axis=None, keepdims=False):
         if keepdims is False:
             r = r.squeeze(axis=axis)
     elif len(axis) == 2 and ord == 2:
+        if x.ndim > 2:
+            raise NotImplementedError("SVD based norm not implemented for ndim > 2")
         r = svd(x)[1][None].max(keepdims=keepdims)
     elif len(axis) == 2 and ord == -2:
+        if x.ndim > 2:
+            raise NotImplementedError("SVD based norm not implemented for ndim > 2")
         r = svd(x)[1][None].min(keepdims=keepdims)
     else:
         if len(axis) == 2:

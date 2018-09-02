@@ -742,8 +742,6 @@ def test_norm_1dim(shape, chunks, axis, norm, keepdims):
     [(5, 6), (2, 2), None],
     [(5, 6), (2, 2), (0, 1)],
     [(5, 6), (2, 2), (1, 0)],
-    [(4, 5, 6, 7), (2, 2, 2, 2), (1,2)],
-    [(4, 5, 6, 7), (2, 2, 2, 2), (-1,-2)],
 ])
 @pytest.mark.parametrize("norm", [
     "fro",
@@ -761,9 +759,31 @@ def test_norm_2dim(shape, chunks, axis, norm, keepdims):
 
     # Need one chunk on last dimension for svd.
     if norm == "nuc" or norm == 2 or norm == -2:
-        d = d.rechunk({axis[-1]: -1})
+        rechunkaxis = -1
+        d = d.rechunk({rechunkaxis: -1})
 
     a_r = np.linalg.norm(a, ord=norm, axis=axis, keepdims=keepdims)
     d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
 
     assert_eq(a_r, d_r)
+
+
+@pytest.mark.parametrize("shape, chunks, axis", [
+    [(4, 5, 6, 7), (2, 2, 2, 2), (1,2)],
+    [(4, 5, 6, 7), (2, 2, 2, 2), (-1,-2)],
+])
+@pytest.mark.parametrize("norm", [
+    "nuc",
+    2,
+    -2
+])
+@pytest.mark.parametrize("keepdims", [
+    False,
+    True,
+])
+def test_norm_implemented_errors(shape, chunks, axis, norm, keepdims):
+    a = np.random.random(shape)
+    d = da.from_array(a, chunks=chunks)
+    if len(shape) > 2 and len(axis) == 2:
+        with pytest.raises(NotImplementedError):
+            da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
