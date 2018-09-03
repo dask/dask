@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
+from numpy.core.numerictypes import typecodes
 from itertools import count
 import re
 
@@ -145,9 +146,17 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ## Assert output_dtypes
     if output_dtypes is None:
         output_dtypes = apply_infer_dtype(func, args, kwargs, "apply_gufunc", "output_dtypes", nout)
-        
+
     if isinstance(output_dtypes, str):
-        otypes = [output_dtypes]
+        is_list_of_typcodes = True
+        for char in output_dtypes:
+            if char not in typecodes['All']:
+                is_list_of_typcodes = False
+                break
+        if is_list_of_typcodes:
+            otypes = list(output_dtypes)
+        else:
+            otypes = [output_dtypes]
         output_dtypes = otypes[0] if nout is None else otypes
     elif isinstance(output_dtypes, (tuple, list)):
         if nout is None:

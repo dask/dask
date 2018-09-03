@@ -323,7 +323,7 @@ def test_apply_gufunc_infer_dtype():
     # Multiple outputs
     def foo(x, y):
         return x + y, x - y
-    
+
     z0, z1 = apply_gufunc(foo, "(),()->(),()", dx, dy)
 
     assert_eq(z0, dx + dy)
