@@ -84,8 +84,10 @@ def apply_gufunc(func, signature, *args, **kwargs):
         According to the specification of numpy.gufunc signature [2]_
     *args : numeric
         Input arrays or scalars to the callable function.
-    output_dtypes : dtype or list of dtypes, keyword only
-        dtype or list of output dtypes.
+    output_dtypes : Optional, dtype or list of dtypes, keyword only
+        dtype or list of output dtypes. If not given, a call onto ``func`` with
+        a small set of data is performed in order to try to automatically
+        determine the output dtypes.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
         new core dimensions (not found on inputs) appear on outputs.

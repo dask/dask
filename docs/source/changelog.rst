@@ -7,7 +7,7 @@ Changelog
 Array
 +++++
 
--
+- ``apply_gufunc`` implements automatic infer of functions output dtypes (:pr:`3936`) `Markus Gonser`_
 
 Dataframe
 +++++++++
