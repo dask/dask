@@ -184,7 +184,7 @@ class CategoricalAccessor(Accessor):
             Keywords to pass on to the call to `compute`.
         """
         if self.known:
-            return self
+            return self._series
         categories = self._property_map('categories').unique().compute(**kwargs)
         return self.set_categories(categories.values)
 
