@@ -559,8 +559,8 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype='dtype', nout=
         Function for which output dtype is to be determined
 
     args: List of array like
-        Arguments to the function, which qwould usually be used. Only attributes 
-        ``ndim`` and ``dtype`` are used. 
+        Arguments to the function, which qwould usually be used. Only attributes
+        ``ndim`` and ``dtype`` are used.
 
     kwargs: dict
         Additional ``kwargs`` to the ``func``
@@ -569,7 +569,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype='dtype', nout=
         Name of calling function to improve potential error messages
 
     suggest_dtype: None/False or String
-        If not ``None`` adds suggestion to potential error message to specify a dtype 
+        If not ``None`` adds suggestion to potential error message to specify a dtype
         via the specified kwarg. Defaults to ``'dtype'``.
 
     nout: None or Int
