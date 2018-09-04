@@ -2678,6 +2678,9 @@ class DataFrame(_Frame):
                     callable(v) or pd.api.types.is_scalar(v)):
                 raise TypeError("Column assignment doesn't support type "
                                 "{0}".format(type(v).__name__))
+            if callable(v):
+                kwargs[k] = v(self)
+
         pairs = list(sum(kwargs.items(), ()))
 
         # Figure out columns of the output
