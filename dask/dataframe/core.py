@@ -4084,8 +4084,9 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         else:
             d[(out1, k)] = (methods.boundary_slice, (name, i - 1), low, b[j], False)
             low = b[j]
+            if len(a) == i + 1 or a[i] < a[i + 1]:
+                j += 1
             i += 1
-            j += 1
         c.append(low)
         k += 1
 
@@ -4119,7 +4120,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         while c[i] < b[j]:
             tmp.append((out1, i))
             i += 1
-        if last_elem and c[i] == b[-1] and (b[-1] != b[-2] or j == len(b) - 1) and i < k:
+        while last_elem and c[i] == b[-1] and (b[-1] != b[-2] or j == len(b) - 1) and i < k:
             # append if last split is not included
             tmp.append((out1, i))
             i += 1
