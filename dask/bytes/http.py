@@ -37,17 +37,20 @@ class HTTPFileSystem(AbstractFileSystem):
         # ignoring URL-encoded arguments
         r = requests.get(url, **self.kwargs)
         links = ex.findall(r.text)
-        out = []
+        out = set()
         for u, l in links:
             if l.startswith('http'):
                 if l.startswith(url):
-                    out.append(l)
+                    out.add(l)
             else:
-                out.append('/'.join([url.rstrip('/'), l]))
+                if l not in ['..', '../']:
+                    # Ignore FTP-like "parent"
+                    out.add('/'.join([url.rstrip('/'), l]))
         if detail:
-            return [{'name': u, 'type': 'file'} for u in out]
+            return [{'name': u, 'type': 'directory'
+                     if u.endswith('/') else 'file'} for u in out]
         else:
-            return out
+            return list(sorted(out))
 
     def mkdirs(self, url):
         """Make any intermediate directories to make path writable"""
