@@ -925,6 +925,13 @@ def test_assign():
         d.assign(foo=d_unknown.a)
 
 
+def test_assign_callable():
+    df = dd.from_pandas(pd.DataFrame({"A": range(10)}), npartitions=2)
+    a = df.assign(B=df.A.shift())
+    b = df.assign(B=lambda x: x.A.shift())
+    assert_eq(a, b)
+
+
 def test_map():
     assert_eq(d.a.map(lambda x: x + 1), full.a.map(lambda x: x + 1))
     lk = dict((v, v + 1) for v in full.a.values)
