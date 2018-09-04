@@ -273,3 +273,15 @@ def test_turn_off_fusion():
 
     assert dask.get(a, y.__dask_keys__()) == dask.get(b, y.__dask_keys__())
     assert len(a) < len(b)
+
+def test_gh3937():
+    """ This will produce Integral type indices that are not ints (np.int64) """
+    data_size = 3322683
+    chunk_size = 2**20
+
+    old_data = da.from_array(np.random.random((data_size,)), (chunk_size,))
+    old_data = da.concatenate((old_data, [old_data[-1]]))
+
+    old_data = old_data.rechunk((chunk_size,))
+    old_data = da.coarsen(np.sum, old_data, {0: 2})
+    old_data.compute()
