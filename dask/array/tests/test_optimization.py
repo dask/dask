@@ -274,7 +274,9 @@ def test_turn_off_fusion():
     assert dask.get(a, y.__dask_keys__()) == dask.get(b, y.__dask_keys__())
     assert len(a) < len(b)
 
+
 def test_gh3937():
+    # test for github issue #3937
     x = da.from_array([1, 2, 3.], (2,))
     x = da.concatenate((x, [x[-1]]))
     y = x.rechunk((2,))
