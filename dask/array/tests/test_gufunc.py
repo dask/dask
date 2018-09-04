@@ -305,7 +305,6 @@ def test_apply_gufunc_infer_dtype():
 
     dz = apply_gufunc(foo, "(),(),()->()", dx, dy, 1, cast='f8', output_dtypes='f8')
     z = foo(dx, dy, 1, cast='f8')
-    print(dz, z)
     assert_eq(dz, z)
 
     def foo(x):
