@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
-from numpy.core.numerictypes import typecodes
 from itertools import count
 import re
 
@@ -84,10 +83,11 @@ def apply_gufunc(func, signature, *args, **kwargs):
         According to the specification of numpy.gufunc signature [2]_
     *args : numeric
         Input arrays or scalars to the callable function.
-    output_dtypes : Optional, dtype or list of dtypes, keyword only
-        dtype or list of output dtypes. If not given, a call onto ``func`` with
-        a small set of data is performed in order to try to automatically
-        determine the output dtypes.
+    output_dtypes : Optional, string, dtype or list of dtypes, keyword only
+        String with one or many comma separated dtypes or list of output
+        dtypes. If not given, a call onto ``func`` with a small set of data
+        is performed in order to try to automatically determine the output
+        dtypes.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
         new core dimensions (not found on inputs) appear on outputs.
@@ -145,22 +145,14 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ## Determine nout: nout = None for functions of one direct return; nout = int for return tuples
     nout = None if not isinstance(core_output_dimss, list) else len(core_output_dimss)
 
-    ## Assert output_dtypes
+    ## Determine and handle output_dtypes
     if output_dtypes is None:
         output_dtypes = apply_infer_dtype(func, args, kwargs, "apply_gufunc", "output_dtypes", nout)
+    elif isinstance(output_dtypes, str):
+        _otypes = output_dtypes.split(',')
+        output_dtypes = _otypes[0] if nout is None else _otypes
 
-    if isinstance(output_dtypes, str):
-        is_list_of_typcodes = True
-        for char in output_dtypes:
-            if char not in typecodes['All']:
-                is_list_of_typcodes = False
-                break
-        if is_list_of_typcodes:
-            otypes = list(output_dtypes)
-        else:
-            otypes = [output_dtypes]
-        output_dtypes = otypes[0] if nout is None else otypes
-    elif isinstance(output_dtypes, (tuple, list)):
+    if isinstance(output_dtypes, (tuple, list)):
         if nout is None:
             raise ValueError("Must specify single dtype for `output_dtypes` for function with one output")
         otypes = output_dtypes
