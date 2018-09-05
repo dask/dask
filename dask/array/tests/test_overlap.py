@@ -11,6 +11,9 @@ from dask.array.overlap import (fractional_slice, getitem, trim_internal,
 from dask.array.utils import assert_eq, same_keys
 
 
+parametrize = pytest.mark.parametrize
+
+
 def test_fractional_slice():
     assert (fractional_slice(('x', 4.9), {0: 2}) ==
             (getitem, ('x', 5), (slice(0, 2), )))
@@ -415,3 +418,21 @@ def test_overlap_few_dimensions():
     assert len(a.dask) < len(c.dask)
 
     assert len(c.dask) < 10 * len(a.dask)
+
+
+@parametrize('boundary', ['reflect', 'periodic', 'nearest', 'none'])
+def test_trim_boundry_is_dict(boundary):
+    a = da.from_array(np.arange(24).reshape(4, 6), chunks=(2, 3))
+    a_overlaped = da.overlap.overlap(a, 2,
+                                     boundary={0: 'reflect', 1: boundary})
+    a_trimmed = da.overlap.trim(a, 2,
+                                boundary={0: 'reflect', 1: boundary})
+    assert np.all(a == a_trimmed)
+
+
+@parametrize('boundary', ['reflect', 'periodic', 'nearest', 'none'])
+def test_trim_boundry_is_string(boundary):
+    a = da.from_array(np.arange(24).reshape(4, 6), chunks=(2, 3))
+    a_overlaped = da.overlap.overlap(a, 2, boundary=boundary)
+    a_trimmed = da.overlap.trim(a, 2, boundary=boundary)
+    assert np.all(a == a_trimmed)

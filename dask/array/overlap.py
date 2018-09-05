@@ -153,7 +153,14 @@ def overlap_internal(x, axes):
     return Array(dsk, name, chunks, dtype=x.dtype)
 
 
-def trim_internal(x, axes):
+def trim(x, depth, boundary=None):
+    """The inverse operation of overlap."""
+    depth = coerce_depth(x.ndim, depth)
+    boundary = coerce_boundary(x.ndim, boundary)
+    return trim_internal(x, depth, boundary)
+
+
+def trim_internal(x, axes, boundary=None):
     """ Trim sides from each block
 
     This couples well with the overlap operation, which may leave excess data on
@@ -164,6 +171,8 @@ def trim_internal(x, axes):
     dask.array.chunk.trim
     dask.array.map_blocks
     """
+    boundary2 = coerce_boundary(x.ndim, boundary)
+
     olist = []
     for i, bd in enumerate(x.chunks):
         ilist = []
@@ -173,8 +182,8 @@ def trim_internal(x, axes):
 
     chunks = tuple(olist)
 
-    return map_blocks(partial(chunk.trim, axes=axes), x, chunks=chunks,
-                      dtype=x.dtype)
+    return map_blocks(partial(chunk.trim, axes=axes, boundary=boundary2),
+                      x, chunks=chunks, dtype=x.dtype)
 
 
 def periodic(x, axis, depth):
@@ -462,8 +471,7 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
     g = overlap(x, depth=depth2, boundary=boundary2)
     g2 = g.map_blocks(func, **kwargs)
     if trim:
-        g3 = add_dummy_padding(g2, depth2, boundary2)
-        return trim_internal(g3, depth2)
+        return trim_internal(g2, depth2, boundary=boundary2)
     else:
         return g2
 

@@ -157,7 +157,7 @@ def coarsen(reduction, x, axes, trim_excess=False):
     return reduction(x.reshape(newshape), axis=tuple(range(1, x.ndim * 2, 2)))
 
 
-def trim(x, axes=None):
+def trim(x, axes=None, boundary=None, block_info=None):
     """ Trim boundaries off of array
 
     >>> x = np.arange(24).reshape((4, 6))
@@ -176,7 +176,28 @@ def trim(x, axes=None):
     if isinstance(axes, dict):
         axes = [axes.get(i, 0) for i in range(x.ndim)]
 
-    return x[tuple(slice(ax, -ax if ax else None) for ax in axes)]
+    if boundary is not None:
+        if block_info is None:
+            raise ValueError('``block_info`` must be provided if '
+                             'boundary condition is provided.')
+        if isinstance(boundary, str):
+            boundary = dict(zip(range(len(x.ndim)), boundary))
+
+        trim_front = [
+            False if (chunk_location == 0 and bdy == 'none') else True
+            for bdy, chunk_location in zip(
+                boundary, block_info[0]['chunk-location'])]
+        trim_back = [
+            False if (chunk_location != chunks-1 and bdy == 'none') else True
+            for bdy, chunks, chunk_location in zip(
+                boundary,
+                block_info[0]['num-chunks'],
+                block_info[0]['chunk-location'])]
+    else:
+        trim_front = [True] * len(axes)
+        trim_back = [True] * len(axes)
+    return x[tuple(slice(ax if front else 0, -ax if back and ax else None)
+                   for ax, front, back in zip(axes, trim_front, trim_back))]
 
 
 def topk(a, k, axis, keepdims):
