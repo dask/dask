@@ -456,12 +456,9 @@ def shuffle_group(df, col, stage, k, npartitions):
     c = ind._values
     typ = np.min_scalar_type(npartitions * 2)
 
-    npartitions, k, stage = [np.array(x, dtype=np.min_scalar_type(x))[()]
-                             for x in [npartitions, k, stage]]
-
     c = np.mod(c, npartitions).astype(typ, copy=False)
-    c = np.floor_divide(c, k ** stage, out=c)
-    c = np.mod(c, k, out=c)
+    np.floor_divide(c, k ** stage, out=c)
+    np.mod(c, k, out=c)
 
     indexer, locations = groupsort_indexer(c.astype(np.int64), k)
     df2 = df.take(indexer)

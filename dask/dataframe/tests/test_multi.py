@@ -1308,3 +1308,29 @@ def test_singleton_divisions():
     joined = ddf2.join(ddf2, rsuffix='r')
     assert joined.divisions == (1, 1)
     joined.compute()
+
+
+def test_repartition_repeated_divisions():
+    df = pd.DataFrame({'x': [0, 0, 0, 0]})
+    ddf = dd.from_pandas(df, npartitions=2).set_index('x')
+
+    ddf2 = ddf.repartition(divisions=(0, 0), force=True)
+    assert_eq(ddf2, df.set_index('x'))
+
+
+def test_multi_duplicate_divisions():
+    df1 = pd.DataFrame({'x': [0, 0, 0, 0]})
+    df2 = pd.DataFrame({'x': [0]})
+
+    ddf1 = dd.from_pandas(df1, npartitions=2).set_index('x')
+    ddf2 = dd.from_pandas(df2, npartitions=1).set_index('x')
+    assert ddf1.npartitions == 2
+    assert len(ddf1) == len(df1)
+
+    r1 = ddf1.merge(ddf2, how='left', left_index=True, right_index=True)
+
+    sf1 = df1.set_index('x')
+    sf2 = df2.set_index('x')
+    r2 = sf1.merge(sf2, how='left', left_index=True, right_index=True)
+
+    assert_eq(r1, r2)

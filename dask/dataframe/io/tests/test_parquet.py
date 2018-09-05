@@ -819,6 +819,52 @@ def test_filters(tmpdir):
     assert len(ddf2) > 0
 
 
+def test_divisions_read_with_filters(tmpdir):
+    check_fastparquet()
+    tmpdir = str(tmpdir)
+    #generate dataframe
+    size = 100
+    categoricals = []
+    for value in ['a', 'b', 'c', 'd']:
+        categoricals += [value] * int(size / 4)
+    df = pd.DataFrame({'a': categoricals,
+                       'b': np.random.random(size=size),
+                       'c': np.random.randint(1, 5, size=size)})
+    d = dd.from_pandas(df, npartitions=4)
+    #save it
+    d.to_parquet(tmpdir, partition_on=['a'], engine='fastparquet')
+    #read it
+    out = dd.read_parquet(tmpdir,
+                          engine='fastparquet',
+                          filters=[('a', '==', 'b')])
+    #test it
+    expected_divisions = (25, 49)
+    assert out.divisions == expected_divisions
+
+
+def test_divisions_are_known_read_with_filters(tmpdir):
+    check_fastparquet()
+    tmpdir = str(tmpdir)
+    #generate dataframe
+    df = pd.DataFrame({'unique': [0, 0, 1, 1, 2, 2, 3, 3],
+                       'id': ['id1', 'id2',
+                              'id1', 'id2',
+                              'id1', 'id2',
+                              'id1', 'id2']},
+                      index=[0, 0, 1, 1, 2, 2, 3, 3])
+    d = dd.from_pandas(df, npartitions=2)
+    #save it
+    d.to_parquet(tmpdir, partition_on=['id'], engine='fastparquet')
+    #read it
+    out = dd.read_parquet(tmpdir,
+                          engine='fastparquet',
+                          filters=[('id', '==', 'id1')])
+    #test it
+    assert out.known_divisions
+    expected_divisions = (0, 2, 3)
+    assert out.divisions == expected_divisions
+
+
 def test_read_from_fastparquet_parquetfile(tmpdir):
     check_fastparquet()
     fn = str(tmpdir)
