@@ -31,7 +31,7 @@ Documentation
 Array
 +++++
 
--  Support coordinate in gradient (:pr:`3948`) `Keisuke Fujii`_
+-  Support coordinate in gradient (:pr:`3949`) `Keisuke Fujii`_
 -  Fix argtopk split_every bug (:pr:`3810`) `Guido Imperiale`_
 -  Ensure result computing dask.array.isnull(`) always gives a numpy array (:pr:`3825`) `Stephan Hoyer`_
 -  Support concatenate for scipy.sparse in dask array (:pr:`3836`) `Matthew Rocklin`_
