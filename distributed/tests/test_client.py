@@ -5476,5 +5476,17 @@ def test_direct_sync(loop):
             assert c.submit(f).result()
 
 
+@gen_cluster()
+def test_mixing_clients(s, a, b):
+    c1 = yield Client(s.address, asynchronous=True)
+    c2 = yield Client(s.address, asynchronous=True)
+
+    future = c1.submit(inc, 1)
+    with pytest.raises(ValueError):
+        c2.submit(inc, future)
+    yield c1.close()
+    yield c2.close()
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401

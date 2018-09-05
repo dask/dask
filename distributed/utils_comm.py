@@ -90,9 +90,11 @@ class WrappedKey(object):
     only be accessed in a certain way.  Schedulers may have particular needs
     that can only be addressed by additional metadata.
     """
-
     def __init__(self, key):
         self.key = key
+
+    def __repr__(self):
+        return "%s('%s')" % (type(self).__name__, self.key)
 
 
 _round_robin_counter = [0]
@@ -144,7 +146,7 @@ collection_types = (tuple, list, set, frozenset)
 def unpack_remotedata(o, byte_keys=False, myset=None):
     """ Unpack WrappedKey objects from collection
 
-    Returns original collection and set of all found keys
+    Returns original collection and set of all found WrappedKey objects
 
     Examples
     --------
@@ -154,19 +156,19 @@ def unpack_remotedata(o, byte_keys=False, myset=None):
     >>> unpack_remotedata(())
     ((), set())
     >>> unpack_remotedata(rd)
-    ('mykey', {'mykey'})
+    ('mykey', {WrappedKey('mykey')})
     >>> unpack_remotedata([1, rd])
-    ([1, 'mykey'], {'mykey'})
+    ([1, 'mykey'], {WrappedKey('mykey')})
     >>> unpack_remotedata({1: rd})
-    ({1: 'mykey'}, {'mykey'})
+    ({1: 'mykey'}, {WrappedKey('mykey')})
     >>> unpack_remotedata({1: [rd]})
-    ({1: ['mykey']}, {'mykey'})
+    ({1: ['mykey']}, {WrappedKey('mykey')})
 
     Use the ``byte_keys=True`` keyword to force string keys
 
     >>> rd = WrappedKey(('x', 1))
     >>> unpack_remotedata(rd, byte_keys=True)
-    ("('x', 1)", {"('x', 1)"})
+    ("('x', 1)", {WrappedKey('('x', 1)')})
     """
     if myset is None:
         myset = set()
@@ -190,7 +192,7 @@ def unpack_remotedata(o, byte_keys=False, myset=None):
         k = o.key
         if byte_keys:
             k = tokey(k)
-        myset.add(k)
+        myset.add(o)
         return k
     else:
         return o

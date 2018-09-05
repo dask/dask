@@ -1391,8 +1391,8 @@ class Client(Node):
 
     @gen.coroutine
     def _gather(self, futures, errors='raise', direct=None, local_worker=None):
-        futures2, keys = unpack_remotedata(futures, byte_keys=True)
-        keys = [tokey(key) for key in keys]
+        unpacked, future_set = unpack_remotedata(futures, byte_keys=True)
+        keys = [tokey(future.key) for future in future_set]
         bad_data = dict()
         data = {}
 
@@ -1485,11 +1485,11 @@ class Client(Node):
             else:
                 break
 
-        if bad_data and errors == 'skip' and isinstance(futures2, list):
-            futures2 = [f for f in futures2 if f not in bad_data]
+        if bad_data and errors == 'skip' and isinstance(unpacked, list):
+            unpacked = [f for f in unpacked if f not in bad_data]
 
         data.update(response['data'])
-        result = pack_data(futures2, merge(data, bad_data))
+        result = pack_data(unpacked, merge(data, bad_data))
         raise gen.Return(result)
 
     def _threaded_gather(self, qin, qout, **kwargs):
@@ -2099,9 +2099,15 @@ class Client(Node):
                 dsk = dask.optimization.inline(dsk, keys=values)
 
             d = {k: unpack_remotedata(v) for k, v in dsk.items()}
-            extra_keys = set.union(*[v[1] for v in d.values()]) if d else set()
+            extra_futures = set.union(*[v[1] for v in d.values()]) if d else set()
+            extra_keys = {tokey(future.key) for future in extra_futures}
             dsk2 = str_graph({k: v[0] for k, v in d.items()}, extra_keys)
             dsk3 = {k: v for k, v in dsk2.items() if k is not v}
+            for future in extra_futures:
+                if future.client is not self:
+                    msg = ("Inputs contain futures that were created by "
+                           "another client.")
+                    raise ValueError(msg)
 
             if restrictions:
                 restrictions = keymap(tokey, restrictions)
@@ -2110,7 +2116,7 @@ class Client(Node):
             if loose_restrictions is not None:
                 loose_restrictions = list(map(tokey, loose_restrictions))
 
-            future_dependencies = {tokey(k): set(map(tokey, v[1])) for k, v in d.items()}
+            future_dependencies = {tokey(k): {tokey(f.key) for f in v[1]} for k, v in d.items()}
 
             for s in future_dependencies.values():
                 for v in s:

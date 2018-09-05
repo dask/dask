@@ -164,6 +164,10 @@ class Actor(WrappedKey):
 
             return self._sync(get_actor_attribute_from_worker)
 
+    @property
+    def client(self):
+        return self._future.client
+
 
 class ProxyRPC(object):
     """
