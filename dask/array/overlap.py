@@ -175,7 +175,7 @@ def trim_internal(x, axes, boundary=None):
 
     olist = []
     for i, bd in enumerate(x.chunks):
-        bdy = boundary2[i] if i in boundary2.keys() else None
+        bdy = boundary2.get(i, None)
         ilist = []
         for j, d in enumerate(bd):
             if bdy != 'none':
