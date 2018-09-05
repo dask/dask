@@ -614,8 +614,8 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
                         "got '{0}'".format(axis))
 
     # Map chunk across all blocks
-    name = 'arg-reduce-chunk-axis={0}-{1}'.format(axis, tokenize(x, chunk, 
-                                                                 combine, split_every, 
+    name = 'arg-reduce-chunk-axis={0}-{1}'.format(axis, tokenize(x, chunk,
+                                                                 combine, split_every,
                                                                  out))
     old = x.name
     keys = list(product(*map(range, x.numblocks)))
@@ -717,7 +717,7 @@ def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
     m = x.map_blocks(func, axis=axis, dtype=dtype)
 
     name = '{0}-axis={1}-{2}'.format(func.__name__, axis, tokenize(func, x, dtype,
-                                                               dtype, out))
+                                                                   dtype, out))
     n = x.numblocks[axis]
     full = slice(None, None, None)
     slc = (full,) * axis + (slice(-1, None),) + (full,) * (x.ndim - axis - 1)

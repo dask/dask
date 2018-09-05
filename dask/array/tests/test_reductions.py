@@ -8,6 +8,7 @@ from dask.array.utils import assert_eq as _assert_eq, same_keys
 from dask.core import get_deps
 import dask.config as config
 
+
 def assert_eq(a, b):
     _assert_eq(a, b, equal_nan=True)
 
