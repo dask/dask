@@ -176,27 +176,33 @@ def trim(x, axes=None, boundary=None, block_info=None):
     if isinstance(axes, dict):
         axes = [axes.get(i, 0) for i in range(x.ndim)]
 
+    # Default is to trim from all sides
+    trim_front = (ax for ax in axes)
+    trim_back = (-ax if ax else None for ax in axes)
     if boundary is not None:
+        # If the boundary was 'none', then we need to avoid trimming
+        # around the edges
         if block_info is None:
             raise ValueError('``block_info`` must be provided if '
                              'boundary condition is provided.')
         if isinstance(boundary, str):
             boundary = dict(zip(range(len(x.ndim)), boundary))
 
-        trim_front = [
-            False if (chunk_location == 0 and boundary.get(i, 'none') == 'none') else True
-            for i, chunk_location in enumerate(
-                block_info[0]['chunk-location'])]
-        trim_back = [
-            False if (chunk_location == chunks-1 and boundary.get(i, 'none') == 'none') else True
-            for i, (chunks, chunk_location) in enumerate(zip(
+        trim_front = (
+            0 if (chunk_location == 0 and
+                  boundary.get(i, 'none') == 'none') else t
+            for i, (chunk_location, t) in enumerate(
+                zip(block_info[0]['chunk-location'], trim_front)))
+        trim_back = (
+            None if (chunk_location == chunks-1
+                  and boundary.get(i, 'none') == 'none') else t
+            for i, (chunks, chunk_location, t) in enumerate(zip(
                 block_info[0]['num-chunks'],
-                block_info[0]['chunk-location']))]
-    else:
-        trim_front = [True] * len(axes)
-        trim_back = [True] * len(axes)
-    return x[tuple(slice(ax if front else 0, -ax if back and ax else None)
-                   for ax, front, back in zip(axes, trim_front, trim_back))]
+                block_info[0]['chunk-location'],
+                trim_back)))
+
+    return x[tuple(slice(front, back)
+                   for front, back in zip(trim_front, trim_back))]
 
 
 def topk(a, k, axis, keepdims):
