@@ -184,15 +184,14 @@ def trim(x, axes=None, boundary=None, block_info=None):
             boundary = dict(zip(range(len(x.ndim)), boundary))
 
         trim_front = [
-            False if (chunk_location == 0 and bdy == 'none') else True
-            for bdy, chunk_location in zip(
-                boundary, block_info[0]['chunk-location'])]
-        trim_back = [
-            False if (chunk_location != chunks-1 and bdy == 'none') else True
-            for bdy, chunks, chunk_location in zip(
-                boundary,
-                block_info[0]['num-chunks'],
+            False if (chunk_location == 0 and boundary[i] == 'none') else True
+            for i, chunk_location in enumerate(
                 block_info[0]['chunk-location'])]
+        trim_back = [
+            False if (chunk_location == chunks-1 and boundary[i] == 'none') else True
+            for i, (chunks, chunk_location) in enumerate(zip(
+                block_info[0]['num-chunks'],
+                block_info[0]['chunk-location']))]
     else:
         trim_front = [True] * len(axes)
         trim_back = [True] * len(axes)

@@ -425,7 +425,7 @@ def test_trim_boundry_is_dict(boundary):
     a = da.from_array(np.arange(24).reshape(4, 6), chunks=(2, 3))
     a_overlaped = da.overlap.overlap(a, 2,
                                      boundary={0: 'reflect', 1: boundary})
-    a_trimmed = da.overlap.trim(a, 2,
+    a_trimmed = da.overlap.trim(a_overlaped, 2,
                                 boundary={0: 'reflect', 1: boundary})
     assert np.all(a == a_trimmed)
 
@@ -434,5 +434,5 @@ def test_trim_boundry_is_dict(boundary):
 def test_trim_boundry_is_string(boundary):
     a = da.from_array(np.arange(24).reshape(4, 6), chunks=(2, 3))
     a_overlaped = da.overlap.overlap(a, 2, boundary=boundary)
-    a_trimmed = da.overlap.trim(a, 2, boundary=boundary)
+    a_trimmed = da.overlap.trim(a_overlaped, 2, boundary=boundary)
     assert np.all(a == a_trimmed)
