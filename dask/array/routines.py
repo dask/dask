@@ -427,9 +427,22 @@ def ediff1d(ary, to_end=None, to_begin=None):
 
 
 def _gradient_kernel(x, block_id, coord, axis, array_locs, grad_kwargs):
+    """
+    x: nd-array
+        array of one block
+    coord: 1d-array or scalar
+        coordinate along which the gradient is computed.
+    axis: int
+        axis along which the gradient is computed
+    array_locs:
+        actual location along axis. None if coordinate is scalar
+    grad_kwargs:
+        keyword to be passed to np.gradient
+    """
     block_loc = block_id[axis]
-    c = coord[array_locs[0][block_loc]: array_locs[1][block_loc]]
-    grad = np.gradient(x, c, axis=axis, **grad_kwargs)
+    if array_locs is not None:
+        coord = coord[array_locs[0][block_loc]: array_locs[1][block_loc]]
+    grad = np.gradient(x, coord, axis=axis, **grad_kwargs)
     return grad
 
 
@@ -463,11 +476,8 @@ def gradient(f, *varargs, **kwargs):
     if len(varargs) != len(axis):
         raise TypeError(
             "Spacing must either be a single scalar, or a scalar / 1d-array "
-            "per dimension"
+            "per axis"
         )
-    # make all the varargs 1d-array
-    varargs = [np.arange(f.shape[a]) * v if np.isscalar(v) else v for a, v
-               in zip(axis, varargs)]
 
     if issubclass(f.dtype.type, (np.bool8, Integral)):
         f = f.astype(float)
@@ -478,14 +488,19 @@ def gradient(f, *varargs, **kwargs):
     for i, ax in enumerate(axis):
         for c in f.chunks[ax]:
             if c < kwargs["edge_order"] + 1:
-                raise ValueError('Chunk size must be larger than edge_order + 1. '
-                                 'Given {}. Rechunk to proceed.'.format(c))
+                raise ValueError(
+                    'Chunk size must be larger than edge_order + 1. '
+                    'Given {}. Rechunk to proceed.'.format(c))
 
-        # coordinate position for each block with overlap
-        array_loc_stop = np.cumsum(np.array(f.chunks[ax])) + 1
-        array_loc_start = array_loc_stop - np.array(f.chunks[ax]) - 2
-        array_loc_stop[-1] -= 1
-        array_loc_start[0] = 0
+        if np.isscalar(varargs[i]):
+            array_locs = None
+        else:
+            # coordinate position for each block taking overlap into account
+            array_loc_stop = np.cumsum(np.array(f.chunks[ax])) + 1
+            array_loc_start = array_loc_stop - np.array(f.chunks[ax]) - 2
+            array_loc_stop[-1] -= 1
+            array_loc_start[0] = 0
+            array_locs = (array_loc_start, array_loc_stop)
 
         results.append(f.map_overlap(
             _gradient_kernel,
@@ -494,7 +509,7 @@ def gradient(f, *varargs, **kwargs):
             boundary="none",
             coord=varargs[i],
             axis=ax,
-            array_locs=(array_loc_start, array_loc_stop),
+            array_locs=array_locs,
             grad_kwargs=kwargs,
         ))
 
