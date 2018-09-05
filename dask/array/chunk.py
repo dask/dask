@@ -194,8 +194,8 @@ def trim(x, axes=None, boundary=None, block_info=None):
             for i, (chunk_location, t) in enumerate(
                 zip(block_info[0]['chunk-location'], trim_front)))
         trim_back = (
-            None if (chunk_location == chunks-1
-                  and boundary.get(i, 'none') == 'none') else t
+            None if (chunk_location == chunks-1 and
+                     boundary.get(i, 'none') == 'none') else t
             for i, (chunks, chunk_location, t) in enumerate(zip(
                 block_info[0]['num-chunks'],
                 block_info[0]['chunk-location'],
