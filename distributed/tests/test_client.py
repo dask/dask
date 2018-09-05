@@ -5488,5 +5488,13 @@ def test_mixing_clients(s, a, b):
     yield c2.close()
 
 
+@gen_cluster(client=True)
+def test_tuple_keys(c, s, a, b):
+    x = dask.delayed(inc)(1, dask_key_name=('x', 1))
+    y = dask.delayed(inc)(x, dask_key_name=('y', 1))
+    future = c.compute(y)
+    assert (yield future) == 3
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401

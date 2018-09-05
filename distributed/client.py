@@ -2098,7 +2098,7 @@ class Client(Node):
             if values:
                 dsk = dask.optimization.inline(dsk, keys=values)
 
-            d = {k: unpack_remotedata(v) for k, v in dsk.items()}
+            d = {k: unpack_remotedata(v, byte_keys=True) for k, v in dsk.items()}
             extra_futures = set.union(*[v[1] for v in d.values()]) if d else set()
             extra_keys = {tokey(future.key) for future in extra_futures}
             dsk2 = str_graph({k: v[0] for k, v in d.items()}, extra_keys)
