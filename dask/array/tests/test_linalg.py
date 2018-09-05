@@ -681,6 +681,7 @@ def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
     assert_eq(a_r, d_r)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("shape, chunks", [
     [(5,), (2,)],
     [(5, 3), (2, 2)],
