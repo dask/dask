@@ -449,6 +449,8 @@ def test_ediff1d(shape, to_end, to_begin):
     [(10, 15, 20), (), 2],
     [(10, 15, 20), (), -1],
     [(10, 15, 20), (), (0, 2)],
+    [(10, 15, 20), (np.exp(np.arange(10)), np.exp(np.arange(20)), ), (0, 2)],
+    [(10, 15, 20), (np.exp(np.arange(20)), ), -1],
 ])
 @pytest.mark.parametrize('edge_order', [
     1,

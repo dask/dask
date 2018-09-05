@@ -426,25 +426,16 @@ def ediff1d(ary, to_end=None, to_begin=None):
     return r
 
 
-def _gradient_kernel(f, grad_varargs, grad_kwargs):
-    return np.gradient(f, *grad_varargs, **grad_kwargs)
+def _gradient_kernel(x, block_id, coord, axis, array_locs, grad_kwargs):
+    block_loc = block_id[axis]
+    c = coord[array_locs[0][block_loc]: array_locs[1][block_loc]]
+    grad = np.gradient(x, c, axis=axis, **grad_kwargs)
+    return grad
 
 
 @wraps(np.gradient)
 def gradient(f, *varargs, **kwargs):
     f = asarray(f)
-
-    if not all([isinstance(e, Number) for e in varargs]):
-        raise NotImplementedError("Only numeric scalar spacings supported.")
-
-    if varargs == ():
-        varargs = (1,)
-    if len(varargs) == 1:
-        varargs = f.ndim * varargs
-    if len(varargs) != f.ndim:
-        raise TypeError(
-            "Spacing must either be a scalar or a scalar per dimension."
-        )
 
     kwargs["edge_order"] = math.ceil(kwargs.get("edge_order", 1))
     if kwargs["edge_order"] > 2:
@@ -464,27 +455,53 @@ def gradient(f, *varargs, **kwargs):
         raise ValueError("duplicate axes not allowed")
 
     axis = tuple(ax % f.ndim for ax in axis)
+    
+    if varargs == ():
+        varargs = (1,)
+    if len(varargs) == 1:
+        varargs = len(axis) * varargs
+    if len(varargs) != len(axis):
+        raise TypeError(
+            "Spacing must either be a single scalar, or a scalar / 1d-array "
+            "per dimension"
+        )
+    # make all the varargs 1d-array
+    varargs = [np.arange(f.shape[a]) * v if np.isscalar(v) else v for a, v
+               in zip(axis, varargs)]
 
     if issubclass(f.dtype.type, (np.bool8, Integral)):
         f = f.astype(float)
     elif issubclass(f.dtype.type, Real) and f.dtype.itemsize < 4:
         f = f.astype(float)
 
-    r = [
-        f.map_overlap(
+    results = []
+    for i, ax in enumerate(axis):
+        for c in f.chunks[ax]:
+            if c < kwargs["edge_order"] + 1:
+                raise ValueError('Chunk size must be larger than edge_order + 1. '
+                                 'Given {}. Rechunk to proceed.'.format(c))
+
+        # coordinate position for each block with overlap
+        array_loc_stop = np.cumsum(np.array(f.chunks[ax])) + 1
+        array_loc_start = array_loc_stop - np.array(f.chunks[ax]) - 2
+        array_loc_stop[-1] -= 1
+        array_loc_start[0] = 0
+
+        results.append(f.map_overlap(
             _gradient_kernel,
             dtype=f.dtype,
             depth={j: 1 if j == ax else 0 for j in range(f.ndim)},
             boundary="none",
-            grad_varargs=(varargs[i],),
-            grad_kwargs=merge(kwargs, {"axis": ax}),
-        )
-        for i, ax in enumerate(axis)
-    ]
-    if drop_result_list:
-        r = r[0]
+            coord=varargs[i],
+            axis=ax,
+            array_locs=(array_loc_start, array_loc_stop),
+            grad_kwargs=kwargs,
+        ))
 
-    return r
+    if drop_result_list:
+        results = results[0]
+
+    return results
 
 
 @wraps(np.bincount)
