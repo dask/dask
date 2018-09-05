@@ -111,7 +111,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             "  2. Have only one column of blocks\n\n"
             "Note: This function (tsqr) supports QR decomposition in the case of\n"
             "tall-and-skinny matrices (single column chunk/block; see qr)"
-            "shape: {}, chunks: {}".format(data.shape, data.chunks)
+            "Current shape: {},\nCurrent chunksize: {}".format(data.shape, data.chunksize)
         )
 
     token = '-' + tokenize(data, compute_svd)

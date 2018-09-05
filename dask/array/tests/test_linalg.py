@@ -683,10 +683,10 @@ def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
 
 @pytest.mark.parametrize("shape, chunks", [
     [(5,), (2,)],
-    [(5, 6), (2, 2)],
-    [(4, 5, 6), (2, 2, 2)],
-    [(4, 5, 6, 7), (2, 2, 2, 2)],
-    [(4, 5, 6, 7, 3), (2, 2, 2, 2, 2)],
+    [(5, 3), (2, 2)],
+    [(4, 5, 3), (2, 2, 2)],
+    [(4, 5, 2, 3), (2, 2, 2, 2)],
+    [(2, 5, 2, 4, 3), (2, 2, 2, 2, 2)],
 ])
 @pytest.mark.parametrize("norm", [
     None,
@@ -769,8 +769,8 @@ def test_norm_2dim(shape, chunks, axis, norm, keepdims):
 
 
 @pytest.mark.parametrize("shape, chunks, axis", [
-    [(4, 5, 6, 7), (2, 2, 2, 2), (1,2)],
-    [(4, 5, 6, 7), (2, 2, 2, 2), (-1,-2)],
+    [(3, 2, 4), (2, 2, 2), (1, 2)],
+    [(2, 3, 4, 5), (2, 2, 2, 2), (-1, -2)],
 ])
 @pytest.mark.parametrize("norm", [
     "nuc",
