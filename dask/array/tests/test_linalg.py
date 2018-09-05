@@ -760,8 +760,7 @@ def test_norm_2dim(shape, chunks, axis, norm, keepdims):
 
     # Need one chunk on last dimension for svd.
     if norm == "nuc" or norm == 2 or norm == -2:
-        rechunkaxis = -1
-        d = d.rechunk({rechunkaxis: -1})
+        d = d.rechunk({-1: -1})
 
     a_r = np.linalg.norm(a, ord=norm, axis=axis, keepdims=keepdims)
     d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
