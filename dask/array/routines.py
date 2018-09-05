@@ -5,10 +5,10 @@ import math
 import warnings
 from distutils.version import LooseVersion
 from functools import wraps, partial
-from numbers import Number, Real, Integral
+from numbers import Real, Integral
 
 import numpy as np
-from toolz import concat, merge, sliding_window, interleave
+from toolz import concat, sliding_window, interleave
 
 from .. import sharedict
 from ..compatibility import Iterable
@@ -455,7 +455,7 @@ def gradient(f, *varargs, **kwargs):
         raise ValueError("duplicate axes not allowed")
 
     axis = tuple(ax % f.ndim for ax in axis)
-    
+
     if varargs == ():
         varargs = (1,)
     if len(varargs) == 1:
