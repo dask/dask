@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from collections import defaultdict
 import pandas as pd
 from toolz import partition_all
+from numbers import Integral
 
 from ..base import tokenize, compute_as_if_collection
 from .accessor import Accessor
@@ -105,7 +106,7 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
         split_every = 16
     elif split_every is False:
         split_every = df.npartitions
-    elif not isinstance(split_every, int) or split_every < 2:
+    elif not isinstance(split_every, Integral) or split_every < 2:
         raise ValueError("split_every must be an integer >= 2")
 
     token = tokenize(df, columns, index, split_every)

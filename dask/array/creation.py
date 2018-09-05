@@ -18,7 +18,6 @@ from .core import (Array, asarray, normalize_chunks,
                    broadcast_to, broadcast_arrays)
 from .wrap import empty, ones, zeros, full
 
-
 def empty_like(a, dtype=None, chunks=None):
     """
     Return a new array with the same shape and type as a given array.
@@ -442,7 +441,7 @@ def eye(N, chunks, M=None, k=0, dtype=float):
       An array where all elements are equal to zero, except for the `k`-th
       diagonal, whose values are equal to one.
     """
-    if not isinstance(chunks, int):
+    if not isinstance(chunks, Integral):
         raise ValueError('chunks must be an int')
 
     token = tokenize(N, chunk, M, k, dtype)

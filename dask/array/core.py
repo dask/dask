@@ -4,7 +4,7 @@ from bisect import bisect
 from functools import partial, wraps
 from itertools import product
 import math
-from numbers import Number
+from numbers import Number, Integral
 import operator
 from operator import add, getitem, mul
 import os
@@ -93,7 +93,7 @@ def getter(a, b, asarray=True, lock=None):
     if isinstance(b, tuple) and any(x is None for x in b):
         b2 = tuple(x for x in b if x is not None)
         b3 = tuple(None if x is None else slice(None, None)
-                   for x in b if not isinstance(x, (int, long)))
+                   for x in b if not isinstance(x, Integral))
         return getter(a, b2, asarray=asarray, lock=lock)[b3]
 
     if lock:
@@ -2834,7 +2834,7 @@ def atop(func, out_ind, *args, **kwargs):
             if ind in adjust_chunks:
                 if callable(adjust_chunks[ind]):
                     chunks[i] = tuple(map(adjust_chunks[ind], chunks[i]))
-                elif isinstance(adjust_chunks[ind], int):
+                elif isinstance(adjust_chunks[ind], Integral):
                     chunks[i] = tuple(adjust_chunks[ind] for _ in chunks[i])
                 elif isinstance(adjust_chunks[ind], (tuple, list)):
                     chunks[i] = tuple(adjust_chunks[ind])
