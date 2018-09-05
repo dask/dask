@@ -285,13 +285,15 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
 
     if index_names and infer_divisions is not False:
         index_name = meta.index.name
-        minmax = fastparquet.api.sorted_partitioned_columns(pf)
+        try:
+            # is https://github.com/dask/fastparquet/pull/371 available in
+            # current fastparquet installation?
+            minmax = fastparquet.api.sorted_partitioned_columns(pf, filters)
+        except TypeError:
+            minmax = fastparquet.api.sorted_partitioned_columns(pf)
         if index_name in minmax:
             divisions = minmax[index_name]
-            idx_lst = [i for i, rg in enumerate(pf.row_groups)
-                       if rg in rgs]
-            divisions = [divisions['min'][i]
-                         for i in idx_lst] + [divisions['max'][idx_lst[-1]]]
+            divisions = divisions['min'] + [divisions['max'][-1]]
         else:
             if infer_divisions is True:
                 raise ValueError(

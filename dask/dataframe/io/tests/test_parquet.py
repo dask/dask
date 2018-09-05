@@ -842,6 +842,29 @@ def test_divisions_read_with_filters(tmpdir):
     assert out.divisions == expected_divisions
 
 
+def test_divisions_are_known_read_with_filters(tmpdir):
+    check_fastparquet()
+    tmpdir = str(tmpdir)
+    #generate dataframe
+    df = pd.DataFrame({'unique': [0, 0, 1, 1, 2, 2, 3, 3],
+                       'id': ['id1', 'id2',
+                              'id1', 'id2',
+                              'id1', 'id2',
+                              'id1', 'id2']},
+                      index=[0, 0, 1, 1, 2, 2, 3, 3])
+    d = dd.from_pandas(df, npartitions=2)
+    #save it
+    d.to_parquet(tmpdir, partition_on=['id'], engine='fastparquet')
+    #read it
+    out = dd.read_parquet(tmpdir,
+                          engine='fastparquet',
+                          filters=[('id', '==', 'id1')])
+    #test it
+    assert out.known_divisions
+    expected_divisions = (0, 2, 3)
+    assert out.divisions == expected_divisions
+
+
 def test_read_from_fastparquet_parquetfile(tmpdir):
     check_fastparquet()
     fn = str(tmpdir)
