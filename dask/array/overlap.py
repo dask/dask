@@ -175,13 +175,18 @@ def trim_internal(x, axes, boundary=None):
 
     olist = []
     for i, bd in enumerate(x.chunks):
+        bdy = boundary2[i] if i in boundary2.keys() else None
         ilist = []
-        for d in bd:
-            ilist.append(d - axes.get(i, 0) * 2)
+        for j, d in enumerate(bd):
+            if bdy != 'none':
+                d = d - axes.get(i, 0) * 2
+            else:
+                d = d - axes.get(i, 0) if j != 0 else d
+                d = d - axes.get(i, 0) if j != len(bd) - 1 else d
+            ilist.append(d)
         olist.append(tuple(ilist))
 
     chunks = tuple(olist)
-
     return map_blocks(partial(chunk.trim, axes=axes, boundary=boundary2),
                       x, chunks=chunks, dtype=x.dtype)
 
