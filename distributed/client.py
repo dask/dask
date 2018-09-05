@@ -3857,10 +3857,23 @@ class get_task_stream(object):
 
     Get back a Bokeh figure and optionally save to a file
 
-    >>> with get_task_stream(plot='save', filename='myfile.html') as ts:
+    >>> with get_task_stream(plot='save', filename='task-stream.html') as ts:
     ...    x.compute()
     >>> ts.figure
     <Bokeh Figure>
+
+    To share this file with others you may wish to upload and serve it online.
+    A common way to do this is to upload the file as a gist, and then serve it
+    on https://rawgit.com ::
+
+       $ pip install gist
+       $ gist task-stream.html
+       https://gist.github.com/8a5b3c74b10b413f612bb5e250856ceb
+
+    You can then navigate to that site, click the "Raw" button to the right of
+    the ``task-stream.html`` file, and then provide that URL to
+    https://rawgit.com .  This process should provide a sharable link that
+    others can use to see your task stream plot.
 
     See Also
     --------

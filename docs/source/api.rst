@@ -3,7 +3,7 @@
 API
 ===
 
-.. currentmodule:: distributed.client
+.. currentmodule:: distributed
 
 **Client**
 
@@ -60,7 +60,7 @@ API
    ReplayExceptionClient.get_futures_error
    ReplayExceptionClient.recreate_error_locally
 
-.. currentmodule:: distributed.client
+.. currentmodule:: distributed
 
 
 **Future**
@@ -131,7 +131,7 @@ The asynchronous variants must be run within a Tornado coroutine.  See the
 Client
 ------
 
-.. currentmodule:: distributed.client
+.. currentmodule:: distributed
 
 .. autoclass:: Client
    :members:
@@ -163,6 +163,7 @@ Other
 .. autofunction:: distributed.get_client
 .. autofunction:: distributed.secede
 .. autofunction:: distributed.rejoin
+.. autoclass:: get_task_stream
 
 .. autoclass:: Lock
    :members:
