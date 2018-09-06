@@ -391,7 +391,7 @@ def _slice_1d(dim_shape, lengths, index):
             ind = index - chunk_boundaries[i - 1]
         else:
             ind = index
-        return {i: ind}
+        return {int(i): int(ind)}
 
     assert isinstance(index, slice)
 
