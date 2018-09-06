@@ -1,7 +1,7 @@
 Changelog
 =========
 
-0.19.1 / YYYY-MM-DD
+0.19.2 / YYYY-MM-DD
 -------------------
 
 Array
@@ -25,6 +25,35 @@ Documentation
 -
 
 
+0.19.1 / 2018-09-06
+-------------------
+
+Array
++++++
+
+-  Don't enforce dtype if result has no dtype (:pr:`3928`) `Matthew Rocklin`_
+-  Fix NumPy issubtype deprecation warning (:pr:`3939`) `Bruce Merry`_
+-  Fix arg reduction tokens to be unique with different arguments (:pr:`3955`) `Tobias de Jong`_
+-  Coerce numpy integers to ints in slicing code (:pr:`3944`) `Yu Feng`_
+-  Linalg.norm ndim along axis partial fix (:pr:`3933`) `Tobias de Jong`_
+
+Dataframe
++++++++++
+
+-  Deterministic DataFrame.set_index (:pr:`3867`) `George Sakkis`_
+-  Fix divisions in read_parquet when dealing with filters #3831 #3930 (:pr:`3923`) (:pr:`3931`)  `@andrethrill`_
+-  Fixing returning type in categorical.as_known  (:pr:`3888`) `Sriharsha Hatwar`_
+-  Fix DataFrame.assign for callables (:pr:`3919`) `Tom Augspurger`_
+-  Include partitions with no width in repartition (:pr:`3941`) `Matthew Rocklin`_
+-  Don't constrict stage/k dtype in dataframe shuffle (:pr:`3942`) `Matthew Rocklin`_
+
+Documentation
++++++++++++++
+
+-  DOC: Add hint on how to render task graphs horizontally (:pr:`3922`) `Uwe Korn`_
+-  Add try-now button to main landing page (:pr:`3924`) `Matthew Rocklin`_
+
+
 0.19.0 / 2018-08-29
 -------------------
 
@@ -32,7 +61,7 @@ Array
 +++++
 
 -  Fix argtopk split_every bug (:pr:`3810`) `Guido Imperiale`_
--  Ensure result computing dask.array.isnull(`) always gives a numpy array (:pr:`3825`) `Stephan Hoyer`_
+-  Ensure result computing dask.array.isnull() always gives a numpy array (:pr:`3825`) `Stephan Hoyer`_
 -  Support concatenate for scipy.sparse in dask array (:pr:`3836`) `Matthew Rocklin`_
 -  Fix argtopk on 32-bit systems. (:pr:`3823`) `Elliott Sales de Andrade`_
 -  Normalize keys in rechunk (:pr:`3820`) `Matthew Rocklin`_
@@ -1366,3 +1395,8 @@ Other
 .. _`Hans Moritz Günther`: https://github.com/hamogu
 .. _`@rtobar`: https://github.com/rtobar
 .. _`Julia Signell`: https://github.com/jsignell
+.. _`Sriharsha Hatwar`: https://github.com/Sriharsha-hatwar
+.. _`Bruce Merry`: https://github.com/bmerry
+.. _`Joe Hamman`: https://github.com/jhamman
+.. _`Robert Sare`: https://github.com/rmsare
+.. _`Jeremy Chan`: https://github.com/convexset
