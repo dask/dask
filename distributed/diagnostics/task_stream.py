@@ -83,7 +83,8 @@ class TaskStreamPlugin(SchedulerPlugin):
 
 
 def rectangles(msgs, workers=None, start_boundary=0):
-    workers = workers or {}
+    if workers is None:
+        workers = {}
 
     L_start = []
     L_duration = []

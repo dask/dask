@@ -1121,8 +1121,11 @@ def test_get_releases_data(c, s, a, b):
     [x] = yield c.get({'x': (inc, 1)}, ['x'], sync=False)
     import gc
     gc.collect()
-    yield gen.moment
-    assert c.refcount['x'] == 0
+
+    start = time()
+    while c.refcount['x']:
+        yield gen.sleep(0.01)
+        assert time() < start + 2
 
 
 def test_Current():

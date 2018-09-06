@@ -28,6 +28,7 @@ def test_TaskStreamPlugin(c, s, *workers):
     workers = dict()
 
     rects = es.rectangles(0, 10, workers)
+    assert workers
     assert all(n == 'div' for n in rects['name'])
     assert all(d > 0 for d in rects['duration'])
     counts = frequencies(rects['color'])
