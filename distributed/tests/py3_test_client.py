@@ -79,7 +79,7 @@ def test_as_completed_async_for_cancel(c, s, a, b):
 
     yield f()
 
-    assert L == [x]
+    assert L == [x, y]
 
 
 def test_async_with(loop):

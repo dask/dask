@@ -3567,6 +3567,18 @@ class as_completed(object):
     Additionally, you can also add more futures to this object during
     computation with the ``.add`` method
 
+    Parameters
+    ----------
+    futures: Collection of futures
+        A list of Future objects to be iterated over in the order in which they
+        complete
+    with_results: bool (False)
+        Whether to wait and include results of futures as well;
+        in this case `as_completed` yields a tuple of (future, result)
+    raise_errors: bool (True)
+        Whether we should raise when the result of a future raises an exception;
+        only affects behavior when `with_results=True`.
+
     Examples
     --------
     >>> x, y, z = client.map(inc, [1, 2, 3])  # doctest: +SKIP
@@ -3602,7 +3614,7 @@ class as_completed(object):
     3
     """
 
-    def __init__(self, futures=None, loop=None, with_results=False):
+    def __init__(self, futures=None, loop=None, with_results=False, raise_errors=True):
         if futures is None:
             futures = []
         self.futures = defaultdict(lambda: 0)
@@ -3612,6 +3624,7 @@ class as_completed(object):
         self.condition = Condition()
         self.thread_condition = threading.Condition()
         self.with_results = with_results
+        self.raise_errors = raise_errors
 
         if futures:
             self.update(futures)
@@ -3626,12 +3639,9 @@ class as_completed(object):
         try:
             yield _wait(future)
         except CancelledError:
-            del self.futures[future]
-            if not self.futures:
-                self._notify()
-            return
+            pass
         if self.with_results:
-            result = yield future._result()
+            result = yield future._result(raiseit=False)
         with self.lock:
             self.futures[future] -= 1
             if not self.futures[future]:
@@ -3680,13 +3690,21 @@ class as_completed(object):
     def __aiter__(self):
         return self
 
+    def _get_and_raise(self):
+        res = self.queue.get()
+        if self.with_results:
+            future, result = res
+            if self.raise_errors and future.status == 'error':
+                six.reraise(*result)
+        return res
+
     def __next__(self):
         while self.queue.empty():
             if self.is_empty():
                 raise StopIteration()
             with self.thread_condition:
                 self.thread_condition.wait(timeout=0.100)
-        return self.queue.get()
+        return self._get_and_raise()
 
     @gen.coroutine
     def __anext__(self):
@@ -3697,7 +3715,7 @@ class as_completed(object):
                 raise StopAsyncIteration
             yield self.condition.wait()
 
-        raise gen.Return(self.queue.get())
+        raise gen.Return(self._get_and_raise())
 
     next = __next__
 

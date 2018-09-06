@@ -1,4 +1,5 @@
 from collections import Iterator
+from concurrent.futures._base import CancelledError
 from operator import add
 import random
 from time import sleep
@@ -9,7 +10,7 @@ from tornado import gen
 from distributed import Client
 from distributed.client import _as_completed, as_completed, _first_completed
 from distributed.compatibility import Empty, StopAsyncIteration, Queue
-from distributed.utils_test import cluster, gen_cluster, inc
+from distributed.utils_test import cluster, gen_cluster, inc, throws
 from distributed.utils_test import loop  # noqa: F401
 
 
@@ -118,26 +119,30 @@ def test_as_completed_is_empty(loop):
 def test_as_completed_cancel(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
-            x = c.submit(sleep, 1)
+            x = c.submit(inc, 1)
             y = c.submit(inc, 1)
 
             ac = as_completed([x, y])
             x.cancel()
 
-            assert next(ac) is y
+            assert next(ac) is x or y
+            assert next(ac) is y or x
 
             with pytest.raises(Empty):
                 ac.queue.get(timeout=0.1)
 
-            assert list(as_completed([x, y, x])) == [y]
+            res = list(as_completed([x, y, x]))
+            assert len(res) == 3
+            assert set(res) == {x, y}
+            assert res.count(x) == 2
 
 
 def test_as_completed_cancel_last(loop):
     with cluster() as (s, [a, b]):
         with Client(s['address'], loop=loop) as c:
-            w = c.submit(sleep, 0.3)
+            w = c.submit(inc, 0.3)
             x = c.submit(inc, 1)
-            y = c.submit(sleep, 0.3)
+            y = c.submit(inc, 0.3)
 
             @gen.coroutine
             def _():
@@ -148,9 +153,9 @@ def test_as_completed_cancel_last(loop):
             loop.add_callback(_)
 
             ac = as_completed([x, y])
-            result = list(ac)
+            result = set(ac)
 
-            assert result == [x]
+            assert result == {x, y}
 
 
 @gen_cluster(client=True)
@@ -168,3 +173,107 @@ def test_async_for_py2_equivalent(c, s, a, b):
 
     with pytest.raises(StopAsyncIteration):
         yield seq.__anext__()
+
+
+@gen_cluster(client=True)
+def test_as_completed_error_async(c, s, a, b):
+    x = c.submit(throws, 1)
+    y = c.submit(inc, 1)
+
+    ac = as_completed([x, y])
+    first = yield ac.__anext__()
+    second = yield ac.__anext__()
+    result = {first, second}
+
+    assert result == {x, y}
+    assert x.status == 'error'
+    assert y.status == 'finished'
+
+
+def test_as_completed_error(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            x = c.submit(throws, 1)
+            y = c.submit(inc, 1)
+
+            ac = as_completed([x, y])
+            result = set(ac)
+
+            assert result == {x, y}
+            assert x.status == 'error'
+            assert y.status == 'finished'
+
+
+def test_as_completed_with_results(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            x = c.submit(throws, 1)
+            y = c.submit(inc, 5)
+            z = c.submit(inc, 1)
+
+            ac = as_completed([x, y, z], with_results=True)
+            y.cancel()
+            with pytest.raises(RuntimeError) as exc:
+                res = list(ac)
+            assert str(exc.value) == 'hello!'
+
+
+@gen_cluster(client=True)
+def test_as_completed_with_results_async(c, s, a, b):
+    x = c.submit(throws, 1)
+    y = c.submit(inc, 5)
+    z = c.submit(inc, 1)
+
+    ac = as_completed([x, y, z], with_results=True)
+    y.cancel()
+    with pytest.raises(RuntimeError) as exc:
+        first = yield ac.__anext__()
+        second = yield ac.__anext__()
+        third = yield ac.__anext__()
+    assert str(exc.value) == 'hello!'
+
+
+def test_as_completed_with_results_no_raise(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as c:
+            x = c.submit(throws, 1)
+            y = c.submit(inc, 5)
+            z = c.submit(inc, 1)
+
+            ac = as_completed([x, y, z], with_results=True, raise_errors=False)
+            y.cancel()
+            res = list(ac)
+
+            dd = {r[0]: r[1:] for r in res}
+            assert set(dd.keys()) == {y, x, z}
+            assert x.status == 'error'
+            assert y.status == 'cancelled'
+            assert z.status == 'finished'
+
+            assert isinstance(dd[y][0], CancelledError)
+            assert isinstance(dd[x][0][1], RuntimeError)
+            assert dd[z][0] == 2
+
+
+@gen_cluster(client=True)
+def test_as_completed_with_results_no_raise_async(c, s, a, b):
+    x = c.submit(throws, 1)
+    y = c.submit(inc, 5)
+    z = c.submit(inc, 1)
+
+    ac = as_completed([x, y, z], with_results=True, raise_errors=False)
+    y.cancel()
+    first = yield ac.__anext__()
+    second = yield ac.__anext__()
+    third = yield ac.__anext__()
+    res = [first, second, third]
+
+    dd = {r[0]: r[1:] for r in res}
+    assert set(dd.keys()) == {y, x, z}
+    assert x.status == 'error'
+    assert y.status == 'cancelled'
+    assert z.status == 'finished'
+
+    assert isinstance(dd[y][0], CancelledError)
+    assert isinstance(dd[x][0][1], RuntimeError)
+    assert dd[z][0] == 2
