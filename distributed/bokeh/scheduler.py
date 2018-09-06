@@ -1053,12 +1053,13 @@ class WorkerTable(DashboardComponent):
 
 def systemmonitor_doc(scheduler, extra, doc):
     with log_errors():
-        sysmon = SystemMonitor(scheduler, sizing_mode='scale_width')
+        sysmon = SystemMonitor(scheduler, sizing_mode='stretch_both')
         doc.title = "Dask: Scheduler System Monitor"
         doc.add_periodic_callback(sysmon.update, 500)
 
-        doc.add_root(column(sysmon.root, sizing_mode='scale_width'))
-        doc.template = env.get_template('simple.html')
+        for subdoc in sysmon.root.children:
+            doc.add_root(subdoc)
+        doc.template = env.get_template('system.html')
         doc.template_variables.update(extra)
         doc.theme = BOKEH_THEME
 

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block extra_resources %}
+<link rel="stylesheet" href="statics/css/system.css"/>
+{% endblock %}
+
+{% block content %}
+{% from macros import embed %}
+<div id="system-fluid">
+  {% for plot in roots %}
+    <div class="system-item">
+      {{ embed(plot) }}
+    </div>
+  {% endfor %}
+</div>
+{{ plot_script }}
+{% endblock %}
+

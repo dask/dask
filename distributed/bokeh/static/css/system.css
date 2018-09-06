@@ -1,0 +1,26 @@
+#system-fluid {
+    display: flex;
+    flex-wrap: wrap;
+    height: 100%;
+}
+
+/* Small layout: stack all graphs on top of each other, space split equally */
+@media (min-width: 0px) {
+    #system-fluid {
+        flex-direction: column;
+    }
+    #system-fluid .system-item {
+        flex: 1;
+    }
+}
+
+/* Large layout: as many rows as necessary, each item consuming at least
+ * half of the width */
+@media (min-width: 992px) {
+    #system-fluid {
+        flex-direction: row;
+    }
+    #system-fluid .system-item {
+        flex: 1 50%;
+    }
+}
