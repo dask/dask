@@ -38,7 +38,7 @@ from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict, Dispatch, factors,
                      parse_bytes, has_keyword, M)
-from ..compatibility import (unicode, long, zip_longest, apply,
+from ..compatibility import (unicode, zip_longest, apply,
                              Iterable, Iterator, Mapping)
 from ..core import quote
 from ..delayed import Delayed, to_task_dask
