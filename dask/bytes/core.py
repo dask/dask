@@ -419,13 +419,13 @@ def get_hdfs_driver(driver="auto"):
     A filesystem class
     """
     if driver == 'auto':
-        for d in ['hdfs3', 'pyarrow']:
+        for d in ['pyarrow', 'hdfs3']:
             try:
                 return get_hdfs_driver(d)
             except RuntimeError:
                 pass
         else:
-            raise RuntimeError("Please install either `hdfs3` or `pyarrow`")
+            raise RuntimeError("Please install either `pyarrow` (preferred) or `hdfs3`")
 
     elif driver == 'hdfs3':
         import_required('hdfs3', "`hdfs3` not installed")
