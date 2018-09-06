@@ -821,7 +821,8 @@ class Client(Node):
         for pc in self._periodic_callbacks.values():
             pc.start()
 
-        self.coroutines.append(self._handle_report())
+        self._handle_scheduler_coroutine = self._handle_report()
+        self.coroutines.append(self._handle_scheduler_coroutine)
 
         raise gen.Return(self)
 
@@ -1044,9 +1045,18 @@ class Client(Node):
                 del dask.config.config['get']
             if self.status == 'closed':
                 raise gen.Return()
+
             if self.scheduler_comm and self.scheduler_comm.comm and not self.scheduler_comm.comm.closed():
                 self._send_to_scheduler({'op': 'close-client'})
                 self._send_to_scheduler({'op': 'close-stream'})
+
+            # Give the scheduler 'stream-closed' message 100ms to come through
+            # This makes the shutdown slightly smoother and quieter
+            with ignoring(AttributeError, gen.TimeoutError):
+                yield gen.with_timeout(timedelta(milliseconds=100),
+                                       self._handle_scheduler_coroutine)
+
+            if self.scheduler_comm and self.scheduler_comm.comm and not self.scheduler_comm.comm.closed():
                 yield self.scheduler_comm.close()
             for key in list(self.futures):
                 self._release_key(key=key)
