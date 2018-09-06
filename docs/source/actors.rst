@@ -175,7 +175,7 @@ the worker with the actor.  It is cached on the ``ActorFuture`` object.
 
 
 Calling from coroutines and async/await
---------------------------
+---------------------------------------
 
 If you use actors within a coroutine or async/await function then actor methods
 and attrbute access will return Tornado futures

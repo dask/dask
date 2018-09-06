@@ -1,10 +1,21 @@
 Changelog
 =========
 
-1.23.1 - YYYY-MM-DD
+1.23.2 - YYYY-MM-DD
 -------------------
 
 -
+
+1.23.1 - 2018-09-06
+-------------------
+
+-  Raise informative error when mixing futures between clients (#2227) `Matthew Rocklin`_
+-  add byte_keys to unpack_remotedata call (#2232) `Matthew Rocklin`_
+-  Add documentation for gist/rawgit for get_task_stream (#2236) `Matthew Rocklin`_
+-  Quiet Client.close by waiting for scheduler stop signal (#2237) `Matthew Rocklin`_
+-  Display system graphs nicely on different screen sizes (#2239) `Derek Ludwig`_
+-  Mutate passed in workers dict in TaskStreamPlugin.rectangles (#2238) `Matthew Rocklin`_
+
 
 1.23.0 - 2018-08-30
 -------------------
@@ -56,7 +67,7 @@ Changelog
 -  Retire workers from scale (:pr:`2104`) `Matthew Rocklin`_
 -  Allow worker to refuse data requests with busy signal (:pr:`2092`) `Matthew Rocklin`_
 -  Don't forget released keys (:pr:`2098`) `Matthew Rocklin`_
--  Update example for stopping a worker (:pr:`2088`) `John A Kirkham`_
+-  Update example for stopping a worker (:pr:`2088`) `John Kirkham`_
 -  removed hardcoded value of memory terminate fraction from a log message (:pr:`2096`) `Bartosz Marcinkowski`_
 -  Adjust worker doc after change in config file location and treatment (:pr:`2094`) `Aurélien Ponte`_
 -  Prefer gathering data from same host (:pr:`2090`) `Matthew Rocklin`_
