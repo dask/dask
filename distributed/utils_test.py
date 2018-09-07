@@ -142,7 +142,8 @@ def loop():
 
     if PY2:  # no forkserver, so no extra procs
         for child in psutil.Process().children(recursive=True):
-            child.terminate()
+            with ignoring(psutil.NoSuchProcess):
+                child.terminate()
 
     _global_clients.clear()
 
