@@ -441,7 +441,7 @@ def _gradient_kernel(x, block_id, coord, axis, array_locs, grad_kwargs):
     """
     block_loc = block_id[axis]
     if array_locs is not None:
-        coord = coord[array_locs[0][block_loc]: array_locs[1][block_loc]]
+        coord = coord[array_locs[0][block_loc]:array_locs[1][block_loc]]
     grad = np.gradient(x, coord, axis=axis, **grad_kwargs)
     return grad
 
