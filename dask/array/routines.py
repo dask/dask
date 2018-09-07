@@ -487,17 +487,19 @@ def gradient(f, *varargs, **kwargs):
     results = []
     for i, ax in enumerate(axis):
         for c in f.chunks[ax]:
-            if c < kwargs["edge_order"] + 1:
+            if np.min(c) < kwargs["edge_order"] + 1:
                 raise ValueError(
                     'Chunk size must be larger than edge_order + 1. '
-                    'Given {}. Rechunk to proceed.'.format(c))
+                    'Minimum chunk for aixs {} is {}. Rechunk to '
+                    'proceed.'.format(np.min(c), ax))
 
         if np.isscalar(varargs[i]):
             array_locs = None
         else:
             # coordinate position for each block taking overlap into account
-            array_loc_stop = np.cumsum(np.array(f.chunks[ax])) + 1
-            array_loc_start = array_loc_stop - np.array(f.chunks[ax]) - 2
+            chunk = np.array(f.chunks[ax])
+            array_loc_stop = np.cumsum(chunk) + 1
+            array_loc_start = array_loc_stop - chunk - 2
             array_loc_stop[-1] -= 1
             array_loc_start[0] = 0
             array_locs = (array_loc_start, array_loc_stop)
