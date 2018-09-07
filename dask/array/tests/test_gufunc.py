@@ -310,14 +310,12 @@ def test_apply_gufunc_infer_dtype():
     def foo(x):
         raise RuntimeError("Woops")
 
-    try:
-        dz = apply_gufunc(foo, "()->()", dx)
-    except Exception as e:
-        assert e.args[0].startswith("`dtype` inference failed")
-        assert "Please specify the dtype explicitly" in e.args[0]
-        assert 'RuntimeError' in e.args[0]
-    else:
-        assert False, "Should have errored"
+    with pytest.raises(ValueError) as e:
+        apply_gufunc(foo, "()->()", dx)
+    msg = str(e.value)
+    assert msg.startswith("`dtype` inference failed")
+    assert "Please specify the dtype explicitly" in msg
+    assert 'RuntimeError' in msg
 
     # Multiple outputs
     def foo(x, y):
