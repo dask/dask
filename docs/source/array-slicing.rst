@@ -7,8 +7,8 @@ supports the following:
 *  Slicing by integers and slices ``x[0, :5]``
 *  Slicing by lists/arrays of integers  ``x[[1, 2, 4]]``
 *  Slicing by lists/arrays of booleans ``x[[False, True, True, False, True]]``
-*  Slicing one `~dask.array.Array` with a `~dask.array.Array` of bools ``x[x > 0]``
-*  Slicing one `~dask.array.Array` with a zero or one-dimensional `~dask.array.Array`
+*  Slicing one :class:`~dask.array.Array` with a :class:`~dask.array.Array` of bools ``x[x > 0]``
+*  Slicing one :class:`~dask.array.Array` with a zero or one-dimensional :class:`~dask.array.Array`
    of ints ``a[b.argtopk(5)]``
 
 It does not currently support the following:
@@ -19,7 +19,7 @@ It does not currently support the following:
    issue. Also users interested in this should take a look at
    :attr:`~dask.array.Array.vindex`.
 
-*  Slicing one `~dask.array.Array` with a multi-dimensional `~dask.array.Array` of ints
+*  Slicing one :class:`~dask.array.Array` with a multi-dimensional :class:`~dask.array.Array` of ints
 
 Efficiency
 ----------
