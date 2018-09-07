@@ -77,12 +77,14 @@ DEFAULT_EXTENSIONS = [
 
 
 def _get_global_client():
-    for k in sorted(_global_clients, reverse=True):
+    L = sorted(list(_global_clients), reverse=True)
+    for k in L:
         c = _global_clients[k]
         if c.status != 'closed':
             return c
         else:
             del _global_clients[k]
+    del L
     return None
 
 

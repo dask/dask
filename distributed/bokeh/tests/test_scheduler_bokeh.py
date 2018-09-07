@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import json
+import re
 import sys
 from time import sleep
 
@@ -48,7 +49,9 @@ def test_simple(c, s, a, b):
                    'individual-nprocessing',
                    'individual-profile']:
         response = yield http_client.fetch('http://localhost:%d/%s' % (port, suffix))
-        assert 'bokeh' in response.body.decode().lower()
+        body = response.body.decode()
+        assert 'bokeh' in body.lower()
+        assert not re.search("href=./", body)  # no absolute links
 
     response = yield http_client.fetch('http://localhost:%d/individual-plots.json' % port)
     response = json.loads(response.body.decode())

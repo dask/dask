@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import json
+import re
 import xml.etree.ElementTree
 
 import pytest
@@ -40,6 +41,7 @@ def test_connect(c, s, a, b):
             json.loads(body)
         else:
             assert xml.etree.ElementTree.fromstring(body) is not None
+            assert not re.search("href=./", body)  # no absolute links
 
 
 @gen_cluster(client=True,
