@@ -4,4 +4,4 @@ cloudpickle
 dask
 numpydoc
 sphinx
-sphinx_rtd_theme
+dask_sphinx_theme
