@@ -96,7 +96,7 @@ pygments_style = 'default'
 
 # -- Options for HTML output ---------------------------------------------------
 
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'dask_sphinx_theme'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -117,7 +117,7 @@ html_theme_options = {
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-html_logo = "images/dask_horizontal_white_no_pad.svg"
+# html_logo = "images/dask_horizontal_white_no_pad.svg"
 
 
 # The name of an image file (within the static path) to use as favicon of the

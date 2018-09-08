@@ -2,9 +2,9 @@
 Dask
 ====
 
-*Dask is a flexible parallel computing library for analytic computing.*
+*Dask is a flexible library for parallel computing in Python.*
 
-Dask is composed of two components:
+Dask is composed of two parts:
 
 1.  **Dynamic task scheduling** optimized for computation.  This is similar to
     *Airflow, Luigi, Celery, or Make*, but optimized for interactive
