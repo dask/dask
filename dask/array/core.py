@@ -2306,6 +2306,9 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
         -1 as a blocksize indicates the size of the corresponding dimension.
     name : str, optional
         The key name to use for the array. Defaults to a hash of ``x``.
+        By default, hash uses python's standard sha1. This behaviour can be
+        changed by installing cityhash, xxhash or murmurhash. If installed,
+        a large-factor speedup can be obtained in the tokenisation step.
         Use ``name=False`` to generate a random name instead of hashing (fast)
     lock : bool or Lock, optional
         If ``x`` doesn't support concurrent reads then provide a lock here, or
