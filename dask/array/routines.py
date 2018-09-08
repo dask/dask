@@ -496,6 +496,9 @@ def gradient(f, *varargs, **kwargs):
         if np.isscalar(varargs[i]):
             array_locs = None
         else:
+            if isinstance(varargs[i], Array):
+                raise NotImplementedError(
+                    'dask array coordinated is not supported.')
             # coordinate position for each block taking overlap into account
             chunk = np.array(f.chunks[ax])
             array_loc_stop = np.cumsum(chunk) + 1
