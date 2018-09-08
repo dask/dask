@@ -336,3 +336,86 @@ def test_apply_gufunc_infer_dtype():
 
     assert_eq(z0, dx + dy)
     assert_eq(z1, dx - dy)
+
+
+@pytest.mark.parametrize('axes', [0, (0,), [(0,)]])
+def test_apply_gufunc_axes_01(axes):
+    def mymedian(x):
+        return np.median(x, axis=-1)
+
+    a = np.random.randn(10, 5)
+    da_ = da.from_array(a, chunks=2)
+
+    m = np.median(a, axis=0)
+    dm = apply_gufunc(mymedian, "(i)->()", da_, axes=axes, allow_rechunk=True)
+    assert_eq(m, dm)
+
+
+@pytest.mark.parametrize('axes', [[0, 1], [(0,), (1,)]])
+def test_apply_gufunc_axes_01b(axes):
+    def mystats(x, y):
+        return np. std(x, axis=-1)*np.mean(y, axis=-1)
+
+    a = np.random.randn(10, 5)
+    b = np.random.randn(5, 6)
+    da_ = da.from_array(a, chunks=2)
+    db_ = da.from_array(b, chunks=2)
+
+    m = np.std(a, axis=0)*np.mean(b, axis=1)
+    dm = apply_gufunc(mystats, "(i),(j)->()", da_, db_, axes=axes, allow_rechunk=True)
+    assert_eq(m, dm)
+
+
+def test_apply_gufunc_axes_02():
+    def myfilter(x, cn=10, axis=-1):
+        y = np.fft.fft(x, axis=axis)
+        y[cn:-cn] = 0
+        nx = np.fft.ifft(y, axis=axis)
+        return np.real(nx)
+
+    a = np.random.randn(3, 6, 4)
+    da_ = da.from_array(a, chunks=2)
+
+    m = myfilter(a, axis=1)
+    dm = apply_gufunc(myfilter, "(i)->(i)", da_, axes=1, allow_rechunk=True)
+    assert_eq(m, dm)
+
+
+def test_apply_gufunc_axes_03():
+    def mydiff(x):
+        return np.diff(x, axis=-1)
+
+    a = np.random.randn(3, 6, 4)
+    da_ = da.from_array(a, chunks=2)
+
+    m = np.diff(a, axis=1)
+    dm = apply_gufunc(mydiff, "(i)->(i)", da_, axes=1, output_sizes={'i': 5}, allow_rechunk=True)
+    assert_eq(m, dm)
+
+
+def test_apply_gufunc_axes_04():
+    def matmul(x, y):
+        return np.einsum("...ij,...jk->...ik", x, y)
+
+    a = np.random.randn(3, 2, 1)
+    b = np.random.randn(3, 7, 5)
+
+    da_ = da.from_array(a, chunks=2)
+    db = da.from_array(b, chunks=3)
+
+    m = np.einsum("jiu,juk->uik", a, b)
+    dm = apply_gufunc(matmul, "(i,j),(j,k)->(i,k)", da_, db, axes=[(1,  0), (0, -1)], allow_rechunk=True)
+    assert_eq(m, dm)
+
+
+@pytest.mark.parametrize('axes', [-2, -1, None])
+def test_apply_gufunc_axes_keepdims(axes):
+    def mymedian(x):
+        return np.median(x, axis=-1)
+
+    a = np.random.randn(10, 5)
+    da_ = da.from_array(a, chunks=2)
+
+    m = np.median(a, axis=-1 if not axes else axes, keepdims=True)
+    dm = apply_gufunc(mymedian, "(i)->()", da_, axes=axes, keepdims=True, allow_rechunk=True)
+    assert_eq(m, dm)

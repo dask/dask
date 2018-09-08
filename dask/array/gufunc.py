@@ -88,6 +88,15 @@ def apply_gufunc(func, signature, *args, **kwargs):
         If not given, a call of ``func`` with a small set of data
         is performed in order to try to  automatically determine the
         output dtypes.
+    axes: int, tuple of ints, or list of tuple of ints, optional, keyword only
+        Specifies which axes of the passed arguments are the core dimensions.
+        For one input argument int or tuple of int is sufficient, for many
+        input arguments a list of tuple of ints has to be passed
+    keepdims: bool, optional, keyword only
+        If core dimensions in ``signature`` are consumed, a dummy dimension is
+        re-introduced at the position specified at its original position.
+        The original position may depend on ``axes``.
+        Defaults to ``False``.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
         new core dimensions (not found on inputs) appear on outputs.
@@ -135,6 +144,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
     output_sizes = kwargs.pop("output_sizes", None)
     vectorize = kwargs.pop("vectorize", None)
     allow_rechunk = kwargs.pop("allow_rechunk", False)
+    axes = kwargs.pop("axes", None)
+    keepdims = kwargs.pop("keepdims", False)
 
     # Input processing:
     ## Signature
@@ -171,13 +182,49 @@ def apply_gufunc(func, signature, *args, **kwargs):
     if output_sizes is None:
         output_sizes = {}
 
+    ## Axes
+    if axes is None:
+        axes = [tuple(range(-len(cid), 0)) for cid in core_input_dimss]
+    else:
+        if isinstance(axes, int):
+            axes = [(axes,)]
+        elif isinstance(axes, tuple):
+            axes = [axes]
+        elif isinstance(axes, list):
+            axes = [a if isinstance(a, tuple) else (a,) for a in axes]
+        else:
+            raise ValueError("Axes should be int, tuple of int or list of tuple of int")
+        if len(axes) != len(core_input_dimss):
+            raise ValueError("According to `signature`, %d arguments required, but `axes` only has %d entries"
+                             % (len(core_input_dimss), len(axes)))
+        for idx, (axis, core_input_dims) in enumerate(zip(axes, core_input_dimss)):
+            if len(axis) != len(core_input_dims):
+                ValueError("According to `signature`, #%d argument has %d core dims, but `axes` specifies %d ints"
+                           % (idx + 1, len(core_input_dims), len(axis)))
+
     # Main code:
     ## Cast all input arrays to dask
     args = [asarray(a) for a in args]
 
     if len(core_input_dimss) != len(args):
         ValueError("According to `signature`, `func` requires %d arguments, but %s given"
-                   % (len(core_output_dimss), len(args)))
+                   % (len(core_input_dimss), len(args)))
+
+    ## Axes: transpose input arguments
+    transposed_args = []
+    original_dim_position = {}
+    for arg, axis, core_input_dims in zip(args, axes, core_input_dimss):
+        shape = arg.shape
+        axis = tuple(a if a < 0 else a - len(shape) for a in axis)
+        tidc = tuple(i for i in range(-len(shape) + 0, 0) if i not in axis) + axis
+
+        transposed_arg = arg.transpose(tidc)
+        transposed_args.append(transposed_arg)
+
+        ### Remember original position of first occurrence
+        for a, cid in reversed(list(zip(axis, core_input_dims))):
+            original_dim_position[cid] = a
+    args = transposed_args
 
     ## Assess input args for loop dims
     input_shapes = [a.shape for a in args]
@@ -185,12 +232,12 @@ def apply_gufunc(func, signature, *args, **kwargs):
     num_loopdims = [len(s) - len(cd) for s, cd in zip(input_shapes, core_input_dimss)]
     max_loopdims = max(num_loopdims) if num_loopdims else None
     _core_input_shapes = [dict(zip(cid, s[n:])) for s, n, cid in zip(input_shapes, num_loopdims, core_input_dimss)]
-    core_shapes = merge(output_sizes, *_core_input_shapes)
+    core_shapes = merge(*_core_input_shapes, output_sizes)
 
     loop_input_dimss = [tuple("__loopdim%d__" % d for d in range(max_loopdims - n, max_loopdims)) for n in num_loopdims]
     input_dimss = [l + c for l, c in zip(loop_input_dimss, core_input_dimss)]
 
-    loop_output_dims = max(loop_input_dimss, key=len) if loop_input_dimss else set()
+    loop_output_dims = max(loop_input_dimss, key=len) if loop_input_dimss else tuple()
 
     ## Assess input args for same size and chunk sizes
     ### Collect sizes and chunksizes of all dims in all arrays
@@ -259,6 +306,32 @@ significantly.".format(dim))
                          chunks=output_chunks,
                          shape=output_shape,
                          dtype=odt)
+
+        ### Axes:
+        consumed_core_dims = tuple(c for c in original_dim_position if c not in cod) if keepdims else tuple()
+        if consumed_core_dims:
+            slices = len(leaf_arr.shape) * (slice(None),) + len(consumed_core_dims) * (np.newaxis,)
+            leaf_arr = leaf_arr[slices]
+            cod = cod + consumed_core_dims
+
+        dims = loop_output_dims + cod
+
+        nr_kept_core_dims = len(tuple(c for c in cod if c in original_dim_position))
+
+        tidcs = [None] * len(dims)
+        for i, d in enumerate(dims):
+            if d in original_dim_position:
+                pos = len(loop_output_dims) + original_dim_position[d]
+                tidcs[pos + nr_kept_core_dims] = i
+        j = 0
+        for i, d in enumerate(dims):
+            if d in original_dim_position:
+                continue
+            while tidcs[j] is not None:
+                j += 1
+            tidcs[j] = i
+        leaf_arr = leaf_arr.transpose(tidcs)
+
         leaf_arrs.append(leaf_arr)
 
     return leaf_arrs if nout else leaf_arrs[0]  # Undo *) from above
