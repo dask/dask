@@ -5,10 +5,10 @@ import math
 import warnings
 from distutils.version import LooseVersion
 from functools import wraps, partial
-from numbers import Number, Real, Integral
+from numbers import Real, Integral
 
 import numpy as np
-from toolz import concat, merge, sliding_window, interleave
+from toolz import concat, sliding_window, interleave
 
 from .. import sharedict
 from ..compatibility import Iterable
@@ -426,25 +426,29 @@ def ediff1d(ary, to_end=None, to_begin=None):
     return r
 
 
-def _gradient_kernel(f, grad_varargs, grad_kwargs):
-    return np.gradient(f, *grad_varargs, **grad_kwargs)
+def _gradient_kernel(x, block_id, coord, axis, array_locs, grad_kwargs):
+    """
+    x: nd-array
+        array of one block
+    coord: 1d-array or scalar
+        coordinate along which the gradient is computed.
+    axis: int
+        axis along which the gradient is computed
+    array_locs:
+        actual location along axis. None if coordinate is scalar
+    grad_kwargs:
+        keyword to be passed to np.gradient
+    """
+    block_loc = block_id[axis]
+    if array_locs is not None:
+        coord = coord[array_locs[0][block_loc]:array_locs[1][block_loc]]
+    grad = np.gradient(x, coord, axis=axis, **grad_kwargs)
+    return grad
 
 
 @wraps(np.gradient)
 def gradient(f, *varargs, **kwargs):
     f = asarray(f)
-
-    if not all([isinstance(e, Number) for e in varargs]):
-        raise NotImplementedError("Only numeric scalar spacings supported.")
-
-    if varargs == ():
-        varargs = (1,)
-    if len(varargs) == 1:
-        varargs = f.ndim * varargs
-    if len(varargs) != f.ndim:
-        raise TypeError(
-            "Spacing must either be a scalar or a scalar per dimension."
-        )
 
     kwargs["edge_order"] = math.ceil(kwargs.get("edge_order", 1))
     if kwargs["edge_order"] > 2:
@@ -465,26 +469,59 @@ def gradient(f, *varargs, **kwargs):
 
     axis = tuple(ax % f.ndim for ax in axis)
 
+    if varargs == ():
+        varargs = (1,)
+    if len(varargs) == 1:
+        varargs = len(axis) * varargs
+    if len(varargs) != len(axis):
+        raise TypeError(
+            "Spacing must either be a single scalar, or a scalar / 1d-array "
+            "per axis"
+        )
+
     if issubclass(f.dtype.type, (np.bool8, Integral)):
         f = f.astype(float)
     elif issubclass(f.dtype.type, Real) and f.dtype.itemsize < 4:
         f = f.astype(float)
 
-    r = [
-        f.map_overlap(
+    results = []
+    for i, ax in enumerate(axis):
+        for c in f.chunks[ax]:
+            if np.min(c) < kwargs["edge_order"] + 1:
+                raise ValueError(
+                    'Chunk size must be larger than edge_order + 1. '
+                    'Minimum chunk for aixs {} is {}. Rechunk to '
+                    'proceed.'.format(np.min(c), ax))
+
+        if np.isscalar(varargs[i]):
+            array_locs = None
+        else:
+            if isinstance(varargs[i], Array):
+                raise NotImplementedError(
+                    'dask array coordinated is not supported.')
+            # coordinate position for each block taking overlap into account
+            chunk = np.array(f.chunks[ax])
+            array_loc_stop = np.cumsum(chunk) + 1
+            array_loc_start = array_loc_stop - chunk - 2
+            array_loc_stop[-1] -= 1
+            array_loc_start[0] = 0
+            array_locs = (array_loc_start, array_loc_stop)
+
+        results.append(f.map_overlap(
             _gradient_kernel,
             dtype=f.dtype,
             depth={j: 1 if j == ax else 0 for j in range(f.ndim)},
             boundary="none",
-            grad_varargs=(varargs[i],),
-            grad_kwargs=merge(kwargs, {"axis": ax}),
-        )
-        for i, ax in enumerate(axis)
-    ]
-    if drop_result_list:
-        r = r[0]
+            coord=varargs[i],
+            axis=ax,
+            array_locs=array_locs,
+            grad_kwargs=kwargs,
+        ))
 
-    return r
+    if drop_result_list:
+        results = results[0]
+
+    return results
 
 
 @wraps(np.bincount)

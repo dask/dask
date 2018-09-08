@@ -449,11 +449,16 @@ def test_ediff1d(shape, to_end, to_begin):
     [(10, 15, 20), (), 2],
     [(10, 15, 20), (), -1],
     [(10, 15, 20), (), (0, 2)],
+    [(10, 15, 20), (np.exp(np.arange(10)), np.exp(np.arange(20)), ), (0, 2)],
+    [(10, 15, 20), (0.5, np.exp(np.arange(20)), ), (0, 2)],
+    [(10, 15, 20), (np.exp(np.arange(20)), ), -1],
 ])
 @pytest.mark.parametrize('edge_order', [
     1,
     2
 ])
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="Old np.gradient does not support coordinate.")
 def test_gradient(shape, varargs, axis, edge_order):
     a = np.random.randint(0, 10, shape)
     d_a = da.from_array(a, chunks=(len(shape) * (5,)))
