@@ -1022,6 +1022,9 @@ def has_keyword(func, keyword):
         if PY3:
             return keyword in inspect.signature(func).parameters
         else:
-            return keyword in inspect.getargspec(func).args
+            if isinstance(func, functools.partial):
+                return keyword in inspect.getargspec(func.func).args
+            else:
+                return keyword in inspect.getargspec(func).args
     except Exception:
         return False
