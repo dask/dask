@@ -331,6 +331,7 @@ def test_effective_get():
     assert any('dask.base.get_scheduler' in str(warning)
                for warning in record.list)
 
+
 def test_has_keyword():
     def foo(a, b, c=None):
         pass
