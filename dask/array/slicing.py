@@ -172,7 +172,7 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
     where_none = [i for i, ind in enumerate(index) if ind is None]
     where_none_orig = list(where_none)
     for i, x in enumerate(where_none):
-        n = sum(isinstance(ind, int) for ind in index[:x])
+        n = sum(isinstance(ind, Integral) for ind in index[:x])
         if n:
             where_none[i] -= n
 
