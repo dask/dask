@@ -6,6 +6,8 @@ from itertools import product, repeat
 from math import factorial, log, ceil
 
 import numpy as np
+from numbers import Integral
+
 from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
@@ -19,7 +21,6 @@ from ..compatibility import getargspec, builtins
 from ..base import tokenize
 from ..utils import ignoring, funcname, Dispatch
 from .. import config, sharedict
-
 
 # Generic functions to support chunks of different types
 empty_lookup = Dispatch('empty')
@@ -124,7 +125,7 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
     """
     if axis is None:
         axis = tuple(range(x.ndim))
-    if isinstance(axis, int):
+    if isinstance(axis, Integral):
         axis = (axis,)
     axis = validate_axis(axis, x.ndim)
 
@@ -159,7 +160,7 @@ def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
     split_every = split_every or config.get('split_every', 4)
     if isinstance(split_every, dict):
         split_every = dict((k, split_every.get(k, 2)) for k in axis)
-    elif isinstance(split_every, int):
+    elif isinstance(split_every, Integral):
         n = builtins.max(int(split_every ** (1 / (len(axis) or 1))), 2)
         split_every = dict.fromkeys(axis, n)
     else:
@@ -446,7 +447,7 @@ def moment_agg(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
 
 def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
            split_every=None, out=None):
-    if not isinstance(order, int) or order < 0:
+    if not isinstance(order, Integral) or order < 0:
         raise ValueError("Order must be an integer >= 0")
 
     if order < 2:
@@ -605,7 +606,7 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
     if axis is None:
         axis = tuple(range(x.ndim))
         ravel = True
-    elif isinstance(axis, int):
+    elif isinstance(axis, Integral):
         axis = validate_axis(axis, x.ndim)
         axis = (axis,)
         ravel = x.ndim == 1
@@ -710,7 +711,7 @@ def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
         axis = 0
     if dtype is None:
         dtype = getattr(func(np.empty((0,), dtype=x.dtype)), 'dtype', object)
-    assert isinstance(axis, int)
+    assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
 
     m = x.map_blocks(func, axis=axis, dtype=dtype)

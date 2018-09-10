@@ -215,9 +215,9 @@ def tensordot(lhs, rhs, axes=2):
         left_axes = tuple(range(lhs.ndim - 1, lhs.ndim - axes - 1, -1))
         right_axes = tuple(range(0, axes))
 
-    if isinstance(left_axes, int):
+    if isinstance(left_axes, Integral):
         left_axes = (left_axes,)
-    if isinstance(right_axes, int):
+    if isinstance(right_axes, Integral):
         right_axes = (right_axes,)
     if isinstance(left_axes, list):
         left_axes = tuple(left_axes)

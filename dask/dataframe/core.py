@@ -10,7 +10,7 @@ import warnings
 from toolz import merge, first, unique, partition_all, remove
 import pandas as pd
 import numpy as np
-from numbers import Number
+from numbers import Number, Integral
 
 try:
     from chest import Chest as Cache
@@ -1218,12 +1218,12 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         """
         from dask.dataframe.rolling import Rolling
 
-        if isinstance(window, int):
+        if isinstance(window, Integral):
             if window < 0:
                 raise ValueError('window must be >= 0')
 
         if min_periods is not None:
-            if not isinstance(min_periods, int):
+            if not isinstance(min_periods, Integral):
                 raise ValueError('min_periods must be an integer')
             if min_periods < 0:
                 raise ValueError('min_periods must be >= 0')
@@ -1234,7 +1234,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @derived_from(pd.DataFrame)
     def diff(self, periods=1, axis=0):
         axis = self._validate_axis(axis)
-        if not isinstance(periods, int):
+        if not isinstance(periods, Integral):
             raise TypeError("periods must be an integer")
 
         if axis == 1:
@@ -1248,7 +1248,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @derived_from(pd.DataFrame)
     def shift(self, periods=1, freq=None, axis=0):
         axis = self._validate_axis(axis)
-        if not isinstance(periods, int):
+        if not isinstance(periods, Integral):
             raise TypeError("periods must be an integer")
 
         if axis == 1:
@@ -2279,7 +2279,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @derived_from(pd.Series)
     def autocorr(self, lag=1, split_every=False):
-        if not isinstance(lag, int):
+        if not isinstance(lag, Integral):
             raise TypeError("lag must be an integer")
         return self.corr(self if lag == 0 else self.shift(lag),
                          split_every=split_every)
@@ -3480,7 +3480,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
         split_every = 8
     elif split_every is False:
         split_every = npartitions
-    elif split_every < 2 or not isinstance(split_every, int):
+    elif split_every < 2 or not isinstance(split_every, Integral):
         raise ValueError("split_every must be an integer >= 2")
 
     token_key = tokenize(token or (chunk, aggregate), meta, args,
@@ -3831,7 +3831,7 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
 
     if split_every is False:
         split_every = df.npartitions
-    elif split_every < 2 or not isinstance(split_every, int):
+    elif split_every < 2 or not isinstance(split_every, Integral):
         raise ValueError("split_every must be an integer >= 2")
 
     df = df._get_numeric_data()

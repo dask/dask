@@ -11,6 +11,8 @@ from ..compatibility import getargspec, Container, Iterable, Sequence
 from ..core import flatten
 from ..utils import ignoring
 
+from numbers import Integral
+
 try:
     from numpy import broadcast_to
 except ImportError:  # pragma: no cover
@@ -171,7 +173,7 @@ def trim(x, axes=None):
     array([[ 7,  8,  9, 10],
            [13, 14, 15, 16]])
     """
-    if isinstance(axes, int):
+    if isinstance(axes, Integral):
         axes = [axes] * x.ndim
     if isinstance(axes, dict):
         axes = [axes.get(i, 0) for i in range(x.ndim)]
