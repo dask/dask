@@ -102,6 +102,8 @@ comment_header = b"""# some header lines
 # in a data file
 # before any data"""
 
+csv_units_row = b'str, int, int\n'
+tsv_units_row = csv_units_row.replace(b',', b'\t')
 
 csv_and_table = pytest.mark.parametrize('reader,files',
                                         [(pd.read_csv, csv_files),
@@ -205,6 +207,20 @@ def test_text_blocks_to_pandas_blocked(reader, files):
 def test_skiprows(dd_read, pd_read, files):
     files = {name: comment_header + b'\n' + content for name, content in files.items()}
     skip = len(comment_header.splitlines())
+    with filetexts(files, mode='b'):
+        df = dd_read('2014-01-*.csv', skiprows=skip)
+        expected_df = pd.concat([pd_read(n, skiprows=skip) for n in sorted(files)])
+        assert_eq(df, expected_df, check_dtype=False)
+
+
+@pytest.mark.parametrize('dd_read,pd_read,files,units',
+                         [(dd.read_csv, pd.read_csv, csv_files, csv_units_row),
+                          (dd.read_table, pd.read_table, tsv_files, tsv_units_row)])
+def test_skiprows_as_list(dd_read, pd_read, files, units):
+    files = {name: (comment_header + b'\n' +
+                    content.replace(b'\n', b'\n' + units, 1)) for name, content in files.items()}
+    n_comment_lines = len(comment_header.splitlines())
+    skip = [*range( n_comment_lines),  n_comment_lines + 1]
     with filetexts(files, mode='b'):
         df = dd_read('2014-01-*.csv', skiprows=skip)
         expected_df = pd.concat([pd_read(n, skiprows=skip) for n in sorted(files)])
