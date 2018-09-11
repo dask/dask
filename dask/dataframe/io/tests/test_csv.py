@@ -220,7 +220,8 @@ def test_skiprows_as_list(dd_read, pd_read, files, units):
     files = {name: (comment_header + b'\n' +
                     content.replace(b'\n', b'\n' + units, 1)) for name, content in files.items()}
     n_comment_lines = len(comment_header.splitlines())
-    skip = [*range( n_comment_lines),  n_comment_lines + 1]
+    skip = list(range( n_comment_lines))
+    skip.append(n_comment_lines + 1)
     with filetexts(files, mode='b'):
         df = dd_read('2014-01-*.csv', skiprows=skip)
         expected_df = pd.concat([pd_read(n, skiprows=skip) for n in sorted(files)])
