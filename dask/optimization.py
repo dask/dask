@@ -845,3 +845,118 @@ class SubgraphCallable(object):
     def __reduce__(self):
         return (SubgraphCallable,
                 (self.dsk, self.outkey, self.inkeys, self.name))
+
+
+def fuse_subgraphs(dsk, keys=None, dependencies=None, rename_keys=None):
+    """Fuse subgraphs together.
+
+    This is intendended to be called after ``fuse``, and will collect any
+    remaining linear chains that couldn't be fused by ``fuse`` into a single
+    callable using ``SubgraphCallable``.
+
+    Parameters
+    ----------
+    dsk: dict
+        The dask graph.
+    keys: list or set, optional
+        Keys that must remain in the returned dask graph.
+    dependencies: dict, optional
+        A mapping from key to a set of keys. This optional input often comes
+        from ``fuse``.
+    rename_keys: bool or func, optional
+        Whether to rename the fused keys with ``default_fused_keys_renamer``
+        or not.  Renaming fused keys can keep the graph more understandable
+        and comprehensive, but it comes at the cost of additional processing.
+        If False, then the top-most key will be used.  For advanced usage, a
+        function to create the new name is also accepted.
+    """
+    if keys is not None and not isinstance(keys, set):
+        if not isinstance(keys, list):
+            keys = [keys]
+        keys = set(flatten(keys))
+
+    if rename_keys is None:
+        rename_keys = config.get('fuse_rename_keys', True)
+    if rename_keys is True:
+        key_renamer = default_fused_keys_renamer
+    elif rename_keys is False:
+        key_renamer = None
+    else:
+        key_renamer = rename_keys
+
+    if dependencies is None:
+        dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+    else:
+        dependencies = dict(dependencies)
+
+    # locate all members of linear chains
+    child2parent = {}
+    unfusible = set()
+    for parent in dsk:
+        deps = dependencies[parent]
+        has_many_children = len(deps) > 1
+        for child in deps:
+            if keys is not None and child in keys:
+                unfusible.add(child)
+            elif child in child2parent:
+                del child2parent[child]
+                unfusible.add(child)
+            elif has_many_children:
+                unfusible.add(child)
+            elif child not in unfusible:
+                child2parent[child] = parent
+
+    # construct the chains from ancestor to descendant
+    chains = []
+    parent2child = dict(map(reversed, child2parent.items()))
+    while child2parent:
+        child, parent = child2parent.popitem()
+        chain = [child, parent]
+        while parent in child2parent:
+            parent = child2parent.pop(parent)
+            del parent2child[parent]
+            chain.append(parent)
+        chain.reverse()
+        while child in parent2child:
+            child = parent2child.pop(child)
+            del child2parent[child]
+            chain.append(child)
+        # Skip chains with < 2 executable tasks
+        ntasks = 0
+        for key in chain:
+            ntasks += istask(dsk[key])
+            if ntasks > 1:
+                chains.append(chain)
+                break
+
+    # create a new graph with fused chains
+    out = dsk.copy()
+    for chain in chains:
+        subgraph = {k: dsk[k] for k in chain}
+        outkey = chain[0]
+
+        # Update dependencies and graph
+        inkeys_set = dependencies[outkey] = dependencies[chain[-1]]
+        for k in chain[1:]:
+            del dependencies[k]
+            del out[k]
+
+        # Create new task
+        inkeys = tuple(inkeys_set)
+        val = (SubgraphCallable(subgraph, outkey, inkeys),) + inkeys
+
+        # Rename keys if needed
+        if key_renamer is not None:
+            # Filter out any aliases before renaming
+            new_key = key_renamer(chain)
+            if new_key is not None and new_key not in dsk and new_key not in out:
+                out[new_key] = val
+                out[outkey] = new_key
+                dependencies[new_key] = dependencies[outkey]
+                dependencies[outkey] = {new_key}
+            else:
+                out[outkey] = val
+        else:
+            out[outkey] = val
+
+    return out, dependencies
