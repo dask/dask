@@ -1087,39 +1087,95 @@ def test_to_csv_paths():
 
 def test_to_csv_header():
     partition_count = 3
+    dfe = pd.DataFrame({'x': [],
+                       'y': []})
     df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f'],
                        'y': [1, 2, 3, 4, 5, 6]})
+    ddfe = dd.from_pandas(dfe, npartitions=partition_count)
     ddf = dd.from_pandas(df, npartitions=partition_count)
 
-    # Test normal header case (header=True, header_first_chunk not passed)
-    ddf.to_csv("foo*.csv", index=False)
-    for i in range(0, partition_count):
-        filename = 'foo{}.csv'.format(i)
+    with tmpdir() as dn:
+
+        # Test empty dataframe case (header=False, header_first_chunk_only not passed)
+        ddfe.to_csv(os.path.join(dn, "fooe*.csv"), index=False, header=False)
+        assert not os.path.exists(os.path.join(dn, "fooe1.csv"))
+        for i in range(0, 1):
+            filename = os.path.join(dn, 'fooe{}.csv'.format(i))
+            with open(filename, 'r') as fp:
+                line = fp.readline()
+                assert line != 'x,y\n'
+            os.remove(filename)
+
+        # Test NO header case (header=False, header_first_chunk_only not passed)
+        ddf.to_csv(os.path.join(dn, "fooa*.csv"), index=False, header=False)
+        for i in range(0, partition_count):
+            filename = os.path.join(dn, 'fooa{}.csv'.format(i))
+            with open(filename, 'r') as fp:
+                line = fp.readline()
+                assert line != 'x,y\n'
+            os.remove(filename)
+
+        # Test normal header case (header=True, header_first_chunk_only not passed)
+        ddf.to_csv(os.path.join(dn, "fooa*.csv"), index=False)
+        for i in range(0, partition_count):
+            filename = os.path.join(dn, 'fooa{}.csv'.format(i))
+            with open(filename, 'r') as fp:
+                line = fp.readline()
+                assert line == 'x,y\n'
+            os.remove(filename)
+
+        # Test header_first_chunk case FALSE
+        # (header=True, header_first_chunk_only = False)
+        ddf.to_csv(os.path.join(dn, "foob*.csv"), index=False,
+                   header_first_partition_only=False)
+        for i in range(0, partition_count):
+            filename = os.path.join(dn, 'foob{}.csv'.format(i))
+            with open(filename, 'r') as fp:
+                line = fp.readline()
+                assert line == 'x,y\n'
+            os.remove(filename)
+
+        # Test header_first_chunk case TRUE
+        # (header=True, header_first_chunk_only = True)
+        ddf.to_csv(os.path.join(dn, "fooc*.csv"), index=False,
+                   header_first_partition_only=True)
+        filename = os.path.join(dn, 'fooc0.csv')
         with open(filename, 'r') as fp:
             line = fp.readline()
             assert line == 'x,y\n'
         os.remove(filename)
 
-    # Test header_first_chunk case FALSE (header=True, header_first_chunk = False)
-    ddf.to_csv("foo*.csv", index=False, header_first_chunk=False)
-    for i in range(0, partition_count):
-        filename = 'foo{}.csv'.format(i)
+        for i in range(1, partition_count):
+            filename = os.path.join(dn, 'fooc{}.csv'.format(i))
+            with open(filename, 'r') as fp:
+                line = fp.readline()
+                assert line != 'x,y\n'
+            os.remove(filename)
+
+        # Test custom header,header_first_chunk case FALSE
+        # (header=list, header_first_chunk_only = False)
+        ddf.to_csv(os.path.join(dn, "foob*.csv"), index=False,
+                   header=['aa', 'bb'], header_first_partition_only=False)
+        for i in range(0, partition_count):
+            filename = os.path.join(dn, 'foob{}.csv'.format(i))
+            with open(filename, 'r') as fp:
+                line = fp.readline()
+                assert line == 'aa,bb\n'
+            os.remove(filename)
+
+        # Test custom header, header_first_chunk case TRUE
+        # (header=list, header_first_chunk_only = True)
+        ddf.to_csv(os.path.join(dn, "fooc*.csv"), index=False,
+                   header=['aa', 'bb'], header_first_partition_only=True)
+        filename = os.path.join(dn, 'fooc0.csv')
         with open(filename, 'r') as fp:
             line = fp.readline()
-            assert line == 'x,y\n'
+            assert line == 'aa,bb\n'
         os.remove(filename)
 
-    # Test header_first_chunk case TRUE (header=True, header_first_chunk = True)
-    ddf.to_csv("foo*.csv", index=False, header_first_chunk=True)
-    filename = 'foo0.csv'
-    with open(filename, 'r') as fp:
-        line = fp.readline()
-        assert line == 'x,y\n'
-    os.remove(filename)
-
-    for i in range(1, partition_count):
-        filename = 'foo{}.csv'.format(i)
-        with open(filename, 'r') as fp:
-            line = fp.readline()
-            assert line != 'x,y\n'
-        os.remove(filename)
+        for i in range(1, partition_count):
+            filename = os.path.join(dn, 'fooc{}.csv'.format(i))
+            with open(filename, 'r') as fp:
+                line = fp.readline()
+                assert line != 'aa,bb\n' and line != 'x,y\n'
+            os.remove(filename)
