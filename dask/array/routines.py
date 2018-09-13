@@ -627,17 +627,17 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     name = 'histogram-sum-' + token
 
     # Map the histogram to all bins
-    def block_hist(x, weights=None):
+    def block_hist(x, range=None, weights=None):
         return np.histogram(x, bins, range=range, weights=weights)[0][np.newaxis]
 
     if weights is None:
-        dsk = {(name, i, 0): (block_hist, k)
+        dsk = {(name, i, 0): (block_hist, k, range)
                for i, k in enumerate(flatten(a.__dask_keys__()))}
         dtype = np.histogram([])[0].dtype
     else:
         a_keys = flatten(a.__dask_keys__())
         w_keys = flatten(weights.__dask_keys__())
-        dsk = {(name, i, 0): (block_hist, k, w)
+        dsk = {(name, i, 0): (block_hist, k, range, w)
                for i, (k, w) in enumerate(zip(a_keys, w_keys))}
         dtype = weights.dtype
 
