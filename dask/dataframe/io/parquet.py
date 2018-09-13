@@ -177,7 +177,6 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
 def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
                       categories=None, index=None, infer_divisions=None):
     import fastparquet
-    from fastparquet.util import check_column_names
 
     if isinstance(paths,fastparquet.api.ParquetFile):
         pf = paths
@@ -423,6 +422,7 @@ def _paths_to_cats(paths, scheme):
         # Check that all partition names map to the same type after
         # transformation by val_to_num
         if len(vals_by_type) > 1:
+            import warnings
             examples = [x[0] for x in vals_by_type.values()]
             warnings.warn("Partition names coerce to values of different"
                           " types, e.g. %s" % examples)
