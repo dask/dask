@@ -219,9 +219,7 @@ def test_skiprows(dd_read, pd_read, files):
 def test_skiprows_as_list(dd_read, pd_read, files, units):
     files = {name: (comment_header + b'\n' +
                     content.replace(b'\n', b'\n' + units, 1)) for name, content in files.items()}
-    n_comment_lines = len(comment_header.splitlines())
-    skip = list(range( n_comment_lines))
-    skip.append(n_comment_lines + 1)
+    skip = [0, 1, 2, 3, 5]
     with filetexts(files, mode='b'):
         df = dd_read('2014-01-*.csv', skiprows=skip)
         expected_df = pd.concat([pd_read(n, skiprows=skip) for n in sorted(files)])
@@ -275,6 +273,36 @@ def test_read_csv(dd_read, pd_read, text, sep):
         # index may be different
         result = f.compute(scheduler='sync').reset_index(drop=True)
         assert_eq(result, pd_read(fn, sep=sep))
+
+
+@pytest.mark.parametrize('dd_read,pd_read,text,skip',
+                         [(dd.read_csv, pd.read_csv, csv_text, 7),
+                          (dd.read_table, pd.read_table, tsv_text, [1, 13])])
+def test_read_csv_large_skiprows(dd_read, pd_read, text, skip):
+    names = ['name', 'amount']
+    with filetext(text) as fn:
+        actual = dd_read(fn, skiprows=skip, names=names)
+        assert_eq(actual, pd_read(fn, skiprows=skip, names=names))
+
+
+@pytest.mark.parametrize('dd_read,pd_read,text,skip',
+                         [(dd.read_csv, pd.read_csv, csv_text, 7),
+                          (dd.read_table, pd.read_table, tsv_text, [1, 12])])
+def test_read_csv_skiprows_only_in_first_partition(dd_read, pd_read, text, skip):
+    # If sample is larger than the first partition this behavior is expected
+    names = ['name', 'amount']
+    with filetext(text) as fn:
+        with pytest.warns(UserWarning) as w:
+            actual = dd_read(fn, blocksize=200, skiprows=skip, names=names).compute()
+            assert_eq(actual, pd_read(fn, skiprows=skip, names=names))
+            assert len(w) == 1
+            msg = str(w[0].message)
+            assert 'sample=blocksize' in msg
+
+        with pytest.warns(UserWarning) as w:
+            with pytest.raises(ValueError):
+                actual = dd_read(fn, blocksize=30, skiprows=skip, names=names).compute()
+                assert actual.shape != pd_read(fn, skiprows=skip, names=names).shape
 
 
 @pytest.mark.parametrize('dd_read,pd_read,files',

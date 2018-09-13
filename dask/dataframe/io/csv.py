@@ -327,7 +327,11 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     if compression not in seekable_files and compression not in cfiles:
         raise NotImplementedError("Compression format %s not installed" %
                                   compression)
-
+    if blocksize and blocksize < sample and lastskiprow != 0:
+        warn("Unexpected behavior can result from passing skiprows when\n"
+             "blocksize is smaller than sample size.\n"
+             "Setting ``sample=blocksize")
+        sample = blocksize
     b_lineterminator = lineterminator.encode()
     b_out = read_bytes(urlpath, delimiter=b_lineterminator,
                        blocksize=blocksize,
