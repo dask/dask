@@ -1279,6 +1279,9 @@ def test_unravel_index():
                                    (3, (15,), 'F'),
                                    (2, (15, 16), 'C'),
                                    (2, (15, 16), 'F')]:
+        arr = np.random.random(shape)
+        darr = da.from_array(arr, chunks=1)
+
         findices = np.random.randint(np.prod(shape, dtype=int), size=nindices)
         d_findices = da.from_array(findices, chunks=1)
 
@@ -1290,6 +1293,8 @@ def test_unravel_index():
 
         for i in range(len(indices)):
             assert_eq(d_indices[i], indices[i])
+
+        assert_eq(darr.vindex[d_indices], arr[indices])
 
 
 def test_coarsen():
