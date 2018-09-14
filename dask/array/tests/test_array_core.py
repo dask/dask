@@ -1184,14 +1184,12 @@ def test_map_blocks_dtype_inference():
     def foo(x):
         raise RuntimeError("Woops")
 
-    try:
+    with pytest.raises(ValueError) as e:
         dx.map_blocks(foo)
-    except Exception as e:
-        assert e.args[0].startswith("`dtype` inference failed")
-        assert "Please specify the dtype explicitly" in e.args[0]
-        assert 'RuntimeError' in e.args[0]
-    else:
-        assert False, "Should have errored"
+    msg = str(e.value)
+    assert msg.startswith("`dtype` inference failed")
+    assert "Please specify the dtype explicitly" in msg
+    assert 'RuntimeError' in msg
 
 
 def test_from_function_requires_block_args():

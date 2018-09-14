@@ -9,7 +9,7 @@ try:
 except ImportError:
     from toolz import concat, merge, unique
 
-from .core import Array, asarray, atop, getitem
+from .core import Array, asarray, atop, getitem, apply_infer_dtype
 from .. import sharedict
 from ..core import flatten
 
@@ -83,8 +83,11 @@ def apply_gufunc(func, signature, *args, **kwargs):
         According to the specification of numpy.gufunc signature [2]_
     *args : numeric
         Input arrays or scalars to the callable function.
-    output_dtypes : dtype or list of dtypes, keyword only
-        dtype or list of output dtypes.
+    output_dtypes : Optional, dtype or list of dtypes, keyword only
+        Valid numpy dtype specification or list thereof.
+        If not given, a call of ``func`` with a small set of data
+        is performed in order to try to  automatically determine the
+        output dtypes.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
         new core dimensions (not found on inputs) appear on outputs.
@@ -142,16 +145,19 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ## Determine nout: nout = None for functions of one direct return; nout = int for return tuples
     nout = None if not isinstance(core_output_dimss, list) else len(core_output_dimss)
 
-    ## Assert output_dtypes
+    ## Determine and handle output_dtypes
     if output_dtypes is None:
-        raise ValueError("Must specify `output_dtypes` of output array(s)")
-    elif isinstance(output_dtypes, str):
-        otypes = list(output_dtypes)
-        output_dtypes = otypes[0] if nout is None else otypes
-    elif isinstance(output_dtypes, (tuple, list)):
+        output_dtypes = apply_infer_dtype(func, args, kwargs, "apply_gufunc", "output_dtypes", nout)
+
+    if isinstance(output_dtypes, (tuple, list)):
         if nout is None:
-            raise ValueError("Must specify single dtype for `output_dtypes` for function with one output")
-        otypes = output_dtypes
+            if len(output_dtypes) > 1:
+                raise ValueError(("Must specify single dtype or list of one dtype "
+                                  "for `output_dtypes` for function with one output"))
+            otypes = output_dtypes
+            output_dtypes = output_dtypes[0]
+        else:
+            otypes = output_dtypes
     else:
         if nout is not None:
             raise ValueError("Must specify tuple of dtypes for `output_dtypes` for function with multiple outputs")
