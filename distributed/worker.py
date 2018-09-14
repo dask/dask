@@ -2121,7 +2121,7 @@ class Worker(WorkerBase):
 
             for dep in self.dependencies.pop(key, ()):
                 if dep in self.dependents:
-                    self.dependents[dep].remove(key)
+                    self.dependents[dep].discard(key)
                     if not self.dependents[dep] and self.dep_state[dep] in ('waiting', 'flight'):
                         self.release_dep(dep)
 
