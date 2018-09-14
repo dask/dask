@@ -549,7 +549,38 @@ def _concatenate2(arrays, axes=[]):
     return concatenate(arrays, axis=axes[0])
 
 
-def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
+def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype='dtype', nout=None):
+    """
+    Tries to infer output dtype of ``func`` for a small set of input arguments.
+
+    Parameters
+    ----------
+    func: Callable
+        Function for which output dtype is to be determined
+
+    args: List of array like
+        Arguments to the function, which qwould usually be used. Only attributes
+        ``ndim`` and ``dtype`` are used.
+
+    kwargs: dict
+        Additional ``kwargs`` to the ``func``
+
+    funcname: String
+        Name of calling function to improve potential error messages
+
+    suggest_dtype: None/False or String
+        If not ``None`` adds suggestion to potential error message to specify a dtype
+        via the specified kwarg. Defaults to ``'dtype'``.
+
+    nout: None or Int
+        ``None`` if function returns single output, integer if many.
+        Deafults to ``None``.
+
+    Returns
+    -------
+    : dtype or List of dtype
+        One or many dtypes (depending on ``nout``)
+    """
     args = [np.ones((1,) * x.ndim, dtype=x.dtype)
             if isinstance(x, Array) else x for x in args]
     try:
@@ -559,7 +590,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
         suggest = ("Please specify the dtype explicitly using the "
-                   "`dtype` kwarg.\n\n") if suggest_dtype else ""
+                   "`{dtype}` kwarg.\n\n".format(dtype=suggest_dtype)) if suggest_dtype else ""
         msg = ("`dtype` inference failed in `{0}`.\n\n"
                "{1}"
                "Original error is below:\n"
@@ -572,7 +603,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
         msg = None
     if msg is not None:
         raise ValueError(msg)
-    return o.dtype
+    return o.dtype if nout is None else tuple(e.dtype for e in o)
 
 
 def map_blocks(func, *args, **kwargs):
