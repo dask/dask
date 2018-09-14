@@ -187,6 +187,17 @@ def test_apply_gufunc_two_mixed_outputs():
     assert_eq(y, np.ones((2, 3), dtype=float))
 
 
+@pytest.mark.parametrize('output_dtypes', [int, (int,)])
+def test_apply_gufunc_output_dtypes(output_dtypes):
+    def foo(x):
+        return y
+    x = np.random.randn(10)
+    y = x.astype(int)
+    dy = apply_gufunc(foo, "()->()", x, output_dtypes=output_dtypes)
+    #print(x, x.compute())
+    assert_eq(y, dy)
+
+
 def test_gufunc_two_inputs():
     def foo(x, y):
         return np.einsum('...ij,...jk->ik', x, y)

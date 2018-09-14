@@ -151,8 +151,13 @@ def apply_gufunc(func, signature, *args, **kwargs):
 
     if isinstance(output_dtypes, (tuple, list)):
         if nout is None:
-            raise ValueError("Must specify single dtype for `output_dtypes` for function with one output")
-        otypes = output_dtypes
+            if len(output_dtypes) > 1:
+                raise ValueError(("Must specify single dtype or list of one dtype "
+                                  "for `output_dtypes` for function with one output"))
+            otypes = output_dtypes
+            output_dtypes = output_dtypes[0]
+        else:
+            otypes = output_dtypes
     else:
         if nout is not None:
             raise ValueError("Must specify tuple of dtypes for `output_dtypes` for function with multiple outputs")
