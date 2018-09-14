@@ -439,7 +439,8 @@ def _write_csv(df, fil, **kwargs):
 
 
 def to_csv(df, filename, name_function=None, compression=None, compute=True,
-           get=None, scheduler=None, storage_options=None, **kwargs):
+           get=None, scheduler=None, storage_options=None,
+           header_first_partition_only=False, **kwargs):
     """
     Store Dask DataFrame to CSV files
 
@@ -576,8 +577,6 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
 
     # If we only want headers in the first file, turn headers off after the
     # first partition
-    header_first_partition_only = kwargs.pop(
-        'header_first_partition_only', None)
 
     values = [to_csv_chunk(dfs[0], files[0], **kwargs)]
 
