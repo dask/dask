@@ -14,8 +14,7 @@ from dask.utils_test import inc
 
 
 def test_pickle_globals():
-    """ For the function f(x) defined below, the only globals added in pickling
-    should be 'np' and '__builtins__'"""
+    """ Unrelated globals should not be included in serialized bytes """
     def unrelated_function(a):
         return np.array([a])
 
