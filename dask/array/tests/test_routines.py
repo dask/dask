@@ -552,6 +552,15 @@ def test_histogram_alternative_bins_range():
     assert_eq(b1, b2)
 
 
+def test_histogram_bins_range_with_nan_array():
+    # Regression test for issue #3977
+    v = da.from_array(np.array([-2, np.nan, 2]), chunks=1)
+    (a1, b1) = da.histogram(v, bins=10, range=(-3, 3))
+    (a2, b2) = np.histogram(v, bins=10, range=(-3, 3))
+    assert_eq(a1, a2)
+    assert_eq(b1, b2)
+
+
 def test_histogram_return_type():
     v = da.random.random(100, chunks=10)
     bins = np.arange(0, 1.01, 0.01)
