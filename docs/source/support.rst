@@ -40,7 +40,7 @@ new to using the project.  There are a few things you can do to improve the
 likelihood of quickly getting a good answer.
 
 1.  **Ask questions in the right place**:  We strongly prefer the use
-    of StackOverflow and Github issues over Gitter chat.  Github and
+    of StackOverflow or Github issues over Gitter chat.  Github and
     StackOverflow are more easily searchable by future users and so is more
     efficient for everyone's time.  Gitter chat is strictly reserved for
     developer and community discussion.
