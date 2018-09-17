@@ -330,7 +330,7 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     if blocksize and blocksize < sample and lastskiprow != 0:
         warn("Unexpected behavior can result from passing skiprows when\n"
              "blocksize is smaller than sample size.\n"
-             "Setting ``sample=blocksize")
+             "Setting ``sample=blocksize``")
         sample = blocksize
     b_lineterminator = lineterminator.encode()
     b_out = read_bytes(urlpath, delimiter=b_lineterminator,
