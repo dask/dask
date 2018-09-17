@@ -180,6 +180,7 @@ Top level user functions:
    triu
    trunc
    unique
+   unravel_index
    var
    vdot
    vstack
@@ -539,6 +540,7 @@ Other functions
 .. autofunction:: triu
 .. autofunction:: trunc
 .. autofunction:: unique
+.. autofunction:: unravel_index
 .. autofunction:: var
 .. autofunction:: vdot
 .. autofunction:: vstack
