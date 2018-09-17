@@ -289,7 +289,6 @@ def test_read_csv_large_skiprows(dd_read, pd_read, text, skip):
                          [(dd.read_csv, pd.read_csv, csv_text, 7),
                           (dd.read_table, pd.read_table, tsv_text, [1, 12])])
 def test_read_csv_skiprows_only_in_first_partition(dd_read, pd_read, text, skip):
-    # If sample is larger than the first partition this behavior is expected
     names = ['name', 'amount']
     with filetext(text) as fn:
         with pytest.warns(UserWarning) as w:
@@ -299,10 +298,10 @@ def test_read_csv_skiprows_only_in_first_partition(dd_read, pd_read, text, skip)
             msg = str(w[0].message)
             assert 'sample=blocksize' in msg
 
-        with pytest.warns(UserWarning) as w:
+        with pytest.warns(UserWarning):
+            # if new sample does not contain all the skiprows, raise error
             with pytest.raises(ValueError):
-                actual = dd_read(fn, blocksize=30, skiprows=skip, names=names).compute()
-                assert actual.shape != pd_read(fn, skiprows=skip, names=names).shape
+                dd_read(fn, blocksize=30, skiprows=skip, names=names)
 
 
 @pytest.mark.parametrize('dd_read,pd_read,files',
