@@ -1,13 +1,14 @@
 Changelog
 =========
 
-0.19.2 / YYYY-MM-DD
+X.XX.X / YYYY-MM-DD
 -------------------
 
 Array
 +++++
 
-- ``apply_gufunc`` implements automatic infer of functions output dtypes (:pr:`3936`) `Markus Gonser`_
+-
+
 
 Dataframe
 +++++++++
@@ -23,6 +24,32 @@ Documentation
 +++++++++++++
 
 -
+
+
+0.19.2 / 2018-09-17
+-------------------
+
+Array
++++++
+
+-  ``apply_gufunc`` implements automatic infer of functions output dtypes (:pr:`3936`) `Markus Gonser`_
+-  Fix array histogram range error when array has nans (#3980) `James Bourbeau`_
+-  Issue 3937 follow up, int type checks. (#3956) `Yu Feng`_
+-  from_array: add @martindurant's explaining of how hashing is done for an array. (#3965) `Mark Harfouche`_
+-  Support gradient with coordinate (#3949) `Keisuke Fujii`_
+
+Core
+++++
+
+-  Fix use of has_keyword with partial in Python 2.7 (#3966) `Mark Harfouche`_
+-  Set pyarrow as default for HDFS (#3957) `Matthew Rocklin`_
+
+Documentation
++++++++++++++
+
+-  Use dask_sphinx_theme (#3963) `Matthew Rocklin`_
+-  Use JupyterLab in Binder links from main page `Matthew Rocklin`_
+-  DOC: fixed sphinx syntax (#3960) `Tom Augspurger`_
 
 
 0.19.1 / 2018-09-06
