@@ -1,10 +1,16 @@
 Changelog
 =========
 
-1.23.2 - YYYY-MM-DD
+1.23.2 - 2018-09-17
 -------------------
 
--
+-  Discard dependent rather than remove (#2250) `Matthew Rocklin`_
+-  Use dask_sphinx_theme `Matthew Rocklin`_
+-  Drop the Bokeh index page (#2241) `John Kirkham`_
+-  Revert change to keep link relative (#2242) `Matthew Rocklin`_
+-  docs: Fix broken AWS link in setup.rst file (#2240) `Vladyslav Moisieienkov`_
+-  Return cancelled futures in as_completed (#2233) `Chris White`_
+
 
 1.23.1 - 2018-09-06
 -------------------
@@ -776,3 +782,5 @@ significantly without many new features.
 .. _`Anderson Banihirwe`: https://github.com/andersy005
 .. _`Yu Feng`: https://github.com/rainwoodman
 .. _`Guillaume EB`: https://github.com/guillaumeeb
+.. _`Vladyslav Moisieienkov`: https://github.com/VMois
+.. _`Chris White`: https://github.com/cicdw
