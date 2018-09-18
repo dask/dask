@@ -56,18 +56,18 @@ def to_hdf(df, path, key, mode='a', append=False, get=None, scheduler=None,
 
     Parameters
     ----------
-    path: string
+    path : string
         Path to a target filename.  May contain a ``*`` to denote many filenames
-    key: string
+    key : string
         Datapath within the files.  May contain a ``*`` to denote many locations
-    name_function: function
+    name_function : function
         A function to convert the ``*`` in the above options to a string.
         Should take in a number from 0 to the number of partitions and return a
         string. (see examples below)
-    compute: bool
+    compute : bool
         Whether or not to execute immediately.  If False then this returns a
         ``dask.Delayed`` value.
-    lock: Lock, optional
+    lock : Lock, optional
         Lock to use to prevent concurrency issues.  By default a
         ``threading.Lock``, ``multiprocessing.Lock`` or ``SerializableLock``
         will be used depending on your scheduler if a lock is required. See
@@ -107,8 +107,12 @@ def to_hdf(df, path, key, mode='a', append=False, get=None, scheduler=None,
 
     Returns
     -------
-    None: if compute == True
-    delayed value: if compute == False
+    filenames : list
+        Returned if ``compute`` is True. List of file names that each partition
+        is saved to.
+    delayed : dask.Delayed
+        Returned if ``compute`` is False. Delayed object to execute ``to_hdf``
+        when computed.
 
     See Also
     --------
