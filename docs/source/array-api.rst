@@ -320,6 +320,8 @@ Slightly Overlapping Computations
 .. autosummary::
    overlap.overlap
    overlap.map_overlap
+   overlap.trim_internal
+   overlap.trim_overlap
 
 
 Create and Store Arrays

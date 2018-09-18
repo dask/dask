@@ -415,3 +415,24 @@ def test_overlap_few_dimensions():
     assert len(a.dask) < len(c.dask)
 
     assert len(c.dask) < 10 * len(a.dask)
+
+
+@pytest.mark.parametrize('boundary',
+                         ['reflect', 'periodic', 'nearest', 'none'])
+def test_trim_boundry(boundary):
+    x = da.from_array(np.arange(24).reshape(4, 6), chunks=(2, 3))
+    x_overlaped = da.overlap.overlap(x, 2,
+                                     boundary={0: 'reflect', 1: boundary})
+    x_trimmed = da.overlap.trim_overlap(x_overlaped, 2,
+                                        boundary={0: 'reflect', 1: boundary})
+    assert np.all(x == x_trimmed)
+
+    x_overlaped = da.overlap.overlap(x, 2,
+                                     boundary={1: boundary})
+    x_trimmed = da.overlap.trim_overlap(x_overlaped, 2,
+                                        boundary={1: boundary})
+    assert np.all(x == x_trimmed)
+
+    x_overlaped = da.overlap.overlap(x, 2, boundary=boundary)
+    x_trimmed = da.overlap.trim_overlap(x_overlaped, 2, boundary=boundary)
+    assert np.all(x == x_trimmed)
