@@ -301,8 +301,15 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                          "recommended to use `dd.{0}(...)."
                          "head(n=nrows)`".format(reader_name))
     if isinstance(kwargs.get('skiprows'), list):
-        raise TypeError("List of skiprows not supported for "
-                        "dd.{0}".format(reader_name))
+        # When skiprows is a list, we expect more than max(skiprows) to
+        # be included in the sample. This means that [0,2] will work well,
+        # but [0, 440] might not work.
+        skiprows = kwargs.get('skiprows')
+        lastskiprow = max(skiprows)
+        # find the firstrow that is not skipped, for use as header
+        firstrow = min(set(range(len(skiprows) + 1)) - set(skiprows))
+    else:
+        skiprows = lastskiprow = firstrow = kwargs.get('skiprows', 0)
     if isinstance(kwargs.get('header'), list):
         raise TypeError("List of header rows not supported for "
                         "dd.{0}".format(reader_name))
@@ -320,7 +327,11 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     if compression not in seekable_files and compression not in cfiles:
         raise NotImplementedError("Compression format %s not installed" %
                                   compression)
-
+    if blocksize and blocksize < sample and lastskiprow != 0:
+        warn("Unexpected behavior can result from passing skiprows when\n"
+             "blocksize is smaller than sample size.\n"
+             "Setting ``sample=blocksize``")
+        sample = blocksize
     b_lineterminator = lineterminator.encode()
     b_out = read_bytes(urlpath, delimiter=b_lineterminator,
                        blocksize=blocksize,
@@ -344,20 +355,19 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     # Get header row, and check that sample is long enough. If the file
     # contains a header row, we need at least 2 nonempty rows + the number of
     # rows to skip.
-    skiprows = kwargs.get('skiprows', 0)
     names = kwargs.get('names', None)
     header = kwargs.get('header', 'infer' if names is None else None)
     need = 1 if header is None else 2
-    parts = b_sample.split(b_lineterminator, skiprows + need)
+    parts = b_sample.split(b_lineterminator, lastskiprow + need)
     # If the last partition is empty, don't count it
     nparts = 0 if not parts else len(parts) - int(not parts[-1])
 
-    if nparts < skiprows + need and len(b_sample) >= sample:
+    if nparts < lastskiprow + need and len(b_sample) >= sample:
         raise ValueError("Sample is not large enough to include at least one "
                          "row of data. Please increase the number of bytes "
                          "in `sample` in the call to `read_csv`/`read_table`")
 
-    header = b'' if header is None else parts[skiprows] + b_lineterminator
+    header = b'' if header is None else parts[firstrow] + b_lineterminator
 
     # Use sample to infer dtypes and check for presense of include_path_column
     head = reader(BytesIO(b_sample), **kwargs)
