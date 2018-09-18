@@ -1,12 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
 from bisect import bisect
-from collections import Iterable, Mapping
-from collections import Iterator
 from functools import partial, wraps
 from itertools import product
 import math
-from numbers import Number
+from numbers import Number, Integral
 import operator
 from operator import add, getitem, mul
 import os
@@ -39,8 +37,9 @@ from ..context import globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, ensure_dict, Dispatch, factors,
-                     parse_bytes, has_keyword)
-from ..compatibility import unicode, long, zip_longest, apply
+                     parse_bytes, has_keyword, M)
+from ..compatibility import (unicode, zip_longest, apply,
+                             Iterable, Iterator, Mapping)
 from ..core import quote
 from ..delayed import Delayed, to_task_dask
 from .. import threaded, core
@@ -94,7 +93,7 @@ def getter(a, b, asarray=True, lock=None):
     if isinstance(b, tuple) and any(x is None for x in b):
         b2 = tuple(x for x in b if x is not None)
         b3 = tuple(None if x is None else slice(None, None)
-                   for x in b if not isinstance(x, (int, long)))
+                   for x in b if not isinstance(x, Integral))
         return getter(a, b2, asarray=asarray, lock=lock)[b3]
 
     if lock:
@@ -550,7 +549,38 @@ def _concatenate2(arrays, axes=[]):
     return concatenate(arrays, axis=axes[0])
 
 
-def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
+def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype='dtype', nout=None):
+    """
+    Tries to infer output dtype of ``func`` for a small set of input arguments.
+
+    Parameters
+    ----------
+    func: Callable
+        Function for which output dtype is to be determined
+
+    args: List of array like
+        Arguments to the function, which qwould usually be used. Only attributes
+        ``ndim`` and ``dtype`` are used.
+
+    kwargs: dict
+        Additional ``kwargs`` to the ``func``
+
+    funcname: String
+        Name of calling function to improve potential error messages
+
+    suggest_dtype: None/False or String
+        If not ``None`` adds suggestion to potential error message to specify a dtype
+        via the specified kwarg. Defaults to ``'dtype'``.
+
+    nout: None or Int
+        ``None`` if function returns single output, integer if many.
+        Deafults to ``None``.
+
+    Returns
+    -------
+    : dtype or List of dtype
+        One or many dtypes (depending on ``nout``)
+    """
     args = [np.ones((1,) * x.ndim, dtype=x.dtype)
             if isinstance(x, Array) else x for x in args]
     try:
@@ -560,7 +590,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb = ''.join(traceback.format_tb(exc_traceback))
         suggest = ("Please specify the dtype explicitly using the "
-                   "`dtype` kwarg.\n\n") if suggest_dtype else ""
+                   "`{dtype}` kwarg.\n\n".format(dtype=suggest_dtype)) if suggest_dtype else ""
         msg = ("`dtype` inference failed in `{0}`.\n\n"
                "{1}"
                "Original error is below:\n"
@@ -573,7 +603,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype=True):
         msg = None
     if msg is not None:
         raise ValueError(msg)
-    return o.dtype
+    return o.dtype if nout is None else tuple(e.dtype for e in o)
 
 
 def map_blocks(func, *args, **kwargs):
@@ -1973,7 +2003,7 @@ class Array(DaskMethodsMixin):
         Copy array.  This is a no-op for dask.arrays, which are immutable
         """
         if self.npartitions == 1:
-            return self.map_blocks(np.copy)
+            return self.map_blocks(M.copy)
         else:
             return Array(self.dask, self.name, self.chunks, self.dtype)
 
@@ -2307,6 +2337,9 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
         -1 as a blocksize indicates the size of the corresponding dimension.
     name : str, optional
         The key name to use for the array. Defaults to a hash of ``x``.
+        By default, hash uses python's standard sha1. This behaviour can be
+        changed by installing cityhash, xxhash or murmurhash. If installed,
+        a large-factor speedup can be obtained in the tokenisation step.
         Use ``name=False`` to generate a random name instead of hashing (fast)
     lock : bool or Lock, optional
         If ``x`` doesn't support concurrent reads then provide a lock here, or
@@ -2835,7 +2868,7 @@ def atop(func, out_ind, *args, **kwargs):
             if ind in adjust_chunks:
                 if callable(adjust_chunks[ind]):
                     chunks[i] = tuple(map(adjust_chunks[ind], chunks[i]))
-                elif isinstance(adjust_chunks[ind], int):
+                elif isinstance(adjust_chunks[ind], Integral):
                     chunks[i] = tuple(adjust_chunks[ind] for _ in chunks[i])
                 elif isinstance(adjust_chunks[ind], (tuple, list)):
                     chunks[i] = tuple(adjust_chunks[ind])
@@ -3315,10 +3348,18 @@ def asarray(a):
     >>> da.asarray(y)
     dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3)>
     """
+    try:
+        import dask.dataframe as dd
+        frame_types = (dd.Series, dd.DataFrame)
+    except ImportError:
+        frame_types = ()
+
     if isinstance(a, Array):
         return a
     if isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         a = stack(a)
+    elif isinstance(a, frame_types):
+        return a.to_dask_array()
     elif not isinstance(getattr(a, 'shape', None), Iterable):
         a = np.asarray(a)
     return from_array(a, chunks=a.shape, getitem=getter_inline)
@@ -3545,7 +3586,7 @@ def _enforce_dtype(*args, **kwargs):
     function = kwargs.pop('enforce_dtype_function')
 
     result = function(*args, **kwargs)
-    if dtype != result.dtype and dtype != object:
+    if hasattr(result, 'dtype') and dtype != result.dtype and dtype != object:
         if not np.can_cast(result, dtype, casting='same_kind'):
             raise ValueError("Inferred dtype from function %r was %r "
                              "but got %r, which can't be cast using "

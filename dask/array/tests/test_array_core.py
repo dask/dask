@@ -1184,14 +1184,12 @@ def test_map_blocks_dtype_inference():
     def foo(x):
         raise RuntimeError("Woops")
 
-    try:
+    with pytest.raises(ValueError) as e:
         dx.map_blocks(foo)
-    except Exception as e:
-        assert e.args[0].startswith("`dtype` inference failed")
-        assert "Please specify the dtype explicitly" in e.args[0]
-        assert 'RuntimeError' in e.args[0]
-    else:
-        assert False, "Should have errored"
+    msg = str(e.value)
+    assert msg.startswith("`dtype` inference failed")
+    assert "Please specify the dtype explicitly" in msg
+    assert 'RuntimeError' in msg
 
 
 def test_from_function_requires_block_args():
@@ -2119,6 +2117,22 @@ def test_asarray():
 
     x = da.asarray([1, 2, 3])
     assert da.asarray(x) is x
+
+
+def test_asarray_dask_dataframe():
+    # https://github.com/dask/dask/issues/3885
+    dd = pytest.importorskip('dask.dataframe')
+    import pandas as pd
+
+    s = dd.from_pandas(pd.Series([1, 2, 3, 4]), 2)
+    result = da.asarray(s)
+    expected = s.values
+    assert_eq(result, expected)
+
+    df = s.to_frame(name='s')
+    result = da.asarray(df)
+    expected = df.values
+    assert_eq(result, expected)
 
 
 def test_asarray_h5py():
@@ -3628,3 +3642,8 @@ def test_3851():
         da.argmax(Y, axis=0).compute()
 
     assert not record
+
+
+def test_3925():
+    x = da.from_array(np.array(['a', 'b', 'c'], dtype=object), chunks=-1)
+    assert (x[0] == x[0]).compute(scheduler='sync')

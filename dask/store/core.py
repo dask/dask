@@ -1,10 +1,11 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import defaultdict, MutableMapping
+from collections import defaultdict
 from operator import getitem
 from datetime import datetime
 from time import time
 
+from ..compatibility import MutableMapping
 from ..core import istask, ishashable
 from ..utils_test import add  # noqa: F401
 

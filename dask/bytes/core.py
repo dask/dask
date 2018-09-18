@@ -19,7 +19,7 @@ from ..utils import import_required, is_integer
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
-               sample=True, compression=None, **kwargs):
+               sample=True, compression=None, include_path=False, **kwargs):
     """Given a path or paths, return delayed objects that read from those paths.
 
     The path may be a filename like ``'2015-01-01.csv'`` or a globstring
@@ -50,6 +50,9 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     sample : bool or int
         Whether or not to return a header sample. If an integer is given it is
         used as sample size, otherwise the default sample size is 10kB.
+    include_path : bool
+        Whether or not to include the path with the bytes representing a particular file.
+        Default is False.
     **kwargs : dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
@@ -58,6 +61,7 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     --------
     >>> sample, blocks = read_bytes('2015-*-*.csv', delimiter=b'\\n')  # doctest: +SKIP
     >>> sample, blocks = read_bytes('s3://bucket/2015-*-*.csv', delimiter=b'\\n')  # doctest: +SKIP
+    >>> sample, paths, blocks = read_bytes('2015-*-*.csv', include_path=True)  # doctest: +SKIP
 
     Returns
     -------
@@ -66,6 +70,10 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     blocks : list of lists of ``dask.Delayed``
         Each list corresponds to a file, and each delayed object computes to a
         block of bytes from that file.
+    paths : list of strings, only included if include_path is True
+        List of same length as blocks, where each item is the path to the file
+        represented in the corresponding block.
+
     """
     fs, fs_token, paths = get_fs_token_paths(urlpath, mode='rb',
                                              storage_options=kwargs)
@@ -106,15 +114,17 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         token = tokenize(fs_token, delimiter, path, fs.ukey(path),
                          compression, offset)
         keys = ['read-block-%s-%s' % (o, token) for o in offset]
-        out.append([delayed_read(OpenFile(fs, path, compression=compression),
-                                 o, l, delimiter, dask_key_name=key)
-                    for o, key, l in zip(offset, keys, length)])
+        values = [delayed_read(OpenFile(fs, path, compression=compression),
+                               o, l, delimiter, dask_key_name=key)
+                  for o, key, l in zip(offset, keys, length)]
+        out.append(values)
 
     if sample:
         with OpenFile(fs, paths[0], compression=compression) as f:
             nbytes = 10000 if sample is True else sample
             sample = read_block(f, 0, nbytes, delimiter)
-
+    if include_path:
+        return sample, out, paths
     return sample, out
 
 
@@ -409,13 +419,13 @@ def get_hdfs_driver(driver="auto"):
     A filesystem class
     """
     if driver == 'auto':
-        for d in ['hdfs3', 'pyarrow']:
+        for d in ['pyarrow', 'hdfs3']:
             try:
                 return get_hdfs_driver(d)
             except RuntimeError:
                 pass
         else:
-            raise RuntimeError("Please install either `hdfs3` or `pyarrow`")
+            raise RuntimeError("Please install either `pyarrow` (preferred) or `hdfs3`")
 
     elif driver == 'hdfs3':
         import_required('hdfs3', "`hdfs3` not installed")

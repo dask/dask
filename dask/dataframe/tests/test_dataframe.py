@@ -925,6 +925,13 @@ def test_assign():
         d.assign(foo=d_unknown.a)
 
 
+def test_assign_callable():
+    df = dd.from_pandas(pd.DataFrame({"A": range(10)}), npartitions=2)
+    a = df.assign(B=df.A.shift())
+    b = df.assign(B=lambda x: x.A.shift())
+    assert_eq(a, b)
+
+
 def test_map():
     assert_eq(d.a.map(lambda x: x + 1), full.a.map(lambda x: x + 1))
     lk = dict((v, v + 1) for v in full.a.values)
@@ -1940,6 +1947,66 @@ def test_to_frame():
     assert_eq(s.to_frame('bar'), a.to_frame('bar'))
 
 
+@pytest.mark.parametrize('as_frame', [False, False])
+def test_to_dask_array_raises(as_frame):
+    s = pd.Series([1, 2, 3, 4, 5, 6], name='foo')
+    a = dd.from_pandas(s, npartitions=2)
+
+    if as_frame:
+        a = a.to_frame()
+
+    with pytest.raises(ValueError, message="4 != 2"):
+        a.to_dask_array((1, 2, 3, 4))
+
+    with pytest.raises(ValueError, message="Unexpected value"):
+        a.to_dask_array(5)
+
+
+@pytest.mark.parametrize('as_frame', [False, False])
+def test_to_dask_array_unknown(as_frame):
+    s = pd.Series([1, 2, 3, 4, 5], name='foo')
+    a = dd.from_pandas(s, chunksize=2)
+
+    if as_frame:
+        a = a.to_frame()
+
+    result = a.to_dask_array()
+    assert isinstance(result, da.Array)
+    result = result.chunks
+
+    if as_frame:
+        assert result[1] == (1,)
+
+    assert len(result) == 1
+    result = result[0]
+
+    assert len(result) == 2
+    assert all(np.isnan(x) for x in result)
+
+
+@pytest.mark.parametrize('lengths', [
+    [2, 3],
+    True,
+])
+@pytest.mark.parametrize('as_frame', [False, False])
+def test_to_dask_array(as_frame, lengths):
+    s = pd.Series([1, 2, 3, 4, 5], name='foo')
+    a = dd.from_pandas(s, chunksize=2)
+
+    if as_frame:
+        a = a.to_frame()
+
+    result = a.to_dask_array(lengths=lengths)
+    assert isinstance(result, da.Array)
+
+    expected_chunks = ((2, 3),)
+
+    if as_frame:
+        expected_chunks = expected_chunks + ((1,),)
+
+    assert result.chunks == expected_chunks
+
+
 def test_apply():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -2656,6 +2723,16 @@ def test_getitem_column_types(col_type):
     cols = col_type(['C', 'A', 'B'])
 
     assert_eq(df[cols], ddf[cols])
+
+
+def test_ipython_completion():
+    df = pd.DataFrame({'a': [1], 'b': [2]})
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    completions = ddf._ipython_key_completions_()
+    assert 'a' in completions
+    assert 'b' in completions
+    assert 'c' not in completions
 
 
 def test_diff():

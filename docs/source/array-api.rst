@@ -180,6 +180,7 @@ Top level user functions:
    triu
    trunc
    unique
+   unravel_index
    var
    vdot
    vstack
@@ -319,6 +320,8 @@ Slightly Overlapping Computations
 .. autosummary::
    overlap.overlap
    overlap.map_overlap
+   overlap.trim_internal
+   overlap.trim_overlap
 
 
 Create and Store Arrays
@@ -352,6 +355,7 @@ Internal functions
 
 .. autosummary::
    atop
+   normalize_chunks
    top
 
 
@@ -538,6 +542,7 @@ Other functions
 .. autofunction:: triu
 .. autofunction:: trunc
 .. autofunction:: unique
+.. autofunction:: unravel_index
 .. autofunction:: var
 .. autofunction:: vdot
 .. autofunction:: vstack
@@ -682,6 +687,7 @@ Other functions
 
 .. autofunction:: map_blocks
 .. autofunction:: atop
+.. autofunction:: normalize_chunks
 .. autofunction:: top
 
 .. currentmodule:: dask.array

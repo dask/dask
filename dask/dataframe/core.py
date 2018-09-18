@@ -1,16 +1,16 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Iterator
 from functools import wraps, partial
 import operator
 from operator import getitem
 from pprint import pformat
+from collections import Sequence
 import warnings
 
 from toolz import merge, first, unique, partition_all, remove
 import pandas as pd
 import numpy as np
-from numbers import Number
+from numbers import Number, Integral
 
 try:
     from chest import Chest as Cache
@@ -22,7 +22,7 @@ from .. import core
 
 from ..utils import partial_by_order
 from .. import threaded
-from ..compatibility import apply, operator_div, bind_method, string_types
+from ..compatibility import apply, operator_div, bind_method, string_types, Iterator
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
@@ -1080,6 +1080,53 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return new_dd_object(merge(self.dask, dsk), name,
                              self._meta, self.divisions)
 
+    def to_dask_array(self, lengths=None):
+        """Convert a dask DataFrame to a dask array.
+
+        Parameters
+        ----------
+        lengths : bool or Sequence of ints, optional
+            How to determine the chunks sizes for the output array.
+            By default, the output array will have unknown chunk lengths
+            along the first axis, which can cause some later operations
+            to fail.
+
+            * True : immediately compute the length of each partition
+            * Sequence : a sequence of integers to use for the chunk sizes
+              on the first axis. These values are *not* validated for
+              correctness, beyond ensuring that the number of items
+              matches the number of partitions.
+
+        Returns
+        -------
+        """
+        from dask.array.core import normalize_chunks
+
+        if lengths is True:
+            lengths = tuple(self.map_partitions(len).compute())
+
+        arr = self.map_partitions(np.array, )
+
+        if isinstance(lengths, Sequence):
+            lengths = tuple(lengths)
+
+            if len(lengths) != self.npartitions:
+                raise ValueError(
+                    "The number of items in 'lengths' does not match "
+                    "the number of partitions. "
+                    "{} != {}".format(len(lengths), self.npartitions)
+                )
+
+            if self.ndim == 1:
+                chunks = normalize_chunks((lengths,))
+            else:
+                chunks = normalize_chunks((lengths, (len(self.columns),)))
+
+            arr._chunks = chunks
+        elif lengths is not None:
+            raise ValueError("Unexpected value for 'lengths': '{}'".format(lengths))
+        return arr
+
     def to_hdf(self, path_or_buf, key, mode='a', append=False, **kwargs):
         """ See dd.to_hdf docstring for more information """
         from .io import to_hdf
@@ -1171,12 +1218,12 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         """
         from dask.dataframe.rolling import Rolling
 
-        if isinstance(window, int):
+        if isinstance(window, Integral):
             if window < 0:
                 raise ValueError('window must be >= 0')
 
         if min_periods is not None:
-            if not isinstance(min_periods, int):
+            if not isinstance(min_periods, Integral):
                 raise ValueError('min_periods must be an integer')
             if min_periods < 0:
                 raise ValueError('min_periods must be >= 0')
@@ -1187,7 +1234,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @derived_from(pd.DataFrame)
     def diff(self, periods=1, axis=0):
         axis = self._validate_axis(axis)
-        if not isinstance(periods, int):
+        if not isinstance(periods, Integral):
             raise TypeError("periods must be an integer")
 
         if axis == 1:
@@ -1201,7 +1248,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @derived_from(pd.DataFrame)
     def shift(self, periods=1, freq=None, axis=0):
         axis = self._validate_axis(axis)
-        if not isinstance(periods, int):
+        if not isinstance(periods, Integral):
             raise TypeError("periods must be an integer")
 
         if axis == 1:
@@ -2232,7 +2279,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @derived_from(pd.Series)
     def autocorr(self, lag=1, split_every=False):
-        if not isinstance(lag, int):
+        if not isinstance(lag, Integral):
             raise TypeError("lag must be an integer")
         return self.corr(self if lag == 0 else self.shift(lag),
                          split_every=split_every)
@@ -2427,7 +2474,7 @@ class DataFrame(_Frame):
             if self.divisions != key.divisions:
                 from .multi import _maybe_align_partitions
                 self, key = _maybe_align_partitions([self, key])
-            dsk = {(name, i): (M._getitem_array, (self._name, i), (key._name, i))
+            dsk = {(name, i): (M.__getitem__, (self._name, i), (key._name, i))
                    for i in range(self.npartitions)}
             return new_dd_object(merge(self.dask, key.dask, dsk), name,
                                  self, self.divisions)
@@ -2479,6 +2526,9 @@ class DataFrame(_Frame):
                  (isinstance(c, pd.compat.string_types) and
                   pd.compat.isidentifier(c)))
         return list(o)
+
+    def _ipython_key_completions_(self):
+        return self.columns.tolist()
 
     @property
     def ndim(self):
@@ -2631,6 +2681,9 @@ class DataFrame(_Frame):
                     callable(v) or pd.api.types.is_scalar(v)):
                 raise TypeError("Column assignment doesn't support type "
                                 "{0}".format(type(v).__name__))
+            if callable(v):
+                kwargs[k] = v(self)
+
         pairs = list(sum(kwargs.items(), ()))
 
         # Figure out columns of the output
@@ -3427,7 +3480,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
         split_every = 8
     elif split_every is False:
         split_every = npartitions
-    elif split_every < 2 or not isinstance(split_every, int):
+    elif split_every < 2 or not isinstance(split_every, Integral):
         raise ValueError("split_every must be an integer >= 2")
 
     token_key = tokenize(token or (chunk, aggregate), meta, args,
@@ -3778,7 +3831,7 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
 
     if split_every is False:
         split_every = df.npartitions
-    elif split_every < 2 or not isinstance(split_every, int):
+    elif split_every < 2 or not isinstance(split_every, Integral):
         raise ValueError("split_every must be an integer >= 2")
 
     df = df._get_numeric_data()
@@ -4031,8 +4084,9 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         else:
             d[(out1, k)] = (methods.boundary_slice, (name, i - 1), low, b[j], False)
             low = b[j]
+            if len(a) == i + 1 or a[i] < a[i + 1]:
+                j += 1
             i += 1
-            j += 1
         c.append(low)
         k += 1
 
@@ -4066,7 +4120,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
         while c[i] < b[j]:
             tmp.append((out1, i))
             i += 1
-        if last_elem and c[i] == b[-1] and (b[-1] != b[-2] or j == len(b) - 1) and i < k:
+        while last_elem and c[i] == b[-1] and (b[-1] != b[-2] or j == len(b) - 1) and i < k:
             # append if last split is not included
             tmp.append((out1, i))
             i += 1

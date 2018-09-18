@@ -118,6 +118,8 @@ def test_full_groupby():
     def func(df):
         return df.assign(b=df.b - df.b.mean())
 
+    assert ddf.groupby('a').apply(func)._name.startswith('func')
+
     assert_eq(df.groupby('a').apply(func),
               ddf.groupby('a').apply(func))
 

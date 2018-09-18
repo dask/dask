@@ -12,19 +12,23 @@ import pytest
 from dask import compute, config, delayed
 from dask.context import set_options
 from dask.multiprocessing import (
-    get, _dumps, _loads, remote_exception, get_context,
+    get, _dumps, _loads, remote_exception, get_context, remote_exception
 )
 from dask.utils_test import inc
 
 
 def test_pickle_globals():
-    """ For the function f(x) defined below, the only globals added in pickling
-    should be 'np' and '__builtins__'"""
-    def f(x):
-        return np.sin(x) + np.cos(x)
+    """ Unrelated globals should not be included in serialized bytes """
+    def unrelated_function(a):
+        return np.array([a])
 
-    assert set(['np', '__builtins__']) == set(
-        _loads(_dumps(f)).__globals__.keys())
+    def my_small_function(a, b):
+        return a + b
+
+    b = _dumps(my_small_function)
+    assert b'my_small_function' in b
+    assert b'unrelated_function' not in b
+    assert b'numpy' not in b
 
 
 def bad():

@@ -196,6 +196,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
                                   "that do not contain a global '_metadata' file")
 
     check_column_names(pf.columns, categories)
+    check_column_names(pf.columns + list(pf.cats or []), columns)
     if isinstance(columns, tuple):
         # ensure they tokenize the same
         columns = list(columns)
@@ -285,12 +286,15 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
 
     if index_names and infer_divisions is not False:
         index_name = meta.index.name
-        minmax = fastparquet.api.sorted_partitioned_columns(pf)
+        try:
+            # is https://github.com/dask/fastparquet/pull/371 available in
+            # current fastparquet installation?
+            minmax = fastparquet.api.sorted_partitioned_columns(pf, filters)
+        except TypeError:
+            minmax = fastparquet.api.sorted_partitioned_columns(pf)
         if index_name in minmax:
-            divisions = (list(minmax[index_name]['min']) +
-                         [minmax[index_name]['max'][-1]])
-            divisions = [divisions[i] for i, rg in enumerate(pf.row_groups)
-                         if rg in rgs] + [divisions[-1]]
+            divisions = minmax[index_name]
+            divisions = divisions['min'] + [divisions['max'][-1]]
         else:
             if infer_divisions is True:
                 raise ValueError(

@@ -188,6 +188,7 @@ Manipulating configuration dictionaries
 .. autosummary::
    dask.config.merge
    dask.config.update
+   dask.config.expand_environment_variables
 
 As described above, configuration can come from many places, including several
 YAML files, environment variables, and project defaults.  Each of these
@@ -215,6 +216,14 @@ to either config.  This is often used to update the global configuration in
 
    dask.config.update(dask.config, new, priority='new')  # Give priority to new values
    dask.config.update(dask.config, new, priority='old')  # Give priority to old values
+
+Sometimes it is useful to expand environment variables stored within a
+configuration. This can be done with the ``expand_environment_variables``
+function:
+
+.. code-block:: python
+
+    dask.config.config = dask.config.expand_environment_variables(dask.config.config)
 
 Refreshing Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -371,3 +380,4 @@ API
 .. autofunction:: dask.config.collect
 .. autofunction:: dask.config.refresh
 .. autofunction:: dask.config.ensure_file
+.. autofunction:: dask.config.expand_environment_variables

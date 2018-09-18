@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Iterator
 import operator
 import types
 import uuid
@@ -13,7 +12,7 @@ except ImportError:
 from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
 from .base import tokenize as _tokenize
-from .compatibility import apply
+from .compatibility import apply, Iterator
 from .core import quote
 from .context import globalmethod
 from .optimization import cull
@@ -148,7 +147,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         into ``nout`` objects, allowing for unpacking of results. By default
         iteration over ``Delayed`` objects will error. Note, that ``nout=1``
         expects ``obj``, to return a tuple of length 1, and consequently for
-        `nout=0``, ``obj`` should return an empty tuple.
+        ``nout=0``, ``obj`` should return an empty tuple.
     traverse : bool, optional
         By default dask traverses builtin python collections looking for dask
         objects passed to ``delayed``. For large collections this can be
