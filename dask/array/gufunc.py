@@ -122,7 +122,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     >>> def stats(x):
     ...     return np.mean(x, axis=-1), np.std(x, axis=-1)
     >>> a = da.random.normal(size=(10,20,30), chunks=(5, 10, 30))
-    >>> mean, std = da.apply_gufunc(stats, "(i)->(),()", a, output_dtypes=2*(a.dtype,))
+    >>> mean, std = da.apply_gufunc(stats, "(i)->(),()", a)
     >>> mean.compute().shape
     (10, 20)
 
@@ -131,7 +131,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ...     return np.einsum("i,j->ij", x, y)
     >>> a = da.random.normal(size=(   20,30), chunks=(10, 30))
     >>> b = da.random.normal(size=(10, 1,40), chunks=(5, 1, 40))
-    >>> c = da.apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b, output_dtypes=a.dtype, vectorize=True)
+    >>> c = da.apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b, vectorize=True)
     >>> c.compute().shape
     (10, 20, 30, 40)
 
@@ -158,7 +158,11 @@ def apply_gufunc(func, signature, *args, **kwargs):
 
     ## Determine and handle output_dtypes
     if output_dtypes is None:
-        output_dtypes = apply_infer_dtype(func, args, kwargs, "apply_gufunc", "output_dtypes", nout)
+        if vectorize:
+            _func = np.vectorize(func, signature=signature)
+        else:
+            _func = func
+        output_dtypes = apply_infer_dtype(_func, args, kwargs, "apply_gufunc", "output_dtypes", nout)
 
     if isinstance(output_dtypes, (tuple, list)):
         if nout is None:
