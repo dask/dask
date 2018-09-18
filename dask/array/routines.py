@@ -16,7 +16,7 @@ from ..core import flatten
 from ..base import tokenize
 from ..utils import funcname
 from . import chunk
-from .creation import arange
+from .creation import arange, empty
 from .utils import safe_wraps, validate_axis
 from .wrap import ones
 from .ufunc import multiply
@@ -1181,6 +1181,28 @@ def _int_piecewise(x, *condlist, **kwargs):
         x, list(condlist), kwargs["funclist"],
         *kwargs["func_args"], **kwargs["func_kw"]
     )
+
+
+def _unravel_index_kernel(indices, func_kwargs):
+    return np.stack(np.unravel_index(indices, **func_kwargs))
+
+
+@wraps(np.unravel_index)
+def unravel_index(indices, dims, order='C'):
+    if dims and indices.size:
+        unraveled_indices = tuple(indices.map_blocks(
+            _unravel_index_kernel,
+            dtype=np.intp,
+            chunks=(((len(dims),),) + indices.chunks),
+            new_axis=0,
+            func_kwargs={"dims": dims, "order": order}
+        ))
+    else:
+        unraveled_indices = tuple(
+            empty((0,), dtype=np.intp, chunks=1) for i in dims
+        )
+
+    return unraveled_indices
 
 
 @wraps(np.piecewise)
