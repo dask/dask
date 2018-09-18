@@ -58,7 +58,12 @@ def pickle_loads(header, frames):
 
 
 def msgpack_dumps(x):
-    return {'serializer': 'msgpack'}, [msgpack.dumps(x, use_bin_type=True)]
+    try:
+        frame = msgpack.dumps(x, use_bin_type=True)
+    except Exception:
+        raise NotImplementedError()
+    else:
+        return {'serializer': 'msgpack'}, [frame]
 
 
 def msgpack_loads(header, frames):
@@ -135,9 +140,9 @@ def serialize(x, serializers=None, on_error='message', context=None):
             return header, frames
         except NotImplementedError:
             continue
-        except Exception:
+        except Exception as e:
             tb = traceback.format_exc()
-            continue
+            break
 
     msg = "Could not serialize object of type %s" % type(x).__name__
     if on_error == 'message':

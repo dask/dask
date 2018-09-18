@@ -13,7 +13,7 @@ from distributed.protocol import (register_serialization, serialize,
                                   deserialize, nested_deserialize, Serialize,
                                   Serialized, to_serialize, serialize_bytes,
                                   deserialize_bytes, serialize_bytelist,
-                                  register_serialization_family)
+                                  register_serialization_family, dask_serialize)
 from distributed.utils import nbytes
 from distributed.utils_test import inc, gen_test
 from distributed.comm.utils import to_frames, from_frames
@@ -332,3 +332,17 @@ def test_context_specific_serialization_class(c, s, a, b):
 
     assert z.x == 1 and z.y == 2
     assert z.context['sender'] == b.address
+
+
+def test_serialize_raises():
+    class Foo(object):
+        pass
+
+    @dask_serialize.register(Foo)
+    def dumps(f):
+        raise Exception("Hello-123")
+
+    with pytest.raises(Exception) as info:
+        deserialize(*serialize(Foo()))
+
+    assert 'Hello-123' in str(info.value)
