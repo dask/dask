@@ -419,3 +419,14 @@ def test_apply_gufunc_axes_keepdims(axes):
     m = np.median(a, axis=-1 if not axes else axes, keepdims=True)
     dm = apply_gufunc(mymedian, "(i)->()", da_, axes=axes, keepdims=True, allow_rechunk=True)
     assert_eq(m, dm)
+
+
+def test_apply_gufunc_axes_two_kept_coredims():
+    a = da.random.normal(size=(   20,30), chunks=(10, 30))
+    b = da.random.normal(size=(10, 1,40), chunks=(5, 1, 40))
+
+    def outer_product(x, y):
+        return np.einsum("i,j->ij", x, y)
+
+    c = apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b, vectorize=True)
+    assert c.compute().shape == (10, 20, 30, 40)

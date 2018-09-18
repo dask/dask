@@ -323,9 +323,11 @@ significantly.".format(dim))
         nr_kept_core_dims = len(tuple(c for c in cod if c in original_dim_position))
 
         tidcs = [None] * len(dims)
-        for i, d in enumerate(dims):
+        for i, d in reversed(list(enumerate(dims))):
             if d in original_dim_position:
                 pos = len(loop_output_dims) + original_dim_position[d]
+                while tidcs[pos + nr_kept_core_dims] is not None:
+                    pos -= 1
                 tidcs[pos + nr_kept_core_dims] = i
         j = 0
         for i, d in enumerate(dims):
