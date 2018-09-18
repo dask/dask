@@ -196,6 +196,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
                                   "that do not contain a global '_metadata' file")
 
     check_column_names(pf.columns, categories)
+    check_column_names(pf.columns + list(pf.cats or []), columns)
     if isinstance(columns, tuple):
         # ensure they tokenize the same
         columns = list(columns)

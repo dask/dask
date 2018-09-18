@@ -264,6 +264,20 @@ def test_columns_index(tmpdir, write_engine, read_engine):
 
 
 @write_read_engines_xfail
+def test_nonsense_column(tmpdir, write_engine, read_engine):
+    fn = str(tmpdir)
+    ddf.to_parquet(fn, engine=write_engine)
+    with pytest.raises((ValueError, KeyError)):
+        # fastparquet fails early, pyarrow only on compute
+        dd.read_parquet(fn, columns=['nonesense'], engine=read_engine
+                        ).compute()
+    with pytest.raises((Exception, KeyError)):
+        # fastparquet fails early, pyarrow only on compute
+        dd.read_parquet(fn, columns=['nonesense'] + list(ddf.columns),
+                        engine=read_engine).compute()
+
+
+@write_read_engines_xfail
 def test_columns_no_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
