@@ -269,7 +269,7 @@ def test_dont_hold_on_to_large_messages(c, s, a, b):
                           f.f_code.co_name, f.f_code.co_filename, sorted(f.f_locals))
             pytest.fail("array should have been destroyed")
 
-        yield gen.sleep(0.05)
+        yield gen.sleep(0.200)
 
 
 @gen_test()
