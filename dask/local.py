@@ -110,7 +110,7 @@ import os
 
 from .compatibility import Queue, Empty, reraise, PY2
 from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
-                   has_tasks, split_task_annotations)
+                   has_tasks, TaskAnnotation)
 from . import config
 from .order import order
 from .callbacks import unpack_callbacks, local_callbacks
@@ -250,7 +250,11 @@ def _execute_task(arg, cache, dsk=None):
     elif istask(arg):
         # Strip out annotations for the moment
         # https://github.com/dask/dask/issues/3783
-        func, args = arg[0], split_task_annotations(*arg[1:])[0]
+        if type(arg[-1]) == TaskAnnotation:
+            func, args, annots = arg[0], arg[1:-1], arg[-1]
+        else:
+            func, args, annots = arg[0], arg[1:], None  # noqa
+
         args2 = [_execute_task(a, cache) for a in args]
         return func(*args2)
     elif not ishashable(arg):

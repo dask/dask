@@ -34,10 +34,7 @@ def test_get_with_annotations():
     def f(x):
         return x + 1
 
-    an1 = TaskAnnotation(1)
-    an2 = TaskAnnotation(2)
-
-    dsk = {'x': (f, 1, an1, an2),
+    dsk = {'x': (f, 1, TaskAnnotation('foo')),
            'y': (inc, 'x')}
 
     assert get(dsk, 'y') == 3
@@ -47,10 +44,7 @@ def test_get_with_annotations_without_computation():
     def f(x):
         return x + 1
 
-    an1 = TaskAnnotation(1)
-    an2 = TaskAnnotation(2)
-
-    dsk = {'x': (f, an1, 1, an2)}
+    dsk = {'x': (f, 1, TaskAnnotation('bar'))}
     assert get(dsk, 'x') == 2
 
 
