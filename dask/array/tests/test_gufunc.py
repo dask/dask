@@ -223,7 +223,7 @@ def test_gufunc():
 
     def foo(x):
         return np.mean(x, axis=-1)
-    gufoo = gufunc(foo, signature="(i)->()", output_dtypes=float, vectorize=True)
+    gufoo = gufunc(foo, signature="(i)->()", axes=-1, keepdims=False, output_dtypes=float, vectorize=True)
 
     y = gufoo(x)
     valy = y.compute()
@@ -236,7 +236,7 @@ def test_gufunc():
 def test_as_gufunc():
     x = da.random.normal(size=(10, 5), chunks=(2, 5))
 
-    @as_gufunc("(i)->()", output_dtypes=float, vectorize=True)
+    @as_gufunc("(i)->()", axes=-1, keepdims=False, output_dtypes=float, vectorize=True)
     def foo(x):
         return np.mean(x, axis=-1)
 

@@ -83,11 +83,6 @@ def apply_gufunc(func, signature, *args, **kwargs):
         According to the specification of numpy.gufunc signature [2]_
     *args : numeric
         Input arrays or scalars to the callable function.
-    output_dtypes : Optional, dtype or list of dtypes, keyword only
-        Valid numpy dtype specification or list thereof.
-        If not given, a call of ``func`` with a small set of data
-        is performed in order to try to  automatically determine the
-        output dtypes.
     axes: int, tuple of ints, or list of tuple of ints, optional, keyword only
         Specifies which axes of the passed arguments are the core dimensions.
         For one input argument int or tuple of int is sufficient, for many
@@ -97,6 +92,11 @@ def apply_gufunc(func, signature, *args, **kwargs):
         re-introduced at the position specified at its original position.
         The original position may depend on ``axes``.
         Defaults to ``False``.
+    output_dtypes : Optional, dtype or list of dtypes, keyword only
+        Valid numpy dtype specification or list thereof.
+        If not given, a call of ``func`` with a small set of data
+        is performed in order to try to  automatically determine the
+        output dtypes.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
         new core dimensions (not found on inputs) appear on outputs.
@@ -361,8 +361,20 @@ class gufunc(object):
     signature : String, keyword only
         Specifies what core dimensions are consumed and produced by ``func``.
         According to the specification of numpy.gufunc signature [2]_
-    output_dtypes : dtype or list of dtypes, keyword only
-        dtype or list of output dtypes.
+    axes: int, tuple of ints, or list of tuple of ints, optional, keyword only
+        Specifies which axes of the passed arguments are the core dimensions.
+        For one input argument int or tuple of int is sufficient, for many
+        input arguments a list of tuple of ints has to be passed
+    keepdims: bool, optional, keyword only
+        If core dimensions in ``signature`` are consumed, a dummy dimension is
+        re-introduced at the position specified at its original position.
+        The original position may depend on ``axes``.
+        Defaults to ``False``.
+    output_dtypes : Optional, dtype or list of dtypes, keyword only
+        Valid numpy dtype specification or list thereof.
+        If not given, a call of ``func`` with a small set of data
+        is performed in order to try to  automatically determine the
+        output dtypes.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
         new core dimensions (not found on inputs) appear on outputs.
@@ -410,6 +422,8 @@ class gufunc(object):
         self.pyfunc = pyfunc
         self.signature = kwargs.pop("signature", None)
         self.vectorize = kwargs.pop("vectorize", False)
+        self.axes = kwargs.pop("axes", None)
+        self.keepdims = kwargs.pop("keepdims", False)
         self.output_sizes = kwargs.pop("output_sizes", None)
         self.output_dtypes = kwargs.pop("output_dtypes", None)
         self.allow_rechunk = kwargs.pop("allow_rechunk", False)
@@ -439,6 +453,8 @@ class gufunc(object):
                             self.signature,
                             *args,
                             vectorize=self.vectorize,
+                            axes=self.axes,
+                            keepdims=self.keepdims,
                             output_sizes=self.output_sizes,
                             output_dtypes=self.output_dtypes,
                             allow_rechunk=self.allow_rechunk or kwargs.pop("allow_rechunk", False),
@@ -454,8 +470,20 @@ def as_gufunc(signature=None, **kwargs):
     signature : String
         Specifies what core dimensions are consumed and produced by ``func``.
         According to the specification of numpy.gufunc signature [2]_
-    output_dtypes : dtype or list of dtypes, keyword only
-        dtype or list of output dtypes.
+    axes: int, tuple of ints, or list of tuple of ints, optional, keyword only
+        Specifies which axes of the passed arguments are the core dimensions.
+        For one input argument int or tuple of int is sufficient, for many
+        input arguments a list of tuple of ints has to be passed
+    keepdims: bool, optional, keyword only
+        If core dimensions in ``signature`` are consumed, a dummy dimension is
+        re-introduced at the position specified at its original position.
+        The original position may depend on ``axes``.
+        Defaults to ``False``.
+    output_dtypes : Optional, dtype or list of dtypes, keyword only
+        Valid numpy dtype specification or list thereof.
+        If not given, a call of ``func`` with a small set of data
+        is performed in order to try to  automatically determine the
+        output dtypes.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
         new core dimensions (not found on inputs) appear on outputs.
@@ -498,7 +526,7 @@ def as_gufunc(signature=None, **kwargs):
     .. [1] http://docs.scipy.org/doc/numpy/reference/ufuncs.html
     .. [2] http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
     """
-    _allowedkeys = {"vectorize", "output_sizes", "output_dtypes", "allow_rechunk"}
+    _allowedkeys = {"vectorize", "axes", "keepdims", "output_sizes", "output_dtypes", "allow_rechunk"}
     if set(_allowedkeys).issubset(kwargs.keys()):
         raise TypeError("Unsupported keyword argument(s) provided")
 
