@@ -421,6 +421,8 @@ def test_apply_gufunc_axes_keepdims(axes):
     assert_eq(m, dm)
 
 
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
+                    reason="`np.vectorize(..., signature=...)` not supported yet")
 def test_apply_gufunc_axes_two_kept_coredims():
     a = da.random.normal(size=(   20,30), chunks=(10, 30))
     b = da.random.normal(size=(10, 1,40), chunks=(5, 1, 40))
