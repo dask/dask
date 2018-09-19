@@ -236,7 +236,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
     num_loopdims = [len(s) - len(cd) for s, cd in zip(input_shapes, core_input_dimss)]
     max_loopdims = max(num_loopdims) if num_loopdims else None
     _core_input_shapes = [dict(zip(cid, s[n:])) for s, n, cid in zip(input_shapes, num_loopdims, core_input_dimss)]
-    core_shapes = merge(*_core_input_shapes, output_sizes)
+    core_shapes = merge(*_core_input_shapes)
+    core_shapes.update(output_sizes)
 
     loop_input_dimss = [tuple("__loopdim%d__" % d for d in range(max_loopdims - n, max_loopdims)) for n in num_loopdims]
     input_dimss = [l + c for l, c in zip(loop_input_dimss, core_input_dimss)]
