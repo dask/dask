@@ -355,7 +355,7 @@ def from_dask_array(x, columns=None, index=None):
     index : dask.dataframe.Index, optional
         An optional *dask* Index to use for the output Series or DataFrame.
 
-        The defualt output index depends on whether `x` has any unknown
+        The default output index depends on whether `x` has any unknown
         chunks. If there are any unknown chunks, the output has ``None``
         for all the divisions (one per chunk). If all the chunks are known,
         a default index with known divsions is created.
