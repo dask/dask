@@ -39,7 +39,7 @@ class GraphLayout(SchedulerPlugin):
 
     def update_graph(self, scheduler, dependencies=None, priority=None,
                      **kwargs):
-        stack = sorted(dependencies, key=priority.get, reverse=True)
+        stack = sorted(dependencies, key=lambda k: priority.get(k, 0), reverse=True)
         while stack:
             key = stack.pop()
             if key in self.x or key not in scheduler.tasks:
