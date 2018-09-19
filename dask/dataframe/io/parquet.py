@@ -255,6 +255,13 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
 
 
 def _pf_validation(pf, columns, index, categories, filters):
+    """Validate user options against metadata in dataset
+
+     columns, index and categories must be in the list of columns available
+     (both data columns and path-based partitioning - subject to possible
+     renaming, if pandas metadata is present). The output index will
+     be inferred from any available pandas metadata, if not given.
+     """
     from fastparquet.util import check_column_names
     check_column_names(pf.columns, categories)
     if isinstance(columns, tuple):
@@ -333,6 +340,7 @@ def _pf_validation(pf, columns, index, categories, filters):
 
 def _read_fp_multifile(fs, fs_token, paths, columns=None,
                        categories=None, index=None):
+    """Read dataset with fastparquet by assuming metadata from first file"""
     from fastparquet import ParquetFile
     from fastparquet.util import analyse_paths, get_file_scheme
     base, fns = analyse_paths(paths)
@@ -356,8 +364,8 @@ def _read_fp_multifile(fs, fs_token, paths, columns=None,
 
 def _read_pf_simple(fs, path, base, index_names, all_columns, is_series,
                     categories, cats, scheme, storage_name_mapping):
+    """Read dataset with fastparquet using ParquetFile machinery"""
     from fastparquet import ParquetFile
-    print(path, base)
     pf = ParquetFile(path, open_with=fs.open)
     relpath = path.replace(base, '').lstrip('/')
     for rg in pf.row_groups:
@@ -386,6 +394,7 @@ def _read_pf_simple(fs, path, base, index_names, all_columns, is_series,
 
 
 def _paths_to_cats(paths, scheme):
+    """Extract out fields and labels from directory names"""
     # can be factored out in fastparquet
     from fastparquet.util import ex_from_sep, val_to_num, groupby_types
     cats = OrderedDict()
@@ -431,6 +440,7 @@ def _paths_to_cats(paths, scheme):
 
 def _read_parquet_file(fs, base, fn, index, columns, series, categories,
                        cs, dt, scheme, storage_name_mapping, *args):
+    """Read a single file with fastparquet, to be used in a task"""
     from fastparquet.api import ParquetFile
     from collections import OrderedDict
 
