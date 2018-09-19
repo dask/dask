@@ -12,7 +12,7 @@ import pytest
 from dask import compute, config, delayed
 from dask.context import set_options
 from dask.multiprocessing import (
-    get, _dumps, _loads, remote_exception, get_context, remote_exception
+    get, _dumps, get_context, remote_exception
 )
 from dask.utils_test import inc
 
