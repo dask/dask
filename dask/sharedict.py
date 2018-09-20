@@ -61,7 +61,7 @@ class ShareDict(Mapping):
         if key is None:
             key = id(arg)
 
-        assert isinstance(arg, dict)
+        assert isinstance(arg, Mapping)
         if arg:
             self.dicts[key] = arg
 

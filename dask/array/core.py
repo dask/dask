@@ -331,6 +331,59 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)),
     return valmap(first, g2)
 
 
+class TOP(Mapping):
+    """ Tensor Operation
+
+    This is a lazily constructed mapping for tensor operation graphs.
+
+    TODO: more extensive docstring
+
+    See Also
+    --------
+    top
+    atop
+    """
+    def __init__(self, func, output, out_indices, *arrind_pairs, **kwargs):
+        self.func = func
+        self.output = output
+        self.output_indices = out_indices
+        self.inputs = arrind_pairs[::2]
+        self.inputs_indices = arrind_pairs[1::2]
+
+        self.numblocks = kwargs.pop('numblocks')
+        self.concatenate = kwargs.pop('concatenate', None)
+        self.new_axes = kwargs.pop('new_axes', {})
+
+        self.kwargs = kwargs
+
+    @property
+    def _dict(self):
+        try:
+            return self._cached_dict
+        except AttributeError:
+            self._cached_dict = top(
+                self.func,
+                self.output,
+                self.output_indices,
+                *concat(zip(self.inputs, self.inputs_indices)),
+                numblocks=self.numblocks,
+                concatenate=self.concatenate,
+                new_axes=self.new_axes,
+                **self.kwargs
+            )
+        return self._cached_dict
+
+    # TODO: determine if these are important and, if so, make them better
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        return len(self._dict)
+
+
 def top(func, output, out_indices, *arrind_pairs, **kwargs):
     """ Tensor operation
 
@@ -2859,7 +2912,7 @@ def atop(func, out_ind, *args, **kwargs):
         out = '%s-%s' % (token or funcname(func).strip('_'),
                          tokenize(func, out_ind, argindsstr, dtype, **kwargs))
 
-    dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs)
+    dsk = TOP(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs)
     dsks = [a.dask for a, ind in arginds if ind is not None]
 
     chunks = [chunkss[i] for i in out_ind]
