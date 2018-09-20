@@ -86,7 +86,7 @@ overlap function:
 Boundaries
 ----------
 
-While overlaping you can specify how to handle the boundaries.  Current policies
+With respect to overlaping you can specify how to handle the boundaries.  Current policies
 include the following:
 
 *  ``periodic`` - wrap borders around to the other side
@@ -101,7 +101,7 @@ So an example boundary kind argument might look like the following
     1: 'reflect',
     2: np.nan}
 
-Alternatively you can use :py:func:`dask.array.pad` for other types of
+Alternatively, you can use :py:func:`dask.array.pad` for other types of
 paddings.
 
 
@@ -120,19 +120,20 @@ that is not stored locally in each block
 
    >>> filt = g.map_blocks(func)
 
-While in this case we used a SciPy function above this could have been any
-arbitrary function.  This is a good interaction point with Numba_.
+While in this case we used a SciPy function, any arbitrary function could have been 
+used instead. This is a good interaction point with Numba_.
 
 If your function does not preserve the shape of the block then you will need to
-provide a ``chunks`` keyword argument.  If your block sizes are regular  then
-this can be a blockshape, such as ``(1000, 1000)`` or if your blocks are irregular
-then this must be a full chunks tuple, for example ``((1000, 700, 1000), (200, 300))``.
+provide a ``chunks`` keyword argument. If your block size is regular, then this
+argument can take a block shape of, for example, ``(1000, 1000)``. In case of
+irregular block sizes, it must be a tuple with the full chunks shape like
+``((1000, 700, 1000), (200, 300))``.
 
 .. code-block:: python
 
    >>> g.map_blocks(myfunc, chunks=(5, 5))
 
-If your function needs to know the location of the block on which it operates
+If your function needs to know the location of the block on which it operates,
 you can give your function a keyword argument ``block_id``
 
 .. code-block:: python
@@ -148,7 +149,7 @@ just to the right of that block.
 Trim Excess
 -----------
 
-After mapping a blocked function you may want to trim off the borders from each
+After mapping a blocked function, you may want to trim off the borders from each
 block by the same amount by which they were expanded.  The function
 ``trim_internal`` is useful here and takes the same ``depth`` argument
 given to ``overlap``.
@@ -166,7 +167,7 @@ given to ``overlap``.
 Full Workflow
 -------------
 
-And so a pretty typical overlaping workflow includes ``overlap``, ``map_blocks``,
+And so, a pretty typical overlaping workflow includes ``overlap``, ``map_blocks``
 and ``trim_internal``
 
 .. code-block:: python
