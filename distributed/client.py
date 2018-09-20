@@ -1461,7 +1461,7 @@ class Client(Node):
                     else:
                         raise ValueError("Bad value, `errors=%s`" % errors)
 
-            keys = [k for k in keys if k not in bad_keys]
+            keys = [k for k in keys if k not in bad_keys and k not in data]
 
             if local_worker:  # look inside local worker
                 data.update({k: local_worker.data[k]
