@@ -145,6 +145,16 @@ global pool set with ``dask.config.set``:
     >>> with dask.config.set(pool=ThreadPool(4)):
     ...     x.compute()
 
+The multiprocessing scheduler also supports `different contexts`_ ("spawn",
+"forkserver", "fork") which you can set with ``dask.config.set``:
+
+.. code-block:: python
+
+   >>> with dask.config.set({"multiprocessing.context", "forkserver"}):
+   ...     x.compute()
+
+.. _different contexts: https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
+
 For more information on the individual options for each scheduler, see the
 docstrings for each scheduler ``get`` function.
 

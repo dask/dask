@@ -12,7 +12,6 @@ from contextlib import contextmanager
 from importlib import import_module
 from numbers import Integral
 from threading import Lock
-import multiprocessing as mp
 import uuid
 import warnings
 from weakref import WeakValueDictionary
@@ -809,7 +808,7 @@ def get_scheduler_lock(get=None, collection=None, scheduler=None):
                                scheduler=scheduler)
 
     if actual_get == multiprocessing.get:
-        return mp.Manager().Lock()
+        return multiprocessing.get_context().Manager().Lock()
 
     return SerializableLock()
 
