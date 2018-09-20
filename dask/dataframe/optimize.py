@@ -20,9 +20,15 @@ def optimize(dsk, keys, **kwargs):
     if fastparquet:
         from .io.parquet import _read_parquet_row_group
         dsk = fuse_getitem(dsk, _read_parquet_row_group, 4)
-    dsk, dependencies = fuse(dsk, keys, dependencies=dependencies,
-                             ave_width=config.get('fuse_ave_width', 0))
-    if config.get('fuse_subgraphs', False):
-        dsk, dependencies = fuse_subgraphs(dsk, keys, dependencies=dependencies)
+
+    subgraphs = config.get('fuse_subgraphs', False)
+    out = fuse(dsk, keys, dependencies=dependencies,
+               ave_width=config.get('fuse_ave_width', None),
+               return_fused_info=subgraphs)
+    if subgraphs:
+        dsk, dependencies, info = out
+        dsk, dependencies = fuse_subgraphs(dsk, keys, dependencies=dependencies, fused_info=info)
+    else:
+        dsk, _ = out
     dsk, _ = cull(dsk, keys)
     return dsk

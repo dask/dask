@@ -453,7 +453,8 @@ def default_fused_keys_renamer(keys):
 
 
 def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
-         max_height=None, max_depth_new_edges=None, rename_keys=None):
+         max_height=None, max_depth_new_edges=None, rename_keys=None,
+         return_fused_info=False):
     """ Fuse tasks that form reductions; more advanced than ``fuse_linear``
 
     This trades parallelism opportunities for faster scheduling by making tasks
@@ -491,6 +492,10 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
         and comprehensive, but it comes at the cost of additional processing.
         If False, then the top-most key will be used.  For advanced usage, a
         function to create the new name is also accepted.
+    return_fused_info : bool, optional
+        If True, a mapping of the fused keys will also be returned. This is
+        useful to be provided later to ``fuse_subgraphs`` to improve key
+        renaming.
 
     Returns
     -------
@@ -528,7 +533,7 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
     )
 
     if not ave_width or not max_height:
-        return dsk, dependencies
+        return (dsk, dependencies, None) if return_fused_info else (dsk, dependencies)
 
     if rename_keys is None:
         rename_keys = config.get('fuse_rename_keys', True)
@@ -741,6 +746,7 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
                 # Traverse upwards
                 parent = rdeps[parent][0]
 
+    fused_info = {}
     if key_renamer is not None:
         for root_key, fused_keys in fused_trees.items():
             alias = key_renamer(fused_keys)
@@ -749,7 +755,9 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
                 rv[root_key] = alias
                 deps[alias] = deps[root_key]
                 deps[root_key] = {alias}
-    return rv, deps
+                fused_info[alias] = fused_keys
+
+    return (rv, deps, fused_info) if return_fused_info else (rv, deps)
 
 
 # Defining `key_split` (used by key renamers in `fuse`) in utils.py
@@ -847,7 +855,8 @@ class SubgraphCallable(object):
                 (self.dsk, self.outkey, self.inkeys, self.name))
 
 
-def fuse_subgraphs(dsk, keys=None, dependencies=None, rename_keys=None):
+def fuse_subgraphs(dsk, keys=None, dependencies=None, rename_keys=None,
+                   fused_info=None):
     """Fuse subgraphs together.
 
     This is intendended to be called after ``fuse``, and will collect any
@@ -856,19 +865,24 @@ def fuse_subgraphs(dsk, keys=None, dependencies=None, rename_keys=None):
 
     Parameters
     ----------
-    dsk: dict
+    dsk : dict
         The dask graph.
-    keys: list or set, optional
+    keys : list or set, optional
         Keys that must remain in the returned dask graph.
-    dependencies: dict, optional
+    dependencies : dict, optional
         A mapping from key to a set of keys. This optional input often comes
         from ``fuse``.
-    rename_keys: bool or func, optional
+    rename_keys : bool or func, optional
         Whether to rename the fused keys with ``default_fused_keys_renamer``
         or not.  Renaming fused keys can keep the graph more understandable
         and comprehensive, but it comes at the cost of additional processing.
         If False, then the top-most key will be used.  For advanced usage, a
         function to create the new name is also accepted.
+    fused_info : mapping, optional
+        A mapping of previously fused keys to their original key names, usually
+        output from ``fuse`` when the ``return_fused_info=True`` was provided.
+        If provided, will be used in conjunction with ``rename_keys`` to
+        provide better names for the fused keys.
     """
     if keys is not None and not isinstance(keys, set):
         if not isinstance(keys, list):
@@ -929,6 +943,14 @@ def fuse_subgraphs(dsk, keys=None, dependencies=None, rename_keys=None):
                 chains.append(chain)
                 break
 
+    def filter_key_names(chain):
+        for k in chain:
+            if k in fused_info:
+                for k2 in fused_info[k]:
+                    yield k2
+            else:
+                yield k
+
     # create a new graph with fused chains
     out = dsk.copy()
     for chain in chains:
@@ -948,6 +970,8 @@ def fuse_subgraphs(dsk, keys=None, dependencies=None, rename_keys=None):
         # Rename keys if needed
         if key_renamer is not None:
             # Filter out any aliases before renaming
+            if fused_info is not None:
+                chain = list(filter_key_names(chain))
             new_key = key_renamer(chain)
             if new_key is not None and new_key not in dsk and new_key not in out:
                 out[new_key] = val
