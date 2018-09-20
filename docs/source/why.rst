@@ -116,11 +116,11 @@ all.  They sometimes prefer this for the following reasons:
 Dask can enable efficient parallel computations on single machines by
 leveraging their multi-core CPUs and streaming data efficiently from disk.
 Dask *can* run on a distributed cluster, but it doesn't have to.  Dask allows
-you to swap out the cluster for single-machine schedulers are surprisingly
+you to swap out the cluster for single-machine schedulers which are surprisingly
 lightweight, require no setup, and can run entirely within the same process as
 the user's session.
 
-To avoid excess memory use Dask is good at finding ways to evaluate
+To avoid excess memory use, Dask is good at finding ways to evaluate
 computations in a low-memory footprint when possible by pulling in chunks of
 data from disk, doing the necessary processing, and throwing away intermediate
 values as quickly as possible.  This lets analysts perform computations on
@@ -134,7 +134,7 @@ Integrates with the Python ecosystem
 
 Python includes computational libraries like Numpy, Pandas, and Scikit-Learn,
 along with thousands of others in data access, plotting, statistics, image and
-signals processing, and more.  These libraries work together seamlessly to
+signal processing, and more.  These libraries work together seamlessly to
 produce a cohesive *ecosystem* of packages that co-evolve to meet the needs of
 analysts in many domains.
 
@@ -193,9 +193,9 @@ communication, load balancing, resilience, diagnostics, etc..
 Responsive feedback
 -------------------
 
-Because everything happens remotely interactive parallel computing can be
-frustrating for users.  They don't have a good sense how computations are
-progressing, what might be going wrong, or what parts of their code they should
+Because everything happens remotely, interactive parallel computing can be
+frustrating for users.  They don't have a good sense of how computations are
+progressing, what might be going wrong, or what parts of their code should they
 focus on for performance.  The added distance between a user and their
 computation can drastically affect how quickly they are able to identify and
 resolve bugs and performance problems, which can drastically increase their
