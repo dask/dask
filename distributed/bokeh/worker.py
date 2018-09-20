@@ -16,7 +16,8 @@ from bokeh.palettes import RdBu
 from bokeh.themes import Theme
 from toolz import merge, partition_all
 
-from .components import DashboardComponent, ProfileTimePlot, ProfileServer
+from .components import (DashboardComponent, ProfileTimePlot, ProfileServer,
+                         add_periodic_callback)
 from .core import BokehServer
 from .utils import transpose
 from ..compatibility import WINDOWS
@@ -554,10 +555,10 @@ def main_doc(worker, extra, doc):
         communicating_stream.root.x_range = xr
 
         doc.title = "Dask Worker Internal Monitor"
-        doc.add_periodic_callback(statetable.update, 200)
-        doc.add_periodic_callback(executing_ts.update, 200)
-        doc.add_periodic_callback(communicating_ts.update, 200)
-        doc.add_periodic_callback(communicating_stream.update, 200)
+        add_periodic_callback(doc, statetable, 200)
+        add_periodic_callback(doc, executing_ts, 200)
+        add_periodic_callback(doc, communicating_ts, 200)
+        add_periodic_callback(doc, communicating_stream, 200)
         doc.add_root(column(statetable.root,
                             executing_ts.root,
                             communicating_ts.root,
@@ -575,8 +576,8 @@ def crossfilter_doc(worker, extra, doc):
         crossfilter = CrossFilter(worker)
 
         doc.title = "Dask Worker Cross-filter"
-        doc.add_periodic_callback(statetable.update, 500)
-        doc.add_periodic_callback(crossfilter.update, 500)
+        add_periodic_callback(doc, statetable, 500)
+        add_periodic_callback(doc, crossfilter, 500)
 
         doc.add_root(column(statetable.root, crossfilter.root))
         doc.template = env.get_template('simple.html')
@@ -589,7 +590,7 @@ def systemmonitor_doc(worker, extra, doc):
     with log_errors():
         sysmon = SystemMonitor(worker, sizing_mode='scale_width')
         doc.title = "Dask Worker Monitor"
-        doc.add_periodic_callback(sysmon.update, 500)
+        add_periodic_callback(doc, sysmon, 500)
 
         doc.add_root(sysmon.root)
         doc.template = env.get_template('simple.html')
@@ -602,7 +603,7 @@ def counters_doc(server, extra, doc):
     with log_errors():
         doc.title = "Dask Worker Counters"
         counter = Counters(server, sizing_mode='stretch_both')
-        doc.add_periodic_callback(counter.update, 500)
+        add_periodic_callback(doc, counter, 500)
 
         doc.add_root(counter.root)
         doc.template = env.get_template('simple.html')

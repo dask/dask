@@ -672,3 +672,21 @@ class ProfileServer(DashboardComponent):
         times = [t * 1000 for t, _ in self.log]
         counts = list(toolz.pluck('count', toolz.pluck(1, self.log)))
         self.ts_source.data.update({'time': times, 'count': counts})
+
+
+def add_periodic_callback(doc, component, interval):
+    """ Add periodic callback to doc in a way that avoids reference cycles
+
+    If we instead use ``doc.add_periodic_callback(component.update, 100)`` then
+    the component stays in memory as a reference cycle because its method is
+    still around.  This way we avoid that and let things clean up a bit more
+    nicely.
+    """
+    ref = weakref.ref(component)
+
+    def update():
+        component = ref()
+        if component is not None:
+            component.update()
+
+    doc.add_periodic_callback(update, interval)

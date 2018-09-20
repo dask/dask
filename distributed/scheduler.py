@@ -2153,7 +2153,7 @@ class Scheduler(ServerNode):
                 worker_comm.abort()
                 self.remove_worker(address=worker)
 
-    def add_plugin(self, plugin=None, idempotent=True, **kwargs):
+    def add_plugin(self, plugin=None, idempotent=False, **kwargs):
         """
         Add external plugin to scheduler
 
