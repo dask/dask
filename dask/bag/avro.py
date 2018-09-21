@@ -54,6 +54,12 @@ def read_header(fo):
     return out
 
 
+def open_head(fn):
+    """Open a file just to read its head"""
+    with copy.copy(fn) as f:
+        return read_header(f)
+
+
 def read_avro(urlpath, blocksize=100000000, storage_options=None):
     """Read set of avro files
 
@@ -73,7 +79,7 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None):
         passed to backend file-system
     """
     from dask.utils import import_required
-    from dask import delayed
+    from dask import delayed, compute
     from dask.bytes.core import open_files, read_bytes
     from dask.bag import from_delayed
     import_required('fastavro',
@@ -82,25 +88,16 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None):
 
     storage_options = storage_options or {}
     files = open_files(urlpath, **storage_options)
-    with copy.copy(files[0]) as f:
-        # we assume the same header for all files
-        head = read_header(f)
     if blocksize is not None:
-        _, chunks = read_bytes(urlpath, sample=False, blocksize=blocksize,
-                               delimiter=head['sync'], include_path=False,
-                               **storage_options)
+        dhead = delayed(open_head)
+        heads = compute(*[dhead(f) for f in files])
         dread = delayed(read_chunk)
         bits = []
-        need_heads = [len(chu) > 1 for chu in chunks]
-        if any(need_heads):
-            # any file with more than one chunk will have a different marker
-            dhead = delayed(lambda i: read_header(io.BytesIO(i)))
-            heads = {i: (dhead(chu[0]) if (len(chu) > 1 and i > 0) else None)
-                     for i, chu in enumerate(chunks)}
-        for i, chu in enumerate(chunks):
-            if len(chu) > 1 and i > 0:
-                head = heads[i]
-            bits.extend([dread(ch, head) for ch in chu])
+        for head, f in zip(heads, files):
+            _, chunks = read_bytes(f.path, sample=False, blocksize=blocksize,
+                                   delimiter=head['sync'], include_path=False,
+                                   **storage_options)
+            bits.extend([dread(ch, head) for ch in chunks[0]])
         return from_delayed(bits)
     else:
         files = open_files(urlpath, **storage_options)
