@@ -2856,13 +2856,17 @@ def atop(func, out_ind, *args, **kwargs):
                              % (ind, arg.ndim))
 
     numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
-    argindsstr = list(concat([(a if ind is None else a.name, ind) for a, ind in arginds]))
+    argindsstr = list(concat([(delayed(a) if sizeof(a) > 1e6 else a
+                               if ind is None else a.name, ind)
+                              for a, ind in arginds]))
     # Finish up the name
     if not out:
         out = '%s-%s' % (token or funcname(func).strip('_'),
                          tokenize(func, out_ind, argindsstr, dtype, **kwargs))
 
-    dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs)
+    kwargs2 = {k: delayed(v) if sizeof(v) > 1e6 else v
+               for k, v in kwargs.items()}
+    dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs2)
     dsks = [a.dask for a, ind in arginds if ind is not None]
 
     chunks = [chunkss[i] for i in out_ind]
