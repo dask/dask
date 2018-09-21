@@ -134,7 +134,7 @@ def get_context():
         if config.get("multiprocessing.context", None) is not None:
             warn(_CONTEXT_UNSUPPORTED, UserWarning)
         return multiprocessing
-    context_name = config.get("multiprocessing.context", None)
+    context_name = config.get("multiprocessing.context", "spawn")
     return multiprocessing.get_context(context_name)
 
 

@@ -147,11 +147,9 @@ def test_random_seeds(random):
 def test_custom_context_used_python3_posix():
     """ The 'multiprocessing.context' config is used to create the pool.
 
-    We assume default is 'fork', and therefore test for 'spawn'.  If default
-    context is changed this test will need to be modified to be different than
-    that.
+    We assume default is 'spawn', and therefore test for 'fork'.
     """
-    # We check for spawn by ensuring subprocess doesn't have modules only
+    # We check for 'fork' by ensuring subprocess doesn't have modules only
     # parent process should have:
     def check_for_pytest():
         import sys
@@ -160,9 +158,9 @@ def test_custom_context_used_python3_posix():
     import sys
     sys.modules["FAKE_MODULE_FOR_TEST"] = 1
     try:
-        with config.set({"multiprocessing.context": "spawn"}):
+        with config.set({"multiprocessing.context": "fork"}):
             result = get({"x": (check_for_pytest,)}, "x")
-        assert not result
+        assert result
     finally:
         del sys.modules["FAKE_MODULE_FOR_TEST"]
 
@@ -176,11 +174,11 @@ def test_get_context_using_python3_posix():
 
     If default context is changed this test will need to change too.
     """
-    assert get_context() is multiprocessing.get_context(None)
+    assert get_context() is multiprocessing.get_context("spawn")
     with config.set({"multiprocessing.context": "forkserver"}):
         assert get_context() is multiprocessing.get_context("forkserver")
-    with config.set({"multiprocessing.context": "spawn"}):
-        assert get_context() is multiprocessing.get_context("spawn")
+    with config.set({"multiprocessing.context": "fork"}):
+        assert get_context() is multiprocessing.get_context("fork")
 
 
 @pytest.mark.skipif(sys.platform != 'win32' and sys.version_info.major > 2,
