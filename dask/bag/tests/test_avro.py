@@ -16,8 +16,7 @@ schema = {
         {'name': 'number', 'type': 'int'},
     ],
 }
-import dask
-dask.set_options(scheduler='sync')
+
 
 def test_onefile_oneblock(tmpdir):
     fn = os.path.join(tmpdir, 'one.avro')
