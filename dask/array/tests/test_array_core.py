@@ -3654,11 +3654,11 @@ def test_map_blocks_large_inputs_delayed():
     b = np.ones(1000000)
 
     c = a.map_blocks(add, b)
-    assert b in c.dask.values()
+    assert any(b is v for v in c.dask.values())
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
     d = a.map_blocks(lambda x, y: x + y, y=b)
-    assert b in d.dask.values()
+    assert any(b is v for v in d.dask.values())
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
 
@@ -3667,9 +3667,9 @@ def test_atop_large_inputs_delayed():
     b = np.ones(1000000)
 
     c = atop(add, 'i', a, 'i', b, None, dtype=a.dtype)
-    assert b in c.dask.values()
+    assert any(b is v for v in c.dask.values())
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
     d = atop(lambda x, y: x + y, 'i', a, 'i', y=b, dtype=a.dtype)
-    assert b in d.dask.values()
+    assert any(b is v for v in d.dask.values())
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
