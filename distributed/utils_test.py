@@ -39,7 +39,7 @@ from tornado import gen, queues
 from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
 
-from .client import default_client, _global_clients
+from .client import default_client, _global_clients, Client
 from .compatibility import PY3, Empty, WINDOWS, PY2
 from .comm.utils import offload
 from .config import initialize_logging
@@ -532,6 +532,44 @@ def check_active_rpc(loop, active_rpc_timeout=1):
                              timeout=active_rpc_timeout, fail_func=fail)
 
     loop.run_sync(wait)
+
+
+@pytest.fixture
+def cluster_fixture(loop):
+    with cluster() as (scheduler, workers):
+        yield (scheduler, workers)
+
+
+@pytest.fixture
+def s(cluster_fixture):
+    scheduler, workers = cluster_fixture
+    return scheduler
+
+
+@pytest.fixture
+def a(cluster_fixture):
+    scheduler, workers = cluster_fixture
+    return workers[0]
+
+
+@pytest.fixture
+def b(cluster_fixture):
+    scheduler, workers = cluster_fixture
+    return workers[1]
+
+
+@pytest.fixture
+def client(loop, cluster_fixture):
+    scheduler, workers = cluster_fixture
+    with Client(scheduler['address'], loop=loop) as client:
+        yield client
+
+
+@pytest.fixture
+def client_secondary(loop, cluster_fixture):
+    scheduler, workers = cluster_fixture
+    with Client(scheduler['address'], loop=loop) as client:
+        yield client
 
 
 @contextmanager

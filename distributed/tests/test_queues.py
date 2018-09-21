@@ -9,8 +9,8 @@ from tornado import gen
 
 from distributed import Client, Queue, Nanny, worker_client, wait
 from distributed.metrics import time
-from distributed.utils_test import (gen_cluster, inc, cluster, slow, div)
-from distributed.utils_test import loop # noqa: F401
+from distributed.utils_test import (gen_cluster, inc, slow, div)
+from distributed.utils_test import client, cluster_fixture, loop # noqa: F401
 
 
 @gen_cluster(client=True)
@@ -57,18 +57,16 @@ def test_queue_with_data(c, s, a, b):
         yield x.get(timeout=0.1)
 
 
-def test_sync(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address']) as c:
-            future = c.submit(lambda x: x + 1, 10)
-            x = Queue('x')
-            xx = Queue('x')
-            x.put(future)
-            assert x.qsize() == 1
-            assert xx.qsize() == 1
-            future2 = xx.get()
+def test_sync(client):
+    future = client.submit(lambda x: x + 1, 10)
+    x = Queue('x')
+    xx = Queue('x')
+    x.put(future)
+    assert x.qsize() == 1
+    assert xx.qsize() == 1
+    future2 = xx.get()
 
-            assert future2.result() == 11
+    assert future2.result() == 11
 
 
 @gen_cluster()
@@ -104,17 +102,15 @@ def test_picklability(c, s, a, b):
     assert result == 11
 
 
-def test_picklability_sync(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address']) as c:
-            q = Queue()
+def test_picklability_sync(client):
+    q = Queue()
 
-            def f(x):
-                q.put(x + 1)
+    def f(x):
+        q.put(x + 1)
 
-            c.submit(f, 10).result()
+    client.submit(f, 10).result()
 
-            assert q.get() == 11
+    assert q.get() == 11
 
 
 @pytest.mark.skipif(sys.version_info[0] == 2, reason='Multi-client issues')

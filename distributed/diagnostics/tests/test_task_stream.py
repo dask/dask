@@ -6,9 +6,9 @@ from time import sleep
 import pytest
 from toolz import frequencies
 
-from distributed import Client, get_task_stream
-from distributed.utils_test import gen_cluster, div, inc, slowinc, cluster
-from distributed.utils_test import loop  # noqa F401
+from distributed import get_task_stream
+from distributed.utils_test import gen_cluster, div, inc, slowinc
+from distributed.utils_test import client, loop, cluster_fixture  # noqa: F401
 from distributed.client import wait
 from distributed.diagnostics.task_stream import TaskStreamPlugin
 from distributed.metrics import time
@@ -95,16 +95,14 @@ def test_client(c, s, a, b):
     assert L == tuple(tasks.buffer)
 
 
-def test_client_sync(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            with get_task_stream(client=c) as ts:
-                sleep(0.1)  # to smooth over time differences on the scheduler
-                # to smooth over time differences on the scheduler
-                futures = c.map(inc, range(10))
-                wait(futures)
+def test_client_sync(client):
+    with get_task_stream(client=client) as ts:
+        sleep(0.1)  # to smooth over time differences on the scheduler
+        # to smooth over time differences on the scheduler
+        futures = client.map(inc, range(10))
+        wait(futures)
 
-            assert len(ts.data) == 10
+    assert len(ts.data) == 10
 
 
 @gen_cluster(client=True)
@@ -119,17 +117,16 @@ def test_get_task_stream_plot(c, s, a, b):
     assert isinstance(figure, bokeh.plotting.Figure)
 
 
-def test_get_task_stream_save(loop, tmpdir):
+def test_get_task_stream_save(client, tmpdir):
     bokeh = pytest.importorskip('bokeh')
     tmpdir = str(tmpdir)
     fn = os.path.join(tmpdir, 'foo.html')
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            with get_task_stream(plot='save', filename=fn) as ts:
-                wait(c.map(inc, range(10)))
-            with open(fn) as f:
-                data = f.read()
-            assert 'inc' in data
-            assert 'bokeh' in data
 
-            assert isinstance(ts.figure, bokeh.plotting.Figure)
+    with get_task_stream(plot='save', filename=fn) as ts:
+        wait(client.map(inc, range(10)))
+    with open(fn) as f:
+        data = f.read()
+    assert 'inc' in data
+    assert 'bokeh' in data
+
+    assert isinstance(ts.figure, bokeh.plotting.Figure)

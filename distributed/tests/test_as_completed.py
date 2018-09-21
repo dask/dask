@@ -7,11 +7,10 @@ from time import sleep
 import pytest
 from tornado import gen
 
-from distributed import Client
 from distributed.client import _as_completed, as_completed, _first_completed
 from distributed.compatibility import Empty, StopAsyncIteration, Queue
-from distributed.utils_test import cluster, gen_cluster, inc, throws
-from distributed.utils_test import loop  # noqa: F401
+from distributed.utils_test import gen_cluster, inc, throws
+from distributed.utils_test import client, cluster_fixture, loop  # noqa: F401
 
 
 @gen_cluster(client=True)
@@ -30,132 +29,116 @@ def test__as_completed(c, s, a, b):
     assert result in [x, y, z]
 
 
-def test_as_completed(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            x = c.submit(inc, 1)
-            y = c.submit(inc, 2)
-            z = c.submit(inc, 1)
+def test_as_completed(client):
+    x = client.submit(inc, 1)
+    y = client.submit(inc, 2)
+    z = client.submit(inc, 1)
 
-            seq = as_completed([x, y, z])
-            assert seq.count() == 3
-            assert isinstance(seq, Iterator)
-            assert set(seq) == {x, y, z}
-            assert seq.count() == 0
+    seq = as_completed([x, y, z])
+    assert seq.count() == 3
+    assert isinstance(seq, Iterator)
+    assert set(seq) == {x, y, z}
+    assert seq.count() == 0
 
-            assert list(as_completed([])) == []
+    assert list(as_completed([])) == []
 
 
-def test_as_completed_with_non_futures(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop):
-            with pytest.raises(TypeError):
-                list(as_completed([1, 2, 3]))
+def test_as_completed_with_non_futures(client):
+    with pytest.raises(TypeError):
+        list(as_completed([1, 2, 3]))
 
 
-def test_as_completed_add(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            total = 0
-            expected = sum(map(inc, range(10)))
-            futures = c.map(inc, range(10))
-            ac = as_completed(futures)
-            for future in ac:
-                result = future.result()
-                total += result
-                if random.random() < 0.5:
-                    future = c.submit(add, future, 10)
-                    ac.add(future)
-                    expected += result + 10
-            assert total == expected
+def test_as_completed_add(client):
+    total = 0
+    expected = sum(map(inc, range(10)))
+    futures = client.map(inc, range(10))
+    ac = as_completed(futures)
+    for future in ac:
+        result = future.result()
+        total += result
+        if random.random() < 0.5:
+            future = client.submit(add, future, 10)
+            ac.add(future)
+            expected += result + 10
+    assert total == expected
 
 
-def test_as_completed_update(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            total = 0
-            todo = list(range(10))
-            expected = sum(map(inc, todo))
-            ac = as_completed([])
-            while todo or not ac.is_empty():
-                if todo:
-                    work, todo = todo[:4], todo[4:]
-                    ac.update(c.map(inc, work))
-                batch = ac.next_batch(block=True)
-                total += sum(r.result() for r in batch)
-            assert total == expected
+def test_as_completed_update(client):
+    total = 0
+    todo = list(range(10))
+    expected = sum(map(inc, todo))
+    ac = as_completed([])
+    while todo or not ac.is_empty():
+        if todo:
+            work, todo = todo[:4], todo[4:]
+            ac.update(client.map(inc, work))
+        batch = ac.next_batch(block=True)
+        total += sum(r.result() for r in batch)
+    assert total == expected
 
 
-def test_as_completed_repeats(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            ac = as_completed()
-            x = c.submit(inc, 1)
-            ac.add(x)
-            ac.add(x)
+def test_as_completed_repeats(client):
+    ac = as_completed()
+    x = client.submit(inc, 1)
+    ac.add(x)
+    ac.add(x)
 
-            assert next(ac) is x
-            assert next(ac) is x
+    assert next(ac) is x
+    assert next(ac) is x
 
-            with pytest.raises(StopIteration):
-                next(ac)
+    with pytest.raises(StopIteration):
+        next(ac)
 
-            ac.add(x)
-            assert next(ac) is x
+    ac.add(x)
+    assert next(ac) is x
 
 
-def test_as_completed_is_empty(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            ac = as_completed()
-            assert ac.is_empty()
-            x = c.submit(inc, 1)
-            ac.add(x)
-            assert not ac.is_empty()
-            assert next(ac) is x
-            assert ac.is_empty()
+def test_as_completed_is_empty(client):
+    ac = as_completed()
+    assert ac.is_empty()
+    x = client.submit(inc, 1)
+    ac.add(x)
+    assert not ac.is_empty()
+    assert next(ac) is x
+    assert ac.is_empty()
 
 
-def test_as_completed_cancel(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            x = c.submit(inc, 1)
-            y = c.submit(inc, 1)
+def test_as_completed_cancel(client):
+    x = client.submit(inc, 1)
+    y = client.submit(inc, 1)
 
-            ac = as_completed([x, y])
-            x.cancel()
+    ac = as_completed([x, y])
+    x.cancel()
 
-            assert next(ac) is x or y
-            assert next(ac) is y or x
+    assert next(ac) is x or y
+    assert next(ac) is y or x
 
-            with pytest.raises(Empty):
-                ac.queue.get(timeout=0.1)
+    with pytest.raises(Empty):
+        ac.queue.get(timeout=0.1)
 
-            res = list(as_completed([x, y, x]))
-            assert len(res) == 3
-            assert set(res) == {x, y}
-            assert res.count(x) == 2
+    res = list(as_completed([x, y, x]))
+    assert len(res) == 3
+    assert set(res) == {x, y}
+    assert res.count(x) == 2
 
 
-def test_as_completed_cancel_last(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            w = c.submit(inc, 0.3)
-            x = c.submit(inc, 1)
-            y = c.submit(inc, 0.3)
+def test_as_completed_cancel_last(client):
+    w = client.submit(inc, 0.3)
+    x = client.submit(inc, 1)
+    y = client.submit(inc, 0.3)
 
-            @gen.coroutine
-            def _():
-                yield gen.sleep(0.1)
-                yield w.cancel(asynchronous=True)
-                yield y.cancel(asynchronous=True)
+    @gen.coroutine
+    def _():
+        yield gen.sleep(0.1)
+        yield w.cancel(asynchronous=True)
+        yield y.cancel(asynchronous=True)
 
-            loop.add_callback(_)
+    client.loop.add_callback(_)
 
-            ac = as_completed([x, y])
-            result = set(ac)
+    ac = as_completed([x, y])
+    result = set(ac)
 
-            assert result == {x, y}
+    assert result == {x, y}
 
 
 @gen_cluster(client=True)
@@ -190,32 +173,28 @@ def test_as_completed_error_async(c, s, a, b):
     assert y.status == 'finished'
 
 
-def test_as_completed_error(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            x = c.submit(throws, 1)
-            y = c.submit(inc, 1)
+def test_as_completed_error(client):
+    x = client.submit(throws, 1)
+    y = client.submit(inc, 1)
 
-            ac = as_completed([x, y])
-            result = set(ac)
+    ac = as_completed([x, y])
+    result = set(ac)
 
-            assert result == {x, y}
-            assert x.status == 'error'
-            assert y.status == 'finished'
+    assert result == {x, y}
+    assert x.status == 'error'
+    assert y.status == 'finished'
 
 
-def test_as_completed_with_results(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            x = c.submit(throws, 1)
-            y = c.submit(inc, 5)
-            z = c.submit(inc, 1)
+def test_as_completed_with_results(client):
+    x = client.submit(throws, 1)
+    y = client.submit(inc, 5)
+    z = client.submit(inc, 1)
 
-            ac = as_completed([x, y, z], with_results=True)
-            y.cancel()
-            with pytest.raises(RuntimeError) as exc:
-                res = list(ac)
-            assert str(exc.value) == 'hello!'
+    ac = as_completed([x, y, z], with_results=True)
+    y.cancel()
+    with pytest.raises(RuntimeError) as exc:
+        res = list(ac)
+    assert str(exc.value) == 'hello!'
 
 
 @gen_cluster(client=True)
@@ -233,26 +212,24 @@ def test_as_completed_with_results_async(c, s, a, b):
     assert str(exc.value) == 'hello!'
 
 
-def test_as_completed_with_results_no_raise(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            x = c.submit(throws, 1)
-            y = c.submit(inc, 5)
-            z = c.submit(inc, 1)
+def test_as_completed_with_results_no_raise(client):
+    x = client.submit(throws, 1)
+    y = client.submit(inc, 5)
+    z = client.submit(inc, 1)
 
-            ac = as_completed([x, y, z], with_results=True, raise_errors=False)
-            y.cancel()
-            res = list(ac)
+    ac = as_completed([x, y, z], with_results=True, raise_errors=False)
+    y.cancel()
+    res = list(ac)
 
-            dd = {r[0]: r[1:] for r in res}
-            assert set(dd.keys()) == {y, x, z}
-            assert x.status == 'error'
-            assert y.status == 'cancelled'
-            assert z.status == 'finished'
+    dd = {r[0]: r[1:] for r in res}
+    assert set(dd.keys()) == {y, x, z}
+    assert x.status == 'error'
+    assert y.status == 'cancelled'
+    assert z.status == 'finished'
 
-            assert isinstance(dd[y][0], CancelledError)
-            assert isinstance(dd[x][0][1], RuntimeError)
-            assert dd[z][0] == 2
+    assert isinstance(dd[y][0], CancelledError)
+    assert isinstance(dd[x][0][1], RuntimeError)
+    assert dd[z][0] == 2
 
 
 @gen_cluster(client=True)

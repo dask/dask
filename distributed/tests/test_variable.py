@@ -9,8 +9,8 @@ from tornado import gen
 
 from distributed import Client, Variable, worker_client, Nanny, wait
 from distributed.metrics import time
-from distributed.utils_test import (gen_cluster, inc, cluster, slow, div)
-from distributed.utils_test import loop # noqa: F401
+from distributed.utils_test import (gen_cluster, inc, slow, div)
+from distributed.utils_test import client, cluster_fixture, loop # noqa: F401
 
 
 @gen_cluster(client=True)
@@ -50,16 +50,14 @@ def test_queue_with_data(c, s, a, b):
     assert data == (1, 'hello')
 
 
-def test_sync(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address']) as c:
-            future = c.submit(lambda x: x + 1, 10)
-            x = Variable('x')
-            xx = Variable('x')
-            x.set(future)
-            future2 = xx.get()
+def test_sync(client):
+    future = client.submit(lambda x: x + 1, 10)
+    x = Variable('x')
+    xx = Variable('x')
+    x.set(future)
+    future2 = xx.get()
 
-            assert future2.result() == 11
+    assert future2.result() == 11
 
 
 @gen_cluster()
@@ -93,15 +91,13 @@ def test_timeout(c, s, a, b):
     assert 0.1 < stop - start < 2.0
 
 
-def test_timeout_sync(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address']) as c:
-            v = Variable('v')
-            start = time()
-            with pytest.raises(gen.TimeoutError):
-                v.get(timeout=0.1)
-            stop = time()
-            assert 0.1 < stop - start < 2.0
+def test_timeout_sync(client):
+    v = Variable('v')
+    start = time()
+    with pytest.raises(gen.TimeoutError):
+        v.get(timeout=0.1)
+    stop = time()
+    assert 0.1 < stop - start < 2.0
 
 
 @gen_cluster(client=True)
@@ -127,16 +123,14 @@ def test_cleanup(c, s, a, b):
     assert result == 11
 
 
-def test_pickleable(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address']) as c:
-            v = Variable('v')
+def test_pickleable(client):
+    v = Variable('v')
 
-            def f(x):
-                v.set(x + 1)
+    def f(x):
+        v.set(x + 1)
 
-            c.submit(f, 10).result()
-            assert v.get() == 11
+    client.submit(f, 10).result()
+    assert v.get() == 11
 
 
 @gen_cluster(client=True)
@@ -233,16 +227,14 @@ def test_erred_future(c, s, a, b):
     assert isinstance(exc, ZeroDivisionError)
 
 
-def test_future_erred_sync(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address']) as c:
-            future = c.submit(div, 1, 0)
-            var = Variable()
-            var.set(future)
+def test_future_erred_sync(client):
+    future = client.submit(div, 1, 0)
+    var = Variable()
+    var.set(future)
 
-            sleep(0.1)
+    sleep(0.1)
 
-            future2 = var.get()
+    future2 = var.get()
 
-            with pytest.raises(ZeroDivisionError):
-                future2.result()
+    with pytest.raises(ZeroDivisionError):
+        future2.result()

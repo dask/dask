@@ -5,10 +5,10 @@ from time import sleep
 
 import pytest
 
-from distributed import Client, Lock, get_client
+from distributed import Lock, get_client
 from distributed.metrics import time
-from distributed.utils_test import gen_cluster, cluster
-from distributed.utils_test import loop  # noqa F401
+from distributed.utils_test import gen_cluster
+from distributed.utils_test import client, cluster_fixture, loop  # noqa F401
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 8)] * 2)
@@ -65,11 +65,9 @@ def test_acquires_with_zero_timeout(c, s, a, b):
     yield lock.release()
 
 
-def test_timeout_sync(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            with Lock('x') as lock:
-                assert Lock('x').acquire(timeout=0.1) is False
+def test_timeout_sync(client):
+    with Lock('x') as lock:
+        assert Lock('x').acquire(timeout=0.1) is False
 
 
 @gen_cluster(client=True)
@@ -79,7 +77,7 @@ def test_errors(c, s, a, b):
         yield lock.release()
 
 
-def test_lock_sync(loop):
+def test_lock_sync(client):
     def f(x):
         with Lock('x') as lock:
             client = get_client()
@@ -88,11 +86,10 @@ def test_lock_sync(loop):
             sleep(0.05)
             assert client.get_metadata('locked') is True
             client.set_metadata('locked', False)
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            c.set_metadata('locked', False)
-            futures = c.map(f, range(10))
-            c.gather(futures)
+
+    client.set_metadata('locked', False)
+    futures = client.map(f, range(10))
+    client.gather(futures)
 
 
 @gen_cluster(client=True)

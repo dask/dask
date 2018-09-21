@@ -13,8 +13,8 @@ from tornado import gen
 from distributed import (worker_client, Client, as_completed, get_worker, wait,
                          get_client)
 from distributed.metrics import time
-from distributed.utils_test import cluster, double, gen_cluster, inc
-from distributed.utils_test import loop # noqa: F401
+from distributed.utils_test import double, gen_cluster, inc
+from distributed.utils_test import client, cluster_fixture, loop  # noqa: F401
 
 
 @gen_cluster(client=True)
@@ -122,7 +122,7 @@ def test_same_loop(c, s, a, b):
     assert result
 
 
-def test_sync(loop):
+def test_sync(client):
     def mysum():
         result = 0
         sub_tasks = [delayed(double)(i) for i in range(100)]
@@ -133,9 +133,7 @@ def test_sync(loop):
                 result += f.result()
         return result
 
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            assert delayed(mysum)().compute() == 9900
+    assert delayed(mysum)().compute() == 9900
 
 
 @gen_cluster(client=True)
@@ -235,16 +233,14 @@ def test_closing_worker_doesnt_close_client(c, s, a, b):
     assert c.status == 'running'
 
 
-def test_timeout(loop):
+def test_timeout(client):
     def func():
         with worker_client(timeout=0) as wc:
             print('hello')
 
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            future = c.submit(func)
-            with pytest.raises(EnvironmentError):
-                result = future.result()
+    future = client.submit(func)
+    with pytest.raises(EnvironmentError):
+        result = future.result()
 
 
 def test_secede_without_stealing_issue_1262():

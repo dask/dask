@@ -10,7 +10,7 @@ from time import sleep
 from distributed import Client
 from distributed.metrics import time
 from distributed.utils_test import cluster, inc
-from distributed.utils_test import loop # noqa F401
+from distributed.utils_test import loop, client, cluster_fixture, s, a, b  # noqa F401
 from toolz import identity
 
 distributed_joblib = pytest.importorskip('distributed.joblib')
@@ -39,49 +39,46 @@ def slow_raise_value_error(condition, duration=0.05):
         raise ValueError("condition evaluated to True")
 
 
-def test_simple(loop, joblib):
+def test_simple(client, joblib):
     Parallel = joblib.Parallel
     delayed = joblib.delayed
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as client:
-            with joblib.parallel_backend('dask') as (ba, _):
-                seq = Parallel()(delayed(inc)(i) for i in range(10))
-                assert seq == [inc(i) for i in range(10)]
 
-                with pytest.raises(ValueError):
-                    Parallel()(delayed(slow_raise_value_error)(i == 3)
-                               for i in range(10))
+    with joblib.parallel_backend('dask') as (ba, _):
+        seq = Parallel()(delayed(inc)(i) for i in range(10))
+        assert seq == [inc(i) for i in range(10)]
 
-                seq = Parallel()(delayed(inc)(i) for i in range(10))
-                assert seq == [inc(i) for i in range(10)]
+        with pytest.raises(ValueError):
+            Parallel()(delayed(slow_raise_value_error)(i == 3)
+                       for i in range(10))
+
+        seq = Parallel()(delayed(inc)(i) for i in range(10))
+        assert seq == [inc(i) for i in range(10)]
 
 
 def random2():
     return random()
 
 
-def test_dont_assume_function_purity(loop, joblib):
+def test_dont_assume_function_purity(client, joblib):
     Parallel = joblib.Parallel
     delayed = joblib.delayed
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as client:
-            with joblib.parallel_backend('dask') as (ba, _):
-                x, y = Parallel()(delayed(random2)() for i in range(2))
-                assert x != y
+
+    with joblib.parallel_backend('dask') as (ba, _):
+        x, y = Parallel()(delayed(random2)() for i in range(2))
+        assert x != y
 
 
-def test_joblib_funcname(loop, joblib):
+def test_joblib_funcname(client, joblib):
     Parallel = joblib.Parallel
     delayed = joblib.delayed
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as client:
-            with joblib.parallel_backend('dask') as (ba, _):
-                x, y = Parallel()(delayed(inc)(i) for i in range(2))
 
-            def f(dask_scheduler):
-                return list(dask_scheduler.transition_log)
-            log = client.run_on_scheduler(f)
-            assert all(tup[0].startswith('inc-batch') for tup in log)
+    with joblib.parallel_backend('dask') as (ba, _):
+        x, y = Parallel()(delayed(inc)(i) for i in range(2))
+
+    def f(dask_scheduler):
+        return list(dask_scheduler.transition_log)
+    log = client.run_on_scheduler(f)
+    assert all(tup[0].startswith('inc-batch') for tup in log)
 
 
 def test_joblib_backend_subclass(joblib):
@@ -108,7 +105,7 @@ class CountSerialized(object):
         return (CountSerialized, (self.x,))
 
 
-def test_joblib_scatter(loop, joblib):
+def test_joblib_scatter(client, joblib):
     Parallel = joblib.Parallel
     delayed = joblib.delayed
 
@@ -116,22 +113,20 @@ def test_joblib_scatter(loop, joblib):
     y = CountSerialized(2)
     z = CountSerialized(3)
 
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as client:
-            with joblib.parallel_backend('dask', scatter=[x, y]) as (ba, _):
-                f = delayed(add5)
-                tasks = [f(x, y, z, d=4, e=5),
-                         f(x, z, y, d=5, e=4),
-                         f(y, x, z, d=x, e=5),
-                         f(z, z, x, d=z, e=y)]
-                sols = [func(*args, **kwargs) for func, args, kwargs in tasks]
-                results = Parallel()(tasks)
+    with joblib.parallel_backend('dask', scatter=[x, y]) as (ba, _):
+        f = delayed(add5)
+        tasks = [f(x, y, z, d=4, e=5),
+                 f(x, z, y, d=5, e=4),
+                 f(y, x, z, d=x, e=5),
+                 f(z, z, x, d=z, e=y)]
+        sols = [func(*args, **kwargs) for func, args, kwargs in tasks]
+        results = Parallel()(tasks)
 
-            # Scatter must take a list/tuple
-            with pytest.raises(TypeError):
-                with joblib.parallel_backend('dask', loop=loop,
-                                             scatter=1):
-                    pass
+    # Scatter must take a list/tuple
+    with pytest.raises(TypeError):
+        with joblib.parallel_backend('dask', loop=loop,
+                                     scatter=1):
+            pass
 
     for l, r in zip(sols, results):
         assert l == r
@@ -182,25 +177,23 @@ def test_errors(loop, joblib):
     assert "create a dask client" in str(info.value).lower()
 
 
-def test_correct_nested_backend(loop, joblib):
+def test_correct_nested_backend(client, joblib):
     if LooseVersion(joblib.__version__) <= LooseVersion("0.11.0"):
         pytest.skip("Requires nested parallelism")
 
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as client:
-            # No requirement, should be us
-            with joblib.parallel_backend('dask') as (ba, _):
-                result = joblib.Parallel(n_jobs=2)(joblib.delayed(outer)(
-                    joblib, nested_require=None) for _ in range(1))
-                assert isinstance(result[0][0][0],
-                                  distributed_joblib.DaskDistributedBackend)
+    # No requirement, should be us
+    with joblib.parallel_backend('dask') as (ba, _):
+        result = joblib.Parallel(n_jobs=2)(joblib.delayed(outer)(
+            joblib, nested_require=None) for _ in range(1))
+        assert isinstance(result[0][0][0],
+                          distributed_joblib.DaskDistributedBackend)
 
-            # Require threads, should be threading
-            with joblib.parallel_backend('dask') as (ba, _):
-                result = joblib.Parallel(n_jobs=2)(joblib.delayed(outer)(
-                    joblib, nested_require='sharedmem') for _ in range(1))
-                assert isinstance(result[0][0][0],
-                                  joblib.parallel.ThreadingBackend)
+    # Require threads, should be threading
+    with joblib.parallel_backend('dask') as (ba, _):
+        result = joblib.Parallel(n_jobs=2)(joblib.delayed(outer)(
+            joblib, nested_require='sharedmem') for _ in range(1))
+        assert isinstance(result[0][0][0],
+                          joblib.parallel.ThreadingBackend)
 
 
 def outer(joblib, nested_require):
@@ -232,16 +225,14 @@ def _test_keywords_f(_):
     return get_worker().address
 
 
-def test_keywords(loop, joblib):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as client:
-            with joblib.parallel_backend('dask', workers=a['address']) as (ba, _):
-                seq = joblib.Parallel()(joblib.delayed(_test_keywords_f)(i) for i in range(10))
-                assert seq == [a['address']] * 10
+def test_keywords(client, joblib, s, a, b):
+    with joblib.parallel_backend('dask', workers=a['address']) as (ba, _):
+        seq = joblib.Parallel()(joblib.delayed(_test_keywords_f)(i) for i in range(10))
+        assert seq == [a['address']] * 10
 
-            with joblib.parallel_backend('dask', workers=b['address']) as (ba, _):
-                seq = joblib.Parallel()(joblib.delayed(_test_keywords_f)(i) for i in range(10))
-                assert seq == [b['address']] * 10
+    with joblib.parallel_backend('dask', workers=b['address']) as (ba, _):
+        seq = joblib.Parallel()(joblib.delayed(_test_keywords_f)(i) for i in range(10))
+        assert seq == [b['address']] * 10
 
 
 def test_cleanup(loop, joblib):

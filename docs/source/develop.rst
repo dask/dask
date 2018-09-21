@@ -71,7 +71,7 @@ The test suite contains three kinds of tests
     same event loop in the main thread.  These are good for testing complex
     logic and inspecting the state of the system directly.  They are also
     easier to debug and cause the fewest problems with shutdowns.
-2.  ``with cluster()``: Tests with multiple processes forked from the master
+2.  ``def test_foo(client)``: Tests with multiple processes forked from the master
     process.  These are good for testing the synchronous (normal user) API and
     when triggering hard failures for resilience tests.
 3.  ``popen``: Tests that call out to the command line to start the system.
@@ -81,6 +81,8 @@ If you are comfortable with the Tornado interface then you will be happiest
 using the ``@gen_cluster`` style of test
 
 .. code-block:: python
+
+   from distributed.utils_test import gen_cluster
 
    @gen_cluster(client=True)
    def test_submit(c, s, a, b):
@@ -107,25 +109,34 @@ instead you need to use the coroutine API, where all blocking functions are
 prepended with an underscore (``_``).  Beware, it is a common mistake to use
 the blocking interface within these tests.
 
-If you want to test the normal synchronous API you can use a ``with cluster``
-style test, which sets up a scheduler and workers for you in different forked
-processes:
+If you want to test the normal synchronous API you can use the ``client``
+pytest fixture style test, which sets up a scheduler and workers for you in
+different forked processes:
 
 .. code-block:: python
 
-   def test_submit_sync(loop):
-       with cluster() as (s, [a, b]):
-           with Client(s['address'], loop=loop) as c:
-               future = c.submit(inc, 1)
-               assert future.key in c.futures
+   from distributed.utils_test import client
 
-               result = future.result()  # use the synchronous/blocking API here
-               assert result == 2
+   def test_submit(client):
+       future = client.submit(inc, 10)
+       assert future.result() == 11
 
-               a['proc'].terminate()  # kill one of the workers
+Additionally, if you want access to the scheduler and worker processes you can
+also add the ``s, a, b`` fixtures as well.
 
-               result = future.result()  # test that future remains valid
-               assert result == 2
+
+.. code-block:: python
+
+   from distributed.utils_test import client
+
+   def test_submit(client, s, a, b):
+       future = client.submit(inc, 10)
+       assert future.result() == 11  # use the synchronous/blocking API here
+
+       a['proc'].terminate()  # kill one of the workers
+
+       result = future.result()  # test that future remains valid
+       assert result == 2
 
 In this style of test you do not have access to the scheduler or workers.  The
 variables ``s, a, b`` are now dictionaries holding a
@@ -134,8 +145,8 @@ use the normal synchronous API (never use yield in this style of test) and you
 can close processes easily by terminating them.
 
 Typically for most user-facing functions you will find both kinds of tests.
-The ``@gen_cluster`` tests test particular logic while the ``with cluster``
-tests test basic interface and resilience.
+The ``@gen_cluster`` tests test particular logic while the ``client`` pytest
+fixture tests test basic interface and resilience.
 
 You should avoid ``popen`` style tests unless absolutely necessary, such as if
 you need to test the command line interface.

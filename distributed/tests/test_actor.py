@@ -6,8 +6,8 @@ import pytest
 
 import dask
 from distributed import Actor, ActorFuture, Client, Future, wait, Nanny
-from distributed.utils_test import gen_cluster, cluster
-from distributed.utils_test import loop  # noqa: F401
+from distributed.utils_test import gen_cluster
+from distributed.utils_test import client, cluster_fixture, loop  # noqa: F401
 from distributed.metrics import time
 
 
@@ -237,23 +237,21 @@ def test_future_dependencies(c, s, a, b):
     assert {ts.key for ts in s.tasks[counter.key].dependents} == {x.key, y.key}
 
 
-def test_sync(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            counter = c.submit(Counter, actor=True)
-            counter = counter.result()
+def test_sync(client):
+    counter = client.submit(Counter, actor=True)
+    counter = counter.result()
 
-            assert counter.n == 0
+    assert counter.n == 0
 
-            future = counter.increment()
-            n = future.result()
-            assert n == 1
-            assert counter.n == 1
+    future = counter.increment()
+    n = future.result()
+    assert n == 1
+    assert counter.n == 1
 
-            assert future.result() == future.result()
+    assert future.result() == future.result()
 
-            assert 'ActorFuture' in repr(future)
-            assert 'distributed.actor' not in repr(future)
+    assert 'ActorFuture' in repr(future)
+    assert 'distributed.actor' not in repr(future)
 
 
 @gen_cluster(client=True, config={'distributed.comm.timeouts.connect': '1s'})

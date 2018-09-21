@@ -5,8 +5,8 @@ from dask import delayed
 from distributed import Client
 from distributed.client import futures_of
 from distributed.metrics import time
-from distributed.utils_test import gen_cluster, inc, cluster
-from distributed.utils_test import loop  # noqa F401
+from distributed.utils_test import gen_cluster, inc
+from distributed.utils_test import client, cluster_fixture, loop  # noqa F401
 from distributed.protocol import Serialized
 from tornado import gen
 
@@ -106,18 +106,16 @@ def test_unpublish(c, s, a, b):
     assert "data" in str(exc_info.value)
 
 
-def test_unpublish_sync(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address']) as c:
-            data = c.scatter([0, 1, 2])
-            c.publish_dataset(data=data)
-            c.unpublish_dataset(name='data')
+def test_unpublish_sync(client):
+    data = client.scatter([0, 1, 2])
+    client.publish_dataset(data=data)
+    client.unpublish_dataset(name='data')
 
-            with pytest.raises(KeyError) as exc_info:
-                result = c.get_dataset(name='data')
+    with pytest.raises(KeyError) as exc_info:
+        result = client.get_dataset(name='data')
 
-            assert "not found" in str(exc_info.value)
-            assert "data" in str(exc_info.value)
+    assert "not found" in str(exc_info.value)
+    assert "data" in str(exc_info.value)
 
 
 @gen_cluster(client=True)
@@ -130,30 +128,28 @@ def test_publish_multiple_datasets(c, s, a, b):
     assert set(datasets) == {'x', 'y'}
 
 
-def test_unpublish_multiple_datasets_sync(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address']) as c:
-            x = delayed(inc)(1)
-            y = delayed(inc)(2)
-            c.publish_dataset(x=x, y=y)
-            c.unpublish_dataset(name='x')
+def test_unpublish_multiple_datasets_sync(client):
+    x = delayed(inc)(1)
+    y = delayed(inc)(2)
+    client.publish_dataset(x=x, y=y)
+    client.unpublish_dataset(name='x')
 
-            with pytest.raises(KeyError) as exc_info:
-                result = c.get_dataset(name='x')
+    with pytest.raises(KeyError) as exc_info:
+        result = client.get_dataset(name='x')
 
-            datasets = c.list_datasets()
-            assert set(datasets) == {'y'}
+    datasets = client.list_datasets()
+    assert set(datasets) == {'y'}
 
-            assert "not found" in str(exc_info.value)
-            assert "x" in str(exc_info.value)
+    assert "not found" in str(exc_info.value)
+    assert "x" in str(exc_info.value)
 
-            c.unpublish_dataset(name='y')
+    client.unpublish_dataset(name='y')
 
-            with pytest.raises(KeyError) as exc_info:
-                result = c.get_dataset(name='y')
+    with pytest.raises(KeyError) as exc_info:
+        result = client.get_dataset(name='y')
 
-            assert "not found" in str(exc_info.value)
-            assert "y" in str(exc_info.value)
+    assert "not found" in str(exc_info.value)
+    assert "y" in str(exc_info.value)
 
 
 @gen_cluster(client=False)
@@ -184,57 +180,45 @@ def test_publish_bag(s, a, b):
     yield f.close()
 
 
-def test_datasets_setitem(loop):
-    with cluster() as (s, _):
-        with Client(s['address'], loop=loop) as client:
-            for key in ['key', ('key', 'key'), 1]:
-                value = 'value'
-                client.datasets[key] = value
-                assert client.get_dataset(key) == value
+def test_datasets_setitem(client):
+    for key in ['key', ('key', 'key'), 1]:
+        value = 'value'
+        client.datasets[key] = value
+        assert client.get_dataset(key) == value
 
 
-def test_datasets_getitem(loop):
-    with cluster() as (s, _):
-        with Client(s['address'], loop=loop) as client:
-            for key in ['key', ('key', 'key'), 1]:
-                value = 'value'
-                client.publish_dataset(value, name=key)
-                assert client.datasets[key] == value
+def test_datasets_getitem(client):
+    for key in ['key', ('key', 'key'), 1]:
+        value = 'value'
+        client.publish_dataset(value, name=key)
+        assert client.datasets[key] == value
 
 
-def test_datasets_delitem(loop):
-    with cluster() as (s, _):
-        with Client(s['address'], loop=loop) as client:
-            for key in ['key', ('key', 'key'), 1]:
-                value = 'value'
-                client.publish_dataset(value, name=key)
-                del client.datasets[key]
-                assert key not in client.list_datasets()
+def test_datasets_delitem(client):
+    for key in ['key', ('key', 'key'), 1]:
+        value = 'value'
+        client.publish_dataset(value, name=key)
+        del client.datasets[key]
+        assert key not in client.list_datasets()
 
 
-def test_datasets_keys(loop):
-    with cluster() as (s, _):
-        with Client(s['address'], loop=loop) as client:
-            client.publish_dataset(**{str(n): n for n in range(10)})
-            keys = list(client.datasets.keys())
-            assert keys == [str(n) for n in range(10)]
+def test_datasets_keys(client):
+    client.publish_dataset(**{str(n): n for n in range(10)})
+    keys = list(client.datasets.keys())
+    assert keys == [str(n) for n in range(10)]
 
 
-def test_datasets_contains(loop):
-    with cluster() as (s, _):
-        with Client(s['address'], loop=loop) as client:
-            key, value = 'key', 'value'
-            client.publish_dataset(key=value)
-            assert key in client.datasets
+def test_datasets_contains(client):
+    key, value = 'key', 'value'
+    client.publish_dataset(key=value)
+    assert key in client.datasets
 
 
-def test_datasets_iter(loop):
-    with cluster() as (s, _):
-        with Client(s['address'], loop=loop) as client:
-            keys = [n for n in range(10)]
-            client.publish_dataset(**{str(key): key for key in keys})
-            for n, key in enumerate(client.datasets):
-                assert key == str(n)
+def test_datasets_iter(client):
+    keys = [n for n in range(10)]
+    client.publish_dataset(**{str(key): key for key in keys})
+    for n, key in enumerate(client.datasets):
+        assert key == str(n)
 
 
 @gen_cluster(client=True)

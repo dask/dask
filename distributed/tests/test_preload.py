@@ -30,6 +30,7 @@ def test_worker_preload_file(loop):
         path = os.path.join(tmpdir, 'worker_info.py')
         with open(path, 'w') as f:
             f.write(PRELOAD_TEXT)
+
         with cluster(worker_kwargs={'preload': [path]}) as (s, workers), \
                 Client(s['address'], loop=loop) as c:
 

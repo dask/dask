@@ -6,12 +6,11 @@ from dask import delayed
 import pytest
 from tornado import gen
 
-from distributed import Worker, Client
+from distributed import Worker
 from distributed.client import wait
 from distributed.utils import tokey
-from distributed.utils_test import (inc, gen_cluster, cluster,
-                                    slowinc, slowadd)
-from distributed.utils_test import loop # noqa: F401
+from distributed.utils_test import (inc, gen_cluster, slowinc, slowadd)
+from distributed.utils_test import client, cluster_fixture, loop, s, a, b  # noqa: F401
 
 
 @gen_cluster(client=True, ncores=[])
@@ -279,23 +278,22 @@ def test_full_collections(c, s, a, b):
     pytest.mark.xfail(True, reason="don't track resources through optimization"),
     False
 ])
-def test_collections_get(loop, optimize_graph):
+def test_collections_get(client, optimize_graph, s, a, b):
     da = pytest.importorskip('dask.array')
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            def f(dask_worker):
-                dask_worker.set_resources(**{'A': 1})
 
-            c.run(f, workers=[a['address']])
+    def f(dask_worker):
+        dask_worker.set_resources(**{'A': 1})
 
-            x = da.random.random(100, chunks=(10,)) + 1
+    client.run(f, workers=[a['address']])
 
-            x.compute(resources={tuple(x.dask): {'A': 1}},
-                      optimize_graph=optimize_graph)
+    x = da.random.random(100, chunks=(10,)) + 1
 
-            def g(dask_worker):
-                return len(dask_worker.log)
+    x.compute(resources={tuple(x.dask): {'A': 1}},
+              optimize_graph=optimize_graph)
 
-            logs = c.run(g)
-            assert logs[a['address']]
-            assert not logs[b['address']]
+    def g(dask_worker):
+        return len(dask_worker.log)
+
+    logs = client.run(g)
+    assert logs[a['address']]
+    assert not logs[b['address']]

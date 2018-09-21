@@ -76,12 +76,11 @@ import re
 
 from toolz import valmap
 
-from distributed.client import Client, wait
+from distributed.client import wait
 from distributed.worker import dumps_task
-from distributed.utils_test import (cluster, inc, dec, throws, gen_cluster,
+from distributed.utils_test import (inc, dec, throws, gen_cluster,
         gen_tls_cluster)
-from distributed.utils_test import loop  # noqa: F401
-from distributed.utils import sync
+from distributed.utils_test import client, loop, cluster_fixture  # noqa: F401
 from distributed.diagnostics.progressbar import (ProgressWidget,
                                                  MultiProgressWidget, progress)
 
@@ -162,64 +161,58 @@ def test_multi_progressbar_widget_after_close(s, a, b):
     assert 'x' in p.bars
 
 
-def test_values(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            L = [c.submit(inc, i) for i in range(5)]
-            wait(L)
-            p = MultiProgressWidget(L)
-            sync(loop, p.listen)
-            assert set(p.bars) == {'inc'}
-            assert p.status == 'finished'
-            assert p.comm.closed()
-            assert '5 / 5' in p.bar_texts['inc'].value
-            assert p.bars['inc'].value == 1.0
+def test_values(client):
+    L = [client.submit(inc, i) for i in range(5)]
+    wait(L)
+    p = MultiProgressWidget(L)
+    client.sync(p.listen)
+    assert set(p.bars) == {'inc'}
+    assert p.status == 'finished'
+    assert p.comm.closed()
+    assert '5 / 5' in p.bar_texts['inc'].value
+    assert p.bars['inc'].value == 1.0
 
-            x = c.submit(throws, 1)
-            p = MultiProgressWidget([x])
-            sync(loop, p.listen)
-            assert p.status == 'error'
+    x = client.submit(throws, 1)
+    p = MultiProgressWidget([x])
+    client.sync(p.listen)
+    assert p.status == 'error'
 
 
-def test_progressbar_done(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            L = [c.submit(inc, i) for i in range(5)]
-            wait(L)
-            p = ProgressWidget(L)
-            sync(loop, p.listen)
-            assert p.status == 'finished'
-            assert p.bar.value == 1.0
-            assert p.bar.bar_style == 'success'
-            assert 'Finished' in p.elapsed_time.value
+def test_progressbar_done(client):
+    L = [client.submit(inc, i) for i in range(5)]
+    wait(L)
+    p = ProgressWidget(L)
+    client.sync(p.listen)
+    assert p.status == 'finished'
+    assert p.bar.value == 1.0
+    assert p.bar.bar_style == 'success'
+    assert 'Finished' in p.elapsed_time.value
 
-            f = c.submit(throws, L)
-            wait([f])
+    f = client.submit(throws, L)
+    wait([f])
 
-            p = ProgressWidget([f])
-            sync(loop, p.listen)
-            assert p.status == 'error'
-            assert p.bar.value == 0.0
-            assert p.bar.bar_style == 'danger'
-            assert 'Exception' in p.elapsed_time.value
+    p = ProgressWidget([f])
+    client.sync(p.listen)
+    assert p.status == 'error'
+    assert p.bar.value == 0.0
+    assert p.bar.bar_style == 'danger'
+    assert 'Exception' in p.elapsed_time.value
 
-            try:
-                throws(1)
-            except Exception as e:
-                assert repr(e) in p.elapsed_time.value
+    try:
+        throws(1)
+    except Exception as e:
+        assert repr(e) in p.elapsed_time.value
 
 
-def test_progressbar_cancel(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            import time
-            L = [c.submit(lambda: time.sleep(0.3), i) for i in range(5)]
-            p = ProgressWidget(L)
-            sync(loop, p.listen)
-            L[-1].cancel()
-            wait(L[:-1])
-            assert p.status == 'error'
-            assert p.bar.value == 0  # no tasks finish before cancel is called
+def test_progressbar_cancel(client):
+    import time
+    L = [client.submit(lambda: time.sleep(0.3), i) for i in range(5)]
+    p = ProgressWidget(L)
+    client.sync(p.listen)
+    L[-1].cancel()
+    wait(L[:-1])
+    assert p.status == 'error'
+    assert p.bar.value == 0  # no tasks finish before cancel is called
 
 
 @gen_cluster()
@@ -245,15 +238,13 @@ def test_multibar_complete(s, a, b):
     assert '2 / 2' in p.bar_texts['y'].value
 
 
-def test_fast(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            L = c.map(inc, range(100))
-            L2 = c.map(dec, L)
-            L3 = c.map(add, L, L2)
-            p = progress(L3, multi=True, complete=True, notebook=True)
-            sync(loop, p.listen)
-            assert set(p._last_response['all']) == {'inc', 'dec', 'add'}
+def test_fast(client):
+    L = client.map(inc, range(100))
+    L2 = client.map(dec, L)
+    L3 = client.map(add, L, L2)
+    p = progress(L3, multi=True, complete=True, notebook=True)
+    client.sync(p.listen)
+    assert set(p._last_response['all']) == {'inc', 'dec', 'add'}
 
 
 @gen_cluster(client=True, client_kwargs={'serializers': ['msgpack']})

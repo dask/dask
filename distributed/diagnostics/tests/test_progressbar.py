@@ -4,30 +4,28 @@ from time import sleep
 
 from tornado import gen
 
-from distributed import Client, Scheduler, Worker
+from distributed import Scheduler, Worker
 from distributed.diagnostics.progressbar import TextProgressBar, progress
 from distributed.metrics import time
-from distributed.utils_test import (cluster, inc, div, gen_cluster)
-from distributed.utils_test import loop  # noqa: F401
+from distributed.utils_test import (inc, div, gen_cluster)
+from distributed.utils_test import client, loop, cluster_fixture  # noqa: F401
 
 
-def test_text_progressbar(capsys, loop):
-    with cluster(nanny=True) as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            futures = c.map(inc, range(10))
-            p = TextProgressBar(futures, interval=0.01, complete=True)
-            c.gather(futures)
+def test_text_progressbar(capsys, client):
+    futures = client.map(inc, range(10))
+    p = TextProgressBar(futures, interval=0.01, complete=True)
+    client.gather(futures)
 
-            start = time()
-            while p.status != 'finished':
-                sleep(0.01)
-                assert time() - start < 5
+    start = time()
+    while p.status != 'finished':
+        sleep(0.01)
+        assert time() - start < 5
 
-            check_bar_completed(capsys)
-            assert p._last_response == {'all': 10,
-                                        'remaining': 0,
-                                        'status': 'finished'}
-            assert p.comm.closed()
+    check_bar_completed(capsys)
+    assert p._last_response == {'all': 10,
+                                'remaining': 0,
+                                'status': 'finished'}
+    assert p.comm.closed()
 
 
 @gen_cluster(client=True)
@@ -79,14 +77,12 @@ def check_bar_completed(capsys, width=40):
     assert percent == '100% Completed'
 
 
-def test_progress_function(loop, capsys):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            f = c.submit(lambda: 1)
-            g = c.submit(lambda: 2)
+def test_progress_function(client, capsys):
+    f = client.submit(lambda: 1)
+    g = client.submit(lambda: 2)
 
-            progress([[f], [[g]]], notebook=False)
-            check_bar_completed(capsys)
+    progress([[f], [[g]]], notebook=False)
+    check_bar_completed(capsys)
 
-            progress(f)
-            check_bar_completed(capsys)
+    progress(f)
+    check_bar_completed(capsys)

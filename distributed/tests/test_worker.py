@@ -19,7 +19,7 @@ import tornado
 from tornado import gen
 from tornado.ioloop import TimeoutError
 
-from distributed import (Nanny, Client, get_client, wait, default_client,
+from distributed import (Nanny, get_client, wait, default_client,
         get_worker, Reschedule)
 from distributed.compatibility import WINDOWS, cache_from_source
 from distributed.core import rpc
@@ -29,9 +29,8 @@ from distributed.metrics import time
 from distributed.worker import Worker, error_message, logger, TOTAL_MEMORY
 from distributed.utils import tmpfile, format_bytes
 from distributed.utils_test import (inc, mul, gen_cluster, div, dec,
-                                    slow, slowinc, gen_test, cluster,
-                                    captured_logger)
-from distributed.utils_test import loop, nodebug # noqa: F401
+                                    slow, slowinc, gen_test, captured_logger)
+from distributed.utils_test import client, loop, nodebug, cluster_fixture, s, a, b  # noqa: F401
 
 
 def test_worker_ncores():
@@ -729,9 +728,11 @@ def test_priorities(c, s, w):
 @gen_cluster(client=True)
 def test_heartbeats(c, s, a, b):
     x = s.workers[a.address].last_seen
+    start = time()
     yield gen.sleep(a.periodic_callbacks['heartbeat'].callback_time / 1000 + 0.1)
-    y = s.workers[a.address].last_seen
-    assert x != y
+    while s.workers[a.address].last_seen == x:
+        yield gen.sleep(0.01)
+        assert time() < start + 2
     assert a.periodic_callbacks['heartbeat'].callback_time < 1000
 
 
@@ -846,16 +847,14 @@ def test_get_client(c, s, a, b):
     assert a._client is a_client
 
 
-def test_get_client_sync(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            def f(x):
-                cc = get_client()
-                future = cc.submit(inc, x)
-                return future.result()
+def test_get_client_sync(client):
+    def f(x):
+        cc = get_client()
+        future = cc.submit(inc, x)
+        return future.result()
 
-            future = c.submit(f, 10)
-            assert future.result() == 11
+    future = client.submit(f, 10)
+    assert future.result() == 11
 
 
 @gen_cluster(client=True)
@@ -872,19 +871,17 @@ def test_get_client_coroutine(c, s, a, b):
                        b.address: 11}
 
 
-def test_get_client_coroutine_sync(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            @gen.coroutine
-            def f():
-                client = yield get_client()
-                future = client.submit(inc, 10)
-                result = yield future
-                raise gen.Return(result)
+def test_get_client_coroutine_sync(client, s, a, b):
+    @gen.coroutine
+    def f():
+        client = yield get_client()
+        future = client.submit(inc, 10)
+        result = yield future
+        raise gen.Return(result)
 
-            results = c.run_coroutine(f)
-            assert results == {a['address']: 11,
-                               b['address']: 11}
+    results = client.run_coroutine(f)
+    assert results == {a['address']: 11,
+                       b['address']: 11}
 
 
 @gen_cluster()
@@ -1116,21 +1113,19 @@ def test_dict_data_if_no_spill_to_disk(s, w):
     assert type(w.data) is dict
 
 
-def test_get_worker_name(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
-            def f():
-                get_client().submit(inc, 1).result()
+def test_get_worker_name(client):
+    def f():
+        get_client().submit(inc, 1).result()
 
-            c.run(f)
+    client.run(f)
 
-            def func(dask_scheduler):
-                return list(dask_scheduler.clients)
+    def func(dask_scheduler):
+        return list(dask_scheduler.clients)
 
-            start = time()
-            while not any('worker' in n for n in c.run_on_scheduler(func)):
-                sleep(0.1)
-                assert time() < start + 10
+    start = time()
+    while not any('worker' in n for n in client.run_on_scheduler(func)):
+        sleep(0.1)
+        assert time() < start + 10
 
 
 @gen_cluster(ncores=[('127.0.0.1', 1)],
