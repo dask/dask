@@ -29,7 +29,8 @@ from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      is_arraylike)
 from ..array import Array
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
-from ..delayed import Delayed, to_task_dask
+from ..sizeof import sizeof
+from ..delayed import delayed, Delayed, to_task_dask
 
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
@@ -3598,17 +3599,20 @@ def map_partitions(func, *args, **kwargs):
     $META
     """
     meta = kwargs.pop('meta', no_default)
+    name = kwargs.pop('token', None)
 
     if meta is not no_default:
         meta = make_meta(meta)
 
+    kwargs2 = {k: delayed(v) if sizeof(v) > 1e6 else v
+               for k, v in kwargs.items()}
+
     assert callable(func)
-    if 'token' in kwargs:
-        name = kwargs.pop('token')
-        token = tokenize(meta, *args, **kwargs)
+    if name is not None:
+        token = tokenize(meta, *args, **kwargs2)
     else:
         name = funcname(func)
-        token = tokenize(func, meta, *args, **kwargs)
+        token = tokenize(func, meta, *args, **kwargs2)
     name = '{0}-{1}'.format(name, token)
 
     from .multi import _maybe_align_partitions
@@ -3616,7 +3620,7 @@ def map_partitions(func, *args, **kwargs):
     args = _maybe_align_partitions(args)
 
     if meta is no_default:
-        meta = _emulate(func, *args, udf=True, **kwargs)
+        meta = _emulate(func, *args, udf=True, **kwargs2)
 
     if all(isinstance(arg, Scalar) for arg in args):
         dask = {(name, 0):
@@ -3628,8 +3632,11 @@ def map_partitions(func, *args, **kwargs):
         meta = _concat([meta])
     meta = make_meta(meta)
 
+    args = [delayed(arg) if not is_dask_collection(arg) and sizeof(arg) > 1e6
+            else arg for arg in args]
+
     args, args_dasks = _process_lazy_args(args)
-    kwargs_task, kwargs_dsk = to_task_dask(kwargs)
+    kwargs_task, kwargs_dsk = to_task_dask(kwargs2)
     args_dasks.append(kwargs_dsk)
 
     dfs = [df for df in args if isinstance(df, _Frame)]
