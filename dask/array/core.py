@@ -2856,7 +2856,7 @@ def atop(func, out_ind, *args, **kwargs):
                              % (ind, arg.ndim))
 
     numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
-    argindsstr = list(concat([(delayed(a) if sizeof(a) > 1e6 else a
+    argindsstr = list(concat([((delayed(a) if sizeof(a) > 1e6 else a)
                                if ind is None else a.name, ind)
                               for a, ind in arginds]))
     # Finish up the name
