@@ -8,33 +8,34 @@ from dask.array.core import rewrite_atop, rewrite_TOPs
 from dask.utils_test import inc, dec
 
 a, b, c, d, e, f, g = 'abcdefg'
+_0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = ['_%d' % i for i in range(10)]
 i, j, k = 'ijk'
 
 
 @pytest.mark.parametrize('inputs,expected', [
     # output name, output index, task, input indices
-    [[(b, 'i', (inc, a), {a: 'i'})],
+    [[(b, 'i', {b: (inc, _0)}, [(a, 'i')])],
 
-     (b, 'i', (inc, a), {a: 'i'})],
+      (b, 'i', {b: (inc, _0)}, [(a, 'i')])],
 
-    [[(b, 'i', (inc, a), {a: 'i'}),
-      (c, 'i', (dec, a), {a: 'i'}),
-      (d, 'i', (add, a, b, c), {a: 'i', b: 'i', c: 'i'})],
+    [[(b, 'i', {b: (inc, _0)}, [(a, 'i')]),
+      (c, 'i', {c: (dec, _0)}, [(a, 'i')]),
+      (d, 'i', {d: (add, _0, _1, _2)}, [(a, 'i'), (b, 'i'), (c, 'i')])],
 
-     (d, 'i', (add, a, (inc, a), (dec, a)), {a: 'i'})],
+      (d, 'i', {b: (inc, _0), c: (dec, _0), d: (add, _0, b, c)}, [(a, 'i')]],
 
-    [[(c, 'i', (inc, a), {a: 'i'}),
-      (d, 'i', (inc, b), {b: 'i'}),
-      (g, 'ij', (add, c, d), {c: 'i', d: 'j'})],
+    [[(c, 'i', {c: (inc, _0)}, [(a, 'i')]),
+      (d, 'i', {d: (inc, _0)}, [(b, 'i')]),
+      (g, 'ij', {g: (add, _0, _1)}, [((c, 'i'), (d, 'j')]],
 
-     (g, 'ij', (add, (inc, a), (inc, b)), {a: 'i', b: 'j'})],
+     (g, 'ij', {g: (add, c, d), c: (inc, _0), d: (inc, _1)}, [(a, 'i'), (b, 'j')]],
 
-    pytest.mark.xfail([[(b, 'ji', (np.transpose, a), {a: 'ij'}),
-                        (c, 'ij', (add, a, b), {a: 'ij', b: 'ij'})],
+    [[(b, 'ji', {b: (np.transpose, _0)}, [(a, 'ij')]),
+      (c, 'ij', {c: (add, _0, _1)}, [(a, 'ij'), (b, 'ij')])],
 
-                       (c, 'ij', (add, a, (np.transpose, a)), {a: 'ij', a: 'ji'})],
-                       reason="atop can't have two indices for the same array at once"),
+      (c, 'ij', {c: (add, _0, b), b: (np.transpose, _1)}, [(a, 'ij'), (a, 'ji')])],
 
+    """
     [[(c, 'i', (add, a, b), {a: 'i', b: 'i'}),        # Input list
       (d, 'i', (inc, c), {c: 'i'})],
 
@@ -64,6 +65,7 @@ i, j, k = 'ijk'
       (c, 'i', (inc, b), {b: 'i'})],
 
      (c, 'i', (inc, (sum, a)), {a: 'ij'})],
+     """
 ])
 def test_rewrite(inputs, expected):
     result = rewrite_atop(inputs)
