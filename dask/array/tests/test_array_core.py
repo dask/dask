@@ -3647,3 +3647,15 @@ def test_3851():
 def test_3925():
     x = da.from_array(np.array(['a', 'b', 'c'], dtype=object), chunks=-1)
     assert (x[0] == x[0]).compute(scheduler='sync')
+
+
+def test_map_blocks_large_inputs_delayed():
+    a = da.ones(10, chunks=(5,))
+    b = np.ones(1000000)
+
+    c = a.map_blocks(add, b)
+    assert b in c.dask.values()
+    assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
+    d = a.map_blocks(lambda x, y: x + y, y=b)
+    assert b in d.dask.values()
+    assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence

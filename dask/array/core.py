@@ -41,9 +41,10 @@ from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
 from ..compatibility import (unicode, zip_longest, apply,
                              Iterable, Iterator, Mapping)
 from ..core import quote
-from ..delayed import Delayed, to_task_dask
+from ..delayed import delayed, Delayed, to_task_dask
 from .. import threaded, core
 from .. import sharedict
+from ..sizeof import sizeof
 from ..sharedict import ShareDict
 from .numpy_compat import _Recurser
 from ..bytes.core import get_mapper, get_fs_token_paths
@@ -753,7 +754,6 @@ def map_blocks(func, *args, **kwargs):
                 else (a, None)
                 for a in args]
     numblocks = {a.name: a.numblocks for a in arrs}
-    arginds = list(concat(argpairs))
     out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
 
     if has_keyword(func, 'block_id'):
@@ -761,8 +761,12 @@ def map_blocks(func, *args, **kwargs):
     if has_keyword(func, 'block_info'):
         kwargs['block_info'] = '__dummy__'
 
+    kwargs2 = {k: delayed(v) if sizeof(v) > 1e6 else v
+               for k, v in kwargs.items()}
+    arginds = list(concat([(delayed(x) if sizeof(x) > 1e6 and ind is None else x, ind)
+                           for x, ind in argpairs]))
     dsk = top(func, name, out_ind, *arginds, numblocks=numblocks,
-              **kwargs)
+              **kwargs2)
 
     # If func has block_id as an argument, add it to the kwargs for each call
     if has_keyword(func, 'block_id'):
@@ -2025,7 +2029,6 @@ class Array(DaskMethodsMixin):
         --------
         dask.array.from_delayed
         """
-        from ..delayed import Delayed
         keys = self.__dask_keys__()
         dsk = self.__dask_graph__()
         if optimize_graph:
