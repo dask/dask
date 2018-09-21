@@ -186,7 +186,7 @@ def test_get_context_using_python3_posix():
 def test_custom_context_ignored_elsewhere():
     """ On Python 2/Windows, setting 'multiprocessing.context' doesn't explode.
 
-    Presumption is it's not used since unsupported, but mostly we care about
+    Presumption is it's not used since it's unsupported, but mostly we care about
     not breaking anything.
     """
     assert get({'x': (inc, 1)}, 'x') == 2
