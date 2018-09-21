@@ -16,12 +16,12 @@ import uuid
 import warnings
 
 try:
-    from cytoolz import (partition, concat, join, first,
+    from cytoolz import (partition, concat, join, first, merge,
                          groupby, valmap, accumulate, assoc)
     from cytoolz.curried import filter, pluck
 
 except ImportError:
-    from toolz import (partition, concat, join, first,
+    from toolz import (partition, concat, join, first, merge,
                        groupby, valmap, accumulate, assoc)
     from toolz.curried import filter, pluck
 from toolz import pipe, map, reduce, frequencies
@@ -331,6 +331,16 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)),
     return valmap(first, g2)
 
 
+def _top(func, output, output_indices, *arrind_pairs, **kwargs):
+    inputs = arrind_pairs[::2]
+    inputs_indices = arrind_pairs[1::2]
+
+    task = (func,) + inputs
+    indices = {k: v for k, v in zip(inputs, inputs_indices) if v is not None}
+
+    return TOP(output, output_indices, task, indices, **kwargs)
+
+
 class TOP(Mapping):
     """ Tensor Operation
 
@@ -343,17 +353,15 @@ class TOP(Mapping):
     top
     atop
     """
-    def __init__(self, func, output, out_indices, *arrind_pairs, **kwargs):
-        self.func = func
+    def __init__(self, output, output_indices, task, indices, numblocks,
+                 new_axes=None, **kwargs):
         self.output = output
-        self.output_indices = out_indices
-        self.inputs = arrind_pairs[::2]
-        self.inputs_indices = arrind_pairs[1::2]
+        self.output_indices = output_indices
+        self.task = task
+        self.indices = indices
 
-        self.numblocks = kwargs.pop('numblocks')
-        self.concatenate = kwargs.pop('concatenate', None)
-        self.new_axes = kwargs.pop('new_axes', {})
-
+        self.numblocks = numblocks
+        self.new_axes = new_axes or {}
         self.kwargs = kwargs
 
     @property
@@ -361,15 +369,30 @@ class TOP(Mapping):
         try:
             return self._cached_dict
         except AttributeError:
+
+            # Simple unfused case, walk back to legacy atop mode
+            if (isinstance(self.task, tuple) and
+                callable(self.task[0]) and
+                all(any(k is kk for kk in self.task[1:]) for k in self.indices)):
+                func = self.task[0]
+                inputs = self.task[1:]
+                inputs_indices = []
+                for i in inputs:
+                    try:
+                        inputs_indices.append(self.indices[i])
+                    except (TypeError, KeyError):
+                        inputs_indices.append(None)
+            else:
+                import pdb; pdb.set_trace()
+
             self._cached_dict = top(
-                self.func,
+                func,
                 self.output,
                 self.output_indices,
-                *concat(zip(self.inputs, self.inputs_indices)),
-                numblocks=self.numblocks,
-                concatenate=self.concatenate,
+                *concat(zip(inputs, inputs_indices)),
                 new_axes=self.new_axes,
-                **self.kwargs
+                numblocks=self.numblocks,
+                **self.kwargs,
             )
         return self._cached_dict
 
@@ -814,8 +837,8 @@ def map_blocks(func, *args, **kwargs):
     if has_keyword(func, 'block_info'):
         kwargs['block_info'] = '__dummy__'
 
-    dsk = top(func, name, out_ind, *arginds, numblocks=numblocks,
-              **kwargs)
+    dsk = _top(func, name, out_ind, *arginds, numblocks=numblocks,
+               **kwargs)
 
     # If func has block_id as an argument, add it to the kwargs for each call
     if has_keyword(func, 'block_id'):
@@ -2912,7 +2935,7 @@ def atop(func, out_ind, *args, **kwargs):
         out = '%s-%s' % (token or funcname(func).strip('_'),
                          tokenize(func, out_ind, argindsstr, dtype, **kwargs))
 
-    dsk = TOP(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs)
+    dsk = _top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs)
     dsks = [a.dask for a, ind in arginds if ind is not None]
 
     chunks = [chunkss[i] for i in out_ind]
@@ -4352,3 +4375,58 @@ def from_npy_stack(dirname, mmap_mode='r'):
     dsk = dict(zip(keys, values))
 
     return Array(dsk, name, chunks, dtype)
+
+
+def rewrite_atop(inputs):
+    """ Rewrite a stack of atop expressions into a single atop expression """
+    inputs = {a: {'output-index': b, 'task': c, 'input-indices': d}
+              for a, b, c, d in inputs}
+
+    dependencies, dependents = core.get_deps({k: v['task'] for k, v in inputs.items()})
+    [root] = [k for k, v in dependents.items() if not v]
+
+    indices = dict(inputs[root]['input-indices'])
+
+    task = inputs[root]['task']
+
+    stack = [root]
+    seen = set()
+
+    def join(t):
+        t = tuple(t)
+        if all(isinstance(elem, str) for elem in t):
+            return ''.join(t)
+        else:
+            return t
+
+    while stack:
+        key = stack.pop()
+        for dep in dependencies[key]:
+            task = core.subs(task, dep, inputs[dep]['task'])
+            index_mapping = {}
+            for i, j in zip(inputs[dep]['output-index'], indices[dep]):
+                index_mapping[i] = j
+
+            for k, ind in inputs[dep]['input-indices'].items():
+                if k not in indices:
+                    indices[k] = join(index_mapping.get(i, i) for i in ind)
+
+            if dep not in seen:
+                seen.add(dep)
+                stack.append(dep)
+
+    for inp in inputs:
+        if inp != root:
+            indices.pop(inp)
+
+    return (root, inputs[root]['output-index'], task, indices)
+
+
+def rewrite_TOPs(tops):
+    numblocks = merge(t.numblocks for t in tops)
+    new_axes = merge(t.new_axes for t in tops)
+    kwargs = {}  # TODO
+
+    out, ind, task, indices = rewrite_atop(
+            [(t.output, t.output_indices, t.task, t.indices) for t in tops])
+    return TOP(out, ind, task, indices, numblocks=numblocks, new_axes=new_axes, kwargs=kwargs)
