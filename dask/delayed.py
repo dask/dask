@@ -87,6 +87,12 @@ def to_task_dask(expr):
         # Ensure output type matches input type
         return (args, dsk) if typ is list else ((typ, args), dsk)
 
+    import numpy as np
+    if typ is np.ndarray:
+        if expr.dtype == np.dtype('O'):
+            args, dsk = to_task_dask(expr.tolist())
+            return ((np.asarray, args), dsk)
+
     if typ is dict:
         args, dsk = to_task_dask([[k, v] for k, v in expr.items()])
         return (dict, args), dsk
