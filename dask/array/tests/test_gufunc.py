@@ -223,7 +223,7 @@ def test_gufunc():
 
     def foo(x):
         return np.mean(x, axis=-1)
-    gufoo = gufunc(foo, signature="(i)->()", axes=-1, keepdims=False, output_dtypes=float, vectorize=True)
+    gufoo = gufunc(foo, signature="(i)->()", axis=-1, keepdims=False, output_dtypes=float, vectorize=True)
 
     y = gufoo(x)
     valy = y.compute()
@@ -236,7 +236,7 @@ def test_gufunc():
 def test_as_gufunc():
     x = da.random.normal(size=(10, 5), chunks=(2, 5))
 
-    @as_gufunc("(i)->()", axes=-1, keepdims=False, output_dtypes=float, vectorize=True)
+    @as_gufunc("(i)->()", axis=-1, keepdims=False, output_dtypes=float, vectorize=True)
     def foo(x):
         return np.mean(x, axis=-1)
 
@@ -338,21 +338,33 @@ def test_apply_gufunc_infer_dtype():
     assert_eq(z1, dx - dy)
 
 
-@pytest.mark.parametrize('axes', [0, (0,), [(0,)]])
-def test_apply_gufunc_axes_01(axes):
+@pytest.mark.parametrize('keepdims', [False, True])
+def test_apply_gufunc_axis_01(keepdims):
     def mymedian(x):
         return np.median(x, axis=-1)
 
     a = np.random.randn(10, 5)
     da_ = da.from_array(a, chunks=2)
 
-    m = np.median(a, axis=0)
-    dm = apply_gufunc(mymedian, "(i)->()", da_, axes=axes, allow_rechunk=True)
+    m = np.median(a, axis=0, keepdims=keepdims)
+    dm = apply_gufunc(mymedian, "(i)->()", da_, axis=0, keepdims=keepdims, allow_rechunk=True)
+    assert_eq(m, dm)
+
+
+def test_apply_gufunc_axis_02():
+    def myfft(x):
+        return np.fft.fft(x, axis=-1)
+
+    a = np.random.randn(10, 5)
+    da_ = da.from_array(a, chunks=2)
+
+    m = np.fft.fft(a, axis=0)
+    dm = apply_gufunc(myfft, "(i)->(i)", da_, axis=0, allow_rechunk=True)
     assert_eq(m, dm)
 
 
 @pytest.mark.parametrize('axes', [[0, 1], [(0,), (1,)]])
-def test_apply_gufunc_axes_01b(axes):
+def test_apply_gufunc_axes_01(axes):
     def mystats(x, y):
         return np. std(x, axis=-1) * np.mean(y, axis=-1)
 
@@ -366,7 +378,7 @@ def test_apply_gufunc_axes_01b(axes):
     assert_eq(m, dm)
 
 
-def test_apply_gufunc_axes_02():
+def test_apply_gufunc_axis_02b():
     def myfilter(x, cn=10, axis=-1):
         y = np.fft.fft(x, axis=axis)
         y[cn:-cn] = 0
@@ -377,11 +389,11 @@ def test_apply_gufunc_axes_02():
     da_ = da.from_array(a, chunks=2)
 
     m = myfilter(a, axis=1)
-    dm = apply_gufunc(myfilter, "(i)->(i)", da_, axes=1, allow_rechunk=True)
+    dm = apply_gufunc(myfilter, "(i)->(i)", da_, axis=1, allow_rechunk=True)
     assert_eq(m, dm)
 
 
-def test_apply_gufunc_axes_03():
+def test_apply_gufunc_axis_03():
     def mydiff(x):
         return np.diff(x, axis=-1)
 
@@ -389,7 +401,7 @@ def test_apply_gufunc_axes_03():
     da_ = da.from_array(a, chunks=2)
 
     m = np.diff(a, axis=1)
-    dm = apply_gufunc(mydiff, "(i)->(i)", da_, axes=1, output_sizes={'i': 5}, allow_rechunk=True)
+    dm = apply_gufunc(mydiff, "(i)->(i)", da_, axis=1, output_sizes={'i': 5}, allow_rechunk=True)
     assert_eq(m, dm)
 
 
@@ -404,28 +416,28 @@ def test_apply_gufunc_axes_04():
     db = da.from_array(b, chunks=3)
 
     m = np.einsum("jiu,juk->uik", a, b)
-    dm = apply_gufunc(matmul, "(i,j),(j,k)->(i,k)", da_, db, axes=[(1,  0), (0, -1)], allow_rechunk=True)
+    dm = apply_gufunc(matmul, "(i,j),(j,k)->(i,k)", da_, db, axes=[(1,  0), (0, -1), (-2, -1)], allow_rechunk=True)
     assert_eq(m, dm)
 
 
-@pytest.mark.parametrize('axes', [-2, -1, None])
-def test_apply_gufunc_axes_keepdims(axes):
+@pytest.mark.parametrize('axis', [-2, -1, None])
+def test_apply_gufunc_axis_keepdims(axis):
     def mymedian(x):
         return np.median(x, axis=-1)
 
     a = np.random.randn(10, 5)
     da_ = da.from_array(a, chunks=2)
 
-    m = np.median(a, axis=-1 if not axes else axes, keepdims=True)
-    dm = apply_gufunc(mymedian, "(i)->()", da_, axes=axes, keepdims=True, allow_rechunk=True)
+    m = np.median(a, axis=-1 if not axis else axis, keepdims=True)
+    dm = apply_gufunc(mymedian, "(i)->()", da_, axis=axis, keepdims=True, allow_rechunk=True)
     assert_eq(m, dm)
 
 
 @pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
                     reason="`np.vectorize(..., signature=...)` not supported yet")
 def test_apply_gufunc_axes_two_kept_coredims():
-    a = da.random.normal(size=(   20,30), chunks=(10, 30))
-    b = da.random.normal(size=(10, 1,40), chunks=(5, 1, 40))
+    a = da.random.normal(size=(   20, 30), chunks=(10, 30))
+    b = da.random.normal(size=(10, 1, 40), chunks=(5, 1, 40))
 
     def outer_product(x, y):
         return np.einsum("i,j->ij", x, y)

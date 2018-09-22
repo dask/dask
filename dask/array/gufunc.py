@@ -83,15 +83,30 @@ def apply_gufunc(func, signature, *args, **kwargs):
         According to the specification of numpy.gufunc signature [2]_
     *args : numeric
         Input arrays or scalars to the callable function.
-    axes: int, tuple of ints, or list of tuple of ints, optional, keyword only
-        Specifies which axes of the passed arguments are the core dimensions.
-        For one input argument int or tuple of int is sufficient, for many
-        input arguments a list of tuple of ints has to be passed
+    axes: List of tuples, optional, keyword only
+        A list of tuples with indices of axes a generalized ufunc should operate on.
+        For instance, for a signature of ``"(i,j),(j,k)->(i,k)"`` appropriate for
+        matrix multiplication, the base elements are two-dimensional matrices
+        and these are taken to be stored in the two last axes of each argument. The
+        corresponding axes keyword would be ``[(-2, -1), (-2, -1), (-2, -1)]``.
+        For simplicity, for generalized ufuncs that operate on 1-dimensional arrays
+        (vectors), a single integer is accepted instead of a single-element tuple,
+        and for generalized ufuncs for which all outputs are scalars, the output
+        tuples can be omitted.
+    axis: int, optional, keyword only
+        A single axis over which a generalized ufunc should operate. This is a short-cut
+        for ufuncs that operate over a single, shared core dimension, equivalent to passing
+        in axes with entries of (axis,) for each single-core-dimension argument and ``()`` for
+        all others. For instance, for a signature ``"(i),(i)->()"``, it is equivalent to passing
+        in ``axes=[(axis,), (axis,), ()]``.
     keepdims: bool, optional, keyword only
-        If core dimensions in ``signature`` are consumed, a dummy dimension is
-        re-introduced at the position specified at its original position.
-        The original position may depend on ``axes``.
-        Defaults to ``False``.
+        If this is set to True, axes which are reduced over will be left in the result as
+        a dimension with size one, so that the result will broadcast correctly against the
+        inputs. This option can only be used for generalized ufuncs that operate on inputs
+        that all have the same number of core dimensions and with outputs that have no core
+        dimensions , i.e., with signatures like ``"(i),(i)->()"`` or ``"(m,m)->()"``.
+        If used, the location of the dimensions in the output can be controlled with axes
+        and axis.
     output_dtypes : Optional, dtype or list of dtypes, keyword only
         Valid numpy dtype specification or list thereof.
         If not given, a call of ``func`` with a small set of data
@@ -140,12 +155,13 @@ def apply_gufunc(func, signature, *args, **kwargs):
     .. [1] http://docs.scipy.org/doc/numpy/reference/ufuncs.html
     .. [2] http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
     """
+    axes = kwargs.pop("axes", None)
+    axis = kwargs.pop("axis", None)
+    keepdims = kwargs.pop("keepdims", False)
     output_dtypes = kwargs.pop("output_dtypes", None)
     output_sizes = kwargs.pop("output_sizes", None)
     vectorize = kwargs.pop("vectorize", None)
     allow_rechunk = kwargs.pop("allow_rechunk", False)
-    axes = kwargs.pop("axes", None)
-    keepdims = kwargs.pop("keepdims", False)
 
     # Input processing:
     ## Signature
@@ -187,25 +203,69 @@ def apply_gufunc(func, signature, *args, **kwargs):
         output_sizes = {}
 
     ## Axes
-    if axes is None:
-        axes = [tuple(range(-len(cid), 0)) for cid in core_input_dimss]
-    else:
-        if isinstance(axes, int):
-            axes = [(axes,)]
-        elif isinstance(axes, tuple):
-            axes = [axes]
-        elif isinstance(axes, list):
-            axes = [a if isinstance(a, tuple) else (a,) for a in axes]
-        else:
-            raise ValueError("Axes should be int, tuple of int or list of tuple of int")
-        if len(axes) != len(core_input_dimss):
-            raise ValueError("According to `signature`, %d arguments required, but `axes` only has %d entries"
-                             % (len(core_input_dimss), len(axes)))
-        for idx, (axis, core_input_dims) in enumerate(zip(axes, core_input_dimss)):
-            if len(axis) != len(core_input_dims):
-                ValueError("According to `signature`, #%d argument has %d core dims, but `axes` specifies %d ints"
-                           % (idx + 1, len(core_input_dims), len(axis)))
+    ### Input validation
+    if (axes is not None) and (axis is not None):
+        raise ValueError("Only one of `axis` or `axes` keyword arguments should be given")
+    if axes and not isinstance(axes, list):
+        raise ValueError("`axes` has to be of type list")
 
+    _core_output_dimss = core_output_dimss if nout else [core_output_dimss]
+    _filtered_core_dims = list(filter(len, core_input_dimss))
+    _nr_outputs_with_coredims = len([True for x in _core_output_dimss if len(x) > 0])
+
+    if keepdims is True:
+        if _nr_outputs_with_coredims > 0:
+            raise ValueError("`keepdims` can only be used for scalar outputs")
+        _core_output_dimss = len(_core_output_dimss) * [_filtered_core_dims[0]]
+
+    _core_dims = core_input_dimss + _core_output_dimss
+    if axis is not None:
+        if _filtered_core_dims:
+            cd0 = _filtered_core_dims[0]
+            if len(cd0) != 1:
+                raise ValueError("`axis` can be used only, if one core dimension is present")
+            for cd in _filtered_core_dims:
+                if cd0 != cd:
+                    raise ValueError("To use `axis`, all core dimensions have to be equal")
+
+    ### Expand dafaults or axis
+    if axes is None:
+        if axis is not None:
+            axes = [(axis,) if cd else tuple() for cd in _core_dims]
+        else:
+            axes = [tuple(range(-len(cid), 0)) for cid in _core_dims]
+    axes = [(a,) if isinstance(a, int) else a for a in axes]
+
+    ### Treat outputs
+    _nin = len(args)
+    _nout = nout if nout else 1
+
+    if ((_nr_outputs_with_coredims == 0) and (_nin != len(axes)) and (_nin + _nout != len(axes))) \
+       or ((_nr_outputs_with_coredims > 0) and (_nin + _nout != len(axes))):
+        raise ValueError("The number of `axes` entries is not equal the number of input and output arguments")
+
+    output_axes = axes[_nin:]
+    output_axes = output_axes if output_axes else [tuple(range(-len(cod), 0)) for cod in _core_output_dimss]
+    input_axes = axes[:_nin]
+
+    ### Assert we have as many axes as
+    for idx, (iax, cid) in enumerate(zip(input_axes, core_input_dimss)):
+        if len(iax) != len(cid):
+            raise ValueError("The number of `axes` entries for argument #{} is not equal "
+                             "the number of respective input core dimensions in signature" % idx)
+    if not keepdims:
+        for idx, (oax, cod) in enumerate(zip(output_axes, _core_output_dimss)):
+            if len(oax) != len(cod):
+                raise ValueError("The number of `axes` entries for argument #{} is not equal "
+                                 "the number of respective output core dimensions in signature" % idx)
+    else:
+        if core_input_dimss:
+            cid0 = core_input_dimss[0]
+            for cid in core_input_dimss:
+                if cid0 != cid:
+                    raise ValueError("To use `keepdims`, all core dimensions have to be equal")
+            iax0 = input_axes[0]
+            output_axes = [iax0 for _ in _core_output_dimss]
     # Main code:
     ## Cast all input arrays to dask
     args = [asarray(a) for a in args]
@@ -216,18 +276,13 @@ def apply_gufunc(func, signature, *args, **kwargs):
 
     ## Axes: transpose input arguments
     transposed_args = []
-    original_dim_position = {}
-    for arg, axis, core_input_dims in zip(args, axes, core_input_dimss):
+    for arg, iax, core_input_dims in zip(args, input_axes, core_input_dimss):
         shape = arg.shape
-        axis = tuple(a if a < 0 else a - len(shape) for a in axis)
-        tidc = tuple(i for i in range(-len(shape) + 0, 0) if i not in axis) + axis
+        iax = tuple(a if a < 0 else a - len(shape) for a in iax)
+        tidc = tuple(i for i in range(-len(shape) + 0, 0) if i not in iax) + iax
 
         transposed_arg = arg.transpose(tidc)
         transposed_args.append(transposed_arg)
-
-        ### Remember original position of first occurrence
-        for a, cid in reversed(list(zip(axis, core_input_dims))):
-            original_dim_position[cid] = a
     args = transposed_args
 
     ## Assess input args for loop dims
@@ -299,7 +354,7 @@ significantly.".format(dim))
 
     ## Split output
     leaf_arrs = []
-    for i, cod, odt in zip(count(0), core_output_dimss, output_dtypes):
+    for i, cod, odt, oax in zip(count(0), core_output_dimss, output_dtypes, output_axes):
         core_output_shape = tuple(core_shapes[d] for d in cod)
         core_chunkinds = len(cod) * (0,)
         output_shape = loop_output_shape + core_output_shape
@@ -313,32 +368,19 @@ significantly.".format(dim))
                          dtype=odt)
 
         ### Axes:
-        consumed_core_dims = tuple(c for c in original_dim_position if c not in cod) if keepdims else tuple()
-        if consumed_core_dims:
-            slices = len(leaf_arr.shape) * (slice(None),) + len(consumed_core_dims) * (np.newaxis,)
+        if keepdims is True:
+            slices = len(leaf_arr.shape) * (slice(None),) + len(oax) * (np.newaxis,)
             leaf_arr = leaf_arr[slices]
-            cod = cod + consumed_core_dims
 
-        dims = loop_output_dims + cod
-
-        nr_kept_core_dims = len(tuple(c for c in cod if c in original_dim_position))
-
-        tidcs = [None] * len(dims)
-        for i, d in reversed(list(enumerate(dims))):
-            if d in original_dim_position:
-                pos = len(loop_output_dims) + original_dim_position[d]
-                while tidcs[pos + nr_kept_core_dims] is not None:
-                    pos -= 1
-                tidcs[pos + nr_kept_core_dims] = i
+        tidcs = [None] * len(leaf_arr.shape)
+        for i, oa in zip(range(-len(oax), 0), oax):
+            tidcs[oa] = i
         j = 0
-        for i, d in enumerate(dims):
-            if d in original_dim_position:
-                continue
-            while tidcs[j] is not None:
+        for i in range(len(tidcs)):
+            if tidcs[i] is None:
+                tidcs[i] = j
                 j += 1
-            tidcs[j] = i
         leaf_arr = leaf_arr.transpose(tidcs)
-
         leaf_arrs.append(leaf_arr)
 
     return leaf_arrs if nout else leaf_arrs[0]  # Undo *) from above
@@ -361,15 +403,30 @@ class gufunc(object):
     signature : String, keyword only
         Specifies what core dimensions are consumed and produced by ``func``.
         According to the specification of numpy.gufunc signature [2]_
-    axes: int, tuple of ints, or list of tuple of ints, optional, keyword only
-        Specifies which axes of the passed arguments are the core dimensions.
-        For one input argument int or tuple of int is sufficient, for many
-        input arguments a list of tuple of ints has to be passed
+    axes: List of tuples, optional, keyword only
+        A list of tuples with indices of axes a generalized ufunc should operate on.
+        For instance, for a signature of ``"(i,j),(j,k)->(i,k)"`` appropriate for
+        matrix multiplication, the base elements are two-dimensional matrices
+        and these are taken to be stored in the two last axes of each argument. The
+        corresponding axes keyword would be ``[(-2, -1), (-2, -1), (-2, -1)]``.
+        For simplicity, for generalized ufuncs that operate on 1-dimensional arrays
+        (vectors), a single integer is accepted instead of a single-element tuple,
+        and for generalized ufuncs for which all outputs are scalars, the output
+        tuples can be omitted.
+    axis: int, optional, keyword only
+        A single axis over which a generalized ufunc should operate. This is a short-cut
+        for ufuncs that operate over a single, shared core dimension, equivalent to passing
+        in axes with entries of (axis,) for each single-core-dimension argument and ``()`` for
+        all others. For instance, for a signature ``"(i),(i)->()"``, it is equivalent to passing
+        in ``axes=[(axis,), (axis,), ()]``.
     keepdims: bool, optional, keyword only
-        If core dimensions in ``signature`` are consumed, a dummy dimension is
-        re-introduced at the position specified at its original position.
-        The original position may depend on ``axes``.
-        Defaults to ``False``.
+        If this is set to True, axes which are reduced over will be left in the result as
+        a dimension with size one, so that the result will broadcast correctly against the
+        inputs. This option can only be used for generalized ufuncs that operate on inputs
+        that all have the same number of core dimensions and with outputs that have no core
+        dimensions , i.e., with signatures like ``"(i),(i)->()"`` or ``"(m,m)->()"``.
+        If used, the location of the dimensions in the output can be controlled with axes
+        and axis.
     output_dtypes : Optional, dtype or list of dtypes, keyword only
         Valid numpy dtype specification or list thereof.
         If not given, a call of ``func`` with a small set of data
@@ -423,6 +480,7 @@ class gufunc(object):
         self.signature = kwargs.pop("signature", None)
         self.vectorize = kwargs.pop("vectorize", False)
         self.axes = kwargs.pop("axes", None)
+        self.axis = kwargs.pop("axis", None)
         self.keepdims = kwargs.pop("keepdims", False)
         self.output_sizes = kwargs.pop("output_sizes", None)
         self.output_dtypes = kwargs.pop("output_dtypes", None)
@@ -454,6 +512,7 @@ class gufunc(object):
                             *args,
                             vectorize=self.vectorize,
                             axes=self.axes,
+                            axis=self.axis,
                             keepdims=self.keepdims,
                             output_sizes=self.output_sizes,
                             output_dtypes=self.output_dtypes,
@@ -470,15 +529,30 @@ def as_gufunc(signature=None, **kwargs):
     signature : String
         Specifies what core dimensions are consumed and produced by ``func``.
         According to the specification of numpy.gufunc signature [2]_
-    axes: int, tuple of ints, or list of tuple of ints, optional, keyword only
-        Specifies which axes of the passed arguments are the core dimensions.
-        For one input argument int or tuple of int is sufficient, for many
-        input arguments a list of tuple of ints has to be passed
+    axes: List of tuples, optional, keyword only
+        A list of tuples with indices of axes a generalized ufunc should operate on.
+        For instance, for a signature of ``"(i,j),(j,k)->(i,k)"`` appropriate for
+        matrix multiplication, the base elements are two-dimensional matrices
+        and these are taken to be stored in the two last axes of each argument. The
+        corresponding axes keyword would be ``[(-2, -1), (-2, -1), (-2, -1)]``.
+        For simplicity, for generalized ufuncs that operate on 1-dimensional arrays
+        (vectors), a single integer is accepted instead of a single-element tuple,
+        and for generalized ufuncs for which all outputs are scalars, the output
+        tuples can be omitted.
+    axis: int, optional, keyword only
+        A single axis over which a generalized ufunc should operate. This is a short-cut
+        for ufuncs that operate over a single, shared core dimension, equivalent to passing
+        in axes with entries of (axis,) for each single-core-dimension argument and ``()`` for
+        all others. For instance, for a signature ``"(i),(i)->()"``, it is equivalent to passing
+        in ``axes=[(axis,), (axis,), ()]``.
     keepdims: bool, optional, keyword only
-        If core dimensions in ``signature`` are consumed, a dummy dimension is
-        re-introduced at the position specified at its original position.
-        The original position may depend on ``axes``.
-        Defaults to ``False``.
+        If this is set to True, axes which are reduced over will be left in the result as
+        a dimension with size one, so that the result will broadcast correctly against the
+        inputs. This option can only be used for generalized ufuncs that operate on inputs
+        that all have the same number of core dimensions and with outputs that have no core
+        dimensions , i.e., with signatures like ``"(i),(i)->()"`` or ``"(m,m)->()"``.
+        If used, the location of the dimensions in the output can be controlled with axes
+        and axis.
     output_dtypes : Optional, dtype or list of dtypes, keyword only
         Valid numpy dtype specification or list thereof.
         If not given, a call of ``func`` with a small set of data
@@ -526,7 +600,7 @@ def as_gufunc(signature=None, **kwargs):
     .. [1] http://docs.scipy.org/doc/numpy/reference/ufuncs.html
     .. [2] http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
     """
-    _allowedkeys = {"vectorize", "axes", "keepdims", "output_sizes", "output_dtypes", "allow_rechunk"}
+    _allowedkeys = {"vectorize", "axes", "axis", "keepdims", "output_sizes", "output_dtypes", "allow_rechunk"}
     if set(_allowedkeys).issubset(kwargs.keys()):
         raise TypeError("Unsupported keyword argument(s) provided")
 
