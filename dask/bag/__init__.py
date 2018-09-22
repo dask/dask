@@ -6,6 +6,7 @@ try:
                        bag_zip as zip, bag_map as map)
     from .text import read_text
     from .utils import assert_eq
+    from .avro import read_avro
     from ..context import set_options
     from ..base import compute
 except ImportError as e:
