@@ -45,6 +45,7 @@ from ..delayed import Delayed, to_task_dask
 from .. import threaded, core
 from .. import sharedict
 from ..sharedict import ShareDict
+from ..optimization import SubgraphCallable
 from .numpy_compat import _Recurser
 from ..bytes.core import get_mapper, get_fs_token_paths
 
@@ -334,11 +335,22 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)),
 def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     inputs = arrind_pairs[::2]
     inputs_indices = arrind_pairs[1::2]
+    numblocks = kwargs.pop('numblocks')
+    concatenate = kwargs.pop('concatenate', None)
+    new_axes = kwargs.pop('new_axes', {})
 
     task = (func,) + inputs
-    indices = {k: v for k, v in zip(inputs, inputs_indices) if v is not None}
+    indices = [(k, v) for k, v in zip(inputs, inputs_indices) if v is not None]
+    keys = ('_%d' % i for i in range(len(inputs)))
+    keys = [next(keys) if v is not None else k for k, v in zip(inputs, inputs_indices)]
 
-    return TOP(output, output_indices, task, indices, **kwargs)
+    if not kwargs:
+        dsk = {output: (func,) + tuple(keys)}
+    else:
+        dsk = {output: (apply, func, keys, kwargs)}
+
+    return TOP(output, output_indices, dsk, indices,
+               numblocks=numblocks, concatenate=concatenate, new_axes=new_axes)
 
 
 class TOP(Mapping):
@@ -353,46 +365,32 @@ class TOP(Mapping):
     top
     atop
     """
-    def __init__(self, output, output_indices, task, indices, numblocks,
-                 new_axes=None, **kwargs):
+    def __init__(self, output, output_indices, dsk, indices,
+                 numblocks, concatenate=None, new_axes=None):
         self.output = output
         self.output_indices = output_indices
-        self.task = task
+        self.dsk = dsk
         self.indices = indices
 
         self.numblocks = numblocks
+        self.concatenate = concatenate
         self.new_axes = new_axes or {}
-        self.kwargs = kwargs
 
     @property
     def _dict(self):
         try:
             return self._cached_dict
         except AttributeError:
-
-            # Simple unfused case, walk back to legacy atop mode
-            if (isinstance(self.task, tuple) and
-                callable(self.task[0]) and
-                all(any(k is kk for kk in self.task[1:]) for k in self.indices)):
-                func = self.task[0]
-                inputs = self.task[1:]
-                inputs_indices = []
-                for i in inputs:
-                    try:
-                        inputs_indices.append(self.indices[i])
-                    except (TypeError, KeyError):
-                        inputs_indices.append(None)
-            else:
-                import pdb; pdb.set_trace()
-
+            keys = tuple('_%d' % i for i in range(len(self.indices)))
+            func = SubgraphCallable(self.dsk, self.output, keys)
             self._cached_dict = top(
                 func,
                 self.output,
                 self.output_indices,
-                *concat(zip(inputs, inputs_indices)),
+                *list(concat(self.indices)),
                 new_axes=self.new_axes,
                 numblocks=self.numblocks,
-                **self.kwargs,
+                concatenate=self.concatenate,
             )
         return self._cached_dict
 
@@ -4379,15 +4377,20 @@ def from_npy_stack(dirname, mmap_mode='r'):
 
 def rewrite_atop(inputs):
     """ Rewrite a stack of atop expressions into a single atop expression """
-    inputs = {a: {'output-index': b, 'task': c, 'input-indices': d}
+    from dask.core import reverse_dict
+    inputs = {a: {'output-index': b, 'dsk': c, 'input-indices': d}
               for a, b, c, d in inputs}
+    dependencies = {k: {d for d, _ in v['input-indices'] if d in inputs}
+                        for k, v in inputs.items()}
+    dependents = reverse_dict(dependencies)
 
-    dependencies, dependents = core.get_deps({k: v['task'] for k, v in inputs.items()})
+    new_index_iter = iter('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+
     [root] = [k for k, v in dependents.items() if not v]
 
-    indices = dict(inputs[root]['input-indices'])
+    indices = inputs[root]['input-indices']
 
-    task = inputs[root]['task']
+    dsk = inputs[root]['dsk']
 
     stack = [root]
     seen = set()
@@ -4399,27 +4402,71 @@ def rewrite_atop(inputs):
         else:
             return t
 
-    while stack:
-        key = stack.pop()
-        for dep in dependencies[key]:
-            task = core.subs(task, dep, inputs[dep]['task'])
-            index_mapping = {}
-            for i, j in zip(inputs[dep]['output-index'], indices[dep]):
-                index_mapping[i] = j
+    changed = True
+    while changed:
+        changed = False
+        for i, (dep, ind) in enumerate(indices):
+            if dep not in inputs:
+                continue
 
-            for k, ind in inputs[dep]['input-indices'].items():
-                if k not in indices:
-                    indices[k] = join(index_mapping.get(i, i) for i in ind)
+            changed = True
+            d = inputs[dep]
 
-            if dep not in seen:
-                seen.add(dep)
-                stack.append(dep)
+            # Replace _n with dep name in existing tasks
+            # (inc, _0) -> (inc, 'b')
+            dsk = {k: index_subs(v, {'_' + str(i): dep}) for k, v in dsk.items()}
 
-    for inp in inputs:
-        if inp != root:
-            indices.pop(inp)
+            # Remove current input from input indices
+            # [('a', 'i'), ('b', 'i')] -> [('a', 'i')]
+            _, current_dep_indices = indices.pop(i)  # TODO: this screws with current _0, _1, ...
+            sub = {'_%d' % i: '_%d' % (i - 1) for i in range(i + 1, len(indices) + 1)}
+            dsk = {k: subs(v, sub) for k, v in dsk.items()}
 
-    return (root, inputs[root]['output-index'], task, indices)
+            # Change new input_indices to match give index from current computation
+            # [('c', j')] -> [('c', 'i')]
+            new_indices = inputs[dep]['input-indices']
+            sub = dict(zip(inputs[dep]['output-index'], current_dep_indices))
+            contracted = {x for _, j in new_indices for x in j if x not in inputs[dep]['output-index']}
+            extra = dict(zip(contracted, new_index_iter))
+            sub.update(extra)
+            new_indices = [(x, index_subs(j, sub)) for x, j in new_indices]
+
+            # Bump new inputs up in list
+            sub = {'_' + str(i): '_' + str(i + len(indices)) for i in range(len(new_indices))}
+            new_dsk = {k: subs(v, sub) for k, v in inputs[dep]['dsk'].items()}
+
+            indices.extend(new_indices)
+            dsk.update(new_dsk)
+
+    new_indices = []
+    seen = dict()
+    sub = dict()
+    for i, x in enumerate(indices):
+        if x not in seen:
+            seen[x] = i
+            new_indices.append(x)
+
+        else:
+            sub[i] = seen[x]
+
+    sub = {'_%d' % k: '_%d' % v for k, v in sub.items()}
+
+    dsk = {k: subs(v, sub) for k, v in dsk.items()}
+
+    return (root, inputs[root]['output-index'], dsk, new_indices)
+
+
+def index_subs(ind, substitution):
+    if isinstance(ind, str):
+        return ''.join(substitution.get(c, c) for c in ind)
+    else:
+        return type(ind)(substitution.get(c, c) for c in ind)
+
+
+def subs(task, substitution):
+    for k, v in substitution.items():
+        task = core.subs(task, k, v)
+    return task
 
 
 def rewrite_TOPs(tops):
