@@ -541,6 +541,7 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
         key_renamer = None
     else:
         key_renamer = rename_keys
+    rename_keys = key_renamer is not None
 
     if dependencies is None:
         deps = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
@@ -599,7 +600,7 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
                 children_stack_pop()
                 # This is a leaf node in the reduction region
                 # key, task, fused_keys, height, width, number of nodes, fudge, set of edges
-                info_stack_append((child, rv[child], None if key_renamer is None else [child],
+                info_stack_append((child, rv[child], [child] if rename_keys else None,
                                    1, 1, 1, 0, deps[child] - reducible))
             else:
                 children_stack_pop()
@@ -631,7 +632,7 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
                         deps_parent |= deps_pop(child_key)
                         del rv[child_key]
                         reducible_remove(child_key)
-                        if key_renamer is not None:
+                        if rename_keys:
                             child_keys.append(parent)
                             fused_trees[parent] = child_keys
                             fused_trees_pop(child_key, None)
@@ -655,7 +656,7 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
                             if fudge > int(ave_width - 1):
                                 fudge = int(ave_width - 1)
                             # This task *implicitly* depends on `edges`
-                            info_stack_append((parent, rv[parent], None if key_renamer is None else [parent],
+                            info_stack_append((parent, rv[parent], [parent] if rename_keys else None,
                                                1, width, 1, fudge, edges))
                         else:
                             break
@@ -709,13 +710,13 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
                             del rv[cur_child]
                             children_deps |= deps_pop(cur_child)
                             reducible_remove(cur_child)
-                            if key_renamer is not None:
+                            if rename_keys:
                                 fused_trees_pop(cur_child, None)
                                 child_keys.extend(child_info[2])
                         deps_parent -= children
                         deps_parent |= children_deps
 
-                        if key_renamer is not None:
+                        if rename_keys:
                             child_keys.append(parent)
                             fused_trees[parent] = child_keys
 
@@ -737,7 +738,7 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
                                 fudge = int(ave_width - 1)
                             # key, task, height, width, number of nodes, fudge, set of edges
                             # This task *implicitly* depends on `edges`
-                            info_stack_append((parent, rv[parent], None if key_renamer is None else [parent],
+                            info_stack_append((parent, rv[parent], [parent] if rename_keys else None,
                                                1, width, 1, fudge, edges))
                         else:
                             break
@@ -745,9 +746,9 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
                 parent = rdeps[parent][0]
 
     if fuse_subgraphs:
-        _inplace_fuse_subgraphs(rv, keys, deps, fused_trees, key_renamer)
+        _inplace_fuse_subgraphs(rv, keys, deps, fused_trees, rename_keys)
 
-    if key_renamer is not None:
+    if rename_keys:
         for root_key, fused_keys in fused_trees.items():
             alias = key_renamer(fused_keys)
             if alias is not None and alias not in rv:
@@ -759,7 +760,7 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
     return rv, deps
 
 
-def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, key_renamer):
+def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, rename_keys):
     """Subroutine of fuse.
 
     Mutates dsk, depenencies, and fused_trees inplace"""
@@ -782,7 +783,7 @@ def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, key_renamer):
 
     # construct the chains from ancestor to descendant
     chains = []
-    parent2child = dict(map(reversed, child2parent.items()))
+    parent2child = {v: k for k, v in child2parent.items()}
     while child2parent:
         child, parent = child2parent.popitem()
         chain = [child, parent]
@@ -803,7 +804,7 @@ def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, key_renamer):
                 chains.append(chain)
                 break
 
-    # create a new graph with fused chains
+    # Mutate dsk fusing chains into subgraphs
     for chain in chains:
         subgraph = {k: dsk[k] for k in chain}
         outkey = chain[0]
@@ -816,27 +817,18 @@ def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, key_renamer):
 
         # Create new task
         inkeys = tuple(inkeys_set)
-        val = (SubgraphCallable(subgraph, outkey, inkeys),) + inkeys
+        dsk[outkey] = (SubgraphCallable(subgraph, outkey, inkeys),) + inkeys
 
-        # Rename keys if needed
-        if key_renamer is not None:
+        # Mutate `fused_trees` if key renaming is needed (renaming done in fuse)
+        if rename_keys:
             chain2 = []
             for k in chain:
-                subchain = fused_trees.pop(k, None)
+                subchain = fused_trees.pop(k, False)
                 if subchain:
                     chain2.extend(subchain)
                 else:
                     chain2.append(k)
-            new_key = key_renamer(chain2)
-            if new_key is not None and new_key not in dsk:
-                dsk[new_key] = val
-                dsk[outkey] = new_key
-                dependencies[new_key] = dependencies[outkey]
-                dependencies[outkey] = {new_key}
-            else:
-                dsk[outkey] = val
-        else:
-            dsk[outkey] = val
+            fused_trees[outkey] = chain2
 
 
 # Defining `key_split` (used by key renamers in `fuse`) in utils.py
@@ -921,6 +913,13 @@ class SubgraphCallable(object):
 
     def __repr__(self):
         return self.name
+
+    def __eq__(self, other):
+        return (type(self) is type(other) and
+                self.dsk == other.dsk and
+                self.outkey == other.outkey and
+                set(self.inkeys) == set(other.inkeys) and
+                self.name == other.name)
 
     def __call__(self, *args):
         if not len(args) == len(self.inkeys):

@@ -1,3 +1,4 @@
+import itertools
 import pickle
 from operator import getitem
 from functools import partial
@@ -1101,3 +1102,81 @@ def test_SubgraphCallable():
 
     f2 = pickle.loads(pickle.dumps(f))
     assert f2(1, 2) == f(1, 2)
+
+
+def test_fuse_subgraphs():
+    dsk = {'x-1': 1,
+           'inc-1': (inc, 'x-1'),
+           'inc-2': (inc, 'inc-1'),
+           'add-1': (add, 'x-1', 'inc-2'),
+           'inc-3': (inc, 'add-1'),
+           'inc-4': (inc, 'inc-3'),
+           'add-2': (add, 'add-1', 'inc-4'),
+           'inc-5': (inc, 'add-2'),
+           'inc-6': (inc, 'inc-5')}
+
+    res = fuse(dsk, 'inc-6', fuse_subgraphs=True)
+    sol = with_deps({
+        'inc-6': 'add-inc-x-1',
+        'add-inc-x-1': (SubgraphCallable({
+            'x-1': 1,
+            'add-1': (add, 'x-1', (inc, (inc, 'x-1'))),
+            'inc-6': (inc, (inc, (add, 'add-1', (inc, (inc, 'add-1')))))
+        }, 'inc-6', ()),)
+    })
+    assert res == sol
+
+    res = fuse(dsk, 'inc-6', fuse_subgraphs=True, rename_keys=False)
+    sol = with_deps({
+        'inc-6': (SubgraphCallable({
+            'x-1': 1,
+            'add-1': (add, 'x-1', (inc, (inc, 'x-1'))),
+            'inc-6': (inc, (inc, (add, 'add-1', (inc, (inc, 'add-1')))))
+        }, 'inc-6', ()),)
+    })
+    assert res == sol
+
+    res = fuse(dsk, 'add-2', fuse_subgraphs=True)
+    sol = with_deps({
+        'add-inc-x-1': (SubgraphCallable({
+            'x-1': 1,
+            'add-1': (add, 'x-1', (inc, (inc, 'x-1'))),
+            'add-2': (add, 'add-1', (inc, (inc, 'add-1')))
+        }, 'add-2', ()),),
+        'add-2': 'add-inc-x-1',
+        'inc-6': (inc, (inc, 'add-2'))
+    })
+    assert res == sol
+
+    res = fuse(dsk, 'inc-2', fuse_subgraphs=True)
+    # ordering of arguements is unstable, check all permutations
+    sols = []
+    for inkeys in itertools.permutations(('x-1', 'inc-2')):
+        sols.append(with_deps({
+            'x-1': 1,
+            'inc-2': (inc, (inc, 'x-1')),
+            'inc-6': 'inc-add-1',
+            'inc-add-1': (
+                SubgraphCallable({
+                    'add-1': (add, 'x-1', 'inc-2'),
+                    'inc-6': (inc, (inc, (add, 'add-1', (inc, (inc, 'add-1')))))
+                }, 'inc-6', inkeys),) + inkeys
+        }))
+    assert res in sols
+
+    res = fuse(dsk, ['inc-2', 'add-2'], fuse_subgraphs=True)
+    # ordering of arguements is unstable, check all permutations
+    sols = []
+    for inkeys in itertools.permutations(('x-1', 'inc-2')):
+        sols.append(with_deps({
+            'x-1': 1,
+            'inc-2': (inc, (inc, 'x-1')),
+            'inc-add-1': (
+                SubgraphCallable({
+                    'add-1': (add, 'x-1', 'inc-2'),
+                    'add-2': (add, 'add-1', (inc, (inc, 'add-1')))
+                }, 'add-2', inkeys),) + inkeys,
+            'add-2': 'inc-add-1',
+            'inc-6': (inc, (inc, 'add-2'))
+        }))
+    assert res in sols
