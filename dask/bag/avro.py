@@ -1,4 +1,3 @@
-import copy
 import io
 
 MAGIC = b'Obj\x01'
@@ -54,9 +53,14 @@ def read_header(fo):
     return out
 
 
-def open_head(fs, path):
-    """Open a file just to read its head"""
-    return read_header(fs.open(path, 'rb'))
+def open_head(fs, path, compression):
+    """Open a file just to read its head and size"""
+    from dask.bytes.core import OpenFile, logical_size
+    from dask.bag import from_delayed
+    with OpenFile(fs, path, compression=compression) as f:
+        head = read_header(f)
+    size = logical_size(fs, path, compression)
+    return head, size
 
 
 def read_avro(urlpath, blocksize=100000000, storage_options=None,
@@ -83,7 +87,7 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None,
     """
     from dask.utils import import_required
     from dask import delayed, compute
-    from dask.bytes.core import (open_files, get_fs_token_paths, logical_size,
+    from dask.bytes.core import (open_files, get_fs_token_paths,
                                  OpenFile, tokenize)
     from dask.bag import from_delayed
     import_required('fastavro',
@@ -95,9 +99,7 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None,
         fs, fs_token, paths = get_fs_token_paths(
             urlpath, mode='rb', storage_options=storage_options)
         dhead = delayed(open_head)
-        dsize = delayed(logical_size)
-        out = compute(*[(dhead(fs, path), dsize(fs, path, compression))
-                        for path in paths])
+        out = compute(*[dhead(fs, path, compression) for path in paths])
         heads, sizes = zip(*out)
         dread = delayed(read_chunk)
 
