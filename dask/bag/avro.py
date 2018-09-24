@@ -56,7 +56,6 @@ def read_header(fo):
 def open_head(fs, path, compression):
     """Open a file just to read its head and size"""
     from dask.bytes.core import OpenFile, logical_size
-    from dask.bag import from_delayed
     with OpenFile(fs, path, compression=compression) as f:
         head = read_header(f)
     size = logical_size(fs, path, compression)
