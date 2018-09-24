@@ -80,7 +80,7 @@ External Documentation
 ----------------------
 
 More in-depth technical documentation about Dask's distributed scheduler is
-available at https://distributed.readthedocs.io/en/latest
+available at https://distributed.dask.org/en/latest
 
 API
 ---

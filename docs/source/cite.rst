@@ -10,7 +10,7 @@ blanket citation for all developers past and present.
 To cite Dask in publications, please use the following::
 
    Dask Development Team (2016). Dask: Library for dynamic task scheduling
-   URL http://dask.pydata.org
+   URL https://dask.org
 
 A BibTeX entry for LaTeX users follows::
 
@@ -18,7 +18,7 @@ A BibTeX entry for LaTeX users follows::
      title = {Dask: Library for dynamic task scheduling},
      author = {{Dask Development Team}},
      year = {2016},
-     url = {http://dask.pydata.org},
+     url = {https://dask.org},
    }
 
 The full author list is available using git, or by looking at the `AUTHORS file
