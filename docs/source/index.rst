@@ -6,26 +6,26 @@ Dask
 
 Dask is composed of two parts:
 
-1.  **Dynamic task scheduling** optimized for computation.  This is similar to
+1.  **Dynamic task scheduling** optimized for computation. This is similar to
     *Airflow, Luigi, Celery, or Make*, but optimized for interactive
     computational workloads.
-2.  **"Big Data" collections** like parallel arrays, dataframes, and lists that
-    extend common interfaces like *NumPy, Pandas, or Python iterators* to
-    larger-than-memory or distributed environments.  These parallel collections
-    run on top of the dynamic task schedulers.
+2.  **"Big Data" collections** like parallel arrays, dataframes and lists that
+    extend common interfaces like *NumPy, Pandas or Python iterators* to
+    larger-than-memory or distributed environments. These parallel collections
+    run on top of dynamic task schedulers.
 
 Dask emphasizes the following virtues:
 
 *  **Familiar**: Provides parallelized NumPy array and Pandas DataFrame objects
 *  **Flexible**: Provides a task scheduling interface for more custom workloads
    and integration with other projects.
-*  **Native**: Enables distributed computing in Pure Python with access to
+*  **Native**: Enables distributed computing in pure Python with access to
    the PyData stack.
-*  **Fast**: Operates with low overhead, low latency, and minimal serialization
+*  **Fast**: Operates with low overhead, low latency and minimal serialization
    necessary for fast numerical algorithms
 *  **Scales up**: Runs resiliently on clusters with 1000s of cores
 *  **Scales down**: Trivial to set up and run on a laptop in a single process
-*  **Responsive**: Designed with interactive computing in mind it provides rapid
+*  **Responsive**: Designed with interactive computing in mind, it provides rapid
    feedback and diagnostics to aid humans
 
 
@@ -105,11 +105,11 @@ Dask is convenient on a laptop.  It :doc:`installs <install>` trivially with
 memory" to "fits on disk".
 
 Dask can scale to a cluster of 100s of machines. It is resilient, elastic, data
-local, and low latency.  For more information see documentation on the
+local and low latency.  For more information, see the documentation about the
 `distributed scheduler`_.
 
 This ease of transition between single-machine to moderate cluster enables
-users both to start simple and to grow when necessary.
+users to both start simple and grow when necessary.
 
 
 Complex Algorithms
@@ -153,7 +153,7 @@ Index
 **Collections**
 
 Dask collections are the main interaction point for users. They look like
-NumPy and pandas but generate dask graphs internally. If you are a dask *user*
+NumPy and Pandas but generate dask graphs internally. If you are a dask *user*
 then you should start here.
 
 * :doc:`array`
@@ -178,8 +178,8 @@ then you should start here.
 
 **Scheduling**
 
-Schedulers execute task graphs.  Dask currently has two main schedulers, one
-for local processing using threads or processes, and one for
+Schedulers execute task graphs. Dask currently has two main schedulers: one
+for local processing using threads or processes; and one for
 distributed memory clusters.
 
 * :doc:`scheduling`
@@ -217,11 +217,11 @@ to help make debugging and profiling graph execution easier.
 
 **Graph Internals**
 
-Internally Dask encodes algorithms in a simple format involving Python dicts,
-tuples, and functions.  This graph format can be used in isolation from the
-dask collections.  Working directly with dask graphs is rare unless you intend
+Internally, Dask encodes algorithms in a simple format involving Python dicts,
+tuples and functions. This graph format can be used in isolation from the
+dask collections. Working directly with dask graphs is rare, unless you intend
 to develop new modules with Dask.  Even then, :doc:`dask.delayed <delayed>` is
-often a better choice.  If you are a *core developer*, then you should start here.
+often a better choice. If you are a *core developer*, then you should start here.
 
 * :doc:`graphs`
 * :doc:`spec`
