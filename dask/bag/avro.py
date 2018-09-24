@@ -54,13 +54,13 @@ def read_header(fo):
     return out
 
 
-def open_head(fn):
+def open_head(fs, path):
     """Open a file just to read its head"""
-    with copy.copy(fn) as f:
-        return read_header(f)
+    return read_header(fs.open(path, 'rb'))
 
 
-def read_avro(urlpath, blocksize=100000000, storage_options=None):
+def read_avro(urlpath, blocksize=100000000, storage_options=None,
+              compression=None):
     """Read set of avro files
 
     Use this with arbitrary nested avro schemas. Please refer to the
@@ -77,28 +77,50 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None):
         file will become one partition.
     storage_options: dict or None
         passed to backend file-system
+    compression: str or None
+        Compression format of the targe(s), like 'gzip'. Should only be used
+        with blocksize=None.
     """
     from dask.utils import import_required
     from dask import delayed, compute
-    from dask.bytes.core import open_files, read_bytes
+    from dask.bytes.core import (open_files, get_fs_token_paths, logical_size,
+                                 OpenFile, tokenize)
     from dask.bag import from_delayed
     import_required('fastavro',
                     "fastavro is a required dependency for using "
                     "bag.read_avro().")
 
     storage_options = storage_options or {}
-    files = open_files(urlpath, **storage_options)
     if blocksize is not None:
+        fs, fs_token, paths = get_fs_token_paths(
+            urlpath, mode='rb', storage_options=storage_options)
         dhead = delayed(open_head)
-        heads = compute(*[dhead(f) for f in files])
+        dsize = delayed(logical_size)
+        out = compute(*[(dhead(fs, path), dsize(fs, path, compression))
+                        for path in paths])
+        heads, sizes = zip(*out)
         dread = delayed(read_chunk)
-        bits = []
-        for head, f in zip(heads, files):
-            _, chunks = read_bytes(f.path, sample=False, blocksize=blocksize,
-                                   delimiter=head['sync'], include_path=False,
-                                   **storage_options)
-            bits.extend([dread(ch, head) for ch in chunks[0]])
-        return from_delayed(bits)
+
+        offsets = []
+        lengths = []
+        for size in sizes:
+            off = list(range(0, size, blocksize))
+            length = [blocksize] * len(off)
+            offsets.append(off)
+            lengths.append(length)
+
+        out = []
+        for path, offset, length, head in zip(paths, offsets, lengths, heads):
+            delimiter = head['sync']
+            f = OpenFile(fs, path, compression=compression)
+            token = tokenize(fs_token, delimiter, path, fs.ukey(path),
+                             compression, offset)
+            keys = ['read-avro-%s-%s' % (o, token) for o in offset]
+            values = [dread(f, o, l, head, dask_key_name=key)
+                      for o, key, l in zip(offset, keys, length)]
+            out.extend(values)
+
+        return from_delayed(out)
     else:
         files = open_files(urlpath, **storage_options)
         dread = delayed(read_file)
@@ -106,9 +128,12 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None):
         return from_delayed(chunks)
 
 
-def read_chunk(chunk, head):
+def read_chunk(fobj, off, l, head):
     """Get rows from raw bytes block"""
     import fastavro
+    from dask.bytes.core import read_block
+    with fobj as f:
+        chunk = read_block(f, off, l, head['sync'])
     head_bytes = head['head_bytes']
     if not chunk.startswith(MAGIC):
         chunk = head_bytes + chunk
