@@ -315,10 +315,14 @@ def inline_functions(dsk, output, fast_functions=None, inline_constants=False,
                         for k in dsk}
     dependents = reverse_dict(dependencies)
 
+    def inlinable(v):
+        try:
+            return functions_of(v).issubset(fast_functions)
+        except TypeError:
+            return False
+
     keys = [k for k, v in dsk.items()
-            if istask(v) and functions_of(v).issubset(fast_functions) and
-            dependents[k] and k not in output
-            ]
+            if istask(v) and dependents[k] and k not in output and inlinable(v)]
 
     if keys:
         dsk = inline(dsk, keys, inline_constants=inline_constants,
@@ -454,7 +458,7 @@ def default_fused_keys_renamer(keys):
 
 def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
          max_height=None, max_depth_new_edges=None, rename_keys=None,
-         fuse_subgraphs=False):
+         fuse_subgraphs=None):
     """ Fuse tasks that form reductions; more advanced than ``fuse_linear``
 
     This trades parallelism opportunities for faster scheduling by making tasks
@@ -529,6 +533,9 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
         config.get('fuse_max_width', None) or
         1.5 + ave_width * math.log(ave_width + 1)
     )
+
+    if fuse_subgraphs is None:
+        fuse_subgraphs = config.get('fuse_subgraphs', False)
 
     if not ave_width or not max_height:
         return dsk, dependencies

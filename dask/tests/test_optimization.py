@@ -277,6 +277,26 @@ def test_inline_ignores_curries_and_partials():
     assert 'a' not in result
 
 
+def test_inline_functions_non_hashable():
+    class NonHashableCallable(object):
+        def __call__(self, a):
+            return a + 1
+
+        def __hash__(self):
+            raise TypeError("Not hashable")
+
+    nohash = NonHashableCallable()
+
+    dsk = {'a': 1,
+           'b': (inc, 'a'),
+           'c': (nohash, 'b'),
+           'd': (inc, 'c')}
+
+    result = inline_functions(dsk, [], fast_functions={inc})
+    assert result['c'] == (nohash, dsk['b'])
+    assert 'b' not in result
+
+
 def test_inline_doesnt_shrink_fast_functions_at_top():
     dsk = {'x': (inc, 'y'), 'y': 1}
     result = inline_functions(dsk, [], fast_functions=set([inc]))
