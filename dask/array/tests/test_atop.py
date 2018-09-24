@@ -53,7 +53,7 @@ i, j, k = 'ijk'
     [[(b, 'ij', {b: (np.transpose, _0)}, [(a, 'ji')]),
       (d, 'ij', {d: (np.dot, _0, _1)}, [(b, 'ik'), (c, 'kj')])],
 
-     (d, 'ij', {d: (np.dot, b, _1), b: (np.transpose, _0)}, [(a, 'Ai'), (c, 'Aj')])],
+     (d, 'ij', {d: (np.dot, b, _0), b: (np.transpose, _1)}, [(c, 'kj'), (a, 'ki')])],
 
 
     [[(c, 'i', {c: (add, _0, _1)}, [(a, 'i'), (b, 'i')]),

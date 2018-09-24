@@ -4464,9 +4464,14 @@ def index_subs(ind, substitution):
 
 
 def subs(task, substitution):
-    for k, v in substitution.items():
-        task = core.subs(task, k, v)
-    return task
+    if isinstance(task, dict):
+        return {k: subs(v, substitution) for k, v in task.items()}
+    if isinstance(task, (tuple, list, set)):
+        return type(task)([subs(x, substitution) for x in task])
+    try:
+        return substitution[task]
+    except (KeyError, TypeError):
+        return task
 
 
 def rewrite_TOPs(tops):
