@@ -52,6 +52,18 @@ def test_read_text(fmt, bs, encoding):
         assert ''.join(line for block in L for line in block) == expected
 
 
+def test_files_per_partition():
+    files3 = {'{:02}.txt'.format(n): 'line from {:02}' for n in range(20)}
+    with filetexts(files3):
+        b = read_text('*.txt', files_per_partition=10)
+
+        l = len(b.take(100, npartitions=1))
+        assert l == 10, "10 files should be grouped into one partition"
+
+        assert b.count().compute() == 20, "All 20 lines should be read"
+    pass
+
+
 def test_errors():
     with filetexts({'.test.foo': b'Jos\xe9\nAlice'}, mode='b'):
         with pytest.raises(UnicodeDecodeError):
