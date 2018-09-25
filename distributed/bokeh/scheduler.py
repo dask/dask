@@ -4,7 +4,6 @@ from distutils.version import LooseVersion
 from functools import partial
 import logging
 import math
-from math import sqrt
 from numbers import Number
 from operator import add
 import os
@@ -59,6 +58,7 @@ template_variables = {'pages': ['status', 'workers', 'tasks', 'system', 'profile
 BOKEH_THEME = Theme(os.path.join(os.path.dirname(__file__), 'theme.yaml'))
 
 nan = float('nan')
+inf = float('inf')
 
 
 def update(source, data):
@@ -331,10 +331,8 @@ class CurrentLoad(DashboardComponent):
             nbytes_color = []
             max_limit = 0
             for ws, nb in zip(workers, nbytes):
-                try:
-                    limit = self.scheduler.workers[ws.address].memory_limit
-                except KeyError:
-                    limit = 16e9
+                limit = getattr(self.scheduler.workers[ws.address], 'memory_limit', inf) or inf
+
                 if limit > max_limit:
                     max_limit = limit
 
@@ -445,7 +443,7 @@ class StealingEvents(DashboardComponent):
         except (KeyError, IndexError):
             color = 'black'
 
-        radius = sqrt(min(total_duration, 10)) * 30 + 2
+        radius = math.sqrt(min(total_duration, 10)) * 30 + 2
 
         d = {'time': time * 1000, 'level': level, 'count': len(msgs),
              'color': color, 'duration': total_duration, 'radius': radius,
