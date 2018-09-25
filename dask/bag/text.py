@@ -77,6 +77,9 @@ def read_text(urlpath, blocksize=None, compression='infer',
                 blocks.append(delayed(list)(delayed(files_to_blocks)(block_files)))
 
     else:
+        if files_per_partition is not None:
+            raise ValueError('Only one of blocksize or files_per_partition can be set')
+
         _, blocks = read_bytes(urlpath, delimiter=linedelimiter.encode(),
                                blocksize=blocksize, sample=False,
                                compression=compression,
@@ -99,9 +102,7 @@ def file_to_blocks(lazy_file):
 
 
 def files_to_blocks(lazy_files):
-    for file in lazy_files:
-        for line in file_to_blocks(file):
-            yield line
+    return concat(file_to_blocks(f) for f in lazy_files)
 
 
 def decode(block, encoding, errors):
