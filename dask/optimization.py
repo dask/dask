@@ -928,6 +928,9 @@ class SubgraphCallable(object):
                 set(self.inkeys) == set(other.inkeys) and
                 self.name == other.name)
 
+    def __ne__(self, other):
+        return not (self == other)
+
     def __call__(self, *args):
         if not len(args) == len(self.inkeys):
             raise ValueError("Expected %d args, got %d"
