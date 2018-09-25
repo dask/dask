@@ -4420,7 +4420,7 @@ def rewrite_atop(inputs):
             # [('a', 'i'), ('b', 'i')] -> [('a', 'i')]
             _, current_dep_indices = indices.pop(i)  # TODO: this screws with current _0, _1, ...
             sub = {'_%d' % i: '_%d' % (i - 1) for i in range(i + 1, len(indices) + 1)}
-            dsk = {k: subs(v, sub) for k, v in dsk.items()}
+            dsk = subs(dsk, sub)
 
             # Change new input_indices to match give index from current computation
             # [('c', j')] -> [('c', 'i')]
@@ -4432,10 +4432,16 @@ def rewrite_atop(inputs):
             new_indices = [(x, index_subs(j, sub)) for x, j in new_indices]
 
             # Bump new inputs up in list
-            sub = {'_' + str(i): '_' + str(i + len(indices)) for i in range(len(new_indices))}
-            new_dsk = {k: subs(v, sub) for k, v in inputs[dep]['dsk'].items()}
+            sub = {}
+            for i, index in enumerate(new_indices):
+                if index not in indices:  # use old inputs if available
+                    sub['_%d' % i] = '_%d' % len(indices)
+                    indices.append(index)
+                else:
+                    sub['_%d' % i] = '_%d' % indices.index(index)
+            new_dsk = subs(inputs[dep]['dsk'], sub)
 
-            indices.extend(new_indices)
+            # indices.extend(new_indices)
             dsk.update(new_dsk)
 
     new_indices = []

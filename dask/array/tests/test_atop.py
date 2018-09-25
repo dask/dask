@@ -63,17 +63,22 @@ i, j, k = 'ijk'
       (g, 'i', {g: (add, c, f), f: (add, _2, _3), c: (add, _0, _1)}, [(a, i), (b, i), (d, i), (e, i)])],
 
 
-#   [[(c, 'i', (add, a, b), {a: 'i', b: 'i'}),
-#     (f, 'i', (add, a, e), {a: 'i', e: 'i'}),
-#     (g, 'i', (add, c, f), {c: 'i', f: 'i'})],
+    [[(c, 'i', {c: (add, _0, _1)}, [(a, 'i'), (b, 'i')]),
+      (f, 'i', {f: (add, _0, _1)}, [(a, 'i'), (e, 'i')]),
+      (g, 'i', {g: (add, _0, _1)}, [(c, 'i'), (f, 'i')])],
 
-#    (g, 'i', (add, (add, a, b), (add, a, e)), {a: 'i', b: 'i', e: 'i'})],
+      (g, 'i', {g: (add, c, f), f: (add, _0, _2), c: (add, _0, _1)}, [(a, 'i'), (b, 'i'), (e, 'i')])],
 
 
-#   [[(b, 'i', (sum, a), {a: 'ij'}),
-#     (c, 'i', (inc, b), {b: 'i'})],
+    [[(b, 'i', {b: (sum, _0)}, [(a, 'ij')]),
+      (c, 'i', {c: (inc, _0)}, [(b, 'i')])],
 
-#    (c, 'i', (inc, (sum, a)), {a: 'ij'})],
+     (c, 'i', {c: (inc, b), b: (sum, _0)}, [(a, 'iA')])],
+
+    [[(c, 'i', {c: (inc, _0)}, [(b, 'i')]),
+      (d, 'i', {d: (add, _0, _1, _2)}, [(a, 'i'), (b, 'i'), (c, 'i')])],
+
+     (d, 'i', {d: (add, _0, _1, c), c: (inc, _1)}, [(a, 'i'), (b, 'i')])],
 ])
 def test_rewrite(inputs, expected):
     result = rewrite_atop(inputs)
