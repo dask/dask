@@ -41,7 +41,6 @@ source_suffix = '.rst'
 #source_encoding = 'utf-8-sig'
 
 # The master toctree document.
-master_doc = 'docs'
 html_extra_path = ['index.html']
 
 # General information about the project.
@@ -191,7 +190,7 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('docs', 'dask.tex', u'dask Documentation',
+  ('index', 'dask.tex', u'dask Documentation',
    u'Dask Development Team', 'manual'),
 ]
 
@@ -221,7 +220,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('docs', 'dask', u'dask Documentation',
+    ('index', 'dask', u'dask Documentation',
      [u'Dask Development Team'], 1)
 ]
 
@@ -235,7 +234,7 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('docs', 'Dask', u'dask Documentation',
+  ('index', 'Dask', u'dask Documentation',
    u'Dask Development Team', 'Dask', 'One line description of project.',
    'Miscellaneous'),
 ]
@@ -316,7 +315,7 @@ redirect_files = [
     ('diagnostics.html', 'diagnostics-local.html'),
     ('inspect.html', 'graphviz.html'),
     ('faq.html', 'https://stackoverflow.com/questions/tagged/dask?sort=frequent'),
-    ('index.html', 'docs.html'),
+    ('docs.html', 'index.html'),
 ]
 
 
