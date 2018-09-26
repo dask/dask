@@ -191,7 +191,7 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('docs', 'dask.tex', u'dask Documentation',
+  (master_doc, 'dask.tex', u'dask Documentation',
    u'Dask Development Team', 'manual'),
 ]
 
@@ -221,7 +221,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('docs', 'dask', u'dask Documentation',
+    (master_doc, 'dask', u'dask Documentation',
      [u'Dask Development Team'], 1)
 ]
 
@@ -235,7 +235,7 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('docs', 'Dask', u'dask Documentation',
+  (master_doc, 'Dask', u'dask Documentation',
    u'Dask Development Team', 'Dask', 'One line description of project.',
    'Miscellaneous'),
 ]
