@@ -67,7 +67,7 @@ Delayed
 Distributed Concurrent.futures
 ------------------------------
 
-`Concurrent.futures documentation <https://distributed.readthedocs.io/en/latest/quickstart.html#map-and-submit-functions>`_
+`Concurrent.futures documentation <https://distributed.dask.org/en/latest/quickstart.html#map-and-submit-functions>`_
 
 *  `Custom workflows <https://gist.github.com/mrocklin/ef9ccd29a6ec5f4de84d6192be95042a>`_
 *  `Web Servers and Asynchronous task scheduling <https://gist.github.com/mrocklin/5e69b270d2a06aea7c288513709d921d>`_
