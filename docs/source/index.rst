@@ -21,7 +21,7 @@ Dask emphasizes the following virtues:
    and integration with other projects.
 *  **Native**: Enables distributed computing in pure Python with access to
    the PyData stack.
-*  **Fast**: Operates with low overhead, low latency and minimal serialization
+*  **Fast**: Operates with low overhead, low latency, and minimal serialization
    necessary for fast numerical algorithms
 *  **Scales up**: Runs resiliently on clusters with 1000s of cores
 *  **Scales down**: Trivial to set up and run on a laptop in a single process
