@@ -494,7 +494,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
     if type(x) != type(meta):
         errmsg = ("Expected partition of type `%s` but got "
                   "`%s`" % (type(meta).__name__, type(x).__name__))
-    elif hasattr(meta, 'dtypes'): # isinstance(meta, pd.DataFrame):
+    elif hasattr(meta, 'dtypes') and not hasattr(meta, 'dtype'): # isinstance(meta, pd.DataFrame):
         kwargs = dict()
         if PANDAS_VERSION >= LooseVersion('0.23.0'):
             kwargs['sort'] = True
