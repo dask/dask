@@ -1,3 +1,4 @@
+import itertools
 import os
 import sys
 import pandas as pd
@@ -755,3 +756,28 @@ def test_gh_2730():
         result.sort_values('KEY').reset_index(drop=True),
         expected
     )
+
+
+@pytest.mark.parametrize('npartitions', [None, 'auto'])
+def test_set_index_does_not_repeat_work_due_to_optimizations(npartitions):
+    # Atomic counter
+    count = itertools.count()
+
+    def increment():
+        next(count)
+
+    def make_part(dummy, n):
+        return pd.DataFrame({'x': np.random.random(n),
+                             'y': np.random.random(n)})
+
+    nbytes = 1e6
+    nparts = 50
+    n = int(nbytes / (nparts * 8))
+
+    dsk = {('inc', i): (increment,) for i in range(nparts)}
+    dsk.update({('x', i): (make_part, ('inc', i), n) for i in range(nparts)})
+    ddf = dd.DataFrame(dsk, 'x', make_part(None, 1), [None] * (nparts + 1))
+
+    ddf.set_index('x', npartitions=npartitions)
+    ntimes = next(count)
+    assert ntimes == nparts
