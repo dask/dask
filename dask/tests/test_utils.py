@@ -63,6 +63,13 @@ def test_dispatch():
     assert foo((1, 2.0, b)) == (2, 1.0, b)
 
 
+def test_dispatch_kwargs():
+    foo = Dispatch()
+    foo.register(int, lambda a, b=10: a + b)
+
+    assert foo(1, b=20) == 21
+
+
 def test_dispatch_lazy():
     # this tests the recursive component of dispatch
     foo = Dispatch()
