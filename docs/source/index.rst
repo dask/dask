@@ -9,8 +9,8 @@ Dask is composed of two parts:
 1.  **Dynamic task scheduling** optimized for computation. This is similar to
     *Airflow, Luigi, Celery, or Make*, but optimized for interactive
     computational workloads.
-2.  **"Big Data" collections** like parallel arrays, dataframes and lists that
-    extend common interfaces like *NumPy, Pandas or Python iterators* to
+2.  **"Big Data" collections** like parallel arrays, dataframes, and lists that
+    extend common interfaces like *NumPy, Pandas, or Python iterators* to
     larger-than-memory or distributed environments. These parallel collections
     run on top of dynamic task schedulers.
 
@@ -36,7 +36,7 @@ Dask emphasizes the following virtues:
 
 See the `dask.distributed documentation (separate website)
 <https://distributed.dask.org/en/latest/>`_ for more technical information
-on Dask's distributed scheduler,
+on Dask's distributed scheduler.
 
 Familiar user interface
 -----------------------
@@ -105,7 +105,7 @@ Dask is convenient on a laptop.  It :doc:`installs <install>` trivially with
 memory" to "fits on disk".
 
 Dask can scale to a cluster of 100s of machines. It is resilient, elastic, data
-local and low latency.  For more information, see the documentation about the
+local, and low latency.  For more information, see the documentation about the
 `distributed scheduler`_.
 
 This ease of transition between single-machine to moderate cluster enables
@@ -115,7 +115,7 @@ users to both start simple and grow when necessary.
 Complex Algorithms
 ------------------
 
-Dask represents parallel computations with :doc:`task graphs<graphs>`.  These
+Dask represents parallel computations with :doc:`task graphs<graphs>`. These
 directed acyclic graphs may have arbitrary structure, which enables both
 developers and users the freedom to build sophisticated algorithms and to
 handle messy situations not easily managed by the ``map/filter/groupby``
@@ -218,7 +218,7 @@ to help make debugging and profiling graph execution easier.
 **Graph Internals**
 
 Internally, Dask encodes algorithms in a simple format involving Python dicts,
-tuples and functions. This graph format can be used in isolation from the
+tuples, and functions. This graph format can be used in isolation from the
 dask collections. Working directly with dask graphs is rare, unless you intend
 to develop new modules with Dask.  Even then, :doc:`dask.delayed <delayed>` is
 often a better choice. If you are a *core developer*, then you should start here.
