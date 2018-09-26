@@ -134,7 +134,6 @@ Index
 * :doc:`install`
 * :doc:`setup`
 * :doc:`use-cases`
-* :doc:`examples-tutorials`
 * :doc:`support`
 * :doc:`why`
 
@@ -146,7 +145,6 @@ Index
    install.rst
    setup.rst
    use-cases.rst
-   examples-tutorials.rst
    support.rst
    why.rst
 
