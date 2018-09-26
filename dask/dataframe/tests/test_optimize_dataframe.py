@@ -32,7 +32,8 @@ def test_column_optimizations_with_bcolz_and_rewrite():
                                     bc, slice(0, 2), ['a', 'b'], {}))
                         for i in [1, 2, 3])
 
-        result = dd.optimize(dsk2, [('y', i) for i in [1, 2, 3]])
+        with dask.config.set(fuse_ave_width=0):
+            result = dd.optimize(dsk2, [('y', i) for i in [1, 2, 3]])
         assert result == expected
 
 
