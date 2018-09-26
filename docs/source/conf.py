@@ -316,8 +316,20 @@ redirect_files = [
     ('diagnostics.html', 'diagnostics-local.html'),
     ('inspect.html', 'graphviz.html'),
     ('faq.html', 'https://stackoverflow.com/questions/tagged/dask?sort=frequent'),
+    ('examples-tutorials.html', 'https://examples.dask.org'),
+    ('examples/array-extend.html', 'https://examples.dask.org'),
+    ('examples/array-hdf5.html', 'https://examples.dask.org'),
+    ('examples/array-numpy.html', 'https://examples.dask.org'),
+    ('examples/array-random.html', 'https://examples.dask.org'),
+    ('examples/bag-json.html', 'https://examples.dask.org'),
+    ('examples/bag-word-count-hdfs.html', 'https://examples.dask.org'),
+    ('examples/dataframe-csv.html', 'https://examples.dask.org'),
+    ('examples/dataframe-hdf5.html', 'https://examples.dask.org'),
+    ('examples/delayed-array.html', 'https://examples.dask.org'),
+    ('examples/delayed-custom.html', 'https://examples.dask.org'),
     ('docs.html', 'index.html'),
 ]
+
 
 
 redirect_template = """\
