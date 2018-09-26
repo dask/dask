@@ -55,7 +55,7 @@ how to set up Dask on a variety of local and distributed hardware.
       SLURM, SGE, TORQUE, LSF, and so on
     - :doc:`Kubernetes <setup/kubernetes>`: Deploy Dask with the
       popular Kubernetes resource manager using either Helm or a native deployment.
-    - `YARN / Hadoop <https://dask-yarn.readthedocs.io/en/latest/>`_: Deploy
+    - `YARN / Hadoop <https://yarn.dask.org/en/latest/>`_: Deploy
       Dask on YARN clusters, such as are found in traditional Hadoop
       installations.
     - :doc:`Python API (advanced) <setup/python-advanced>`: Create
@@ -79,7 +79,7 @@ how to set up Dask on a variety of local and distributed hardware.
    setup/ssh.rst
    setup/hpc.rst
    setup/kubernetes.rst
-   YARN / Hadoop <https://dask-yarn.readthedocs.io/en/latest/>
+   YARN / Hadoop <https://yarn.dask.org/en/latest/>
    setup/python-advanced.rst
    setup/cloud.rst
    setup/adaptive.rst

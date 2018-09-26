@@ -8,7 +8,7 @@ EXPERIMENTAL FEATURE added to Version 0.18.0 and above - see :ref:`disclaimer<di
 that distinguish the various dimensions of passed arrays in the two classes loop dimensions
 and core dimensions. To accomplish this, a `signature <https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html#details-of-signature>`_ is specified for numpy generalized ufuncs.
 
-`dask <https://dask.pydata.org/>`_ integrates interoperability with numpy's generalized ufuncs
+`dask <https://dask.org/>`_ integrates interoperability with numpy's generalized ufuncs
 by adhering to respective `ufunc protocol <https://docs.scipy.org/doc/numpy/reference/arrays.classes.html#numpy.class.__array_ufunc__>`_, as well as provides a wrapper to make a Python function a generalized ufunc.
 
 

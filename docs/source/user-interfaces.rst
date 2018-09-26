@@ -7,7 +7,7 @@ Dask supports several user interfaces:
     -  :doc:`Arrays <array>`: parallel Numpy
     -  :doc:`Bags <bag>`: parallel lists
     -  :doc:`Dataframes <dataframe>`: parallel Pandas
-    -  `Machine Learning <https://dask-ml.readthedocs.io>`_ : parallel Scikit-Learn
+    -  `Machine Learning <https://ml.dask.org>`_ : parallel Scikit-Learn
     -  Others from external projects, like `XArray <https://xarray.pydata.org>`_
 -  Low Level
     -  :doc:`Delayed <delayed>`: parallel function evaluation
@@ -335,7 +335,7 @@ below:
     -  :doc:`Arrays <array>`: parallel Numpy
     -  :doc:`Bags <bag>`: parallel lists
     -  :doc:`Dataframes <dataframe>`: parallel Pandas
-    -  `Machine Learning <https://dask-ml.readthedocs.io>`_ : parallel Scikit-Learn
+    -  `Machine Learning <https://ml.dask.org>`_ : parallel Scikit-Learn
     -  Others from external projects, like `XArray <https://xarray.pydata.org>`_
 -  Low Level
     -  :doc:`Delayed <delayed>`: parallel function evaluation

@@ -316,6 +316,7 @@ redirect_files = [
     ('diagnostics.html', 'diagnostics-local.html'),
     ('inspect.html', 'graphviz.html'),
     ('faq.html', 'https://stackoverflow.com/questions/tagged/dask?sort=frequent'),
+    ('index.html', 'docs.html'),
 ]
 
 

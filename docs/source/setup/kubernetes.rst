@@ -60,5 +60,5 @@ You may also want to see the documentation on using
 to help you manage your software environments on Kubernetes.
 
 .. _Kubernetes: https://kubernetes.io/
-.. _Dask-Kubernetes: https://dask-kubernetes.readthedocs.io/
+.. _Dask-Kubernetes: https://kubernetes.dask.org/
 .. _Helm: https://helm.sh/

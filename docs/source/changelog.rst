@@ -1272,7 +1272,7 @@ This release also includes a deprecation warning for ``dask.distributed``, which
 will be removed in the next version.
 
 Future development in distributed computing for dask is happening here:
-https://distributed.readthedocs.io . General feedback on that project is most
+https://distributed.dask.org . General feedback on that project is most
 welcome from this community.
 
 

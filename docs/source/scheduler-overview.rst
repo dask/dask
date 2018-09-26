@@ -10,7 +10,7 @@ implements a few different schedulers:
 - ``distributed.Client.get``: a distributed scheduler for executing graphs
    on multiple machines.  This lives in the external distributed_ project.
 
-.. _distributed: https://distributed.readthedocs.io/en/latest/
+.. _distributed: https://distributed.dask.org/en/latest/
 
 
 The ``get`` function

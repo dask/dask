@@ -25,7 +25,7 @@ New users may instead prefer to start with one of the following projects, which
 provide easy high-level access to Dask using resource managers that are
 commonly deployed on HPC systems:
 
-1.  `dask-jobqueue <https://dask-jobqueue.readthedocs.io>`_ for use with PBS,
+1.  `dask-jobqueue <https://jobqueue.dask.org>`_ for use with PBS,
     SLURM, and SGE resource managers
 2.  `dask-drmaa <https://github.com/dask/dask-drmaa>`_ for use with any DRMAA
     compliant resource manager
@@ -47,7 +47,7 @@ They provide interfaces that look like the following:
    from dask.distributed import Client
    client = Client(cluster)    # Connect to that cluster
 
-We recommend reading the `dask-jobqueue documentation <https://dask-jobqueue.readthedocs.io>`_
+We recommend reading the `dask-jobqueue documentation <https://jobqueue.dask.org>`_
 first to get a basic system running, and then returning this this documentation
 for fine-tuning.
 
