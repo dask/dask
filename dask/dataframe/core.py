@@ -7,7 +7,7 @@ from pprint import pformat
 from collections import Sequence
 import warnings
 
-from toolz import merge, first, unique, partition_all, remove
+from toolz import merge, first, unique, partition_all, remove, pluck
 import pandas as pd
 import numpy as np
 from numbers import Number, Integral
@@ -67,40 +67,6 @@ def _concat(args):
     # this seems easier. TODO: don't do this.
     args2 = [i for i in args if len(i)]
     return args[0] if not args2 else methods.concat(args2, uniform=True)
-
-
-def _get_return_type(meta):
-    if isinstance(meta, _Frame):
-        meta = meta._meta
-
-    if isinstance(meta, pd.Series):
-        return Series
-    elif isinstance(meta, pd.DataFrame):
-        return DataFrame
-    elif isinstance(meta, pd.Index):
-        return Index
-    return Scalar
-
-
-def new_dd_object(dsk, name, meta, divisions):
-    """Generic constructor for dask.dataframe objects.
-
-    Decides the appropriate output class based on the type of `meta` provided.
-    """
-    if isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)):
-        return _get_return_type(meta)(dsk, name, meta, divisions)
-    elif is_arraylike(meta):
-        import dask.array as da
-        chunks = (((np.nan,) * (len(divisions) - 1),) +
-                  tuple((d,) for d in meta.shape[1:]))
-        if len(chunks) > 1:
-            dsk = dsk.copy()
-            suffix = (0,) * (len(chunks) - 1)
-            for i in range(len(chunks[0])):
-                dsk[(name, i) + suffix] = dsk.pop((name, i))
-        return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
-    else:
-        return _get_return_type(meta)(dsk, name, meta, divisions)
 
 
 def finalize(results):
@@ -401,12 +367,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @property
     def index(self):
         """Return dask Index instance"""
-        name = self._name + '-index'
-        dsk = {(name, i): (getattr, key, 'index')
-               for i, key in enumerate(self.__dask_keys__())}
-
-        return Index(merge(dsk, self.dask), name,
-                     self._meta.index, self.divisions)
+        return self.map_partitions(getattr, 'index', token=self._name + '-index')
 
     def reset_index(self, drop=False):
         """Reset the index to the default index.
@@ -3622,7 +3583,7 @@ def map_partitions(func, *args, **kwargs):
         dask = {(name, 0):
                 (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)}
         return Scalar(merge(dask, *[arg.dask for arg in args]), name, meta)
-    elif not (isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)) or is_arraylike(meta)):
+    elif not (isinstance(meta, tuple(pluck(0, parallel_types))) or is_arraylike(meta)):
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
         meta = _concat([meta])
@@ -4408,3 +4369,42 @@ def _repr_data_series(s, index):
     else:
         dtype = str(s.dtype)
     return pd.Series([dtype] + ['...'] * npartitions, index=index, name=s.name)
+
+
+parallel_types = [
+    (pd.Series, Series),
+    (pd.DataFrame, DataFrame),
+    (pd.Index, Index),
+]
+
+
+def _get_return_type(meta):
+    if isinstance(meta, _Frame):
+        meta = meta._meta
+
+    for pd_type, dd_type in reversed(parallel_types):
+        if isinstance(meta, pd_type):
+            return dd_type
+
+    return Scalar
+
+
+def new_dd_object(dsk, name, meta, divisions):
+    """Generic constructor for dask.dataframe objects.
+
+    Decides the appropriate output class based on the type of `meta` provided.
+    """
+    if isinstance(meta, tuple(pluck(0, parallel_types))):
+        return _get_return_type(meta)(dsk, name, meta, divisions)
+    elif is_arraylike(meta):
+        import dask.array as da
+        chunks = (((np.nan,) * (len(divisions) - 1),) +
+                  tuple((d,) for d in meta.shape[1:]))
+        if len(chunks) > 1:
+            dsk = dsk.copy()
+            suffix = (0,) * (len(chunks) - 1)
+            for i in range(len(chunks[0])):
+                dsk[(name, i) + suffix] = dsk.pop((name, i))
+        return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
+    else:
+        return _get_return_type(meta)(dsk, name, meta, divisions)
