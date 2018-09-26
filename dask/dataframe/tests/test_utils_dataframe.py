@@ -66,7 +66,8 @@ def test_make_meta():
     assert meta.name == 'a'
 
     # With index
-    meta = make_meta({'a': 'i8', 'b': 'i4'}, pd.Int64Index([1, 2], name='foo'))
+    meta = make_meta({'a': 'i8', 'b': 'i4'},
+                     index=pd.Int64Index([1, 2], name='foo'))
     assert isinstance(meta.index, pd.Int64Index)
     assert len(meta.index) == 0
     meta = make_meta(('a', 'i8'), pd.Int64Index([1, 2], name='foo'))

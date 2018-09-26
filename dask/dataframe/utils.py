@@ -17,11 +17,12 @@ try:
 except ImportError:
     # pandas < 0.19.2
     from pandas.core.common import is_datetime64tz_dtype
+from toolz import pluck
 
 from ..compatibility import PY2, Iterator
 from ..core import get_deps
 from ..local import get_sync
-from ..utils import asciitable, is_arraylike
+from ..utils import asciitable, is_arraylike, Dispatch
 
 
 PANDAS_VERSION = LooseVersion(pd.__version__)
@@ -237,7 +238,21 @@ def _empty_series(name, dtype, index=None):
     return pd.Series([], dtype=dtype, name=name, index=index)
 
 
-def make_meta(x, index=None):
+make_meta = Dispatch('make_meta')
+
+
+@make_meta.register((pd.Series, pd.DataFrame))
+def make_meta_pandas(x):
+    return x.iloc[:0]
+
+
+@make_meta.register(pd.Index)
+def make_meta_index(x):
+    return x[:0]
+
+
+@make_meta.register(object)
+def make_meta_object(x, index=None):
     """Create an empty pandas object containing the desired metadata.
 
     Parameters
@@ -265,12 +280,9 @@ def make_meta(x, index=None):
     """
     if hasattr(x, '_meta'):
         return x._meta
-    if isinstance(x, (pd.Series, pd.DataFrame)):
-        return x.iloc[0:0]
-    elif isinstance(x, pd.Index):
-        return x[0:0]
     elif is_arraylike(x):
         return x[:0]
+
     index = index if index is None else index[0:0]
 
     if isinstance(x, dict):
@@ -307,6 +319,35 @@ else:
     _numeric_index_types = (pd.Int64Index, pd.Float64Index)
 
 
+meta_nonempty = Dispatch('meta_nonempty')
+
+
+@meta_nonempty.register(object)
+def meta_nonempty_object(x):
+    """Create a nonempty pandas object from the given metadata.
+
+    Returns a pandas DataFrame, Series, or Index that contains two rows
+    of fake data.
+    """
+    if is_scalar(x):
+        return _nonempty_scalar(x)
+    else:
+        raise TypeError("Expected Index, Series, DataFrame, or scalar, "
+                        "got {0}".format(type(x).__name__))
+
+
+@meta_nonempty.register(pd.DataFrame)
+def meta_nonempty_dataframe(x):
+    idx = meta_nonempty(x.index)
+    data = {i: _nonempty_series(x.iloc[:, i], idx=idx)
+            for i, c in enumerate(x.columns)}
+    res = pd.DataFrame(data, index=idx,
+                       columns=np.arange(len(x.columns)))
+    res.columns = x.columns
+    return res
+
+
+@meta_nonempty.register(pd.Index)
 def _nonempty_index(idx):
     typ = type(idx)
     if typ is pd.RangeIndex:
@@ -385,8 +426,10 @@ def _nonempty_scalar(x):
                         "'{0}'".format(type(x).__name__))
 
 
-def _nonempty_series(s, idx):
-
+@meta_nonempty.register(pd.Series)
+def _nonempty_series(s, idx=None):
+    if idx is None:
+        idx = _nonempty_index(s.index)
     dtype = s.dtype
     if is_datetime64tz_dtype(dtype):
         entry = pd.Timestamp('1970-01-01', tz=dtype.tz)
@@ -405,32 +448,6 @@ def _nonempty_series(s, idx):
         data = np.array([entry, entry], dtype=dtype)
 
     return pd.Series(data, name=s.name, index=idx)
-
-
-def meta_nonempty(x):
-    """Create a nonempty pandas object from the given metadata.
-
-    Returns a pandas DataFrame, Series, or Index that contains two rows
-    of fake data.
-    """
-    if isinstance(x, pd.Index):
-        return _nonempty_index(x)
-    elif isinstance(x, pd.Series):
-        idx = _nonempty_index(x.index)
-        return _nonempty_series(x, idx)
-    elif isinstance(x, pd.DataFrame):
-        idx = _nonempty_index(x.index)
-        data = {i: _nonempty_series(x.iloc[:, i], idx)
-                for i, c in enumerate(x.columns)}
-        res = pd.DataFrame(data, index=idx,
-                           columns=np.arange(len(x.columns)))
-        res.columns = x.columns
-        return res
-    elif is_scalar(x):
-        return _nonempty_scalar(x)
-    else:
-        raise TypeError("Expected Index, Series, DataFrame, or scalar, "
-                        "got {0}".format(type(x).__name__))
 
 
 def check_meta(x, meta, funcname=None, numeric_equal=True):
@@ -469,14 +486,15 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             return a == b
         return (a.kind in eq_types and b.kind in eq_types) or (a == b)
 
-    if not isinstance(meta, (pd.Series, pd.Index, pd.DataFrame)):
+    from .core import parallel_types
+    if not isinstance(meta, tuple(pluck(0, parallel_types))):
         raise TypeError("Expected partition to be DataFrame, Series, or "
                         "Index, got `%s`" % type(meta).__name__)
 
     if type(x) != type(meta):
         errmsg = ("Expected partition of type `%s` but got "
                   "`%s`" % (type(meta).__name__, type(x).__name__))
-    elif isinstance(meta, pd.DataFrame):
+    elif hasattr(meta, 'dtypes'): # isinstance(meta, pd.DataFrame):
         kwargs = dict()
         if PANDAS_VERSION >= LooseVersion('0.23.0'):
             kwargs['sort'] = True
