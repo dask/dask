@@ -3604,7 +3604,7 @@ def map_partitions(func, *args, **kwargs):
     if meta is not no_default:
         meta = make_meta(meta)
 
-    kwargs2 = {k: delayed(v) if sizeof(v) > 1e6 else v
+    kwargs2 = {k: delayed(v) if not is_dask_collection(v) and sizeof(v) > 1e6 else v
                for k, v in kwargs.items()}
 
     assert callable(func)

@@ -761,9 +761,10 @@ def map_blocks(func, *args, **kwargs):
     if has_keyword(func, 'block_info'):
         kwargs['block_info'] = '__dummy__'
 
-    kwargs2 = {k: delayed(v) if sizeof(v) > 1e6 else v
+    kwargs2 = {k: delayed(v) if not is_dask_collection(v) and sizeof(v) > 1e6 else v
                for k, v in kwargs.items()}
-    arginds = list(concat([(delayed(x) if sizeof(x) > 1e6 and ind is None else x, ind)
+    arginds = list(concat([(delayed(x) if not is_dask_collection(x) and
+                            sizeof(x) > 1e6 and ind is None else x, ind)
                            for x, ind in argpairs]))
     dsk = top(func, name, out_ind, *arginds, numblocks=numblocks,
               **kwargs2)
@@ -2856,7 +2857,7 @@ def atop(func, out_ind, *args, **kwargs):
                              % (ind, arg.ndim))
 
     numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
-    argindsstr = list(concat([((delayed(a) if sizeof(a) > 1e6 else a)
+    argindsstr = list(concat([((delayed(a) if not is_dask_collection(a) and sizeof(a) > 1e6 else a)
                                if ind is None else a.name, ind)
                               for a, ind in arginds]))
     # Finish up the name
@@ -2864,7 +2865,7 @@ def atop(func, out_ind, *args, **kwargs):
         out = '%s-%s' % (token or funcname(func).strip('_'),
                          tokenize(func, out_ind, argindsstr, dtype, **kwargs))
 
-    kwargs2 = {k: delayed(v) if sizeof(v) > 1e6 else v
+    kwargs2 = {k: delayed(v) if not is_dask_collection(v) and sizeof(v) > 1e6 else v
                for k, v in kwargs.items()}
     dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs2)
     dsks = [a.dask for a, ind in arginds if ind is not None]
