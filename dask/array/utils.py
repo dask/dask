@@ -21,7 +21,15 @@ except AttributeError:
         AxisError = type(e)
 
 
+def normalize_to_array(x):
+    if 'cupy' in str(type(x)):
+        return x.get()
+    else:
+        return x
+
 def allclose(a, b, equal_nan=False, **kwargs):
+    a = normalize_to_array(a)
+    b = normalize_to_array(b)
     if getattr(a, 'dtype', None) != 'O':
         return np.allclose(a, b, equal_nan=equal_nan, **kwargs)
     if equal_nan:
