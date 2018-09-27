@@ -546,8 +546,8 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
         if result is None:
             result = dsk.compute(scheduler='sync')
         if isinstance(dsk, dd.Index):
-            assert isinstance(result, pd.Index), type(result)
-            assert isinstance(dsk._meta, pd.Index), type(dsk._meta)
+            assert 'Index' in type(result).__name__, type(result)
+            # assert type(dsk._meta) == type(result), type(dsk._meta)
             if check_names:
                 assert dsk.name == result.name
                 assert dsk._meta.name == result.name
@@ -556,8 +556,8 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
         elif isinstance(dsk, dd.Series):
-            assert isinstance(result, pd.Series), type(result)
-            assert isinstance(dsk._meta, pd.Series), type(dsk._meta)
+            assert 'Series' in type(result).__name__, type(result)
+            assert type(dsk._meta) == type(result), type(dsk._meta)
             if check_names:
                 assert dsk.name == result.name, (dsk.name, result.name)
                 assert dsk._meta.name == result.name
@@ -566,9 +566,9 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
             _check_dask(dsk.index, check_names=check_names,
                         check_dtypes=check_dtypes, result=result.index)
         elif isinstance(dsk, dd.DataFrame):
-            assert isinstance(result, pd.DataFrame), type(result)
+            assert 'DataFrame' in type(result).__name__, type(result)
             assert isinstance(dsk.columns, pd.Index), type(dsk.columns)
-            assert isinstance(dsk._meta, pd.DataFrame), type(dsk._meta)
+            assert type(dsk._meta) == type(result), type(dsk._meta)
             if check_names:
                 tm.assert_index_equal(dsk.columns, result.columns)
                 tm.assert_index_equal(dsk._meta.columns, result.columns)
@@ -616,6 +616,10 @@ def assert_eq(a, b, check_names=True, check_dtypes=True,
     if not check_index:
         a = a.reset_index(drop=True)
         b = b.reset_index(drop=True)
+    if hasattr(a, 'to_pandas'):
+        a = a.to_pandas()
+    if hasattr(b, 'to_pandas'):
+        b = b.to_pandas()
     if isinstance(a, pd.DataFrame):
         a = _maybe_sort(a)
         b = _maybe_sort(b)
@@ -659,8 +663,12 @@ def assert_divisions(ddf):
         return
 
     def index(x):
-        return (x if isinstance(x, pd.Index)
-                else x.index.get_level_values(0))
+        if isinstance(x, pd.Index):
+            return x
+        try:
+            return x.index.get_level_values(0)
+        except AttributeError:
+            return x.index
 
     results = get_sync(ddf.dask, ddf.__dask_keys__())
     for i, df in enumerate(results[:-1]):
