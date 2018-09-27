@@ -406,12 +406,12 @@ class Dispatch(object):
                 return lk[cls2]
         raise TypeError("No dispatch for {0}".format(cls))
 
-    def __call__(self, arg, **kwargs):
+    def __call__(self, arg, *args, **kwargs):
         """
         Call the corresponding method based on type of argument.
         """
         meth = self.dispatch(type(arg))
-        return meth(arg, **kwargs)
+        return meth(arg, *args, **kwargs)
 
 
 def ensure_not_exists(filename):
