@@ -6,7 +6,7 @@ import pytest
 import dask.config
 from dask.config import (update, merge, collect, collect_yaml, collect_env,
                          get, ensure_file, set, config, rename,
-                         update_defaults, refresh)
+                         update_defaults, refresh, expand_environment_variables)
 from dask.utils import tmpfile
 
 
@@ -279,3 +279,21 @@ def test_refresh():
 
     refresh(paths=[], env={'DASK_C': '3'}, config=config, defaults=defaults)
     assert config == {'a': 1, 'c': 3}
+
+
+@pytest.mark.parametrize('inp,out', [
+    ('1', '1'),
+    (1, 1),
+    ('$FOO', 'foo'),
+    ([1, '$FOO'], [1, 'foo']),
+    ((1, '$FOO'), (1, 'foo')),
+    ({1, '$FOO'}, {1, 'foo'}),
+    ({'a': '$FOO'}, {'a': 'foo'}),
+    ({'a': 'A', 'b': [1, '2', '$FOO']}, {'a': 'A', 'b': [1, '2', 'foo']})
+])
+def test_expand_environment_variables(inp, out):
+    try:
+        os.environ["FOO"] = "foo"
+        assert expand_environment_variables(inp) == out
+    finally:
+        del os.environ['FOO']

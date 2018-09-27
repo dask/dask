@@ -9,7 +9,7 @@ provides some more flexibility in situations where the computations may evolve
 over time.
 
 These features depend on the second generation task scheduler found in
-`dask.distributed <https://distributed.readthedocs.org/en/latest>`_ (which,
+`dask.distributed <https://distributed.dask.org/en/latest>`_ (which,
 despite its name, runs very well on a single machine).
 
 .. currentmodule:: distributed
@@ -422,7 +422,7 @@ Coordination Primitives
    Pub
    Sub
 
-*These are advanced features and are rarely necessary in the common case.*
+.. note: These are advanced features and are rarely necessary in the common case.
 
 Sometimes situations arise where tasks, workers, or clients need to coordinate
 with each other in ways beyond normal task scheduling with futures.  In these
@@ -603,6 +603,132 @@ providing an additional channel of communication between ongoing tasks.
 
 .. autoclass:: Pub
    :members:
+
+Actors
+------
+
+.. note: This is an advanced feature and is rarely necessary in the common case.
+.. note: This is an experimental feature and is subject to change without notice
+
+Actors allow workers to manage rapidly changing state without coordinating with
+the central scheduler.  This has the advantage of reducing latency
+(worker-to-worker roundtrip latency is around 1ms), reducing pressure on the
+centralized scheduler (workers can coordinate actors entirely among each other)
+and also enabling workflows that require stateful or in-place memory
+manipulation.
+
+However, these benefits come at a cost.  The scheduler is unaware of actors and
+so they don't benefit from diagnostics, load balancing, or resilience.  Once an
+actor is running on a worker it is forever tied to that worker.  If that worker
+becomes overburdened or dies then there is not opportunity to recover the
+workload.
+
+*Because Actors avoid the central scheduler they can be high-performing, but not resilient.*
+
+Example: Counter
+~~~~~~~~~~~~~~~~
+
+An actor is a class containing both state and methods that is submitted to a
+worker.
+
+.. code-block:: python
+
+   class Counter:
+       n = 0
+
+       def __init__(self):
+           self.n = 0
+
+       def increment(self):
+           self.n += 1
+           return self.n
+
+   from dask.distributed import Client
+   client = Client()
+
+   future = client.submit(Counter, actor=True)
+   counter = future.result()
+
+   >>> counter
+   <Actor: Counter, key=Counter-afa1cdfb6b4761e616fa2cfab42398c8>
+
+Method calls on this object produce ``ActorFutures``, which are similar to
+normal Futures, but interact only with the worker holding the Actor:
+
+.. code-block:: python
+
+   >>> future = counter.increment()
+   >>> future
+   <ActorFuture>
+
+   >>> future.result()
+   1
+
+Attribute access is synchronous and blocking:
+
+.. code-block:: python
+
+   >>> counter.n
+   1
+
+
+Example: Parameter Server
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+   import numpy as np
+
+   from dask.distributed import Client
+   client = Client(processes=False)
+
+   class ParameterServer:
+       def __init__(self):
+           self.data = dict()
+
+       def put(self, key, value):
+           self.data[key] = value
+
+       def get(self, key):
+           return self.data[key]
+
+   ps_future = client.submit(ParameterServer, actor=True)
+   ps = ps_future.result()
+
+   ps.put('parameters', np.random.random(1000))
+
+   def train(batch, ps):
+       params = ps.get('parameters')
+
+   for batch in batches:
+
+
+Asynchronous Operation
+~~~~~~~~~~~~~~~~~~~~~~
+
+All operations that require talking to the remote worker are awaitable
+
+.. code-block:: python
+
+   async def f():
+       future = client.submit(Counter, actor=True)
+       counter = await future  # gather actor object locally
+
+       counter.increment()  # send off a request asynchronously
+       await counter.increment()  # or wait until it was received
+
+       n = await counter.n  # attribute access also must be awaited
+
+
+
+
+Usually Dask computations are composed of tasks that build off of each other in
+a pure functional way.  They're centrally manathat are managed by the central
+scheduler and
+
+Because tasks are assumed to
+be pure (they don't change their inputs) and are known and coordinated by the
+central scheduler they are safe and
 
 
 API

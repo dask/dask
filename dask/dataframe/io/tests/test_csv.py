@@ -29,6 +29,10 @@ def normalize_text(s):
     return '\n'.join(map(str.strip, s.strip().split('\n')))
 
 
+def parse_filename(path):
+    return os.path.split(path)[1]
+
+
 csv_text = """
 name,amount
 Alice,100
@@ -98,6 +102,8 @@ comment_header = b"""# some header lines
 # in a data file
 # before any data"""
 
+csv_units_row = b'str, int, int\n'
+tsv_units_row = csv_units_row.replace(b',', b'\t')
 
 csv_and_table = pytest.mark.parametrize('reader,files',
                                         [(pd.read_csv, csv_files),
@@ -207,6 +213,19 @@ def test_skiprows(dd_read, pd_read, files):
         assert_eq(df, expected_df, check_dtype=False)
 
 
+@pytest.mark.parametrize('dd_read,pd_read,files,units',
+                         [(dd.read_csv, pd.read_csv, csv_files, csv_units_row),
+                          (dd.read_table, pd.read_table, tsv_files, tsv_units_row)])
+def test_skiprows_as_list(dd_read, pd_read, files, units):
+    files = {name: (comment_header + b'\n' +
+                    content.replace(b'\n', b'\n' + units, 1)) for name, content in files.items()}
+    skip = [0, 1, 2, 3, 5]
+    with filetexts(files, mode='b'):
+        df = dd_read('2014-01-*.csv', skiprows=skip)
+        expected_df = pd.concat([pd_read(n, skiprows=skip) for n in sorted(files)])
+        assert_eq(df, expected_df, check_dtype=False)
+
+
 csv_blocks = [[b'aa,bb\n1,1.0\n2,2.0', b'10,20\n30,40'],
               [b'aa,bb\n1,1.0\n2,2.0', b'10,20\n30,40']]
 
@@ -256,6 +275,35 @@ def test_read_csv(dd_read, pd_read, text, sep):
         assert_eq(result, pd_read(fn, sep=sep))
 
 
+@pytest.mark.parametrize('dd_read,pd_read,text,skip',
+                         [(dd.read_csv, pd.read_csv, csv_text, 7),
+                          (dd.read_table, pd.read_table, tsv_text, [1, 13])])
+def test_read_csv_large_skiprows(dd_read, pd_read, text, skip):
+    names = ['name', 'amount']
+    with filetext(text) as fn:
+        actual = dd_read(fn, skiprows=skip, names=names)
+        assert_eq(actual, pd_read(fn, skiprows=skip, names=names))
+
+
+@pytest.mark.parametrize('dd_read,pd_read,text,skip',
+                         [(dd.read_csv, pd.read_csv, csv_text, 7),
+                          (dd.read_table, pd.read_table, tsv_text, [1, 12])])
+def test_read_csv_skiprows_only_in_first_partition(dd_read, pd_read, text, skip):
+    names = ['name', 'amount']
+    with filetext(text) as fn:
+        with pytest.warns(UserWarning) as w:
+            actual = dd_read(fn, blocksize=200, skiprows=skip, names=names).compute()
+            assert_eq(actual, pd_read(fn, skiprows=skip, names=names))
+            assert len(w) == 1
+            msg = str(w[0].message)
+            assert 'sample=blocksize' in msg
+
+        with pytest.warns(UserWarning):
+            # if new sample does not contain all the skiprows, raise error
+            with pytest.raises(ValueError):
+                dd_read(fn, blocksize=30, skiprows=skip, names=names)
+
+
 @pytest.mark.parametrize('dd_read,pd_read,files',
                          [(dd.read_csv, pd.read_csv, csv_files),
                           (dd.read_table, pd.read_table, tsv_files)])
@@ -282,6 +330,56 @@ def test_read_csv_files_list(dd_read, pd_read, files):
 
         with pytest.raises(ValueError):
             dd_read([])
+
+
+@pytest.mark.parametrize('dd_read,files',
+                         [(dd.read_csv, csv_files),
+                          (dd.read_table, tsv_files)])
+def test_read_csv_include_path_column(dd_read, files):
+    with filetexts(files, mode='b'):
+        df = dd_read('2014-01-*.csv', include_path_column=True,
+                     converters={'path': parse_filename})
+        filenames = df.path.compute().unique()
+        assert '2014-01-01.csv' in filenames
+        assert '2014-01-02.csv' not in filenames
+        assert '2014-01-03.csv' in filenames
+
+
+@pytest.mark.parametrize('dd_read,files',
+                         [(dd.read_csv, csv_files),
+                          (dd.read_table, tsv_files)])
+def test_read_csv_include_path_column_as_str(dd_read, files):
+    with filetexts(files, mode='b'):
+        df = dd_read('2014-01-*.csv', include_path_column='filename',
+                     converters={'filename': parse_filename})
+        filenames = df.filename.compute().unique()
+        assert '2014-01-01.csv' in filenames
+        assert '2014-01-02.csv' not in filenames
+        assert '2014-01-03.csv' in filenames
+
+
+@pytest.mark.parametrize('dd_read,files',
+                         [(dd.read_csv, csv_files),
+                          (dd.read_table, tsv_files)])
+def test_read_csv_include_path_column_with_duplicate_name(dd_read, files):
+    with filetexts(files, mode='b'):
+        with pytest.raises(ValueError):
+            dd_read('2014-01-*.csv', include_path_column='name')
+
+
+@pytest.mark.parametrize('dd_read,files',
+                         [(dd.read_csv, csv_files),
+                          (dd.read_table, tsv_files)])
+def test_read_csv_include_path_column_is_dtype_category(dd_read, files):
+    with filetexts(files, mode='b'):
+        df = dd_read('2014-01-*.csv', include_path_column=True)
+        assert df.path.dtype == 'category'
+        assert has_known_categories(df.path)
+
+        dfs = dd_read('2014-01-*.csv', include_path_column=True, collection=False)
+        result = dfs[0].compute()
+        assert result.path.dtype == 'category'
+        assert has_known_categories(result.path)
 
 
 # After this point, we test just using read_csv, as all functionality

@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import copy
 import io
 import os
 from distutils.version import LooseVersion
@@ -19,7 +20,7 @@ from ..utils import import_required, is_integer
 
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
-               sample=True, compression=None, **kwargs):
+               sample=True, compression=None, include_path=False, **kwargs):
     """Given a path or paths, return delayed objects that read from those paths.
 
     The path may be a filename like ``'2015-01-01.csv'`` or a globstring
@@ -50,6 +51,9 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     sample : bool or int
         Whether or not to return a header sample. If an integer is given it is
         used as sample size, otherwise the default sample size is 10kB.
+    include_path : bool
+        Whether or not to include the path with the bytes representing a particular file.
+        Default is False.
     **kwargs : dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
@@ -58,6 +62,7 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     --------
     >>> sample, blocks = read_bytes('2015-*-*.csv', delimiter=b'\\n')  # doctest: +SKIP
     >>> sample, blocks = read_bytes('s3://bucket/2015-*-*.csv', delimiter=b'\\n')  # doctest: +SKIP
+    >>> sample, paths, blocks = read_bytes('2015-*-*.csv', include_path=True)  # doctest: +SKIP
 
     Returns
     -------
@@ -66,6 +71,10 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     blocks : list of lists of ``dask.Delayed``
         Each list corresponds to a file, and each delayed object computes to a
         block of bytes from that file.
+    paths : list of strings, only included if include_path is True
+        List of same length as blocks, where each item is the path to the file
+        represented in the corresponding block.
+
     """
     fs, fs_token, paths = get_fs_token_paths(urlpath, mode='rb',
                                              storage_options=kwargs)
@@ -106,20 +115,22 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         token = tokenize(fs_token, delimiter, path, fs.ukey(path),
                          compression, offset)
         keys = ['read-block-%s-%s' % (o, token) for o in offset]
-        out.append([delayed_read(OpenFile(fs, path, compression=compression),
-                                 o, l, delimiter, dask_key_name=key)
-                    for o, key, l in zip(offset, keys, length)])
+        values = [delayed_read(OpenFile(fs, path, compression=compression),
+                               o, l, delimiter, dask_key_name=key)
+                  for o, key, l in zip(offset, keys, length)]
+        out.append(values)
 
     if sample:
         with OpenFile(fs, paths[0], compression=compression) as f:
             nbytes = 10000 if sample is True else sample
             sample = read_block(f, 0, nbytes, delimiter)
-
+    if include_path:
+        return sample, out, paths
     return sample, out
 
 
 def read_block_from_file(lazy_file, off, bs, delimiter):
-    with lazy_file as f:
+    with copy.copy(lazy_file) as f:
         return read_block(f, off, bs, delimiter)
 
 
@@ -263,6 +274,41 @@ def infer_options(urlpath):
     return urlpath, protocol, options
 
 
+def expand_paths_if_needed(paths, mode, num, fs, name_function):
+    """Expand paths if they have a ``*`` in them.
+
+    :param paths: list of paths
+    mode : str
+        Mode in which to open files.
+    num : int
+        If opening in writing mode, number of files we expect to create.
+    fs : filesystem object
+    name_function : callable
+        If opening in writing mode, this callable is used to generate path
+        names. Names are generated for each partition by
+        ``urlpath.replace('*', name_function(partition_index))``.
+    :return: list of paths
+    """
+    expanded_paths = []
+    paths = list(paths)
+    if 'w' in mode and sum([1 for p in paths if '*' in p]) > 1:
+        raise ValueError("When writing data, only one filename mask can be specified.")
+    for curr_path in paths:
+        if '*' in curr_path:
+            if 'w' in mode:
+                # expand using name_function
+                expanded_paths.extend(_expand_paths(curr_path, name_function, num))
+            else:
+                # expand using glob
+                expanded_paths.extend(fs.glob(curr_path))
+        else:
+            expanded_paths.append(curr_path)
+    # if we generated more paths that asked for, trim the list
+    if 'w' in mode and len(expanded_paths) > num:
+        expanded_paths = expanded_paths[:num]
+    return expanded_paths
+
+
 def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
                        storage_options=None):
     """Filesystem, deterministic token, and paths from a urlpath and options.
@@ -294,9 +340,8 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
             raise ValueError("When specifying a list of paths, all paths must "
                              "share the same protocol and options")
         update_storage_options(options, storage_options)
-        paths = list(paths)
-
         fs, fs_token = get_fs(protocol, options)
+        paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
 
     elif isinstance(urlpath, (str, unicode)) or hasattr(urlpath, 'name'):
         urlpath, protocol, options = infer_options(urlpath)
@@ -337,41 +382,6 @@ def get_mapper(fs, path):
         raise ValueError('No mapper for protocol "%s"' % fs.protocol)
 
 
-def open_text_files(urlpath, compression=None, mode='rt', encoding='utf8',
-                    errors='strict', **kwargs):
-    """ Given path return dask.delayed file-like objects in text mode
-
-    This function is deprecated, use ``open_files(path, mode='rt', ...)``.
-
-    Parameters
-    ----------
-    urlpath: string
-        Absolute or relative filepath, URL (may include protocols like
-        ``s3://``), or globstring pointing to data.
-    encoding: string
-    errors: string
-    compression: string
-        Compression to use.  See ``dask.bytes.compression.files`` for options.
-    **kwargs: dict
-        Extra options that make sense to a particular storage connection, e.g.
-        host, port, username, password, etc.
-
-    Examples
-    --------
-    >>> files = open_text_files('2015-*-*.csv', encoding='utf-8')  # doctest: +SKIP
-    >>> files = open_text_files('s3://bucket/2015-*-*.csv')  # doctest: +SKIP
-
-    Returns
-    -------
-    List of ``dask.delayed`` objects that compute to text file-like objects
-    """
-    warn("DeprecationWarning: open_text_files is deprecated, use `open_files` "
-         "with mode='rt' or mode='wt'")
-    return open_files(urlpath, mode=mode.replace('b', 't'),
-                      compression=compression, encoding=encoding,
-                      errors=errors, **kwargs)
-
-
 def _expand_paths(path, name_function, num):
     if isinstance(path, (str, unicode)):
         if path.count('*') > 1:
@@ -410,13 +420,13 @@ def get_hdfs_driver(driver="auto"):
     A filesystem class
     """
     if driver == 'auto':
-        for d in ['hdfs3', 'pyarrow']:
+        for d in ['pyarrow', 'hdfs3']:
             try:
                 return get_hdfs_driver(d)
             except RuntimeError:
                 pass
         else:
-            raise RuntimeError("Please install either `hdfs3` or `pyarrow`")
+            raise RuntimeError("Please install either `pyarrow` (preferred) or `hdfs3`")
 
     elif driver == 'hdfs3':
         import_required('hdfs3', "`hdfs3` not installed")
@@ -489,12 +499,6 @@ def get_fs(protocol, storage_options=None):
 
 
 _filesystems = dict()
-
-
-class FileSystem(object):
-    """Deprecated, do not use. Implement filesystems by matching the interface
-    of `dask.bytes.local.LocalFileSystem` instead of subclassing."""
-    pass
 
 
 def logical_size(fs, path, compression='infer'):

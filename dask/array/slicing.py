@@ -69,7 +69,7 @@ def sanitize_index(ind):
         return np.asanyarray(nonzero)
     elif np.issubdtype(index_array.dtype, np.integer):
         return index_array
-    elif np.issubdtype(index_array.dtype, float):
+    elif np.issubdtype(index_array.dtype, np.floating):
         int_index = index_array.astype(np.intp)
         if np.allclose(index_array, int_index):
             return int_index
@@ -172,7 +172,7 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
     where_none = [i for i, ind in enumerate(index) if ind is None]
     where_none_orig = list(where_none)
     for i, x in enumerate(where_none):
-        n = sum(isinstance(ind, int) for ind in index[:x])
+        n = sum(isinstance(ind, Integral) for ind in index[:x])
         if n:
             where_none[i] -= n
 
@@ -391,7 +391,7 @@ def _slice_1d(dim_shape, lengths, index):
             ind = index - chunk_boundaries[i - 1]
         else:
             ind = index
-        return {i: ind}
+        return {int(i): int(ind)}
 
     assert isinstance(index, slice)
 
@@ -718,23 +718,21 @@ def normalize_slice(idx, dim):
     """
 
     if isinstance(idx, slice):
-        start, stop, step = idx.start, idx.stop, idx.step
-        if start is not None:
-            if start < 0 and not math.isnan(dim):
-                start = max(0, start + dim)
-            elif start > dim:
-                start = dim
-        if stop is not None:
-            if stop < 0 and not math.isnan(dim):
-                stop = max(0, stop + dim)
-            elif stop > dim:
-                stop = dim
-        if start == 0:
-            start = None
-        if stop == dim:
-            stop = None
-        if step == 1:
-            step = None
+        if math.isnan(dim):
+            return idx
+        start, stop, step = idx.indices(dim)
+        if step > 0:
+            if start == 0:
+                start = None
+            if stop >= dim:
+                stop = None
+            if step == 1:
+                step = None
+        elif step < 0:
+            if start >= dim - 1:
+                start = None
+            if stop < 0:
+                stop = None
         return slice(start, stop, step)
     return idx
 

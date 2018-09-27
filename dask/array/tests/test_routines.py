@@ -3,7 +3,6 @@ from __future__ import division, print_function, absolute_import
 import itertools
 from numbers import Number
 import textwrap
-import sys
 
 import pytest
 from distutils.version import LooseVersion
@@ -11,8 +10,9 @@ from distutils.version import LooseVersion
 np = pytest.importorskip('numpy')
 
 import dask.array as da
+from dask.compatibility import PY2
 from dask.utils import ignoring
-from dask.array.utils import assert_eq, same_keys
+from dask.array.utils import assert_eq, same_keys, AxisError
 from dask.array.einsumfuncs import einsum_can_optimize
 
 
@@ -265,7 +265,7 @@ def test_tensordot():
                      da.tensordot(a, b, axes=(1, 0)))
 
     # Increasing number of chunks warning
-    with pytest.warns(None if sys.version_info[0] == 2 else da.PerformanceWarning):
+    with pytest.warns(None if PY2 else da.PerformanceWarning):
         assert not same_keys(da.tensordot(a, b, axes=0),
                              da.tensordot(a, b, axes=1))
 
@@ -449,11 +449,16 @@ def test_ediff1d(shape, to_end, to_begin):
     [(10, 15, 20), (), 2],
     [(10, 15, 20), (), -1],
     [(10, 15, 20), (), (0, 2)],
+    [(10, 15, 20), (np.exp(np.arange(10)), np.exp(np.arange(20)), ), (0, 2)],
+    [(10, 15, 20), (0.5, np.exp(np.arange(20)), ), (0, 2)],
+    [(10, 15, 20), (np.exp(np.arange(20)), ), -1],
 ])
 @pytest.mark.parametrize('edge_order', [
     1,
     2
 ])
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="Old np.gradient does not support coordinate.")
 def test_gradient(shape, varargs, axis, edge_order):
     a = np.random.randint(0, 10, shape)
     d_a = da.from_array(a, chunks=(len(shape) * (5,)))
@@ -543,6 +548,15 @@ def test_histogram_alternative_bins_range():
     v = da.random.random(100, chunks=10)
     (a1, b1) = da.histogram(v, bins=10, range=(0, 1))
     (a2, b2) = np.histogram(v, bins=10, range=(0, 1))
+    assert_eq(a1, a2)
+    assert_eq(b1, b2)
+
+
+def test_histogram_bins_range_with_nan_array():
+    # Regression test for issue #3977
+    v = da.from_array(np.array([-2, np.nan, 2]), chunks=1)
+    (a1, b1) = da.histogram(v, bins=10, range=(-3, 3))
+    (a2, b2) = np.histogram(v, bins=10, range=(-3, 3))
     assert_eq(a1, a2)
     assert_eq(b1, b2)
 
@@ -935,6 +949,14 @@ def test_isnull():
         assert_eq(da.notnull(a), ~np.isnan(x))
 
 
+def test_isnull_result_is_an_array():
+    # regression test for https://github.com/dask/dask/issues/3822
+    arr = da.from_array(np.arange(3, dtype=np.int64), chunks=-1)
+    with ignoring(ImportError):
+        result = da.isnull(arr[0]).compute()
+        assert type(result) is np.ndarray
+
+
 def test_isclose():
     x = np.array([0, np.nan, 1, 1.5])
     y = np.array([1e-9, np.nan, 1, 2])
@@ -1243,6 +1265,47 @@ def test_nonzero_method():
             assert_eq(d_nz[i], x_nz[i])
 
 
+@pytest.mark.skipif(
+    LooseVersion(np.__version__) < LooseVersion("1.14.0"),
+    reason="NumPy 1.14.0+ needed for `unravel_index` to take an empty shape."
+)
+def test_unravel_index_empty():
+    shape = tuple()
+    findices = np.array(0, dtype=int)
+    d_findices = da.from_array(findices, chunks=1)
+
+    indices = np.unravel_index(findices, shape)
+    d_indices = da.unravel_index(d_findices, shape)
+
+    assert isinstance(d_indices, type(indices))
+    assert len(d_indices) == len(indices) == 0
+
+
+def test_unravel_index():
+    for nindices, shape, order in [(0, (15,), 'C'),
+                                   (1, (15,), 'C'),
+                                   (3, (15,), 'C'),
+                                   (3, (15,), 'F'),
+                                   (2, (15, 16), 'C'),
+                                   (2, (15, 16), 'F')]:
+        arr = np.random.random(shape)
+        darr = da.from_array(arr, chunks=1)
+
+        findices = np.random.randint(np.prod(shape, dtype=int), size=nindices)
+        d_findices = da.from_array(findices, chunks=1)
+
+        indices = np.unravel_index(findices, shape, order)
+        d_indices = da.unravel_index(d_findices, shape, order)
+
+        assert isinstance(d_indices, type(indices))
+        assert len(d_indices) == len(indices)
+
+        for i in range(len(indices)):
+            assert_eq(d_indices[i], indices[i])
+
+        assert_eq(darr.vindex[d_indices], arr[indices])
+
+
 def test_coarsen():
     x = np.random.randint(10, size=(24, 24))
     d = da.from_array(x, chunks=(4, 8))
@@ -1288,10 +1351,10 @@ def test_insert():
     with pytest.raises(NotImplementedError):
         da.insert(a, [4, 2], -1, axis=0)
 
-    with pytest.raises(IndexError):
+    with pytest.raises(AxisError):
         da.insert(a, [3], -1, axis=2)
 
-    with pytest.raises(IndexError):
+    with pytest.raises(AxisError):
         da.insert(a, [3], -1, axis=-3)
 
 

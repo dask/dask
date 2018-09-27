@@ -1,19 +1,20 @@
 from __future__ import absolute_import, division, print_function
 
-import warnings
-
+import operator
 from functools import partial, wraps
 from itertools import product, repeat
 from math import factorial, log, ceil
-import operator
 
 import numpy as np
+from numbers import Integral
+
 from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
 from .core import _concatenate2, Array, atop, lol_tuples, handle_out
 from .creation import arange
 from .ufunc import sqrt
+from .utils import validate_axis
 from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
 from ..compatibility import getargspec, builtins
@@ -21,7 +22,6 @@ from ..base import tokenize
 from ..utils import ignoring, funcname, Dispatch
 from ..optimization_compile import __preserve_deps__, should_apply_marker
 from .. import config, sharedict
-
 
 # Generic functions to support chunks of different types
 empty_lookup = Dispatch('empty')
@@ -126,9 +126,9 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
     """
     if axis is None:
         axis = tuple(range(x.ndim))
-    if isinstance(axis, int):
+    if isinstance(axis, Integral):
         axis = (axis,)
-    axis = tuple(validate_axis(x.ndim, a) for a in axis)
+    axis = validate_axis(axis, x.ndim)
 
     if dtype is None:
         raise ValueError("Must specify dtype")
@@ -161,7 +161,7 @@ def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
     split_every = split_every or config.get('split_every', 4)
     if isinstance(split_every, dict):
         split_every = dict((k, split_every.get(k, 2)) for k in axis)
-    elif isinstance(split_every, int):
+    elif isinstance(split_every, Integral):
         n = builtins.max(int(split_every ** (1 / (len(axis) or 1))), 2)
         split_every = dict.fromkeys(axis, n)
     else:
@@ -456,7 +456,7 @@ def moment_agg(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
 
 def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
            split_every=None, out=None):
-    if not isinstance(order, int) or order < 0:
+    if not isinstance(order, Integral) or order < 0:
         raise ValueError("Order must be an integer >= 0")
 
     if order < 2:
@@ -529,34 +529,6 @@ with ignoring(AttributeError):
     nanstd = wraps(chunk.nanstd)(nanstd)
 
 
-def vnorm(a, ord=None, axis=None, dtype=None, keepdims=False, split_every=None,
-          out=None):
-    """ Vector norm
-
-    See np.linalg.norm
-    """
-
-    warnings.warn(
-        "DeprecationWarning: Please use `dask.array.linalg.norm` instead.",
-        UserWarning
-    )
-
-    if ord is None or ord == 'fro':
-        ord = 2
-    if ord == np.inf:
-        return max(abs(a), axis=axis, keepdims=keepdims,
-                   split_every=split_every, out=out)
-    elif ord == -np.inf:
-        return min(abs(a), axis=axis, keepdims=keepdims,
-                   split_every=split_every, out=out)
-    elif ord == 1:
-        return sum(abs(a), axis=axis, dtype=dtype, keepdims=keepdims,
-                   split_every=split_every, out=out)
-    else:
-        return sum(abs(a) ** ord, axis=axis, dtype=dtype, keepdims=keepdims,
-                   split_every=split_every, out=out) ** (1. / ord)
-
-
 def _arg_combine(data, axis, argfunc, keepdims=False):
     """ Merge intermediate results from ``arg_*`` functions"""
     axis = None if len(axis) == data.ndim or data.ndim == 1 else axis[0]
@@ -570,6 +542,7 @@ def _arg_combine(data, axis, argfunc, keepdims=False):
         local_args = argfunc(vals, axis=axis)
         inds = np.ogrid[tuple(map(slice, local_args.shape))]
         inds.insert(axis, local_args)
+        inds = tuple(inds)
         vals = vals[inds]
         arg = arg[inds]
         if keepdims:
@@ -642,11 +615,8 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
     if axis is None:
         axis = tuple(range(x.ndim))
         ravel = True
-    elif isinstance(axis, int):
-        if axis < 0:
-            axis += x.ndim
-        if axis < 0 or axis >= x.ndim:
-            raise ValueError("axis entry is out of bounds")
+    elif isinstance(axis, Integral):
+        axis = validate_axis(axis, x.ndim)
         axis = (axis,)
         ravel = x.ndim == 1
     else:
@@ -654,7 +624,8 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
                         "got '{0}'".format(axis))
 
     # Map chunk across all blocks
-    name = 'arg-reduce-chunk-{0}'.format(tokenize(chunk, axis))
+    name = 'arg-reduce-{0}'.format(tokenize(axis, x, chunk,
+                                            combine, split_every))
     old = x.name
     keys = list(product(*map(range, x.numblocks)))
     offsets = list(product(*(accumulate(operator.add, bd[:-1], 0)
@@ -749,12 +720,13 @@ def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
         axis = 0
     if dtype is None:
         dtype = getattr(func(np.empty((0,), dtype=x.dtype)), 'dtype', object)
-    assert isinstance(axis, int)
-    axis = validate_axis(x.ndim, axis)
+    assert isinstance(axis, Integral)
+    axis = validate_axis(axis, x.ndim)
 
     m = x.map_blocks(func, axis=axis, dtype=dtype)
 
-    name = '%s-axis=%d-%s' % (func.__name__, axis, tokenize(x, dtype))
+    name = '{0}-{1}'.format(func.__name__, tokenize(func, axis, binop,
+                                                    ident, x, dtype))
     n = x.numblocks[axis]
     full = slice(None, None, None)
     slc = (full,) * axis + (slice(-1, None),) + (full,) * (x.ndim - axis - 1)
@@ -806,17 +778,6 @@ def cumprod(x, axis=None, dtype=None, out=None):
     return cumreduction(np.cumprod, _cumprod_merge, 1, x, axis, dtype, out=out)
 
 
-def validate_axis(ndim, axis):
-    """ Validate single axis dimension against number of dimensions """
-    if axis > ndim - 1 or axis < -ndim:
-        raise ValueError("Axis must be between -%d and %d, got %d" %
-                         (ndim, ndim - 1, axis))
-    if axis < 0:
-        return axis + ndim
-    else:
-        return axis
-
-
 def topk(a, k, axis=-1, split_every=None):
     """ Extract the k largest elements from a on the given axis,
     and return them sorted from largest to smallest.
@@ -853,12 +814,7 @@ def topk(a, k, axis=-1, split_every=None):
     >>> d.topk(-2).compute()
     array([1, 3])
     """
-    if isinstance(a, int) and isinstance(k, Array):
-        warnings.warn("DeprecationWarning: topk(k, a) has been replaced with "
-                      "topk(a, k)")
-        a, k = k, a
-
-    axis = validate_axis(a.ndim, axis)
+    axis = validate_axis(axis, a.ndim)
 
     # chunk and combine steps of the reduction, which recursively invoke
     # np.partition to pick the top/bottom k elements from the previous step.
@@ -895,7 +851,7 @@ def argtopk(a, k, axis=-1, split_every=None):
 
     Returns
     -------
-    Selection of int64 indices of x with size abs(k) along the given axis.
+    Selection of np.intp indices of x with size abs(k) along the given axis.
 
     Examples
     --------
@@ -907,10 +863,10 @@ def argtopk(a, k, axis=-1, split_every=None):
     >>> d.argtopk(-2).compute()
     array([1, 2])
     """
-    axis = validate_axis(a.ndim, axis)
+    axis = validate_axis(axis, a.ndim)
 
     # Generate nodes where every chunk is a tuple of (a, original index of a)
-    idx = arange(a.shape[axis], chunks=(a.chunks[axis], ), dtype=np.int64)
+    idx = arange(a.shape[axis], chunks=(a.chunks[axis], ), dtype=np.intp)
     idx = idx[tuple(slice(None) if i == axis else np.newaxis
                     for i in range(a.ndim))]
     a_plus_idx = a.map_blocks(chunk.argtopk_preprocess, idx,
@@ -928,5 +884,5 @@ def argtopk(a, k, axis=-1, split_every=None):
 
     return reduction(
         a_plus_idx, chunk=chunk_combine, combine=chunk_combine,
-        aggregate=aggregate, axis=axis, keepdims=True, dtype=np.int64,
+        aggregate=aggregate, axis=axis, keepdims=True, dtype=np.intp,
         split_every=split_every, concatenate=False, output_size=abs(k))

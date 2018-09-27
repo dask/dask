@@ -9,14 +9,16 @@ try:
 except ImportError:
     yaml = None
 
-from .compatibility import makedirs
+from collections import Mapping
+
+from .compatibility import makedirs, builtins
 
 
 no_default = '__no_default__'
 
 
 paths = [
-    '/etc/dask',
+    os.getenv('DASK_ROOT_CONFIG', '/etc/dask'),
     os.path.join(sys.prefix, 'etc', 'dask'),
     os.path.join(os.path.expanduser('~'), '.config', 'dask'),
     os.path.join(os.path.expanduser('~'), '.dask')
@@ -432,6 +434,36 @@ def update_defaults(new, config=config, defaults=defaults):
     """
     defaults.append(new)
     update(config, new, priority='old')
+
+
+def expand_environment_variables(config):
+    ''' Expand environment variables in a nested config dictionary
+
+    This function will recursively search through any nested dictionaries
+    and/or lists.
+
+    Parameters
+    ----------
+    config : dict, iterable, or str
+        Input object to search for environment variables
+
+    Returns
+    -------
+    config : same type as input
+
+    Examples
+    --------
+    >>> expand_environment_variables({'x': [1, 2, '$USER']})  # doctest: +SKIP
+    {'x': [1, 2, 'my-username']}
+    '''
+    if isinstance(config, Mapping):
+        return {k: expand_environment_variables(v) for k, v in config.items()}
+    elif isinstance(config, str):
+        return os.path.expandvars(config)
+    elif isinstance(config, (list, tuple, builtins.set)):
+        return type(config)([expand_environment_variables(v) for v in config])
+    else:
+        return config
 
 
 refresh()

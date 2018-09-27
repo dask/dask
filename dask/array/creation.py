@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Sequence
 from functools import partial, wraps
 from itertools import product
 from operator import add
@@ -11,6 +10,7 @@ from toolz import accumulate, sliding_window
 
 from .. import sharedict
 from ..base import tokenize
+from ..compatibility import Sequence
 from ..utils import ignoring
 from . import chunk
 from .core import (Array, asarray, normalize_chunks,
@@ -57,7 +57,8 @@ def empty_like(a, dtype=None, chunks=None):
 
     a = asarray(a)
     return empty(
-        a.shape, dtype=(dtype or a.dtype), chunks=(chunks or a.chunks)
+        a.shape, dtype=(dtype or a.dtype),
+        chunks=(chunks if chunks is not None else a.chunks)
     )
 
 
@@ -92,7 +93,8 @@ def ones_like(a, dtype=None, chunks=None):
 
     a = asarray(a)
     return ones(
-        a.shape, dtype=(dtype or a.dtype), chunks=(chunks or a.chunks)
+        a.shape, dtype=(dtype or a.dtype),
+        chunks=(chunks if chunks is not None else a.chunks)
     )
 
 
@@ -127,7 +129,8 @@ def zeros_like(a, dtype=None, chunks=None):
 
     a = asarray(a)
     return zeros(
-        a.shape, dtype=(dtype or a.dtype), chunks=(chunks or a.chunks)
+        a.shape, dtype=(dtype or a.dtype),
+        chunks=(chunks if chunks is not None else a.chunks)
     )
 
 
@@ -169,7 +172,7 @@ def full_like(a, fill_value, dtype=None, chunks=None):
         a.shape,
         fill_value,
         dtype=(dtype or a.dtype),
-        chunks=(chunks or a.chunks)
+        chunks=(chunks if chunks is not None else a.chunks)
     )
 
 
@@ -439,7 +442,7 @@ def eye(N, chunks, M=None, k=0, dtype=float):
       An array where all elements are equal to zero, except for the `k`-th
       diagonal, whose values are equal to one.
     """
-    if not isinstance(chunks, int):
+    if not isinstance(chunks, Integral):
         raise ValueError('chunks must be an int')
 
     token = tokenize(N, chunk, M, k, dtype)
@@ -940,7 +943,7 @@ def pad_udf(array, pad_width, mode, **kwargs):
 
         result = result.map_blocks(
             wrapped_pad_func,
-            token="pad",
+            name="pad",
             dtype=result.dtype,
             pad_func=mode,
             iaxis_pad_width=pad_width[d],

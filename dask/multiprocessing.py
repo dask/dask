@@ -4,18 +4,14 @@ import multiprocessing
 import traceback
 import pickle
 import sys
-
-from . import config
-from .local import get_async  # TODO: get better get
-from .optimization import fuse, cull
+from warnings import warn
 
 import cloudpickle
 
-
-if sys.version_info.major < 3:
-    import copy_reg as copyreg
-else:
-    import copyreg
+from . import config
+from .compatibility import copyreg
+from .local import get_async  # TODO: get better get
+from .optimization import fuse, cull
 
 
 def _reduce_method_descriptor(m):
@@ -125,6 +121,23 @@ def pack_exception(e, dumps):
     return result
 
 
+_CONTEXT_UNSUPPORTED = """\
+The 'multiprocessing.context' configuration option will be ignored on Python 2
+and on Windows, because they each only support a single context.
+"""
+
+
+def get_context():
+    """ Return the current multiprocessing context."""
+    if sys.platform == "win32" or sys.version_info.major == 2:
+        # Just do the default, since we can't change it:
+        if config.get("multiprocessing.context", None) is not None:
+            warn(_CONTEXT_UNSUPPORTED, UserWarning)
+        return multiprocessing
+    context_name = config.get("multiprocessing.context", None)
+    return multiprocessing.get_context(context_name)
+
+
 def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
         optimize_graph=True, **kwargs):
     """ Multiprocessed get function appropriate for Bags
@@ -148,8 +161,9 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
     """
     pool = config.get('pool', None)
     if pool is None:
-        pool = multiprocessing.Pool(num_workers,
-                                    initializer=initialize_worker_process)
+        context = get_context()
+        pool = context.Pool(num_workers,
+                            initializer=initialize_worker_process)
         cleanup = True
     else:
         cleanup = False

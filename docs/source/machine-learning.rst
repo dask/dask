@@ -8,4 +8,4 @@ easier to scale single-machine libraries like Scikit-Learn where possible and
 makes using distributed libraries like XGBoost or Tensorflow more comfortable
 for everyday users.
 
-See the separate `Dask-ML documentation <https://dask-ml.readthedocs.io/en/latest>`_ for more information.
+See the separate `Dask-ML documentation <https://ml.dask.org/en/latest>`_ for more information.

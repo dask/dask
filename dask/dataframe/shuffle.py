@@ -51,16 +51,21 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
         index2 = index
 
     if divisions is None:
-        divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
         if repartition:
-            parts = df.to_delayed()
+            index2, df = base.optimize(index2, df)
+            parts = df.to_delayed(optimize_graph=False)
             sizes = [delayed(sizeof)(part) for part in parts]
         else:
+            index2, = base.optimize(index2)
             sizes = []
-        iparts = index2.to_delayed()
+
+        divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
+        iparts = index2.to_delayed(optimize_graph=False)
         mins = [ipart.min() for ipart in iparts]
         maxes = [ipart.max() for ipart in iparts]
-        divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes)
+        sizes, mins, maxes = base.optimize(sizes, mins, maxes)
+        divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes,
+                                                     optimize_graph=False)
         divisions = divisions.tolist()
 
         empty_dataframe_detected = pd.isnull(divisions).all()
@@ -456,12 +461,9 @@ def shuffle_group(df, col, stage, k, npartitions):
     c = ind._values
     typ = np.min_scalar_type(npartitions * 2)
 
-    npartitions, k, stage = [np.array(x, dtype=np.min_scalar_type(x))[()]
-                             for x in [npartitions, k, stage]]
-
     c = np.mod(c, npartitions).astype(typ, copy=False)
-    c = np.floor_divide(c, k ** stage, out=c)
-    c = np.mod(c, k, out=c)
+    np.floor_divide(c, k ** stage, out=c)
+    np.mod(c, k, out=c)
 
     indexer, locations = groupsort_indexer(c.astype(np.int64), k)
     df2 = df.take(indexer)

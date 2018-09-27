@@ -8,17 +8,16 @@ import sys
 import tempfile
 import re
 from errno import ENOENT
-from collections import Iterator
 from contextlib import contextmanager
 from importlib import import_module
 from numbers import Integral
 from threading import Lock
-import multiprocessing as mp
 import uuid
 import warnings
 from weakref import WeakValueDictionary
 
-from .compatibility import get_named_args, getargspec, PY3, unicode, bind_method
+from .compatibility import (get_named_args, getargspec, PY3, unicode,
+                            bind_method, Iterator)
 from .core import get_deps
 from .optimization import key_split    # noqa: F401
 
@@ -809,7 +808,7 @@ def get_scheduler_lock(get=None, collection=None, scheduler=None):
                                scheduler=scheduler)
 
     if actual_get == multiprocessing.get:
-        return mp.Manager().Lock()
+        return multiprocessing.get_context().Manager().Lock()
 
     return SerializableLock()
 
@@ -894,9 +893,13 @@ def is_arraylike(x):
     >>> is_arraylike('cat')
     False
     """
-    return (# hasattr(x, '__array__') and
-            hasattr(x, 'shape') and x.shape and
-            hasattr(x, 'dtype'))
+    from .base import is_dask_collection
+
+    return (
+        hasattr(x, 'shape') and x.shape and
+        hasattr(x, 'dtype') and
+        not any(is_dask_collection(n) for n in x.shape)
+    )
 
 
 def natural_sort_key(s):
@@ -1020,6 +1023,9 @@ def has_keyword(func, keyword):
         if PY3:
             return keyword in inspect.signature(func).parameters
         else:
-            return keyword in inspect.getargspec(func).args
+            if isinstance(func, functools.partial):
+                return keyword in inspect.getargspec(func.func).args
+            else:
+                return keyword in inspect.getargspec(func).args
     except Exception:
         return False

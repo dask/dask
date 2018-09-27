@@ -1,3 +1,4 @@
+.hypothesis
 *.py[cod]
 __pycache__/
 *.egg-info
@@ -17,3 +18,4 @@ log
 hdfs-initialized-indicator
 .ipynb_checkpoints
 mydask.png
+.vscode/

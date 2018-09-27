@@ -8,7 +8,7 @@ Array
    array-api.rst
    array-chunks.rst
    array-creation.rst
-   array-ghost.rst
+   array-overlap.rst
    array-design.rst
    array-sparse.rst
    array-stats.rst
@@ -82,4 +82,4 @@ By default Dask array uses the threaded scheduler in order to avoid data
 transfer costs and because NumPy releases the GIL well.  It is also quite
 effective on a cluster using the `dask.distributed`_ scheduler.
 
-.. _`dask.distributed`: https://distributed.readthedocs.io/en/latest/
+.. _`dask.distributed`: https://distributed.dask.org/en/latest/

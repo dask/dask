@@ -6,7 +6,7 @@ np = pytest.importorskip('numpy')
 import dask.array as da
 from dask.array.utils import assert_eq as _assert_eq, same_keys
 from dask.core import get_deps
-from dask.context import set_options
+import dask.config as config
 
 
 def assert_eq(a, b):
@@ -139,7 +139,7 @@ def test_arg_reductions(dfunc, func):
     assert_eq(dfunc(a, 0), func(x, 0))
     assert_eq(dfunc(a, 1), func(x, 1))
     assert_eq(dfunc(a, 2), func(x, 2))
-    with set_options(split_every=2):
+    with config.set(split_every=2):
         assert_eq(dfunc(a), func(x))
         assert_eq(dfunc(a, 0), func(x, 0))
         assert_eq(dfunc(a, 1), func(x, 1))
@@ -368,7 +368,7 @@ def test_tree_reduce_depth():
 
 def test_tree_reduce_set_options():
     x = da.from_array(np.arange(242).reshape((11, 22)), chunks=(3, 4))
-    with set_options(split_every={0: 2, 1: 3}):
+    with config.set(split_every={0: 2, 1: 3}):
         assert_max_deps(x.sum(), 2 * 3)
         assert_max_deps(x.sum(axis=0), 2)
 
@@ -460,13 +460,41 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
         daskfunc(b, -k, axis=3, split_every=split_every)
 
 
-def test_topk_argtopk2():
+@pytest.mark.parametrize('npfunc,daskfunc', [
+    (np.sort, da.topk),
+    (np.argsort, da.argtopk),
+])
+@pytest.mark.parametrize('split_every', [None, 2, 3, 4])
+@pytest.mark.parametrize('chunksize', [1, 2, 3, 4, 5, 10])
+def test_topk_argtopk2(npfunc, daskfunc, split_every, chunksize):
+    """Fine test use cases when k is larger than chunk size"""
+    a = da.random.random((10, ), chunks=chunksize)
+    k = 5
+
+    # top 5 elements, sorted descending
+    assert_eq(npfunc(a)[-k:][::-1],
+              daskfunc(a, k, split_every=split_every))
+    # bottom 5 elements, sorted ascending
+    assert_eq(npfunc(a)[:k],
+              daskfunc(a, -k, split_every=split_every))
+
+
+def test_topk_argtopk3():
     a = da.random.random((10, 20, 30), chunks=(4, 8, 8))
 
-    # Support for deprecated API for topk
-    with pytest.warns(UserWarning):
-        assert_eq(da.topk(a, 5), da.topk(5, a))
-
     # As Array methods
-    assert_eq(a.topk(5, axis=1, split_every=2), da.topk(a, 5, axis=1, split_every=2))
-    assert_eq(a.argtopk(5, axis=1, split_every=2), da.argtopk(a, 5, axis=1, split_every=2))
+    assert_eq(a.topk(5, axis=1, split_every=2),
+              da.topk(a, 5, axis=1, split_every=2))
+    assert_eq(a.argtopk(5, axis=1, split_every=2),
+              da.argtopk(a, 5, axis=1, split_every=2))
+
+
+@pytest.mark.parametrize('func', [da.cumsum, da.cumprod,
+                                  da.argmin, da.argmax,
+                                  da.min, da.max,
+                                  da.nansum, da.nanmax])
+def test_regres_3940(func):
+    a = da.ones((5,2), chunks=(2,2))
+    assert func(a).name != func(a + 1).name
+    assert func(a, axis=0).name != func(a).name
+    assert func(a, axis=0).name != func(a, axis=1).name

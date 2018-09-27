@@ -180,9 +180,9 @@ Top level user functions:
    triu
    trunc
    unique
+   unravel_index
    var
    vdot
-   vnorm
    vstack
    where
    zeros
@@ -314,12 +314,14 @@ Image Support
 .. autosummary::
    image.imread
 
-Slightly Overlapping Ghost Computations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Slightly Overlapping Computations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. autosummary::
-   ghost.ghost
-   ghost.map_overlap
+   overlap.overlap
+   overlap.map_overlap
+   overlap.trim_internal
+   overlap.trim_overlap
 
 
 Create and Store Arrays
@@ -338,7 +340,7 @@ Create and Store Arrays
 Generalized Ufuncs
 ~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask.array
+.. currentmodule:: dask.array.gufunc
 
 .. autosummary::
    apply_gufunc
@@ -353,6 +355,7 @@ Internal functions
 
 .. autosummary::
    atop
+   normalize_chunks
    top
 
 
@@ -539,9 +542,9 @@ Other functions
 .. autofunction:: triu
 .. autofunction:: trunc
 .. autofunction:: unique
+.. autofunction:: unravel_index
 .. autofunction:: var
 .. autofunction:: vdot
-.. autofunction:: vnorm
 .. autofunction:: vstack
 .. autofunction:: where
 .. autofunction:: zeros
@@ -580,9 +583,9 @@ Other functions
 .. autofunction:: masked_where
 .. autofunction:: set_fill_value
 
-.. currentmodule:: dask.array.ghost
+.. currentmodule:: dask.array.overlap
 
-.. autofunction:: ghost
+.. autofunction:: overlap
 .. autofunction:: map_overlap
 
 .. currentmodule:: dask.array
@@ -684,6 +687,7 @@ Other functions
 
 .. autofunction:: map_blocks
 .. autofunction:: atop
+.. autofunction:: normalize_chunks
 .. autofunction:: top
 
 .. currentmodule:: dask.array
