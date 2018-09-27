@@ -64,6 +64,9 @@ def read_text(urlpath, blocksize=None, compression='infer',
     --------
     from_sequence: Build bag from Python sequence
     """
+    if blocksize is not None and files_per_partition is not None:
+        raise ValueError('Only one of blocksize or files_per_partition can be set')
+
     files = open_files(urlpath, mode='rt', encoding=encoding,
                        errors=errors, compression=compression,
                        **(storage_options or {}))
@@ -74,12 +77,9 @@ def read_text(urlpath, blocksize=None, compression='infer',
             blocks = []
             for start in range(0, len(files), files_per_partition):
                 block_files = files[start:(start + files_per_partition)]
-                blocks.append(delayed(list)(delayed(files_to_blocks)(block_files)))
-
+                block_lines = delayed(concat)(delayed(map)(file_to_blocks, block_files))
+                blocks.append(block_lines)
     else:
-        if files_per_partition is not None:
-            raise ValueError('Only one of blocksize or files_per_partition can be set')
-
         _, blocks = read_bytes(urlpath, delimiter=linedelimiter.encode(),
                                blocksize=blocksize, sample=False,
                                compression=compression,
@@ -99,10 +99,6 @@ def file_to_blocks(lazy_file):
     with lazy_file as f:
         for line in f:
             yield line
-
-
-def files_to_blocks(lazy_files):
-    return concat(file_to_blocks(f) for f in lazy_files)
 
 
 def decode(block, encoding, errors):

@@ -61,7 +61,6 @@ def test_files_per_partition():
         assert l == 10, "10 files should be grouped into one partition"
 
         assert b.count().compute() == 20, "All 20 lines should be read"
-    pass
 
 
 def test_errors():
