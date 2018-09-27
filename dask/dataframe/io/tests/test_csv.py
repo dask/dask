@@ -102,6 +102,8 @@ comment_header = b"""# some header lines
 # in a data file
 # before any data"""
 
+csv_units_row = b'str, int, int\n'
+tsv_units_row = csv_units_row.replace(b',', b'\t')
 
 csv_and_table = pytest.mark.parametrize('reader,files',
                                         [(pd.read_csv, csv_files),
@@ -211,6 +213,19 @@ def test_skiprows(dd_read, pd_read, files):
         assert_eq(df, expected_df, check_dtype=False)
 
 
+@pytest.mark.parametrize('dd_read,pd_read,files,units',
+                         [(dd.read_csv, pd.read_csv, csv_files, csv_units_row),
+                          (dd.read_table, pd.read_table, tsv_files, tsv_units_row)])
+def test_skiprows_as_list(dd_read, pd_read, files, units):
+    files = {name: (comment_header + b'\n' +
+                    content.replace(b'\n', b'\n' + units, 1)) for name, content in files.items()}
+    skip = [0, 1, 2, 3, 5]
+    with filetexts(files, mode='b'):
+        df = dd_read('2014-01-*.csv', skiprows=skip)
+        expected_df = pd.concat([pd_read(n, skiprows=skip) for n in sorted(files)])
+        assert_eq(df, expected_df, check_dtype=False)
+
+
 csv_blocks = [[b'aa,bb\n1,1.0\n2,2.0', b'10,20\n30,40'],
               [b'aa,bb\n1,1.0\n2,2.0', b'10,20\n30,40']]
 
@@ -258,6 +273,35 @@ def test_read_csv(dd_read, pd_read, text, sep):
         # index may be different
         result = f.compute(scheduler='sync').reset_index(drop=True)
         assert_eq(result, pd_read(fn, sep=sep))
+
+
+@pytest.mark.parametrize('dd_read,pd_read,text,skip',
+                         [(dd.read_csv, pd.read_csv, csv_text, 7),
+                          (dd.read_table, pd.read_table, tsv_text, [1, 13])])
+def test_read_csv_large_skiprows(dd_read, pd_read, text, skip):
+    names = ['name', 'amount']
+    with filetext(text) as fn:
+        actual = dd_read(fn, skiprows=skip, names=names)
+        assert_eq(actual, pd_read(fn, skiprows=skip, names=names))
+
+
+@pytest.mark.parametrize('dd_read,pd_read,text,skip',
+                         [(dd.read_csv, pd.read_csv, csv_text, 7),
+                          (dd.read_table, pd.read_table, tsv_text, [1, 12])])
+def test_read_csv_skiprows_only_in_first_partition(dd_read, pd_read, text, skip):
+    names = ['name', 'amount']
+    with filetext(text) as fn:
+        with pytest.warns(UserWarning) as w:
+            actual = dd_read(fn, blocksize=200, skiprows=skip, names=names).compute()
+            assert_eq(actual, pd_read(fn, skiprows=skip, names=names))
+            assert len(w) == 1
+            msg = str(w[0].message)
+            assert 'sample=blocksize' in msg
+
+        with pytest.warns(UserWarning):
+            # if new sample does not contain all the skiprows, raise error
+            with pytest.raises(ValueError):
+                dd_read(fn, blocksize=30, skiprows=skip, names=names)
 
 
 @pytest.mark.parametrize('dd_read,pd_read,files',

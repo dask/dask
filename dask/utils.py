@@ -12,7 +12,6 @@ from contextlib import contextmanager
 from importlib import import_module
 from numbers import Integral
 from threading import Lock
-import multiprocessing as mp
 import uuid
 import warnings
 from weakref import WeakValueDictionary
@@ -809,7 +808,7 @@ def get_scheduler_lock(get=None, collection=None, scheduler=None):
                                scheduler=scheduler)
 
     if actual_get == multiprocessing.get:
-        return mp.Manager().Lock()
+        return multiprocessing.get_context().Manager().Lock()
 
     return SerializableLock()
 
@@ -1022,6 +1021,9 @@ def has_keyword(func, keyword):
         if PY3:
             return keyword in inspect.signature(func).parameters
         else:
-            return keyword in inspect.getargspec(func).args
+            if isinstance(func, functools.partial):
+                return keyword in inspect.getargspec(func.func).args
+            else:
+                return keyword in inspect.getargspec(func).args
     except Exception:
         return False

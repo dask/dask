@@ -5,10 +5,10 @@ import math
 import warnings
 from distutils.version import LooseVersion
 from functools import wraps, partial
-from numbers import Number, Real, Integral
+from numbers import Real, Integral
 
 import numpy as np
-from toolz import concat, merge, sliding_window, interleave
+from toolz import concat, sliding_window, interleave
 
 from .. import sharedict
 from ..compatibility import Iterable
@@ -16,7 +16,7 @@ from ..core import flatten
 from ..base import tokenize
 from ..utils import funcname
 from . import chunk
-from .creation import arange
+from .creation import arange, empty
 from .utils import safe_wraps, validate_axis
 from .wrap import ones
 from .ufunc import multiply
@@ -215,9 +215,9 @@ def tensordot(lhs, rhs, axes=2):
         left_axes = tuple(range(lhs.ndim - 1, lhs.ndim - axes - 1, -1))
         right_axes = tuple(range(0, axes))
 
-    if isinstance(left_axes, int):
+    if isinstance(left_axes, Integral):
         left_axes = (left_axes,)
-    if isinstance(right_axes, int):
+    if isinstance(right_axes, Integral):
         right_axes = (right_axes,)
     if isinstance(left_axes, list):
         left_axes = tuple(left_axes)
@@ -426,25 +426,29 @@ def ediff1d(ary, to_end=None, to_begin=None):
     return r
 
 
-def _gradient_kernel(f, grad_varargs, grad_kwargs):
-    return np.gradient(f, *grad_varargs, **grad_kwargs)
+def _gradient_kernel(x, block_id, coord, axis, array_locs, grad_kwargs):
+    """
+    x: nd-array
+        array of one block
+    coord: 1d-array or scalar
+        coordinate along which the gradient is computed.
+    axis: int
+        axis along which the gradient is computed
+    array_locs:
+        actual location along axis. None if coordinate is scalar
+    grad_kwargs:
+        keyword to be passed to np.gradient
+    """
+    block_loc = block_id[axis]
+    if array_locs is not None:
+        coord = coord[array_locs[0][block_loc]:array_locs[1][block_loc]]
+    grad = np.gradient(x, coord, axis=axis, **grad_kwargs)
+    return grad
 
 
 @wraps(np.gradient)
 def gradient(f, *varargs, **kwargs):
     f = asarray(f)
-
-    if not all([isinstance(e, Number) for e in varargs]):
-        raise NotImplementedError("Only numeric scalar spacings supported.")
-
-    if varargs == ():
-        varargs = (1,)
-    if len(varargs) == 1:
-        varargs = f.ndim * varargs
-    if len(varargs) != f.ndim:
-        raise TypeError(
-            "Spacing must either be a scalar or a scalar per dimension."
-        )
 
     kwargs["edge_order"] = math.ceil(kwargs.get("edge_order", 1))
     if kwargs["edge_order"] > 2:
@@ -465,26 +469,59 @@ def gradient(f, *varargs, **kwargs):
 
     axis = tuple(ax % f.ndim for ax in axis)
 
+    if varargs == ():
+        varargs = (1,)
+    if len(varargs) == 1:
+        varargs = len(axis) * varargs
+    if len(varargs) != len(axis):
+        raise TypeError(
+            "Spacing must either be a single scalar, or a scalar / 1d-array "
+            "per axis"
+        )
+
     if issubclass(f.dtype.type, (np.bool8, Integral)):
         f = f.astype(float)
     elif issubclass(f.dtype.type, Real) and f.dtype.itemsize < 4:
         f = f.astype(float)
 
-    r = [
-        f.map_overlap(
+    results = []
+    for i, ax in enumerate(axis):
+        for c in f.chunks[ax]:
+            if np.min(c) < kwargs["edge_order"] + 1:
+                raise ValueError(
+                    'Chunk size must be larger than edge_order + 1. '
+                    'Minimum chunk for aixs {} is {}. Rechunk to '
+                    'proceed.'.format(np.min(c), ax))
+
+        if np.isscalar(varargs[i]):
+            array_locs = None
+        else:
+            if isinstance(varargs[i], Array):
+                raise NotImplementedError(
+                    'dask array coordinated is not supported.')
+            # coordinate position for each block taking overlap into account
+            chunk = np.array(f.chunks[ax])
+            array_loc_stop = np.cumsum(chunk) + 1
+            array_loc_start = array_loc_stop - chunk - 2
+            array_loc_stop[-1] -= 1
+            array_loc_start[0] = 0
+            array_locs = (array_loc_start, array_loc_stop)
+
+        results.append(f.map_overlap(
             _gradient_kernel,
             dtype=f.dtype,
             depth={j: 1 if j == ax else 0 for j in range(f.ndim)},
             boundary="none",
-            grad_varargs=(varargs[i],),
-            grad_kwargs=merge(kwargs, {"axis": ax}),
-        )
-        for i, ax in enumerate(axis)
-    ]
-    if drop_result_list:
-        r = r[0]
+            coord=varargs[i],
+            axis=ax,
+            array_locs=array_locs,
+            grad_kwargs=kwargs,
+        ))
 
-    return r
+    if drop_result_list:
+        results = results[0]
+
+    return results
 
 
 @wraps(np.bincount)
@@ -590,17 +627,17 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     name = 'histogram-sum-' + token
 
     # Map the histogram to all bins
-    def block_hist(x, weights=None):
-        return np.histogram(x, bins, weights=weights)[0][np.newaxis]
+    def block_hist(x, range=None, weights=None):
+        return np.histogram(x, bins, range=range, weights=weights)[0][np.newaxis]
 
     if weights is None:
-        dsk = {(name, i, 0): (block_hist, k)
+        dsk = {(name, i, 0): (block_hist, k, range)
                for i, k in enumerate(flatten(a.__dask_keys__()))}
         dtype = np.histogram([])[0].dtype
     else:
         a_keys = flatten(a.__dask_keys__())
         w_keys = flatten(weights.__dask_keys__())
-        dsk = {(name, i, 0): (block_hist, k, w)
+        dsk = {(name, i, 0): (block_hist, k, range, w)
                for i, (k, w) in enumerate(zip(a_keys, w_keys))}
         dtype = weights.dtype
 
@@ -1144,6 +1181,28 @@ def _int_piecewise(x, *condlist, **kwargs):
         x, list(condlist), kwargs["funclist"],
         *kwargs["func_args"], **kwargs["func_kw"]
     )
+
+
+def _unravel_index_kernel(indices, func_kwargs):
+    return np.stack(np.unravel_index(indices, **func_kwargs))
+
+
+@wraps(np.unravel_index)
+def unravel_index(indices, dims, order='C'):
+    if dims and indices.size:
+        unraveled_indices = tuple(indices.map_blocks(
+            _unravel_index_kernel,
+            dtype=np.intp,
+            chunks=(((len(dims),),) + indices.chunks),
+            new_axis=0,
+            func_kwargs={"dims": dims, "order": order}
+        ))
+    else:
+        unraveled_indices = tuple(
+            empty((0,), dtype=np.intp, chunks=1) for i in dims
+        )
+
+    return unraveled_indices
 
 
 @wraps(np.piecewise)

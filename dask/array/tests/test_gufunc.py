@@ -73,7 +73,7 @@ def test_apply_gufunc_output_dtypes_string_many_outputs(vectorize):
     def stats(x):
         return np.mean(x, axis=-1), np.std(x, axis=-1)
     a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
-    mean, std = apply_gufunc(stats, "(i)->(),()", a, output_dtypes="ff", vectorize=vectorize)
+    mean, std = apply_gufunc(stats, "(i)->(),()", a, output_dtypes=("f", "f"), vectorize=vectorize)
     assert mean.compute().shape == (10, 20)
     assert std.compute().shape == (10, 20)
 
@@ -187,6 +187,17 @@ def test_apply_gufunc_two_mixed_outputs():
     assert_eq(y, np.ones((2, 3), dtype=float))
 
 
+@pytest.mark.parametrize('output_dtypes', [int, (int,)])
+def test_apply_gufunc_output_dtypes(output_dtypes):
+    def foo(x):
+        return y
+    x = np.random.randn(10)
+    y = x.astype(int)
+    dy = apply_gufunc(foo, "()->()", x, output_dtypes=output_dtypes)
+    #print(x, x.compute())
+    assert_eq(y, dy)
+
+
 def test_gufunc_two_inputs():
     def foo(x, y):
         return np.einsum('...ij,...jk->ik', x, y)
@@ -283,3 +294,45 @@ def test_apply_gufunc_check_inhomogeneous_chunksize():
     with pytest.raises(ValueError) as excinfo:
         da.apply_gufunc(foo, "(),()->()", a, b, output_dtypes=float, allow_rechunk=False)
     assert "with different chunksize present" in str(excinfo.value)
+
+
+def test_apply_gufunc_infer_dtype():
+    x = np.arange(50).reshape((5, 10))
+    y = np.arange(10)
+    dx = da.from_array(x, chunks=5)
+    dy = da.from_array(y, chunks=5)
+
+    def foo(x, *args, **kwargs):
+        cast = kwargs.pop('cast', 'i8')
+        return (x + sum(args)).astype(cast)
+
+    dz = apply_gufunc(foo, "(),(),()->()", dx, dy, 1)
+    z = foo(dx, dy, 1)
+    assert_eq(dz, z)
+
+    dz = apply_gufunc(foo, "(),(),()->()", dx, dy, 1, cast='f8')
+    z = foo(dx, dy, 1, cast='f8')
+    assert_eq(dz, z)
+
+    dz = apply_gufunc(foo, "(),(),()->()", dx, dy, 1, cast='f8', output_dtypes='f8')
+    z = foo(dx, dy, 1, cast='f8')
+    assert_eq(dz, z)
+
+    def foo(x):
+        raise RuntimeError("Woops")
+
+    with pytest.raises(ValueError) as e:
+        apply_gufunc(foo, "()->()", dx)
+    msg = str(e.value)
+    assert msg.startswith("`dtype` inference failed")
+    assert "Please specify the dtype explicitly" in msg
+    assert 'RuntimeError' in msg
+
+    # Multiple outputs
+    def foo(x, y):
+        return x + y, x - y
+
+    z0, z1 = apply_gufunc(foo, "(),()->(),()", dx, dy)
+
+    assert_eq(z0, dx + dy)
+    assert_eq(z1, dx - dy)

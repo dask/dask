@@ -11,7 +11,7 @@ from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
                         memory_repr, methodcaller, M, skip_doctest,
                         SerializableLock, funcname, ndeepmap, ensure_dict,
                         extra_titles, asciitable, itemgetter, partial_by_order,
-                        effective_get)
+                        effective_get, has_keyword)
 from dask.utils_test import inc
 
 
@@ -61,6 +61,13 @@ def test_dispatch():
     assert foo(1.0) == 0.0
     assert foo(b) == b
     assert foo((1, 2.0, b)) == (2, 1.0, b)
+
+
+def test_dispatch_kwargs():
+    foo = Dispatch()
+    foo.register(int, lambda a, b=10: a + b)
+
+    assert foo(1, b=20) == 21
 
 
 def test_dispatch_lazy():
@@ -330,3 +337,15 @@ def test_effective_get():
 
     assert any('dask.base.get_scheduler' in str(warning)
                for warning in record.list)
+
+
+def test_has_keyword():
+    def foo(a, b, c=None):
+        pass
+    assert has_keyword(foo, 'a')
+    assert has_keyword(foo, 'b')
+    assert has_keyword(foo, 'c')
+
+    bar = functools.partial(foo, a=1)
+    assert has_keyword(bar, 'b')
+    assert has_keyword(bar, 'c')

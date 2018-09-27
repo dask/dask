@@ -4,6 +4,7 @@ import datetime
 
 import pandas as pd
 from pandas.core.window import Rolling as pd_Rolling
+from numbers import Integral
 
 from ..base import tokenize
 from ..utils import M, funcname, derived_from
@@ -18,11 +19,11 @@ def overlap_chunk(func, prev_part, current_part, next_part, before, after,
            "window size. Try using ``df.repartition`` "
            "to increase the partition size.")
 
-    if prev_part is not None and isinstance(before, int):
+    if prev_part is not None and isinstance(before, Integral):
         if prev_part.shape[0] != before:
             raise NotImplementedError(msg)
 
-    if next_part is not None and isinstance(after, int):
+    if next_part is not None and isinstance(after, Integral):
         if next_part.shape[0] != after:
             raise NotImplementedError(msg)
     # We validate that the window isn't too large for tiemdeltas in map_overlap
@@ -69,8 +70,8 @@ def map_overlap(func, df, before, after, *args, **kwargs):
             raise TypeError("Must have a `DatetimeIndex` when using string offset "
                             "for `before` and `after`")
     else:
-        if not (isinstance(before, int) and before >= 0 and
-                isinstance(after, int) and after >= 0):
+        if not (isinstance(before, Integral) and before >= 0 and
+                isinstance(after, Integral) and after >= 0):
             raise ValueError("before and after must be positive integers")
 
     if 'token' in kwargs:
@@ -102,7 +103,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         "Try using ``df.repartition`` to increase the partition size"
     )
 
-    if before and isinstance(before, int):
+    if before and isinstance(before, Integral):
         dsk.update({(name_a, i): (M.tail, (df_name, i), before)
                     for i in range(df.npartitions - 1)})
         prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
@@ -117,7 +118,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
     else:
         prevs = [None] * df.npartitions
 
-    if after and isinstance(after, int):
+    if after and isinstance(after, Integral):
         dsk.update({(name_b, i): (M.head, (df_name, i), after)
                     for i in range(1, df.npartitions)})
         nexts = [(name_b, i) for i in range(1, df.npartitions)] + [None]
@@ -219,7 +220,7 @@ class Rolling(object):
         or multiple (False).
         """
         return (self.axis in (1, 'columns') or
-                (isinstance(self.window, int) and self.window <= 1) or
+                (isinstance(self.window, Integral) and self.window <= 1) or
                 self.obj.npartitions == 1)
 
     def _call_method(self, method_name, *args, **kwargs):

@@ -1,13 +1,14 @@
 Changelog
 =========
 
-0.19.1 / YYYY-MM-DD
+X.XX.X / YYYY-MM-DD
 -------------------
 
 Array
 +++++
 
 -
+
 
 Dataframe
 +++++++++
@@ -25,14 +26,70 @@ Documentation
 -
 
 
+0.19.2 / 2018-09-17
+-------------------
+
+Array
++++++
+
+-  ``apply_gufunc`` implements automatic infer of functions output dtypes (:pr:`3936`) `Markus Gonser`_
+-  Fix array histogram range error when array has nans (:pr:`3980`) `James Bourbeau`_
+-  Issue 3937 follow up, int type checks. (:pr:`3956`) `Yu Feng`_
+-  from_array: add @martindurant's explaining of how hashing is done for an array. (:pr:`3965`) `Mark Harfouche`_
+-  Support gradient with coordinate (:pr:`3949`) `Keisuke Fujii`_
+
+Core
+++++
+
+-  Fix use of has_keyword with partial in Python 2.7 (:pr:`3966`) `Mark Harfouche`_
+-  Set pyarrow as default for HDFS (:pr:`3957`) `Matthew Rocklin`_
+
+Documentation
++++++++++++++
+
+-  Use dask_sphinx_theme (:pr:`3963`) `Matthew Rocklin`_
+-  Use JupyterLab in Binder links from main page `Matthew Rocklin`_
+-  DOC: fixed sphinx syntax (:pr:`3960`) `Tom Augspurger`_
+
+
+0.19.1 / 2018-09-06
+-------------------
+
+Array
++++++
+
+-  Don't enforce dtype if result has no dtype (:pr:`3928`) `Matthew Rocklin`_
+-  Fix NumPy issubtype deprecation warning (:pr:`3939`) `Bruce Merry`_
+-  Fix arg reduction tokens to be unique with different arguments (:pr:`3955`) `Tobias de Jong`_
+-  Coerce numpy integers to ints in slicing code (:pr:`3944`) `Yu Feng`_
+-  Linalg.norm ndim along axis partial fix (:pr:`3933`) `Tobias de Jong`_
+
+Dataframe
++++++++++
+
+-  Deterministic DataFrame.set_index (:pr:`3867`) `George Sakkis`_
+-  Fix divisions in read_parquet when dealing with filters #3831 #3930 (:pr:`3923`) (:pr:`3931`)  `@andrethrill`_
+-  Fixing returning type in categorical.as_known  (:pr:`3888`) `Sriharsha Hatwar`_
+-  Fix DataFrame.assign for callables (:pr:`3919`) `Tom Augspurger`_
+-  Include partitions with no width in repartition (:pr:`3941`) `Matthew Rocklin`_
+-  Don't constrict stage/k dtype in dataframe shuffle (:pr:`3942`) `Matthew Rocklin`_
+
+Documentation
++++++++++++++
+
+-  DOC: Add hint on how to render task graphs horizontally (:pr:`3922`) `Uwe Korn`_
+-  Add try-now button to main landing page (:pr:`3924`) `Matthew Rocklin`_
+
+
 0.19.0 / 2018-08-29
 -------------------
 
 Array
 +++++
 
+-  Support coordinate in gradient (:pr:`3949`) `Keisuke Fujii`_
 -  Fix argtopk split_every bug (:pr:`3810`) `Guido Imperiale`_
--  Ensure result computing dask.array.isnull(`) always gives a numpy array (:pr:`3825`) `Stephan Hoyer`_
+-  Ensure result computing dask.array.isnull() always gives a numpy array (:pr:`3825`) `Stephan Hoyer`_
 -  Support concatenate for scipy.sparse in dask array (:pr:`3836`) `Matthew Rocklin`_
 -  Fix argtopk on 32-bit systems. (:pr:`3823`) `Elliott Sales de Andrade`_
 -  Normalize keys in rechunk (:pr:`3820`) `Matthew Rocklin`_
@@ -1215,7 +1272,7 @@ This release also includes a deprecation warning for ``dask.distributed``, which
 will be removed in the next version.
 
 Future development in distributed computing for dask is happening here:
-https://distributed.readthedocs.io . General feedback on that project is most
+https://distributed.dask.org . General feedback on that project is most
 welcome from this community.
 
 
@@ -1311,7 +1368,7 @@ Other
 .. _`@xwang777`: https://github.com/xwang777
 .. _`@fjetter`: https://github.com/fjetter
 .. _`@Ced4`: https://github.com/Ced4
-.. _`Ian Hopkinson`: https://https://github.com/IanHopkinson
+.. _`Ian Hopkinson`: https://github.com/IanHopkinson
 .. _`Stephan Hoyer`: https://github.com/shoyer
 .. _`Albert DeFusco`: https://github.com/AlbertDeFusco
 .. _`Markus Gonser`: https://github.com/magonser
@@ -1343,6 +1400,7 @@ Other
 .. _`@beomi`: https://github.com/beomi
 .. _`Henrique Ribeiro`: https://github.com/henriqueribeiro
 .. _`Marco Rossi`: https://github.com/m-rossi
+.. _`Itamar Turner-Trauring`: https://github.com/itamarst
 .. _`Mike Neish`: https://github.com/neishm
 .. _`Mark Harfouche`: https://github.com/hmaarrfk
 .. _`George Sakkis`: https://github.com/gsakkis
@@ -1366,3 +1424,8 @@ Other
 .. _`Hans Moritz Günther`: https://github.com/hamogu
 .. _`@rtobar`: https://github.com/rtobar
 .. _`Julia Signell`: https://github.com/jsignell
+.. _`Sriharsha Hatwar`: https://github.com/Sriharsha-hatwar
+.. _`Bruce Merry`: https://github.com/bmerry
+.. _`Joe Hamman`: https://github.com/jhamman
+.. _`Robert Sare`: https://github.com/rmsare
+.. _`Jeremy Chan`: https://github.com/convexset

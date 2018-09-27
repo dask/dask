@@ -925,6 +925,13 @@ def test_assign():
         d.assign(foo=d_unknown.a)
 
 
+def test_assign_callable():
+    df = dd.from_pandas(pd.DataFrame({"A": range(10)}), npartitions=2)
+    a = df.assign(B=df.A.shift())
+    b = df.assign(B=lambda x: x.A.shift())
+    assert_eq(a, b)
+
+
 def test_map():
     assert_eq(d.a.map(lambda x: x + 1), full.a.map(lambda x: x + 1))
     lk = dict((v, v + 1) for v in full.a.values)
@@ -2716,6 +2723,16 @@ def test_getitem_column_types(col_type):
     cols = col_type(['C', 'A', 'B'])
 
     assert_eq(df[cols], ddf[cols])
+
+
+def test_ipython_completion():
+    df = pd.DataFrame({'a': [1], 'b': [2]})
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    completions = ddf._ipython_key_completions_()
+    assert 'a' in completions
+    assert 'b' in completions
+    assert 'c' not in completions
 
 
 def test_diff():

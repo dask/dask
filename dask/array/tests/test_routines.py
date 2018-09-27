@@ -449,11 +449,16 @@ def test_ediff1d(shape, to_end, to_begin):
     [(10, 15, 20), (), 2],
     [(10, 15, 20), (), -1],
     [(10, 15, 20), (), (0, 2)],
+    [(10, 15, 20), (np.exp(np.arange(10)), np.exp(np.arange(20)), ), (0, 2)],
+    [(10, 15, 20), (0.5, np.exp(np.arange(20)), ), (0, 2)],
+    [(10, 15, 20), (np.exp(np.arange(20)), ), -1],
 ])
 @pytest.mark.parametrize('edge_order', [
     1,
     2
 ])
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="Old np.gradient does not support coordinate.")
 def test_gradient(shape, varargs, axis, edge_order):
     a = np.random.randint(0, 10, shape)
     d_a = da.from_array(a, chunks=(len(shape) * (5,)))
@@ -543,6 +548,15 @@ def test_histogram_alternative_bins_range():
     v = da.random.random(100, chunks=10)
     (a1, b1) = da.histogram(v, bins=10, range=(0, 1))
     (a2, b2) = np.histogram(v, bins=10, range=(0, 1))
+    assert_eq(a1, a2)
+    assert_eq(b1, b2)
+
+
+def test_histogram_bins_range_with_nan_array():
+    # Regression test for issue #3977
+    v = da.from_array(np.array([-2, np.nan, 2]), chunks=1)
+    (a1, b1) = da.histogram(v, bins=10, range=(-3, 3))
+    (a2, b2) = np.histogram(v, bins=10, range=(-3, 3))
     assert_eq(a1, a2)
     assert_eq(b1, b2)
 
@@ -1249,6 +1263,47 @@ def test_nonzero_method():
 
         for i in range(len(x_nz)):
             assert_eq(d_nz[i], x_nz[i])
+
+
+@pytest.mark.skipif(
+    LooseVersion(np.__version__) < LooseVersion("1.14.0"),
+    reason="NumPy 1.14.0+ needed for `unravel_index` to take an empty shape."
+)
+def test_unravel_index_empty():
+    shape = tuple()
+    findices = np.array(0, dtype=int)
+    d_findices = da.from_array(findices, chunks=1)
+
+    indices = np.unravel_index(findices, shape)
+    d_indices = da.unravel_index(d_findices, shape)
+
+    assert isinstance(d_indices, type(indices))
+    assert len(d_indices) == len(indices) == 0
+
+
+def test_unravel_index():
+    for nindices, shape, order in [(0, (15,), 'C'),
+                                   (1, (15,), 'C'),
+                                   (3, (15,), 'C'),
+                                   (3, (15,), 'F'),
+                                   (2, (15, 16), 'C'),
+                                   (2, (15, 16), 'F')]:
+        arr = np.random.random(shape)
+        darr = da.from_array(arr, chunks=1)
+
+        findices = np.random.randint(np.prod(shape, dtype=int), size=nindices)
+        d_findices = da.from_array(findices, chunks=1)
+
+        indices = np.unravel_index(findices, shape, order)
+        d_indices = da.unravel_index(d_findices, shape, order)
+
+        assert isinstance(d_indices, type(indices))
+        assert len(d_indices) == len(indices)
+
+        for i in range(len(indices)):
+            assert_eq(d_indices[i], indices[i])
+
+        assert_eq(darr.vindex[d_indices], arr[indices])
 
 
 def test_coarsen():
