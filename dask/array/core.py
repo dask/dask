@@ -614,7 +614,7 @@ def map_blocks(func, *args, **kwargs):
     ----------
     func : callable
         Function to apply to every block in the array.
-    args : dask arrays or constants
+    args : dask arrays or other objects
     dtype : np.dtype, optional
         The ``dtype`` of the output array. It is recommended to provide this.
         If not provided, will be inferred by applying the function to a small
