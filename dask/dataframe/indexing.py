@@ -13,15 +13,17 @@ from . import methods
 from ..base import tokenize
 
 
-class _LocIndexer(object):
-    """ Helper class for the .loc accessor """
-
+class _IndexerBase(object):
     def __init__(self, obj):
         self.obj = obj
 
     @property
     def _name(self):
         return self.obj._name
+
+    @property
+    def _meta_indexer(self):
+        raise NotImplementedError
 
     def _make_meta(self, iindexer, cindexer):
         """
@@ -30,7 +32,46 @@ class _LocIndexer(object):
         if cindexer is None:
             return self.obj
         else:
-            return self.obj._meta.loc[:, cindexer]
+            return self._meta_indexer[:, cindexer]
+
+
+class _iLocIndexer(_IndexerBase):
+
+    @property
+    def _meta_indexer(self):
+        return self.obj._meta.iloc
+
+    def __getitem__(self, key):
+
+        # dataframe
+        msg = ("'DataFrame.iloc' only supports selecting columns. "
+               "It must be used like 'df.iloc[:, column_indexer]'.")
+        if not isinstance(key, tuple):
+            raise ValueError(msg)
+
+        if len(key) != 2:
+            raise ValueError(msg)
+
+        iindexer, cindexer = key
+
+        if iindexer != slice(None):
+            raise ValueError(msg)
+
+        return self._iloc(iindexer, cindexer)
+
+    def _iloc(self, iindexer, cindexer):
+        assert iindexer == slice(None)
+        meta = self._make_meta( iindexer, cindexer)
+
+        return self.obj.map_partitions(methods.iloc, cindexer, meta=meta)
+
+
+class _LocIndexer(_IndexerBase):
+    """ Helper class for the .loc accessor """
+
+    @property
+    def _meta_indexer(self):
+        return self.obj._meta.loc
 
     def __getitem__(self, key):
 

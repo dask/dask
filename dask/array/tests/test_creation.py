@@ -11,15 +11,17 @@ from dask.array.utils import assert_eq, same_keys
 
 @pytest.mark.parametrize(
     "funcname", [
-        "empty_like",
-        "ones_like",
-        "zeros_like",
-        "full_like",
+        "empty_like", "empty",
+        "ones_like", "ones",
+        "zeros_like", "zeros",
+        "full_like", "full",
     ]
 )
+@pytest.mark.parametrize("cast_shape", [tuple, list, np.asarray])
+@pytest.mark.parametrize("cast_chunks", [tuple, list, np.asarray])
 @pytest.mark.parametrize(
     "shape, chunks", [
-        ((10, 10), (4, 4)),
+        ((10, 10), (4, 4))
     ]
 )
 @pytest.mark.parametrize(
@@ -27,11 +29,13 @@ from dask.array.utils import assert_eq, same_keys
         "i4",
     ]
 )
-def test_arr_like(funcname, shape, dtype, chunks):
+def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks):
     np_func = getattr(np, funcname)
     da_func = getattr(da, funcname)
+    shape = cast_shape(shape)
+    chunks = cast_chunks(chunks)
 
-    if funcname == "full_like":
+    if "full" in funcname:
         old_np_func = np_func
         old_da_func = da_func
 
@@ -40,38 +44,48 @@ def test_arr_like(funcname, shape, dtype, chunks):
 
     dtype = np.dtype(dtype)
 
-    a = np.random.randint(0, 10, shape).astype(dtype)
+    if "like" in funcname:
+        a = np.random.randint(0, 10, shape).astype(dtype)
 
-    np_r = np_func(a)
-    da_r = da_func(a, chunks=chunks)
+        np_r = np_func(a)
+        da_r = da_func(a, chunks=chunks)
+    else:
+        np_r = np_func(shape, dtype=dtype)
+        da_r = da_func(shape, dtype=dtype, chunks=chunks)
 
     assert np_r.shape == da_r.shape
     assert np_r.dtype == da_r.dtype
 
-    if funcname != "empty_like":
+    if "empty" not in funcname:
         assert (np_r == np.asarray(da_r)).all()
 
 
-def test_linspace():
-    darr = da.linspace(6, 49, chunks=5)
-    nparr = np.linspace(6, 49)
+@pytest.mark.parametrize("endpoint", [True, False])
+def test_linspace(endpoint):
+    darr = da.linspace(6, 49, endpoint=endpoint, chunks=5)
+    nparr = np.linspace(6, 49, endpoint=endpoint)
     assert_eq(darr, nparr)
 
-    darr = da.linspace(1.4, 4.9, chunks=5, num=13)
-    nparr = np.linspace(1.4, 4.9, num=13)
+    darr = da.linspace(1.4, 4.9, endpoint=endpoint, chunks=5, num=13)
+    nparr = np.linspace(1.4, 4.9, endpoint=endpoint, num=13)
     assert_eq(darr, nparr)
 
-    darr = da.linspace(6, 49, chunks=5, dtype=float)
-    nparr = np.linspace(6, 49, dtype=float)
+    darr = da.linspace(6, 49, endpoint=endpoint, chunks=5, dtype=float)
+    nparr = np.linspace(6, 49, endpoint=endpoint, dtype=float)
     assert_eq(darr, nparr)
 
-    darr = da.linspace(1.4, 4.9, chunks=5, num=13, dtype=int)
-    nparr = np.linspace(1.4, 4.9, num=13, dtype=int)
+    darr, dstep = da.linspace(6, 49, endpoint=endpoint, chunks=5, retstep=True)
+    nparr, npstep = np.linspace(6, 49, endpoint=endpoint, retstep=True)
+    assert np.allclose(dstep, npstep)
     assert_eq(darr, nparr)
-    assert (sorted(da.linspace(1.4, 4.9, chunks=5, num=13).dask) ==
-            sorted(da.linspace(1.4, 4.9, chunks=5, num=13).dask))
-    assert (sorted(da.linspace(6, 49, chunks=5, dtype=float).dask) ==
-            sorted(da.linspace(6, 49, chunks=5, dtype=float).dask))
+
+    darr = da.linspace(1.4, 4.9, endpoint=endpoint, chunks=5, num=13, dtype=int)
+    nparr = np.linspace(1.4, 4.9, num=13, endpoint=endpoint, dtype=int)
+    assert_eq(darr, nparr)
+    assert (sorted(da.linspace(1.4, 4.9, endpoint=endpoint, chunks=5, num=13).dask) ==
+            sorted(da.linspace(1.4, 4.9, endpoint=endpoint, chunks=5, num=13).dask))
+    assert (sorted(da.linspace(6, 49, endpoint=endpoint, chunks=5, dtype=float).dask) ==
+            sorted(da.linspace(6, 49, endpoint=endpoint, chunks=5, dtype=float).dask))
 
 
 def test_arange():
@@ -113,9 +127,37 @@ def test_arange():
     nparr = np.arange(0, -1, 0.5)
     assert_eq(darr, nparr)
 
+    # Unexpected or missing kwargs
+    with pytest.raises(TypeError) as exc:
+        da.arange(10, chunks=-1, whatsthis=1)
+    assert 'whatsthis' in str(exc)
+    with pytest.raises(TypeError) as exc:
+        da.arange(10)
+    assert 'chunks' in str(exc)
 
-def test_arange_has_dtype():
-    assert da.arange(5, chunks=2).dtype == np.arange(5).dtype
+
+@pytest.mark.parametrize("start,stop,step,dtype", [
+    (0, 1, 1, None),  # int64
+    (1.5, 2, 1, None),  # float64
+    (1, 2.5, 1, None),  # float64
+    (1, 2, .5, None),  # float64
+    (np.float32(1), np.float32(2), np.float32(1), None),  # promoted to float64
+    (np.int32(1), np.int32(2), np.int32(1), None),  # promoted to int64
+    (np.uint32(1), np.uint32(2), np.uint32(1), None),  # promoted to int64
+    (np.uint64(1), np.uint64(2), np.uint64(1), None),  # promoted to float64
+    (np.uint32(1), np.uint32(2), np.uint32(1), np.uint32),
+    (np.uint64(1), np.uint64(2), np.uint64(1), np.uint64),
+    # numpy.arange gives unexpected results
+    # https://github.com/numpy/numpy/issues/11505
+    # (1j, 2, 1, None),
+    # (1, 2j, 1, None),
+    # (1, 2, 1j, None),
+    # (1+2j, 2+3j, 1+.1j, None),
+])
+def test_arange_dtypes(start, stop, step, dtype):
+    a_np = np.arange(start, stop, step, dtype=dtype)
+    a_da = da.arange(start, stop, step, dtype=dtype, chunks=-1)
+    assert_eq(a_np, a_da)
 
 
 @pytest.mark.xfail(reason="Casting floats to ints is not supported since edge"

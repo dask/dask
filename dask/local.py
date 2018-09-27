@@ -61,26 +61,18 @@ Changing state
 Examples
 --------
 
->>> import pprint
->>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
->>> pprint.pprint(start_state_from_dask(dsk)) # doctest: +NORMALIZE_WHITESPACE
+>>> import pprint  # doctest: +SKIP
+>>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}  # doctest: +SKIP
+>>> pprint.pprint(start_state_from_dask(dsk))  # doctest: +SKIP
 {'cache': {'x': 1, 'y': 2},
- 'dependencies': {'w': set(['y', 'z']),
-                  'x': set([]),
-                  'y': set([]),
-                  'z': set(['x'])},
- 'dependents': {'w': set([]),
-                'x': set(['z']),
-                'y': set(['w']),
-                'z': set(['w'])},
- 'finished': set([]),
+ 'dependencies': {'w': {'z', 'y'}, 'x': set(), 'y': set(), 'z': {'x'}},
+ 'dependents': {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}},
+ 'finished': set(),
  'ready': ['z'],
- 'released': set([]),
- 'running': set([]),
- 'waiting': {'w': set(['z'])},
- 'waiting_data': {'x': set(['z']),
-                  'y': set(['w']),
-                  'z': set(['w'])}}
+ 'released': set(),
+ 'running': set(),
+ 'waiting': {'w': {'z'}},
+ 'waiting_data': {'x': {'z'}, 'y': {'w'}, 'z': {'w'}}}
 
 Optimizations
 =============
@@ -115,19 +107,17 @@ See the function ``inline_functions`` for more information.
 from __future__ import absolute_import, division, print_function
 
 import os
-import sys
 
-from .compatibility import Queue, Empty, reraise
+from .compatibility import Queue, Empty, reraise, PY2
 from .core import (istask, flatten, reverse_dict, get_dependencies, ishashable,
                    has_tasks)
 from . import config
 from .order import order
 from .callbacks import unpack_callbacks, local_callbacks
-from .optimization import cull
 from .utils_test import add, inc  # noqa: F401
 
 
-if sys.version_info.major < 3:
+if PY2:
     # Due to a bug in python 2.7 Queue.get, if a timeout isn't specified then
     # `Queue.get` can't be interrupted. A workaround is to specify an extremely
     # long timeout, which then allows it to be interrupted.
@@ -160,26 +150,18 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     Examples
     --------
 
-    >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
-    >>> from pprint import pprint
-    >>> pprint(start_state_from_dask(dsk)) # doctest: +NORMALIZE_WHITESPACE
+    >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}  # doctest: +SKIP
+    >>> from pprint import pprint  # doctest: +SKIP
+    >>> pprint(start_state_from_dask(dsk))  # doctest: +SKIP
     {'cache': {'x': 1, 'y': 2},
-     'dependencies': {'w': set(['y', 'z']),
-                      'x': set([]),
-                      'y': set([]),
-                      'z': set(['x'])},
-     'dependents': {'w': set([]),
-                    'x': set(['z']),
-                    'y': set(['w']),
-                    'z': set(['w'])},
-     'finished': set([]),
+     'dependencies': {'w': {'z', 'y'}, 'x': set(), 'y': set(), 'z': {'x'}},
+     'dependents': {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}},
+     'finished': set(),
      'ready': ['z'],
-     'released': set([]),
-     'running': set([]),
-     'waiting': {'w': set(['z'])},
-     'waiting_data': {'x': set(['z']),
-                      'y': set(['w']),
-                      'z': set(['w'])}}
+     'released': set(),
+     'running': set(),
+     'waiting': {'w': {'z'}},
+     'waiting_data': {'x': {'z'}, 'y': {'w'}, 'z': {'w'}}}
     """
     if sortkey is None:
         sortkey = order(dsk).get
@@ -469,8 +451,6 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
                 if cb[0]:
                     cb[0](dsk)
                 started_cbs.append(cb)
-
-            dsk, dependencies = cull(dsk, list(results))
 
             keyorder = order(dsk)
 

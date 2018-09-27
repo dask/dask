@@ -134,9 +134,9 @@ def test_get_deps():
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
     >>> dependencies
-    {'a': set([]), 'c': set(['b']), 'b': set(['a'])}
+    {'a': set(), 'b': {'a'}, 'c': {'b'}}
     >>> dependents
-    {'a': set(['b']), 'c': set([]), 'b': set(['c'])}
+    {'a': {'b'}, 'b': {'c'}, 'c': set()}
     """
     dsk = {'a': [1, 2, 3],
            'b': 'a',

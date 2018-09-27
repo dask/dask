@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 from functools import wraps
-from collections import Iterator
 from numbers import Number
 
 import numpy as np
@@ -10,6 +9,7 @@ from toolz import merge, merge_sorted
 from .core import Array
 from ..base import tokenize
 from .. import sharedict
+from ..compatibility import Iterator
 
 
 @wraps(np.percentile)

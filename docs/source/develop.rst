@@ -151,8 +151,40 @@ You can also test certain modules or individual tests for faster response::
 
    py.test dask/dataframe/tests/test_dataframe_core.py::test_set_index
 
-Tests run automatically on the Travis.ci continuous testing framework on every
-push to every pull request on GitHub.
+Tests run automatically on the Travis.ci and Appveyor continuous testing
+frameworks on every push to every pull request on GitHub.
+
+Tests are organized within the various modules' subdirectories::
+
+    dask/array/tests/test_*.py
+    dask/bag/tests/test_*.py
+    dask/dataframe/tests/test_*.py
+    dask/diagnostics/tests/test_*.py
+
+For the Dask collections like dask.array and dask.dataframe behavior is
+typically tested directly against the Numpy or Pandas libraries using the
+``assert_eq`` functions:
+
+.. code-block:: python
+
+   import numpy as np
+   import dask.array as da
+   from dask.array.utils import assert_eq
+
+   def test_aggregations():
+       nx = np.random.random(100)
+       dx = da.from_array(x, chunks=(10,))
+
+       assert_eq(nx.sum(), dx.sum())
+       assert_eq(nx.min(), dx.min())
+       assert_eq(nx.max(), dx.max())
+       ...
+
+This technique helps to ensure compatibility with upstream libraries, and tends
+to be simpler than testing correctness directly.  Additionally, by passing Dask
+collections directly to the ``assert_eq`` function rather than call compute
+manually the testing suite is able to run a number of checks on the lazy
+collections themselves.
 
 
 Docstrings
@@ -195,7 +227,7 @@ after the line.
 
 .. _numpydoc: https://github.com/numpy/numpy/blob/master/doc/HOWTO_DOCUMENT.rst.txt
 
-Docstrings are currently tested under Python 2.7 on travis.ci.  You can test
+Docstrings are currently tested under Python 3.6 on travis.ci.  You can test
 docstrings with pytest as follows::
 
    py.test dask --doctest-modules

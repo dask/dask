@@ -10,7 +10,7 @@ implements a few different schedulers:
 - ``distributed.Client.get``: a distributed scheduler for executing graphs
    on multiple machines.  This lives in the external distributed_ project.
 
-.. _distributed: https://distributed.readthedocs.io/en/latest/
+.. _distributed: https://distributed.dask.org/en/latest/
 
 
 The ``get`` function
@@ -144,6 +144,16 @@ global pool set with ``dask.config.set``:
     >>> from multiprocessing.pool import ThreadPool
     >>> with dask.config.set(pool=ThreadPool(4)):
     ...     x.compute()
+
+The multiprocessing scheduler also supports `different contexts`_ ("spawn",
+"forkserver", "fork") which you can set with ``dask.config.set``:
+
+.. code-block:: python
+
+   >>> with dask.config.set({"multiprocessing.context", "forkserver"}):
+   ...     x.compute()
+
+.. _different contexts: https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
 
 For more information on the individual options for each scheduler, see the
 docstrings for each scheduler ``get`` function.

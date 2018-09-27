@@ -5,8 +5,6 @@ import pytest
 import math
 import os
 import random
-import sys
-from collections import Iterator
 from itertools import repeat
 
 import partd
@@ -17,7 +15,8 @@ import dask.bag as db
 from dask.bag.core import (Bag, lazify, lazify_task, map, collect,
                            reduceby, reify, partition, inline_singleton_lists,
                            optimize, from_delayed)
-from dask.compatibility import BZ2File, GzipFile, PY2
+from dask.bag.utils import assert_eq
+from dask.compatibility import BZ2File, GzipFile, PY2, Iterator
 from dask.delayed import Delayed
 from dask.utils import filetexts, tmpfile, tmpdir
 from dask.utils_test import inc, add
@@ -30,15 +29,6 @@ dsk = {('x', 0): (range, 5),
 L = list(range(5)) * 3
 
 b = Bag(dsk, 'x', 3)
-
-
-def assert_eq(a, b):
-    if hasattr(a, 'compute'):
-        a = a.compute(scheduler='sync')
-    if hasattr(b, 'compute'):
-        b = b.compute(scheduler='sync')
-
-    assert a == b
 
 
 def iseven(x):
@@ -128,17 +118,6 @@ def test_map_method():
     x_sum = sum(x)
     assert (b.map(myadd, b.sum(), c=10).compute() ==
             [myadd(i, x_sum, 10) for i in x])
-
-    # check that map works with multiarg functions. Can be removed after
-    # deprecated behavior is removed
-    assert b.map(add, b2).compute() == list(map(add, x, x2))
-
-    # check that map works with vararg functions. Can be removed after
-    # deprecated behavior is removed
-    def vararg_inc(*args):
-        return inc(*args)
-
-    assert_eq(b.map(vararg_inc), list(map(inc, x)))
 
 
 def test_starmap():
@@ -851,7 +830,6 @@ def test_to_textfiles_name_function_preserves_order():
         assert seq == out
 
 
-@pytest.mark.skipif(sys.version_info[:2] == (3,3), reason="Python3.3 uses pytest2.7.2, w/o warns method")
 def test_to_textfiles_name_function_warn():
     seq = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p']
     a = db.from_sequence(seq, npartitions=16)
@@ -898,10 +876,11 @@ def test_to_textfiles_inputs():
 def test_to_textfiles_endlines():
     b = db.from_sequence(['a', 'b', 'c'], npartitions=1)
     with tmpfile() as fn:
-        b.to_textfiles([fn])
-        with open(fn, 'r') as f:
-            result = f.readlines()
-        assert result == ['a\n', 'b\n', 'c']
+        for last_endline in False, True:
+            b.to_textfiles([fn], last_endline=last_endline)
+            with open(fn, 'r') as f:
+                result = f.readlines()
+            assert result == ['a\n', 'b\n', 'c\n' if last_endline else 'c']
 
 
 def test_string_namespace():

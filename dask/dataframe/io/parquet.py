@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import re
 import copy
 import json
-import warnings
 import os
 from distutils.version import LooseVersion
 
@@ -197,6 +196,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
                                   "that do not contain a global '_metadata' file")
 
     check_column_names(pf.columns, categories)
+    check_column_names(pf.columns + list(pf.cats or []), columns)
     if isinstance(columns, tuple):
         # ensure they tokenize the same
         columns = list(columns)
@@ -286,12 +286,15 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
 
     if index_names and infer_divisions is not False:
         index_name = meta.index.name
-        minmax = fastparquet.api.sorted_partitioned_columns(pf)
+        try:
+            # is https://github.com/dask/fastparquet/pull/371 available in
+            # current fastparquet installation?
+            minmax = fastparquet.api.sorted_partitioned_columns(pf, filters)
+        except TypeError:
+            minmax = fastparquet.api.sorted_partitioned_columns(pf)
         if index_name in minmax:
-            divisions = (list(minmax[index_name]['min']) +
-                         [minmax[index_name]['max'][-1]])
-            divisions = [divisions[i] for i, rg in enumerate(pf.row_groups)
-                         if rg in rgs] + [divisions[-1]]
+            divisions = minmax[index_name]
+            divisions = divisions['min'] + [divisions['max'][-1]]
         else:
             if infer_divisions is True:
                 raise ValueError(
@@ -483,7 +486,6 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
                   categories=None, index=None, infer_divisions=None):
     from ...bytes.core import get_pyarrow_filesystem
     import pyarrow.parquet as pq
-    import pyarrow as pa
 
     # In pyarrow, the physical storage field names may differ from
     # the actual dataframe names. This is true for Index names when
@@ -523,15 +525,6 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
         column_names = schema.names
         storage_name_mapping = {k: k for k in column_names}
         column_index_names = [None]
-
-    if pa.__version__ < LooseVersion('0.8.0'):
-        # the pyarrow 0.7.0 *reader* expects the storage names for index names
-        # that are None.
-        if any(x is None for x in index_names):
-            name_storage_mapping = {v: k for
-                                    k, v in storage_name_mapping.items()}
-            index_names = [name_storage_mapping.get(name, name)
-                           for name in index_names]
 
     column_names += [p for p in partitions if p not in column_names]
     column_names, index_names, out_type = _normalize_index_columns(
@@ -708,7 +701,7 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
 
             # Handle conversion to pandas timestamp divisions
             index_field = pa_schema.field_by_name(divisions_name)
-            if isinstance(index_field.type, pa.TimestampType):
+            if pa.types.is_timestamp(index_field.type):
                 time_unit = index_field.type.unit
                 divisions_ns = [_to_ns(d, time_unit) for d in
                                 divisions]
@@ -874,19 +867,18 @@ def get_engine(engine):
         return eng
 
     elif engine == 'pyarrow':
-        import_required('pyarrow', "`pyarrow` not installed")
+        pa = import_required('pyarrow', "`pyarrow` not installed")
+
+        if LooseVersion(pa.__version__) < '0.8.0':
+            raise RuntimeError("PyArrow version >= 0.8.0 required")
 
         _ENGINES['pyarrow'] = eng = {'read': _read_pyarrow,
                                      'write': _write_pyarrow}
         return eng
 
-    elif engine == 'arrow':
-        warnings.warn("parquet with `engine='arrow'` is deprecated, "
-                      "use `engine='pyarrow'` instead")
-        return get_engine('pyarrow')
-
     else:
-        raise ValueError('Unsupported engine type: {0}'.format(engine))
+        raise ValueError('Unsupported engine: "{0}".'.format(engine) +
+                         '  Valid choices include "pyarrow" and "fastparquet".')
 
 
 def read_parquet(path, columns=None, filters=None, categories=None, index=None,
@@ -899,12 +891,14 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
     Parameters
     ----------
-    path : string or list
+    path : string, list or fastparquet.ParquetFile
         Source directory for data, or path(s) to individual parquet files.
         Prefix with a protocol like ``s3://`` to read from alternative
         filesystems. To read from multiple files you can pass a globstring or a
         list of paths, with the caveat that they must all have the same
         protocol.
+        Alternatively, also accepts a previously opened
+        fastparquet.ParquetFile()
     columns : string, list or None (default)
         Field name(s) to read in as columns in the output. By default all
         non-index fields will be read (as determined by the pandas parquet
@@ -1047,12 +1041,6 @@ def to_parquet(df, path, engine='auto', compression='default', write_index=None,
     --------
     read_parquet: Read parquet data to dask.dataframe
     """
-    # TODO: remove once deprecation cycle is finished
-    if isinstance(path, DataFrame):
-        warnings.warn("DeprecationWarning: The order of `df` and `path` in "
-                      "`dd.to_parquet` has switched, please update your code")
-        df, path = path, df
-
     partition_on = partition_on or []
 
     if set(partition_on) - set(df.columns):

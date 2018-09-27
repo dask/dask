@@ -56,7 +56,7 @@ We proceed with hash joins in the following stages:
 from __future__ import absolute_import, division, print_function
 
 from functools import wraps, partial
-from warnings import warn
+import warnings
 
 from toolz import merge_sorted, unique, first
 import toolz
@@ -445,7 +445,9 @@ def concat_unindexed_dataframes(dfs):
 
 def concat_indexed_dataframes(dfs, axis=0, join='outer'):
     """ Concatenate indexed dataframes together along the index """
-    meta = methods.concat([df._meta for df in dfs], axis=axis, join=join)
+    warn = axis != 0
+    meta = methods.concat([df._meta for df in dfs], axis=axis, join=join,
+                          filter_warning=warn)
     empties = [strip_unknown_categories(df._meta) for df in dfs]
 
     dfs2, divisions, parts = align_partitions(*dfs)
@@ -456,7 +458,11 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
                for df, empty in zip(part, empties)]
               for part in parts]
 
-    dsk = dict(((name, i), (methods.concat, part, axis, join))
+    filter_warning = True
+    uniform = False
+
+    dsk = dict(((name, i), (methods.concat, part, axis, join,
+                            uniform, filter_warning))
                for i, part in enumerate(parts2))
     for df in dfs2:
         dsk.update(df.dask)
@@ -466,7 +472,7 @@ def concat_indexed_dataframes(dfs, axis=0, join='outer'):
 
 def stack_partitions(dfs, divisions, join='outer'):
     """Concatenate partitions on axis=0 by doing a simple stack"""
-    meta = methods.concat([df._meta for df in dfs], join=join)
+    meta = methods.concat([df._meta for df in dfs], join=join, filter_warning=False)
     empty = strip_unknown_categories(meta)
 
     name = 'concat-{0}'.format(tokenize(*dfs))
@@ -599,9 +605,10 @@ def concat(dfs, axis=0, join='outer', interleave_partitions=False):
         elif (len(dasks) == len(dfs) and
               all(not df.known_divisions for df in dfs) and
               len({df.npartitions for df in dasks}) == 1):
-            warn("Concatenating dataframes with unknown divisions.\n"
-                 "We're assuming that the indexes of each dataframes are \n"
-                 "aligned. This assumption is not generally safe.")
+            warnings.warn("Concatenating dataframes with unknown divisions.\n"
+                          "We're assuming that the indexes of each dataframes"
+                          " are \n aligned. This assumption is not generally "
+                          "safe.")
             return concat_unindexed_dataframes(dfs)
         else:
             raise ValueError('Unable to concatenate DataFrame with unknown '

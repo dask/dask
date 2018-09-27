@@ -5,7 +5,7 @@ import itertools
 import math
 import uuid
 import warnings
-from collections import Iterable, Iterator, defaultdict
+from collections import defaultdict
 from distutils.version import LooseVersion
 from functools import wraps, partial
 from operator import getitem
@@ -30,7 +30,7 @@ except ImportError:
 from .. import config
 from ..base import tokenize, dont_optimize, is_dask_collection, DaskMethodsMixin
 from ..bytes import open_files
-from ..compatibility import apply, urlopen
+from ..compatibility import apply, urlopen, Iterable, Iterator
 from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict
 from ..delayed import Delayed
@@ -116,7 +116,7 @@ def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
     return dsk5
 
 
-def _to_textfiles_chunk(data, lazy_file):
+def _to_textfiles_chunk(data, lazy_file, last_endline):
     with lazy_file as f:
         if isinstance(f, io.TextIOWrapper):
             endline = u'\n'
@@ -131,11 +131,13 @@ def _to_textfiles_chunk(data, lazy_file):
             else:
                 started = True
             f.write(ensure(d))
+        if last_endline:
+            f.write(endline)
 
 
 def to_textfiles(b, path, name_function=None, compression='infer',
                  encoding=system_encoding, compute=True, storage_options=None,
-                 **kwargs):
+                 last_endline=False, **kwargs):
     """ Write dask Bag to disk, one filename per partition, one line per element.
 
     **Paths**: This will create one file for each partition in your bag. You
@@ -188,6 +190,9 @@ def to_textfiles(b, path, name_function=None, compression='infer',
     then calling ``to_textfiles`` :
 
     >>> b_dict.map(json.dumps).to_textfiles("/path/to/data/*.json")  # doctest: +SKIP
+
+    **Last endline**: By default the last line does not end with a newline
+    character. Pass ``last_endline=True`` to invert the default.
     """
     mode = 'wb' if encoding is None else 'wt'
     files = open_files(path, compression=compression, mode=mode,
@@ -195,7 +200,7 @@ def to_textfiles(b, path, name_function=None, compression='infer',
                        num=b.npartitions, **(storage_options or {}))
 
     name = 'to-textfiles-' + uuid.uuid4().hex
-    dsk = {(name, i): (_to_textfiles_chunk, (b.name, i), f)
+    dsk = {(name, i): (_to_textfiles_chunk, (b.name, i), f, last_endline)
            for i, f in enumerate(files)}
     out = type(b)(merge(dsk, b.dask), name, b.npartitions)
 
@@ -576,9 +581,9 @@ class Bag(DaskMethodsMixin):
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(5))
         >>> list(b.random_sample(0.5, 42))
-        [1, 4]
+        [1, 3]
         >>> list(b.random_sample(0.5, 42))
-        [1, 4]
+        [1, 3]
         """
         if not 0 <= prob <= 1:
             raise ValueError('prob must be a number in the interval [0, 1]')
@@ -692,9 +697,10 @@ class Bag(DaskMethodsMixin):
     @wraps(to_textfiles)
     def to_textfiles(self, path, name_function=None, compression='infer',
                      encoding=system_encoding, compute=True,
-                     storage_options=None, **kwargs):
+                     storage_options=None, last_endline=False, **kwargs):
         return to_textfiles(self, path, name_function, compression, encoding,
-                            compute, storage_options=storage_options, **kwargs)
+                            compute, storage_options=storage_options,
+                            last_endline=last_endline, **kwargs)
 
     def fold(self, binop, combine=None, initial=no_default, split_every=None):
         """ Parallelizable reduction
@@ -1289,17 +1295,12 @@ class Bag(DaskMethodsMixin):
         import pandas as pd
         import dask.dataframe as dd
         if meta is None:
-            if isinstance(columns, pd.DataFrame):
-                warnings.warn("Passing metadata to `columns` is deprecated. "
-                              "Please use the `meta` keyword instead.")
-                meta = columns
-            else:
-                head = self.take(1, warn=False)
-                if len(head) == 0:
-                    raise ValueError("`dask.bag.Bag.to_dataframe` failed to "
-                                     "properly infer metadata, please pass in "
-                                     "metadata via the `meta` keyword")
-                meta = pd.DataFrame(list(head), columns=columns)
+            head = self.take(1, warn=False)
+            if len(head) == 0:
+                raise ValueError("`dask.bag.Bag.to_dataframe` failed to "
+                                 "properly infer metadata, please pass in "
+                                 "metadata via the `meta` keyword")
+            meta = pd.DataFrame(list(head), columns=columns)
         elif columns is not None:
             raise ValueError("Can't specify both `meta` and `columns`")
         else:

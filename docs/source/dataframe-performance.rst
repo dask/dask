@@ -1,3 +1,5 @@
+.. _dataframe.performance:
+
 Dask DataFrame Performance Tips
 ===============================
 
@@ -59,7 +61,7 @@ Additionally, set_index has a few options that can accelerate it in some
 situations.  For example if you know that your dataset is sorted or you already
 know the values by which it is divided you can provide these to accelerate the
 set_index operation.  See the `set_index docstring
-<http://dask.pydata.org/en/latest/dataframe-api.html#dask.dataframe.DataFrame.set_index>`_
+<http://docs.dask.org/en/latest/dataframe-api.html#dask.dataframe.DataFrame.set_index>`_
 for more information.
 
 .. code-block:: python
@@ -83,7 +85,7 @@ It is often ideal to load, filter, and shuffle data once and keep this result in
 memory.  Afterwards each of the several complex queries can be based off of
 this in-memory data rather than have to repeat the full load-filter-shuffle
 process each time.  To do this, use the `client.persist
-<http://distributed.readthedocs.io/en/latest/api.html#distributed.client.Client.persist>`_
+<https://distributed.dask.org/en/latest/api.html#distributed.client.Client.persist>`_
 method.
 
 .. code-block:: python
@@ -188,13 +190,12 @@ Store Data in Apache Parquet Format
 -----------------------------------
 
 HDF5 is a popular choice for Pandas users with high performance needs.  We
-encourage Dask.dataframe users to `store and load data
-<http://dask.pydata.org/en/latest/dataframe-create.html>`_ using Parquet
-instead.  `Apache Parquet <http://parquet.apache.org/>`_ is a columnar binary
-format that is easy to split into multiple files (easier for parallel loading)
-and is generally much simpler to deal with than HDF5 (from the library's
-perspective).  It is also a common format used by other big data systems like
-`Apache Spark <http://spark.apache.org/>`_ and `Apache Impala
+encourage Dask.dataframe users to :doc:`store and load data dataframe-create>`
+using Parquet instead.  `Apache Parquet <http://parquet.apache.org/>`_ is a
+columnar binary format that is easy to split into multiple files (easier for
+parallel loading) and is generally much simpler to deal with than HDF5 (from
+the library's perspective).  It is also a common format used by other big data
+systems like `Apache Spark <http://spark.apache.org/>`_ and `Apache Impala
 <http://impala.apache.org/>`_ and so is useful to interchange with other
 systems.
 

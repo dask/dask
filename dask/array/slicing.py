@@ -42,7 +42,7 @@ def sanitize_index(ind):
     >>> sanitize_index(np.array([False, True, True]))
     array([1, 2])
     >>> type(sanitize_index(np.int32(0)))
-    <type 'int'>
+    <class 'int'>
     >>> sanitize_index(1.0)
     1
     >>> sanitize_index(0.5)
@@ -69,7 +69,7 @@ def sanitize_index(ind):
         return np.asanyarray(nonzero)
     elif np.issubdtype(index_array.dtype, np.integer):
         return index_array
-    elif np.issubdtype(index_array.dtype, float):
+    elif np.issubdtype(index_array.dtype, np.floating):
         int_index = index_array.astype(np.intp)
         if np.allclose(index_array, int_index):
             return int_index
@@ -172,7 +172,7 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
     where_none = [i for i, ind in enumerate(index) if ind is None]
     where_none_orig = list(where_none)
     for i, x in enumerate(where_none):
-        n = sum(isinstance(ind, int) for ind in index[:x])
+        n = sum(isinstance(ind, Integral) for ind in index[:x])
         if n:
             where_none[i] -= n
 
@@ -241,7 +241,7 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
 
     # lists and full slices.  Just use take
     if all(isinstance(i, np.ndarray) or i == slice(None, None, None)
-            for i in index):
+           for i in index):
         axis = where_list[0]
         blockdims2, dsk3 = take(out_name, in_name, blockdims,
                                 index[where_list[0]], axis=axis)
@@ -364,11 +364,19 @@ def _slice_1d(dim_shape, lengths, index):
 
     And negative slicing
 
-    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 0, -3))
-    {0: slice(-2, -20, -3), 1: slice(-1, -21, -3), 2: slice(-3, -21, -3), 3: slice(-2, -21, -3), 4: slice(-1, -21, -3)}
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 0, -3)) # doctest: +NORMALIZE_WHITESPACE
+    {4: slice(-1, -21, -3),
+     3: slice(-2, -21, -3),
+     2: slice(-3, -21, -3),
+     1: slice(-1, -21, -3),
+     0: slice(-2, -20, -3)}
 
-    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 12, -3))
-    {0: slice(-2, -8, -3), 1: slice(-1, -21, -3), 2: slice(-3, -21, -3), 3: slice(-2, -21, -3), 4: slice(-1, -21, -3)}
+    >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, 12, -3)) # doctest: +NORMALIZE_WHITESPACE
+    {4: slice(-1, -21, -3),
+     3: slice(-2, -21, -3),
+     2: slice(-3, -21, -3),
+     1: slice(-1, -21, -3),
+     0: slice(-2, -8, -3)}
 
     >>> _slice_1d(100, [20, 20, 20, 20, 20], slice(100, -12, -3))
     {4: slice(-1, -12, -3)}
@@ -383,7 +391,7 @@ def _slice_1d(dim_shape, lengths, index):
             ind = index - chunk_boundaries[i - 1]
         else:
             ind = index
-        return {i: ind}
+        return {int(i): int(ind)}
 
     assert isinstance(index, slice)
 
@@ -710,23 +718,21 @@ def normalize_slice(idx, dim):
     """
 
     if isinstance(idx, slice):
-        start, stop, step = idx.start, idx.stop, idx.step
-        if start is not None:
-            if start < 0 and not math.isnan(dim):
-                start = max(0, start + dim)
-            elif start > dim:
-                start = dim
-        if stop is not None:
-            if stop < 0 and not math.isnan(dim):
-                stop = max(0, stop + dim)
-            elif stop > dim:
-                stop = dim
-        if start == 0:
-            start = None
-        if stop == dim:
-            stop = None
-        if step == 1:
-            step = None
+        if math.isnan(dim):
+            return idx
+        start, stop, step = idx.indices(dim)
+        if step > 0:
+            if start == 0:
+                start = None
+            if stop >= dim:
+                stop = None
+            if step == 1:
+                step = None
+        elif step < 0:
+            if start >= dim - 1:
+                start = None
+            if stop < 0:
+                stop = None
         return slice(start, stop, step)
     return idx
 
@@ -816,13 +822,28 @@ def check_index(ind, dimension):
     IndexError: Index out of bounds 5
 
     >>> check_index(slice(0, 3), 5)
+
+    >>> check_index([True], 1)
+    >>> check_index([True, True], 3)
+    Traceback (most recent call last):
+    ...
+    IndexError: Boolean array length 2 doesn't equal dimension 3
+    >>> check_index([True, True, True], 1)
+    Traceback (most recent call last):
+    ...
+    IndexError: Boolean array length 3 doesn't equal dimension 1
     """
     # unknown dimension, assumed to be in bounds
     if np.isnan(dimension):
         return
     elif isinstance(ind, (list, np.ndarray)):
         x = np.asanyarray(ind)
-        if (x >= dimension).any() or (x < -dimension).any():
+        if x.dtype == bool:
+            if x.size != dimension:
+                raise IndexError(
+                    "Boolean array length %s doesn't equal dimension %s" %
+                    (x.size, dimension))
+        elif (x >= dimension).any() or (x < -dimension).any():
             raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
         return
@@ -840,7 +861,125 @@ def check_index(ind, dimension):
         raise IndexError(msg % (ind, dimension))
 
 
-def slice_with_dask_array(x, index):
+def slice_with_int_dask_array(x, index):
+    """ Slice x with at most one 1D dask arrays of ints.
+
+    This is a helper function of :meth:`Array.__getitem__`.
+
+    Parameters
+    ----------
+    x: Array
+    index: tuple with as many elements as x.ndim, among which there are
+           one or more Array's with dtype=int
+
+    Returns
+    -------
+    tuple of (sliced x, new index)
+
+    where the new index is the same as the input, but with slice(None)
+    replaced to the original slicer where a 1D filter has been applied and
+    one less element where a zero-dimensional filter has been applied.
+    """
+    from .core import Array
+
+    assert len(index) == x.ndim
+    fancy_indexes = [
+        isinstance(idx, (tuple, list)) or
+        (isinstance(idx, (np.ndarray, Array)) and idx.ndim > 0)
+        for idx in index
+    ]
+    if sum(fancy_indexes) > 1:
+        raise NotImplementedError("Don't yet support nd fancy indexing)")
+
+    out_index = []
+    dropped_axis_cnt = 0
+    for in_axis, idx in enumerate(index):
+        out_axis = in_axis - dropped_axis_cnt
+        if isinstance(idx, Array) and idx.dtype.kind in 'iu':
+            if idx.ndim == 0:
+                idx = idx[np.newaxis]
+                x = slice_with_int_dask_array_on_axis(x, idx, out_axis)
+                x = x[tuple(
+                    0 if i == out_axis else slice(None)
+                    for i in range(x.ndim)
+                )]
+                dropped_axis_cnt += 1
+            elif idx.ndim == 1:
+                x = slice_with_int_dask_array_on_axis(x, idx, out_axis)
+                out_index.append(slice(None))
+            else:
+                raise NotImplementedError(
+                    "Slicing with dask.array of ints only permitted when "
+                    "the indexer has zero or one dimensions")
+        else:
+            out_index.append(idx)
+    return x, tuple(out_index)
+
+
+def slice_with_int_dask_array_on_axis(x, idx, axis):
+    """ Slice a ND dask array with a 1D dask arrays of ints along the given
+    axis.
+
+    This is a helper function of :func:`slice_with_int_dask_array`.
+    """
+    from .core import Array, atop, from_array
+    from . import chunk
+
+    assert 0 <= axis < x.ndim
+
+    if np.isnan(x.chunks[axis]).any():
+        raise NotImplementedError("Slicing an array with unknown chunks with "
+                                  "a dask.array of ints is not supported")
+
+    # Calculate the offset at which each chunk starts along axis
+    # e.g. chunks=(..., (5, 3, 4), ...) -> offset=[0, 5, 8]
+    offset = np.roll(np.cumsum(x.chunks[axis]), 1)
+    offset[0] = 0
+    offset = from_array(offset, chunks=1)
+    # Tamper with the declared chunks of offset to make atop align it with
+    # x[axis]
+    offset = Array(offset.dask, offset.name, (x.chunks[axis], ), offset.dtype)
+
+    # Define axis labels for atop
+    x_axes = tuple(range(x.ndim))
+    idx_axes = (x.ndim, )  # arbitrary index not already in x_axes
+    offset_axes = (axis, )
+    p_axes = x_axes[:axis + 1] + idx_axes + x_axes[axis + 1:]
+    y_axes = x_axes[:axis] + idx_axes + x_axes[axis + 1:]
+
+    # Calculate the cartesian product of every chunk of x vs every chunk of idx
+    p = atop(chunk.slice_with_int_dask_array,
+             p_axes, x, x_axes, idx, idx_axes, offset, offset_axes,
+             x_size=x.shape[axis], axis=axis, dtype=x.dtype)
+
+    # Aggregate on the chunks of x along axis
+    y = atop(chunk.slice_with_int_dask_array_aggregate,
+             y_axes, idx, idx_axes, p, p_axes,
+             concatenate=True, x_chunks=x.chunks[axis], axis=axis,
+             dtype=x.dtype)
+    return y
+
+
+def slice_with_bool_dask_array(x, index):
+    """ Slice x with one or more dask arrays of bools
+
+    This is a helper function of `Array.__getitem__`.
+
+    Parameters
+    ----------
+    x: Array
+    index: tuple with as many elements as x.ndim, among which there are
+           one or more Array's with dtype=bool
+
+    Returns
+    -------
+    tuple of (sliced x, new index)
+
+    where the new index is the same as the input, but with slice(None)
+    replaced to the original slicer when a filter has been applied.
+
+    Note: The sliced x will have nan chunks on the sliced axes.
+    """
     from .core import Array, atop, elemwise
 
     out_index = [slice(None)
@@ -857,8 +996,8 @@ def slice_with_dask_array(x, index):
                 out_index)
 
     if any(isinstance(ind, Array) and ind.dtype == bool and ind.ndim != 1
-            for ind in index):
-        raise NotImplementedError("Slicing with dask.array only permitted when "
+           for ind in index):
+        raise NotImplementedError("Slicing with dask.array of bools only permitted when "
                                   "the indexer has only one dimension or when "
                                   "it has the same dimension as the sliced "
                                   "array")

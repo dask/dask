@@ -1,6 +1,5 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Sequence
 from functools import partial, wraps
 from itertools import product
 from operator import add
@@ -11,6 +10,7 @@ from toolz import accumulate, sliding_window
 
 from .. import sharedict
 from ..base import tokenize
+from ..compatibility import Sequence
 from ..utils import ignoring
 from . import chunk
 from .core import (Array, asarray, normalize_chunks,
@@ -57,7 +57,8 @@ def empty_like(a, dtype=None, chunks=None):
 
     a = asarray(a)
     return empty(
-        a.shape, dtype=(dtype or a.dtype), chunks=(chunks or a.chunks)
+        a.shape, dtype=(dtype or a.dtype),
+        chunks=(chunks if chunks is not None else a.chunks)
     )
 
 
@@ -92,7 +93,8 @@ def ones_like(a, dtype=None, chunks=None):
 
     a = asarray(a)
     return ones(
-        a.shape, dtype=(dtype or a.dtype), chunks=(chunks or a.chunks)
+        a.shape, dtype=(dtype or a.dtype),
+        chunks=(chunks if chunks is not None else a.chunks)
     )
 
 
@@ -127,7 +129,8 @@ def zeros_like(a, dtype=None, chunks=None):
 
     a = asarray(a)
     return zeros(
-        a.shape, dtype=(dtype or a.dtype), chunks=(chunks or a.chunks)
+        a.shape, dtype=(dtype or a.dtype),
+        chunks=(chunks if chunks is not None else a.chunks)
     )
 
 
@@ -169,16 +172,15 @@ def full_like(a, fill_value, dtype=None, chunks=None):
         a.shape,
         fill_value,
         dtype=(dtype or a.dtype),
-        chunks=(chunks or a.chunks)
+        chunks=(chunks if chunks is not None else a.chunks)
     )
 
 
-def linspace(start, stop, num=50, chunks=None, dtype=None):
+def linspace(start, stop, num=50, endpoint=True, retstep=False, chunks=None,
+             dtype=None):
     """
     Return `num` evenly spaced values over the closed interval [`start`,
     `stop`].
-
-    TODO: implement the `endpoint`, `restep`, and `dtype` keyword args
 
     Parameters
     ----------
@@ -188,14 +190,25 @@ def linspace(start, stop, num=50, chunks=None, dtype=None):
         The last value of the sequence.
     num : int, optional
         Number of samples to include in the returned dask array, including the
-        endpoints.
+        endpoints. Default is 50.
+    endpoint : bool, optional
+        If True, ``stop`` is the last sample. Otherwise, it is not included.
+        Default is True.
+    retstep : bool, optional
+        If True, return (samples, step), where step is the spacing between
+        samples. Default is False.
     chunks :  int
         The number of samples on each block. Note that the last block will have
         fewer samples if `num % blocksize != 0`
+    dtype : dtype, optional
+        The type of the output array. Default is given by ``numpy.dtype(float)``.
 
     Returns
     -------
     samples : dask array
+    step : float, optional
+        Only returned if ``retstep`` is True. Size of spacing between samples.
+
 
     See Also
     --------
@@ -210,23 +223,29 @@ def linspace(start, stop, num=50, chunks=None, dtype=None):
 
     range_ = stop - start
 
-    space = float(range_) / (num - 1)
+    div = (num - 1) if endpoint else num
+    step = float(range_) / div
 
     if dtype is None:
         dtype = np.linspace(0, 1, 1).dtype
 
-    name = 'linspace-' + tokenize((start, stop, num, chunks, dtype))
+    name = 'linspace-' + tokenize((start, stop, num, endpoint, chunks, dtype))
 
     dsk = {}
     blockstart = start
 
     for i, bs in enumerate(chunks[0]):
-        blockstop = blockstart + ((bs - 1) * space)
-        task = (partial(np.linspace, dtype=dtype), blockstart, blockstop, bs)
-        blockstart = blockstart + (space * bs)
+        bs_space = bs - 1 if endpoint else bs
+        blockstop = blockstart + (bs_space * step)
+        task = (partial(np.linspace, endpoint=endpoint, dtype=dtype),
+                blockstart, blockstop, bs)
+        blockstart = blockstart + (step * bs)
         dsk[(name, i)] = task
 
-    return Array(dsk, name, chunks, dtype=dtype)
+    if retstep:
+        return Array(dsk, name, chunks, dtype=dtype), step
+    else:
+        return Array(dsk, name, chunks, dtype=dtype)
 
 
 def arange(*args, **kwargs):
@@ -252,6 +271,8 @@ def arange(*args, **kwargs):
     chunks :  int
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
+    dtype : numpy.dtype
+        Output dtype. Omit to infer it from start, stop, step
 
     Returns
     -------
@@ -276,18 +297,22 @@ def arange(*args, **kwargs):
         arange takes 3 positional arguments: arange([start], stop, [step])
         ''')
 
-    if 'chunks' not in kwargs:
-        raise ValueError("Must supply a chunks= keyword argument")
-    chunks = kwargs['chunks']
+    try:
+        chunks = kwargs.pop('chunks')
+    except KeyError:
+        raise TypeError("Required argument 'chunks' not found")
 
-    dtype = kwargs.get('dtype', None)
-    if dtype is None:
-        dtype = np.arange(0, 1, step).dtype
-
-    num = max(np.ceil((stop - start) / step), 0)
+    num = int(max(np.ceil((stop - start) / step), 0))
     chunks = normalize_chunks(chunks, (num,))
 
-    name = 'arange-' + tokenize((start, stop, step, chunks, num))
+    dtype = kwargs.pop('dtype', None)
+    if dtype is None:
+        dtype = np.arange(start, stop, step * num if num else step).dtype
+    if kwargs:
+        raise TypeError("Unexpected keyword argument(s): %s" %
+                        ",".join(kwargs.keys()))
+
+    name = 'arange-' + tokenize((start, stop, step, chunks, dtype))
     dsk = {}
     elem_count = 0
 
@@ -417,7 +442,7 @@ def eye(N, chunks, M=None, k=0, dtype=float):
       An array where all elements are equal to zero, except for the `k`-th
       diagonal, whose values are equal to one.
     """
-    if not isinstance(chunks, int):
+    if not isinstance(chunks, Integral):
         raise ValueError('chunks must be an int')
 
     token = tokenize(N, chunk, M, k, dtype)
@@ -918,7 +943,7 @@ def pad_udf(array, pad_width, mode, **kwargs):
 
         result = result.map_blocks(
             wrapped_pad_func,
-            token="pad",
+            name="pad",
             dtype=result.dtype,
             pad_func=mode,
             iaxis_pad_width=pad_width[d],

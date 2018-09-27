@@ -617,7 +617,7 @@ def test_rechunk_avoid_needless_chunking():
     (100, 1, 10, (10,) * 10),
     (100, 50, 10, (10,) * 10),
     (100, 100, 10, (10,) * 10),
-    (20, 7, 10, (10, 10)),
+    (20, 7, 10, (7, 7, 6)),
     (20, (1, 1, 1, 1, 6, 2, 1, 7), 5, (5, 5, 5, 5)),
 ])
 def test_rechunk_auto_1d(shape, chunks, bs, expected):
@@ -695,3 +695,24 @@ def test_rechunk_zero():
         x = da.ones(10, chunks=(5,))
         y = x.rechunk('auto')
         assert y.chunks == ((1,) * 10,)
+
+
+def test_rechunk_bad_keys():
+    x = da.zeros((2, 3, 4), chunks=1)
+    assert x.rechunk({-1: 4}).chunks == ((1, 1), (1, 1, 1), (4,))
+    assert x.rechunk({-x.ndim: 2}).chunks == ((2,), (1, 1, 1), (1, 1, 1, 1))
+
+    with pytest.raises(TypeError) as info:
+        x.rechunk({'blah': 4})
+
+    assert 'blah' in str(info.value)
+
+    with pytest.raises(ValueError) as info:
+        x.rechunk({100: 4})
+
+    assert '100' in str(info.value)
+
+    with pytest.raises(ValueError) as info:
+        x.rechunk({-100: 4})
+
+    assert '-100' in str(info.value)

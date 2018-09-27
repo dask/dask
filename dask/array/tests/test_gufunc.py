@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 from distutils.version import LooseVersion
 import pytest
-from pytest import raises as assert_raises
 from numpy.testing import assert_equal
 import dask.array as da
 from dask.array.utils import assert_eq
@@ -25,13 +24,13 @@ def test__parse_gufunc_signature():
                  ([('x',)], [('y',), ()]))
     assert_equal(_parse_gufunc_signature('(),(a,b,c),(d)->(d,e)'),
                  ([(), ('a', 'b', 'c'), ('d',)], ('d', 'e')))
-    with assert_raises(ValueError):
+    with pytest.raises(ValueError):
         _parse_gufunc_signature('(x)(y)->()')
-    with assert_raises(ValueError):
+    with pytest.raises(ValueError):
         _parse_gufunc_signature('(x),(y)->')
-    with assert_raises(ValueError):
+    with pytest.raises(ValueError):
         _parse_gufunc_signature('((x))->(x)')
-    with assert_raises(ValueError):
+    with pytest.raises(ValueError):
         _parse_gufunc_signature('(x)->(x),')
 
 
@@ -74,7 +73,7 @@ def test_apply_gufunc_output_dtypes_string_many_outputs(vectorize):
     def stats(x):
         return np.mean(x, axis=-1), np.std(x, axis=-1)
     a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
-    mean, std = apply_gufunc(stats, "(i)->(),()", a, output_dtypes="ff", vectorize=vectorize)
+    mean, std = apply_gufunc(stats, "(i)->(),()", a, output_dtypes=("f", "f"), vectorize=vectorize)
     assert mean.compute().shape == (10, 20)
     assert std.compute().shape == (10, 20)
 
@@ -118,7 +117,7 @@ def test_apply_gufunc_elemwise_01b():
         return x + y
     a = da.from_array(np.array([1, 2, 3]), chunks=2, name='a')
     b = da.from_array(np.array([1, 2, 3]), chunks=1, name='b')
-    with assert_raises(ValueError):
+    with pytest.raises(ValueError):
         apply_gufunc(add, "(),()->()", a, b, output_dtypes=a.dtype)
 
 
@@ -186,6 +185,17 @@ def test_apply_gufunc_two_mixed_outputs():
     assert x.compute() == 1
     assert y.chunks == ((2,), (3,))
     assert_eq(y, np.ones((2, 3), dtype=float))
+
+
+@pytest.mark.parametrize('output_dtypes', [int, (int,)])
+def test_apply_gufunc_output_dtypes(output_dtypes):
+    def foo(x):
+        return y
+    x = np.random.randn(10)
+    y = x.astype(int)
+    dy = apply_gufunc(foo, "()->()", x, output_dtypes=output_dtypes)
+    #print(x, x.compute())
+    assert_eq(y, dy)
 
 
 def test_gufunc_two_inputs():
@@ -260,7 +270,7 @@ def test_apply_gufunc_check_same_dimsizes():
     a = da.random.normal(size=(3,), chunks=(2,))
     b = da.random.normal(size=(4,), chunks=(2,))
 
-    with assert_raises(ValueError) as excinfo:
+    with pytest.raises(ValueError) as excinfo:
         apply_gufunc(foo, "(),()->()", a, b, output_dtypes=float, allow_rechunk=True)
     assert "different lengths in arrays" in str(excinfo.value)
 
@@ -269,7 +279,7 @@ def test_apply_gufunc_check_coredim_chunksize():
     def foo(x):
         return np.sum(x, axis=-1)
     a = da.random.normal(size=(8,), chunks=3)
-    with assert_raises(ValueError) as excinfo:
+    with pytest.raises(ValueError) as excinfo:
         da.apply_gufunc(foo, "(i)->()", a, output_dtypes=float, allow_rechunk=False)
     assert "consists of multiple chunks" in str(excinfo.value)
 
@@ -281,6 +291,48 @@ def test_apply_gufunc_check_inhomogeneous_chunksize():
     a = da.random.normal(size=(8,), chunks=((2, 2, 2, 2),))
     b = da.random.normal(size=(8,), chunks=((2, 3, 3),))
 
-    with assert_raises(ValueError) as excinfo:
+    with pytest.raises(ValueError) as excinfo:
         da.apply_gufunc(foo, "(),()->()", a, b, output_dtypes=float, allow_rechunk=False)
     assert "with different chunksize present" in str(excinfo.value)
+
+
+def test_apply_gufunc_infer_dtype():
+    x = np.arange(50).reshape((5, 10))
+    y = np.arange(10)
+    dx = da.from_array(x, chunks=5)
+    dy = da.from_array(y, chunks=5)
+
+    def foo(x, *args, **kwargs):
+        cast = kwargs.pop('cast', 'i8')
+        return (x + sum(args)).astype(cast)
+
+    dz = apply_gufunc(foo, "(),(),()->()", dx, dy, 1)
+    z = foo(dx, dy, 1)
+    assert_eq(dz, z)
+
+    dz = apply_gufunc(foo, "(),(),()->()", dx, dy, 1, cast='f8')
+    z = foo(dx, dy, 1, cast='f8')
+    assert_eq(dz, z)
+
+    dz = apply_gufunc(foo, "(),(),()->()", dx, dy, 1, cast='f8', output_dtypes='f8')
+    z = foo(dx, dy, 1, cast='f8')
+    assert_eq(dz, z)
+
+    def foo(x):
+        raise RuntimeError("Woops")
+
+    with pytest.raises(ValueError) as e:
+        apply_gufunc(foo, "()->()", dx)
+    msg = str(e.value)
+    assert msg.startswith("`dtype` inference failed")
+    assert "Please specify the dtype explicitly" in msg
+    assert 'RuntimeError' in msg
+
+    # Multiple outputs
+    def foo(x, y):
+        return x + y, x - y
+
+    z0, z1 = apply_gufunc(foo, "(),()->(),()", dx, dy)
+
+    assert_eq(z0, dx + dy)
+    assert_eq(z1, dx - dy)

@@ -8,7 +8,7 @@ from . import core
 DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
 
 
-class HTTPFileSystem(core.FileSystem):
+class HTTPFileSystem(object):
     """
     Simple File-System for fetching data via HTTP(S)
 
@@ -294,8 +294,17 @@ class HTTPFile(object):
 
 
 def file_size(url, session, **kwargs):
-    """Call HEAD on the server to get file size"""
-    r = session.head(url, **kwargs)
+    """Call HEAD on the server to get file size
+
+    Default operation is to explicitly allow redirects and use encoding
+    'identity' (no compression) to get the true size of the target.
+    """
+    kwargs = kwargs.copy()
+    ar = kwargs.pop('allow_redirects', True)
+    head = kwargs.get('headers', {})
+    if 'Accept-Encoding' not in head:
+        head['Accept-Encoding'] = 'identity'
+    r = session.head(url, allow_redirects=ar, **kwargs)
     r.raise_for_status()
     if 'Content-Length' in r.headers:
         return int(r.headers['Content-Length'])

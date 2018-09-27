@@ -75,14 +75,16 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
     Notes
     -----
     With ``k`` blocks of size ``(m, n)``, this algorithm has memory use that
-    scales as ``m * n * k``.
+    scales as ``k * m * n``.
 
     The implementation here is the recursive variant due to the ultimate
-    need for one "single core" QR decomposition. Given m blocks, the
-    "single core" QR decomposition will have to work with a ``(k * n, n)``
-    matrix, and ``k * n`` may be substantially larger than ``m``.
+    need for one "single core" QR decomposition. In the non-recursive version
+    of the algorithm, given ``k`` blocks, after ``k`` ``m * n`` QR
+    decompositions, there will be a "single core" QR decomposition that will
+    have to work with a ``(k * n, n)`` matrix.
 
-    As such, (if ``m / n >= 2``) recursion will be applied as necessary
+    Here, recursion is applied as necessary to ensure that ``k * n`` is not
+    larger than ``m`` (if ``m / n >= 2``). In particular, this is done
     to ensure that single core computations do not have to work on blocks
     larger than ``(m, n)``.
 
@@ -109,6 +111,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             "  2. Have only one column of blocks\n\n"
             "Note: This function (tsqr) supports QR decomposition in the case of\n"
             "tall-and-skinny matrices (single column chunk/block; see qr)"
+            "Current shape: {},\nCurrent chunksize: {}".format(data.shape, data.chunksize)
         )
 
     token = '-' + tokenize(data, compute_svd)
@@ -1079,15 +1082,15 @@ def lstsq(a, b):
 
 @wraps(np.linalg.norm)
 def norm(x, ord=None, axis=None, keepdims=False):
-    if x.ndim > 2:
-        raise ValueError("Improper number of dimensions to norm.")
-
     if axis is None:
         axis = tuple(range(x.ndim))
     elif isinstance(axis, Number):
         axis = (int(axis),)
     else:
         axis = tuple(axis)
+
+    if len(axis) > 2:
+        raise ValueError("Improper number of dimensions to norm.")
 
     if ord == "fro":
         ord = None
@@ -1102,6 +1105,8 @@ def norm(x, ord=None, axis=None, keepdims=False):
     elif ord == "nuc":
         if len(axis) == 1:
             raise ValueError("Invalid norm order for vectors.")
+        if x.ndim > 2:
+            raise NotImplementedError("SVD based norm not implemented for ndim > 2")
 
         r = svd(x)[1][None].sum(keepdims=keepdims)
     elif ord == np.inf:
@@ -1109,29 +1114,41 @@ def norm(x, ord=None, axis=None, keepdims=False):
         if len(axis) == 1:
             r = r.max(axis=axis, keepdims=keepdims)
         else:
-            r = r.sum(axis=axis[1], keepdims=keepdims).max(keepdims=keepdims)
+            r = r.sum(axis=axis[1], keepdims=True).max(axis=axis[0], keepdims=True)
+            if keepdims is False:
+                r = r.squeeze(axis=axis)
     elif ord == -np.inf:
         r = abs(r)
         if len(axis) == 1:
             r = r.min(axis=axis, keepdims=keepdims)
         else:
-            r = r.sum(axis=axis[1], keepdims=keepdims).min(keepdims=keepdims)
+            r = r.sum(axis=axis[1], keepdims=True).min(axis=axis[0], keepdims=True)
+            if keepdims is False:
+                r = r.squeeze(axis=axis)
     elif ord == 0:
         if len(axis) == 2:
             raise ValueError("Invalid norm order for matrices.")
 
-        r = (r != 0).astype(r.dtype).sum(axis=0, keepdims=keepdims)
+        r = (r != 0).astype(r.dtype).sum(axis=axis, keepdims=keepdims)
     elif ord == 1:
         r = abs(r)
         if len(axis) == 1:
             r = r.sum(axis=axis, keepdims=keepdims)
         else:
-            r = r.sum(axis=axis[0], keepdims=keepdims).max(keepdims=keepdims)
+            r = r.sum(axis=axis[0], keepdims=True).max(axis=axis[1], keepdims=True)
+            if keepdims is False:
+                r = r.squeeze(axis=axis)
     elif len(axis) == 2 and ord == -1:
-        r = abs(r).sum(axis=axis[0], keepdims=keepdims).min(keepdims=keepdims)
+        r = abs(r).sum(axis=axis[0], keepdims=True).min(axis=axis[1], keepdims=True)
+        if keepdims is False:
+            r = r.squeeze(axis=axis)
     elif len(axis) == 2 and ord == 2:
+        if x.ndim > 2:
+            raise NotImplementedError("SVD based norm not implemented for ndim > 2")
         r = svd(x)[1][None].max(keepdims=keepdims)
     elif len(axis) == 2 and ord == -2:
+        if x.ndim > 2:
+            raise NotImplementedError("SVD based norm not implemented for ndim > 2")
         r = svd(x)[1][None].min(keepdims=keepdims)
     else:
         if len(axis) == 2:
