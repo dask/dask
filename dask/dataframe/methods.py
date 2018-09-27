@@ -227,8 +227,9 @@ concat = Dispatch('concat')
 
 
 @concat.register((tuple, list))
-def concat_list(L, axis=0, **kwargs):
-    return concat(*L, axis=axis, **kwargs)
+def concat_list(L, axis=0, join='outer', uniform=False, filter_warning=True, **kwargs):
+    return concat(*L, axis=axis, join=join, uniform=uniform,
+                  filter_warning=filter_warning, **kwargs)
 
 
 @concat.register((pd.DataFrame, pd.Series, pd.Index))
