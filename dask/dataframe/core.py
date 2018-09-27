@@ -56,7 +56,7 @@ def _concat(args):
         return args
     if isinstance(first(core.flatten(args)), np.ndarray):
         return da.core.concatenate3(args)
-    if not isinstance(args[0], (pd.DataFrame, pd.Series, pd.Index)):
+    if not isinstance(args[0], tuple(t for t, _ in parallel_types)):
         try:
             return pd.Series(args)
         except Exception:

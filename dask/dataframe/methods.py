@@ -8,6 +8,7 @@ from pandas.api.types import is_categorical_dtype
 from toolz import partition
 
 from .utils import PANDAS_VERSION
+from ..utils import Dispatch
 if PANDAS_VERSION >= '0.20.0':
     from pandas.api.types import union_categoricals
 else:
@@ -222,7 +223,16 @@ else:
         return x._get_level_values(n)
 
 
-def concat(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
+concat = Dispatch('concat')
+
+
+@concat.register((tuple, list))
+def concat_list(L, **kwargs):
+    return concat(*L, **kwargs)
+
+
+@concat.register((pd.DataFrame, pd.Series, pd.Index))
+def concat_pandas(*dfs, axis=0, join='outer', uniform=False, filter_warning=True):
     """Concatenate, handling some edge cases:
 
     - Unions categoricals between partitions
