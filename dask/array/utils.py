@@ -27,6 +27,7 @@ def normalize_to_array(x):
     else:
         return x
 
+
 def allclose(a, b, equal_nan=False, **kwargs):
     a = normalize_to_array(a)
     b = normalize_to_array(b)

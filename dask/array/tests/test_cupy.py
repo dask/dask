@@ -1,6 +1,3 @@
-import random
-from distutils.version import LooseVersion
-
 import numpy as np
 import pytest
 
