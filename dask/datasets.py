@@ -49,7 +49,7 @@ def timeseries(
 
 def generate_mimesis(field, schema_description, records_per_partition, seed):
     from mimesis.schema import Schema, Field
-    field = Field(**field, seed=seed)
+    field = Field(seed=seed, **field)
     schema = Schema(schema=lambda: schema_description(field))
     for i in range(records_per_partition):
         yield schema.create(iterations=1)
