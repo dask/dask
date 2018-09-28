@@ -223,17 +223,10 @@ else:
         return x._get_level_values(n)
 
 
-concat = Dispatch('concat')
+concat_dispatch = Dispatch('concat')
 
 
-@concat.register((tuple, list))
-def concat_list(L, axis=0, join='outer', uniform=False, filter_warning=True, **kwargs):
-    return concat(*L, axis=axis, join=join, uniform=uniform,
-                  filter_warning=filter_warning, **kwargs)
-
-
-@concat.register((pd.DataFrame, pd.Series, pd.Index))
-def concat_pandas(*dfs, axis=0, join='outer', uniform=False, filter_warning=True):
+def concat(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
     """Concatenate, handling some edge cases:
 
     - Unions categoricals between partitions
@@ -249,14 +242,21 @@ def concat_pandas(*dfs, axis=0, join='outer', uniform=False, filter_warning=True
         True if all arguments have the same columns and dtypes (but not
         necessarily categories). Default is False.
     """
+    if len(dfs) == 1:
+        return dfs[0]
+    else:
+        func = concat_dispatch.dispatch(type(dfs[0]))
+        return func(dfs, axis=axis, join=join, uniform=uniform,
+                filter_warning=filter_warning)
+
+
+@concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
     if axis == 1:
         with warnings.catch_warnings():
             if filter_warning:
                 warnings.simplefilter('ignore', FutureWarning)
             return pd.concat(dfs, axis=axis, join=join)
-
-    if len(dfs) == 1:
-        return dfs[0]
 
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):
