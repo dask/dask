@@ -13,7 +13,7 @@ Array
 Dataframe
 +++++++++
 
--
+- Added an `index` parameter to :meth:`dask.dataframe.from_dask_array` for creating a dask DataFrame from a dask Array with a given index.
 
 Core
 ++++

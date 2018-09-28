@@ -14,7 +14,7 @@ from ...compatibility import unicode, PY3
 from ... import array as da
 from ...delayed import delayed
 
-from ..core import DataFrame, Series, new_dd_object
+from ..core import DataFrame, Series, Index, new_dd_object
 from ..shuffle import set_partition
 from ..utils import insert_meta_param_description, check_meta, make_meta
 
@@ -342,16 +342,27 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
     return result
 
 
-def from_dask_array(x, columns=None):
+def from_dask_array(x, columns=None, index=None):
     """ Create a Dask DataFrame from a Dask Array.
 
     Converts a 2d array into a DataFrame and a 1d array into a Series.
 
     Parameters
     ----------
-    x: da.Array
-    columns: list or string
+    x : da.Array
+    columns : list or string
         list of column names if DataFrame, single string if Series
+    index : dask.dataframe.Index, optional
+        An optional *dask* Index to use for the output Series or DataFrame.
+
+        The default output index depends on whether `x` has any unknown
+        chunks. If there are any unknown chunks, the output has ``None``
+        for all the divisions (one per chunk). If all the chunks are known,
+        a default index with known divsions is created.
+
+        Specifying `index` can be useful if you're conforming a Dask Array
+        to an existing dask Series or DataFrame, and you would like the
+        indices to match.
 
     Examples
     --------
@@ -378,7 +389,22 @@ def from_dask_array(x, columns=None):
         x = x.rechunk({1: x.shape[1]})
 
     name = 'from-dask-array' + tokenize(x, columns)
-    if np.isnan(sum(x.shape)):
+    to_merge = []
+
+    if index is not None:
+        if not isinstance(index, Index):
+            raise ValueError("'index' must be an instance of dask.dataframe.Index")
+        if index.npartitions != x.numblocks[0]:
+            msg = (
+                "'index' must have the same number of blocks as 'x'. "
+                "({} != {})".format(index.npartitions, x.numblocks[0])
+            )
+            raise ValueError(msg)
+        divisions = index.divisions
+        to_merge.append(ensure_dict(index.dask))
+        index = index.__dask_keys__()
+
+    elif np.isnan(sum(x.shape)):
         divisions = [None] * (len(x.chunks[0]) + 1)
         index = [None] * len(x.chunks[0])
     else:
@@ -398,7 +424,8 @@ def from_dask_array(x, columns=None):
         else:
             dsk[name, i] = (pd.DataFrame, chunk, ind, meta.columns)
 
-    return new_dd_object(merge(ensure_dict(x.dask), dsk), name, meta, divisions)
+    to_merge.extend([ensure_dict(x.dask), dsk])
+    return new_dd_object(merge(*to_merge), name, meta, divisions)
 
 
 def _link(token, result):
