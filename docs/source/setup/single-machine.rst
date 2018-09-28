@@ -67,6 +67,6 @@ You can specify these functions in any of the following ways:
 Use the Distributed Scheduler
 -----------------------------
 
-The newer ``dask.distributed`` scheduler also works well on a single machine and
+Dask's newer distributed scheduler also works well on a single machine and
 offers more features and diagnostics.  See :doc:`this page
 <single-distributed>` for more information.
