@@ -247,7 +247,7 @@ def concat(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
     else:
         func = concat_dispatch.dispatch(type(dfs[0]))
         return func(dfs, axis=axis, join=join, uniform=uniform,
-                filter_warning=filter_warning)
+                    filter_warning=filter_warning)
 
 
 @concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
