@@ -491,10 +491,13 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         raise TypeError("Expected partition to be DataFrame, Series, or "
                         "Index, got `%s`" % type(meta).__name__)
 
+    def is_dataframe_like(df):
+        return all(hasattr(df, attr) for attr in ['dtypes', 'columns', 'groupby', 'head'])
+
     if type(x) != type(meta):
         errmsg = ("Expected partition of type `%s` but got "
                   "`%s`" % (type(meta).__name__, type(x).__name__))
-    elif hasattr(meta, 'dtypes') and not hasattr(meta, 'dtype'): # isinstance(meta, pd.DataFrame):
+    elif is_dataframe_like(meta):
         kwargs = dict()
         if PANDAS_VERSION >= LooseVersion('0.23.0'):
             kwargs['sort'] = True
