@@ -46,7 +46,7 @@ If you want to run workers in your same process, you can pass the
 
 This is sometimes preferable if you want to avoid inter-worker communication
 and your computations release the GIL.  This is common when primarily using
-NumPy or ``dask.array``.
+NumPy or Dask Array.
 
 
 LocalCluster
