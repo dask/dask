@@ -4,12 +4,12 @@ Single Machine: dask.distributed
 The ``dask.distributed`` scheduler works well on a single machine.  It is sometimes
 preferred over the default scheduler for the following reasons:
 
-1.  It provides access to asynchronous API, notably :doc:`Futures <../futures>`.
+1.  It provides access to asynchronous API, notably :doc:`Futures <../futures>`
 2.  It provides a diagnostic dashboard that can provide valuable insight on
-    performance and progress.
+    performance and progress
 3.  It handles data locality with more sophistication, and so can be more
     efficient than the multiprocessing scheduler on workloads that require
-    multiple processes.
+    multiple processes
 
 You can create a ``dask.distributed`` scheduler by importing and creating a
 ``Client`` with no arguments.  This overrides whatever default was previously
