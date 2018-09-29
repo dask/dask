@@ -201,6 +201,42 @@ on your Dask array to turn in to a normal NumPy array:
    array([0, 1, 4, 9, 16, 25])
 
 
+Intermediate storage
+--------------------
+
+.. autosummary::
+   store
+
+In some cases, one may wish to store an intermediate value that will be used in
+later computations. This could be useful for a variety of cases like saving
+work before a flaky step, as a simple form of caching, a useful
+restore/stopping point in a long computation, inclusion of the intermediate
+value in later analysis, etc.
+
+This uses ``store`` or anything that builds off of ``store`` to provide this
+functionality. The intermediate storage operation can be done in one of two
+ways. Triggering a computation immediately, which behaves like ``persist``
+except the computed value is placed in the ``targets`` instead. Alternatively
+computation can be delayed, which merely includes the storage step in the Dask
+graph. Both options allow this intermediate value to be used in later
+computations and both place the value in the ``targets``, which it reads the
+result from later.
+
+.. code-block:: Python
+
+   >>> import dask.array as da
+   >>> import zarr as zr
+   >>> c = (2, 2)
+   >>> d = da.ones((10, 11), chunks=c)
+   >>> z1 = zr.open_array('lazy.zarr', shape=d.shape, dtype=d.dtype, chunks=c)
+   >>> z2 = zr.open_array('eager.zarr', shape=d.shape, dtype=d.dtype, chunks=c)
+   >>> d1 = d.store(z1, compute=False, return_stored=True)
+   >>> d2 = d.store(z2, compute=True, return_stored=True)
+
+This can be combined with any other storage strategies either noted above, in
+the docs or for any specialized storage types.
+
+
 Numpy style slicing
 -------------------
 
