@@ -9,7 +9,7 @@ use this scheduler. However, you do have a choice between threads and processes:
 1.  **Threads**: Use multiple threads in the same process.  This option is good
     for numeric code that releases the GIL_ (like NumPy, Pandas, Scikit-Learn,
     Numba, ...) because data is free to share.  This is the default scheduler for
-    ``dask.array``, ``dask.dataframe``, and ``dask.delayed``.
+    ``dask.array``, ``dask.dataframe``, and ``dask.delayed``
 
 2.  **Processes**: Send data to separate processes for processing.  This option
     is good when operating on pure Python objects like strings or JSON-like
@@ -17,17 +17,17 @@ use this scheduler. However, you do have a choice between threads and processes:
     on numeric data like Pandas DataFrames or NumPy arrays.  Using processes
     avoids GIL issues, but can also result in a lot of inter-process
     communication, which can be slow.  This is the default scheduler for
-    ``dask.bag``, and it is sometimes useful with ``dask.dataframe``.
+    ``dask.bag``, and it is sometimes useful with ``dask.dataframe``
 
     Note that the ``dask.distributed`` scheduler is often a better choice when
     working with GIL-bound code.  See :doc:`dask.distributed on a single
-    machine <single-distributed>`.
+    machine <single-distributed>`
 
 3.  **Single-threaded**: Execute computations in a single thread.  This option
     provides no parallelism, but is useful when debugging or profiling.
     Turning your parallel execution into a sequential one can be a convenient
     option in many situations where you want to better understand what is going
-    on.
+    on
 
 .. _GIL: https://docs.python.org/3/glossary.html#term-gil
 
@@ -37,9 +37,9 @@ Selecting Threads, Processes, or Single Threaded
 
 Currently, these options are available by selecting different ``get`` functions:
 
--  ``dask.threaded.get``: The threaded scheduler.
--  ``dask.multiprocessing.get``: The multiprocessing scheduler.
--  ``dask.local.get_sync``: The single-threaded scheduler.
+-  ``dask.threaded.get``: The threaded scheduler
+-  ``dask.multiprocessing.get``: The multiprocessing scheduler
+-  ``dask.local.get_sync``: The single-threaded scheduler
 
 You can specify these functions in any of the following ways:
 
