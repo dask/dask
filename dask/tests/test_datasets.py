@@ -19,3 +19,10 @@ def test_no_mimesis():
             dask.datasets.make_people()
 
         assert "pip install mimesis" in str(info.value)
+
+
+def test_deterministic():
+    pytest.importorskip('mimesis')
+
+    b = dask.datasets.make_people(seed=123)
+    assert b.take(1)[0]['name'] == ('Leandro', 'Orr')
