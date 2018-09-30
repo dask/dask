@@ -16,7 +16,7 @@ from ..core import flatten
 from ..base import tokenize
 from ..utils import funcname
 from . import chunk
-from .creation import arange, diag, empty
+from .creation import arange, diag, empty, indices
 from .utils import safe_wraps, validate_axis
 from .wrap import ones
 from .ufunc import multiply, sqrt
@@ -1119,8 +1119,6 @@ def isnonzero(a):
 
 @wraps(np.argwhere)
 def argwhere(a):
-    from .creation import indices
-
     a = asarray(a)
 
     nz = isnonzero(a).flatten()
