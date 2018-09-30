@@ -378,13 +378,25 @@ def test_diag():
     assert_eq(da.diag(d), np.diag(x))
 
 
-def test_fromfunction():
-    def f(x, y):
-        return x + y
-    d = da.fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8')
+@pytest.mark.parametrize('dtype', [None, 'f8', 'i8'])
+@pytest.mark.parametrize('func, kwargs', [
+    (lambda x, y: x + y, {}),
+    (lambda x, y, c=1: x + c * y, {}),
+    (lambda x, y, c=1: x + c * y, {"c": 3}),
+])
+def test_fromfunction(func, dtype, kwargs):
+    a = np.fromfunction(func, shape=(5, 5), dtype=dtype, **kwargs)
+    d = da.fromfunction(
+        func, shape=(5, 5), chunks=(2, 2), dtype=dtype, **kwargs
+    )
 
-    assert_eq(d, np.fromfunction(f, shape=(5, 5)))
-    assert same_keys(d, da.fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8'))
+    assert_eq(d, a)
+
+    d2 = da.fromfunction(
+        func, shape=(5, 5), chunks=(2, 2), dtype=dtype, **kwargs
+    )
+
+    assert same_keys(d, d2)
 
 
 def test_repeat():
