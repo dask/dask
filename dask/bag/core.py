@@ -765,9 +765,11 @@ class Bag(DaskMethodsMixin):
         >>> dict(b.frequencies())  # doctest: +SKIP
         {'Alice': 2, 'Bob', 1}
         """
-        return self.reduction(frequencies, merge_frequencies,
-                              out_type=Bag, split_every=split_every,
-                              name='frequencies').map_partitions(dictitems)
+        return (self.reduction(frequencies, merge_frequencies,
+                               out_type=Bag, split_every=split_every,
+                               name='frequencies')
+                    .map_partitions(dictitems)
+                    .map_partitions(sorted, key=second, reverse=True))
 
     def topk(self, k, key=None, split_every=None):
         """ K largest elements in collection

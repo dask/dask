@@ -1,13 +1,14 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function
 
-import pytest
+from itertools import repeat
 import math
 import os
 import random
-from itertools import repeat
+import sys
 
 import partd
+import pytest
 from toolz import merge, join, filter, identity, valmap, groupby, pluck
 
 import dask
@@ -243,6 +244,12 @@ def test_frequencies():
     bag = db.from_sequence([0, 0, 0, 0], npartitions=4)
     bag2 = bag.filter(None).frequencies(split_every=2)
     assert_eq(bag2, [])
+
+
+@pytest.mark.skipif(sys.version_info < (3, 6), reason='sorted dicts')
+def test_frequencies_sorted():
+    b = db.from_sequence(['a', 'b', 'b', 'b', 'c', 'c'])
+    assert list(b.frequencies().compute()) == [('b', 3), ('c', 2), ('a', 1)]
 
 
 def test_topk():
