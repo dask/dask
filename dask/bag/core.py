@@ -766,8 +766,8 @@ class Bag(DaskMethodsMixin):
         {'Alice': 2, 'Bob', 1}
         """
         result = self.reduction(frequencies, merge_frequencies,
-                               out_type=Bag, split_every=split_every,
-                               name='frequencies').map_partitions(dictitems)
+                                out_type=Bag, split_every=split_every,
+                                name='frequencies').map_partitions(dictitems)
         if sort:
             result = result.map_partitions(sorted, key=second, reverse=True)
         return result

@@ -5,7 +5,6 @@ from itertools import repeat
 import math
 import os
 import random
-import sys
 
 import partd
 import pytest
