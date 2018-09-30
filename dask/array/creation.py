@@ -633,6 +633,7 @@ def fromfunction(func, chunks=None, shape=None, dtype=None):
     aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in chunks]
     offsets = list(product(*aggdims))
     shapes = list(product(*chunks))
+    dtype = dtype or float
 
     values = [(np.fromfunction, offset_func(func, offset), shp)
               for offset, shp in zip(offsets, shapes)]
