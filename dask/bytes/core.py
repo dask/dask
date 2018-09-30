@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import copy
 import io
 import os
 from distutils.version import LooseVersion
@@ -129,7 +130,7 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
 
 
 def read_block_from_file(lazy_file, off, bs, delimiter):
-    with lazy_file as f:
+    with copy.copy(lazy_file) as f:
         return read_block(f, off, bs, delimiter)
 
 

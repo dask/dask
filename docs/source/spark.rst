@@ -98,7 +98,7 @@ functionality.
         - Dask allows you to specify arbitrary task graphs for more complex and
           custom systems that are not part of the standard set of collections.
 
-.. _dask-ml: https://dask-ml.readthedocs.org/en/latest
+.. _dask-ml: https://ml.dask.org/en/latest
 
 
 Reasons you might choose Spark

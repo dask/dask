@@ -1,7 +1,7 @@
-Single Machine: Dask.distributed
+Single Machine: dask.distributed
 ================================
 
-The dask.distributed scheduler works well on a single machine.  It is sometimes
+The ``dask.distributed`` scheduler works well on a single machine.  It is sometimes
 preferred over the default scheduler for the following reasons:
 
 1.  It provides access to asynchronous API, notably :doc:`Futures <../futures>`
@@ -9,9 +9,9 @@ preferred over the default scheduler for the following reasons:
     performance and progress
 3.  It handles data locality with more sophistication, and so can be more
     efficient than the multiprocessing scheduler on workloads that require
-    multiple processes.
+    multiple processes
 
-You can create a dask.distributed scheduler by importing and creating a
+You can create a ``dask.distributed`` scheduler by importing and creating a
 ``Client`` with no arguments.  This overrides whatever default was previously
 set.
 
@@ -37,7 +37,7 @@ Client with no arguments
 This sets up a scheduler in your local process and several processes running
 single-threaded Workers.
 
-If you want to run workers in your same process you can pass the
+If you want to run workers in your same process, you can pass the
 ``processes=False`` keyword argument.
 
 .. code-block:: python
@@ -46,7 +46,7 @@ If you want to run workers in your same process you can pass the
 
 This is sometimes preferable if you want to avoid inter-worker communication
 and your computations release the GIL.  This is common when primarily using
-NumPy or Dask.array.
+NumPy or Dask Array.
 
 
 LocalCluster
@@ -62,8 +62,8 @@ and then passing that to your client.
    client = Client(cluster)
 
 This is equivalent, but somewhat more explicit.  You may want to look at the
-keyword arguments available on LocalCluster to understand the options available
-to you on handling the mixture of threads and processes, specifying explicit
+keyword arguments available on ``LocalCluster`` to understand the options available
+to you on handling the mixture of threads and processes, like specifying explicit
 ports, and so on.
 
 .. currentmodule:: distributed.deploy.local

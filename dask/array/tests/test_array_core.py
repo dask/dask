@@ -1287,7 +1287,7 @@ def test_store_kwargs():
 
     called[0] = False
     at = np.zeros(shape=(10, 10))
-    store([a], [at], get=get_func, return_store=True, foo="test kwarg")
+    store([a], [at], get=get_func, return_stored=True, foo="test kwarg")
     assert called[0]
 
 
@@ -3647,3 +3647,29 @@ def test_3851():
 def test_3925():
     x = da.from_array(np.array(['a', 'b', 'c'], dtype=object), chunks=-1)
     assert (x[0] == x[0]).compute(scheduler='sync')
+
+
+def test_map_blocks_large_inputs_delayed():
+    a = da.ones(10, chunks=(5,))
+    b = np.ones(1000000)
+
+    c = a.map_blocks(add, b)
+    assert any(b is v for v in c.dask.values())
+    assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
+
+    d = a.map_blocks(lambda x, y: x + y, y=b)
+    assert any(b is v for v in d.dask.values())
+    assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
+
+
+def test_atop_large_inputs_delayed():
+    a = da.ones(10, chunks=(5,))
+    b = np.ones(1000000)
+
+    c = atop(add, 'i', a, 'i', b, None, dtype=a.dtype)
+    assert any(b is v for v in c.dask.values())
+    assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
+
+    d = atop(lambda x, y: x + y, 'i', a, 'i', y=b, dtype=a.dtype)
+    assert any(b is v for v in d.dask.values())
+    assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence

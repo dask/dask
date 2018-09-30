@@ -13,7 +13,7 @@ Array
 Dataframe
 +++++++++
 
--
+- Added an `index` parameter to :meth:`dask.dataframe.from_dask_array` for creating a dask DataFrame from a dask Array with a given index.
 
 Core
 ++++
@@ -1272,7 +1272,7 @@ This release also includes a deprecation warning for ``dask.distributed``, which
 will be removed in the next version.
 
 Future development in distributed computing for dask is happening here:
-https://distributed.readthedocs.io . General feedback on that project is most
+https://distributed.dask.org . General feedback on that project is most
 welcome from this community.
 
 
@@ -1368,7 +1368,7 @@ Other
 .. _`@xwang777`: https://github.com/xwang777
 .. _`@fjetter`: https://github.com/fjetter
 .. _`@Ced4`: https://github.com/Ced4
-.. _`Ian Hopkinson`: https://https://github.com/IanHopkinson
+.. _`Ian Hopkinson`: https://github.com/IanHopkinson
 .. _`Stephan Hoyer`: https://github.com/shoyer
 .. _`Albert DeFusco`: https://github.com/AlbertDeFusco
 .. _`Markus Gonser`: https://github.com/magonser
@@ -1400,6 +1400,7 @@ Other
 .. _`@beomi`: https://github.com/beomi
 .. _`Henrique Ribeiro`: https://github.com/henriqueribeiro
 .. _`Marco Rossi`: https://github.com/m-rossi
+.. _`Itamar Turner-Trauring`: https://github.com/itamarst
 .. _`Mike Neish`: https://github.com/neishm
 .. _`Mark Harfouche`: https://github.com/hmaarrfk
 .. _`George Sakkis`: https://github.com/gsakkis
