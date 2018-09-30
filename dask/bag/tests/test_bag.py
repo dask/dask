@@ -246,10 +246,9 @@ def test_frequencies():
     assert_eq(bag2, [])
 
 
-@pytest.mark.skipif(sys.version_info < (3, 6), reason='sorted dicts')
 def test_frequencies_sorted():
     b = db.from_sequence(['a', 'b', 'b', 'b', 'c', 'c'])
-    assert list(b.frequencies().compute()) == [('b', 3), ('c', 2), ('a', 1)]
+    assert list(b.frequencies(sort=True).compute()) == [('b', 3), ('c', 2), ('a', 1)]
 
 
 def test_topk():
