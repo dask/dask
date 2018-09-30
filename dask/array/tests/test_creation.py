@@ -383,11 +383,11 @@ def test_fromfunction():
         return x + y
 
     a = np.fromfunction(f, shape=(5, 5))
-    d = da.fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8')
+    d = da.fromfunction(f, shape=(5, 5), chunks=(2, 2))
 
     assert_eq(d, a)
 
-    d2 = da.fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8')
+    d2 = da.fromfunction(f, shape=(5, 5), chunks=(2, 2))
 
     assert same_keys(d, d2)
 
