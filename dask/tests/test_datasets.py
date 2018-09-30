@@ -17,7 +17,6 @@ def test_full_dataset():
     assert b.count().compute() == 20
 
 
-
 def test_no_mimesis():
     try:
         import mimesis  # noqa: F401
