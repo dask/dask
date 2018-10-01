@@ -851,18 +851,20 @@ def map_blocks(func, *args, **kwargs):
                            for x, ind in argpairs]))
     # TODO: collect extra graphs from kwargs2 and arginds if they have
     # collections
-    dsk = _top(func, name, out_ind, *arginds, numblocks=numblocks,
-               **kwargs2)
+    if has_keyword(func, 'block_id') or has_keyword(func, 'block_info'):
+        my_top = top
+    else:
+        my_top = _top
+    dsk = my_top(func, name, out_ind, *arginds, numblocks=numblocks,
+                 **kwargs2)
 
     # If func has block_id as an argument, add it to the kwargs for each call
     if has_keyword(func, 'block_id'):
-        dsk = dict(dsk)
         for k in dsk.keys():
             dsk[k] = dsk[k][:-1] + (assoc(dsk[k][-1], 'block_id', k[1:]),)
 
     # If func has block_info as an argument, add it to the kwargs for each call
     if has_keyword(func, 'block_info'):
-        dsk = dict(dsk)
         starts = {}
         num_chunks = {}
         shapes = {}

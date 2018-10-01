@@ -151,8 +151,8 @@ class RandomState(object):
                         kwrg[k] = (getitem, lookup[k], slc)
             vals.append((_apply_random, func.__name__, state, size, arg, kwrg))
         dsk.update(dict(zip(keys, vals)))
-        dsk = sharedict.merge((name, dsk), *dsks, dependencies={name: {arg.name
-            for arg in args if isinstance(arg, Array)}})
+        dsk = sharedict.merge((name, dsk), *dsks,
+                              dependencies={name: {arg.name for arg in args if isinstance(arg, Array)}})
         return Array(dsk, name, chunks + extra_chunks, dtype=dtype)
 
     @doc_wraps(np.random.RandomState.beta)

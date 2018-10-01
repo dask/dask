@@ -293,8 +293,10 @@ def frexp(x):
     ldt = l.dtype
     rdt = r.dtype
 
-    L = Array(sharedict.merge(tmp.dask, (left, ldsk)), left, chunks=tmp.chunks, dtype=ldt)
-    R = Array(sharedict.merge(tmp.dask, (right, rdsk)), right, chunks=tmp.chunks, dtype=rdt)
+    L = Array(sharedict.merge(tmp.dask, (left, ldsk), dependencies={left: {tmp.name}}),
+              left, chunks=tmp.chunks, dtype=ldt)
+    R = Array(sharedict.merge(tmp.dask, (right, rdsk), dependencies={right: {tmp.name}}),
+              right, chunks=tmp.chunks, dtype=rdt)
     return L, R
 
 
@@ -314,6 +316,8 @@ def modf(x):
     ldt = l.dtype
     rdt = r.dtype
 
-    L = Array(sharedict.merge(tmp.dask, (left, ldsk)), left, chunks=tmp.chunks, dtype=ldt)
-    R = Array(sharedict.merge(tmp.dask, (right, rdsk)), right, chunks=tmp.chunks, dtype=rdt)
+    L = Array(sharedict.merge(tmp.dask, (left, ldsk), dependencies={left: {tmp.name}}),
+              left, chunks=tmp.chunks, dtype=ldt)
+    R = Array(sharedict.merge(tmp.dask, (right, rdsk), dependencies={left: {tmp.name}}),
+              right, chunks=tmp.chunks, dtype=rdt)
     return L, R

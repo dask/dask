@@ -438,6 +438,7 @@ def rewrite_atop(inputs):
 
 
 def index_subs(ind, substitution):
+    """ A simple subs function that works both on tuples and strings """
     if isinstance(ind, str):
         return ''.join(substitution.get(c, c) for c in ind)
     else:
@@ -445,6 +446,11 @@ def index_subs(ind, substitution):
 
 
 def subs(task, substitution):
+    """ Create a new task with the values substituted
+
+    This is like dask.core.subs, but takes a dict of many substitutions to
+    perform simultaneously.  It is not as concerned with micro performance.
+    """
     if isinstance(task, dict):
         return {k: subs(v, substitution) for k, v in task.items()}
     if isinstance(task, (tuple, list, set)):

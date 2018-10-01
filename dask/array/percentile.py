@@ -57,7 +57,7 @@ def percentile(a, q, interpolation='linear'):
         dtype = (np.array([], dtype=dtype) / 0.5).dtype
 
     dsk = merge(dsk, dsk2)
-    dsk = sharedict.merge(a.dask, (name2, dsk))
+    dsk = sharedict.merge(a.dask, (name2, dsk), dependencies={name2: {a.name}})
     return Array(dsk, name2, chunks=((len(q),),), dtype=dtype)
 
 

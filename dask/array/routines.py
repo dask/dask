@@ -550,7 +550,7 @@ def bincount(x, weights=None, minlength=None):
 
     chunks = ((minlength,),)
 
-    dsk = sharedict.merge((name, dsk), x.dask)
+    dsk = sharedict.merge((name, dsk), x.dask, dependencies={name: {x.name}})
     if weights is not None:
         dsk.update(weights.dask)
 
@@ -641,7 +641,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                for i, (k, w) in enumerate(zip(a_keys, w_keys))}
         dtype = weights.dtype
 
-    all_dsk = sharedict.merge(a.dask, (name, dsk))
+    all_dsk = sharedict.merge(a.dask, (name, dsk), dependencies={name: {a.name}})
     if weights is not None:
         all_dsk.update(weights.dask)
 
@@ -871,7 +871,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
         sharedict.merge(*(
             [(name, dsk)] +
             [o.dask for o in out_parts if hasattr(o, "__dask_keys__")]
-        )),
+        ), dependencies={name: {o.name for o in out_parts if hasattr(o, '__dask_keys__')}}),
         name,
         ((np.nan,),),
         out_dtype
@@ -1232,7 +1232,8 @@ def coarsen(reduction, x, axes, trim_excess=False):
                    for i, bds in enumerate(x.chunks))
 
     dt = reduction(np.empty((1,) * x.ndim, dtype=x.dtype)).dtype
-    return Array(sharedict.merge(x.dask, (name, dsk)), name, chunks, dtype=dt)
+    return Array(sharedict.merge(x.dask, (name, dsk), dependencies={name: {x.name}}),
+                 name, chunks, dtype=dt)
 
 
 def split_at_breaks(array, breaks, axis=0):
