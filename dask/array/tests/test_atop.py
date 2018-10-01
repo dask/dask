@@ -125,7 +125,6 @@ def test_atop_diamond_fusion():
 
 
 def test_atop_non_atop_output():
-    """ Diamond fusion """
     x = da.ones(10, chunks=(5,))
     y = (((x + 1) + 2) + 3)
     w = y.sum()

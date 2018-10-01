@@ -412,7 +412,7 @@ def rewrite_atop(inputs):
             # indices.extend(new_indices)
             dsk.update(new_dsk)
 
-    indices = [(a, tuple(b)) for a, b in indices]
+    indices = [(a, tuple(b) if isinstance(b, list) else b) for a, b in indices]
     new_indices = []
     seen = dict()
     sub = dict()
