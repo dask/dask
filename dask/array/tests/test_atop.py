@@ -102,11 +102,11 @@ def test_optimize_atop():
     y = ((((x + 1) + 2) + 3) + 4)
 
     # dsk = da.optimization.optimize_atop(y.dask)
-    (y,) = dask.optimize(y)
+    dsk = da.optimization.optimize_atop(y.dask)
 
-    assert isinstance(y.dask, dask.sharedict.ShareDict)
+    assert isinstance(dsk, dask.sharedict.ShareDict)
 
-    assert len([layer for layer in y.dask.dicts.values() if isinstance(layer, TOP)]) == 1
+    assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
 
 
 @pytest.mark.xfail(reason="we only look for y-splits, not for total dependencies")
@@ -149,3 +149,13 @@ def test_top_len():
 
     d = y.dask.dicts[y.name]
     assert len(d) == 4
+
+
+def test_inner_compute():
+    x = da.ones(10, chunks=(5,)) + 1 + 2 + 3
+    a = x.sum()
+    y = x * 2 * 3 * 4
+    b = y.sum()
+    z = x * 2 * 3
+
+    dask.compute(x, a, y, b, z)

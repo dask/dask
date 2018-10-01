@@ -31,10 +31,15 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
     2.  Remove full slicing, e.g. x[:]
     3.  Inline fast functions like getitem and np.transpose
     """
-    if isinstance(dsk, ShareDict):
-        dsk = optimize_atop(dsk)
-    dsk = ensure_dict(dsk)
     keys = list(flatten(keys))
+    key_prefixes = {k[0] if type(k) is tuple else k for k in keys}
+
+    # High level stage optimization
+    if isinstance(dsk, ShareDict):
+        dsk = optimize_atop(dsk, keep=key_prefixes)
+
+    # Low level task optimizations
+    dsk = ensure_dict(dsk)
     if fast_functions is not None:
         inline_functions_fast_functions = fast_functions
 
@@ -296,7 +301,7 @@ def fuse_slice(a, b):
     raise NotImplementedError()
 
 
-def optimize_atop(sharedict):
+def optimize_atop(sharedict, keep=()):
     from .core import TOP
     layers = sharedict.dicts
     dependents = reverse_dict(sharedict.dependencies)
@@ -318,7 +323,7 @@ def optimize_atop(sharedict):
             next_deps = set()
             while deps:
                 dep = deps.pop()
-                if isinstance(layers[dep], TOP):
+                if isinstance(layers[dep], TOP) and not (dep != layer and dep in keep):
                     top_layers.add(dep)
                     for d in sharedict.dependencies.get(dep, ()):
                         if len(dependents[d]) <= 1:
