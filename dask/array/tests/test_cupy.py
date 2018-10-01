@@ -12,7 +12,7 @@ cupy = pytest.importorskip('cupy')
 
 functions = [
     lambda x: x,
-    pytest.mark.xfail(lambda x: da.expm1(x), reason="cupy doesn't support expm1"),
+    pytest.mark.xfail(lambda x: da.expm1(x), reason="expm1 isn't a proper ufunc"),
     lambda x: 2 * x,
     lambda x: x / 2,
     lambda x: x**2,
