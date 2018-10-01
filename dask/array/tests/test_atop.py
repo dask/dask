@@ -8,7 +8,7 @@ import dask
 import dask.array as da
 from dask import sharedict
 from dask.array.core import TOP
-from dask.array.optimization import rewrite_atop, rewrite_TOPs, subs, index_subs
+from dask.array.optimization import rewrite_atop, subs, index_subs
 from dask.utils_test import inc, dec
 
 a, b, c, d, e, f, g = 'abcdefg'
@@ -92,19 +92,6 @@ def test_rewrite(inputs, expected):
     assert result2 == expected
 
 
-def dont_test_rewrite_TOP():
-    x = da.ones(10, chunks=(5,))
-    y = x + 1
-    z = y + 2
-
-    a = z.dask.dicts[x.name]
-    b = z.dask.dicts[y.name]
-    c = z.dask.dicts[z.name]
-
-    out = rewrite_TOPs([b, c])
-    import pdb; pdb.set_trace()
-
-
 def test_index_subs():
     assert index_subs(tuple('ij'), {'i': 'j', 'j': 'i'}) == tuple('ji')
     assert index_subs('ij', {'i': 'j', 'j': 'i'}) == 'ji'
@@ -114,10 +101,12 @@ def test_optimize_atop():
     x = da.ones(10, chunks=(5,))
     y = ((((x + 1) + 2) + 3) + 4)
 
-    dsk = da.optimization.optimize_atop(y.dask)
-    assert isinstance(dsk, dask.sharedict.ShareDict)
+    # dsk = da.optimization.optimize_atop(y.dask)
+    (y,) = dask.optimize(y)
 
-    assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
+    assert isinstance(y.dask, dask.sharedict.ShareDict)
+
+    assert len([layer for layer in y.dask.dicts.values() if isinstance(layer, TOP)]) == 1
 
 
 @pytest.mark.xfail(reason="we only look for y-splits, not for total dependencies")
@@ -143,13 +132,21 @@ def test_atop_non_atop_output():
     z = (((y * 2) * 3) * 4)
 
     z_top_before = tuple(z.dask.dicts[z.name].indices)
-    dsk = da.optimization.optimize_atop(z.dask)
+    (zz,) = dask.optimize(z)
     z_top_after = tuple(z.dask.dicts[z.name].indices)
     assert z_top_before == z_top_after, "z_top mutated"
 
-    assert isinstance(dsk, dask.sharedict.ShareDict)
-    assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
+    assert isinstance(zz.dask, dask.sharedict.ShareDict)
+    assert len([layer for layer in zz.dask.dicts.values() if isinstance(layer, TOP)]) == 1
 
-    dsk = da.optimization.optimize_atop(sharedict.merge(w.dask, z.dask))
+    (ww, zz) = dask.optimize(w, z)
     assert isinstance(dsk, dask.sharedict.ShareDict)
-    assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) >= 1
+    assert len([layer for layer in z.dask.dicts.values() if isinstance(layer, TOP)]) >= 1
+
+
+def test_top_len():
+    x = da.ones(10, chunks=(5,))
+    y = x[:, None] * x[None, :]
+
+    d = y.dask.dicts[y.name]
+    assert len(d) == 4

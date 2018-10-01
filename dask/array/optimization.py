@@ -31,6 +31,7 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
     2.  Remove full slicing, e.g. x[:]
     3.  Inline fast functions like getitem and np.transpose
     """
+    dsk = optimize_atop(dsk)
     dsk = ensure_dict(dsk)
     keys = list(flatten(keys))
     if fast_functions is not None:
@@ -375,7 +376,7 @@ def rewrite_atop(inputs):
 
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
-            dsk = {k: index_subs(v, {'_' + str(i): dep}) for k, v in dsk.items()}
+            dsk = {k: subs(v, {'_' + str(i): dep}) for k, v in dsk.items()}
 
             # Remove current input from input indices
             # [('a', 'i'), ('b', 'i')] -> [('a', 'i')]
@@ -433,7 +434,7 @@ def index_subs(ind, substitution):
     if isinstance(ind, str):
         return ''.join(substitution.get(c, c) for c in ind)
     else:
-        return type(ind)(substitution.get(c, c) for c in ind)
+        return type(ind)([substitution.get(c, c) for c in ind])
 
 
 def subs(task, substitution):
@@ -445,13 +446,3 @@ def subs(task, substitution):
         return substitution[task]
     except (KeyError, TypeError):
         return task
-
-
-def rewrite_TOPs(tops):
-    numblocks = merge(t.numblocks for t in tops)
-    new_axes = merge(t.new_axes for t in tops)
-    kwargs = {}  # TODO
-
-    out, ind, task, indices = rewrite_atop(
-            [(t.output, t.output_indices, t.task, t.indices) for t in tops])
-    return TOP(out, ind, task, indices, numblocks=numblocks, new_axes=new_axes, kwargs=kwargs)

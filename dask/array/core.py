@@ -403,7 +403,16 @@ class TOP(Mapping):
         return iter(self._dict)
 
     def __len__(self):
-        return len(self._dict)
+        return int(np.prod(list(self._out_numblocks().values())))
+
+    def _out_numblocks(self):
+        d = {}
+        indices = dict(self.indices)
+        for k, v in self.numblocks.items():
+            for a, b in zip(indices[k], v):
+                d[a] = max(d.get(a, 0), b)
+
+        return {k: v for k, v in d.items() if k in self.output_indices}
 
 
 def top(func, output, out_indices, *arrind_pairs, **kwargs):
