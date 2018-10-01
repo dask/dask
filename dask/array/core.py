@@ -849,6 +849,8 @@ def map_blocks(func, *args, **kwargs):
     arginds = list(concat([(delayed(x) if not is_dask_collection(x) and
                             sizeof(x) > 1e6 and ind is None else x, ind)
                            for x, ind in argpairs]))
+    # TODO: collect extra graphs from kwargs2 and arginds if they have
+    # collections
     dsk = _top(func, name, out_ind, *arginds, numblocks=numblocks,
                **kwargs2)
 
@@ -2659,7 +2661,7 @@ def from_delayed(value, shape, dtype, name=None):
     dsk = {(name,) + (0,) * len(shape): value.key}
     chunks = tuple((d,) for d in shape)
     return Array(sharedict.merge(value.dask, (name, dsk),
-                                 dependencies={name: {value.name}}),
+                                 dependencies={name: {value._key}}),
                  name, chunks, dtype)
 
 

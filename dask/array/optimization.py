@@ -31,7 +31,8 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
     2.  Remove full slicing, e.g. x[:]
     3.  Inline fast functions like getitem and np.transpose
     """
-    dsk = optimize_atop(dsk)
+    if isinstance(dsk, ShareDict):
+        dsk = optimize_atop(dsk)
     dsk = ensure_dict(dsk)
     keys = list(flatten(keys))
     if fast_functions is not None:
@@ -351,6 +352,8 @@ def rewrite_atop(inputs):
     [root] = [k for k, v in dependents.items() if not v]
 
     indices = list(inputs[root].indices)
+    new_axes = inputs[root].new_axes
+    concatenate = inputs[root].concatenate
 
     dsk = dict(inputs[root].dsk)
 
@@ -393,6 +396,9 @@ def rewrite_atop(inputs):
             sub.update(extra)
             new_indices = [(x, index_subs(j, sub)) for x, j in new_indices]
 
+            # TODO: handle new_axes
+            # TODO: handle concatenate
+
             # Bump new inputs up in list
             sub = {}
             for i, index in enumerate(new_indices):
@@ -406,6 +412,7 @@ def rewrite_atop(inputs):
             # indices.extend(new_indices)
             dsk.update(new_dsk)
 
+    indices = [(a, tuple(b)) for a, b in indices]
     new_indices = []
     seen = dict()
     sub = dict()
@@ -424,8 +431,8 @@ def rewrite_atop(inputs):
     numblocks = toolz.merge([inp.numblocks for inp in inputs.values()])
     numblocks = {k: v for k, v in numblocks.items() if k in toolz.pluck(0, indices)}
 
-    out = TOP(root, inputs[root].output_indices, dsk, new_indices, numblocks=numblocks)
-    # TODO: handle concatenate
+    out = TOP(root, inputs[root].output_indices, dsk, new_indices,
+              numblocks=numblocks, new_axes=new_axes, concatenate=concatenate)
 
     return out
 
