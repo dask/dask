@@ -3,12 +3,14 @@ from __future__ import absolute_import, division, print_function
 from operator import getitem
 
 import numpy as np
+import toolz
 
 from .core import getter, getter_nofancy, getter_inline
 from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
 from ..optimization import cull, fuse, inline_functions
 from ..utils import ensure_dict
+from ..sharedict import ShareDict
 
 from numbers import Integral
 
@@ -290,3 +292,166 @@ def fuse_slice(a, b):
             j += 1
         return tuple(result)
     raise NotImplementedError()
+
+
+def optimize_atop(sharedict):
+    from .core import TOP
+    layers = sharedict.dicts
+    dependents = reverse_dict(sharedict.dependencies)
+    roots = {k for k, v in sharedict.dicts.items() if not dependents.get(k)}
+    stack = list(roots)
+
+    out = {}
+    dependencies = {}
+    seen = set()
+
+    while stack:
+        layer = stack.pop()
+        if layer in seen:
+            continue
+        seen.add(layer)
+        if isinstance(layers[layer], TOP):
+            top_layers = {layer}
+            deps = set(top_layers)
+            next_deps = set()
+            while deps:
+                dep = deps.pop()
+                if isinstance(layers[dep], TOP):
+                    top_layers.add(dep)
+                    for d in sharedict.dependencies.get(dep, ()):
+                        if len(dependents[d]) <= 1:
+                            deps.add(d)
+                        else:
+                            stack.append(d)
+                else:
+                    stack.append(dep)
+            new_layer = rewrite_atop([layers[l] for l in top_layers])
+            out[layer] = new_layer
+            dependencies[layer] = {k for k, _ in new_layer.indices}
+        else:
+            out[layer] = layers[layer]
+            dependencies[layer] = sharedict.dependencies.get(layer, set())
+            stack.extend(sharedict.dependencies.get(layer, ()))
+
+    return ShareDict(out, dependencies)
+
+
+def rewrite_atop(inputs):
+    """ Rewrite a stack of atop expressions into a single atop expression """
+    from dask.core import reverse_dict
+    from dask.array.core import TOP
+    inputs = {inp.output: inp for inp in inputs}
+    dependencies = {inp.output: {d for d, _ in inp.indices if d in inputs}
+                        for inp in inputs.values()}
+    dependents = reverse_dict(dependencies)
+
+    new_index_iter = iter('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+
+    [root] = [k for k, v in dependents.items() if not v]
+
+    indices = list(inputs[root].indices)
+
+    dsk = dict(inputs[root].dsk)
+
+    stack = [root]
+    seen = set()
+
+    def join(t):
+        t = tuple(t)
+        if all(isinstance(elem, str) for elem in t):
+            return ''.join(t)
+        else:
+            return t
+
+    changed = True
+    while changed:
+        changed = False
+        for i, (dep, ind) in enumerate(indices):
+            if dep not in inputs:
+                continue
+
+            changed = True
+            d = inputs[dep]
+
+            # Replace _n with dep name in existing tasks
+            # (inc, _0) -> (inc, 'b')
+            dsk = {k: index_subs(v, {'_' + str(i): dep}) for k, v in dsk.items()}
+
+            # Remove current input from input indices
+            # [('a', 'i'), ('b', 'i')] -> [('a', 'i')]
+            _, current_dep_indices = indices.pop(i)  # TODO: this screws with current _0, _1, ...
+            sub = {'_%d' % i: '_%d' % (i - 1) for i in range(i + 1, len(indices) + 1)}
+            dsk = subs(dsk, sub)
+
+            # Change new input_indices to match give index from current computation
+            # [('c', j')] -> [('c', 'i')]
+            new_indices = inputs[dep].indices
+            sub = dict(zip(inputs[dep].output_indices, current_dep_indices))
+            contracted = {x for _, j in new_indices for x in j if x not in inputs[dep].output_indices}
+            extra = dict(zip(contracted, new_index_iter))
+            sub.update(extra)
+            new_indices = [(x, index_subs(j, sub)) for x, j in new_indices]
+
+            # Bump new inputs up in list
+            sub = {}
+            for i, index in enumerate(new_indices):
+                if index not in indices:  # use old inputs if available
+                    sub['_%d' % i] = '_%d' % len(indices)
+                    indices.append(index)
+                else:
+                    sub['_%d' % i] = '_%d' % indices.index(index)
+            new_dsk = subs(inputs[dep].dsk, sub)
+
+            # indices.extend(new_indices)
+            dsk.update(new_dsk)
+
+    new_indices = []
+    seen = dict()
+    sub = dict()
+    for i, x in enumerate(indices):
+        if x not in seen:
+            seen[x] = i
+            new_indices.append(x)
+
+        else:
+            sub[i] = seen[x]
+
+    sub = {'_%d' % k: '_%d' % v for k, v in sub.items()}
+
+    dsk = {k: subs(v, sub) for k, v in dsk.items()}
+
+    numblocks = toolz.merge([inp.numblocks for inp in inputs.values()])
+    numblocks = {k: v for k, v in numblocks.items() if k in toolz.pluck(0, indices)}
+
+    out = TOP(root, inputs[root].output_indices, dsk, new_indices, numblocks=numblocks)
+    # TODO: handle concatenate
+
+    return out
+
+
+def index_subs(ind, substitution):
+    if isinstance(ind, str):
+        return ''.join(substitution.get(c, c) for c in ind)
+    else:
+        return type(ind)(substitution.get(c, c) for c in ind)
+
+
+def subs(task, substitution):
+    if isinstance(task, dict):
+        return {k: subs(v, substitution) for k, v in task.items()}
+    if isinstance(task, (tuple, list, set)):
+        return type(task)([subs(x, substitution) for x in task])
+    try:
+        return substitution[task]
+    except (KeyError, TypeError):
+        return task
+
+
+def rewrite_TOPs(tops):
+    numblocks = merge(t.numblocks for t in tops)
+    new_axes = merge(t.new_axes for t in tops)
+    kwargs = {}  # TODO
+
+    out, ind, task, indices = rewrite_atop(
+            [(t.output, t.output_indices, t.task, t.indices) for t in tops])
+    return TOP(out, ind, task, indices, numblocks=numblocks, new_axes=new_axes, kwargs=kwargs)

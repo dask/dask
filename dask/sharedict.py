@@ -49,13 +49,15 @@ class ShareDict(Mapping):
     >>> s.dicts  # doctest: +SKIP
     {'a': {'x': 1, 'y': 2}, 'b': {'z': 3}}
     """
-    def __init__(self):
-        self.dicts = dict()
+    def __init__(self, dicts=None, dependencies=None):
+        self.dicts = dicts or dict()
+        self.dependencies = dependencies or dict()
 
     def update_with_key(self, arg, key=None):
         if type(arg) is ShareDict:
             assert key is None
             self.dicts.update(arg.dicts)
+            self.dependencies.update(arg.dependencies)
             return
 
         if key is None:
@@ -89,7 +91,8 @@ class ShareDict(Mapping):
         return unique(concat(self.dicts.values()))
 
 
-def merge(*dicts):
+def merge(*dicts, dependencies=None):
+    # assert dependencies is not None
     result = ShareDict()
     for d in dicts:
         if isinstance(d, tuple):
@@ -97,4 +100,5 @@ def merge(*dicts):
             result.update_with_key(d, key=key)
         else:
             result.update_with_key(d)
+    result.dependencies.update(dependencies or {})
     return result

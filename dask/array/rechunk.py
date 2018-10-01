@@ -566,7 +566,8 @@ def _compute_rechunk(x, chunks):
 
     del old_blocks, new_index
 
-    x2 = sharedict.merge(x.dask, (merge_temp_name, toolz.merge(x2, intermediates)))
+    x2 = sharedict.merge(x.dask, (merge_temp_name, toolz.merge(x2,
+        intermediates)), dependencies={merge_temp_name: {x.name}})
     return Array(x2, merge_temp_name, chunks, dtype=x.dtype)
 
 

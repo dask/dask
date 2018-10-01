@@ -841,15 +841,17 @@ def map_blocks(func, *args, **kwargs):
                             sizeof(x) > 1e6 and ind is None else x, ind)
                            for x, ind in argpairs]))
     dsk = _top(func, name, out_ind, *arginds, numblocks=numblocks,
-              **kwargs2)
+               **kwargs2)
 
     # If func has block_id as an argument, add it to the kwargs for each call
     if has_keyword(func, 'block_id'):
+        dsk = dict(dsk)
         for k in dsk.keys():
             dsk[k] = dsk[k][:-1] + (assoc(dsk[k][-1], 'block_id', k[1:]),)
 
     # If func has block_info as an argument, add it to the kwargs for each call
     if has_keyword(func, 'block_info'):
+        dsk = dict(dsk)
         starts = {}
         num_chunks = {}
         shapes = {}
@@ -949,7 +951,8 @@ def map_blocks(func, *args, **kwargs):
 
     chunks = tuple(chunks2)
 
-    return Array(sharedict.merge((name, dsk), *[a.dask for a in arrs]),
+    return Array(sharedict.merge((name, dsk), *[a.dask for a in arrs],
+                                 dependencies={name: {a.name for a in arrs}}),
                  name, chunks, dtype)
 
 
@@ -1067,6 +1070,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
                          % (len(sources), len(targets), len(regions)))
 
     # Optimize all sources together
+    # TODO: Sharedict merge dependencies
     sources_dsk = sharedict.merge(*[e.__dask_graph__() for e in sources])
     sources_dsk = Array.__dask_optimize__(
         sources_dsk,
@@ -1507,7 +1511,7 @@ class Array(DaskMethodsMixin):
         out = 'getitem-' + tokenize(self, index2)
         dsk, chunks = slice_array(out, self.name, self.chunks, index2)
 
-        dsk2 = sharedict.merge(self.dask, (out, dsk))
+        dsk2 = sharedict.merge(self.dask, (out, dsk), dependencies={out: {self.name}})
 
         return Array(dsk2, out, chunks, dtype=self.dtype)
 
@@ -1577,7 +1581,9 @@ class Array(DaskMethodsMixin):
 
         dsk = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
-        return Array(sharedict.merge(self.dask, (name, dsk)), name, chunks, self.dtype)
+        return Array(sharedict.merge(self.dask, (name, dsk),
+                                     dependencies={name: {self.name}}),
+                     name, chunks, self.dtype)
 
     @property
     def blocks(self):
@@ -2643,7 +2649,9 @@ def from_delayed(value, shape, dtype, name=None):
     name = name or 'from-value-' + tokenize(value, shape, dtype)
     dsk = {(name,) + (0,) * len(shape): value.key}
     chunks = tuple((d,) for d in shape)
-    return Array(sharedict.merge(value.dask, (name, dsk)), name, chunks, dtype)
+    return Array(sharedict.merge(value.dask, (name, dsk),
+                                 dependencies={name: {value.name}}),
+                 name, chunks, dtype)
 
 
 def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
@@ -2959,7 +2967,9 @@ def atop(func, out_ind, *args, **kwargs):
                         "adjust_chunks values must be callable, int, or tuple")
     chunks = tuple(chunks)
 
-    return Array(sharedict.merge((out, dsk), *dsks), out, chunks, dtype=dtype)
+    return Array(sharedict.merge((out, dsk), *dsks,
+                                 dependencies={out: {a.name for a, ind in arginds if ind is not None}}),
+                 out, chunks, dtype=dtype)
 
 
 def unpack_singleton(x):
@@ -3255,7 +3265,8 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
               key[axis + 2:] for key in keys]
 
     dsk = dict(zip(keys, values))
-    dsk2 = sharedict.merge((name, dsk), * [a.dask for a in seq])
+    dsk2 = sharedict.merge((name, dsk), * [a.dask for a in seq],
+                           dependencies={name: {a.name for a in seq}})
 
     return Array(dsk2, name, chunks, dtype=dt)
 
@@ -3749,8 +3760,8 @@ def broadcast_to(x, shape, chunks=None):
         new_key = (name,) + new_index
         dsk[new_key] = (chunk.broadcast_to, old_key, quote(chunk_shape))
 
-    return Array(sharedict.merge((name, dsk), x.dask), name, chunks,
-                 dtype=x.dtype)
+    return Array(sharedict.merge((name, dsk), x.dask, dependencies={name: {x.name}}),
+                 name, chunks, dtype=x.dtype)
 
 
 @wraps(np.broadcast_arrays)
@@ -3965,7 +3976,8 @@ def stack(seq, axis=0):
               for inp in inputs]
 
     dsk = dict(zip(keys, values))
-    dsk2 = sharedict.merge((name, dsk), *[a.dask for a in seq])
+    dsk2 = sharedict.merge((name, dsk), *[a.dask for a in seq],
+                           dependencies={name: {a.name for a in seq}})
 
     return Array(dsk2, name, chunks, dtype=dt)
 
@@ -4227,7 +4239,8 @@ def _vindex_array(x, dict_indexes):
                    for okey in other_blocks)
 
         result_1d = Array(
-            sharedict.merge(x.dask, (out_name, dsk)), out_name, chunks, x.dtype
+                sharedict.merge(x.dask, (out_name, dsk), dependencies={out_name: {x.name}}),
+                out_name, chunks, x.dtype
         )
         return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
@@ -4352,7 +4365,7 @@ def to_npy_stack(dirname, x, axis=0):
     dsk = {(name, i): (np.save, os.path.join(dirname, '%d.npy' % i), key)
            for i, key in enumerate(core.flatten(xx.__dask_keys__()))}
 
-    compute_as_if_collection(Array, sharedict.merge(dsk, xx.dask), list(dsk))
+    compute_as_if_collection(Array, sharedict.merge(dsk, xx.dask, dependencies={name: {xx.name}}), list(dsk))
 
 
 def from_npy_stack(dirname, mmap_mode='r'):
@@ -4486,13 +4499,3 @@ def subs(task, substitution):
         return substitution[task]
     except (KeyError, TypeError):
         return task
-
-
-def rewrite_TOPs(tops):
-    numblocks = merge(t.numblocks for t in tops)
-    new_axes = merge(t.new_axes for t in tops)
-    kwargs = {}  # TODO
-
-    out, ind, task, indices = rewrite_atop(
-            [(t.output, t.output_indices, t.task, t.indices) for t in tops])
-    return TOP(out, ind, task, indices, numblocks=numblocks, new_axes=new_axes, kwargs=kwargs)

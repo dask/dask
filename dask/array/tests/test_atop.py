@@ -2,9 +2,13 @@ from operator import add
 
 import pytest
 import numpy as np
+import toolz
 
+import dask
 import dask.array as da
-from dask.array.core import rewrite_atop, rewrite_TOPs, subs, index_subs
+from dask import sharedict
+from dask.array.core import TOP
+from dask.array.optimization import rewrite_atop, rewrite_TOPs, subs, index_subs
 from dask.utils_test import inc, dec
 
 a, b, c, d, e, f, g = 'abcdefg'
@@ -81,11 +85,14 @@ i, j, k = 'ijk'
      (d, 'i', {d: (add, _0, _1, c), c: (inc, _1)}, [(a, 'i'), (b, 'i')])],
 ])
 def test_rewrite(inputs, expected):
+    inputs = [TOP(*inp, numblocks={k: (1,) * len(v) for k, v in inp[-1]})
+              for inp in inputs]
     result = rewrite_atop(inputs)
-    assert result == expected
+    result2 = (result.output, result.output_indices, result.dsk, result.indices)
+    assert result2 == expected
 
 
-def test_rewrite_TOP():
+def dont_test_rewrite_TOP():
     x = da.ones(10, chunks=(5,))
     y = x + 1
     z = y + 2
@@ -101,3 +108,48 @@ def test_rewrite_TOP():
 def test_index_subs():
     assert index_subs(tuple('ij'), {'i': 'j', 'j': 'i'}) == tuple('ji')
     assert index_subs('ij', {'i': 'j', 'j': 'i'}) == 'ji'
+
+
+def test_optimize_atop():
+    x = da.ones(10, chunks=(5,))
+    y = ((((x + 1) + 2) + 3) + 4)
+
+    dsk = da.optimization.optimize_atop(y.dask)
+    assert isinstance(dsk, dask.sharedict.ShareDict)
+
+    assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
+
+
+@pytest.mark.xfail(reason="we only look for y-splits, not for total dependencies")
+def test_atop_diamond_fusion():
+    x = da.ones(10, chunks=(5,))
+    y = (((x + 1) + 2) + 3)
+    a = y * 2
+    b = y * 3
+    c = a + b
+    d = (((c + 1) + 2) + 3)
+
+    dsk = da.optimization.optimize_atop(d.dask)
+    assert isinstance(dsk, dask.sharedict.ShareDict)
+
+    assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
+
+
+def test_atop_non_atop_output():
+    """ Diamond fusion """
+    x = da.ones(10, chunks=(5,))
+    y = (((x + 1) + 2) + 3)
+    w = y.sum()
+    z = (((y * 2) * 3) * 4)
+
+    z_top_before = tuple(z.dask.dicts[z.name].indices)
+    dsk = da.optimization.optimize_atop(z.dask)
+    z_top_after = tuple(z.dask.dicts[z.name].indices)
+    assert z_top_before == z_top_after, "z_top mutated"
+
+    assert isinstance(dsk, dask.sharedict.ShareDict)
+    assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
+
+    dsk = da.optimization.optimize_atop(sharedict.merge(w.dask, z.dask))
+    assert isinstance(dsk, dask.sharedict.ShareDict)
+    assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) >= 1
