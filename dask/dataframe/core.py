@@ -2658,6 +2658,13 @@ class DataFrame(_Frame):
                    meta=self._meta, token=token, split_every=split_every,
                    n=n, columns=columns)
 
+
+    @derived_from(pd.DataFrame)
+    def nunique(self, axis=0, dropna=True):
+        token = 'dataframe-nunique'
+        return aca(self, chunk=M.nunique, aggregate=M.nunique,
+                   meta=self._meta, token=token, axis=axis, dropna=dropna)
+
     @derived_from(pd.DataFrame)
     def nsmallest(self, n=5, columns=None, split_every=None):
         token = 'dataframe-nsmallest'
