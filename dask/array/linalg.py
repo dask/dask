@@ -762,7 +762,8 @@ def lu(a):
                 dsk[name_u, i, j] = (name_lu, i, j)
                 # l_permuted is not referred in upper triangulars
 
-    dsk = sharedict.merge(a.dask, ('lu-' + token, dsk), dependencies={'lu-' + token: {a.name}})
+    dsk = sharedict.merge(a.dask, (name_p, dsk), (name_l, dsk), (name_u, dsk),
+                          dependencies={name_p: {a.name}, name_l: {a.name}, name_u: {a.name}})
     pp, ll, uu = scipy.linalg.lu(np.ones(shape=(1, 1), dtype=a.dtype))
     p = Array(dsk, name_p, shape=a.shape, chunks=a.chunks, dtype=pp.dtype)
     l = Array(dsk, name_l, shape=a.shape, chunks=a.chunks, dtype=ll.dtype)
@@ -998,10 +999,10 @@ def _cholesky(a):
                         dsk[prev] = (np.dot, (name, j, p), (name_upper, p, i))
                         prevs.append(prev)
                     target = (operator.sub, target, (sum, prevs))
-                dsk[name_upper, j, i] = (_solve_triangular_lower,(name, j, j), target)
+                dsk[name_upper, j, i] = (_solve_triangular_lower, (name, j, j), target)
                 dsk[name, i, j] = (np.transpose, (name_upper, j, i))
 
-    dsk = sharedict.merge(a.dask, (name, dsk), dependencies={name: {a.name}})
+    dsk = sharedict.merge(a.dask, (name, dsk), (name_upper, dsk), dependencies={name: {a.name}, name_upper: {a.name}})
     cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
 
     lower = Array(dsk, name, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
