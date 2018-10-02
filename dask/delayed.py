@@ -16,7 +16,7 @@ from .compatibility import apply, Iterator
 from .core import quote
 from .context import globalmethod
 from .optimization import cull
-from .utils import funcname, methodcaller, OperatorMethodMixin
+from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict
 from . import sharedict
 
 __all__ = ['Delayed', 'delayed']
@@ -343,6 +343,7 @@ def right(method):
 
 
 def optimize(dsk, keys, **kwargs):
+    dsk = ensure_dict(dsk)
     dsk2, _ = cull(dsk, keys)
     return dsk2
 

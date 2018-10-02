@@ -190,8 +190,8 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
             groups = {k: (opt(dsk, keys), keys)
                       for k, (dsk, keys) in groups.items()}
 
-        dsk = merge(*(opt(dsk, keys, **kwargs)
-                      for opt, (dsk, keys) in groups.items()))
+        dsk = merge(*map(ensure_dict, [opt(dsk, keys, **kwargs)
+                      for opt, (dsk, keys) in groups.items()]))
     else:
         dsk, _ = _extract_graph_and_keys(collections)
 
