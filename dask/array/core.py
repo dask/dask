@@ -334,11 +334,30 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)),
 
 
 def _top(func, output, output_indices, *arrind_pairs, **kwargs):
-    inputs = arrind_pairs[::2]
-    inputs_indices = arrind_pairs[1::2]
     numblocks = kwargs.pop('numblocks')
     concatenate = kwargs.pop('concatenate', None)
     new_axes = kwargs.pop('new_axes', {})
+
+    graph = ShareDict()
+
+    # Unpack dask values in non-array arguments
+    argpairs = list(partition(2, arrind_pairs))
+    for i, (arg, ind) in enumerate(argpairs):
+        if ind is None:
+            arg2, dsk2 = to_task_dask(arg)
+            if dsk2:
+                graph.update(dsk2)
+                # TODO: add dependencies
+                argpairs[i] = (arg2, ind)
+
+    inputs = tuple([name for name, _ in argpairs])
+    inputs_indices = tuple([index for _, index in argpairs])
+
+    # Unpack delayed objects in kwargs
+    if kwargs:
+        kwargs, dsk_kwargs = to_task_dask(kwargs)
+    else:
+        dsk_kwargs = {}
 
     task = (func,) + inputs
     indices = [(k, v) for k, v in zip(inputs, inputs_indices) if v is not None]
@@ -350,8 +369,12 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     else:
         dsk = {output: (apply, func, keys, kwargs)}
 
-    return TOP(output, output_indices, dsk, indices,
+    top = TOP(output, output_indices, dsk, indices,
                numblocks=numblocks, concatenate=concatenate, new_axes=new_axes)
+    graph.update_with_key(top, output)
+    import pdb; pdb.set_trace()
+    graph.dependencies = {output: {arg for arg, ind in argpairs if ind is not None}}
+    return graph
 
 
 class TOP(Mapping):
@@ -544,14 +567,6 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     dummies = dict((i, list(range(dims[i]))) for i in dummy_indices)
 
     dsk = {}
-
-    # Unpack dask values in non-array arguments
-    for i, (arg, ind) in enumerate(argpairs):
-        if ind is None:
-            arg2, dsk2 = to_task_dask(arg)
-            if dsk2:
-                dsk.update(ensure_dict(dsk2))
-                argpairs[i] = (arg2, ind)
 
     # Create argument lists
     valtups = []
@@ -851,7 +866,7 @@ def map_blocks(func, *args, **kwargs):
                            for x, ind in argpairs]))
     # TODO: collect extra graphs from kwargs2 and arginds if they have
     # collections
-    if has_keyword(func, 'block_id') or has_keyword(func, 'block_info'):
+    if (has_keyword(func, 'block_id') or has_keyword(func, 'block_info') or drop_axis):
         my_top = top
     else:
         my_top = _top
@@ -964,8 +979,7 @@ def map_blocks(func, *args, **kwargs):
 
     chunks = tuple(chunks2)
 
-    return Array(sharedict.merge((name, dsk), *[a.dask for a in arrs],
-                                 dependencies={name: {a.name for a in arrs}}),
+    return Array(sharedict.merge(dsk, *[a.dask for a in arrs]),
                  name, chunks, dtype)
 
 
