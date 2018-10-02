@@ -370,6 +370,8 @@ class LoopRunner(object):
             # Loop already running in other thread (user-launched)
             done_evt.wait(5)
             if not isinstance(start_exc[0], RuntimeError):
+                if not isinstance(start_exc[0]):  # track down infrequent error
+                    raise TypeError("not an exception", start_exc[0])
                 raise start_exc[0]
             self._all_loops[self._loop] = count + 1, None
         else:

@@ -44,6 +44,7 @@ call deactivate
 call activate %CONDA_ENV%
 
 %CONDA% uninstall -q -y --force dask joblib zict
+%PIP_INSTALL% pip --upgrade
 %PIP_INSTALL% git+https://github.com/dask/dask --upgrade
 %PIP_INSTALL% git+https://github.com/joblib/joblib.git --upgrade
 %PIP_INSTALL% git+https://github.com/dask/zict --upgrade

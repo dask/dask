@@ -681,12 +681,24 @@ def add_periodic_callback(doc, component, interval):
     the component stays in memory as a reference cycle because its method is
     still around.  This way we avoid that and let things clean up a bit more
     nicely.
+
+    TODO: we still have reference cycles.  Docs seem to be referred to by their
+    add_periodic_callback methods.
     """
     ref = weakref.ref(component)
 
-    def update():
-        component = ref()
-        if component is not None:
-            component.update()
+    doc.add_periodic_callback(lambda: update(ref), interval)
+    _attach(doc, component)
 
-    doc.add_periodic_callback(update, interval)
+
+def update(ref):
+    comp = ref()
+    if comp is not None:
+        comp.update()
+
+
+def _attach(doc, component):
+    if not hasattr(doc, 'components'):
+        doc.components = set()
+
+    doc.components.add(component)
