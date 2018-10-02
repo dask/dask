@@ -157,6 +157,21 @@ def subs(task, substitution):
         return task
 
 
+def index_subs(ind, substitution):
+    """ A simple subs function that works both on tuples and strings """
+    if ind is None:
+        return ind
+    if isinstance(ind, str):
+        return ''.join(substitution.get(c, c) for c in ind)
+    else:
+        return type(ind)([substitution.get(c, c) for c in ind])
+
+
+def atop_token(i):
+    assert isinstance(i, int)
+    return '_%d' % i
+
+
 from .optimization import optimize, fuse_slice
 
 
@@ -356,6 +371,13 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
 
     graph = ShareDict()
 
+    # Transform indices to canonical elements
+    arrind_pairs = list(arrind_pairs)
+    unique_indices = set(output_indices) | {i for ii in arrind_pairs[1::2] if ii is not None for i in ii}
+    sub = {k: atop_token(i) for i, k in enumerate(sorted(unique_indices))}
+    output_indices = index_subs(tuple(output_indices), sub)
+    arrind_pairs[1::2] = [index_subs(a, sub) for a in arrind_pairs[1::2]]
+
     # Unpack dask values in non-array arguments
     argpairs = list(partition(2, arrind_pairs))
     for i, (arg, ind) in enumerate(argpairs):
@@ -375,7 +397,7 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
 
         # replace keys in kwargs with _0 tokens
         new_keys = list(core.get_dependencies(dsk_kwargs, task=kwargs))
-        new_tokens = tuple('_%d' % i for i in range(len(inputs), len(inputs) + len(new_keys)))
+        new_tokens = tuple(atop_token(i) for i in range(len(inputs), len(inputs) + len(new_keys)))
         sub = dict(zip(new_keys, new_tokens))
         inputs = inputs + tuple(new_keys)
         inputs_indices = inputs_indices + (None,) * len(new_keys)
@@ -384,7 +406,7 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
         # TODO: add dependencies
 
     indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
-    keys = tuple('_%d' % i for i in range(len(inputs)))
+    keys = tuple(map(atop_token, range(len(inputs))))
 
     if not kwargs:
         dsk = {output: (func,) + keys}
@@ -415,6 +437,8 @@ class TOP(Mapping):
     """
     def __init__(self, output, output_indices, dsk, indices,
                  numblocks, concatenate=None, new_axes=None):
+        if any(x and '00' in x for _, x in indices):
+            import pdb; pdb.set_trace()
         self.output = output
         self.output_indices = output_indices
         self.dsk = dsk
@@ -429,7 +453,7 @@ class TOP(Mapping):
         try:
             return self._cached_dict
         except AttributeError:
-            keys = tuple('_%d' % i for i in range(len(self.indices)))
+            keys = tuple(map(atop_token, range(len(self.indices))))
             func = SubgraphCallable(self.dsk, self.output, keys)
             self._cached_dict = top(
                 func,

@@ -5,7 +5,8 @@ from operator import getitem
 import numpy as np
 import toolz
 
-from .core import getter, getter_nofancy, getter_inline, subs
+from .core import (getter, getter_nofancy, getter_inline, subs, atop_token,
+        index_subs)
 from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
 from ..optimization import cull, fuse, inline_functions
@@ -385,12 +386,12 @@ def rewrite_atop(inputs):
 
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
-            dsk = {k: subs(v, {'_' + str(i): dep}) for k, v in dsk.items()}
+            dsk = {k: subs(v, {atop_token(i): dep}) for k, v in dsk.items()}
 
             # Remove current input from input indices
             # [('a', 'i'), ('b', 'i')] -> [('a', 'i')]
             _, current_dep_indices = indices.pop(i)  # TODO: this screws with current _0, _1, ...
-            sub = {'_%d' % i: '_%d' % (i - 1) for i in range(i + 1, len(indices) + 1)}
+            sub = {atop_token(i): atop_token(i - 1) for i in range(i + 1, len(indices) + 1)}
             dsk = subs(dsk, sub)
 
             # Change new input_indices to match give index from current computation
@@ -400,7 +401,13 @@ def rewrite_atop(inputs):
             contracted = {x for _, j in new_indices if j is not None for x in j if x not in inputs[dep].output_indices}
             extra = dict(zip(contracted, new_index_iter))
             sub.update(extra)
+            if any(x and '00' in x for _, x in new_indices):
+                import pdb; pdb.set_trace()
+            old_indices = tuple(new_indices)
             new_indices = [(x, index_subs(j, sub)) for x, j in new_indices]
+            if any(x and '00' in x for _, x in new_indices):
+                import pdb; pdb.set_trace()
+
 
             # TODO: handle new_axes
             # TODO: handle concatenate
@@ -409,10 +416,10 @@ def rewrite_atop(inputs):
             sub = {}
             for i, index in enumerate(new_indices):
                 if index not in indices:  # use old inputs if available
-                    sub['_%d' % i] = '_%d' % len(indices)
+                    sub[atop_token(i)] = atop_token(len(indices))
                     indices.append(index)
                 else:
-                    sub['_%d' % i] = '_%d' % indices.index(index)
+                    sub[atop_token(i)] = atop_token(indices.index(index))
             new_dsk = subs(inputs[dep].dsk, sub)
 
             # indices.extend(new_indices)
@@ -432,7 +439,7 @@ def rewrite_atop(inputs):
         else:
             sub[i] = seen[x]
 
-    sub = {'_%d' % k: '_%d' % v for k, v in sub.items()}
+    sub = {atop_token(k): atop_token(v) for k, v in sub.items()}
 
     dsk = {k: subs(v, sub) for k, v in dsk.items()}
 
@@ -443,13 +450,3 @@ def rewrite_atop(inputs):
               numblocks=numblocks, new_axes=new_axes, concatenate=concatenate)
 
     return out
-
-
-def index_subs(ind, substitution):
-    """ A simple subs function that works both on tuples and strings """
-    if ind is None:
-        return ind
-    if isinstance(ind, str):
-        return ''.join(substitution.get(c, c) for c in ind)
-    else:
-        return type(ind)([substitution.get(c, c) for c in ind])
