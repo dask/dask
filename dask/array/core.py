@@ -1537,6 +1537,11 @@ class Array(DaskMethodsMixin):
         from .slicing import normalize_index, slice_with_int_dask_array, slice_with_bool_dask_array
         index2 = normalize_index(index, self.shape)
 
+        dependencies = {self.name}
+        for i in index2:
+            if isinstance(i, Array):
+                dependencies.add(i.name)
+
         if any(isinstance(i, Array) and i.dtype.kind in 'iu' for i in index2):
             self, index2 = slice_with_int_dask_array(self, index2)
         if any(isinstance(i, Array) and i.dtype == bool for i in index2):
@@ -1548,7 +1553,7 @@ class Array(DaskMethodsMixin):
         out = 'getitem-' + tokenize(self, index2)
         dsk, chunks = slice_array(out, self.name, self.chunks, index2)
 
-        dsk2 = sharedict.merge(self.dask, (out, dsk), dependencies={out: {self.name}})
+        dsk2 = sharedict.merge(self.dask, (out, dsk), dependencies={out: dependencies})
 
         return Array(dsk2, out, chunks, dtype=self.dtype)
 

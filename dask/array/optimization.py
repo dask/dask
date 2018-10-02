@@ -324,7 +324,9 @@ def optimize_atop(sharedict, keep=()):
             next_deps = set()
             while deps:
                 dep = deps.pop()
-                if isinstance(layers[dep], TOP) and not (dep != layer and dep in keep):
+                if (isinstance(layers[dep], TOP)
+                        and not (dep != layer and dep in keep)
+                        and layers[dep].concatenate == layers[layer].concatenate):
                     top_layers.add(dep)
                     for d in sharedict.dependencies.get(dep, ()):
                         if len(dependents[d]) <= 1:
