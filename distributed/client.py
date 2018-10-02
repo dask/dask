@@ -1296,6 +1296,9 @@ class Client(Node):
             Higher priorities take precedence
         fifo_timeout: str timedelta (default '100ms')
             Allowed amount of time between calls to consider the same priority
+        **kwargs: dict
+            Extra keywords to send to the function.
+            Large values will be included explicitly in the task graph.
 
         Examples
         --------
@@ -1358,8 +1361,17 @@ class Client(Node):
             dsk = {key: (func,) + args
                    for key, args in zip(keys, zip(*iterables))}
         else:
-            dsk = {key: (apply, func, (tuple, list(args)), kwargs)
-                   for key, args in zip(keys, zip(*iterables))}
+            kwargs2 = {}
+            dsk = {}
+            for k, v in kwargs.items():
+                if sizeof(v) > 1e5:
+                    vv = dask.delayed(v)
+                    kwargs2[k] = vv._key
+                    dsk.update(vv.dask)
+                else:
+                    kwargs2[k] = v
+            dsk.update({key: (apply, func, (tuple, list(args)), kwargs2)
+                        for key, args in zip(keys, zip(*iterables))})
 
         if isinstance(workers, six.string_types + (Number,)):
             workers = [workers]

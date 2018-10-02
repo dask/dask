@@ -5369,5 +5369,17 @@ def test_tuple_keys(c, s, a, b):
     assert (yield future) == 3
 
 
+@gen_cluster(client=True)
+def test_map_large_kwargs_in_graph(c, s, a, b):
+    np = pytest.importorskip('numpy')
+    x = np.random.random(100000)
+    futures = c.map(lambda a, b: a + b, range(100), b=x)
+    while not s.tasks:
+        yield gen.sleep(0.01)
+
+    assert len(s.tasks) == 101
+    assert any(k.startswith('ndarray') for k in s.tasks)
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401
