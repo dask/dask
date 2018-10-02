@@ -54,8 +54,8 @@ class RandomState(object):
     --------
     np.random.RandomState
     """
-    def __init__(self, seed=None, RandomState=np.random.RandomState):
-        self._numpy_state = RandomState(seed)
+    def __init__(self, seed=None, RandomState=None):
+        self._numpy_state = np.random.RandomState(seed)
         self._RandomState = RandomState
 
     def seed(self, seed=None):
@@ -394,6 +394,8 @@ def _choice(state_data, a, size, replace, p):
 
 def _apply_random(RandomState, funcname, state_data, size, args, kwargs):
     """Apply RandomState method with seed"""
+    if RandomState is None:
+        RandomState = np.random.RandomState
     state = RandomState(state_data)
     func = getattr(state, funcname)
     return func(*args, size=size, **kwargs)
