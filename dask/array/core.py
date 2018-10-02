@@ -183,7 +183,7 @@ def getem(arr, chunks, getitem=getter, shape=None, out_name=None, lock=False,
     keys = list(product([out_name], *[range(len(bds)) for bds in chunks]))
     slices = slices_from_chunks(chunks)
 
-    if getitem != operator.getitem and (not asarray or lock):
+    if getitem is not operator.getitem and (not asarray or lock):
         values = [(getitem, arr, x, asarray, lock) for x in slices]
     else:
         # Common case, drop extra parameters
