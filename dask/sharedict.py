@@ -55,7 +55,7 @@ class ShareDict(Mapping):
 
     def update_with_key(self, arg, key=None):
         if type(arg) is ShareDict:
-            assert key is None
+            assert key is None or key in arg.dicts
             self.dicts.update(arg.dicts)
             self.dependencies.update(arg.dependencies)
             return

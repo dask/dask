@@ -34,6 +34,7 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
     keys = list(flatten(keys))
     key_prefixes = {k[0] if type(k) is tuple else k for k in keys}
 
+    dsk0 = dsk
     # High level stage optimization
     if isinstance(dsk, ShareDict):
         dsk = optimize_atop(dsk, keep=key_prefixes)
@@ -334,7 +335,7 @@ def optimize_atop(sharedict, keep=()):
                     stack.append(dep)
             new_layer = rewrite_atop([layers[l] for l in top_layers])
             out[layer] = new_layer
-            dependencies[layer] = {k for k, _ in new_layer.indices}
+            dependencies[layer] = {k for k, v in new_layer.indices if v is not None}
         else:
             out[layer] = layers[layer]
             dependencies[layer] = sharedict.dependencies.get(layer, set())
@@ -348,7 +349,7 @@ def rewrite_atop(inputs):
     from dask.core import reverse_dict
     from dask.array.core import TOP
     inputs = {inp.output: inp for inp in inputs}
-    dependencies = {inp.output: {d for d, _ in inp.indices if d in inputs}
+    dependencies = {inp.output: {d for d, v in inp.indices if v is not None and d in inputs}
                         for inp in inputs.values()}
     dependents = reverse_dict(dependencies)
 
@@ -376,6 +377,8 @@ def rewrite_atop(inputs):
     while changed:
         changed = False
         for i, (dep, ind) in enumerate(indices):
+            if ind is None:
+                continue
             if dep not in inputs:
                 continue
 
@@ -422,7 +425,9 @@ def rewrite_atop(inputs):
     seen = dict()
     sub = dict()
     for i, x in enumerate(indices):
-        if x not in seen:
+        if x[1] is None:
+            new_indices.append(x)
+        elif x not in seen:
             seen[x] = i
             new_indices.append(x)
 

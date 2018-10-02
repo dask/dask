@@ -356,23 +356,32 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     # Unpack delayed objects in kwargs
     if kwargs:
         kwargs, dsk_kwargs = to_task_dask(kwargs)
-    else:
-        dsk_kwargs = {}
+
+        # replace keys in kwargs with _0 tokens
+        new_keys = list(core.get_dependencies(dsk_kwargs, task=kwargs))
+        new_tokens = tuple('_%d' % i for i in range(len(inputs), len(inputs) + len(new_keys)))
+        sub = dict(zip(new_keys, new_tokens))
+        inputs = inputs + tuple(new_keys)
+        inputs_indices = inputs_indices + (None,) * len(new_keys)
+        kwargs = subs(kwargs, sub)
+        graph.update(dsk_kwargs)
+        # TODO: add dependencies
 
     task = (func,) + inputs
-    indices = [(k, v) for k, v in zip(inputs, inputs_indices) if v is not None]
-    keys = ('_%d' % i for i in range(len(inputs)))
-    keys = [next(keys) if v is not None else k for k, v in zip(inputs, inputs_indices)]
+    indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
+    keys = tuple('_%d' % i for i in range(len(inputs)))
 
     if not kwargs:
-        dsk = {output: (func,) + tuple(keys)}
+        dsk = {output: (func,) + keys}
     else:
-        dsk = {output: (apply, func, keys, kwargs)}
+        _keys = list(keys)
+        if new_keys:
+            _keys = _keys[:-len(new_keys)]
+        dsk = {output: (apply, func, _keys, kwargs)}
 
     top = TOP(output, output_indices, dsk, indices,
                numblocks=numblocks, concatenate=concatenate, new_axes=new_axes)
     graph.update_with_key(top, output)
-    import pdb; pdb.set_trace()
     graph.dependencies = {output: {arg for arg, ind in argpairs if ind is not None}}
     return graph
 
@@ -430,7 +439,7 @@ class TOP(Mapping):
 
     def _out_numblocks(self):
         d = {}
-        indices = dict(self.indices)
+        indices = {k: v for k, v in self.indices if v is not None}
         for k, v in self.numblocks.items():
             for a, b in zip(indices[k], v):
                 d[a] = max(d.get(a, 0), b)
@@ -859,7 +868,8 @@ def map_blocks(func, *args, **kwargs):
     if has_keyword(func, 'block_info'):
         kwargs['block_info'] = '__dummy__'
 
-    kwargs2 = {k: delayed(v) if not is_dask_collection(v) and sizeof(v) > 1e6 else v
+    original_kwargs = kwargs
+    kwargs = {k: delayed(v) if not is_dask_collection(v) and sizeof(v) > 1e6 else v
                for k, v in kwargs.items()}
     arginds = list(concat([(delayed(x) if not is_dask_collection(x) and
                             sizeof(x) > 1e6 and ind is None else x, ind)
@@ -871,7 +881,7 @@ def map_blocks(func, *args, **kwargs):
     else:
         my_top = _top
     dsk = my_top(func, name, out_ind, *arginds, numblocks=numblocks,
-                 **kwargs2)
+                 **kwargs)
 
     # If func has block_id as an argument, add it to the kwargs for each call
     if has_keyword(func, 'block_id'):
@@ -909,7 +919,7 @@ def map_blocks(func, *args, **kwargs):
             dsk[k] = dsk[k][:-1] + (assoc(dsk[k][-1], 'block_info', info),)
 
     if dtype is None:
-        kwargs2 = kwargs
+        kwargs2 = original_kwargs
         if has_keyword(func, 'block_id'):
             kwargs2 = assoc(kwargs, 'block_id', first(dsk.keys())[1:])
         if has_keyword(func, 'block_info'):
@@ -979,7 +989,7 @@ def map_blocks(func, *args, **kwargs):
 
     chunks = tuple(chunks2)
 
-    return Array(sharedict.merge(dsk, *[a.dask for a in arrs]),
+    return Array(sharedict.merge((name, dsk), *[a.dask for a in arrs]),
                  name, chunks, dtype)
 
 

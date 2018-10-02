@@ -229,8 +229,9 @@ def sum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
         dt = dtype
     else:
         dt = getattr(np.empty((1,), dtype=a.dtype).sum(), 'dtype', object)
-    return reduction(a, chunk.sum, chunk.sum, axis=axis, keepdims=keepdims,
+    result = reduction(a, chunk.sum, chunk.sum, axis=axis, keepdims=keepdims,
                      dtype=dt, split_every=split_every, out=out)
+    return result
 
 
 @wraps(chunk.prod)

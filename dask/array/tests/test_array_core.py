@@ -3657,7 +3657,8 @@ def test_map_blocks_large_inputs_delayed():
     assert any(b is v for v in c.dask.values())
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
-    d = a.map_blocks(lambda x, y: x + y, y=b)
+    d = a.map_blocks(lambda x, y: x + y.sum(), y=b)
+    assert_eq(d, d)
     assert any(b is v for v in d.dask.values())
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
