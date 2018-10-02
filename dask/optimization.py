@@ -568,8 +568,7 @@ def fuse(dsk, keys=None, dependencies=None, ave_width=None, max_width=None,
     if keys:
         reducible -= keys
     if (not reducible and
-            (not fuse_subgraphs or not
-             {k for k, vals in rdeps.items() if len(set(vals)) == 1})):
+            (not fuse_subgraphs or all(len(set(v)) != 1 for v in rdeps.values()))):
         # Quick return if there's nothing to do. Only progress if there's tasks
         # fusible by the main `fuse`, or by `fuse_subgraphs` if enabled.
         return dsk, deps
