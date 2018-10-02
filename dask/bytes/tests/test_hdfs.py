@@ -74,11 +74,11 @@ def test_fs_driver_backends():
     from dask.bytes.pyarrow import PyArrowHadoopFileSystem
 
     fs1, token1 = get_fs('hdfs')
-    assert isinstance(fs1, HDFS3HadoopFileSystem)
+    assert isinstance(fs1, PyArrowHadoopFileSystem)
 
-    with dask.config.set(hdfs_driver='pyarrow'):
+    with dask.config.set(hdfs_driver='hdfs3'):
         fs2, token2 = get_fs('hdfs')
-    assert isinstance(fs2, PyArrowHadoopFileSystem)
+    assert isinstance(fs2, HDFS3HadoopFileSystem)
 
     assert token1 != token2
 
