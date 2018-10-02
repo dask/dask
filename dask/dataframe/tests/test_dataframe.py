@@ -3279,3 +3279,10 @@ def test_map_partitions_delays_large_inputs():
 
     a = ddf.map_partitions(lambda x, y: x, big)
     assert any(big is v for v in a.dask.values())
+
+
+def test_nunique():
+    df = pd.DataFrame({'A': [1, 2, 3], 'B': [1, 1, 1]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(df.nunique(), ddf.nunique())
+    assert_eq(df.nunique(axis=1), ddf.nunique(axis=1))
