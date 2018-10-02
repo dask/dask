@@ -83,9 +83,19 @@ i, j, k = 'ijk'
       (d, 'i', {d: (add, _0, _1, _2)}, [(a, 'i'), (b, 'i'), (c, 'i')])],
 
      (d, 'i', {d: (add, _0, _1, c), c: (inc, _1)}, [(a, 'i'), (b, 'i')])],
+
+     # Include literals
+    [[(b, 'i', {b: (add, _0, _1)}, [(a, 'i'), (123, None)])],
+
+      (b, 'i', {b: (add, _0, _1)}, [(a, 'i'), (123, None)])],
+
+    [[(b, 'i', {b: (add, _0, _1)}, [(a, 'i'), (123, None)]),
+      (c, 'j', {c: (add, _0, _1)}, [(b, 'j'), (456, None)])],
+
+      (c, 'j', {b: (add, _1, _2), c: (add, b, _0)}, [(456, None), (a, 'j'), (123, None)])],
 ])
 def test_rewrite(inputs, expected):
-    inputs = [TOP(*inp, numblocks={k: (1,) * len(v) for k, v in inp[-1]})
+    inputs = [TOP(*inp, numblocks={k: (1,) * len(v) for k, v in inp[-1] if v is not None})
               for inp in inputs]
     result = rewrite_atop(inputs)
     result2 = (result.output, result.output_indices, result.dsk, result.indices)

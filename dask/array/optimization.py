@@ -396,7 +396,7 @@ def rewrite_atop(inputs):
             # [('c', j')] -> [('c', 'i')]
             new_indices = inputs[dep].indices
             sub = dict(zip(inputs[dep].output_indices, current_dep_indices))
-            contracted = {x for _, j in new_indices for x in j if x not in inputs[dep].output_indices}
+            contracted = {x for _, j in new_indices if j is not None for x in j if x not in inputs[dep].output_indices}
             extra = dict(zip(contracted, new_index_iter))
             sub.update(extra)
             new_indices = [(x, index_subs(j, sub)) for x, j in new_indices]
@@ -444,6 +444,8 @@ def rewrite_atop(inputs):
 
 def index_subs(ind, substitution):
     """ A simple subs function that works both on tuples and strings """
+    if ind is None:
+        return ind
     if isinstance(ind, str):
         return ''.join(substitution.get(c, c) for c in ind)
     else:
