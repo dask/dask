@@ -2658,7 +2658,6 @@ class DataFrame(_Frame):
                    meta=self._meta, token=token, split_every=split_every,
                    n=n, columns=columns)
 
-
     @derived_from(pd.DataFrame)
     def nunique(self, axis=0, dropna=True):
         token = 'dataframe-nunique'
