@@ -5,7 +5,7 @@ from operator import getitem
 import numpy as np
 import toolz
 
-from .core import getter, getter_nofancy, getter_inline
+from .core import getter, getter_nofancy, getter_inline, subs
 from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
 from ..optimization import cull, fuse, inline_functions
@@ -34,7 +34,6 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
     keys = list(flatten(keys))
     key_prefixes = {k[0] if type(k) is tuple else k for k in keys}
 
-    dsk0 = dsk
     # High level stage optimization
     if isinstance(dsk, ShareDict):
         dsk = optimize_atop(dsk, keep=key_prefixes)
@@ -321,12 +320,11 @@ def optimize_atop(sharedict, keep=()):
         if isinstance(layers[layer], TOP):
             top_layers = {layer}
             deps = set(top_layers)
-            next_deps = set()
             while deps:
                 dep = deps.pop()
-                if (isinstance(layers[dep], TOP)
-                        and not (dep != layer and dep in keep)
-                        and layers[dep].concatenate == layers[layer].concatenate):
+                if (isinstance(layers[dep], TOP) and
+                        not (dep != layer and dep in keep) and
+                        layers[dep].concatenate == layers[layer].concatenate):
                     top_layers.add(dep)
                     for d in sharedict.dependencies.get(dep, ()):
                         if len(dependents[d]) <= 1:
@@ -352,7 +350,7 @@ def rewrite_atop(inputs):
     from dask.array.core import TOP
     inputs = {inp.output: inp for inp in inputs}
     dependencies = {inp.output: {d for d, v in inp.indices if v is not None and d in inputs}
-                        for inp in inputs.values()}
+                    for inp in inputs.values()}
     dependents = reverse_dict(dependencies)
 
     new_index_iter = iter('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
@@ -365,7 +363,6 @@ def rewrite_atop(inputs):
 
     dsk = dict(inputs[root].dsk)
 
-    stack = [root]
     seen = set()
 
     def join(t):
@@ -385,7 +382,6 @@ def rewrite_atop(inputs):
                 continue
 
             changed = True
-            d = inputs[dep]
 
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
@@ -457,19 +453,3 @@ def index_subs(ind, substitution):
         return ''.join(substitution.get(c, c) for c in ind)
     else:
         return type(ind)([substitution.get(c, c) for c in ind])
-
-
-def subs(task, substitution):
-    """ Create a new task with the values substituted
-
-    This is like dask.core.subs, but takes a dict of many substitutions to
-    perform simultaneously.  It is not as concerned with micro performance.
-    """
-    if isinstance(task, dict):
-        return {k: subs(v, substitution) for k, v in task.items()}
-    if isinstance(task, (tuple, list, set)):
-        return type(task)([subs(x, substitution) for x in task])
-    try:
-        return substitution[task]
-    except (KeyError, TypeError):
-        return task

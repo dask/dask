@@ -28,7 +28,7 @@ from dask.array import chunk
 
 from dask.array.core import (getem, getter, top, dotmany, concatenate3,
                              broadcast_dimensions, Array, stack, concatenate,
-                             from_array, elemwise, broadcast_shapes,
+                             from_array, broadcast_shapes,
                              broadcast_to, blockdims_from_blockshape, store,
                              optimize, from_func, normalize_chunks,
                              broadcast_chunks, atop, from_delayed,

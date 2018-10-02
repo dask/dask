@@ -16,12 +16,12 @@ import uuid
 import warnings
 
 try:
-    from cytoolz import (partition, concat, join, first, merge,
+    from cytoolz import (partition, concat, join, first,
                          groupby, valmap, accumulate, assoc)
     from cytoolz.curried import filter, pluck
 
 except ImportError:
-    from toolz import (partition, concat, join, first, merge,
+    from toolz import (partition, concat, join, first,
                        groupby, valmap, accumulate, assoc)
     from toolz.curried import filter, pluck
 from toolz import pipe, map, reduce, frequencies
@@ -139,6 +139,22 @@ def getter_inline(a, b, asarray=True, lock=None):
     This inlining can be relevant to operations when running off of disk.
     """
     return getter(a, b, asarray=asarray, lock=lock)
+
+
+def subs(task, substitution):
+    """ Create a new task with the values substituted
+
+    This is like dask.core.subs, but takes a dict of many substitutions to
+    perform simultaneously.  It is not as concerned with micro performance.
+    """
+    if isinstance(task, dict):
+        return {k: subs(v, substitution) for k, v in task.items()}
+    if isinstance(task, (tuple, list, set)):
+        return type(task)([subs(x, substitution) for x in task])
+    try:
+        return substitution[task]
+    except (KeyError, TypeError):
+        return task
 
 
 from .optimization import optimize, fuse_slice
@@ -367,7 +383,6 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
         graph.update(dsk_kwargs)
         # TODO: add dependencies
 
-    task = (func,) + inputs
     indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
     keys = tuple('_%d' % i for i in range(len(inputs)))
 
@@ -380,7 +395,7 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
         dsk = {output: (apply, func, _keys, kwargs)}
 
     top = TOP(output, output_indices, dsk, indices,
-               numblocks=numblocks, concatenate=concatenate, new_axes=new_axes)
+              numblocks=numblocks, concatenate=concatenate, new_axes=new_axes)
     graph.update_with_key(top, output)
     graph.dependencies = {output: {arg for arg, ind in argpairs if ind is not None}}
     return graph
@@ -870,7 +885,7 @@ def map_blocks(func, *args, **kwargs):
 
     original_kwargs = kwargs
     kwargs = {k: delayed(v) if not is_dask_collection(v) and sizeof(v) > 1e6 else v
-               for k, v in kwargs.items()}
+              for k, v in kwargs.items()}
     arginds = list(concat([(delayed(x) if not is_dask_collection(x) and
                             sizeof(x) > 1e6 and ind is None else x, ind)
                            for x, ind in argpairs]))
@@ -4281,8 +4296,8 @@ def _vindex_array(x, dict_indexes):
                    for okey in other_blocks)
 
         result_1d = Array(
-                sharedict.merge(x.dask, (out_name, dsk), dependencies={out_name: {x.name}}),
-                out_name, chunks, x.dtype
+            sharedict.merge(x.dask, (out_name, dsk), dependencies={out_name: {x.name}}),
+            out_name, chunks, x.dtype
         )
         return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
@@ -4436,108 +4451,3 @@ def from_npy_stack(dirname, mmap_mode='r'):
     dsk = dict(zip(keys, values))
 
     return Array(dsk, name, chunks, dtype)
-
-
-def rewrite_atop(inputs):
-    """ Rewrite a stack of atop expressions into a single atop expression """
-    from dask.core import reverse_dict
-    inputs = {a: {'output-index': b, 'dsk': c, 'input-indices': d}
-              for a, b, c, d in inputs}
-    dependencies = {k: {d for d, _ in v['input-indices'] if d in inputs}
-                        for k, v in inputs.items()}
-    dependents = reverse_dict(dependencies)
-
-    new_index_iter = iter('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-
-    [root] = [k for k, v in dependents.items() if not v]
-
-    indices = inputs[root]['input-indices']
-
-    dsk = inputs[root]['dsk']
-
-    stack = [root]
-    seen = set()
-
-    def join(t):
-        t = tuple(t)
-        if all(isinstance(elem, str) for elem in t):
-            return ''.join(t)
-        else:
-            return t
-
-    changed = True
-    while changed:
-        changed = False
-        for i, (dep, ind) in enumerate(indices):
-            if dep not in inputs:
-                continue
-
-            changed = True
-            d = inputs[dep]
-
-            # Replace _n with dep name in existing tasks
-            # (inc, _0) -> (inc, 'b')
-            dsk = {k: index_subs(v, {'_' + str(i): dep}) for k, v in dsk.items()}
-
-            # Remove current input from input indices
-            # [('a', 'i'), ('b', 'i')] -> [('a', 'i')]
-            _, current_dep_indices = indices.pop(i)  # TODO: this screws with current _0, _1, ...
-            sub = {'_%d' % i: '_%d' % (i - 1) for i in range(i + 1, len(indices) + 1)}
-            dsk = subs(dsk, sub)
-
-            # Change new input_indices to match give index from current computation
-            # [('c', j')] -> [('c', 'i')]
-            new_indices = inputs[dep]['input-indices']
-            sub = dict(zip(inputs[dep]['output-index'], current_dep_indices))
-            contracted = {x for _, j in new_indices for x in j if x not in inputs[dep]['output-index']}
-            extra = dict(zip(contracted, new_index_iter))
-            sub.update(extra)
-            new_indices = [(x, index_subs(j, sub)) for x, j in new_indices]
-
-            # Bump new inputs up in list
-            sub = {}
-            for i, index in enumerate(new_indices):
-                if index not in indices:  # use old inputs if available
-                    sub['_%d' % i] = '_%d' % len(indices)
-                    indices.append(index)
-                else:
-                    sub['_%d' % i] = '_%d' % indices.index(index)
-            new_dsk = subs(inputs[dep]['dsk'], sub)
-
-            # indices.extend(new_indices)
-            dsk.update(new_dsk)
-
-    new_indices = []
-    seen = dict()
-    sub = dict()
-    for i, x in enumerate(indices):
-        if x not in seen:
-            seen[x] = i
-            new_indices.append(x)
-
-        else:
-            sub[i] = seen[x]
-
-    sub = {'_%d' % k: '_%d' % v for k, v in sub.items()}
-
-    dsk = {k: subs(v, sub) for k, v in dsk.items()}
-
-    return (root, inputs[root]['output-index'], dsk, new_indices)
-
-
-def index_subs(ind, substitution):
-    if isinstance(ind, str):
-        return ''.join(substitution.get(c, c) for c in ind)
-    else:
-        return type(ind)(substitution.get(c, c) for c in ind)
-
-
-def subs(task, substitution):
-    if isinstance(task, dict):
-        return {k: subs(v, substitution) for k, v in task.items()}
-    if isinstance(task, (tuple, list, set)):
-        return type(task)([subs(x, substitution) for x in task])
-    try:
-        return substitution[task]
-    except (KeyError, TypeError):
-        return task

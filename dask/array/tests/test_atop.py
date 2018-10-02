@@ -2,13 +2,11 @@ from operator import add
 
 import pytest
 import numpy as np
-import toolz
 
 import dask
 import dask.array as da
-from dask import sharedict
 from dask.array.core import TOP
-from dask.array.optimization import rewrite_atop, subs, index_subs
+from dask.array.optimization import rewrite_atop, index_subs
 from dask.utils_test import inc, dec
 
 a, b, c, d, e, f, g = 'abcdefg'
@@ -20,23 +18,23 @@ i, j, k = 'ijk'
     # output name, output index, task, input indices
     [[(b, 'i', {b: (inc, _0)}, [(a, 'i')])],
 
-      (b, 'i', {b: (inc, _0)}, [(a, 'i')])],
+     (b, 'i', {b: (inc, _0)}, [(a, 'i')])],
 
     [[(b, 'i', {b: (inc, _0)}, [(a, 'i')]),
       (c, 'i', {c: (dec, _0)}, [(a, 'i')]),
       (d, 'i', {d: (add, _0, _1, _2)}, [(a, 'i'), (b, 'i'), (c, 'i')])],
 
-      (d, 'i', {b: (inc, _0), c: (dec, _0), d: (add, _0, b, c)}, [(a, 'i')])],
+     (d, 'i', {b: (inc, _0), c: (dec, _0), d: (add, _0, b, c)}, [(a, 'i')])],
 
     [[(b, 'i', {b: (inc, _0)}, [(a, 'i')]),
       (c, 'j', {c: (inc, _0)}, [(b, 'j')])],
 
-      (c, 'j', {b: (inc, _0), c: (inc, b)}, [(a, 'j')])],
+     (c, 'j', {b: (inc, _0), c: (inc, b)}, [(a, 'j')])],
 
     [[(b, 'i', {b: (sum, _0)}, [(a, 'ij')]),
       (c, 'k', {c: (inc, _0)}, [(b, 'k')])],
 
-      (c, 'k', {b: (sum, _0), c: (inc, b)}, [(a, 'kA')])],
+     (c, 'k', {b: (sum, _0), c: (inc, b)}, [(a, 'kA')])],
 
     [[(c, 'i', {c: (inc, _0)}, [(a, 'i')]),
       (d, 'i', {d: (inc, _0)}, [(b, 'i')]),
@@ -47,12 +45,12 @@ i, j, k = 'ijk'
     [[(b, 'ji', {b: (np.transpose, _0)}, [(a, 'ij')]),
       (c, 'ij', {c: (add, _0, _1)}, [(a, 'ij'), (b, 'ij')])],
 
-      (c, 'ij', {c: (add, _0, b), b: (np.transpose, _1)}, [(a, 'ij'), (a, 'ji')])],
+     (c, 'ij', {c: (add, _0, b), b: (np.transpose, _1)}, [(a, 'ij'), (a, 'ji')])],
 
     [[(c, 'i', {c: (add, _0, _1)}, [(a, 'i'), (b, 'i')]),
       (d, 'i', {d: (inc, _0)}, [(c, 'i')])],
 
-      (d, 'i', {d: (inc, c), c: (add, _0, _1)}, [(a, 'i'), (b, 'i')])],
+     (d, 'i', {d: (inc, c), c: (add, _0, _1)}, [(a, 'i'), (b, 'i')])],
 
     [[(b, 'ij', {b: (np.transpose, _0)}, [(a, 'ji')]),
       (d, 'ij', {d: (np.dot, _0, _1)}, [(b, 'ik'), (c, 'kj')])],
@@ -64,14 +62,14 @@ i, j, k = 'ijk'
       (f, 'i', {f: (add, _0, _1)}, [(d, 'i'), (e, 'i')]),
       (g, 'i', {g: (add, _0, _1)}, [(c, 'i'), (f, 'i')])],
 
-      (g, 'i', {g: (add, c, f), f: (add, _2, _3), c: (add, _0, _1)}, [(a, i), (b, i), (d, i), (e, i)])],
+     (g, 'i', {g: (add, c, f), f: (add, _2, _3), c: (add, _0, _1)}, [(a, i), (b, i), (d, i), (e, i)])],
 
 
     [[(c, 'i', {c: (add, _0, _1)}, [(a, 'i'), (b, 'i')]),
       (f, 'i', {f: (add, _0, _1)}, [(a, 'i'), (e, 'i')]),
       (g, 'i', {g: (add, _0, _1)}, [(c, 'i'), (f, 'i')])],
 
-      (g, 'i', {g: (add, c, f), f: (add, _0, _2), c: (add, _0, _1)}, [(a, 'i'), (b, 'i'), (e, 'i')])],
+     (g, 'i', {g: (add, c, f), f: (add, _0, _2), c: (add, _0, _1)}, [(a, 'i'), (b, 'i'), (e, 'i')])],
 
 
     [[(b, 'i', {b: (sum, _0)}, [(a, 'ij')]),
@@ -84,15 +82,15 @@ i, j, k = 'ijk'
 
      (d, 'i', {d: (add, _0, _1, c), c: (inc, _1)}, [(a, 'i'), (b, 'i')])],
 
-     # Include literals
+    # Include literals
     [[(b, 'i', {b: (add, _0, _1)}, [(a, 'i'), (123, None)])],
 
-      (b, 'i', {b: (add, _0, _1)}, [(a, 'i'), (123, None)])],
+     (b, 'i', {b: (add, _0, _1)}, [(a, 'i'), (123, None)])],
 
     [[(b, 'i', {b: (add, _0, _1)}, [(a, 'i'), (123, None)]),
       (c, 'j', {c: (add, _0, _1)}, [(b, 'j'), (456, None)])],
 
-      (c, 'j', {b: (add, _1, _2), c: (add, b, _0)}, [(456, None), (a, 'j'), (123, None)])],
+     (c, 'j', {b: (add, _1, _2), c: (add, b, _0)}, [(456, None), (a, 'j'), (123, None)])],
 ])
 def test_rewrite(inputs, expected):
     inputs = [TOP(*inp, numblocks={k: (1,) * len(v) for k, v in inp[-1] if v is not None})

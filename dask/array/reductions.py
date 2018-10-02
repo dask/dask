@@ -230,7 +230,7 @@ def sum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     else:
         dt = getattr(np.empty((1,), dtype=a.dtype).sum(), 'dtype', object)
     result = reduction(a, chunk.sum, chunk.sum, axis=axis, keepdims=keepdims,
-                     dtype=dt, split_every=split_every, out=out)
+                       dtype=dt, split_every=split_every, out=out)
     return result
 
 
