@@ -95,13 +95,31 @@ Client as default:
 
     client = Client('scheduler:8786', set_as_default=True)
 
-Alternatively, if you prefer to avoid defaults, you can specify a ``method=``
-keyword argument to ``groupby`` or ``set_index``
+Alternatively, if you prefer to avoid defaults, you can configure the global
+shuffling method by using the ``dask.config.set(shuffle=...)`` command.
+This can be done globally,
 
 .. code-block:: python
 
-    df.set_index(column, method='disk')
-    df.set_index(column, method='tasks')
+    dask.config.set(shuffle='tasks')
+
+    df.groupby(...).apply(...)
+
+or as a context manager
+
+.. code-block:: python
+
+    with dask.config.set(shuffle='tasks'):
+        df.groupby(...).apply(...)
+
+
+In addition, ``set_index`` also accepts a ``shuffle`` keyword argument that
+can be used to select either on-disk or task-based shuffling
+
+.. code-block:: python
+
+    df.set_index(column, shuffle='disk')
+    df.set_index(column, shuffle='tasks')
 
 
 Aggregate
