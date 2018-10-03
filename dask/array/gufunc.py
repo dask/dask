@@ -55,7 +55,7 @@ def _parse_gufunc_signature(signature):
     return ins, outs
 
 
-def _validate_normalize_axes(axes, axis, keepdims, core_input_dimss, core_output_dimss):
+def _validate_normalize_axes(axes, axis, keepdims, input_coredimss, output_coredimss):
     """
     Validates logic of `axes`/`axis`/`keepdims` arguments and normalize them.
     Refer to [1]_ for details
@@ -65,8 +65,8 @@ def _validate_normalize_axes(axes, axis, keepdims, core_input_dimss, core_output
     axes: List of tuples
     axis: int
     keepdims: bool
-    core_input_dimss: List of Tuple of dims
-    core_output_dimss: List of Tuple of dims
+    input_coredimss: List of Tuple of dims
+    output_coredimss: List of Tuple of dims
 
     Returns
     -------
@@ -77,24 +77,24 @@ def _validate_normalize_axes(axes, axis, keepdims, core_input_dimss, core_output
     ----------
     .. [1] https://docs.scipy.org/doc/numpy/reference/ufuncs.html#optional-keyword-arguments
     """
-    nin = len(core_input_dimss)
-    nout = 1 if not isinstance(core_output_dimss, list) else len(core_output_dimss)
+    nin = len(input_coredimss)
+    nout = 1 if not isinstance(output_coredimss, list) else len(output_coredimss)
 
     if axes is not None and axis is not None:
         raise ValueError("Only one of `axis` or `axes` keyword arguments should be given")
     if axes and not isinstance(axes, list):
         raise ValueError("`axes` has to be of type list")
 
-    core_output_dimss = core_output_dimss if nout > 1 else [core_output_dimss]
-    _filtered_core_dims = list(filter(len, core_input_dimss))
-    _nr_outputs_with_coredims = len([True for x in core_output_dimss if len(x) > 0])
+    output_coredimss = output_coredimss if nout > 1 else [output_coredimss]
+    _filtered_core_dims = list(filter(len, input_coredimss))
+    _nr_outputs_with_coredims = len([True for x in output_coredimss if len(x) > 0])
 
     if keepdims:
         if _nr_outputs_with_coredims > 0:
             raise ValueError("`keepdims` can only be used for scalar outputs")
-        core_output_dimss = len(core_output_dimss) * [_filtered_core_dims[0]]
+        output_coredimss = len(output_coredimss) * [_filtered_core_dims[0]]
 
-    core_dims = core_input_dimss + core_output_dimss
+    core_dims = input_coredimss + output_coredimss
     if axis is not None:
         if not isinstance(axis, int):
             raise ValueError("`axis` argument has to be an integer value")
@@ -111,40 +111,40 @@ def _validate_normalize_axes(axes, axis, keepdims, core_input_dimss, core_output
         if axis is not None:
             axes = [(axis,) if cd else tuple() for cd in core_dims]
         else:
-            axes = [tuple(range(-len(cid), 0)) for cid in core_dims]
+            axes = [tuple(range(-len(icd), 0)) for icd in core_dims]
     elif not isinstance(axes, list):
         raise ValueError("`axes` argument has to be a list")
     axes = [(a,) if isinstance(a, int) else a for a in axes]
 
-    if (((_nr_outputs_with_coredims == 0) and (nin != len(axes)) and (nin + nout != len(axes)))
-            or ((_nr_outputs_with_coredims > 0) and (nin + nout != len(axes)))):
+    if (((_nr_outputs_with_coredims == 0) and (nin != len(axes)) and (nin + nout != len(axes))) or
+            ((_nr_outputs_with_coredims > 0) and (nin + nout != len(axes)))):
         raise ValueError("The number of `axes` entries is not equal the number of input and output arguments")
 
     # Treat outputs
     output_axes = axes[nin:]
-    output_axes = output_axes if output_axes else [tuple(range(-len(cod), 0)) for cod in core_output_dimss]
+    output_axes = output_axes if output_axes else [tuple(range(-len(ocd), 0)) for ocd in output_coredimss]
     input_axes = axes[:nin]
 
     # Assert we have as many axes as output core dimensions
-    for idx, (iax, cid) in enumerate(zip(input_axes, core_input_dimss)):
-        if len(iax) != len(cid):
+    for idx, (iax, icd) in enumerate(zip(input_axes, input_coredimss)):
+        if len(iax) != len(icd):
             raise ValueError("The number of `axes` entries for argument #{} is not equal "
                              "the number of respective input core dimensions in signature"
                              .format(idx))
     if not keepdims:
-        for idx, (oax, cod) in enumerate(zip(output_axes, core_output_dimss)):
-            if len(oax) != len(cod):
+        for idx, (oax, ocd) in enumerate(zip(output_axes, output_coredimss)):
+            if len(oax) != len(ocd):
                 raise ValueError("The number of `axes` entries for argument #{} is not equal "
                                  "the number of respective output core dimensions in signature"
                                  .format(idx))
     else:
-        if core_input_dimss:
-            cid0 = core_input_dimss[0]
-            for cid in core_input_dimss:
-                if cid0 != cid:
+        if input_coredimss:
+            icd0 = input_coredimss[0]
+            for icd in input_coredimss:
+                if icd0 != icd:
                     raise ValueError("To use `keepdims`, all core dimensions have to be equal")
             iax0 = input_axes[0]
-            output_axes = [iax0 for _ in core_output_dimss]
+            output_axes = [iax0 for _ in output_coredimss]
 
     return input_axes, output_axes
 
@@ -261,10 +261,10 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ## Signature
     if not isinstance(signature, str):
         raise TypeError('`signature` has to be of type string')
-    core_input_dimss, core_output_dimss = _parse_gufunc_signature(signature)
+    input_coredimss, output_coredimss = _parse_gufunc_signature(signature)
 
     ## Determine nout: nout = None for functions of one direct return; nout = int for return tuples
-    nout = None if not isinstance(core_output_dimss, list) else len(core_output_dimss)
+    nout = None if not isinstance(output_coredimss, list) else len(output_coredimss)
 
     ## Determine and handle output_dtypes
     if output_dtypes is None:
@@ -297,19 +297,19 @@ def apply_gufunc(func, signature, *args, **kwargs):
         output_sizes = {}
 
     ## Axes
-    input_axes, output_axes = _validate_normalize_axes(axes, axis, keepdims, core_input_dimss, core_output_dimss)
+    input_axes, output_axes = _validate_normalize_axes(axes, axis, keepdims, input_coredimss, output_coredimss)
 
     # Main code:
     ## Cast all input arrays to dask
     args = [asarray(a) for a in args]
 
-    if len(core_input_dimss) != len(args):
+    if len(input_coredimss) != len(args):
         ValueError("According to `signature`, `func` requires %d arguments, but %s given"
-                   % (len(core_input_dimss), len(args)))
+                   % (len(input_coredimss), len(args)))
 
     ## Axes: transpose input arguments
     transposed_args = []
-    for arg, iax, core_input_dims in zip(args, input_axes, core_input_dimss):
+    for arg, iax, input_coredims in zip(args, input_axes, input_coredimss):
         shape = arg.shape
         iax = tuple(a if a < 0 else a - len(shape) for a in iax)
         tidc = tuple(i for i in range(-len(shape) + 0, 0) if i not in iax) + iax
@@ -321,14 +321,14 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ## Assess input args for loop dims
     input_shapes = [a.shape for a in args]
     input_chunkss = [a.chunks for a in args]
-    num_loopdims = [len(s) - len(cd) for s, cd in zip(input_shapes, core_input_dimss)]
+    num_loopdims = [len(s) - len(cd) for s, cd in zip(input_shapes, input_coredimss)]
     max_loopdims = max(num_loopdims) if num_loopdims else None
-    _core_input_shapes = [dict(zip(cid, s[n:])) for s, n, cid in zip(input_shapes, num_loopdims, core_input_dimss)]
+    _core_input_shapes = [dict(zip(icd, s[n:])) for s, n, icd in zip(input_shapes, num_loopdims, input_coredimss)]
     core_shapes = merge(*_core_input_shapes)
     core_shapes.update(output_sizes)
 
     loop_input_dimss = [tuple("__loopdim%d__" % d for d in range(max_loopdims - n, max_loopdims)) for n in num_loopdims]
-    input_dimss = [l + c for l, c in zip(loop_input_dimss, core_input_dimss)]
+    input_dimss = [l + c for l, c in zip(loop_input_dimss, input_coredimss)]
 
     loop_output_dims = max(loop_input_dimss, key=len) if loop_input_dimss else tuple()
 
@@ -382,14 +382,14 @@ significantly.".format(dim))
 
     ### *) Treat direct output
     if nout is None:
-        core_output_dimss = [core_output_dimss]
+        output_coredimss = [output_coredimss]
         output_dtypes = [output_dtypes]
 
     ## Split output
     leaf_arrs = []
-    for i, cod, odt, oax in zip(count(0), core_output_dimss, output_dtypes, output_axes):
-        core_output_shape = tuple(core_shapes[d] for d in cod)
-        core_chunkinds = len(cod) * (0,)
+    for i, ocd, odt, oax in zip(count(0), output_coredimss, output_dtypes, output_axes):
+        core_output_shape = tuple(core_shapes[d] for d in ocd)
+        core_chunkinds = len(ocd) * (0,)
         output_shape = loop_output_shape + core_output_shape
         output_chunks = loop_output_chunks + core_output_shape
         leaf_name = "%s_%d-%s" % (name, i, token)
