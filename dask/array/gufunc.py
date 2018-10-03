@@ -55,6 +55,100 @@ def _parse_gufunc_signature(signature):
     return ins, outs
 
 
+def _validate_normalize_axes(axes, axis, keepdims, core_input_dimss, core_output_dimss):
+    """
+    Validates logic of `axes`/`axis`/`keepdims` arguments and normalize them.
+    Refer to [1]_ for details
+
+    Arguments
+    ---------
+    axes: List of tuples
+    axis: int
+    keepdims: bool
+    core_input_dimss: List of Tuple of dims
+    core_output_dimss: List of Tuple of dims
+
+    Returns
+    -------
+    input_axes: List of tuple of int
+    output_axes: List of tuple of int
+
+    References
+    ----------
+    .. [1] https://docs.scipy.org/doc/numpy/reference/ufuncs.html#optional-keyword-arguments
+    """
+    nin = len(core_input_dimss)
+    nout = 1 if not isinstance(core_output_dimss, list) else len(core_output_dimss)
+
+    if axes is not None and axis is not None:
+        raise ValueError("Only one of `axis` or `axes` keyword arguments should be given")
+    if axes and not isinstance(axes, list):
+        raise ValueError("`axes` has to be of type list")
+
+    core_output_dimss = core_output_dimss if nout > 1 else [core_output_dimss]
+    _filtered_core_dims = list(filter(len, core_input_dimss))
+    _nr_outputs_with_coredims = len([True for x in core_output_dimss if len(x) > 0])
+
+    if keepdims:
+        if _nr_outputs_with_coredims > 0:
+            raise ValueError("`keepdims` can only be used for scalar outputs")
+        core_output_dimss = len(core_output_dimss) * [_filtered_core_dims[0]]
+
+    core_dims = core_input_dimss + core_output_dimss
+    if axis is not None:
+        if not isinstance(axis, int):
+            raise ValueError("`axis` argument has to be an integer value")
+        if _filtered_core_dims:
+            cd0 = _filtered_core_dims[0]
+            if len(cd0) != 1:
+                raise ValueError("`axis` can be used only, if one core dimension is present")
+            for cd in _filtered_core_dims:
+                if cd0 != cd:
+                    raise ValueError("To use `axis`, all core dimensions have to be equal")
+
+    # Expand dafaults or axis
+    if axes is None:
+        if axis is not None:
+            axes = [(axis,) if cd else tuple() for cd in core_dims]
+        else:
+            axes = [tuple(range(-len(cid), 0)) for cid in core_dims]
+    elif not isinstance(axes, list):
+        raise ValueError("`axes` argument has to be a list")
+    axes = [(a,) if isinstance(a, int) else a for a in axes]
+
+    if (((_nr_outputs_with_coredims == 0) and (nin != len(axes)) and (nin + nout != len(axes)))
+            or ((_nr_outputs_with_coredims > 0) and (nin + nout != len(axes)))):
+        raise ValueError("The number of `axes` entries is not equal the number of input and output arguments")
+
+    # Treat outputs
+    output_axes = axes[nin:]
+    output_axes = output_axes if output_axes else [tuple(range(-len(cod), 0)) for cod in core_output_dimss]
+    input_axes = axes[:nin]
+
+    # Assert we have as many axes as output core dimensions
+    for idx, (iax, cid) in enumerate(zip(input_axes, core_input_dimss)):
+        if len(iax) != len(cid):
+            raise ValueError("The number of `axes` entries for argument #{} is not equal "
+                             "the number of respective input core dimensions in signature"
+                             .format(idx))
+    if not keepdims:
+        for idx, (oax, cod) in enumerate(zip(output_axes, core_output_dimss)):
+            if len(oax) != len(cod):
+                raise ValueError("The number of `axes` entries for argument #{} is not equal "
+                                 "the number of respective output core dimensions in signature"
+                                 .format(idx))
+    else:
+        if core_input_dimss:
+            cid0 = core_input_dimss[0]
+            for cid in core_input_dimss:
+                if cid0 != cid:
+                    raise ValueError("To use `keepdims`, all core dimensions have to be equal")
+            iax0 = input_axes[0]
+            output_axes = [iax0 for _ in core_output_dimss]
+
+    return input_axes, output_axes
+
+
 def apply_gufunc(func, signature, *args, **kwargs):
     """
     Apply a generalized ufunc or similar python function to arrays.
@@ -203,75 +297,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
         output_sizes = {}
 
     ## Axes
-    ### Input validation
-    if axes is not None and axis is not None:
-        raise ValueError("Only one of `axis` or `axes` keyword arguments should be given")
-    if axes and not isinstance(axes, list):
-        raise ValueError("`axes` has to be of type list")
+    input_axes, output_axes = _validate_normalize_axes(axes, axis, keepdims, core_input_dimss, core_output_dimss)
 
-    _core_output_dimss = core_output_dimss if nout else [core_output_dimss]
-    _filtered_core_dims = list(filter(len, core_input_dimss))
-    _nr_outputs_with_coredims = len([True for x in _core_output_dimss if len(x) > 0])
-
-    if keepdims:
-        if _nr_outputs_with_coredims > 0:
-            raise ValueError("`keepdims` can only be used for scalar outputs")
-        _core_output_dimss = len(_core_output_dimss) * [_filtered_core_dims[0]]
-
-    _core_dims = core_input_dimss + _core_output_dimss
-    if axis is not None:
-        if not isinstance(axis, int):
-            raise ValueError("`axis` argument has to be an integer value")
-        if _filtered_core_dims:
-            cd0 = _filtered_core_dims[0]
-            if len(cd0) != 1:
-                raise ValueError("`axis` can be used only, if one core dimension is present")
-            for cd in _filtered_core_dims:
-                if cd0 != cd:
-                    raise ValueError("To use `axis`, all core dimensions have to be equal")
-
-    ### Expand dafaults or axis
-    if axes is None:
-        if axis is not None:
-            axes = [(axis,) if cd else tuple() for cd in _core_dims]
-        else:
-            axes = [tuple(range(-len(cid), 0)) for cid in _core_dims]
-    elif not isinstance(axes, list):
-        raise ValueError("`axes` argument has to be a list")
-    axes = [(a,) if isinstance(a, int) else a for a in axes]
-
-    ### Treat outputs
-    _nin = len(args)
-    _nout = nout if nout else 1
-
-    if (((_nr_outputs_with_coredims == 0) and (_nin != len(axes)) and (_nin + _nout != len(axes)))
-            or ((_nr_outputs_with_coredims > 0) and (_nin + _nout != len(axes)))):
-        raise ValueError("The number of `axes` entries is not equal the number of input and output arguments")
-
-    output_axes = axes[_nin:]
-    output_axes = output_axes if output_axes else [tuple(range(-len(cod), 0)) for cod in _core_output_dimss]
-    input_axes = axes[:_nin]
-
-    ### Assert we have as many axes as
-    for idx, (iax, cid) in enumerate(zip(input_axes, core_input_dimss)):
-        if len(iax) != len(cid):
-            raise ValueError("The number of `axes` entries for argument #{} is not equal "
-                             "the number of respective input core dimensions in signature"
-                             .format(idx))
-    if not keepdims:
-        for idx, (oax, cod) in enumerate(zip(output_axes, _core_output_dimss)):
-            if len(oax) != len(cod):
-                raise ValueError("The number of `axes` entries for argument #{} is not equal "
-                                 "the number of respective output core dimensions in signature"
-                                 .format(idx))
-    else:
-        if core_input_dimss:
-            cid0 = core_input_dimss[0]
-            for cid in core_input_dimss:
-                if cid0 != cid:
-                    raise ValueError("To use `keepdims`, all core dimensions have to be equal")
-            iax0 = input_axes[0]
-            output_axes = [iax0 for _ in _core_output_dimss]
     # Main code:
     ## Cast all input arrays to dask
     args = [asarray(a) for a in args]
