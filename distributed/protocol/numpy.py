@@ -4,12 +4,6 @@ import fractions
 
 import numpy as np
 
-try:
-    import blosc
-    n = blosc.set_nthreads(2)
-except ImportError:
-    blosc = False
-
 from .utils import frame_split_size, merge_frames
 from .serialize import dask_serialize, dask_deserialize
 from . import pickle
