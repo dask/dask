@@ -7,7 +7,7 @@ X.XX.X / YYYY-MM-DD
 Array
 +++++
 
-- ``apply_gufunc`` implements keywords `axes` and `keepdims` (:pr:`3985`) `Markus Gonser`_
+- ``apply_gufunc`` implements keywords `axes`, `axis` and `keepdims` (:pr:`3985`) `Markus Gonser`_
 
 
 Dataframe
