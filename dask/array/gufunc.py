@@ -269,10 +269,10 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ## Determine and handle output_dtypes
     if output_dtypes is None:
         if vectorize:
-            _func = np.vectorize(func, signature=signature)
+            tempfunc = np.vectorize(func, signature=signature)
         else:
-            _func = func
-        output_dtypes = apply_infer_dtype(_func, args, kwargs, "apply_gufunc", "output_dtypes", nout)
+            tempfunc = func
+        output_dtypes = apply_infer_dtype(tempfunc, args, kwargs, "apply_gufunc", "output_dtypes", nout)
 
     if isinstance(output_dtypes, (tuple, list)):
         if nout is None:
