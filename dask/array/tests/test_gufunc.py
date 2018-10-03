@@ -536,3 +536,37 @@ def test_apply_gufunc_keepdims_input_validation_01():
 
     with pytest.raises(ValueError):
         apply_gufunc(foo, "(i),(j)->(0)", a, axes=[(0,), (0,)], keepdims=True)
+
+
+def test_apply_gufunc_via_numba_01():
+    numba = pytest.importorskip('numba')
+
+    @numba.guvectorize([(numba.float64[:], numba.float64[:], numba.float64[:])], '(n),(n)->(n)')
+    def g(x, y, res):
+        for i in range(x.shape[0]):
+            res[i] = x[i] + y[i]
+
+    a = da.random.normal(size=(20, 30), chunks=30)
+    b = da.random.normal(size=(20, 30), chunks=30)
+
+    x = a + b
+    y = g(a, b, axis=0)
+
+    assert_eq(x, y)
+
+
+def test_apply_gufunc_via_numba_02():
+    numba = pytest.importorskip('numba')
+
+    @numba.guvectorize([(numba.float64[:], numba.float64[:])], '(n)->()')
+    def mysum(x, res):
+        res[0] = 0.
+        for i in range(x.shape[0]):
+            res[0] += x[i]
+
+    a = da.random.normal(size=(20, 30), chunks=5)
+
+    x = a.sum(axis=0, keepdims=True)
+    y = mysum(a, axis=0, keepdims=True, allow_rechunk=True)
+
+    assert_eq(x, y)
