@@ -1138,7 +1138,8 @@ def test_groupby_tasks_names():
 
 
 @pytest.mark.parametrize('size,npartitions,groups', [(1000, 20, 100),
-                                                     (12345, 234, 1042)])
+                                                     (12345, 234, 1042),
+                                                     (100, 1, 50)])
 def test_groupby_tasks_2(size, npartitions, groups):
     func = lambda x: x % groups
     b = db.range(size, npartitions=npartitions).groupby(func, shuffle='tasks')
