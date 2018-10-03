@@ -406,7 +406,7 @@ def test_apply_gufunc_axis_keepdims(axis):
 @pytest.mark.parametrize('axes', [[0, 1], [(0,), (1,)]])
 def test_apply_gufunc_axes_01(axes):
     def mystats(x, y):
-        return np. std(x, axis=-1) * np.mean(y, axis=-1)
+        return np.std(x, axis=-1) * np.mean(y, axis=-1)
 
     a = np.random.randn(10, 5)
     b = np.random.randn(5, 6)

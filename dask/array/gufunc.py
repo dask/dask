@@ -204,7 +204,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
 
     ## Axes
     ### Input validation
-    if (axes is not None) and (axis is not None):
+    if axes is not None and axis is not None:
         raise ValueError("Only one of `axis` or `axes` keyword arguments should be given")
     if axes and not isinstance(axes, list):
         raise ValueError("`axes` has to be of type list")
@@ -213,7 +213,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     _filtered_core_dims = list(filter(len, core_input_dimss))
     _nr_outputs_with_coredims = len([True for x in _core_output_dimss if len(x) > 0])
 
-    if keepdims is True:
+    if keepdims:
         if _nr_outputs_with_coredims > 0:
             raise ValueError("`keepdims` can only be used for scalar outputs")
         _core_output_dimss = len(_core_output_dimss) * [_filtered_core_dims[0]]
@@ -244,8 +244,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
     _nin = len(args)
     _nout = nout if nout else 1
 
-    if ((_nr_outputs_with_coredims == 0) and (_nin != len(axes)) and (_nin + _nout != len(axes))) \
-       or ((_nr_outputs_with_coredims > 0) and (_nin + _nout != len(axes))):
+    if (((_nr_outputs_with_coredims == 0) and (_nin != len(axes)) and (_nin + _nout != len(axes)))
+            or ((_nr_outputs_with_coredims > 0) and (_nin + _nout != len(axes)))):
         raise ValueError("The number of `axes` entries is not equal the number of input and output arguments")
 
     output_axes = axes[_nin:]
@@ -374,7 +374,7 @@ significantly.".format(dim))
                          dtype=odt)
 
         ### Axes:
-        if keepdims is True:
+        if keepdims:
             slices = len(leaf_arr.shape) * (slice(None),) + len(oax) * (np.newaxis,)
             leaf_arr = leaf_arr[slices]
 
