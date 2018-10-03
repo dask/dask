@@ -62,6 +62,14 @@ concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
 
 
+@tensordot_lookup.register_lazy('cupy')
+@concatenate_lookup.register_lazy('cupy')
+def register_cupy():
+    import cupy
+    concatenate_lookup.register(cupy.ndarray, cupy.concatenate)
+    tensordot_lookup.register(cupy.ndarray, cupy.tensordot)
+
+
 @tensordot_lookup.register_lazy('sparse')
 @concatenate_lookup.register_lazy('sparse')
 def register_sparse():
