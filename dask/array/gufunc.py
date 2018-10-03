@@ -220,6 +220,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
 
     _core_dims = core_input_dimss + _core_output_dimss
     if axis is not None:
+        if not isinstance(axis, int):
+            raise ValueError("`axis` argument has to be an integer value")
         if _filtered_core_dims:
             cd0 = _filtered_core_dims[0]
             if len(cd0) != 1:
@@ -234,6 +236,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
             axes = [(axis,) if cd else tuple() for cd in _core_dims]
         else:
             axes = [tuple(range(-len(cid), 0)) for cid in _core_dims]
+    elif not isinstance(axes, list):
+        raise ValueError("`axes` argument has to be a list")
     axes = [(a,) if isinstance(a, int) else a for a in axes]
 
     ### Treat outputs
@@ -252,12 +256,14 @@ def apply_gufunc(func, signature, *args, **kwargs):
     for idx, (iax, cid) in enumerate(zip(input_axes, core_input_dimss)):
         if len(iax) != len(cid):
             raise ValueError("The number of `axes` entries for argument #{} is not equal "
-                             "the number of respective input core dimensions in signature" % idx)
+                             "the number of respective input core dimensions in signature"
+                             .format(idx))
     if not keepdims:
         for idx, (oax, cod) in enumerate(zip(output_axes, _core_output_dimss)):
             if len(oax) != len(cod):
                 raise ValueError("The number of `axes` entries for argument #{} is not equal "
-                                 "the number of respective output core dimensions in signature" % idx)
+                                 "the number of respective output core dimensions in signature"
+                                 .format(idx))
     else:
         if core_input_dimss:
             cid0 = core_input_dimss[0]

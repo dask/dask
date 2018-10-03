@@ -363,21 +363,6 @@ def test_apply_gufunc_axis_02():
     assert_eq(m, dm)
 
 
-@pytest.mark.parametrize('axes', [[0, 1], [(0,), (1,)]])
-def test_apply_gufunc_axes_01(axes):
-    def mystats(x, y):
-        return np. std(x, axis=-1) * np.mean(y, axis=-1)
-
-    a = np.random.randn(10, 5)
-    b = np.random.randn(5, 6)
-    da_ = da.from_array(a, chunks=2)
-    db_ = da.from_array(b, chunks=2)
-
-    m = np.std(a, axis=0) * np.mean(b, axis=1)
-    dm = apply_gufunc(mystats, "(i),(j)->()", da_, db_, axes=axes, allow_rechunk=True)
-    assert_eq(m, dm)
-
-
 def test_apply_gufunc_axis_02b():
     def myfilter(x, cn=10, axis=-1):
         y = np.fft.fft(x, axis=axis)
@@ -405,7 +390,35 @@ def test_apply_gufunc_axis_03():
     assert_eq(m, dm)
 
 
-def test_apply_gufunc_axes_04():
+@pytest.mark.parametrize('axis', [-2, -1, None])
+def test_apply_gufunc_axis_keepdims(axis):
+    def mymedian(x):
+        return np.median(x, axis=-1)
+
+    a = np.random.randn(10, 5)
+    da_ = da.from_array(a, chunks=2)
+
+    m = np.median(a, axis=-1 if not axis else axis, keepdims=True)
+    dm = apply_gufunc(mymedian, "(i)->()", da_, axis=axis, keepdims=True, allow_rechunk=True)
+    assert_eq(m, dm)
+
+
+@pytest.mark.parametrize('axes', [[0, 1], [(0,), (1,)]])
+def test_apply_gufunc_axes_01(axes):
+    def mystats(x, y):
+        return np. std(x, axis=-1) * np.mean(y, axis=-1)
+
+    a = np.random.randn(10, 5)
+    b = np.random.randn(5, 6)
+    da_ = da.from_array(a, chunks=2)
+    db_ = da.from_array(b, chunks=2)
+
+    m = np.std(a, axis=0) * np.mean(b, axis=1)
+    dm = apply_gufunc(mystats, "(i),(j)->()", da_, db_, axes=axes, allow_rechunk=True)
+    assert_eq(m, dm)
+
+
+def test_apply_gufunc_axes_02():
     def matmul(x, y):
         return np.einsum("...ij,...jk->...ik", x, y)
 
@@ -420,19 +433,6 @@ def test_apply_gufunc_axes_04():
     assert_eq(m, dm)
 
 
-@pytest.mark.parametrize('axis', [-2, -1, None])
-def test_apply_gufunc_axis_keepdims(axis):
-    def mymedian(x):
-        return np.median(x, axis=-1)
-
-    a = np.random.randn(10, 5)
-    da_ = da.from_array(a, chunks=2)
-
-    m = np.median(a, axis=-1 if not axis else axis, keepdims=True)
-    dm = apply_gufunc(mymedian, "(i)->()", da_, axis=axis, keepdims=True, allow_rechunk=True)
-    assert_eq(m, dm)
-
-
 @pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
                     reason="`np.vectorize(..., signature=...)` not supported yet")
 def test_apply_gufunc_axes_two_kept_coredims():
@@ -444,3 +444,95 @@ def test_apply_gufunc_axes_two_kept_coredims():
 
     c = apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b, vectorize=True)
     assert c.compute().shape == (10, 20, 30, 40)
+
+
+def test_apply_gufunc_axes_input_validation_01():
+    def foo(x):
+        return np.mean(x, axis=-1)
+
+    a = da.random.normal(size=(20, 30), chunks=30)
+
+    with pytest.raises(ValueError):
+        apply_gufunc(foo, "(i)->()", a, axes=0)
+
+    apply_gufunc(foo, "(i)->()", a, axes=[0])
+    apply_gufunc(foo, "(i)->()", a, axes=[(0,)])
+    apply_gufunc(foo, "(i)->()", a, axes=[0, tuple()])
+    apply_gufunc(foo, "(i)->()", a, axes=[(0,), tuple()])
+
+    with pytest.raises(ValueError):
+        apply_gufunc(foo, "(i)->()", a, axes=[(0, 1)])
+
+    with pytest.raises(ValueError):
+        apply_gufunc(foo, "(i)->()", a, axes=[0, 0])
+
+
+def test_apply_gufunc_axes_input_validation_02():
+    def foo(x):
+        return np.mean(x, axis=-2)
+
+    a = da.random.normal(size=(20, 30), chunks=30)
+
+    with pytest.raises(ValueError):
+        apply_gufunc(foo, "(i,j)->(j)", a, axes=[(1, 0)])
+
+    with pytest.raises(ValueError):
+        apply_gufunc(foo, "(i,j)->(j)", a, axes=[0, 0])
+
+    with pytest.raises(ValueError):
+        apply_gufunc(foo, "(i,j)->(j)", a, axes=[(0,), 0])
+
+    apply_gufunc(foo, "(i,j)->(j)", a, axes=[(1, 0), 0])
+    apply_gufunc(foo, "(i,j)->(j)", a, axes=[(1, 0), (0,)])
+
+
+def test_apply_gufunc_axis_input_validation_01():
+    def foo(x, y):
+        return np.mean(x, axis=-1) * np.mean(y, axis=-1)
+
+    a = da.random.normal(size=(20, 30), chunks=30)
+    b = da.random.normal(size=(20, 30), chunks=30)
+
+    apply_gufunc(foo, "(i),(i)->()", a, b, axis=0)
+    apply_gufunc(foo, "(i),(i)->()", a, b, axis=0, keepdims=True)
+
+    with pytest.raises(ValueError):
+        apply_gufunc(foo, "(i),(i)->()", a, b, axis=(0,))
+
+    with pytest.raises(ValueError):
+        apply_gufunc(foo, "(i),(j)->()", a, b, axis=0)
+
+    def foo(x):
+        return np.mean(x, axis=-2)
+
+    with pytest.raises(ValueError):
+        apply_gufunc(foo, "(i,j)->(j)", a, axis=0)
+
+    def foo(x):
+        return x
+
+    apply_gufunc(foo, "(i)->(i)", a, axis=0)
+
+
+def test_apply_gufunc_keepdims_input_validation_01():
+    def foo(x):
+        return np.mean(x, axis=-1)
+
+    a = da.random.normal(size=(20, 30), chunks=30)
+
+    apply_gufunc(foo, "(i)->()", a, axis=0, keepdims=True)
+
+    def foo(x):
+        return x
+
+    with pytest.raises(ValueError):
+        apply_gufunc(foo, "(i)->(i)", a, axis=0, keepdims=True)
+
+    with pytest.raises(ValueError):
+        apply_gufunc(foo, "(i,j)->(i,j)", a, axes=[(0, 1), (0, 1)], keepdims=True)
+
+    def foo(x, y):
+        return np.mean(x, axis=-1) * np.mean(y, axis=-1)
+
+    with pytest.raises(ValueError):
+        apply_gufunc(foo, "(i),(j)->(0)", a, axes=[(0,), (0,)], keepdims=True)
