@@ -183,7 +183,7 @@ def getem(arr, chunks, getitem=getter, shape=None, out_name=None, lock=False,
     keys = list(product([out_name], *[range(len(bds)) for bds in chunks]))
     slices = slices_from_chunks(chunks)
 
-    if not asarray or lock:
+    if getitem is not operator.getitem and (not asarray or lock):
         values = [(getitem, arr, x, asarray, lock) for x in slices]
     else:
         # Common case, drop extra parameters
@@ -2389,7 +2389,7 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
         dsk = {(name, ) + (0, ) * x.ndim: x}
     else:
         if getitem is None:
-            if type(x) is np.ndarray:
+            if type(x) is np.ndarray and not lock:
                 # simpler and cleaner, but missing all the nuances of getter
                 getitem = operator.getitem
             elif fancy:
