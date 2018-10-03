@@ -1970,7 +1970,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     max_branch = max_branch or 32
     n = b.npartitions
 
-    stages = int(math.ceil(math.log(n) / math.log(max_branch)))
+    stages = int(math.ceil(math.log(n) / math.log(max_branch))) or 1
     if stages > 1:
         k = int(math.ceil(n ** (1 / stages)))
     else:
