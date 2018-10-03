@@ -538,6 +538,8 @@ def test_apply_gufunc_keepdims_input_validation_01():
         apply_gufunc(foo, "(i),(j)->(0)", a, axes=[(0,), (0,)], keepdims=True)
 
 
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
+                    reason="Additional kwargs for this version not supported")
 def test_apply_gufunc_via_numba_01():
     numba = pytest.importorskip('numba')
 
@@ -555,6 +557,8 @@ def test_apply_gufunc_via_numba_01():
     assert_eq(x, y)
 
 
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.12.0',
+                    reason="Additional kwargs for this version not supported")
 def test_apply_gufunc_via_numba_02():
     numba = pytest.importorskip('numba')
 
