@@ -429,8 +429,11 @@ class TOP(Mapping):
     """ Tensor Operation
 
     This is a lazily constructed mapping for tensor operation graphs.
-
-    TODO: more extensive docstring
+    This defines a dictionary using an operation and an indexing pattern.
+    It is built for many operations like elementwise, transpose, tensordot, and
+    so on.  We choose to keep these as symbolic mappings rather than raw
+    dictionaries because we are able to fuse them during optimization,
+    sometimes resulting in much lower overhead.
 
     See Also
     --------
@@ -913,8 +916,6 @@ def map_blocks(func, *args, **kwargs):
     arginds = list(concat([(delayed(x) if not is_dask_collection(x) and
                             sizeof(x) > 1e6 and ind is None else x, ind)
                            for x, ind in argpairs]))
-    # TODO: collect extra graphs from kwargs2 and arginds if they have
-    # collections
     if (has_keyword(func, 'block_id') or has_keyword(func, 'block_info') or drop_axis):
         my_top = top
     else:
@@ -1146,7 +1147,6 @@ def store(sources, targets, lock=True, regions=None, compute=True,
                          % (len(sources), len(targets), len(regions)))
 
     # Optimize all sources together
-    # TODO: Sharedict merge dependencies
     sources_dsk = sharedict.merge(*[e.__dask_graph__() for e in sources])
     sources_dsk = Array.__dask_optimize__(
         sources_dsk,

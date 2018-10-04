@@ -383,7 +383,7 @@ def rewrite_atop(inputs):
 
             # Remove current input from input indices
             # [('a', 'i'), ('b', 'i')] -> [('a', 'i')]
-            _, current_dep_indices = indices.pop(i)  # TODO: this screws with current _0, _1, ...
+            _, current_dep_indices = indices.pop(i)
             sub = {atop_token(i): atop_token(i - 1) for i in range(i + 1, len(indices) + 1)}
             dsk = subs(dsk, sub)
 
@@ -397,7 +397,6 @@ def rewrite_atop(inputs):
             new_indices = [(x, index_subs(j, sub)) for x, j in new_indices]
 
             # TODO: handle new_axes
-            # TODO: handle concatenate
 
             # Bump new inputs up in list
             sub = {}
