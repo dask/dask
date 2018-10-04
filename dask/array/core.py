@@ -162,10 +162,8 @@ def index_subs(ind, substitution):
     """ A simple subs function that works both on tuples and strings """
     if ind is None:
         return ind
-    if isinstance(ind, str):
-        return ''.join(substitution.get(c, c) for c in ind)
     else:
-        return type(ind)([substitution.get(c, c) for c in ind])
+        return tuple([substitution.get(c, c) for c in ind])
 
 
 def atop_token(i, prefix='_'):
@@ -365,6 +363,16 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)),
 
 
 def _top(func, output, output_indices, *arrind_pairs, **kwargs):
+    """ Create a TOP symbolic mutable mapping, given the inputs to top
+
+    This is like the ``top`` function, but rather than construct a dict, it
+    returns a symbolic TOP object.
+
+    See Also
+    --------
+    top
+    TOP
+    """
     numblocks = kwargs.pop('numblocks')
     concatenate = kwargs.pop('concatenate', None)
     new_axes = kwargs.pop('new_axes', {})
@@ -379,7 +387,7 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     output_indices = index_subs(tuple(output_indices), sub)
     arrind_pairs[1::2] = [tuple(a) if a is not None else a for a in arrind_pairs[1::2]]
     arrind_pairs[1::2] = [index_subs(a, sub) for a in arrind_pairs[1::2]]
-    new_axes = {index_subs(k, sub): v for k, v in new_axes.items()}
+    new_axes = {index_subs(k, sub)[0]: v for k, v in new_axes.items()}
 
     # Unpack dask values in non-array arguments
     argpairs = list(partition(2, arrind_pairs))
@@ -388,7 +396,6 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
             arg2, dsk2 = to_task_dask(arg)
             if dsk2:
                 graph.update(dsk2)
-                # TODO: add dependencies
                 argpairs[i] = (arg2, ind)
 
     inputs = tuple([name for name, _ in argpairs])
@@ -406,7 +413,6 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
         inputs_indices = inputs_indices + (None,) * len(new_keys)
         kwargs = subs(kwargs, sub)
         graph.update(dsk_kwargs)
-        # TODO: add dependencies
 
     indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
     keys = tuple(map(atop_token, range(len(inputs))))
@@ -470,7 +476,6 @@ class TOP(Mapping):
             )
         return self._cached_dict
 
-    # TODO: determine if these are important and, if so, make them better
     def __getitem__(self, key):
         return self._dict[key]
 

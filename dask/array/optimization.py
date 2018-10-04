@@ -302,6 +302,30 @@ def fuse_slice(a, b):
 
 
 def optimize_atop(sharedict, keys=()):
+    """ High level optimization of stacked TOP layers
+
+    For operations that have multiple TOP operations one after the other, like
+    ``x.T + 123`` we can fuse these into a single TOP operation.  This happens
+    before any actual tasks are generated, and so can reduce overhead.
+
+    This finds groups of TOP operations that can be safely fused, and then
+    passes them to ``rewrite_atop`` for rewriting.
+
+    Parameters
+    ----------
+    sharedict : ShareDict
+    keys: Iterable
+        The keys of all outputs of all collections.
+        Used to make sure that we don't fuse a layer needed by an output
+
+    Returns
+    -------
+    sharedict : ShareDict
+
+    See Also
+    --------
+    rewrite_atop
+    """
     from .core import TOP
     keep = {k[0] if type(k) is tuple else k for k in keys}
     layers = sharedict.dicts
@@ -346,7 +370,24 @@ def optimize_atop(sharedict, keys=()):
 
 
 def rewrite_atop(inputs):
-    """ Rewrite a stack of atop expressions into a single atop expression """
+    """ Rewrite a stack of atop expressions into a single atop expression
+
+    Given a set of TOP layers, combine them into a single layer.  The provided
+    layers are expected to fit well together.  That job is handled by
+    ``optimize_atop``
+
+    Parameters
+    ----------
+    inputs : List[TOP]
+
+    Returns
+    -------
+    top : TOP
+
+    See Also
+    --------
+    optimize_atop
+    """
     from dask.core import reverse_dict
     from dask.array.core import TOP
     inputs = {inp.output: inp for inp in inputs}

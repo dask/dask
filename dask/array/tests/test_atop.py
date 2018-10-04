@@ -108,7 +108,6 @@ def test_rewrite(inputs, expected):
 
 def test_index_subs():
     assert index_subs(tuple('ij'), {'i': 'j', 'j': 'i'}) == tuple('ji')
-    assert index_subs('ij', {'i': 'j', 'j': 'i'}) == 'ji'
 
 
 def test_optimize_atop():
