@@ -372,12 +372,14 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     graph = ShareDict()
 
     # Transform indices to canonical elements
+    # We use terms like _0, and _1 rather than provided index elements
     arrind_pairs = list(arrind_pairs)
     unique_indices = set(output_indices) | {i for ii in arrind_pairs[1::2] if ii is not None for i in ii}
     sub = {k: atop_token(i) for i, k in enumerate(sorted(unique_indices))}
     output_indices = index_subs(tuple(output_indices), sub)
     arrind_pairs[1::2] = [tuple(a) if a is not None else a for a in arrind_pairs[1::2]]
     arrind_pairs[1::2] = [index_subs(a, sub) for a in arrind_pairs[1::2]]
+    new_axes = {index_subs(k, sub): v for k, v in new_axes.items()}
 
     # Unpack dask values in non-array arguments
     argpairs = list(partition(2, arrind_pairs))
