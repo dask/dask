@@ -8,6 +8,7 @@ from numbers import Number, Integral
 import operator
 from operator import add, getitem, mul
 import os
+import re
 import sys
 import traceback
 import pickle
@@ -756,6 +757,26 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype='dtype', nout=
     return o.dtype if nout is None else tuple(e.dtype for e in o)
 
 
+def normalize_arg(x):
+    """ Normalize user provided arguments to atop or map_blocks
+
+    We do a few things:
+
+    1.  If they are string literals that might collide with atop_token then we
+        quote them
+    2.  IF they are large (as defined by sizeof) then we put them into the
+        graph on their own by using dask.delayed
+    """
+    if is_dask_collection(x):
+        return x
+    elif isinstance(x, str) and re.match('_\d+', x):
+        return delayed(x)
+    elif sizeof(x) > 1e6:
+        return delayed(x)
+    else:
+        return x
+
+
 def map_blocks(func, *args, **kwargs):
     """ Map a function across all blocks of a dask array.
 
@@ -911,10 +932,8 @@ def map_blocks(func, *args, **kwargs):
         kwargs['block_info'] = '__dummy__'
 
     original_kwargs = kwargs
-    kwargs = {k: delayed(v) if not is_dask_collection(v) and sizeof(v) > 1e6 else v
-              for k, v in kwargs.items()}
-    arginds = list(concat([(delayed(x) if not is_dask_collection(x) and
-                            sizeof(x) > 1e6 and ind is None else x, ind)
+    kwargs = {k: normalize_arg(v) for k, v in kwargs.items()}
+    arginds = list(concat([(normalize_arg(x) if ind is None else x, ind)
                            for x, ind in argpairs]))
     if (has_keyword(func, 'block_id') or has_keyword(func, 'block_info') or drop_axis):
         my_top = top
@@ -3020,16 +3039,14 @@ def atop(func, out_ind, *args, **kwargs):
                              % (ind, arg.ndim))
 
     numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
-    argindsstr = list(concat([((delayed(a) if not is_dask_collection(a) and sizeof(a) > 1e6 else a)
-                               if ind is None else a.name, ind)
+    argindsstr = list(concat([(normalize_arg(a) if ind is None else a.name, ind)
                               for a, ind in arginds]))
     # Finish up the name
     if not out:
         out = '%s-%s' % (token or funcname(func).strip('_'),
                          tokenize(func, out_ind, argindsstr, dtype, **kwargs))
 
-    kwargs2 = {k: delayed(v) if not is_dask_collection(v) and sizeof(v) > 1e6 else v
-               for k, v in kwargs.items()}
+    kwargs2 = {k: normalize_arg(v) for k, v in kwargs.items()}
     dsk = _top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs2)
     dsks = [a.dask for a, ind in arginds if ind is not None]
 
