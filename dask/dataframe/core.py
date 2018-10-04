@@ -7,7 +7,7 @@ from pprint import pformat
 from collections import Sequence
 import warnings
 
-from toolz import merge, first, unique, partition_all, remove, pluck
+from toolz import merge, first, unique, partition_all, remove
 import pandas as pd
 import numpy as np
 from numbers import Number, Integral
@@ -20,7 +20,7 @@ except ImportError:
 from .. import array as da
 from .. import core
 
-from ..utils import partial_by_order
+from ..utils import partial_by_order, Dispatch
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method, string_types, Iterator
 from ..context import globalmethod
@@ -56,7 +56,7 @@ def _concat(args):
         return args
     if isinstance(first(core.flatten(args)), np.ndarray):
         return da.core.concatenate3(args)
-    if not isinstance(args[0], tuple(t for t, _ in parallel_types)):
+    if not isinstance(args[0], parallel_types()):
         try:
             return pd.Series(args)
         except Exception:
@@ -185,7 +185,7 @@ def _scalar_binary(op, self, other, inv=False):
     name = '{0}-{1}'.format(funcname(op), tokenize(self, other))
 
     dsk = self.dask
-    return_type = _get_return_type(other)
+    return_type = get_parallel_type(other)
 
     if isinstance(other, Scalar):
         dsk = merge(dsk, other.dask)
@@ -3583,7 +3583,7 @@ def map_partitions(func, *args, **kwargs):
         dask = {(name, 0):
                 (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)}
         return Scalar(merge(dask, *[arg.dask for arg in args]), name, meta)
-    elif not (isinstance(meta, tuple(pluck(0, parallel_types))) or is_arraylike(meta)):
+    elif not (isinstance(meta, parallel_types()) or is_arraylike(meta)):
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
         meta = _concat([meta])
@@ -4371,22 +4371,37 @@ def _repr_data_series(s, index):
     return pd.Series([dtype] + ['...'] * npartitions, index=index, name=s.name)
 
 
-parallel_types = [
-    (pd.Series, Series),
-    (pd.DataFrame, DataFrame),
-    (pd.Index, Index),
-]
+get_parallel_type = Dispatch('get_parallel_type')
 
 
-def _get_return_type(meta):
-    if isinstance(meta, _Frame):
-        meta = meta._meta
+@get_parallel_type.register(pd.Series)
+def get_parallel_type_series(_):
+    return Series
 
-    for pd_type, dd_type in reversed(parallel_types):
-        if isinstance(meta, pd_type):
-            return dd_type
 
+@get_parallel_type.register(pd.DataFrame)
+def get_parallel_type_dataframe(_):
+    return DataFrame
+
+
+@get_parallel_type.register(pd.Index)
+def get_parallel_type_index(_):
+    return Index
+
+
+@get_parallel_type.register(object)
+def get_parallel_type_object(o):
     return Scalar
+
+
+@get_parallel_type.register(_Frame)
+def get_parallel_type_frame(o):
+    return get_parallel_type(o._meta)
+
+
+def parallel_types():
+    return tuple(k for k, v in get_parallel_type._lookup.items()
+                 if v is not get_parallel_type_object)
 
 
 def new_dd_object(dsk, name, meta, divisions):
@@ -4394,8 +4409,8 @@ def new_dd_object(dsk, name, meta, divisions):
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
-    if isinstance(meta, tuple(pluck(0, parallel_types))):
-        return _get_return_type(meta)(dsk, name, meta, divisions)
+    if isinstance(meta, parallel_types()):
+        return get_parallel_type(meta)(dsk, name, meta, divisions)
     elif is_arraylike(meta):
         import dask.array as da
         chunks = (((np.nan,) * (len(divisions) - 1),) +
@@ -4407,4 +4422,4 @@ def new_dd_object(dsk, name, meta, divisions):
                 dsk[(name, i) + suffix] = dsk.pop((name, i))
         return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
     else:
-        return _get_return_type(meta)(dsk, name, meta, divisions)
+        return get_parallel_type(meta)(dsk, name, meta, divisions)

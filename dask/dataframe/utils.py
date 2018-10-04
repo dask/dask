@@ -486,8 +486,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             return a == b
         return (a.kind in eq_types and b.kind in eq_types) or (a == b)
 
-    from .core import parallel_types
-    if not isinstance(meta, tuple(pluck(0, parallel_types))):
+    if not isinstance(meta, parallel_types()):
         raise TypeError("Expected partition to be DataFrame, Series, or "
                         "Index, got `%s`" % type(meta).__name__)
 
