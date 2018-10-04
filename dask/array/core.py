@@ -3522,17 +3522,18 @@ def asarray(a):
     >>> da.asarray(y)
     dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3)>
     """
-    try:
-        import dask.dataframe as dd
-        frame_types = (dd.Series, dd.DataFrame)
-    except ImportError:
-        frame_types = ()
+    def frame_types():
+        try:
+            import dask.dataframe as dd
+            return (dd.Series, dd.DataFrame)
+        except ImportError:
+            return ()
 
     if isinstance(a, Array):
         return a
     if isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         a = stack(a)
-    elif isinstance(a, frame_types):
+    elif isinstance(a, frame_types()):
         return a.to_dask_array()
     elif not isinstance(getattr(a, 'shape', None), Iterable):
         a = np.asarray(a)
