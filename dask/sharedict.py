@@ -91,7 +91,9 @@ class ShareDict(Mapping):
         return unique(concat(self.dicts.values()))
 
 
-def merge(*dicts, dependencies=None):
+def merge(*dicts, **kwargs):
+    dependencies = kwargs.pop('dependencies', None)
+    assert not kwargs
     # assert dependencies is not None
     result = ShareDict()
     for d in dicts:

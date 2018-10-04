@@ -465,7 +465,7 @@ class TOP(Mapping):
                 *list(concat(self.indices)),
                 new_axes=self.new_axes,
                 numblocks=self.numblocks,
-                concatenate=self.concatenate,
+                concatenate=self.concatenate
             )
         return self._cached_dict
 
