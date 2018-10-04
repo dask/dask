@@ -51,7 +51,12 @@ def test_dispatch():
     foo.register(int, lambda a: a + 1)
     foo.register(float, lambda a: a - 1)
     foo.register(tuple, lambda a: tuple(foo(i) for i in a))
-    foo.register(object, lambda a: a)
+
+    def f(a):
+        """ My Docstring """
+        return a
+
+    foo.register(object, f)
 
     class Bar(object):
         pass
@@ -62,6 +67,7 @@ def test_dispatch():
     assert foo(b) == b
     assert foo((1, 2.0, b)) == (2, 1.0, b)
 
+    assert foo.__doc__ == f.__doc__
 
 def test_dispatch_kwargs():
     foo = Dispatch()

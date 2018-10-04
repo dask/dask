@@ -413,6 +413,14 @@ class Dispatch(object):
         meth = self.dispatch(type(arg))
         return meth(arg, *args, **kwargs)
 
+    @property
+    def __doc__(self):
+        try:
+            func = self.dispatch(object)
+            return func.__doc__
+        except TypeError:
+            return "Single Dispatch for %s" % self.__name__
+
 
 def ensure_not_exists(filename):
     """
