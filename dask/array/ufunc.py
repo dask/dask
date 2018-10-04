@@ -318,6 +318,6 @@ def modf(x):
 
     L = Array(sharedict.merge(tmp.dask, (left, ldsk), dependencies={left: {tmp.name}}),
               left, chunks=tmp.chunks, dtype=ldt)
-    R = Array(sharedict.merge(tmp.dask, (right, rdsk), dependencies={left: {tmp.name}}),
+    R = Array(sharedict.merge(tmp.dask, (right, rdsk), dependencies={right: {tmp.name}}),
               right, chunks=tmp.chunks, dtype=rdt)
     return L, R

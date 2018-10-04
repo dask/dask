@@ -394,13 +394,8 @@ def rewrite_atop(inputs):
             contracted = {x for _, j in new_indices if j is not None for x in j if x not in inputs[dep].output_indices}
             extra = dict(zip(contracted, new_index_iter))
             sub.update(extra)
-            if any(x and '00' in x for _, x in new_indices):
-                import pdb; pdb.set_trace()
             old_indices = tuple(new_indices)
             new_indices = [(x, index_subs(j, sub)) for x, j in new_indices]
-            if any(x and '00' in x for _, x in new_indices):
-                import pdb; pdb.set_trace()
-
 
             # TODO: handle new_axes
             # TODO: handle concatenate
