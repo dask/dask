@@ -8,6 +8,7 @@ import dask.array as da
 from dask.array.core import TOP
 from dask.array.optimization import (rewrite_atop, index_subs, optimize_atop,
                                      flatten)
+from dask.array.utils import assert_eq
 from dask.utils_test import inc, dec
 
 a, b, c, d, e, f, g = 'abcdefg'
@@ -174,3 +175,25 @@ def test_inner_compute():
     z = x * 2 * 3
 
     dask.compute(x, a, y, b, z)
+
+
+@pytest.mark.parametrize('name', ['_', '_0', '_1', '.', '.0'])
+def test_common_token_names_args(name):
+    x = np.array(['a', 'bb', 'ccc'], dtype=object)
+    d = da.from_array(x, chunks=2)
+
+    result = da.atop(add, 'i', d, 'i', name, None, dtype=object)
+    expected = x + name
+
+    assert_eq(result, expected)
+
+@pytest.mark.xfail(reason="TODO: we leak tokens/values in kwargs")
+@pytest.mark.parametrize('name', ['_', '_0', '_1', '.', '.0'])
+def test_common_token_names_kwargs(name):
+    x = np.array(['a', 'bb', 'ccc'], dtype=object)
+    d = da.from_array(x, chunks=2)
+
+    result = da.atop(lambda x, y: x + y, 'i', d, 'i', y=name, dtype=object)
+    expected = x + name
+
+    assert_eq(result, expected)
