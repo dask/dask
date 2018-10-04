@@ -366,13 +366,6 @@ def rewrite_atop(inputs):
 
     seen = set()
 
-    def join(t):
-        t = tuple(t)
-        if all(isinstance(elem, str) for elem in t):
-            return ''.join(t)
-        else:
-            return t
-
     changed = True
     while changed:
         changed = False

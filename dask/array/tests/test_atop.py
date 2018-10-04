@@ -96,7 +96,11 @@ def test_rewrite(inputs, expected):
     inputs = [TOP(*inp, numblocks={k: (1,) * len(v) for k, v in inp[-1] if v is not None})
               for inp in inputs]
     result = rewrite_atop(inputs)
-    result2 = (result.output, result.output_indices, result.dsk, result.indices)
+    result2 = (result.output,
+               ''.join(result.output_indices),
+               result.dsk,
+               [(name, ''.join(ind) if ind is not None else ind)
+                for name, ind in result.indices])
     assert result2 == expected
 
 

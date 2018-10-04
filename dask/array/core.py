@@ -376,6 +376,7 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     unique_indices = set(output_indices) | {i for ii in arrind_pairs[1::2] if ii is not None for i in ii}
     sub = {k: atop_token(i) for i, k in enumerate(sorted(unique_indices))}
     output_indices = index_subs(tuple(output_indices), sub)
+    arrind_pairs[1::2] = [tuple(a) if a is not None else a for a in arrind_pairs[1::2]]
     arrind_pairs[1::2] = [index_subs(a, sub) for a in arrind_pairs[1::2]]
 
     # Unpack dask values in non-array arguments
@@ -437,12 +438,10 @@ class TOP(Mapping):
     """
     def __init__(self, output, output_indices, dsk, indices,
                  numblocks, concatenate=None, new_axes=None):
-        if any(x and '00' in x for _, x in indices):
-            import pdb; pdb.set_trace()
         self.output = output
-        self.output_indices = output_indices
+        self.output_indices = tuple(output_indices)
         self.dsk = dsk
-        self.indices = indices
+        self.indices = tuple((name, tuple(ind) if ind is not None else ind) for name, ind in indices)
 
         self.numblocks = numblocks
         self.concatenate = concatenate
@@ -450,9 +449,9 @@ class TOP(Mapping):
 
     @property
     def _dict(self):
-        try:
+        if hasattr(self, '_cached_dict'):
             return self._cached_dict
-        except AttributeError:
+        else:
             keys = tuple(map(atop_token, range(len(self.indices))))
             func = SubgraphCallable(self.dsk, self.output, keys)
             self._cached_dict = top(
