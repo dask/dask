@@ -807,6 +807,15 @@ def test_ravel():
     assert_eq(np.ravel(x), da.ravel(a))
 
 
+def test_ravel_1D_no_op():
+    x = np.random.randint(10, size=100)
+    dx = da.from_array(x, chunks=10)
+    # known dims
+    assert_eq(dx.ravel(), x.ravel())
+    # Unknown dims
+    assert_eq(dx[dx > 2].ravel(), x[x > 2].ravel())
+
+
 @pytest.mark.parametrize('is_func', [True, False])
 @pytest.mark.parametrize('axis', [None, 0, -1, (0, -1)])
 def test_squeeze(is_func, axis):

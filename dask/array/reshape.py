@@ -155,6 +155,10 @@ def reshape(x, shape):
     if len(known_sizes) < len(shape):
         if len(known_sizes) - len(shape) > 1:
             raise ValueError('can only specify one unknown dimension')
+        # Fastpath for x.reshape(-1) on 1D arrays, allows unknown shape in x
+        # for this case only.
+        if len(shape) == 1 and x.ndim == 1:
+            return x
         missing_size = sanitize_index(x.size / reduce(mul, known_sizes, 1))
         shape = tuple(missing_size if s == -1 else s for s in shape)
 
