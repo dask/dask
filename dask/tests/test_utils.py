@@ -69,6 +69,7 @@ def test_dispatch():
 
     assert foo.__doc__ == f.__doc__
 
+
 def test_dispatch_kwargs():
     foo = Dispatch()
     foo.register(int, lambda a, b=10: a + b)

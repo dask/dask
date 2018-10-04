@@ -17,7 +17,6 @@ try:
 except ImportError:
     # pandas < 0.19.2
     from pandas.core.common import is_datetime64tz_dtype
-from toolz import pluck
 
 from ..compatibility import PY2, Iterator
 from ..core import get_deps
@@ -486,6 +485,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             return a == b
         return (a.kind in eq_types and b.kind in eq_types) or (a == b)
 
+    from .core import parallel_types
     if not isinstance(meta, parallel_types()):
         raise TypeError("Expected partition to be DataFrame, Series, or "
                         "Index, got `%s`" % type(meta).__name__)
