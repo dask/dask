@@ -6,7 +6,7 @@ import numpy as np
 import toolz
 
 from .core import (getter, getter_nofancy, getter_inline, subs, atop_token,
-        index_subs)
+                   index_subs)
 from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
 from ..optimization import cull, fuse, inline_functions
@@ -33,11 +33,10 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
     3.  Inline fast functions like getitem and np.transpose
     """
     keys = list(flatten(keys))
-    key_prefixes = {k[0] if type(k) is tuple else k for k in keys}
 
     # High level stage optimization
     if isinstance(dsk, ShareDict):
-        dsk = optimize_atop(dsk, keep=key_prefixes)
+        dsk = optimize_atop(dsk, keys=keys)
 
     # Low level task optimizations
     dsk = ensure_dict(dsk)
@@ -302,8 +301,9 @@ def fuse_slice(a, b):
     raise NotImplementedError()
 
 
-def optimize_atop(sharedict, keep=()):
+def optimize_atop(sharedict, keys=()):
     from .core import TOP
+    keep = {k[0] if type(k) is tuple else k for k in keys}
     layers = sharedict.dicts
     dependents = reverse_dict(sharedict.dependencies)
     roots = {k for k, v in sharedict.dicts.items() if not dependents.get(k)}
@@ -394,7 +394,6 @@ def rewrite_atop(inputs):
             contracted = {x for _, j in new_indices if j is not None for x in j if x not in inputs[dep].output_indices}
             extra = dict(zip(contracted, new_index_iter))
             sub.update(extra)
-            old_indices = tuple(new_indices)
             new_indices = [(x, index_subs(j, sub)) for x, j in new_indices]
 
             # TODO: handle new_axes

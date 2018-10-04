@@ -6,7 +6,8 @@ import numpy as np
 import dask
 import dask.array as da
 from dask.array.core import TOP
-from dask.array.optimization import rewrite_atop, index_subs
+from dask.array.optimization import (rewrite_atop, index_subs, optimize_atop,
+                                     flatten)
 from dask.utils_test import inc, dec
 
 a, b, c, d, e, f, g = 'abcdefg'
@@ -147,10 +148,12 @@ def test_atop_non_atop_output():
     z_top_after = tuple(z.dask.dicts[z.name].indices)
     assert z_top_before == z_top_after, "z_top mutated"
 
-    assert isinstance(zz.dask, dask.sharedict.ShareDict)
-    assert len([layer for layer in zz.dask.dicts.values() if isinstance(layer, TOP)]) == 1
+    dsk = optimize_atop(z.dask, keys=list(flatten(z.__dask_keys__())))
+    assert isinstance(dsk, dask.sharedict.ShareDict)
+    assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
 
-    (ww, zz) = dask.optimize(w, z)
+    dsk = optimize_atop(dask.sharedict.merge(w.dask, z.dask),
+                        keys=list(flatten([w.__dask_keys__(), z.__dask_keys__()])))
     assert isinstance(dsk, dask.sharedict.ShareDict)
     assert len([layer for layer in z.dask.dicts.values() if isinstance(layer, TOP)]) >= 1
 
