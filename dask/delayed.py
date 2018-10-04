@@ -521,7 +521,7 @@ class DelayedAttr(Delayed):
     def dask(self):
         dsk = {self._key: (getattr, self._obj._key, self._attr)}
         return sharedict.merge(self._obj.dask, (self._key, dsk),
-                dependencies={})
+                               dependencies={})
 
     def __call__(self, *args, **kwargs):
         return call_function(methodcaller(self._attr), self._attr, (self._obj,) + args, kwargs)
