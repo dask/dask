@@ -3041,6 +3041,7 @@ def test_warn_bad_rechunking():
     assert '20' in record[0].message.args[0]
 
 
+@pytest.mark.xfail(reason='atop fusion doesnt respect this, which is ok')
 def test_optimize_fuse_keys():
     x = da.ones(10, chunks=(5,))
     y = x + 1

@@ -419,18 +419,19 @@ def rewrite_atop(inputs):
             dsk.update(new_dsk)
 
     indices = [(a, tuple(b) if isinstance(b, list) else b) for a, b in indices]
+
+    # De-duplicate indices
     new_indices = []
     seen = dict()
-    sub = dict()
+    sub = dict()  # like {_0: _0, _1: _0, _2: _1}
     for i, x in enumerate(indices):
-        if x[1] is None:
-            new_indices.append(x)
-        elif x not in seen:
-            seen[x] = i
-            new_indices.append(x)
-
-        else:
+        if x[1] is not None and x in seen:
             sub[i] = seen[x]
+        else:
+            if x[1] is not None:
+                seen[x] = len(new_indices)
+            sub[i] = len(new_indices)
+            new_indices.append(x)
 
     sub = {atop_token(k): atop_token(v) for k, v in sub.items()}
 
