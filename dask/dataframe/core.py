@@ -2613,7 +2613,7 @@ class DataFrame(_Frame):
             Defaults to False
         divisions: list, optional
             Known values on which to separate index values of the partitions.
-            See http://dask.pydata.org/en/latest/dataframe-design.html#partitions
+            See https://docs.dask.org/en/latest/dataframe-design.html#partitions
             Defaults to computing this with a single pass over the data. Note
             that if ``sorted=True``, specified divisions are assumed to match
             the existing partitions in the data. If this is untrue, you should
