@@ -452,8 +452,8 @@ class TOP(Mapping):
         self.output = output
         self.output_indices = tuple(output_indices)
         self.dsk = dsk
-        self.indices = tuple((name, tuple(ind) if ind is not None else ind) for name, ind in indices)
-
+        self.indices = tuple((name, tuple(ind) if ind is not None else ind)
+                             for name, ind in indices)
         self.numblocks = numblocks
         self.concatenate = concatenate
         self.new_axes = new_axes or {}

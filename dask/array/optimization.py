@@ -330,7 +330,8 @@ def optimize_atop(sharedict, keys=()):
     keep = {k[0] if type(k) is tuple else k for k in keys}
     layers = sharedict.dicts
     dependents = reverse_dict(sharedict.dependencies)
-    roots = {k for k, v in sharedict.dicts.items() if not dependents.get(k)}
+    roots = {k for k, v in sharedict.dicts.items()
+             if not dependents.get(k)}
     stack = list(roots)
 
     out = {}
@@ -432,7 +433,10 @@ def rewrite_atop(inputs):
             # [('c', j')] -> [('c', 'i')]
             new_indices = inputs[dep].indices
             sub = dict(zip(inputs[dep].output_indices, current_dep_indices))
-            contracted = {x for _, j in new_indices if j is not None for x in j if x not in inputs[dep].output_indices}
+            contracted = {x for _, j in new_indices
+                          if j is not None
+                          for x in j
+                          if x not in inputs[dep].output_indices}
             extra = dict(zip(contracted, new_index_iter))
             sub.update(extra)
             new_indices = [(x, index_subs(j, sub)) for x, j in new_indices]
@@ -452,7 +456,8 @@ def rewrite_atop(inputs):
             # indices.extend(new_indices)
             dsk.update(new_dsk)
 
-    indices = [(a, tuple(b) if isinstance(b, list) else b) for a, b in indices]
+    indices = [(a, tuple(b) if isinstance(b, list) else b)
+               for a, b in indices]
 
     # De-duplicate indices
     new_indices = []
@@ -472,7 +477,8 @@ def rewrite_atop(inputs):
     dsk = {k: subs(v, sub) for k, v in dsk.items()}
 
     numblocks = toolz.merge([inp.numblocks for inp in inputs.values()])
-    numblocks = {k: v for k, v in numblocks.items() if k in toolz.pluck(0, indices)}
+    numblocks = {k: v for k, v in numblocks.items()
+                 if k in toolz.pluck(0, indices)}
 
     out = TOP(root, inputs[root].output_indices, dsk, new_indices,
               numblocks=numblocks, new_axes=new_axes, concatenate=concatenate)
