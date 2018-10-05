@@ -5,7 +5,7 @@ import numpy as np
 
 import dask
 import dask.array as da
-from dask.array.core import TOP
+from dask.array.core import TOP, atop
 from dask.array.optimization import (rewrite_atop, index_subs, optimize_atop,
                                      flatten)
 from dask.array.utils import assert_eq
@@ -196,3 +196,128 @@ def test_common_token_names_kwargs(name):
     expected = x + name
 
     assert_eq(result, expected)
+
+
+def test_atop_names():
+    x = da.ones(5, chunks=(2,))
+    y = atop(add, 'i', x, 'i', dtype=x.dtype)
+    assert y.name.startswith('add')
+
+
+def test_atop_new_axes():
+    def f(x):
+        return x[:, None] * np.ones((1, 7))
+    x = da.ones(5, chunks=2)
+    y = atop(f, 'aq', x, 'a', new_axes={'q': 7}, concatenate=True,
+             dtype=x.dtype)
+    assert y.chunks == ((2, 2, 1), (7,))
+    assert_eq(y, np.ones((5, 7)))
+
+    def f(x):
+        return x[None, :] * np.ones((7, 1))
+    x = da.ones(5, chunks=2)
+    y = atop(f, 'qa', x, 'a', new_axes={'q': 7}, concatenate=True,
+             dtype=x.dtype)
+    assert y.chunks == ((7,), (2, 2, 1))
+    assert_eq(y, np.ones((7, 5)))
+
+    def f(x):
+        y = x.sum(axis=1)
+        return y[:, None] * np.ones((1, 5))
+
+    x = da.ones((4, 6), chunks=(2, 2))
+    y = atop(f, 'aq', x, 'ab', new_axes={'q': 5}, concatenate=True,
+             dtype=x.dtype)
+    assert y.chunks == ((2, 2), (5,))
+    assert_eq(y, np.ones((4, 5)) * 6)
+
+
+@pytest.mark.parametrize('concatenate', [True, False])
+def test_atop_stacked_new_axes(concatenate):
+    def f(x):
+        return x[..., None] * np.ones((1, 7))
+
+    x = da.ones(5, chunks=2)
+    y = atop(f, 'aq', x, 'a', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
+    z = atop(f, 'abq', y, 'ab', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
+    assert z.chunks == ((2, 2, 1), (7,), (7,))
+    assert_eq(z, np.ones((5, 7, 7)))
+
+
+@pytest.mark.parametrize('concatenate', [True, False])
+def test_atop_stacked_new_axes_front(concatenate):
+    def f(x):
+        if isinstance(x, list):
+            x = np.concatenate(x)
+        return x[None, ...] * np.ones(7)[(slice(None),) + (None,) * x.ndim]
+
+    x = da.ones(5, chunks=2)
+    y = atop(f, 'qa', x, 'a', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
+    z = atop(f, 'qab', y, 'ab', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
+    assert z.chunks == ((7,), (7,), (2, 2, 1))
+    assert_eq(z, np.ones((7, 7, 5)))
+
+    w = atop(lambda x: x[:, 0, 0], 'a', z, 'abc', dtype=x.dtype,
+            concatenate=concatenate)
+    assert w.chunks == ((7,),)
+    assert_eq(w, np.ones((7,)))
+
+
+@pytest.mark.parametrize('concatenate', [True, False])
+def test_atop_stacked_new_axes_same_dim(concatenate):
+    def f(x):
+        return x[..., None] * np.ones((1, 7))
+
+    x = da.ones(5, chunks=2)
+    y = da.zeros(5, chunks=2)
+    a = atop(f, 'aq', x, 'a', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
+    b = atop(f, 'aq', y, 'a', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
+    c = a + b
+    assert c.chunks == ((2, 2, 1), (7,))
+    assert_eq(c, np.ones((5, 7)))
+
+
+def test_atop_kwargs():
+    def f(a, b=0):
+        return a + b
+
+    x = da.ones(5, chunks=(2,))
+    y = atop(f, 'i', x, 'i', b=10, dtype=x.dtype)
+    assert_eq(y, np.ones(5) + 10)
+
+
+def test_atop_chunks():
+    x = da.ones((5, 5), chunks=((2, 1, 2), (3, 2)))
+
+    def double(a, axis=0):
+        return np.concatenate([a, a], axis=axis)
+
+    y = atop(double, 'ij', x, 'ij',
+             adjust_chunks={'i': lambda n: 2 * n}, axis=0, dtype=x.dtype)
+    assert y.chunks == ((4, 2, 4), (3, 2))
+    assert_eq(y, np.ones((10, 5)))
+
+    y = atop(double, 'ij', x, 'ij',
+             adjust_chunks={'j': lambda n: 2 * n}, axis=1, dtype=x.dtype)
+    assert y.chunks == ((2, 1, 2), (6, 4))
+    assert_eq(y, np.ones((5, 10)))
+
+    x = da.ones((10, 10), chunks=(5, 5))
+    y = atop(double, 'ij', x, 'ij', axis=0,
+             adjust_chunks={'i': 10}, dtype=x.dtype)
+    assert y.chunks == ((10, 10), (5, 5))
+    assert_eq(y, np.ones((20, 10)))
+
+    y = atop(double, 'ij', x, 'ij', axis=0,
+             adjust_chunks={'i': (10, 10)}, dtype=x.dtype)
+    assert y.chunks == ((10, 10), (5, 5))
+    assert_eq(y, np.ones((20, 10)))
+
+
+def test_atop_raises_on_incorrect_indices():
+    x = da.arange(5, chunks=3)
+    with pytest.raises(ValueError) as info:
+        da.atop(lambda x: x, 'ii', x, 'ii', dtype=int)
+
+    assert 'ii' in str(info.value)
+    assert '1' in str(info.value)
