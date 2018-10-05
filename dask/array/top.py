@@ -336,7 +336,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     if kwargs:
         task, dsk2 = to_task_dask(kwargs)
         if dsk2:
-            dsk.update(ensure_dict(dsk2))
+            dsk.update(utils.ensure_dict(dsk2))
             kwargs2 = task
         else:
             kwargs2 = kwargs
@@ -538,3 +538,187 @@ def lol_tuples(head, ind, values, dummies):
     else:
         return [lol_tuples(head + (v,), ind[1:], values, dummies)
                 for v in dummies[ind[0]]]
+
+
+def optimize_atop(full_graph, keys=()):
+    """ High level optimization of stacked TOP layers
+
+    For operations that have multiple TOP operations one after the other, like
+    ``x.T + 123`` we can fuse these into a single TOP operation.  This happens
+    before any actual tasks are generated, and so can reduce overhead.
+
+    This finds groups of TOP operations that can be safely fused, and then
+    passes them to ``rewrite_atop`` for rewriting.
+
+    Parameters
+    ----------
+    full_graph: ShareDict
+    keys: Iterable
+        The keys of all outputs of all collections.
+        Used to make sure that we don't fuse a layer needed by an output
+
+    Returns
+    -------
+    sharedict : ShareDict
+
+    See Also
+    --------
+    rewrite_atop
+    """
+    keep = {k[0] if type(k) is tuple else k for k in keys}
+    layers = full_graph.dicts
+    dependents = core.reverse_dict(full_graph.dependencies)
+    roots = {k for k, v in full_graph.dicts.items()
+             if not dependents.get(k)}
+    stack = list(roots)
+
+    out = {}
+    dependencies = {}
+    seen = set()
+
+    while stack:
+        layer = stack.pop()
+        if layer in seen:
+            continue
+        seen.add(layer)
+        if isinstance(layers[layer], TOP):
+            top_layers = {layer}
+            deps = set(top_layers)
+            while deps:
+                dep = deps.pop()
+                if (isinstance(layers[dep], TOP) and
+                        not (dep != layer and dep in keep) and
+                        layers[dep].concatenate == layers[layer].concatenate):
+                    top_layers.add(dep)
+                    for d in full_graph.dependencies.get(dep, ()):
+                        if len(dependents[d]) <= 1:
+                            deps.add(d)
+                        else:
+                            stack.append(d)
+                else:
+                    stack.append(dep)
+            new_layer = rewrite_atop([layers[l] for l in top_layers])
+            out[layer] = new_layer
+            dependencies[layer] = {k for k, v in new_layer.indices if v is not None}
+        else:
+            out[layer] = layers[layer]
+            dependencies[layer] = full_graph.dependencies.get(layer, set())
+            stack.extend(full_graph.dependencies.get(layer, ()))
+
+    return sharedict.ShareDict(out, dependencies)
+
+
+def rewrite_atop(inputs):
+    """ Rewrite a stack of atop expressions into a single atop expression
+
+    Given a set of TOP layers, combine them into a single layer.  The provided
+    layers are expected to fit well together.  That job is handled by
+    ``optimize_atop``
+
+    Parameters
+    ----------
+    inputs : List[TOP]
+
+    Returns
+    -------
+    top : TOP
+
+    See Also
+    --------
+    optimize_atop
+    """
+    inputs = {inp.output: inp for inp in inputs}
+    dependencies = {inp.output: {d for d, v in inp.indices if v is not None and d in inputs}
+                    for inp in inputs.values()}
+    dependents = core.reverse_dict(dependencies)
+
+    new_index_iter = iter('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+
+    [root] = [k for k, v in dependents.items() if not v]
+
+    indices = list(inputs[root].indices)
+    new_axes = inputs[root].new_axes
+    concatenate = inputs[root].concatenate
+
+    dsk = dict(inputs[root].dsk)
+
+    seen = set()
+
+    changed = True
+    while changed:
+        changed = False
+        for i, (dep, ind) in enumerate(indices):
+            if ind is None:
+                continue
+            if dep not in inputs:
+                continue
+
+            changed = True
+
+            # Replace _n with dep name in existing tasks
+            # (inc, _0) -> (inc, 'b')
+            dsk = {k: subs(v, {atop_token(i): dep}) for k, v in dsk.items()}
+
+            # Remove current input from input indices
+            # [('a', 'i'), ('b', 'i')] -> [('a', 'i')]
+            _, current_dep_indices = indices.pop(i)
+            sub = {atop_token(i): atop_token(i - 1) for i in range(i + 1, len(indices) + 1)}
+            dsk = subs(dsk, sub)
+
+            # Change new input_indices to match give index from current computation
+            # [('c', j')] -> [('c', 'i')]
+            new_indices = inputs[dep].indices
+            sub = dict(zip(inputs[dep].output_indices, current_dep_indices))
+            contracted = {x for _, j in new_indices
+                          if j is not None
+                          for x in j
+                          if x not in inputs[dep].output_indices}
+            extra = dict(zip(contracted, new_index_iter))
+            sub.update(extra)
+            new_indices = [(x, index_subs(j, sub)) for x, j in new_indices]
+
+            # Update new_axes
+            for k, v in inputs[dep].new_axes.items():
+                new_axes[sub[k]] = v
+
+            # Bump new inputs up in list
+            sub = {}
+            for i, index in enumerate(new_indices):
+                if index not in indices:  # use old inputs if available
+                    sub[atop_token(i)] = atop_token(len(indices))
+                    indices.append(index)
+                else:
+                    sub[atop_token(i)] = atop_token(indices.index(index))
+            new_dsk = subs(inputs[dep].dsk, sub)
+
+            # indices.extend(new_indices)
+            dsk.update(new_dsk)
+
+    indices = [(a, tuple(b) if isinstance(b, list) else b)
+               for a, b in indices]
+
+    # De-duplicate indices
+    new_indices = []
+    seen = {}
+    sub = {}  # like {_0: _0, _1: _0, _2: _1}
+    for i, x in enumerate(indices):
+        if x[1] is not None and x in seen:
+            sub[i] = seen[x]
+        else:
+            if x[1] is not None:
+                seen[x] = len(new_indices)
+            sub[i] = len(new_indices)
+            new_indices.append(x)
+
+    sub = {atop_token(k): atop_token(v) for k, v in sub.items()}
+
+    dsk = {k: subs(v, sub) for k, v in dsk.items()}
+
+    numblocks = toolz.merge([inp.numblocks for inp in inputs.values()])
+    numblocks = {k: v for k, v in numblocks.items()
+                 if k in toolz.pluck(0, indices)}
+
+    out = TOP(root, inputs[root].output_indices, dsk, new_indices,
+              numblocks=numblocks, new_axes=new_axes, concatenate=concatenate)
+
+    return out

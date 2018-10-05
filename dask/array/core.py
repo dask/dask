@@ -19,13 +19,13 @@ import warnings
 try:
     from cytoolz import (partition, concat, join, first,
                          groupby, valmap, accumulate, assoc)
-    from cytoolz.curried import filter, pluck
+    from cytoolz.curried import pluck
 
 except ImportError:
     from toolz import (partition, concat, join, first,
                        groupby, valmap, accumulate, assoc)
-    from toolz.curried import filter, pluck
-from toolz import pipe, map, reduce, frequencies
+    from toolz.curried import pluck
+from toolz import map, reduce, frequencies
 import numpy as np
 
 from . import chunk
@@ -35,9 +35,9 @@ from ..base import (DaskMethodsMixin, tokenize, dont_optimize,
 from ..context import globalmethod
 from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
-                     SerializableLock, ensure_dict, Dispatch, factors,
+                     SerializableLock, Dispatch, factors,
                      parse_bytes, has_keyword, M)
-from ..compatibility import (unicode, zip_longest, apply,
+from ..compatibility import (unicode, zip_longest,
                              Iterable, Iterator, Mapping)
 from ..core import quote
 from ..delayed import delayed, Delayed
@@ -45,11 +45,10 @@ from .. import threaded, core
 from .. import sharedict
 from ..sizeof import sizeof
 from ..sharedict import ShareDict
-from ..optimization import SubgraphCallable
 from ..bytes.core import get_mapper, get_fs_token_paths
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
-from .top import atop, _top, top, TOP, lol_tuples
+from .top import atop, _top, top
 
 
 config.update_defaults({'array': {
@@ -3976,5 +3975,3 @@ def from_npy_stack(dirname, mmap_mode='r'):
     dsk = dict(zip(keys, values))
 
     return Array(dsk, name, chunks, dtype)
-
-

@@ -11,7 +11,8 @@ from numbers import Integral
 from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
-from .core import _concatenate2, Array, atop, lol_tuples, handle_out
+from .core import _concatenate2, Array, atop, handle_out
+from .top import lol_tuples
 from .creation import arange
 from .ufunc import sqrt
 from .utils import validate_axis

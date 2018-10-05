@@ -6,8 +6,7 @@ import numpy as np
 import dask
 import dask.array as da
 from dask.array.core import TOP, atop
-from dask.array.optimization import (rewrite_atop, index_subs, optimize_atop,
-                                     flatten)
+from dask.array.top import rewrite_atop, index_subs, optimize_atop
 from dask.array.utils import assert_eq
 from dask.utils_test import inc, dec
 
@@ -148,12 +147,12 @@ def test_atop_non_atop_output():
     z_top_after = tuple(z.dask.dicts[z.name].indices)
     assert z_top_before == z_top_after, "z_top mutated"
 
-    dsk = optimize_atop(z.dask, keys=list(flatten(z.__dask_keys__())))
+    dsk = optimize_atop(z.dask, keys=list(dask.core.flatten(z.__dask_keys__())))
     assert isinstance(dsk, dask.sharedict.ShareDict)
     assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
 
     dsk = optimize_atop(dask.sharedict.merge(w.dask, z.dask),
-                        keys=list(flatten([w.__dask_keys__(), z.__dask_keys__()])))
+                        keys=list(dask.core.flatten([w.__dask_keys__(), z.__dask_keys__()])))
     assert isinstance(dsk, dask.sharedict.ShareDict)
     assert len([layer for layer in z.dask.dicts.values() if isinstance(layer, TOP)]) >= 1
 
@@ -257,8 +256,7 @@ def test_atop_stacked_new_axes_front(concatenate):
     assert z.chunks == ((7,), (7,), (2, 2, 1))
     assert_eq(z, np.ones((7, 7, 5)))
 
-    w = atop(lambda x: x[:, 0, 0], 'a', z, 'abc', dtype=x.dtype,
-            concatenate=concatenate)
+    w = atop(lambda x: x[:, 0, 0], 'a', z, 'abc', dtype=x.dtype, concatenate=concatenate)
     assert w.chunks == ((7,),)
     assert_eq(w, np.ones((7,)))
 
