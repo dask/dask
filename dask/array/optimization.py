@@ -5,8 +5,8 @@ from operator import getitem
 import numpy as np
 import toolz
 
-from .core import (getter, getter_nofancy, getter_inline, subs, atop_token,
-                   index_subs)
+from .core import getter, getter_nofancy, getter_inline
+from .top import subs, atop_token, index_subs
 from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
 from ..optimization import cull, fuse, inline_functions
