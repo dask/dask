@@ -1046,6 +1046,7 @@ class WorkerTable(DashboardComponent):
             data['memory_limit'][-1] = ws.memory_limit
             data['cpu'][-1] = ws.metrics['cpu'] / 100.0
             data['cpu_fraction'][-1] = ws.metrics['cpu'] / 100.0 / ws.ncores
+            data['ncores'][-1] = ws.ncores
 
         self.source.data.update(data)
 
