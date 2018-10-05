@@ -59,11 +59,16 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     # Transform indices to canonical elements
     # We use terms like _0, and _1 rather than provided index elements
     arrind_pairs = list(arrind_pairs)
-    unique_indices = set(output_indices) | {i for ii in arrind_pairs[1::2] if ii is not None for i in ii}
-    sub = {k: atop_token(i, '.') for i, k in enumerate(sorted(unique_indices))}
+    unique_indices = {i for ii in arrind_pairs[1::2]
+                      if ii is not None
+                      for i in ii} | set(output_indices)
+    sub = {k: atop_token(i, '.')
+           for i, k in enumerate(sorted(unique_indices))}
     output_indices = index_subs(tuple(output_indices), sub)
-    arrind_pairs[1::2] = [tuple(a) if a is not None else a for a in arrind_pairs[1::2]]
-    arrind_pairs[1::2] = [index_subs(a, sub) for a in arrind_pairs[1::2]]
+    arrind_pairs[1::2] = [tuple(a) if a is not None else a
+                          for a in arrind_pairs[1::2]]
+    arrind_pairs[1::2] = [index_subs(a, sub)
+                          for a in arrind_pairs[1::2]]
     new_axes = {index_subs(k, sub)[0]: v for k, v in new_axes.items()}
 
     # Unpack dask values in non-array arguments
@@ -75,6 +80,7 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
                 graph.update(dsk2)
                 argpairs[i] = (arg2, ind)
 
+    # separate argpairs into two separate tuples
     inputs = tuple([name for name, _ in argpairs])
     inputs_indices = tuple([index for _, index in argpairs])
 
@@ -94,6 +100,7 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
     keys = tuple(map(atop_token, range(len(inputs))))
 
+    # Construct local graph
     if not kwargs:
         dsk = {output: (func,) + keys}
     else:
@@ -102,6 +109,7 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
             _keys = _keys[:-len(new_keys)]
         dsk = {output: (apply, func, _keys, kwargs)}
 
+    # Construct final output
     top = TOP(output, output_indices, dsk, indices,
               numblocks=numblocks, concatenate=concatenate, new_axes=new_axes)
     graph.update_with_key(top, output)
@@ -285,11 +293,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
 
     assert set(numblocks) == {name for name, ind in argpairs if ind is not None}
 
-    all_indices = toolz.pipe(argpairs,
-                             toolz.curried.pluck(1),
-                             toolz.curried.filter(None),
-                             toolz.concat,
-                             set)
+    all_indices = {x for _, ind in argpairs if ind for x in ind}
     dummy_indices = all_indices - set(out_indices)
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
@@ -581,15 +585,19 @@ def optimize_atop(full_graph, keys=()):
         if layer in seen:
             continue
         seen.add(layer)
+
+        # Outer loop walks through possible output TOP layers
         if isinstance(layers[layer], TOP):
             top_layers = {layer}
             deps = set(top_layers)
-            while deps:
+            while deps:  # we gather as many sub-layers as we can
                 dep = deps.pop()
                 if (isinstance(layers[dep], TOP) and
-                        not (dep != layer and dep in keep) and
-                        layers[dep].concatenate == layers[layer].concatenate):
+                        not (dep != layer and dep in keep) and  # output layer
+                        layers[dep].concatenate == layers[layer].concatenate):  # punt on mixed concatenate
                     top_layers.add(dep)
+
+                    # traverse further to this child's children
                     for d in full_graph.dependencies.get(dep, ()):
                         if len(dependents[d]) <= 1:
                             deps.add(d)
@@ -597,6 +605,8 @@ def optimize_atop(full_graph, keys=()):
                             stack.append(d)
                 else:
                     stack.append(dep)
+
+            # Merge these TOP layers into one
             new_layer = rewrite_atop([layers[l] for l in top_layers])
             out[layer] = new_layer
             dependencies[layer] = {k for k, v in new_layer.indices if v is not None}
@@ -628,23 +638,22 @@ def rewrite_atop(inputs):
     optimize_atop
     """
     inputs = {inp.output: inp for inp in inputs}
-    dependencies = {inp.output: {d for d, v in inp.indices if v is not None and d in inputs}
+    dependencies = {inp.output: {d for d, v in inp.indices
+                                 if v is not None and d in inputs}
                     for inp in inputs.values()}
     dependents = core.reverse_dict(dependencies)
 
-    new_index_iter = (c + (str(d) if d else '')
+    new_index_iter = (c + (str(d) if d else '')  # A, B, ... A1, B1, ...
                       for d in itertools.count()
                       for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
 
     [root] = [k for k, v in dependents.items() if not v]
 
+    # Our final results.  These will change during fusion below
     indices = list(inputs[root].indices)
     new_axes = inputs[root].new_axes
     concatenate = inputs[root].concatenate
-
     dsk = dict(inputs[root].dsk)
-
-    seen = set()
 
     changed = True
     while changed:
@@ -699,7 +708,8 @@ def rewrite_atop(inputs):
     indices = [(a, tuple(b) if isinstance(b, list) else b)
                for a, b in indices]
 
-    # De-duplicate indices
+    # De-duplicate indices like [(a, ij), (b, i), (a, ij)] -> [(a, ij), (b, i)]
+    # Make sure that we map everything else appropriately as we remove inputs
     new_indices = []
     seen = {}
     sub = {}  # like {_0: _0, _1: _0, _2: _1}
@@ -713,7 +723,6 @@ def rewrite_atop(inputs):
             new_indices.append(x)
 
     sub = {atop_token(k): atop_token(v) for k, v in sub.items()}
-
     dsk = {k: subs(v, sub) for k, v in dsk.items()}
 
     numblocks = toolz.merge([inp.numblocks for inp in inputs.values()])
