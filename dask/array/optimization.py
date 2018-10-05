@@ -461,8 +461,8 @@ def rewrite_atop(inputs):
 
     # De-duplicate indices
     new_indices = []
-    seen = dict()
-    sub = dict()  # like {_0: _0, _1: _0, _2: _1}
+    seen = {}
+    sub = {}  # like {_0: _0, _1: _0, _2: _1}
     for i, x in enumerate(indices):
         if x[1] is not None and x in seen:
             sub[i] = seen[x]
