@@ -142,7 +142,7 @@ detail, see `dask.delayed`_.
         result = fib(10).compute()
         print(result)  # prints "55"
 
-.. _dask.delayed: https://dask.pydata.org/en/latest/delayed.html
+.. _dask.delayed: https://docs.dask.org/en/latest/delayed.html
 
 Getting the client on a worker
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

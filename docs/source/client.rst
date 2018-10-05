@@ -196,8 +196,8 @@ following pages:
 
 .. _concurrent.futures:  https://docs.python.org/3/library/concurrent.futures.html
 .. _PEP-3148: https://www.python.org/dev/peps/pep-3148/
-.. _dask.array: http://dask.pydata.org/en/latest/array.html
-.. _dask.bag: http://dask.pydata.org/en/latest/bag.html
-.. _dask.dataframe: http://dask.pydata.org/en/latest/dataframe.html
-.. _dask.delayed: http://dask.pydata.org/en/latest/delayed.html
-.. _Dask: http://dask.pydata.org/en/latest/
+.. _dask.array: https://docs.dask.org/en/latest/array.html
+.. _dask.bag: https://docs.dask.org/en/latest/bag.html
+.. _dask.dataframe: https://docs.dask.org/en/latest/dataframe.html
+.. _dask.delayed: https://docs.dask.org/en/latest/delayed.html
+.. _Dask: https://dask.org

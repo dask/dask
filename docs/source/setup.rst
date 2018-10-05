@@ -200,7 +200,7 @@ Using AWS
 See `Cloud Deployments`_ for the latest information on deploying to Amazon
 cloud.
 
-.. _`Cloud Deployments`: https://dask.pydata.org/en/latest/setup/cloud.html
+.. _`Cloud Deployments`: https://docs.dask.org/en/latest/setup/cloud.html
 
 
 Using Google Cloud

@@ -6,8 +6,8 @@ including where to ask for help, a layout of repositories, testing practices,
 and documentation and style standards are available at the `Dask developer
 guidelines`_ in the main documentation.
 
-.. _Dask: http://dask.pydata.org/en/latest/
-.. _`Dask developer guidelines`: http://dask.pydata.org/en/latest/develop.html
+.. _Dask: http://dask.org
+.. _`Dask developer guidelines`: http://docs.dask.org/en/latest/develop.html
 
 Install
 -------

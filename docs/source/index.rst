@@ -31,7 +31,7 @@ In particular it meets the following needs:
     and easy to :doc:`set up <setup>` on your own cluster.
 
 .. _`concurrent.futures`: https://www.python.org/dev/peps/pep-3148/
-.. _`dask`: http://dask.pydata.org/en/latest/
+.. _`dask`: https://dask.org
 
 Architecture
 ------------
@@ -65,8 +65,8 @@ and Pandas, while the simple ``client.submit`` interface provides users with
 custom control when they want to break out of canned "big data" abstractions
 and submit fully custom workloads.
 
-.. _dask.array: http://dask.pydata.org/en/latest/array.html
-.. _dask.dataframe: http://dask.pydata.org/en/latest/dataframe.html
+.. _dask.array: https://dask.docs.org/en/latest/array.html
+.. _dask.dataframe: https://dask.docs.org/en/latest/dataframe.html
 
 Contents
 --------

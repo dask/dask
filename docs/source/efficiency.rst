@@ -105,5 +105,5 @@ C/Fortran/Numba code might be enough to give you the 10x speed boost that
 you're looking for.  Parallelism and distributed computing are expensive ways
 to accelerate your application.
 
-.. _dask: http://dask.pydata.org/en/latest/
+.. _dask: https://dask.org
 .. _concurrent.futures: https://docs.python.org/3/library/concurrent.futures.html
