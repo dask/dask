@@ -82,7 +82,7 @@ class DaskMethodsMixin(object):
         -----
         For more information on optimization see here:
 
-        http://dask.pydata.org/en/latest/optimize.html
+        https://docs.dask.org/en/latest/optimize.html
         """
         return visualize(self, filename=filename, format=format,
                          optimize_graph=optimize_graph, **kwargs)
@@ -440,7 +440,7 @@ def visualize(*args, **kwargs):
     -----
     For more information on optimization see here:
 
-    http://dask.pydata.org/en/latest/optimize.html
+    https://docs.dask.org/en/latest/optimize.html
     """
     from dask.dot import dot_graph
 

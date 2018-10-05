@@ -1109,7 +1109,7 @@ You must specify a chunks= keyword argument.
 This specifies the chunksize of your array blocks.
 
 See the following documentation page for details:
-  http://dask.pydata.org/en/latest/array-creation.html#chunks
+  https://docs.dask.org/en/latest/array-creation.html#chunks
 """.strip()
 
 

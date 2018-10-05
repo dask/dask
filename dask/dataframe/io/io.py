@@ -500,7 +500,7 @@ def from_delayed(dfs, meta=None, divisions=None, prefix='from-delayed'):
     $META
     divisions : tuple, str, optional
         Partition boundaries along the index.
-        For tuple, see http://dask.pydata.org/en/latest/dataframe-design.html#partitions
+        For tuple, see https://docs.dask.org/en/latest/dataframe-design.html#partitions
         For string 'sorted' will compute the delayed values to find index
         values.  Assumes that the indexes are mutually sorted.
         If None, then won't use index information

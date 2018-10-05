@@ -2287,7 +2287,8 @@ def test_raise_on_no_chunks():
         Array(x.dask, x.name, chunks=None, dtype=x.dtype, shape=None)
         assert False
     except ValueError as e:
-        assert "dask.pydata.org" in str(e)
+        assert "dask" in str(e)
+        assert ".org" in str(e)
 
     pytest.raises(ValueError, lambda: da.ones(6))
 
