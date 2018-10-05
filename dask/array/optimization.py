@@ -441,7 +441,9 @@ def rewrite_atop(inputs):
             sub.update(extra)
             new_indices = [(x, index_subs(j, sub)) for x, j in new_indices]
 
-            # TODO: handle new_axes
+            # Update new_axes
+            for k, v in inputs[dep].new_axes.items():
+                new_axes[sub[k]] = v
 
             # Bump new inputs up in list
             sub = {}

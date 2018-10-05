@@ -64,7 +64,7 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     output_indices = index_subs(tuple(output_indices), sub)
     arrind_pairs[1::2] = [tuple(a) if a is not None else a for a in arrind_pairs[1::2]]
     arrind_pairs[1::2] = [index_subs(a, sub) for a in arrind_pairs[1::2]]
-    new_axes = {index_subs(k, sub): v for k, v in new_axes.items()}
+    new_axes = {index_subs(k, sub)[0]: v for k, v in new_axes.items()}
 
     # Unpack dask values in non-array arguments
     argpairs = list(toolz.partition(2, arrind_pairs))
