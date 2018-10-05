@@ -1509,6 +1509,12 @@ def test_upload_file(c, s, a, b):
 
 
 @gen_cluster(client=True)
+def test_upload_file_no_extension(c, s, a, b):
+    with tmp_text('myfile', '') as fn:
+        yield c.upload_file(fn)
+
+
+@gen_cluster(client=True)
 def test_upload_file_zip(c, s, a, b):
     def g():
         import myfile
