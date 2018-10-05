@@ -1,26 +1,41 @@
 Changelog
 =========
 
+1.23.3 - 2018-10-05
+-------------------
+
+-  Err in dask serialization if not a NotImplementedError (:pr:`2251`) `Matthew Rocklin`_
+-  Protect against key missing from priority in GraphLayout (:pr:`2259`) `Matthew Rocklin`_
+-  Do not pull data twice in Client.gather (:pr:`2263`) `Adam Klein`_
+-  Add pytest fixture for cluster tests (:pr:`2262`) `Matthew Rocklin`_
+-  Cleanup bokeh callbacks  (:pr:`2261`) (:pr:`2278`) `Matthew Rocklin`_
+-  Fix bokeh error for `memory_limit=None` (:pr:`2255`) `Brett Naul`_
+-  Place large keywords into task graph in Client.map (:pr:`2281`) `Matthew Rocklin`_
+-  Remove redundant blosc threading code from protocol.numpy (:pr:`2284`) `Mike Gevaert`_
+-  Add ncores to workertable (:pr:`2289`) `Matthew Rocklin`_
+-  Support upload_file on files with no extension (:pr:`2290`) `Matthew Rocklin`_
+
+
 1.23.2 - 2018-09-17
 -------------------
 
--  Discard dependent rather than remove (#2250) `Matthew Rocklin`_
+-  Discard dependent rather than remove (:pr:`2250`) `Matthew Rocklin`_
 -  Use dask_sphinx_theme `Matthew Rocklin`_
--  Drop the Bokeh index page (#2241) `John Kirkham`_
--  Revert change to keep link relative (#2242) `Matthew Rocklin`_
--  docs: Fix broken AWS link in setup.rst file (#2240) `Vladyslav Moisieienkov`_
--  Return cancelled futures in as_completed (#2233) `Chris White`_
+-  Drop the Bokeh index page (:pr:`2241`) `John Kirkham`_
+-  Revert change to keep link relative (:pr:`2242`) `Matthew Rocklin`_
+-  docs: Fix broken AWS link in setup.rst file (:pr:`2240`) `Vladyslav Moisieienkov`_
+-  Return cancelled futures in as_completed (:pr:`2233`) `Chris White`_
 
 
 1.23.1 - 2018-09-06
 -------------------
 
--  Raise informative error when mixing futures between clients (#2227) `Matthew Rocklin`_
--  add byte_keys to unpack_remotedata call (#2232) `Matthew Rocklin`_
--  Add documentation for gist/rawgit for get_task_stream (#2236) `Matthew Rocklin`_
--  Quiet Client.close by waiting for scheduler stop signal (#2237) `Matthew Rocklin`_
--  Display system graphs nicely on different screen sizes (#2239) `Derek Ludwig`_
--  Mutate passed in workers dict in TaskStreamPlugin.rectangles (#2238) `Matthew Rocklin`_
+-  Raise informative error when mixing futures between clients (:pr:`2227`) `Matthew Rocklin`_
+-  add byte_keys to unpack_remotedata call (:pr:`2232`) `Matthew Rocklin`_
+-  Add documentation for gist/rawgit for get_task_stream (:pr:`2236`) `Matthew Rocklin`_
+-  Quiet Client.close by waiting for scheduler stop signal (:pr:`2237`) `Matthew Rocklin`_
+-  Display system graphs nicely on different screen sizes (:pr:`2239`) `Derek Ludwig`_
+-  Mutate passed in workers dict in TaskStreamPlugin.rectangles (:pr:`2238`) `Matthew Rocklin`_
 
 
 1.23.0 - 2018-08-30
@@ -29,30 +44,30 @@ Changelog
 -  Add direct_to_workers to Client `Matthew Rocklin`_
 -  Add Scheduler.proxy to workers `Matthew Rocklin`_
 -  Implement Actors `Matthew Rocklin`_
--  Fix tooltip (#2168) `Loïc Estève`_
--  Fix scale /  avoid returning coroutines (#2171) `Joe Hamman`_
--  Clarify dask-worker --nprocs (#2173) `Yu Feng`_
--  Concatenate all bytes of small messages in TCP comms (#2172) `Matthew Rocklin`_
--  Add dashboard_link property (#2176) `Jacob Tomlinson`_
--  Always offload to_frames (#2170) `Matthew Rocklin`_
--  Warn if desired port is already in use (#2191) (#2199) `Matthew Rocklin`_
--  Add profile page for event loop thread (#2144) `Matthew Rocklin`_
--  Use dispatch for dask serialization, also add sklearn, pytorch (#2175) `Matthew Rocklin`_
--  Handle corner cases with busy signal (#2182) `Matthew Rocklin`_
--  Check self.dependencies when looking at tasks in memory (#2196) `Matthew Rocklin`_
--  Add ability to log additional custom metrics from each worker (#2169) `Loïc Estève`_
--  Fix formatting when port is a tuple (#2204) `Loïc Estève`_
--  Describe what ZeroMQ is (#2211) `Mike DePalatis`_
--  Tiny typo fix (#2214) `Anderson Banihirwe`_
--  Add Python 3.7 to travis.yml (#2203) `Matthew Rocklin`_
--  Add plot= keyword to get_task_stream (#2198) `Matthew Rocklin`_
--  Add support for optional versions in Client.get_versions (#2216) `Matthew Rocklin`_
--  Add routes for solo bokeh figures in dashboard (#2185) `Matthew Rocklin`_
--  Be resilient to missing dep after busy signal (#2217) `Matthew Rocklin`_
--  Use CSS Grid to layout status page on the dashboard (#2213) `Derek Ludwig`_ and `Luke Canavan`_
--  Fix deserialization of queues on main ioloop thread (#2221) `Matthew Rocklin`_
--  Add a worker initialization function (#2201) `Guillaume EB`_
--  Collapse navbar in dashboard (#2223) `Luke Canavan`_
+-  Fix tooltip (:pr:`2168`) `Loïc Estève`_
+-  Fix scale /  avoid returning coroutines (:pr:`2171`) `Joe Hamman`_
+-  Clarify dask-worker --nprocs (:pr:`2173`) `Yu Feng`_
+-  Concatenate all bytes of small messages in TCP comms (:pr:`2172`) `Matthew Rocklin`_
+-  Add dashboard_link property (:pr:`2176`) `Jacob Tomlinson`_
+-  Always offload to_frames (:pr:`2170`) `Matthew Rocklin`_
+-  Warn if desired port is already in use (:pr:`2191`) (:pr:`2199`) `Matthew Rocklin`_
+-  Add profile page for event loop thread (:pr:`2144`) `Matthew Rocklin`_
+-  Use dispatch for dask serialization, also add sklearn, pytorch (:pr:`2175`) `Matthew Rocklin`_
+-  Handle corner cases with busy signal (:pr:`2182`) `Matthew Rocklin`_
+-  Check self.dependencies when looking at tasks in memory (:pr:`2196`) `Matthew Rocklin`_
+-  Add ability to log additional custom metrics from each worker (:pr:`2169`) `Loïc Estève`_
+-  Fix formatting when port is a tuple (:pr:`2204`) `Loïc Estève`_
+-  Describe what ZeroMQ is (:pr:`2211`) `Mike DePalatis`_
+-  Tiny typo fix (:pr:`2214`) `Anderson Banihirwe`_
+-  Add Python 3.7 to travis.yml (:pr:`2203`) `Matthew Rocklin`_
+-  Add plot= keyword to get_task_stream (:pr:`2198`) `Matthew Rocklin`_
+-  Add support for optional versions in Client.get_versions (:pr:`2216`) `Matthew Rocklin`_
+-  Add routes for solo bokeh figures in dashboard (:pr:`2185`) `Matthew Rocklin`_
+-  Be resilient to missing dep after busy signal (:pr:`2217`) `Matthew Rocklin`_
+-  Use CSS Grid to layout status page on the dashboard (:pr:`2213`) `Derek Ludwig`_ and `Luke Canavan`_
+-  Fix deserialization of queues on main ioloop thread (:pr:`2221`) `Matthew Rocklin`_
+-  Add a worker initialization function (:pr:`2201`) `Guillaume EB`_
+-  Collapse navbar in dashboard (:pr:`2223`) `Luke Canavan`_
 
 
 1.22.1 - 2018-08-03
@@ -784,3 +799,5 @@ significantly without many new features.
 .. _`Guillaume EB`: https://github.com/guillaumeeb
 .. _`Vladyslav Moisieienkov`: https://github.com/VMois
 .. _`Chris White`: https://github.com/cicdw
+.. _`Adam Klein`: https://github.com/adamklein
+.. _`Mike Gevaert`: https://github.com/mgeplf
