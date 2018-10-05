@@ -11,6 +11,7 @@ Dataframe
    dataframe-design.rst
    dataframe-groupby.rst
    dataframe-indexing.rst
+   dataframe-extend.rst
 
 A Dask DataFrame is a large parallel dataframe composed of many smaller Pandas
 dataframes, split along the index.  These pandas dataframes may live on disk
