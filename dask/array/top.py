@@ -632,7 +632,9 @@ def rewrite_atop(inputs):
                     for inp in inputs.values()}
     dependents = core.reverse_dict(dependencies)
 
-    new_index_iter = iter('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+    new_index_iter = (c + (str(d) if d else '')
+                      for d in itertools.count()
+                      for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
 
     [root] = [k for k, v in dependents.items() if not v]
 
