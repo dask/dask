@@ -1,29 +1,59 @@
 Changelog
 =========
 
-X.XX.X / YYYY-MM-DD
+0.19.3 / 2018-10-05
 -------------------
 
 Array
 +++++
 
--
+-   Make da.RandomState extensible to other modules (:pr:`4041`) `Matthew Rocklin`_
+-   Support unknown dims in ravel no-op case (:pr:`4055`) `Jim Crist`_
+-   Add basic infrastructure for cupy (:pr:`4019`) `Matthew Rocklin`_
+-   Avoid asarray and lock arguments for from_array(getitem`) (:pr:`4044`) `Matthew Rocklin`_
+-   Move local imports in `corrcoef` to global imports (:pr:`4030`) `John A Kirkham`_
+-   Move local `indices` import to global import (:pr:`4029`) `John A Kirkham`_
+-   Fix-up Dask Array's fromfunction w.r.t. dtype and kwargs (:pr:`4028`) `John A Kirkham`_
+-   Don't use dummy expansion for trim_internal in overlapped (:pr:`3964`) `Mark Harfouche`_
+-   Add unravel_index (:pr:`3958`) `John A Kirkham`_
 
+Bag
++++
+
+-   Sort result in Bag.frequencies (:pr:`4033`) `Matthew Rocklin`_
+-   Add support for npartitions=1 edge case in groupby (:pr:`4050`) `James Bourbeau`_
+-   Add new random dataset for people (:pr:`4018`) `Matthew Rocklin`_
+-   Improve performance of bag.read_text on small files (:pr:`4013`) `Eric Wolak`_
+-   Add bag.read_avro (:pr:`4000`) (:pr:`4007`) `Martin Durant`_
 
 Dataframe
 +++++++++
 
-- Added an `index` parameter to :meth:`dask.dataframe.from_dask_array` for creating a dask DataFrame from a dask Array with a given index.
+-   Added an ``index`` parameter to :meth:`dask.dataframe.from_dask_array` for creating a dask DataFrame from a dask Array with a given index. (:pr:`3991`) `Tom Augspurger`_
+-   Improve sub-classability of dask dataframe (:pr:`4015`) `Matthew Rocklin`_
+-   Fix failing hdfs test [test-hdfs] (:pr:`4046`) `Jim Crist`_
+-   fuse_subgraphs works without normal fuse (:pr:`4042`) `Jim Crist`_
+-   Make path for reading many parquet files without prescan (:pr:`3978`) `Martin Durant`_
+-   Index in dd.from_dask_array (:pr:`3991`) `Tom Augspurger`_
+-   Making skiprows accept lists (:pr:`3975`) `Julia Signell`_
+-   Fail early in fastparquet read for nonexistent column (:pr:`3989`) `Martin Durant`_
 
 Core
 ++++
 
--
+-   Add support for npartitions=1 edge case in groupby (:pr:`4050`) `James Bourbeau`_
+-   Automatically wrap large arguments with dask.delayed in map_blocks/partitions (:pr:`4002`) `Matthew Rocklin`_
+-   Fuse linear chains of subgraphs (:pr:`3979`) `Jim Crist`_
+-   Make multiprocessing context configurable (:pr:`3763`) `Itamar Turner-Trauring`_
 
 Documentation
 +++++++++++++
 
--
+-   Extensive copy-editing  (:pr:`4049`), (:pr:`4034`),  (:pr:`4031`), (:pr:`4020`), (:pr:`4021`), (:pr:`4022`), (:pr:`4023`), (:pr:`4016`), (:pr:`4017`), (:pr:`4010`), (:pr:`3997`), (:pr:`3996`), `Miguel Farrajota`_
+-   Update shuffle method selection docs [skip ci] (:pr:`4048`) `James Bourbeau`_
+-   Remove docs/source/examples, point to examples.dask.org (:pr:`4014`) `Matthew Rocklin`_
+-   Replace readthedocs links with dask.org (:pr:`4008`) `Matthew Rocklin`_
+-   Updates DataFrame.to_hdf docstring for returned values [skip ci] (:pr:`3992`) `James Bourbeau`_
 
 
 0.19.2 / 2018-09-17
@@ -1405,7 +1435,6 @@ Other
 .. _`Mark Harfouche`: https://github.com/hmaarrfk
 .. _`George Sakkis`: https://github.com/gsakkis
 .. _`Ziyao Wei`: https://github.com/ZiyaoWei
-.. _`Itamar Turner-Trauring`: https://github.com/itamarst
 .. _`Jacob Tomlinson`: https://github.com/jacobtomlinson
 .. _`Elliott Sales de Andrade`: https://github.com/QuLogic
 .. _`Gerome Pistre`: https://github.com/GPistre
@@ -1429,3 +1458,5 @@ Other
 .. _`Joe Hamman`: https://github.com/jhamman
 .. _`Robert Sare`: https://github.com/rmsare
 .. _`Jeremy Chan`: https://github.com/convexset
+.. _`Eric Wolak`: https://github.com/epall
+.. _`Miguel Farrajota`: https://github.com/farrajota
