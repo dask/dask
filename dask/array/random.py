@@ -292,6 +292,15 @@ class RandomState(object):
         return self._wrap('multinomial', n, pvals, size=size, chunks=chunks,
                           extra_chunks=((len(pvals),),))
 
+    @doc_wraps(np.random.RandomState.multivariate_normal)
+    def multivariate_normal(self, mean, cov, size=None, check_valid='warn',
+                            tol=1e-8, chunks=None):
+        return self._wrap(
+            'multivariate_normal',
+            mean, cov=cov, size=size, check_valid=check_valid, tol=tol,
+            chunks=chunks, extra_chunks=(len(mean),)
+        )
+
     @doc_wraps(np.random.RandomState.negative_binomial)
     def negative_binomial(self, n, p, size=None, chunks=None):
         return self._wrap('negative_binomial', n, p, size=size, chunks=chunks)
