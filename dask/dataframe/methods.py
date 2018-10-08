@@ -121,7 +121,7 @@ def describe_aggregate(values):
     typ = pd.DataFrame if isinstance(count, pd.Series) else pd.Series
     part1 = typ([count, mean, std, min],
                 index=['count', 'mean', 'std', 'min'])
-    q.index = ['{0:g}%'.format(l*100) for l in q.index.tolist()]
+    q.index = ['{0:g}%'.format(l * 100) for l in q.index.tolist()]
     part3 = typ([max], index=['max'])
     return pd.concat([part1, q, part3])
 
