@@ -115,7 +115,7 @@ class RandomState(object):
 
         small_kwargs = {}
         for key, ar in kwargs.items():
-            if isinstance(ar, (np.ndarray, Array)):
+            if key != 'cov' and isinstance(ar, (np.ndarray, Array)):
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
                     dsks.append(res.dask)
@@ -298,7 +298,7 @@ class RandomState(object):
         return self._wrap(
             'multivariate_normal',
             mean, cov=cov, size=size, check_valid=check_valid, tol=tol,
-            chunks=chunks, extra_chunks=(len(mean),)
+            chunks=chunks, extra_chunks=((len(mean),),)
         )
 
     @doc_wraps(np.random.RandomState.negative_binomial)
