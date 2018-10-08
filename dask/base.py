@@ -856,6 +856,8 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     if scheduler is not None:
         if callable(scheduler):
             return scheduler
+        elif "Client" in type(scheduler).__name__ and hasattr(scheduler, 'get'):
+            return scheduler.get
         elif scheduler.lower() in named_schedulers:
             return named_schedulers[scheduler.lower()]
         elif scheduler.lower() in ('dask.distributed', 'distributed'):

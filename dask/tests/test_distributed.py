@@ -176,3 +176,11 @@ def test_zarr_in_memory_distributed_err(loop):
                 a = da.ones((3, 3), chunks=c)
                 z = zarr.zeros_like(a, chunks=c)
                 a.to_zarr(z)
+
+
+def test_scheduler_equals_client(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s['address'], loop=loop) as client:
+            x = delayed(lambda: 1)()
+            assert x.compute(scheduler=client) == 1
+            assert client.run_on_scheduler(lambda dask_scheduler: dask_scheduler.story(x.key))
