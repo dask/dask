@@ -352,8 +352,8 @@ resources.  They contact these users and teach them how to launch_ their own
 dask.distributed clusters using the traditional job scheduler on their cluster,
 making space for more new users in the sandbox allocation.
 
-.. _`dask.distributed quickstart`: https://distributed.readthedocs.io/en/latest/quickstart.html
-.. _launch: https://distributed.readthedocs.io/en/latest/setup.html
+.. _`dask.distributed quickstart`: https://distributed.dask.org/en/latest/quickstart.html
+.. _launch: https://distributed.dask.org/en/latest/setup.html
 
 
 Financial Modeling Team
@@ -398,7 +398,7 @@ produce a rudimentary but effective stream processing system.
 Because dask.distributed is elastic, they can scale up or scale down their
 cluster resources in response to demand.
 
-.. _`combine dask.distributed with normal Python Queues`: https://distributed.readthedocs.io/en/latest/queues.html
+.. _`combine dask.distributed with normal Python Queues`: https://distributed.dask.org/en/latest/queues.html
 
 .. _Joblib: https://pythonhosted.org/joblib/parallel.html
-.. _dask.distributed: https://distributed.readthedocs.io/en/latest/
+.. _dask.distributed: https://distributed.dask.org/en/latest/

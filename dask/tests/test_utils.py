@@ -51,7 +51,12 @@ def test_dispatch():
     foo.register(int, lambda a: a + 1)
     foo.register(float, lambda a: a - 1)
     foo.register(tuple, lambda a: tuple(foo(i) for i in a))
-    foo.register(object, lambda a: a)
+
+    def f(a):
+        """ My Docstring """
+        return a
+
+    foo.register(object, f)
 
     class Bar(object):
         pass
@@ -61,6 +66,24 @@ def test_dispatch():
     assert foo(1.0) == 0.0
     assert foo(b) == b
     assert foo((1, 2.0, b)) == (2, 1.0, b)
+
+    assert foo.__doc__ == f.__doc__
+
+
+def test_dispatch_kwargs():
+    foo = Dispatch()
+    foo.register(int, lambda a, b=10: a + b)
+
+    assert foo(1, b=20) == 21
+
+
+def test_dispatch_variadic_on_first_argument():
+    foo = Dispatch()
+    foo.register(int, lambda a, b: a + b)
+    foo.register(float, lambda a, b: a - b)
+
+    assert foo(1, 2) == 3
+    assert foo(1., 2.) == -1
 
 
 def test_dispatch_lazy():

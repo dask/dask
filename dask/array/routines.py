@@ -16,10 +16,10 @@ from ..core import flatten
 from ..base import tokenize
 from ..utils import funcname
 from . import chunk
-from .creation import arange, empty
+from .creation import arange, diag, empty, indices
 from .utils import safe_wraps, validate_axis
 from .wrap import ones
-from .ufunc import multiply
+from .ufunc import multiply, sqrt
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    asanyarray, concatenate, stack, atop, broadcast_shapes,
@@ -715,10 +715,6 @@ def cov(m, y=None, rowvar=1, bias=0, ddof=None):
 
 @wraps(np.corrcoef)
 def corrcoef(x, y=None, rowvar=1):
-
-    from .ufunc import sqrt
-    from .creation import diag
-
     c = cov(x, y, rowvar)
     if c.shape == ():
         return c / c
@@ -1123,8 +1119,6 @@ def isnonzero(a):
 
 @wraps(np.argwhere)
 def argwhere(a):
-    from .creation import indices
-
     a = asarray(a)
 
     nz = isnonzero(a).flatten()

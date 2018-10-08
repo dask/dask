@@ -41,9 +41,10 @@ from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
 from ..compatibility import (unicode, zip_longest, apply,
                              Iterable, Iterator, Mapping)
 from ..core import quote
-from ..delayed import Delayed, to_task_dask
+from ..delayed import delayed, Delayed, to_task_dask
 from .. import threaded, core
 from .. import sharedict
+from ..sizeof import sizeof
 from ..sharedict import ShareDict
 from .numpy_compat import _Recurser
 from ..bytes.core import get_mapper, get_fs_token_paths
@@ -59,6 +60,14 @@ concatenate_lookup = Dispatch('concatenate')
 tensordot_lookup = Dispatch('tensordot')
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
+
+
+@tensordot_lookup.register_lazy('cupy')
+@concatenate_lookup.register_lazy('cupy')
+def register_cupy():
+    import cupy
+    concatenate_lookup.register(cupy.ndarray, cupy.concatenate)
+    tensordot_lookup.register(cupy.ndarray, cupy.tensordot)
 
 
 @tensordot_lookup.register_lazy('sparse')
@@ -182,7 +191,7 @@ def getem(arr, chunks, getitem=getter, shape=None, out_name=None, lock=False,
     keys = list(product([out_name], *[range(len(bds)) for bds in chunks]))
     slices = slices_from_chunks(chunks)
 
-    if not asarray or lock:
+    if getitem is not operator.getitem and (not asarray or lock):
         values = [(getitem, arr, x, asarray, lock) for x in slices]
     else:
         # Common case, drop extra parameters
@@ -613,7 +622,7 @@ def map_blocks(func, *args, **kwargs):
     ----------
     func : callable
         Function to apply to every block in the array.
-    args : dask arrays or constants
+    args : dask arrays or other objects
     dtype : np.dtype, optional
         The ``dtype`` of the output array. It is recommended to provide this.
         If not provided, will be inferred by applying the function to a small
@@ -753,7 +762,6 @@ def map_blocks(func, *args, **kwargs):
                 else (a, None)
                 for a in args]
     numblocks = {a.name: a.numblocks for a in arrs}
-    arginds = list(concat(argpairs))
     out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
 
     if has_keyword(func, 'block_id'):
@@ -761,8 +769,13 @@ def map_blocks(func, *args, **kwargs):
     if has_keyword(func, 'block_info'):
         kwargs['block_info'] = '__dummy__'
 
+    kwargs2 = {k: delayed(v) if not is_dask_collection(v) and sizeof(v) > 1e6 else v
+               for k, v in kwargs.items()}
+    arginds = list(concat([(delayed(x) if not is_dask_collection(x) and
+                            sizeof(x) > 1e6 and ind is None else x, ind)
+                           for x, ind in argpairs]))
     dsk = top(func, name, out_ind, *arginds, numblocks=numblocks,
-              **kwargs)
+              **kwargs2)
 
     # If func has block_id as an argument, add it to the kwargs for each call
     if has_keyword(func, 'block_id'):
@@ -1096,7 +1109,7 @@ You must specify a chunks= keyword argument.
 This specifies the chunksize of your array blocks.
 
 See the following documentation page for details:
-  http://dask.pydata.org/en/latest/array-creation.html#chunks
+  https://docs.dask.org/en/latest/array-creation.html#chunks
 """.strip()
 
 
@@ -2025,7 +2038,6 @@ class Array(DaskMethodsMixin):
         --------
         dask.array.from_delayed
         """
-        from ..delayed import Delayed
         keys = self.__dask_keys__()
         dsk = self.__dask_graph__()
         if optimize_graph:
@@ -2385,7 +2397,7 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
         dsk = {(name, ) + (0, ) * x.ndim: x}
     else:
         if getitem is None:
-            if type(x) is np.ndarray:
+            if type(x) is np.ndarray and not lock:
                 # simpler and cleaner, but missing all the nuances of getter
                 getitem = operator.getitem
             elif fancy:
@@ -2853,13 +2865,17 @@ def atop(func, out_ind, *args, **kwargs):
                              % (ind, arg.ndim))
 
     numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
-    argindsstr = list(concat([(a if ind is None else a.name, ind) for a, ind in arginds]))
+    argindsstr = list(concat([((delayed(a) if not is_dask_collection(a) and sizeof(a) > 1e6 else a)
+                               if ind is None else a.name, ind)
+                              for a, ind in arginds]))
     # Finish up the name
     if not out:
         out = '%s-%s' % (token or funcname(func).strip('_'),
                          tokenize(func, out_ind, argindsstr, dtype, **kwargs))
 
-    dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs)
+    kwargs2 = {k: delayed(v) if not is_dask_collection(v) and sizeof(v) > 1e6 else v
+               for k, v in kwargs.items()}
+    dsk = top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs2)
     dsks = [a.dask for a, ind in arginds if ind is not None]
 
     chunks = [chunkss[i] for i in out_ind]

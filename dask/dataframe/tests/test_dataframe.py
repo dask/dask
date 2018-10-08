@@ -3266,3 +3266,16 @@ def test_dask_dataframe_holds_scipy_sparse_containers():
     vs = y.to_delayed().flatten().tolist()
     values = dask.compute(*vs, scheduler='single-threaded')
     assert all(isinstance(v, sparse.csr_matrix) for v in values)
+
+
+def test_map_partitions_delays_large_inputs():
+    df = pd.DataFrame({'x': [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    big = np.ones(1000000)
+
+    b = ddf.map_partitions(lambda x, y: x, y=big)
+    assert any(big is v for v in b.dask.values())
+
+    a = ddf.map_partitions(lambda x, y: x, big)
+    assert any(big is v for v in a.dask.values())

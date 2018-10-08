@@ -20,7 +20,7 @@ except ImportError:
 from .. import array as da
 from .. import core
 
-from ..utils import partial_by_order
+from ..utils import partial_by_order, Dispatch
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method, string_types, Iterator
 from ..context import globalmethod
@@ -29,7 +29,8 @@ from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      is_arraylike)
 from ..array import Array
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
-from ..delayed import Delayed, to_task_dask
+from ..sizeof import sizeof
+from ..delayed import delayed, Delayed, to_task_dask
 
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
@@ -56,7 +57,7 @@ def _concat(args):
         return args
     if isinstance(first(core.flatten(args)), np.ndarray):
         return da.core.concatenate3(args)
-    if not isinstance(args[0], (pd.DataFrame, pd.Series, pd.Index)):
+    if not isinstance(args[0], parallel_types()):
         try:
             return pd.Series(args)
         except Exception:
@@ -67,40 +68,6 @@ def _concat(args):
     # this seems easier. TODO: don't do this.
     args2 = [i for i in args if len(i)]
     return args[0] if not args2 else methods.concat(args2, uniform=True)
-
-
-def _get_return_type(meta):
-    if isinstance(meta, _Frame):
-        meta = meta._meta
-
-    if isinstance(meta, pd.Series):
-        return Series
-    elif isinstance(meta, pd.DataFrame):
-        return DataFrame
-    elif isinstance(meta, pd.Index):
-        return Index
-    return Scalar
-
-
-def new_dd_object(dsk, name, meta, divisions):
-    """Generic constructor for dask.dataframe objects.
-
-    Decides the appropriate output class based on the type of `meta` provided.
-    """
-    if isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)):
-        return _get_return_type(meta)(dsk, name, meta, divisions)
-    elif is_arraylike(meta):
-        import dask.array as da
-        chunks = (((np.nan,) * (len(divisions) - 1),) +
-                  tuple((d,) for d in meta.shape[1:]))
-        if len(chunks) > 1:
-            dsk = dsk.copy()
-            suffix = (0,) * (len(chunks) - 1)
-            for i in range(len(chunks[0])):
-                dsk[(name, i) + suffix] = dsk.pop((name, i))
-        return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
-    else:
-        return _get_return_type(meta)(dsk, name, meta, divisions)
 
 
 def finalize(results):
@@ -219,7 +186,7 @@ def _scalar_binary(op, self, other, inv=False):
     name = '{0}-{1}'.format(funcname(op), tokenize(self, other))
 
     dsk = self.dask
-    return_type = _get_return_type(other)
+    return_type = get_parallel_type(other)
 
     if isinstance(other, Scalar):
         dsk = merge(dsk, other.dask)
@@ -401,12 +368,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @property
     def index(self):
         """Return dask Index instance"""
-        name = self._name + '-index'
-        dsk = {(name, i): (getattr, key, 'index')
-               for i, key in enumerate(self.__dask_keys__())}
-
-        return Index(merge(dsk, self.dask), name,
-                     self._meta.index, self.divisions)
+        return self.map_partitions(getattr, 'index', token=self._name + '-index')
 
     def reset_index(self, drop=False):
         """Reset the index to the default index.
@@ -2612,7 +2574,7 @@ class DataFrame(_Frame):
             Defaults to False
         divisions: list, optional
             Known values on which to separate index values of the partitions.
-            See http://dask.pydata.org/en/latest/dataframe-design.html#partitions
+            See https://docs.dask.org/en/latest/dataframe-design.html#partitions
             Defaults to computing this with a single pass over the data. Note
             that if ``sorted=True``, specified divisions are assumed to match
             the existing partitions in the data. If this is untrue, you should
@@ -3598,17 +3560,20 @@ def map_partitions(func, *args, **kwargs):
     $META
     """
     meta = kwargs.pop('meta', no_default)
+    name = kwargs.pop('token', None)
 
     if meta is not no_default:
         meta = make_meta(meta)
 
+    kwargs2 = {k: delayed(v) if not is_dask_collection(v) and sizeof(v) > 1e6 else v
+               for k, v in kwargs.items()}
+
     assert callable(func)
-    if 'token' in kwargs:
-        name = kwargs.pop('token')
-        token = tokenize(meta, *args, **kwargs)
+    if name is not None:
+        token = tokenize(meta, *args, **kwargs2)
     else:
         name = funcname(func)
-        token = tokenize(func, meta, *args, **kwargs)
+        token = tokenize(func, meta, *args, **kwargs2)
     name = '{0}-{1}'.format(name, token)
 
     from .multi import _maybe_align_partitions
@@ -3616,20 +3581,23 @@ def map_partitions(func, *args, **kwargs):
     args = _maybe_align_partitions(args)
 
     if meta is no_default:
-        meta = _emulate(func, *args, udf=True, **kwargs)
+        meta = _emulate(func, *args, udf=True, **kwargs2)
 
     if all(isinstance(arg, Scalar) for arg in args):
         dask = {(name, 0):
                 (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)}
         return Scalar(merge(dask, *[arg.dask for arg in args]), name, meta)
-    elif not (isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)) or is_arraylike(meta)):
+    elif not (isinstance(meta, parallel_types()) or is_arraylike(meta)):
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
         meta = _concat([meta])
     meta = make_meta(meta)
 
+    args = [delayed(arg) if not is_dask_collection(arg) and sizeof(arg) > 1e6
+            else arg for arg in args]
+
     args, args_dasks = _process_lazy_args(args)
-    kwargs_task, kwargs_dsk = to_task_dask(kwargs)
+    kwargs_task, kwargs_dsk = to_task_dask(kwargs2)
     args_dasks.append(kwargs_dsk)
 
     dfs = [df for df in args if isinstance(df, _Frame)]
@@ -4408,3 +4376,57 @@ def _repr_data_series(s, index):
     else:
         dtype = str(s.dtype)
     return pd.Series([dtype] + ['...'] * npartitions, index=index, name=s.name)
+
+
+get_parallel_type = Dispatch('get_parallel_type')
+
+
+@get_parallel_type.register(pd.Series)
+def get_parallel_type_series(_):
+    return Series
+
+
+@get_parallel_type.register(pd.DataFrame)
+def get_parallel_type_dataframe(_):
+    return DataFrame
+
+
+@get_parallel_type.register(pd.Index)
+def get_parallel_type_index(_):
+    return Index
+
+
+@get_parallel_type.register(object)
+def get_parallel_type_object(o):
+    return Scalar
+
+
+@get_parallel_type.register(_Frame)
+def get_parallel_type_frame(o):
+    return get_parallel_type(o._meta)
+
+
+def parallel_types():
+    return tuple(k for k, v in get_parallel_type._lookup.items()
+                 if v is not get_parallel_type_object)
+
+
+def new_dd_object(dsk, name, meta, divisions):
+    """Generic constructor for dask.dataframe objects.
+
+    Decides the appropriate output class based on the type of `meta` provided.
+    """
+    if isinstance(meta, parallel_types()):
+        return get_parallel_type(meta)(dsk, name, meta, divisions)
+    elif is_arraylike(meta):
+        import dask.array as da
+        chunks = (((np.nan,) * (len(divisions) - 1),) +
+                  tuple((d,) for d in meta.shape[1:]))
+        if len(chunks) > 1:
+            dsk = dsk.copy()
+            suffix = (0,) * (len(chunks) - 1)
+            for i in range(len(chunks[0])):
+                dsk[(name, i) + suffix] = dsk.pop((name, i))
+        return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
+    else:
+        return get_parallel_type(meta)(dsk, name, meta, divisions)

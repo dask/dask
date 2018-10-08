@@ -67,7 +67,7 @@ documentation <scheduling-configuration>`.
 This only works for single-machine schedulers.  It does not work with
 dask.distributed unless you are comfortable using the Tornado API (look at the
 `testing infrastructure
-<http://distributed.readthedocs.io/en/latest/develop.html#writing-tests>`_
+<https://distributed.dask.org/en/latest/develop.html#writing-tests>`_
 docs, which accomplish this).  Also, because this operates on a single machine
 it assumes that your computation can run on a single machine without exceeding
 memory limits.  It may be wise to use this approach on smaller versions of your
@@ -149,14 +149,14 @@ both failures and general performance bottlenecks.
 For the single-machine scheduler see :doc:`diagnostics
 <understanding-performance>` documentation.  The rest of the section will
 assume that you are using the `distributed scheduler
-<http://distributed.readthedocs.io/en/latest/>`_ where these issues arise more
+<https://distributed.dask.org/en/latest/>`_ where these issues arise more
 commonly.
 
 Web Diagnostics
 ~~~~~~~~~~~~~~~
 
 First, the distributed scheduler has a number of `diagnostic web pages
-<http://distributed.readthedocs.io/en/latest/web.html>`_ showing dozens of
+<https://distributed.dask.org/en/latest/web.html>`_ showing dozens of
 recorded metrics like CPU, memory, network, and disk use, a history of previous
 tasks, allocation of tasks to workers, worker memory pressure, work stealing,
 open file handle limits, etc..  *Many* problems can be correctly diagnosed by
@@ -164,7 +164,7 @@ inspecting these pages.  By default these are available at
 ``http://scheduler:8787/`` ``http://scheduler:8788/`` and ``http://worker:8789/``
 where ``scheduler`` and ``worker`` should be replaced by the addresses of the
 scheduler and each of the workers. See `web diagnostic docs
-<http://distributed.readthedocs.io/en/latest/web.html>`_ for more information.
+<https://distributed.dask.org/en/latest/web.html>`_ for more information.
 
 Logs
 ~~~~
@@ -198,7 +198,7 @@ LocalCluster
 
 If you are using the distributed scheduler from a single machine you may be
 setting up workers manually using the command line interface or you may be
-using `LocalCluster <http://distributed.readthedocs.io/en/latest/local-cluster.html>`_
+using `LocalCluster <https://distributed.dask.org/en/latest/local-cluster.html>`_
 which is what runs when you just call ``Client()``
 
 .. code-block:: python
@@ -211,7 +211,7 @@ which is what runs when you just call ``Client()``
 
 LocalCluster is useful because the scheduler and workers are in the same
 process with you, so you can easily inspect their `state
-<http://distributed.readthedocs.io/en/latest/scheduling-state.html>`_ while
+<https://distributed.dask.org/en/latest/scheduling-state.html>`_ while
 they run (they are running in a separate thread).
 
 .. code-block:: python
@@ -246,4 +246,4 @@ machines, the tasks are still running in separate threads, and so are not
 easily accessible from an interactive IPython session.
 
 For more details, see the `Dask.distributed IPython docs
-<http://distributed.readthedocs.io/en/latest/ipython.html>`_.
+<https://distributed.dask.org/en/latest/ipython.html>`_.

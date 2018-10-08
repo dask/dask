@@ -51,16 +51,21 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
         index2 = index
 
     if divisions is None:
-        divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
         if repartition:
-            parts = df.to_delayed()
+            index2, df = base.optimize(index2, df)
+            parts = df.to_delayed(optimize_graph=False)
             sizes = [delayed(sizeof)(part) for part in parts]
         else:
+            index2, = base.optimize(index2)
             sizes = []
-        iparts = index2.to_delayed()
+
+        divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
+        iparts = index2.to_delayed(optimize_graph=False)
         mins = [ipart.min() for ipart in iparts]
         maxes = [ipart.max() for ipart in iparts]
-        divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes)
+        sizes, mins, maxes = base.optimize(sizes, mins, maxes)
+        divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes,
+                                                     optimize_graph=False)
         divisions = divisions.tolist()
 
         empty_dataframe_detected = pd.isnull(divisions).all()

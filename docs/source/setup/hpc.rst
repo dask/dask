@@ -21,11 +21,11 @@ Most of this page documents best practices to use Dask on an HPC cluster.  This
 is technical and aimed both at users with some experience deploying Dask and
 also system administrators.
 
-New users may instead prefer to start with one of the following projects, which
+New users may instead prefer to start with one of the following projects which
 provide easy high-level access to Dask using resource managers that are
 commonly deployed on HPC systems:
 
-1.  `dask-jobqueue <https://dask-jobqueue.readthedocs.io>`_ for use with PBS,
+1.  `dask-jobqueue <https://jobqueue.dask.org>`_ for use with PBS,
     SLURM, and SGE resource managers
 2.  `dask-drmaa <https://github.com/dask/dask-drmaa>`_ for use with any DRMAA
     compliant resource manager
@@ -47,17 +47,17 @@ They provide interfaces that look like the following:
    from dask.distributed import Client
    client = Client(cluster)    # Connect to that cluster
 
-We recommend reading the `dask-jobqueue documentation <https://dask-jobqueue.readthedocs.io>`_
-first to get a basic system running, and then returning this this documentation
+We recommend reading the `dask-jobqueue documentation <https://jobqueue.dask.org>`_
+first to get a basic system running and then returning to this documentation
 for fine-tuning.
 
 
 Using a Shared Network File System and a Job Scheduler
 ------------------------------------------------------
 
-.. note:: this section is not necessary if you use a tool like dask-jobqueue
+.. note:: This section is not necessary if you use a tool like dask-jobqueue.
 
-Some clusters benefit from a shared network file system (NFS) and can use this
+Some clusters benefit from a shared Network File System (NFS), and can use this
 to communicate the scheduler location to the workers::
 
    dask-scheduler --scheduler-file /path/to/scheduler.json  # writes address to file
@@ -71,9 +71,9 @@ to communicate the scheduler location to the workers::
 
 This can be particularly useful when deploying ``dask-scheduler`` and
 ``dask-worker`` processes using a job scheduler like
-``SGE/SLURM/Torque/etc..``  Here is an example using SGE's ``qsub`` command::
+SGE/SLURM/Torque/etc.  Here is an example using SGE's ``qsub`` command::
 
-    # Start a dask-scheduler somewhere and write connection information to file
+    # Start a dask-scheduler somewhere and write the connection information to a file
     qsub -b y /path/to/dask-scheduler --scheduler-file /home/$USER/scheduler.json
 
     # Start 100 dask-worker processes in an array job pointing to the same file
@@ -86,7 +86,7 @@ workers share a network file system.
 Using MPI
 ---------
 
-.. note:: this section is not necessary if you use a tool like dask-jobqueue
+.. note:: This section is not necessary if you use a tool like dask-jobqueue.
 
 You can launch a Dask network using ``mpirun`` or ``mpiexec`` and the
 ``dask-mpi`` command line executable.
@@ -101,9 +101,9 @@ You can launch a Dask network using ``mpirun`` or ``mpiexec`` and the
    client = Client(scheduler_file='/path/to/scheduler.json')
 
 This depends on the `mpi4py <http://mpi4py.readthedocs.io/>`_ library.  It only
-uses MPI to start the Dask cluster, and not for inter-node communication.  MPI
-implementations differ.  The use of ``mpirun --np 4`` is specific to the
-``mpich`` MPI implementation installed through conda and linked to mpi4py
+uses MPI to start the Dask cluster and not for inter-node communication. MPI implementations differ: the use 
+of ``mpirun --np 4`` is specific to the ``mpich`` MPI implementation installed 
+through conda and linked to mpi4py
 
 .. code-block:: bash
 
@@ -124,14 +124,14 @@ High Performance Network
 Many HPC systems have both standard Ethernet networks as well as
 high-performance networks capable of increased bandwidth.  You can instruct
 Dask to use the high-performance network interface by using the ``--interface``
-keyword to the ``dask-worker``, ``dask-scheduler``, or ``dask-mpi`` commands or
-the ``interface=`` keyword to the dask-jobqueue ``Cluster`` objects.
+keyword with the ``dask-worker``, ``dask-scheduler``, or ``dask-mpi`` commands or
+the ``interface=`` keyword with the dask-jobqueue ``Cluster`` objects:
 
 .. code-block:: bash
 
    mpirun --np 4 dask-mpi --scheduler-file /home/$USER/scheduler.json --interface ib0
 
-In the code example above we have assumed that your cluster has an Infiniband
+In the code example above, we have assumed that your cluster has an Infiniband
 network interface called ``ib0``. You can check this by asking your system
 administrator or by inspecting the output of ``ifconfig``
 
@@ -154,10 +154,10 @@ No Local Storage
 ----------------
 
 Users often exceed memory limits available to a specific Dask deployment.  In
-normal operation Dask spills excess data to disk.  However, in HPC systems the
+normal operation, Dask spills excess data to disk.  However, in HPC systems, the
 individual compute nodes often lack locally attached storage, preferring
 instead to store data in a robust high performance network storage solution.
-As a result when a Dask cluster starts to exceed memory limits its workers can
+As a result, when a Dask cluster starts to exceed memory limits, its workers can
 start making many small writes to the remote network file system.  This is both
 inefficient (small writes to a network file system are *much* slower than local
 storage for this use case) and potentially dangerous to the file system itself.
@@ -165,7 +165,7 @@ storage for this use case) and potentially dangerous to the file system itself.
 See `this page
 <http://distributed.readthedocs.io/en/latest/worker.html#memory-management>`_
 for more information on Dask's memory policies.  Consider changing the
-following values to your ``~/.config/dask/distributed.yaml`` file
+following values in your ``~/.config/dask/distributed.yaml`` file:
 
 .. code-block:: yaml
 
@@ -185,7 +185,7 @@ As a reminder, you can set the memory limit for a worker using the
 
    dask-mpi ... --memory-limit 10GB
 
-Alternatively if you *do* have local storage mounted on your compute nodes you
+Alternatively, if you *do* have local storage mounted on your compute nodes, you
 can point Dask workers to use a particular location in your filesystem using
 the ``--local-directory`` keyword::
 
@@ -197,25 +197,25 @@ Launch Many Small Jobs
 
 HPC job schedulers are optimized for large monolithic jobs with many nodes that
 all need to run as a group at the same time.  Dask jobs can be quite a bit more
-flexible, workers can come and go without strongly affecting the job.  So if we
-separate our job into many smaller jobs we can often get through the job
+flexible: workers can come and go without strongly affecting the job.  If we
+split our job into many smaller jobs, we can often get through the job
 scheduling queue much more quickly than a typical job.  This is particularly
 valuable when we want to get started right away and interact with a Jupyter
 notebook session rather than waiting for hours for a suitable allocation block
 to become free.
 
-So, to get a large cluster quickly we recommend allocating a dask-scheduler
+So, to get a large cluster quickly, we recommend allocating a dask-scheduler
 process on one node with a modest wall time (the intended time of your session)
 and then allocating many small single-node dask-worker jobs with shorter wall
 times (perhaps 30 minutes) that can easily squeeze into extra space in the job
-scheduler.  As you need more computation you can add more of these single-node
+scheduler.  As you need more computation, you can add more of these single-node
 jobs or let them expire.
 
 
 Use Dask to co-launch a Jupyter server
 --------------------------------------
 
-Dask can help you by launching other services alongside it.  For example you
+Dask can help you by launching other services alongside it.  For example, you
 can run a Jupyter notebook server on the machine running the ``dask-scheduler``
 process with the following commands
 

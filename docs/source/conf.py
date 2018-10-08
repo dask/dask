@@ -41,7 +41,7 @@ source_suffix = '.rst'
 #source_encoding = 'utf-8-sig'
 
 # The master toctree document.
-master_doc = 'docs'
+master_doc = 'index'
 html_extra_path = ['index.html']
 
 # General information about the project.
@@ -191,7 +191,7 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('docs', 'dask.tex', u'dask Documentation',
+  (master_doc, 'dask.tex', u'dask Documentation',
    u'Dask Development Team', 'manual'),
 ]
 
@@ -221,7 +221,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('docs', 'dask', u'dask Documentation',
+    (master_doc, 'dask', u'dask Documentation',
      [u'Dask Development Team'], 1)
 ]
 
@@ -235,7 +235,7 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('docs', 'Dask', u'dask Documentation',
+  (master_doc, 'Dask', u'dask Documentation',
    u'Dask Development Team', 'Dask', 'One line description of project.',
    'Miscellaneous'),
 ]
@@ -316,7 +316,20 @@ redirect_files = [
     ('diagnostics.html', 'diagnostics-local.html'),
     ('inspect.html', 'graphviz.html'),
     ('faq.html', 'https://stackoverflow.com/questions/tagged/dask?sort=frequent'),
+    ('examples-tutorials.html', 'https://examples.dask.org'),
+    ('examples/array-extend.html', 'https://examples.dask.org'),
+    ('examples/array-hdf5.html', 'https://examples.dask.org'),
+    ('examples/array-numpy.html', 'https://examples.dask.org'),
+    ('examples/array-random.html', 'https://examples.dask.org'),
+    ('examples/bag-json.html', 'https://examples.dask.org'),
+    ('examples/bag-word-count-hdfs.html', 'https://examples.dask.org'),
+    ('examples/dataframe-csv.html', 'https://examples.dask.org'),
+    ('examples/dataframe-hdf5.html', 'https://examples.dask.org'),
+    ('examples/delayed-array.html', 'https://examples.dask.org'),
+    ('examples/delayed-custom.html', 'https://examples.dask.org'),
+    ('docs.html', 'index.html'),
 ]
+
 
 
 redirect_template = """\

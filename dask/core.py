@@ -120,21 +120,31 @@ def _get_nonrecursive(d, x, maxdepth=1000):
             results.append(key)
 
 
-def _get_recursive(d, x):
+def _get_recursive(dsk, x, cache):
     # recursive, no cycle detection
     if isinstance(x, list):
-        return [_get_recursive(d, k) for k in x]
-    elif ishashable(x) and x in d:
-        return _get_recursive(d, d[x])
-    elif istask(x):
+        return [_get_recursive(dsk, k, cache) for k in x]
+
+    hashable = ishashable(x)
+    if hashable and x in cache:
+        return cache[x]
+    elif hashable and x in dsk:
+        res = cache[x] = _get_recursive(dsk, dsk[x], cache)
+        return res
+    elif type(x) is tuple and x and callable(x[0]):  # istask
         func, args = x[0], x[1:]
-        args2 = [_get_recursive(d, k) for k in args]
+        args2 = [_get_recursive(dsk, k, cache) for k in args]
         return func(*args2)
-    else:
-        return x
+    return x
 
 
-def get(d, x, recursive=False):
+def lists_to_tuples(res, keys):
+    if isinstance(keys, list):
+        return tuple(lists_to_tuples(r, k) for r, k in zip(res, keys))
+    return res
+
+
+def get(d, x, recursive=False, cache=None):
     """ Get value from Dask
 
     Examples
@@ -148,12 +158,18 @@ def get(d, x, recursive=False):
     >>> get(d, 'y')
     2
     """
-    _get = _get_recursive if recursive else _get_nonrecursive
+    for k in (flatten(x) if isinstance(x, list) else [x]):
+        if k not in d:
+            raise KeyError("{0} is not a key in the graph".format(k))
+    if recursive:
+        res = _get_recursive(d, x, cache or {})
+    else:
+        if cache is not None:
+            raise ValueError("Cache not supported")
+        res = _get_nonrecursive(d, x)
     if isinstance(x, list):
-        return tuple(get(d, k) for k in x)
-    elif x in d:
-        return _get(d, x)
-    raise KeyError("{0} is not a key in the graph".format(x))
+        return lists_to_tuples(res, x)
+    return res
 
 
 def get_dependencies(dsk, key=None, task=None, as_list=False):

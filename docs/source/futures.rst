@@ -9,7 +9,7 @@ provides some more flexibility in situations where the computations may evolve
 over time.
 
 These features depend on the second generation task scheduler found in
-`dask.distributed <https://distributed.readthedocs.org/en/latest>`_ (which,
+`dask.distributed <https://distributed.dask.org/en/latest>`_ (which,
 despite its name, runs very well on a single machine).
 
 .. currentmodule:: distributed

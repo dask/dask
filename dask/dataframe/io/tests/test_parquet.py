@@ -187,12 +187,13 @@ def test_read_glob(tmpdir, write_engine, read_engine):
 
     # Infer divisions for engines/versions that support it
 
-    ddf2 = dd.read_parquet(os.path.join(fn, '*'), engine=read_engine,
+    ddf2 = dd.read_parquet(os.path.join(fn, '*.parquet'), engine=read_engine,
                            infer_divisions=should_check_divs(write_engine) and should_check_divs(read_engine))
     assert_eq(ddf, ddf2, check_divisions=should_check_divs(write_engine) and should_check_divs(read_engine))
 
     # No divisions
-    ddf2_no_divs = dd.read_parquet(os.path.join(fn, '*'), engine=read_engine, infer_divisions=False)
+    ddf2_no_divs = dd.read_parquet(os.path.join(fn, '*.parquet'),
+                                   engine=read_engine, infer_divisions=False)
     assert_eq(ddf.clear_divisions(), ddf2_no_divs, check_divisions=True)
 
 
@@ -441,7 +442,8 @@ def test_optimize(tmpdir, c):
     assert_eq(df[c], ddf2[c])
     x = ddf2[c]
 
-    dsk = x.__dask_optimize__(x.dask, x.__dask_keys__())
+    with dask.config.set(fuse_rename_keys=False):
+        dsk = x.__dask_optimize__(x.dask, x.__dask_keys__())
     assert len(dsk) == x.npartitions
     assert all(v[4] == c for v in dsk.values())
 

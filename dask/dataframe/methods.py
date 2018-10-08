@@ -8,6 +8,7 @@ from pandas.api.types import is_categorical_dtype
 from toolz import partition
 
 from .utils import PANDAS_VERSION
+from ..utils import Dispatch
 if PANDAS_VERSION >= '0.20.0':
     from pandas.api.types import union_categoricals
 else:
@@ -222,6 +223,9 @@ else:
         return x._get_level_values(n)
 
 
+concat_dispatch = Dispatch('concat')
+
+
 def concat(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
     """Concatenate, handling some edge cases:
 
@@ -238,14 +242,21 @@ def concat(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
         True if all arguments have the same columns and dtypes (but not
         necessarily categories). Default is False.
     """
+    if len(dfs) == 1:
+        return dfs[0]
+    else:
+        func = concat_dispatch.dispatch(type(dfs[0]))
+        return func(dfs, axis=axis, join=join, uniform=uniform,
+                    filter_warning=filter_warning)
+
+
+@concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
     if axis == 1:
         with warnings.catch_warnings():
             if filter_warning:
                 warnings.simplefilter('ignore', FutureWarning)
             return pd.concat(dfs, axis=axis, join=join)
-
-    if len(dfs) == 1:
-        return dfs[0]
 
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):
