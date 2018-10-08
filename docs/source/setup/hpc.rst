@@ -37,7 +37,7 @@ They provide interfaces that look like the following:
    from dask_jobqueue import PBSCluster
 
    cluster = PBSCluster(cores=36,
-                        memory"100GB",
+                        memory="100GB",
                         project='P48500028',
                         queue='premium',
                         walltime='02:00:00')
