@@ -432,6 +432,7 @@ logistic = _state.logistic
 lognormal = _state.lognormal
 logseries = _state.logseries
 multinomial = _state.multinomial
+multivariate_normal = _state.multivariate_normal
 negative_binomial = _state.negative_binomial
 noncentral_chisquare = _state.noncentral_chisquare
 noncentral_f = _state.noncentral_f
