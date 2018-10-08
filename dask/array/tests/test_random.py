@@ -147,6 +147,14 @@ def test_random_all():
     da.random.lognormal(size=5, chunks=3).compute()
     da.random.logseries(0.5, size=5, chunks=3).compute()
     da.random.multinomial(20, [1 / 6.] * 6, size=5, chunks=3).compute()
+
+    cov = np.array([
+        [ 2.19,  1.96, -0.51],
+        [ 1.96,  3.69, -0.25],
+        [-0.51, -0.25,  0.23],
+    ])
+    da.random.multivariate_normal([1,2,3], cov, size=5, chunks=3).compute()
+
     da.random.negative_binomial(5, 0.5, size=5, chunks=3).compute()
     da.random.noncentral_chisquare(2, 2, size=5, chunks=3).compute()
 
