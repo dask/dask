@@ -2919,8 +2919,13 @@ def get_data_from_worker(rpc, keys, worker, who=None, max_connections=None,
                                    deserializers=deserializers,
                                    op='get_data', keys=keys, who=who,
                                    max_connections=max_connections)
-        if response['status'] == 'OK':
-            yield comm.write('OK')
+        try:
+            status = response['status']
+        except KeyError:
+            raise ValueError("Unexpected response", response)
+        else:
+            if status == 'OK':
+                yield comm.write('OK')
     finally:
         rpc.reuse(worker, comm)
 

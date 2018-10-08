@@ -8,6 +8,7 @@ from tornado import gen
 
 from distributed import Worker
 from distributed.client import wait
+from distributed.compatibility import WINDOWS
 from distributed.utils import tokey
 from distributed.utils_test import (inc, gen_cluster, slowinc, slowadd)
 from distributed.utils_test import client, cluster_fixture, loop, s, a, b  # noqa: F401
@@ -276,7 +277,7 @@ def test_full_collections(c, s, a, b):
 
 @pytest.mark.parametrize('optimize_graph', [
     pytest.mark.xfail(True, reason="don't track resources through optimization"),
-    False
+    pytest.mark.skipif(WINDOWS, False, reason="intermittent failure"),
 ])
 def test_collections_get(client, optimize_graph, s, a, b):
     da = pytest.importorskip('dask.array')
