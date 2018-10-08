@@ -271,6 +271,15 @@ class Future(WrappedKey):
         """
         return self.client.cancel([self], **kwargs)
 
+    def retry(self, **kwargs):
+        """ Retry this future if it has failed
+
+        See Also
+        --------
+        Client.retry
+        """
+        return self.client.retry([self], **kwargs)
+
     def cancelled(self):
         """ Returns True if the future has been cancelled """
         return self._state.status == 'cancelled'
@@ -400,6 +409,10 @@ class FutureState(object):
 
     def lose(self):
         self.status = 'lost'
+        self._get_event().clear()
+
+    def retry(self):
+        self.status = 'pending'
         self._get_event().clear()
 
     def set_error(self, exception, traceback):
@@ -588,6 +601,7 @@ class Client(Node):
             'key-in-memory': self._handle_key_in_memory,
             'lost-data': self._handle_lost_data,
             'cancelled-key': self._handle_cancelled_key,
+            'task-retried': self._handle_retried_key,
             'task-erred': self._handle_task_erred,
             'restart': self._handle_restart,
             'error': self._handle_error
@@ -1011,6 +1025,11 @@ class Client(Node):
         state = self.futures.get(key)
         if state is not None:
             state.cancel()
+
+    def _handle_retried_key(self, key=None):
+        state = self.futures.get(key)
+        if state is not None:
+            state.retry()
 
     def _handle_task_erred(self, key=None, exception=None, traceback=None):
         state = self.futures.get(key)
@@ -1830,6 +1849,24 @@ class Client(Node):
         """
         return self.sync(self._cancel, futures, asynchronous=asynchronous,
                          force=force)
+
+    @gen.coroutine
+    def _retry(self, futures):
+        keys = list({tokey(f.key) for f in futures_of(futures)})
+        response = yield self.scheduler.retry(keys=keys, client=self.id)
+        for key in response:
+            st = self.futures[key]
+            st.retry()
+
+    def retry(self, futures, asynchronous=None):
+        """
+        Retry failed futures
+
+        Parameters
+        ----------
+        futures: list of Futures
+        """
+        return self.sync(self._retry, futures, asynchronous=asynchronous)
 
     @gen.coroutine
     def _publish_dataset(self, *args, **kwargs):

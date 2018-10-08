@@ -31,6 +31,7 @@ API
    Client.rebalance
    Client.replicate
    Client.restart
+   Client.retry
    Client.run
    Client.run_on_scheduler
    Client.scatter
@@ -73,6 +74,7 @@ API
    Future.done
    Future.exception
    Future.result
+   Future.retry
    Future.traceback
 
 **Client Coordination**

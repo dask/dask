@@ -1356,15 +1356,17 @@ class Worker(WorkerBase):
         try:
             if key in self.tasks:
                 state = self.task_state[key]
-                if state in ('memory', 'error'):
-                    if state == 'memory':
-                        assert key in self.data or key in self.actors
+                if state == 'memory':
+                    assert key in self.data or key in self.actors
                     logger.debug("Asked to compute pre-existing result: %s: %s",
                                  key, state)
                     self.send_task_state_to_scheduler(key)
                     return
                 if state in IN_PLAY:
                     return
+                if state == 'erred':
+                    del self.exceptions[key]
+                    del self.tracebacks[key]
 
             if priority is not None:
                 priority = tuple(priority) + (self.generation,)

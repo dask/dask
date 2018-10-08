@@ -301,6 +301,8 @@ def check_rpc_message_lifetime(*listen_args):
         # If additional instances were created, they were deleted as well
         assert CountedObject.n_instances == 0
 
+    server.stop()
+
 
 @gen_test()
 def test_rpc_message_lifetime_default():
@@ -651,6 +653,8 @@ def test_rpc_serialization(loop):
         with rpc(server.address, serializers=['msgpack', 'pickle']) as r:
             result = yield r.echo(x=to_serialize(inc))
             assert result == {'result': inc}
+
+        server.stop()
 
     loop.run_sync(f)
 

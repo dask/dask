@@ -5387,5 +5387,60 @@ def test_map_large_kwargs_in_graph(c, s, a, b):
     assert any(k.startswith('ndarray') for k in s.tasks)
 
 
+@gen_cluster(client=True)
+def test_retry(c, s, a, b):
+    def f():
+        assert dask.config.get('foo')
+
+    with dask.config.set(foo=False):
+        future = c.submit(f)
+        with pytest.raises(AssertionError):
+            yield future
+
+    with dask.config.set(foo=True):
+        yield future.retry()
+        yield future
+
+
+@gen_cluster(client=True)
+def test_retry_dependencies(c, s, a, b):
+    def f():
+        return dask.config.get('foo')
+
+    x = c.submit(f)
+    y = c.submit(inc, x)
+
+    with pytest.raises(KeyError):
+        yield y
+
+    with dask.config.set(foo=100):
+        yield y.retry()
+        result = yield y
+        assert result == 101
+
+        yield y.retry()
+        yield x.retry()
+        result = yield y
+        assert result == 101
+
+
+@gen_cluster(client=True)
+def test_released_dependencies(c, s, a, b):
+    def f(x):
+        return dask.config.get('foo') + 1
+
+    x = c.submit(inc, 1, key='x')
+    y = c.submit(f, x, key='y')
+    del x
+
+    with pytest.raises(KeyError):
+        yield y
+
+    with dask.config.set(foo=100):
+        yield y.retry()
+        result = yield y
+        assert result == 101
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401
