@@ -515,5 +515,20 @@ def test_scale_retires_workers():
     yield cluster._close()
 
 
+def test_local_tls_restart(loop):
+    from distributed.utils_test import tls_only_security
+    security = tls_only_security()
+    with LocalCluster(n_workers=1, scheduler_port=8786, silence_logs=False, security=security,
+                      diagnostics_port=False, ip='tls://0.0.0.0', loop=loop) as c:
+        with Client(c.scheduler.address, loop=loop, security=security) as client:
+            print(c.workers, c.workers[0].address)
+            workers_before = set(client.scheduler_info()['workers'])
+            assert client.submit(inc, 1).result() == 2
+            client.restart()
+            workers_after = set(client.scheduler_info()['workers'])
+            assert client.submit(inc, 2).result() == 3
+            assert workers_before != workers_after
+
+
 if sys.version_info >= (3, 5):
     from distributed.deploy.tests.py3_test_deploy import *  # noqa F401

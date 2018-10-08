@@ -1018,15 +1018,30 @@ class Scheduler(ServerNode):
                          for worker in self.workers.values()}}
         return d
 
-    def get_worker_service_addr(self, worker, service_name):
+    def get_worker_service_addr(self, worker, service_name, protocol=False):
         """
         Get the (host, port) address of the named service on the *worker*.
         Returns None if the service doesn't exist.
+
+        Parameters
+        ----------
+        worker : address
+        service_name : str
+            Common services include 'bokeh' and 'nanny'
+        protocol : boolean
+            Whether or not to include a full address with protocol (True)
+            or just a (host, port) pair
         """
         ws = self.workers[worker]
         port = ws.services.get(service_name)
         if port is None:
             return None
+        elif protocol:
+            return '%(protocol)s://%(host)s:%(port)d' % {
+                'protocol': ws.address.split('://')[0],
+                'host': ws.host,
+                'port': port
+            }
         else:
             return ws.host, port
 
@@ -1191,7 +1206,7 @@ class Scheduler(ServerNode):
         logger.info("Closing worker %s", worker)
         with log_errors():
             self.log_event(worker, {'action': 'close-worker'})
-            nanny_addr = self.get_worker_service_addr(worker, 'nanny')
+            nanny_addr = self.get_worker_service_addr(worker, 'nanny', protocol=True)
             address = nanny_addr or worker
 
             self.worker_send(worker, {'op': 'close', 'report': False})
@@ -2290,7 +2305,7 @@ class Scheduler(ServerNode):
                 self.client_releases_keys(keys=[ts.key for ts in cs.wants_what],
                                           client=cs.client_key)
 
-            nannies = {addr: self.get_worker_service_addr(addr, 'nanny')
+            nannies = {addr: self.get_worker_service_addr(addr, 'nanny', protocol=True)
                        for addr in self.workers}
 
             for addr in list(self.workers):
@@ -2357,7 +2372,7 @@ class Scheduler(ServerNode):
         # TODO replace with worker_list
 
         if nanny:
-            addresses = [self.get_worker_service_addr(w, 'nanny')
+            addresses = [self.get_worker_service_addr(w, 'nanny', protocol=True)
                          for w in workers]
         else:
             addresses = workers
@@ -2369,7 +2384,7 @@ class Scheduler(ServerNode):
             resp = yield send_recv(comm, close=True, serializers=serializers, **msg)
             raise gen.Return(resp)
 
-        results = yield All([send_message(self.coerce_address(address))
+        results = yield All([send_message(address)
                              for address in addresses
                              if address is not None])
 
