@@ -43,7 +43,7 @@ def test_basic():
     h = [c for c in d['children'].values() if 'test_h' in str(c['description'])][0]
 
     assert g['count'] < h['count']
-    assert g['count'] + h['count'] == 100
+    assert 95 < g['count'] + h['count'] <= 100
 
 
 def test_merge():

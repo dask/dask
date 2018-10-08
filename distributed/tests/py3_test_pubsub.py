@@ -3,8 +3,10 @@ from distributed.utils_test import gen_cluster
 
 import toolz
 from tornado import gen
+import pytest
 
 
+@pytest.mark.xfail(reason="out of order execution")
 @gen_cluster(client=True)
 def test_basic(c, s, a, b):
     async def publish():
