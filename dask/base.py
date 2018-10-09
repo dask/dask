@@ -825,10 +825,13 @@ def warn_on_get(get):
     else:
         if get in named_schedulers.values():
             _warnned_on_get[0] = True
-            warnings.warn("The get= keyword has been deprecated. "
-                          "Please use the scheduler= keyword instead with the "
-                          "name of the desired scheduler "
-                          "like 'threads' or 'processes'")
+            warnings.warn(
+                "The get= keyword has been deprecated. "
+                "Please use the scheduler= keyword instead with the name of "
+                "the desired scheduler like 'threads' or 'processes'\n"
+                "    x.compute(scheduler='threads') \n"
+                "or with a function that takes the graph and keys\n"
+                "    x.compute(scheduler=my_scheduler_function)")
 
 
 def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
@@ -851,7 +854,11 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         return get
 
     if scheduler is not None:
-        if scheduler.lower() in named_schedulers:
+        if callable(scheduler):
+            return scheduler
+        elif "Client" in type(scheduler).__name__ and hasattr(scheduler, 'get'):
+            return scheduler.get
+        elif scheduler.lower() in named_schedulers:
             return named_schedulers[scheduler.lower()]
         elif scheduler.lower() in ('dask.distributed', 'distributed'):
             from distributed.worker import get_client
