@@ -693,8 +693,6 @@ class ConnectionPool(object):
                  serializers=None,
                  deserializers=None,
                  connection_args=None):
-        self.open = 0          # Total number of open comms
-        self.active = 0        # Number of comms currently in use
         self.limit = limit     # Max number of open comms
         # Invariant: len(available) == open - active
         self.available = defaultdict(set)
@@ -705,6 +703,14 @@ class ConnectionPool(object):
         self.deserializers = deserializers if deserializers is not None else serializers
         self.connection_args = connection_args
         self.event = Event()
+
+    @property
+    def active(self):
+        return sum(map(len, self.occupied.values()))
+
+    @property
+    def open(self):
+        return self.active + sum(map(len, self.available.values()))
 
     def __repr__(self):
         return "<ConnectionPool: open=%d, active=%d>" % (self.open,
@@ -727,26 +733,20 @@ class ConnectionPool(object):
         if available:
             comm = available.pop()
             if not comm.closed():
-                self.active += 1
                 occupied.add(comm)
                 raise gen.Return(comm)
-            else:
-                self.open -= 1
 
         while self.open >= self.limit:
             self.event.clear()
             self.collect()
             yield self.event.wait()
 
-        self.open += 1
         try:
             comm = yield connect(addr, timeout=timeout,
                                  deserialize=self.deserialize,
                                  connection_args=self.connection_args)
         except Exception:
-            self.open -= 1
             raise
-        self.active += 1
         occupied.add(comm)
 
         if self.open >= self.limit:
@@ -763,9 +763,7 @@ class ConnectionPool(object):
         except KeyError:
             pass
         else:
-            self.active -= 1
             if comm.closed():
-                self.open -= 1
                 if self.open < self.limit:
                     self.event.set()
             else:
@@ -781,7 +779,6 @@ class ConnectionPool(object):
             for comm in comms:
                 comm.close()
             comms.clear()
-        self.open = self.active
         if self.open < self.limit:
             self.event.set()
 
@@ -794,13 +791,10 @@ class ConnectionPool(object):
             comms = self.available.pop(addr)
             for comm in comms:
                 comm.close()
-                self.open -= 1
         if addr in self.occupied:
             comms = self.occupied.pop(addr)
             for comm in comms:
                 comm.close()
-                self.open -= 1
-                self.active -= 1
         if self.open < self.limit:
             self.event.set()
 
