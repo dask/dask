@@ -55,6 +55,7 @@ Dataframe
     DataFrame.ndim
     DataFrame.nlargest
     DataFrame.npartitions
+    DataFrame.partitions
     DataFrame.pow
     DataFrame.quantile
     DataFrame.query

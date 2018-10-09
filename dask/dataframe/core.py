@@ -20,7 +20,7 @@ except ImportError:
 from .. import array as da
 from .. import core
 
-from ..utils import partial_by_order, Dispatch
+from ..utils import partial_by_order, Dispatch, IndexCallable
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method, string_types, Iterator
 from ..context import globalmethod
@@ -896,9 +896,46 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         """ Purely label-location based indexer for selection by label.
 
         >>> df.loc["b"]  # doctest: +SKIP
-        >>> df.loc["b":"d"]  # doctest: +SKIP"""
+        >>> df.loc["b":"d"]  # doctest: +SKIP
+        """
         from .indexing import _LocIndexer
         return _LocIndexer(self)
+
+    def _partitions(self, index):
+        if not isinstance(index, tuple):
+            index = (index,)
+        from ..array.slicing import normalize_index
+        index = normalize_index(index, (self.npartitions,))
+        index = tuple(slice(k, k + 1) if isinstance(k, Number) else k
+                      for k in index)
+        name = 'blocks-' + tokenize(self, index)
+        new_keys = np.array(self.__dask_keys__(), dtype=object)[index].tolist()
+
+        divisions = [self.divisions[i] for _, i in new_keys] + [self.divisions[new_keys[-1][1] + 1]]
+        dsk = {(name, i): tuple(key) for i, key in enumerate(new_keys)}
+
+        return new_dd_object(merge(dsk, self.dask), name, self._meta, divisions)
+
+    @property
+    def partitions(self):
+        """ Slice dataframe by partitions
+
+        This allows partitionwise slicing of a Dask Dataframe.  You can perform normal
+        Numpy-style slicing but now rather than slice elements of the array you
+        slice along partitions so, for example, ``df.partitions[:5]`` produces a new
+        Dask Dataframe of the first five partitions.
+
+        Examples
+        --------
+        >>> df.partitions[0]  # doctest: +SKIP
+        >>> df.partitions[:3]  # doctest: +SKIP
+        >>> df.partitions[::10]  # doctest: +SKIP
+
+        Returns
+        -------
+        A Dask DataFrame
+        """
+        return IndexCallable(self._partitions)
 
     # Note: iloc is implemented only on DataFrame
 
