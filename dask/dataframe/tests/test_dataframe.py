@@ -288,6 +288,9 @@ def test_describe():
 
     assert_eq(s.describe(), ds.describe())
     assert_eq(df.describe(), ddf.describe())
+    test_quantiles = [0.25, 0.75]
+    assert_eq(df.describe(percentiles=test_quantiles),
+              ddf.describe(percentiles=test_quantiles))
     assert_eq(s.describe(), ds.describe(split_every=2))
     assert_eq(df.describe(), ddf.describe(split_every=2))
 
