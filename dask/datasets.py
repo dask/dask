@@ -135,8 +135,8 @@ def make_people(npartitions=10, records_per_partition=1000, seed=None, locale='e
         'telephone': field('person.telephone'),
         'address': {'address': field('address.address'),
                     'city': field('address.city')},
-        'credt-card': {'number': field('payment.credit_card_number'),
-                       'expiration-date': field('payment.credit_card_expiration_date')},
+        'credit-card': {'number': field('payment.credit_card_number'),
+                        'expiration-date': field('payment.credit_card_expiration_date')},
     }
 
     return _make_mimesis({'locale': locale}, schema, npartitions, records_per_partition, seed)
