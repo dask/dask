@@ -37,7 +37,7 @@ except ImportError:
     single_key = first
 from tornado import gen
 from tornado.gen import TimeoutError
-from tornado.locks import Event, Condition
+from tornado.locks import Event, Condition, Semaphore
 from tornado.ioloop import IOLoop
 from tornado.queues import Queue
 
@@ -551,6 +551,10 @@ class Client(Node):
             deserializers = serializers
         self._deserializers = deserializers
         self.direct_to_workers = direct_to_workers
+
+        self._gather_semaphore = Semaphore(5)
+        self._gather_keys = None
+        self._gather_future = None
 
         # Communication
         self.security = security or Security()
@@ -1500,19 +1504,18 @@ class Client(Node):
                              if k in local_worker.data})
                 keys = [k for k in keys if k not in data]
 
-            if direct or local_worker:  # gather directly from workers
-                who_has = yield self.scheduler.who_has(keys=keys)
-                data2, missing_keys, missing_workers = yield gather_from_workers(
-                    who_has, rpc=self.rpc, close=False)
-                response = {'status': 'OK', 'data': data2}
-                if missing_keys:
-                    keys2 = [key for key in keys if key not in data2]
-                    response = yield self.scheduler.gather(keys=keys2)
-                    if response['status'] == 'OK':
-                        response['data'].update(data2)
-
-            else:  # ask scheduler to gather data for us
-                response = yield self.scheduler.gather(keys=keys)
+            # We now do an actual remote communication with workers or scheduler
+            if self._gather_future:  # attach onto another pending gather request
+                self._gather_keys |= set(keys)
+                response = yield self._gather_future
+            else:                    # no one waiting, go ahead
+                self._gather_keys = set(keys)
+                future = self._gather_remote(direct, local_worker)
+                if self._gather_keys is None:
+                    self._gather_future = None
+                else:
+                    self._gather_future = future
+                response = yield future
 
             if response['status'] == 'error':
                 log = logger.warning if errors == 'raise' else logger.debug
@@ -1534,6 +1537,38 @@ class Client(Node):
         data.update(response['data'])
         result = pack_data(unpacked, merge(data, bad_data))
         raise gen.Return(result)
+
+    @gen.coroutine
+    def _gather_remote(self, direct, local_worker):
+        """ Perform gather with workers or scheduler
+
+        This method exists to limit and batch many concurrent gathers into a
+        few.  In controls access using a Tornado semaphore, and picks up keys
+        from other requests made recently.
+        """
+        yield self._gather_semaphore.acquire()
+        keys = list(self._gather_keys)
+        self._gather_keys = None  # clear state, these keys are being sent off
+        self._gather_future = None
+
+        try:
+            if direct or local_worker:  # gather directly from workers
+                who_has = yield self.scheduler.who_has(keys=keys)
+                data2, missing_keys, missing_workers = yield gather_from_workers(
+                    who_has, rpc=self.rpc, close=False)
+                response = {'status': 'OK', 'data': data2}
+                if missing_keys:
+                    keys2 = [key for key in keys if key not in data2]
+                    response = yield self.scheduler.gather(keys=keys2)
+                    if response['status'] == 'OK':
+                        response['data'].update(data2)
+
+            else:  # ask scheduler to gather data for us
+                response = yield self.scheduler.gather(keys=keys)
+        finally:
+            self._gather_semaphore.release()
+
+        raise gen.Return(response)
 
     def _threaded_gather(self, qin, qout, **kwargs):
         """ Internal function for gathering Queue """

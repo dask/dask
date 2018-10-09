@@ -527,6 +527,13 @@ def test_gather_skip(c, s, a):
     assert not sched.getvalue()
 
 
+@gen_cluster(client=True)
+def test_limit_concurrent_gathering(c, s, a, b):
+    futures = c.map(inc, range(100))
+    results = yield futures
+    assert len(a.outgoing_transfer_log) + len(b.outgoing_transfer_log) < 100
+
+
 @gen_cluster(client=True, timeout=None)
 def test_get(c, s, a, b):
     future = c.get({'x': (inc, 1)}, 'x', sync=False)
