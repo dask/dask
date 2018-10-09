@@ -86,23 +86,23 @@ def _validate_normalize_axes(axes, axis, keepdims, input_coredimss, output_cored
         raise ValueError("`axes` has to be of type list")
 
     output_coredimss = output_coredimss if nout > 1 else [output_coredimss]
-    _filtered_core_dims = list(filter(len, input_coredimss))
-    _nr_outputs_with_coredims = len([True for x in output_coredimss if len(x) > 0])
+    filtered_core_dims = list(filter(len, input_coredimss))
+    nr_outputs_with_coredims = len([True for x in output_coredimss if len(x) > 0])
 
     if keepdims:
-        if _nr_outputs_with_coredims > 0:
+        if nr_outputs_with_coredims > 0:
             raise ValueError("`keepdims` can only be used for scalar outputs")
-        output_coredimss = len(output_coredimss) * [_filtered_core_dims[0]]
+        output_coredimss = len(output_coredimss) * [filtered_core_dims[0]]
 
     core_dims = input_coredimss + output_coredimss
     if axis is not None:
         if not isinstance(axis, int):
             raise ValueError("`axis` argument has to be an integer value")
-        if _filtered_core_dims:
-            cd0 = _filtered_core_dims[0]
+        if filtered_core_dims:
+            cd0 = filtered_core_dims[0]
             if len(cd0) != 1:
                 raise ValueError("`axis` can be used only, if one core dimension is present")
-            for cd in _filtered_core_dims:
+            for cd in filtered_core_dims:
                 if cd0 != cd:
                     raise ValueError("To use `axis`, all core dimensions have to be equal")
 
@@ -116,8 +116,8 @@ def _validate_normalize_axes(axes, axis, keepdims, input_coredimss, output_cored
         raise ValueError("`axes` argument has to be a list")
     axes = [(a,) if isinstance(a, int) else a for a in axes]
 
-    if (((_nr_outputs_with_coredims == 0) and (nin != len(axes)) and (nin + nout != len(axes))) or
-            ((_nr_outputs_with_coredims > 0) and (nin + nout != len(axes)))):
+    if (((nr_outputs_with_coredims == 0) and (nin != len(axes)) and (nin + nout != len(axes))) or
+            ((nr_outputs_with_coredims > 0) and (nin + nout != len(axes)))):
         raise ValueError("The number of `axes` entries is not equal the number of input and output arguments")
 
     # Treat outputs
@@ -323,8 +323,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
     input_chunkss = [a.chunks for a in args]
     num_loopdims = [len(s) - len(cd) for s, cd in zip(input_shapes, input_coredimss)]
     max_loopdims = max(num_loopdims) if num_loopdims else None
-    _core_input_shapes = [dict(zip(icd, s[n:])) for s, n, icd in zip(input_shapes, num_loopdims, input_coredimss)]
-    core_shapes = merge(*_core_input_shapes)
+    core_input_shapes = [dict(zip(icd, s[n:])) for s, n, icd in zip(input_shapes, num_loopdims, input_coredimss)]
+    core_shapes = merge(*core_input_shapes)
     core_shapes.update(output_sizes)
 
     loop_input_dimss = [tuple("__loopdim%d__" % d for d in range(max_loopdims - n, max_loopdims)) for n in num_loopdims]
@@ -338,12 +338,12 @@ def apply_gufunc(func, signature, *args, **kwargs):
     chunksizess = {}
     for dims, shape, chunksizes in zip(input_dimss, input_shapes, input_chunkss):
         for dim, size, chunksize in zip(dims, shape, chunksizes):
-            _dimsizes = dimsizess.get(dim, [])
-            _dimsizes.append(size)
-            dimsizess[dim] = _dimsizes
-            _chunksizes = chunksizess.get(dim, [])
-            _chunksizes.append(chunksize)
-            chunksizess[dim] = _chunksizes
+            dimsizes = dimsizess.get(dim, [])
+            dimsizes.append(size)
+            dimsizess[dim] = dimsizes
+            chunksizes_ = chunksizess.get(dim, [])
+            chunksizes_.append(chunksize)
+            chunksizess[dim] = chunksizes_
     ### Assert correct partitioning, for case:
     for dim, sizes in dimsizess.items():
         #### Check that the arrays have same length for same dimensions or dimension `1`
@@ -377,8 +377,7 @@ significantly.".format(dim))
     loop_output_chunks = tmp.chunks
     dsk = tmp.__dask_graph__()
     keys = list(flatten(tmp.__dask_keys__()))
-    _anykey = keys[0]
-    name, token = _anykey[0].split('-')
+    name, token = keys[0][0].split('-')
 
     ### *) Treat direct output
     if nout is None:
