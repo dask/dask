@@ -13,9 +13,10 @@ from distributed import Scheduler, Worker, Client, config, default_client
 from distributed.core import rpc
 from distributed.metrics import time
 from distributed.utils_test import (cluster, gen_cluster, inc,
-                                    gen_test, wait_for_port, new_config,
-                                    tls_only_security)
-from distributed.utils_test import loop # noqa: F401
+                                    gen_test, wait_for_port, new_config)
+
+from distributed.utils_test import (loop, tls_only_security, # noqa: F401
+                                    security, tls_client, tls_cluster)
 from distributed.utils import get_ip
 
 
@@ -152,6 +153,18 @@ def test_lingering_client():
 def test_lingering_client(loop):
     with cluster() as (s, [a, b]):
         client = Client(s['address'], loop=loop)
+
+
+def test_tls_cluster(tls_client):
+    tls_client.submit(lambda x: x + 1, 10).result() == 11
+    assert tls_client.security
+
+
+def test_tls_scheduler(security, loop):
+    s = Scheduler(security=security, loop=loop)
+    s.start('localhost')
+    assert s.address.startswith('tls')
+    s.close()
 
 
 if sys.version_info >= (3, 5):

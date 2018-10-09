@@ -34,7 +34,7 @@ import pytest
 import six
 
 import dask
-from toolz import merge, memoize
+from toolz import merge, memoize, assoc
 from tornado import gen, queues
 from tornado.gen import TimeoutError
 from tornado.ioloop import IOLoop
@@ -573,6 +573,37 @@ def client_secondary(loop, cluster_fixture):
 
 
 @contextmanager
+def tls_cluster_context(worker_kwargs=None, scheduler_kwargs=None,
+                        security=None, **kwargs):
+    security = security or tls_only_security()
+    worker_kwargs = assoc(worker_kwargs or {}, 'security', security)
+    scheduler_kwargs = assoc(scheduler_kwargs or {}, 'security', security)
+
+    with cluster(worker_kwargs=worker_kwargs,
+                 scheduler_kwargs=scheduler_kwargs,
+                 **kwargs) as (s, workers):
+        yield s, workers
+
+
+@pytest.fixture
+def tls_cluster(loop, security):
+    with tls_cluster_context(security=security) as (scheduler, workers):
+        yield (scheduler, workers)
+
+
+@pytest.fixture
+def tls_client(tls_cluster, loop, security):
+    s, workers = tls_cluster
+    with Client(s['address'], security=security, loop=loop) as client:
+        yield client
+
+
+@pytest.fixture
+def security():
+    return tls_only_security()
+
+
+@contextmanager
 def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
             scheduler_kwargs={}):
     ws = weakref.WeakSet()
@@ -627,7 +658,13 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
 
             start = time()
             try:
-                with rpc(saddr) as s:
+                try:
+                    security = scheduler_kwargs['security']
+                    rpc_kwargs = {'connection_args': security.get_connection_args('client')}
+                except KeyError:
+                    rpc_kwargs = {}
+
+                with rpc(saddr, **rpc_kwargs) as s:
                     while True:
                         ncores = loop.run_sync(s.ncores)
                         if len(ncores) == nworkers:
@@ -643,8 +680,9 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
                 logger.debug("Closing out test cluster")
 
                 loop.run_sync(lambda: disconnect_all([w['address'] for w in workers],
-                                                     timeout=0.5))
-                loop.run_sync(lambda: disconnect(saddr, timeout=0.5))
+                                                     timeout=0.5,
+                                                     rpc_kwargs=rpc_kwargs))
+                loop.run_sync(lambda: disconnect(saddr, timeout=0.5, rpc_kwargs=rpc_kwargs))
 
                 scheduler.terminate()
                 scheduler_q.close()
@@ -684,11 +722,13 @@ def cluster(nworkers=2, nanny=False, worker_kwargs={}, active_rpc_timeout=1,
 
 
 @gen.coroutine
-def disconnect(addr, timeout=3):
+def disconnect(addr, timeout=3, rpc_kwargs=None):
+    rpc_kwargs = rpc_kwargs or {}
+
     @gen.coroutine
     def do_disconnect():
         with ignoring(EnvironmentError, CommClosedError):
-            with rpc(addr) as w:
+            with rpc(addr, **rpc_kwargs) as w:
                 yield w.terminate(close=True)
 
     with ignoring(TimeoutError):
@@ -696,8 +736,8 @@ def disconnect(addr, timeout=3):
 
 
 @gen.coroutine
-def disconnect_all(addresses, timeout=3):
-    yield [disconnect(addr, timeout) for addr in addresses]
+def disconnect_all(addresses, timeout=3, rpc_kwargs=None):
+    yield [disconnect(addr, timeout, rpc_kwargs) for addr in addresses]
 
 
 def slow(func):

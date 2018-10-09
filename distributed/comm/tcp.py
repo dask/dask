@@ -301,7 +301,8 @@ def _expect_tls_context(connection_args):
     ctx = connection_args.get('ssl_context')
     if not isinstance(ctx, ssl.SSLContext):
         raise TypeError("TLS expects a `ssl_context` argument of type "
-                        "ssl.SSLContext (perhaps check your TLS configuration?)")
+                        "ssl.SSLContext (perhaps check your TLS configuration?)"
+                        "  Instead got %s" % str(ctx))
     return ctx
 
 

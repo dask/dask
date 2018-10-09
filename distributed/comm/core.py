@@ -208,7 +208,15 @@ def listen(addr, handle_comm, deserialize=True, connection_args=None):
 
     *handle_comm* can be a regular function or a coroutine.
     """
-    scheme, loc = parse_address(addr)
+    try:
+        scheme, loc = parse_address(addr, strict=True)
+    except ValueError:
+        if connection_args and connection_args.get('ssl_context'):
+            addr = 'tls://' + addr
+        else:
+            addr = 'tcp://' + addr
+        scheme, loc = parse_address(addr, strict=True)
+
     backend = registry.get_backend(scheme)
 
     return backend.get_listener(loc, handle_comm, deserialize,
