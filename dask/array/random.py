@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from distutils.version import LooseVersion
 from itertools import product
 from numbers import Integral
 from operator import getitem
@@ -295,10 +296,15 @@ class RandomState(object):
     @doc_wraps(np.random.RandomState.multivariate_normal)
     def multivariate_normal(self, mean, cov, size=None, check_valid='warn',
                             tol=1e-8, chunks=None):
+        if LooseVersion(np.__version__) >= LooseVersion("1.13.0"):
+            kwargs = dict(check_valid=check_valid, tol=tol)
+        else:
+            kwargs = {}
         return self._wrap(
             'multivariate_normal',
-            mean, cov=cov, size=size, check_valid=check_valid, tol=tol,
-            chunks=chunks, extra_chunks=((len(mean),),)
+            mean, cov=cov, size=size,
+            chunks=chunks, extra_chunks=((len(mean),),),
+            **kwargs
         )
 
     @doc_wraps(np.random.RandomState.negative_binomial)
