@@ -811,7 +811,7 @@ def test_optimize_None():
         assert dsk == dict(y.dask)  # but they aren't
         return dask.get(dsk, keys)
 
-    with dask.config.set(array_optimize=None, get=my_get):
+    with dask.config.set(array_optimize=None, scheduler=my_get):
         y.compute()
 
 
@@ -856,3 +856,14 @@ def test_get_scheduler():
     with dask.config.set(scheduler='threads'):
         assert get_scheduler(scheduler='threads') is dask.threaded.get
     assert get_scheduler() is None
+
+
+def test_callable_scheduler():
+    called = [False]
+
+    def get(dsk, keys, *args, **kwargs):
+        called[0] = True
+        return dask.get(dsk, keys)
+
+    assert delayed(lambda: 1)().compute(scheduler=get) == 1
+    assert called[0]
