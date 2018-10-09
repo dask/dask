@@ -3279,3 +3279,17 @@ def test_map_partitions_delays_large_inputs():
 
     a = ddf.map_partitions(lambda x, y: x, big)
     assert any(big is v for v in a.dask.values())
+
+
+def test_partitions_indexer():
+    df = pd.DataFrame({'x': range(10)})
+    ddf = dd.from_pandas(df, npartitions=5)
+
+    assert_eq(ddf.partitions[0], ddf.get_partition(0))
+    assert_eq(ddf.partitions[3], ddf.get_partition(3))
+    assert_eq(ddf.partitions[-1], ddf.get_partition(4))
+
+    assert ddf.partitions[:3].npartitions == 3
+    assert ddf.x.partitions[:3].npartitions == 3
+
+    assert ddf.x.partitions[::2].compute().tolist() == [0, 1, 4, 5, 8, 9]
