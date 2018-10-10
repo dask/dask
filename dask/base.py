@@ -19,7 +19,7 @@ from .context import thread_state
 from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict
-from . import config, local, threaded
+from . import config, local, threaded, sharedict
 
 
 __all__ = ("DaskMethodsMixin",
@@ -190,8 +190,8 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
             groups = {k: (opt(dsk, keys), keys)
                       for k, (dsk, keys) in groups.items()}
 
-        dsk = merge(*(opt(dsk, keys, **kwargs)
-                      for opt, (dsk, keys) in groups.items()))
+        dsk = merge(*map(ensure_dict, [opt(dsk, keys, **kwargs)
+                         for opt, (dsk, keys) in groups.items()]))
     else:
         dsk, _ = _extract_graph_and_keys(collections)
 
@@ -201,18 +201,16 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
 def _extract_graph_and_keys(vals):
     """Given a list of dask vals, return a single graph and a list of keys such
     that ``get(dsk, keys)`` is equivalent to ``[v.compute() v in vals]``."""
-    dsk = {}
-    keys = []
-    for v in vals:
-        d = v.__dask_graph__()
-        if hasattr(d, 'dicts'):
-            for dd in d.dicts.values():
-                dsk.update(dd)
-        else:
-            dsk.update(d)
-        keys.append(v.__dask_keys__())
 
-    return dsk, keys
+    graphs = [v.__dask_graph__() for v in vals]
+    keys = [v.__dask_keys__() for v in vals]
+
+    if any(isinstance(graph, sharedict.ShareDict) for graph in graphs):
+        graph = sharedict.merge(*graphs)
+    else:
+        graph = merge(*graphs)
+
+    return graph, keys
 
 
 def unpack_collections(*args, **kwargs):
