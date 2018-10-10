@@ -217,8 +217,7 @@ def to_avro(b, filename, schema, name_function=None, storage_options=None,
     # TODO infer schema from first partition of data
     from .core import merge
     from dask.utils import import_required
-    from dask.bytes.core import open_files, logical_size
-    from dask.bag import from_delayed
+    from dask.bytes.core import open_files
     import_required('fastavro',
                     "fastavro is a required dependency for using "
                     "bag.to_avro().")
