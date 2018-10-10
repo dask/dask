@@ -1261,17 +1261,17 @@ def test_store_kwargs():
 
     called[0] = False
     at = np.zeros(shape=(10, 10))
-    store([a], [at], get=get_func, foo="test kwarg")
+    store([a], [at], scheduler=get_func, foo="test kwarg")
     assert called[0]
 
     called[0] = False
     at = np.zeros(shape=(10, 10))
-    a.store(at, get=get_func, foo="test kwarg")
+    a.store(at, scheduler=get_func, foo="test kwarg")
     assert called[0]
 
     called[0] = False
     at = np.zeros(shape=(10, 10))
-    store([a], [at], get=get_func, return_stored=True, foo="test kwarg")
+    store([a], [at], scheduler=get_func, return_stored=True, foo="test kwarg")
     assert called[0]
 
 

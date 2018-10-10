@@ -5,7 +5,6 @@ import pytest
 from operator import add, mul
 import subprocess
 import sys
-import warnings
 
 from toolz import merge
 
@@ -834,20 +833,17 @@ def test_scheduler_keyword():
 
         with dask.config.set(scheduler='foo'):
             assert x.compute(scheduler='threads') == 2
-
-        with pytest.raises(ValueError):
-            x.compute(get=dask.threaded.get, scheduler='foo')
     finally:
         del named_schedulers['foo']
 
 
-def test_warn_get_keyword():
+def test_raise_get_keyword():
     x = delayed(inc)(1)
 
-    with warnings.catch_warnings(record=True) as record:
+    with pytest.raises(TypeError) as info:
         x.compute(get=dask.get)
 
-    assert 'scheduler=' in str(record[0].message)
+    assert 'scheduler=' in str(info.value)
 
 
 def test_get_scheduler():
