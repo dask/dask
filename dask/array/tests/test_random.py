@@ -229,16 +229,16 @@ def test_multinomial():
 
 
 def test_multivariate_normal():
-    mean = np.array([1, 2, 3])
     cov = np.array([
         [ 2.19,  1.96, -0.51],
         [ 1.96,  3.69, -0.25],
         [-0.51, -0.25,  0.23],
     ])
-    for size, chunks in [(5, 3), ((5, 4), (2, 3))]:
-        x = da.random.multivariate_normal(mean, cov, size=size, chunks=chunks)
-        y = np.random.multivariate_normal(mean, cov, size=size)
-        assert x.shape == y.shape == x.compute().shape
+    for mean in ([1, 2, 3], np.array([1, 2, 3])):
+        for size, chunks in [(5, 3), ((5, 4), (2, 3))]:
+            x = da.random.multivariate_normal(mean, cov, size=size, chunks=chunks)
+            y = np.random.multivariate_normal(mean, cov, size=size)
+            assert x.shape == y.shape == x.compute().shape
 
 
 def test_choice():
