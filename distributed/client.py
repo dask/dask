@@ -306,7 +306,7 @@ class Future(WrappedKey):
         --------
         >>> import traceback  # doctest: +SKIP
         >>> tb = future.traceback()  # doctest: +SKIP
-        >>> traceback.export_tb(tb)  # doctest: +SKIP
+        >>> traceback.format_tb(tb)  # doctest: +SKIP
         [...]
 
         See Also
