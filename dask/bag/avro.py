@@ -155,6 +155,25 @@ def to_avro(b, filename, schema, name_function=None, storage_options=None,
             **kwargs):
     """Write bag to set of avro files
 
+    The schema is a complex dictionary dscribing the data, see
+    https://avro.apache.org/docs/1.8.2/gettingstartedpython.html#Defining+a+schema
+    and https://fastavro.readthedocs.io/en/latest/writer.html .
+    It's structure is as follows::
+
+        {'name': 'Test',
+         'namespace': 'Test',
+         'doc': 'Descriptive text',
+         'type': 'record',
+         'fields': [
+            {'name': 'a', 'type': 'int'},
+         ]}
+
+    where the "name" field is required, but "namespace" and "doc" are optional
+    descriptors; "type" must always be "record". The list of fields should
+    have an entry for every key of the input records, and the types are
+    like the primitive, complex or logical types of the Avro spec
+    ( https://avro.apache.org/docs/1.8.2/spec.html ).
+
     Results in one avro file per input partition.
 
     Parameters
@@ -165,8 +184,7 @@ def to_avro(b, filename, schema, name_function=None, storage_options=None,
         partitions. If a string, must includ a glob character "*", which will
         be expanded using name_function
     schema: dict
-        Avro schema dictionary, see
-        https://fastavro.readthedocs.io/en/latest/writer.html
+        Avro schema dictionary, see above
     name_function: None or callable
         Expands integers into strings, see
         ``dask.bytes.utils.build_name_function``
@@ -192,7 +210,7 @@ def to_avro(b, filename, schema, name_function=None, storage_options=None,
     from dask.bag import from_delayed
     import_required('fastavro',
                     "fastavro is a required dependency for using "
-                    "bag.read_avro().")
+                    "bag.to_avro().")
 
     storage_options = storage_options or {}
     files = open_files(filename, 'wb', name_function=name_function,

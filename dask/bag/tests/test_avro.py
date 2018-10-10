@@ -61,9 +61,7 @@ def test_roundtrip_simple(tmpdir):
     fn = os.path.join(tmpdir, 'out*.avro')
     b = db.from_sequence([{'a': i} for i in [1, 2, 3, 4, 5]], npartitions=2)
     schema = {
-        'doc': 'Test',
         'name': 'Test',
-        'namespace': 'test',
         'type': 'record',
         'fields': [
             {'name': 'a', 'type': 'int'}, ]}
