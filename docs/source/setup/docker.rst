@@ -41,7 +41,7 @@ Extensibility
 
 Users can mildly customize the software environment by populating the
 environment variables ``EXTRA_APT_PACKAGES``, ``EXTRA_CONDA_PACKAGES``, and
-``EXTRA_PIP_PACKAGES``.  If these environmet variables are set, they will
+``EXTRA_PIP_PACKAGES``.  If these environment variables are set, they will
 trigger calls to the following respectively::
 
    apt-get install $EXTRA_APT_PACKAGES
