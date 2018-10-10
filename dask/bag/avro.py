@@ -205,7 +205,6 @@ def to_avro(b, filename, schema, name_function=None, storage_options=None,
     # TODO infer schema from first partition of data
     from .core import merge
     from dask.utils import import_required
-    from dask import delayed, compute
     from dask.bytes.core import open_files, logical_size
     from dask.bag import from_delayed
     import_required('fastavro',
