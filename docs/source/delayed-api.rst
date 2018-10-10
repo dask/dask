@@ -14,9 +14,9 @@ The ``dask.delayed`` interface consists of one function, ``delayed``:
 
    Wraps objects. Used to create ``Delayed`` proxies directly.
 
-``Delayed`` objects can be thought of as representing a key in the dask. A
-``Delayed`` supports *most* python operations, each of which creates another
-``Delayed`` representing the result:
+``Delayed`` objects can be thought of as representing a key in the dask task
+graph. A ``Delayed`` supports *most* python operations, each of which creates
+another ``Delayed`` representing the result:
 
 - Most operators (``*``, ``-``, and so on)
 - Item access and slicing (``a[0]``)
