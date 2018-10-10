@@ -45,16 +45,16 @@ def test_globalmethod():
 
     assert x.f() == 1
 
-    with dask.set_options(f=lambda: 2):
+    with dask.config.set(f=lambda: 2):
         assert x.f() == 2
 
-    with dask.set_options(f=foo):
+    with dask.config.set(f=foo):
         assert x.f is foo
         assert x.f() == 'foo'
 
     assert x.g is foo
     assert x.g() == 'foo'
 
-    with dask.set_options(g=False):
+    with dask.config.set(g=False):
         assert x.g is bar
         assert x.g() == 'bar'

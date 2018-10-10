@@ -883,7 +883,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             raise ValueError("Compute called on multiple collections with "
                              "differing default schedulers. Please specify a "
                              "scheduler=` parameter explicitly in compute or "
-                             "globally with `set_options`.")
+                             "globally with `dask.config.set`.")
         return get
 
     return None
