@@ -201,6 +201,18 @@ def to_avro(b, filename, schema, name_function=None, storage_options=None,
         returns delayed objects, which can be computed by the user where
         convenient.
     kwargs: passed to compute(), if compute=True
+
+    Examples
+    --------
+    >>> b = db.from_sequence([{'name': 'Alice', 'value': 100},
+    ...                       {'name': 'Bob', 'value': 200}])
+    >>> schema = {'name': 'People', 'doc': "Set of people's scores",
+    ...           'type': 'record',
+    ...           'fields': [
+    ...               {'name': 'name', 'type': 'string'},
+    ...               {'name': 'value', 'type': 'int'}]}
+    >>> b.to_avro('my-data.*.avro', schema)  # doctest: +SKIP
+    ['my-data.0.avro', 'my-data.1.avro']
     """
     # TODO infer schema from first partition of data
     from .core import merge
