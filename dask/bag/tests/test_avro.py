@@ -55,3 +55,19 @@ def test_twofile_multiblock(tmpdir):
     b = db.read_avro(os.path.join(tmpdir, '*.avro'), blocksize=1000)
     assert b.npartitions > 2
     assert b.compute() == expected
+
+
+def test_roundtrip_simple(tmpdir):
+    fn = os.path.join(tmpdir, 'out*.avro')
+    b = db.from_sequence([{'a': i} for i in [1, 2, 3, 4, 5]], npartitions=2)
+    schema = {
+        'doc': 'Test',
+        'name': 'Test',
+        'namespace': 'test',
+        'type': 'record',
+        'fields': [
+            {'name': 'a', 'type': 'int'}, ]}
+    out = b.to_avro(fn, schema)
+    assert len(out) == 2
+    b2 = db.read_avro(fn)
+    assert b.compute() == b2.compute()

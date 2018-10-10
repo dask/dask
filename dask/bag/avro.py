@@ -1,4 +1,5 @@
 import io
+import uuid
 
 MAGIC = b'Obj\x01'
 SYNC_SIZE = 16
@@ -147,3 +148,69 @@ def read_file(fo):
     import fastavro
     with fo as f:
         return list(fastavro.iter_avro(f))
+
+
+def to_avro(b, filename, schema, name_function=None, storage_options=None,
+            codec='null', sync_interval=16000, metadata=None, compute=True,
+            **kwargs):
+    """Write bag to set of avro files
+
+    Results in one avro file per input partition.
+
+    Parameters
+    ----------
+    b: dask.bag.Bag
+    filename: list of str or str
+        Filenames to write to. If a list, number must match the number of
+        partitions. If a string, must includ a glob character "*", which will
+        be expanded using name_function
+    schema: dict
+        Avro schema dictionary, see
+        https://fastavro.readthedocs.io/en/latest/writer.html
+    name_function: None or callable
+        Expands integers into strings, see
+        ``dask.bytes.utils.build_name_function``
+    storage_options: None or dict
+        Extra key/value options to pass to the backend file-system
+    codec: 'null', 'deflate', or 'snappy'
+        Compression algorithm
+    sync_interval: int
+        Number of records to include in each block within a file
+    metadata: None or dict
+        Included in the file header
+    compute: bool
+        If True, files are written immediately, and function blocks. If False,
+        returns delayed objects, which can be computed by the user where
+        convenient.
+    kwargs: passed to compute(), if compute=True
+    """
+    # TODO infer schema from first partition of data
+    from .core import merge
+    from dask.utils import import_required
+    from dask import delayed, compute
+    from dask.bytes.core import open_files, logical_size
+    from dask.bag import from_delayed
+    import_required('fastavro',
+                    "fastavro is a required dependency for using "
+                    "bag.read_avro().")
+
+    storage_options = storage_options or {}
+    files = open_files(filename, 'wb', name_function=name_function,
+                       num=b.npartitions, **storage_options)
+    name = 'to-avro-' + uuid.uuid4().hex
+    dsk = {(name, i): (_write_avro_part, (b.name, i), f, schema, codec,
+                       sync_interval, metadata)
+           for i, f in enumerate(files)}
+    out = type(b)(merge(dsk, b.dask), name, b.npartitions)
+    if compute:
+        out.compute(**kwargs)
+        return [f.path for f in files]
+    else:
+        return out.to_delayed()
+
+
+def _write_avro_part(part, f, schema, codec, sync_interval, metadata):
+    """Create single avro file from list of dictionaries"""
+    import fastavro
+    with f as f:
+        fastavro.writer(f, schema, part, codec, sync_interval, metadata)
