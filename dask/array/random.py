@@ -99,40 +99,43 @@ class RandomState(object):
         dsk = {}
         dsks = []
         lookup = {}
-        small_args = []
-        for i, ar in enumerate(args):
-            if isinstance(ar, (np.ndarray, Array)):
-                res = _broadcast_any(ar, size, chunks)
-                if isinstance(res, Array):
-                    dsks.append(res.dask)
-                    lookup[i] = res.name
-                elif isinstance(res, np.ndarray):
-                    name = 'array-{}'.format(tokenize(res))
-                    lookup[i] = name
-                    dsk[name] = res
-                small_args.append(ar[tuple(0 for _ in ar.shape)])
-            else:
-                small_args.append(ar)
 
-        small_kwargs = {}
-        for key, ar in kwargs.items():
-            if key != 'cov' and isinstance(ar, (np.ndarray, Array)):
-                res = _broadcast_any(ar, size, chunks)
-                if isinstance(res, Array):
-                    dsks.append(res.dask)
-                    lookup[key] = res.name
-                elif isinstance(res, np.ndarray):
-                    name = 'array-{}'.format(tokenize(res))
-                    lookup[key] = name
-                    dsk[name] = res
-                small_kwargs[key] = ar[tuple(0 for _ in ar.shape)]
-            else:
-                small_kwargs[key] = ar
-
-        # Get dtype
-        small_kwargs['size'] = (0,)
         func = getattr(np.random.RandomState(), funcname)
-        dtype = func(*small_args, **small_kwargs).dtype
+        if funcname == 'multivariate_normal':
+            dtype = func(*args, size=(0,), **kwargs).dtype
+        else:
+            small_args = []
+            for i, ar in enumerate(args):
+                if isinstance(ar, (np.ndarray, Array)):
+                    res = _broadcast_any(ar, size, chunks)
+                    if isinstance(res, Array):
+                        dsks.append(res.dask)
+                        lookup[i] = res.name
+                    elif isinstance(res, np.ndarray):
+                        name = 'array-{}'.format(tokenize(res))
+                        lookup[i] = name
+                        dsk[name] = res
+                    small_args.append(ar[tuple(0 for _ in ar.shape)])
+                else:
+                    small_args.append(ar)
+
+            small_kwargs = {}
+            for key, ar in kwargs.items():
+                if isinstance(ar, (np.ndarray, Array)):
+                    res = _broadcast_any(ar, size, chunks)
+                    if isinstance(res, Array):
+                        dsks.append(res.dask)
+                        lookup[key] = res.name
+                    elif isinstance(res, np.ndarray):
+                        name = 'array-{}'.format(tokenize(res))
+                        lookup[key] = name
+                        dsk[name] = res
+                    small_kwargs[key] = ar[tuple(0 for _ in ar.shape)]
+                else:
+                    small_kwargs[key] = ar
+            # Get dtype
+            small_kwargs['size'] = (0,)
+            dtype = func(*small_args, **small_kwargs).dtype
 
         sizes = list(product(*chunks))
         seeds = random_state_data(len(sizes), self._numpy_state)
@@ -302,7 +305,7 @@ class RandomState(object):
             kwargs = {}
         return self._wrap(
             'multivariate_normal',
-            mean, cov=cov, size=size,
+            mean=mean, cov=cov, size=size,
             chunks=chunks, extra_chunks=((len(mean),),),
             **kwargs
         )
