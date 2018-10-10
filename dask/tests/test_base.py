@@ -626,6 +626,7 @@ def test_use_cloudpickle_to_tokenize_functions_in__main__():
 
 
 def inc_to_dec(dsk, keys):
+    dsk = dict(dsk)
     for key in dsk:
         if dsk[key][0] == inc:
             dsk[key] = (dec,) + dsk[key][1:]

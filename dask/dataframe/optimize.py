@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 
 from ..optimization import cull, fuse_getitem, fuse
 from .. import config, core
+from ..utils import ensure_dict
 
 try:
     import fastparquet  # noqa: F401
@@ -11,6 +12,7 @@ except ImportError:
 
 
 def optimize(dsk, keys, **kwargs):
+    dsk = ensure_dict(dsk)
     from .io import dataframe_from_ctable
     if isinstance(keys, list):
         dsk, dependencies = cull(dsk, list(core.flatten(keys)))

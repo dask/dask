@@ -348,8 +348,8 @@ def _check_lu_result(p, l, u, A):
     assert np.allclose(p.dot(l).dot(u), A)
 
     # check triangulars
-    assert_eq(l, da.tril(l))
-    assert_eq(u, da.triu(u))
+    assert_eq(l, da.tril(l), check_graph=False)
+    assert_eq(u, da.triu(u), check_graph=False)
 
 
 def test_lu_1():
@@ -367,9 +367,9 @@ def test_lu_1():
         dA = da.from_array(A, chunks=(chunk, chunk))
         p, l, u = scipy.linalg.lu(A)
         dp, dl, du = da.linalg.lu(dA)
-        assert_eq(p, dp)
-        assert_eq(l, dl)
-        assert_eq(u, du)
+        assert_eq(p, dp, check_graph=False)
+        assert_eq(l, dl, check_graph=False)
+        assert_eq(u, du, check_graph=False)
         _check_lu_result(dp, dl, du, A)
 
     A3 = np.array([[ 7,  3,  2,  1,  4,  1],
@@ -521,24 +521,24 @@ def test_solve(shape, chunk):
     db = da.from_array(b, chunk)
 
     res = da.linalg.solve(dA, db)
-    assert_eq(res, scipy.linalg.solve(A, b))
-    assert_eq(dA.dot(res), b.astype(float))
+    assert_eq(res, scipy.linalg.solve(A, b), check_graph=False)
+    assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # tall-and-skinny matrix
     b = np.random.randint(1, 10, (shape, 5))
     db = da.from_array(b, (chunk, 5))
 
     res = da.linalg.solve(dA, db)
-    assert_eq(res, scipy.linalg.solve(A, b))
-    assert_eq(dA.dot(res), b.astype(float))
+    assert_eq(res, scipy.linalg.solve(A, b), check_graph=False)
+    assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # matrix
     b = np.random.randint(1, 10, (shape, shape))
     db = da.from_array(b, (chunk, chunk))
 
     res = da.linalg.solve(dA, db)
-    assert_eq(res, scipy.linalg.solve(A, b))
-    assert_eq(dA.dot(res), b.astype(float))
+    assert_eq(res, scipy.linalg.solve(A, b), check_graph=False)
+    assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
 
 @pytest.mark.parametrize(('shape', 'chunk'), [(20, 10), (50, 10)])
@@ -549,8 +549,8 @@ def test_inv(shape, chunk):
     dA = da.from_array(A, (chunk, chunk))
 
     res = da.linalg.inv(dA)
-    assert_eq(res, scipy.linalg.inv(A))
-    assert_eq(dA.dot(res), np.eye(shape, dtype=float))
+    assert_eq(res, scipy.linalg.inv(A), check_graph=False)
+    assert_eq(dA.dot(res), np.eye(shape, dtype=float), check_graph=False)
 
 
 def _get_symmat(size):
@@ -572,24 +572,24 @@ def test_solve_sym_pos(shape, chunk):
     db = da.from_array(b, chunk)
 
     res = da.linalg.solve(dA, db, sym_pos=True)
-    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True))
-    assert_eq(dA.dot(res), b.astype(float))
+    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True), check_graph=False)
+    assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # tall-and-skinny matrix
     b = np.random.randint(1, 10, (shape, 5))
     db = da.from_array(b, (chunk, 5))
 
     res = da.linalg.solve(dA, db, sym_pos=True)
-    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True))
-    assert_eq(dA.dot(res), b.astype(float))
+    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True), check_graph=False)
+    assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # matrix
     b = np.random.randint(1, 10, (shape, shape))
     db = da.from_array(b, (chunk, chunk))
 
     res = da.linalg.solve(dA, db, sym_pos=True)
-    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True))
-    assert_eq(dA.dot(res), b.astype(float))
+    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True), check_graph=False)
+    assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
 
 @pytest.mark.parametrize(('shape', 'chunk'), [(20, 10), (12, 3), (30, 3), (30, 6)])
@@ -597,8 +597,8 @@ def test_cholesky(shape, chunk):
 
     A = _get_symmat(shape)
     dA = da.from_array(A, (chunk, chunk))
-    assert_eq(da.linalg.cholesky(dA), scipy.linalg.cholesky(A))
-    assert_eq(da.linalg.cholesky(dA, lower=True), scipy.linalg.cholesky(A, lower=True))
+    assert_eq(da.linalg.cholesky(dA), scipy.linalg.cholesky(A), check_graph=False)
+    assert_eq(da.linalg.cholesky(dA, lower=True), scipy.linalg.cholesky(A, lower=True), check_graph=False)
 
 
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"),

@@ -762,7 +762,8 @@ def lu(a):
                 dsk[name_u, i, j] = (name_lu, i, j)
                 # l_permuted is not referred in upper triangulars
 
-    dsk = sharedict.merge(a.dask, ('lu-' + token, dsk))
+    dsk = sharedict.merge(a.dask, (name_p, dsk), (name_l, dsk), (name_u, dsk),
+                          dependencies={name_p: {a.name}, name_l: {a.name}, name_u: {a.name}})
     pp, ll, uu = scipy.linalg.lu(np.ones(shape=(1, 1), dtype=a.dtype))
     p = Array(dsk, name_p, shape=a.shape, chunks=a.chunks, dtype=pp.dtype)
     l = Array(dsk, name_l, shape=a.shape, chunks=a.chunks, dtype=ll.dtype)
@@ -852,7 +853,7 @@ def solve_triangular(a, b, lower=False):
                     target = (operator.sub, target, (sum, prevs))
                 dsk[_key(i, j)] = (scipy.linalg.solve_triangular, (a.name, i, i), target)
 
-    dsk = sharedict.merge(a.dask, b.dask, (name, dsk))
+    dsk = sharedict.merge(a.dask, b.dask, (name, dsk), dependencies={name: {a.name, b.name}})
     res = _solve_triangular_lower(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype))
     return Array(dsk, name, shape=b.shape, chunks=b.chunks, dtype=res.dtype)
@@ -998,10 +999,10 @@ def _cholesky(a):
                         dsk[prev] = (np.dot, (name, j, p), (name_upper, p, i))
                         prevs.append(prev)
                     target = (operator.sub, target, (sum, prevs))
-                dsk[name_upper, j, i] = (_solve_triangular_lower,(name, j, j), target)
+                dsk[name_upper, j, i] = (_solve_triangular_lower, (name, j, j), target)
                 dsk[name, i, j] = (np.transpose, (name_upper, j, i))
 
-    dsk = sharedict.merge(a.dask, (name, dsk))
+    dsk = sharedict.merge(a.dask, (name, dsk), (name_upper, dsk), dependencies={name: {a.name}, name_upper: {a.name}})
     cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
 
     lower = Array(dsk, name, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
@@ -1060,7 +1061,7 @@ def lstsq(a, b):
     # rank
     rname = 'lstsq-rank-' + token
     rdsk = {(rname, ): (np.linalg.matrix_rank, (r.name, 0, 0))}
-    rdsk = sharedict.merge(r.dask, (rname, rdsk))
+    rdsk = sharedict.merge(r.dask, (rname, rdsk), dependencies={rname: {r.name}})
     # rank must be an integer
     rank = Array(rdsk, rname, shape=(), chunks=(), dtype=int)
 
@@ -1071,7 +1072,7 @@ def lstsq(a, b):
                          (np.sqrt,
                           (np.linalg.eigvals,
                            (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))))}
-    sdsk = sharedict.merge(rt.dask, (sname, sdsk))
+    sdsk = sharedict.merge(rt.dask, (sname, sdsk), dependencies={sname: {rt.name}})
     _, _, _, ss = np.linalg.lstsq(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype))
     s = Array(sdsk, sname, shape=(r.shape[0], ),

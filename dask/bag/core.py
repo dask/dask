@@ -108,6 +108,7 @@ def inline_singleton_lists(dsk, dependencies=None):
 
 def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
     """ Optimize a dask from a dask Bag. """
+    dsk = ensure_dict(dsk)
     dsk2, dependencies = cull(dsk, keys)
     dsk3, dependencies = fuse(dsk2, keys + (fuse_keys or []), dependencies,
                               rename_keys=rename_fused_keys)

@@ -28,7 +28,7 @@ from dask.array import chunk
 
 from dask.array.core import (getem, getter, top, dotmany, concatenate3,
                              broadcast_dimensions, Array, stack, concatenate,
-                             from_array, elemwise, broadcast_shapes,
+                             from_array, broadcast_shapes,
                              broadcast_to, blockdims_from_blockshape, store,
                              optimize, from_func, normalize_chunks,
                              broadcast_chunks, atop, from_delayed,
@@ -705,22 +705,6 @@ def test_block_tuple():
         with pytest.raises(TypeError) as e:
             da.block(arrays)
         e.match(r'tuple')
-
-
-def test_binops():
-    a = Array(dict((('a', i), np.array([0])) for i in range(3)),
-              'a', chunks=((1, 1, 1),), dtype='i8')
-    b = Array(dict((('b', i), np.array([0])) for i in range(3)),
-              'b', chunks=((1, 1, 1),), dtype='i8')
-
-    result = elemwise(add, a, b, name='c')
-    assert result.dask == merge(a.dask, b.dask,
-                                dict((('c', i), (add, ('a', i), ('b', i)))
-                                     for i in range(3)))
-
-    result = elemwise(pow, a, 2, name='c')
-    assert "'a', 0" in str(result.dask[('c', 0)])
-    assert "2" in str(result.dask[('c', 0)])
 
 
 def test_broadcast_shapes():
@@ -2785,86 +2769,6 @@ def test_cumulative():
         x.cumsum(axis=-4)
 
 
-def test_atop_names():
-    x = da.ones(5, chunks=(2,))
-    y = atop(add, 'i', x, 'i', dtype=x.dtype)
-    assert y.name.startswith('add')
-
-
-def test_atop_new_axes():
-    def f(x):
-        return x[:, None] * np.ones((1, 7))
-    x = da.ones(5, chunks=2)
-    y = atop(f, 'aq', x, 'a', new_axes={'q': 7}, concatenate=True,
-             dtype=x.dtype)
-    assert y.chunks == ((2, 2, 1), (7,))
-    assert_eq(y, np.ones((5, 7)))
-
-    def f(x):
-        return x[None, :] * np.ones((7, 1))
-    x = da.ones(5, chunks=2)
-    y = atop(f, 'qa', x, 'a', new_axes={'q': 7}, concatenate=True,
-             dtype=x.dtype)
-    assert y.chunks == ((7,), (2, 2, 1))
-    assert_eq(y, np.ones((7, 5)))
-
-    def f(x):
-        y = x.sum(axis=1)
-        return y[:, None] * np.ones((1, 5))
-
-    x = da.ones((4, 6), chunks=(2, 2))
-    y = atop(f, 'aq', x, 'ab', new_axes={'q': 5}, concatenate=True,
-             dtype=x.dtype)
-    assert y.chunks == ((2, 2), (5,))
-    assert_eq(y, np.ones((4, 5)) * 6)
-
-
-def test_atop_kwargs():
-    def f(a, b=0):
-        return a + b
-
-    x = da.ones(5, chunks=(2,))
-    y = atop(f, 'i', x, 'i', b=10, dtype=x.dtype)
-    assert_eq(y, np.ones(5) + 10)
-
-
-def test_atop_chunks():
-    x = da.ones((5, 5), chunks=((2, 1, 2), (3, 2)))
-
-    def double(a, axis=0):
-        return np.concatenate([a, a], axis=axis)
-
-    y = atop(double, 'ij', x, 'ij',
-             adjust_chunks={'i': lambda n: 2 * n}, axis=0, dtype=x.dtype)
-    assert y.chunks == ((4, 2, 4), (3, 2))
-    assert_eq(y, np.ones((10, 5)))
-
-    y = atop(double, 'ij', x, 'ij',
-             adjust_chunks={'j': lambda n: 2 * n}, axis=1, dtype=x.dtype)
-    assert y.chunks == ((2, 1, 2), (6, 4))
-    assert_eq(y, np.ones((5, 10)))
-
-    x = da.ones((10, 10), chunks=(5, 5))
-    y = atop(double, 'ij', x, 'ij', axis=0,
-             adjust_chunks={'i': 10}, dtype=x.dtype)
-    assert y.chunks == ((10, 10), (5, 5))
-    assert_eq(y, np.ones((20, 10)))
-
-    y = atop(double, 'ij', x, 'ij', axis=0,
-             adjust_chunks={'i': (10, 10)}, dtype=x.dtype)
-    assert y.chunks == ((10, 10), (5, 5))
-    assert_eq(y, np.ones((20, 10)))
-
-
-def test_atop_raises_on_incorrect_indices():
-    x = da.arange(5, chunks=3)
-    with pytest.raises(ValueError) as info:
-        da.atop(lambda x: x, 'ii', x, 'ii', dtype=int)
-
-    assert 'ii' in str(info.value)
-    assert '1' in str(info.value)
-
-
 def test_from_delayed():
     v = delayed(np.ones)((5, 3))
     x = from_delayed(v, shape=(5, 3), dtype=np.ones(0).dtype)
@@ -3056,19 +2960,6 @@ def test_warn_bad_rechunking():
 
     assert record
     assert '20' in record[0].message.args[0]
-
-
-def test_optimize_fuse_keys():
-    x = da.ones(10, chunks=(5,))
-    y = x + 1
-    z = y + 1
-
-    dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
-    assert not set(y.dask) & set(dsk)
-
-    dsk = z.__dask_optimize__(z.dask, z.__dask_keys__(),
-                              fuse_keys=y.__dask_keys__())
-    assert all(k in dsk for k in y.__dask_keys__())
 
 
 def test_concatenate_stack_dont_warn():
@@ -3658,7 +3549,8 @@ def test_map_blocks_large_inputs_delayed():
     assert any(b is v for v in c.dask.values())
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
-    d = a.map_blocks(lambda x, y: x + y, y=b)
+    d = a.map_blocks(lambda x, y: x + y.sum(), y=b)
+    assert_eq(d, d)
     assert any(b is v for v in d.dask.values())
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 

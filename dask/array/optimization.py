@@ -5,10 +5,12 @@ from operator import getitem
 import numpy as np
 
 from .core import getter, getter_nofancy, getter_inline
+from .top import optimize_atop
 from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
 from ..optimization import cull, fuse, inline_functions
 from ..utils import ensure_dict
+from ..sharedict import ShareDict
 
 from numbers import Integral
 
@@ -29,8 +31,14 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
     2.  Remove full slicing, e.g. x[:]
     3.  Inline fast functions like getitem and np.transpose
     """
-    dsk = ensure_dict(dsk)
     keys = list(flatten(keys))
+
+    # High level stage optimization
+    if isinstance(dsk, ShareDict):
+        dsk = optimize_atop(dsk, keys=keys)
+
+    # Low level task optimizations
+    dsk = ensure_dict(dsk)
     if fast_functions is not None:
         inline_functions_fast_functions = fast_functions
 

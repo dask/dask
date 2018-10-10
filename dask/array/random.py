@@ -163,7 +163,8 @@ class RandomState(object):
                         kwrg[k] = (getitem, lookup[k], slc)
             vals.append((_apply_random, self._RandomState, funcname, seed, size, arg, kwrg))
         dsk.update(dict(zip(keys, vals)))
-        dsk = sharedict.merge((name, dsk), *dsks)
+        dsk = sharedict.merge((name, dsk), *dsks,
+                              dependencies={name: {arg.name for arg in args if isinstance(arg, Array)}})
         return Array(dsk, name, chunks + extra_chunks, dtype=dtype)
 
     @doc_wraps(np.random.RandomState.beta)
@@ -182,6 +183,7 @@ class RandomState(object):
         @doc_wraps(np.random.RandomState.choice)
         def choice(self, a, size=None, replace=True, p=None, chunks=None):
             dsks = []
+            names = set()
             # Normalize and validate `a`
             if isinstance(a, Integral):
                 # On windows the output dtype differs if p is provided or
@@ -198,6 +200,7 @@ class RandomState(object):
                     raise ValueError("a must be one dimensional")
                 len_a = len(a)
                 dsks.append(a.dask)
+                names.add(a.name)
                 a = a.__dask_keys__()[0]
 
             # Normalize and validate `p`
@@ -240,7 +243,8 @@ class RandomState(object):
             dsk = {k: (_choice, state, a, size, replace, p) for
                    k, state, size in zip(keys, state_data, sizes)}
 
-            return Array(sharedict.merge((name, dsk), *dsks),
+            return Array(sharedict.merge((name, dsk), *dsks,
+                                         dependencies={name: names}),
                          name, chunks, dtype=dtype)
 
     # @doc_wraps(np.random.RandomState.dirichlet)
