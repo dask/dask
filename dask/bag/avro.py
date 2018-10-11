@@ -1,4 +1,5 @@
 import io
+import uuid
 
 MAGIC = b'Obj\x01'
 SYNC_SIZE = 16
@@ -123,7 +124,7 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None,
 
         return from_delayed(out)
     else:
-        files = open_files(urlpath, **storage_options)
+        files = open_files(urlpath, compression=compression, **storage_options)
         dread = delayed(read_file)
         chunks = [dread(fo) for fo in files]
         return from_delayed(chunks)
@@ -147,3 +148,109 @@ def read_file(fo):
     import fastavro
     with fo as f:
         return list(fastavro.iter_avro(f))
+
+
+def to_avro(b, filename, schema, name_function=None, storage_options=None,
+            codec='null', sync_interval=16000, metadata=None, compute=True,
+            **kwargs):
+    """Write bag to set of avro files
+
+    The schema is a complex dictionary dscribing the data, see
+    https://avro.apache.org/docs/1.8.2/gettingstartedpython.html#Defining+a+schema
+    and https://fastavro.readthedocs.io/en/latest/writer.html .
+    It's structure is as follows::
+
+        {'name': 'Test',
+         'namespace': 'Test',
+         'doc': 'Descriptive text',
+         'type': 'record',
+         'fields': [
+            {'name': 'a', 'type': 'int'},
+         ]}
+
+    where the "name" field is required, but "namespace" and "doc" are optional
+    descriptors; "type" must always be "record". The list of fields should
+    have an entry for every key of the input records, and the types are
+    like the primitive, complex or logical types of the Avro spec
+    ( https://avro.apache.org/docs/1.8.2/spec.html ).
+
+    Results in one avro file per input partition.
+
+    Parameters
+    ----------
+    b: dask.bag.Bag
+    filename: list of str or str
+        Filenames to write to. If a list, number must match the number of
+        partitions. If a string, must includ a glob character "*", which will
+        be expanded using name_function
+    schema: dict
+        Avro schema dictionary, see above
+    name_function: None or callable
+        Expands integers into strings, see
+        ``dask.bytes.utils.build_name_function``
+    storage_options: None or dict
+        Extra key/value options to pass to the backend file-system
+    codec: 'null', 'deflate', or 'snappy'
+        Compression algorithm
+    sync_interval: int
+        Number of records to include in each block within a file
+    metadata: None or dict
+        Included in the file header
+    compute: bool
+        If True, files are written immediately, and function blocks. If False,
+        returns delayed objects, which can be computed by the user where
+        convenient.
+    kwargs: passed to compute(), if compute=True
+
+    Examples
+    --------
+    >>> import dask.bag as db
+    >>> b = db.from_sequence([{'name': 'Alice', 'value': 100},
+    ...                       {'name': 'Bob', 'value': 200}])
+    >>> schema = {'name': 'People', 'doc': "Set of people's scores",
+    ...           'type': 'record',
+    ...           'fields': [
+    ...               {'name': 'name', 'type': 'string'},
+    ...               {'name': 'value', 'type': 'int'}]}
+    >>> b.to_avro('my-data.*.avro', schema)  # doctest: +SKIP
+    ['my-data.0.avro', 'my-data.1.avro']
+    """
+    # TODO infer schema from first partition of data
+    from .core import merge
+    from dask.utils import import_required
+    from dask.bytes.core import open_files
+    import_required('fastavro',
+                    "fastavro is a required dependency for using "
+                    "bag.to_avro().")
+    _verify_schema(schema)
+
+    storage_options = storage_options or {}
+    files = open_files(filename, 'wb', name_function=name_function,
+                       num=b.npartitions, **storage_options)
+    name = 'to-avro-' + uuid.uuid4().hex
+    dsk = {(name, i): (_write_avro_part, (b.name, i), f, schema, codec,
+                       sync_interval, metadata)
+           for i, f in enumerate(files)}
+    out = type(b)(merge(dsk, b.dask), name, b.npartitions)
+    if compute:
+        out.compute(**kwargs)
+        return [f.path for f in files]
+    else:
+        return out.to_delayed()
+
+
+def _verify_schema(s):
+    assert isinstance(s, dict), 'Schema must be dictionary'
+    for field in ['name', 'type', 'fields']:
+        assert field in s, "Schema missing '%s' field" % field
+    assert s['type'] == 'record', "Schema must be of type 'record'"
+    assert isinstance(s['fields'], list), 'Fields entry must be a list'
+    for f in s['fields']:
+        assert 'name' in f and 'type' in f, "Field spec incomplete: %s" % f
+
+
+def _write_avro_part(part, f, schema, codec, sync_interval, metadata):
+    """Create single avro file from list of dictionaries"""
+    import fastavro
+    with f as f:
+        fastavro.writer(f, schema, part, codec, sync_interval, metadata)

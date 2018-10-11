@@ -70,6 +70,34 @@ attached directly to bags with ``.str.methodname``:
    >>> b = db.read_text('myfile.*.csv').str.strip().str.split(',')
 
 
+``db.from_avro``
+----------------
+
+Dask.bag can read binary files in the `Avro`_ format, if `fastavro`_ is installed.
+A bag can be made from one or more
+files, with optional chunking within files. The resulting bag will have one item per
+Avro record, which will be a dictionary of the form given by the Avro schema. There will
+be at least one partition per input file.
+
+.. code-block:: python
+
+   >>> b = db.read_avro('datafile.avro')
+   >>> b = db.read_avro('data.*.avro')
+
+.. _Avro: https://avro.apache.org/docs/1.8.2/
+.. _fastavro: https://fastavro.readthedocs.io
+
+By default, Dask will split data files into chunks of approximately ``blocksize`` bytes in
+size. The actual blocks you would get depend on the internal blocking of the file.
+
+For files that are compressed after creation (this is not the same as the internal "codec" used
+by Avro), then no chunking should be used, and there will be exactly one partition per file:
+
+.. code-block:: python
+
+   > b = bd.read_avro('compressed.*.avro.gz', blocksize=None, compression='gzip')
+
+
 ``db.from_delayed``
 -------------------
 
@@ -101,6 +129,14 @@ You can convert a dask bag into a sequence of files on disk by calling the
 
 .. autofunction:: dask.bag.core.to_textfiles
 
+To Avro
+-------
+
+Dask bags can be written directly to Avro binary format using `fastavro`_. One file
+will be written per bag partition. This requires the user to provide a fully-specified
+schema dictionary, see the docstring of the ``.to_avro()`` method.
+
+.. autofunction:: dask.bag.avro.to_avro
 
 To DataFrames
 -------------

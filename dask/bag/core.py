@@ -28,6 +28,7 @@ except ImportError:
                        count, pluck, groupby, topk)
 
 from .. import config
+from .avro import to_avro
 from ..base import tokenize, dont_optimize, is_dask_collection, DaskMethodsMixin
 from ..bytes import open_files
 from ..compatibility import apply, urlopen, Iterable, Iterator
@@ -702,6 +703,14 @@ class Bag(DaskMethodsMixin):
         return to_textfiles(self, path, name_function, compression, encoding,
                             compute, storage_options=storage_options,
                             last_endline=last_endline, **kwargs)
+
+    @wraps(to_avro)
+    def to_avro(self, filename, schema, name_function=None,
+                storage_options=None,
+                codec='null', sync_interval=16000, metadata=None, compute=True,
+                **kwargs):
+        return to_avro(self, filename, schema, name_function, storage_options,
+                       codec, sync_interval, metadata, compute, **kwargs)
 
     def fold(self, binop, combine=None, initial=no_default, split_every=None):
         """ Parallelizable reduction
