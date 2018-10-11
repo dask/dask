@@ -319,3 +319,16 @@ def test_atop_raises_on_incorrect_indices():
 
     assert 'ii' in str(info.value)
     assert '1' in str(info.value)
+
+
+def test_atop_numpy_arg():
+    x = da.arange(10, chunks=(5,))
+    y = np.arange(1000)
+
+
+    x = x.map_blocks(lambda x, y: x, 1.0)
+    x = x.map_blocks(lambda x, y: x, 'abc')
+    x = x.map_blocks(lambda x, y: x, y)
+    x = x.map_blocks(lambda x, y: x, 'abc')
+    x = x.map_blocks(lambda x, y: x, 1.0)
+    assert_eq(x, np.arange(10))

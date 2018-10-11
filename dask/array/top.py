@@ -572,7 +572,7 @@ def optimize_atop(full_graph, keys=()):
     keep = {k[0] if type(k) is tuple else k for k in keys}
     layers = full_graph.dicts
     dependents = core.reverse_dict(full_graph.dependencies)
-    roots = {k for k, v in full_graph.dicts.items()
+    roots = {k for k in full_graph.dicts
              if not dependents.get(k)}
     stack = list(roots)
 
@@ -695,11 +695,16 @@ def rewrite_atop(inputs):
             # Bump new inputs up in list
             sub = {}
             for i, index in enumerate(new_indices):
-                if index not in indices:  # use old inputs if available
+                try:
+                    contains = index in indices
+                except (ValueError, TypeError):
+                    contains = False
+
+                if contains:  # use old inputs if available
+                    sub[atop_token(i)] = atop_token(indices.index(index))
+                else:
                     sub[atop_token(i)] = atop_token(len(indices))
                     indices.append(index)
-                else:
-                    sub[atop_token(i)] = atop_token(indices.index(index))
             new_dsk = subs(inputs[dep].dsk, sub)
 
             # indices.extend(new_indices)
