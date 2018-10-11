@@ -3076,7 +3076,9 @@ def asanyarray(a):
     """
     if isinstance(a, Array):
         return a
-    if isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
+    elif hasattr(a, 'to_dask_array'):
+        return a.to_dask_array()
+    elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         a = stack(a)
     elif not isinstance(getattr(a, 'shape', None), Iterable):
         a = np.asanyarray(a)
