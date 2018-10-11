@@ -325,7 +325,6 @@ def test_atop_numpy_arg():
     x = da.arange(10, chunks=(5,))
     y = np.arange(1000)
 
-
     x = x.map_blocks(lambda x, y: x, 1.0)
     x = x.map_blocks(lambda x, y: x, 'abc')
     x = x.map_blocks(lambda x, y: x, y)
