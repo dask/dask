@@ -341,3 +341,11 @@ def test_bag_array_conversion():
     x, = [da.from_delayed(a, shape=(10,), dtype=int) for a in [x]]
     z = da.concatenate([x])
     assert_eq(z, np.arange(10), check_graph=False)
+
+
+def test_svd():
+    x = da.ones((1, 1), chunks=(1, 1))
+    y = x * 2
+    u, s, v = da.linalg.svd(y)
+    z = y + u
+    assert_eq(z, z)
