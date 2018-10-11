@@ -582,7 +582,7 @@ def optimize_atop(full_graph, keys=()):
 
     while stack:
         layer = stack.pop()
-        if layer in seen:
+        if layer in seen or layer not in layers:
             continue
         seen.add(layer)
 
