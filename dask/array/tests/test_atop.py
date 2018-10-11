@@ -231,6 +231,17 @@ def test_atop_new_axes():
     assert_eq(y, np.ones((4, 5)) * 6)
 
 
+def test_atop_new_axes_2():
+    x = da.ones((2, 2), chunks=(1, 1))
+    def func(x):
+        return np.stack([x, -x], axis=-1)
+
+    y = atop(func, ('x', 'y', 'sign'), x, ('x', 'y'), dtype=x.dtype,
+             concatenate=True, new_axes={'sign': 2})
+
+    assert_eq(y, y)
+
+
 @pytest.mark.parametrize('concatenate', [True, False])
 def test_atop_stacked_new_axes(concatenate):
     def f(x):
