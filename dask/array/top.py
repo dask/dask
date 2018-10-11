@@ -730,9 +730,10 @@ def rewrite_atop(inputs):
     sub = {atop_token(k): atop_token(v) for k, v in sub.items()}
     dsk = {k: subs(v, sub) for k, v in dsk.items()}
 
+    indices_check = {k for k, v in indices if v is not None}
     numblocks = toolz.merge([inp.numblocks for inp in inputs.values()])
     numblocks = {k: v for k, v in numblocks.items()
-                 if k in toolz.pluck(0, indices)}
+                 if v is None or k in indices_check}
 
     out = TOP(root, inputs[root].output_indices, dsk, new_indices,
               numblocks=numblocks, new_axes=new_axes, concatenate=concatenate)

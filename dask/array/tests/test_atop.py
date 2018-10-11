@@ -330,6 +330,7 @@ def test_atop_numpy_arg():
     x = x.map_blocks(lambda x, y: x, y)
     x = x.map_blocks(lambda x, y: x, 'abc')
     x = x.map_blocks(lambda x, y: x, 1.0)
+    x = x.map_blocks(lambda x, y, z: x, 'abc', np.array(['a', 'b'], dtype=object))
     assert_eq(x, np.arange(10))
 
 
