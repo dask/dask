@@ -115,7 +115,7 @@ class RandomState(object):
                         name = 'array-{}'.format(tokenize(res))
                         lookup[i] = name
                         dsk[name] = res
-                    small_args.append(ar[tuple(0 for _ in ar.shape)])
+                    small_args.append(ar[(0,)*ar.ndim])
                 else:
                     small_args.append(ar)
 
@@ -130,7 +130,7 @@ class RandomState(object):
                         name = 'array-{}'.format(tokenize(res))
                         lookup[key] = name
                         dsk[name] = res
-                    small_kwargs[key] = ar[tuple(0 for _ in ar.shape)]
+                    small_kwargs[key] = ar[(0,)*ar.ndim]
                 else:
                     small_kwargs[key] = ar
             # Get dtype
