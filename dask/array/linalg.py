@@ -190,7 +190,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
         # retrieve R_stacked for recursion with tsqr
         vchunks_rstacked = tuple([sum(map(lambda x: x[1], sub_block_info)) for sub_block_info in all_blocks])
-        dsk.dependencies[name_r_stacked] = set(data.name)
+        dsk.dependencies[name_r_stacked] = {data.name}
         r_stacked = Array(dsk, name_r_stacked,
                           shape=(sum(vchunks_rstacked), n), chunks=(vchunks_rstacked, (n)), dtype=rr.dtype)
 
@@ -343,8 +343,8 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             r_shape = (n, n) if data.shape[0] >= data.shape[1] else data.shape
             r_chunks = r_shape
 
-        dsk.dependencies[name_q_st3] = set(data.name)
-        dsk.dependencies[name_r_st2] = set(data.name)
+        dsk.dependencies[name_q_st3] = {data.name}
+        dsk.dependencies[name_r_st2] = {data.name}
         q = Array(dsk, name_q_st3,
                   shape=q_shape, chunks=q_chunks, dtype=qq.dtype)
         r = Array(dsk, name_r_st2,

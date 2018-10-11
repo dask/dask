@@ -233,6 +233,7 @@ def test_atop_new_axes():
 
 def test_atop_new_axes_2():
     x = da.ones((2, 2), chunks=(1, 1))
+
     def func(x):
         return np.stack([x, -x], axis=-1)
 

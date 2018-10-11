@@ -54,7 +54,6 @@ class ShareDict(Mapping):
         self.dependencies = dependencies or dict()
 
         assert set(self.dependencies) == set(self.dicts)
-        # assert all(dep in self.dicts for v in self.dependencies.values() for dep in v)
 
     def update_with_key(self, arg, key=None, dependencies=None):
         if type(arg) is ShareDict:
@@ -67,6 +66,7 @@ class ShareDict(Mapping):
             key = id(arg)
 
         if dependencies:
+            assert isinstance(dependencies, (tuple, list, set))
             self.dependencies[key] = set(dependencies)
 
         assert isinstance(arg, Mapping)
