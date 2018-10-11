@@ -2139,6 +2139,26 @@ def test_asanyarray():
     assert da.asanyarray(dx) is dx
 
 
+def test_asanyarray_dataframe():
+    pd = pytest.importorskip('pandas')
+    dd = pytest.importorskip('dask.dataframe')
+
+    df = pd.DataFrame({'x': [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    x = np.asanyarray(df)
+    dx = da.asanyarray(ddf)
+    assert isinstance(dx, da.Array)
+
+    assert_eq(x, dx)
+
+    x = np.asanyarray(df.x)
+    dx = da.asanyarray(ddf.x)
+    assert isinstance(dx, da.Array)
+
+    assert_eq(x, dx)
+
+
 def test_from_func():
     x = np.arange(10)
     f = lambda n: n * x
