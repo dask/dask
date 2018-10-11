@@ -124,7 +124,7 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None,
 
         return from_delayed(out)
     else:
-        files = open_files(urlpath, **storage_options)
+        files = open_files(urlpath, compression=compression, **storage_options)
         dread = delayed(read_file)
         chunks = [dread(fo) for fo in files]
         return from_delayed(chunks)
@@ -204,6 +204,7 @@ def to_avro(b, filename, schema, name_function=None, storage_options=None,
 
     Examples
     --------
+    >>> import dask.bag as db
     >>> b = db.from_sequence([{'name': 'Alice', 'value': 100},
     ...                       {'name': 'Bob', 'value': 200}])
     >>> schema = {'name': 'People', 'doc': "Set of people's scores",
@@ -221,6 +222,7 @@ def to_avro(b, filename, schema, name_function=None, storage_options=None,
     import_required('fastavro',
                     "fastavro is a required dependency for using "
                     "bag.to_avro().")
+    _verify_schema(schema)
 
     storage_options = storage_options or {}
     files = open_files(filename, 'wb', name_function=name_function,
@@ -235,6 +237,16 @@ def to_avro(b, filename, schema, name_function=None, storage_options=None,
         return [f.path for f in files]
     else:
         return out.to_delayed()
+
+
+def _verify_schema(s):
+    assert isinstance(s, dict), 'Schema must be dictionary'
+    for field in ['name', 'type', 'fields']:
+        assert field in s, "Schema missing '%s' field" % field
+    assert s['type'] == 'record', "Schema must be of type 'record'"
+    assert isinstance(s['fields'], list), 'Fields entry must be a list'
+    for f in s['fields']:
+        assert'name' in f and 'type' in f , "Field spec incomplete: %s" % f
 
 
 def _write_avro_part(part, f, schema, codec, sync_interval, metadata):

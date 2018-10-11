@@ -72,3 +72,36 @@ def test_roundtrip_simple(tmpdir):
     assert len(out) == 2
     b2 = db.read_avro(fn)
     assert b.compute() == b2.compute()
+
+
+@pytest.mark.parametrize('codec', ['null', 'deflate', 'snappy'])
+def test_roundtrip(tmpdir, codec):
+    if codec == 'snappy':
+        pytest.importorskip('snappy')
+    fn = os.path.join(tmpdir, 'out*.avro')
+    b = db.from_sequence(expected, npartitions=3)
+    b.to_avro(fn, schema=schema, codec=codec)
+    b2 = db.read_avro(fn)
+    assert b.compute() == b2.compute()
+
+
+def test_invalid_schema(tmpdir):
+    b = db.from_sequence(expected, npartitions=3)
+    fn = os.path.join(tmpdir, 'out*.avro')
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema=[])
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema={})
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema={'doc': 'unknown'})
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema={'name': 'test'})
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema={'name': 'test', 'type': 'wrong'})
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema={'name': 'test', 'type': 'record'})
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema={'name': 'test', 'type': 'record'})
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema={'name': 'test', 'type': 'record',
+                          'fields': [{'name': 'a'}]})
