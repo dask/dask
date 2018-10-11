@@ -246,7 +246,7 @@ def _verify_schema(s):
     assert s['type'] == 'record', "Schema must be of type 'record'"
     assert isinstance(s['fields'], list), 'Fields entry must be a list'
     for f in s['fields']:
-        assert'name' in f and 'type' in f , "Field spec incomplete: %s" % f
+        assert 'name' in f and 'type' in f, "Field spec incomplete: %s" % f
 
 
 def _write_avro_part(part, f, schema, codec, sync_interval, metadata):

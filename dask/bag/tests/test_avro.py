@@ -104,4 +104,4 @@ def test_invalid_schema(tmpdir):
         b.to_avro(fn, schema={'name': 'test', 'type': 'record'})
     with pytest.raises(AssertionError):
         b.to_avro(fn, schema={'name': 'test', 'type': 'record',
-                          'fields': [{'name': 'a'}]})
+                              'fields': [{'name': 'a'}]})
