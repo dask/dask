@@ -876,7 +876,7 @@ def test_callable_scheduler():
 @pytest.mark.parametrize('scheduler', ['threads', 'processes'])
 def test_num_workers_config(num_workers, scheduler):
     # Regression test for issue #4082
-    a = da.random.randint(0, 100, size=200, chunks=5)
+    a = da.random.randint(0, 10, size=400, chunks=2)
 
     with dask.config.set(num_workers=num_workers), Profiler() as prof:
         a.compute(scheduler=scheduler)
