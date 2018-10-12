@@ -1001,6 +1001,26 @@ def test_sum_with_min_count():
                           ddf.sum(min_count=min_count, axis=axis).compute())
 
 
+@pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
+                    reason="Parameter min_count not implemented in "
+                           "DataFrame.prod()")
+def test_prod_with_min_count():
+    dfs = [pd.DataFrame([[None, 2, 3],
+                         [None, 5, 6],
+                         [5, 4, 9]]),
+           pd.DataFrame([[2, None, None],
+                         [None, 5, 6],
+                         [5, 4, 9]])]
+    ddfs = [dd.from_pandas(df, npartitions=4) for df in dfs]
+    axes = [0, 1]
+
+    for df, ddf in zip(dfs, ddfs):
+        for axis in axes:
+            for min_count in [0, 1, 2, 3]:
+                assert_eq(df.prod(min_count=min_count, axis=axis),
+                          ddf.prod(min_count=min_count, axis=axis).compute())
+
+
 @pytest.mark.parametrize('join', ['inner', 'outer', 'left', 'right'])
 def test_align(join):
     df1a = pd.DataFrame({'A': np.random.randn(10),
