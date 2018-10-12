@@ -110,7 +110,7 @@ Contents
    configuration
    local-cluster
    ipython
-   joblib
+   Joblib Integration <https://ml.dask.org/joblib.html>
    publish
    queues
    resources

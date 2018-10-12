@@ -378,3 +378,35 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'numpy': ('http://docs.scipy.org/doc/numpy', None),
     }
+
+# Redirects
+# https://tech.signavio.com/2017/managing-sphinx-redirects
+redirect_files = [
+    # old html, new html
+    ('joblib.html', 'https://ml.dask.org/joblib.html'),
+]
+
+
+redirect_template = """\
+<html>
+  <head>
+    <meta http-equiv="refresh" content="1; url={new}" />
+    <script>
+      window.location.href = "{new}"
+    </script>
+  </head>
+</html>
+"""
+
+
+def copy_legacy_redirects(app, docname):
+    if app.builder.name == 'html':
+        for html_src_path, new in redirect_files:
+            page = redirect_template.format(new=new)
+            target_path = app.outdir + '/' + html_src_path
+            with open(target_path, 'w') as f:
+                f.write(page)
+
+
+def setup(app):
+    app.connect('build-finished', copy_legacy_redirects)
