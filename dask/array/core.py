@@ -2387,6 +2387,8 @@ def from_delayed(value, shape, dtype, name=None):
     name = name or 'from-value-' + tokenize(value, shape, dtype)
     dsk = {(name,) + (0,) * len(shape): value.key}
     chunks = tuple((d,) for d in shape)
+    # TODO: value._key may not be the name of the layer in value.dask
+    # This should be fixed after we build full expression graphs
     return Array(sharedict.merge(value.dask, (name, dsk),
                                  dependencies={name: {value._key}}),
                  name, chunks, dtype)

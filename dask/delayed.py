@@ -502,7 +502,8 @@ class DelayedLeaf(Delayed):
 
     @property
     def dask(self):
-        return sharedict.ShareDict({self._key: {self._key: self._obj}}, {})
+        return sharedict.ShareDict({self._key: {self._key: self._obj}},
+                                   dependencies={self._key: set()})
 
     def __call__(self, *args, **kwargs):
         return call_function(self._obj, self._key, args, kwargs,

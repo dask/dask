@@ -69,7 +69,7 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
                           for a in arrind_pairs[1::2]]
     arrind_pairs[1::2] = [index_subs(a, sub)
                           for a in arrind_pairs[1::2]]
-    new_axes = {index_subs(k, sub)[0]: v for k, v in new_axes.items()}
+    new_axes = {index_subs((k,), sub)[0]: v for k, v in new_axes.items()}
 
     # Unpack dask values in non-array arguments
     argpairs = list(toolz.partition(2, arrind_pairs))
@@ -572,7 +572,7 @@ def optimize_atop(full_graph, keys=()):
     keep = {k[0] if type(k) is tuple else k for k in keys}
     layers = full_graph.dicts
     dependents = core.reverse_dict(full_graph.dependencies)
-    roots = {k for k, v in full_graph.dicts.items()
+    roots = {k for k in full_graph.dicts
              if not dependents.get(k)}
     stack = list(roots)
 
@@ -582,7 +582,7 @@ def optimize_atop(full_graph, keys=()):
 
     while stack:
         layer = stack.pop()
-        if layer in seen:
+        if layer in seen or layer not in layers:
             continue
         seen.add(layer)
 
@@ -695,11 +695,16 @@ def rewrite_atop(inputs):
             # Bump new inputs up in list
             sub = {}
             for i, index in enumerate(new_indices):
-                if index not in indices:  # use old inputs if available
+                try:
+                    contains = index in indices
+                except (ValueError, TypeError):
+                    contains = False
+
+                if contains:  # use old inputs if available
+                    sub[atop_token(i)] = atop_token(indices.index(index))
+                else:
                     sub[atop_token(i)] = atop_token(len(indices))
                     indices.append(index)
-                else:
-                    sub[atop_token(i)] = atop_token(indices.index(index))
             new_dsk = subs(inputs[dep].dsk, sub)
 
             # indices.extend(new_indices)
@@ -725,9 +730,10 @@ def rewrite_atop(inputs):
     sub = {atop_token(k): atop_token(v) for k, v in sub.items()}
     dsk = {k: subs(v, sub) for k, v in dsk.items()}
 
+    indices_check = {k for k, v in indices if v is not None}
     numblocks = toolz.merge([inp.numblocks for inp in inputs.values()])
     numblocks = {k: v for k, v in numblocks.items()
-                 if k in toolz.pluck(0, indices)}
+                 if v is None or k in indices_check}
 
     out = TOP(root, inputs[root].output_indices, dsk, new_indices,
               numblocks=numblocks, new_axes=new_axes, concatenate=concatenate)

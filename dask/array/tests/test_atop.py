@@ -231,6 +231,18 @@ def test_atop_new_axes():
     assert_eq(y, np.ones((4, 5)) * 6)
 
 
+def test_atop_new_axes_2():
+    x = da.ones((2, 2), chunks=(1, 1))
+
+    def func(x):
+        return np.stack([x, -x], axis=-1)
+
+    y = atop(func, ('x', 'y', 'sign'), x, ('x', 'y'), dtype=x.dtype,
+             concatenate=True, new_axes={'sign': 2})
+
+    assert_eq(y, y)
+
+
 @pytest.mark.parametrize('concatenate', [True, False])
 def test_atop_stacked_new_axes(concatenate):
     def f(x):
@@ -319,3 +331,33 @@ def test_atop_raises_on_incorrect_indices():
 
     assert 'ii' in str(info.value)
     assert '1' in str(info.value)
+
+
+def test_atop_numpy_arg():
+    x = da.arange(10, chunks=(5,))
+    y = np.arange(1000)
+
+    x = x.map_blocks(lambda x, y: x, 1.0)
+    x = x.map_blocks(lambda x, y: x, 'abc')
+    x = x.map_blocks(lambda x, y: x, y)
+    x = x.map_blocks(lambda x, y: x, 'abc')
+    x = x.map_blocks(lambda x, y: x, 1.0)
+    x = x.map_blocks(lambda x, y, z: x, 'abc', np.array(['a', 'b'], dtype=object))
+    assert_eq(x, np.arange(10))
+
+
+def test_bag_array_conversion():
+    import dask.bag as db
+    b = db.range(10, npartitions=1)
+    x, = b.map_partitions(np.asarray).to_delayed()
+    x, = [da.from_delayed(a, shape=(10,), dtype=int) for a in [x]]
+    z = da.concatenate([x])
+    assert_eq(z, np.arange(10), check_graph=False)
+
+
+def test_svd():
+    x = da.ones((1, 1), chunks=(1, 1))
+    y = x * 2
+    u, s, v = da.linalg.svd(y)
+    z = y + u
+    assert_eq(z, z)

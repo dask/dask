@@ -100,8 +100,8 @@ rolling_method_args_check_less_precise = [
     ('median', (), False),
     ('min', (), False),
     ('max', (), False),
-    ('std', (), False),
-    ('var', (), False),
+    ('std', (), True),
+    ('var', (), True),
     ('skew', (), True),  # here and elsewhere, results for kurt and skew are
     ('kurt', (), True),  # checked with check_less_precise=True so that we are
     # only looking at 3ish decimal places for the equality check
