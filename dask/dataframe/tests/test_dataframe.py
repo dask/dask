@@ -981,6 +981,9 @@ def test_unknown_divisions():
     assert_eq(d.a + d.b + 1, full.a + full.b + 1)
 
 
+@pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
+                    reason="Parameter min_count not implemented in "
+                           "DataFrame.sum()")
 def test_sum_with_min_count():
     dfs = [pd.DataFrame([[None, 2, 3],
                          [None, 5, 6],
