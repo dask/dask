@@ -3124,8 +3124,8 @@ class DataFrame(_Frame):
     def _repr_data(self):
         meta = self._meta
         index = self._repr_divisions
-        values = {c: _repr_data_series(meta[c], index) for c in meta.columns}
-        return pd.DataFrame(values, columns=meta.columns)
+        series_list = [_repr_data_series(s, index=index) for _, s in meta.iteritems()]
+        return pd.concat(series_list, axis=1)
 
     _HTML_FMT = """<div><strong>Dask DataFrame Structure:</strong></div>
 {data}

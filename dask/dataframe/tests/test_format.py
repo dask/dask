@@ -3,6 +3,8 @@ import pandas as pd
 from textwrap import dedent
 
 import dask.dataframe as dd
+import dask.array as da
+import numpy as np
 from dask.dataframe.utils import PANDAS_VERSION
 
 if PANDAS_VERSION >= '0.21.0':
@@ -487,3 +489,9 @@ def test_categorical_format():
            "dtype: category\n"
            "Dask Name: from_pandas, 1 tasks")
     assert repr(unknown) == exp
+
+
+def test_duplicate_columns_repr():
+    arr = da.from_array(np.arange(10).reshape(5, 2), chunks=(5, 2))
+    frame = dd.from_dask_array(arr, columns=['a', 'a'])
+    repr(frame)
