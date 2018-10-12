@@ -8,7 +8,7 @@ import toolz
 from .. import base, core, sharedict, utils
 from ..compatibility import apply
 from ..delayed import to_task_dask
-from ..optimization import SubgraphCallable
+from ..optimization import CompiledSubgraphCallable
 
 
 def subs(task, substitution):
@@ -149,7 +149,7 @@ class TOP(collections.Mapping):
             return self._cached_dict
         else:
             keys = tuple(map(atop_token, range(len(self.indices))))
-            func = SubgraphCallable(self.dsk, self.output, keys)
+            func = CompiledSubgraphCallable(self.dsk, self.output, keys)
             self._cached_dict = top(
                 func,
                 self.output,
