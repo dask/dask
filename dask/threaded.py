@@ -56,6 +56,7 @@ def get(dsk, result, cache=None, num_workers=None, **kwargs):
     """
     global default_pool
     pool = config.get('pool', None)
+    num_workers = num_workers or config.get('num_workers', None)
     thread = current_thread()
 
     with pools_lock:
