@@ -872,9 +872,8 @@ def test_callable_scheduler():
     assert called[0]
 
 
-@pytest.mark.parametrize('num_workers', range(1, 4))
 @pytest.mark.parametrize('scheduler', ['threads', 'processes'])
-def test_num_workers_config(num_workers, scheduler):
+def test_num_workers_config(scheduler):
     # Regression test for issue #4082
 
     @delayed
@@ -883,6 +882,7 @@ def test_num_workers_config(num_workers, scheduler):
         return x
 
     a = [f(i) for i in range(5)]
+    num_workers = 3
     with dask.config.set(num_workers=num_workers), Profiler() as prof:
         a = compute(*a, scheduler=scheduler)
 
