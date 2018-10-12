@@ -8,8 +8,8 @@ import numpy as np
 
 from .core import (normalize_chunks, Array, slices_from_chunks, asarray,
                    broadcast_shapes, broadcast_to)
-from .. import sharedict
 from ..base import tokenize
+from ..highgraph import HighGraph
 from ..utils import ignoring, random_state_data, skip_doctest
 
 
@@ -163,9 +163,11 @@ class RandomState(object):
                         kwrg[k] = (getitem, lookup[k], slc)
             vals.append((_apply_random, self._RandomState, funcname, seed, size, arg, kwrg))
         dsk.update(dict(zip(keys, vals)))
-        dsk = sharedict.merge((name, dsk), *dsks,
-                              dependencies={name: {arg.name for arg in args if isinstance(arg, Array)}})
-        return Array(dsk, name, chunks + extra_chunks, dtype=dtype)
+        graph = HighGraph.from_collections(
+            name, dsk, dependencies=[arg for arg
+            in args if isinstance(arg, Array)]
+        )
+        return Array(graph, name, chunks + extra_chunks, dtype=dtype)
 
     @doc_wraps(np.random.RandomState.beta)
     def beta(self, a, b, size=None, chunks=None):
@@ -182,8 +184,7 @@ class RandomState(object):
     with ignoring(AttributeError):
         @doc_wraps(np.random.RandomState.choice)
         def choice(self, a, size=None, replace=True, p=None, chunks=None):
-            dsks = []
-            names = set()
+            dependencies = []
             # Normalize and validate `a`
             if isinstance(a, Integral):
                 # On windows the output dtype differs if p is provided or
@@ -199,8 +200,7 @@ class RandomState(object):
                 if a.ndim != 1:
                     raise ValueError("a must be one dimensional")
                 len_a = len(a)
-                dsks.append(a.dask)
-                names.add(a.name)
+                dependencies.append(a)
                 a = a.__dask_keys__()[0]
 
             # Normalize and validate `p`
@@ -220,7 +220,7 @@ class RandomState(object):
                 if len(p) != len_a:
                     raise ValueError("a and p must have the same size")
 
-                dsks.append(p.dask)
+                dependencies.append(p)
                 p = p.__dask_keys__()[0]
 
             if size is None:
@@ -243,9 +243,8 @@ class RandomState(object):
             dsk = {k: (_choice, state, a, size, replace, p) for
                    k, state, size in zip(keys, state_data, sizes)}
 
-            return Array(sharedict.merge((name, dsk), *dsks,
-                                         dependencies={name: names}),
-                         name, chunks, dtype=dtype)
+            graph = HighGraph.from_collections(name, dsk, dependencies=dependencies)
+            return Array(graph, name, chunks, dtype=dtype)
 
     # @doc_wraps(np.random.RandomState.dirichlet)
     # def dirichlet(self, alpha, size=None, chunks=None):

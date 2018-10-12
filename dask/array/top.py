@@ -7,7 +7,8 @@ import toolz
 
 from .. import base, core, sharedict, utils
 from ..compatibility import apply
-from ..delayed import to_task_dask
+from ..delayed import to_task_dask, unpack_collections
+from ..highgraph import HighGraph
 from ..optimization import SubgraphCallable
 
 
@@ -53,12 +54,20 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     numblocks = kwargs.pop('numblocks')
     concatenate = kwargs.pop('concatenate', None)
     new_axes = kwargs.pop('new_axes', {})
+    dependencies = []
 
-    graph = sharedict.ShareDict()
+    from .core import Array
+
+    arrind_pairs = list(arrind_pairs)
+    for i, arg in enumerate(arrind_pairs):
+        if i % 2 == 1:
+            continue
+        if isinstance(arg, Array):
+            arrind_pairs[i] = arg.name
+            dependencies.append(arg)
 
     # Transform indices to canonical elements
     # We use terms like _0, and _1 rather than provided index elements
-    arrind_pairs = list(arrind_pairs)
     unique_indices = {i for ii in arrind_pairs[1::2]
                       if ii is not None
                       for i in ii} | set(output_indices)
@@ -75,9 +84,9 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     argpairs = list(toolz.partition(2, arrind_pairs))
     for i, (arg, ind) in enumerate(argpairs):
         if ind is None:
-            arg2, dsk2 = to_task_dask(arg)
-            if dsk2:
-                graph.update(dsk2)
+            arg2, deps = unpack_collections(arg)
+            if deps:
+                dependencies.extend(deps)
                 argpairs[i] = (arg2, ind)
 
     # separate argpairs into two separate tuples
@@ -86,35 +95,34 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
 
     # Unpack delayed objects in kwargs
     if kwargs:
-        kwargs, dsk_kwargs = to_task_dask(kwargs)
+        kwargs, collections = unpack_collections(kwargs)
+        dependencies.extend(collections)
+        new_keys = {n for c in collections for n in c.__dask_layers__()}
 
         # replace keys in kwargs with _0 tokens
-        new_keys = list(core.get_dependencies(dsk_kwargs, task=kwargs))
+        # new_keys = list(core.get_dependencies(dsk_kwargs, task=kwargs))
         new_tokens = tuple(atop_token(i) for i in range(len(inputs), len(inputs) + len(new_keys)))
         sub = dict(zip(new_keys, new_tokens))
         inputs = inputs + tuple(new_keys)
         inputs_indices = inputs_indices + (None,) * len(new_keys)
         kwargs = subs(kwargs, sub)
-        graph.update(dsk_kwargs)
 
     indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
     keys = tuple(map(atop_token, range(len(inputs))))
 
     # Construct local graph
     if not kwargs:
-        dsk = {output: (func,) + keys}
+        subgraph = {output: (func,) + keys}
     else:
         _keys = list(keys)
         if new_keys:
             _keys = _keys[:-len(new_keys)]
-        dsk = {output: (apply, func, _keys, kwargs)}
+        subgraph = {output: (apply, func, _keys, kwargs)}
 
     # Construct final output
-    top = TOP(output, output_indices, dsk, indices,
+    top = TOP(output, output_indices, subgraph, indices,
               numblocks=numblocks, concatenate=concatenate, new_axes=new_axes)
-    graph.update_with_key(top, output)
-    graph.dependencies = {output: {arg for arg, ind in argpairs if ind is not None}}
-    return graph
+    return HighGraph.from_collections(output, top, dependencies=dependencies)
 
 
 class TOP(collections.Mapping):
@@ -472,7 +480,7 @@ def atop(func, out_ind, *args, **kwargs):
                              % (ind, arg.ndim))
 
     numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
-    argindsstr = list(toolz.concat([(normalize_arg(a) if ind is None else a.name, ind)
+    argindsstr = list(toolz.concat([(normalize_arg(a) if ind is None else a, ind)
                                     for a, ind in arginds]))
     # Finish up the name
     if not out:
@@ -480,8 +488,7 @@ def atop(func, out_ind, *args, **kwargs):
                          base.tokenize(func, out_ind, argindsstr, dtype, **kwargs))
 
     kwargs2 = {k: normalize_arg(v) for k, v in kwargs.items()}
-    dsk = _top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs2)
-    dsks = [a.dask for a, ind in arginds if ind is not None]
+    graph = _top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs2)
 
     chunks = [chunkss[i] for i in out_ind]
     if adjust_chunks:
@@ -498,9 +505,7 @@ def atop(func, out_ind, *args, **kwargs):
                         "adjust_chunks values must be callable, int, or tuple")
     chunks = tuple(chunks)
 
-    return Array(sharedict.merge((out, dsk), *dsks,
-                                 dependencies={out: {a.name for a, ind in arginds if ind is not None}}),
-                 out, chunks, dtype=dtype)
+    return Array(graph, out, chunks, dtype=dtype)
 
 
 def lol_tuples(head, ind, values, dummies):

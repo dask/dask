@@ -10,7 +10,7 @@ import numpy as np
 from toolz import memoize, merge, pluck, concat
 
 from .. import core
-from .. import sharedict
+from ..highgraph import HighGraph
 from ..base import tokenize, is_dask_collection
 
 colon = slice(None, None, None)
@@ -992,8 +992,8 @@ def slice_with_bool_dask_array(x, index):
         name = 'getitem-' + tokenize(x, index)
         dsk = {(name, i): k for i, k in enumerate(core.flatten(y.__dask_keys__()))}
         chunks = ((np.nan,) * y.npartitions,)
-        return (Array(sharedict.merge(y.dask, (name, dsk), dependencies={name: {y.name}}),
-                      name, chunks, x.dtype), out_index)
+        graph = HighGraph.from_collections(name, dsk, dependencies=[y])
+        return Array(graph, name, chunks, x.dtype), out_index
 
     if any(isinstance(ind, Array) and ind.dtype == bool and ind.ndim != 1
            for ind in index):

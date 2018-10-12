@@ -5,9 +5,9 @@ import types
 import uuid
 
 try:
-    from cytoolz import curry, pluck
+    from cytoolz import curry, pluck, concat
 except ImportError:
-    from toolz import curry, pluck
+    from toolz import curry, pluck, concat
 
 from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
@@ -18,6 +18,7 @@ from .context import globalmethod
 from .optimization import cull
 from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict
 from . import sharedict
+from .highgraph import HighGraph
 
 __all__ = ['Delayed', 'delayed']
 
@@ -28,6 +29,83 @@ def unzip(ls, nout):
     if not out:
         out = [()] * nout
     return out
+
+
+def finalize(collection):
+    assert is_dask_collection(collection)
+
+    name = 'finalize-' + tokenize(collection)
+    keys = collection.__dask_keys__()
+    finalize, args = collection.__dask_postcompute__()
+    layer = {name: (finalize, keys) + args}
+    graph = HighGraph.from_collections(name, layer, dependencies=collection)
+    return Delayed(name, graph)
+
+
+def unpack_collections(expr):
+    """Normalize a python object and merge all sub-graphs.
+
+    - Replace ``Delayed`` with their keys
+    - Convert literals to things the schedulers can handle
+    - Extract dask graphs from all enclosed values
+
+    Parameters
+    ----------
+    expr : object
+        The object to be normalized. This function knows how to handle
+        dask collections, as well as most builtin python types.
+
+    Returns
+    -------
+    task : normalized task to be run
+    collections : a set of collections
+
+    Examples
+    --------
+    >>> a = delayed(1, 'a')
+    >>> b = delayed(2, 'b')
+    >>> task, collections = unpack_collections([a, b, 3])
+    >>> task  # doctest: +SKIP
+    ['a', 'b', 3]
+    >>> collections  # doctest: +SKIP
+    {a, b}
+
+    >>> task, collections = unpack_collections({a: 1, b: 2})
+    >>> task  # doctest: +SKIP
+    (dict, [['a', 1], ['b', 2]])
+    >>> collections  # doctest: +SKIP
+    {a, b}
+    """
+    if isinstance(expr, Delayed):
+        return expr._key, {expr}
+
+    if is_dask_collection(expr):
+        finalized = finalize(expr)
+        return finalized._key, {finalized}
+
+    if isinstance(expr, Iterator):
+        expr = list(expr)
+
+    typ = type(expr)
+
+    if typ in (list, tuple, set):
+        args, collections = unzip((unpack_collections(e) for e in expr), 2)
+        args = list(args)
+        collections = list(concat(collections))
+        # Ensure output type matches input type
+        if typ is not list:
+            args = (typ, args)
+        return args, collections
+
+    if typ is dict:
+        args, collections = unpack_collections([[k, v] for k, v in expr.items()])
+        return (dict, args), collections
+
+    if typ is slice:
+        args, collections = unpack_collections([expr.start, expr.stop, expr.step])
+        return (slice,) + tuple(args), collections
+
+    return expr, set()
 
 
 def to_task_dask(expr):
@@ -311,10 +389,10 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         return obj
 
     if is_dask_collection(obj) or traverse:
-        task, dsk = to_task_dask(obj)
+        task, collections = unpack_collections(obj)
     else:
         task = quote(obj)
-        dsk = {}
+        collections = set()
 
     if task is obj:
         if not (nout is None or (type(nout) is int and nout >= 0)):
@@ -331,8 +409,9 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     else:
         if not name:
             name = '%s-%s' % (type(obj).__name__, tokenize(task, pure=pure))
-        dsk = sharedict.merge(dsk, (name, {name: task}), dependencies={})
-        return Delayed(name, dsk)
+        layer = {name: task}
+        graph = HighGraph.from_collections(name, layer, dependencies=collections)
+        return Delayed(name, graph)
 
 
 def right(method):
@@ -362,6 +441,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     def __init__(self, key, dsk, length=None):
         self._key = key
         if type(dsk) is list:  # compatibility with older versions
+            assert False
             dsk = sharedict.merge(*dsk, dependencies={})
         self.dask = dsk
         self._length = length
@@ -370,6 +450,9 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         return self.dask
 
     def __dask_keys__(self):
+        return [self.key]
+
+    def __dask_layers__(self):
         return [self.key]
 
     def __dask_tokenize__(self):
@@ -468,27 +551,21 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
         name = dask_key_name
 
     dsk = sharedict.ShareDict()
-    args_dasks = list(map(to_task_dask, args))
-    for arg, d in args_dasks:
-        if isinstance(d, sharedict.ShareDict):
-            dsk.update_with_key(d)
-        elif isinstance(arg, (str, tuple)):
-            dsk.update_with_key(d, key=arg)
-        else:
-            dsk.update(d)
 
-    args = tuple(pluck(0, args_dasks))
+    args2, collections = unzip(map(unpack_collections, args), 2)
+    collections = list(concat(collections))
 
     if kwargs:
-        dask_kwargs, dsk2 = to_task_dask(kwargs)
-        dsk.update(dsk2)
-        task = (apply, func, list(args), dask_kwargs)
+        dask_kwargs, collections2 = unpack_collections(kwargs)
+        collections.extend(collections2)
+        task = (apply, func, list(args2), dask_kwargs)
     else:
-        task = (func,) + args
+        task = (func,) + args2
 
-    dsk.update_with_key({name: task}, key=name)
+    graph = HighGraph.from_collections(name, {name: task},
+                                       dependencies=collections)
     nout = nout if nout is not None else None
-    return Delayed(name, dsk, length=nout)
+    return Delayed(name, graph, length=nout)
 
 
 class DelayedLeaf(Delayed):
@@ -502,8 +579,8 @@ class DelayedLeaf(Delayed):
 
     @property
     def dask(self):
-        return sharedict.ShareDict({self._key: {self._key: self._obj}},
-                                   dependencies={self._key: set()})
+        return HighGraph.from_collections(self._key, {self._key: self._obj},
+                                          dependencies=())
 
     def __call__(self, *args, **kwargs):
         return call_function(self._obj, self._key, args, kwargs,
@@ -520,9 +597,9 @@ class DelayedAttr(Delayed):
 
     @property
     def dask(self):
-        dsk = {self._key: (getattr, self._obj._key, self._attr)}
-        return sharedict.merge(self._obj.dask, (self._key, dsk),
-                               dependencies={})
+        layer = {self._key: (getattr, self._obj._key, self._attr)}
+        return HighGraph.from_collections(self._key, layer,
+                                          dependencies=[self._obj])
 
     def __call__(self, *args, **kwargs):
         return call_function(methodcaller(self._attr), self._attr, (self._obj,) + args, kwargs)
