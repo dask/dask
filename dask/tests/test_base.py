@@ -19,6 +19,7 @@ from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
 from dask.compatibility import long, unicode, PY2
+from dask.diagnostics import Profiler
 
 
 def import_or_none(path):
@@ -868,3 +869,18 @@ def test_callable_scheduler():
 
     assert delayed(lambda: 1)().compute(scheduler=get) == 1
     assert called[0]
+
+
+@pytest.mark.skipif('not da')
+@pytest.mark.parametrize('num_workers', range(1, 4))
+@pytest.mark.parametrize('scheduler', ['threads', 'processes'])
+def test_num_workers_config(num_workers, scheduler):
+    # Regression test for issue #4082
+    a = da.random.randint(0, 10, size=400, chunks=2)
+
+    with dask.config.set(num_workers=num_workers), Profiler() as prof:
+        a.compute(scheduler=scheduler)
+
+    workers = {i.worker_id for i in prof.results}
+
+    assert len(workers) == num_workers
