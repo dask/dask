@@ -6,6 +6,7 @@ from operator import add, mul
 import subprocess
 import sys
 import warnings
+import time
 
 from toolz import merge
 
@@ -871,15 +872,19 @@ def test_callable_scheduler():
     assert called[0]
 
 
-@pytest.mark.skipif('not da')
 @pytest.mark.parametrize('num_workers', range(1, 4))
 @pytest.mark.parametrize('scheduler', ['threads', 'processes'])
 def test_num_workers_config(num_workers, scheduler):
     # Regression test for issue #4082
-    a = da.random.randint(0, 10, size=400, chunks=2)
 
+    @delayed
+    def f(x):
+        time.sleep(0.5)
+        return x
+
+    a = [f(i) for i in range(5)]
     with dask.config.set(num_workers=num_workers), Profiler() as prof:
-        a.compute(scheduler=scheduler)
+        a = compute(*a, scheduler=scheduler)
 
     workers = {i.worker_id for i in prof.results}
 
