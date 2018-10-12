@@ -998,7 +998,7 @@ def test_sum_with_min_count():
         for axis in axes:
             for min_count in [0, 1, 2, 3]:
                 assert_eq(df.sum(min_count=min_count, axis=axis),
-                          ddf.sum(min_count=min_count, axis=axis).compute())
+                          ddf.sum(min_count=min_count, axis=axis))
 
 
 @pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
@@ -1018,7 +1018,7 @@ def test_prod_with_min_count():
         for axis in axes:
             for min_count in [0, 1, 2, 3]:
                 assert_eq(df.prod(min_count=min_count, axis=axis),
-                          ddf.prod(min_count=min_count, axis=axis).compute())
+                          ddf.prod(min_count=min_count, axis=axis))
 
 
 @pytest.mark.parametrize('join', ['inner', 'outer', 'left', 'right'])
