@@ -11,7 +11,7 @@ from dask.core import get_dependencies
 from dask.local import get_sync
 from dask.optimization import (cull, fuse, inline, inline_functions,
                                functions_of, fuse_getitem, fuse_selections,
-                               fuse_linear, SubgraphCallable)
+                               fuse_linear, SubgraphCallable, CompiledSubgraphCallable)
 from dask.utils import partial_by_order
 
 
@@ -1122,6 +1122,47 @@ def test_SubgraphCallable():
 
     f2 = pickle.loads(pickle.dumps(f))
     assert f2(1, 2) == f(1, 2)
+
+
+def test_CompiledSubgraphCallable():
+    non_hashable = [1, 2, 3]
+
+    dsk = {'a': (apply, add, ['in1', 2]),
+           'b': (apply, func_with_kwargs, ['in2', 20], {'c': 4}),
+           'c': (apply, func_with_kwargs, ['in2', 'in1'], (dict, (zip, ('c',), ['in1']))),
+           'd': (inc, 'a'),
+           'e': (add, 'c', 'd'),
+           'f': ['a', 2, 'b', (add, 'b', (sum, non_hashable))],
+           'g': (dontcall, 'in1'),
+           'h': (add, (sum, 'f'), (sum, ['a', 'b', 'e']))}
+
+    f = CompiledSubgraphCallable(dsk, 'h', ['in1', 'in2'], name='test')
+
+    assert f.name == 'test'
+    assert repr(f) == 'test'
+
+    nglobals = len(f.namespace)
+    glbls = list(f.namespace.values())
+    assert dontcall not in glbls
+    assert apply not in glbls
+    assert partial_by_order not in glbls
+    assert non_hashable in glbls
+
+    dsk2 = dsk.copy()
+    dsk2.update({'in1': 1, 'in2': 2})
+    assert f(1, 2) == get_sync(cull(dsk2, ['h'])[0], ['h'])[0]
+    assert f(1, 2) == f(1, 2)
+    # Not mutated by calling
+    assert len(f.namespace) == nglobals
+
+    f2 = pickle.loads(pickle.dumps(f))
+    assert f2.func is None  # func is recompiled after unpickling
+    assert f == f2
+    assert not f != f2
+    assert f2(1, 2) == f(1, 2)
+    assert f2.name == f.name
+    assert f2.code == f.code
+    assert f2.namespace == f.namespace
 
 
 def test_fuse_subgraphs():

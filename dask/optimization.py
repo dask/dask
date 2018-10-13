@@ -3,11 +3,12 @@ from __future__ import absolute_import, division, print_function
 import math
 import re
 from operator import getitem
+from itertools import count
 
 from . import config
-from .compatibility import unicode
-from .core import (istask, get_dependencies, subs, toposort,
-                   flatten, reverse_dict, ishashable, _get_recursive)
+from .compatibility import unicode, exec_, apply
+from .core import (istask, has_tasks, get_dependencies, subs, toposort,
+                   _toposort, flatten, reverse_dict, ishashable, _get_recursive)
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -944,3 +945,101 @@ class SubgraphCallable(object):
     def __reduce__(self):
         return (SubgraphCallable,
                 (self.dsk, self.outkey, self.inkeys, self.name))
+
+
+def _gencode(x, dsk, names, namespace, cache, all_keys):
+    """A helper for generating code for CompiledSubgraphCallable."""
+    if istask(x):
+        func, args = x[0], x[1:]
+        kwargs = {}
+        if func is apply:
+            if len(args) == 3:
+                func, args, kwargs = args
+            else:
+                func, args = args
+        func = _gencode(func, dsk, names, namespace, cache, all_keys)
+        args = [_gencode(a, dsk, names, namespace, cache, all_keys) for a in args]
+        if kwargs:
+            args.append(
+                '**(%s)' % _gencode(kwargs, dsk, names, namespace, cache, all_keys)
+            )
+        return "%s(%s)" % (func, ', '.join(args))
+    elif isinstance(x, list) and has_tasks(all_keys, x):
+        args = [_gencode(a, dsk, names, namespace, cache, all_keys) for a in x]
+        return "[%s]" % ', '.join(args)
+    elif ishashable(x):
+        if x in cache:
+            sym = cache[x]
+        else:
+            sym = cache[x] = next(names)
+            if x not in dsk:
+                namespace[sym] = x
+        return sym
+    else:
+        sym = next(names)
+        namespace[sym] = x
+        return sym
+
+
+class CompiledSubgraphCallable(object):
+    """A version of SubgraphCallable that compiles the subgraph to a
+    python function.
+
+    Parameters
+    ----------
+    dsk : dict
+        A dask graph
+    outkey : hashable
+        The output key from the graph
+    inkeys : list
+        A list of keys to be used as arguments to the callable.
+    name : str, optional
+        The name to use for the function.
+    """
+    __slots__ = ('code', 'namespace', 'name', 'func')
+
+    def __init__(self, dsk, outkey, inkeys, name='subgraph_callable'):
+        names = ('_%d_' % i for i in count())
+        all_keys = set(dsk)
+        all_keys.update(inkeys)
+        namespace = {}
+        cache = dict(zip(inkeys, names))
+        header = 'def %s(%s):' % (name, ', '.join(cache[a] for a in inkeys))
+        lines = [header]
+        for key in _toposort(dsk, outkey):
+            task = dsk[key]
+            lhs = _gencode(key, dsk, names, namespace, cache, all_keys)
+            rhs = _gencode(task, dsk, names, namespace, cache, all_keys)
+            lines.append('    %s = %s' % (lhs, rhs))
+        lines.append('    return %s' % cache[outkey])
+
+        self.code = '\n'.join(lines)
+        self.namespace = namespace
+        self.name = name
+        self.func = None
+
+    def __repr__(self):
+        return self.name
+
+    def __eq__(self, other):
+        return (type(self) is type(other) and
+                self.code == other.code and
+                self.namespace == other.namespace and
+                self.name == other.name)
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __call__(self, *args):
+        if self.func is None:
+            n = self.namespace.copy()
+            exec_(self.code, n)
+            self.func = n[self.name]
+        return self.func(*args)
+
+    def __getstate__(self):
+        return (self.code, self.namespace, self.name)
+
+    def __setstate__(self, state):
+        self.code, self.namespace, self.name = state
+        self.func = None
