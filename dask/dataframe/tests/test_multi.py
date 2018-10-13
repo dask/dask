@@ -1207,8 +1207,8 @@ def test_append2():
     meta = make_meta({'b': 'i8', 'c': 'i8'})
     ddf3 = dd.DataFrame(dsk, 'y', meta, [None, None])
 
-    assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute(), sort=False))
-    assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute(), sort=False))
+    assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute(), **concat_kwargs))
+    assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute(), **concat_kwargs))
     # Series + DataFrame
     with pytest.warns(None):
         # RuntimeWarning from pandas on comparing int and str
@@ -1216,8 +1216,8 @@ def test_append2():
         assert_eq(ddf2.a.append(ddf1), ddf2.a.compute().append(ddf1.compute()))
 
     # different columns
-    assert_eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute(), sort=False))
-    assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute(), sort=False))
+    assert_eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute(), **concat_kwargs))
+    assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute(), **concat_kwargs))
     # Series + DataFrame
     with pytest.warns(None):
         # RuntimeWarning from pandas on comparing int and str
@@ -1225,8 +1225,8 @@ def test_append2():
         assert_eq(ddf3.b.append(ddf1), ddf3.b.compute().append(ddf1.compute()))
 
     # Dask + pandas
-    assert_eq(ddf1.append(ddf2.compute()), ddf1.compute().append(ddf2.compute(), sort=False))
-    assert_eq(ddf2.append(ddf1.compute()), ddf2.compute().append(ddf1.compute(), sort=False))
+    assert_eq(ddf1.append(ddf2.compute()), ddf1.compute().append(ddf2.compute(), **concat_kwargs))
+    assert_eq(ddf2.append(ddf1.compute()), ddf2.compute().append(ddf1.compute(), **concat_kwargs))
     # Series + DataFrame
     with pytest.warns(None):
         # RuntimeWarning from pandas on comparing int and str
@@ -1234,8 +1234,8 @@ def test_append2():
         assert_eq(ddf2.a.append(ddf1.compute()), ddf2.a.compute().append(ddf1.compute()))
 
     # different columns
-    assert_eq(ddf1.append(ddf3.compute()), ddf1.compute().append(ddf3.compute(), sort=False))
-    assert_eq(ddf3.append(ddf1.compute()), ddf3.compute().append(ddf1.compute(), sort=False))
+    assert_eq(ddf1.append(ddf3.compute()), ddf1.compute().append(ddf3.compute(), **concat_kwargs))
+    assert_eq(ddf3.append(ddf1.compute()), ddf3.compute().append(ddf1.compute(), **concat_kwargs))
     # Series + DataFrame
     with pytest.warns(None):
         # RuntimeWarning from pandas on comparing int and str
