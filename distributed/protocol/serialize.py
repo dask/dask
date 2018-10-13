@@ -144,7 +144,7 @@ def serialize(x, serializers=None, on_error='message', context=None):
             tb = traceback.format_exc()
             break
 
-    msg = "Could not serialize object of type %s" % type(x).__name__
+    msg = "Could not serialize object of type %s." % type(x).__name__
     if on_error == 'message':
         frames = [msg]
         if tb:
@@ -154,7 +154,7 @@ def serialize(x, serializers=None, on_error='message', context=None):
 
         return {'serializer': 'error'}, frames
     elif on_error == 'raise':
-        raise TypeError(msg)
+        raise TypeError(msg, str(x)[:10000])
 
 
 def deserialize(header, frames, deserializers=None):
