@@ -249,13 +249,8 @@ def test_indexed_concat(join):
                      index=[1, 2, 4, 5, 6, 8])
     b = dd.repartition(B, [1, 2, 5, 8])
 
-    with warnings.catch_warnings(record=True) as w:
-        expected = pd.concat([A, B], axis=0, join=join)
-
-    ctx = FutureWarning if w else None
-
-    with pytest.warns(ctx):
-        result = concat_indexed_dataframes([a, b], join=join)
+    expected = pd.concat([A, B], axis=0, join=join, sort=False)
+    result = concat_indexed_dataframes([a, b], join=join)
     assert_eq(result, expected)
 
     with warnings.catch_warnings():
@@ -290,14 +285,8 @@ def test_concat(join):
     for (dd1, dd2, pd1, pd2) in [(ddf1, ddf2, pdf1, pdf2),
                                  (ddf1, ddf3, pdf1, pdf3)]:
 
-        with warnings.catch_warnings(record=True) as a:
-            expected = pd.concat([pd1, pd2], join=join)
-
-        # warn iff pandas warns
-        ctx = FutureWarning if a else None
-
-        with pytest.warns(ctx):
-            result = dd.concat([dd1, dd2], join=join)
+        expected = pd.concat([pd1, pd2], join=join, sort=True)
+        result = dd.concat([dd1, dd2], join=join)
         assert_eq(result, expected)
 
     # test outer only, inner has a problem on pandas side
@@ -307,13 +296,8 @@ def test_concat(join):
                                  (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
                                  (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
                                  (ddf1.x, ddf3.z, pdf1.x, pdf3.z)]:
-        with warnings.catch_warnings(record=True) as a:
-            expected = pd.concat([pd1, pd2])
-
-        ctx = FutureWarning if a else None
-
-        with pytest.warns(ctx):
-            result = dd.concat([dd1, dd2])
+        expected = pd.concat([pd1, pd2], sort=True)
+        result = dd.concat([dd1, dd2])
         assert_eq(result, expected)
 
 
@@ -893,7 +877,7 @@ def test_concat2():
         pdcase = [_c.compute() for _c in case]
 
         with warnings.catch_warnings(record=True) as w:
-            expected = pd.concat(pdcase)
+            expected = pd.concat(pdcase, sort=False)
 
         ctx = FutureWarning if w else None
 
@@ -909,7 +893,7 @@ def test_concat2():
             assert set(result.dask) == set(dd.concat(case).dask)
 
         with warnings.catch_warnings(record=True) as w:
-            expected = pd.concat(pdcase, join='inner')
+            expected = pd.concat(pdcase, join='inner', sort=False)
 
         ctx = FutureWarning if w else None
 
@@ -936,7 +920,7 @@ def test_concat3():
     ddf3 = dd.from_pandas(pdf3, 2)
 
     with warnings.catch_warnings(record=True) as w:
-        expected = pd.concat([pdf1, pdf2])
+        expected = pd.concat([pdf1, pdf2], sort=False)
 
     ctx = FutureWarning if w else None
 
@@ -953,7 +937,7 @@ def test_concat3():
                   pd.concat([pdf1, pdf2]))
 
     with warnings.catch_warnings(record=True) as w:
-        expected = pd.concat([pdf1, pdf2, pdf3])
+        expected = pd.concat([pdf1, pdf2, pdf3], sort=False)
 
     ctx = FutureWarning if w else None
 
@@ -998,9 +982,9 @@ def test_concat4_interleave_partitions():
         assert msg in str(err.value)
 
         assert_eq(dd.concat(case, interleave_partitions=True),
-                  pd.concat(pdcase))
+                  pd.concat(pdcase, sort=False))
         assert_eq(dd.concat(case, join='inner', interleave_partitions=True),
-                  pd.concat(pdcase, join='inner'))
+                  pd.concat(pdcase, join='inner', sort=False))
 
     msg = "'join' must be 'inner' or 'outer'"
     with pytest.raises(ValueError) as err:
@@ -1039,7 +1023,7 @@ def test_concat5():
         with pytest.warns(None):
             # some cases will raise warning directly from pandas
             assert_eq(dd.concat(case, interleave_partitions=True),
-                      pd.concat(pdcase))
+                      pd.concat(pdcase, sort=False))
 
         assert_eq(dd.concat(case, join='inner', interleave_partitions=True),
                   pd.concat(pdcase, join='inner'))
@@ -1175,12 +1159,10 @@ def test_append():
     s = pd.Series([7, 8], name=6, index=['a', 'b'])
 
     def check_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
-        with warnings.catch_warnings(record=True) as w:
+        with warnings.catch_warnings(record=True):
             expected = pandas_obj.append(pandas_append)
 
-        ctx = FutureWarning if w else None
-        with pytest.warns(ctx):
-            result = dask_obj.append(dask_append)
+        result = dask_obj.append(dask_append)
 
         assert_eq(result, expected)
 
@@ -1225,8 +1207,8 @@ def test_append2():
     meta = make_meta({'b': 'i8', 'c': 'i8'})
     ddf3 = dd.DataFrame(dsk, 'y', meta, [None, None])
 
-    assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute()))
-    assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute()))
+    assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute(), sort=False))
+    assert_eq(ddf2.append(ddf1), ddf2.compute().append(ddf1.compute(), sort=False))
     # Series + DataFrame
     with pytest.warns(None):
         # RuntimeWarning from pandas on comparing int and str
@@ -1234,8 +1216,8 @@ def test_append2():
         assert_eq(ddf2.a.append(ddf1), ddf2.a.compute().append(ddf1.compute()))
 
     # different columns
-    assert_eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute()))
-    assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute()))
+    assert_eq(ddf1.append(ddf3), ddf1.compute().append(ddf3.compute(), sort=False))
+    assert_eq(ddf3.append(ddf1), ddf3.compute().append(ddf1.compute(), sort=False))
     # Series + DataFrame
     with pytest.warns(None):
         # RuntimeWarning from pandas on comparing int and str
@@ -1243,8 +1225,8 @@ def test_append2():
         assert_eq(ddf3.b.append(ddf1), ddf3.b.compute().append(ddf1.compute()))
 
     # Dask + pandas
-    assert_eq(ddf1.append(ddf2.compute()), ddf1.compute().append(ddf2.compute()))
-    assert_eq(ddf2.append(ddf1.compute()), ddf2.compute().append(ddf1.compute()))
+    assert_eq(ddf1.append(ddf2.compute()), ddf1.compute().append(ddf2.compute(), sort=False))
+    assert_eq(ddf2.append(ddf1.compute()), ddf2.compute().append(ddf1.compute(), sort=False))
     # Series + DataFrame
     with pytest.warns(None):
         # RuntimeWarning from pandas on comparing int and str
@@ -1252,8 +1234,8 @@ def test_append2():
         assert_eq(ddf2.a.append(ddf1.compute()), ddf2.a.compute().append(ddf1.compute()))
 
     # different columns
-    assert_eq(ddf1.append(ddf3.compute()), ddf1.compute().append(ddf3.compute()))
-    assert_eq(ddf3.append(ddf1.compute()), ddf3.compute().append(ddf1.compute()))
+    assert_eq(ddf1.append(ddf3.compute()), ddf1.compute().append(ddf3.compute(), sort=False))
+    assert_eq(ddf3.append(ddf1.compute()), ddf3.compute().append(ddf1.compute(), sort=False))
     # Series + DataFrame
     with pytest.warns(None):
         # RuntimeWarning from pandas on comparing int and str
