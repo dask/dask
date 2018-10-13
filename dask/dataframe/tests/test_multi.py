@@ -7,7 +7,7 @@ import pandas.util.testing as tm
 
 from dask.base import compute_as_if_collection
 from dask.dataframe.core import _Frame
-from dask.dataframe.methods import concat
+from dask.dataframe.methods import concat, concat_kwargs
 from dask.dataframe.multi import (align_partitions, merge_indexed_dataframes,
                                   hash_join, concat_indexed_dataframes,
                                   _maybe_align_partitions)
@@ -249,7 +249,7 @@ def test_indexed_concat(join):
                      index=[1, 2, 4, 5, 6, 8])
     b = dd.repartition(B, [1, 2, 5, 8])
 
-    expected = pd.concat([A, B], axis=0, join=join, sort=False)
+    expected = pd.concat([A, B], axis=0, join=join, **concat_kwargs)
     result = concat_indexed_dataframes([a, b], join=join)
     assert_eq(result, expected)
 
@@ -285,7 +285,7 @@ def test_concat(join):
     for (dd1, dd2, pd1, pd2) in [(ddf1, ddf2, pdf1, pdf2),
                                  (ddf1, ddf3, pdf1, pdf3)]:
 
-        expected = pd.concat([pd1, pd2], join=join, sort=True)
+        expected = pd.concat([pd1, pd2], join=join)
         result = dd.concat([dd1, dd2], join=join)
         assert_eq(result, expected)
 
@@ -296,7 +296,7 @@ def test_concat(join):
                                  (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
                                  (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
                                  (ddf1.x, ddf3.z, pdf1.x, pdf3.z)]:
-        expected = pd.concat([pd1, pd2], sort=True)
+        expected = pd.concat([pd1, pd2])
         result = dd.concat([dd1, dd2])
         assert_eq(result, expected)
 
@@ -877,7 +877,7 @@ def test_concat2():
         pdcase = [_c.compute() for _c in case]
 
         with warnings.catch_warnings(record=True) as w:
-            expected = pd.concat(pdcase, sort=False)
+            expected = pd.concat(pdcase, **concat_kwargs)
 
         ctx = FutureWarning if w else None
 
@@ -893,7 +893,7 @@ def test_concat2():
             assert set(result.dask) == set(dd.concat(case).dask)
 
         with warnings.catch_warnings(record=True) as w:
-            expected = pd.concat(pdcase, join='inner', sort=False)
+            expected = pd.concat(pdcase, join='inner', **concat_kwargs)
 
         ctx = FutureWarning if w else None
 
@@ -920,7 +920,7 @@ def test_concat3():
     ddf3 = dd.from_pandas(pdf3, 2)
 
     with warnings.catch_warnings(record=True) as w:
-        expected = pd.concat([pdf1, pdf2], sort=False)
+        expected = pd.concat([pdf1, pdf2], **concat_kwargs)
 
     ctx = FutureWarning if w else None
 
@@ -937,7 +937,7 @@ def test_concat3():
                   pd.concat([pdf1, pdf2]))
 
     with warnings.catch_warnings(record=True) as w:
-        expected = pd.concat([pdf1, pdf2, pdf3], sort=False)
+        expected = pd.concat([pdf1, pdf2, pdf3], **concat_kwargs)
 
     ctx = FutureWarning if w else None
 
@@ -982,9 +982,9 @@ def test_concat4_interleave_partitions():
         assert msg in str(err.value)
 
         assert_eq(dd.concat(case, interleave_partitions=True),
-                  pd.concat(pdcase, sort=False))
+                  pd.concat(pdcase, **concat_kwargs))
         assert_eq(dd.concat(case, join='inner', interleave_partitions=True),
-                  pd.concat(pdcase, join='inner', sort=False))
+                  pd.concat(pdcase, join='inner', **concat_kwargs))
 
     msg = "'join' must be 'inner' or 'outer'"
     with pytest.raises(ValueError) as err:
@@ -1023,7 +1023,7 @@ def test_concat5():
         with pytest.warns(None):
             # some cases will raise warning directly from pandas
             assert_eq(dd.concat(case, interleave_partitions=True),
-                      pd.concat(pdcase, sort=False))
+                      pd.concat(pdcase, **concat_kwargs))
 
         assert_eq(dd.concat(case, join='inner', interleave_partitions=True),
                   pd.concat(pdcase, join='inner'))
