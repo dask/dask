@@ -3678,7 +3678,7 @@ def map_partitions(func, *args, **kwargs):
     dsk = {}
     for i in range(dfs[0].npartitions):
         values = [(arg._name, i if isinstance(arg, _Frame) else 0)
-                  if isinstance(arg, (_Frame, Scalar)) else arg for arg in args]
+                  if isinstance(arg, (_Frame, Scalar)) else arg for arg in args2]
         dsk[(name, i)] = (apply_and_enforce, func, values, kwargs_task, meta)
 
     graph = HighGraph.from_collections(name, dsk, dependencies=dependencies)
