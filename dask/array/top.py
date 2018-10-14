@@ -54,17 +54,9 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     numblocks = kwargs.pop('numblocks')
     concatenate = kwargs.pop('concatenate', None)
     new_axes = kwargs.pop('new_axes', {})
-    dependencies = []
-
-    from .core import Array
+    dependencies = kwargs.pop('dependencies', [])
 
     arrind_pairs = list(arrind_pairs)
-    for i, arg in enumerate(arrind_pairs):
-        if i % 2 == 1:
-            continue
-        if isinstance(arg, Array):
-            arrind_pairs[i] = arg.name
-            dependencies.append(arg)
 
     # Transform indices to canonical elements
     # We use terms like _0, and _1 rather than provided index elements
@@ -82,23 +74,14 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
 
     # Unpack dask values in non-array arguments
     argpairs = list(toolz.partition(2, arrind_pairs))
-    for i, (arg, ind) in enumerate(argpairs):
-        if ind is None:
-            arg2, deps = unpack_collections(arg)
-            if deps:
-                dependencies.extend(deps)
-                argpairs[i] = (arg2, ind)
 
     # separate argpairs into two separate tuples
     inputs = tuple([name for name, _ in argpairs])
     inputs_indices = tuple([index for _, index in argpairs])
 
     # Unpack delayed objects in kwargs
+    new_keys = {n for c in dependencies for n in c.__dask_layers__()}
     if kwargs:
-        kwargs, collections = unpack_collections(kwargs)
-        dependencies.extend(collections)
-        new_keys = {n for c in collections for n in c.__dask_layers__()}
-
         # replace keys in kwargs with _0 tokens
         # new_keys = list(core.get_dependencies(dsk_kwargs, task=kwargs))
         new_tokens = tuple(atop_token(i) for i in range(len(inputs), len(inputs) + len(new_keys)))
@@ -117,11 +100,13 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
         _keys = list(keys)
         if new_keys:
             _keys = _keys[:-len(new_keys)]
-        subgraph = {output: (apply, func, _keys, kwargs)}
+        kwargs2 = (dict, list(map(list, kwargs.items())))
+        subgraph = {output: (apply, func, _keys, kwargs2)}
 
     # Construct final output
     top = TOP(output, output_indices, subgraph, indices,
               numblocks=numblocks, concatenate=concatenate, new_axes=new_axes)
+    return top
     return HighGraph.from_collections(output, top, dependencies=dependencies)
 
 
@@ -462,7 +447,7 @@ def atop(func, out_ind, *args, **kwargs):
     token = kwargs.pop('token', None)
     dtype = kwargs.pop('dtype', None)
     adjust_chunks = kwargs.pop('adjust_chunks', None)
-    new_axes = kwargs.get('new_axes', {})
+    new_axes = kwargs.pop('new_axes', {})
 
     from .core import Array, unify_chunks, normalize_arg
 
@@ -480,15 +465,39 @@ def atop(func, out_ind, *args, **kwargs):
                              % (ind, arg.ndim))
 
     numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
-    argindsstr = list(toolz.concat([(normalize_arg(a) if ind is None else a, ind)
-                                    for a, ind in arginds]))
+
+    dependencies = []
+    arrays = []
+
+    # Normalize arguments
+    argindsstr = []
+    for a, ind in arginds:
+        if ind is None:
+            a = normalize_arg(a)
+            a, collections = unpack_collections(a)
+            dependencies.extend(collections)
+        else:
+            arrays.append(a)
+            a = a.name
+        argindsstr.extend((a, ind))
+
+    # Normalize keyword arguments
+    kwargs2 = {}
+    for k, v in kwargs.items():
+        v = normalize_arg(v)
+        v, collections = unpack_collections(v)
+        dependencies.extend(collections)
+        kwargs2[k] = v
+
     # Finish up the name
     if not out:
         out = '%s-%s' % (token or utils.funcname(func).strip('_'),
                          base.tokenize(func, out_ind, argindsstr, dtype, **kwargs))
 
-    kwargs2 = {k: normalize_arg(v) for k, v in kwargs.items()}
-    graph = _top(func, out, out_ind, *argindsstr, numblocks=numblocks, **kwargs2)
+    graph = _top(func, out, out_ind, *argindsstr, numblocks=numblocks,
+                 dependencies=dependencies, new_axes=new_axes, **kwargs2)
+    graph = HighGraph.from_collections(out, graph,
+                                       dependencies=arrays + dependencies)
 
     chunks = [chunkss[i] for i in out_ind]
     if adjust_chunks:

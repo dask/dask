@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from bisect import bisect
+import copy
 from functools import partial, wraps
 from itertools import product
 import math
@@ -49,7 +50,7 @@ from ..highgraph import HighGraph
 from ..bytes.core import get_mapper, get_fs_token_paths
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
-from .top import atop, _top, top
+from .top import atop, _top, top, subs
 
 
 config.update_defaults({'array': {
@@ -554,7 +555,7 @@ def map_blocks(func, *args, **kwargs):
     if isinstance(drop_axis, Number):
         drop_axis = [drop_axis]
     if isinstance(new_axis, Number):
-        new_axis = [new_axis]
+        new_axis = [new_axis]  # TODO: handle new_axis
 
     arrs = [a for a in args if isinstance(a, Array)]
 
@@ -566,27 +567,35 @@ def map_blocks(func, *args, **kwargs):
     out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
 
     if has_keyword(func, 'block_id'):
-        kwargs['block_id'] = '__dummy__'
+        kwargs['block_id'] = '__block_id_dummy__'
     if has_keyword(func, 'block_info'):
-        kwargs['block_info'] = '__dummy__'
+        kwargs['block_info'] = '__block_info_dummy__'
 
     original_kwargs = kwargs
-    kwargs = {k: normalize_arg(v) for k, v in kwargs.items()}
-    if (has_keyword(func, 'block_id') or has_keyword(func, 'block_info') or drop_axis):
-        my_top = top
-        argpairs = [(a.name, ind) if ind is not None else (a, ind)
-                    for a, ind in argpairs]
-    else:
-        my_top = _top
-    arginds = list(concat([(normalize_arg(x) if ind is None else x, ind)
-                           for x, ind in argpairs]))
-    dsk = my_top(func, name, out_ind, *arginds, numblocks=numblocks,
-                 **kwargs)
 
-    # If func has block_id as an argument, add it to the kwargs for each call
+    if dtype is None:
+        kwargs2 = original_kwargs
+        if has_keyword(func, 'block_id'):
+            kwargs2 = assoc(kwargs, 'block_id', first(dsk.keys())[1:])
+        if has_keyword(func, 'block_info'):
+            kwargs2 = assoc(kwargs, 'block_info', first_info)
+        dtype = apply_infer_dtype(func, args, kwargs2, 'map_blocks')
+
+    out = atop(func, out_ind, *concat(argpairs), name=name,
+               new_axes={}, dtype=dtype, **kwargs)
+
+    if (has_keyword(func, 'block_id') or has_keyword(func, 'block_info') or drop_axis):
+        dsk = out.dask.layers[out.name]
+        dsk = dict(dsk)
+        out.dask.layers[out.name] = dsk
+
     if has_keyword(func, 'block_id'):
-        for k in dsk.keys():
-            dsk[k] = dsk[k][:-1] + (assoc(dsk[k][-1], 'block_id', k[1:]),)
+        for k, vv in dsk.items():
+            v = copy.copy(vv[0])
+            [(key, task)] = v.dsk.items()
+            task = subs(task, {'__block_id_dummy__': k[1:]})
+            v.dsk[key] = task
+            dsk[k] = (v, vv[1:])
 
     # If func has block_info as an argument, add it to the kwargs for each call
     if has_keyword(func, 'block_info'):
@@ -606,7 +615,9 @@ def map_blocks(func, *args, **kwargs):
                 num_chunks[i] = arg.numblocks
 
         first_info = None
-        for k in dsk.keys():
+        for k, v in dsk.items():
+            v = v[0]
+            [(key, task)] = v.dsk.items()  # unpack subgraph callable
             info = {i: {'shape': shapes[i],
                         'num-chunks': num_chunks[i],
                         'array-location': [(starts[i][ij][j], starts[i][ij][j + 1])
@@ -616,15 +627,8 @@ def map_blocks(func, *args, **kwargs):
             if first is None:
                 first_info = info  # for the dtype computation just below
 
-            dsk[k] = dsk[k][:-1] + (assoc(dsk[k][-1], 'block_info', info),)
-
-    if dtype is None:
-        kwargs2 = original_kwargs
-        if has_keyword(func, 'block_id'):
-            kwargs2 = assoc(kwargs, 'block_id', first(dsk.keys())[1:])
-        if has_keyword(func, 'block_info'):
-            kwargs2 = assoc(kwargs, 'block_info', first_info)
-        dtype = apply_infer_dtype(func, args, kwargs2, 'map_blocks')
+            task = subs(task, {'__block_info_dummy__': info})
+            v.dsk[key] = task
 
     if len(arrs) == 1:
         numblocks = list(arrs[0].numblocks)
@@ -636,11 +640,14 @@ def map_blocks(func, *args, **kwargs):
         if any(numblocks[i] > 1 for i in drop_axis):
             raise ValueError("Can't drop an axis with more than 1 block. "
                              "Please use `atop` instead.")
-        dsk = dict((tuple(k for i, k in enumerate(k)
+        dsk2 = dict((tuple(k for i, k in enumerate(k)
                           if i - 1 not in drop_axis), v)
                    for k, v in dsk.items())
+        dsk.clear()
+        dsk.update(dsk2)
         numblocks = [n for i, n in enumerate(numblocks) if i not in drop_axis]
-    if new_axis:
+
+    if False and new_axis:
         new_axis = sorted(new_axis)
         for i in new_axis:
             if not 0 <= i <= len(numblocks):
@@ -671,27 +678,10 @@ def map_blocks(func, *args, **kwargs):
                 chunks2.append(c)
             else:
                 chunks2.append(nb * (c,))
-    else:
-        if len(arrs) == 1:
-            chunks2 = list(arrs[0].chunks)
-        else:
-            try:
-                chunks2 = list(broadcast_chunks(*[a.chunks for a in arrs]))
-            except Exception:
-                raise ValueError("Arrays in `map_blocks` don't align, can't "
-                                 "infer output chunks. Please provide "
-                                 "`chunks` kwarg.")
-        if drop_axis:
-            chunks2 = [c for (i, c) in enumerate(chunks2) if i not in drop_axis]
-        if new_axis:
-            for i in sorted(new_axis):
-                chunks2.insert(i, (1,))
+        out._chunks = tuple(chunks2)
 
-    chunks = tuple(chunks2)
 
-    assert isinstance(dsk, HighGraph)
-    # graph = HighGraph.from_collections(name, dsk, dependencies=arrs)
-    return Array(dsk, name, chunks, dtype)
+    return out
 
 
 def broadcast_chunks(*chunkss):

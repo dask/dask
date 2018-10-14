@@ -361,3 +361,14 @@ def test_svd():
     u, s, v = da.linalg.svd(y)
     z = y + u
     assert_eq(z, z)
+
+
+def test_args_delayed():
+    x = da.arange(10, chunks=(5,))
+    y = dask.delayed(lambda: 100)()
+
+    z = atop(add, 'i', x, 'i', y, None, dtype=x.dtype)
+    assert_eq(z, np.arange(10) + 100)
+
+    z = atop(lambda x, y: x + y, 'i', x, 'i', y=y, dtype=x.dtype)
+    assert_eq(z, np.arange(10) + 100)
