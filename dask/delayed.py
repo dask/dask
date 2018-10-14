@@ -38,7 +38,7 @@ def finalize(collection):
     keys = collection.__dask_keys__()
     finalize, args = collection.__dask_postcompute__()
     layer = {name: (finalize, keys) + args}
-    graph = HighGraph.from_collections(name, layer, dependencies=collection)
+    graph = HighGraph.from_collections(name, layer, dependencies=[collection])
     return Delayed(name, graph)
 
 

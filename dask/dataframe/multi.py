@@ -59,11 +59,11 @@ from functools import wraps, partial
 import warnings
 
 from toolz import merge_sorted, unique, first
-import toolz
 import pandas as pd
 
 from ..base import tokenize
 from ..compatibility import apply
+from ..highgraph import HighGraph
 from .core import (_Frame, DataFrame, Series, map_partitions, Index,
                    _maybe_from_pandas, new_dd_object, is_broadcastable)
 from .io import from_pandas
@@ -233,8 +233,8 @@ def merge_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix='',
                     left_index=left_index, right_index=right_index,
                     left_on=left_on, right_on=right_on,
                     suffixes=(lsuffix, rsuffix), indicator=indicator)
-    return new_dd_object(toolz.merge(lhs.dask, rhs.dask, dsk),
-                         name, meta, divisions)
+    graph = HighGraph.from_collections(name, dsk, dependencies=[lhs, rhs])
+    return new_dd_object(graph, name, meta, divisions)
 
 
 shuffle_func = shuffle  # name sometimes conflicts with keyword argument
@@ -291,8 +291,8 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
            for i in range(npartitions)}
 
     divisions = [None] * (npartitions + 1)
-    return new_dd_object(toolz.merge(lhs2.dask, rhs2.dask, dsk),
-                         name, meta, divisions)
+    graph = HighGraph.from_collections(name, dsk, dependencies=[lhs2, rhs2])
+    return new_dd_object(graph, name, meta, divisions)
 
 
 def single_partition_join(left, right, **kwargs):
@@ -323,8 +323,8 @@ def single_partition_join(left, right, **kwargs):
         else:
             divisions = [None for _ in left.divisions]
 
-    return new_dd_object(toolz.merge(dsk, left.dask, right.dask), name,
-                         meta, divisions)
+    graph = HighGraph.from_collections(name, dsk, dependencies=[left, right])
+    return new_dd_object(graph, name, meta, divisions)
 
 
 @wraps(pd.merge)
@@ -439,8 +439,8 @@ def concat_unindexed_dataframes(dfs):
 
     meta = pd.concat([df._meta for df in dfs], axis=1)
 
-    return new_dd_object(toolz.merge(dsk, *[df.dask for df in dfs]),
-                         name, meta, dfs[0].divisions)
+    graph = HighGraph.from_collections(name, dsk, dependencies=dfs)
+    return new_dd_object(graph, name, meta, dfs[0].divisions)
 
 
 def concat_indexed_dataframes(dfs, axis=0, join='outer'):

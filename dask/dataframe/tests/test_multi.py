@@ -228,7 +228,7 @@ def test_hash_join(how, shuffle):
     c = hash_join(a, 'x', b, 'z', 'outer', npartitions=3, shuffle=shuffle)
     assert c.npartitions == 3
 
-    result = c.compute()
+    result = c.compute(scheduler='single-threaded')
     expected = pd.merge(A, B, 'outer', None, 'x', 'z')
 
     list_eq(result, expected)

@@ -286,8 +286,9 @@ def test_describe():
     ds = dd.from_pandas(s, 4)
     ddf = dd.from_pandas(df, 4)
 
-    assert_eq(s.describe(), ds.describe())
     assert_eq(df.describe(), ddf.describe())
+    assert_eq(s.describe(), ds.describe())
+
     test_quantiles = [0.25, 0.75]
     assert_eq(df.describe(percentiles=test_quantiles),
               ddf.describe(percentiles=test_quantiles))
@@ -617,7 +618,7 @@ def test_map_partitions_keeps_kwargs_readable():
 
     # NOTE: we'd like to ensure that we keep the keyword arguments readable
     # in the dask graph
-    assert "['x', 5]" in str(b.dask)
+    assert "['x', 5]" in str(dict(b.dask)) or "{'x': 5}" in str(dict(b.dask))
     assert_eq(df.x + 5, b)
 
     assert a.x.map_partitions(f, x=5)._name != a.x.map_partitions(f, x=6)._name
@@ -3296,3 +3297,12 @@ def test_partitions_indexer():
     assert ddf.x.partitions[:3].npartitions == 3
 
     assert ddf.x.partitions[::2].compute().tolist() == [0, 1, 4, 5, 8, 9]
+
+
+def test_mod_eq():
+    df = pd.DataFrame({'a': [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    assert_eq(df, ddf)
+    assert_eq(df.a, ddf.a)
+    assert_eq(df.a + 2, ddf.a + 2)
+    assert_eq(df.a + 2 == 0, ddf.a + 2 == 0)

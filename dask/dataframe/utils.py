@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import collections
 import re
 import textwrap
 from distutils.version import LooseVersion
@@ -646,7 +647,7 @@ def assert_eq(a, b, check_names=True, check_dtypes=True,
 def assert_dask_graph(dask, label):
     if hasattr(dask, 'dask'):
         dask = dask.dask
-    assert isinstance(dask, dict)
+    assert isinstance(dask, collections.Mapping)
     for k in dask:
         if isinstance(k, tuple):
             k = k[0]
