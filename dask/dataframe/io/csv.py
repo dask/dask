@@ -499,7 +499,8 @@ def _write_csv(df, fil, **kwargs):
 
 
 def to_csv(df, filename, name_function=None, compression=None, compute=True,
-           get=None, scheduler=None, storage_options=None, **kwargs):
+           get=None, scheduler=None, storage_options=None,
+           header_first_partition_only=False, **kwargs):
     """
     Store Dask DataFrame to CSV files
 
@@ -567,6 +568,8 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
     header : boolean or list of string, default True
         Write out column names. If a list of string is given it is assumed
         to be aliases for the column names
+    header_first_partition_only : boolean, default False
+        If set, only write the header row in the first output file
     index : boolean, default True
         Write row names (index)
     index_label : string or sequence, or False, default None
@@ -629,8 +632,19 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
                        num=df.npartitions, **(storage_options or {}))
 
     to_csv_chunk = delayed(_write_csv, pure=False)
-    values = [to_csv_chunk(d, f, **kwargs)
-              for d, f in zip(df.to_delayed(), files)]
+
+    dfs = df.to_delayed()
+
+    # If we only want headers in the first file, turn headers off after the
+    # first partition
+
+    values = [to_csv_chunk(dfs[0], files[0], **kwargs)]
+
+    if len(dfs) > 1:
+        if header_first_partition_only:
+            kwargs['header'] = False
+        values.extend([to_csv_chunk(d, f, **kwargs)
+                       for d, f in zip(dfs[1:], files[1:])])
 
     if compute:
         delayed(values).compute(get=get, scheduler=scheduler)

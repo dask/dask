@@ -1181,3 +1181,51 @@ def test_to_csv_paths():
     assert ddf.to_csv("foo*.csv") == ['foo0.csv', 'foo1.csv']
     os.remove('foo0.csv')
     os.remove('foo1.csv')
+
+
+@pytest.mark.parametrize("header, expected", [(False, ""), (True, "x,y\n")])
+def test_to_csv_header_empty_dataframe(header, expected):
+    dfe = pd.DataFrame({'x': [],
+                       'y': []})
+    ddfe = dd.from_pandas(dfe, npartitions=1)
+
+    with tmpdir() as dn:
+        ddfe.to_csv(os.path.join(dn, "fooe*.csv"), index=False, header=header)
+        assert not os.path.exists(os.path.join(dn, "fooe1.csv"))
+        filename = os.path.join(dn, 'fooe0.csv')
+        with open(filename, 'r') as fp:
+            line = fp.readline()
+            assert line == expected
+        os.remove(filename)
+
+
+@pytest.mark.parametrize("header,header_first_partition_only,expected_first,expected_next",
+                         [
+                             (False, False, "a,1\n", "d,4\n"),
+                             (True, False, "x,y\n", "x,y\n"),
+                             (False, True, "a,1\n", "d,4\n"),
+                             (True, True, "x,y\n", "d,4\n"),
+                             (['aa', 'bb'], False, "aa,bb\n", "aa,bb\n"),
+                             (['aa', 'bb'], True, "aa,bb\n", "d,4\n")])
+def test_to_csv_header(header, header_first_partition_only, expected_first, expected_next):
+    partition_count = 2
+    df = pd.DataFrame({'x': ['a', 'b', 'c', 'd', 'e', 'f'],
+                       'y': [1, 2, 3, 4, 5, 6]})
+    ddf = dd.from_pandas(df, npartitions=partition_count)
+
+    with tmpdir() as dn:
+        # Test NO header case
+        # (header=False, header_first_chunk_only not passed)
+        ddf.to_csv(os.path.join(dn, "fooa*.csv"), index=False, header=header,
+                   header_first_partition_only=header_first_partition_only)
+        filename = os.path.join(dn, 'fooa0.csv')
+        with open(filename, 'r') as fp:
+            line = fp.readline()
+            assert line == expected_first
+        os.remove(filename)
+
+        filename = os.path.join(dn, 'fooa1.csv')
+        with open(filename, 'r') as fp:
+            line = fp.readline()
+            assert line == expected_next
+        os.remove(filename)
