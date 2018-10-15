@@ -4,7 +4,6 @@ import ast
 import os
 import sys
 import threading
-from os import makedirs
 from collections import Mapping
 
 try:
@@ -12,23 +11,22 @@ try:
 except ImportError:
     yaml = None
 
-
 try:
     import builtins
 except ImportError:
     # python 2
     import __builtin__ as builtins
 
-PY3 = sys.version_info[0] == 3
-PY2 = sys.version_info[0] == 2
-
-if PY2:
+if sys.version_info[0] == 2:
+    # python 2
     def makedirs(name, mode=0o777, exist_ok=True):
         try:
             os.makedirs(name, mode=mode)
         except OSError:
             if not exist_ok or not os.path.isdir(name):
                 raise
+else:
+    makedirs = os.makedirs
 
 no_default = '__no_default__'
 
