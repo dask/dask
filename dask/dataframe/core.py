@@ -1321,14 +1321,26 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                    split_every=split_every, out=out)
 
     @derived_from(pd.DataFrame)
-    def sum(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
-        return self._reduction_agg('sum', axis=axis, skipna=skipna,
-                                   split_every=split_every, out=out)
+    def sum(self, axis=None, skipna=True, split_every=False, dtype=None,
+            out=None, min_count=None):
+        result = self._reduction_agg('sum', axis=axis, skipna=skipna,
+                                     split_every=split_every, out=out)
+        if min_count:
+            return result.where(self.notnull().sum(axis=axis) >= min_count,
+                                other=np.NaN)
+        else:
+            return result
 
     @derived_from(pd.DataFrame)
-    def prod(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
-        return self._reduction_agg('prod', axis=axis, skipna=skipna,
-                                   split_every=split_every, out=out)
+    def prod(self, axis=None, skipna=True, split_every=False, dtype=None,
+             out=None, min_count=None):
+        result = self._reduction_agg('prod', axis=axis, skipna=skipna,
+                                     split_every=split_every, out=out)
+        if min_count:
+            return result.where(self.notnull().sum(axis=axis) >= min_count,
+                                other=np.NaN)
+        else:
+            return result
 
     @derived_from(pd.DataFrame)
     def max(self, axis=None, skipna=True, split_every=False, out=None):

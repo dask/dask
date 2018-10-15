@@ -595,6 +595,9 @@ def _maybe_sort(a):
     # sort by value, then index
     try:
         if isinstance(a, pd.DataFrame):
+            if set(a.index.names) & set(a.columns):
+                a.index.names = ['-overlapped-index-name-%d' % i
+                                 for i in range(len(a.index.names))]
             a = a.sort_values(by=a.columns.tolist())
         else:
             a = a.sort_values()
