@@ -301,7 +301,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
                           (operator.getitem, (name_q_st2_aux, 0, 0), b))
                          for i, b in enumerate(block_slices))
         layers[name_q_st2] = dsk_q_st2
-        dependencies[name_q_st2] = {name_q_st2_aux}
+        dependencies[name_q_st2] = {name_q_st2_aux, 'q-blocksizes' + token}
 
         # Q: Block qr[0] (*) In-core qr[0]
         name_q_st3 = 'dot' + token + '-q3'
