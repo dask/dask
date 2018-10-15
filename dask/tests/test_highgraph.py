@@ -1,5 +1,7 @@
 import dask.array as da
 import os
+from dask.utils_test import inc
+from dask.highgraph import HighGraph
 
 
 def test_visualize(tmpdir):
@@ -11,3 +13,12 @@ def test_visualize(tmpdir):
     d.dask.visualize(fn)
     assert os.path.exists(fn)
 
+
+def test_basic():
+    a = {'x': 1}
+    b = {'y': (inc, 'x')}
+    layers = {'a': a, 'b': b}
+    dependencies = {'a': set(), 'b': {'a'}}
+    hg = HighGraph(layers, dependencies)
+
+    assert dict(hg) == {'x': 1, 'y': (inc, 'x')}

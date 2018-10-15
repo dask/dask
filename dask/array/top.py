@@ -5,7 +5,7 @@ import numbers
 import numpy as np
 import toolz
 
-from .. import base, core, sharedict, utils
+from .. import base, core, utils
 from ..compatibility import apply
 from ..delayed import to_task_dask, unpack_collections
 from ..highgraph import HighGraph
@@ -570,14 +570,14 @@ def optimize_atop(full_graph, keys=()):
 
     Parameters
     ----------
-    full_graph: ShareDict
+    full_graph: HighGraph
     keys: Iterable
         The keys of all outputs of all collections.
         Used to make sure that we don't fuse a layer needed by an output
 
     Returns
     -------
-    sharedict : ShareDict
+    HighGraph
 
     See Also
     --------
@@ -629,7 +629,7 @@ def optimize_atop(full_graph, keys=()):
             dependencies[layer] = full_graph.dependencies.get(layer, set())
             stack.extend(full_graph.dependencies.get(layer, ()))
 
-    return sharedict.ShareDict(out, dependencies)
+    return HighGraph(out, dependencies)
 
 
 def rewrite_atop(inputs):

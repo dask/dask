@@ -5,6 +5,7 @@ import numpy as np
 
 import dask
 import dask.array as da
+from dask.highgraph import HighGraph
 from dask.array.top import TOP, atop
 from dask.array.top import rewrite_atop, index_subs, optimize_atop
 from dask.array.utils import assert_eq
@@ -116,7 +117,7 @@ def test_optimize_atop():
     # dsk = da.optimization.optimize_atop(y.dask)
     dsk = da.optimization.optimize_atop(y.dask)
 
-    assert isinstance(dsk, dask.sharedict.ShareDict)
+    assert isinstance(dsk, HighGraph)
 
     assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
 
@@ -131,7 +132,7 @@ def test_atop_diamond_fusion():
     d = (((c + 1) + 2) + 3)
 
     dsk = da.optimization.optimize_atop(d.dask)
-    assert isinstance(dsk, dask.sharedict.ShareDict)
+    assert isinstance(dsk, HighGraph)
 
     assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
 
@@ -148,12 +149,12 @@ def test_atop_non_atop_output():
     assert z_top_before == z_top_after, "z_top mutated"
 
     dsk = optimize_atop(z.dask, keys=list(dask.core.flatten(z.__dask_keys__())))
-    assert isinstance(dsk, dask.sharedict.ShareDict)
+    assert isinstance(dsk, HighGraph)
     assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
 
-    dsk = optimize_atop(dask.sharedict.merge(w.dask, z.dask),
+    dsk = optimize_atop(HighGraph.merge(w.dask, z.dask),
                         keys=list(dask.core.flatten([w.__dask_keys__(), z.__dask_keys__()])))
-    assert isinstance(dsk, dask.sharedict.ShareDict)
+    assert isinstance(dsk, HighGraph)
     assert len([layer for layer in z.dask.dicts.values() if isinstance(layer, TOP)]) >= 1
 
 

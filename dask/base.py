@@ -19,7 +19,7 @@ from .context import thread_state
 from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict
-from . import config, local, threaded, sharedict
+from . import config, local, threaded
 
 
 __all__ = ("DaskMethodsMixin",
@@ -201,12 +201,13 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
 def _extract_graph_and_keys(vals):
     """Given a list of dask vals, return a single graph and a list of keys such
     that ``get(dsk, keys)`` is equivalent to ``[v.compute() v in vals]``."""
+    from .highgraph import HighGraph
 
     graphs = [v.__dask_graph__() for v in vals]
     keys = [v.__dask_keys__() for v in vals]
 
-    if any(isinstance(graph, sharedict.ShareDict) for graph in graphs):
-        graph = sharedict.merge(*graphs)
+    if any(isinstance(graph, HighGraph) for graph in graphs):
+        graph = HighGraph.merge(*graphs)
     else:
         graph = merge(*graphs)
 

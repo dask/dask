@@ -1,8 +1,10 @@
+import collections
+
+import toolz
+
 from . import sharedict
 from .utils import ignoring
 from .base import is_dask_collection
-
-import toolz
 
 class HighGraph(sharedict.ShareDict):
     def __init__(self, layers, dependencies):
@@ -55,10 +57,18 @@ class HighGraph(sharedict.ShareDict):
         return toolz.unique(toolz.concat(self.layers.values()))
 
     @classmethod
-    def merge(*graphs):
-        graphs = list(graphs)
-        layers = toolz.merge(g.layers for g in graphs)
-        dependencies = toolz.merge(g.dependencies for g in graphs)
+    def merge(cls, *graphs):
+        layers = {}
+        dependencies = {}
+        for g in graphs:
+            if isinstance(g, HighGraph):
+                layers.update(g.layers)
+                dependencies.update(g.dependencies)
+            elif isinstance(g, collections.Mapping):
+                layers[id(g)] = g
+                dependencies[id(g)] = set()
+            else:
+                raise TypeError(g)
         return HighGraph(layers, dependencies)
 
     def visualize(self, filename='dask.pdf', format=None, **kwargs):
