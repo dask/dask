@@ -550,8 +550,8 @@ def bincount(x, weights=None, minlength=None):
 
     chunks = ((minlength,),)
 
-    graph = HighGraph.from_collections(name, dsk, dependencies=[x] + [weights]
-            if weights else [])
+    graph = HighGraph.from_collections(name, dsk,
+                dependencies=[x] if weights is None else [x, weights])
 
     return Array(graph, name, chunks, dtype)
 
@@ -641,7 +641,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         dtype = weights.dtype
 
     graph = HighGraph.from_collections(name, dsk,
-                dependencies=[a, weights] if weights else [])
+                dependencies=[a] if weights is None else [a, weights])
 
     mapped = Array(graph, name, chunks, dtype=dtype)
     n = mapped.sum(axis=0)
