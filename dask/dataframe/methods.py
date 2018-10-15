@@ -13,6 +13,10 @@ if PANDAS_VERSION >= '0.20.0':
     from pandas.api.types import union_categoricals
 else:
     from pandas.types.concat import union_categoricals
+if PANDAS_VERSION >= '0.23':
+    concat_kwargs = {'sort': False}
+else:
+    concat_kwargs = {}
 
 # ---------------------------------
 # indexing
@@ -123,7 +127,7 @@ def describe_aggregate(values):
                 index=['count', 'mean', 'std', 'min'])
     q.index = ['{0:g}%'.format(l * 100) for l in q.index.tolist()]
     part3 = typ([max], index=['max'])
-    return pd.concat([part1, q, part3])
+    return pd.concat([part1, q, part3], **concat_kwargs)
 
 
 def cummin_aggregate(x, y):
@@ -253,10 +257,7 @@ def concat(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
 @concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
     if axis == 1:
-        with warnings.catch_warnings():
-            if filter_warning:
-                warnings.simplefilter('ignore', FutureWarning)
-            return pd.concat(dfs, axis=axis, join=join)
+        return pd.concat(dfs, axis=axis, join=join, **concat_kwargs)
 
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):
@@ -312,13 +313,14 @@ def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True)
                 if filter_warning:
                     warnings.simplefilter('ignore', FutureWarning)
                 cat_mask = pd.concat([(df.dtypes == 'category').to_frame().T
-                                      for df in dfs3], join=join).any()
+                                      for df in dfs3], join=join,
+                                     **concat_kwargs).any()
 
         if cat_mask.any():
             not_cat = cat_mask[~cat_mask].index
             # this should be aligned, so no need to filter warning
             out = pd.concat([df[df.columns.intersection(not_cat)]
-                             for df in dfs3], join=join)
+                             for df in dfs3], join=join, **concat_kwargs)
             temp_ind = out.index
             for col in cat_mask.index.difference(not_cat):
                 # Find an example of categoricals in this column
@@ -349,7 +351,7 @@ def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True)
                 warnings.simplefilter("ignore", RuntimeWarning)
                 if filter_warning:
                     warnings.simplefilter("ignore", FutureWarning)
-                out = pd.concat(dfs3, join=join)
+                out = pd.concat(dfs3, join=join, **concat_kwargs)
     else:
         if is_categorical_dtype(dfs2[0].dtype):
             if ind is None:
@@ -359,7 +361,7 @@ def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True)
         with warnings.catch_warnings():
             if filter_warning:
                 warnings.simplefilter('ignore', FutureWarning)
-            out = pd.concat(dfs2, join=join)
+            out = pd.concat(dfs2, join=join, **concat_kwargs)
     # Re-add the index if needed
     if ind is not None:
         out.index = ind

@@ -1302,14 +1302,26 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                    split_every=split_every, out=out)
 
     @derived_from(pd.DataFrame)
-    def sum(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
-        return self._reduction_agg('sum', axis=axis, skipna=skipna,
-                                   split_every=split_every, out=out)
+    def sum(self, axis=None, skipna=True, split_every=False, dtype=None,
+            out=None, min_count=None):
+        result = self._reduction_agg('sum', axis=axis, skipna=skipna,
+                                     split_every=split_every, out=out)
+        if min_count:
+            return result.where(self.notnull().sum(axis=axis) >= min_count,
+                                other=np.NaN)
+        else:
+            return result
 
     @derived_from(pd.DataFrame)
-    def prod(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
-        return self._reduction_agg('prod', axis=axis, skipna=skipna,
-                                   split_every=split_every, out=out)
+    def prod(self, axis=None, skipna=True, split_every=False, dtype=None,
+             out=None, min_count=None):
+        result = self._reduction_agg('prod', axis=axis, skipna=skipna,
+                                     split_every=split_every, out=out)
+        if min_count:
+            return result.where(self.notnull().sum(axis=axis) >= min_count,
+                                other=np.NaN)
+        else:
+            return result
 
     @derived_from(pd.DataFrame)
     def max(self, axis=None, skipna=True, split_every=False, out=None):
@@ -3124,8 +3136,8 @@ class DataFrame(_Frame):
     def _repr_data(self):
         meta = self._meta
         index = self._repr_divisions
-        values = {c: _repr_data_series(meta[c], index) for c in meta.columns}
-        return pd.DataFrame(values, columns=meta.columns)
+        series_list = [_repr_data_series(s, index=index) for _, s in meta.iteritems()]
+        return pd.concat(series_list, axis=1)
 
     _HTML_FMT = """<div><strong>Dask DataFrame Structure:</strong></div>
 {data}

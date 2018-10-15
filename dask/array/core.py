@@ -2387,6 +2387,8 @@ def from_delayed(value, shape, dtype, name=None):
     name = name or 'from-value-' + tokenize(value, shape, dtype)
     dsk = {(name,) + (0,) * len(shape): value.key}
     chunks = tuple((d,) for d in shape)
+    # TODO: value._key may not be the name of the layer in value.dask
+    # This should be fixed after we build full expression graphs
     return Array(sharedict.merge(value.dask, (name, dsk),
                                  dependencies={name: {value._key}}),
                  name, chunks, dtype)
@@ -3076,7 +3078,9 @@ def asanyarray(a):
     """
     if isinstance(a, Array):
         return a
-    if isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
+    elif hasattr(a, 'to_dask_array'):
+        return a.to_dask_array()
+    elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         a = stack(a)
     elif not isinstance(getattr(a, 'shape', None), Iterable):
         a = np.asanyarray(a)

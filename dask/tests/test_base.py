@@ -5,6 +5,8 @@ import pytest
 from operator import add, mul
 import subprocess
 import sys
+import warnings
+import time
 
 from toolz import merge
 
@@ -18,6 +20,7 @@ from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
 from dask.compatibility import long, unicode, PY2
+from dask.diagnostics import Profiler
 
 
 def import_or_none(path):
@@ -864,3 +867,22 @@ def test_callable_scheduler():
 
     assert delayed(lambda: 1)().compute(scheduler=get) == 1
     assert called[0]
+
+
+@pytest.mark.parametrize('scheduler', ['threads', 'processes'])
+def test_num_workers_config(scheduler):
+    # Regression test for issue #4082
+
+    @delayed
+    def f(x):
+        time.sleep(0.5)
+        return x
+
+    a = [f(i) for i in range(5)]
+    num_workers = 3
+    with dask.config.set(num_workers=num_workers), Profiler() as prof:
+        a = compute(*a, scheduler=scheduler)
+
+    workers = {i.worker_id for i in prof.results}
+
+    assert len(workers) == num_workers
