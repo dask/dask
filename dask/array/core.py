@@ -552,6 +552,8 @@ def map_blocks(func, *args, **kwargs):
     chunks = kwargs.pop('chunks', None)
     drop_axis = kwargs.pop('drop_axis', [])
     new_axis = kwargs.pop('new_axis', [])
+    new_axes = {}
+
     if isinstance(drop_axis, Number):
         drop_axis = [drop_axis]
     if isinstance(new_axis, Number):
@@ -581,8 +583,23 @@ def map_blocks(func, *args, **kwargs):
             kwargs2 = assoc(kwargs, 'block_info', first_info)
         dtype = apply_infer_dtype(func, args, kwargs2, 'map_blocks')
 
+    if drop_axis:
+        out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
+    if new_axis:
+        # new_axis = [x + len(drop_axis) for x in new_axis]
+        out_ind = list(out_ind)
+        for ax in sorted(new_axis):
+            n = len(out_ind) + len(drop_axis)
+            out_ind.insert(ax, n)
+            if chunks is not None:
+                new_axes[n] = chunks[ax]
+            else:
+                new_axes[n] = 1
+        out_ind = tuple(out_ind)
+        if max(new_axis) > max(out_ind):
+            raise ValueError("New_axis values do not fill in all dimensions")
     out = atop(func, out_ind, *concat(argpairs), name=name,
-               new_axes={}, dtype=dtype, **kwargs)
+               new_axes=new_axes, dtype=dtype, concatenate=True, **kwargs)
 
     if (has_keyword(func, 'block_id') or has_keyword(func, 'block_info') or drop_axis):
         dsk = out.dask.layers[out.name]
@@ -630,46 +647,12 @@ def map_blocks(func, *args, **kwargs):
             task = subs(task, {'__block_info_dummy__': info})
             v.dsk[key] = task
 
-    if len(arrs) == 1:
-        numblocks = list(arrs[0].numblocks)
-    else:
-        dims = broadcast_dimensions(argpairs, numblocks)
-        numblocks = [b for (_, b) in sorted(dims.items(), reverse=True)]
-
-    if drop_axis:
-        if any(numblocks[i] > 1 for i in drop_axis):
-            raise ValueError("Can't drop an axis with more than 1 block. "
-                             "Please use `atop` instead.")
-        dsk2 = dict((tuple(k for i, k in enumerate(k)
-                          if i - 1 not in drop_axis), v)
-                   for k, v in dsk.items())
-        dsk.clear()
-        dsk.update(dsk2)
-        numblocks = [n for i, n in enumerate(numblocks) if i not in drop_axis]
-
-    if False and new_axis:
-        new_axis = sorted(new_axis)
-        for i in new_axis:
-            if not 0 <= i <= len(numblocks):
-                ndim = len(numblocks)
-                raise ValueError("Can't add axis %d when current "
-                                 "axis are %r. Missing axis: "
-                                 "%r" % (i, list(range(ndim)),
-                                         list(range(ndim, i))))
-            numblocks.insert(i, 1)
-        dsk, old_dsk = dict(), dsk
-        for key in old_dsk:
-            new_key = list(key)
-            for i in new_axis:
-                new_key.insert(i + 1, 0)
-            dsk[tuple(new_key)] = old_dsk[key]
-
     if chunks:
-        if len(chunks) != len(numblocks):
+        if len(chunks) != len(out.numblocks):
             raise ValueError("Provided chunks have {0} dims, expected {1} "
-                             "dims.".format(len(chunks), len(numblocks)))
+                             "dims.".format(len(chunks), len(out.numblocks)))
         chunks2 = []
-        for i, (c, nb) in enumerate(zip(chunks, numblocks)):
+        for i, (c, nb) in enumerate(zip(chunks, out.numblocks)):
             if isinstance(c, tuple):
                 if not len(c) == nb:
                     raise ValueError("Dimension {0} has {1} blocks, "
@@ -679,7 +662,6 @@ def map_blocks(func, *args, **kwargs):
             else:
                 chunks2.append(nb * (c,))
         out._chunks = tuple(chunks2)
-
 
     return out
 
