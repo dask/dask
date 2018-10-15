@@ -53,3 +53,49 @@ class HighGraph(sharedict.ShareDict):
 
     def __iter__(self):
         return toolz.unique(toolz.concat(self.layers.values()))
+
+    @classmethod
+    def merge(*graphs):
+        graphs = list(graphs)
+        layers = toolz.merge(g.layers for g in graphs)
+        dependencies = toolz.merge(g.dependencies for g in graphs)
+        return HighGraph(layers, dependencies)
+
+    def visualize(self, filename='dask.pdf', format=None, **kwargs):
+        from .dot import handle_graphviz
+        g = to_graphviz(self, **kwargs)
+        return handle_graphviz(g, filename, format)
+
+
+def to_graphviz(hg, data_attributes=None, function_attributes=None,
+                rankdir='BT', graph_attr={}, node_attr=None, edge_attr=None, **kwargs):
+    from .dot import graphviz, name, label
+
+    if data_attributes is None:
+        data_attributes = {}
+    if function_attributes is None:
+        function_attributes = {}
+
+    graph_attr = graph_attr or {}
+    graph_attr['rankdir'] = rankdir
+    graph_attr.update(kwargs)
+    g = graphviz.Digraph(graph_attr=graph_attr,
+                         node_attr=node_attr,
+                         edge_attr=edge_attr)
+
+    seen = set()
+    cache = {}
+
+    for k in hg.dependencies:
+        k_name = name(k)
+        attrs = data_attributes.get(k, {})
+        attrs.setdefault('label', label(k, cache=cache))
+        attrs.setdefault('shape', 'box')
+        g.node(k_name, **attrs)
+
+    for k, deps in hg.dependencies.items():
+        k_name = name(k)
+        for dep in deps:
+            dep_name = name(dep)
+            g.edge(dep_name, k_name)
+    return g
