@@ -34,7 +34,8 @@ from ..bytes import open_files
 from ..compatibility import apply, urlopen, Iterable, Iterator
 from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict
-from ..delayed import Delayed
+from ..delayed import Delayed, unpack_collections
+from ..highgraph import HighGraph
 from ..multiprocessing import get as mpget
 from ..optimization import fuse, cull, inline
 from ..utils import (system_encoding, takes_multiple_arguments, funcname,
@@ -204,7 +205,8 @@ def to_textfiles(b, path, name_function=None, compression='infer',
     name = 'to-textfiles-' + uuid.uuid4().hex
     dsk = {(name, i): (_to_textfiles_chunk, (b.name, i), f, last_endline)
            for i, f in enumerate(files)}
-    out = type(b)(merge(dsk, b.dask), name, b.npartitions)
+    graph = HighGraph.from_collections(name, dsk, dependencies=[b])
+    out = type(b)(graph, name, b.npartitions)
 
     if compute:
         out.compute(**kwargs)
@@ -342,7 +344,8 @@ class Item(DaskMethodsMixin):
     def apply(self, func):
         name = 'apply-{0}-{1}'.format(funcname(func), tokenize(self, func))
         dsk = {name: (func, self.key)}
-        return Item(merge(self.dask, dsk), name)
+        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        return Item(graph, name)
 
     __int__ = __float__ = __complex__ = __bool__ = DaskMethodsMixin.compute
 
@@ -392,6 +395,8 @@ class Bag(DaskMethodsMixin):
     30
     """
     def __init__(self, dsk, name, npartitions):
+        if not isinstance(dsk, HighGraph):
+            dsk = HighGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self.name = name
         self.npartitions = npartitions
@@ -531,13 +536,15 @@ class Bag(DaskMethodsMixin):
         """
         name = 'starmap-{0}-{1}'.format(funcname(func),
                                         tokenize(self, func, kwargs))
-        dsk = self.dask.copy()
+        dependencies = [self]
         if kwargs:
-            kw_dsk, kwargs = unpack_scalar_dask_kwargs(kwargs)
-            dsk.update(kw_dsk)
-        dsk.update({(name, i): (reify, (starmap_chunk, func, (self.name, i), kwargs))
-                   for i in range(self.npartitions)})
-        return type(self)(dsk, name, self.npartitions)
+            kwargs, collections = unpack_scalar_dask_kwargs(kwargs)
+            dependencies.extend(collections)
+
+        dsk = {(name, i): (reify, (starmap_chunk, func, (self.name, i), kwargs))
+               for i in range(self.npartitions)}
+        graph = HighGraph.from_collections(name, dsk, dependencies=dependencies)
+        return type(self)(graph, name, self.npartitions)
 
     @property
     def _args(self):
@@ -564,7 +571,8 @@ class Bag(DaskMethodsMixin):
                                        tokenize(self, predicate))
         dsk = dict(((name, i), (reify, (filter, predicate, (self.name, i))))
                    for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        return type(self)(graph, name, self.npartitions)
 
     def random_sample(self, prob, random_state=None):
         """ Return elements from bag with probability of ``prob``.
@@ -596,7 +604,8 @@ class Bag(DaskMethodsMixin):
         state_data = random_state_data_python(self.npartitions, random_state)
         dsk = {(name, i): (reify, (random_sample, (self.name, i), state, prob))
                for i, state in zip(range(self.npartitions), state_data)}
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        return type(self)(graph, name, self.npartitions)
 
     def remove(self, predicate):
         """ Remove elements in collection that match predicate.
@@ -613,7 +622,8 @@ class Bag(DaskMethodsMixin):
                                        tokenize(self, predicate))
         dsk = dict(((name, i), (reify, (remove, predicate, (self.name, i))))
                    for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        return type(self)(graph, name, self.npartitions)
 
     def map_partitions(self, func, *args, **kwargs):
         """Apply a function to every partition across one or more bags.
@@ -676,7 +686,8 @@ class Bag(DaskMethodsMixin):
         else:
             dsk = dict(((name, i), (list, (pluck, key, (self.name, i), default)))
                        for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        return type(self)(graph, name, self.npartitions)
 
     def unzip(self, n):
         """Transform a bag of tuples to ``n`` bags of their elements.
@@ -867,11 +878,12 @@ class Bag(DaskMethodsMixin):
         dsk[(fmt, 0)] = (empty_safe_aggregate, aggregate,
                          [(b, j) for j in range(k)], True)
 
+        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
         if out_type is Item:
             dsk[fmt] = dsk.pop((fmt, 0))
-            return Item(merge(self.dask, dsk), fmt)
+            return Item(graph, fmt)
         else:
-            return Bag(merge(self.dask, dsk), fmt, 1)
+            return Bag(graph, fmt, 1)
 
     def sum(self, split_every=None):
         """ Sum all elements """
@@ -996,7 +1008,8 @@ class Bag(DaskMethodsMixin):
         dsk.update({(name, i): (list, (join, on_other, other,
                                        on_self, (self.name, i)))
                    for i in range(self.npartitions)})
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        return type(self)(graph, name, self.npartitions)
 
     def product(self, other):
         """ Cartesian product between two bags. """
@@ -1007,7 +1020,8 @@ class Bag(DaskMethodsMixin):
                    (list, (itertools.product, (self.name, i),
                                               (other.name, j))))
                    for i in range(n) for j in range(m))
-        return type(self)(merge(self.dask, other.dask, dsk), name, n * m)
+        graph = HighGraph.from_collections(name, dsk, dependencies=[self, other])
+        return type(self)(graph, name, n * m)
 
     def foldby(self, key, binop, initial=no_default, combine=None,
                combine_initial=no_default, split_every=None):
@@ -1137,7 +1151,8 @@ class Bag(DaskMethodsMixin):
             dsk[(e, 0)] = (dictitems, (merge_with, (partial, reduce, combine),
                                        [(b, j) for j in range(k)]))
 
-        return type(self)(merge(self.dask, dsk), e, 1)
+        graph = HighGraph.from_collections(e, dsk, dependencies=[self])
+        return type(self)(graph, e, 1)
 
     def take(self, k, npartitions=1, compute=True, warn=True):
         """ Take the first k elements.
@@ -1183,7 +1198,8 @@ class Bag(DaskMethodsMixin):
         else:
             dsk = {(name, 0): (safe_take, k, (self.name, 0), warn)}
 
-        b = Bag(merge(self.dask, dsk), name, 1)
+        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        b = Bag(graph, name, 1)
 
         if compute:
             return tuple(b.compute())
@@ -1203,7 +1219,8 @@ class Bag(DaskMethodsMixin):
         name = 'flatten-' + tokenize(self)
         dsk = dict(((name, i), (list, (toolz.concat, (self.name, i))))
                    for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        return type(self)(graph, name, self.npartitions)
 
     def __iter__(self):
         return iter(self.compute())
@@ -1390,7 +1407,8 @@ class Bag(DaskMethodsMixin):
                     j += 1
                 last = new
 
-        return Bag(dsk=merge(self.dask, dsk), name=new_name, npartitions=npartitions)
+        graph = HighGraph.from_collections(new_name, dsk, dependencies=[self])
+        return Bag(graph, name=new_name, npartitions=npartitions)
 
     def accumulate(self, binop, initial=no_default):
         """ Repeatedly apply binary function to a sequence, accumulating results.
@@ -1426,7 +1444,8 @@ class Bag(DaskMethodsMixin):
             dsk[(a, i)] = (accumulate_part, binop, (self.name, i), (c, i - 1))
             dsk[(b, i)] = (first, (a, i))
             dsk[(c, i)] = (second, (a, i))
-        return Bag(merge(self.dask, dsk), b, self.npartitions)
+        graph = HighGraph.from_collections(b, dsk, dependencies=[self])
+        return Bag(graph, b, self.npartitions)
 
 
 def accumulate_part(binop, seq, initial, is_first=False):
@@ -1554,7 +1573,8 @@ def concat(bags):
     counter = itertools.count(0)
     dsk = {(name, next(counter)): key
            for bag in bags for key in bag.__dask_keys__()}
-    return Bag(merge(dsk, *[b.dask for b in bags]), name, len(dsk))
+    graph = HighGraph.from_collections(name, dsk, dependencies=bags)
+    return Bag(graph, name, len(dsk))
 
 
 def reify(seq):
@@ -1597,14 +1617,14 @@ def from_delayed(values):
               if not isinstance(v, Delayed) and hasattr(v, 'key')
               else v
               for v in values]
-    dsk = merge(ensure_dict(v.dask) for v in values)
 
     name = 'bag-from-delayed-' + tokenize(*values)
     names = [(name, i) for i in range(len(values))]
-    values = [(reify, v.key) for v in values]
-    dsk2 = dict(zip(names, values))
+    values2 = [(reify, v.key) for v in values]
+    dsk = dict(zip(names, values2))
 
-    return Bag(merge(dsk, dsk2), name, len(values))
+    graph = HighGraph.from_collections(name, dsk, dependencies=values)
+    return Bag(graph, name, len(values))
 
 
 def merge_distinct(seqs):
@@ -1696,8 +1716,8 @@ def bag_zip(*bags):
     dsk = dict(
         ((name, i), (reify, (zip,) + tuple((bag.name, i) for bag in bags)))
         for i in range(npartitions))
-    bags_dsk = merge(*(bag.dask for bag in bags))
-    return Bag(merge(bags_dsk, dsk), name, npartitions)
+    graph = HighGraph.from_collections(name, dsk, dependencies=bags)
+    return Bag(graph, name, npartitions)
 
 
 def map_chunk(f, args, bag_kwargs, kwargs):
@@ -1750,20 +1770,18 @@ def unpack_scalar_dask_kwargs(kwargs):
     supported.  Returns a merged dask graph and a task resulting in a keyword
     dict.
     """
-    dsk = {}
     kwargs2 = {}
+    dependencies = []
     for k, v in kwargs.items():
-        if isinstance(v, (Delayed, Item)):
-            dsk.update(ensure_dict(v.dask))
-            kwargs2[k] = v.key
-        elif is_dask_collection(v):
-            raise NotImplementedError("dask.bag doesn't support kwargs of "
-                                      "type %s" % type(v).__name__)
-        else:
+        vv, collections = unpack_collections(v)
+        if not collections:
             kwargs2[k] = v
-    if dsk:
-        kwargs = (dict, (zip, list(kwargs2), list(kwargs2.values())))
-    return dsk, kwargs
+        else:
+            kwargs2[k] = vv
+            dependencies.extend(collections)
+    if dependencies:
+        kwargs2 = (dict, (zip, list(kwargs2), list(kwargs2.values())))
+    return kwargs2, dependencies
 
 
 def bag_map(func, *args, **kwargs):
@@ -1824,6 +1842,7 @@ def bag_map(func, *args, **kwargs):
     """
     name = 'map-%s-%s' % (funcname(func), tokenize(func, args, kwargs))
     dsk = {}
+    dependencies = []
 
     bags = []
     args2 = []
@@ -1831,10 +1850,8 @@ def bag_map(func, *args, **kwargs):
         if isinstance(a, Bag):
             bags.append(a)
             args2.append(a)
-            dsk.update(a.dask)
         elif isinstance(a, (Item, Delayed)):
             args2.append((itertools.repeat, a.key))
-            dsk.update(ensure_dict(a.dask))
         else:
             args2.append((itertools.repeat, a))
 
@@ -1844,12 +1861,11 @@ def bag_map(func, *args, **kwargs):
         if isinstance(v, Bag):
             bag_kwargs[k] = v
             bags.append(v)
-            dsk.update(v.dask)
         else:
             other_kwargs[k] = v
 
-    kw_dsk, other_kwargs = unpack_scalar_dask_kwargs(other_kwargs)
-    dsk.update(kw_dsk)
+    other_kwargs, collections = unpack_scalar_dask_kwargs(other_kwargs)
+    dependencies.extend(collections)
 
     if not bags:
         raise ValueError("At least one argument must be a Bag.")
@@ -1868,13 +1884,15 @@ def bag_map(func, *args, **kwargs):
         return (dict, (zip, list(bag_kwargs),
                        [(b.name, n) for b in bag_kwargs.values()]))
 
-    dsk.update({(name, n): (reify, (map_chunk, func, build_args(n),
+    dsk = {(name, n): (reify, (map_chunk, func, build_args(n),
                                     build_bag_kwargs(n), other_kwargs))
-                for n in range(npartitions)})
+           for n in range(npartitions)}
 
     # If all bags are the same type, use that type, otherwise fallback to Bag
     return_type = set(map(type, bags))
     return_type = return_type.pop() if len(return_type) == 1 else Bag
+
+    graph = HighGraph.from_collections(name, dsk, dependencies=bags + dependencies)
 
     return return_type(dsk, name, npartitions)
 
@@ -2025,9 +2043,10 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
                 (list, (dict.items, (groupby, grouper, (pluck, 1, j)))))
                for i, j in enumerate(join))
 
-    dsk = merge(b2.dask, start, end, *(groups + splits + joins))
-
-    return type(b)(dsk, 'shuffle-' + token, len(inputs))
+    name = 'shuffle-' + token
+    dsk = merge(start, end, *(groups + splits + joins))
+    graph = HighGraph.from_collections(name, dsk, dependencies=[b2])
+    return type(b)(graph, name, len(inputs))
 
 
 def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
@@ -2067,7 +2086,9 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
                  (collect, grouper, i, p, barrier_token))
                 for i in range(npartitions))
 
-    return type(b)(merge(b.dask, dsk1, dsk2, dsk3, dsk4), name, npartitions)
+    dsk = merge(dsk1, dsk2, dsk3, dsk4)
+    graph = HighGraph.from_collections(name, dsk, dependencies=[b])
+    return type(b)(graph, name, npartitions)
 
 
 def empty_safe_apply(func, part, is_last):

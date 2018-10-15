@@ -30,7 +30,7 @@ class HighGraph(sharedict.ShareDict):
                 with ignoring(AttributeError):
                     deps[name] |= set(collection.__dask_layers__())
             else:
-                raise TypeError(type(dep))
+                raise TypeError(type(collection))
 
         return HighGraph(layers, deps)
 

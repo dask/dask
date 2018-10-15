@@ -1,6 +1,8 @@
 import io
 import uuid
 
+from ..highgraph import HighGraph
+
 MAGIC = b'Obj\x01'
 SYNC_SIZE = 16
 
@@ -216,7 +218,6 @@ def to_avro(b, filename, schema, name_function=None, storage_options=None,
     ['my-data.0.avro', 'my-data.1.avro']
     """
     # TODO infer schema from first partition of data
-    from .core import merge
     from dask.utils import import_required
     from dask.bytes.core import open_files
     import_required('fastavro',
@@ -231,7 +232,8 @@ def to_avro(b, filename, schema, name_function=None, storage_options=None,
     dsk = {(name, i): (_write_avro_part, (b.name, i), f, schema, codec,
                        sync_interval, metadata)
            for i, f in enumerate(files)}
-    out = type(b)(merge(dsk, b.dask), name, b.npartitions)
+    graph = HighGraph.from_collections(name, dsk, dependencies=[b])
+    out = type(b)(graph, name, b.npartitions)
     if compute:
         out.compute(**kwargs)
         return [f.path for f in files]
