@@ -10,7 +10,7 @@ except ImportError:
     from toolz import concat, merge, unique
 
 from .core import Array, asarray, atop, getitem, apply_infer_dtype
-from .. import sharedict
+from ..highgraph import HighGraph
 from ..core import flatten
 
 
@@ -375,7 +375,6 @@ significantly.".format(dim))
     ## Prepare output shapes
     loop_output_shape = tmp.shape
     loop_output_chunks = tmp.chunks
-    dsk = tmp.__dask_graph__()
     keys = list(flatten(tmp.__dask_keys__()))
     name, token = keys[0][0].split('-')
 
@@ -393,7 +392,8 @@ significantly.".format(dim))
         output_chunks = loop_output_chunks + core_output_shape
         leaf_name = "%s_%d-%s" % (name, i, token)
         leaf_dsk = {(leaf_name,) + key[1:] + core_chunkinds: ((getitem, key, i) if nout else key) for key in keys}
-        leaf_arr = Array(sharedict.merge((leaf_name, leaf_dsk), dsk),
+        graph = HighGraph.from_collections(leaf_name, leaf_dsk, dependencies=[tmp])
+        leaf_arr = Array(graph,
                          leaf_name,
                          chunks=output_chunks,
                          shape=output_shape,
