@@ -3,11 +3,20 @@ import os
 
 import pytest
 
-import dask.config
-from dask.config import (update, merge, collect, collect_yaml, collect_env,
-                         get, ensure_file, set, config, rename,
-                         update_defaults, refresh, expand_environment_variables)
+import dask._config
+from dask._config import update, merge, collect_yaml, collect_env, expand_environment_variables
 from dask.utils import tmpfile
+
+config_name = 'test'
+config = dask._config.Config(config_name)
+collect = config.collect
+get = config.get
+ensure_file = config.ensure_file
+set = config.set
+rename = config.rename
+update_defaults = config.update_defaults
+refresh = config.refresh
+config_dict = config.config
 
 
 def test_update():
@@ -79,13 +88,13 @@ def test_collect_yaml_dir():
 
 
 def test_env():
-    env = {'DASK_A_B': '123',
-           'DASK_C': 'True',
-           'DASK_D': 'hello',
-           'DASK_E__X': '123',
-           'DASK_E__Y': '456',
-           'DASK_F': '[1, 2, "3"]',
-           'DASK_G': '/not/parsable/as/literal',
+    env = {'TEST_A_B': '123',
+           'TEST_C': 'True',
+           'TEST_D': 'hello',
+           'TEST_E__X': '123',
+           'TEST_E__Y': '456',
+           'TEST_F': '[1, 2, "3"]',
+           'TEST_G': '/not/parsable/as/literal',
            'FOO': 'not included',
            }
 
@@ -98,13 +107,13 @@ def test_env():
         'g': '/not/parsable/as/literal',
     }
 
-    assert collect_env(env) == expected
+    assert collect_env(config_name.upper(), env) == expected
 
 
 def test_collect():
     a = {'x': 1, 'y': {'a': 1}}
     b = {'x': 2, 'z': 3, 'y': {'b': 2}}
-    env = {'DASK_W': 4}
+    env = {'TEST_W': 4}
 
     expected = {
         'w': 4,
@@ -125,22 +134,23 @@ def test_collect():
 
 
 def test_collect_env_none():
-    os.environ['DASK_FOO'] = 'bar'
+    os.environ['TEST_FOO'] = 'bar'
     try:
         config = collect([])
         assert config == {'foo': 'bar'}
     finally:
-        del os.environ['DASK_FOO']
+        del os.environ['TEST_FOO']
 
 
 def test_get():
-    d = {'x': 1, 'y': {'a': 2}}
+    test_config = dask._config.Config(config_name)
+    test_config.config = {'x': 1, 'y': {'a': 2}}
 
-    assert get('x', config=d) == 1
-    assert get('y.a', config=d) == 2
-    assert get('y.b', 123, config=d) == 123
+    assert test_config.get('x') == 1
+    assert test_config.get('y.a') == 2
+    assert test_config.get('y.b', 123) == 123
     with pytest.raises(KeyError):
-        get('y.b', config=d)
+        test_config.get('y.b')
 
 
 def test_ensure_file(tmpdir):
@@ -185,34 +195,35 @@ def test_ensure_file(tmpdir):
 
 
 def test_set():
-    with set(abc=123):
-        assert config['abc'] == 123
-        with set(abc=456):
-            assert config['abc'] == 456
-        assert config['abc'] == 123
+    config = dask._config.Config(config_name)
+    with config.set(abc=123):
+        assert config.config['abc'] == 123
+        with config.set(abc=456):
+            assert config.config['abc'] == 456
+        assert config.config['abc'] == 123
 
-    assert 'abc' not in config
+    assert 'abc' not in config.config
 
-    with set({'abc': 123}):
-        assert config['abc'] == 123
-    assert 'abc' not in config
+    with config.set({'abc': 123}):
+        assert config.config['abc'] == 123
+    assert 'abc' not in config.config
 
-    with set({'abc.x': 1, 'abc.y': 2, 'abc.z.a': 3}):
-        assert config['abc'] == {'x': 1, 'y': 2, 'z': {'a': 3}}
-    assert 'abc' not in config
+    with config.set({'abc.x': 1, 'abc.y': 2, 'abc.z.a': 3}):
+        assert config.config['abc'] == {'x': 1, 'y': 2, 'z': {'a': 3}}
+    assert 'abc' not in config.config
 
-    d = {}
-    set({'abc.x': 123}, config=d)
-    assert d['abc']['x'] == 123
+    config.config = {}
+    config.set({'abc.x': 123})
+    assert config.config['abc']['x'] == 123
 
 
 def test_set_nested():
     with set({'abc': {'x': 123}}):
-        assert config['abc'] == {'x': 123}
+        assert config.config['abc'] == {'x': 123}
         with set({'abc.y': 456}):
-            assert config['abc'] == {'x': 123, 'y': 456}
-        assert config['abc'] == {'x': 123}
-    assert 'abc' not in config
+            assert config.config['abc'] == {'x': 123, 'y': 456}
+        assert config.config['abc'] == {'x': 123}
+    assert 'abc' not in config.config
 
 
 def test_set_hard_to_copyables():
@@ -241,19 +252,20 @@ def test_ensure_file_directory(mkdir, tmpdir):
     assert os.path.exists(os.path.join(dest, 'source.yaml'))
 
 
-def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmpdir):
+def test_ensure_file_defaults_to_TEST_CONFIG_directory(tmpdir):
     a = {'x': 1, 'y': {'a': 1}}
     source = os.path.join(str(tmpdir), 'source.yaml')
     with open(source, 'w') as f:
         yaml.dump(a, f)
 
-    destination = os.path.join(str(tmpdir), 'dask')
-    PATH = dask.config.PATH
+    config = dask._config.Config('test')
+    destination = os.path.join(str(tmpdir), 'test')
+    PATH = config.main_path
     try:
-        dask.config.PATH = destination
-        ensure_file(source=source)
+        config.main_path = destination
+        config.ensure_file(source=source)
     finally:
-        dask.config.PATH = PATH
+        config.main_path = PATH
 
     assert os.path.isdir(destination)
     [fn] = os.listdir(destination)
@@ -261,24 +273,25 @@ def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmpdir):
 
 
 def test_rename():
+    config = dask._config.Config(config_name)
     aliases = {'foo-bar': 'foo.bar'}
-    config = {'foo-bar': 123}
-    rename(aliases, config=config)
-    assert config == {'foo': {'bar': 123}}
+    config.config = {'foo-bar': 123}
+    config.rename(aliases)
+    assert config.config == {'foo': {'bar': 123}}
 
 
 def test_refresh():
     defaults = []
-    config = {}
+    config = dask._config.Config(config_name, defaults=defaults)
 
-    update_defaults({'a': 1}, config=config, defaults=defaults)
-    assert config == {'a': 1}
+    config.update_defaults({'a': 1})
+    assert config.config == {'a': 1}
 
-    refresh(paths=[], env={'DASK_B': '2'}, config=config, defaults=defaults)
-    assert config == {'a': 1, 'b': 2}
+    config.refresh(paths=[], env={'TEST_B': '2'})
+    assert config.config == {'a': 1, 'b': 2}
 
-    refresh(paths=[], env={'DASK_C': '3'}, config=config, defaults=defaults)
-    assert config == {'a': 1, 'c': 3}
+    config.refresh(paths=[], env={'TEST_C': '3'})
+    assert config.config == {'a': 1, 'c': 3}
 
 
 @pytest.mark.parametrize('inp,out', [

@@ -4,7 +4,7 @@ import math
 import re
 from operator import getitem
 
-from . import config
+from dask import config
 from .compatibility import unicode
 from .core import (istask, get_dependencies, subs, toposort,
                    flatten, reverse_dict, ishashable, _get_recursive)

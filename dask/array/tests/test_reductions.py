@@ -6,7 +6,7 @@ np = pytest.importorskip('numpy')
 import dask.array as da
 from dask.array.utils import assert_eq as _assert_eq, same_keys
 from dask.core import get_deps
-import dask.config as config
+from dask import config
 
 
 def assert_eq(a, b):
