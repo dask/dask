@@ -341,7 +341,6 @@ class Config(object):
 
         return merge(*configs)
 
-
     def refresh(self, **kwargs):
         """Update configuration by re-reading yaml files and env variables
 

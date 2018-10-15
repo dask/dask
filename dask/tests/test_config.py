@@ -3,20 +3,10 @@ import os
 
 import pytest
 
-import dask._config
-from dask._config import update, merge, collect_yaml, collect_env, expand_environment_variables
+from dask._config import Config, update, merge, collect_yaml, collect_env, expand_environment_variables
 from dask.utils import tmpfile
 
 config_name = 'test'
-config = dask._config.Config(config_name)
-collect = config.collect
-get = config.get
-ensure_file = config.ensure_file
-set = config.set
-rename = config.rename
-update_defaults = config.update_defaults
-refresh = config.refresh
-config_dict = config.config
 
 
 def test_update():
@@ -122,6 +112,7 @@ def test_collect():
         'z': 3,
     }
 
+    config = Config(config_name)
     with tmpfile(extension='yaml') as fn1:
         with tmpfile(extension='yaml') as fn2:
             with open(fn1, 'w') as f:
@@ -129,21 +120,22 @@ def test_collect():
             with open(fn2, 'w') as f:
                 yaml.dump(b, f)
 
-            config = collect([fn1, fn2], env=env)
+            config = config.collect([fn1, fn2], env=env)
             assert config == expected
 
 
 def test_collect_env_none():
     os.environ['TEST_FOO'] = 'bar'
+    config = Config(config_name)
     try:
-        config = collect([])
+        config = config.collect([])
         assert config == {'foo': 'bar'}
     finally:
         del os.environ['TEST_FOO']
 
 
 def test_get():
-    test_config = dask._config.Config(config_name)
+    test_config = Config(config_name)
     test_config.config = {'x': 1, 'y': {'a': 2}}
 
     assert test_config.get('x') == 1
@@ -164,7 +156,8 @@ def test_ensure_file(tmpdir):
     with open(source, 'w') as f:
         yaml.dump(a, f)
 
-    ensure_file(source=source, destination=dest, comment=False)
+    config = Config(config_name)
+    config.ensure_file(source=source, destination=dest, comment=False)
 
     with open(destination) as f:
         result = yaml.load(f)
@@ -174,7 +167,7 @@ def test_ensure_file(tmpdir):
     with open(source, 'w') as f:
         yaml.dump(b, f)
 
-    ensure_file(source=source, destination=dest, comment=False)
+    config.ensure_file(source=source, destination=dest, comment=False)
 
     with open(destination) as f:
         result = yaml.load(f)
@@ -183,7 +176,7 @@ def test_ensure_file(tmpdir):
     os.remove(destination)
 
     # Write again, now with comments
-    ensure_file(source=source, destination=dest, comment=True)
+    config.ensure_file(source=source, destination=dest, comment=True)
 
     with open(destination) as f:
         text = f.read()
@@ -195,7 +188,7 @@ def test_ensure_file(tmpdir):
 
 
 def test_set():
-    config = dask._config.Config(config_name)
+    config = Config(config_name)
     with config.set(abc=123):
         assert config.config['abc'] == 123
         with config.set(abc=456):
@@ -218,9 +211,10 @@ def test_set():
 
 
 def test_set_nested():
-    with set({'abc': {'x': 123}}):
+    config = Config(config_name)
+    with config.set({'abc': {'x': 123}}):
         assert config.config['abc'] == {'x': 123}
-        with set({'abc.y': 456}):
+        with config.set({'abc.y': 456}):
             assert config.config['abc'] == {'x': 123, 'y': 456}
         assert config.config['abc'] == {'x': 123}
     assert 'abc' not in config.config
@@ -228,8 +222,9 @@ def test_set_nested():
 
 def test_set_hard_to_copyables():
     import threading
-    with set(x=threading.Lock()):
-        with set(y=1):
+    config = Config(config_name)
+    with config.set(x=threading.Lock()):
+        with config.set(y=1):
             pass
 
 
@@ -246,7 +241,8 @@ def test_ensure_file_directory(mkdir, tmpdir):
     if mkdir:
         os.mkdir(dest)
 
-    ensure_file(source=source, destination=dest)
+    config = Config(config_name)
+    config.ensure_file(source=source, destination=dest)
 
     assert os.path.isdir(dest)
     assert os.path.exists(os.path.join(dest, 'source.yaml'))
@@ -258,7 +254,7 @@ def test_ensure_file_defaults_to_TEST_CONFIG_directory(tmpdir):
     with open(source, 'w') as f:
         yaml.dump(a, f)
 
-    config = dask._config.Config('test')
+    config = Config('test')
     destination = os.path.join(str(tmpdir), 'test')
     PATH = config.main_path
     try:
@@ -273,7 +269,7 @@ def test_ensure_file_defaults_to_TEST_CONFIG_directory(tmpdir):
 
 
 def test_rename():
-    config = dask._config.Config(config_name)
+    config = Config(config_name)
     aliases = {'foo-bar': 'foo.bar'}
     config.config = {'foo-bar': 123}
     config.rename(aliases)
@@ -282,7 +278,7 @@ def test_rename():
 
 def test_refresh():
     defaults = []
-    config = dask._config.Config(config_name, defaults=defaults)
+    config = Config(config_name, defaults=defaults)
 
     config.update_defaults({'a': 1})
     assert config.config == {'a': 1}
