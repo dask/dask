@@ -407,6 +407,9 @@ class Bag(DaskMethodsMixin):
     def __dask_keys__(self):
         return [(self.name, i) for i in range(self.npartitions)]
 
+    def __dask_layers__(self):
+        return {self.name}
+
     def __dask_tokenize__(self):
         return self.name
 
@@ -1851,6 +1854,7 @@ def bag_map(func, *args, **kwargs):
             bags.append(a)
             args2.append(a)
         elif isinstance(a, (Item, Delayed)):
+            dependencies.append(a)
             args2.append((itertools.repeat, a.key))
         else:
             args2.append((itertools.repeat, a))
@@ -1894,7 +1898,7 @@ def bag_map(func, *args, **kwargs):
 
     graph = HighGraph.from_collections(name, dsk, dependencies=bags + dependencies)
 
-    return return_type(dsk, name, npartitions)
+    return return_type(graph, name, npartitions)
 
 
 def map_partitions(func, *args, **kwargs):
@@ -1934,19 +1938,32 @@ def map_partitions(func, *args, **kwargs):
     """
     name = 'map-partitions-%s-%s' % (funcname(func),
                                      tokenize(func, args, kwargs))
-
-    # Extract bag arguments, build initial graph
-    bags = []
     dsk = {}
-    for vals in [args, kwargs.values()]:
-        for a in vals:
-            if isinstance(a, (Bag, Item, Delayed)):
-                dsk.update(ensure_dict(a.dask))
-                if isinstance(a, Bag):
-                    bags.append(a)
-            elif is_dask_collection(a):
-                raise NotImplementedError("dask.bag doesn't support args of "
-                                          "type %s" % type(a).__name__)
+    dependencies = []
+
+    bags = []
+    args2 = []
+    for a in args:
+        if isinstance(a, Bag):
+            bags.append(a)
+            args2.append(a)
+        elif isinstance(a, (Item, Delayed)):
+            args2.append((itertools.repeat, a.key))
+            dependencies.append(a)
+        else:
+            args2.append((itertools.repeat, a))
+
+    bag_kwargs = {}
+    other_kwargs = {}
+    for k, v in kwargs.items():
+        if isinstance(v, Bag):
+            bag_kwargs[k] = v
+            bags.append(v)
+        else:
+            other_kwargs[k] = v
+
+    other_kwargs, collections = unpack_scalar_dask_kwargs(other_kwargs)
+    dependencies.extend(collections)
 
     if not bags:
         raise ValueError("At least one argument must be a Bag.")
@@ -1956,29 +1973,32 @@ def map_partitions(func, *args, **kwargs):
         raise ValueError("All bags must have the same number of partitions.")
     npartitions = npartitions.pop()
 
-    def build_task(n):
-        args2 = [(a.name, n) if isinstance(a, Bag) else a.key
-                 if isinstance(a, (Item, Delayed)) else a for a in args]
+    def build_args(n):
+        return [(a.name, n) if isinstance(a, Bag) else a for a in args2]
 
-        if any(isinstance(v, (Bag, Item, Delayed)) for v in kwargs.values()):
-            vals = [(v.name, n) if isinstance(v, Bag) else v.key
-                    if isinstance(v, (Item, Delayed)) else v
-                    for v in kwargs.values()]
-            kwargs2 = (dict, (zip, list(kwargs), vals))
-        else:
-            kwargs2 = kwargs
+    def build_bag_kwargs(n):
+        if not bag_kwargs:
+            return {}
+        return (dict, (zip, list(bag_kwargs),
+                       [(b.name, n) for b in bag_kwargs.values()]))
 
-        if kwargs2 or len(args2) > 1:
-            return (apply, func, args2, kwargs2)
-        return (func, args2[0])
-
-    dsk.update({(name, n): build_task(n) for n in range(npartitions)})
+    if kwargs:
+        dsk = {(name, n): (apply,
+                            func,
+                            build_args(n),
+                            (merge, build_bag_kwargs(n), other_kwargs))
+               for n in range(npartitions)}
+    else:
+        dsk = {(name, n): (func,) + tuple(build_args(n))
+               for n in range(npartitions)}
 
     # If all bags are the same type, use that type, otherwise fallback to Bag
     return_type = set(map(type, bags))
     return_type = return_type.pop() if len(return_type) == 1 else Bag
 
-    return return_type(dsk, name, npartitions)
+    graph = HighGraph.from_collections(name, dsk, dependencies=bags + dependencies)
+
+    return return_type(graph, name, npartitions)
 
 
 def _reduce(binop, sequence, initial=no_default):
