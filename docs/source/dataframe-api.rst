@@ -84,6 +84,7 @@ Dataframe
     DataFrame.to_delayed
     DataFrame.to_hdf
     DataFrame.to_json
+    DataFrame.to_parquet
     DataFrame.to_records
     DataFrame.truediv
     DataFrame.values
@@ -197,7 +198,6 @@ Series
    Series.to_delayed
    Series.to_frame
    Series.to_hdf
-   Series.to_parquet
    Series.to_string
    Series.to_timestamp
    Series.truediv
