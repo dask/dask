@@ -550,8 +550,6 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     else:
         name = dask_key_name
 
-    dsk = sharedict.ShareDict()
-
     args2, collections = unzip(map(unpack_collections, args), 2)
     collections = list(concat(collections))
 

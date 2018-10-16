@@ -608,11 +608,12 @@ def map_blocks(func, *args, **kwargs):
 
     if has_keyword(func, 'block_id'):
         for k, vv in dsk.items():
-            v = copy.copy(vv[0])
+            v = copy.copy(vv[0])  # Need to copy and unpack subgraph callable
+            v.dsk = copy.copy(v.dsk)
             [(key, task)] = v.dsk.items()
             task = subs(task, {'__block_id_dummy__': k[1:]})
             v.dsk[key] = task
-            dsk[k] = (v, vv[1:])
+            dsk[k] = (v,) + vv[1:]
 
     # If func has block_info as an argument, add it to the kwargs for each call
     if has_keyword(func, 'block_info'):
