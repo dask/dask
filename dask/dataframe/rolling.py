@@ -253,6 +253,10 @@ class Rolling(object):
         return self._call_method('count')
 
     @derived_from(pd_Rolling)
+    def cov(self):
+        return self._call_method('cov')
+
+    @derived_from(pd_Rolling)
     def sum(self):
         return self._call_method('sum')
 
