@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from operator import add
 
-from collections import Iterator, deque
+from collections import deque
 from concurrent.futures import CancelledError
 import gc
 import itertools
@@ -36,7 +36,7 @@ from distributed.client import (Client, Future, wait, as_completed, tokenize,
                                 _get_global_client, default_client,
                                 futures_of,
                                 temp_default_client)
-from distributed.compatibility import PY3
+from distributed.compatibility import PY3, Iterator
 
 from distributed.metrics import time
 from distributed.scheduler import Scheduler, KilledWorker

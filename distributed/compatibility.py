@@ -11,6 +11,7 @@ if sys.version_info[0] == 2:
     from thread import get_ident as get_thread_identity
     from inspect import getargspec
     from cgi import escape as html_escape
+    from collections import Iterator, Mapping, Set, MutableMapping
 
     reload = reload
     unicode = unicode
@@ -58,6 +59,7 @@ if sys.version_info[0] == 2:
 
 if sys.version_info[0] == 3:
     from asyncio import iscoroutinefunction
+    from collections.abc import Iterator, Mapping, Set, MutableMapping
     from queue import Queue, Empty
     from importlib import reload
     from threading import get_ident as get_thread_identity

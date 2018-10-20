@@ -1,4 +1,3 @@
-from collections import Iterator
 from concurrent.futures._base import CancelledError
 from operator import add
 import random
@@ -8,7 +7,7 @@ import pytest
 from tornado import gen
 
 from distributed.client import _as_completed, as_completed, _first_completed
-from distributed.compatibility import Empty, StopAsyncIteration, Queue
+from distributed.compatibility import Empty, StopAsyncIteration, Queue, Iterator
 from distributed.utils_test import gen_cluster, inc, throws
 from distributed.utils_test import client, cluster_fixture, loop  # noqa: F401
 

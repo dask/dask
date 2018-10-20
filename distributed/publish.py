@@ -1,4 +1,4 @@
-from collections import MutableMapping
+from distributed.compatibility import MutableMapping
 from distributed.utils import log_errors, tokey
 
 

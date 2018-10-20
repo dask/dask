@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import defaultdict, deque, OrderedDict, Mapping, Set
+from collections import defaultdict, deque, OrderedDict
 from datetime import timedelta
 from functools import partial
 import itertools
@@ -20,7 +20,7 @@ try:
     from cytoolz import frequencies, merge, pluck, merge_sorted, first
 except ImportError:
     from toolz import frequencies, merge, pluck, merge_sorted, first
-from toolz import valmap, first, second, compose, groupby
+from toolz import valmap, second, compose, groupby
 from tornado import gen
 from tornado.gen import Return
 from tornado.ioloop import IOLoop
@@ -30,7 +30,7 @@ import dask
 from .batched import BatchedSend
 from .comm import (normalize_address, resolve_address,
                    get_address_host, unparse_host_port)
-from .compatibility import finalize, unicode
+from .compatibility import finalize, unicode, Mapping, Set
 from .core import (rpc, connect, send_recv,
                    clean_exception, CommClosedError)
 from . import profile
