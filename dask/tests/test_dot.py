@@ -19,7 +19,7 @@ from IPython.display import Image, SVG
 
 
 # Since graphviz doesn't store a graph, we need to parse the output
-label_re = re.compile('.*\[label=(.*?) shape=(.*?)\]')
+label_re = re.compile(r'.*\[label=(.*?) shape=(.*?)\]')
 
 
 def get_label(line):

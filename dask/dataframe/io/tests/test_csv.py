@@ -265,7 +265,7 @@ def test_enforce_columns(reader, blocks):
 @pytest.mark.parametrize('dd_read,pd_read,text,sep',
                          [(dd.read_csv, pd.read_csv, csv_text, ','),
                           (dd.read_table, pd.read_table, tsv_text, '\t'),
-                          (dd.read_table, pd.read_table, tsv_text2, '\s+')])
+                          (dd.read_table, pd.read_table, tsv_text2, r'\s+')])
 def test_read_csv(dd_read, pd_read, text, sep):
     with filetext(text) as fn:
         f = dd_read(fn, blocksize=30, lineterminator=os.linesep, sep=sep)
