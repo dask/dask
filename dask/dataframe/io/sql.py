@@ -73,7 +73,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
 
     Examples
     --------
-    >>> df = dd.read_sql('accounts', 'sqlite:///path/to/bank.db',
+    >>> df = dd.read_sql_table('accounts', 'sqlite:///path/to/bank.db',
     ...                  npartitions=10, index_col='id')  # doctest: +SKIP
     """
     import sqlalchemy as sa
