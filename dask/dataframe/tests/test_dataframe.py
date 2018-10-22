@@ -175,7 +175,7 @@ def test_index_names():
 
 @pytest.mark.parametrize(
     'npartitions',
-    [1, pytest.mark.xfail(2, reason='pandas join removes freq')]
+    [1, pytest.param(2, marks=pytest.mark.xfail)]
 )
 def test_timezone_freq(npartitions):
     s_naive = pd.Series(pd.date_range('20130101', periods=10))
