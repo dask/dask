@@ -1734,7 +1734,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         name = 'first-' + tokenize(self, offset)
         dsk = {(name, i): (self._name, i) for i in range(end)}
         dsk[(name, end)] = (methods.boundary_slice, (self._name, end),
-                            None, date, include_right, True, 'ix')
+                            None, date, include_right, True, 'loc')
         return new_dd_object(merge(self.dask, dsk), name, self, divs)
 
     @derived_from(pd.DataFrame)
@@ -1758,7 +1758,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         dsk = {(name, i + 1): (self._name, j + 1)
                for i, j in enumerate(range(start, self.npartitions))}
         dsk[(name, 0)] = (methods.boundary_slice, (self._name, start),
-                          date, None, True, False, 'ix')
+                          date, None, True, False, 'loc')
         return new_dd_object(merge(self.dask, dsk), name, self, divs)
 
     def nunique_approx(self, split_every=None):
