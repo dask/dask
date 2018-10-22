@@ -708,18 +708,22 @@ def test_block_tuple():
 
 
 def test_broadcast_shapes():
-    assert () == broadcast_shapes()
-    assert (2, 5) == broadcast_shapes((2, 5))
-    assert (0, 5) == broadcast_shapes((0, 1), (1, 5))
-    assert np.allclose(
-        (2, np.nan), broadcast_shapes((1, np.nan), (2, 1)), equal_nan=True
-    )
-    assert np.allclose(
-        (2, np.nan), broadcast_shapes((2, 1), (1, np.nan)), equal_nan=True
-    )
-    assert (3, 4, 5) == broadcast_shapes((3, 4, 5), (4, 1), ())
-    assert (3, 4) == broadcast_shapes((3, 1), (1, 4), (4,))
-    assert (5, 6, 7, 3, 4) == broadcast_shapes((3, 1), (), (5, 6, 7, 1, 4))
+    with warnings.catch_warnings(record=True) as record:
+        assert () == broadcast_shapes()
+        assert (2, 5) == broadcast_shapes((2, 5))
+        assert (0, 5) == broadcast_shapes((0, 1), (1, 5))
+        assert np.allclose(
+            (2, np.nan), broadcast_shapes((1, np.nan), (2, 1)), equal_nan=True
+        )
+        assert np.allclose(
+            (2, np.nan), broadcast_shapes((2, 1), (1, np.nan)), equal_nan=True
+        )
+        assert (3, 4, 5) == broadcast_shapes((3, 4, 5), (4, 1), ())
+        assert (3, 4) == broadcast_shapes((3, 1), (1, 4), (4,))
+        assert (5, 6, 7, 3, 4) == broadcast_shapes((3, 1), (), (5, 6, 7, 1, 4))
+
+    assert not record
+
     pytest.raises(ValueError, lambda: broadcast_shapes((3,), (3, 4)))
     pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (2, 3, 1)))
     pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (1, np.nan)))
@@ -1925,8 +1929,9 @@ def test_slicing_with_non_ndarrays():
 
 
 def test_getter():
-    assert type(getter(np.matrix([[1]]), 0)) is np.ndarray
-    assert type(getter(np.matrix([[1]]), 0, asarray=False)) is np.matrix
+    with warnings.catch_warnings(record=True):
+        assert type(getter(np.matrix([[1]]), 0)) is np.ndarray
+        assert type(getter(np.matrix([[1]]), 0, asarray=False)) is np.matrix
     assert_eq(getter([1, 2, 3, 4, 5], slice(1, 4)), np.array([2, 3, 4]))
 
     assert_eq(getter(np.arange(5), (None, slice(None, None))),
@@ -2057,11 +2062,12 @@ def test_from_array_no_asarray(asarray, cls):
         for c in concat(chunks):
             assert type(c) is cls
 
-    x = np.matrix(np.arange(100).reshape((10, 10)))
-    dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
-    assert_chunks_are_of_type(dx)
-    assert_chunks_are_of_type(dx[0:5])
-    assert_chunks_are_of_type(dx[0:5][:, 0])
+    with warnings.catch_warnings(record=True):
+        x = np.matrix(np.arange(100).reshape((10, 10)))
+        dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
+        assert_chunks_are_of_type(dx)
+        assert_chunks_are_of_type(dx[0:5])
+        assert_chunks_are_of_type(dx[0:5][:, 0])
 
 
 def test_from_array_getitem():
@@ -2131,12 +2137,13 @@ def test_asarray_h5py():
 
 
 def test_asanyarray():
-    x = np.matrix([1, 2, 3])
-    dx = da.asanyarray(x)
-    assert dx.numblocks == (1, 1)
-    chunks = compute_as_if_collection(Array, dx.dask, dx.__dask_keys__())
-    assert isinstance(chunks[0][0], np.matrix)
-    assert da.asanyarray(dx) is dx
+    with warnings.catch_warnings(record=True):
+        x = np.matrix([1, 2, 3])
+        dx = da.asanyarray(x)
+        assert dx.numblocks == (1, 1)
+        chunks = compute_as_if_collection(Array, dx.dask, dx.__dask_keys__())
+        assert isinstance(chunks[0][0], np.matrix)
+        assert da.asanyarray(dx) is dx
 
 
 def test_asanyarray_dataframe():
