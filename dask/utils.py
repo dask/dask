@@ -933,7 +933,7 @@ def natural_sort_key(s):
     ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
     """
     return [int(part) if part.isdigit() else part
-            for part in re.split('(\d+)', s)]
+            for part in re.split(r'(\d+)', s)]
 
 
 def factors(n):

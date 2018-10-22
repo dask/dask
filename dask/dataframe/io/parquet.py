@@ -55,7 +55,7 @@ def _parse_pandas_metadata(pandas_metadata):
     * pyarrow>=0.7.0
     """
     index_storage_names = pandas_metadata['index_columns']
-    index_name_xpr = re.compile('__index_level_\d+__')
+    index_name_xpr = re.compile(r'__index_level_\d+__')
 
     # older metadatas will not have a 'field_name' field so we fall back
     # to the 'name' field

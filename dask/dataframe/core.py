@@ -1131,11 +1131,6 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         from .io import to_hdf
         return to_hdf(self, path_or_buf, key, mode, append, **kwargs)
 
-    def to_parquet(self, path, *args, **kwargs):
-        """ See dd.to_parquet docstring for more information """
-        from .io import to_parquet
-        return to_parquet(self, path, *args, **kwargs)
-
     def to_csv(self, filename, **kwargs):
         """ See dd.to_csv docstring for more information """
         from .io import to_csv
@@ -2793,6 +2788,11 @@ class DataFrame(_Frame):
         """
         from .io import to_bag
         return to_bag(self, index)
+
+    def to_parquet(self, path, *args, **kwargs):
+        """ See dd.to_parquet docstring for more information """
+        from .io import to_parquet
+        return to_parquet(self, path, *args, **kwargs)
 
     @derived_from(pd.DataFrame)
     def to_string(self, max_rows=5):

@@ -407,7 +407,7 @@ def normalize_arg(x):
     """
     if is_dask_collection(x):
         return x
-    elif isinstance(x, str) and re.match('_\d+', x):
+    elif isinstance(x, str) and re.match(r'_\d+', x):
         return delayed(x)
     elif sizeof(x) > 1e6:
         return delayed(x)
