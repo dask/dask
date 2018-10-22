@@ -2,6 +2,7 @@ import textwrap
 from distutils.version import LooseVersion
 from itertools import product
 from operator import add
+import warnings
 
 import pandas as pd
 import pandas.util.testing as tm
