@@ -881,7 +881,7 @@ class Bag(DaskMethodsMixin):
         dsk[(fmt, 0)] = (empty_safe_aggregate, aggregate,
                          [(b, j) for j in range(k)], True)
 
-        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        graph = HighGraph.from_collections(fmt, dsk, dependencies=[self])
         if out_type is Item:
             dsk[fmt] = dsk.pop((fmt, 0))
             return Item(graph, fmt)

@@ -10,6 +10,7 @@ class HighGraph(sharedict.ShareDict):
     def __init__(self, layers, dependencies):
         for v in layers.values():
             assert not isinstance(v, sharedict.ShareDict)
+        assert all(layers)
         self.layers = layers
         self.dependencies = dependencies
         assert set(dependencies) == set(layers)
