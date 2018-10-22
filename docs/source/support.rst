@@ -20,13 +20,10 @@ Conversation happens in the following places:
     <https://gitter.im/dask/dev>`_ for developer conversation.  Note that
     because gitter chat is not searchable by future users we discourage usage
     questions and bug reports on gitter and instead ask people to use Stack
-    Overflow or GitHub
-4.  **Weekly developer meeting** usually happens at Thursday 4pm UTC (11am in New
-    York, 8am in Los Angeles, 12am in Beijing) at https://appear.in/dask-dev
-    with meeting notes on a publicly viewable `document
-    <https://docs.google.com/document/d/1nh50G7K1xR4lPfo6ynDC7O6L-qUvM0FiXaxKeWelNw8/edit?usp=sharing>`_.
-    Subscribe to this `public calendar <https://calendar.google.com/calendar/ical/4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com/public/basic.ics>`_
-    to receive updates if the meeting is rescheduled or canceled
+    Overflow or GitHub.
+4.  **Monthly developer meeting** happens the first Thursday of the month at
+    4pm UTC (11am in New York, 8am in Los Angeles, 12am in Beijing) at
+    https://appear.in/dask-dev
 
 .. _`Stack Overflow with the #dask tag`: http://stackoverflow.com/questions/tagged/dask
 .. _`Github issue tracker`: https://github.com/dask/dask/issues/
