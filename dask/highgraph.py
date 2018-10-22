@@ -28,10 +28,16 @@ class HighGraph(sharedict.ShareDict):
         for collection in toolz.unique(dependencies, key=id):
             if is_dask_collection(collection):
                 graph = collection.__dask_graph__()
-                layers.update(graph.layers)
-                deps.update(graph.dependencies)
-                with ignoring(AttributeError):
-                    deps[name] |= set(collection.__dask_layers__())
+                if isinstance(graph, HighGraph):
+                    layers.update(graph.layers)
+                    deps.update(graph.dependencies)
+                    with ignoring(AttributeError):
+                        deps[name] |= set(collection.__dask_layers__())
+                else:
+                    key = id(graph)
+                    layers[key] = graph
+                    deps[name].add(key)
+                    deps[key] = set()
             else:
                 raise TypeError(type(collection))
 
