@@ -2655,34 +2655,35 @@ def test_idxmaxmin(idx, skipna):
     df.d.iloc[78] = np.nan
     ddf = dd.from_pandas(df, npartitions=3)
 
-    assert_eq(df.idxmax(axis=1, skipna=skipna),
-              ddf.idxmax(axis=1, skipna=skipna))
-    assert_eq(df.idxmin(axis=1, skipna=skipna),
-              ddf.idxmin(axis=1, skipna=skipna))
+    with warnings.catch_warnings(record=True):
+        assert_eq(df.idxmax(axis=1, skipna=skipna),
+                  ddf.idxmax(axis=1, skipna=skipna))
+        assert_eq(df.idxmin(axis=1, skipna=skipna),
+                  ddf.idxmin(axis=1, skipna=skipna))
 
-    assert_eq(df.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna))
-    assert_eq(df.idxmax(skipna=skipna),
-              ddf.idxmax(skipna=skipna, split_every=2))
-    assert (ddf.idxmax(skipna=skipna)._name !=
-            ddf.idxmax(skipna=skipna, split_every=2)._name)
+        assert_eq(df.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna))
+        assert_eq(df.idxmax(skipna=skipna),
+                  ddf.idxmax(skipna=skipna, split_every=2))
+        assert (ddf.idxmax(skipna=skipna)._name !=
+                ddf.idxmax(skipna=skipna, split_every=2)._name)
 
-    assert_eq(df.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna))
-    assert_eq(df.idxmin(skipna=skipna),
-              ddf.idxmin(skipna=skipna, split_every=2))
-    assert (ddf.idxmin(skipna=skipna)._name !=
-            ddf.idxmin(skipna=skipna, split_every=2)._name)
+        assert_eq(df.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna))
+        assert_eq(df.idxmin(skipna=skipna),
+                  ddf.idxmin(skipna=skipna, split_every=2))
+        assert (ddf.idxmin(skipna=skipna)._name !=
+                ddf.idxmin(skipna=skipna, split_every=2)._name)
 
-    assert_eq(df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
-    assert_eq(df.a.idxmax(skipna=skipna),
-              ddf.a.idxmax(skipna=skipna, split_every=2))
-    assert (ddf.a.idxmax(skipna=skipna)._name !=
-            ddf.a.idxmax(skipna=skipna, split_every=2)._name)
+        assert_eq(df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
+        assert_eq(df.a.idxmax(skipna=skipna),
+                  ddf.a.idxmax(skipna=skipna, split_every=2))
+        assert (ddf.a.idxmax(skipna=skipna)._name !=
+                ddf.a.idxmax(skipna=skipna, split_every=2)._name)
 
-    assert_eq(df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
-    assert_eq(df.a.idxmin(skipna=skipna),
-              ddf.a.idxmin(skipna=skipna, split_every=2))
-    assert (ddf.a.idxmin(skipna=skipna)._name !=
-            ddf.a.idxmin(skipna=skipna, split_every=2)._name)
+        assert_eq(df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
+        assert_eq(df.a.idxmin(skipna=skipna),
+                  ddf.a.idxmin(skipna=skipna, split_every=2))
+        assert (ddf.a.idxmin(skipna=skipna)._name !=
+                ddf.a.idxmin(skipna=skipna, split_every=2)._name)
 
 
 def test_idxmaxmin_empty_partitions():
