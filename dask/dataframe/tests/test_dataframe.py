@@ -288,6 +288,9 @@ def test_describe():
 
     assert_eq(s.describe(), ds.describe())
     assert_eq(df.describe(), ddf.describe())
+    test_quantiles = [0.25, 0.75]
+    assert_eq(df.describe(percentiles=test_quantiles),
+              ddf.describe(percentiles=test_quantiles))
     assert_eq(s.describe(), ds.describe(split_every=2))
     assert_eq(df.describe(), ddf.describe(split_every=2))
 
@@ -976,6 +979,28 @@ def test_unknown_divisions():
 
     assert_eq(d.a.sum(), full.a.sum())
     assert_eq(d.a + d.b + 1, full.a + full.b + 1)
+
+
+@pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
+                    reason="Parameter min_count not implemented in "
+                           "DataFrame.sum() and DataFrame.prod()")
+def test_with_min_count():
+    dfs = [pd.DataFrame([[None, 2, 3],
+                         [None, 5, 6],
+                         [5, 4, 9]]),
+           pd.DataFrame([[2, None, None],
+                         [None, 5, 6],
+                         [5, 4, 9]])]
+    ddfs = [dd.from_pandas(df, npartitions=4) for df in dfs]
+    axes = [0, 1]
+
+    for df, ddf in zip(dfs, ddfs):
+        for axis in axes:
+            for min_count in [0, 1, 2, 3]:
+                assert_eq(df.sum(min_count=min_count, axis=axis),
+                          ddf.sum(min_count=min_count, axis=axis))
+                assert_eq(df.prod(min_count=min_count, axis=axis),
+                          ddf.prod(min_count=min_count, axis=axis))
 
 
 @pytest.mark.parametrize('join', ['inner', 'outer', 'left', 'right'])
@@ -3279,3 +3304,17 @@ def test_map_partitions_delays_large_inputs():
 
     a = ddf.map_partitions(lambda x, y: x, big)
     assert any(big is v for v in a.dask.values())
+
+
+def test_partitions_indexer():
+    df = pd.DataFrame({'x': range(10)})
+    ddf = dd.from_pandas(df, npartitions=5)
+
+    assert_eq(ddf.partitions[0], ddf.get_partition(0))
+    assert_eq(ddf.partitions[3], ddf.get_partition(3))
+    assert_eq(ddf.partitions[-1], ddf.get_partition(4))
+
+    assert ddf.partitions[:3].npartitions == 3
+    assert ddf.x.partitions[:3].npartitions == 3
+
+    assert ddf.x.partitions[::2].compute().tolist() == [0, 1, 4, 5, 8, 9]

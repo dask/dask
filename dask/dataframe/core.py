@@ -20,7 +20,7 @@ except ImportError:
 from .. import array as da
 from .. import core
 
-from ..utils import partial_by_order, Dispatch
+from ..utils import partial_by_order, Dispatch, IndexCallable
 from .. import threaded
 from ..compatibility import apply, operator_div, bind_method, string_types, Iterator
 from ..context import globalmethod
@@ -896,9 +896,46 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         """ Purely label-location based indexer for selection by label.
 
         >>> df.loc["b"]  # doctest: +SKIP
-        >>> df.loc["b":"d"]  # doctest: +SKIP"""
+        >>> df.loc["b":"d"]  # doctest: +SKIP
+        """
         from .indexing import _LocIndexer
         return _LocIndexer(self)
+
+    def _partitions(self, index):
+        if not isinstance(index, tuple):
+            index = (index,)
+        from ..array.slicing import normalize_index
+        index = normalize_index(index, (self.npartitions,))
+        index = tuple(slice(k, k + 1) if isinstance(k, Number) else k
+                      for k in index)
+        name = 'blocks-' + tokenize(self, index)
+        new_keys = np.array(self.__dask_keys__(), dtype=object)[index].tolist()
+
+        divisions = [self.divisions[i] for _, i in new_keys] + [self.divisions[new_keys[-1][1] + 1]]
+        dsk = {(name, i): tuple(key) for i, key in enumerate(new_keys)}
+
+        return new_dd_object(merge(dsk, self.dask), name, self._meta, divisions)
+
+    @property
+    def partitions(self):
+        """ Slice dataframe by partitions
+
+        This allows partitionwise slicing of a Dask Dataframe.  You can perform normal
+        Numpy-style slicing but now rather than slice elements of the array you
+        slice along partitions so, for example, ``df.partitions[:5]`` produces a new
+        Dask Dataframe of the first five partitions.
+
+        Examples
+        --------
+        >>> df.partitions[0]  # doctest: +SKIP
+        >>> df.partitions[:3]  # doctest: +SKIP
+        >>> df.partitions[::10]  # doctest: +SKIP
+
+        Returns
+        -------
+        A Dask DataFrame
+        """
+        return IndexCallable(self._partitions)
 
     # Note: iloc is implemented only on DataFrame
 
@@ -1094,11 +1131,6 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         from .io import to_hdf
         return to_hdf(self, path_or_buf, key, mode, append, **kwargs)
 
-    def to_parquet(self, path, *args, **kwargs):
-        """ See dd.to_parquet docstring for more information """
-        from .io import to_parquet
-        return to_parquet(self, path, *args, **kwargs)
-
     def to_csv(self, filename, **kwargs):
         """ See dd.to_csv docstring for more information """
         from .io import to_csv
@@ -1265,14 +1297,26 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                    split_every=split_every, out=out)
 
     @derived_from(pd.DataFrame)
-    def sum(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
-        return self._reduction_agg('sum', axis=axis, skipna=skipna,
-                                   split_every=split_every, out=out)
+    def sum(self, axis=None, skipna=True, split_every=False, dtype=None,
+            out=None, min_count=None):
+        result = self._reduction_agg('sum', axis=axis, skipna=skipna,
+                                     split_every=split_every, out=out)
+        if min_count:
+            return result.where(self.notnull().sum(axis=axis) >= min_count,
+                                other=np.NaN)
+        else:
+            return result
 
     @derived_from(pd.DataFrame)
-    def prod(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
-        return self._reduction_agg('prod', axis=axis, skipna=skipna,
-                                   split_every=split_every, out=out)
+    def prod(self, axis=None, skipna=True, split_every=False, dtype=None,
+             out=None, min_count=None):
+        result = self._reduction_agg('prod', axis=axis, skipna=skipna,
+                                     split_every=split_every, out=out)
+        if min_count:
+            return result.where(self.notnull().sum(axis=axis) >= min_count,
+                                other=np.NaN)
+        else:
+            return result
 
     @derived_from(pd.DataFrame)
     def max(self, axis=None, skipna=True, split_every=False, out=None):
@@ -1458,19 +1502,22 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 return DataFrame(dask, keyname, meta, quantiles[0].divisions)
 
     @derived_from(pd.DataFrame)
-    def describe(self, split_every=False):
+    def describe(self, split_every=False, percentiles=None):
         # currently, only numeric describe is supported
         num = self._get_numeric_data()
         if self.ndim == 2 and len(num.columns) == 0:
             raise ValueError("DataFrame contains only non-numeric data.")
         elif self.ndim == 1 and self.dtype == 'object':
             raise ValueError("Cannot compute ``describe`` on object dtype.")
-
+        if percentiles is None:
+            percentiles = [0.25, 0.5, 0.75]
+        else:
+            percentiles = list(set(sorted(percentiles + [0.5])))
         stats = [num.count(split_every=split_every),
                  num.mean(split_every=split_every),
                  num.std(split_every=split_every),
                  num.min(split_every=split_every),
-                 num.quantile([0.25, 0.5, 0.75]),
+                 num.quantile(percentiles),
                  num.max(split_every=split_every)]
         stats_names = [(s._name, 0) for s in stats]
 
@@ -2742,6 +2789,11 @@ class DataFrame(_Frame):
         from .io import to_bag
         return to_bag(self, index)
 
+    def to_parquet(self, path, *args, **kwargs):
+        """ See dd.to_parquet docstring for more information """
+        from .io import to_parquet
+        return to_parquet(self, path, *args, **kwargs)
+
     @derived_from(pd.DataFrame)
     def to_string(self, max_rows=5):
         # option_context doesn't affect
@@ -3084,8 +3136,8 @@ class DataFrame(_Frame):
     def _repr_data(self):
         meta = self._meta
         index = self._repr_divisions
-        values = {c: _repr_data_series(meta[c], index) for c in meta.columns}
-        return pd.DataFrame(values, columns=meta.columns)
+        series_list = [_repr_data_series(s, index=index) for _, s in meta.iteritems()]
+        return pd.concat(series_list, axis=1)
 
     _HTML_FMT = """<div><strong>Dask DataFrame Structure:</strong></div>
 {data}

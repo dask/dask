@@ -128,21 +128,23 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
     name_qr_st1 = 'qr' + token
     dsk_qr_st1 = top(_wrapped_qr, name_qr_st1, 'ij', data.name, 'ij',
                      numblocks={data.name: numblocks})
-    dsk.update_with_key(dsk_qr_st1, key=name_qr_st1)
+    dsk.update_with_key(dsk_qr_st1, key=name_qr_st1,
+                        dependencies={name_qr_st1, data.name})
 
     # Block qr[0]
     name_q_st1 = 'getitem' + token + '-q1'
     dsk_q_st1 = dict(((name_q_st1, i, 0),
                       (operator.getitem, (name_qr_st1, i, 0), 0))
                      for i in range(numblocks[0]))
-    dsk.update_with_key(dsk_q_st1, key=name_q_st1)
+    dsk.update_with_key(dsk_q_st1, key=name_q_st1,
+                        dependencies={name_qr_st1})
 
     # Block qr[1]
     name_r_st1 = 'getitem' + token + '-r1'
     dsk_r_st1 = dict(((name_r_st1, i, 0),
                       (operator.getitem, (name_qr_st1, i, 0), 1))
                      for i in range(numblocks[0]))
-    dsk.update_with_key(dsk_r_st1, key=name_r_st1)
+    dsk.update_with_key(dsk_r_st1, key=name_r_st1, dependencies={name_qr_st1})
 
     # Next step is to obtain a QR decomposition for the stacked R factors, so either:
     # - gather R factors into a single core and do a QR decomposition
@@ -183,10 +185,12 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
                                            [(name_r_st1, idx, 0)
                                             for idx, _ in sub_block_info])))
                              for i, sub_block_info in enumerate(all_blocks))
-        dsk.update_with_key(dsk_r_stacked, key=name_r_stacked)
+        dsk.update_with_key(dsk_r_stacked, key=name_r_stacked,
+                            dependencies={name_r_st1})
 
         # retrieve R_stacked for recursion with tsqr
         vchunks_rstacked = tuple([sum(map(lambda x: x[1], sub_block_info)) for sub_block_info in all_blocks])
+        dsk.dependencies[name_r_stacked] = {data.name}
         r_stacked = Array(dsk, name_r_stacked,
                           shape=(sum(vchunks_rstacked), n), chunks=(vchunks_rstacked, (n)), dtype=rr.dtype)
 
@@ -204,19 +208,22 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
                          for i, sub_block_info in enumerate(all_blocks)
                          for j, e in zip([x[0] for x in sub_block_info],
                                          _cumsum_blocks([x[1] for x in sub_block_info])))
-        dsk.update_with_key(dsk_q_st2, key=name_q_st2)
+        dsk.update_with_key(dsk_q_st2, key=name_q_st2,
+                            dependencies={q_inner.name})
 
         # R: R_inner
         name_r_st2 = 'r-inner-' + token
         dsk_r_st2 = {(name_r_st2, 0, 0): (r_inner.name, 0, 0)}
-        dsk.update_with_key(dsk_r_st2, key=name_r_st2)
+        dsk.update_with_key(dsk_r_st2, key=name_r_st2,
+                            dependencies={r_inner.name})
 
         # Q: Block qr[0] (*) Q_inner
         name_q_st3 = 'dot-' + token + '-q3'
         dsk_q_st3 = top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
                         name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
                                                      name_q_st2: numblocks})
-        dsk.update_with_key(dsk_q_st3, key=name_q_st3)
+        dsk.update_with_key(dsk_q_st3, key=name_q_st3,
+                            dependencies={name_q_st1, name_q_st2, name_q_st3})
     else:
         # Do single core computation
 
@@ -225,19 +232,22 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         name_r_st1_stacked = 'stack' + token + '-r1'
         dsk_r_st1_stacked = {(name_r_st1_stacked, 0, 0): (np.vstack,
                                                           (tuple, to_stack))}
-        dsk.update_with_key(dsk_r_st1_stacked, key=name_r_st1_stacked)
+        dsk.update_with_key(dsk_r_st1_stacked, key=name_r_st1_stacked,
+                            dependencies={name_r_st1})
 
         # In-core QR computation
         name_qr_st2 = 'qr' + token + '-qr2'
         dsk_qr_st2 = top(np.linalg.qr, name_qr_st2, 'ij', name_r_st1_stacked, 'ij',
                          numblocks={name_r_st1_stacked: (1, 1)})
-        dsk.update_with_key(dsk_qr_st2, key=name_qr_st2)
+        dsk.update_with_key(dsk_qr_st2, key=name_qr_st2,
+                            dependencies={name_r_st1_stacked})
 
         # In-core qr[0]
         name_q_st2_aux = 'getitem' + token + '-q2-aux'
         dsk_q_st2_aux = {(name_q_st2_aux, 0, 0): (operator.getitem,
                                                   (name_qr_st2, 0, 0), 0)}
-        dsk.update_with_key(dsk_q_st2_aux, key=name_q_st2_aux)
+        dsk.update_with_key(dsk_q_st2_aux, key=name_q_st2_aux,
+                            dependencies={name_qr_st2})
 
         if not any(np.isnan(c) for cs in data.chunks for c in cs):
             # when chunks are all known...
@@ -246,6 +256,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             block_slices = [(slice(e[0], e[1]), slice(0, n))
                             for e in _cumsum_blocks(q2_block_sizes)]
             dsk_q_blockslices = {}
+            dependencies = set()
         else:
             # when chunks are not already known...
 
@@ -276,28 +287,33 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
                                             dsk_q2_cumsum,
                                             dsk_block_slices)
 
+            dependencies = {data.name, name_q2bs, name_q2cs}
             block_slices = [(name_blockslice, i) for i in range(numblocks[0])]
 
-        dsk.update_with_key(dsk_q_blockslices, key='q-blocksizes' + token)
+        dsk.update_with_key(dsk_q_blockslices, key='q-blocksizes' + token,
+                            dependencies=dependencies)
 
         # In-core qr[0] unstacking
         name_q_st2 = 'getitem' + token + '-q2'
         dsk_q_st2 = dict(((name_q_st2, i, 0),
                           (operator.getitem, (name_q_st2_aux, 0, 0), b))
                          for i, b in enumerate(block_slices))
-        dsk.update_with_key(dsk_q_st2, key=name_q_st2)
+        dsk.update_with_key(dsk_q_st2, key=name_q_st2,
+                            dependencies={name_q_st2_aux})
 
         # Q: Block qr[0] (*) In-core qr[0]
         name_q_st3 = 'dot' + token + '-q3'
         dsk_q_st3 = top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
                         name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
                                                      name_q_st2: numblocks})
-        dsk.update_with_key(dsk_q_st3, key=name_q_st3)
+        dsk.update_with_key(dsk_q_st3, key=name_q_st3,
+                            dependencies={name_q_st1, name_q_st2})
 
         # R: In-core qr[1]
         name_r_st2 = 'getitem' + token + '-r2'
         dsk_r_st2 = {(name_r_st2, 0, 0): (operator.getitem, (name_qr_st2, 0, 0), 1)}
-        dsk.update_with_key(dsk_r_st2, key=name_r_st2)
+        dsk.update_with_key(dsk_r_st2, key=name_r_st2,
+                            dependencies={name_qr_st2})
 
     if not compute_svd:
         is_unknown_m = np.isnan(data.shape[0]) or any(np.isnan(c) for c in data.chunks[0])
@@ -327,6 +343,8 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             r_shape = (n, n) if data.shape[0] >= data.shape[1] else data.shape
             r_chunks = r_shape
 
+        dsk.dependencies[name_q_st3] = {data.name}
+        dsk.dependencies[name_r_st2] = {data.name}
         q = Array(dsk, name_q_st3,
                   shape=q_shape, chunks=q_chunks, dtype=qq.dtype)
         r = Array(dsk, name_r_st2,
@@ -355,11 +373,11 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
                         name_u_st2, 'kj', numblocks={name_q_st3: numblocks,
                                                      name_u_st2: (1, 1)})
 
-        dsk.update_with_key(dsk_svd_st2, key=name_svd_st2)
-        dsk.update_with_key(dsk_u_st2, key=name_u_st2)
-        dsk.update_with_key(dsk_u_st4, key=name_u_st4)
-        dsk.update_with_key(dsk_s_st2, key=name_s_st2)
-        dsk.update_with_key(dsk_v_st2, key=name_v_st2)
+        dsk.update_with_key(dsk_svd_st2, key=name_svd_st2, dependencies={name_r_st2})
+        dsk.update_with_key(dsk_u_st2, key=name_u_st2, dependencies={name_svd_st2})
+        dsk.update_with_key(dsk_u_st4, key=name_u_st4, dependencies={name_q_st3, name_u_st2})
+        dsk.update_with_key(dsk_s_st2, key=name_s_st2, dependencies={name_svd_st2})
+        dsk.update_with_key(dsk_v_st2, key=name_v_st2, dependencies={name_svd_st2})
 
         uu, ss, vvh = np.linalg.svd(np.ones(shape=(1, 1), dtype=data.dtype))
 
@@ -434,11 +452,11 @@ def sfqr(data, name=None):
     name_A_rest = prefix + 'A_rest'
     dsk.update_with_key({
         (name_A_1, 0, 0): (data.name, 0, 0)
-    }, key=name_A_1)
+    }, key=name_A_1, dependencies={data.name})
     dsk.update_with_key({
         (name_A_rest, 0, idx): (data.name, 0, 1 + idx)
         for idx in range(nc - 1)
-    }, key=name_A_rest)
+    }, key=name_A_rest, dependencies={data.name})
 
     # Q R_1 = A_1
     name_Q_R1 = prefix + 'Q_R_1'
@@ -446,13 +464,13 @@ def sfqr(data, name=None):
     name_R_1 = prefix + 'R_1'
     dsk.update_with_key({
         (name_Q_R1, 0, 0): (np.linalg.qr, (name_A_1, 0, 0))
-    }, key=name_Q_R1)
+    }, key=name_Q_R1, dependencies={name_A_1})
     dsk.update_with_key({
         (name_Q, 0, 0): (operator.getitem, (name_Q_R1, 0, 0), 0)
-    }, key=name_Q)
+    }, key=name_Q, dependencies={name_Q_R1})
     dsk.update_with_key({
         (name_R_1, 0, 0): (operator.getitem, (name_Q_R1, 0, 0), 1),
-    }, key=name_R_1)
+    }, key=name_R_1, dependencies={name_Q_R1})
 
     Q = Array(dsk, name_Q,
               shape=(m, min(m, n)), chunks=(m, min(m, n)), dtype=qq.dtype)
@@ -762,7 +780,8 @@ def lu(a):
                 dsk[name_u, i, j] = (name_lu, i, j)
                 # l_permuted is not referred in upper triangulars
 
-    dsk = sharedict.merge(a.dask, ('lu-' + token, dsk))
+    dsk = sharedict.merge(a.dask, (name_p, dsk), (name_l, dsk), (name_u, dsk),
+                          dependencies={name_p: {a.name}, name_l: {a.name}, name_u: {a.name}})
     pp, ll, uu = scipy.linalg.lu(np.ones(shape=(1, 1), dtype=a.dtype))
     p = Array(dsk, name_p, shape=a.shape, chunks=a.chunks, dtype=pp.dtype)
     l = Array(dsk, name_l, shape=a.shape, chunks=a.chunks, dtype=ll.dtype)
@@ -852,7 +871,7 @@ def solve_triangular(a, b, lower=False):
                     target = (operator.sub, target, (sum, prevs))
                 dsk[_key(i, j)] = (scipy.linalg.solve_triangular, (a.name, i, i), target)
 
-    dsk = sharedict.merge(a.dask, b.dask, (name, dsk))
+    dsk = sharedict.merge(a.dask, b.dask, (name, dsk), dependencies={name: {a.name, b.name}})
     res = _solve_triangular_lower(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype))
     return Array(dsk, name, shape=b.shape, chunks=b.chunks, dtype=res.dtype)
@@ -998,10 +1017,10 @@ def _cholesky(a):
                         dsk[prev] = (np.dot, (name, j, p), (name_upper, p, i))
                         prevs.append(prev)
                     target = (operator.sub, target, (sum, prevs))
-                dsk[name_upper, j, i] = (_solve_triangular_lower,(name, j, j), target)
+                dsk[name_upper, j, i] = (_solve_triangular_lower, (name, j, j), target)
                 dsk[name, i, j] = (np.transpose, (name_upper, j, i))
 
-    dsk = sharedict.merge(a.dask, (name, dsk))
+    dsk = sharedict.merge(a.dask, (name, dsk), (name_upper, dsk), dependencies={name: {a.name}, name_upper: {a.name}})
     cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
 
     lower = Array(dsk, name, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
@@ -1060,7 +1079,7 @@ def lstsq(a, b):
     # rank
     rname = 'lstsq-rank-' + token
     rdsk = {(rname, ): (np.linalg.matrix_rank, (r.name, 0, 0))}
-    rdsk = sharedict.merge(r.dask, (rname, rdsk))
+    rdsk = sharedict.merge(r.dask, (rname, rdsk), dependencies={rname: {r.name}})
     # rank must be an integer
     rank = Array(rdsk, rname, shape=(), chunks=(), dtype=int)
 
@@ -1071,7 +1090,7 @@ def lstsq(a, b):
                          (np.sqrt,
                           (np.linalg.eigvals,
                            (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))))}
-    sdsk = sharedict.merge(rt.dask, (sname, sdsk))
+    sdsk = sharedict.merge(rt.dask, (sname, sdsk), dependencies={sname: {rt.name}})
     _, _, _, ss = np.linalg.lstsq(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype))
     s = Array(sdsk, sname, shape=(r.shape[0], ),

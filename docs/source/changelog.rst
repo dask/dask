@@ -1,6 +1,37 @@
 Changelog
 =========
 
+0.19.4 / 2018-10-09
+-------------------
+
+Array
++++++
+
+-  Implement ``apply_gufunc(..., axes=..., keepdims=...)`` (:pr:`3985`) `Markus Gonser`_
+
+Bag
++++
+
+-  Fix typo in datasets.make_people (:pr:`4069`) `Matthew Rocklin`_
+
+Dataframe
++++++++++
+
+-  Added `percentiles` options for `dask.dataframe.describe` method (:pr:`4067`) `Zhenqing Li`_
+-  Add DataFrame.partitions accessor similar to Array.blocks (:pr:`4066`) `Matthew Rocklin`_
+
+Core
+++++
+
+-  Pass get functions and Clients through scheduler keyword (:pr:`4062`) `Matthew Rocklin`_
+
+Documentation
++++++++++++++
+
+-  Fix Typo on hpc example. (missing `=` in kwarg). (:pr:`4068`) `Matthias Bussonier`_
+-  Extensive copy-editing: (:pr:`4065`), (:pr:`4064`), (:pr:`4063`) `Miguel Farrajota`_
+
+
 0.19.3 / 2018-10-05
 -------------------
 
@@ -1460,3 +1491,5 @@ Other
 .. _`Jeremy Chan`: https://github.com/convexset
 .. _`Eric Wolak`: https://github.com/epall
 .. _`Miguel Farrajota`: https://github.com/farrajota
+.. _`Zhenqing Li`: https://github.com/DigitalPig
+.. _`Matthias Bussonier`: https://github.com/Carreau

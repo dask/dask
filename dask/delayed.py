@@ -16,7 +16,7 @@ from .compatibility import apply, Iterator
 from .core import quote
 from .context import globalmethod
 from .optimization import cull
-from .utils import funcname, methodcaller, OperatorMethodMixin
+from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict
 from . import sharedict
 
 __all__ = ['Delayed', 'delayed']
@@ -83,7 +83,7 @@ def to_task_dask(expr):
     if typ in (list, tuple, set):
         args, dasks = unzip((to_task_dask(e) for e in expr), 2)
         args = list(args)
-        dsk = sharedict.merge(*dasks)
+        dsk = sharedict.merge(*dasks, dependencies={})  # TODO
         # Ensure output type matches input type
         return (args, dsk) if typ is list else ((typ, args), dsk)
 
@@ -331,7 +331,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     else:
         if not name:
             name = '%s-%s' % (type(obj).__name__, tokenize(task, pure=pure))
-        dsk = sharedict.merge(dsk, (name, {name: task}))
+        dsk = sharedict.merge(dsk, (name, {name: task}), dependencies={})
         return Delayed(name, dsk)
 
 
@@ -343,6 +343,7 @@ def right(method):
 
 
 def optimize(dsk, keys, **kwargs):
+    dsk = ensure_dict(dsk)
     dsk2, _ = cull(dsk, keys)
     return dsk2
 
@@ -361,7 +362,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     def __init__(self, key, dsk, length=None):
         self._key = key
         if type(dsk) is list:  # compatibility with older versions
-            dsk = sharedict.merge(*dsk)
+            dsk = sharedict.merge(*dsk, dependencies={})
         self.dask = dsk
         self._length = length
 
@@ -501,7 +502,8 @@ class DelayedLeaf(Delayed):
 
     @property
     def dask(self):
-        return {self._key: self._obj}
+        return sharedict.ShareDict({self._key: {self._key: self._obj}},
+                                   dependencies={self._key: set()})
 
     def __call__(self, *args, **kwargs):
         return call_function(self._obj, self._key, args, kwargs,
@@ -519,7 +521,8 @@ class DelayedAttr(Delayed):
     @property
     def dask(self):
         dsk = {self._key: (getattr, self._obj._key, self._attr)}
-        return sharedict.merge(self._obj.dask, (self._key, dsk))
+        return sharedict.merge(self._obj.dask, (self._key, dsk),
+                               dependencies={})
 
     def __call__(self, *args, **kwargs):
         return call_function(methodcaller(self._attr), self._attr, (self._obj,) + args, kwargs)

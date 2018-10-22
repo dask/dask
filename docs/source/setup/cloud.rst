@@ -1,9 +1,8 @@
 Cloud Deployments
 =================
 
-To get started running Dask on common Cloud providers
-like Amazon, Google, or Microsoft
-we currently recommend deploying
+To get started running Dask on common Cloud providers like Amazon, 
+Google, or Microsoft, we currently recommend deploying
 :doc:`Dask with Kubernetes and Helm <kubernetes-helm>`.
 
 All three major cloud vendors now provide managed Kubernetes services.
@@ -14,7 +13,7 @@ Data Access
 -----------
 
 You may want to install additional libraries in your Jupyter and worker images
-to access the object stores of each cloud
+to access the object stores of each cloud:
 
 -  `s3fs <https://s3fs.readthedocs.io/>`_ for Amazon's S3
 -  `gcsfs <https://gcsfs.readthedocs.io/>`_ for Google's GCS

@@ -73,13 +73,14 @@ def assert_eq_shape(a, b, check_nan=True):
             assert aa == bb
 
 
-def assert_eq(a, b, check_shape=True, **kwargs):
+def assert_eq(a, b, check_shape=True, check_graph=True, **kwargs):
     a_original = a
     b_original = b
     if isinstance(a, Array):
         assert a.dtype is not None
         adt = a.dtype
-        _check_dsk(a.dask)
+        if check_graph:
+            _check_dsk(a.dask)
         a = a.compute(scheduler='sync')
         if hasattr(a, 'todense'):
             a = a.todense()
@@ -97,7 +98,8 @@ def assert_eq(a, b, check_shape=True, **kwargs):
     if isinstance(b, Array):
         assert b.dtype is not None
         bdt = b.dtype
-        _check_dsk(b.dask)
+        if check_graph:
+            _check_dsk(b.dask)
         b = b.compute(scheduler='sync')
         if not hasattr(b, 'dtype'):
             b = np.array(b, dtype='O')
