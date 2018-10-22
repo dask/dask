@@ -1,4 +1,5 @@
 from datetime import datetime
+import warnings
 
 import pytest
 import numpy as np
@@ -1023,48 +1024,49 @@ def test_reductions_frame_nan(split_every):
     assert_eq(df.sem(ddof=0), ddf.sem(ddof=0, split_every=split_every))
     assert_eq(df.mean(), ddf.mean(split_every=split_every))
 
-    assert_eq(df.sum(skipna=False),
-              ddf.sum(skipna=False, split_every=split_every))
-    assert_eq(df.prod(skipna=False),
-              ddf.prod(skipna=False, split_every=split_every))
-    assert_eq(df.min(skipna=False),
-              ddf.min(skipna=False, split_every=split_every))
-    assert_eq(df.max(skipna=False),
-              ddf.max(skipna=False, split_every=split_every))
-    assert_eq(df.std(skipna=False),
-              ddf.std(skipna=False, split_every=split_every))
-    assert_eq(df.var(skipna=False),
-              ddf.var(skipna=False, split_every=split_every))
-    assert_eq(df.sem(skipna=False),
-              ddf.sem(skipna=False, split_every=split_every))
-    assert_eq(df.std(skipna=False, ddof=0),
-              ddf.std(skipna=False, ddof=0, split_every=split_every))
-    assert_eq(df.var(skipna=False, ddof=0),
-              ddf.var(skipna=False, ddof=0, split_every=split_every))
-    assert_eq(df.sem(skipna=False, ddof=0),
-              ddf.sem(skipna=False, ddof=0, split_every=split_every))
-    assert_eq(df.mean(skipna=False),
-              ddf.mean(skipna=False, split_every=split_every))
+    with warnings.catch_warnings(record=True):
+        assert_eq(df.sum(skipna=False),
+                  ddf.sum(skipna=False, split_every=split_every))
+        assert_eq(df.prod(skipna=False),
+                  ddf.prod(skipna=False, split_every=split_every))
+        assert_eq(df.min(skipna=False),
+                  ddf.min(skipna=False, split_every=split_every))
+        assert_eq(df.max(skipna=False),
+                  ddf.max(skipna=False, split_every=split_every))
+        assert_eq(df.std(skipna=False),
+                  ddf.std(skipna=False, split_every=split_every))
+        assert_eq(df.var(skipna=False),
+                  ddf.var(skipna=False, split_every=split_every))
+        assert_eq(df.sem(skipna=False),
+                  ddf.sem(skipna=False, split_every=split_every))
+        assert_eq(df.std(skipna=False, ddof=0),
+                  ddf.std(skipna=False, ddof=0, split_every=split_every))
+        assert_eq(df.var(skipna=False, ddof=0),
+                  ddf.var(skipna=False, ddof=0, split_every=split_every))
+        assert_eq(df.sem(skipna=False, ddof=0),
+                  ddf.sem(skipna=False, ddof=0, split_every=split_every))
+        assert_eq(df.mean(skipna=False),
+                  ddf.mean(skipna=False, split_every=split_every))
 
-    assert_eq(df.sum(axis=1, skipna=False),
-              ddf.sum(axis=1, skipna=False, split_every=split_every))
-    assert_eq(df.prod(axis=1, skipna=False),
-              ddf.prod(axis=1, skipna=False, split_every=split_every))
-    assert_eq(df.min(axis=1, skipna=False),
-              ddf.min(axis=1, skipna=False, split_every=split_every))
-    assert_eq(df.max(axis=1, skipna=False),
-              ddf.max(axis=1, skipna=False, split_every=split_every))
-    assert_eq(df.std(axis=1, skipna=False),
-              ddf.std(axis=1, skipna=False, split_every=split_every))
-    assert_eq(df.var(axis=1, skipna=False),
-              ddf.var(axis=1, skipna=False, split_every=split_every))
-    assert_eq(df.sem(axis=1, skipna=False),
-              ddf.sem(axis=1, skipna=False, split_every=split_every))
-    assert_eq(df.std(axis=1, skipna=False, ddof=0),
-              ddf.std(axis=1, skipna=False, ddof=0, split_every=split_every))
-    assert_eq(df.var(axis=1, skipna=False, ddof=0),
-              ddf.var(axis=1, skipna=False, ddof=0, split_every=split_every))
-    assert_eq(df.sem(axis=1, skipna=False, ddof=0),
-              ddf.sem(axis=1, skipna=False, ddof=0, split_every=split_every))
-    assert_eq(df.mean(axis=1, skipna=False),
-              ddf.mean(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.sum(axis=1, skipna=False),
+                  ddf.sum(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.prod(axis=1, skipna=False),
+                  ddf.prod(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.min(axis=1, skipna=False),
+                  ddf.min(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.max(axis=1, skipna=False),
+                  ddf.max(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.std(axis=1, skipna=False),
+                  ddf.std(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.var(axis=1, skipna=False),
+                  ddf.var(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.sem(axis=1, skipna=False),
+                  ddf.sem(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.std(axis=1, skipna=False, ddof=0),
+                  ddf.std(axis=1, skipna=False, ddof=0, split_every=split_every))
+        assert_eq(df.var(axis=1, skipna=False, ddof=0),
+                  ddf.var(axis=1, skipna=False, ddof=0, split_every=split_every))
+        assert_eq(df.sem(axis=1, skipna=False, ddof=0),
+                  ddf.sem(axis=1, skipna=False, ddof=0, split_every=split_every))
+        assert_eq(df.mean(axis=1, skipna=False),
+                  ddf.mean(axis=1, skipna=False, split_every=split_every))
