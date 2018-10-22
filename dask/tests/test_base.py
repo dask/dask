@@ -5,7 +5,6 @@ import pytest
 from operator import add, mul
 import subprocess
 import sys
-import warnings
 import time
 
 from toolz import merge
