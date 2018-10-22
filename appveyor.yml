@@ -12,8 +12,8 @@ environment:
     # Since appveyor is quite slow, we only use a single configuration
     - PYTHON: "3.5"
       ARCH: "64"
-      NUMPY: "1.15.2"
-      PANDAS: "0.23.4"
+      NUMPY: "1.14"
+      PANDAS: "0.22"
       CONDA_ENV: testenv
 
 init:
