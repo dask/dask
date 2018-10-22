@@ -498,3 +498,28 @@ def test_regres_3940(func):
     assert func(a).name != func(a + 1).name
     assert func(a, axis=0).name != func(a).name
     assert func(a, axis=0).name != func(a, axis=1).name
+
+
+@pytest.mark.parametrize('func', [
+    np.sum,
+    np.max,
+    np.nansum,
+    pytest.param(np.argmax, marks=pytest.mark.xfail),
+    pytest.param(np.std, marks=pytest.mark.xfail),
+])
+@pytest.mark.parametrize('keepdims', [True, False])
+def test_empty_chunks(func, keepdims):
+    x = np.arange(20).reshape((10, 2))
+    dx = da.from_array(x, chunks=(1, 1))
+
+    y = x[x > 4]
+    dy = dx[dx > 4]
+    assert_eq(func(y, keepdims=keepdims), func(dy, keepdims=keepdims))
+
+    y = x[x < 4]
+    dy = dx[dx < 4]
+    assert_eq(func(y, keepdims=keepdims), func(dy, keepdims=keepdims))
+
+    y = x[x % 3 != 0]
+    dy = dx[dx % 3 != 0]
+    assert_eq(func(y, keepdims=keepdims), func(dy, keepdims=keepdims))

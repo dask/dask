@@ -8,7 +8,7 @@ from math import factorial, log, ceil
 import numpy as np
 from numbers import Integral
 
-from toolz import compose, partition_all, get, accumulate, pluck
+from toolz import partition_all, get, accumulate, pluck
 
 from . import chunk
 from .core import _concatenate2, Array, atop, handle_out
@@ -139,10 +139,13 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
 
     # Map chunk across all blocks
     inds = tuple(range(x.ndim))
+
     # The dtype of `tmp` doesn't actually matter, and may be incorrect.
-    tmp = atop(chunk, inds, x, inds, axis=axis, keepdims=True, dtype=x.dtype)
+    tmp = atop(_apply_reduction, inds, x, inds, function=chunk, axis=axis,
+               keepdims=True, dtype=x.dtype, token=funcname(chunk))
     tmp._chunks = tuple((output_size, ) * len(c) if i in axis else c
                         for i, c in enumerate(tmp.chunks))
+
     result = _tree_reduce(tmp, aggregate, axis, keepdims, dtype, split_every,
                           combine, name=name, concatenate=concatenate)
     if keepdims and output_size != 1:
@@ -172,20 +175,41 @@ def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
     for i, n in enumerate(x.numblocks):
         if i in split_every and split_every[i] != 1:
             depth = int(builtins.max(depth, ceil(log(n, split_every[i]))))
-    func = partial(combine or aggregate, axis=axis, keepdims=True)
-    if concatenate:
-        func = compose(func, partial(_concatenate2, axes=axis))
+
     for i in range(depth - 1):
-        x = partial_reduce(func, x, split_every, True, dtype=dtype,
-                           name=(name or funcname(combine or aggregate)) + '-partial')
-    func = partial(aggregate, axis=axis, keepdims=keepdims)
+        x = partial_reduce(combine or aggregate, x, split_every, dtype=dtype,
+                           name=(name or funcname(combine or aggregate)) + '-partial',
+                           axis=axis, concatenate=concatenate, keepdims=True)
+
+    return partial_reduce(aggregate, x, split_every, dtype=dtype,
+                          name=(name or funcname(aggregate)) + '-aggregate',
+                          axis=axis, keepdims=keepdims,
+                          concatenate=concatenate, final=True)
+
+
+def _apply_reduction(chunks, function, axis=None, keepdims=None,
+                     concatenate=False, final=False):
     if concatenate:
-        func = compose(func, partial(_concatenate2, axes=axis))
-    return partial_reduce(func, x, split_every, keepdims=keepdims, dtype=dtype,
-                          name=(name or funcname(aggregate)) + '-aggregate')
+        chunks = _concatenate2(chunks, axes=axis)
+
+    try:
+        result = function(chunks, axis=axis, keepdims=keepdims)
+    except Exception as e:
+        if "no identity" in str(e) and not final:
+            if keepdims:
+                return chunks[tuple([slice(None) if x not in axis else slice(0, 1)
+                                     for x in range(chunks.ndim)])]
+            else:
+                return chunks[tuple([slice(None) if x not in axis else 0
+                                     for x in range(chunks.ndim)])]
+        else:
+            raise
+
+    return result
 
 
-def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
+def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None,
+                   axis=None, concatenate=False, final=False):
     """ Partial reduction across multiple axes.
 
     Parameters
@@ -219,7 +243,7 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
         decided = dict((i, j[0]) for (i, j) in enumerate(p) if len(j) == 1)
         dummy = dict(i for i in enumerate(p) if i[0] not in decided)
         g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
-        dsk[(name,) + k] = (func, g)
+        dsk[(name,) + k] = (_apply_reduction, g, func, axis, keepdims, concatenate, final)
     return Array(sharedict.merge(x.dask, (name, dsk), dependencies={name: {x.name}}),
                  name, out_chunks, dtype=dtype)
 
@@ -423,6 +447,7 @@ def moment_combine(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
     result = empty(n.shape, dtype=[('total', total.dtype),
                                    ('n', n.dtype),
                                    ('M', Ms.dtype, (order - 1,))])
+
     result['total'] = total
     result['n'] = n
     result['M'] = M
