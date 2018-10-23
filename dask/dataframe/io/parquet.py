@@ -178,7 +178,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
                       categories=None, index=None, infer_divisions=None):
     import fastparquet
 
-    if isinstance(paths,fastparquet.api.ParquetFile):
+    if isinstance(paths, fastparquet.api.ParquetFile):
         pf = paths
     elif len(paths) > 1:
         if infer_divisions:
@@ -188,12 +188,39 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
             return _read_fp_multifile(fs, fs_token, paths, columns=None,
                                       categories=None, index=None)
     else:
+        pf = None
         try:
+            # open directory with a metadata file
             pf = fastparquet.ParquetFile(paths[0] + fs.sep + '_metadata',
                                          open_with=fs.open,
                                          sep=fs.sep)
         except Exception:
-            pf = fastparquet.ParquetFile(paths[0], open_with=fs.open, sep=fs.sep)
+            pass
+        if pf is None:
+            # open single file, which may or may not be a metadata file
+            try:
+                pf = fastparquet.ParquetFile(paths[0], open_with=fs.open,
+                                             sep=fs.sep)
+            except Exception:
+                pass
+        if pf is None:
+            # open directory without metadata file, scan for al parq data files
+            try:
+                path = paths[0].rstrip('/')
+                paths = (fs.glob(path + '/*.parq*')
+                         + fs.glob(path + '/*/*.parq*')
+                         + fs.glob(path + '/*/*/*.parq*'))
+                if infer_divisions:
+                    # this scans all the files, for divisions and filtering
+                    pf = fastparquet.ParquetFile(paths, open_with=fs.open,
+                                                 sep=fs.sep)
+                else:
+                    return _read_fp_multifile(fs, fs_token, paths, columns=None,
+                                              categories=None, index=None)
+            except Exception:
+                pass
+        if pf is None:
+            raise RuntimeError("Opening parquet dataset failed")
 
     # Validate infer_divisions
     if os.path.split(pf.fn)[-1] != '_metadata' and infer_divisions is True:
