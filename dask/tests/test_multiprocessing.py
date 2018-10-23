@@ -9,8 +9,8 @@ import random
 import numpy as np
 
 import pytest
-from dask import compute, config, delayed
-from dask.context import set_options
+import dask
+from dask import compute, delayed
 from dask.multiprocessing import (
     get, _dumps, get_context, remote_exception
 )
@@ -104,13 +104,13 @@ def test_unpicklable_args_generate_errors():
 
 def test_reuse_pool():
     pool = multiprocessing.Pool()
-    with set_options(pool=pool):
+    with dask.config.set(pool=pool):
         assert get({'x': (inc, 1)}, 'x') == 2
         assert get({'x': (inc, 1)}, 'x') == 2
 
 
 def test_dumps_loads():
-    with set_options(func_dumps=pickle.dumps, func_loads=pickle.loads):
+    with dask.config.set(func_dumps=pickle.dumps, func_loads=pickle.loads):
         assert get({'x': 1, 'y': (add, 'x', 2)}, 'y') == 3
 
 
@@ -134,7 +134,7 @@ def test_random_seeds(random):
         return tuple(random.randint(0, 10000) for i in range(5))
 
     N = 10
-    with set_options(scheduler='processes'):
+    with dask.config.set(scheduler='processes'):
         results, = compute([delayed(f, pure=False)() for i in range(N)])
 
     assert len(set(results)) == N
@@ -160,7 +160,7 @@ def test_custom_context_used_python3_posix():
     import sys
     sys.modules["FAKE_MODULE_FOR_TEST"] = 1
     try:
-        with config.set({"multiprocessing.context": "spawn"}):
+        with dask.config.set({"multiprocessing.context": "spawn"}):
             result = get({"x": (check_for_pytest,)}, "x")
         assert not result
     finally:
@@ -177,9 +177,9 @@ def test_get_context_using_python3_posix():
     If default context is changed this test will need to change too.
     """
     assert get_context() is multiprocessing.get_context(None)
-    with config.set({"multiprocessing.context": "forkserver"}):
+    with dask.config.set({"multiprocessing.context": "forkserver"}):
         assert get_context() is multiprocessing.get_context("forkserver")
-    with config.set({"multiprocessing.context": "spawn"}):
+    with dask.config.set({"multiprocessing.context": "spawn"}):
         assert get_context() is multiprocessing.get_context("spawn")
 
 
@@ -193,7 +193,7 @@ def test_custom_context_ignored_elsewhere():
     """
     assert get({'x': (inc, 1)}, 'x') == 2
     with pytest.warns(UserWarning):
-        with config.set({"multiprocessing.context": "forkserver"}):
+        with dask.config.set({"multiprocessing.context": "forkserver"}):
             assert get({'x': (inc, 1)}, 'x') == 2
 
 
@@ -203,5 +203,5 @@ def test_get_context_always_default():
     """ On Python 2/Windows, get_context() always returns same context."""
     assert get_context() is multiprocessing
     with pytest.warns(UserWarning):
-        with config.set({"multiprocessing.context": "forkserver"}):
+        with dask.config.set({"multiprocessing.context": "forkserver"}):
             assert get_context() is multiprocessing

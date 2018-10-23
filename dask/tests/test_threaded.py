@@ -7,7 +7,7 @@ from time import time, sleep
 
 import pytest
 
-from dask.context import set_options
+import dask
 from dask.compatibility import PY2
 from dask.threaded import get
 from dask.utils_test import inc, add
@@ -40,7 +40,7 @@ def test_exceptions_rise_to_top():
 
 def test_reuse_pool():
     pool = ThreadPool()
-    with set_options(pool=pool):
+    with dask.config.set(pool=pool):
         assert get({'x': (inc, 1)}, 'x') == 2
         assert get({'x': (inc, 1)}, 'x') == 2
 

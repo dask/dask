@@ -499,7 +499,7 @@ def _write_csv(df, fil, **kwargs):
 
 
 def to_csv(df, filename, name_function=None, compression=None, compute=True,
-           get=None, scheduler=None, storage_options=None,
+           scheduler=None, storage_options=None,
            header_first_partition_only=False, **kwargs):
     """
     Store Dask DataFrame to CSV files
@@ -647,7 +647,7 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
                        for d, f in zip(dfs[1:], files[1:])])
 
     if compute:
-        delayed(values).compute(get=get, scheduler=scheduler)
+        delayed(values).compute(scheduler=scheduler)
         return [f.path for f in files]
     else:
         return values
