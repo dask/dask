@@ -3006,7 +3006,7 @@ def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     return load_dsk
 
 
-def asarray(a):
+def asarray(a, **kwargs):
     """Convert the input to a dask array.
 
     Parameters
@@ -3046,7 +3046,7 @@ def asarray(a):
         return a.to_dask_array()
     elif not isinstance(getattr(a, 'shape', None), Iterable):
         a = np.asarray(a)
-    return from_array(a, chunks=a.shape, getitem=getter_inline)
+    return from_array(a, chunks=a.shape, getitem=getter_inline, **kwargs)
 
 
 def asanyarray(a):
