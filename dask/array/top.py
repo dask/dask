@@ -1,4 +1,3 @@
-import collections
 import itertools
 import numbers
 
@@ -6,7 +5,7 @@ import numpy as np
 import toolz
 
 from .. import base, core, utils
-from ..compatibility import apply
+from ..compatibility import apply, Mapping
 from ..delayed import to_task_dask, unpack_collections
 from ..highgraph import HighLevelGraph
 from ..optimization import SubgraphCallable
@@ -110,7 +109,7 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     return HighLevelGraph.from_collections(output, top, dependencies=dependencies)
 
 
-class TOP(collections.Mapping):
+class TOP(Mapping):
     """ Tensor Operation
 
     This is a lazily constructed mapping for tensor operation graphs.

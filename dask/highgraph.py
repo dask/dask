@@ -1,10 +1,9 @@
-import collections
-
 import toolz
 
 from . import sharedict
 from .utils import ignoring
 from .base import is_dask_collection
+from .compatibility import Mapping
 
 
 class HighLevelGraph(sharedict.ShareDict):
@@ -92,7 +91,7 @@ class HighLevelGraph(sharedict.ShareDict):
             if isinstance(g, HighLevelGraph):
                 layers.update(g.layers)
                 dependencies.update(g.dependencies)
-            elif isinstance(g, collections.Mapping):
+            elif isinstance(g, Mapping):
                 layers[id(g)] = g
                 dependencies[id(g)] = set()
             else:
