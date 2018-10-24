@@ -41,7 +41,7 @@ class HighGraph(sharedict.ShareDict):
             else:
                 raise TypeError(type(collection))
 
-        return HighGraph(layers, deps)
+        return cls(layers, deps)
 
     def __getitem__(self, key):
         for d in self.layers.values():
@@ -76,7 +76,7 @@ class HighGraph(sharedict.ShareDict):
                 dependencies[id(g)] = set()
             else:
                 raise TypeError(g)
-        return HighGraph(layers, dependencies)
+        return cls(layers, dependencies)
 
     def visualize(self, filename='dask.pdf', format=None, **kwargs):
         from .dot import graphviz_to_file
