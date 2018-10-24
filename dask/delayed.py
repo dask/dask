@@ -5,9 +5,9 @@ import types
 import uuid
 
 try:
-    from cytoolz import curry, pluck, concat
+    from cytoolz import curry, pluck, concat, unique
 except ImportError:
-    from toolz import curry, pluck, concat
+    from toolz import curry, pluck, concat, unique
 
 from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
@@ -58,7 +58,7 @@ def unpack_collections(expr):
     Returns
     -------
     task : normalized task to be run
-    collections : a set of collections
+    collections : a tuple of collections
 
     Examples
     --------
@@ -68,7 +68,7 @@ def unpack_collections(expr):
     >>> task  # doctest: +SKIP
     ['a', 'b', 3]
     >>> collections  # doctest: +SKIP
-    {a, b}
+    (a, b)
 
     >>> task, collections = unpack_collections({a: 1, b: 2})
     >>> task  # doctest: +SKIP
@@ -77,21 +77,21 @@ def unpack_collections(expr):
     {a, b}
     """
     if isinstance(expr, Delayed):
-        return expr._key, {expr}
+        return expr._key, (expr,)
 
     if is_dask_collection(expr):
         finalized = finalize(expr)
-        return finalized._key, {finalized}
+        return finalized._key, (finalized,)
 
     if isinstance(expr, Iterator):
-        expr = list(expr)
+        expr = tuple(expr)
 
     typ = type(expr)
 
     if typ in (list, tuple, set):
         args, collections = unzip((unpack_collections(e) for e in expr), 2)
         args = list(args)
-        collections = list(concat(collections))
+        collections = tuple(unique(concat(collections), key=id))
         # Ensure output type matches input type
         if typ is not list:
             args = (typ, args)
@@ -105,7 +105,7 @@ def unpack_collections(expr):
         args, collections = unpack_collections([expr.start, expr.stop, expr.step])
         return (slice,) + tuple(args), collections
 
-    return expr, set()
+    return expr, ()
 
 
 def to_task_dask(expr):
