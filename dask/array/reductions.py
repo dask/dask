@@ -8,7 +8,7 @@ from math import factorial, log, ceil
 import numpy as np
 from numbers import Integral
 
-from toolz import compose, partition_all, get, accumulate, pluck, concat
+from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
 from .core import _concatenate2, Array, atop, handle_out
@@ -551,6 +551,12 @@ def arg_chunk(func, argfunc, x, axis, offset_info):
     arg = argfunc(x, axis=arg_axis, keepdims=True)
     if arg_axis is None:
         offset, total_shape = offset_info
+        if np.isnan(total_shape).any():
+            raise ValueError(
+                "Arg-reductions do not work with arrays that have "
+                "unknown chunksizes.  At some point in your computation "
+                "this array lost chunking information"
+            )
         ind = np.unravel_index(arg.ravel()[0], x.shape)
         total_ind = tuple(o + i for (o, i) in zip(offset, ind))
         arg[:] = np.ravel_multi_index(total_ind, total_shape)
@@ -616,13 +622,6 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
     else:
         raise TypeError("axis must be either `None` or int, "
                         "got '{0}'".format(axis))
-
-    if np.isnan(list(concat(x.chunks))).any():
-        raise ValueError(
-            "Arg-reductions do not work with arrays that have "
-            "unknown chunksizes.  At some point in your computation "
-            "this array lost chunking information"
-        )
 
     # Map chunk across all blocks
     name = 'arg-reduce-{0}'.format(tokenize(axis, x, chunk,

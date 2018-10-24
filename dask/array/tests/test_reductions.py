@@ -190,7 +190,7 @@ def test_arg_reductions_unknown_chunksize(func):
     d = d[d > 1]
 
     with pytest.raises(ValueError) as info:
-        getattr(da, func)(d)
+        getattr(da, func)(d).compute()
 
     assert "unknown chunksize" in str(info.value)
 
