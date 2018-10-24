@@ -476,6 +476,20 @@ def get_fs(protocol, storage_options=None):
                         "    pip install gcsfs")
         cls = _filesystems[protocol]
 
+    elif protocol in ['adl', 'adlfs']:
+
+        import_required('dask_adlfs',
+                        "Need to install `dask_adlfs` and `azure-storage-py"
+                        "thon` libraries for Azure Datalake Storage support.\n"
+                        "The latter is available via pip or conda:\n"
+                        "    conda install -c conda-forge azure-storage\n"
+                        "    or\n"
+                        "    pip install azure-storage\n"
+                        "`dask_adlfs` is only available by source install:\n"
+                        "    pip install git+https://github.com/dask/"
+                        "dask-adlfs/")
+
+        cls = _filesystems[protocol]
     elif protocol == 'hdfs':
         cls = get_hdfs_driver(config.get("hdfs_driver", "auto"))
 
