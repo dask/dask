@@ -728,6 +728,8 @@ def normalize_slice(idx, dim):
                 stop = None
             if step == 1:
                 step = None
+            if stop is not None and start is not None and stop < start:
+                stop = start
         elif step < 0:
             if start >= dim - 1:
                 start = None
