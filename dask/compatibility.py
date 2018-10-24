@@ -304,14 +304,15 @@ else:
 
 
 def getargspec(func):
-    """Version of inspect.getargspec that works for functools.partial objects"""
+    """Version of inspect.getargspec that works with partial and warps."""
     if isinstance(func, functools.partial):
-        return _getargspec(func.func)
+        return getargspec(func.func)
+ 
+    func = getattr(func, '__wrapped__', func)
+    if isinstance(func, type):
+        return _getargspec(func.__init__)
     else:
-        if isinstance(func, type):
-            return _getargspec(func.__init__)
-        else:
-            return _getargspec(func)
+        return _getargspec(func)
 
 
 def bind_method(cls, name, func):
