@@ -200,13 +200,13 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
 def _extract_graph_and_keys(vals):
     """Given a list of dask vals, return a single graph and a list of keys such
     that ``get(dsk, keys)`` is equivalent to ``[v.compute() v in vals]``."""
-    from .highgraph import HighGraph
+    from .highgraph import HighLevelGraph
 
     graphs = [v.__dask_graph__() for v in vals]
     keys = [v.__dask_keys__() for v in vals]
 
-    if any(isinstance(graph, HighGraph) for graph in graphs):
-        graph = HighGraph.merge(*graphs)
+    if any(isinstance(graph, HighLevelGraph) for graph in graphs):
+        graph = HighLevelGraph.merge(*graphs)
     else:
         graph = merge(*graphs)
 

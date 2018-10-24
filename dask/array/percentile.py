@@ -8,7 +8,7 @@ from toolz import merge, merge_sorted
 
 from .core import Array
 from ..base import tokenize
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 from ..compatibility import Iterator
 
 
@@ -57,7 +57,7 @@ def percentile(a, q, interpolation='linear'):
         dtype = (np.array([], dtype=dtype) / 0.5).dtype
 
     dsk = merge(dsk, dsk2)
-    graph = HighGraph.from_collections(name2, dsk, dependencies=[a])
+    graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[a])
     return Array(graph, name2, chunks=((len(q),),), dtype=dtype)
 
 

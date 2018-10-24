@@ -8,7 +8,7 @@ from numbers import Integral
 import numpy as np
 from toolz import accumulate, sliding_window
 
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 from ..base import tokenize
 from ..compatibility import Sequence
 from . import chunk
@@ -488,7 +488,7 @@ def diag(v):
         if v.chunks[0] == v.chunks[1]:
             dsk = {(name, i): (np.diag, row[i])
                    for i, row in enumerate(v.__dask_keys__())}
-            graph = HighGraph.from_collections(name, dsk, dependencies=[v])
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
             return Array(graph, name, (v.chunks[0],), dtype=v.dtype)
         else:
             raise NotImplementedError("Extracting diagonals from non-square "
@@ -504,7 +504,7 @@ def diag(v):
             else:
                 dsk[key] = (np.zeros, (m, n))
 
-    graph = HighGraph.from_collections(name, dsk, dependencies=[v])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
     return Array(graph, name, (chunks_1d, chunks_1d), dtype=v.dtype)
 
 
@@ -552,7 +552,7 @@ def triu(m, k=0):
                 dsk[(name, i, j)] = (np.triu, (m.name, i, j), k - (chunk * (j - i)))
             else:
                 dsk[(name, i, j)] = (m.name, i, j)
-    graph = HighGraph.from_collections(name, dsk, dependencies=[m])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
     return Array(graph, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
 
 
@@ -600,7 +600,7 @@ def tril(m, k=0):
                 dsk[(name, i, j)] = (np.tril, (m.name, i, j), k - (chunk * (j - i)))
             else:
                 dsk[(name, i, j)] = (np.zeros, (m.chunks[0][i], m.chunks[1][j]))
-    graph = HighGraph.from_collections(name, dsk, dependencies=[m])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
     return Array(graph, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
 
 
@@ -782,7 +782,7 @@ def pad_edge(array, pad_width, mode, *args):
         else:
             dsk[result_chunk_key] = array_chunk_key
 
-    graph = HighGraph.from_collections(name, dsk, dependencies=[array])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[array])
     result = Array(graph, name, chunks=chunks, dtype=array.dtype)
 
     return result

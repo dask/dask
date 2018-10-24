@@ -7,7 +7,7 @@ from ..core import DataFrame, Series
 from ..utils import PANDAS_VERSION
 from ...base import tokenize
 from ...utils import derived_from
-from ...highgraph import HighGraph
+from ...highgraph import HighLevelGraph
 
 if PANDAS_VERSION >= '0.20.0':
     from pandas.core.resample import Resampler as pd_Resampler
@@ -115,7 +115,7 @@ class Resampler(object):
         meta_r = self.obj._meta_nonempty.resample(self._rule, **self._kwargs)
         meta = getattr(meta_r, how)(*how_args, **how_kwargs)
 
-        graph = HighGraph.from_collections(name, dsk, dependencies=[partitioned])
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[partitioned])
         if isinstance(meta, pd.DataFrame):
             return DataFrame(graph, name, meta, outdivs)
         return Series(graph, name, meta, outdivs)

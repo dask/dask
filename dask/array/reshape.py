@@ -9,7 +9,7 @@ from .core import Array
 from ..base import tokenize
 from ..core import flatten
 from ..compatibility import reduce
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 from ..utils import M
 
 
@@ -177,7 +177,7 @@ def reshape(x, shape):
         key = next(flatten(x.__dask_keys__()))
         dsk = {(name,) + (0,) * len(shape): (M.reshape, key, shape)}
         chunks = tuple((d,) for d in shape)
-        graph = HighGraph.from_collections(name, dsk, dependencies=[x])
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
         return Array(graph, name, chunks, dtype=x.dtype)
 
     # Logic for how to rechunk
@@ -190,5 +190,5 @@ def reshape(x, shape):
     shapes = list(product(*outchunks))
     dsk = {a: (M.reshape, b, shape) for a, b, shape in zip(out_keys, in_keys, shapes)}
 
-    graph = HighGraph.from_collections(name, dsk, dependencies=[x2])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x2])
     return Array(graph, name, outchunks, dtype=x.dtype)

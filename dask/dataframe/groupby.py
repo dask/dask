@@ -15,7 +15,7 @@ from .shuffle import shuffle
 from .utils import make_meta, insert_meta_param_description, raise_on_meta_error
 from ..base import tokenize
 from ..utils import derived_from, M, funcname, itemgetter
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 
 
 # #############################################
@@ -869,7 +869,7 @@ class _GroupBy(object):
                                (cumpart_ext._name, i), (name_cum, i),
                                index, 0 if columns is None else columns,
                                aggregate, initial)
-        graph = HighGraph.from_collections(name, dask, dependencies=[cumpart_ext, cumlast])
+        graph = HighLevelGraph.from_collections(name, dask, dependencies=[cumpart_ext, cumlast])
         return new_dd_object(graph, name, chunk(self._meta), self.obj.divisions)
 
     @derived_from(pd.core.groupby.GroupBy)

@@ -1,7 +1,7 @@
 import io
 import uuid
 
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 
 MAGIC = b'Obj\x01'
 SYNC_SIZE = 16
@@ -232,7 +232,7 @@ def to_avro(b, filename, schema, name_function=None, storage_options=None,
     dsk = {(name, i): (_write_avro_part, (b.name, i), f, schema, codec,
                        sync_interval, metadata)
            for i, f in enumerate(files)}
-    graph = HighGraph.from_collections(name, dsk, dependencies=[b])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[b])
     out = type(b)(graph, name, b.npartitions)
     if compute:
         out.compute(**kwargs)

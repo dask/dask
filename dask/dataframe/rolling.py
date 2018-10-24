@@ -8,7 +8,7 @@ from numbers import Integral
 
 from ..base import tokenize
 from ..utils import M, funcname, derived_from
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 from .core import _emulate
 from .utils import make_meta, PANDAS_VERSION
 
@@ -139,7 +139,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         dsk[(name, i)] = (overlap_chunk, func, prev, current, next, before,
                           after, args, kwargs)
 
-    graph = HighGraph.from_collections(name, dsk, dependencies=[df])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
     return df._constructor(graph, name, meta, df.divisions)
 
 

@@ -7,7 +7,7 @@ from .utils import ignoring
 from .base import is_dask_collection
 
 
-class HighGraph(sharedict.ShareDict):
+class HighLevelGraph(sharedict.ShareDict):
     def __init__(self, layers, dependencies):
         for v in layers.values():
             assert not isinstance(v, sharedict.ShareDict)
@@ -23,9 +23,9 @@ class HighGraph(sharedict.ShareDict):
 
     @classmethod
     def from_collections(cls, name, layer, dependencies=()):
-        """ Construct a HighGraph from a new layer and a set of collections
+        """ Construct a HighLevelGraph from a new layer and a set of collections
 
-        This constructs a HighGraph in the common case where we have a single
+        This constructs a HighLevelGraph in the common case where we have a single
         new layer and a set of old collections on which we want to depend.
 
         This pulls out the ``__dask_layers__()`` method of the collections if
@@ -49,7 +49,7 @@ class HighGraph(sharedict.ShareDict):
         for collection in toolz.unique(dependencies, key=id):
             if is_dask_collection(collection):
                 graph = collection.__dask_graph__()
-                if isinstance(graph, HighGraph):
+                if isinstance(graph, HighLevelGraph):
                     layers.update(graph.layers)
                     deps.update(graph.dependencies)
                     with ignoring(AttributeError):
@@ -89,7 +89,7 @@ class HighGraph(sharedict.ShareDict):
         layers = {}
         dependencies = {}
         for g in graphs:
-            if isinstance(g, HighGraph):
+            if isinstance(g, HighLevelGraph):
                 layers.update(g.layers)
                 dependencies.update(g.dependencies)
             elif isinstance(g, collections.Mapping):

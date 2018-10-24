@@ -10,7 +10,7 @@ import pandas as pd
 from .core import new_dd_object, Series
 from . import methods
 from ..base import tokenize
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 
 
 class _IndexerBase(object):
@@ -151,7 +151,7 @@ class _LocIndexer(_IndexerBase):
         else:
             divisions = [None, None]
             dsk = {(name, 0): meta.head(0)}
-        graph = HighGraph.from_collections(name, dsk, dependencies=[self.obj])
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
         return new_dd_object(graph, name, meta=meta, divisions=divisions)
 
     def _loc_element(self, iindexer, cindexer):
@@ -165,7 +165,7 @@ class _LocIndexer(_IndexerBase):
                            slice(iindexer, iindexer), cindexer)}
 
         meta = self._make_meta(iindexer, cindexer)
-        graph = HighGraph.from_collections(name, dsk, dependencies=[self.obj])
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
         return new_dd_object(graph, name, meta=meta, divisions=[iindexer, iindexer])
 
     def _get_partitions(self, keys):
@@ -236,7 +236,7 @@ class _LocIndexer(_IndexerBase):
         assert len(divisions) == len(dsk) + 1
 
         meta = self._make_meta(iindexer, cindexer)
-        graph = HighGraph.from_collections(name, dsk, dependencies=[self.obj])
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
         return new_dd_object(graph, name, meta=meta, divisions=divisions)
 
 

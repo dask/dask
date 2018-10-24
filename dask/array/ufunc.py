@@ -9,7 +9,7 @@ from toolz import curry
 from .core import Array, elemwise, atop, apply_infer_dtype, asarray
 from ..base import is_dask_collection, normalize_function
 from .. import core
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 from ..utils import skip_doctest, funcname
 
 
@@ -295,9 +295,9 @@ def frexp(x):
     ldt = l.dtype
     rdt = r.dtype
 
-    graph = HighGraph.from_collections(left, ldsk, dependencies=[tmp])
+    graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
     L = Array(graph, left, chunks=tmp.chunks, dtype=ldt)
-    graph = HighGraph.from_collections(right, rdsk, dependencies=[tmp])
+    graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
     R = Array(graph, right, chunks=tmp.chunks, dtype=rdt)
     return L, R
 
@@ -318,8 +318,8 @@ def modf(x):
     ldt = l.dtype
     rdt = r.dtype
 
-    graph = HighGraph.from_collections(left, ldsk, dependencies=[tmp])
+    graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
     L = Array(graph, left, chunks=tmp.chunks, dtype=ldt)
-    graph = HighGraph.from_collections(right, rdsk, dependencies=[tmp])
+    graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
     R = Array(graph, right, chunks=tmp.chunks, dtype=rdt)
     return L, R

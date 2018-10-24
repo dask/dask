@@ -8,7 +8,7 @@ import toolz
 from .. import base, core, utils
 from ..compatibility import apply
 from ..delayed import to_task_dask, unpack_collections
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 from ..optimization import SubgraphCallable
 
 
@@ -107,7 +107,7 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     top = TOP(output, output_indices, subgraph, indices,
               numblocks=numblocks, concatenate=concatenate, new_axes=new_axes)
     return top
-    return HighGraph.from_collections(output, top, dependencies=dependencies)
+    return HighLevelGraph.from_collections(output, top, dependencies=dependencies)
 
 
 class TOP(collections.Mapping):
@@ -496,7 +496,7 @@ def atop(func, out_ind, *args, **kwargs):
 
     graph = _top(func, out, out_ind, *argindsstr, numblocks=numblocks,
                  dependencies=dependencies, new_axes=new_axes, **kwargs2)
-    graph = HighGraph.from_collections(out, graph,
+    graph = HighLevelGraph.from_collections(out, graph,
                                        dependencies=arrays + dependencies)
 
     chunks = [chunkss[i] for i in out_ind]
@@ -570,14 +570,14 @@ def optimize_atop(full_graph, keys=()):
 
     Parameters
     ----------
-    full_graph: HighGraph
+    full_graph: HighLevelGraph
     keys: Iterable
         The keys of all outputs of all collections.
         Used to make sure that we don't fuse a layer needed by an output
 
     Returns
     -------
-    HighGraph
+    HighLevelGraph
 
     See Also
     --------
@@ -629,7 +629,7 @@ def optimize_atop(full_graph, keys=()):
             dependencies[layer] = full_graph.dependencies.get(layer, set())
             stack.extend(full_graph.dependencies.get(layer, ()))
 
-    return HighGraph(out, dependencies)
+    return HighLevelGraph(out, dependencies)
 
 
 def rewrite_atop(inputs):

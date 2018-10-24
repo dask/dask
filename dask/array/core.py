@@ -46,7 +46,7 @@ from .. import threaded, core
 from .. import sharedict
 from ..sizeof import sizeof
 from ..sharedict import ShareDict
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 from ..bytes.core import get_mapper, get_fs_token_paths
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
@@ -922,8 +922,8 @@ class Array(DaskMethodsMixin):
     def __new__(cls, dask, name, chunks, dtype, shape=None):
         self = super(Array, cls).__new__(cls)
         assert isinstance(dask, Mapping)
-        if not isinstance(dask, HighGraph):
-            dask = HighGraph.from_collections(name, dask, dependencies=())
+        if not isinstance(dask, HighLevelGraph):
+            dask = HighLevelGraph.from_collections(name, dask, dependencies=())
         self.dask = dask
         self.name = name
         if dtype is None:
@@ -1227,7 +1227,7 @@ class Array(DaskMethodsMixin):
         out = 'getitem-' + tokenize(self, index2)
         dsk, chunks = slice_array(out, self.name, self.chunks, index2)
 
-        graph = HighGraph.from_collections(out, dsk, dependencies=[self])
+        graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
         return Array(graph, out, chunks, dtype=self.dtype)
 
     def _vindex(self, key):
@@ -1296,7 +1296,7 @@ class Array(DaskMethodsMixin):
 
         layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
-        graph = HighGraph.from_collections(name, layer, dependencies=[self])
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[self])
         return Array(graph, name, chunks, self.dtype)
 
     @property
@@ -2363,7 +2363,7 @@ def from_delayed(value, shape, dtype, name=None):
     chunks = tuple((d,) for d in shape)
     # TODO: value._key may not be the name of the layer in value.dask
     # This should be fixed after we build full expression graphs
-    graph = HighGraph.from_collections(name, dsk, dependencies=[value])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[value])
     return Array(graph, name, chunks, dtype)
 
 
@@ -2828,7 +2828,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
               key[axis + 2:] for key in keys]
 
     dsk = dict(zip(keys, values))
-    graph = HighGraph.from_collections(name, dsk, dependencies=seq)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=seq)
 
     return Array(graph, name, chunks, dtype=dt)
 
@@ -3328,7 +3328,7 @@ def broadcast_to(x, shape, chunks=None):
         new_key = (name,) + new_index
         dsk[new_key] = (chunk.broadcast_to, old_key, quote(chunk_shape))
 
-    graph = HighGraph.from_collections(name, dsk, dependencies=[x])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
     return Array(graph, name, chunks, dtype=x.dtype)
 
 
@@ -3544,7 +3544,7 @@ def stack(seq, axis=0):
               for inp in inputs]
 
     layer = dict(zip(keys, values))
-    graph = HighGraph.from_collections(name, layer, dependencies=seq)
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=seq)
 
     return Array(graph, name, chunks, dtype=dt)
 
@@ -3806,7 +3806,7 @@ def _vindex_array(x, dict_indexes):
                    for okey in other_blocks)
 
         result_1d = Array(
-            HighGraph.from_collections(out_name, dsk, dependencies=[x]),
+            HighLevelGraph.from_collections(out_name, dsk, dependencies=[x]),
             out_name, chunks, x.dtype
         )
         return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
@@ -3932,7 +3932,7 @@ def to_npy_stack(dirname, x, axis=0):
     dsk = {(name, i): (np.save, os.path.join(dirname, '%d.npy' % i), key)
            for i, key in enumerate(core.flatten(xx.__dask_keys__()))}
 
-    graph = HighGraph.from_collections(name, dsk, dependencies=[xx])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[xx])
     compute_as_if_collection(Array, graph, list(dsk))
 
 

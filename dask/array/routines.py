@@ -13,7 +13,7 @@ from toolz import concat, sliding_window, interleave
 from ..compatibility import Iterable
 from ..core import flatten
 from ..base import tokenize
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 from ..utils import funcname
 from . import chunk
 from .creation import arange, diag, empty, indices
@@ -550,7 +550,7 @@ def bincount(x, weights=None, minlength=None):
 
     chunks = ((minlength,),)
 
-    graph = HighGraph.from_collections(name, dsk,
+    graph = HighLevelGraph.from_collections(name, dsk,
                 dependencies=[x] if weights is None else [x, weights])
 
     return Array(graph, name, chunks, dtype)
@@ -640,7 +640,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                for i, (k, w) in enumerate(zip(a_keys, w_keys))}
         dtype = weights.dtype
 
-    graph = HighGraph.from_collections(name, dsk,
+    graph = HighLevelGraph.from_collections(name, dsk,
                 dependencies=[a] if weights is None else [a, weights])
 
     mapped = Array(graph, name, chunks, dtype=dtype)
@@ -861,7 +861,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     if return_counts:
         out_dtype.append(("counts", np.intp))
 
-    graph = HighGraph.from_collections(name, dsk, dependencies=[o for o in
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[o for o in
         out_parts if hasattr(o, '__dask_keys__')])
     chunks = ((np.nan,),)
     out = Array(graph, name, chunks, out_dtype)
@@ -1221,7 +1221,7 @@ def coarsen(reduction, x, axes, trim_excess=False):
                    for i, bds in enumerate(x.chunks))
 
     dt = reduction(np.empty((1,) * x.ndim, dtype=x.dtype)).dtype
-    graph = HighGraph.from_collections(name, dsk, dependencies=[x])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
     return Array(graph, name, chunks, dtype=dt)
 
 

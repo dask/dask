@@ -31,7 +31,7 @@ from ..array import Array
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..sizeof import sizeof
 from ..delayed import delayed, Delayed, unpack_collections
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
@@ -80,8 +80,8 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     def __init__(self, dsk, name, meta, divisions=None):
         # divisions is ignored, only present to be compatible with other
         # objects.
-        if not isinstance(dsk, HighGraph):
-            dsk = HighGraph.from_collections(name, dsk, dependencies=[])
+        if not isinstance(dsk, HighLevelGraph):
+            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self._name = name
         meta = make_meta(meta)
@@ -162,7 +162,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
             name = funcname(op) + '-' + tokenize(self)
             dsk = {(name, 0): (op, (self._name, 0))}
             meta = op(self._meta_nonempty)
-            graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return Scalar(graph, name, meta)
         return f
 
@@ -212,7 +212,7 @@ def _scalar_binary(op, self, other, inv=False):
     else:
         meta = op(self._meta_nonempty, other_meta_nonempty)
 
-    graph = HighGraph.from_collections(name, dsk, dependencies=dependencies)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     if return_type is not Scalar:
         return return_type(graph, name, meta,
                            [other.index.min(), other.index.max()])
@@ -238,12 +238,12 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         Values along which we partition our blocks on the index
     """
     def __init__(self, dsk, name, meta, divisions):
-        if not isinstance(dsk, HighGraph):
-            dsk = HighGraph.from_collections(name, dsk, dependencies=[])
+        if not isinstance(dsk, HighLevelGraph):
+            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         if any(isinstance(name, int) for name in dsk.layers):
             import pdb
             pdb.set_trace()
-        if any(isinstance(layer, HighGraph) for layer in dsk.layers.values()):
+        if any(isinstance(layer, HighLevelGraph) for layer in dsk.layers.values()):
             import pdb
             pdb.set_trace()
         self.dask = dsk
@@ -424,7 +424,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             name = 'get-partition-%s-%s' % (str(n), self._name)
             divisions = self.divisions[n:n + 2]
             layer = {(name, 0): (self._name, n)}
-            graph = HighGraph.from_collections(name, layer, dependencies=[self])
+            graph = HighLevelGraph.from_collections(name, layer, dependencies=[self])
             return new_dd_object(graph, name, self._meta, divisions)
         else:
             msg = "n must be 0 <= n < {0}".format(self.npartitions)
@@ -846,7 +846,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             name2 = 'split-%d-%s' % (i, token)
             dsk2 = {(name2, j): (getitem, (name, j), i)
                     for j in range(self.npartitions)}
-            graph = HighGraph.from_collections(name2, merge(dsk2, layer),
+            graph = HighLevelGraph.from_collections(name2, merge(dsk2, layer),
                                                dependencies=[self])
             out_df = type(self)(graph, name2, self._meta, self.divisions)
             out.append(out_df)
@@ -887,7 +887,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         else:
             dsk = {(name, 0): (safe_head, (self._name, 0), n)}
 
-        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         result = new_dd_object(graph, name, self._meta,
                                [self.divisions[0], self.divisions[npartitions]])
 
@@ -903,7 +903,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         name = 'tail-%d-%s' % (n, self._name)
         dsk = {(name, 0): (M.tail, (self._name, self.npartitions - 1), n)}
 
-        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         result = new_dd_object(graph, name, self._meta, self.divisions[-2:])
 
         if compute:
@@ -933,7 +933,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         divisions = [self.divisions[i] for _, i in new_keys] + [self.divisions[new_keys[-1][1] + 1]]
         dsk = {(name, i): tuple(key) for i, key in enumerate(new_keys)}
 
-        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return new_dd_object(graph, name, self._meta, divisions)
 
     @property
@@ -1038,7 +1038,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             dsk = {(name, i): (methods.fillna_check, (self._name, i),
                                method, i != skip_check)
                    for i in range(self.npartitions)}
-            graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             parts = new_dd_object(graph, name, meta, self.divisions)
         else:
             parts = self
@@ -1096,7 +1096,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         dsk = {(name, i): (methods.sample, (self._name, i), state, frac, replace)
                for i, state in enumerate(state_data)}
 
-        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return new_dd_object(graph, name, self._meta, self.divisions)
 
     def to_dask_array(self, lengths=None):
@@ -1511,12 +1511,12 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
             if isinstance(quantiles[0], Scalar):
                 layer = {(keyname, 0): (pd.Series, qnames, num.columns, None, meta.name)}
-                graph = HighGraph.from_collections(keyname, layer, dependencies=quantiles)
+                graph = HighLevelGraph.from_collections(keyname, layer, dependencies=quantiles)
                 divisions = (min(num.columns), max(num.columns))
                 return Series(graph, keyname, meta, divisions)
             else:
                 layer = {(keyname, 0): (methods.concat, qnames, 1)}
-                graph = HighGraph.from_collections(keyname, layer, dependencies=quantiles)
+                graph = HighLevelGraph.from_collections(keyname, layer, dependencies=quantiles)
                 return DataFrame(graph, keyname, meta, quantiles[0].divisions)
 
     @derived_from(pd.DataFrame)
@@ -1541,7 +1541,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
         name = 'describe--' + tokenize(self, split_every)
         layer = {(name, 0): (methods.describe_aggregate, stats_names)}
-        graph = HighGraph.from_collections(name, layer, dependencies=stats)
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
         return new_dd_object(graph, name, num._meta, divisions=[None, None])
 
     def _cum_agg(self, op_name, chunk, aggregate, axis, skipna=True,
@@ -1581,7 +1581,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                     # aggregate with previous cumulation results
                     layer[(cname, i)] = (aggregate, (cname, i - 1), (cumlast._name, i - 1))
                 layer[(name, i)] = (aggregate, (cumpart._name, i), (cname, i))
-            graph = HighGraph.from_collections(cname, layer,
+            graph = HighLevelGraph.from_collections(cname, layer,
                                                dependencies=[cumpart, cumlast])
             result = new_dd_object(graph, name, chunk(self._meta), self.divisions)
             return handle_out(out, result)
@@ -1752,7 +1752,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         dsk = {(name, i): (self._name, i) for i in range(end)}
         dsk[(name, end)] = (methods.boundary_slice, (self._name, end),
                             None, date, include_right, True, 'loc')
-        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return new_dd_object(graph, name, self, divs)
 
     @derived_from(pd.DataFrame)
@@ -1777,7 +1777,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                for i, j in enumerate(range(start, self.npartitions))}
         dsk[(name, 0)] = (methods.boundary_slice, (self._name, start),
                           date, None, True, False, 'loc')
-        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return new_dd_object(graph, name, self, divs)
 
     def nunique_approx(self, split_every=None):
@@ -2041,7 +2041,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             dsk = dict(((name, i), (operator.getitem, (self._name, i),
                                     (key._name, i)))
                        for i in range(self.npartitions))
-            graph = HighGraph.from_collections(name, dsk, dependencies=[self, key])
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return Series(graph, name, self._meta, self.divisions)
         raise NotImplementedError()
 
@@ -2122,7 +2122,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         name = 'map-' + tokenize(self, arg, na_action)
         dsk = {(name, i): (M.map, k, arg, na_action) for i, k in
                enumerate(self.__dask_keys__())}
-        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         if meta is no_default:
             meta = _emulate(M.map, self, arg, na_action=na_action, udf=True)
         else:
@@ -2362,7 +2362,7 @@ class Index(Series):
         """
         name = 'head-%d-%s' % (n, self._name)
         dsk = {(name, 0): (operator.getitem, (self._name, 0), slice(0, n))}
-        graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
 
         result = new_dd_object(graph, name, self._meta, self.divisions[:2])
 
@@ -2482,7 +2482,7 @@ class DataFrame(_Frame):
             meta = self._meta[_extract_meta(key)]
             dsk = {(name, i): (operator.getitem, (self._name, i), key)
                    for i in range(self.npartitions)}
-            graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         elif isinstance(key, slice):
             return self.loc[key]
@@ -2493,7 +2493,7 @@ class DataFrame(_Frame):
 
             dsk = {(name, i): (operator.getitem, (self._name, i), key)
                    for i in range(self.npartitions)}
-            graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         if isinstance(key, Series):
             # do not perform dummy calculation, as columns will not be changed.
@@ -2503,7 +2503,7 @@ class DataFrame(_Frame):
                 self, key = _maybe_align_partitions([self, key])
             dsk = {(name, i): (M.__getitem__, (self._name, i), (key._name, i))
                    for i in range(self.npartitions)}
-            graph = HighGraph.from_collections(name, dsk, dependencies=[self, key])
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return new_dd_object(graph, name, self, self.divisions)
         raise NotImplementedError(key)
 
@@ -2542,7 +2542,7 @@ class DataFrame(_Frame):
             name = 'getitem-%s' % tokenize(self, key)
             dsk = {(name, i): (operator.getitem, (self._name, i), key)
                    for i in range(self.npartitions)}
-            graph = HighGraph.from_collections(name, dsk, dependencies=[self])
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
@@ -3332,7 +3332,7 @@ def elemwise(op, *args, **kwargs):
     else:
         dsk = {(_name, i): (op,) + frs for i, frs in enumerate(zip(*keys))}
 
-    graph = HighGraph.from_collections(_name, dsk, dependencies=dasks)
+    graph = HighLevelGraph.from_collections(_name, dsk, dependencies=dasks)
 
     if meta is no_default:
         if len(dfs) >= 2 and not all(hasattr(d, 'npartitions') for d in dasks):
@@ -3577,7 +3577,7 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
 
     dependencies = [arg for arg in args if isinstance(arg, _Frame)]
 
-    graph = HighGraph.from_collections(b, dsk, dependencies=dependencies)
+    graph = HighLevelGraph.from_collections(b, dsk, dependencies=dependencies)
 
     divisions = [None] * (split_out + 1)
 
@@ -3656,7 +3656,7 @@ def map_partitions(func, *args, **kwargs):
     if all(isinstance(arg, Scalar) for arg in args):
         layer = {(name, 0):
                  (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)}
-        graph = HighGraph.from_collections(name, layer, dependencies=args)
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
         return Scalar(graph, name, meta)
     elif not (isinstance(meta, parallel_types()) or is_arraylike(meta)):
         # If `meta` is not a pandas object, the concatenated results will be a
@@ -3693,7 +3693,7 @@ def map_partitions(func, *args, **kwargs):
                   if isinstance(arg, (_Frame, Scalar)) else arg for arg in args2]
         dsk[(name, i)] = (apply_and_enforce, func, values, kwargs_task, meta)
 
-    graph = HighGraph.from_collections(name, dsk, dependencies=dependencies)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, args[0].divisions)
 
 
@@ -3789,7 +3789,7 @@ def _rename_dask(df, names):
     for i in range(df.npartitions):
         dsk[name, i] = (_rename, metadata, (df._name, i))
 
-    graph = HighGraph.from_collections(name, dsk, dependencies=[df])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
     return new_dd_object(graph, name, metadata, df.divisions)
 
 
@@ -3843,7 +3843,7 @@ def quantile(df, q):
                                            [qs] * df.npartitions,
                                            sorted(val_dsk)))}
     dsk = merge(val_dsk, merge_dsk)
-    graph = HighGraph.from_collections(name3, dsk, dependencies=[df])
+    graph = HighLevelGraph.from_collections(name3, dsk, dependencies=[df])
     return return_type(graph, name3, meta, new_divisions)
 
 
@@ -3908,7 +3908,7 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     name = '{0}-{1}'.format(funcname, token)
     dsk[(name, 0)] = (cov_corr_agg, [(a, i) for i in range(k)],
                       df.columns, min_periods, corr, scalar)
-    graph = HighGraph.from_collections(name, dsk, dependencies=[df])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
     if scalar:
         return Scalar(graph, name, 'f8')
     meta = make_meta([(c, 'f8') for c in df.columns], index=df.columns)
@@ -4228,7 +4228,7 @@ def repartition_npartitions(df, npartitions):
         divisions = [df.divisions[new_partition_index]
                      for new_partition_index in new_partitions_boundaries]
 
-        graph = HighGraph.from_collections(new_name, dsk, dependencies=[df])
+        graph = HighLevelGraph.from_collections(new_name, dsk, dependencies=[df])
         return new_dd_object(graph, new_name, df._meta, divisions)
     else:
         original_divisions = divisions = pd.Series(df.divisions)
@@ -4276,7 +4276,7 @@ def repartition_npartitions(df, npartitions):
                 last = new
 
             divisions = [None] * (npartitions + 1)
-            graph = HighGraph.from_collections(new_name, dsk, dependencies=[df])
+            graph = HighLevelGraph.from_collections(new_name, dsk, dependencies=[df])
             return new_dd_object(graph, new_name, df._meta, divisions)
 
 
@@ -4316,7 +4316,7 @@ def repartition(df, divisions=None, force=False):
         out = 'repartition-merge-' + token
         dsk = repartition_divisions(df.divisions, divisions,
                                     df._name, tmp, out, force=force)
-        graph = HighGraph.from_collections(out, dsk, dependencies=[df])
+        graph = HighLevelGraph.from_collections(out, dsk, dependencies=[df])
         return new_dd_object(graph, out, df._meta, divisions)
     elif isinstance(df, (pd.Series, pd.DataFrame)):
         name = 'repartition-dataframe-' + token

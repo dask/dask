@@ -18,7 +18,7 @@ from .context import globalmethod
 from .optimization import cull
 from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict
 from . import sharedict
-from .highgraph import HighGraph
+from .highgraph import HighLevelGraph
 
 __all__ = ['Delayed', 'delayed']
 
@@ -38,7 +38,7 @@ def finalize(collection):
     keys = collection.__dask_keys__()
     finalize, args = collection.__dask_postcompute__()
     layer = {name: (finalize, keys) + args}
-    graph = HighGraph.from_collections(name, layer, dependencies=[collection])
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=[collection])
     return Delayed(name, graph)
 
 
@@ -410,7 +410,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         if not name:
             name = '%s-%s' % (type(obj).__name__, tokenize(task, pure=pure))
         layer = {name: task}
-        graph = HighGraph.from_collections(name, layer, dependencies=collections)
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=collections)
         return Delayed(name, graph)
 
 
@@ -560,7 +560,7 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     else:
         task = (func,) + args2
 
-    graph = HighGraph.from_collections(name, {name: task},
+    graph = HighLevelGraph.from_collections(name, {name: task},
                                        dependencies=collections)
     nout = nout if nout is not None else None
     return Delayed(name, graph, length=nout)
@@ -577,7 +577,7 @@ class DelayedLeaf(Delayed):
 
     @property
     def dask(self):
-        return HighGraph.from_collections(self._key, {self._key: self._obj},
+        return HighLevelGraph.from_collections(self._key, {self._key: self._obj},
                                           dependencies=())
 
     def __call__(self, *args, **kwargs):
@@ -596,7 +596,7 @@ class DelayedAttr(Delayed):
     @property
     def dask(self):
         layer = {self._key: (getattr, self._obj._key, self._attr)}
-        return HighGraph.from_collections(self._key, layer,
+        return HighLevelGraph.from_collections(self._key, layer,
                                           dependencies=[self._obj])
 
     def __call__(self, *args, **kwargs):

@@ -1,7 +1,7 @@
 import dask.array as da
 import os
 from dask.utils_test import inc
-from dask.highgraph import HighGraph
+from dask.highgraph import HighLevelGraph
 
 
 def test_visualize(tmpdir):
@@ -19,6 +19,6 @@ def test_basic():
     b = {'y': (inc, 'x')}
     layers = {'a': a, 'b': b}
     dependencies = {'a': set(), 'b': {'a'}}
-    hg = HighGraph(layers, dependencies)
+    hg = HighLevelGraph(layers, dependencies)
 
     assert dict(hg) == {'x': 1, 'y': (inc, 'x')}

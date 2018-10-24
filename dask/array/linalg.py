@@ -9,7 +9,7 @@ import toolz
 
 from ..base import tokenize
 from ..compatibility import apply
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 from .core import top, dotmany, Array, concatenate
 from .creation import eye
 from .random import RandomState
@@ -191,7 +191,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
         # retrieve R_stacked for recursion with tsqr
         vchunks_rstacked = tuple([sum(map(lambda x: x[1], sub_block_info)) for sub_block_info in all_blocks])
-        graph = HighGraph(layers, dependencies)
+        graph = HighLevelGraph(layers, dependencies)
         # dsk.dependencies[name_r_stacked] = {data.name}
         r_stacked = Array(graph, name_r_stacked,
                           shape=(sum(vchunks_rstacked), n), chunks=(vchunks_rstacked, (n)), dtype=rr.dtype)
@@ -347,7 +347,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
         # dsk.dependencies[name_q_st3] = {data.name}
         # dsk.dependencies[name_r_st2] = {data.name}
-        graph = HighGraph(layers, dependencies)
+        graph = HighLevelGraph(layers, dependencies)
         q = Array(graph, name_q_st3,
                   shape=q_shape, chunks=q_chunks, dtype=qq.dtype)
         r = Array(graph, name_r_st2,
@@ -397,7 +397,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         m_vh = n_u
         n_vh = n
         d_vh = max(m_vh, n_vh)  # full matrix returned: but basically n
-        graph = HighGraph(layers, dependencies)
+        graph = HighLevelGraph(layers, dependencies)
         u = Array(graph, name_u_st4, shape=(m_u, n_u), chunks=(data.chunks[0], (n_u,)), dtype=uu.dtype)
         s = Array(graph, name_s_st2, shape=(n_s,), chunks=((n_s,),), dtype=ss.dtype)
         vh = Array(graph, name_v_st2, shape=(d_vh, d_vh), chunks=((n,), (n,)), dtype=vvh.dtype)
@@ -476,7 +476,7 @@ def sfqr(data, name=None):
     layers[name_R_1] = {(name_R_1, 0, 0): (operator.getitem, (name_Q_R1, 0, 0), 1)}
     dependencies[name_R_1] = {name_Q_R1}
 
-    graph = HighGraph(layers, dependencies)
+    graph = HighLevelGraph(layers, dependencies)
 
     Q = Array(graph, name_Q,
               shape=(m, min(m, n)), chunks=(m, min(m, n)), dtype=qq.dtype)
@@ -788,13 +788,13 @@ def lu(a):
 
     pp, ll, uu = scipy.linalg.lu(np.ones(shape=(1, 1), dtype=a.dtype))
 
-    graph = HighGraph.from_collections(name_p, dsk, dependencies=[a])
+    graph = HighLevelGraph.from_collections(name_p, dsk, dependencies=[a])
     p = Array(graph, name_p, shape=a.shape, chunks=a.chunks, dtype=pp.dtype)
 
-    graph = HighGraph.from_collections(name_l, dsk, dependencies=[a])
+    graph = HighLevelGraph.from_collections(name_l, dsk, dependencies=[a])
     l = Array(graph, name_l, shape=a.shape, chunks=a.chunks, dtype=ll.dtype)
 
-    graph = HighGraph.from_collections(name_u, dsk, dependencies=[a])
+    graph = HighLevelGraph.from_collections(name_u, dsk, dependencies=[a])
     u = Array(graph, name_u, shape=a.shape, chunks=a.chunks, dtype=uu.dtype)
 
     return p, l, u
@@ -881,7 +881,7 @@ def solve_triangular(a, b, lower=False):
                     target = (operator.sub, target, (sum, prevs))
                 dsk[_key(i, j)] = (scipy.linalg.solve_triangular, (a.name, i, i), target)
 
-    graph = HighGraph.from_collections(name, dsk, dependencies=[a, b])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a, b])
     res = _solve_triangular_lower(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype))
     return Array(graph, name, shape=b.shape, chunks=b.chunks, dtype=res.dtype)
@@ -1030,8 +1030,8 @@ def _cholesky(a):
                 dsk[name_upper, j, i] = (_solve_triangular_lower, (name, j, j), target)
                 dsk[name, i, j] = (np.transpose, (name_upper, j, i))
 
-    graph_upper = HighGraph.from_collections(name_upper, dsk, dependencies=[a])
-    graph_lower = HighGraph.from_collections(name, dsk, dependencies=[a])
+    graph_upper = HighLevelGraph.from_collections(name_upper, dsk, dependencies=[a])
+    graph_lower = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
     cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
 
     lower = Array(graph_lower, name, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
@@ -1090,7 +1090,7 @@ def lstsq(a, b):
     # rank
     rname = 'lstsq-rank-' + token
     rdsk = {(rname, ): (np.linalg.matrix_rank, (r.name, 0, 0))}
-    graph = HighGraph.from_collections(rname, rdsk, dependencies=[r])
+    graph = HighLevelGraph.from_collections(rname, rdsk, dependencies=[r])
     # rank must be an integer
     rank = Array(graph, rname, shape=(), chunks=(), dtype=int)
 
@@ -1101,7 +1101,7 @@ def lstsq(a, b):
                          (np.sqrt,
                           (np.linalg.eigvals,
                            (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))))}
-    graph = HighGraph.from_collections(sname, sdsk, dependencies=[rt])
+    graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt])
     _, _, _, ss = np.linalg.lstsq(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype))
     s = Array(graph, sname, shape=(r.shape[0], ),

@@ -18,7 +18,7 @@ import toolz
 from toolz import accumulate, reduce
 
 from ..base import tokenize
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 from ..utils import parse_bytes
 from .core import concatenate3, Array, normalize_chunks
 from .utils import validate_axis
@@ -568,7 +568,7 @@ def _compute_rechunk(x, chunks):
     del old_blocks, new_index
 
     layer = toolz.merge(x2, intermediates)
-    graph = HighGraph.from_collections(merge_name, layer, dependencies=[x])
+    graph = HighLevelGraph.from_collections(merge_name, layer, dependencies=[x])
     return Array(graph, merge_name, chunks, dtype=x.dtype)
 
 

@@ -9,7 +9,7 @@ from toolz.curried import map
 
 from . import chunk, wrap
 from .core import Array, map_blocks, concatenate, concatenate3, reshapelist
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 from ..base import tokenize
 from ..core import flatten
 from ..utils import concrete
@@ -148,7 +148,7 @@ def overlap_internal(x, axes):
             chunks.append(left + mid + right)
 
     dsk = merge(interior_slices, overlap_blocks)
-    graph = HighGraph.from_collections(name, dsk, dependencies=[x])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
 
     return Array(graph, name, chunks, dtype=x.dtype)
 

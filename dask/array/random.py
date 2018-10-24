@@ -9,7 +9,7 @@ import numpy as np
 from .core import (normalize_chunks, Array, slices_from_chunks, asarray,
                    broadcast_shapes, broadcast_to)
 from ..base import tokenize
-from ..highgraph import HighGraph
+from ..highgraph import HighLevelGraph
 from ..utils import ignoring, random_state_data, skip_doctest
 
 
@@ -163,7 +163,7 @@ class RandomState(object):
                         kwrg[k] = (getitem, lookup[k], slc)
             vals.append((_apply_random, self._RandomState, funcname, seed, size, arg, kwrg))
         dsk.update(dict(zip(keys, vals)))
-        graph = HighGraph.from_collections(
+        graph = HighLevelGraph.from_collections(
             name, dsk, dependencies=[arg for arg
             in args if isinstance(arg, Array)]
         )
@@ -243,7 +243,7 @@ class RandomState(object):
             dsk = {k: (_choice, state, a, size, replace, p) for
                    k, state, size in zip(keys, state_data, sizes)}
 
-            graph = HighGraph.from_collections(name, dsk, dependencies=dependencies)
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
             return Array(graph, name, chunks, dtype=dtype)
 
     # @doc_wraps(np.random.RandomState.dirichlet)
