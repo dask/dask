@@ -23,7 +23,7 @@ try:
             sin, cos, tan, arcsin, arccos, arctan, arctan2, hypot, sinh, cosh,
             tanh, arcsinh, arccosh, arctanh, deg2rad, rad2deg, greater,
             greater_equal, less, less_equal, not_equal, equal, maximum,
-            bitwise_and, bitwise_or, bitwise_xor, bitwise_not, minimum,
+            bitwise_and, bitwise_or, bitwise_xor, bitwise_not, invert, minimum,
             logical_and, logical_or, logical_xor, logical_not, fmax, fmin,
             isreal, iscomplex, isfinite, isinf, isneginf, isposinf, isnan, signbit,
             copysign, nextafter, spacing, ldexp, fmod, floor, ceil, trunc, degrees,

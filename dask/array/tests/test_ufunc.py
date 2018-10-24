@@ -56,7 +56,7 @@ except AttributeError:
 unary_ufuncs = ['absolute', 'arccos', 'arccosh', 'arcsin', 'arcsinh', 'arctan',
                 'arctanh', 'bitwise_not', 'cbrt', 'ceil', 'conj', 'cos',
                 'cosh', 'deg2rad', 'degrees', 'exp', 'exp2', 'expm1', 'fabs',
-                'fix', 'floor', 'i0', 'isfinite', 'isinf', 'isnan', 'log',
+                'fix', 'floor', 'i0', 'invert','isfinite', 'isinf', 'isnan', 'log',
                 'log10', 'log1p', 'log2', 'logical_not', 'nan_to_num',
                 'negative', 'rad2deg', 'radians', 'reciprocal', 'rint', 'sign',
                 'signbit', 'sin', 'sinc', 'sinh', 'spacing', 'sqrt', 'square',
