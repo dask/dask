@@ -229,6 +229,7 @@ bitwise_and = ufunc(np.bitwise_and)
 bitwise_or = ufunc(np.bitwise_or)
 bitwise_xor = ufunc(np.bitwise_xor)
 bitwise_not = ufunc(np.bitwise_not)
+invert = bitwise_not
 
 # floating functions
 isfinite = ufunc(np.isfinite)

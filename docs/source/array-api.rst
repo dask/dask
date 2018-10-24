@@ -91,6 +91,7 @@ Top level user functions:
    imag
    indices
    insert
+   invert
    isclose
    iscomplex
    isfinite
