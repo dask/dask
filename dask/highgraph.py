@@ -79,9 +79,9 @@ class HighGraph(sharedict.ShareDict):
         return HighGraph(layers, dependencies)
 
     def visualize(self, filename='dask.pdf', format=None, **kwargs):
-        from .dot import handle_graphviz
+        from .dot import graphviz_to_file
         g = to_graphviz(self, **kwargs)
-        return handle_graphviz(g, filename, format)
+        return graphviz_to_file(g, filename, format)
 
 
 def to_graphviz(hg, data_attributes=None, function_attributes=None,
