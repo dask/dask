@@ -11,7 +11,7 @@ from dask import persist, delayed, compute
 from dask.delayed import Delayed
 from dask.utils import tmpdir
 from distributed.client import wait, Client
-from distributed.utils_test import gen_cluster, inc, cluster, loop  # flake8: noqa
+from distributed.utils_test import gen_cluster, inc, cluster, loop  # noqa F401
 
 
 if 'should_check_state' in inspect.getargspec(gen_cluster).args:
@@ -103,10 +103,9 @@ def test_local_get_with_distributed_active(c, s, a, b):
     yield gen.sleep(0.01)
     assert not s.tasks # scheduler hasn't done anything
 
-    y = delayed(inc)(2).persist(scheduler='sync')
+    x = delayed(inc)(2).persist(scheduler='sync')  # noqa F841
     yield gen.sleep(0.01)
     assert not s.tasks # scheduler hasn't done anything
-
 
 
 def test_to_hdf_distributed(loop):
@@ -153,10 +152,10 @@ def test_futures_in_graph(loop):
 
 def test_zarr_distributed_roundtrip(loop):
     da = pytest.importorskip('dask.array')
-    zarr = pytest.importorskip('zarr')
+    pytest.importorskip('zarr')
     assert_eq = da.utils.assert_eq
     with cluster() as (s, [a, b]):
-        with Client(s['address'], loop=loop) as c:
+        with Client(s['address'], loop=loop):
             with tmpdir() as d:
                 a = da.zeros((3, 3), chunks=(1, 1))
                 a.to_zarr(d)
