@@ -6,6 +6,7 @@ from . import sharedict
 from .utils import ignoring
 from .base import is_dask_collection
 
+
 class HighGraph(sharedict.ShareDict):
     def __init__(self, layers, dependencies):
         for v in layers.values():
@@ -22,6 +23,26 @@ class HighGraph(sharedict.ShareDict):
 
     @classmethod
     def from_collections(cls, name, layer, dependencies=()):
+        """ Construct a HighGraph from a new layer and a set of collections
+
+        This constructs a HighGraph in the common case where we have a single
+        new layer and a set of old collections on which we want to depend.
+
+        This pulls out the ``__dask_layers__()`` method of the collections if
+        they exist, and adds them to the dependencies for this new layer.  It
+        also merges all of the layers from all of the dependent collections
+        together into the new layers for this graph.
+
+        Parameters
+        ----------
+        name : str
+            The name of the new layer
+        layer : Mapping
+            The graph layer itself
+        dependencies : List of Dask collections
+            A lit of other dask collections (like arrays or dataframes) that
+            have graphs themselves
+        """
         layers = {name: layer}
         deps = {}
         deps[name] = set()
