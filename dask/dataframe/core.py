@@ -1151,11 +1151,6 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         from .io import to_hdf
         return to_hdf(self, path_or_buf, key, mode, append, **kwargs)
 
-    def to_parquet(self, path, *args, **kwargs):
-        """ See dd.to_parquet docstring for more information """
-        from .io import to_parquet
-        return to_parquet(self, path, *args, **kwargs)
-
     def to_csv(self, filename, **kwargs):
         """ See dd.to_csv docstring for more information """
         from .io import to_csv
@@ -1756,7 +1751,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         name = 'first-' + tokenize(self, offset)
         dsk = {(name, i): (self._name, i) for i in range(end)}
         dsk[(name, end)] = (methods.boundary_slice, (self._name, end),
-                            None, date, include_right, True, 'ix')
+                            None, date, include_right, True, 'loc')
         graph = HighGraph.from_collections(name, dsk, dependencies=[self])
         return new_dd_object(graph, name, self, divs)
 
@@ -1781,7 +1776,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         dsk = {(name, i + 1): (self._name, j + 1)
                for i, j in enumerate(range(start, self.npartitions))}
         dsk[(name, 0)] = (methods.boundary_slice, (self._name, start),
-                          date, None, True, False, 'ix')
+                          date, None, True, False, 'loc')
         graph = HighGraph.from_collections(name, dsk, dependencies=[self])
         return new_dd_object(graph, name, self, divs)
 
@@ -2810,6 +2805,11 @@ class DataFrame(_Frame):
         """
         from .io import to_bag
         return to_bag(self, index)
+
+    def to_parquet(self, path, *args, **kwargs):
+        """ See dd.to_parquet docstring for more information """
+        from .io import to_parquet
+        return to_parquet(self, path, *args, **kwargs)
 
     @derived_from(pd.DataFrame)
     def to_string(self, max_rows=5):

@@ -23,7 +23,7 @@ try:
             sin, cos, tan, arcsin, arccos, arctan, arctan2, hypot, sinh, cosh,
             tanh, arcsinh, arccosh, arctanh, deg2rad, rad2deg, greater,
             greater_equal, less, less_equal, not_equal, equal, maximum,
-            bitwise_and, bitwise_or, bitwise_xor, bitwise_not, minimum,
+            bitwise_and, bitwise_or, bitwise_xor, bitwise_not, invert, minimum,
             logical_and, logical_or, logical_xor, logical_not, fmax, fmin,
             isreal, iscomplex, isfinite, isinf, isneginf, isposinf, isnan, signbit,
             copysign, nextafter, spacing, ldexp, fmod, floor, ceil, trunc, degrees,
@@ -51,16 +51,12 @@ try:
     from .wrap import ones, zeros, empty, full
     from .creation import ones_like, zeros_like, empty_like, full_like
     from .rechunk import rechunk
-    from ..context import set_options
     from ..base import compute
     from .optimization import optimize
     from .creation import (arange, linspace, meshgrid, indices, diag, eye,
                            triu, tril, fromfunction, tile, repeat, pad)
     from .gufunc import apply_gufunc, gufunc, as_gufunc
     from .utils import assert_eq
-
-    # TODO: remove this after the deprecation cycle of ghost is complete
-    from . import ghost
 
 except ImportError as e:
     msg = ("Dask array requirements are not installed.\n\n"

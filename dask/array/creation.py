@@ -54,7 +54,7 @@ def empty_like(a, dtype=None, chunks=None):
     the functions that do set the array values.
     """
 
-    a = asarray(a)
+    a = asarray(a, name=False)
     return empty(
         a.shape, dtype=(dtype or a.dtype),
         chunks=(chunks if chunks is not None else a.chunks)
@@ -90,7 +90,7 @@ def ones_like(a, dtype=None, chunks=None):
     empty : Return a new uninitialized array.
     """
 
-    a = asarray(a)
+    a = asarray(a, name=False)
     return ones(
         a.shape, dtype=(dtype or a.dtype),
         chunks=(chunks if chunks is not None else a.chunks)
@@ -126,7 +126,7 @@ def zeros_like(a, dtype=None, chunks=None):
     empty : Return a new uninitialized array.
     """
 
-    a = asarray(a)
+    a = asarray(a, name=False)
     return zeros(
         a.shape, dtype=(dtype or a.dtype),
         chunks=(chunks if chunks is not None else a.chunks)
@@ -166,7 +166,7 @@ def full_like(a, fill_value, dtype=None, chunks=None):
     full : Fill a new array.
     """
 
-    a = asarray(a)
+    a = asarray(a, name=False)
     return full(
         a.shape,
         fill_value,

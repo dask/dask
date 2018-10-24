@@ -409,7 +409,7 @@ def normalize_arg(x):
     """
     if is_dask_collection(x):
         return x
-    elif isinstance(x, str) and re.match('_\d+', x):
+    elif isinstance(x, str) and re.match(r'_\d+', x):
         return delayed(x)
     elif sizeof(x) > 1e6:
         return delayed(x)
@@ -2978,7 +2978,7 @@ def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     return load_dsk
 
 
-def asarray(a):
+def asarray(a, **kwargs):
     """Convert the input to a dask array.
 
     Parameters
@@ -3018,7 +3018,7 @@ def asarray(a):
         return a.to_dask_array()
     elif not isinstance(getattr(a, 'shape', None), Iterable):
         a = np.asarray(a)
-    return from_array(a, chunks=a.shape, getitem=getter_inline)
+    return from_array(a, chunks=a.shape, getitem=getter_inline, **kwargs)
 
 
 def asanyarray(a):
@@ -3114,7 +3114,10 @@ def broadcast_shapes(*shapes):
         return shapes[0]
     out = []
     for sizes in zip_longest(*map(reversed, shapes), fillvalue=-1):
-        dim = 0 if 0 in sizes else np.max(sizes)
+        if np.isnan(sizes).any():
+            dim = np.nan
+        else:
+            dim = 0 if 0 in sizes else np.max(sizes)
         if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
             raise ValueError("operands could not be broadcast together with "
                              "shapes {0}".format(' '.join(map(str, shapes))))

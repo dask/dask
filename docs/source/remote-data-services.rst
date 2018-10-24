@@ -208,29 +208,38 @@ The following parameters may be passed to s3fs using ``storage_options``:
 Google Cloud Storage
 --------------------
 
-(gcsfs is in early development, expect the details here to change)
-
 Google Cloud Storage is a RESTful online file storage web service for storing
 and accessing data on Google's infrastructure.
 
-The GCS backend will be available only after importing gcsfs_. The
-protocol identifiers ``gcs`` and ``gs`` are identical in their effect.
+The GCS backend is identified by the
+protocol identifiers ``gcs`` and ``gs``, which are identical in their effect.
 
-Authentication for GCS is based on OAuth2, and designed for user verification.
-Interactive authentication is available when ``token==None`` using the local
-browser, or by using gcloud_ to produce a JSON token file and passing that.
-In either case, gcsfs stores a cache of tokens in a local file, so subsequent
-authentication will not be necessary.
+Multiple modes of authentication are supported. These options should be
+included in the ``storage_options`` dictionary as ``{'token': ..}`` submitted with your call
+to a storage-based dask function/method. See the `gcsfs`_ documentation for further
+details.
+
+
+General recommendations for distributed clusters, in order:
+- use 'anon' for public data
+- use 'cloud', if this is available
+- use `gcloud`_ to generate a JSON file, and distribute this to all workers, and
+supply the path to the file
+- use gcsfs directly with the 'browser' method to generate a token cache file
+(``~/.gcs_tokens``) and distribute this, with method 'cache'.
 
 .. _gcloud: https://cloud.google.com/sdk/docs/
 
-Possible additional storage options:
+The final suggestion may be the fastest and simplest for authenticated access (as
+opposed to anonymous), since it will not require re-authentication; however this method
+is not secure, credentials will be passed directly around the cluster. This is fine if
+you are certain that the cluster is itself secured. You need to create a ``GCSFileSystem`` object
+using any method that works for you, and then pass its credentials directly:
 
-   -  access : 'read_only', 'read_write', 'full_control', access privilege
-      level (note that the token cache uses a separate token for each level)
+.. code-block:: python
 
-   -  token: either an actual dictionary of a google token, or location of
-      a JSON file created by gcloud.
+    gcs = GCSFileSystem(...)
+    dask_function(..., storage_options={'token': gcs.session.credentials})
 
 
 HTTP(s)
