@@ -7,6 +7,70 @@ from .compatibility import Mapping
 
 
 class HighLevelGraph(sharedict.ShareDict):
+    """ Task graph composed of layers of dependent subgraphs
+
+    This object encodes a Dask task graph that is composed of layers of
+    dependent subgraphs, such as commonly occurs when building task graphs
+    using high level collections like Dask array, bag, or dataframe.
+
+    Typically each high level array, bag, or dataframe operation takes the task
+    graphs of the input collections, merges them, and then adds one or more new
+    layers of tasks for the new operation.  These layers typically have at
+    least as many tasks as there are partitions or chunks in the collection.
+    The HighLevelGraph object stores the subgraphs for each operation
+    separately in sub-graphs, and also stores the dependency structure between
+    them.
+
+    Parameters
+    ----------
+    layers : Dict[str, Mapping]
+        The subgraph layers, keyed by a unique name
+    dependencies : Dict[str, Set[str]]
+        The set of layers on which each layer depends
+
+    Examples
+    --------
+
+    Here is an idealized example that shows the internal state of a
+    HighLevelGraph
+
+    >>> import dask.dataframe as dd
+
+    >>> df = dd.read_csv('myfile.*.csv')  # doctest: +SKIP
+    >>> df = df + 100  # doctest: +SKIP
+    >>> df = df[df.name == 'Alice']  # doctest: +SKIP
+
+    >>> graph = df.__dask_graph__()  # doctest: +SKIP
+    >>> graph.layers  # doctest: +SKIP
+    {
+     'read-csv': {('read-csv', 0): (pandas.read_csv, 'myfile.0.csv'),
+                  ('read-csv', 1): (pandas.read_csv, 'myfile.1.csv'),
+                  ('read-csv', 2): (pandas.read_csv, 'myfile.2.csv'),
+                  ('read-csv', 3): (pandas.read_csv, 'myfile.3.csv')},
+
+     'add': {('add', 0): (operator.add, 'myfile.0.csv', 100),
+             ('add', 1): (operator.add, 'myfile.1.csv', 100),
+             ('add', 2): (operator.add, 'myfile.2.csv', 100),
+             ('add', 3): (operator.add, 'myfile.3.csv', 100)}
+
+     'filter': {('filter', 0): (lambda part: part[part.name == 'Alice'], ('add', 0)),
+                ('filter', 1): (lambda part: part[part.name == 'Alice'], ('add', 1)),
+                ('filter', 2): (lambda part: part[part.name == 'Alice'], ('add', 2)),
+                ('filter', 3): (lambda part: part[part.name == 'Alice'], ('add', 3))}
+    }
+
+    >>> graph.dependencies  # doctest: +SKIP
+    {
+     'read-csv': set(),
+     'add': {'read-csv'},
+     'filter': {'add'}
+    }
+
+    See Also
+    --------
+    HighLevelGraph.from_collections :
+        typically used by developers to make new HighLevelGraphs
+    """
     def __init__(self, layers, dependencies):
         for v in layers.values():
             assert not isinstance(v, sharedict.ShareDict)
@@ -41,6 +105,19 @@ class HighLevelGraph(sharedict.ShareDict):
         dependencies : List of Dask collections
             A lit of other dask collections (like arrays or dataframes) that
             have graphs themselves
+
+        Examples
+        --------
+
+        In typical usage we make a new task layer, and then pass that layer
+        along with all dependent collections to this method.
+
+        >>> def add(self, other):
+        ...     name = 'add-' + tokenize(self, other)
+        ...     layer = {(name, i): (add, input_key, other)
+        ...              for i, input_key in enumerate(self.__dask_keys__())}
+        ...     graph = HighLevelGraph.from_collections(name, layer, dependencies=[self])
+        ...     return new_collection(name, graph)
         """
         layers = {name: layer}
         deps = {}
