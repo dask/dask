@@ -3589,3 +3589,10 @@ def test_atop_large_inputs_delayed():
     d = atop(lambda x, y: x + y, 'i', a, 'i', y=b, dtype=a.dtype)
     assert any(b is v for v in d.dask.values())
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
+
+
+def test_slice_reversed():
+    x = da.ones(10, chunks=-1)
+    y = x[6:3]
+
+    assert_eq(y, np.ones(0))
