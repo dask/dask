@@ -8,7 +8,7 @@ from math import factorial, log, ceil
 import numpy as np
 from numbers import Integral
 
-from toolz import compose, partition_all, get, accumulate, pluck, concat
+from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
 from .core import _concatenate2, Array, atop, handle_out

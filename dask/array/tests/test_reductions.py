@@ -199,7 +199,7 @@ def test_arg_reductions_unknown_chunksize_2d(func):
     x = da.ones((10, 10), chunks=(5, 5))
     x = x[x[0, :] > 0, :]  # unknown chunks in first dimension only
 
-    with pytest.raises(ValueError) as info:
+    with pytest.raises(ValueError):
         getattr(da, func)(x, axis=0)
 
     getattr(da, func)(x, axis=1).compute()
