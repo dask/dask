@@ -99,10 +99,12 @@ class RandomState(object):
         dsks = []
         lookup = {}
         small_args = []
+        dependencies = []
         for i, ar in enumerate(args):
             if isinstance(ar, (np.ndarray, Array)):
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
+                    dependencies.append(res)
                     dsks.append(res.dask)
                     lookup[i] = res.name
                 elif isinstance(res, np.ndarray):
@@ -118,6 +120,7 @@ class RandomState(object):
             if isinstance(ar, (np.ndarray, Array)):
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
+                    dependencies.append(res)
                     dsks.append(res.dask)
                     lookup[key] = res.name
                 elif isinstance(res, np.ndarray):
@@ -141,6 +144,7 @@ class RandomState(object):
         keys = product([name], *([range(len(bd)) for bd in chunks] +
                                  [[0]] * len(extra_chunks)))
         blocks = product(*[range(len(bd)) for bd in chunks])
+
         vals = []
         for seed, size, slc, block in zip(seeds, sizes, slices, blocks):
             arg = []
@@ -149,6 +153,7 @@ class RandomState(object):
                     arg.append(ar)
                 else:
                     if isinstance(ar, Array):
+                        dependencies.append(ar)
                         arg.append((lookup[i], ) + block)
                     else:   # np.ndarray
                         arg.append((getitem, lookup[i], slc))
@@ -158,14 +163,16 @@ class RandomState(object):
                     kwrg[k] = ar
                 else:
                     if isinstance(ar, Array):
+                        dependencies.append(ar)
                         kwrg[k] = (lookup[k], ) + block
                     else:   # np.ndarray
                         kwrg[k] = (getitem, lookup[k], slc)
             vals.append((_apply_random, self._RandomState, funcname, seed, size, arg, kwrg))
+
         dsk.update(dict(zip(keys, vals)))
+
         graph = HighLevelGraph.from_collections(
-            name, dsk, dependencies=[arg for arg
-            in args if isinstance(arg, Array)]
+            name, dsk, dependencies=dependencies,
         )
         return Array(graph, name, chunks + extra_chunks, dtype=dtype)
 
