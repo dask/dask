@@ -43,9 +43,7 @@ from ..compatibility import (unicode, zip_longest,
 from ..core import quote
 from ..delayed import delayed, Delayed
 from .. import threaded, core
-from .. import sharedict
 from ..sizeof import sizeof
-from ..sharedict import ShareDict
 from ..highgraph import HighLevelGraph
 from ..bytes.core import get_mapper, get_fs_token_paths
 from .numpy_compat import _Recurser, _make_sliced_dtype
@@ -786,7 +784,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
                          % (len(sources), len(targets), len(regions)))
 
     # Optimize all sources together
-    sources_dsk = sharedict.merge(*[e.__dask_graph__() for e in sources])
+    sources_dsk = HighLevelGraph.merge(*[e.__dask_graph__() for e in sources])
     sources_dsk = Array.__dask_optimize__(
         sources_dsk,
         list(core.flatten([e.__dask_keys__() for e in sources]))
@@ -809,25 +807,25 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         else:
             targets2.append(e)
 
-    targets_dsk = sharedict.merge(*targets_dsk)
+    targets_dsk = HighLevelGraph.merge(*targets_dsk)
     targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
 
     load_stored = (return_stored and not compute)
     toks = [str(uuid.uuid1()) for _ in range(len(sources))]
-    store_dsk = sharedict.merge(*[
+    store_dsk = HighLevelGraph.merge(*[
         insert_to_ooc(s, t, lock, r, return_stored, load_stored, tok)
         for s, t, r, tok in zip(sources2, targets2, regions, toks)
     ])
     store_keys = list(store_dsk.keys())
 
-    store_dsk = sharedict.merge(store_dsk, targets_dsk, sources_dsk)
+    store_dsk = HighLevelGraph.merge(store_dsk, targets_dsk, sources_dsk)
 
     if return_stored:
         load_store_dsk = store_dsk
         if compute:
             store_dlyds = [Delayed(k, store_dsk) for k in store_keys]
             store_dlyds = persist(*store_dlyds, **kwargs)
-            store_dsk_2 = sharedict.merge(*[e.dask for e in store_dlyds])
+            store_dsk_2 = HighLevelGraph.merge(*[e.dask for e in store_dlyds])
 
             load_store_dsk = retrieve_from_ooc(
                 store_keys, store_dsk, store_dsk_2
@@ -841,7 +839,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         return result
     else:
         name = 'store-' + str(uuid.uuid1())
-        dsk = sharedict.merge({name: store_keys}, store_dsk)
+        dsk = HighLevelGraph.merge({name: store_keys}, store_dsk)
         result = Delayed(name, dsk)
 
         if compute:
