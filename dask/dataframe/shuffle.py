@@ -284,12 +284,16 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     dsk2 = {(name, i): (shuffle_group_3, key, column, npartitions, p)
             for i, key in enumerate(df.__dask_keys__())}
 
-    dsk = toolz.merge(df.dask, dsk1, dsk2)
+    dependencies = []
+    layer = {}
     if compute:
+        graph = HighLevelGraph.merge(df.dask, dsk1, dsk2)
         keys = [p, sorted(dsk2)]
-        pp, values = compute_as_if_collection(DataFrame, dsk, keys)
+        pp, values = compute_as_if_collection(DataFrame, graph, keys)
         dsk1 = {p: pp}
-        dsk = dict(zip(sorted(dsk2), values))
+        dsk2 = dict(zip(sorted(dsk2), values))
+    else:
+        dependencies.append(df)
 
     # Barrier
     barrier_token = 'barrier-' + always_new_token
@@ -302,8 +306,8 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
 
     divisions = (None,) * (npartitions + 1)
 
-    dsk = toolz.merge(dsk, dsk1, dsk3, dsk4)
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
+    layer = toolz.merge(dsk1, dsk2, dsk3, dsk4)
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=dependencies)
 
     return DataFrame(graph, name, df._meta, divisions)
 
