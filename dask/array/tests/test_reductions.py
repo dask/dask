@@ -205,6 +205,15 @@ def test_arg_reductions_unknown_chunksize_2d(func):
     getattr(da, func)(x, axis=1).compute()
 
 
+@pytest.mark.parametrize('func', ['argmax', 'nanargmax'])
+def test_arg_reductions_unknown_single_chunksize(func):
+    x = da.ones((10, 10), chunks=(10, 10))
+    x = x[x[0, :] > 0, :]  # unknown chunks in first dimension only
+
+    getattr(da, func)(x, axis=0).compute()
+    getattr(da, func)(x, axis=1).compute()
+
+
 def test_reductions_2D_nans():
     # chunks are a mix of some/all/no NaNs
     x = np.full((4, 4), np.nan)
