@@ -1,7 +1,7 @@
 import dask.array as da
 import os
 from dask.utils_test import inc
-from dask.highgraph import HighLevelGraph
+from dask.highlevelgraph import HighLevelGraph
 
 
 def test_visualize(tmpdir):

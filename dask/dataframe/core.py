@@ -31,7 +31,7 @@ from ..array import Array
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..sizeof import sizeof
 from ..delayed import delayed, Delayed, unpack_collections
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor

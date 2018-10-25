@@ -8,7 +8,7 @@ from numbers import Integral
 
 from ..base import tokenize
 from ..utils import M, funcname, derived_from
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from .core import _emulate
 from .utils import make_meta, PANDAS_VERSION
 

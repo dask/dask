@@ -44,7 +44,7 @@ from ..core import quote
 from ..delayed import delayed, Delayed
 from .. import threaded, core
 from ..sizeof import sizeof
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from ..bytes.core import get_mapper, get_fs_token_paths
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis

@@ -7,7 +7,7 @@ from ..core import DataFrame, Series
 from ..utils import PANDAS_VERSION
 from ...base import tokenize
 from ...utils import derived_from
-from ...highgraph import HighLevelGraph
+from ...highlevelgraph import HighLevelGraph
 
 if PANDAS_VERSION >= '0.20.0':
     from pandas.core.resample import Resampler as pd_Resampler

@@ -10,7 +10,7 @@ from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
 from ..optimization import cull, fuse, inline_functions
 from ..utils import ensure_dict
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 
 from numbers import Integral
 

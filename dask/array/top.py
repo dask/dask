@@ -7,7 +7,7 @@ import toolz
 from .. import base, core, utils
 from ..compatibility import apply, Mapping
 from ..delayed import to_task_dask, unpack_collections
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from ..optimization import SubgraphCallable
 
 

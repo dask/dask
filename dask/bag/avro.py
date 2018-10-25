@@ -1,7 +1,7 @@
 import io
 import uuid
 
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 
 MAGIC = b'Obj\x01'
 SYNC_SIZE = 16

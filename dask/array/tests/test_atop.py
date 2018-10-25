@@ -5,7 +5,7 @@ import numpy as np
 
 import dask
 import dask.array as da
-from dask.highgraph import HighLevelGraph
+from dask.highlevelgraph import HighLevelGraph
 from dask.array.top import TOP, atop
 from dask.array.top import rewrite_atop, index_subs, optimize_atop
 from dask.array.utils import assert_eq

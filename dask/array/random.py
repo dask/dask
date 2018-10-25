@@ -9,7 +9,7 @@ import numpy as np
 from .core import (normalize_chunks, Array, slices_from_chunks, asarray,
                    broadcast_shapes, broadcast_to)
 from ..base import tokenize
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from ..utils import ignoring, random_state_data, skip_doctest
 
 

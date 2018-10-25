@@ -9,7 +9,7 @@ import toolz
 
 from ..base import tokenize
 from ..compatibility import apply
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from .core import dotmany, Array, concatenate
 from .top import top
 from .creation import eye

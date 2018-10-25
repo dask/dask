@@ -10,7 +10,7 @@ except ImportError:
     from toolz import concat, merge, unique
 
 from .core import Array, asarray, atop, getitem, apply_infer_dtype
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from ..core import flatten
 
 

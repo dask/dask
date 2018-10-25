@@ -20,7 +20,7 @@ from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
 from ..compatibility import getargspec, builtins
 from ..base import tokenize
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from ..utils import ignoring, funcname, Dispatch
 from .. import config
 

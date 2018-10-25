@@ -10,7 +10,7 @@ import numpy as np
 from toolz import frequencies, concat
 
 from .core import Array
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 
 try:
     AxisError = np.AxisError

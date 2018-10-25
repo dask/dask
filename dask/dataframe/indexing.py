@@ -10,7 +10,7 @@ import pandas as pd
 from .core import new_dd_object, Series
 from . import methods
 from ..base import tokenize
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 
 
 class _IndexerBase(object):

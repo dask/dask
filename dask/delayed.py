@@ -18,7 +18,7 @@ from .context import globalmethod
 from .optimization import cull
 from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict
 from . import sharedict
-from .highgraph import HighLevelGraph
+from .highlevelgraph import HighLevelGraph
 
 __all__ = ['Delayed', 'delayed']
 

@@ -16,7 +16,7 @@ from .utils import PANDAS_VERSION
 from .. import base, config
 from ..base import tokenize, compute, compute_as_if_collection
 from ..delayed import delayed
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
 

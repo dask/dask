@@ -10,7 +10,7 @@ import numpy as np
 from toolz import memoize, merge, pluck, concat
 
 from .. import core
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize, is_dask_collection
 
 colon = slice(None, None, None)

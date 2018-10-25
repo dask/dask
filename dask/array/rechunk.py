@@ -18,7 +18,7 @@ import toolz
 from toolz import accumulate, reduce
 
 from ..base import tokenize
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from ..utils import parse_bytes
 from .core import concatenate3, Array, normalize_chunks
 from .utils import validate_axis

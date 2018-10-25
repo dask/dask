@@ -9,7 +9,7 @@ from toolz.curried import map
 
 from . import chunk, wrap
 from .core import Array, map_blocks, concatenate, concatenate3, reshapelist
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
 from ..core import flatten
 from ..utils import concrete

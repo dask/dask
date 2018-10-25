@@ -13,7 +13,7 @@ from toolz import concat, sliding_window, interleave
 from ..compatibility import Iterable
 from ..core import flatten
 from ..base import tokenize
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname
 from . import chunk
 from .creation import arange, diag, empty, indices

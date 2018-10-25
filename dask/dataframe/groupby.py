@@ -15,7 +15,7 @@ from .shuffle import shuffle
 from .utils import make_meta, insert_meta_param_description, raise_on_meta_error
 from ..base import tokenize
 from ..utils import derived_from, M, funcname, itemgetter
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 
 
 # #############################################

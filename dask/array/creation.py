@@ -8,7 +8,7 @@ from numbers import Integral
 import numpy as np
 from toolz import accumulate, sliding_window
 
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
 from ..compatibility import Sequence
 from . import chunk

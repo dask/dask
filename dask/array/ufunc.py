@@ -9,7 +9,7 @@ from toolz import curry
 from .core import Array, elemwise, atop, apply_infer_dtype, asarray
 from ..base import is_dask_collection, normalize_function
 from .. import core
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from ..utils import skip_doctest, funcname
 
 

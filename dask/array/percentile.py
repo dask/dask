@@ -8,7 +8,7 @@ from toolz import merge, merge_sorted
 
 from .core import Array
 from ..base import tokenize
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from ..compatibility import Iterator
 
 

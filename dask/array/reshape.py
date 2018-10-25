@@ -9,7 +9,7 @@ from .core import Array
 from ..base import tokenize
 from ..core import flatten
 from ..compatibility import reduce
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from ..utils import M
 
 

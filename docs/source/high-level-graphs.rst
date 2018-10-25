@@ -186,7 +186,7 @@ Python dictionary that is the semantic merger of the underlying layers
 API
 ---
 
-.. currentmodule:: dask.highgraph
+.. currentmodule:: dask.highlevelgraph
 
 .. autoclass:: HighLevelGraph
    :members:

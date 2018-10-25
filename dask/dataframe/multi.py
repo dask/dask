@@ -63,7 +63,7 @@ import pandas as pd
 
 from ..base import tokenize
 from ..compatibility import apply
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from .core import (_Frame, DataFrame, Series, map_partitions, Index,
                    _maybe_from_pandas, new_dd_object, is_broadcastable)
 from .io import from_pandas

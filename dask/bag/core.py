@@ -35,7 +35,7 @@ from ..compatibility import apply, urlopen, Iterable, Iterator
 from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict
 from ..delayed import Delayed, unpack_collections
-from ..highgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph
 from ..multiprocessing import get as mpget
 from ..optimization import fuse, cull, inline
 from ..utils import (system_encoding, takes_multiple_arguments, funcname,
