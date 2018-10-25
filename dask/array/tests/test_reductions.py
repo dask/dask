@@ -183,6 +183,37 @@ def test_nanarg_reductions(dfunc, func):
             dfunc(a).compute()
 
 
+@pytest.mark.parametrize('func', ['argmax', 'nanargmax'])
+def test_arg_reductions_unknown_chunksize(func):
+    x = da.arange(10, chunks=5)
+    x = x[x > 1]
+
+    with pytest.raises(ValueError) as info:
+        getattr(da, func)(x)
+
+    assert "unknown chunksize" in str(info.value)
+
+
+@pytest.mark.parametrize('func', ['argmax', 'nanargmax'])
+def test_arg_reductions_unknown_chunksize_2d(func):
+    x = da.ones((10, 10), chunks=(5, 5))
+    x = x[x[0, :] > 0, :]  # unknown chunks in first dimension only
+
+    with pytest.raises(ValueError):
+        getattr(da, func)(x, axis=0)
+
+    getattr(da, func)(x, axis=1).compute()
+
+
+@pytest.mark.parametrize('func', ['argmax', 'nanargmax'])
+def test_arg_reductions_unknown_single_chunksize(func):
+    x = da.ones((10, 10), chunks=(10, 10))
+    x = x[x[0, :] > 0, :]  # unknown chunks in first dimension only
+
+    getattr(da, func)(x, axis=0).compute()
+    getattr(da, func)(x, axis=1).compute()
+
+
 def test_reductions_2D_nans():
     # chunks are a mix of some/all/no NaNs
     x = np.full((4, 4), np.nan)

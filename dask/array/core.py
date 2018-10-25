@@ -1829,6 +1829,8 @@ class Array(DaskMethodsMixin):
         """
         keys = self.__dask_keys__()
         graph = self.__dask_graph__()
+        if optimize_graph:
+            graph = self.__dask_optimize__(graph, keys)
         L = ndeepmap(self.ndim, lambda k: Delayed(k, graph), keys)
         return np.array(L, dtype=object)
 

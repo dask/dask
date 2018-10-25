@@ -581,7 +581,7 @@ def _write_fastparquet(df, fs, fs_token, path, write_index=None, append=False,
                              'but existing file scheme is not.')
         elif ((set(pf.columns) != set(df.columns) - set(partition_on)) or (set(partition_on) != set(pf.cats))):
             raise ValueError('Appended columns not the same.\n'
-                             'New: {} | Previous: {}'
+                             'Previous: {} | New: {}'
                              .format(pf.columns, list(df.columns)))
         elif set(pf.dtypes[c] for c in pf.columns) != set(df[pf.columns].dtypes):
             raise ValueError('Appended dtypes differ.\n{}'
@@ -599,7 +599,7 @@ def _write_fastparquet(df, fs, fs_token, path, write_index=None, append=False,
             if divisions[0] < old_end:
                 raise ValueError(
                     'Appended divisions overlapping with the previous ones.\n'
-                    'New: {} | Previous: {}'.format(old_end, divisions[0]))
+                    'Previous: {} | New: {}'.format(old_end, divisions[0]))
     else:
         fmd = fastparquet.writer.make_metadata(df._meta,
                                                object_encoding=object_encoding,

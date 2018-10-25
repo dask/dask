@@ -457,6 +457,7 @@ Other functions
 .. autofunction:: imag
 .. autofunction:: indices
 .. autofunction:: insert
+.. autofunction:: invert
 .. autofunction:: isclose
 .. autofunction:: iscomplex
 .. autofunction:: isfinite
