@@ -182,6 +182,8 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
         dsk = self.__dask_graph__()
         if optimize_graph:
             dsk = self.__dask_optimize__(dsk, self.__dask_keys__())
+            name = 'delayed-' + self._name
+            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=())
         return Delayed(self.key, dsk)
 
 
@@ -1179,8 +1181,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         """
         keys = self.__dask_keys__()
         graph = self.__dask_graph__()
-        # if optimize_graph:
-        #     dsk = self.__dask_optimize__(dsk, keys)
+        if optimize_graph:
+            graph = self.__dask_optimize__(graph, self.__dask_keys__())
+            name = 'delayed-' + self._name
+            graph = HighLevelGraph.from_collections(name, graph, dependencies=())
         return [Delayed(k, graph) for k in keys]
 
     @classmethod

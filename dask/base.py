@@ -13,7 +13,7 @@ import uuid
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
-from .compatibility import long, unicode, Iterator
+from .compatibility import long, unicode, Iterator, Mapping
 from .context import thread_state
 from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex

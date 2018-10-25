@@ -10,7 +10,8 @@ import toolz
 from ..base import tokenize
 from ..compatibility import apply
 from ..highgraph import HighLevelGraph
-from .core import top, dotmany, Array, concatenate
+from .core import dotmany, Array, concatenate
+from .top import top
 from .creation import eye
 from .random import RandomState
 
