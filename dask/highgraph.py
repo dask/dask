@@ -1,12 +1,11 @@
 import toolz
 
-from . import sharedict
 from .utils import ignoring
 from .base import is_dask_collection
 from .compatibility import Mapping
 
 
-class HighLevelGraph(sharedict.ShareDict):
+class HighLevelGraph(Mapping):
     """ Task graph composed of layers of dependent subgraphs
 
     This object encodes a Dask task graph that is composed of layers of
@@ -71,7 +70,7 @@ class HighLevelGraph(sharedict.ShareDict):
     """
     def __init__(self, layers, dependencies):
         for v in layers.values():
-            assert not isinstance(v, sharedict.ShareDict)
+            assert not isinstance(v, HighLevelGraph)
         assert all(layers)
         self.layers = layers
         self.dependencies = dependencies
