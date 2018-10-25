@@ -31,8 +31,8 @@ codebase:
 
 - **HTTP(s)**: ``http://`` or ``https://`` for reading data directly from HTTP web servers
 
-.. - # ``adlfs:`` - Azure Data-lake cloud storage, for use with the Microsoft
-  Azure platform, using azure-data-lake-store-python_
+- **Azure Datalake Storage**: ``adl://``, for use with the Microsoft
+  Azure platform, using azure-data-lake-store-python_. This is *experimental*, use at your own risk.
 
 When specifying a storage location, a URL should be provided using the general
 form ``protocol://path/to/data``.  If no protocol is provided, the local
@@ -40,7 +40,7 @@ file-system is assumed (same as ``file://``).
 
 .. _hdfs3: http://hdfs3.readthedocs.io/
 .. _s3fs: http://s3fs.readthedocs.io/
-.. .. _azure-data-lake-store-python: https://github.com/Azure/azure-data-lake-store-python
+.. _azure-data-lake-store-python: https://github.com/Azure/azure-data-lake-store-python
 .. _gcsfs: https://github.com/dask/gcsfs/
 .. _pyarrow: https://arrow.apache.org/docs/python/
 
@@ -240,6 +240,19 @@ using any method that works for you, and then pass its credentials directly:
 
     gcs = GCSFileSystem(...)
     dask_function(..., storage_options={'token': gcs.session.credentials})
+
+Azure Datalake
+--------------
+
+*Support for ADL is experimental - use at own risk*
+
+Parameters ``tenant_id``, ``client_id``, and ``client_secret`` are required for
+authentication in ``storage_options=``,
+and all other parameters will be passed on to the AzureDLFileSystem_ constructor,
+follow the link for further information. The auth parameters are passed directly to
+workers, so this should only be used within a secure cluster.
+
+.. _AzureDLFileSystem: https://azure-datalake-store.readthedocs.io/en/latest/api.html#azure.datalake.store.core.AzureDLFileSystem
 
 
 HTTP(s)
