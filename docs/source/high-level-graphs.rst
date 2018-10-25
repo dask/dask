@@ -181,3 +181,13 @@ Python dictionary that is the semantic merger of the underlying layers
    12
    >>> graph[('read-csv', 0)]
    ('read-csv', 0): (pandas.read_csv, 'myfile.0.csv'),
+
+
+API
+---
+
+.. currentmodule:: dask.highgraph
+
+.. autoclass:: HighLevelGraph
+   :members:
+   :inherited-members:
