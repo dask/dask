@@ -512,8 +512,11 @@ def map_overlap(x, func, depth, boundary=None, trim=True, **kwargs):
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
 
+    assert all(type(c) is int for cc in x.chunks for c in cc)
     g = overlap(x, depth=depth2, boundary=boundary2)
+    assert all(type(c) is int for cc in g.chunks for c in cc)
     g2 = g.map_blocks(func, **kwargs)
+    assert all(type(c) is int for cc in g2.chunks for c in cc)
     if trim:
         return trim_internal(g2, depth2, boundary2)
     else:

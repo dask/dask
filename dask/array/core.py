@@ -634,6 +634,7 @@ def map_blocks(func, *args, **kwargs):
 
         first_info = None
         for k, v in dsk.items():
+            vv = v
             v = v[0]
             [(key, task)] = v.dsk.items()  # unpack subgraph callable
             info = {i: {'shape': shapes[i],
@@ -645,8 +646,12 @@ def map_blocks(func, *args, **kwargs):
             if first is None:
                 first_info = info  # for the dtype computation just below
 
+            v = copy.copy(v)  # Need to copy and unpack subgraph callable
+            v.dsk = copy.copy(v.dsk)
+            [(key, task)] = v.dsk.items()
             task = subs(task, {'__block_info_dummy__': info})
             v.dsk[key] = task
+            dsk[k] = (v,) + vv[1:]
 
     if chunks:
         if len(chunks) != len(out.numblocks):
@@ -662,7 +667,7 @@ def map_blocks(func, *args, **kwargs):
                 chunks2.append(c)
             else:
                 chunks2.append(nb * (c,))
-        out._chunks = tuple(chunks2)
+        out._chunks = normalize_chunks(chunks2)
 
     return out
 

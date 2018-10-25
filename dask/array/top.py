@@ -455,7 +455,9 @@ def atop(func, out_ind, *args, **kwargs):
 
     chunkss, arrays = unify_chunks(*args)
     for k, v in new_axes.items():
-        chunkss[k] = (v,)
+        if not isinstance(v, tuple):
+            v = (v,)
+        chunkss[k] = v
     arginds = list(zip(arrays, args[1::2]))
 
     for arg, ind in arginds:
