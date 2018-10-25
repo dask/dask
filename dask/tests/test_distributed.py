@@ -2,7 +2,6 @@ import pytest
 distributed = pytest.importorskip('distributed')
 
 from functools import partial
-import inspect
 from operator import add
 from tornado import gen
 

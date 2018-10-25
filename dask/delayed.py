@@ -5,9 +5,9 @@ import types
 import uuid
 
 try:
-    from cytoolz import curry, pluck, concat, unique
+    from cytoolz import curry, concat, unique
 except ImportError:
-    from toolz import curry, pluck, concat, unique
+    from toolz import curry, concat, unique
 
 from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
@@ -561,7 +561,7 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
         task = (func,) + args2
 
     graph = HighLevelGraph.from_collections(name, {name: task},
-                                       dependencies=collections)
+                                            dependencies=collections)
     nout = nout if nout is not None else None
     return Delayed(name, graph, length=nout)
 
@@ -578,7 +578,7 @@ class DelayedLeaf(Delayed):
     @property
     def dask(self):
         return HighLevelGraph.from_collections(self._key, {self._key: self._obj},
-                                          dependencies=())
+                                               dependencies=())
 
     def __call__(self, *args, **kwargs):
         return call_function(self._obj, self._key, args, kwargs,
@@ -597,7 +597,7 @@ class DelayedAttr(Delayed):
     def dask(self):
         layer = {self._key: (getattr, self._obj._key, self._attr)}
         return HighLevelGraph.from_collections(self._key, layer,
-                                          dependencies=[self._obj])
+                                               dependencies=[self._obj])
 
     def __call__(self, *args, **kwargs):
         return call_function(methodcaller(self._attr), self._attr, (self._obj,) + args, kwargs)

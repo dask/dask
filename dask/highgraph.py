@@ -194,7 +194,6 @@ def to_graphviz(hg, data_attributes=None, function_attributes=None,
                          node_attr=node_attr,
                          edge_attr=edge_attr)
 
-    seen = set()
     cache = {}
 
     for k in hg.dependencies:

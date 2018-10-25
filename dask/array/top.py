@@ -498,7 +498,7 @@ def atop(func, out_ind, *args, **kwargs):
     graph = _top(func, out, out_ind, *argindsstr, numblocks=numblocks,
                  dependencies=dependencies, new_axes=new_axes, **kwargs2)
     graph = HighLevelGraph.from_collections(out, graph,
-                                       dependencies=arrays + dependencies)
+                                            dependencies=arrays + dependencies)
 
     chunks = [chunkss[i] for i in out_ind]
     if adjust_chunks:

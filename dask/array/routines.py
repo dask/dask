@@ -550,8 +550,7 @@ def bincount(x, weights=None, minlength=None):
 
     chunks = ((minlength,),)
 
-    graph = HighLevelGraph.from_collections(name, dsk,
-                dependencies=[x] if weights is None else [x, weights])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x] if weights is None else [x, weights])
 
     return Array(graph, name, chunks, dtype)
 
@@ -640,8 +639,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                for i, (k, w) in enumerate(zip(a_keys, w_keys))}
         dtype = weights.dtype
 
-    graph = HighLevelGraph.from_collections(name, dsk,
-                dependencies=[a] if weights is None else [a, weights])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a] if weights is None else [a, weights])
 
     mapped = Array(graph, name, chunks, dtype=dtype)
     n = mapped.sum(axis=0)
@@ -861,8 +859,8 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     if return_counts:
         out_dtype.append(("counts", np.intp))
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[o for o in
-        out_parts if hasattr(o, '__dask_keys__')])
+    dependencies = [o for o in out_parts if hasattr(o, '__dask_keys__')]
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     chunks = ((np.nan,),)
     out = Array(graph, name, chunks, out_dtype)
 

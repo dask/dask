@@ -29,7 +29,7 @@ except ImportError:
 
 from .. import config
 from .avro import to_avro
-from ..base import tokenize, dont_optimize, is_dask_collection, DaskMethodsMixin
+from ..base import tokenize, dont_optimize, DaskMethodsMixin
 from ..bytes import open_files
 from ..compatibility import apply, urlopen, Iterable, Iterator
 from ..context import globalmethod
@@ -1889,7 +1889,7 @@ def bag_map(func, *args, **kwargs):
                        [(b.name, n) for b in bag_kwargs.values()]))
 
     dsk = {(name, n): (reify, (map_chunk, func, build_args(n),
-                                    build_bag_kwargs(n), other_kwargs))
+                               build_bag_kwargs(n), other_kwargs))
            for n in range(npartitions)}
 
     # If all bags are the same type, use that type, otherwise fallback to Bag
@@ -1984,9 +1984,9 @@ def map_partitions(func, *args, **kwargs):
 
     if kwargs:
         dsk = {(name, n): (apply,
-                            func,
-                            build_args(n),
-                            (merge, build_bag_kwargs(n), other_kwargs))
+                           func,
+                           build_args(n),
+                           (merge, build_bag_kwargs(n), other_kwargs))
                for n in range(npartitions)}
     else:
         dsk = {(name, n): (func,) + tuple(build_args(n))

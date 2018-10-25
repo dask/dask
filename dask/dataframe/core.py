@@ -846,8 +846,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             name2 = 'split-%d-%s' % (i, token)
             dsk2 = {(name2, j): (getitem, (name, j), i)
                     for j in range(self.npartitions)}
-            graph = HighLevelGraph.from_collections(name2, merge(dsk2, layer),
-                                               dependencies=[self])
+            graph = HighLevelGraph.from_collections(name2, merge(dsk2, layer), dependencies=[self])
             out_df = type(self)(graph, name2, self._meta, self.divisions)
             out.append(out_df)
         return out
@@ -1581,8 +1580,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                     # aggregate with previous cumulation results
                     layer[(cname, i)] = (aggregate, (cname, i - 1), (cumlast._name, i - 1))
                 layer[(name, i)] = (aggregate, (cumpart._name, i), (cname, i))
-            graph = HighLevelGraph.from_collections(cname, layer,
-                                               dependencies=[cumpart, cumlast])
+            graph = HighLevelGraph.from_collections(cname, layer, dependencies=[cumpart, cumlast])
             result = new_dd_object(graph, name, chunk(self._meta), self.divisions)
             return handle_out(out, result)
 

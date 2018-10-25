@@ -19,12 +19,12 @@ import warnings
 
 try:
     from cytoolz import (partition, concat, join, first,
-                         groupby, valmap, accumulate, assoc)
+                         groupby, valmap, accumulate)
     from cytoolz.curried import pluck
 
 except ImportError:
     from toolz import (partition, concat, join, first,
-                       groupby, valmap, accumulate, assoc)
+                       groupby, valmap, accumulate)
     from toolz.curried import pluck
 from toolz import map, reduce, frequencies
 import numpy as np
@@ -48,7 +48,7 @@ from ..highgraph import HighLevelGraph
 from ..bytes.core import get_mapper, get_fs_token_paths
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
-from .top import atop, _top, top, subs
+from .top import atop, subs
 
 
 config.update_defaults({'array': {
@@ -563,7 +563,6 @@ def map_blocks(func, *args, **kwargs):
                 if isinstance(a, Array)
                 else (a, None)
                 for a in args]
-    numblocks = {a.name: a.numblocks for a in arrs}
     out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
 
     if has_keyword(func, 'block_id'):
@@ -574,12 +573,7 @@ def map_blocks(func, *args, **kwargs):
     original_kwargs = kwargs
 
     if dtype is None:
-        kwargs2 = original_kwargs
-        if has_keyword(func, 'block_id'):
-            kwargs2 = assoc(kwargs, 'block_id', first(dsk.keys())[1:])
-        if has_keyword(func, 'block_info'):
-            kwargs2 = assoc(kwargs, 'block_info', first_info)
-        dtype = apply_infer_dtype(func, args, kwargs2, 'map_blocks')
+        dtype = apply_infer_dtype(func, args, original_kwargs, 'map_blocks')
 
     if drop_axis:
         out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
@@ -630,7 +624,6 @@ def map_blocks(func, *args, **kwargs):
                 shapes[k] = arg.shape
                 num_chunks[i] = arg.numblocks
 
-        first_info = None
         for k, v in dsk.items():
             vv = v
             v = v[0]
@@ -641,8 +634,6 @@ def map_blocks(func, *args, **kwargs):
                                            for ij, j in enumerate(k[1:])],
                         'chunk-location': k[1:]}
                     for i in shapes}
-            if first is None:
-                first_info = info  # for the dtype computation just below
 
             v = copy.copy(v)  # Need to copy and unpack subgraph callable
             v.dsk = copy.copy(v.dsk)
