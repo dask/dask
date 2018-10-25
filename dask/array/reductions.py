@@ -617,7 +617,7 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
         raise TypeError("axis must be either `None` or int, "
                         "got '{0}'".format(axis))
 
-    if np.isnan(list(concat(x.chunks))).any():
+    if np.isnan([c for i, cc in enumerate(x.chunks) if i in axis for c in cc]).any():
         raise ValueError(
             "Arg-reductions do not work with arrays that have "
             "unknown chunksizes.  At some point in your computation "
