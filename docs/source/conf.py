@@ -349,6 +349,7 @@ def copy_legacy_redirects(app, docname):
         for html_src_path, new in redirect_files:
             page = redirect_template.format(new=new)
             target_path = app.outdir + '/' + html_src_path
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
             with open(target_path, 'w') as f:
                 f.write(page)
 
