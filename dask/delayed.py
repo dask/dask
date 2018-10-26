@@ -3,11 +3,12 @@ from __future__ import absolute_import, division, print_function
 import operator
 import types
 import uuid
+import warnings
 
 try:
-    from cytoolz import curry, concat, unique
+    from cytoolz import curry, concat, unique, merge
 except ImportError:
-    from toolz import curry, concat, unique
+    from toolz import curry, concat, unique, merge
 
 from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
@@ -17,7 +18,6 @@ from .core import quote
 from .context import globalmethod
 from .optimization import cull
 from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict
-from . import sharedict
 from .highlevelgraph import HighLevelGraph
 
 __all__ = ['Delayed', 'delayed']
@@ -142,6 +142,9 @@ def to_task_dask(expr):
     >>> dict(dask)  # doctest: +SKIP
     {'a': 1, 'b': 2}
     """
+    warnings.warn("The dask.delayed.to_dask_dask function has been "
+                  "Deprecated in favor of unpack_collections", stacklevel=2)
+
     if isinstance(expr, Delayed):
         return expr.key, expr.dask
 
@@ -161,7 +164,7 @@ def to_task_dask(expr):
     if typ in (list, tuple, set):
         args, dasks = unzip((to_task_dask(e) for e in expr), 2)
         args = list(args)
-        dsk = sharedict.merge(*dasks, dependencies={})  # TODO
+        dsk = merge(dasks)
         # Ensure output type matches input type
         return (args, dsk) if typ is list else ((typ, args), dsk)
 
@@ -440,9 +443,6 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
     def __init__(self, key, dsk, length=None):
         self._key = key
-        if type(dsk) is list:  # compatibility with older versions
-            assert False
-            dsk = sharedict.merge(*dsk, dependencies={})
         self.dask = dsk
         self._length = length
 
