@@ -9,9 +9,7 @@ try:
 except ImportError:
     yaml = None
 
-from collections import Mapping
-
-from .compatibility import makedirs, builtins
+from .compatibility import makedirs, builtins, Mapping
 
 
 no_default = '__no_default__'
