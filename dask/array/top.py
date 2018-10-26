@@ -447,13 +447,21 @@ def atop(func, out_ind, *args, **kwargs):
     dtype = kwargs.pop('dtype', None)
     adjust_chunks = kwargs.pop('adjust_chunks', None)
     new_axes = kwargs.pop('new_axes', {})
+    align_arrays = kwargs.pop('align_arrays', True)
 
     from .core import Array, unify_chunks, normalize_arg
 
     if dtype is None:
         raise ValueError("Must specify dtype of output array")
 
-    chunkss, arrays = unify_chunks(*args)
+    if align_arrays:
+        chunkss, arrays = unify_chunks(*args)
+    else:
+        arg, ind = max([(a, i) for (a, i) in toolz.partition(2, args) if i is not None],
+                       key=lambda ai: len(ai[1]))
+        chunkss = dict(zip(ind, arg.chunks))
+        arrays = [a for a, ind in toolz.partition(2, args)]
+
     for k, v in new_axes.items():
         if not isinstance(v, tuple):
             v = (v,)

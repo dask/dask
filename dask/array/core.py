@@ -591,7 +591,8 @@ def map_blocks(func, *args, **kwargs):
         if max(new_axis) > max(out_ind):
             raise ValueError("New_axis values do not fill in all dimensions")
     out = atop(func, out_ind, *concat(argpairs), name=name,
-               new_axes=new_axes, dtype=dtype, concatenate=True, **kwargs)
+               new_axes=new_axes, dtype=dtype, concatenate=True,
+               align_arrays=False, **kwargs)
 
     if (has_keyword(func, 'block_id') or has_keyword(func, 'block_info') or drop_axis):
         dsk = out.dask.layers[out.name]

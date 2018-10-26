@@ -3597,3 +3597,14 @@ def test_slice_reversed():
     y = x[6:3]
 
     assert_eq(y, np.ones(0))
+
+
+def test_map_blocks_chunks():
+    x = da.arange(400, chunks=(100,))
+    y = da.arange(40, chunks=(10,))
+
+    def func(a, b):
+        return np.array([a.max(), b.max()])
+
+    assert_eq(da.map_blocks(func, x, y, chunks=(2,), dtype=x.dtype),
+              np.array([99, 9, 199, 19, 299, 29, 399, 39]))
