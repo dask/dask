@@ -1,10 +1,14 @@
-import dask.array as da
 import os
+
+import pytest
+
+import dask.array as da
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph
 
 
 def test_visualize(tmpdir):
+    pytest.importorskip('graphviz')
     fn = str(tmpdir)
     a = da.ones(10, chunks=(5,))
     b = a + 1
