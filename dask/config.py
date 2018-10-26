@@ -102,6 +102,25 @@ def merge(*dicts):
     return result
 
 
+def normalize_nested_keys(config):
+    """ Replaces underscores with hyphens for keys for a nested Mapping
+
+    Examples
+    --------
+    >>> a = {'x': 1, 'y_1': {'a_2': 2}}
+    >>> normalize_nested_keys(a)  # doctest: +SKIP
+    {'x': 1, 'y-1': {'a-2': 2}}
+    """
+    config_norm = {}
+    for key, value in config.items():
+        if isinstance(value, Mapping):
+            value = normalize_nested_keys(value)
+        key_norm = normalize_key(key)
+        config_norm[key_norm] = value
+
+    return config_norm
+
+
 def collect_yaml(paths=paths):
     """ Collect configuration from yaml files
 
@@ -127,6 +146,7 @@ def collect_yaml(paths=paths):
     for path in file_paths:
         with open(path) as f:
             data = yaml.load(f.read()) or {}
+            data = normalize_nested_keys(data)
             configs.append(data)
 
     return configs
@@ -149,7 +169,8 @@ def collect_env(env=None):
     d = {}
     for name, value in env.items():
         if name.startswith('DASK_'):
-            varname = name[5:].lower().replace('__', '.').replace('_', '-')
+            varname = name[5:].lower().replace('__', '.')
+            varname = normalize_key(varname)
             try:
                 d[varname] = ast.literal_eval(value)
             except (SyntaxError, ValueError):
@@ -226,7 +247,7 @@ def ensure_file(
 
 
 def normalize_key(key):
-    """ Replaces single underscores with hyphens
+    """ Replaces underscores with hyphens
 
     Parameters
     ----------

@@ -6,7 +6,8 @@ import pytest
 import dask.config
 from dask.config import (update, merge, collect, collect_yaml, collect_env,
                          get, ensure_file, set, config, rename,
-                         update_defaults, refresh, expand_environment_variables)
+                         update_defaults, refresh, expand_environment_variables,
+                         normalize_nested_keys)
 from dask.utils import tmpfile
 
 
@@ -297,3 +298,15 @@ def test_expand_environment_variables(inp, out):
         assert expand_environment_variables(inp) == out
     finally:
         del os.environ['FOO']
+
+
+def test_normalize_nested_keys():
+    config = {'key_1': 1,
+              'key_2': {'nested_key_1': 2},
+              'key_3': 3
+              }
+    expected = {'key-1': 1,
+                'key-2': {'nested-key-1': 2},
+                'key-3': 3
+                }
+    assert normalize_nested_keys(config) == expected
