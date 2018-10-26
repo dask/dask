@@ -320,21 +320,15 @@ def test_normalize_nested_keys():
 def test_env_var_normalization(monkeypatch):
     value = 3
     monkeypatch.setenv('DASK_A_B', value)
-    dask.config.refresh()
-
-    assert get('a_b') == value
-    assert get('a-b') == value
-
-    # Maks sure to remove this test key from config
-    dask.config.config.pop('a-b')
+    d = {}
+    dask.config.refresh(config=d)
+    assert get('a_b', config=d) == value
+    assert get('a-b', config=d) == value
 
 
 @pytest.mark.parametrize('key', ['custom_key', 'custom-key'])
 def test_get_set_roundtrip(key):
     value = 123
-    dask.config.set({key: value})
-    assert dask.config.get('custom_key') == value
-    assert dask.config.get('custom-key') == value
-
-    # Maks sure to remove this test key from config
-    dask.config.config.pop(normalize_key(key))
+    with dask.config.set({key: value}):
+        assert dask.config.get('custom_key') == value
+        assert dask.config.get('custom-key') == value
