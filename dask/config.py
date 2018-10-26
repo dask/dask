@@ -285,16 +285,16 @@ class set(object):
         path: List[str]
             Used internally to hold the path of old values
         """
+        key = keys[0].replace('_', '-')
         if len(keys) == 1:
             if old is not None:
-                path_key = tuple(path + [keys[0]])
-                if keys[0] in d:
-                    old[path_key] = d[keys[0]]
+                path_key = tuple(path + [key])
+                if key in d:
+                    old[path_key] = d[key]
                 else:
                     old[path_key] = '--delete--'
-            d[keys[0]] = value
+            d[key] = value
         else:
-            key = keys[0]
             if key not in d:
                 d[key] = {}
                 if old is not None:
@@ -392,6 +392,7 @@ def get(key, default=no_default, config=config):
     keys = key.split('.')
     result = config
     for k in keys:
+        k = k.replace('_', '-')
         try:
             result = result[k]
         except (TypeError, IndexError, KeyError):
