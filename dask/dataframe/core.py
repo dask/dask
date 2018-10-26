@@ -4,7 +4,6 @@ from functools import wraps, partial
 import operator
 from operator import getitem
 from pprint import pformat
-from collections import Sequence
 import warnings
 
 from toolz import merge, first, unique, partition_all, remove
@@ -22,7 +21,8 @@ from .. import core
 
 from ..utils import partial_by_order, Dispatch, IndexCallable
 from .. import threaded
-from ..compatibility import apply, operator_div, bind_method, string_types, Iterator
+from ..compatibility import (apply, operator_div, bind_method, string_types,
+                             Iterator, Sequence)
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
