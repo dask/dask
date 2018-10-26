@@ -3,7 +3,7 @@ from time import sleep
 import pytest
 from tornado import gen
 
-from distributed.utils_test import div, gen_cluster, inc, loop, cluster
+from distributed.utils_test import div, gen_cluster, inc, loop, cluster  # noqa F401
 from distributed import as_completed, Client, Lock
 from distributed.utils import sync
 
@@ -105,7 +105,7 @@ def test_async_with(loop):
 def test_locks(loop):
     async def f():
         async with Client(processes=False, asynchronous=True) as c:
-            assert c.asynchronous == True
+            assert c.asynchronous
             async with Lock('x'):
                 lock2 = Lock('x')
                 result = await lock2.acquire(timeout=0.1)

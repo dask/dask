@@ -362,7 +362,7 @@ def _parent_process(child_pipe):
 
 
 def test_asyncprocess_child_teardown_on_parent_exit():
-    """ Check that a child process started by AsyncProcess exits if its parent
+    r""" Check that a child process started by AsyncProcess exits if its parent
     exits.
 
     The motivation is to ensure that if an AsyncProcess is created and the
