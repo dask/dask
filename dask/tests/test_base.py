@@ -885,23 +885,3 @@ def test_num_workers_config(scheduler):
     workers = {i.worker_id for i in prof.results}
 
     assert len(workers) == num_workers
-
-
-@pytest.mark.parametrize('scheduler', ['threads', 'processes'])
-def test_num_workers_env_var(monkeypatch, scheduler):
-    num_workers = 3
-    monkeypatch.setenv('DASK_NUM_WORKERS', num_workers)
-    dask.config.refresh()
-
-    @delayed
-    def f(x):
-        time.sleep(0.5)
-        return x
-
-    a = [f(i) for i in range(5)]
-    with Profiler() as prof:
-        a = compute(*a, scheduler=scheduler)
-
-    workers = {i.worker_id for i in prof.results}
-
-    assert len(workers) == num_workers

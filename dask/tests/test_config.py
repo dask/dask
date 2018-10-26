@@ -7,7 +7,7 @@ import dask.config
 from dask.config import (update, merge, collect, collect_yaml, collect_env,
                          get, ensure_file, set, config, rename,
                          update_defaults, refresh, expand_environment_variables,
-                         normalize_nested_keys)
+                         normalize_key, normalize_nested_keys)
 from dask.utils import tmpfile
 
 
@@ -300,6 +300,11 @@ def test_expand_environment_variables(inp, out):
         del os.environ['FOO']
 
 
+@pytest.mark.parametrize('key', ['custom_key', 'custom-key'])
+def test_normalize_key(key):
+    assert normalize_key(key) == 'custom-key'
+
+
 def test_normalize_nested_keys():
     config = {'key_1': 1,
               'key_2': {'nested_key_1': 2},
@@ -310,3 +315,26 @@ def test_normalize_nested_keys():
                 'key-3': 3
                 }
     assert normalize_nested_keys(config) == expected
+
+
+def test_env_var_normalization(monkeypatch):
+    value = 3
+    monkeypatch.setenv('DASK_A_B', value)
+    dask.config.refresh()
+
+    assert get('a_b') == value
+    assert get('a-b') == value
+
+    # Maks sure to remove this test key from config
+    dask.config.config.pop('a-b')
+
+
+@pytest.mark.parametrize('key', ['custom_key', 'custom-key'])
+def test_get_set_roundtrip(key):
+    value = 123
+    dask.config.set({key: value})
+    assert dask.config.get('custom_key') == value
+    assert dask.config.get('custom-key') == value
+
+    # Maks sure to remove this test key from config
+    dask.config.config.pop(normalize_key(key))
