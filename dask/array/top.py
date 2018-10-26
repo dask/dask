@@ -460,7 +460,7 @@ def atop(func, out_ind, *args, **kwargs):
         arg, ind = max([(a, i) for (a, i) in toolz.partition(2, args) if i is not None],
                        key=lambda ai: len(ai[1]))
         chunkss = dict(zip(ind, arg.chunks))
-        arrays = [a for a, ind in toolz.partition(2, args)]
+        arrays = args[::2]
 
     for k, v in new_axes.items():
         if not isinstance(v, tuple):
