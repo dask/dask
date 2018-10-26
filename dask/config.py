@@ -225,6 +225,17 @@ def ensure_file(
         pass
 
 
+def normalize_key(key):
+    """ Replaces single underscores with hyphens
+
+    Parameters
+    ----------
+    key : string
+        Key to assign.
+    """
+    return key.replace('_', '-')
+
+
 class set(object):
     """ Temporarily set configuration values within a context manager
 
@@ -285,7 +296,7 @@ class set(object):
         path: List[str]
             Used internally to hold the path of old values
         """
-        key = keys[0].replace('_', '-')
+        key = normalize_key(keys[0])
         if len(keys) == 1:
             if old is not None:
                 path_key = tuple(path + [key])
@@ -392,7 +403,7 @@ def get(key, default=no_default, config=config):
     keys = key.split('.')
     result = config
     for k in keys:
-        k = k.replace('_', '-')
+        k = normalize_key(k)
         try:
             result = result[k]
         except (TypeError, IndexError, KeyError):
