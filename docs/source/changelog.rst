@@ -1,6 +1,60 @@
 Changelog
 =========
 
+0.20.0 / 2018-10-26
+-------------------
+
+Array
++++++
+
+-  Fuse Atop operations (:pr:`3998`), (:pr:`4081`) `Matthew Rocklin`_
+-  Support da.asanyarray on dask dataframes (:pr:`4080`) `Matthew Rocklin`_
+-  Remove unnecessary endianness check in datetime test (:pr:`4113`) `Elliott Sales de Andrade`_
+-  Set name=False in array foo_like functions (:pr:`4116`) `Matthew Rocklin`_
+-  Remove dask.array.ghost module (:pr:`4121`) `Matthew Rocklin`_
+-  Fix use of getargspec in dask array (:pr:`4125`) `Stephan Hoyer`_
+-  Adds dask.array.invert (:pr:`4127`), (:pr:`4131`) `Anderson Banihirwe`_
+-  Raise informative error on arg-reduction on unknown chunksize (:pr:`4128`), (:pr:`4135`) `Matthew Rocklin`_
+-  Normalize reversed slices in dask array (:pr:`4126`) `Matthew Rocklin`_
+
+Bag
++++
+
+-  Add bag.to_avro (:pr:`4076`) `Martin Durant`_
+
+Core
+++++
+
+-  Pull num_workers from config.get (:pr:`4086`), (:pr:`4093`) `James Bourbeau`_
+-  Fix invalid escape sequences with raw strings (:pr:`4112`) `Elliott Sales de Andrade`_
+-  Raise an error on the use of the get= keyword and set_options (:pr:`4077`) `Matthew Rocklin`_
+-  Add import for Azure DataLake storage, and add docs (:pr:`4132`) `Martin Durant`_
+-  Avoid collections.Mapping/Sequence (:pr:`4138`)  `Matthew Rocklin`_
+
+Dataframe
++++++++++
+
+-  Include index keyword in to_dask_dataframe (:pr:`4071`) `Matthew Rocklin`_
+-  add support for duplicate column names (:pr:`4087`) `Jan Koch`_
+-  Implement min_count for the DataFrame methods sum and prod (:pr:`4090`) `Bart Broere`_
+-  Remove pandas warnings in concat (:pr:`4095`) `Matthew Rocklin`_
+-  DataFrame.to_csv header option to only output headers in the first chunk (:pr:`3909`) `Rahul Vaidya`_
+-  Remove Series.to_parquet (:pr:`4104`) `Justin Dennison`_
+-  Avoid warnings and deprecated pandas methods (:pr:`4115`) `Matthew Rocklin`_
+-  Swap 'old' and 'previous' when reporting append error (:pr:`4130`) `Martin Durant`_
+
+Documentation
++++++++++++++
+
+-  Copy edit documentation (:pr:`4073`), (:pr:`4074`), (:pr:`4094`), (:pr:`4097`), (:pr:`4107`), (:pr:`4124`), (:pr:`4133`), (:pr:`4139`) `Miguel Farrajota`_
+-  Fix typo in code example (:pr:`4089`) `Antonino Ingargiola`_
+-  Add pycon 2018 presentation (:pr:`4102`) `Javad`_
+-  Quick description for gcsfs (:pr:`4109`) `Martin Durant`_
+-  Fixed typo in docstrings of read_sql_table method (:pr:`4114`) `TakaakiFuruse`_
+-  Make target directories in redirects if they don't exist (:pr:`4136`) `Matthew Rocklin`_
+
+
+
 0.19.4 / 2018-10-09
 -------------------
 
@@ -81,10 +135,10 @@ Documentation
 +++++++++++++
 
 -   Extensive copy-editing  (:pr:`4049`), (:pr:`4034`),  (:pr:`4031`), (:pr:`4020`), (:pr:`4021`), (:pr:`4022`), (:pr:`4023`), (:pr:`4016`), (:pr:`4017`), (:pr:`4010`), (:pr:`3997`), (:pr:`3996`), `Miguel Farrajota`_
--   Update shuffle method selection docs [skip ci] (:pr:`4048`) `James Bourbeau`_
+-   Update shuffle method selection docs (:pr:`4048`) `James Bourbeau`_
 -   Remove docs/source/examples, point to examples.dask.org (:pr:`4014`) `Matthew Rocklin`_
 -   Replace readthedocs links with dask.org (:pr:`4008`) `Matthew Rocklin`_
--   Updates DataFrame.to_hdf docstring for returned values [skip ci] (:pr:`3992`) `James Bourbeau`_
+-   Updates DataFrame.to_hdf docstring for returned values (:pr:`3992`) `James Bourbeau`_
 
 
 0.19.2 / 2018-09-17
@@ -203,7 +257,7 @@ Docs
 -  fix of minor typos in landing page index.html (:pr:`3746`) `Christoph Moehl`_
 -  Update delayed-custom.rst (:pr:`3850`) `Anderson Banihirwe`_
 -  DOC: clarify delayed docstring (:pr:`3709`) `Scott Sievert`_
--  Add new presentations (:pr:`3880`) `@javad94`_
+-  Add new presentations (:pr:`3880`) `Javad`_
 -  Add dask array normalize_chunks to documentation (:pr:`3878`) `Daniel Rothenberg`_
 -  Docs: Fix link to snakeviz (:pr:`3900`) `Hans Moritz Günther`_
 -  Add missing ` to docstring (:pr:`3915`) `@rtobar`_
@@ -1479,7 +1533,7 @@ Other
 .. _`John Mrziglod`: https://github.com/JohnMrziglod
 .. _`Christoph Moehl`: https://github.com/cmohl2013
 .. _`Anderson Banihirwe`: https://github.com/andersy005
-.. _`@javad94`: https://github.com/javad94
+.. _`Javad`: https://github.com/javad94
 .. _`Daniel Rothenberg`: https://github.com/darothen
 .. _`Hans Moritz Günther`: https://github.com/hamogu
 .. _`@rtobar`: https://github.com/rtobar
@@ -1493,3 +1547,9 @@ Other
 .. _`Miguel Farrajota`: https://github.com/farrajota
 .. _`Zhenqing Li`: https://github.com/DigitalPig
 .. _`Matthias Bussonier`: https://github.com/Carreau
+.. _`Jan Koch`: https://github.com/datajanko
+.. _`Bart Broere`: https://github.com/bartbroere
+.. _`Rahul Vaidya`: https://github.com/rvaidya
+.. _`Justin Dennison`: https://github.com/justin1dennison
+.. _`Antonino Ingargiola`: https://github.com/tritemio
+.. _`TakaakiFuruse`: https://github.com/TakaakiFuruse
