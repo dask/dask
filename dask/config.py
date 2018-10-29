@@ -119,7 +119,7 @@ def normalize_nested_keys(config):
     Examples
     --------
     >>> a = {'x': 1, 'y_1': {'a_2': 2}}
-    >>> normalize_nested_keys(a)  # doctest: +SKIP
+    >>> normalize_nested_keys(a)
     {'x': 1, 'y-1': {'a-2': 2}}
     """
     config_norm = {}
