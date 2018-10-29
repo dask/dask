@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from functools import partial, wraps
 from itertools import product
 from operator import add
-from numbers import Integral
+from numbers import Integral, Number
 
 import numpy as np
 from toolz import accumulate, sliding_window
@@ -694,31 +694,31 @@ def tile(A, reps):
     return concatenate(reps * [A], axis=-1)
 
 
-def expand_pad_width(array, pad_width):
-    if isinstance(pad_width, Integral):
-        pad_width = array.ndim * ((pad_width, pad_width),)
-    elif (isinstance(pad_width, Sequence) and
-          all(isinstance(pw, Integral) for pw in pad_width) and
-          len(pad_width) == 1):
-        pad_width = array.ndim * ((pad_width[0], pad_width[0]),)
-    elif (isinstance(pad_width, Sequence) and
-          len(pad_width) == 2 and
-          all(isinstance(pw, Integral) for pw in pad_width)):
-            pad_width = tuple(
-                (pad_width[0], pad_width[1]) for _ in range(array.ndim)
+def expand_pad_value(array, pad_value):
+    if isinstance(pad_value, Number):
+        pad_value = array.ndim * ((pad_value, pad_value),)
+    elif (isinstance(pad_value, Sequence) and
+          all(isinstance(pw, Number) for pw in pad_value) and
+          len(pad_value) == 1):
+        pad_value = array.ndim * ((pad_value[0], pad_value[0]),)
+    elif (isinstance(pad_value, Sequence) and
+          len(pad_value) == 2 and
+          all(isinstance(pw, Number) for pw in pad_value)):
+            pad_value = tuple(
+                (pad_value[0], pad_value[1]) for _ in range(array.ndim)
             )
-    elif (isinstance(pad_width, Sequence) and
-          len(pad_width) == array.ndim and
-          all(isinstance(pw, Sequence) for pw in pad_width) and
-          all((len(pw) == 2) for pw in pad_width) and
-          all(all(isinstance(w, Integral) for w in pw) for pw in pad_width)):
-            pad_width = tuple((pw[0], pw[1]) for pw in pad_width)
+    elif (isinstance(pad_value, Sequence) and
+          len(pad_value) == array.ndim and
+          all(isinstance(pw, Sequence) for pw in pad_value) and
+          all((len(pw) == 2) for pw in pad_value) and
+          all(all(isinstance(w, Number) for w in pw) for pw in pad_value)):
+            pad_value = tuple((pw[0], pw[1]) for pw in pad_value)
     else:
         raise TypeError(
-            "`pad_width` must be composed of integral typed values."
+            "`pad_value` must be composed of integral typed values."
         )
 
-    return pad_width
+    return pad_value
 
 
 def np_pad(array, pad_width, mode, extra_arg=None):
@@ -856,7 +856,7 @@ def pad_stats(array, pad_width, mode, *args):
     if mode == "median":
         raise NotImplementedError("`pad` does not support `mode` of `median`.")
 
-    stat_length = expand_pad_width(array, args[0])
+    stat_length = expand_pad_value(array, args[0])
 
     result = np.empty(array.ndim * (3,), dtype=object)
     for idx in np.ndindex(result.shape):
@@ -950,7 +950,7 @@ def pad_udf(array, pad_width, mode, **kwargs):
 def pad(array, pad_width, mode, **kwargs):
     array = asarray(array)
 
-    pad_width = expand_pad_width(array, pad_width)
+    pad_width = expand_pad_value(array, pad_width)
 
     if mode in ["maximum", "mean", "median", "minimum"]:
         kwargs.setdefault("stat_length", array.shape)
