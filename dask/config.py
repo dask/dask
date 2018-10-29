@@ -102,6 +102,17 @@ def merge(*dicts):
     return result
 
 
+def normalize_key(key):
+    """ Replaces underscores with hyphens
+
+    Parameters
+    ----------
+    key : string
+        Key to assign.
+    """
+    return key.replace('_', '-')
+
+
 def normalize_nested_keys(config):
     """ Replaces underscores with hyphens for keys for a nested Mapping
 
@@ -244,17 +255,6 @@ def ensure_file(
                 os.remove(tmp)
     except OSError:
         pass
-
-
-def normalize_key(key):
-    """ Replaces underscores with hyphens
-
-    Parameters
-    ----------
-    key : string
-        Key to assign.
-    """
-    return key.replace('_', '-')
 
 
 class set(object):
