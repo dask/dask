@@ -3320,3 +3320,11 @@ def test_partitions_indexer():
     assert ddf.x.partitions[:3].npartitions == 3
 
     assert ddf.x.partitions[::2].compute().tolist() == [0, 1, 4, 5, 8, 9]
+
+
+def test_setitem():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4]})
+    ddf = dd.from_pandas(df.copy(), 2)
+    df[df.columns] = 1
+    ddf[ddf.columns] = 1
+    assert_eq(df, ddf)

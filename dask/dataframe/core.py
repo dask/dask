@@ -2490,9 +2490,13 @@ class DataFrame(_Frame):
         raise NotImplementedError(key)
 
     def __setitem__(self, key, value):
-        if isinstance(key, (tuple, list)):
+        if isinstance(key, (tuple, list)) and isinstance(value, DataFrame):
             df = self.assign(**{k: value[c]
                                 for k, c in zip(key, value.columns)})
+
+        elif isinstance(key, pd.Index) and not isinstance(value, DataFrame):
+            key = list(key)
+            df = self.assign(**{k: value for k in key})
         else:
             df = self.assign(**{key: value})
 
