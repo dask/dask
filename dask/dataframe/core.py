@@ -2496,8 +2496,7 @@ class DataFrame(_Frame):
 
         elif isinstance(key, pd.Index) and not isinstance(value, DataFrame):
             key = list(key)
-            df = self.assign(**{k: value
-                                for k in key})
+            df = self.assign(**{k: value for k in key})
         else:
             df = self.assign(**{key: value})
 

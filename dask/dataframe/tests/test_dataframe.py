@@ -3324,7 +3324,7 @@ def test_partitions_indexer():
 
 def test_setitem():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4]})
-    ddf = dd.from_pandas(df, 2)
+    ddf = dd.from_pandas(df.copy(), 2)
     df[df.columns] = 1
     ddf[ddf.columns] = 1
     assert_eq(df, ddf)
