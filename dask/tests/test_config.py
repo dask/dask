@@ -300,9 +300,14 @@ def test_expand_environment_variables(inp, out):
         del os.environ['FOO']
 
 
-@pytest.mark.parametrize('key', ['custom_key', 'custom-key'])
-def test_normalize_key(key):
-    assert normalize_key(key) == 'custom-key'
+@pytest.mark.parametrize('inp,out', [
+    ('custom_key', 'custom-key'),
+    ('custom-key', 'custom-key'),
+    (1, 1),
+    (2.3, 2.3)
+])
+def test_normalize_key(inp, out):
+    assert normalize_key(inp) == out
 
 
 def test_normalize_nested_keys():

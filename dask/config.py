@@ -9,7 +9,7 @@ try:
 except ImportError:
     yaml = None
 
-from .compatibility import makedirs, builtins, Mapping
+from .compatibility import makedirs, builtins, Mapping, string_types
 
 
 no_default = '__no_default__'
@@ -103,14 +103,16 @@ def merge(*dicts):
 
 
 def normalize_key(key):
-    """ Replaces underscores with hyphens
+    """ Replaces underscores with hyphens in string keys
 
     Parameters
     ----------
-    key : string
+    key : string, int, or float
         Key to assign.
     """
-    return key.replace('_', '-')
+    if isinstance(key, string_types):
+        key = key.replace('_', '-')
+    return key
 
 
 def normalize_nested_keys(config):
