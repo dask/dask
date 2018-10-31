@@ -441,6 +441,15 @@ def test_boolean_numpy_array_slicing():
     assert_eq(da.asarray([0])[ind], np.arange(1)[ind])
 
 
+def test_boolean_slicing_nan_chunks():
+    dx1 = da.from_array(np.arange(20), chunks=4)
+    dx2 = da.from_array(np.arange(10, 30), chunks=4)
+    dx3 = dx1[dx2 > 5]
+    with pytest.raises(NotImplementedError,
+                       message='unknown chunks with a dask.array of bools'):
+        dx3[dx2 > 10]
+
+
 def test_empty_list():
     x = np.ones((5, 5, 5), dtype='i4')
     dx = da.from_array(x, chunks=2)

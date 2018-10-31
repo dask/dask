@@ -3092,7 +3092,7 @@ def test_index_array_with_array_1d():
 
     dy = da.ones(11, chunks=(3,))
 
-    with pytest.raises(ValueError):
+    with pytest.raises(NotImplementedError):
         dx[dy > 5]
 
 

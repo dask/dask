@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-from itertools import product
+from itertools import chain, product
 import math
 from numbers import Integral, Number
 from operator import getitem, itemgetter
@@ -962,6 +962,34 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
     return y
 
 
+def _flat_chunks(c):
+    """
+    Helper function to retrieve all chunks attributes from dask arrays and
+    return them as a flat iterable of chunk sizes from the input dask arrays.
+
+    Parameters
+    ----------
+    c: Either a NumPy array, a dask array or an iterable, from which to
+       retrieve all dask array chunksizes
+
+    Returns
+    -------
+    Chunk sizes from all input dask arrays, as a flat list.
+
+    """
+    if is_dask_collection(c):
+        arrays = (c,)
+    else:
+        try:
+            arrays = filter(lambda x: hasattr(x, 'chunks'), c)
+        except TypeError:
+            arrays = filter(lambda x: hasattr(x, 'chunks'), (c,))
+    all_chunks = []
+    for array in arrays:
+        all_chunks.extend(array.chunks)
+    return list(chain.from_iterable(all_chunks))
+
+
 def slice_with_bool_dask_array(x, index):
     """ Slice x with one or more dask arrays of bools
 
@@ -983,6 +1011,16 @@ def slice_with_bool_dask_array(x, index):
     Note: The sliced x will have nan chunks on the sliced axes.
     """
     from .core import Array, atop, elemwise
+
+    x_chunks = _flat_chunks(x)
+    nan_in_x_chunks = np.isnan(x_chunks).any()
+    index_chunks = _flat_chunks(index)
+    nan_in_index_chunks = np.isnan(index_chunks).any()
+    failure_mode = nan_in_x_chunks and not nan_in_index_chunks
+
+    if failure_mode:
+        raise NotImplementedError("Slicing an array with unknown chunks with "
+                                  "a dask.array of bools is not supported")
 
     out_index = [slice(None)
                  if isinstance(ind, Array) and ind.dtype == bool
