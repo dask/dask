@@ -153,8 +153,8 @@ to break up a computation.
        for filename in filenames:
            data = load(filename)
            data = process(data)
-           result = save(data)
-
+           results.append(save(data))
+       
        return results
 
    dask.compute(f(filenames))  # this is only a single task
@@ -180,7 +180,7 @@ to break up a computation.
        for filename in filenames:
            data = load(filename)
            data = process(data)
-           result = save(data)
+           results.append(save(data))
 
        return results
 
@@ -221,8 +221,7 @@ of the dask collections to help you.
    def batch(seq):
        sub_results = []
        for x in seq:
-           result = f(x)
-           sub_results.append(result)
+           sub_results.append(f(x))
        return sub_results
 
    batches = []
