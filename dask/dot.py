@@ -6,7 +6,7 @@ from functools import partial
 
 from .compatibility import apply
 from .core import istask, get_dependencies, ishashable
-from .utils import funcname, import_required
+from .utils import funcname, import_required, key_split
 
 
 graphviz = import_required("graphviz", "Drawing dask graphs requires the "
@@ -119,14 +119,13 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None,
                          edge_attr=edge_attr)
 
     seen = set()
-    cache = {}
 
     for k, v in dsk.items():
         k_name = name(k)
         if k_name not in seen:
             seen.add(k_name)
             attrs = data_attributes.get(k, {})
-            attrs.setdefault('label', label(k, cache=cache))
+            attrs.setdefault('label', '')
             attrs.setdefault('shape', 'box')
             g.node(k_name, **attrs)
 
@@ -135,7 +134,7 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None,
             if func_name not in seen:
                 seen.add(func_name)
                 attrs = function_attributes.get(k, {})
-                attrs.setdefault('label', task_label(v))
+                attrs.setdefault('label', key_split(k))
                 attrs.setdefault('shape', 'circle')
                 g.node(func_name, **attrs)
             g.edge(func_name, k_name)
@@ -145,7 +144,7 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None,
                 if dep_name not in seen:
                     seen.add(dep_name)
                     attrs = data_attributes.get(dep, {})
-                    attrs.setdefault('label', label(dep, cache=cache))
+                    attrs.setdefault('label', '')# label(dep, cache=cache))
                     attrs.setdefault('shape', 'box')
                     g.node(dep_name, **attrs)
                 g.edge(dep_name, func_name)
