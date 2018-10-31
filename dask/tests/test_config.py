@@ -6,7 +6,8 @@ import pytest
 import dask.config
 from dask.config import (update, merge, collect, collect_yaml, collect_env,
                          get, ensure_file, set, config, rename,
-                         update_defaults, refresh, expand_environment_variables)
+                         update_defaults, refresh, expand_environment_variables,
+                         normalize_key, normalize_nested_keys)
 from dask.utils import tmpfile
 
 
@@ -297,3 +298,42 @@ def test_expand_environment_variables(inp, out):
         assert expand_environment_variables(inp) == out
     finally:
         del os.environ['FOO']
+
+
+@pytest.mark.parametrize('inp,out', [
+    ('custom_key', 'custom-key'),
+    ('custom-key', 'custom-key'),
+    (1, 1),
+    (2.3, 2.3)
+])
+def test_normalize_key(inp, out):
+    assert normalize_key(inp) == out
+
+
+def test_normalize_nested_keys():
+    config = {'key_1': 1,
+              'key_2': {'nested_key_1': 2},
+              'key_3': 3
+              }
+    expected = {'key-1': 1,
+                'key-2': {'nested-key-1': 2},
+                'key-3': 3
+                }
+    assert normalize_nested_keys(config) == expected
+
+
+def test_env_var_normalization(monkeypatch):
+    value = 3
+    monkeypatch.setenv('DASK_A_B', value)
+    d = {}
+    dask.config.refresh(config=d)
+    assert get('a_b', config=d) == value
+    assert get('a-b', config=d) == value
+
+
+@pytest.mark.parametrize('key', ['custom_key', 'custom-key'])
+def test_get_set_roundtrip(key):
+    value = 123
+    with dask.config.set({key: value}):
+        assert dask.config.get('custom_key') == value
+        assert dask.config.get('custom-key') == value

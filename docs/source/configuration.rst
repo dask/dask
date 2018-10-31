@@ -55,6 +55,10 @@ the ``config`` dictionary or the ``get`` function:
 You may wish to inspect the ``dask.config.config`` dictionary to get a sense
 for what configuration is being used by your current system.
 
+Note that the ``get`` function treats underscores and hyphens identically.
+For example, ``dask.config.get('num_workers')`` is equivalent to
+``dask.config.get('num-workers')``.
+
 
 Specify Configuration
 ---------------------
@@ -177,6 +181,10 @@ This function can also be used as a context manager for consistent cleanup.
 
    with dask.config.set({'scheduler.work-stealing': True}):
        ...
+
+Note that the ``set`` function treats underscores and hyphens identically.
+For example, ``dask.config.set({'scheduler.work-stealing': True})`` is
+equivalent to ``dask.config.set({'scheduler.work_stealing': True})``.
 
 
 Updating Configuration
