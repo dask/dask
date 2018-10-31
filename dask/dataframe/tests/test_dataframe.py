@@ -3330,3 +3330,11 @@ def test_mod_eq():
     assert_eq(df.a, ddf.a)
     assert_eq(df.a + 2, ddf.a + 2)
     assert_eq(df.a + 2 == 0, ddf.a + 2 == 0)
+
+
+def test_setitem():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4]})
+    ddf = dd.from_pandas(df.copy(), 2)
+    df[df.columns] = 1
+    ddf[ddf.columns] = 1
+    assert_eq(df, ddf)
