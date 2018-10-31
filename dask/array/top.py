@@ -82,7 +82,6 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     new_keys = {n for c in dependencies for n in c.__dask_layers__()}
     if kwargs:
         # replace keys in kwargs with _0 tokens
-        # new_keys = list(core.get_dependencies(dsk_kwargs, task=kwargs))
         new_tokens = tuple(atop_token(i) for i in range(len(inputs), len(inputs) + len(new_keys)))
         sub = dict(zip(new_keys, new_tokens))
         inputs = inputs + tuple(new_keys)

@@ -242,12 +242,6 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __init__(self, dsk, name, meta, divisions):
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
-        if any(isinstance(name, int) for name in dsk.layers):
-            import pdb
-            pdb.set_trace()
-        if any(isinstance(layer, HighLevelGraph) for layer in dsk.layers.values()):
-            import pdb
-            pdb.set_trace()
         self.dask = dsk
         self._name = name
         meta = make_meta(meta)
