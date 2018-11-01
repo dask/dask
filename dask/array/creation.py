@@ -757,6 +757,30 @@ def np_pad(array, pad_width, mode, extra_arg=None):
         return np.pad(array, pad_width, mode)
 
 
+def linear_ramp_chunk(start, stop, num, dim, step):
+    """
+    Helper function to find the linear ramp for a chunk.
+    """
+
+    num1 = num + 1
+
+    shape = list(start.shape)
+    shape[dim] = num
+    shape = tuple(shape)
+
+    dtype = np.dtype(start.dtype)
+
+    result = np.empty(shape, dtype=dtype)
+    for i in np.ndindex(start.shape):
+        j = list(i)
+        j[dim] = slice(None)
+        j = tuple(j)
+
+        result[j] = np.linspace(start[i], stop, num1, dtype=dtype)[1:][::step]
+
+    return result
+
+
 def pad_edge(array, pad_width, mode, *args):
     """
     Helper function for padding edges.
