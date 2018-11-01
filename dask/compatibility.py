@@ -307,7 +307,7 @@ def getargspec(func):
     """Version of inspect.getargspec that works with partial and warps."""
     if isinstance(func, functools.partial):
         return getargspec(func.func)
- 
+
     func = getattr(func, '__wrapped__', func)
     if isinstance(func, type):
         return _getargspec(func.__init__)
@@ -337,3 +337,17 @@ def bind_method(cls, name, func):
         setattr(cls, name, types.MethodType(func, None, cls))
     else:
         setattr(cls, name, func)
+
+
+try:
+    from dataclasses import is_dataclass, fields as dataclass_fields, make_dataclass
+
+except ImportError:
+    def is_dataclass(x):
+        return False
+
+    def dataclass_fields(x):
+        return []
+
+    def make_dataclass(*args, **kwargs):
+        raise NotImplemented()

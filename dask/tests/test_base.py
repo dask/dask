@@ -18,7 +18,7 @@ from dask.base import (compute, tokenize, normalize_token, normalize_function,
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
-from dask.compatibility import long, unicode, PY2
+from dask.compatibility import long, unicode, PY2, make_dataclass
 from dask.diagnostics import Profiler
 
 
@@ -346,13 +346,23 @@ def test_is_dask_collection():
     assert not is_dask_collection(DummyCollection)
 
 
+try:
+    import dataclasses
+
+    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
+    ADataClass = make_dataclass('ADataClass', [('a', int)])
+
+except ImportError:
+    dataclasses = None
+
+
 def test_unpack_collections():
     a = delayed(1) + 5
     b = a + 1
     c = a + 2
 
     def build(a, b, c, iterator):
-        return (a, b,               # Top-level collections
+        t = (a, b,                  # Top-level collections
                 {'a': a,            # dict
                  a: b,              # collections as keys
                  'b': [1, 2, [b]],  # list
@@ -360,6 +370,11 @@ def test_unpack_collections():
                  'd': (c, 2),       # tuple
                  'e': {a, 2, 3}},   # set
                 iterator)           # Iterator
+
+        if dataclasses is not None:
+            t[2]['f'] = ADataClass(a=a)
+
+        return t
 
     args = build(a, b, c, (i for i in [a, b, c]))
 

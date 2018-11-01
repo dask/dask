@@ -13,7 +13,8 @@ import uuid
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
-from .compatibility import long, unicode, Iterator
+from .compatibility import apply, long, unicode, Iterator, is_dataclass, \
+    dataclass_fields
 from .context import thread_state
 from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex
@@ -264,6 +265,10 @@ def unpack_collections(*args, **kwargs):
             elif typ is dict:
                 tsk = (dict, [[_unpack(k), _unpack(v)]
                               for k, v in expr.items()])
+            elif is_dataclass(expr):
+                tsk = (apply, typ, (), (dict,
+                       [[f.name, _unpack(getattr(expr, f.name))] for f in
+                        dataclass_fields(expr)]))
             else:
                 return expr
 
