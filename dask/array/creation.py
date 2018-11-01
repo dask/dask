@@ -721,6 +721,25 @@ def expand_pad_value(array, pad_value):
     return pad_value
 
 
+def get_pad_shapes_chunks(array, pad_width, axes):
+    """
+    Helper function for finding shapes and chunks of end pads.
+    """
+
+    pad_shapes = [list(array.shape), list(array.shape)]
+    pad_chunks = [list(array.chunks), list(array.chunks)]
+
+    for d in axes:
+        for i in range(2):
+            pad_shapes[i][d] = pad_width[d][i]
+            pad_chunks[i][d] = (pad_width[d][i],)
+
+    pad_shapes = [tuple(s) for s in pad_shapes]
+    pad_chunks = [tuple(c) for c in pad_chunks]
+
+    return pad_shapes, pad_chunks
+
+
 def np_pad(array, pad_width, mode, extra_arg=None):
     if mode in ["maximum", "mean", "median", "minimum"]:
         extra_arg = extra_arg or None
