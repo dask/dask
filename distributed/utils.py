@@ -1361,28 +1361,6 @@ class DequeHandler(logging.Handler):
             inst.clear()
 
 
-def fix_asyncio_event_loop_policy(asyncio):
-    """
-    Work around https://github.com/tornadoweb/tornado/issues/2183
-    """
-    class PatchedDefaultEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
-
-        def get_event_loop(self):
-            """Get the event loop.
-
-            This may be None or an instance of EventLoop.
-            """
-            try:
-                return super().get_event_loop()
-            except RuntimeError:
-                # "There is no current event loop in thread"
-                loop = self.new_event_loop()
-                self.set_event_loop(loop)
-                return loop
-
-    asyncio.set_event_loop_policy(PatchedDefaultEventLoopPolicy())
-
-
 def reset_logger_locks():
     """ Python 2's logger's locks don't survive a fork event
 
@@ -1395,7 +1373,9 @@ def reset_logger_locks():
 
 # Only bother if asyncio has been loaded by Tornado
 if 'asyncio' in sys.modules:
-    fix_asyncio_event_loop_policy(sys.modules['asyncio'])
+    import asyncio
+    import tornado.platform.asyncio
+    asyncio.set_event_loop_policy(tornado.platform.asyncio.AnyThreadEventLoopPolicy())
 
 
 def has_keyword(func, keyword):
