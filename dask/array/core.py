@@ -2801,6 +2801,8 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     --------
     stack
     """
+    seq = [a for a in seq if a.size]
+
     n = len(seq)
     ndim = len(seq[0].shape)
 
