@@ -356,6 +356,13 @@ def test_concatenate():
     assert z.dask == a.dask
     assert z is a
 
+    z = concatenate([a, b[:0]], axis=0)
+
+    assert z.shape == a.shape
+    assert z.chunks == a.chunks
+    assert z.dask == a.dask
+    assert z is a
+
     assert (concatenate([a, b, c], axis=-1).chunks ==
             concatenate([a, b, c], axis=1).chunks)
 
