@@ -16,7 +16,7 @@ from numbers import Integral
 try:
     from numpy import broadcast_to
 except ImportError:  # pragma: no cover
-    broadcast_to = npcompat.broadcast_to
+    from ..core import broadcast_to
 
 try:
     from numpy import take_along_axis
