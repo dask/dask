@@ -14,11 +14,6 @@ from ..utils import ignoring
 from numbers import Integral
 
 try:
-    from numpy import broadcast_to
-except ImportError:  # pragma: no cover
-    from ..core import broadcast_to
-
-try:
     from numpy import take_along_axis
 except ImportError:  # pragma: no cover
     take_along_axis = npcompat.take_along_axis
@@ -231,7 +226,7 @@ def argtopk(a_plus_idx, k, axis, keepdims):
     if isinstance(a_plus_idx, list):
         a_plus_idx = list(flatten(a_plus_idx))
         a = np.concatenate([ai for ai, _ in a_plus_idx], axis)
-        idx = np.concatenate([broadcast_to(idxi, ai.shape)
+        idx = np.concatenate([np.broadcast_to(idxi, ai.shape)
                               for ai, idxi in a_plus_idx], axis)
     else:
         a, idx = a_plus_idx
