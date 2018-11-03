@@ -870,7 +870,7 @@ def test_broadcast_to():
     a = from_array(x, chunks=(3, 1, 3))
 
     for shape in [a.shape, (5, 0, 6), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
-        xb = chunk.broadcast_to(x, shape)
+        xb = np.broadcast_to(x, shape)
         ab = broadcast_to(a, shape)
 
         assert_eq(xb, ab)
@@ -910,7 +910,7 @@ def test_broadcast_to_chunks():
             ((5, 3, 6), (3, -1, 3), ((3, 2), (3,), (3, 3))),
             ((5, 3, 6), (3, 1, 3), ((3, 2), (1, 1, 1,), (3, 3))),
             ((2, 5, 3, 6), (1, 3, 1, 3), ((1, 1), (3, 2), (1, 1, 1,), (3, 3)))]:
-        xb = chunk.broadcast_to(x, shape)
+        xb = np.broadcast_to(x, shape)
         ab = broadcast_to(a, shape, chunks=chunks)
         assert_eq(xb, ab)
         assert ab.chunks == expected_chunks
