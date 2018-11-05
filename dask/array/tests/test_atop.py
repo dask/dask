@@ -1,3 +1,4 @@
+import collections
 from operator import add
 
 import pytest
@@ -361,3 +362,21 @@ def test_svd():
     u, s, v = da.linalg.svd(y)
     z = y + u
     assert_eq(z, z)
+
+
+@pytest.mark.parametrize('tup', [
+    (1, 2),
+    collections.namedtuple('foo', ['a', 'b'])(1, 2),
+])
+def test_namedtuple(tup):
+    A = da.random.random((20, 20), chunks=(10, 10))
+
+    def f(data, x):
+        return data
+
+    B = da.atop(f, ("d1", "d2"),
+                A, ("d1", "d2"),
+                x=tup,
+                dtype=A.dtype)
+
+    assert_eq(A, B)

@@ -18,7 +18,7 @@ def subs(task, substitution):
     """
     if isinstance(task, dict):
         return {k: subs(v, substitution) for k, v in task.items()}
-    if isinstance(task, (tuple, list, set)):
+    if type(task) in (tuple, list, set):
         return type(task)([subs(x, substitution) for x in task])
     try:
         return substitution[task]
