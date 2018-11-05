@@ -181,7 +181,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     if isinstance(paths, fastparquet.api.ParquetFile):
         pf = paths
     elif len(paths) > 1:
-        if infer_divisions is not True:
+        if infer_divisions is not False:
             # this scans all the files, allowing index/divisions and filtering
             pf = fastparquet.ParquetFile(paths, open_with=fs.open, sep=fs.sep)
         else:
