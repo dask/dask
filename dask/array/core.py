@@ -3354,7 +3354,7 @@ def broadcast_to(x, shape, chunks=None):
                           for bd, i in zip(x.chunks, new_index[ndim_new:]))
         old_key = (x.name,) + old_index
         new_key = (name,) + new_index
-        dsk[new_key] = (chunk.broadcast_to, old_key, quote(chunk_shape))
+        dsk[new_key] = (np.broadcast_to, old_key, quote(chunk_shape))
 
     return Array(sharedict.merge((name, dsk), x.dask, dependencies={name: {x.name}}),
                  name, chunks, dtype=x.dtype)
