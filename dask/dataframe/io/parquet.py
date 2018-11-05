@@ -178,15 +178,15 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
                       categories=None, index=None, infer_divisions=None):
     import fastparquet
 
-    if isinstance(paths,fastparquet.api.ParquetFile):
+    if isinstance(paths, fastparquet.api.ParquetFile):
         pf = paths
     elif len(paths) > 1:
-        if infer_divisions:
+        if infer_divisions is not True:
             # this scans all the files, allowing index/divisions and filtering
             pf = fastparquet.ParquetFile(paths, open_with=fs.open, sep=fs.sep)
         else:
-            return _read_fp_multifile(fs, fs_token, paths, columns=None,
-                                      categories=None, index=None)
+            return _read_fp_multifile(fs, fs_token, paths, columns=columns,
+                                      categories=categories, index=index)
     else:
         try:
             pf = fastparquet.ParquetFile(paths[0] + fs.sep + '_metadata',
