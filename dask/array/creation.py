@@ -721,21 +721,47 @@ def expand_pad_value(array, pad_value):
     return pad_value
 
 
-def np_pad(array, pad_width, mode, extra_arg=None):
-    if mode in ["maximum", "mean", "median", "minimum"]:
-        extra_arg = extra_arg or None
-        return np.pad(array, pad_width, mode, stat_length=extra_arg)
-    elif mode == "constant":
-        extra_arg = extra_arg or 0
-        return np.pad(array, pad_width, mode, constant_values=extra_arg)
-    elif mode == "linear_ramp":
-        extra_arg = extra_arg or 0
-        return np.pad(array, pad_width, mode, end_values=extra_arg)
-    elif mode in ["reflect", "symmetric"]:
-        extra_arg = extra_arg or "even"
-        return np.pad(array, pad_width, mode, reflect_type=extra_arg)
-    else:
-        return np.pad(array, pad_width, mode)
+def get_pad_shapes_chunks(array, pad_width, axes):
+    """
+    Helper function for finding shapes and chunks of end pads.
+    """
+
+    pad_shapes = [list(array.shape), list(array.shape)]
+    pad_chunks = [list(array.chunks), list(array.chunks)]
+
+    for d in axes:
+        for i in range(2):
+            pad_shapes[i][d] = pad_width[d][i]
+            pad_chunks[i][d] = (pad_width[d][i],)
+
+    pad_shapes = [tuple(s) for s in pad_shapes]
+    pad_chunks = [tuple(c) for c in pad_chunks]
+
+    return pad_shapes, pad_chunks
+
+
+def linear_ramp_chunk(start, stop, num, dim, step):
+    """
+    Helper function to find the linear ramp for a chunk.
+    """
+
+    num1 = num + 1
+
+    shape = list(start.shape)
+    shape[dim] = num
+    shape = tuple(shape)
+
+    dtype = np.dtype(start.dtype)
+
+    result = np.empty(shape, dtype=dtype)
+    for i in np.ndindex(start.shape):
+        j = list(i)
+        j[dim] = slice(None)
+        j = tuple(j)
+
+        result[j] = np.linspace(start[i], stop, num1, dtype=dtype)[1:][::step]
+
+    return result
 
 
 def pad_edge(array, pad_width, mode, *args):
@@ -745,48 +771,52 @@ def pad_edge(array, pad_width, mode, *args):
     Handles the cases where the only the values on the edge are needed.
     """
 
-    token = tokenize(array, pad_width, mode, args)
-    name = 'pad-' + token
-    numblocks = array.numblocks
+    args = tuple(expand_pad_value(array, e) for e in args)
 
-    chunks = list()
-    for d, c in enumerate(array.chunks):
-        c = list(c)
-        c[0] += pad_width[d][0]
-        c[-1] += pad_width[d][-1]
-        c = tuple(c)
-        chunks.append(c)
-    chunks = tuple(chunks)
+    result = array
+    for d in range(array.ndim):
+        pad_shapes, pad_chunks = get_pad_shapes_chunks(result, pad_width, (d,))
+        pad_arrays = [result, result]
 
-    dsk = {}
-    for idx in product(*(range(n) for n in numblocks)):
-        pad_chunk_width = []
-        for d, i in enumerate(idx):
-            ith_pad_chunk_width = [0, 0]
-            if i == 0:
-                ith_pad_chunk_width[0] = pad_width[d][0]
-            if i == numblocks[d] - 1:
-                ith_pad_chunk_width[1] = pad_width[d][1]
+        if mode is "constant":
+            constant_values = args[0][d]
+            constant_values = [
+                asarray(c).astype(result.dtype) for c in constant_values
+            ]
 
-            ith_pad_chunk_width = tuple(ith_pad_chunk_width)
-            pad_chunk_width.append(ith_pad_chunk_width)
+            pad_arrays = [
+                broadcast_to(v, s, c)
+                for v, s, c in zip(constant_values, pad_shapes, pad_chunks)
+            ]
+        elif mode in ["edge", "linear_ramp"]:
+            pad_slices = [
+                result.ndim * [slice(None)], result.ndim * [slice(None)]
+            ]
+            pad_slices[0][d] = slice(None, 1, None)
+            pad_slices[1][d] = slice(-1, None, None)
+            pad_slices = [tuple(sl) for sl in pad_slices]
 
-        pad_chunk_width = tuple(pad_chunk_width)
+            pad_arrays = [result[sl] for sl in pad_slices]
 
-        array_chunk_key = (array.name,) + idx
-        result_chunk_key = (name,) + idx
+            if mode is "edge":
+                pad_arrays = [
+                    broadcast_to(a, s, c)
+                    for a, s, c in zip(pad_arrays, pad_shapes, pad_chunks)
+                ]
+            elif mode is "linear_ramp":
+                end_values = args[0][d]
 
-        if any(map(any, pad_chunk_width)):
-            dsk[result_chunk_key] = (
-                np_pad, array_chunk_key, pad_chunk_width, mode
-            )
-            dsk[result_chunk_key] += args
-        else:
-            dsk[result_chunk_key] = array_chunk_key
+                pad_arrays = [
+                    a.map_blocks(
+                        linear_ramp_chunk, ev, pw,
+                        chunks=c, dtype=result.dtype, dim=d, step=(2 * i - 1)
+                    )
+                    for i, (a, ev, pw, c) in enumerate(
+                        zip(pad_arrays, end_values, pad_width[d], pad_chunks)
+                    )
+                ]
 
-    dsk = sharedict.merge((name, dsk), array.dask, dependencies={name: {array.name}})
-
-    result = Array(dsk, name, chunks=chunks, dtype=array.dtype)
+        result = concatenate([pad_arrays[0], result, pad_arrays[1]], axis=d)
 
     return result
 
