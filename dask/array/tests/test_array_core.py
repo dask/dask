@@ -24,8 +24,6 @@ from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir, key_split
 from dask.utils_test import inc, dec
 
-from dask.array import chunk
-
 from dask.array.core import (getem, getter, top, dotmany, concatenate3,
                              broadcast_dimensions, Array, stack, concatenate,
                              from_array, broadcast_shapes,
