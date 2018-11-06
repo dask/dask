@@ -962,34 +962,6 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
     return y
 
 
-def _flat_chunks(c):
-    """
-    Helper function to retrieve all chunks attributes from dask arrays and
-    return them as a flat iterable of chunk sizes from the input dask arrays.
-
-    Parameters
-    ----------
-    c: Either a NumPy array, a dask array or an iterable, from which to
-       retrieve all dask array chunksizes
-
-    Returns
-    -------
-    Chunk sizes from all input dask arrays, as a flat list.
-
-    """
-    if is_dask_collection(c):
-        arrays = (c,)
-    else:
-        try:
-            arrays = filter(lambda x: hasattr(x, 'chunks'), c)
-        except TypeError:
-            arrays = filter(lambda x: hasattr(x, 'chunks'), (c,))
-    all_chunks = []
-    for array in arrays:
-        all_chunks.extend(array.chunks)
-    return list(chain.from_iterable(all_chunks))
-
-
 def slice_with_bool_dask_array(x, index):
     """ Slice x with one or more dask arrays of bools
 

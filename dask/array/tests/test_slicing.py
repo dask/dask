@@ -8,7 +8,7 @@ np = pytest.importorskip('numpy')
 
 import dask
 import dask.array as da
-from dask.array.slicing import (_flat_chunks, _sanitize_index_element, _slice_1d,
+from dask.array.slicing import (_sanitize_index_element, _slice_1d,
                                 new_blockdim, sanitize_index, slice_array,
                                 take, normalize_index, slicing_plan)
 from dask.array.utils import assert_eq, same_keys
@@ -623,23 +623,6 @@ def test_index_with_int_dask_array_nocompute():
     result = x[idx]
     with pytest.raises(NotImplementedError):
         result.compute()
-
-
-def test_flat_chunks():
-    x = np.arange(10)
-    dx = da.from_array(x, chunks=(5,))
-    dxn = da.from_array(x, chunks=-1)
-    dxn._chunks = ((np.nan, np.nan),)
-    s = slice(None)
-
-    # Check single items.
-    assert _flat_chunks(x) == []
-    assert _flat_chunks(dx) == [5, 5]
-    assert _flat_chunks(s) == []
-
-    # Check combinations.
-    assert _flat_chunks([x, dx, s]) == [5, 5]
-    assert _flat_chunks([dx, dxn]) == [5, 5, np.nan, np.nan]
 
 
 def test_index_with_bool_dask_array():
