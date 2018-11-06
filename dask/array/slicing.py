@@ -1012,13 +1012,10 @@ def slice_with_bool_dask_array(x, index):
     """
     from .core import Array, atop, elemwise
 
-    x_chunks = _flat_chunks(x)
-    nan_in_x_chunks = np.isnan(x_chunks).any()
-    index_chunks = _flat_chunks(index)
-    nan_in_index_chunks = np.isnan(index_chunks).any()
-    failure_mode = nan_in_x_chunks and not nan_in_index_chunks
+    nan_shape_dims = [i for i, v in enumerate(x.shape) if np.isnan(v)]
+    dims_to_index = [i for i, idx in enumerate(index) if not isinstance(idx, slice)]
 
-    if failure_mode:
+    if nan_shape_dims == dims_to_index:
         raise NotImplementedError("Slicing an array with unknown chunks with "
                                   "a dask.array of bools is not supported")
 
