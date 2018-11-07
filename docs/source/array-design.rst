@@ -116,7 +116,7 @@ and a chunks tuple::
 
     chunks = ((5, 5, 5, 5), (8, 8, 8))
 
-Then, using this elements, one can construct an array::
+Then, using these elements, one can construct an array::
 
     x = da.Array(dsk, name, chunks)
 
