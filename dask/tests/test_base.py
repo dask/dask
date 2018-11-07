@@ -18,7 +18,7 @@ from dask.base import (compute, tokenize, normalize_token, normalize_function,
 from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
-from dask.compatibility import long, unicode, PY2, make_dataclass
+from dask.compatibility import long, unicode, PY2
 from dask.diagnostics import Profiler
 
 
@@ -348,10 +348,8 @@ def test_is_dask_collection():
 
 try:
     import dataclasses
-
     # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
-    ADataClass = make_dataclass('ADataClass', [('a', int)])
-
+    ADataClass = dataclasses.make_dataclass('ADataClass', [('a', int)])
 except ImportError:
     dataclasses = None
 

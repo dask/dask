@@ -9,7 +9,7 @@ import pytest
 
 import dask
 from dask import compute
-from dask.compatibility import PY2, PY3, make_dataclass
+from dask.compatibility import PY2, PY3
 from dask.delayed import delayed, to_task_dask, Delayed
 from dask.utils_test import inc
 
@@ -95,10 +95,10 @@ def test_delayed():
 
 
 def test_delayed_with_dataclass():
-    pytest.importorskip("dataclasses")
+    dataclasses = pytest.importorskip("dataclasses")
 
     # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
-    ADataClass = make_dataclass('ADataClass', [('a', int)])
+    ADataClass = dataclasses.make_dataclass('ADataClass', [('a', int)])
 
     literal = dask.delayed(3)
     with_class = dask.delayed({"a": ADataClass(a=literal)})

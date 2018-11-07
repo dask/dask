@@ -340,7 +340,7 @@ def bind_method(cls, name, func):
 
 
 try:
-    from dataclasses import is_dataclass, fields as dataclass_fields, make_dataclass
+    from dataclasses import is_dataclass, fields as dataclass_fields
 
 except ImportError:
     def is_dataclass(x):
@@ -348,6 +348,3 @@ except ImportError:
 
     def dataclass_fields(x):
         return []
-
-    def make_dataclass(*args, **kwargs):
-        raise NotImplemented()
