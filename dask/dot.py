@@ -104,6 +104,25 @@ def label(x, cache=None):
     return s
 
 
+def box_label(key):
+    """ Label boxes in graph by chunk index
+
+    >>> box_label(('x', 1, 2, 3))
+    '(1, 2, 3)'
+    >>> box_label(('x', 123))
+    '123'
+    >>> box_label('x')
+    ''
+    """
+    if isinstance(key, tuple):
+        key = key[1:]
+        if len(key) == 1:
+            [key] = key
+        return str(key)
+    else:
+        return ""
+
+
 def to_graphviz(dsk, data_attributes=None, function_attributes=None,
                 rankdir='BT', graph_attr={}, node_attr=None, edge_attr=None, **kwargs):
     if data_attributes is None:
@@ -125,7 +144,7 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None,
         if k_name not in seen:
             seen.add(k_name)
             attrs = data_attributes.get(k, {})
-            attrs.setdefault('label', '')
+            attrs.setdefault('label', box_label(k))
             attrs.setdefault('shape', 'box')
             g.node(k_name, **attrs)
 
@@ -144,7 +163,7 @@ def to_graphviz(dsk, data_attributes=None, function_attributes=None,
                 if dep_name not in seen:
                     seen.add(dep_name)
                     attrs = data_attributes.get(dep, {})
-                    attrs.setdefault('label', '')# label(dep, cache=cache))
+                    attrs.setdefault('label', box_label(dep))
                     attrs.setdefault('shape', 'box')
                     g.node(dep_name, **attrs)
                 g.edge(dep_name, func_name)
