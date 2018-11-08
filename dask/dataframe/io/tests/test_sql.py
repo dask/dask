@@ -206,3 +206,12 @@ def test_select_from_select(db):
                     ).select_from(sql.table('test'))
     out = read_sql_table(s1, db, npartitions=2, index_col='number')
     assert_eq(out, df[['name']])
+
+
+def test_extra_connection_engine_keywords(db):
+    # single chunk
+    data = read_sql_table('test', db, npartitions=2, index_col='number', engine_kwargs={'echo': True}
+                          ).compute()
+    assert (data.name == df.name).all()
+    assert data.index.name == 'number'
+    assert_eq(data, df)
