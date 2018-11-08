@@ -208,10 +208,16 @@ def test_select_from_select(db):
     assert_eq(out, df[['name']])
 
 
-def test_extra_connection_engine_keywords(db):
-    # single chunk
+def test_extra_connection_engine_keywords(capsys, db):
+    data = read_sql_table('test', db, npartitions=2, index_col='number', engine_kwargs={'echo': False}
+                          ).compute()
+    # no captured message from the stdout with the echo=False parameter (this is the default)
+    out, err = capsys.readouterr()
+    assert "SELECT" not in out
+    assert_eq(data, df)
+    # with the echo=True sqlalchemy parameter, you should get all SQL queries in the stdout
     data = read_sql_table('test', db, npartitions=2, index_col='number', engine_kwargs={'echo': True}
                           ).compute()
-    assert (data.name == df.name).all()
-    assert data.index.name == 'number'
+    out, err = capsys.readouterr()
+    assert "SELECT" in out
     assert_eq(data, df)
