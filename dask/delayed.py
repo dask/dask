@@ -12,7 +12,8 @@ except ImportError:
 from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
 from .base import tokenize as _tokenize
-from .compatibility import apply, Iterator
+from .compatibility import apply, Iterator, is_dataclass, dataclass_fields
+
 from .core import quote
 from .context import globalmethod
 from .optimization import cull
@@ -90,6 +91,12 @@ def to_task_dask(expr):
     if typ is dict:
         args, dsk = to_task_dask([[k, v] for k, v in expr.items()])
         return (dict, args), dsk
+
+    if is_dataclass(expr):
+        args, dsk = to_task_dask([[f.name, getattr(expr, f.name)] for f in
+                                  dataclass_fields(expr)])
+
+        return (apply, typ, (), (dict, args)), dsk
 
     if typ is slice:
         args, dsk = to_task_dask([expr.start, expr.stop, expr.step])

@@ -388,3 +388,28 @@ def test_validate_top_inputs():
 
     assert 'repeated' in str(info.value).lower()
     assert 'i' in str(info.value)
+
+
+def test_gh_4176():
+    def foo(A):
+        return A[None, ...]
+
+    A = da.ones(shape=(10, 20, 4), chunks=(2, 5, 4))
+
+    name = 'D'
+
+    dsk = da.core.top(
+        foo, name, ("nsrc", "ntime", "nbl", "npol"),
+        A.name, ("ntime", "nbl", "npol"),
+        new_axes={"nsrc": 1},
+        numblocks={a.name: a.numblocks for a in (A,)}
+    )
+
+    array_dsk = dask.sharedict.ShareDict()
+    array_dsk.update(dsk)
+    array_dsk.update(A.__dask_graph__())
+
+    chunks = ((1,),) + A.chunks
+
+    D = da.Array(array_dsk, name, chunks, dtype=A.dtype)
+    D.sum(axis=0).compute()

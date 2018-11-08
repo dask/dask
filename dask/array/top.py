@@ -601,7 +601,8 @@ def optimize_atop(full_graph, keys=()):
             deps = set(top_layers)
             while deps:  # we gather as many sub-layers as we can
                 dep = deps.pop()
-                if (isinstance(layers[dep], TOP) and
+                if (dep in layers and
+                        isinstance(layers[dep], TOP) and
                         not (dep != layer and dep in keep) and  # output layer
                         layers[dep].concatenate == layers[layer].concatenate):  # punt on mixed concatenate
                     top_layers.add(dep)
