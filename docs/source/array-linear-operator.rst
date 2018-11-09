@@ -1,7 +1,7 @@
 LinearOperator
 ==============
 
-Dask arrays implement the SciPy LinearOperator_ interface and so can be used
+Dask Array implements the SciPy LinearOperator_ interface and it can be used
 with any SciPy algorithm depending on that interface.
 
 Example
