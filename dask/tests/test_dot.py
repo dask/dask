@@ -76,9 +76,7 @@ def test_to_graphviz():
     g = to_graphviz(dsk)
     labels = list(filter(None, map(get_label, g.body)))
     assert len(labels) == 10        # 10 nodes total
-    funcs = set(('add', 'sum', 'neg'))
-    assert set(labels).difference(dsk) == funcs
-    assert set(labels).difference(funcs) == set(dsk)
+    assert set(labels) == {'c', 'd', 'e', 'f', '""'}
     shapes = list(filter(None, map(get_shape, g.body)))
     assert set(shapes) == set(('box', 'circle'))
 
@@ -89,10 +87,8 @@ def test_to_graphviz_custom():
         data_attributes={'a': {'shape': 'square'}},
         function_attributes={'c': {'label': 'neg_c', 'shape': 'ellipse'}},
     )
-    labels = list(filter(None, map(get_label, g.body)))
-    funcs = set(('add', 'sum', 'neg', 'neg_c'))
-    assert set(labels).difference(dsk) == funcs
-    assert set(labels).difference(funcs) == set(dsk)
+    labels = set(filter(None, map(get_label, g.body)))
+    assert labels == {'neg_c', 'd', 'e', 'f', '""'}
     shapes = list(filter(None, map(get_shape, g.body)))
     assert set(shapes) == set(('box', 'circle', 'square', 'ellipse'))
 
