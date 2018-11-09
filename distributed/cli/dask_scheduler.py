@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import atexit
+import dask
 import logging
 import os
 import shutil
@@ -58,7 +59,7 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               "cluster is on a shared network file system.")
 @click.option('--local-directory', default='', type=str,
               help="Directory to place scheduler files")
-@click.option('--preload', type=str, multiple=True, is_eager=True,
+@click.option('--preload', type=str, multiple=True, is_eager=True, default='',
               help='Module that should be loaded by the scheduler process  '
                    'like "foo.bar" or "/path/to/foo.py".')
 @click.argument('preload_argv', nargs=-1,
@@ -125,6 +126,10 @@ def main(host, port, bokeh_port, show, _bokeh, bokeh_whitelist, bokeh_prefix,
                           scheduler_file=scheduler_file,
                           security=sec)
     scheduler.start(addr)
+    if not preload:
+        preload = dask.config.get('distributed.scheduler.preload')
+    if not preload_argv:
+        preload_argv = dask.config.get('distributed.scheduler.preload-argv')
     preload_modules(preload, parameter=scheduler, file_dir=local_directory, argv=preload_argv)
 
     logger.info('Local Directory: %26s', local_directory)

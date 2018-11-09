@@ -87,7 +87,7 @@ class WorkerBase(ServerNode):
                  services=None, service_ports=None, name=None,
                  reconnect=True, memory_limit='auto',
                  executor=None, resources=None, silence_logs=None,
-                 death_timeout=None, preload=(), preload_argv=[], security=None,
+                 death_timeout=None, preload=None, preload_argv=None, security=None,
                  contact_address=None, memory_monitor_interval='200ms',
                  extensions=None, metrics=None, **kwargs):
 
@@ -108,7 +108,11 @@ class WorkerBase(ServerNode):
         self.available_resources = (resources or {}).copy()
         self.death_timeout = death_timeout
         self.preload = preload
-        self.preload_argv = preload_argv,
+        if self.preload is None:
+            self.preload = dask.config.get('distributed.worker.preload')
+        self.preload_argv = preload_argv
+        if self.preload_argv is None:
+            self.preload_argv = dask.config.get('distributed.worker.preload-argv')
         self.contact_address = contact_address
         self.memory_monitor_interval = parse_timedelta(memory_monitor_interval, default='ms')
         self.extensions = dict()
