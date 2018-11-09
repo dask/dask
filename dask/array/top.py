@@ -455,6 +455,16 @@ def atop(func, out_ind, *args, **kwargs):
     adjust_chunks = kwargs.pop('adjust_chunks', None)
     new_axes = kwargs.get('new_axes', {})
 
+    # Input Validation
+    if len(set(out_ind)) != len(out_ind):
+        raise ValueError("Repeated elements not allowed in output index",
+                         [k for k, v in toolz.frequencies(out_ind).items() if v > 1])
+    new = (set(out_ind)
+           - {a for arg in args[1::2] if arg is not None for a in arg}
+           - set(new_axes or ()))
+    if new:
+        raise ValueError("Unknown dimension", new)
+
     from .core import Array, unify_chunks, normalize_arg
 
     if dtype is None:

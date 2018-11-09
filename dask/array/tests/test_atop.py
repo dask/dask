@@ -325,15 +325,6 @@ def test_atop_chunks():
     assert_eq(y, np.ones((20, 10)))
 
 
-def test_atop_raises_on_incorrect_indices():
-    x = da.arange(5, chunks=3)
-    with pytest.raises(ValueError) as info:
-        da.atop(lambda x: x, 'ii', x, 'ii', dtype=int)
-
-    assert 'ii' in str(info.value)
-    assert '1' in str(info.value)
-
-
 def test_atop_numpy_arg():
     x = da.arange(10, chunks=(5,))
     y = np.arange(1000)
@@ -380,6 +371,23 @@ def test_namedtuple(tup):
                 dtype=A.dtype)
 
     assert_eq(A, B)
+
+
+def test_validate_top_inputs():
+    A = da.random.random((20, 20), chunks=(10, 10))
+
+    with pytest.raises(ValueError) as info:
+        da.atop(inc, 'jk', A, 'ij', dtype=A.dtype)
+
+    assert 'unknown dimension' in str(info.value).lower()
+    assert 'k' in str(info.value)
+    assert 'j' not in str(info.value)
+
+    with pytest.raises(ValueError) as info:
+        da.atop(inc, 'ii', A, 'ij', dtype=A.dtype)
+
+    assert 'repeated' in str(info.value).lower()
+    assert 'i' in str(info.value)
 
 
 def test_gh_4176():
