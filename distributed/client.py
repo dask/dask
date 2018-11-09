@@ -560,7 +560,12 @@ class Client(Node):
         self.security = security or Security()
         self.scheduler_comm = None
         assert isinstance(self.security, Security)
-        self.connection_args = self.security.get_connection_args('client')
+
+        if name == 'worker':
+            self.connection_args = self.security.get_connection_args('worker')
+        else:
+            self.connection_args = self.security.get_connection_args('client')
+
         self._connecting_to_scheduler = False
         self._asynchronous = asynchronous
         self._should_close_loop = not loop
