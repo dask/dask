@@ -2,7 +2,7 @@ click >= 6.6
 cloudpickle >= 0.2.2
 dask >= 0.18.0
 msgpack
-psutil
+psutil >= 5.0
 six
 sortedcontainers !=2.0.0, !=2.0.1
 tblib

@@ -46,8 +46,9 @@ class SystemMonitor(object):
             return {k: None for k, v in self.quantities.items()}
 
     def update(self):
-        cpu = self.proc.cpu_percent()
-        memory = self.proc.memory_info().rss
+        with self.proc.oneshot():
+            cpu = self.proc.cpu_percent()
+            memory = self.proc.memory_info().rss
         now = time()
 
         self.cpu.append(cpu)
