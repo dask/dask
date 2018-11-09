@@ -24,7 +24,7 @@ from ..utils import (ensure_bytes, ensure_ip, get_ip, get_ipv6, nbytes,
 
 from .registry import Backend, backends
 from .addressing import parse_host_port, unparse_host_port
-from .core import Comm, Connector, Listener, CommClosedError
+from .core import Comm, Connector, Listener, CommClosedError, FatalCommClosedError
 from .utils import (to_frames, from_frames,
                     get_tcp_server_address, ensure_concrete_host)
 
@@ -121,6 +121,9 @@ def convert_stream_closed_error(obj, exc):
     if exc.real_error is not None:
         # The stream was closed because of an underlying OS error
         exc = exc.real_error
+        if ssl and isinstance(exc, ssl.SSLError):
+            if 'UNKNOWN_CA' in exc.reason:
+                raise FatalCommClosedError("in %s: %s: %s" % (obj, exc.__class__.__name__, exc))
         raise CommClosedError("in %s: %s: %s" % (obj, exc.__class__.__name__, exc))
     else:
         raise CommClosedError("in %s: %s" % (obj, exc))
@@ -329,6 +332,13 @@ class BaseTCPConnector(Connector, RequireEncryptionMixin):
             stream = yield client.connect(ip, port,
                                           max_buffer_size=MAX_BUFFER_SIZE,
                                           **kwargs)
+            # Under certain circumstances tornado will have a closed connnection with an error and not raise
+            # a StreamClosedError.
+            #
+            # This occurs with tornado 5.x and openssl 1.1+
+            if stream.closed() and stream.error:
+                raise StreamClosedError(stream.error)
+
         except StreamClosedError as e:
             # The socket connect() call failed
             convert_stream_closed_error(self, e)
