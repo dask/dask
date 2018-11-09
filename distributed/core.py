@@ -310,7 +310,13 @@ class Server(object):
                     raise TypeError("Bad message type.  Expected dict, got\n  "
                                     + str(msg))
 
-                op = msg.pop('op')
+                try:
+                    op = msg.pop('op')
+                except KeyError:
+                    raise ValueError(
+                        "Received unexpected message without 'op' key: " %
+                        str(msg)
+                    )
                 if self.counters is not None:
                     self.counters['op'].add(op)
                 self._comms[comm] = op
