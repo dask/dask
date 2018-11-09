@@ -1,6 +1,18 @@
 Changelog
 =========
 
+1.24.1 - 2018-11-09
+-------------------
+
+-  Use tornado's builtin AnyThreadLoopEventPolicy (:pr:`2326`) `Matthew Rocklin`_
+-  Adjust TLS tests for openssl 1.1 (:pr:`2331`) `Marius van Niekerk`_
+-  Avoid setting event loop policy if within Jupyter notebook server (:pr:`2343`) `Matthew Rocklin`_
+-  Add preload script to conf (:pr:`2325`) `Guillaume Eynard-Bontemps`_
+-  Add serializer for Numpy masked arrays (:pr:`2335`) `Peter Killick`_
+-  Use psutil.Process.oneshot (:pr:`2339`) `NotSqrt`_
+-  Use worker SSL context when getting client from worker. (:pr:`2301`) Anonymous
+
+
 1.24.0 - 2018-10-26
 -------------------
 
@@ -85,7 +97,7 @@ Changelog
 -  Be resilient to missing dep after busy signal (:pr:`2217`) `Matthew Rocklin`_
 -  Use CSS Grid to layout status page on the dashboard (:pr:`2213`) `Derek Ludwig`_ and `Luke Canavan`_
 -  Fix deserialization of queues on main ioloop thread (:pr:`2221`) `Matthew Rocklin`_
--  Add a worker initialization function (:pr:`2201`) `Guillaume EB`_
+-  Add a worker initialization function (:pr:`2201`) `Guillaume Eynard-Bontemps`_
 -  Collapse navbar in dashboard (:pr:`2223`) `Luke Canavan`_
 
 
@@ -815,10 +827,12 @@ significantly without many new features.
 .. _`Derek Ludwig`: https://github.com/dsludwig
 .. _`Anderson Banihirwe`: https://github.com/andersy005
 .. _`Yu Feng`: https://github.com/rainwoodman
-.. _`Guillaume EB`: https://github.com/guillaumeeb
+.. _`Guillaume Eynard-Bontemps`: https://github.com/guillaumeeb
 .. _`Vladyslav Moisieienkov`: https://github.com/VMois
 .. _`Chris White`: https://github.com/cicdw
 .. _`Adam Klein`: https://github.com/adamklein
 .. _`Mike Gevaert`: https://github.com/mgeplf
 .. _`Gaurav Sheni`: https://github.com/gsheni
 .. _`Eric Ma`: https://github.com/ericmjl
+.. _`Peter Killick`: https://github.com/dkillick
+.. _`NotSqrt`: https://github.com/NotSqrt
