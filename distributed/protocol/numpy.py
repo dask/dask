@@ -102,3 +102,37 @@ def deserialize_numpy_ndarray(header, frames):
                        strides=header['strides'])
 
         return x
+
+
+@dask_serialize.register(np.ma.core.MaskedArray)
+def serialize_numpy_maskedarray(x):
+    # Separate elements of the masked array that we need to deal with discretely.
+    data = x.data
+    mask = x.mask
+    fill_value = x.fill_value
+
+    # Make use of existing numpy serialization for the two ndarray elements of
+    # the masked array.
+    data_header, data_frames = serialize_numpy_ndarray(data)
+    mask_header, mask_frames = serialize_numpy_ndarray(mask)
+
+    header = {"data-header": data_header,
+              "mask-header": mask_header,
+              "fill_value": fill_value,
+              "nframes": len(data_frames)}
+    return header, data_frames + mask_frames
+
+
+@dask_deserialize.register(np.ma.core.MaskedArray)
+def deserialize_numpy_maskedarray(header, frames):
+    data_frames = frames[:header["nframes"]]
+    mask_frames = frames[header["nframes"]:]
+    data_header = header["data-header"]
+    mask_header = header["mask-header"]
+
+    # Get the individual elements of the masked array in order to reconstruct.
+    data = deserialize_numpy_ndarray(data_header, data_frames)
+    mask = deserialize_numpy_ndarray(mask_header, mask_frames)
+    fill_value = header["fill_value"]
+
+    return np.ma.masked_array(data, mask=mask, fill_value=fill_value)

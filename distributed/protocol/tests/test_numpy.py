@@ -6,6 +6,7 @@ from zlib import crc32
 import numpy as np
 import pytest
 
+from distributed.compatibility import PY2
 from distributed.protocol import (serialize, deserialize, decompress, dumps,
                                   loads, to_serialize, msgpack)
 from distributed.protocol.utils import BIG_BYTES_SHARD_SIZE
@@ -27,51 +28,72 @@ def test_serialize():
     assert (result == x).all()
 
 
-@pytest.mark.parametrize('x',
-                         [np.ones(5),
-                          np.array(5),
-                             np.random.random((5, 5)),
-                             np.random.random((5, 5))[::2, :],
-                             np.random.random((5, 5))[:, ::2],
-                             np.asfortranarray(np.random.random((5, 5))),
-                             np.asfortranarray(np.random.random((5, 5)))[::2, :],
-                             np.asfortranarray(np.random.random((5, 5)))[:, ::2],
-                             np.random.random(5).astype('f4'),
-                             np.random.random(5).astype('>i8'),
-                             np.random.random(5).astype('<i8'),
-                             np.arange(5).astype('M8[us]'),
-                             np.arange(5).astype('M8[ms]'),
-                             np.arange(5).astype('m8'),
-                             np.arange(5).astype('m8[s]'),
-                             np.arange(5).astype('c16'),
-                             np.arange(5).astype('c8'),
-                             np.array([True, False, True]),
-                             np.ones(shape=5, dtype=[('a', 'i4'), ('b', 'M8[us]')]),
-                             np.array(['abc'], dtype='S3'),
-                             np.array(['abc'], dtype='U3'),
-                             np.array(['abc'], dtype=object),
-                             np.ones(shape=(5,), dtype=('f8', 32)),
-                             np.ones(shape=(5,), dtype=[('x', 'f8', 32)]),
-                             np.ones(shape=(5,), dtype=np.dtype([('a', 'i1'), ('b', 'f8')], align=False)),
-                             np.ones(shape=(5,), dtype=np.dtype([('a', 'i1'), ('b', 'f8')], align=True)),
-                             np.ones(shape=(5,), dtype=np.dtype([('a', 'm8[us]')], align=False)),
-                             # this dtype fails unpickling
-                             np.ones(shape=(5,), dtype=np.dtype([('a', 'm8')], align=False)),
-                             np.array([(1, 'abc')], dtype=[('x', 'i4'), ('s', object)]),
-                             np.zeros(5000, dtype=[('x%d' % i, '<f8') for i in range(4)]),
-                             np.zeros(5000, dtype='S32'),
-                             np.zeros((1, 1000, 1000)),
-                             np.arange(12)[::2],  # non-contiguous array
-                             np.ones(shape=(5, 6)).astype(dtype=[('total', '<f8'), ('n', '<f8')])])
+@pytest.mark.parametrize('x', [
+    np.ones(5),
+    np.array(5),
+    np.random.random((5, 5)),
+    np.random.random((5, 5))[::2, :],
+    np.random.random((5, 5))[:, ::2],
+    np.asfortranarray(np.random.random((5, 5))),
+    np.asfortranarray(np.random.random((5, 5)))[::2, :],
+    np.asfortranarray(np.random.random((5, 5)))[:, ::2],
+    np.random.random(5).astype('f4'),
+    np.random.random(5).astype('>i8'),
+    np.random.random(5).astype('<i8'),
+    np.arange(5).astype('M8[us]'),
+    np.arange(5).astype('M8[ms]'),
+    np.arange(5).astype('m8'),
+    np.arange(5).astype('m8[s]'),
+    np.arange(5).astype('c16'),
+    np.arange(5).astype('c8'),
+    np.array([True, False, True]),
+    np.ones(shape=5, dtype=[('a', 'i4'), ('b', 'M8[us]')]),
+    np.array(['abc'], dtype='S3'),
+    np.array(['abc'], dtype='U3'),
+    np.array(['abc'], dtype=object),
+    np.ones(shape=(5,), dtype=('f8', 32)),
+    np.ones(shape=(5,), dtype=[('x', 'f8', 32)]),
+    np.ones(shape=(5,), dtype=np.dtype([('a', 'i1'), ('b', 'f8')], align=False)),
+    np.ones(shape=(5,), dtype=np.dtype([('a', 'i1'), ('b', 'f8')], align=True)),
+    np.ones(shape=(5,), dtype=np.dtype([('a', 'm8[us]')], align=False)),
+    # this dtype fails unpickling
+    np.ones(shape=(5,), dtype=np.dtype([('a', 'm8')], align=False)),
+    np.array([(1, 'abc')], dtype=[('x', 'i4'), ('s', object)]),
+    np.zeros(5000, dtype=[('x%d' % i, '<f8') for i in range(4)]),
+    np.zeros(5000, dtype='S32'),
+    np.zeros((1, 1000, 1000)),
+    np.arange(12)[::2],  # non-contiguous array
+    np.ones(shape=(5, 6)).astype(dtype=[('total', '<f8'), ('n', '<f8')]),
+    np.ma.masked_array((5, 6), mask=[True, False]),  # int array
+    np.ma.masked_array((5., 6.), mask=[True, False]),  # float array (different default fill_value)
+    np.ma.masked_array((5., 6.), mask=[True, False], fill_value=np.nan),
+])
 def test_dumps_serialize_numpy(x):
     header, frames = serialize(x)
     if 'compression' in header:
         frames = decompress(header, frames)
+    buffer_interface = buffer if PY2 else memoryview  # noqa: F821
+    for frame in frames:
+        assert isinstance(frame, (bytes, buffer_interface))
     y = deserialize(header, frames)
 
     np.testing.assert_equal(x, y)
     if x.flags.c_contiguous or x.flags.f_contiguous:
         assert x.strides == y.strides
+
+
+def test_masked_array_serialize():
+    data = (5, 6)
+    mask = [True, False]
+    fill_value = 999
+    x = np.ma.masked_array(data, mask=mask, fill_value=fill_value)
+    header, frames = serialize(x)
+    y = deserialize(header, frames)
+
+    # Explicitly test the particular elements of the masked array.
+    np.testing.assert_equal(data, y.data)
+    np.testing.assert_equal(mask, y.mask)
+    assert fill_value == y.fill_value
 
 
 def test_dumps_serialize_numpy_custom_dtype():
