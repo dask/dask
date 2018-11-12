@@ -147,7 +147,7 @@ Memory Management
 Workers are given a target memory limit to stay under with the
 command line ``--memory-limit`` keyword or the ``memory_limit=`` Python
 keyword argument, which sets the memory limit per worker processes launched
-by dask-workder ::
+by dask-worker ::
 
     $ dask-worker tcp://scheduler:port --memory-limit=auto  # total available RAM on the machine
     $ dask-worker tcp://scheduler:port --memory-limit=4e9  # four gigabytes per worker process.
