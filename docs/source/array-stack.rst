@@ -6,7 +6,7 @@ think of as one large array.  This is common with geospatial data in which we
 might have many HDF5/NetCDF files on disk, one for every day, but we want to do
 operations that span multiple days.
 
-To solve this problem we use the functions ``da.stack``, ``da.concatenate``,
+To solve this problem, we use the functions ``da.stack``, ``da.concatenate``,
 and ``da.block``.
 
 Stack
@@ -63,7 +63,7 @@ Block
 -----
 
 We can handle a larger variety of cases with ``da.block`` as it allows
-concatenation to be applied over multiple dimensions at once. This is useful if
+concatenation to be applied over multiple dimensions at once.  This is useful if
 your chunks tile a space, for example if small squares tile a larger 2-D plane.
 
 .. code-block:: python
