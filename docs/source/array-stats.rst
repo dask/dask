@@ -29,7 +29,7 @@ results.
 
    >>> a = da.random.uniform(size=(50,), chunks=(25,))
    >>> b = a + da.random.uniform(low=-0.15, high=0.15, size=(50,), chunks=(25,))
-   >>> result = ttest_rel(a, b)
+   >>> result = stats.ttest_rel(a, b)
    >>> result.compute()
    Ttest_relResult(statistic=-1.5102104380013242, pvalue=0.13741197274874514)
 
