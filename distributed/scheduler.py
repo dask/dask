@@ -4307,8 +4307,8 @@ class Scheduler(ServerNode):
         now = time()
         for ws in self.workers.values():
             if ws.last_seen < now - self.worker_ttl:
-                logger.warn("Worker failed to heartbeat within %s seconds. "
-                            "Closing: %s", self.worker_ttl, ws)
+                logger.warning("Worker failed to heartbeat within %s seconds. "
+                               "Closing: %s", self.worker_ttl, ws)
                 self.remove_worker(address=ws.address)
 
 

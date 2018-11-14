@@ -192,8 +192,9 @@ class GCDiagnosis(object):
         self._fractional_timer.stop_timing()
         frac = self._fractional_timer.running_fraction
         if frac is not None and frac >= self._warn_over_frac:
-            logger.warn("full garbage collections took %d%% CPU time recently "
-                        "(threshold: %d%%)", 100 * frac, 100 * self._warn_over_frac)
+            logger.warning("full garbage collections took %d%% CPU time "
+                           "recently (threshold: %d%%)",
+                           100 * frac, 100 * self._warn_over_frac)
         rss_saved = self._gc_rss_before - rss
         if rss_saved >= self._info_over_rss_win:
             logger.info("full garbage collection released %s "
@@ -202,8 +203,8 @@ class GCDiagnosis(object):
                         format_bytes(self._info_over_rss_win))
         if info['uncollectable'] > 0:
             # This should ideally never happen on Python 3, but who knows?
-            logger.warn("garbage collector couldn't collect %d objects, "
-                        "please look in gc.garbage", info['uncollectable'])
+            logger.warning("garbage collector couldn't collect %d objects, "
+                           "please look in gc.garbage", info['uncollectable'])
 
 
 _gc_diagnosis = GCDiagnosis()
