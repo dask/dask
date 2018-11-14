@@ -3893,18 +3893,27 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
 
 
 def cov_corr_chunk(df, corr=False):
-    """Chunk part of a covariance or correlation computation"""
-    mat = df.astype('float64', copy=False).values
-    mask = np.isfinite(mat)
-    keep = np.bitwise_and(mask[:, None, :], mask[:, :, None])
-
-    x = np.where(keep, mat[:, None, :], np.nan)
-    sums = np.nansum(x, 0)
-    counts = keep.astype('int').sum(0)
+    """Chunk part of a covariance or correlation computation
+    """
+    shape = (df.shape[1], df.shape[1])
+    sums = np.zeros(shape)
+    counts = np.zeros(shape)
+    df = df.astype('float64', copy=False)
+    for idx, col in enumerate(df):
+        mask = df[col].notnull()
+        sums[idx] = df[mask].sum().values
+        counts[idx] = df[mask].count().values
     cov = df.cov().values
     dtype = [('sum', sums.dtype), ('count', counts.dtype), ('cov', cov.dtype)]
     if corr:
-        m = np.nansum((x - sums / np.where(counts, counts, np.nan)) ** 2, 0)
+        mu = (sums / counts).T
+        m = np.zeros(shape)
+        mask = df.isnull().values
+        for idx, x in enumerate(df):
+            mu_discrepancy = np.subtract.outer(df[x], mu[idx]) ** 2
+            mu_discrepancy[mask] = np.nan
+            m[idx] = np.nansum(mu_discrepancy, axis=0)
+        m = m.T
         dtype.append(('m', m.dtype))
 
     out = np.empty(counts.shape, dtype=dtype)
