@@ -312,7 +312,11 @@ class ProfilePlot(DashboardComponent):
         def cb(attr, old, new):
             with log_errors():
                 try:
-                    ind = new['1d']['indices'][0]
+                    selected = new.indices
+                except AttributeError:
+                    selected = new['1d']['indices']
+                try:
+                    ind = selected[0]
                 except IndexError:
                     return
                 data = profile.plot_data(self.states[ind], profile_interval)
@@ -408,7 +412,11 @@ class ProfileTimePlot(DashboardComponent):
                 return
             with log_errors():
                 try:
-                    ind = new['1d']['indices'][0]
+                    selected = new.indices
+                except AttributeError:
+                    selected = new['1d']['indices']
+                try:
+                    ind = selected[0]
                 except IndexError:
                     return
                 data = profile.plot_data(self.states[ind], profile_interval)
@@ -571,7 +579,11 @@ class ProfileServer(DashboardComponent):
                 return
             with log_errors():
                 try:
-                    ind = new['1d']['indices'][0]
+                    selected = new.indices
+                except AttributeError:
+                    selected = new['1d']['indices']
+                try:
+                    ind = selected[0]
                 except IndexError:
                     return
                 data = profile.plot_data(self.states[ind], profile_interval)
