@@ -190,7 +190,7 @@ Store Data in Apache Parquet Format
 -----------------------------------
 
 HDF5 is a popular choice for Pandas users with high performance needs.  We
-encourage Dask.dataframe users to :doc:`store and load data dataframe-create>`
+encourage Dask.dataframe users to :doc:`store and load data <dataframe-create>`
 using Parquet instead.  `Apache Parquet <http://parquet.apache.org/>`_ is a
 columnar binary format that is easy to split into multiple files (easier for
 parallel loading) and is generally much simpler to deal with than HDF5 (from
