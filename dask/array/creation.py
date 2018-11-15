@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from functools import partial, wraps
 from itertools import product
 from operator import add
-from numbers import Integral
+from numbers import Integral, Number
 
 import numpy as np
 from toolz import accumulate, sliding_window
@@ -11,7 +11,6 @@ from toolz import accumulate, sliding_window
 from .. import sharedict
 from ..base import tokenize
 from ..compatibility import Sequence
-from ..utils import ignoring
 from . import chunk
 from .core import (Array, asarray, normalize_chunks,
                    stack, concatenate, block,
@@ -55,7 +54,7 @@ def empty_like(a, dtype=None, chunks=None):
     the functions that do set the array values.
     """
 
-    a = asarray(a)
+    a = asarray(a, name=False)
     return empty(
         a.shape, dtype=(dtype or a.dtype),
         chunks=(chunks if chunks is not None else a.chunks)
@@ -91,7 +90,7 @@ def ones_like(a, dtype=None, chunks=None):
     empty : Return a new uninitialized array.
     """
 
-    a = asarray(a)
+    a = asarray(a, name=False)
     return ones(
         a.shape, dtype=(dtype or a.dtype),
         chunks=(chunks if chunks is not None else a.chunks)
@@ -127,7 +126,7 @@ def zeros_like(a, dtype=None, chunks=None):
     empty : Return a new uninitialized array.
     """
 
-    a = asarray(a)
+    a = asarray(a, name=False)
     return zeros(
         a.shape, dtype=(dtype or a.dtype),
         chunks=(chunks if chunks is not None else a.chunks)
@@ -167,7 +166,7 @@ def full_like(a, fill_value, dtype=None, chunks=None):
     full : Fill a new array.
     """
 
-    a = asarray(a)
+    a = asarray(a, name=False)
     return full(
         a.shape,
         fill_value,
@@ -489,7 +488,9 @@ def diag(v):
         if v.chunks[0] == v.chunks[1]:
             dsk = {(name, i): (np.diag, row[i])
                    for i, row in enumerate(v.__dask_keys__())}
-            return Array(sharedict.merge(v.dask, (name, dsk)), name, (v.chunks[0],), dtype=v.dtype)
+            return Array(sharedict.merge(v.dask, (name, dsk),
+                                         dependencies={name: {v.name}}),
+                         name, (v.chunks[0],), dtype=v.dtype)
         else:
             raise NotImplementedError("Extracting diagonals from non-square "
                                       "chunked arrays")
@@ -504,8 +505,9 @@ def diag(v):
             else:
                 dsk[key] = (np.zeros, (m, n))
 
-    return Array(sharedict.merge(v.dask, (name, dsk)), name, (chunks_1d, chunks_1d),
-                 dtype=v.dtype)
+    return Array(sharedict.merge(v.dask, (name, dsk),
+                                 dependencies={name: {v.name}}),
+                 name, (chunks_1d, chunks_1d), dtype=v.dtype)
 
 
 def triu(m, k=0):
@@ -552,8 +554,8 @@ def triu(m, k=0):
                 dsk[(name, i, j)] = (np.triu, (m.name, i, j), k - (chunk * (j - i)))
             else:
                 dsk[(name, i, j)] = (m.name, i, j)
-    return Array(sharedict.merge((name, dsk), m.dask), name,
-                 shape=m.shape, chunks=m.chunks, dtype=m.dtype)
+    return Array(sharedict.merge((name, dsk), m.dask, dependencies={name: {m.name}}),
+                 name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
 
 
 def tril(m, k=0):
@@ -600,41 +602,30 @@ def tril(m, k=0):
                 dsk[(name, i, j)] = (np.tril, (m.name, i, j), k - (chunk * (j - i)))
             else:
                 dsk[(name, i, j)] = (np.zeros, (m.chunks[0][i], m.chunks[1][j]))
-    dsk = sharedict.merge(m.dask, (name, dsk))
+    dsk = sharedict.merge(m.dask, (name, dsk), dependencies={name: {m.name}})
     return Array(dsk, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
 
 
-def offset_func(func, offset, *args):
-    """  Offsets inputs by offset
-
-    >>> double = lambda x: x * 2
-    >>> f = offset_func(double, (10,))
-    >>> f(1)
-    22
-    >>> f(300)
-    620
-    """
-    def _offset(*args):
+def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
+    def offset_func(*args, **kwargs):
         args2 = list(map(add, args, offset))
-        return func(*args2)
+        return func(*args2, **kwargs)
 
-    with ignoring(Exception):
-        _offset.__name__ = 'offset_' + func.__name__
-
-    return _offset
+    return np.fromfunction(offset_func, shape, dtype=dtype, **func_kwargs)
 
 
 @wraps(np.fromfunction)
-def fromfunction(func, chunks=None, shape=None, dtype=None):
+def fromfunction(func, chunks=None, shape=None, dtype=None, **kwargs):
     if chunks:
         chunks = normalize_chunks(chunks, shape)
-    name = 'fromfunction-' + tokenize(func, chunks, shape, dtype)
+    name = 'fromfunction-' + tokenize(func, chunks, shape, dtype, kwargs)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
     aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in chunks]
     offsets = list(product(*aggdims))
     shapes = list(product(*chunks))
+    dtype = dtype or float
 
-    values = [(np.fromfunction, offset_func(func, offset), shp)
+    values = [(_np_fromfunction, func, shp, dtype, offset, kwargs)
               for offset, shp in zip(offsets, shapes)]
 
     dsk = dict(zip(keys, values))
@@ -703,48 +694,74 @@ def tile(A, reps):
     return concatenate(reps * [A], axis=-1)
 
 
-def expand_pad_width(array, pad_width):
-    if isinstance(pad_width, Integral):
-        pad_width = array.ndim * ((pad_width, pad_width),)
-    elif (isinstance(pad_width, Sequence) and
-          all(isinstance(pw, Integral) for pw in pad_width) and
-          len(pad_width) == 1):
-        pad_width = array.ndim * ((pad_width[0], pad_width[0]),)
-    elif (isinstance(pad_width, Sequence) and
-          len(pad_width) == 2 and
-          all(isinstance(pw, Integral) for pw in pad_width)):
-            pad_width = tuple(
-                (pad_width[0], pad_width[1]) for _ in range(array.ndim)
+def expand_pad_value(array, pad_value):
+    if isinstance(pad_value, Number):
+        pad_value = array.ndim * ((pad_value, pad_value),)
+    elif (isinstance(pad_value, Sequence) and
+          all(isinstance(pw, Number) for pw in pad_value) and
+          len(pad_value) == 1):
+        pad_value = array.ndim * ((pad_value[0], pad_value[0]),)
+    elif (isinstance(pad_value, Sequence) and
+          len(pad_value) == 2 and
+          all(isinstance(pw, Number) for pw in pad_value)):
+            pad_value = tuple(
+                (pad_value[0], pad_value[1]) for _ in range(array.ndim)
             )
-    elif (isinstance(pad_width, Sequence) and
-          len(pad_width) == array.ndim and
-          all(isinstance(pw, Sequence) for pw in pad_width) and
-          all((len(pw) == 2) for pw in pad_width) and
-          all(all(isinstance(w, Integral) for w in pw) for pw in pad_width)):
-            pad_width = tuple((pw[0], pw[1]) for pw in pad_width)
+    elif (isinstance(pad_value, Sequence) and
+          len(pad_value) == array.ndim and
+          all(isinstance(pw, Sequence) for pw in pad_value) and
+          all((len(pw) == 2) for pw in pad_value) and
+          all(all(isinstance(w, Number) for w in pw) for pw in pad_value)):
+            pad_value = tuple((pw[0], pw[1]) for pw in pad_value)
     else:
         raise TypeError(
-            "`pad_width` must be composed of integral typed values."
+            "`pad_value` must be composed of integral typed values."
         )
 
-    return pad_width
+    return pad_value
 
 
-def np_pad(array, pad_width, mode, extra_arg=None):
-    if mode in ["maximum", "mean", "median", "minimum"]:
-        extra_arg = extra_arg or None
-        return np.pad(array, pad_width, mode, stat_length=extra_arg)
-    elif mode == "constant":
-        extra_arg = extra_arg or 0
-        return np.pad(array, pad_width, mode, constant_values=extra_arg)
-    elif mode == "linear_ramp":
-        extra_arg = extra_arg or 0
-        return np.pad(array, pad_width, mode, end_values=extra_arg)
-    elif mode in ["reflect", "symmetric"]:
-        extra_arg = extra_arg or "even"
-        return np.pad(array, pad_width, mode, reflect_type=extra_arg)
-    else:
-        return np.pad(array, pad_width, mode)
+def get_pad_shapes_chunks(array, pad_width, axes):
+    """
+    Helper function for finding shapes and chunks of end pads.
+    """
+
+    pad_shapes = [list(array.shape), list(array.shape)]
+    pad_chunks = [list(array.chunks), list(array.chunks)]
+
+    for d in axes:
+        for i in range(2):
+            pad_shapes[i][d] = pad_width[d][i]
+            pad_chunks[i][d] = (pad_width[d][i],)
+
+    pad_shapes = [tuple(s) for s in pad_shapes]
+    pad_chunks = [tuple(c) for c in pad_chunks]
+
+    return pad_shapes, pad_chunks
+
+
+def linear_ramp_chunk(start, stop, num, dim, step):
+    """
+    Helper function to find the linear ramp for a chunk.
+    """
+
+    num1 = num + 1
+
+    shape = list(start.shape)
+    shape[dim] = num
+    shape = tuple(shape)
+
+    dtype = np.dtype(start.dtype)
+
+    result = np.empty(shape, dtype=dtype)
+    for i in np.ndindex(start.shape):
+        j = list(i)
+        j[dim] = slice(None)
+        j = tuple(j)
+
+        result[j] = np.linspace(start[i], stop, num1, dtype=dtype)[1:][::step]
+
+    return result
 
 
 def pad_edge(array, pad_width, mode, *args):
@@ -754,49 +771,52 @@ def pad_edge(array, pad_width, mode, *args):
     Handles the cases where the only the values on the edge are needed.
     """
 
-    token = tokenize(array, pad_width, mode, args)
-    name = 'pad-' + token
-    numblocks = array.numblocks
+    args = tuple(expand_pad_value(array, e) for e in args)
 
-    chunks = list()
-    for d, c in enumerate(array.chunks):
-        c = list(c)
-        c[0] += pad_width[d][0]
-        c[-1] += pad_width[d][-1]
-        c = tuple(c)
-        chunks.append(c)
-    chunks = tuple(chunks)
+    result = array
+    for d in range(array.ndim):
+        pad_shapes, pad_chunks = get_pad_shapes_chunks(result, pad_width, (d,))
+        pad_arrays = [result, result]
 
-    dsk = {}
-    for idx in product(*(range(n) for n in numblocks)):
-        pad_chunk_width = []
-        for d, i in enumerate(idx):
-            ith_pad_chunk_width = [0, 0]
-            if i == 0:
-                ith_pad_chunk_width[0] = pad_width[d][0]
-            if i == numblocks[d] - 1:
-                ith_pad_chunk_width[1] = pad_width[d][1]
+        if mode is "constant":
+            constant_values = args[0][d]
+            constant_values = [
+                asarray(c).astype(result.dtype) for c in constant_values
+            ]
 
-            ith_pad_chunk_width = tuple(ith_pad_chunk_width)
-            pad_chunk_width.append(ith_pad_chunk_width)
+            pad_arrays = [
+                broadcast_to(v, s, c)
+                for v, s, c in zip(constant_values, pad_shapes, pad_chunks)
+            ]
+        elif mode in ["edge", "linear_ramp"]:
+            pad_slices = [
+                result.ndim * [slice(None)], result.ndim * [slice(None)]
+            ]
+            pad_slices[0][d] = slice(None, 1, None)
+            pad_slices[1][d] = slice(-1, None, None)
+            pad_slices = [tuple(sl) for sl in pad_slices]
 
-        pad_chunk_width = tuple(pad_chunk_width)
+            pad_arrays = [result[sl] for sl in pad_slices]
 
-        array_chunk_key = (array.name,) + idx
-        result_chunk_key = (name,) + idx
+            if mode is "edge":
+                pad_arrays = [
+                    broadcast_to(a, s, c)
+                    for a, s, c in zip(pad_arrays, pad_shapes, pad_chunks)
+                ]
+            elif mode is "linear_ramp":
+                end_values = args[0][d]
 
-        if any(map(any, pad_chunk_width)):
-            dsk[result_chunk_key] = (
-                np_pad, array_chunk_key, pad_chunk_width, mode
-            )
-            dsk[result_chunk_key] += args
-        else:
-            dsk[result_chunk_key] = array_chunk_key
+                pad_arrays = [
+                    a.map_blocks(
+                        linear_ramp_chunk, ev, pw,
+                        chunks=c, dtype=result.dtype, dim=d, step=(2 * i - 1)
+                    )
+                    for i, (a, ev, pw, c) in enumerate(
+                        zip(pad_arrays, end_values, pad_width[d], pad_chunks)
+                    )
+                ]
 
-    dsk = sharedict.merge((name, dsk))
-    dsk = sharedict.merge(dsk, array.dask)
-
-    result = Array(dsk, name, chunks=chunks, dtype=array.dtype)
+        result = concatenate([pad_arrays[0], result, pad_arrays[1]], axis=d)
 
     return result
 
@@ -866,7 +886,7 @@ def pad_stats(array, pad_width, mode, *args):
     if mode == "median":
         raise NotImplementedError("`pad` does not support `mode` of `median`.")
 
-    stat_length = expand_pad_width(array, args[0])
+    stat_length = expand_pad_value(array, args[0])
 
     result = np.empty(array.ndim * (3,), dtype=object)
     for idx in np.ndindex(result.shape):
@@ -915,7 +935,7 @@ def pad_stats(array, pad_width, mode, *args):
 
 
 def wrapped_pad_func(array, pad_func, iaxis_pad_width, iaxis, pad_func_kwargs):
-    result = array.copy()
+    result = np.empty_like(array)
     for i in np.ndindex(array.shape[:iaxis] + array.shape[iaxis + 1:]):
         i = i[:iaxis] + (slice(None),) + i[iaxis:]
         result[i] = pad_func(array[i], iaxis_pad_width, iaxis, pad_func_kwargs)
@@ -960,7 +980,7 @@ def pad_udf(array, pad_width, mode, **kwargs):
 def pad(array, pad_width, mode, **kwargs):
     array = asarray(array)
 
-    pad_width = expand_pad_width(array, pad_width)
+    pad_width = expand_pad_value(array, pad_width)
 
     if mode in ["maximum", "mean", "median", "minimum"]:
         kwargs.setdefault("stat_length", array.shape)

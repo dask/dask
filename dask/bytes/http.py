@@ -21,9 +21,12 @@ class HTTPFileSystem(object):
         """
         Parameters
         ----------
+        block_size: int
+            Blocks to read bytes; if 0, will default to raw requests file-like
+            objects instead of HTTPFile instances
         storage_options: key-value
             May be credentials, e.g., `{'auth': ('username', 'pword')}` or any
-            other parameters for requests
+            other parameters passed on to requests
         """
         self.block_size = storage_options.pop('block_size', DEFAULT_BLOCK_SIZE)
         self.kwargs = storage_options
@@ -52,7 +55,15 @@ class HTTPFileSystem(object):
         if mode != 'rb':
             raise NotImplementedError
         block_size = block_size if block_size is not None else self.block_size
-        return HTTPFile(url, self.session, block_size, **self.kwargs)
+        if block_size:
+            return HTTPFile(url, self.session, block_size, **self.kwargs)
+        else:
+            kw = self.kwargs.copy()
+            kw['stream'] = True
+            r = self.session.get(url, **kw)
+            r.raise_for_status()
+            r.raw.decode_content = True
+            return r.raw
 
     def ukey(self, url):
         """Unique identifier, implied file might have changed every time"""
@@ -85,7 +96,7 @@ class HTTPFile(object):
         connections where the server allows this
     block_size: int or None
         The amount of read-ahead to do, in bytes. Default is 5MB, or the value
-        configured for the FileSystem creating this file
+        configured for the FileSystem creating this file.
     kwargs: all other key-values are passed to reqeuests calls.
     """
 

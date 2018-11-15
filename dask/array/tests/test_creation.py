@@ -378,13 +378,25 @@ def test_diag():
     assert_eq(da.diag(d), np.diag(x))
 
 
-def test_fromfunction():
-    def f(x, y):
-        return x + y
-    d = da.fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8')
+@pytest.mark.parametrize('dtype', [None, 'f8', 'i8'])
+@pytest.mark.parametrize('func, kwargs', [
+    (lambda x, y: x + y, {}),
+    (lambda x, y, c=1: x + c * y, {}),
+    (lambda x, y, c=1: x + c * y, {"c": 3}),
+])
+def test_fromfunction(func, dtype, kwargs):
+    a = np.fromfunction(func, shape=(5, 5), dtype=dtype, **kwargs)
+    d = da.fromfunction(
+        func, shape=(5, 5), chunks=(2, 2), dtype=dtype, **kwargs
+    )
 
-    assert_eq(d, np.fromfunction(f, shape=(5, 5)))
-    assert same_keys(d, da.fromfunction(f, shape=(5, 5), chunks=(2, 2), dtype='f8'))
+    assert_eq(d, a)
+
+    d2 = da.fromfunction(
+        func, shape=(5, 5), chunks=(2, 2), dtype=dtype, **kwargs
+    )
+
+    assert same_keys(d, d2)
 
 
 def test_repeat():
@@ -471,6 +483,10 @@ def test_tile_array_reps(shape, chunks, reps):
     ((10,), (3,), 3, 'edge', {}),
     ((10,), (3,), 3, 'linear_ramp', {}),
     ((10,), (3,), 3, 'linear_ramp', {'end_values': 0}),
+    (
+        (10, 11), (4, 5), ((1, 4), (2, 3)), 'linear_ramp',
+        {'end_values': ((-1, -2), (4, 3))}
+    ),
     ((10, 11), (4, 5), ((1, 4), (2, 3)), 'reflect', {}),
     ((10, 11), (4, 5), ((1, 4), (2, 3)), 'symmetric', {}),
     ((10, 11), (4, 5), ((1, 4), (2, 3)), 'wrap', {}),

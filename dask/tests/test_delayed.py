@@ -8,7 +8,7 @@ from toolz import identity, partial, merge
 import pytest
 
 import dask
-from dask import set_options, compute
+from dask import compute
 from dask.compatibility import PY2, PY3
 from dask.delayed import delayed, to_task_dask, Delayed
 from dask.utils_test import inc
@@ -92,6 +92,22 @@ def test_delayed():
     assert 1 in a.dask.values()
     b = add2(add2(a, 2), 3)
     assert a.key in b.dask
+
+
+def test_delayed_with_dataclass():
+    dataclasses = pytest.importorskip("dataclasses")
+
+    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
+    ADataClass = dataclasses.make_dataclass('ADataClass', [('a', int)])
+
+    literal = dask.delayed(3)
+    with_class = dask.delayed({"a": ADataClass(a=literal)})
+
+    def return_nested(obj):
+        return obj["a"].a
+    final = delayed(return_nested)(with_class)
+
+    assert final.compute() == 3
 
 
 def test_operators():
@@ -275,37 +291,37 @@ def test_pure_global_setting():
     # delayed functions
     func = delayed(add)
 
-    with set_options(delayed_pure=True):
+    with dask.config.set(delayed_pure=True):
         assert func(1, 2).key == func(1, 2).key
 
-    with set_options(delayed_pure=False):
+    with dask.config.set(delayed_pure=False):
         assert func(1, 2).key != func(1, 2).key
 
     func = delayed(add, pure=True)
-    with set_options(delayed_pure=False):
+    with dask.config.set(delayed_pure=False):
         assert func(1, 2).key == func(1, 2).key
 
     # delayed objects
     assert delayed(1).key != delayed(1).key
-    with set_options(delayed_pure=True):
+    with dask.config.set(delayed_pure=True):
         assert delayed(1).key == delayed(1).key
 
-    with set_options(delayed_pure=False):
+    with dask.config.set(delayed_pure=False):
         assert delayed(1, pure=True).key == delayed(1, pure=True).key
 
     # delayed methods
     data = delayed([1, 2, 3])
     assert data.index(1).key != data.index(1).key
 
-    with set_options(delayed_pure=True):
+    with dask.config.set(delayed_pure=True):
         assert data.index(1).key == data.index(1).key
         assert data.index(1, pure=False).key != data.index(1, pure=False).key
 
-    with set_options(delayed_pure=False):
+    with dask.config.set(delayed_pure=False):
         assert data.index(1, pure=True).key == data.index(1, pure=True).key
 
     # magic methods always pure
-    with set_options(delayed_pure=False):
+    with dask.config.set(delayed_pure=False):
         assert data.index.key == data.index.key
         element = data[0]
         assert (element + element).key == (element + element).key

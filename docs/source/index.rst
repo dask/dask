@@ -171,7 +171,7 @@ then you should start here.
    dataframe.rst
    delayed.rst
    futures.rst
-   machine-learning.rst
+   Machine Learning <https://ml.dask.org>
    api.rst
 
 **Scheduling**

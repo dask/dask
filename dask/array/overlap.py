@@ -148,7 +148,7 @@ def overlap_internal(x, axes):
             chunks.append(left + mid + right)
 
     dsk = merge(interior_slices, overlap_blocks)
-    dsk = sharedict.merge(x.dask, (name, dsk))
+    dsk = sharedict.merge(x.dask, (name, dsk), dependencies={name: {x.name}})
 
     return Array(dsk, name, chunks, dtype=x.dtype)
 

@@ -9,17 +9,17 @@ import pickle
 import os
 import threading
 import uuid
-import warnings
 
 from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
-from .compatibility import long, unicode, Iterator
+from .compatibility import (apply, long, unicode, Iterator, is_dataclass,
+                            dataclass_fields)
 from .context import thread_state
 from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict
-from . import config, local, threaded
+from . import config, local, threaded, sharedict
 
 
 __all__ = ("DaskMethodsMixin",
@@ -82,7 +82,7 @@ class DaskMethodsMixin(object):
         -----
         For more information on optimization see here:
 
-        http://dask.pydata.org/en/latest/optimize.html
+        https://docs.dask.org/en/latest/optimize.html
         """
         return visualize(self, filename=filename, format=format,
                          optimize_graph=optimize_graph, **kwargs)
@@ -157,11 +157,11 @@ class DaskMethodsMixin(object):
         return result
 
 
-def compute_as_if_collection(cls, dsk, keys, get=None, scheduler=None, **kwargs):
+def compute_as_if_collection(cls, dsk, keys, scheduler=None, get=None, **kwargs):
     """Compute a graph as if it were of type cls.
 
     Allows for applying the same optimizations and default scheduler."""
-    schedule = get_scheduler(get=get, scheduler=scheduler, cls=cls)
+    schedule = get_scheduler(scheduler=scheduler, cls=cls, get=get)
     dsk2 = optimization_function(cls)(ensure_dict(dsk), keys, **kwargs)
     return schedule(dsk2, keys, **kwargs)
 
@@ -190,8 +190,8 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
             groups = {k: (opt(dsk, keys), keys)
                       for k, (dsk, keys) in groups.items()}
 
-        dsk = merge(*(opt(dsk, keys, **kwargs)
-                      for opt, (dsk, keys) in groups.items()))
+        dsk = merge(*map(ensure_dict, [opt(dsk, keys, **kwargs)
+                         for opt, (dsk, keys) in groups.items()]))
     else:
         dsk, _ = _extract_graph_and_keys(collections)
 
@@ -201,18 +201,16 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
 def _extract_graph_and_keys(vals):
     """Given a list of dask vals, return a single graph and a list of keys such
     that ``get(dsk, keys)`` is equivalent to ``[v.compute() v in vals]``."""
-    dsk = {}
-    keys = []
-    for v in vals:
-        d = v.__dask_graph__()
-        if hasattr(d, 'dicts'):
-            for dd in d.dicts.values():
-                dsk.update(dd)
-        else:
-            dsk.update(d)
-        keys.append(v.__dask_keys__())
 
-    return dsk, keys
+    graphs = [v.__dask_graph__() for v in vals]
+    keys = [v.__dask_keys__() for v in vals]
+
+    if any(isinstance(graph, sharedict.ShareDict) for graph in graphs):
+        graph = sharedict.merge(*graphs)
+    else:
+        graph = merge(*graphs)
+
+    return graph, keys
 
 
 def unpack_collections(*args, **kwargs):
@@ -267,6 +265,10 @@ def unpack_collections(*args, **kwargs):
             elif typ is dict:
                 tsk = (dict, [[_unpack(k), _unpack(v)]
                               for k, v in expr.items()])
+            elif is_dataclass(expr):
+                tsk = (apply, typ, (), (dict,
+                       [[f.name, _unpack(getattr(expr, f.name))] for f in
+                        dataclass_fields(expr)]))
             else:
                 return expr
 
@@ -385,9 +387,9 @@ def compute(*args, **kwargs):
     if not collections:
         return args
 
-    schedule = get_scheduler(get=kwargs.pop('get', None),
-                             scheduler=kwargs.pop('scheduler', None),
-                             collections=collections)
+    schedule = get_scheduler(scheduler=kwargs.pop('scheduler', None),
+                             collections=collections,
+                             get=kwargs.pop('get', None))
 
     dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
     keys = [x.__dask_keys__() for x in collections]
@@ -440,7 +442,7 @@ def visualize(*args, **kwargs):
     -----
     For more information on optimization see here:
 
-    http://dask.pydata.org/en/latest/optimize.html
+    https://docs.dask.org/en/latest/optimize.html
     """
     from dask.dot import dot_graph
 
@@ -546,8 +548,7 @@ def persist(*args, **kwargs):
     if not collections:
         return args
 
-    schedule = get_scheduler(get=kwargs.pop('get', None),
-                             scheduler=kwargs.pop('scheduler', None),
+    schedule = get_scheduler(scheduler=kwargs.pop('scheduler', None),
                              collections=collections)
 
     if inspect.ismethod(schedule):
@@ -816,19 +817,24 @@ else:
     })
 
 
-_warnned_on_get = [False]
+get_err_msg = """
+The get= keyword has been removed.
 
+Please use the scheduler= keyword instead with the name of
+the desired scheduler like 'threads' or 'processes'
 
-def warn_on_get(get):
-    if _warnned_on_get[0]:
-        return
-    else:
-        if get in named_schedulers.values():
-            _warnned_on_get[0] = True
-            warnings.warn("The get= keyword has been deprecated. "
-                          "Please use the scheduler= keyword instead with the "
-                          "name of the desired scheduler "
-                          "like 'threads' or 'processes'")
+    x.compute(scheduler='single-threaded')
+    x.compute(scheduler='threads')
+    x.compute(scheduler='processes')
+
+or with a function that takes the graph and keys
+
+    x.compute(scheduler=my_scheduler_function)
+
+or with a Dask client
+
+    x.compute(scheduler=client)
+""".strip()
 
 
 def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
@@ -836,22 +842,22 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
 
     There are various ways to specify the scheduler to use:
 
-    1.  Passing in get= parameters (deprecated)
-    2.  Passing in scheduler= parameters
-    3.  Passing these into global confiuration
-    4.  Using defaults of a dask collection
+    1.  Passing in scheduler= parameters
+    2.  Passing these into global confiuration
+    3.  Using defaults of a dask collection
 
     This function centralizes the logic to determine the right scheduler to use
     from those many options
     """
-    if get is not None:
-        if scheduler is not None:
-            raise ValueError("Both get= and scheduler= provided.  Choose one")
-        warn_on_get(get)
-        return get
+    if get:
+        raise TypeError(get_err_msg)
 
     if scheduler is not None:
-        if scheduler.lower() in named_schedulers:
+        if callable(scheduler):
+            return scheduler
+        elif "Client" in type(scheduler).__name__ and hasattr(scheduler, 'get'):
+            return scheduler.get
+        elif scheduler.lower() in named_schedulers:
             return named_schedulers[scheduler.lower()]
         elif scheduler.lower() in ('dask.distributed', 'distributed'):
             from distributed.worker import get_client
@@ -865,8 +871,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         return get_scheduler(scheduler=config.get('scheduler', None))
 
     if config.get('get', None):
-        warn_on_get(config.get('get', None))
-        return config.get('get', None)
+        raise ValueError(get_err_msg)
 
     if getattr(thread_state, 'key', False):
         from distributed.worker import get_worker
@@ -883,7 +888,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             raise ValueError("Compute called on multiple collections with "
                              "differing default schedulers. Please specify a "
                              "scheduler=` parameter explicitly in compute or "
-                             "globally with `set_options`.")
+                             "globally with `dask.config.set`.")
         return get
 
     return None

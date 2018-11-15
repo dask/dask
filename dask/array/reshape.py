@@ -155,6 +155,10 @@ def reshape(x, shape):
     if len(known_sizes) < len(shape):
         if len(known_sizes) - len(shape) > 1:
             raise ValueError('can only specify one unknown dimension')
+        # Fastpath for x.reshape(-1) on 1D arrays, allows unknown shape in x
+        # for this case only.
+        if len(shape) == 1 and x.ndim == 1:
+            return x
         missing_size = sanitize_index(x.size / reduce(mul, known_sizes, 1))
         shape = tuple(missing_size if s == -1 else s for s in shape)
 
@@ -173,8 +177,8 @@ def reshape(x, shape):
         key = next(flatten(x.__dask_keys__()))
         dsk = {(name,) + (0,) * len(shape): (M.reshape, key, shape)}
         chunks = tuple((d,) for d in shape)
-        return Array(sharedict.merge((name, dsk), x.dask), name, chunks,
-                     dtype=x.dtype)
+        return Array(sharedict.merge((name, dsk), x.dask, dependencies={name: {x.name}}),
+                     name, chunks, dtype=x.dtype)
 
     # Logic for how to rechunk
     inchunks, outchunks = reshape_rechunk(x.shape, shape, x.chunks)
@@ -186,5 +190,5 @@ def reshape(x, shape):
     shapes = list(product(*outchunks))
     dsk = {a: (M.reshape, b, shape) for a, b, shape in zip(out_keys, in_keys, shapes)}
 
-    return Array(sharedict.merge((name, dsk), x2.dask), name, outchunks,
-                 dtype=x.dtype)
+    return Array(sharedict.merge((name, dsk), x2.dask, dependencies={name: {x2.name}}),
+                 name, outchunks, dtype=x.dtype)

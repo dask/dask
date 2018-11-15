@@ -28,6 +28,7 @@ except ImportError:
                        count, pluck, groupby, topk)
 
 from .. import config
+from .avro import to_avro
 from ..base import tokenize, dont_optimize, is_dask_collection, DaskMethodsMixin
 from ..bytes import open_files
 from ..compatibility import apply, urlopen, Iterable, Iterator
@@ -108,6 +109,7 @@ def inline_singleton_lists(dsk, dependencies=None):
 
 def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
     """ Optimize a dask from a dask Bag. """
+    dsk = ensure_dict(dsk)
     dsk2, dependencies = cull(dsk, keys)
     dsk3, dependencies = fuse(dsk2, keys + (fuse_keys or []), dependencies,
                               rename_keys=rename_fused_keys)
@@ -702,6 +704,14 @@ class Bag(DaskMethodsMixin):
                             compute, storage_options=storage_options,
                             last_endline=last_endline, **kwargs)
 
+    @wraps(to_avro)
+    def to_avro(self, filename, schema, name_function=None,
+                storage_options=None,
+                codec='null', sync_interval=16000, metadata=None, compute=True,
+                **kwargs):
+        return to_avro(self, filename, schema, name_function, storage_options,
+                       codec, sync_interval, metadata, compute, **kwargs)
+
     def fold(self, binop, combine=None, initial=no_default, split_every=None):
         """ Parallelizable reduction
 
@@ -758,16 +768,19 @@ class Bag(DaskMethodsMixin):
             return self.reduction(reduce(binop), reduce(combine),
                                   split_every=split_every)
 
-    def frequencies(self, split_every=None):
+    def frequencies(self, split_every=None, sort=False):
         """ Count number of occurrences of each distinct element.
 
         >>> b = from_sequence(['Alice', 'Bob', 'Alice'])
         >>> dict(b.frequencies())  # doctest: +SKIP
         {'Alice': 2, 'Bob', 1}
         """
-        return self.reduction(frequencies, merge_frequencies,
-                              out_type=Bag, split_every=split_every,
-                              name='frequencies').map_partitions(dictitems)
+        result = self.reduction(frequencies, merge_frequencies,
+                                out_type=Bag, split_every=split_every,
+                                name='frequencies').map_partitions(dictitems)
+        if sort:
+            result = result.map_partitions(sorted, key=second, reverse=True)
+        return result
 
     def topk(self, k, key=None, split_every=None):
         """ K largest elements in collection
@@ -1967,7 +1980,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     max_branch = max_branch or 32
     n = b.npartitions
 
-    stages = int(math.ceil(math.log(n) / math.log(max_branch)))
+    stages = int(math.ceil(math.log(n) / math.log(max_branch))) or 1
     if stages > 1:
         k = int(math.ceil(n ** (1 / stages)))
     else:

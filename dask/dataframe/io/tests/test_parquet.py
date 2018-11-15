@@ -187,12 +187,13 @@ def test_read_glob(tmpdir, write_engine, read_engine):
 
     # Infer divisions for engines/versions that support it
 
-    ddf2 = dd.read_parquet(os.path.join(fn, '*'), engine=read_engine,
+    ddf2 = dd.read_parquet(os.path.join(fn, '*.parquet'), engine=read_engine,
                            infer_divisions=should_check_divs(write_engine) and should_check_divs(read_engine))
     assert_eq(ddf, ddf2, check_divisions=should_check_divs(write_engine) and should_check_divs(read_engine))
 
     # No divisions
-    ddf2_no_divs = dd.read_parquet(os.path.join(fn, '*'), engine=read_engine, infer_divisions=False)
+    ddf2_no_divs = dd.read_parquet(os.path.join(fn, '*.parquet'),
+                                   engine=read_engine, infer_divisions=False)
     assert_eq(ddf.clear_divisions(), ddf2_no_divs, check_divisions=True)
 
 
@@ -667,6 +668,7 @@ def test_ordering(tmpdir, write_engine, read_engine):
 
 
 def test_read_parquet_custom_columns(tmpdir, engine):
+    import glob
     tmp = str(tmpdir)
     data = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                          'f': np.arange(1000, dtype=np.float64)})
@@ -679,6 +681,15 @@ def test_read_parquet_custom_columns(tmpdir, engine):
                           infer_divisions=should_check_divs(engine))
     assert_eq(df[['i32', 'f']], df2,
               check_index=False, check_divisions=should_check_divs(engine))
+
+    import glob
+    fns = glob.glob(os.path.join(tmp, '*.parquet'))
+    df2 = dd.read_parquet(fns,
+                          columns=['i32'],
+                          engine=engine).compute()
+    df2.sort_values('i32', inplace=True)
+    assert_eq(df[['i32']], df2,
+              check_index=False, check_divisions=False)
 
     df3 = dd.read_parquet(tmp,
                           columns=['f', 'i32'],

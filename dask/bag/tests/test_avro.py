@@ -55,3 +55,53 @@ def test_twofile_multiblock(tmpdir):
     b = db.read_avro(os.path.join(tmpdir, '*.avro'), blocksize=1000)
     assert b.npartitions > 2
     assert b.compute() == expected
+
+
+def test_roundtrip_simple(tmpdir):
+    from dask.delayed import Delayed
+    fn = os.path.join(tmpdir, 'out*.avro')
+    b = db.from_sequence([{'a': i} for i in [1, 2, 3, 4, 5]], npartitions=2)
+    schema = {
+        'name': 'Test',
+        'type': 'record',
+        'fields': [
+            {'name': 'a', 'type': 'int'}, ]}
+    out = b.to_avro(fn, schema, compute=False)
+    assert isinstance(out[0], Delayed)
+    out = b.to_avro(fn, schema)
+    assert len(out) == 2
+    b2 = db.read_avro(fn)
+    assert b.compute() == b2.compute()
+
+
+@pytest.mark.parametrize('codec', ['null', 'deflate', 'snappy'])
+def test_roundtrip(tmpdir, codec):
+    if codec == 'snappy':
+        pytest.importorskip('snappy')
+    fn = os.path.join(tmpdir, 'out*.avro')
+    b = db.from_sequence(expected, npartitions=3)
+    b.to_avro(fn, schema=schema, codec=codec)
+    b2 = db.read_avro(fn)
+    assert b.compute() == b2.compute()
+
+
+def test_invalid_schema(tmpdir):
+    b = db.from_sequence(expected, npartitions=3)
+    fn = os.path.join(tmpdir, 'out*.avro')
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema=[])
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema={})
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema={'doc': 'unknown'})
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema={'name': 'test'})
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema={'name': 'test', 'type': 'wrong'})
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema={'name': 'test', 'type': 'record'})
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema={'name': 'test', 'type': 'record'})
+    with pytest.raises(AssertionError):
+        b.to_avro(fn, schema={'name': 'test', 'type': 'record',
+                              'fields': [{'name': 'a'}]})

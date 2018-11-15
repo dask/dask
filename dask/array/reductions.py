@@ -11,7 +11,8 @@ from numbers import Integral
 from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
-from .core import _concatenate2, Array, atop, lol_tuples, handle_out
+from .core import _concatenate2, Array, atop, handle_out
+from .top import lol_tuples
 from .creation import arange
 from .ufunc import sqrt
 from .utils import validate_axis
@@ -219,7 +220,8 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
         dummy = dict(i for i in enumerate(p) if i[0] not in decided)
         g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
         dsk[(name,) + k] = (func, g)
-    return Array(sharedict.merge(x.dask, (name, dsk)), name, out_chunks, dtype=dtype)
+    return Array(sharedict.merge(x.dask, (name, dsk), dependencies={name: {x.name}}),
+                 name, out_chunks, dtype=dtype)
 
 
 @wraps(chunk.sum)
@@ -624,6 +626,15 @@ def arg_reduction(x, chunk, combine, aggregate,
         raise TypeError("axis must be either `None` or int, "
                         "got '{0}'".format(axis))
 
+    for ax in axis:
+        chunks = x.chunks[ax]
+        if len(chunks) > 1 and np.isnan(chunks).any():
+            raise ValueError(
+                "Arg-reductions do not work with arrays that have "
+                "unknown chunksizes.  At some point in your computation "
+                "this array lost chunking information"
+            )
+
     # Map chunk across all blocks
     name = 'arg-reduce-{0}'.format(tokenize(axis, x, chunk,
                                             combine, split_every))
@@ -641,7 +652,8 @@ def arg_reduction(x, chunk, combine, aggregate,
     dsk = dict(((name,) + k, (chunk, (old,) + k, axis, off)) for (k, off)
                in zip(keys, offset_info))
     # The dtype of `tmp` doesn't actually matter, just need to provide something
-    tmp = Array(sharedict.merge(x.dask, (name, dsk)), name, chunks, dtype=x.dtype)
+    tmp = Array(sharedict.merge(x.dask, (name, dsk), dependencies={name: {x.name}}),
+                name, chunks, dtype=x.dtype)
     dtype = np.argmin([1]).dtype
     result = _tree_reduce(tmp, combine, aggregate, axis=axis, keepdims=False,
                           dtype=dtype, split_every=split_every)
@@ -752,7 +764,8 @@ def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
                                (operator.getitem, (m.name,) + old, slc))
             dsk[(name,) + ind] = (binop, this_slice, (m.name,) + ind)
 
-    result = Array(sharedict.merge(m.dask, (name, dsk)), name, x.chunks, m.dtype)
+    result = Array(sharedict.merge(m.dask, (name, dsk), dependencies={name: {m.name}}),
+                   name, x.chunks, m.dtype)
     return handle_out(out, result)
 
 

@@ -91,6 +91,7 @@ Top level user functions:
    imag
    indices
    insert
+   invert
    isclose
    iscomplex
    isfinite
@@ -456,6 +457,7 @@ Other functions
 .. autofunction:: imag
 .. autofunction:: indices
 .. autofunction:: insert
+.. autofunction:: invert
 .. autofunction:: isclose
 .. autofunction:: iscomplex
 .. autofunction:: isfinite

@@ -728,6 +728,8 @@ def normalize_slice(idx, dim):
                 stop = None
             if step == 1:
                 step = None
+            if stop is not None and start is not None and stop < start:
+                stop = start
         elif step < 0:
             if start >= dim - 1:
                 start = None
@@ -992,8 +994,8 @@ def slice_with_bool_dask_array(x, index):
         name = 'getitem-' + tokenize(x, index)
         dsk = {(name, i): k for i, k in enumerate(core.flatten(y.__dask_keys__()))}
         chunks = ((np.nan,) * y.npartitions,)
-        return (Array(sharedict.merge(y.dask, (name, dsk)), name, chunks, x.dtype),
-                out_index)
+        return (Array(sharedict.merge(y.dask, (name, dsk), dependencies={name: {y.name}}),
+                      name, chunks, x.dtype), out_index)
 
     if any(isinstance(ind, Array) and ind.dtype == bool and ind.ndim != 1
            for ind in index):

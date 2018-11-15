@@ -283,7 +283,7 @@ about side effects that it might have, like writing a result to a file.
 
    >>> a = client.submit(load, filename)
    >>> b = client.submit(process, a)
-   >>> c = client.submit(write, c, out_filename)
+   >>> c = client.submit(write, b, out_filename)
 
 As noted above, Dask will stop work that doesn't have any active futures.  It
 thinks that because no one has a pointer to this data that no one cares.  You
@@ -305,7 +305,7 @@ part of a function:
         out_filename = 'out-' + filename
         a = client.submit(load, filename)
         b = client.submit(process, a)
-        c = client.submit(write, c, out_filename)
+        c = client.submit(write, b, out_filename)
         fire_and_forget(c)
         return  # here we lose the reference to c, but that's now ok
 
