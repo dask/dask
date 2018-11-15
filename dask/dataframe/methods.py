@@ -51,8 +51,8 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
                    kind='loc'):
     """Index slice start/stop. Can switch include/exclude boundaries.
 
-    Example
-    -------
+    Examples
+    --------
     >>> df = pd.DataFrame({'x': [10, 20, 30, 40, 50]}, index=[1, 2, 2, 3, 4])
     >>> boundary_slice(df, 2, None)
         x
