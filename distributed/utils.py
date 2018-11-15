@@ -1372,7 +1372,7 @@ def reset_logger_locks():
 
 
 # Only bother if asyncio has been loaded by Tornado
-if 'asyncio' in sys.modules:
+if 'asyncio' in sys.modules and tornado.version_info[0] >= 5:
 
     jupyter_event_loop_initialized = False
 
