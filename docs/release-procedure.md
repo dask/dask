@@ -6,21 +6,30 @@ Release per project:
 
 *   Update release notes in docs/source/changelog.rst
 
+*   Commit
+
+        git commit -a -m "bump version to x.x.x"
+
 *   Tag commit
 
         git tag -a x.x.x -m 'Version x.x.x'
 
-*   and push to github
+*   Push to github
 
         git push dask master --tags
 
-*  Upload to PyPI
+*   Upload to PyPI
 
         git clean -xfd
         python setup.py sdist bdist_wheel --universal
         twine upload dist/*
 
-*   Update conda recipe feedstocks on `conda-forge <https://conda-forge.github.io/>`_.
+*   Update `dask-core` feedstock on [conda-forge](https://conda-forge.github.io)
+
+    Typically this is handled by a bot, but in some cases you have to modify
+    version numbers.
+
+    If for some reason you have to do this manually, then follow these steps:
 
     *  Update conda-smithy and run conda-smithy rerender
 
@@ -33,3 +42,12 @@ Release per project:
     *  Update version number and hash in recipe
     *  Check dependencies
     *  Do the same for the dask-feedstock meta-package
+
+*   Update `dask` feedstock after `dask-core` feedstock has been merged and is
+    available through conda.
+
+    Usually this only means updating the version in the top line, and then
+    submitting a PR.
+
+*   Automated systems internal to Anaconda Inc then handle updating the
+    Anaconda defaults channel

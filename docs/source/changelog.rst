@@ -1,6 +1,29 @@
 Changelog
 =========
 
+0.20.2 / 2018-11-15
+-------------------
+
+Array
++++++
+
+-  Avoid fusing dependencies of atop reductions (:pr:`4207`) `Matthew Rocklin`_
+
+Dataframe
++++++++++
+
+-  Improve memory footprint for dataframe correlation (:pr:`4193`) `Damien Garaud`_
+-  Add empty DataFrame check to boundary_slice (:pr:`4212`) `James Bourbeau`_
+
+
+Documentation
++++++++++++++
+
+-  Copy edit documentation (:pr:`4197`) (:pr:`4204`) (:pr:`4198`) (:pr:`4199`) (:pr:`4200`) (:pr:`4202`) (:pr:`4209`) `Miguel Farrajota`_
+-  Add stats module namespace (:pr:`4206`) `James Bourbeau`_
+-  Fix link in dataframe documentation (:pr:`4208`) `James Bourbeau`_
+
+
 0.20.1 / 2018-11-09
 -------------------
 
