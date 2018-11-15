@@ -4,7 +4,6 @@ from functools import wraps, partial
 import operator
 from operator import getitem
 from pprint import pformat
-from collections import Sequence
 import warnings
 
 from toolz import merge, first, unique, partition_all, remove
@@ -20,16 +19,18 @@ except ImportError:
 from .. import array as da
 from .. import core
 
-from ..utils import partial_by_order
+from ..utils import partial_by_order, Dispatch, IndexCallable
 from .. import threaded
-from ..compatibility import apply, operator_div, bind_method, string_types, Iterator
+from ..compatibility import (apply, operator_div, bind_method, string_types,
+                             Iterator, Sequence)
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
                      is_arraylike)
 from ..array import Array
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
-from ..delayed import Delayed, to_task_dask
+from ..sizeof import sizeof
+from ..delayed import delayed, Delayed, to_task_dask
 
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
@@ -56,7 +57,7 @@ def _concat(args):
         return args
     if isinstance(first(core.flatten(args)), np.ndarray):
         return da.core.concatenate3(args)
-    if not isinstance(args[0], (pd.DataFrame, pd.Series, pd.Index)):
+    if not isinstance(args[0], parallel_types()):
         try:
             return pd.Series(args)
         except Exception:
@@ -67,40 +68,6 @@ def _concat(args):
     # this seems easier. TODO: don't do this.
     args2 = [i for i in args if len(i)]
     return args[0] if not args2 else methods.concat(args2, uniform=True)
-
-
-def _get_return_type(meta):
-    if isinstance(meta, _Frame):
-        meta = meta._meta
-
-    if isinstance(meta, pd.Series):
-        return Series
-    elif isinstance(meta, pd.DataFrame):
-        return DataFrame
-    elif isinstance(meta, pd.Index):
-        return Index
-    return Scalar
-
-
-def new_dd_object(dsk, name, meta, divisions):
-    """Generic constructor for dask.dataframe objects.
-
-    Decides the appropriate output class based on the type of `meta` provided.
-    """
-    if isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)):
-        return _get_return_type(meta)(dsk, name, meta, divisions)
-    elif is_arraylike(meta):
-        import dask.array as da
-        chunks = (((np.nan,) * (len(divisions) - 1),) +
-                  tuple((d,) for d in meta.shape[1:]))
-        if len(chunks) > 1:
-            dsk = dsk.copy()
-            suffix = (0,) * (len(chunks) - 1)
-            for i in range(len(chunks[0])):
-                dsk[(name, i) + suffix] = dsk.pop((name, i))
-        return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
-    else:
-        return _get_return_type(meta)(dsk, name, meta, divisions)
 
 
 def finalize(results):
@@ -219,7 +186,7 @@ def _scalar_binary(op, self, other, inv=False):
     name = '{0}-{1}'.format(funcname(op), tokenize(self, other))
 
     dsk = self.dask
-    return_type = _get_return_type(other)
+    return_type = get_parallel_type(other)
 
     if isinstance(other, Scalar):
         dsk = merge(dsk, other.dask)
@@ -401,12 +368,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @property
     def index(self):
         """Return dask Index instance"""
-        name = self._name + '-index'
-        dsk = {(name, i): (getattr, key, 'index')
-               for i, key in enumerate(self.__dask_keys__())}
-
-        return Index(merge(dsk, self.dask), name,
-                     self._meta.index, self.divisions)
+        return self.map_partitions(getattr, 'index', token=self._name + '-index')
 
     def reset_index(self, drop=False):
         """Reset the index to the default index.
@@ -934,9 +896,46 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         """ Purely label-location based indexer for selection by label.
 
         >>> df.loc["b"]  # doctest: +SKIP
-        >>> df.loc["b":"d"]  # doctest: +SKIP"""
+        >>> df.loc["b":"d"]  # doctest: +SKIP
+        """
         from .indexing import _LocIndexer
         return _LocIndexer(self)
+
+    def _partitions(self, index):
+        if not isinstance(index, tuple):
+            index = (index,)
+        from ..array.slicing import normalize_index
+        index = normalize_index(index, (self.npartitions,))
+        index = tuple(slice(k, k + 1) if isinstance(k, Number) else k
+                      for k in index)
+        name = 'blocks-' + tokenize(self, index)
+        new_keys = np.array(self.__dask_keys__(), dtype=object)[index].tolist()
+
+        divisions = [self.divisions[i] for _, i in new_keys] + [self.divisions[new_keys[-1][1] + 1]]
+        dsk = {(name, i): tuple(key) for i, key in enumerate(new_keys)}
+
+        return new_dd_object(merge(dsk, self.dask), name, self._meta, divisions)
+
+    @property
+    def partitions(self):
+        """ Slice dataframe by partitions
+
+        This allows partitionwise slicing of a Dask Dataframe.  You can perform normal
+        Numpy-style slicing but now rather than slice elements of the array you
+        slice along partitions so, for example, ``df.partitions[:5]`` produces a new
+        Dask Dataframe of the first five partitions.
+
+        Examples
+        --------
+        >>> df.partitions[0]  # doctest: +SKIP
+        >>> df.partitions[:3]  # doctest: +SKIP
+        >>> df.partitions[::10]  # doctest: +SKIP
+
+        Returns
+        -------
+        A Dask DataFrame
+        """
+        return IndexCallable(self._partitions)
 
     # Note: iloc is implemented only on DataFrame
 
@@ -1132,11 +1131,6 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         from .io import to_hdf
         return to_hdf(self, path_or_buf, key, mode, append, **kwargs)
 
-    def to_parquet(self, path, *args, **kwargs):
-        """ See dd.to_parquet docstring for more information """
-        from .io import to_parquet
-        return to_parquet(self, path, *args, **kwargs)
-
     def to_csv(self, filename, **kwargs):
         """ See dd.to_csv docstring for more information """
         from .io import to_csv
@@ -1303,14 +1297,26 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                    split_every=split_every, out=out)
 
     @derived_from(pd.DataFrame)
-    def sum(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
-        return self._reduction_agg('sum', axis=axis, skipna=skipna,
-                                   split_every=split_every, out=out)
+    def sum(self, axis=None, skipna=True, split_every=False, dtype=None,
+            out=None, min_count=None):
+        result = self._reduction_agg('sum', axis=axis, skipna=skipna,
+                                     split_every=split_every, out=out)
+        if min_count:
+            return result.where(self.notnull().sum(axis=axis) >= min_count,
+                                other=np.NaN)
+        else:
+            return result
 
     @derived_from(pd.DataFrame)
-    def prod(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
-        return self._reduction_agg('prod', axis=axis, skipna=skipna,
-                                   split_every=split_every, out=out)
+    def prod(self, axis=None, skipna=True, split_every=False, dtype=None,
+             out=None, min_count=None):
+        result = self._reduction_agg('prod', axis=axis, skipna=skipna,
+                                     split_every=split_every, out=out)
+        if min_count:
+            return result.where(self.notnull().sum(axis=axis) >= min_count,
+                                other=np.NaN)
+        else:
+            return result
 
     @derived_from(pd.DataFrame)
     def max(self, axis=None, skipna=True, split_every=False, out=None):
@@ -1496,19 +1502,22 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 return DataFrame(dask, keyname, meta, quantiles[0].divisions)
 
     @derived_from(pd.DataFrame)
-    def describe(self, split_every=False):
+    def describe(self, split_every=False, percentiles=None):
         # currently, only numeric describe is supported
         num = self._get_numeric_data()
         if self.ndim == 2 and len(num.columns) == 0:
             raise ValueError("DataFrame contains only non-numeric data.")
         elif self.ndim == 1 and self.dtype == 'object':
             raise ValueError("Cannot compute ``describe`` on object dtype.")
-
+        if percentiles is None:
+            percentiles = [0.25, 0.5, 0.75]
+        else:
+            percentiles = list(set(sorted(percentiles + [0.5])))
         stats = [num.count(split_every=split_every),
                  num.mean(split_every=split_every),
                  num.std(split_every=split_every),
                  num.min(split_every=split_every),
-                 num.quantile([0.25, 0.5, 0.75]),
+                 num.quantile(percentiles),
                  num.max(split_every=split_every)]
         stats_names = [(s._name, 0) for s in stats]
 
@@ -1725,7 +1734,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         name = 'first-' + tokenize(self, offset)
         dsk = {(name, i): (self._name, i) for i in range(end)}
         dsk[(name, end)] = (methods.boundary_slice, (self._name, end),
-                            None, date, include_right, True, 'ix')
+                            None, date, include_right, True, 'loc')
         return new_dd_object(merge(self.dask, dsk), name, self, divs)
 
     @derived_from(pd.DataFrame)
@@ -1749,7 +1758,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         dsk = {(name, i + 1): (self._name, j + 1)
                for i, j in enumerate(range(start, self.npartitions))}
         dsk[(name, 0)] = (methods.boundary_slice, (self._name, start),
-                          date, None, True, False, 'ix')
+                          date, None, True, False, 'loc')
         return new_dd_object(merge(self.dask, dsk), name, self, divs)
 
     def nunique_approx(self, split_every=None):
@@ -2481,9 +2490,13 @@ class DataFrame(_Frame):
         raise NotImplementedError(key)
 
     def __setitem__(self, key, value):
-        if isinstance(key, (tuple, list)):
+        if isinstance(key, (tuple, list)) and isinstance(value, DataFrame):
             df = self.assign(**{k: value[c]
                                 for k, c in zip(key, value.columns)})
+
+        elif isinstance(key, pd.Index) and not isinstance(value, DataFrame):
+            key = list(key)
+            df = self.assign(**{k: value for k in key})
         else:
             df = self.assign(**{key: value})
 
@@ -2612,7 +2625,7 @@ class DataFrame(_Frame):
             Defaults to False
         divisions: list, optional
             Known values on which to separate index values of the partitions.
-            See http://dask.pydata.org/en/latest/dataframe-design.html#partitions
+            See https://docs.dask.org/en/latest/dataframe-design.html#partitions
             Defaults to computing this with a single pass over the data. Note
             that if ``sorted=True``, specified divisions are assumed to match
             the existing partitions in the data. If this is untrue, you should
@@ -2779,6 +2792,11 @@ class DataFrame(_Frame):
         """
         from .io import to_bag
         return to_bag(self, index)
+
+    def to_parquet(self, path, *args, **kwargs):
+        """ See dd.to_parquet docstring for more information """
+        from .io import to_parquet
+        return to_parquet(self, path, *args, **kwargs)
 
     @derived_from(pd.DataFrame)
     def to_string(self, max_rows=5):
@@ -3122,8 +3140,8 @@ class DataFrame(_Frame):
     def _repr_data(self):
         meta = self._meta
         index = self._repr_divisions
-        values = {c: _repr_data_series(meta[c], index) for c in meta.columns}
-        return pd.DataFrame(values, columns=meta.columns)
+        series_list = [_repr_data_series(s, index=index) for _, s in meta.iteritems()]
+        return pd.concat(series_list, axis=1)
 
     _HTML_FMT = """<div><strong>Dask DataFrame Structure:</strong></div>
 {data}
@@ -3598,17 +3616,20 @@ def map_partitions(func, *args, **kwargs):
     $META
     """
     meta = kwargs.pop('meta', no_default)
+    name = kwargs.pop('token', None)
 
     if meta is not no_default:
         meta = make_meta(meta)
 
+    kwargs2 = {k: delayed(v) if not is_dask_collection(v) and sizeof(v) > 1e6 else v
+               for k, v in kwargs.items()}
+
     assert callable(func)
-    if 'token' in kwargs:
-        name = kwargs.pop('token')
-        token = tokenize(meta, *args, **kwargs)
+    if name is not None:
+        token = tokenize(meta, *args, **kwargs2)
     else:
         name = funcname(func)
-        token = tokenize(func, meta, *args, **kwargs)
+        token = tokenize(func, meta, *args, **kwargs2)
     name = '{0}-{1}'.format(name, token)
 
     from .multi import _maybe_align_partitions
@@ -3616,20 +3637,23 @@ def map_partitions(func, *args, **kwargs):
     args = _maybe_align_partitions(args)
 
     if meta is no_default:
-        meta = _emulate(func, *args, udf=True, **kwargs)
+        meta = _emulate(func, *args, udf=True, **kwargs2)
 
     if all(isinstance(arg, Scalar) for arg in args):
         dask = {(name, 0):
                 (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)}
         return Scalar(merge(dask, *[arg.dask for arg in args]), name, meta)
-    elif not (isinstance(meta, (pd.Series, pd.DataFrame, pd.Index)) or is_arraylike(meta)):
+    elif not (isinstance(meta, parallel_types()) or is_arraylike(meta)):
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
         meta = _concat([meta])
     meta = make_meta(meta)
 
+    args = [delayed(arg) if not is_dask_collection(arg) and sizeof(arg) > 1e6
+            else arg for arg in args]
+
     args, args_dasks = _process_lazy_args(args)
-    kwargs_task, kwargs_dsk = to_task_dask(kwargs)
+    kwargs_task, kwargs_dsk = to_task_dask(kwargs2)
     args_dasks.append(kwargs_dsk)
 
     dfs = [df for df in args if isinstance(df, _Frame)]
@@ -3869,18 +3893,27 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
 
 
 def cov_corr_chunk(df, corr=False):
-    """Chunk part of a covariance or correlation computation"""
-    mat = df.astype('float64', copy=False).values
-    mask = np.isfinite(mat)
-    keep = np.bitwise_and(mask[:, None, :], mask[:, :, None])
-
-    x = np.where(keep, mat[:, None, :], np.nan)
-    sums = np.nansum(x, 0)
-    counts = keep.astype('int').sum(0)
+    """Chunk part of a covariance or correlation computation
+    """
+    shape = (df.shape[1], df.shape[1])
+    sums = np.zeros(shape)
+    counts = np.zeros(shape)
+    df = df.astype('float64', copy=False)
+    for idx, col in enumerate(df):
+        mask = df[col].notnull()
+        sums[idx] = df[mask].sum().values
+        counts[idx] = df[mask].count().values
     cov = df.cov().values
     dtype = [('sum', sums.dtype), ('count', counts.dtype), ('cov', cov.dtype)]
     if corr:
-        m = np.nansum((x - sums / np.where(counts, counts, np.nan)) ** 2, 0)
+        mu = (sums / counts).T
+        m = np.zeros(shape)
+        mask = df.isnull().values
+        for idx, x in enumerate(df):
+            mu_discrepancy = np.subtract.outer(df[x], mu[idx]) ** 2
+            mu_discrepancy[mask] = np.nan
+            m[idx] = np.nansum(mu_discrepancy, axis=0)
+        m = m.T
         dtype.append(('m', m.dtype))
 
     out = np.empty(counts.shape, dtype=dtype)
@@ -4408,3 +4441,57 @@ def _repr_data_series(s, index):
     else:
         dtype = str(s.dtype)
     return pd.Series([dtype] + ['...'] * npartitions, index=index, name=s.name)
+
+
+get_parallel_type = Dispatch('get_parallel_type')
+
+
+@get_parallel_type.register(pd.Series)
+def get_parallel_type_series(_):
+    return Series
+
+
+@get_parallel_type.register(pd.DataFrame)
+def get_parallel_type_dataframe(_):
+    return DataFrame
+
+
+@get_parallel_type.register(pd.Index)
+def get_parallel_type_index(_):
+    return Index
+
+
+@get_parallel_type.register(object)
+def get_parallel_type_object(o):
+    return Scalar
+
+
+@get_parallel_type.register(_Frame)
+def get_parallel_type_frame(o):
+    return get_parallel_type(o._meta)
+
+
+def parallel_types():
+    return tuple(k for k, v in get_parallel_type._lookup.items()
+                 if v is not get_parallel_type_object)
+
+
+def new_dd_object(dsk, name, meta, divisions):
+    """Generic constructor for dask.dataframe objects.
+
+    Decides the appropriate output class based on the type of `meta` provided.
+    """
+    if isinstance(meta, parallel_types()):
+        return get_parallel_type(meta)(dsk, name, meta, divisions)
+    elif is_arraylike(meta):
+        import dask.array as da
+        chunks = (((np.nan,) * (len(divisions) - 1),) +
+                  tuple((d,) for d in meta.shape[1:]))
+        if len(chunks) > 1:
+            dsk = dsk.copy()
+            suffix = (0,) * (len(chunks) - 1)
+            for i in range(len(chunks[0])):
+                dsk[(name, i) + suffix] = dsk.pop((name, i))
+        return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
+    else:
+        return get_parallel_type(meta)(dsk, name, meta, divisions)

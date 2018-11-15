@@ -5,13 +5,12 @@ import pickle
 import numpy as np
 import pytest
 
-import dask
 from dask.sharedict import ShareDict
 from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
                         memory_repr, methodcaller, M, skip_doctest,
                         SerializableLock, funcname, ndeepmap, ensure_dict,
                         extra_titles, asciitable, itemgetter, partial_by_order,
-                        effective_get, has_keyword)
+                        has_keyword)
 from dask.utils_test import inc
 
 
@@ -51,7 +50,12 @@ def test_dispatch():
     foo.register(int, lambda a: a + 1)
     foo.register(float, lambda a: a - 1)
     foo.register(tuple, lambda a: tuple(foo(i) for i in a))
-    foo.register(object, lambda a: a)
+
+    def f(a):
+        """ My Docstring """
+        return a
+
+    foo.register(object, f)
 
     class Bar(object):
         pass
@@ -61,6 +65,24 @@ def test_dispatch():
     assert foo(1.0) == 0.0
     assert foo(b) == b
     assert foo((1, 2.0, b)) == (2, 1.0, b)
+
+    assert foo.__doc__ == f.__doc__
+
+
+def test_dispatch_kwargs():
+    foo = Dispatch()
+    foo.register(int, lambda a, b=10: a + b)
+
+    assert foo(1, b=20) == 21
+
+
+def test_dispatch_variadic_on_first_argument():
+    foo = Dispatch()
+    foo.register(int, lambda a, b: a + b)
+    foo.register(float, lambda a, b: a - b)
+
+    assert foo(1, 2) == 3
+    assert foo(1., 2.) == -1
 
 
 def test_dispatch_lazy():
@@ -318,18 +340,6 @@ def test_itemgetter():
 
 def test_partial_by_order():
     assert partial_by_order(5, function=operator.add, other=[(1, 20)]) == 25
-
-
-def test_effective_get():
-    da = pytest.importorskip('dask.array')
-    x = da.arange(10, chunks=(5,))
-
-    with pytest.warns(Warning) as record:
-        assert effective_get(collection=x) is dask.threaded.get
-        assert effective_get(get=dask.threaded.get) is dask.threaded.get
-
-    assert any('dask.base.get_scheduler' in str(warning)
-               for warning in record.list)
 
 
 def test_has_keyword():

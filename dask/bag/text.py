@@ -16,7 +16,7 @@ delayed = delayed(pure=True)
 def read_text(urlpath, blocksize=None, compression='infer',
               encoding=system_encoding, errors='strict',
               linedelimiter=os.linesep, collection=True,
-              storage_options=None):
+              storage_options=None, files_per_partition=None):
     """ Read lines from text files
 
     Parameters
@@ -38,6 +38,9 @@ def read_text(urlpath, blocksize=None, compression='infer',
     storage_options: dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
+    files_per_partition: None or int
+        If set, group input files into partitions of the requested size,
+        instead of one partition per file. Mutually exclusive with blocksize.
 
     Examples
     --------
@@ -61,12 +64,21 @@ def read_text(urlpath, blocksize=None, compression='infer',
     --------
     from_sequence: Build bag from Python sequence
     """
-    if blocksize is None:
-        files = open_files(urlpath, mode='rt', encoding=encoding,
-                           errors=errors, compression=compression,
-                           **(storage_options or {}))
-        blocks = [delayed(list)(delayed(file_to_blocks)(fil)) for fil in files]
+    if blocksize is not None and files_per_partition is not None:
+        raise ValueError('Only one of blocksize or files_per_partition can be set')
 
+    files = open_files(urlpath, mode='rt', encoding=encoding,
+                       errors=errors, compression=compression,
+                       **(storage_options or {}))
+    if blocksize is None:
+        if files_per_partition is None:
+            blocks = [delayed(list)(delayed(file_to_blocks)(fil)) for fil in files]
+        else:
+            blocks = []
+            for start in range(0, len(files), files_per_partition):
+                block_files = files[start:(start + files_per_partition)]
+                block_lines = delayed(concat)(delayed(map)(file_to_blocks, block_files))
+                blocks.append(block_lines)
     else:
         _, blocks = read_bytes(urlpath, delimiter=linedelimiter.encode(),
                                blocksize=blocksize, sample=False,

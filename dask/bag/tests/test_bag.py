@@ -1,13 +1,13 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function
 
-import pytest
+from itertools import repeat
 import math
 import os
 import random
-from itertools import repeat
 
 import partd
+import pytest
 from toolz import merge, join, filter, identity, valmap, groupby, pluck
 
 import dask
@@ -243,6 +243,11 @@ def test_frequencies():
     bag = db.from_sequence([0, 0, 0, 0], npartitions=4)
     bag2 = bag.filter(None).frequencies(split_every=2)
     assert_eq(bag2, [])
+
+
+def test_frequencies_sorted():
+    b = db.from_sequence(['a', 'b', 'b', 'b', 'c', 'c'])
+    assert list(b.frequencies(sort=True).compute()) == [('b', 3), ('c', 2), ('a', 1)]
 
 
 def test_topk():
@@ -1133,7 +1138,8 @@ def test_groupby_tasks_names():
 
 
 @pytest.mark.parametrize('size,npartitions,groups', [(1000, 20, 100),
-                                                     (12345, 234, 1042)])
+                                                     (12345, 234, 1042),
+                                                     (100, 1, 50)])
 def test_groupby_tasks_2(size, npartitions, groups):
     func = lambda x: x % groups
     b = db.range(size, npartitions=npartitions).groupby(func, shuffle='tasks')

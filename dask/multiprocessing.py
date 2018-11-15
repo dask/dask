@@ -160,6 +160,7 @@ def get(dsk, keys, num_workers=None, func_loads=None, func_dumps=None,
         If True [default], `fuse` is applied to the graph before computation.
     """
     pool = config.get('pool', None)
+    num_workers = num_workers or config.get('num_workers', None)
     if pool is None:
         context = get_context()
         pool = context.Pool(num_workers,

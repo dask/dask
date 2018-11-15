@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import warnings
+
 import pytest
 np = pytest.importorskip('numpy')
 
@@ -58,37 +60,38 @@ def test_reductions_1D(dtype):
 
 def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True,
                       split_every=True):
-    assert_eq(da_func(darr), np_func(narr))
-    assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
-    assert_eq(da_func(darr, axis=0), np_func(narr, axis=0))
-    assert_eq(da_func(darr, axis=1), np_func(narr, axis=1))
-    assert_eq(da_func(darr, axis=-1), np_func(narr, axis=-1))
-    assert_eq(da_func(darr, axis=-2), np_func(narr, axis=-2))
-    assert_eq(da_func(darr, axis=1, keepdims=True),
-              np_func(narr, axis=1, keepdims=True))
-    assert_eq(da_func(darr, axis=(1, 0)), np_func(narr, axis=(1, 0)))
-
-    assert same_keys(da_func(darr, axis=1), da_func(darr, axis=1))
-    assert same_keys(da_func(darr, axis=(1, 0)), da_func(darr, axis=(1, 0)))
-
-    if use_dtype:
-        assert_eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))
-        assert_eq(da_func(darr, dtype='i8'), np_func(narr, dtype='i8'))
-
-    if split_every:
-        a1 = da_func(darr, split_every=4)
-        a2 = da_func(darr, split_every={0: 2, 1: 2})
-        assert same_keys(a1, a2)
-        assert_eq(a1, np_func(narr))
-        assert_eq(a2, np_func(narr))
-        assert_eq(da_func(darr, keepdims=True, split_every=4),
-                  np_func(narr, keepdims=True))
-        assert_eq(da_func(darr, axis=0, split_every=2), np_func(narr, axis=0))
-        assert_eq(da_func(darr, axis=0, keepdims=True, split_every=2),
-                  np_func(narr, axis=0, keepdims=True))
-        assert_eq(da_func(darr, axis=1, split_every=2), np_func(narr, axis=1))
-        assert_eq(da_func(darr, axis=1, keepdims=True, split_every=2),
+    with warnings.catch_warnings(record=True):
+        assert_eq(da_func(darr), np_func(narr))
+        assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
+        assert_eq(da_func(darr, axis=0), np_func(narr, axis=0))
+        assert_eq(da_func(darr, axis=1), np_func(narr, axis=1))
+        assert_eq(da_func(darr, axis=-1), np_func(narr, axis=-1))
+        assert_eq(da_func(darr, axis=-2), np_func(narr, axis=-2))
+        assert_eq(da_func(darr, axis=1, keepdims=True),
                   np_func(narr, axis=1, keepdims=True))
+        assert_eq(da_func(darr, axis=(1, 0)), np_func(narr, axis=(1, 0)))
+
+        assert same_keys(da_func(darr, axis=1), da_func(darr, axis=1))
+        assert same_keys(da_func(darr, axis=(1, 0)), da_func(darr, axis=(1, 0)))
+
+        if use_dtype:
+            assert_eq(da_func(darr, dtype='f8'), np_func(narr, dtype='f8'))
+            assert_eq(da_func(darr, dtype='i8'), np_func(narr, dtype='i8'))
+
+        if split_every:
+            a1 = da_func(darr, split_every=4)
+            a2 = da_func(darr, split_every={0: 2, 1: 2})
+            assert same_keys(a1, a2)
+            assert_eq(a1, np_func(narr))
+            assert_eq(a2, np_func(narr))
+            assert_eq(da_func(darr, keepdims=True, split_every=4),
+                      np_func(narr, keepdims=True))
+            assert_eq(da_func(darr, axis=0, split_every=2), np_func(narr, axis=0))
+            assert_eq(da_func(darr, axis=0, keepdims=True, split_every=2),
+                      np_func(narr, axis=0, keepdims=True))
+            assert_eq(da_func(darr, axis=1, split_every=2), np_func(narr, axis=1))
+            assert_eq(da_func(darr, axis=1, keepdims=True, split_every=2),
+                      np_func(narr, axis=1, keepdims=True))
 
 
 def test_reduction_errors():
@@ -177,6 +180,37 @@ def test_nanarg_reductions(dfunc, func):
     with pytest.raises(ValueError):
         with pytest.warns(None):  # All NaN axis
             dfunc(a).compute()
+
+
+@pytest.mark.parametrize('func', ['argmax', 'nanargmax'])
+def test_arg_reductions_unknown_chunksize(func):
+    x = da.arange(10, chunks=5)
+    x = x[x > 1]
+
+    with pytest.raises(ValueError) as info:
+        getattr(da, func)(x)
+
+    assert "unknown chunksize" in str(info.value)
+
+
+@pytest.mark.parametrize('func', ['argmax', 'nanargmax'])
+def test_arg_reductions_unknown_chunksize_2d(func):
+    x = da.ones((10, 10), chunks=(5, 5))
+    x = x[x[0, :] > 0, :]  # unknown chunks in first dimension only
+
+    with pytest.raises(ValueError):
+        getattr(da, func)(x, axis=0)
+
+    getattr(da, func)(x, axis=1).compute()
+
+
+@pytest.mark.parametrize('func', ['argmax', 'nanargmax'])
+def test_arg_reductions_unknown_single_chunksize(func):
+    x = da.ones((10, 10), chunks=(10, 10))
+    x = x[x[0, :] > 0, :]  # unknown chunks in first dimension only
+
+    getattr(da, func)(x, axis=0).compute()
+    getattr(da, func)(x, axis=1).compute()
 
 
 def test_reductions_2D_nans():

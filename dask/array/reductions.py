@@ -11,7 +11,8 @@ from numbers import Integral
 from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
-from .core import _concatenate2, Array, atop, lol_tuples, handle_out
+from .core import _concatenate2, Array, atop, handle_out
+from .top import lol_tuples
 from .creation import arange
 from .ufunc import sqrt
 from .utils import validate_axis
@@ -37,8 +38,8 @@ def divide(a, b, dtype=None):
     return f(a, b, dtype=dtype)
 
 
-def reduction(x, chunk, combine, aggregate, axis=None, keepdims=False,
-              dtype=None, split_every=None, name=None, out=None,
+def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
+              split_every=None, combine=None, name=None, out=None,
               concatenate=True, output_size=1):
     """ General version of reductions
 
@@ -50,10 +51,11 @@ def reduction(x, chunk, combine, aggregate, axis=None, keepdims=False,
         First function to be executed when resolving the dask graph.
         This function is applied in parallel to all original chunks of x.
         See below for function parameters.
-    combine: callable(x_chunk, axis, keepdims)
-        Function used for intermediate recursive aggregation (see split_every
-        below). If the reduction can be performed in less than 3 steps, it will
-        not be invoked at all.
+    combine: callable(x_chunk, axis, keepdims), optional
+        Function used for intermediate recursive aggregation (see
+        split_every below). If omitted, it defaults to aggregate.
+        If the reduction can be performed in less than 3 steps, it will not
+        be invoked at all.
     aggregate: callable(x_chunk, axis, keepdims)
         Last function to be executed when resolving the dask graph,
         producing the final output. It is always invoked, even when the reduced
@@ -141,17 +143,16 @@ def reduction(x, chunk, combine, aggregate, axis=None, keepdims=False,
     tmp = atop(chunk, inds, x, inds, axis=axis, keepdims=True, dtype=x.dtype)
     tmp._chunks = tuple((output_size, ) * len(c) if i in axis else c
                         for i, c in enumerate(tmp.chunks))
-    result = _tree_reduce(
-        tmp, combine, aggregate, axis=axis, keepdims=keepdims, dtype=dtype,
-        split_every=split_every, name=name, concatenate=concatenate)
+    result = _tree_reduce(tmp, aggregate, axis, keepdims, dtype, split_every,
+                          combine, name=name, concatenate=concatenate)
     if keepdims and output_size != 1:
         result._chunks = tuple((output_size, ) if i in axis else c
                                for i, c in enumerate(tmp.chunks))
     return handle_out(out, result)
 
 
-def _tree_reduce(x, combine, aggregate, axis, keepdims, dtype,
-                 split_every=None, name=None, concatenate=True):
+def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
+                 combine=None, name=None, concatenate=True):
     """ Perform the tree reduction step of a reduction.
 
     Lower level, users should use ``reduction`` or ``arg_reduction`` directly.
@@ -171,12 +172,12 @@ def _tree_reduce(x, combine, aggregate, axis, keepdims, dtype,
     for i, n in enumerate(x.numblocks):
         if i in split_every and split_every[i] != 1:
             depth = int(builtins.max(depth, ceil(log(n, split_every[i]))))
-    func = partial(combine, axis=axis, keepdims=True)
+    func = partial(combine or aggregate, axis=axis, keepdims=True)
     if concatenate:
         func = compose(func, partial(_concatenate2, axes=axis))
     for i in range(depth - 1):
         x = partial_reduce(func, x, split_every, True, dtype=dtype,
-                           name=(name or funcname(combine)) + '-combine')
+                           name=(name or funcname(combine or aggregate)) + '-partial')
     func = partial(aggregate, axis=axis, keepdims=keepdims)
     if concatenate:
         func = compose(func, partial(_concatenate2, axes=axis))
@@ -219,7 +220,8 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
         dummy = dict(i for i in enumerate(p) if i[0] not in decided)
         g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
         dsk[(name,) + k] = (func, g)
-    return Array(sharedict.merge(x.dask, (name, dsk)), name, out_chunks, dtype=dtype)
+    return Array(sharedict.merge(x.dask, (name, dsk), dependencies={name: {x.name}}),
+                 name, out_chunks, dtype=dtype)
 
 
 @wraps(chunk.sum)
@@ -228,9 +230,9 @@ def sum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
         dt = dtype
     else:
         dt = getattr(np.empty((1,), dtype=a.dtype).sum(), 'dtype', object)
-    return reduction(a, chunk.sum, chunk.sum, chunk.sum,
-                     axis=axis, keepdims=keepdims, dtype=dt,
-                     split_every=split_every, out=out)
+    result = reduction(a, chunk.sum, chunk.sum, axis=axis, keepdims=keepdims,
+                       dtype=dt, split_every=split_every, out=out)
+    return result
 
 
 @wraps(chunk.prod)
@@ -239,37 +241,32 @@ def prod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
         dt = dtype
     else:
         dt = getattr(np.empty((1,), dtype=a.dtype).prod(), 'dtype', object)
-    return reduction(a, chunk.prod, chunk.prod, chunk.prod,
-                     axis=axis, keepdims=keepdims, dtype=dt,
-                     split_every=split_every, out=out)
+    return reduction(a, chunk.prod, chunk.prod, axis=axis, keepdims=keepdims,
+                     dtype=dt, split_every=split_every, out=out)
 
 
 @wraps(chunk.min)
 def min(a, axis=None, keepdims=False, split_every=None, out=None):
-    return reduction(a, chunk.min, chunk.min, chunk.min,
-                     axis=axis, keepdims=keepdims, dtype=a.dtype,
-                     split_every=split_every, out=out)
+    return reduction(a, chunk.min, chunk.min, axis=axis, keepdims=keepdims,
+                     dtype=a.dtype, split_every=split_every, out=out)
 
 
 @wraps(chunk.max)
 def max(a, axis=None, keepdims=False, split_every=None, out=None):
-    return reduction(a, chunk.max, chunk.max, chunk.max,
-                     axis=axis, keepdims=keepdims, dtype=a.dtype,
-                     split_every=split_every, out=out)
+    return reduction(a, chunk.max, chunk.max, axis=axis, keepdims=keepdims,
+                     dtype=a.dtype, split_every=split_every, out=out)
 
 
 @wraps(chunk.any)
 def any(a, axis=None, keepdims=False, split_every=None, out=None):
-    return reduction(a, chunk.any, chunk.any, chunk.any,
-                     axis=axis, keepdims=keepdims, dtype='bool',
-                     split_every=split_every, out=out)
+    return reduction(a, chunk.any, chunk.any, axis=axis, keepdims=keepdims,
+                     dtype='bool', split_every=split_every, out=out)
 
 
 @wraps(chunk.all)
 def all(a, axis=None, keepdims=False, split_every=None, out=None):
-    return reduction(a, chunk.all, chunk.all, chunk.all,
-                     axis=axis, keepdims=keepdims, dtype='bool',
-                     split_every=split_every, out=out)
+    return reduction(a, chunk.all, chunk.all, axis=axis, keepdims=keepdims,
+                     dtype='bool', split_every=split_every, out=out)
 
 
 @wraps(chunk.nansum)
@@ -278,9 +275,8 @@ def nansum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None)
         dt = dtype
     else:
         dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), 'dtype', object)
-    return reduction(a, chunk.nansum, chunk.sum, chunk.sum,
-                     axis=axis, keepdims=keepdims, dtype=dt,
-                     split_every=split_every, out=out)
+    return reduction(a, chunk.nansum, chunk.sum, axis=axis, keepdims=keepdims,
+                     dtype=dt, split_every=split_every, out=out)
 
 
 with ignoring(AttributeError):
@@ -291,9 +287,9 @@ with ignoring(AttributeError):
             dt = dtype
         else:
             dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), 'dtype', object)
-        return reduction(a, chunk.nanprod, chunk.prod, chunk.prod,
-                         axis=axis, keepdims=keepdims, dtype=dt,
-                         split_every=split_every, out=out)
+        return reduction(a, chunk.nanprod, chunk.prod, axis=axis,
+                         keepdims=keepdims, dtype=dt, split_every=split_every,
+                         out=out)
 
     @wraps(chunk.nancumsum)
     def nancumsum(x, axis, dtype=None, out=None):
@@ -308,16 +304,16 @@ with ignoring(AttributeError):
 
 @wraps(chunk.nanmin)
 def nanmin(a, axis=None, keepdims=False, split_every=None, out=None):
-    return reduction(a, chunk.nanmin, chunk.nanmin, chunk.nanmin,
-                     axis=axis, keepdims=keepdims, dtype=a.dtype,
-                     split_every=split_every, out=out)
+    return reduction(a, chunk.nanmin, chunk.nanmin, axis=axis,
+                     keepdims=keepdims, dtype=a.dtype, split_every=split_every,
+                     out=out)
 
 
 @wraps(chunk.nanmax)
 def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
-    return reduction(a, chunk.nanmax, chunk.nanmax, chunk.nanmax,
-                     axis=axis, keepdims=keepdims, dtype=a.dtype,
-                     split_every=split_every, out=out)
+    return reduction(a, chunk.nanmax, chunk.nanmax, axis=axis,
+                     keepdims=keepdims, dtype=a.dtype, split_every=split_every,
+                     out=out)
 
 
 def numel(x, **kwargs):
@@ -361,9 +357,9 @@ def mean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
         dt = dtype
     else:
         dt = getattr(np.mean(np.empty(shape=(1,), dtype=a.dtype)), 'dtype', object)
-    return reduction(a, mean_chunk, mean_combine, mean_agg,
-                     axis=axis, keepdims=keepdims, dtype=dt,
-                     split_every=split_every, out=out)
+    return reduction(a, mean_chunk, mean_agg, axis=axis, keepdims=keepdims,
+                     dtype=dt, split_every=split_every, combine=mean_combine,
+                     out=out)
 
 
 def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None,
@@ -373,9 +369,9 @@ def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None,
     else:
         dt = getattr(np.mean(np.empty(shape=(1,), dtype=a.dtype)), 'dtype', object)
     return reduction(a, partial(mean_chunk, sum=chunk.nansum, numel=nannumel),
-                     partial(mean_combine, sum=chunk.nansum, numel=nannumel),
                      mean_agg, axis=axis, keepdims=keepdims, dtype=dt,
-                     split_every=split_every, out=out)
+                     split_every=split_every, out=out,
+                     combine=partial(mean_combine, sum=chunk.nansum, numel=nannumel))
 
 
 with ignoring(AttributeError):
@@ -470,10 +466,10 @@ def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
     else:
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), 'dtype', object)
     return reduction(a, partial(moment_chunk, order=order),
-                     partial(moment_combine, order=order),
                      partial(moment_agg, order=order, ddof=ddof),
                      axis=axis, keepdims=keepdims,
-                     dtype=dt, split_every=split_every, out=out)
+                     dtype=dt, split_every=split_every, out=out,
+                     combine=partial(moment_combine, order=order))
 
 
 @wraps(chunk.var)
@@ -483,10 +479,9 @@ def var(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None,
         dt = dtype
     else:
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), 'dtype', object)
-    return reduction(a, moment_chunk, moment_combine,
-                     partial(moment_agg, ddof=ddof), axis=axis,
+    return reduction(a, moment_chunk, partial(moment_agg, ddof=ddof), axis=axis,
                      keepdims=keepdims, dtype=dt, split_every=split_every,
-                     name='var', out=out)
+                     combine=moment_combine, name='var', out=out)
 
 
 def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None,
@@ -496,10 +491,9 @@ def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None,
     else:
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), 'dtype', object)
     return reduction(a, partial(moment_chunk, sum=chunk.nansum, numel=nannumel),
-                     partial(moment_combine, sum=np.nansum),
-                     partial(moment_agg, sum=np.nansum, ddof=ddof),
-                     axis=axis, keepdims=keepdims, dtype=dt,
-                     split_every=split_every, out=out)
+                     partial(moment_agg, sum=np.nansum, ddof=ddof), axis=axis,
+                     keepdims=keepdims, dtype=dt, split_every=split_every,
+                     combine=partial(moment_combine, sum=np.nansum), out=out)
 
 
 with ignoring(AttributeError):
@@ -597,8 +591,7 @@ def nanarg_agg(func, argfunc, data, axis=None, **kwargs):
     return arg
 
 
-def arg_reduction(x, chunk, combine, aggregate,
-                  axis=None, split_every=None, out=None):
+def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None):
     """ Generic function for argreduction.
 
     Parameters
@@ -608,8 +601,8 @@ def arg_reduction(x, chunk, combine, aggregate,
         Partialed ``arg_chunk``.
     combine : callable
         Partialed ``arg_combine``.
-    aggregate : callable
-        Partialed ``arg_aggregate``.
+    agg : callable
+        Partialed ``arg_agg``.
     axis : int, optional
     split_every : int or dict, optional
     """
@@ -623,6 +616,15 @@ def arg_reduction(x, chunk, combine, aggregate,
     else:
         raise TypeError("axis must be either `None` or int, "
                         "got '{0}'".format(axis))
+
+    for ax in axis:
+        chunks = x.chunks[ax]
+        if len(chunks) > 1 and np.isnan(chunks).any():
+            raise ValueError(
+                "Arg-reductions do not work with arrays that have "
+                "unknown chunksizes.  At some point in your computation "
+                "this array lost chunking information"
+            )
 
     # Map chunk across all blocks
     name = 'arg-reduce-{0}'.format(tokenize(axis, x, chunk,
@@ -641,10 +643,10 @@ def arg_reduction(x, chunk, combine, aggregate,
     dsk = dict(((name,) + k, (chunk, (old,) + k, axis, off)) for (k, off)
                in zip(keys, offset_info))
     # The dtype of `tmp` doesn't actually matter, just need to provide something
-    tmp = Array(sharedict.merge(x.dask, (name, dsk)), name, chunks, dtype=x.dtype)
+    tmp = Array(sharedict.merge(x.dask, (name, dsk), dependencies={name: {x.name}}),
+                name, chunks, dtype=x.dtype)
     dtype = np.argmin([1]).dtype
-    result = _tree_reduce(tmp, combine, aggregate, axis=axis, keepdims=False,
-                          dtype=dtype, split_every=split_every)
+    result = _tree_reduce(tmp, agg, axis, False, dtype, split_every, combine)
     return handle_out(out, result)
 
 
@@ -661,16 +663,16 @@ def make_arg_reduction(func, argfunc, is_nan_func=False):
     chunk = partial(arg_chunk, func, argfunc)
     combine = partial(arg_combine, func, argfunc)
     if is_nan_func:
-        aggregate = partial(nanarg_agg, func, argfunc)
+        agg = partial(nanarg_agg, func, argfunc)
     else:
-        aggregate = partial(arg_agg, func, argfunc)
+        agg = partial(arg_agg, func, argfunc)
 
     @wraps(argfunc)
-    def wrapper(x, axis=None, split_every=None, out=None):
-        return arg_reduction(x, chunk, combine, aggregate, axis=axis,
+    def _(x, axis=None, split_every=None, out=None):
+        return arg_reduction(x, chunk, combine, agg, axis,
                              split_every=split_every, out=out)
 
-    return wrapper
+    return _
 
 
 def _nanargmin(x, axis, **kwargs):
@@ -749,10 +751,11 @@ def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
         for old, ind in zip(last_indices, indices):
             this_slice = (name, 'extra') + ind
             dsk[this_slice] = (binop, (name, 'extra') + old,
-                               (operator.getitem, (m.name,) + old, slc))
+                                      (operator.getitem, (m.name,) + old, slc))
             dsk[(name,) + ind] = (binop, this_slice, (m.name,) + ind)
 
-    result = Array(sharedict.merge(m.dask, (name, dsk)), name, x.chunks, m.dtype)
+    result = Array(sharedict.merge(m.dask, (name, dsk), dependencies={name: {m.name}}),
+                   name, x.chunks, m.dtype)
     return handle_out(out, result)
 
 
@@ -827,7 +830,7 @@ def topk(a, k, axis=-1, split_every=None):
     aggregate = partial(chunk.topk_aggregate, k=k)
 
     return reduction(
-        a, chunk_combine, chunk_combine, aggregate,
+        a, chunk=chunk_combine, combine=chunk_combine, aggregate=aggregate,
         axis=axis, keepdims=True, dtype=a.dtype, split_every=split_every,
         output_size=abs(k))
 

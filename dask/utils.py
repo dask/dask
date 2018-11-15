@@ -13,7 +13,6 @@ from importlib import import_module
 from numbers import Integral
 from threading import Lock
 import uuid
-import warnings
 from weakref import WeakValueDictionary
 
 from .compatibility import (get_named_args, getargspec, PY3, unicode,
@@ -268,7 +267,7 @@ def random_state_data(n, random_state=None):
     """
     import numpy as np
 
-    if not isinstance(random_state, np.random.RandomState):
+    if not all(hasattr(random_state, attr) for attr in ['normal', 'beta', 'bytes', 'uniform']):
         random_state = np.random.RandomState(random_state)
 
     random_data = random_state.bytes(624 * n * 4)  # `n * 624` 32-bit integers
@@ -406,12 +405,20 @@ class Dispatch(object):
                 return lk[cls2]
         raise TypeError("No dispatch for {0}".format(cls))
 
-    def __call__(self, arg):
+    def __call__(self, arg, *args, **kwargs):
         """
         Call the corresponding method based on type of argument.
         """
         meth = self.dispatch(type(arg))
-        return meth(arg)
+        return meth(arg, *args, **kwargs)
+
+    @property
+    def __doc__(self):
+        try:
+            func = self.dispatch(object)
+            return func.__doc__
+        except TypeError:
+            return "Single Dispatch for %s" % self.__name__
 
 
 def ensure_not_exists(filename):
@@ -798,13 +805,12 @@ class SerializableLock(object):
     __repr__ = __str__
 
 
-def get_scheduler_lock(get=None, collection=None, scheduler=None):
+def get_scheduler_lock(collection=None, scheduler=None):
     """Get an instance of the appropriate lock for a certain situation based on
        scheduler used."""
     from . import multiprocessing
     from .base import get_scheduler
-    actual_get = get_scheduler(get=get,
-                               collections=[collection],
+    actual_get = get_scheduler(collections=[collection],
                                scheduler=scheduler)
 
     if actual_get == multiprocessing.get:
@@ -927,7 +933,7 @@ def natural_sort_key(s):
     ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
     """
     return [int(part) if part.isdigit() else part
-            for part in re.split('(\d+)', s)]
+            for part in re.split(r'(\d+)', s)]
 
 
 def factors(n):
@@ -1006,14 +1012,6 @@ byte_sizes = {
 byte_sizes = {k.lower(): v for k, v in byte_sizes.items()}
 byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and 'i' not in k})
 byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and 'i' in k})
-
-
-def effective_get(get=None, collection=None):
-    """ Deprecated: see dask.base.get_scheduler """
-    warnings.warn("Deprecated, see dask.base.get_scheduler instead")
-
-    from dask.base import get_scheduler
-    return get_scheduler(get=get, collections=[collection])
 
 
 def has_keyword(func, keyword):
