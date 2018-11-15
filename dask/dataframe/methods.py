@@ -51,6 +51,8 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
                    kind='loc'):
     """Index slice start/stop. Can switch include/exclude boundaries.
 
+    Example
+    -------
     >>> df = pd.DataFrame({'x': [10, 20, 30, 40, 50]}, index=[1, 2, 2, 3, 4])
     >>> boundary_slice(df, 2, None)
         x
@@ -69,7 +71,18 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True,
     1  10
     2  20
     2  30
+
+    Empty input DataFrames are returned
+
+    >>> df_empty = pd.DataFrame()
+    >>> boundary_slice(df_empty, 1, 3)
+    Empty DataFrame
+    Columns: []
+    Index: []
     """
+    if df.empty:
+        return df
+
     if kind == 'loc' and not df.index.is_monotonic:
         # Pandas treats missing keys differently for label-slicing
         # on monotonic vs. non-monotonic indexes
