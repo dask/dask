@@ -601,20 +601,32 @@ def optimize_atop(full_graph, keys=()):
             deps = set(top_layers)
             while deps:  # we gather as many sub-layers as we can
                 dep = deps.pop()
-                if (dep in layers and
-                        isinstance(layers[dep], TOP) and
-                        not (dep != layer and dep in keep) and  # output layer
-                        layers[dep].concatenate == layers[layer].concatenate):  # punt on mixed concatenate
-                    top_layers.add(dep)
-
-                    # traverse further to this child's children
-                    for d in full_graph.dependencies.get(dep, ()):
-                        if len(dependents[d]) <= 1:
-                            deps.add(d)
-                        else:
-                            stack.append(d)
-                else:
+                if dep not in layers:
                     stack.append(dep)
+                    continue
+                if not isinstance(layers[dep], TOP):
+                    stack.append(dep)
+                    continue
+                if (dep != layer and dep in keep):
+                    stack.append(dep)
+                    continue
+                if layers[dep].concatenate != layers[layer].concatenate:
+                    stack.append(dep)
+                    continue
+
+                # passed everything, proceed
+                top_layers.add(dep)
+
+                # traverse further to this child's children
+                for d in full_graph.dependencies.get(dep, ()):
+                    # Don't allow reductions to proceed
+                    output_indices = set(layers[dep].output_indices)
+                    input_indices = {i for _, ind in layers[dep].indices if ind for i in ind}
+
+                    if len(dependents[d]) <= 1 and output_indices.issuperset(input_indices):
+                        deps.add(d)
+                    else:
+                        stack.append(d)
 
             # Merge these TOP layers into one
             new_layer = rewrite_atop([layers[l] for l in top_layers])

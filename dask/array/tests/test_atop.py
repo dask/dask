@@ -269,7 +269,7 @@ def test_atop_stacked_new_axes_front(concatenate):
     assert z.chunks == ((7,), (7,), (2, 2, 1))
     assert_eq(z, np.ones((7, 7, 5)))
 
-    w = atop(lambda x: x[:, 0, 0], 'a', z, 'abc', dtype=x.dtype, concatenate=concatenate)
+    w = atop(lambda x: x[:, 0, 0], 'a', z, 'abc', dtype=x.dtype, concatenate=True)
     assert w.chunks == ((7,),)
     assert_eq(w, np.ones((7,)))
 
@@ -413,3 +413,16 @@ def test_gh_4176():
 
     D = da.Array(array_dsk, name, chunks, dtype=A.dtype)
     D.sum(axis=0).compute()
+
+
+def test_dont_merge_before_reductions():
+    x = da.ones(10, chunks=(5,))
+    y = da.atop(inc, 'i', x, 'i', dtype=x.dtype)
+    z = da.atop(sum, '', y, 'i', dtype=y.dtype)
+    w = da.atop(sum, '', z, '', dtype=y.dtype)
+
+    dsk = optimize_atop(w.dask)
+
+    assert len([d for d in dsk.dicts.values() if isinstance(d, TOP)]) == 2
+
+    z.compute()
