@@ -5,6 +5,7 @@ from operator import add
 from time import time
 import weakref
 
+import bokeh
 from bokeh.layouts import row, column
 from bokeh.models import ( ColumnDataSource, Plot, DataRange1d, LinearAxis,
         HoverTool, BoxZoomTool, ResetTool, PanTool, WheelZoomTool, Range1d,
@@ -325,7 +326,10 @@ class ProfilePlot(DashboardComponent):
                 self.source.data.update(data)
                 self.source.selected = old
 
-        self.source.on_change('selected', cb)
+        if bokeh.__version__ >= '1.0':
+            self.source.selected.on_change('indices', cb)
+        else:
+            self.source.on_change('selected', cb)
 
         self.root = figure(tools='tap', **kwargs)
         self.root.quad('left', 'right', 'top', 'bottom', color='color',
@@ -411,9 +415,9 @@ class ProfileTimePlot(DashboardComponent):
             if changing[0]:
                 return
             with log_errors():
-                try:
-                    selected = new.indices
-                except AttributeError:
+                if isinstance(new, list):  # bokeh >= 1.0
+                    selected = new
+                else:
                     selected = new['1d']['indices']
                 try:
                     ind = selected[0]
@@ -424,10 +428,16 @@ class ProfileTimePlot(DashboardComponent):
                 self.states.extend(data.pop('states'))
                 changing[0] = True  # don't recursively trigger callback
                 self.source.data.update(data)
-                self.source.selected = old
+                if isinstance(new, list):  # bokeh >= 1.0
+                    self.source.selected.indices = old
+                else:
+                    self.source.selected = old
                 changing[0] = False
 
-        self.source.on_change('selected', cb)
+        if bokeh.__version__ >= '1.0':
+            self.source.selected.on_change('indices', cb)
+        else:
+            self.source.on_change('selected', cb)
 
         self.profile_plot = figure(tools='tap', height=400, **kwargs)
         r = self.profile_plot.quad('left', 'right', 'top', 'bottom', color='color',
@@ -496,7 +506,10 @@ class ProfileTimePlot(DashboardComponent):
                     self.start = self.stop = None
                 self.trigger_update(update_metadata=False)
 
-        self.ts_source.on_change('selected', ts_change)
+        if bokeh.__version__ >= '1.0':
+            self.ts_source.selected.on_change('indices', ts_change)
+        else:
+            self.ts_source.on_change('selected', ts_change)
 
         self.reset_button = Button(label="Reset", button_type="success")
         self.reset_button.on_click(lambda: self.update(self.state) )
@@ -578,9 +591,9 @@ class ProfileServer(DashboardComponent):
             if changing[0]:
                 return
             with log_errors():
-                try:
-                    selected = new.indices
-                except AttributeError:
+                if isinstance(new, list):  # bokeh >= 1.0
+                    selected = new
+                else:
                     selected = new['1d']['indices']
                 try:
                     ind = selected[0]
@@ -591,10 +604,16 @@ class ProfileServer(DashboardComponent):
                 self.states.extend(data.pop('states'))
                 changing[0] = True  # don't recursively trigger callback
                 self.source.data.update(data)
-                self.source.selected = old
+                if isinstance(new, list):  # bokeh >= 1.0
+                    self.source.selected.indices = old
+                else:
+                    self.source.selected = old
                 changing[0] = False
 
-        self.source.on_change('selected', cb)
+        if bokeh.__version__ >= '1.0':
+            self.source.selected.on_change('indices', cb)
+        else:
+            self.source.on_change('selected', cb)
 
         self.profile_plot = figure(tools='tap', height=400, **kwargs)
         r = self.profile_plot.quad('left', 'right', 'top', 'bottom', color='color',
@@ -663,7 +682,10 @@ class ProfileServer(DashboardComponent):
                     self.start = self.stop = None
                 self.trigger_update()
 
-        self.ts_source.on_change('selected', ts_change)
+        if bokeh.__version__ >= '1.0':
+            self.ts_source.selected.on_change('indices', ts_change)
+        else:
+            self.ts_source.on_change('selected', ts_change)
 
         self.reset_button = Button(label="Reset", button_type="success")
         self.reset_button.on_click(lambda: self.update(self.state))
