@@ -1,6 +1,14 @@
 Changelog
 =========
 
+1.24.2 - 2018-11-15
+-------------------
+
+-  Add support for Bokeh 1.0 (:pr:`2348`) (:pr:`2356`) `Matthew Rocklin`_
+-  Fix regression that dropped support for Tornado 4 (:pr:`2353`) `Roy Wedge`_
+-  Avoid deprecation warnings (:pr:`2355`) (:pr:`2357`) `Matthew Rocklin`_
+-  Fix typo in worker documentation (:pr:`2349`) `Tom Rochette`_
+
 1.24.1 - 2018-11-09
 -------------------
 
@@ -836,3 +844,5 @@ significantly without many new features.
 .. _`Eric Ma`: https://github.com/ericmjl
 .. _`Peter Killick`: https://github.com/dkillick
 .. _`NotSqrt`: https://github.com/NotSqrt
+.. _`Tom Rochette`: https://github.com/tomzx
+.. _`Roy Wedge`: https://github.com/rwedge
