@@ -12,6 +12,7 @@ if sys.version_info[0] == 2:
     from inspect import getargspec
     from cgi import escape as html_escape
     from collections import Iterator, Mapping, Set, MutableMapping
+    from fractions import gcd
 
     reload = reload
     unicode = unicode
@@ -67,6 +68,7 @@ if sys.version_info[0] == 3:
     from importlib.util import cache_from_source
     from inspect import getfullargspec as getargspec
     from html import escape as html_escape
+    from math import gcd
 
     PY2 = False
     PY3 = True

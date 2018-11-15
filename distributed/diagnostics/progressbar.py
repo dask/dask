@@ -145,8 +145,8 @@ class ProgressWidget(ProgressBar):
 
         from ipywidgets import FloatProgress, HBox, VBox, HTML
         self.elapsed_time = HTML('')
-        self.bar = FloatProgress(min=0, max=1, description='', height='10px')
-        self.bar_text = HTML('', width="140px")
+        self.bar = FloatProgress(min=0, max=1, description='')
+        self.bar_text = HTML('')
 
         self.bar_widget = HBox([self.bar_text, self.bar])
         self.widget = VBox([self.elapsed_time, self.bar_widget])
@@ -269,10 +269,9 @@ class MultiProgressWidget(MultiProgressBar):
     def make_widget(self, all):
         from ipywidgets import FloatProgress, HBox, VBox, HTML
         self.elapsed_time = HTML('')
-        self.bars = {key: FloatProgress(min=0, max=1, description='',
-                                        height='10px')
+        self.bars = {key: FloatProgress(min=0, max=1, description='')
                      for key in all}
-        self.bar_texts = {key: HTML('', width="140px") for key in all}
+        self.bar_texts = {key: HTML('') for key in all}
         self.bar_labels = {key: HTML('<div style=\"padding: 0px 10px 0px 10px;'
                                      ' text-align:left; word-wrap: '
                                      'break-word;\">' +
