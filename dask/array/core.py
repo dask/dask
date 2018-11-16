@@ -348,7 +348,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype='dtype', nout=
         Function for which output dtype is to be determined
 
     args: List of array like
-        Arguments to the function, which qwould usually be used. Only attributes
+        Arguments to the function, which would usually be used. Only attributes
         ``ndim`` and ``dtype`` are used.
 
     kwargs: dict
@@ -3325,7 +3325,7 @@ def broadcast_to(x, shape, chunks=None):
                           for bd, i in zip(x.chunks, new_index[ndim_new:]))
         old_key = (x.name,) + old_index
         new_key = (name,) + new_index
-        dsk[new_key] = (chunk.broadcast_to, old_key, quote(chunk_shape))
+        dsk[new_key] = (np.broadcast_to, old_key, quote(chunk_shape))
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
     return Array(graph, name, chunks, dtype=x.dtype)

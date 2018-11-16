@@ -8,7 +8,7 @@ from .io import from_delayed, from_pandas
 
 def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
                    limits=None, columns=None, bytes_per_chunk=256 * 2**20,
-                   head_rows=5, schema=None, meta=None, **kwargs):
+                   head_rows=5, schema=None, meta=None, engine_kwargs=None, **kwargs):
     """
     Create dataframe from an SQL table.
 
@@ -53,17 +53,19 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         ``sql.func.abs(sql.column('value')).label('abs(value)')``.
         Labeling columns created by functions or arithmetic operations is
         recommended.
-    bytes_per_chunk: int
+    bytes_per_chunk : int
         If both divisions and npartitions is None, this is the target size of
         each partition, in bytes
-    head_rows: int
+    head_rows : int
         How many rows to load for inferring the data-types, unless passing meta
-    meta: empty DataFrame or None
+    meta : empty DataFrame or None
         If provided, do not attempt to infer dtypes, but use these, coercing
         all chunks on load
-    schema: str or None
+    schema : str or None
         If using a table name, pass this to sqlalchemy to select which DB
         schema to use within the URI connection
+    engine_kwargs : dict or None
+        Specific db engine parameters for sqlalchemy
     kwargs : dict
         Additional parameters to pass to `pd.read_sql()`
 
@@ -81,7 +83,8 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
     from sqlalchemy.sql import elements
     if index_col is None:
         raise ValueError("Must specify index column to partition on")
-    engine = sa.create_engine(uri)
+    engine_kwargs = {} if engine_kwargs is None else engine_kwargs
+    engine = sa.create_engine(uri, **engine_kwargs)
     m = sa.MetaData()
     if isinstance(table, string_types):
         table = sa.Table(table, m, autoload=True, autoload_with=engine,

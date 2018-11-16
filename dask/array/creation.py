@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 from functools import partial, wraps
 from itertools import product
 from operator import add
-from numbers import Integral
+from numbers import Integral, Number
 
 import numpy as np
 from toolz import accumulate, sliding_window
@@ -692,48 +692,74 @@ def tile(A, reps):
     return concatenate(reps * [A], axis=-1)
 
 
-def expand_pad_width(array, pad_width):
-    if isinstance(pad_width, Integral):
-        pad_width = array.ndim * ((pad_width, pad_width),)
-    elif (isinstance(pad_width, Sequence) and
-          all(isinstance(pw, Integral) for pw in pad_width) and
-          len(pad_width) == 1):
-        pad_width = array.ndim * ((pad_width[0], pad_width[0]),)
-    elif (isinstance(pad_width, Sequence) and
-          len(pad_width) == 2 and
-          all(isinstance(pw, Integral) for pw in pad_width)):
-            pad_width = tuple(
-                (pad_width[0], pad_width[1]) for _ in range(array.ndim)
+def expand_pad_value(array, pad_value):
+    if isinstance(pad_value, Number):
+        pad_value = array.ndim * ((pad_value, pad_value),)
+    elif (isinstance(pad_value, Sequence) and
+          all(isinstance(pw, Number) for pw in pad_value) and
+          len(pad_value) == 1):
+        pad_value = array.ndim * ((pad_value[0], pad_value[0]),)
+    elif (isinstance(pad_value, Sequence) and
+          len(pad_value) == 2 and
+          all(isinstance(pw, Number) for pw in pad_value)):
+            pad_value = tuple(
+                (pad_value[0], pad_value[1]) for _ in range(array.ndim)
             )
-    elif (isinstance(pad_width, Sequence) and
-          len(pad_width) == array.ndim and
-          all(isinstance(pw, Sequence) for pw in pad_width) and
-          all((len(pw) == 2) for pw in pad_width) and
-          all(all(isinstance(w, Integral) for w in pw) for pw in pad_width)):
-            pad_width = tuple((pw[0], pw[1]) for pw in pad_width)
+    elif (isinstance(pad_value, Sequence) and
+          len(pad_value) == array.ndim and
+          all(isinstance(pw, Sequence) for pw in pad_value) and
+          all((len(pw) == 2) for pw in pad_value) and
+          all(all(isinstance(w, Number) for w in pw) for pw in pad_value)):
+            pad_value = tuple((pw[0], pw[1]) for pw in pad_value)
     else:
         raise TypeError(
-            "`pad_width` must be composed of integral typed values."
+            "`pad_value` must be composed of integral typed values."
         )
 
-    return pad_width
+    return pad_value
 
 
-def np_pad(array, pad_width, mode, extra_arg=None):
-    if mode in ["maximum", "mean", "median", "minimum"]:
-        extra_arg = extra_arg or None
-        return np.pad(array, pad_width, mode, stat_length=extra_arg)
-    elif mode == "constant":
-        extra_arg = extra_arg or 0
-        return np.pad(array, pad_width, mode, constant_values=extra_arg)
-    elif mode == "linear_ramp":
-        extra_arg = extra_arg or 0
-        return np.pad(array, pad_width, mode, end_values=extra_arg)
-    elif mode in ["reflect", "symmetric"]:
-        extra_arg = extra_arg or "even"
-        return np.pad(array, pad_width, mode, reflect_type=extra_arg)
-    else:
-        return np.pad(array, pad_width, mode)
+def get_pad_shapes_chunks(array, pad_width, axes):
+    """
+    Helper function for finding shapes and chunks of end pads.
+    """
+
+    pad_shapes = [list(array.shape), list(array.shape)]
+    pad_chunks = [list(array.chunks), list(array.chunks)]
+
+    for d in axes:
+        for i in range(2):
+            pad_shapes[i][d] = pad_width[d][i]
+            pad_chunks[i][d] = (pad_width[d][i],)
+
+    pad_shapes = [tuple(s) for s in pad_shapes]
+    pad_chunks = [tuple(c) for c in pad_chunks]
+
+    return pad_shapes, pad_chunks
+
+
+def linear_ramp_chunk(start, stop, num, dim, step):
+    """
+    Helper function to find the linear ramp for a chunk.
+    """
+
+    num1 = num + 1
+
+    shape = list(start.shape)
+    shape[dim] = num
+    shape = tuple(shape)
+
+    dtype = np.dtype(start.dtype)
+
+    result = np.empty(shape, dtype=dtype)
+    for i in np.ndindex(start.shape):
+        j = list(i)
+        j[dim] = slice(None)
+        j = tuple(j)
+
+        result[j] = np.linspace(start[i], stop, num1, dtype=dtype)[1:][::step]
+
+    return result
 
 
 def pad_edge(array, pad_width, mode, *args):
@@ -743,47 +769,52 @@ def pad_edge(array, pad_width, mode, *args):
     Handles the cases where the only the values on the edge are needed.
     """
 
-    token = tokenize(array, pad_width, mode, args)
-    name = 'pad-' + token
-    numblocks = array.numblocks
+    args = tuple(expand_pad_value(array, e) for e in args)
 
-    chunks = list()
-    for d, c in enumerate(array.chunks):
-        c = list(c)
-        c[0] += pad_width[d][0]
-        c[-1] += pad_width[d][-1]
-        c = tuple(c)
-        chunks.append(c)
-    chunks = tuple(chunks)
+    result = array
+    for d in range(array.ndim):
+        pad_shapes, pad_chunks = get_pad_shapes_chunks(result, pad_width, (d,))
+        pad_arrays = [result, result]
 
-    dsk = {}
-    for idx in product(*(range(n) for n in numblocks)):
-        pad_chunk_width = []
-        for d, i in enumerate(idx):
-            ith_pad_chunk_width = [0, 0]
-            if i == 0:
-                ith_pad_chunk_width[0] = pad_width[d][0]
-            if i == numblocks[d] - 1:
-                ith_pad_chunk_width[1] = pad_width[d][1]
+        if mode is "constant":
+            constant_values = args[0][d]
+            constant_values = [
+                asarray(c).astype(result.dtype) for c in constant_values
+            ]
 
-            ith_pad_chunk_width = tuple(ith_pad_chunk_width)
-            pad_chunk_width.append(ith_pad_chunk_width)
+            pad_arrays = [
+                broadcast_to(v, s, c)
+                for v, s, c in zip(constant_values, pad_shapes, pad_chunks)
+            ]
+        elif mode in ["edge", "linear_ramp"]:
+            pad_slices = [
+                result.ndim * [slice(None)], result.ndim * [slice(None)]
+            ]
+            pad_slices[0][d] = slice(None, 1, None)
+            pad_slices[1][d] = slice(-1, None, None)
+            pad_slices = [tuple(sl) for sl in pad_slices]
 
-        pad_chunk_width = tuple(pad_chunk_width)
+            pad_arrays = [result[sl] for sl in pad_slices]
 
-        array_chunk_key = (array.name,) + idx
-        result_chunk_key = (name,) + idx
+            if mode is "edge":
+                pad_arrays = [
+                    broadcast_to(a, s, c)
+                    for a, s, c in zip(pad_arrays, pad_shapes, pad_chunks)
+                ]
+            elif mode is "linear_ramp":
+                end_values = args[0][d]
 
-        if any(map(any, pad_chunk_width)):
-            dsk[result_chunk_key] = (
-                np_pad, array_chunk_key, pad_chunk_width, mode
-            )
-            dsk[result_chunk_key] += args
-        else:
-            dsk[result_chunk_key] = array_chunk_key
+                pad_arrays = [
+                    a.map_blocks(
+                        linear_ramp_chunk, ev, pw,
+                        chunks=c, dtype=result.dtype, dim=d, step=(2 * i - 1)
+                    )
+                    for i, (a, ev, pw, c) in enumerate(
+                        zip(pad_arrays, end_values, pad_width[d], pad_chunks)
+                    )
+                ]
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[array])
-    result = Array(graph, name, chunks=chunks, dtype=array.dtype)
+        result = concatenate([pad_arrays[0], result, pad_arrays[1]], axis=d)
 
     return result
 
@@ -853,7 +884,7 @@ def pad_stats(array, pad_width, mode, *args):
     if mode == "median":
         raise NotImplementedError("`pad` does not support `mode` of `median`.")
 
-    stat_length = expand_pad_width(array, args[0])
+    stat_length = expand_pad_value(array, args[0])
 
     result = np.empty(array.ndim * (3,), dtype=object)
     for idx in np.ndindex(result.shape):
@@ -947,7 +978,7 @@ def pad_udf(array, pad_width, mode, **kwargs):
 def pad(array, pad_width, mode, **kwargs):
     array = asarray(array)
 
-    pad_width = expand_pad_width(array, pad_width)
+    pad_width = expand_pad_value(array, pad_width)
 
     if mode in ["maximum", "mean", "median", "minimum"]:
         kwargs.setdefault("stat_length", array.shape)

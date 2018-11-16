@@ -3077,6 +3077,13 @@ def test_boundary_slice_nonmonotonic():
     tm.assert_frame_equal(result, expected)
 
 
+def test_boundary_slice_empty():
+    df = pd.DataFrame()
+    result = methods.boundary_slice(df, 1, 4)
+    expected = pd.DataFrame()
+    tm.assert_frame_equal(result, expected)
+
+
 @pytest.mark.parametrize('start, stop, right_boundary, left_boundary, drop', [
     (-1, None, False, False, [-1, -2]),
     (-1, None, False, True, [-2]),

@@ -96,6 +96,22 @@ def test_delayed():
     assert a.key in b.dask
 
 
+def test_delayed_with_dataclass():
+    dataclasses = pytest.importorskip("dataclasses")
+
+    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
+    ADataClass = dataclasses.make_dataclass('ADataClass', [('a', int)])
+
+    literal = dask.delayed(3)
+    with_class = dask.delayed({"a": ADataClass(a=literal)})
+
+    def return_nested(obj):
+        return obj["a"].a
+    final = delayed(return_nested)(with_class)
+
+    assert final.compute() == 3
+
+
 def test_operators():
     a = delayed([1, 2, 3])
     assert a[0].compute() == 1

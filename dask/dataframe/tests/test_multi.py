@@ -239,6 +239,28 @@ def test_hash_join(how, shuffle):
             hash_join(a, 'y', b, 'y', 'outer', shuffle=shuffle)._name)
 
 
+def test_sequential_joins():
+    # Pandas version of multiple inner joins
+    df1 = pd.DataFrame({'key': list(range(6)),
+                        'A': ['A0', 'A1', 'A2', 'A3', 'A4', 'A5']})
+    df2 = pd.DataFrame({'key': list(range(4)),
+                        'B': ['B0', 'B1', 'B2', 'B3']})
+    df3 = pd.DataFrame({'key': list(range(1, 5)),
+                        'C': ['C0', 'C1', 'C2', 'C3']})
+
+    join_pd = df1.join(df2, how='inner', lsuffix='_l', rsuffix='_r')
+    multi_join_pd = join_pd.join(df3, how='inner', lsuffix='_l', rsuffix='_r')
+
+    # Dask version of multiple inner joins
+    ddf1 = dd.from_pandas(df1, npartitions=3)
+    ddf2 = dd.from_pandas(df2, npartitions=2)
+    ddf3 = dd.from_pandas(df3, npartitions=2)
+
+    join_dd = ddf1.join(ddf2, how='inner', lsuffix='_l', rsuffix='_r')
+    multi_join_dd = join_dd.join(ddf3, how='inner', lsuffix='_l', rsuffix='_r')
+    assert_eq(multi_join_pd, multi_join_dd)
+
+
 @pytest.mark.parametrize('join', ['inner', 'outer'])
 def test_indexed_concat(join):
     A = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7], 'y': list('abcdef')},

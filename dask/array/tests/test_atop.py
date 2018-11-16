@@ -1,3 +1,4 @@
+import collections
 from operator import add
 
 import pytest
@@ -269,7 +270,7 @@ def test_atop_stacked_new_axes_front(concatenate):
     assert z.chunks == ((7,), (7,), (2, 2, 1))
     assert_eq(z, np.ones((7, 7, 5)))
 
-    w = atop(lambda x: x[:, 0, 0], 'a', z, 'abc', dtype=x.dtype, concatenate=concatenate)
+    w = atop(lambda x: x[:, 0, 0], 'a', z, 'abc', dtype=x.dtype, concatenate=True)
     assert w.chunks == ((7,),)
     assert_eq(w, np.ones((7,)))
 
@@ -325,15 +326,6 @@ def test_atop_chunks():
     assert_eq(y, np.ones((20, 10)))
 
 
-def test_atop_raises_on_incorrect_indices():
-    x = da.arange(5, chunks=3)
-    with pytest.raises(ValueError) as info:
-        da.atop(lambda x: x, 'ii', x, 'ii', dtype=int)
-
-    assert 'ii' in str(info.value)
-    assert '1' in str(info.value)
-
-
 def test_atop_numpy_arg():
     x = da.arange(10, chunks=(5,))
     y = np.arange(1000)
@@ -373,3 +365,78 @@ def test_args_delayed():
 
     z = atop(lambda x, y: x + y, 'i', x, 'i', y=y, dtype=x.dtype)
     assert_eq(z, np.arange(10) + 100)
+
+
+@pytest.mark.parametrize('tup', [
+    (1, 2),
+    collections.namedtuple('foo', ['a', 'b'])(1, 2),
+])
+def test_namedtuple(tup):
+    A = da.random.random((20, 20), chunks=(10, 10))
+
+    def f(data, x):
+        return data
+
+    B = da.atop(f, ("d1", "d2"),
+                A, ("d1", "d2"),
+                x=tup,
+                dtype=A.dtype)
+
+    assert_eq(A, B)
+
+
+def test_validate_top_inputs():
+    A = da.random.random((20, 20), chunks=(10, 10))
+
+    with pytest.raises(ValueError) as info:
+        da.atop(inc, 'jk', A, 'ij', dtype=A.dtype)
+
+    assert 'unknown dimension' in str(info.value).lower()
+    assert 'k' in str(info.value)
+    assert 'j' not in str(info.value)
+
+    with pytest.raises(ValueError) as info:
+        da.atop(inc, 'ii', A, 'ij', dtype=A.dtype)
+
+    assert 'repeated' in str(info.value).lower()
+    assert 'i' in str(info.value)
+
+
+def test_gh_4176():
+    from dask.sharedict import ShareDict
+
+    def foo(A):
+        return A[None, ...]
+
+    A = da.ones(shape=(10, 20, 4), chunks=(2, 5, 4))
+
+    name = 'D'
+
+    dsk = da.top.top(
+        foo, name, ("nsrc", "ntime", "nbl", "npol"),
+        A.name, ("ntime", "nbl", "npol"),
+        new_axes={"nsrc": 1},
+        numblocks={a.name: a.numblocks for a in (A,)}
+    )
+
+    array_dsk = ShareDict()
+    array_dsk.update(dsk)
+    array_dsk.update(A.__dask_graph__())
+
+    chunks = ((1,),) + A.chunks
+
+    D = da.Array(array_dsk, name, chunks, dtype=A.dtype)
+    D.sum(axis=0).compute()
+
+
+def test_dont_merge_before_reductions():
+    x = da.ones(10, chunks=(5,))
+    y = da.atop(inc, 'i', x, 'i', dtype=x.dtype)
+    z = da.atop(sum, '', y, 'i', dtype=y.dtype)
+    w = da.atop(sum, '', z, '', dtype=y.dtype)
+
+    dsk = optimize_atop(w.dask)
+
+    assert len([d for d in dsk.dicts.values() if isinstance(d, TOP)]) == 2
+
+    z.compute()

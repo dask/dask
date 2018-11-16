@@ -1,6 +1,68 @@
 Changelog
 =========
 
+0.20.2 / 2018-11-15
+-------------------
+
+Array
++++++
+
+-  Avoid fusing dependencies of atop reductions (:pr:`4207`) `Matthew Rocklin`_
+
+Dataframe
++++++++++
+
+-  Improve memory footprint for dataframe correlation (:pr:`4193`) `Damien Garaud`_
+-  Add empty DataFrame check to boundary_slice (:pr:`4212`) `James Bourbeau`_
+
+
+Documentation
++++++++++++++
+
+-  Copy edit documentation (:pr:`4197`) (:pr:`4204`) (:pr:`4198`) (:pr:`4199`) (:pr:`4200`) (:pr:`4202`) (:pr:`4209`) `Miguel Farrajota`_
+-  Add stats module namespace (:pr:`4206`) `James Bourbeau`_
+-  Fix link in dataframe documentation (:pr:`4208`) `James Bourbeau`_
+
+
+0.20.1 / 2018-11-09
+-------------------
+
+Array
++++++
+
+-  Only allocate the result space in wrapped_pad_func (:pr:`4153`) `John A Kirkham`_
+-  Generalize expand_pad_width to expand_pad_value (:pr:`4150`) `John A Kirkham`_
+-  Test da.pad with 2D linear_ramp case (:pr:`4162`) `John A Kirkham`_
+-  Fix import for broadcast_to. (:pr:`4168`) `samc0de`_
+-  Rewrite Dask Array's `pad` to add only new chunks (:pr:`4152`) `John A Kirkham`_
+-  Validate index inputs to atop (:pr:`4182`) `Matthew Rocklin`_
+
+Core
+++++
+
+-  Dask.config set and get normalize underscores and hyphens (:pr:`4143`) `James Bourbeau`_
+-  Only subs on core collections, not subclasses (:pr:`4159`) `Matthew Rocklin`_
+-  Add block_size=0 option to HTTPFileSystem. (:pr:`4171`) `Martin Durant`_
+-  Add traverse support for dataclasses (:pr:`4165`) `Armin Berres`_
+-  Avoid optimization on sharedicts without dependencies (:pr:`4181`) `Matthew Rocklin`_
+-  Update the pytest version for TravisCI (:pr:`4189`) `Damien Garaud`_
+-  Use key_split rather than funcname in visualize names (:pr:`4160`) `Matthew Rocklin`_
+
+Dataframe
++++++++++
+
+-  Add fix for  DataFrame.__setitem__ for index (:pr:`4151`) `Anderson Banihirwe`_
+-  Fix column choice when passing list of files to fastparquet (:pr:`4174`) `Martin Durant`_
+-  Pass engine_kwargs from read_sql_table to sqlalchemy (:pr:`4187`) `Damien Garaud`_
+
+Documentation
++++++++++++++
+
+-  Fix documentation in Delayed best practices example that returned an empty list (:pr:`4147`) `Jonathan Fraine`_
+-  Copy edit documentation (:pr:`4164`) (:pr:`4175`) (:pr:`4185`) (:pr:`4192`) (:pr:`4191`) (:pr:`4190`) (:pr:`4180`) `Miguel Farrajota`_
+-  Fix typo in docstring (:pr:`4183`) `Carlos Valiente`_
+
+
 0.20.0 / 2018-10-26
 -------------------
 
@@ -1553,3 +1615,8 @@ Other
 .. _`Justin Dennison`: https://github.com/justin1dennison
 .. _`Antonino Ingargiola`: https://github.com/tritemio
 .. _`TakaakiFuruse`: https://github.com/TakaakiFuruse
+.. _`samc0de`: https://github.com/samc0de
+.. _`Armin Berres`: https://github.com/aberres
+.. _`Damien Garaud`: https://github.com/geraud
+.. _`Jonathan Fraine`: https://github.com/exowanderer
+.. _`Carlos Valiente`: https://github.com/carletes
