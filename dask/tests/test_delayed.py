@@ -107,6 +107,7 @@ def test_delayed_with_dataclass():
 
     def return_nested(obj):
         return obj["a"].a
+
     final = delayed(return_nested)(with_class)
 
     assert final.compute() == 3

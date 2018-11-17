@@ -106,6 +106,12 @@ def unpack_collections(expr):
         args, collections = unpack_collections([expr.start, expr.stop, expr.step])
         return (slice,) + tuple(args), collections
 
+    if is_dataclass(expr):
+        args, collections = unpack_collections([[f.name, getattr(expr, f.name)] for f in
+                                               dataclass_fields(expr)])
+
+        return (apply, typ, (), (dict, args)), collections
+
     return expr, ()
 
 
