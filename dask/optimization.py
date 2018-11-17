@@ -916,7 +916,7 @@ class SubgraphCallable(object):
     __slots__ = ('dsk', 'outkey', 'inkeys', 'name')
 
     def __init__(self, dsk, outkey, inkeys, name='subgraph_callable'):
-        self.dsk = dsk
+        self.dsk, _ = cull(dsk, outkey)
         self.outkey = outkey
         self.inkeys = inkeys
         self.name = name
