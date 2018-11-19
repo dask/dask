@@ -38,13 +38,13 @@ class Nanny(ServerNode):
     status = None
 
     def __init__(self, scheduler_ip=None, scheduler_port=None,
-                 scheduler_file=None, worker_port=0,
-                 ncores=None, loop=None, local_dir=None, services=None,
-                 name=None, memory_limit='auto', reconnect=True,
-                 validate=False, quiet=False, resources=None, silence_logs=None,
-                 death_timeout=None, preload=(), preload_argv=[], security=None,
-                 contact_address=None, listen_address=None, worker_class=None,
-                 **kwargs):
+            scheduler_file=None, worker_port=0, ncores=None, loop=None,
+            local_dir='dask-worker-space', services=None, name=None,
+            memory_limit='auto', reconnect=True, validate=False, quiet=False,
+            resources=None, silence_logs=None, death_timeout=None, preload=(),
+            preload_argv=[], security=None, contact_address=None,
+            listen_address=None, worker_class=None, **kwargs):
+
         if scheduler_file:
             cfg = json_load_robust(scheduler_file)
             self.scheduler_addr = cfg['address']
