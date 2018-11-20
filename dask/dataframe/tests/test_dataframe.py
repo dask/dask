@@ -3235,6 +3235,9 @@ def test_mixed_dask_array_operations():
     assert_eq(df.index.values + df.x,
               ddf.index.values + ddf.x)
 
+    assert_eq(df.x + df.x.values.sum(),
+              ddf.x + ddf.x.values.sum())
+
 
 def test_mixed_dask_array_operations_errors():
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5]}, index=[4, 5, 6, 7, 8])
@@ -3345,3 +3348,11 @@ def test_setitem():
     df[df.columns] = 1
     ddf[ddf.columns] = 1
     assert_eq(df, ddf)
+
+
+def test_broadcast():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    y = ddf - (ddf.sum() + 1)
+    assert_eq(ddf - (ddf.sum() + 1),
+              df - (df.sum() + 1))

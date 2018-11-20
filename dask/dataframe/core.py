@@ -2034,9 +2034,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     def __getitem__(self, key):
         if isinstance(key, Series) and self.divisions == key.divisions:
             name = 'index-%s' % tokenize(self, key)
-            dsk = dict(((name, i), (operator.getitem, (self._name, i),
-                                    (key._name, i)))
-                       for i in range(self.npartitions))
+            dsk = broadcast(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return Series(graph, name, self._meta, self.divisions)
         raise NotImplementedError()
@@ -2476,8 +2474,7 @@ class DataFrame(_Frame):
 
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
-            dsk = {(name, i): (operator.getitem, (self._name, i), key)
-                   for i in range(self.npartitions)}
+            dsk = broadcast(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         elif isinstance(key, slice):
@@ -2487,8 +2484,7 @@ class DataFrame(_Frame):
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
 
-            dsk = {(name, i): (operator.getitem, (self._name, i), key)
-                   for i in range(self.npartitions)}
+            dsk = broadcast(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         if isinstance(key, Series):
@@ -2497,8 +2493,7 @@ class DataFrame(_Frame):
             if self.divisions != key.divisions:
                 from .multi import _maybe_align_partitions
                 self, key = _maybe_align_partitions([self, key])
-            dsk = {(name, i): (M.__getitem__, (self._name, i), (key._name, i))
-                   for i in range(self.npartitions)}
+            dsk = broadcast(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return new_dd_object(graph, name, self, self.divisions)
         raise NotImplementedError(key)
@@ -2538,12 +2533,7 @@ class DataFrame(_Frame):
 
     def __getattr__(self, key):
         if key in self.columns:
-            meta = self._meta[key]
-            name = 'getitem-%s' % tokenize(self, key)
-            dsk = {(name, i): (operator.getitem, (self._name, i), key)
-                   for i in range(self.npartitions)}
-            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-            return new_dd_object(graph, name, meta, self.divisions)
+            return self[key]
         raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
     def __dir__(self):
@@ -3302,7 +3292,7 @@ def elemwise(op, *args, **kwargs):
         if not isinstance(a, Array):
             continue
         # Ensure that they have similar-ish chunk structure
-        if not all(len(a.chunks[0]) == df.npartitions for df in dfs):
+        if not all(not a.chunks or len(a.chunks[0]) == df.npartitions for df in dfs):
             msg = ("When combining dask arrays with dataframes they must "
                    "match chunking exactly.  Operation: %s" % funcname(op))
             raise ValueError(msg)
@@ -3324,13 +3314,7 @@ def elemwise(op, *args, **kwargs):
             if isinstance(d, Scalar) or _is_broadcastable(d)
             else core.flatten(d.__dask_keys__()) for d in dasks]
 
-    if other:
-        dsk = {(_name, i):
-               (apply, partial_by_order, list(frs),
-                {'function': op, 'other': other})
-               for i, frs in enumerate(zip(*keys))}
-    else:
-        dsk = {(_name, i): (op,) + frs for i, frs in enumerate(zip(*keys))}
+    dsk = broadcast(op, _name, *args, **kwargs)
 
     graph = HighLevelGraph.from_collections(_name, dsk, dependencies=dasks)
 
@@ -3686,15 +3670,16 @@ def map_partitions(func, *args, **kwargs):
     else:
         kwargs_task = kwargs2
 
+    dsk = broadcast(func, name, *args2, **kwargs_task)
     dfs = [df for df in args if isinstance(df, _Frame)]
-    dsk = {}
-    for i in range(dfs[0].npartitions):
-        values = [(a._name, i if isinstance(a, _Frame) else 0)
-                  if isinstance(a, (_Frame, Scalar)) else a for a in args2]
-        dsk[(name, i)] = (apply_and_enforce, func, values, kwargs_task, meta)
+    # dsk = {}
+    # for i in range(dfs[0].npartitions):
+    #     values = [(a._name, i if isinstance(a, _Frame) else 0)
+    #               if isinstance(a, (_Frame, Scalar)) else a for a in args2]
+    #     dsk[(name, i)] = (apply_and_enforce, func, values, kwargs_task, meta)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
-    return new_dd_object(graph, name, meta, args[0].divisions)
+    return new_dd_object(graph, name, meta, dfs[0].divisions)
 
 
 def apply_and_enforce(func, args, kwargs, meta):
@@ -3785,9 +3770,7 @@ def _rename_dask(df, names):
     metadata = _rename(names, df._meta)
     name = 'rename-{0}'.format(tokenize(df, metadata))
 
-    dsk = {}
-    for i in range(df.npartitions):
-        dsk[name, i] = (_rename, metadata, (df._name, i))
+    dsk = broadcast(_rename, name, metadata, df)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
     return new_dd_object(graph, name, metadata, df.divisions)
@@ -4514,10 +4497,18 @@ def new_dd_object(dsk, name, meta, divisions):
         chunks = (((np.nan,) * (len(divisions) - 1),) +
                   tuple((d,) for d in meta.shape[1:]))
         if len(chunks) > 1:
+            from ..array.top import TOP
             layer = dsk.layers[name]
-            suffix = (0,) * (len(chunks) - 1)
-            for i in range(len(chunks[0])):
-                layer[(name, i) + suffix] = layer.pop((name, i))
+            if isinstance(layer, TOP):
+                layer.new_axes['j'] = chunks[1][0]
+                layer.output_indices = layer.output_indices + ('j',)
+            else:
+                suffix = (0,) * (len(chunks) - 1)
+                for i in range(len(chunks[0])):
+                    layer[(name, i) + suffix] = layer.pop((name, i))
         return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
     else:
         return get_parallel_type(meta)(dsk, name, meta, divisions)
+
+
+from .broadcast import broadcast
