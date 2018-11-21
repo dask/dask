@@ -1473,7 +1473,7 @@ def test_groupby_agg_custom__mode():
         'custom_mode',
         lambda s: s.apply(lambda s: [s.value_counts()]),
         agg_mode,
-        lambda s: s.map(lambda i: i[0].argmax()),
+        lambda s: s.map(lambda i: i[0].idxmax()),
     )
 
     d = pd.DataFrame({

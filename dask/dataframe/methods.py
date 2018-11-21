@@ -117,14 +117,18 @@ def index_count(x):
 
 def mean_aggregate(s, n):
     try:
-        return s / n
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter('always')
+            return s / n
     except ZeroDivisionError:
         return np.float64(np.nan)
 
 
 def var_aggregate(x2, x, n, ddof):
     try:
-        result = (x2 / n) - (x / n)**2
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter('always')
+            result = (x2 / n) - (x / n)**2
         if ddof != 0:
             result = result * n / (n - ddof)
         return result

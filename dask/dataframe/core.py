@@ -3906,7 +3906,9 @@ def cov_corr_chunk(df, corr=False):
     cov = df.cov().values
     dtype = [('sum', sums.dtype), ('count', counts.dtype), ('cov', cov.dtype)]
     if corr:
-        mu = (sums / counts).T
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            mu = (sums / counts).T
         m = np.zeros(shape)
         mask = df.isnull().values
         for idx, x in enumerate(df):
