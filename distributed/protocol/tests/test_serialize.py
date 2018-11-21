@@ -266,11 +266,11 @@ def my_dumps(obj, context=None):
 
 
 def my_loads(header, frames):
-    obj = MyObject(**msgpack.loads(frames[0], encoding='utf8'))
+    obj = MyObject(**msgpack.loads(frames[0], raw=False))
 
     # to provide something to test against, lets just attach the context to
     # the object itself
-    obj.context = msgpack.loads(frames[1], encoding='utf8')
+    obj.context = msgpack.loads(frames[1], raw=False)
     return obj
 
 

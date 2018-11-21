@@ -4,6 +4,7 @@ from functools import partial
 import os
 import sys
 import threading
+import warnings
 
 import pytest
 
@@ -28,7 +29,9 @@ from distributed.comm import (tcp, inproc, connect, listen, CommClosedError,
 
 EXTERNAL_IP4 = get_ip()
 if has_ipv6():
-    EXTERNAL_IP6 = get_ipv6()
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter('always')
+        EXTERNAL_IP6 = get_ipv6()
 
 
 ca_file = get_cert('tls-ca-cert.pem')

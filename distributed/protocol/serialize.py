@@ -362,7 +362,7 @@ def deserialize_bytes(b):
     frames = unpack_frames(b)
     header, frames = frames[0], frames[1:]
     if header:
-        header = msgpack.loads(header, encoding='utf8', use_list=False)
+        header = msgpack.loads(header, raw=False, use_list=False)
     else:
         header = {}
     frames = decompress(header, frames)
