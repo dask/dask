@@ -102,6 +102,7 @@ def test_reduction_errors():
         x.sum(axis=-3)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('dtype', ['f4', 'i4'])
 def test_reductions_2D(dtype):
     x = np.arange(1, 122).reshape((11, 11)).astype(dtype)
