@@ -20,6 +20,7 @@ from .creation import arange, diag, empty, indices
 from .utils import safe_wraps, validate_axis
 from .wrap import ones
 from .ufunc import multiply, sqrt
+from .ma import getmaskarray
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    asanyarray, concatenate, stack, atop, broadcast_shapes,
@@ -1326,7 +1327,8 @@ def average(a, axis=None, weights=None, returned=False):
             # setup wgt to broadcast along axis
             wgt = broadcast_to(wgt, (a.ndim - 1) * (1,) + wgt.shape)
             wgt = wgt.swapaxes(-1, axis)
-
+        # if there is a masked array
+        wgt = wgt * (~getmaskarray(a))
         scl = wgt.sum(axis=axis, dtype=result_dtype)
         avg = multiply(a, wgt, dtype=result_dtype).sum(axis) / scl
 
