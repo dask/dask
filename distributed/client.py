@@ -2262,7 +2262,8 @@ class Client(Node):
 
     def get(self, dsk, keys, restrictions=None, loose_restrictions=None,
             resources=None, sync=True, asynchronous=None, direct=None,
-            retries=None, priority=0, fifo_timeout='60s', **kwargs):
+            retries=None, priority=0, fifo_timeout='60s', actors=None,
+            **kwargs):
         """ Compute dask graph
 
         Parameters
@@ -2293,13 +2294,17 @@ class Client(Node):
         --------
         Client.compute: Compute asynchronous collections
         """
-        futures = self._graph_to_futures(dsk, set(flatten([keys])),
-                                         restrictions, loose_restrictions,
-                                         resources=resources,
-                                         fifo_timeout=fifo_timeout,
-                                         retries=retries,
-                                         user_priority=priority,
-                                         )
+        futures = self._graph_to_futures(
+            dsk,
+            keys=set(flatten([keys])),
+            restrictions=restrictions,
+            loose_restrictions=loose_restrictions,
+            resources=resources,
+            fifo_timeout=fifo_timeout,
+            retries=retries,
+            user_priority=priority,
+            actors=actors,
+        )
         packed = pack_data(keys, futures)
         if sync:
             if getattr(thread_state, 'key', False):

@@ -118,7 +118,7 @@ class Actor(WrappedKey):
     def __getattr__(self, key):
         attr = getattr(self._cls, key)
 
-        if self._future and not self._future.status == 'finished':
+        if self._future and self._future.status not in ('finished', 'pending'):
             raise ValueError("Worker holding Actor was lost.  Status: " + self._future.status)
 
         if callable(attr):
