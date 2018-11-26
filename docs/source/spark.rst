@@ -165,8 +165,12 @@ parallelism to existing solutions then dask may be a good fit, especially if
 you are already using Python and associated libraries like NumPy and Pandas.
 
 If you are looking to manage a terabyte or less of tabular CSV or JSON data
-then you should forget both Spark and Dask and use Postgres_ or MongoDB_.
+then you should consider forgetting both Spark and Dask and use Postgres_ or MongoDB_.
 
+Data size is only one of the decision variables in determing what tool to use.
+Before abandoning Dask or Spark, consider ease of use, functionality, operation type,
+and other salient concerns. Dask can be useful at any data size, but other tools can
+as well. Your decision should take all factors into consideration.
 
 .. _Spark: https://spark.apache.org/
 .. _PySpark: https://spark.apache.org/docs/latest/api/python/
