@@ -1372,7 +1372,7 @@ def test_passing_parquetfile(tmpdir):
 
     dd.to_parquet(ddf, path)
     pf = fp.ParquetFile(path)
-    shutil.rmtree(tmpdir)
+    shutil.rmtree(path)
 
     # should pass, because no need to re-read metadata
     dd.read_parquet(pf)
