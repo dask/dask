@@ -1137,6 +1137,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
             mode='rb',
             storage_options=storage_options
         )
+        paths = path
     else:
         read = get_engine(engine)['read']
         fs, fs_token, paths = get_fs_token_paths(
