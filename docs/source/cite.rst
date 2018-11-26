@@ -21,8 +21,7 @@ A BibTeX entry for LaTeX users follows::
      url = {https://dask.org},
    }
 
-The full author list is available using git, or by looking at the `AUTHORS file
-<https://raw.githubusercontent.com/dask/dask/master/AUTHORS.md>`_.
+The full author list is available using ``git`` (e.g. ``git shortlog -ns``).
 
 Papers about parts of Dask
 --------------------------
