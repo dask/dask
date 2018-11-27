@@ -2170,7 +2170,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @classmethod
     def _bind_operator_method(cls, name, op):
-        """ bind operator method like DataFrame.add to this class """
+        """ bind operator method like Series.add to this class """
 
         def meth(self, other, level=None, fill_value=None, axis=0):
             if level is not None:
@@ -2184,7 +2184,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison):
-        """ bind comparison method like DataFrame.add to this class """
+        """ bind comparison method like Series.eq to this class """
 
         def meth(self, other, level=None, fill_value=None, axis=0):
             if level is not None:
@@ -2918,7 +2918,7 @@ class DataFrame(_Frame):
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison):
-        """ bind comparison method like DataFrame.add to this class """
+        """ bind comparison method like DataFrame.eq to this class """
 
         def meth(self, other, axis='columns', level=None):
             if level is not None:
