@@ -55,7 +55,7 @@ of the collection:
 
 The compute method takes a number of keywords:
 
-- ``get``: a scheduler ``get`` function, overrides the default for the collection
+- ``scheduler``: the name of the desired scheduler like ``"threads"``, ``"processes"``, or ``"single-threaded"`, a ``get`` function, or a ``dask.distributed.Client`` object.  Overrides the default for the collection.
 - ``**kwargs``: extra keywords to pass on to the scheduler ``get`` function.
 
 See also: :ref:`configuring-schedulers`.
