@@ -3,13 +3,13 @@ Best Practices
 
 It is easy to get started with Dask delayed, but using it *well* does require
 some experience.  This page contains suggestions for best practices, and
-includes solutions to common problems:
+includes solutions to common problems.
 
 
 Call delayed on the function, not the result
 --------------------------------------------
 
-Dask.delayed operates on functions, like ``dask.delayed(f)(x, y)``, not on their results like ``dask.delayed(f(x, y))``.  When you do the latter Python first calculates ``f(x, y)`` before Dask has a chance to step in
+Dask delayed operates on functions like ``dask.delayed(f)(x, y)``, not on their results like ``dask.delayed(f(x, y))``.  When you do the latter, Python first calculates ``f(x, y)`` before Dask has a chance to step in.
 
 **Don't**
 
@@ -27,9 +27,9 @@ Dask.delayed operates on functions, like ``dask.delayed(f)(x, y)``, not on their
 Compute on lots of computation at once
 --------------------------------------
 
-To improve parallelism you want to include lots of computation in each compute call.
-Ideally you want to make many dask.delayed calls to define your computation and
-then only call ``dask.compute`` at the end.  It's ok to call ``dask.compute``
+To improve parallelism, you want to include lots of computation in each compute call.
+Ideally, you want to make many ``dask.delayed`` calls to define your computation and
+then call ``dask.compute`` only at the end.  It is ok to call ``dask.compute``
 in the middle of your computation as well, but everything will stop there as
 Dask computes those results before moving forward with your code.
 
@@ -56,7 +56,7 @@ Dask computes those results before moving forward with your code.
 Don't mutate inputs
 -------------------
 
-Your functions should not change the inputs directly
+Your functions should not change the inputs directly.
 
 **Don't**
 
@@ -75,7 +75,7 @@ Your functions should not change the inputs directly
    def f(x):
        return x + 1
 
-If you need to use a mutable operation then make a copy within your function first
+If you need to use a mutable operation, then make a copy within your function first:
 
 .. code-block:: python
 
@@ -89,9 +89,9 @@ If you need to use a mutable operation then make a copy within your function fir
 Avoid global state
 ------------------
 
-Ideally your operations shouldn't rely on global state.  Using global state
+Ideally, your operations shouldn't rely on global state.  Using global state
 *might* work if you only use threads, but when you move to multiprocessing or
-distributed computing then you will likely encounter confusing errors
+distributed computing then you will likely encounter confusing errors.
 
 **Don't**
 
@@ -128,11 +128,11 @@ to pass the output to something that eventually calls compute.
 Break up computations into many pieces
 --------------------------------------
 
-Every dask.delayed function call is a single operation from Dask's perspective.
-You achieve parallelism by having many dask.delayed calls, not by using only a
-single one.  Dask will not look inside a function decorated with dask.delayed
-and parallelize that code internally.  It needs your help to find good places
-to break up a computation.
+Every ``dask.delayed`` function call is a single operation from Dask's perspective.
+You achieve parallelism by having many delayed calls, not by using only a
+single one: Dask will not look inside a function decorated with ``@dask.delayed``
+and parallelize that code internally.  To accomplish that, it needs your help to 
+find good places to break up a computation.
 
 **Don't**
 
@@ -191,9 +191,9 @@ Avoid too many tasks
 --------------------
 
 Every delayed task has an overhead of a few hundred microseconds.  Usually this
-is ok, but it can become a problem if you apply dask.delayed too finely.  In
-this case it's often best to break up your many tasks into batches, or use one
-of the dask collections to help you.
+is ok, but it can become a problem if you apply ``dask.delayed`` too finely.  In
+this case, it's often best to break up your many tasks into batches or use one
+of the Dask collections to help you.
 
 **Don't**
 
@@ -233,11 +233,11 @@ of the dask collections to help you.
 Avoid calling delayed within delayed functions
 ----------------------------------------------
 
-Often if you are new to using Dask.delayed you place dask.delayed calls
-everywhere and hope for the best.  While this may actually work it's usually
+Often, if you are new to using Dask delayed, you place ``dask.delayed`` calls
+everywhere and hope for the best.  While this may actually work, it's usually
 slow and results in hard-to-understand solutions.
 
-Usually you never call dask.delayed within dask.delayed functions.
+Usually you never call ``dask.delayed`` within ``dask.delayed`` functions.
 
 **Don't**
 
@@ -253,7 +253,7 @@ Usually you never call dask.delayed within dask.delayed functions.
 
 **Do**
 
-Instead, because this function only does delayed work it is very fast and so
+Instead, because this function only does delayed work, it is very fast and so
 there is no reason to delay it.
 
 .. code-block:: python
@@ -266,17 +266,16 @@ there is no reason to delay it.
         return result
 
 
-
 Don't call dask.delayed on other Dask collections
 -------------------------------------------------
 
-When you place a dask array or dask dataframe into a delayed call that function
-will receive the Numpy or Pandas equivalent.  Beware that if your array is
-large then this might crash your workers.
+When you place a Dask array or Dask DataFrame into a delayed call, that function
+will receive the NumPy or Pandas equivalent.  Beware that if your array is
+large, then this might crash your workers.
 
 Instead, it's more common to use methods like ``da.map_blocks`` or
-``df.map_partitions``, or to turn your arrays or dataframes into *many* delayed
-objects
+``df.map_partitions``, or to turn your arrays or DataFrames into *many* delayed
+objects.
 
 **Don't**
 
@@ -300,13 +299,12 @@ objects
 
    delayed_values = [dask.delayed(train)(part) for part in partitions]
 
-However, if you don't mind turning your dask array/dataframe into a single
-chunk then this is ok.
+However, if you don't mind turning your Dask array/DataFrame into a single
+chunk, then this is ok.
 
 .. code-block:: python
 
    dask.delayed(train)(..., y=df.sum())
-
 
 
 Avoid repeatedly putting large inputs into delayed calls
@@ -329,7 +327,7 @@ your data separately for each function call.
    results = [dask.delayed(train)(x, i) for i in range(1000)]
 
 
-Every call to ``dask.delayed(train)(x, ...)`` has to hash the numpy array ``x``, which slows things down.
+Every call to ``dask.delayed(train)(x, ...)`` has to hash the NumPy array ``x``, which slows things down.
 
 
 **Do**
