@@ -2186,11 +2186,12 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     def _bind_comparison_method(cls, name, comparison):
         """ bind comparison method like DataFrame.add to this class """
 
-        def meth(self, other, level=None, axis=0):
+        def meth(self, other, level=None, fill_value=None, axis=0):
             if level is not None:
                 raise NotImplementedError('level must be None')
             axis = self._validate_axis(axis)
-            return elemwise(comparison, self, other, axis=axis)
+            op = partial(comparison, fill_value=fill_value)
+            return elemwise(op, self, other, axis=axis)
 
         meth.__doc__ = comparison.__doc__
         bind_method(cls, name, meth)
