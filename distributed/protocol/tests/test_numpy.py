@@ -64,9 +64,6 @@ def test_serialize():
     np.zeros((1, 1000, 1000)),
     np.arange(12)[::2],  # non-contiguous array
     np.ones(shape=(5, 6)).astype(dtype=[('total', '<f8'), ('n', '<f8')]),
-    np.ma.masked_array((5, 6), mask=[True, False]),  # int array
-    np.ma.masked_array((5., 6.), mask=[True, False]),  # float array (different default fill_value)
-    np.ma.masked_array((5., 6.), mask=[True, False], fill_value=np.nan),
 ])
 def test_dumps_serialize_numpy(x):
     header, frames = serialize(x)
@@ -82,18 +79,20 @@ def test_dumps_serialize_numpy(x):
         assert x.strides == y.strides
 
 
-def test_masked_array_serialize():
-    data = (5, 6)
-    mask = [True, False]
-    fill_value = 999
-    x = np.ma.masked_array(data, mask=mask, fill_value=fill_value)
-    header, frames = serialize(x)
-    y = deserialize(header, frames)
-
-    # Explicitly test the particular elements of the masked array.
-    np.testing.assert_equal(data, y.data)
-    np.testing.assert_equal(mask, y.mask)
-    assert fill_value == y.fill_value
+@pytest.mark.parametrize('x', [
+    np.ma.masked_array([5, 6], mask=[True, False], fill_value=10, dtype='i4'),
+    np.ma.masked_array([5., 6.], mask=[True, False], fill_value=10, dtype='f4'),
+    np.ma.masked_array([5., 6.], mask=[True, False], fill_value=np.nan, dtype='f8'),
+    np.ma.masked_array([5., 6.], mask=np.ma.nomask, fill_value=np.nan, dtype='f8'),
+    np.ma.masked_array([True, False], mask=np.ma.nomask, fill_value=True, dtype='bool'),
+    np.ma.masked_array(['a', 'b'], mask=[True, False], fill_value='c', dtype='O')
+])
+def test_masked_array_serialize(x):
+    y, = loads(dumps([to_serialize(x)]))
+    assert x.data.dtype == y.data.dtype
+    np.testing.assert_equal(x.data, y.data)
+    np.testing.assert_equal(x.mask, y.mask)
+    np.testing.assert_equal(x.fill_value, y.fill_value)
 
 
 def test_dumps_serialize_numpy_custom_dtype():

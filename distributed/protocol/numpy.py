@@ -105,33 +105,41 @@ def deserialize_numpy_ndarray(header, frames):
 
 @dask_serialize.register(np.ma.core.MaskedArray)
 def serialize_numpy_maskedarray(x):
-    # Separate elements of the masked array that we need to deal with discretely.
-    data = x.data
-    mask = x.mask
-    fill_value = x.fill_value
+    data_header, frames = serialize_numpy_ndarray(x.data)
+    header = {'data-header': data_header,
+              'nframes': len(frames)}
 
-    # Make use of existing numpy serialization for the two ndarray elements of
-    # the masked array.
-    data_header, data_frames = serialize_numpy_ndarray(data)
-    mask_header, mask_frames = serialize_numpy_ndarray(mask)
+    # Serialize mask if present
+    if x.mask is not np.ma.nomask:
+        mask_header, mask_frames = serialize_numpy_ndarray(x.mask)
+        header['mask-header'] = mask_header
+        frames += mask_frames
 
-    header = {"data-header": data_header,
-              "mask-header": mask_header,
-              "fill_value": fill_value,
-              "nframes": len(data_frames)}
-    return header, data_frames + mask_frames
+    # Only a few dtypes have python equivalents msgpack can serialize
+    if isinstance(x.fill_value, (np.integer, np.floating, np.bool_)):
+        serialized_fill_value = (False, x.fill_value.item())
+    else:
+        serialized_fill_value = (True, pickle.dumps(x.fill_value))
+    header['fill-value'] = serialized_fill_value
+
+    return header, frames
 
 
 @dask_deserialize.register(np.ma.core.MaskedArray)
 def deserialize_numpy_maskedarray(header, frames):
-    data_frames = frames[:header["nframes"]]
-    mask_frames = frames[header["nframes"]:]
     data_header = header["data-header"]
-    mask_header = header["mask-header"]
-
-    # Get the individual elements of the masked array in order to reconstruct.
+    data_frames = frames[:header["nframes"]]
     data = deserialize_numpy_ndarray(data_header, data_frames)
-    mask = deserialize_numpy_ndarray(mask_header, mask_frames)
-    fill_value = header["fill_value"]
+
+    if 'mask-header' in header:
+        mask_header = header["mask-header"]
+        mask_frames = frames[header["nframes"]:]
+        mask = deserialize_numpy_ndarray(mask_header, mask_frames)
+    else:
+        mask = np.ma.nomask
+
+    pickled_fv, fill_value = header["fill-value"]
+    if pickled_fv:
+        fill_value = pickle.loads(fill_value)
 
     return np.ma.masked_array(data, mask=mask, fill_value=fill_value)
