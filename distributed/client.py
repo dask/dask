@@ -3180,6 +3180,8 @@ class Client(Node):
                              packages=packages)
         except KeyError:
             scheduler = None
+        except TypeError:  # packages keyword not supported
+            scheduler = sync(self.loop, self.scheduler.versions)  # this raises
 
         workers = sync(self.loop, self.scheduler.broadcast,
                        msg={'op': 'versions', 'packages': packages})
