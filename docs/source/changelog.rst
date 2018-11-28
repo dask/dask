@@ -1,6 +1,36 @@
 Changelog
 =========
 
+1.0.0 / 2018-11-28
+------------------
+
+Array
++++++
+
+-  Add nancumsum/nancumprod unit tests (:pr:`4215`) `Guido Imperiale`_
+
+DataFrame
++++++++++
+
+-  Add index to to_dask_dataframe docstring (:pr:`4232`) `James Bourbeau`_
+-  Text and fix when appending categoricals with fastparquet (:pr:`4245`) `Martin Durant`_
+-  Don't reread metadata when passing ParquetFile to read_parquet (:pr:`4247`) `Martin Durant`_
+
+Documentation
++++++++++++++
+
+-  Copy edit documentation (:pr:`4222`) (:pr:`4224`) (:pr:`4228`) (:pr:`4231`) (:pr:`4230`) (:pr:`4234`) (:pr:`4235`) (:pr:`4254`) `Miguel Farrajota`_
+-  Updated doc for the new scheduler keyword (:pr:`4251`) `@milesial`_
+
+
+Core
+++++
+
+-  Avoid a few warnings (:pr:`4223`) `Matthew Rocklin`_
+-  Remove dask.store module (:pr:`4221`) `Matthew Rocklin`_
+-  Remove AUTHORS.md `Jim Crist`_
+
+
 0.20.2 / 2018-11-15
 -------------------
 
@@ -1620,3 +1650,4 @@ Other
 .. _`Damien Garaud`: https://github.com/geraud
 .. _`Jonathan Fraine`: https://github.com/exowanderer
 .. _`Carlos Valiente`: https://github.com/carletes
+.. _`@milesial`: https://github.com/milesial
