@@ -1,6 +1,17 @@
 Changelog
 =========
 
+1.25.0 - 2018-11-28
+-------------------
+
+-  Fixed the 404 error on the Scheduler Dashboard homepage (:pr:`2361`) `Michael Wheeler`_
+-  Consolidate two Worker classes into one (:pr:`2363`) `Matthew Rocklin`_
+-  Avoid warnings in pyarrow and msgpack (:pr:`2364`) `Matthew Rocklin`_
+-  Avoid race condition in Actor's Future (:pr:`2374`) `Matthew Rocklin`_
+-  Support missing packages keyword in Client.get_versions (:pr:`2379`) `Matthew Rocklin`_
+-  Fixup serializing masked arrays (:pr:`2373`) `Jim Crist`_
+
+
 1.24.2 - 2018-11-15
 -------------------
 
@@ -8,6 +19,7 @@ Changelog
 -  Fix regression that dropped support for Tornado 4 (:pr:`2353`) `Roy Wedge`_
 -  Avoid deprecation warnings (:pr:`2355`) (:pr:`2357`) `Matthew Rocklin`_
 -  Fix typo in worker documentation (:pr:`2349`) `Tom Rochette`_
+
 
 1.24.1 - 2018-11-09
 -------------------
@@ -846,3 +858,4 @@ significantly without many new features.
 .. _`NotSqrt`: https://github.com/NotSqrt
 .. _`Tom Rochette`: https://github.com/tomzx
 .. _`Roy Wedge`: https://github.com/rwedge
+.. _`Michael Wheeler`: https://github.com/mikewheel
