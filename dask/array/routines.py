@@ -20,7 +20,6 @@ from .creation import arange, diag, empty, indices
 from .utils import safe_wraps, validate_axis
 from .wrap import ones
 from .ufunc import multiply, sqrt
-from .ma import getmaskarray
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
                    asanyarray, concatenate, stack, atop, broadcast_shapes,
@@ -1293,11 +1292,11 @@ def insert(arr, obj, values, axis):
     return concatenate(interleaved, axis=axis)
 
 
-@wraps(np.average)
-def average(a, axis=None, weights=None, returned=False):
+def _average(a, axis=None, weights=None, returned=False, is_masked=False):
     # This was minimally modified from numpy.average
     # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
     # or NUMPY_LICENSE.txt within this directory
+    # Wrapper used by da.average or da.ma.average.
     a = asanyarray(a)
 
     if weights is None:
@@ -1327,8 +1326,9 @@ def average(a, axis=None, weights=None, returned=False):
             # setup wgt to broadcast along axis
             wgt = broadcast_to(wgt, (a.ndim - 1) * (1,) + wgt.shape)
             wgt = wgt.swapaxes(-1, axis)
-        # if there is a masked array
-        wgt = wgt * (~getmaskarray(a))
+        if is_masked:
+            from .ma import getmaskarray
+            wgt = wgt * (~getmaskarray(a))
         scl = wgt.sum(axis=axis, dtype=result_dtype)
         avg = multiply(a, wgt, dtype=result_dtype).sum(axis) / scl
 
@@ -1338,3 +1338,8 @@ def average(a, axis=None, weights=None, returned=False):
         return avg, scl
     else:
         return avg
+
+
+@wraps(np.average)
+def average(a, axis=None, weights=None, returned=False):
+    return _average(a, axis, weights, returned, is_masked=False)
