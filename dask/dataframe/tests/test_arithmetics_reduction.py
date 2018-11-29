@@ -1070,3 +1070,17 @@ def test_reductions_frame_nan(split_every):
                   ddf.sem(axis=1, skipna=False, ddof=0, split_every=split_every))
         assert_eq(df.mean(axis=1, skipna=False),
                   ddf.mean(axis=1, skipna=False, split_every=split_every))
+
+
+@pytest.mark.parametrize('comparison', ['lt', 'gt', 'le', 'ge', 'ne', 'eq'])
+def test_series_comparison_nan(comparison):
+    s = pd.Series([1, 2, 3, 4, 5, 6, 7])
+    s_nan = pd.Series([1, -1, 8, np.nan, 5, 6, 2.4])
+    ds = dd.from_pandas(s, 3)
+    ds_nan = dd.from_pandas(s_nan, 3)
+
+    fill_value = 7
+    comparison_pd = getattr(s, comparison)
+    comparison_dd = getattr(ds, comparison)
+    assert_eq(comparison_dd(ds_nan, fill_value=fill_value),
+              comparison_pd(s_nan, fill_value=fill_value))
