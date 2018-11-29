@@ -99,6 +99,9 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_tokenize__(self):
         return self._name
 
+    def __dask_layers__(self):
+        return [self.key]
+
     __dask_optimize__ = globalmethod(optimize, key='dataframe_optimize',
                                      falsey=dont_optimize)
     __dask_scheduler__ = staticmethod(threaded.get)
@@ -3664,13 +3667,17 @@ def map_partitions(func, *args, **kwargs):
         else:
             args2.append(arg)
 
-    kwargs_task, deps = unpack_collections(kwargs2)
-    if deps:
-        dependencies.extend(deps)
-    else:
-        kwargs_task = kwargs2
+    # Normalize keyword arguments
+    kwargs3 = {}
+    from ..array.core import normalize_arg
+    for k, v in kwargs.items():
+        vv = v
+        v = normalize_arg(v)
+        v, collections = unpack_collections(v)
+        dependencies.extend(collections)
+        kwargs3[k] = v
 
-    dsk = broadcast(func, name, *args2, **kwargs_task)
+    dsk = broadcast(func, name, *args2, dependencies=dependencies, **kwargs3)
     dfs = [df for df in args if isinstance(df, _Frame)]
     # dsk = {}
     # for i in range(dfs[0].npartitions):

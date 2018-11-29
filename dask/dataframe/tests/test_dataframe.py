@@ -608,6 +608,7 @@ def test_map_partitions_method_names():
     assert b.dtype == 'i8'
 
 
+@pytest.mark.xfail(reason='now we use SubgraphCallables')
 def test_map_partitions_keeps_kwargs_readable():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     a = dd.from_pandas(df, npartitions=2)
@@ -3356,3 +3357,11 @@ def test_broadcast():
     y = ddf - (ddf.sum() + 1)
     assert_eq(ddf - (ddf.sum() + 1),
               df - (df.sum() + 1))
+
+
+def test_scalar_with_array():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    da.utils.assert_eq(df.x.values + df.x.mean(),
+                       ddf.x.values + ddf.x.mean())
