@@ -8,6 +8,7 @@ import numpy as np
 from ..base import normalize_token
 from .core import (concatenate_lookup, tensordot_lookup, map_blocks,
                    asanyarray, atop)
+from .routines import _average
 
 
 if LooseVersion(np.__version__) < '1.11.2':
@@ -249,3 +250,8 @@ def set_fill_value(a, fill_value):
     res = a.map_blocks(_set_fill_value, fill_value)
     a.dask = res.dask
     a.name = res.name
+
+
+@wraps(np.ma.average)
+def average(a, axis=None, weights=None, returned=False):
+    return _average(a, axis, weights, returned, is_masked=True)
