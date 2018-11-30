@@ -114,7 +114,7 @@ Top level user functions:
    logical_not
    logical_or
    logical_xor
-   map_blocks
+   ~core.map_blocks
    map_overlap
    matmul
    max
@@ -145,7 +145,7 @@ Top level user functions:
    outer
    pad
    percentile
-   PerformanceWarning
+   ~core.PerformanceWarning
    piecewise
    prod
    ptp
