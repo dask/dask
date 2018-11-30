@@ -3714,6 +3714,8 @@ def test_write_scheduler_file(c):
 
 
 def test_get_versions(c):
+    requests = pytest.importorskip('requests')
+
     v = c.get_versions()
     assert v['scheduler'] is not None
     assert v['client'] is not None
@@ -3726,7 +3728,6 @@ def test_get_versions(c):
     # that this does not raise
 
     v = c.get_versions(packages=['requests'])
-    import requests
     assert dict(v['client']['packages']['optional'])['requests'] == requests.__version__
 
 

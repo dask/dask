@@ -193,9 +193,10 @@ class WorkerState(object):
     # XXX need a state field to signal active/removed?
 
     __slots__ = (
+        'actors',
         'address',
         'has_what',
-        'info',
+        'last_seen',
         'local_directory',
         'memory_limit',
         'metrics',
@@ -206,30 +207,34 @@ class WorkerState(object):
         'pid',
         'processing',
         'resources',
-        'time_delay',
-        'used_resources',
         'services',
         'status',
-        'last_seen',
-        'actors',
+        'time_delay',
+        'used_resources',
     )
 
-    def __init__(self, worker, ncores, memory_limit, name=None):
-        self.address = worker
-        self.has_what = set()
-        self.memory_limit = memory_limit
+    def __init__(self, address=None, pid=0, name=None, ncores=0, memory_limit=0,
+                 local_directory=None, services=None):
+        self.address = address
+        self.pid = pid
         self.name = name
-        self.nbytes = 0
         self.ncores = ncores
+        self.memory_limit = memory_limit
+        self.local_directory = local_directory
+        self.services = services or {}
+
+        self.status = 'running'
+        self.nbytes = 0
         self.occupancy = 0
-        self.pid = 0
-        self.processing = dict()
+        self.metrics = {}
+        self.last_seen = 0
+        self.time_delay = 0
+
+        self.actors = set()
+        self.has_what = set()
+        self.processing = {}
         self.resources = {}
         self.used_resources = {}
-        self.last_seen = 0
-        self.services = {}
-        self.actors = set()
-        self.metrics = {}
 
     @property
     def host(self):
@@ -1277,9 +1282,15 @@ class Scheduler(ServerNode):
             if ws is not None:
                 raise ValueError("Worker already exists %s" % address)
 
-            ws = WorkerState(address, ncores, memory_limit, name)
-            ws.status = 'running'
-            self.workers[address] = ws
+            self.workers[address] = ws = WorkerState(
+                    address=address,
+                    pid=pid,
+                    ncores=ncores,
+                    memory_limit=memory_limit,
+                    name=name,
+                    local_directory=local_directory,
+                    services=services
+            )
 
             if name in self.aliases:
                 msg = {'status': 'error',
@@ -1296,10 +1307,6 @@ class Scheduler(ServerNode):
 
             self.total_ncores += ncores
             self.aliases[name] = address
-            ws.name = name
-            ws.pid = pid
-            ws.services = services
-            ws.local_directory = local_directory
 
             response = self.heartbeat_worker(address=address,
                                              resolve_address=resolve_address,
