@@ -50,3 +50,16 @@ def test_fuse_ave_width():
 
     assert len(a) < len(b)
     assert len(a) <= 15
+
+
+def test_optimize_atop():
+    from dask.array.optimization import optimize_atop
+    df = pd.DataFrame({'x': range(10), 'y': range(10)})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    for i in range(10):
+        ddf['x'] = ddf.x + 1 + ddf.y
+
+    graph = optimize_atop(ddf.dask)
+
+    assert len(graph) <= 4
