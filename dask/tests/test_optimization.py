@@ -1089,10 +1089,6 @@ def test_fuse_reductions_multiple_input():
     })
 
 
-def dontcall(x):
-    raise ValueError("shouldn't be called")
-
-
 def func_with_kwargs(a, b, c=2):
     return a + b + c
 
@@ -1108,7 +1104,6 @@ def test_SubgraphCallable():
            'd': (inc, 'a'),
            'e': (add, 'c', 'd'),
            'f': ['a', 2, 'b', (add, 'b', (sum, non_hashable))],
-           'g': (dontcall, 'in1'),
            'h': (add, (sum, 'f'), (sum, ['a', 'b']))}
 
     f = SubgraphCallable(dsk, 'h', ['in1', 'in2'], name='test')

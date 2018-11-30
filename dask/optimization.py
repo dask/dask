@@ -4,10 +4,10 @@ import math
 import re
 from operator import getitem
 
-from . import config
+from . import config, core
 from .compatibility import unicode
 from .core import (istask, get_dependencies, subs, toposort,
-                   flatten, reverse_dict, ishashable, _get_recursive)
+                   flatten, reverse_dict, ishashable)
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -938,8 +938,8 @@ class SubgraphCallable(object):
         if not len(args) == len(self.inkeys):
             raise ValueError("Expected %d args, got %d"
                              % (len(self.inkeys), len(args)))
-        return _get_recursive(self.dsk, self.outkey,
-                              dict(zip(self.inkeys, args)))
+        return core.get(self.dsk, self.outkey,
+                        dict(zip(self.inkeys, args)))
 
     def __reduce__(self):
         return (SubgraphCallable,
