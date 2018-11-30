@@ -87,12 +87,17 @@ def test_dumps_serialize_numpy(x):
     np.ma.masked_array([True, False], mask=np.ma.nomask, fill_value=True, dtype='bool'),
     np.ma.masked_array(['a', 'b'], mask=[True, False], fill_value='c', dtype='O')
 ])
-def test_masked_array_serialize(x):
+def test_serialize_numpy_ma_masked_array(x):
     y, = loads(dumps([to_serialize(x)]))
     assert x.data.dtype == y.data.dtype
     np.testing.assert_equal(x.data, y.data)
     np.testing.assert_equal(x.mask, y.mask)
     np.testing.assert_equal(x.fill_value, y.fill_value)
+
+
+def test_serialize_numpy_ma_masked():
+    y, = loads(dumps([to_serialize(np.ma.masked)]))
+    assert y is np.ma.masked
 
 
 def test_dumps_serialize_numpy_custom_dtype():

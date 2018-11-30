@@ -103,6 +103,16 @@ def deserialize_numpy_ndarray(header, frames):
         return x
 
 
+@dask_serialize.register(np.ma.core.MaskedConstant)
+def serialize_numpy_ma_masked(x):
+    return {}, []
+
+
+@dask_deserialize.register(np.ma.core.MaskedConstant)
+def deserialize_numpy_ma_masked(header, frames):
+    return np.ma.masked
+
+
 @dask_serialize.register(np.ma.core.MaskedArray)
 def serialize_numpy_maskedarray(x):
     data_header, frames = serialize_numpy_ndarray(x.data)
