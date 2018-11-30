@@ -5,7 +5,6 @@ from operator import add
 from time import time
 import weakref
 
-import bokeh
 from bokeh.layouts import row, column
 from bokeh.models import ( ColumnDataSource, Plot, DataRange1d, LinearAxis,
         HoverTool, BoxZoomTool, ResetTool, PanTool, WheelZoomTool, Range1d,
@@ -16,6 +15,7 @@ import dask
 from tornado import gen
 import toolz
 
+from .utils import without_property_validation, BOKEH_VERSION
 from ..diagnostics.progress_stream import nbytes_bar
 from .. import profile
 from ..utils import log_errors, parse_timedelta
@@ -70,6 +70,7 @@ class TaskStream(DashboardComponent):
         # Required for update callback
         self.task_stream_index = [0]
 
+    @without_property_validation
     def update(self, messages):
         with log_errors():
             index = messages['task-events']['index']
@@ -211,6 +212,7 @@ class MemoryUsage(DashboardComponent):
         )
         self.root.add_tools(hover)
 
+    @without_property_validation
     def update(self, messages):
         with log_errors():
             msg = messages['progress']
@@ -260,6 +262,7 @@ class Processing(DashboardComponent):
 
         self.root = fig
 
+    @without_property_validation
     def update(self, messages):
         with log_errors():
             msg = messages['processing']
@@ -310,6 +313,7 @@ class ProfilePlot(DashboardComponent):
         self.states = data.pop('states')
         self.source = ColumnDataSource(data=data)
 
+        @without_property_validation
         def cb(attr, old, new):
             with log_errors():
                 try:
@@ -326,7 +330,7 @@ class ProfilePlot(DashboardComponent):
                 self.source.data.update(data)
                 self.source.selected = old
 
-        if bokeh.__version__ >= '1.0':
+        if BOKEH_VERSION >= '1.0.0':
             self.source.selected.on_change('indices', cb)
         else:
             self.source.on_change('selected', cb)
@@ -370,6 +374,7 @@ class ProfilePlot(DashboardComponent):
         self.root.yaxis.visible = False
         self.root.grid.visible = False
 
+    @without_property_validation
     def update(self, state):
         with log_errors():
             self.state = state
@@ -411,6 +416,7 @@ class ProfileTimePlot(DashboardComponent):
 
         changing = [False]  # avoid repeated changes from within callback
 
+        @without_property_validation
         def cb(attr, old, new):
             if changing[0]:
                 return
@@ -434,7 +440,7 @@ class ProfileTimePlot(DashboardComponent):
                     self.source.selected = old
                 changing[0] = False
 
-        if bokeh.__version__ >= '1.0':
+        if BOKEH_VERSION >= '1.0.0':
             self.source.selected.on_change('indices', cb)
         else:
             self.source.on_change('selected', cb)
@@ -506,7 +512,7 @@ class ProfileTimePlot(DashboardComponent):
                     self.start = self.stop = None
                 self.trigger_update(update_metadata=False)
 
-        if bokeh.__version__ >= '1.0':
+        if BOKEH_VERSION >= '1.0.0':
             self.ts_source.selected.on_change('indices', ts_change)
         else:
             self.ts_source.on_change('selected', ts_change)
@@ -531,6 +537,7 @@ class ProfileTimePlot(DashboardComponent):
                                self.update_button, sizing_mode='scale_width'),
                            self.profile_plot, self.ts_plot, **kwargs)
 
+    @without_property_validation
     def update(self, state, metadata=None):
         with log_errors():
             self.state = state
@@ -550,6 +557,7 @@ class ProfileTimePlot(DashboardComponent):
 
                 self.ts_source.data.update(self.ts)
 
+    @without_property_validation
     def trigger_update(self, update_metadata=True):
         @gen.coroutine
         def cb():
@@ -587,6 +595,7 @@ class ProfileServer(DashboardComponent):
 
         changing = [False]  # avoid repeated changes from within callback
 
+        @without_property_validation
         def cb(attr, old, new):
             if changing[0]:
                 return
@@ -610,7 +619,7 @@ class ProfileServer(DashboardComponent):
                     self.source.selected = old
                 changing[0] = False
 
-        if bokeh.__version__ >= '1.0':
+        if BOKEH_VERSION >= '1.0.0':
             self.source.selected.on_change('indices', cb)
         else:
             self.source.on_change('selected', cb)
@@ -682,7 +691,7 @@ class ProfileServer(DashboardComponent):
                     self.start = self.stop = None
                 self.trigger_update()
 
-        if bokeh.__version__ >= '1.0':
+        if BOKEH_VERSION >= '1.0.0':
             self.ts_source.selected.on_change('indices', ts_change)
         else:
             self.ts_source.on_change('selected', ts_change)
@@ -697,6 +706,7 @@ class ProfileServer(DashboardComponent):
                                sizing_mode='scale_width'),
                            self.profile_plot, self.ts_plot, **kwargs)
 
+    @without_property_validation
     def update(self, state):
         with log_errors():
             self.state = state
@@ -704,6 +714,7 @@ class ProfileServer(DashboardComponent):
             self.states = data.pop('states')
             self.source.data.update(data)
 
+    @without_property_validation
     def trigger_update(self):
         self.state = profile.get_profile(self.log, start=self.start, stop=self.stop)
         data = profile.plot_data(self.state, profile_interval)

@@ -19,7 +19,7 @@ from toolz import merge, partition_all
 from .components import (DashboardComponent, ProfileTimePlot, ProfileServer,
                          add_periodic_callback)
 from .core import BokehServer
-from .utils import transpose
+from .utils import transpose, without_property_validation
 from ..compatibility import WINDOWS
 from ..diagnostics.progress_stream import color_of
 from ..metrics import time
@@ -57,6 +57,7 @@ class StateTable(DashboardComponent):
         )
         self.root = table
 
+    @without_property_validation
     def update(self):
         with log_errors():
             w = self.worker
@@ -108,6 +109,7 @@ class CommunicatingStream(DashboardComponent):
             self.last_outgoing = 0
             self.who = dict()
 
+    @without_property_validation
     def update(self):
         with log_errors():
             outgoing = self.worker.outgoing_transfer_log
@@ -176,6 +178,7 @@ class CommunicatingTimeSeries(DashboardComponent):
 
         self.root = fig
 
+    @without_property_validation
     def update(self):
         with log_errors():
             self.source.stream({'x': [time() * 1000],
@@ -204,6 +207,7 @@ class ExecutingTimeSeries(DashboardComponent):
 
         self.root = fig
 
+    @without_property_validation
     def update(self):
         with log_errors():
             self.source.stream({'x': [time() * 1000],
@@ -264,6 +268,7 @@ class CrossFilter(DashboardComponent):
 
             self.root = self.layout
 
+    @without_property_validation
     def update(self):
         with log_errors():
             outgoing = self.worker.outgoing_transfer_log
@@ -323,6 +328,7 @@ class CrossFilter(DashboardComponent):
             )
             return fig
 
+    @without_property_validation
     def update_figure(self, attr, old, new):
         with log_errors():
             fig = self.create_figure(**self.kwargs)
@@ -418,6 +424,7 @@ class SystemMonitor(DashboardComponent):
         self.last = self.worker.monitor.count
         return d
 
+    @without_property_validation
     def update(self):
         with log_errors():
             self.source.stream(self.get_data(), 1000)
@@ -505,6 +512,7 @@ class Counters(DashboardComponent):
             self.counter_figures[name] = fig
             return fig
 
+    @without_property_validation
     def update(self):
         with log_errors():
             for name, fig in self.digest_figures.items():

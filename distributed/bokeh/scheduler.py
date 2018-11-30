@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-from distutils.version import LooseVersion
 from functools import partial
 import logging
 import math
@@ -8,7 +7,6 @@ from numbers import Number
 from operator import add
 import os
 
-import bokeh
 from bokeh.layouts import column, row
 from bokeh.models import (ColumnDataSource, DataRange1d, HoverTool, ResetTool,
                           PanTool, WheelZoomTool, TapTool, OpenURL, Range1d, Plot, Quad,
@@ -32,7 +30,7 @@ from .components import (DashboardComponent, ProfileTimePlot, ProfileServer,
                          add_periodic_callback)
 from .core import BokehServer
 from .worker import SystemMonitor, counters_doc
-from .utils import transpose
+from .utils import transpose, BOKEH_VERSION, without_property_validation
 from ..metrics import time
 from ..utils import log_errors, format_bytes, format_time
 from ..diagnostics.progress_stream import color_of, progress_quads, nbytes_bar
@@ -61,6 +59,7 @@ nan = float('nan')
 inf = float('inf')
 
 
+@without_property_validation
 def update(source, data):
     """ Update source with data
 
@@ -126,6 +125,7 @@ class Occupancy(DashboardComponent):
 
             self.root = fig
 
+    @without_property_validation
     def update(self):
         with log_errors():
             workers = list(self.scheduler.workers.values())
@@ -193,6 +193,7 @@ class ProcessingHistogram(DashboardComponent):
                            left='left', right='right', bottom=0, top='top',
                            color='blue')
 
+    @without_property_validation
     def update(self):
         L = [len(ws.processing) for ws in self.scheduler.workers.values()]
         counts, x = np.histogram(L, bins=40)
@@ -229,6 +230,7 @@ class NBytesHistogram(DashboardComponent):
                            left='left', right='right', bottom=0, top='top',
                            color='blue')
 
+    @without_property_validation
     def update(self):
         nbytes = np.asarray([ws.nbytes for ws in self.scheduler.workers.values()])
         counts, x = np.histogram(nbytes, bins=40)
@@ -306,6 +308,7 @@ class CurrentLoad(DashboardComponent):
 
             processing.y_range = nbytes.y_range
 
+    @without_property_validation
     def update(self):
         with log_errors():
             workers = list(self.scheduler.workers.values())
@@ -386,6 +389,7 @@ class StealingTimeSeries(DashboardComponent):
 
         self.root = fig
 
+    @without_property_validation
     def update(self):
         with log_errors():
             result = {'time': [time() * 1000],
@@ -451,6 +455,7 @@ class StealingEvents(DashboardComponent):
 
         return d
 
+    @without_property_validation
     def update(self):
         with log_errors():
             log = self.steal.log
@@ -500,6 +505,7 @@ class Events(DashboardComponent):
 
         self.root = fig
 
+    @without_property_validation
     def update(self):
         with log_errors():
             log = self.scheduler.events[self.name]
@@ -553,6 +559,7 @@ class TaskStream(components.TaskStream):
         components.TaskStream.__init__(self, n_rectangles=n_rectangles,
                                        clear_interval=clear_interval, **kwargs)
 
+    @without_property_validation
     def update(self):
         if self.index == self.plugin.index:
             return
@@ -640,6 +647,7 @@ class GraphPlot(DashboardComponent):
         rect.nonselection_glyph = None
         self.root.add_tools(hover, tap)
 
+    @without_property_validation
     def update(self):
         with log_errors():
             # occasionally reset the column data source to remove old nodes
@@ -658,6 +666,7 @@ class GraphPlot(DashboardComponent):
 
             self.patch_updates()
 
+    @without_property_validation
     def add_new_nodes_edges(self, new, new_edges, update=False):
         if new or update:
             node_key = []
@@ -710,6 +719,7 @@ class GraphPlot(DashboardComponent):
                 self.node_source.stream(node)
                 self.edge_source.stream(edge)
 
+    @without_property_validation
     def patch_updates(self):
         """
         Small updates like color changes or lost nodes from task transitions
@@ -837,6 +847,7 @@ class TaskProgress(DashboardComponent):
         )
         self.root.add_tools(hover)
 
+    @without_property_validation
     def update(self):
         with log_errors():
             state = {'all': valmap(len, self.plugin.all),
@@ -909,6 +920,7 @@ class MemoryUse(DashboardComponent):
         )
         self.root.add_tools(hover)
 
+    @without_property_validation
     def update(self):
         with log_errors():
             nb = nbytes_bar(self.plugin.nbytes)
@@ -954,7 +966,7 @@ class WorkerTable(DashboardComponent):
                       'num_fds': NumberFormatter(format='0'),
                       'ncores': NumberFormatter(format='0')}
 
-        if LooseVersion(bokeh.__version__) < '0.12.15':
+        if BOKEH_VERSION < '0.12.15':
             dt_kwargs = {'row_headers': False}
         else:
             dt_kwargs = {'index_position': None}
@@ -1033,6 +1045,7 @@ class WorkerTable(DashboardComponent):
 
         self.root = column(*components, id='bk-worker-table', **sizing_mode)
 
+    @without_property_validation
     def update(self):
         data = {name: [] for name in self.names + self.extra_names}
         for addr, ws in sorted(self.scheduler.workers.items()):
