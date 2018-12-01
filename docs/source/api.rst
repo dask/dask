@@ -26,7 +26,7 @@ These more general Dask functions are described below:
 These functions work with any scheduler.  More advanced operations are
 available when using the newer scheduler and starting a
 :obj:`dask.distributed.Client` (which, despite its name, runs nicely on a
-single machine.)  This API provides the ability to submit, cancel, and track
+single machine).  This API provides the ability to submit, cancel, and track
 work asynchronously, and includes many functions for complex inter-task
 workflows.  These are not necessary for normal operation, but can be useful for
 real-time or advanced operation.
