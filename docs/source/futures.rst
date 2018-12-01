@@ -52,7 +52,7 @@ You can submit individual tasks using the ``submit`` method:
    a = client.submit(inc, 10)  # calls inc(10) in background thread or process
    b = client.submit(inc, 20)  # calls inc(20) in background thread or process
 
-``submit`` returns a ``Future``, which refers to a remote result.  This result may
+The ``submit`` function returns a ``Future``, which refers to a remote result.  This result may
 not yet be completed:
 
 .. code-block:: python
