@@ -722,14 +722,6 @@ All operations that require talking to the remote worker are awaitable:
 
        n = await counter.n  # attribute access also must be awaited
 
-Usually Dask computations are composed of tasks that build off of each other in
-a pure functional way.  **They're centrally manathat are managed by the central
-scheduler and
-
-Because tasks are assumed to
-be pure (they don't change their inputs) and are known and coordinated by the
-central scheduler they are safe and**
-
 
 API
 ---
