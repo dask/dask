@@ -10,7 +10,7 @@ over time.
 
 These features depend on the second generation task scheduler found in
 `dask.distributed <https://distributed.dask.org/en/latest>`_ (which,
-despite its name, runs very well on a single machine.)
+despite its name, runs very well on a single machine).
 
 .. currentmodule:: distributed
 
@@ -476,7 +476,7 @@ themselves on remote clients if necessary:
 
 
 Queues can also send small pieces of information, anything that is msgpack
-encodable (ints, strings, bools, lists, dicts, etc.)  This can be useful to
+encodable (ints, strings, bools, lists, dicts, etc.).  This can be useful to
 send back small scores or administrative messages:
 
 .. code-block:: python
@@ -491,7 +491,7 @@ send back small scores or administrative messages:
 
 Queues are mediated by the central scheduler, and so they are not ideal for
 sending large amounts of data (everything you send will be routed through a
-central point.)  They are well suited to move around small bits of metadata, or
+central point).  They are well suited to move around small bits of metadata, or
 futures.  These futures may point to much larger pieces of data safely:
 
 .. code-block:: python
