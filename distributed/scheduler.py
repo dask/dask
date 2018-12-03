@@ -743,7 +743,7 @@ class Scheduler(ServerNode):
         Information about each worker host
 
     * **clients:** ``{client key: ClientState}``
-        Workers currently connected to the scheduler
+        Clients currently connected to the scheduler
 
     * **services:** ``{str: port}``:
         Other services running on this scheduler, like Bokeh
