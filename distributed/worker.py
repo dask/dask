@@ -143,7 +143,7 @@ class Worker(ServerNode):
         Dictionary mapping keys to actual values
     * **task_state**: ``{key: string}``:
         The state of all tasks that the scheduler has asked us to compute.
-        Valid states include waiting, constrained, exeucuting, memory, erred
+        Valid states include waiting, constrained, executing, memory, erred
     * **tasks**: ``{key: dict}``
         The function, args, kwargs of a task.  We run this when appropriate
     * **dependencies**: ``{key: {deps}}``
