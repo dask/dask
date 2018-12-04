@@ -1767,7 +1767,19 @@ class Scheduler(ServerNode):
             if not self.workers:
                 logger.info("Lost all workers")
 
+            @gen.coroutine
+            def remove_worker_from_events():
+                # If the worker isn't registered anymore after the delay, remove from events
+                if address not in self.workers and address in self.events:
+                    del self.events[address]
+
+            cleanup_delay = parse_timedelta(dask.config.get('distributed.scheduler.events-cleanup-delay'))
+            self.loop.call_later(
+                cleanup_delay,
+                remove_worker_from_events
+            )
             logger.debug("Removed worker %s", address)
+
         return 'OK'
 
     def stimulus_cancel(self, comm, keys=None, client=None, force=False):
@@ -2053,6 +2065,18 @@ class Scheduler(ServerNode):
             self.client_releases_keys(keys=[ts.key for ts in cs.wants_what],
                                       client=cs.client_key)
             del self.clients[client]
+
+        @gen.coroutine
+        def remove_client_from_events():
+            # If the client isn't registered anymore after the delay, remove from events
+            if client not in self.clients and client in self.events:
+                del self.events[client]
+
+        cleanup_delay = parse_timedelta(dask.config.get('distributed.scheduler.events-cleanup-delay'))
+        self.loop.call_later(
+            cleanup_delay,
+            remove_client_from_events
+        )
 
     def send_task_to_worker(self, worker, key):
         """ Send a single computational task to a worker """
