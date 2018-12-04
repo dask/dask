@@ -52,7 +52,7 @@ They provide interfaces that look like the following:
                         memory="100GB",
                         project='P48500028',
                         queue='premium',
-						interface='ib0',
+                        interface='ib0',
                         walltime='02:00:00')
 
    cluster.scale(100)  # Start 100 workers in 100 jobs that match the description above
