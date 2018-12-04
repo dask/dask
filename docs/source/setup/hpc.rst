@@ -14,19 +14,31 @@ labs.  These systems commonly have the following attributes:
 3.  A high performance network interconnect, such as Infiniband
 4.  Little or no node-local storage
 
+
 Where to start
 --------------
 
-Most of this page documents best practices to use Dask on an HPC cluster.  This
-is technical and aimed both at users with some experience deploying Dask and
-also system administrators.
+Most of this page documents various ways and best practices to use Dask on an
+HPC cluster.  This is technical and aimed both at users with some experience
+deploying Dask and also system administrators.
 
-New users may instead prefer to start with one of the following projects which
-provide easy high-level access to Dask using resource managers that are
-commonly deployed on HPC systems:
+The preferred and simplest way to run Dask on HPC systems today both for new,
+experienced users or administrator is to use 
+`dask-jobqueue <https://jobqueue.dask.org>`_.
+
+However, dask-jobqueue is slightly oriented toward interactive analysis usage,
+and it might be better to use tools like dask-mpi in some routine batch
+production workloads.
+
+
+Dask-jobqueue and Dask-drmaa
+----------------------------
+
+The following projects provide easy high-level access to Dask using resource
+managers that are commonly deployed on HPC systems:
 
 1.  `dask-jobqueue <https://jobqueue.dask.org>`_ for use with PBS,
-    SLURM, and SGE resource managers
+    SLURM, LSF, SGE and other resource managers
 2.  `dask-drmaa <https://github.com/dask/dask-drmaa>`_ for use with any DRMAA
     compliant resource manager
 
@@ -40,16 +52,59 @@ They provide interfaces that look like the following:
                         memory="100GB",
                         project='P48500028',
                         queue='premium',
+						interface='ib0',
                         walltime='02:00:00')
 
-   cluster.start_workers(100)  # Start 100 jobs that match the description above
+   cluster.scale(100)  # Start 100 workers in 100 jobs that match the description above
 
    from dask.distributed import Client
    client = Client(cluster)    # Connect to that cluster
 
-We recommend reading the `dask-jobqueue documentation <https://jobqueue.dask.org>`_
-first to get a basic system running and then returning to this documentation
-for fine-tuning.
+Dask-jobqueue provides a lot of possibilities like adaptive dynamic scaling
+of workers, we recommend reading the `dask-jobqueue documentation 
+<https://jobqueue.dask.org>`_ first to get a basic system running and then
+returning to this documentation for fine-tuning if necessary.
+
+
+Using MPI
+---------
+
+.. note:: This section may not be necessary if you use a tool like 
+   dask-jobqueue.
+
+You can launch a Dask network using ``mpirun`` or ``mpiexec`` and the
+``dask-mpi`` command line executable.
+
+.. code-block:: bash
+
+   mpirun --np 4 dask-mpi --scheduler-file /home/$USER/scheduler.json
+
+.. code-block:: python
+
+   from dask.distributed import Client
+   client = Client(scheduler_file='/path/to/scheduler.json')
+
+This depends on the `mpi4py <http://mpi4py.readthedocs.io/>`_ library.  It only
+uses MPI to start the Dask cluster and not for inter-node communication. MPI 
+implementations differ: the use of ``mpirun --np 4`` is specific to the 
+``mpich`` or ``open-mpi`` MPI implementation installed through conda and linked
+to mpi4py.
+
+.. code-block:: bash
+
+   conda install mpi4py
+
+It is not necessary to use exactly this implementation, but you may want to
+verify that your ``mpi4py`` Python library is linked against the proper
+``mpirun/mpiexec`` executable and that the flags used (like ``--np 4``) are
+correct for your system.  The system administrator of your cluster should be
+very familiar with these concerns and able to help.
+
+In some setups, MPI processes are not allowed to fork other processes. In this
+case, we recommend using ``--no-nanny`` option in order to prevent dask from
+using an additional nanny process to manage workers. 
+
+Run ``dask-mpi --help`` to see more options for the ``dask-mpi`` command.
 
 
 Using a Shared Network File System and a Job Scheduler
@@ -57,8 +112,8 @@ Using a Shared Network File System and a Job Scheduler
 
 .. note:: This section is not necessary if you use a tool like dask-jobqueue.
 
-Some clusters benefit from a shared Network File System (NFS), and can use this
-to communicate the scheduler location to the workers::
+Some clusters benefit from a shared File System (NFS, GPFS, Lustre or alike),
+and can use this to communicate the scheduler location to the workers::
 
    dask-scheduler --scheduler-file /path/to/scheduler.json  # writes address to file
 
@@ -81,41 +136,6 @@ SGE/SLURM/Torque/etc.  Here is an example using SGE's ``qsub`` command::
 
 Note, the ``--scheduler-file`` option is *only* valuable if your scheduler and
 workers share a network file system.
-
-
-Using MPI
----------
-
-.. note:: This section is not necessary if you use a tool like dask-jobqueue.
-
-You can launch a Dask network using ``mpirun`` or ``mpiexec`` and the
-``dask-mpi`` command line executable.
-
-.. code-block:: bash
-
-   mpirun --np 4 dask-mpi --scheduler-file /home/$USER/scheduler.json
-
-.. code-block:: python
-
-   from dask.distributed import Client
-   client = Client(scheduler_file='/path/to/scheduler.json')
-
-This depends on the `mpi4py <http://mpi4py.readthedocs.io/>`_ library.  It only
-uses MPI to start the Dask cluster and not for inter-node communication. MPI implementations differ: the use 
-of ``mpirun --np 4`` is specific to the ``mpich`` MPI implementation installed 
-through conda and linked to mpi4py
-
-.. code-block:: bash
-
-   conda install mpi4py
-
-It is not necessary to use exactly this implementation, but you may want to
-verify that your ``mpi4py`` Python library is linked against the proper
-``mpirun/mpiexec`` executable and that the flags used (like ``--np 4``) are
-correct for your system.  The system administrator of your cluster should be
-very familiar with these concerns and able to help.
-
-Run ``dask-mpi --help`` to see more options for the ``dask-mpi`` command.
 
 
 High Performance Network
@@ -194,6 +214,8 @@ the ``--local-directory`` keyword::
 
 Launch Many Small Jobs
 ----------------------
+
+.. note:: This section is not necessary if you use a tool like dask-jobqueue.
 
 HPC job schedulers are optimized for large monolithic jobs with many nodes that
 all need to run as a group at the same time.  Dask jobs can be quite a bit more
