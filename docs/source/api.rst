@@ -3,8 +3,8 @@ API
 
 Dask APIs generally follow from upstream APIs:
 
--  The :doc:`Dask Array API <array-api>` follows the Numpy API
--  The :doc:`Dask Dataframe API <dataframe-api>` follows the Pandas API
+-  The :doc:`Dask Array API <array-api>` follows the NumPy API
+-  The :doc:`Dask DataFrame API <dataframe-api>` follows the Pandas API
 -  The `Dask-ML API <https://ml.dask.org/modules/api.html>`_ follows the Scikit-Learn API and other related machine learning libraries
 -  The :doc:`Dask Bag API <bag-api>` follows the map/filter/groupby/reduce API common in PySpark, PyToolz, and the Python standard library
 -  The :doc:`Dask Delayed API <delayed-api>` wraps general Python code
