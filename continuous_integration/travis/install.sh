@@ -16,6 +16,7 @@ esac
 wget https://repo.continuum.io/miniconda/$MINICONDA_FILENAME -O miniconda.sh
 bash miniconda.sh -b -p $HOME/miniconda
 export PATH="$HOME/miniconda/bin:$PATH"
+export BOTO_CONFIG=null
 conda config --set always_yes yes --set changeps1 no --set remote_max_retries 10
 
 # Create conda environment
@@ -40,7 +41,7 @@ conda install -q -c conda-forge \
     bokeh \
     boto3 \
     moto \
-    botocore=1.12.57 \
+    botocore \
     httpretty \
     chest \
     cloudpickle \
