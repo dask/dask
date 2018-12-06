@@ -55,14 +55,16 @@ def test_empty(db):
         assert pd_dataframe.empty is True
 
 
-@pytest.mark.skip(reason="Requires a postgres server. Sqlite does not support multiple schemas.")
+# @pytest.mark.skip(reason="Requires a postgres server. Sqlite does not support multiple schemas.")
 def test_empty_other_schema():
     from sqlalchemy import create_engine, MetaData, Table, Column, Integer, event, DDL
     # Database configurations.
+    pg_host = 'localhost'
+    pg_port = '5432'
     pg_user = 'user'
     pg_pass = 'pass'
     pg_db = 'db'
-    db_url = 'postgresql://%s:%s@localhost/%s' % (pg_user, pg_pass, pg_db)
+    db_url = 'postgresql://%s:%s@%s:%s/%s' % (pg_user, pg_pass, pg_host, pg_port, pg_db)
 
     # Create an empty table in a different schema.
     table_name = 'empty_table'
