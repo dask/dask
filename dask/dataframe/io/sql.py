@@ -120,7 +120,8 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         if head.empty:
             # no results at all
             name = table.name
-            head = pd.read_sql_table(name, uri, index_col=index_col)
+            schema = table.schema
+            head = pd.read_sql_table(name, uri, schema=schema, index_col=index_col)
             return from_pandas(head, npartitions=1)
 
         bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / 5
