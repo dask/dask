@@ -38,7 +38,7 @@ conda install -q -c conda-forge \
     bcolz \
     blosc \
     bokeh \
-    boto3 \
+    boto3=1.7.84 \
     chest \
     cloudpickle \
     coverage \

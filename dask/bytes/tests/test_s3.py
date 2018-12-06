@@ -37,13 +37,17 @@ def s3():
     # writable local S3 system
     import moto
     try:
-        with moto.mock_s3():
-            client = boto3.client('s3')
-            client.create_bucket(Bucket=test_bucket_name, ACL='public-read-write')
-            for f, data in files.items():
-                client.put_object(Bucket=test_bucket_name, Key=f, Body=data)
-            yield s3fs.S3FileSystem(anon=True)
+        m = moto.mock_s3()
+        m.start()
+        client = boto3.client('s3')
+        client.create_bucket(Bucket=test_bucket_name, ACL='public-read-write')
+        for f, data in files.items():
+            client.put_object(Bucket=test_bucket_name, Key=f, Body=data)
+        yield s3fs.S3FileSystem(anon=True)
     finally:
+        m.reset()
+        m.start()
+        m.stop()
         httpretty.HTTPretty.disable()
         httpretty.HTTPretty.reset()
 
@@ -65,6 +69,8 @@ def s3_context(bucket, files):
         except Exception:
             pass
         finally:
+            m.reset()
+            m.start()
             m.stop()
             httpretty = pytest.importorskip('httpretty')
             httpretty.HTTPretty.disable()
