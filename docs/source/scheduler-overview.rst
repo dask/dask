@@ -150,7 +150,7 @@ The multiprocessing scheduler also supports `different contexts`_ ("spawn",
 
 .. code-block:: python
 
-   >>> with dask.config.set({"multiprocessing.context", "forkserver"}):
+   >>> with dask.config.set({"multiprocessing.context": "forkserver"}):
    ...     x.compute()
 
 .. _different contexts: https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
