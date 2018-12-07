@@ -12,7 +12,7 @@ except ImportError:
 
 from .compression import compressions, maybe_compress, decompress
 from .serialize import (serialize, deserialize, Serialize, Serialized,
-                        extract_serialize)
+                        extract_serialize, msgpack_len_opts)
 from .utils import frame_split_size, merge_frames
 from ..utils import nbytes
 
@@ -20,11 +20,12 @@ _deserialize = deserialize
 
 
 try:
-    msgpack.loads(msgpack.dumps(''), raw=False)
-    msgpack_raw_false = {'raw': False}
+    msgpack.loads(msgpack.dumps(''), raw=False, **msgpack_len_opts)
+    msgpack_opts = {'raw': False}
+    msgpack_opts.update(msgpack_len_opts)
 except TypeError:
     # Backward compat with old msgpack (prior to 0.5.2)
-    msgpack_raw_false = {'encoding': 'utf-8'}
+    msgpack_opts = {'encoding': 'utf-8'}
 
 
 logger = logging.getLogger(__name__)
@@ -110,7 +111,7 @@ def loads(frames, deserialize=True, deserializers=None):
             return msg
 
         header = frames.pop()
-        header = msgpack.loads(header, use_list=False, **msgpack_raw_false)
+        header = msgpack.loads(header, use_list=False, **msgpack_opts)
         keys = header['keys']
         headers = header['headers']
         bytestrings = set(header['bytestrings'])
@@ -182,7 +183,7 @@ def loads_msgpack(header, payload):
         dumps_msgpack
     """
     if header:
-        header = msgpack.loads(header, use_list=False, **msgpack_raw_false)
+        header = msgpack.loads(header, use_list=False, **msgpack_opts)
     else:
         header = {}
 
@@ -194,4 +195,4 @@ def loads_msgpack(header, payload):
             raise ValueError("Data is compressed as %s but we don't have this"
                              " installed" % str(header['compression']))
 
-    return msgpack.loads(payload, use_list=False, **msgpack_raw_false)
+    return msgpack.loads(payload, use_list=False, **msgpack_opts)

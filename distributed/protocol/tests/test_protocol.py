@@ -137,6 +137,18 @@ def test_large_messages():
     assert (msg['y']['a'].data == msg2['y']['a']).all()
 
 
+def test_large_messages_map():
+    import psutil
+    if psutil.virtual_memory().total < 8e9:
+        pytest.skip("insufficient memory")
+
+    x = {i: 'mystring_%d' % i for i in range(100000)}
+
+    b = dumps(x)
+    x2 = loads(b)
+    assert x == x2
+
+
 def test_loads_deserialize_False():
     frames = dumps({'data': Serialize(123), 'status': 'OK'})
     msg = loads(frames)

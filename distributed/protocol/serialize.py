@@ -57,6 +57,11 @@ def pickle_loads(header, frames):
     return pickle.loads(b''.join(frames))
 
 
+msgpack_len_opts = {
+    ('max_%s_len' % x): 2**31 - 1
+    for x in ['str', 'bin', 'array', 'map', 'ext']}
+
+
 def msgpack_dumps(x):
     try:
         frame = msgpack.dumps(x, use_bin_type=True)
@@ -67,7 +72,8 @@ def msgpack_dumps(x):
 
 
 def msgpack_loads(header, frames):
-    return msgpack.loads(b''.join(frames), encoding='utf8', use_list=False)
+    return msgpack.loads(b''.join(frames), encoding='utf8', use_list=False,
+                         **msgpack_len_opts)
 
 
 def serialization_error_loads(header, frames):
