@@ -174,7 +174,8 @@ def test_full_groupby_apply_multiarg():
     lambda df: ['a', 'b'],
     lambda df: df['a'],
     lambda df: [df['a'], df['b']],
-    pytest.mark.xfail(reason="not yet supported")(lambda df: [df['a'] > 2, df['b'] > 1])
+    pytest.param(lambda df: [df['a'] > 2, df['b'] > 1], marks=pytest.mark.xfail(
+        reason="not yet supported"))
 ])
 @pytest.mark.parametrize('reverse', [True, False])
 def test_full_groupby_multilevel(grouper, reverse):
@@ -654,7 +655,7 @@ def test_apply_shuffle():
     lambda df: df['AA'],
     lambda df: [df['AA'], df['AB']],
     lambda df: df['AA'] + 1,
-    pytest.mark.xfail("NotImplemented")(lambda df: [df['AA'] + 1, df['AB'] + 1]),
+    pytest.param(lambda df: [df['AA'] + 1, df['AB'] + 1], marks=pytest.mark.xfail("NotImplemented"))
 ])
 def test_apply_shuffle_multilevel(grouper):
     pdf = pd.DataFrame({'AB': [1, 2, 3, 4] * 5,
@@ -962,7 +963,8 @@ def test_series_aggregations_multilevel(grouper, agg_func):
     lambda df: df['a'] > 2,
     lambda df: [df['a'], df['b']],
     lambda df: [df['a'] > 2],
-    pytest.mark.xfail(reason="index dtype does not coincide: boolean != empty")(lambda df: [df['a'] > 2, df['b'] > 1])
+    pytest.param(lambda df: [df['a'] > 2, df['b'] > 1], marks=pytest.mark.xfail(
+        reason="index dtype does not coincide: boolean != empty"))
 ])
 @pytest.mark.parametrize('group_and_slice', [
     lambda df, grouper: df.groupby(grouper(df)),
