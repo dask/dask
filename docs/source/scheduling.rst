@@ -21,7 +21,7 @@ Dask has two families of task schedulers:
 
 1.  **Single machine scheduler**: This scheduler provides basic features on a
     local process or thread pool.  This scheduler was made first and is the
-    default.  It is simple and cheap to use, altough it can only be used on 
+    default.  It is simple and cheap to use, although it can only be used on 
     a single machine and does not scale
 2.  **Distributed scheduler**: This scheduler is more sophisticated, offers
     more features, but also requires a bit more effort to set up.  It can
