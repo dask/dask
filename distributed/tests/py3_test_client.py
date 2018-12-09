@@ -1,10 +1,14 @@
+import gc
+import sys
 from time import sleep
+import weakref
 
 import pytest
 from tornado import gen
 
 from distributed.utils_test import div, gen_cluster, inc, loop, cluster  # noqa F401
 from distributed import as_completed, Client, Lock
+from distributed.metrics import time
 from distributed.utils import sync
 
 
@@ -123,3 +127,34 @@ def test_client_sync_with_async_def(loop):
         with Client(s['address'], loop=loop) as c:
             assert sync(loop, ff) == 1
             assert c.sync(ff) == 1
+
+
+@gen_cluster(client=True)
+async def test_dont_hold_on_to_large_messages(c, s, a, b):
+    np = pytest.importorskip('numpy')
+    da = pytest.importorskip('dask.array')
+    x = np.random.random(1000000)
+    xr = weakref.ref(x)
+
+    d = da.from_array(x, chunks=(100000,))
+    d = d.persist()
+    del x
+
+    start = time()
+    while xr() is not None:
+        if time() > start + 5:
+            # Help diagnosing
+            from types import FrameType
+            x = xr()
+            if x is not None:
+                del x
+                rc = sys.getrefcount(xr())
+                refs = gc.get_referrers(xr())
+                print("refs to x:", rc, refs, gc.isenabled())
+                frames = [r for r in refs if isinstance(r, FrameType)]
+                for i, f in enumerate(frames):
+                    print("frames #%d:" % i,
+                          f.f_code.co_name, f.f_code.co_filename, sorted(f.f_locals))
+            pytest.fail("array should have been destroyed")
+
+        await gen.sleep(0.200)

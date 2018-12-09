@@ -1,10 +1,6 @@
-
 from contextlib import contextmanager
 from datetime import timedelta
-import gc
 import random
-import sys
-import weakref
 
 import pytest
 from toolz import assoc
@@ -14,7 +10,7 @@ from distributed.batched import BatchedSend
 from distributed.core import listen, connect, CommClosedError
 from distributed.metrics import time
 from distributed.utils import All
-from distributed.utils_test import gen_test, slow, gen_cluster, captured_logger
+from distributed.utils_test import gen_test, slow, captured_logger
 from distributed.protocol import to_serialize
 
 
@@ -238,38 +234,6 @@ def test_sending_traffic_jam():
 @gen_test()
 def test_large_traffic_jam():
     yield run_traffic_jam(500, 1500000)
-
-
-@pytest.mark.skipif(sys.version_info[0] < 3, reason="intermittent failure")
-@gen_cluster(client=True)
-def test_dont_hold_on_to_large_messages(c, s, a, b):
-    np = pytest.importorskip('numpy')
-    da = pytest.importorskip('dask.array')
-    x = np.random.random(1000000)
-    xr = weakref.ref(x)
-
-    d = da.from_array(x, chunks=(100000,))
-    d = d.persist()
-    del x
-
-    start = time()
-    while xr() is not None:
-        if time() > start + 5:
-            # Help diagnosing
-            from types import FrameType
-            x = xr()
-            if x is not None:
-                del x
-                rc = sys.getrefcount(xr())
-                refs = gc.get_referrers(xr())
-                print("refs to x:", rc, refs, gc.isenabled())
-                frames = [r for r in refs if isinstance(r, FrameType)]
-                for i, f in enumerate(frames):
-                    print("frames #%d:" % i,
-                          f.f_code.co_name, f.f_code.co_filename, sorted(f.f_locals))
-            pytest.fail("array should have been destroyed")
-
-        yield gen.sleep(0.200)
 
 
 @gen_test()
