@@ -312,7 +312,7 @@ def _inner_apply_along_axis(arr,
     )
 
 
-def apply_along_axis(func1d, axis, arr, dtype=None, shape=None, *args, **kwargs):
+def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     """
     Apply a function to 1-D slices along the given axis. This is
     a blocked variant of :func:`numpy.apply_along_axis` implemented via
@@ -327,26 +327,30 @@ def apply_along_axis(func1d, axis, arr, dtype=None, shape=None, *args, **kwargs)
         Axis along which func1d will be applied
     arr : dask array
         Dask array to which ``func1d`` will be applied
-    dtype : np.dtype, optional
-        The ``dtype`` of the output array. It is recommended to provide this.
-        If not provided, will be inferred by applying the function to a small
-        set of fake data.
-    shape : tuple, optional
-        The ``shape`` of the output array. It is recommended to provide this.
-        If not provided, will be inferred by applying the function to a small
-        set of fake data.
     args : any
         Additional arguments to ``func1d``.
     kwargs : any
-        Additional named arguments to ``func1d``.
-
+        Additional named arguments to ``func1d``, with the exception of named arguments ``dtype`` and
+        ``shape``. These two kwargs specify the dtype and shape of the output of ``func1d``.
+        If ``shape`` and ``dtype`` are not supplied, these properties of the output of ``func1d``
+        will be estimated on a test array which may not be representative of the data in ``arr``.
     """
     arr = asarray(arr)
 
-    # Validate and normalize axis.
+    # Verify that axis is valid and throw an error otherwise
     axis = len(arr.shape[:axis])
 
-    # Test out some data with the function.
+    try:
+        shape = kwargs.pop('shape')
+    except KeyError:
+        shape = None
+
+    try:
+        dtype = kwargs.pop('dtype')
+    except KeyError:
+        dtype = None
+
+    # If necessary, infer dtype and shape of the output of func1d by calling it on test data.
     if (shape is None) or (dtype is None):
         test_data = np.ones((1,), dtype=arr.dtype)
         test_result = np.array(func1d(test_data, *args, **kwargs))
@@ -399,7 +403,7 @@ def apply_over_axes(func, a, axes):
     # Compute using `apply_along_axis`.
     result = a
     for i in axes:
-        result = apply_along_axis(func, i, result, None, None, 0)
+        result = apply_along_axis(func, i, result, 0)
 
         # Restore original dimensionality or error.
         if result.ndim == (a.ndim - 1):
