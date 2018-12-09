@@ -52,10 +52,9 @@ df = pd.DataFrame({'x': [i * 7 % 5 for i in range(nrows)],  # Not sorted
 ddf = dd.from_pandas(df, npartitions=npartitions)
 
 
-@pytest.fixture(params=[pytest.mark.skipif(not fastparquet, 'fastparquet',
-                                           reason='fastparquet not found'),
-                        pytest.mark.skipif(not pq, 'pyarrow',
-                                           reason='pyarrow not found')])
+@pytest.fixture(params=[
+    pytest.param('fastparquet', marks=pytest.mark.skipif(not fastparquet, reason='fastparquet not found')),
+    pytest.param('pyarrow', marks=pytest.mark.skipif(not pq, reason='pyarrow not found'))])
 def engine(request):
     return request.param
 
@@ -709,8 +708,9 @@ def test_read_parquet_custom_columns(tmpdir, engine):
     (pd.DataFrame({'x': pd.Categorical([1, 2, 1])}), {}, {'categories': ['x']}),
     (pd.DataFrame({'x': list(map(pd.Timestamp, [3000, 2000, 1000]))}), {}, {}),
     (pd.DataFrame({'x': [3000, 2000, 1000]}).astype('M8[ns]'), {}, {}),
-    pytest.mark.xfail((pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'), {}, {}),
-                      reason="Parquet doesn't support nanosecond precision"),
+    pytest.param(pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'), {}, {},
+                 marks=pytest.mark.xfail(
+                     reason="Parquet doesn't support nanosecond precision")),
     (pd.DataFrame({'x': [3, 2, 1]}).astype('M8[us]'), {}, {}),
     (pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ms]'), {}, {}),
     (pd.DataFrame({'x': [3, 2, 1]}).astype('uint16'), {}, {}),

@@ -153,7 +153,7 @@ def test_partitioning_index_categorical_on_values():
     assert (res == res2).all()
 
 
-@pytest.mark.parametrize('npartitions', [1, 4, 7, pytest.mark.slow(23)])
+@pytest.mark.parametrize('npartitions', [1, 4, 7, pytest.param(23, marks=pytest.mark.slow)])
 def test_set_index_tasks(npartitions):
     df = pd.DataFrame({'x': np.random.random(100),
                        'y': np.random.random(100) // 0.2},
