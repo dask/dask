@@ -543,8 +543,11 @@ class Client(Node):
         self.cluster = None
         self.scheduler = None
         self._scheduler_identity = {}
-        self._lock = threading.Lock()
-        self._refcount_lock = threading.Lock()
+        # A reentrant-lock on the refcounts for futures associated with this
+        # client. Should be held by individual operations modifying refcounts,
+        # or any bulk operation that needs to ensure the set of futures doesn't
+        # change during operation.
+        self._refcount_lock = threading.RLock()
         self.datasets = Datasets(self)
         self._serializers = serializers
         if deserializers is None:
@@ -1249,7 +1252,7 @@ class Client(Node):
 
         skey = tokey(key)
 
-        with self._lock:
+        with self._refcount_lock:
             if skey in self.futures:
                 return Future(key, self, inform=False)
 
@@ -2184,7 +2187,7 @@ class Client(Node):
                           loose_restrictions=None, priority=None,
                           user_priority=0, resources=None, retries=None,
                           fifo_timeout=0, actors=None):
-        with self._lock:
+        with self._refcount_lock:
             if resources:
                 resources = self._expand_resources(resources,
                                                    all_keys=itertools.chain(dsk, keys))
@@ -2334,13 +2337,14 @@ class Client(Node):
         This returns the same graph if unchanged but a new graph if any changes
         were necessary.
         """
-        changed = False
-        for key in list(dsk):
-            if tokey(key) in self.futures:
-                if not changed:
-                    changed = True
-                    dsk = dict(dsk)
-                dsk[key] = Future(key, self, inform=False)
+        with self._refcount_lock:
+            changed = False
+            for key in list(dsk):
+                if tokey(key) in self.futures:
+                    if not changed:
+                        changed = True
+                        dsk = dict(dsk)
+                    dsk[key] = Future(key, self, inform=False)
 
         if changed:
             dsk, _ = dask.optimization.cull(dsk, keys)
@@ -2370,15 +2374,13 @@ class Client(Node):
         --------
         Client.persist: trigger computation of collection's tasks
         """
-        with self._lock:
-            dsk = self._optimize_insert_futures(
-                    collection.__dask_graph__(),
-                    collection.__dask_keys__())
+        dsk_orig = collection.__dask_graph__()
+        dsk = self._optimize_insert_futures(dsk_orig, collection.__dask_keys__())
 
-            if dsk is collection.__dask_graph__():
-                return collection
-            else:
-                return redict_collection(collection, dsk)
+        if dsk is dsk_orig:
+            return collection
+        else:
+            return redict_collection(collection, dsk)
 
     def compute(self, collections, sync=False, optimize_graph=True,
                 workers=None, allow_other_workers=False, resources=None,

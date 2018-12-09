@@ -4119,6 +4119,24 @@ def test_normalize_collection_dask_array(c, s, a, b):
     assert result1 == result2
 
 
+@slow
+def test_normalize_collection_with_released_futures(c):
+    da = pytest.importorskip('dask.array')
+
+    x = da.arange(2**20, chunks=2**10)
+    y = x.persist()
+    wait(y)
+    sol = y.sum().compute()
+    # Start releasing futures
+    del y
+    # Try to reuse futures. Previously this was a race condition,
+    # and the call to `.compute()` would error out due to missing
+    # futures on the scheduler at compute time.
+    normalized = c.normalize_collection(x)
+    res = normalized.sum().compute()
+    assert res == sol
+
+
 @gen_cluster(client=True)
 def test_auto_normalize_collection(c, s, a, b):
     da = pytest.importorskip('dask.array')
