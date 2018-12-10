@@ -2186,7 +2186,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @classmethod
     def _bind_operator_method(cls, name, op):
-        """ bind operator method like DataFrame.add to this class """
+        """ bind operator method like Series.add to this class """
 
         def meth(self, other, level=None, fill_value=None, axis=0):
             if level is not None:
@@ -2200,13 +2200,17 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison):
-        """ bind comparison method like DataFrame.add to this class """
+        """ bind comparison method like Series.eq to this class """
 
-        def meth(self, other, level=None, axis=0):
+        def meth(self, other, level=None, fill_value=None, axis=0):
             if level is not None:
                 raise NotImplementedError('level must be None')
             axis = self._validate_axis(axis)
-            return elemwise(comparison, self, other, axis=axis)
+            if fill_value is None:
+                return elemwise(comparison, self, other, axis=axis)
+            else:
+                op = partial(comparison, fill_value=fill_value)
+                return elemwise(op, self, other, axis=axis)
 
         meth.__doc__ = comparison.__doc__
         bind_method(cls, name, meth)
@@ -2537,7 +2541,8 @@ class DataFrame(_Frame):
     def __getattr__(self, key):
         if key in self.columns:
             return self[key]
-        raise AttributeError("'DataFrame' object has no attribute %r" % key)
+        else:
+            raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
     def __dir__(self):
         o = set(dir(type(self)))
@@ -2923,7 +2928,7 @@ class DataFrame(_Frame):
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison):
-        """ bind comparison method like DataFrame.add to this class """
+        """ bind comparison method like DataFrame.eq to this class """
 
         def meth(self, other, axis='columns', level=None):
             if level is not None:
@@ -3773,7 +3778,6 @@ def _rename_dask(df, names):
     name = 'rename-{0}'.format(tokenize(df, metadata))
 
     dsk = broadcast(_rename, name, metadata, df)
-
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
     return new_dd_object(graph, name, metadata, df.divisions)
 
@@ -3914,7 +3918,9 @@ def cov_corr_chunk(df, corr=False):
     cov = df.cov().values
     dtype = [('sum', sums.dtype), ('count', counts.dtype), ('cov', cov.dtype)]
     if corr:
-        mu = (sums / counts).T
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            mu = (sums / counts).T
         m = np.zeros(shape)
         mask = df.isnull().values
         for idx, x in enumerate(df):

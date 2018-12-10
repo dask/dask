@@ -583,7 +583,7 @@ def _write_fastparquet(df, fs, fs_token, path, write_index=None, append=False,
             raise ValueError('Appended columns not the same.\n'
                              'Previous: {} | New: {}'
                              .format(pf.columns, list(df.columns)))
-        elif set(pf.dtypes[c] for c in pf.columns) != set(df[pf.columns].dtypes):
+        elif (pd.Series(pf.dtypes).loc[pf.columns] != df[pf.columns].dtypes).any():
             raise ValueError('Appended dtypes differ.\n{}'
                              .format(set(pf.dtypes.items()) ^
                                      set(df.dtypes.iteritems())))
@@ -1137,6 +1137,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
             mode='rb',
             storage_options=storage_options
         )
+        paths = path
     else:
         read = get_engine(engine)['read']
         fs, fs_token, paths = get_fs_token_paths(

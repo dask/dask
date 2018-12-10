@@ -1131,6 +1131,17 @@ class Array(DaskMethodsMixin):
         ----------
         columns: list or string
             list of column names if DataFrame, single string if Series
+        index : dask.dataframe.Index, optional
+            An optional *dask* Index to use for the output Series or DataFrame.
+
+            The default output index depends on whether the array has any unknown
+            chunks. If there are any unknown chunks, the output has ``None``
+            for all the divisions (one per chunk). If all the chunks are known,
+            a default index with known divsions is created.
+
+            Specifying ``index`` can be useful if you're conforming a Dask Array
+            to an existing dask Series or DataFrame, and you would like the
+            indices to match.
 
         See Also
         --------

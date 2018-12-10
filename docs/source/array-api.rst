@@ -114,7 +114,7 @@ Top level user functions:
    logical_not
    logical_or
    logical_xor
-   map_blocks
+   ~core.map_blocks
    map_overlap
    matmul
    max
@@ -145,7 +145,7 @@ Top level user functions:
    outer
    pad
    percentile
-   PerformanceWarning
+   ~core.PerformanceWarning
    piecewise
    prod
    ptp
@@ -564,6 +564,7 @@ Other functions
 .. autofunction:: solve_triangular
 .. autofunction:: svd
 .. autofunction:: svd_compressed
+.. autofunction:: sfqr
 .. autofunction:: tsqr
 
 .. currentmodule:: dask.array.ma
@@ -589,6 +590,8 @@ Other functions
 
 .. autofunction:: overlap
 .. autofunction:: map_overlap
+.. autofunction:: trim_internal
+.. autofunction:: trim_overlap
 
 .. currentmodule:: dask.array
 
@@ -628,6 +631,7 @@ Other functions
 .. autofunction:: beta
 .. autofunction:: binomial
 .. autofunction:: chisquare
+.. autofunction:: choice
 .. autofunction:: exponential
 .. autofunction:: f
 .. autofunction:: gamma

@@ -52,10 +52,9 @@ df = pd.DataFrame({'x': [i * 7 % 5 for i in range(nrows)],  # Not sorted
 ddf = dd.from_pandas(df, npartitions=npartitions)
 
 
-@pytest.fixture(params=[pytest.mark.skipif(not fastparquet, 'fastparquet',
-                                           reason='fastparquet not found'),
-                        pytest.mark.skipif(not pq, 'pyarrow',
-                                           reason='pyarrow not found')])
+@pytest.fixture(params=[
+    pytest.param('fastparquet', marks=pytest.mark.skipif(not fastparquet, reason='fastparquet not found')),
+    pytest.param('pyarrow', marks=pytest.mark.skipif(not pq, reason='pyarrow not found'))])
 def engine(request):
     return request.param
 
@@ -433,6 +432,8 @@ def test_names(tmpdir, engine):
             set(read(fn, columns=['x']).dask))
 
 
+@pytest.mark.xfail(reason="parquet column fusion is special cased today"
+                          " we'll need to find a more general solution near-term")
 @pytest.mark.parametrize('c', [['x'], 'x', ['x', 'y'], []])
 def test_optimize(tmpdir, c):
     check_fastparquet()
@@ -709,8 +710,9 @@ def test_read_parquet_custom_columns(tmpdir, engine):
     (pd.DataFrame({'x': pd.Categorical([1, 2, 1])}), {}, {'categories': ['x']}),
     (pd.DataFrame({'x': list(map(pd.Timestamp, [3000, 2000, 1000]))}), {}, {}),
     (pd.DataFrame({'x': [3000, 2000, 1000]}).astype('M8[ns]'), {}, {}),
-    pytest.mark.xfail((pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'), {}, {}),
-                      reason="Parquet doesn't support nanosecond precision"),
+    pytest.param(pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'), {}, {},
+                 marks=pytest.mark.xfail(
+                     reason="Parquet doesn't support nanosecond precision")),
     (pd.DataFrame({'x': [3, 2, 1]}).astype('M8[us]'), {}, {}),
     (pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ms]'), {}, {}),
     (pd.DataFrame({'x': [3, 2, 1]}).astype('uint16'), {}, {}),
@@ -1345,3 +1347,34 @@ def test_informative_error_messages():
     assert 'foo' in str(info.value)
     assert 'arrow' in str(info.value)
     assert 'fastparquet' in str(info.value)
+
+
+def test_append_cat_fp(tmpdir):
+    pytest.importorskip('fastparquet')
+    path = str(tmpdir)
+    # https://github.com/dask/dask/issues/4120
+    df = pd.DataFrame({"x": ["a", "a", "b", "a", "b"]})
+    df["x"] = df["x"].astype("category")
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    dd.to_parquet(ddf, path)
+
+    # this fails:
+    dd.to_parquet(ddf, path, append=True, ignore_divisions=True)
+    d = dd.read_parquet(path).compute()
+    assert d['x'].tolist() == ["a", "a", "b", "a", "b"] * 2
+
+
+def test_passing_parquetfile(tmpdir):
+    import shutil
+    fp = pytest.importorskip('fastparquet')
+    path = str(tmpdir)
+    df = pd.DataFrame({"x": [1, 3, 2, 4]})
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    dd.to_parquet(ddf, path)
+    pf = fp.ParquetFile(path)
+    shutil.rmtree(path)
+
+    # should pass, because no need to re-read metadata
+    dd.read_parquet(pf)

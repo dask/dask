@@ -9,29 +9,29 @@ objects:
 -  ...
 
 These projects may also want to produce parallel variants of themselves with
-Dask, and may want to reuse some of the code in Dask Dataframe.
+Dask, and may want to reuse some of the code in Dask DataFrame.
 This document describes how to do this.  It is intended for maintainers of
-these libraries, and not for general users.
+these libraries and not for general users.
 
 
 Implement dask, name, meta, and divisions
 -----------------------------------------
 
 You will need to implement ``._meta``, ``.dask``, ``.divisions``, and
-``._name`` as defined in the :doc:`dataframe design docs <dataframe-design>`.
+``._name`` as defined in the :doc:`DataFrame design docs <dataframe-design>`.
 
 
 Extend Dispatched Methods
 -------------------------
 
 If you are going to pass around Pandas-like objects that are not normal Pandas
-objects then we ask you to extend a few dispatched methods.
+objects, then we ask you to extend a few dispatched methods.
 
 make_meta
 ~~~~~~~~~
 
 This function returns an empty version of one of your non-Dask objects, given a
-non-empty non-Dask object.
+non-empty non-Dask object:
 
 .. code-block:: python
 
@@ -52,11 +52,11 @@ non-empty non-Dask object.
        return ind[:0]
 
 
-Additionally you should create a similar function that returns a non-empty
-version of your non-Dask dataframe objects, filled with a few rows of
+Additionally, you should create a similar function that returns a non-empty
+version of your non-Dask DataFrame objects filled with a few rows of
 representative or random data.  This is used to guess types when they are not
 provided.  It should expect an empty version of your object with columns,
-dtypes, index name, and it should return a non-empty version.
+dtypes, index name, and it should return a non-empty version:
 
 .. code-block:: python
 
@@ -82,7 +82,7 @@ dtypes, index name, and it should return a non-empty version.
 get_parallel_type
 ~~~~~~~~~~~~~~~~~
 
-Given a non-Dask dataframe object, return the Dask equivalent
+Given a non-Dask DataFrame object, return the Dask equivalent:
 
 .. code-block:: python
 
@@ -106,8 +106,8 @@ Given a non-Dask dataframe object, return the Dask equivalent
 concat
 ~~~~~~
 
-Concatenate many of your non-Dask dataframe objects together.  It should expect
-a list of your objects (homogeneously typed).
+Concatenate many of your non-Dask DataFrame objects together.  It should expect
+a list of your objects (homogeneously typed):
 
 .. code-block:: python
 
@@ -121,9 +121,9 @@ a list of your objects (homogeneously typed).
 Extension Arrays
 ----------------
 
-Rather than subclassing Pandas dataframes, you may be interested in extending
+Rather than subclassing Pandas DataFrames, you may be interested in extending
 Pandas with `Extension Arrays <https://pandas.pydata.org/pandas-docs/stable/extending.html>`_.
 
-API support for extension arrays isn't in Dask Dataframe yet (though this would
+API support for extension arrays isn't in Dask DataFrame yet (though this would
 be a good contribution), but many of the complications above will go away if
-your objects are genuinely Pandas dataframes, rather than a subclass.
+your objects are genuinely Pandas DataFrames, rather than a subclass.
