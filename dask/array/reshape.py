@@ -9,8 +9,8 @@ from .core import Array
 from ..base import tokenize
 from ..core import flatten
 from ..compatibility import reduce
+from ..highlevelgraph import HighLevelGraph
 from ..utils import M
-from .. import sharedict
 
 
 def reshape_rechunk(inshape, outshape, inchunks):
@@ -177,8 +177,8 @@ def reshape(x, shape):
         key = next(flatten(x.__dask_keys__()))
         dsk = {(name,) + (0,) * len(shape): (M.reshape, key, shape)}
         chunks = tuple((d,) for d in shape)
-        return Array(sharedict.merge((name, dsk), x.dask, dependencies={name: {x.name}}),
-                     name, chunks, dtype=x.dtype)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
+        return Array(graph, name, chunks, dtype=x.dtype)
 
     # Logic for how to rechunk
     inchunks, outchunks = reshape_rechunk(x.shape, shape, x.chunks)
@@ -190,5 +190,5 @@ def reshape(x, shape):
     shapes = list(product(*outchunks))
     dsk = {a: (M.reshape, b, shape) for a, b, shape in zip(out_keys, in_keys, shapes)}
 
-    return Array(sharedict.merge((name, dsk), x2.dask, dependencies={name: {x2.name}}),
-                 name, outchunks, dtype=x.dtype)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x2])
+    return Array(graph, name, outchunks, dtype=x.dtype)

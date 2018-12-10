@@ -244,7 +244,10 @@ def dot_graph(dsk, filename='mydask', format=None, **kwargs):
     dask.dot.to_graphviz
     """
     g = to_graphviz(dsk, **kwargs)
+    return graphviz_to_file(g, filename, format)
 
+
+def graphviz_to_file(g, filename, format):
     fmts = ['.png', '.pdf', '.dot', '.svg', '.jpeg', '.jpg']
     if format is None and any(filename.lower().endswith(fmt) for fmt in fmts):
         filename, format = os.path.splitext(filename)

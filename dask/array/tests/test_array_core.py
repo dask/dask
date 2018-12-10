@@ -24,13 +24,14 @@ from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir, key_split
 from dask.utils_test import inc, dec
 
-from dask.array.core import (getem, getter, top, dotmany, concatenate3,
+from dask.array.core import (getem, getter, dotmany, concatenate3,
                              broadcast_dimensions, Array, stack, concatenate,
                              from_array, broadcast_shapes,
                              broadcast_to, blockdims_from_blockshape, store,
                              optimize, from_func, normalize_chunks,
-                             broadcast_chunks, atop, from_delayed,
+                             broadcast_chunks, from_delayed,
                              concatenate_axes, common_blockdim)
+from dask.array.top import top, atop
 from dask.array.utils import assert_eq, same_keys
 
 # temporary until numpy functions migrated
@@ -2590,14 +2591,6 @@ def test_map_blocks_with_changed_dimension():
     with pytest.raises(ValueError):
         d.map_blocks(lambda b: b.sum(axis=0), chunks=((4, 4, 4),), drop_axis=0)
 
-    # Can't drop axis with more than 1 block
-    with pytest.raises(ValueError):
-        d.map_blocks(lambda b: b.sum(axis=1), drop_axis=1, dtype=d.dtype)
-
-    # Adding axis with a gap
-    with pytest.raises(ValueError):
-        d.map_blocks(lambda b: b, new_axis=(3, 4))
-
     d = da.from_array(x, chunks=(4, 8))
     e = d.map_blocks(lambda b: b.sum(axis=1), drop_axis=1, dtype=d.dtype)
     assert e.chunks == ((4, 3),)
@@ -2614,6 +2607,10 @@ def test_map_blocks_with_changed_dimension():
                      new_axis=[0, 3], dtype=d.dtype)
     assert e.chunks == ((1,), (4, 4), (4, 4), (1,))
     assert_eq(e, x[None, :, :, None])
+
+    # Adding axis with a gap
+    with pytest.raises(ValueError):
+        d.map_blocks(lambda b: b, new_axis=(3, 4))
 
     # Both new_axis and drop_axis
     d = da.from_array(x, chunks=(8, 4))
@@ -3598,3 +3595,14 @@ def test_slice_reversed():
     y = x[6:3]
 
     assert_eq(y, np.ones(0))
+
+
+def test_map_blocks_chunks():
+    x = da.arange(400, chunks=(100,))
+    y = da.arange(40, chunks=(10,))
+
+    def func(a, b):
+        return np.array([a.max(), b.max()])
+
+    assert_eq(da.map_blocks(func, x, y, chunks=(2,), dtype=x.dtype),
+              np.array([99, 9, 199, 19, 299, 29, 399, 39]))

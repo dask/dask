@@ -10,7 +10,7 @@ import numpy as np
 from toolz import frequencies, concat
 
 from .core import Array
-from ..sharedict import ShareDict
+from ..highlevelgraph import HighLevelGraph
 
 try:
     AxisError = np.AxisError
@@ -55,10 +55,10 @@ def _not_empty(x):
 
 def _check_dsk(dsk):
     """ Check that graph is well named and non-overlapping """
-    if not isinstance(dsk, ShareDict):
+    if not isinstance(dsk, HighLevelGraph):
         return
 
-    assert all(isinstance(k, (tuple, str)) for k in dsk.dicts)
+    assert all(isinstance(k, (tuple, str)) for k in dsk.layers)
     freqs = frequencies(concat(dsk.dicts.values()))
     non_one = {k: v for k, v in freqs.items() if v != 1}
     assert not non_one, non_one

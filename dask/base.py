@@ -14,12 +14,12 @@ from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
 from .compatibility import (apply, long, unicode, Iterator, is_dataclass,
-                            dataclass_fields)
+                            dataclass_fields, Mapping)
 from .context import thread_state
 from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict
-from . import config, local, threaded, sharedict
+from . import config, local, threaded
 
 
 __all__ = ("DaskMethodsMixin",
@@ -201,12 +201,13 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
 def _extract_graph_and_keys(vals):
     """Given a list of dask vals, return a single graph and a list of keys such
     that ``get(dsk, keys)`` is equivalent to ``[v.compute() v in vals]``."""
+    from .highlevelgraph import HighLevelGraph
 
     graphs = [v.__dask_graph__() for v in vals]
     keys = [v.__dask_keys__() for v in vals]
 
-    if any(isinstance(graph, sharedict.ShareDict) for graph in graphs):
-        graph = sharedict.merge(*graphs)
+    if any(isinstance(graph, HighLevelGraph) for graph in graphs):
+        graph = HighLevelGraph.merge(*graphs)
     else:
         graph = merge(*graphs)
 
@@ -449,10 +450,10 @@ def visualize(*args, **kwargs):
     filename = kwargs.pop('filename', 'mydask')
     optimize_graph = kwargs.pop('optimize_graph', False)
 
-    dsks = [arg for arg in args if isinstance(arg, dict)]
+    dsks = [arg for arg in args if isinstance(arg, Mapping)]
     args = [arg for arg in args if is_dask_collection(arg)]
 
-    dsk = collections_to_dsk(args, optimize_graph=optimize_graph)
+    dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
     for d in dsks:
         dsk.update(d)
 

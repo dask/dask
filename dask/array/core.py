@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 from bisect import bisect
+import copy
 from functools import partial, wraps
 from itertools import product
 import math
@@ -18,12 +19,12 @@ import warnings
 
 try:
     from cytoolz import (partition, concat, join, first,
-                         groupby, valmap, accumulate, assoc)
+                         groupby, valmap, accumulate)
     from cytoolz.curried import pluck
 
 except ImportError:
     from toolz import (partition, concat, join, first,
-                       groupby, valmap, accumulate, assoc)
+                       groupby, valmap, accumulate)
     from toolz.curried import pluck
 from toolz import map, reduce, frequencies
 import numpy as np
@@ -42,13 +43,12 @@ from ..compatibility import (unicode, zip_longest,
 from ..core import quote
 from ..delayed import delayed, Delayed
 from .. import threaded, core
-from .. import sharedict
 from ..sizeof import sizeof
-from ..sharedict import ShareDict
+from ..highlevelgraph import HighLevelGraph
 from ..bytes.core import get_mapper, get_fs_token_paths
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
-from .top import atop, _top, top
+from .top import atop, subs
 
 
 config.update_defaults({'array': {
@@ -550,40 +550,63 @@ def map_blocks(func, *args, **kwargs):
     chunks = kwargs.pop('chunks', None)
     drop_axis = kwargs.pop('drop_axis', [])
     new_axis = kwargs.pop('new_axis', [])
+    new_axes = {}
+
     if isinstance(drop_axis, Number):
         drop_axis = [drop_axis]
     if isinstance(new_axis, Number):
-        new_axis = [new_axis]
+        new_axis = [new_axis]  # TODO: handle new_axis
 
     arrs = [a for a in args if isinstance(a, Array)]
 
-    argpairs = [(a.name, tuple(range(a.ndim))[::-1])
+    argpairs = [(a, tuple(range(a.ndim))[::-1])
                 if isinstance(a, Array)
                 else (a, None)
                 for a in args]
-    numblocks = {a.name: a.numblocks for a in arrs}
     out_ind = tuple(range(max(a.ndim for a in arrs)))[::-1]
 
     if has_keyword(func, 'block_id'):
-        kwargs['block_id'] = '__dummy__'
+        kwargs['block_id'] = '__block_id_dummy__'
     if has_keyword(func, 'block_info'):
-        kwargs['block_info'] = '__dummy__'
+        kwargs['block_info'] = '__block_info_dummy__'
 
     original_kwargs = kwargs
-    kwargs = {k: normalize_arg(v) for k, v in kwargs.items()}
-    arginds = list(concat([(normalize_arg(x) if ind is None else x, ind)
-                           for x, ind in argpairs]))
-    if (has_keyword(func, 'block_id') or has_keyword(func, 'block_info') or drop_axis):
-        my_top = top
-    else:
-        my_top = _top
-    dsk = my_top(func, name, out_ind, *arginds, numblocks=numblocks,
-                 **kwargs)
 
-    # If func has block_id as an argument, add it to the kwargs for each call
+    if dtype is None:
+        dtype = apply_infer_dtype(func, args, original_kwargs, 'map_blocks')
+
+    if drop_axis:
+        out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
+    if new_axis:
+        # new_axis = [x + len(drop_axis) for x in new_axis]
+        out_ind = list(out_ind)
+        for ax in sorted(new_axis):
+            n = len(out_ind) + len(drop_axis)
+            out_ind.insert(ax, n)
+            if chunks is not None:
+                new_axes[n] = chunks[ax]
+            else:
+                new_axes[n] = 1
+        out_ind = tuple(out_ind)
+        if max(new_axis) > max(out_ind):
+            raise ValueError("New_axis values do not fill in all dimensions")
+    out = atop(func, out_ind, *concat(argpairs), name=name,
+               new_axes=new_axes, dtype=dtype, concatenate=True,
+               align_arrays=False, **kwargs)
+
+    if (has_keyword(func, 'block_id') or has_keyword(func, 'block_info') or drop_axis):
+        dsk = out.dask.layers[out.name]
+        dsk = dict(dsk)
+        out.dask.layers[out.name] = dsk
+
     if has_keyword(func, 'block_id'):
-        for k in dsk.keys():
-            dsk[k] = dsk[k][:-1] + (assoc(dsk[k][-1], 'block_id', k[1:]),)
+        for k, vv in dsk.items():
+            v = copy.copy(vv[0])  # Need to copy and unpack subgraph callable
+            v.dsk = copy.copy(v.dsk)
+            [(key, task)] = v.dsk.items()
+            task = subs(task, {'__block_id_dummy__': k[1:]})
+            v.dsk[key] = task
+            dsk[k] = (v,) + vv[1:]
 
     # If func has block_info as an argument, add it to the kwargs for each call
     if has_keyword(func, 'block_info'):
@@ -602,64 +625,30 @@ def map_blocks(func, *args, **kwargs):
                 shapes[k] = arg.shape
                 num_chunks[i] = arg.numblocks
 
-        first_info = None
-        for k in dsk.keys():
+        for k, v in dsk.items():
+            vv = v
+            v = v[0]
+            [(key, task)] = v.dsk.items()  # unpack subgraph callable
             info = {i: {'shape': shapes[i],
                         'num-chunks': num_chunks[i],
                         'array-location': [(starts[i][ij][j], starts[i][ij][j + 1])
                                            for ij, j in enumerate(k[1:])],
                         'chunk-location': k[1:]}
                     for i in shapes}
-            if first is None:
-                first_info = info  # for the dtype computation just below
 
-            dsk[k] = dsk[k][:-1] + (assoc(dsk[k][-1], 'block_info', info),)
-
-    if dtype is None:
-        kwargs2 = original_kwargs
-        if has_keyword(func, 'block_id'):
-            kwargs2 = assoc(kwargs, 'block_id', first(dsk.keys())[1:])
-        if has_keyword(func, 'block_info'):
-            kwargs2 = assoc(kwargs, 'block_info', first_info)
-        dtype = apply_infer_dtype(func, args, kwargs2, 'map_blocks')
-
-    if len(arrs) == 1:
-        numblocks = list(arrs[0].numblocks)
-    else:
-        dims = broadcast_dimensions(argpairs, numblocks)
-        numblocks = [b for (_, b) in sorted(dims.items(), reverse=True)]
-
-    if drop_axis:
-        if any(numblocks[i] > 1 for i in drop_axis):
-            raise ValueError("Can't drop an axis with more than 1 block. "
-                             "Please use `atop` instead.")
-        dsk = dict((tuple(k for i, k in enumerate(k)
-                          if i - 1 not in drop_axis), v)
-                   for k, v in dsk.items())
-        numblocks = [n for i, n in enumerate(numblocks) if i not in drop_axis]
-    if new_axis:
-        new_axis = sorted(new_axis)
-        for i in new_axis:
-            if not 0 <= i <= len(numblocks):
-                ndim = len(numblocks)
-                raise ValueError("Can't add axis %d when current "
-                                 "axis are %r. Missing axis: "
-                                 "%r" % (i, list(range(ndim)),
-                                         list(range(ndim, i))))
-            numblocks.insert(i, 1)
-        dsk, old_dsk = dict(), dsk
-        for key in old_dsk:
-            new_key = list(key)
-            for i in new_axis:
-                new_key.insert(i + 1, 0)
-            dsk[tuple(new_key)] = old_dsk[key]
+            v = copy.copy(v)  # Need to copy and unpack subgraph callable
+            v.dsk = copy.copy(v.dsk)
+            [(key, task)] = v.dsk.items()
+            task = subs(task, {'__block_info_dummy__': info})
+            v.dsk[key] = task
+            dsk[k] = (v,) + vv[1:]
 
     if chunks:
-        if len(chunks) != len(numblocks):
+        if len(chunks) != len(out.numblocks):
             raise ValueError("Provided chunks have {0} dims, expected {1} "
-                             "dims.".format(len(chunks), len(numblocks)))
+                             "dims.".format(len(chunks), len(out.numblocks)))
         chunks2 = []
-        for i, (c, nb) in enumerate(zip(chunks, numblocks)):
+        for i, (c, nb) in enumerate(zip(chunks, out.numblocks)):
             if isinstance(c, tuple):
                 if not len(c) == nb:
                     raise ValueError("Dimension {0} has {1} blocks, "
@@ -668,26 +657,9 @@ def map_blocks(func, *args, **kwargs):
                 chunks2.append(c)
             else:
                 chunks2.append(nb * (c,))
-    else:
-        if len(arrs) == 1:
-            chunks2 = list(arrs[0].chunks)
-        else:
-            try:
-                chunks2 = list(broadcast_chunks(*[a.chunks for a in arrs]))
-            except Exception:
-                raise ValueError("Arrays in `map_blocks` don't align, can't "
-                                 "infer output chunks. Please provide "
-                                 "`chunks` kwarg.")
-        if drop_axis:
-            chunks2 = [c for (i, c) in enumerate(chunks2) if i not in drop_axis]
-        if new_axis:
-            for i in sorted(new_axis):
-                chunks2.insert(i, (1,))
+        out._chunks = normalize_chunks(chunks2)
 
-    chunks = tuple(chunks2)
-
-    return Array(sharedict.merge((name, dsk), *[a.dask for a in arrs]),
-                 name, chunks, dtype)
+    return out
 
 
 def broadcast_chunks(*chunkss):
@@ -804,7 +776,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
                          % (len(sources), len(targets), len(regions)))
 
     # Optimize all sources together
-    sources_dsk = sharedict.merge(*[e.__dask_graph__() for e in sources])
+    sources_dsk = HighLevelGraph.merge(*[e.__dask_graph__() for e in sources])
     sources_dsk = Array.__dask_optimize__(
         sources_dsk,
         list(core.flatten([e.__dask_keys__() for e in sources]))
@@ -827,25 +799,25 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         else:
             targets2.append(e)
 
-    targets_dsk = sharedict.merge(*targets_dsk)
+    targets_dsk = HighLevelGraph.merge(*targets_dsk)
     targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
 
     load_stored = (return_stored and not compute)
     toks = [str(uuid.uuid1()) for _ in range(len(sources))]
-    store_dsk = sharedict.merge(*[
+    store_dsk = HighLevelGraph.merge(*[
         insert_to_ooc(s, t, lock, r, return_stored, load_stored, tok)
         for s, t, r, tok in zip(sources2, targets2, regions, toks)
     ])
     store_keys = list(store_dsk.keys())
 
-    store_dsk = sharedict.merge(store_dsk, targets_dsk, sources_dsk)
+    store_dsk = HighLevelGraph.merge(store_dsk, targets_dsk, sources_dsk)
 
     if return_stored:
         load_store_dsk = store_dsk
         if compute:
             store_dlyds = [Delayed(k, store_dsk) for k in store_keys]
             store_dlyds = persist(*store_dlyds, **kwargs)
-            store_dsk_2 = sharedict.merge(*[e.dask for e in store_dlyds])
+            store_dsk_2 = HighLevelGraph.merge(*[e.dask for e in store_dlyds])
 
             load_store_dsk = retrieve_from_ooc(
                 store_keys, store_dsk, store_dsk_2
@@ -859,7 +831,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         return result
     else:
         name = 'store-' + str(uuid.uuid1())
-        dsk = sharedict.merge({name: store_keys}, store_dsk)
+        dsk = HighLevelGraph.merge({name: store_keys}, store_dsk)
         result = Delayed(name, dsk)
 
         if compute:
@@ -945,10 +917,8 @@ class Array(DaskMethodsMixin):
     def __new__(cls, dask, name, chunks, dtype, shape=None):
         self = super(Array, cls).__new__(cls)
         assert isinstance(dask, Mapping)
-        if not isinstance(dask, ShareDict):
-            s = ShareDict()
-            s.update_with_key(dask, key=name)
-            dask = s
+        if not isinstance(dask, HighLevelGraph):
+            dask = HighLevelGraph.from_collections(name, dask, dependencies=())
         self.dask = dask
         self.name = name
         if dtype is None:
@@ -971,6 +941,9 @@ class Array(DaskMethodsMixin):
 
     def __dask_graph__(self):
         return self.dask
+
+    def __dask_layers__(self):
+        return (self.name,)
 
     def __dask_keys__(self):
         if self._cached_keys is not None:
@@ -1260,9 +1233,8 @@ class Array(DaskMethodsMixin):
         out = 'getitem-' + tokenize(self, index2)
         dsk, chunks = slice_array(out, self.name, self.chunks, index2)
 
-        dsk2 = sharedict.merge(self.dask, (out, dsk), dependencies={out: dependencies})
-
-        return Array(dsk2, out, chunks, dtype=self.dtype)
+        graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
+        return Array(graph, out, chunks, dtype=self.dtype)
 
     def _vindex(self, key):
         if not isinstance(key, tuple):
@@ -1328,11 +1300,10 @@ class Array(DaskMethodsMixin):
 
         keys = list(product(*[range(len(c)) for c in chunks]))
 
-        dsk = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+        layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
-        return Array(sharedict.merge(self.dask, (name, dsk),
-                                     dependencies={name: {self.name}}),
-                     name, chunks, self.dtype)
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[self])
+        return Array(graph, name, chunks, self.dtype)
 
     @property
     def blocks(self):
@@ -1860,10 +1831,12 @@ class Array(DaskMethodsMixin):
         dask.array.from_delayed
         """
         keys = self.__dask_keys__()
-        dsk = self.__dask_graph__()
+        graph = self.__dask_graph__()
         if optimize_graph:
-            dsk = self.__dask_optimize__(dsk, keys)
-        L = ndeepmap(self.ndim, lambda k: Delayed(k, dsk), keys)
+            graph = self.__dask_optimize__(graph, keys)  # TODO, don't collape graph
+            name = 'delayed-' + self.name
+            graph = HighLevelGraph.from_collections(name, graph, dependencies=())
+        L = ndeepmap(self.ndim, lambda k: Delayed(k, graph), keys)
         return np.array(L, dtype=object)
 
     @derived_from(np.ndarray)
@@ -2400,9 +2373,8 @@ def from_delayed(value, shape, dtype, name=None):
     chunks = tuple((d,) for d in shape)
     # TODO: value._key may not be the name of the layer in value.dask
     # This should be fixed after we build full expression graphs
-    return Array(sharedict.merge(value.dask, (name, dsk),
-                                 dependencies={name: {value._key}}),
-                 name, chunks, dtype)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[value])
+    return Array(graph, name, chunks, dtype)
 
 
 def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
@@ -2866,10 +2838,9 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
               key[axis + 2:] for key in keys]
 
     dsk = dict(zip(keys, values))
-    dsk2 = sharedict.merge((name, dsk), * [a.dask for a in seq],
-                           dependencies={name: {a.name for a in seq}})
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=seq)
 
-    return Array(dsk2, name, chunks, dtype=dt)
+    return Array(graph, name, chunks, dtype=dt)
 
 
 def load_store_chunk(x, out, index, lock, return_stored, load_stored):
@@ -3367,8 +3338,8 @@ def broadcast_to(x, shape, chunks=None):
         new_key = (name,) + new_index
         dsk[new_key] = (np.broadcast_to, old_key, quote(chunk_shape))
 
-    return Array(sharedict.merge((name, dsk), x.dask, dependencies={name: {x.name}}),
-                 name, chunks, dtype=x.dtype)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
+    return Array(graph, name, chunks, dtype=x.dtype)
 
 
 @wraps(np.broadcast_arrays)
@@ -3582,11 +3553,10 @@ def stack(seq, axis=0):
               (None, ) + (slice(None, None, None), ) * (ndim - axis))
               for inp in inputs]
 
-    dsk = dict(zip(keys, values))
-    dsk2 = sharedict.merge((name, dsk), *[a.dask for a in seq],
-                           dependencies={name: {a.name for a in seq}})
+    layer = dict(zip(keys, values))
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=seq)
 
-    return Array(dsk2, name, chunks, dtype=dt)
+    return Array(graph, name, chunks, dtype=dt)
 
 
 def concatenate3(arrays):
@@ -3846,7 +3816,7 @@ def _vindex_array(x, dict_indexes):
                    for okey in other_blocks)
 
         result_1d = Array(
-            sharedict.merge(x.dask, (out_name, dsk), dependencies={out_name: {x.name}}),
+            HighLevelGraph.from_collections(out_name, dsk, dependencies=[x]),
             out_name, chunks, x.dtype
         )
         return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
@@ -3972,7 +3942,8 @@ def to_npy_stack(dirname, x, axis=0):
     dsk = {(name, i): (np.save, os.path.join(dirname, '%d.npy' % i), key)
            for i, key in enumerate(core.flatten(xx.__dask_keys__()))}
 
-    compute_as_if_collection(Array, sharedict.merge(dsk, xx.dask, dependencies={name: {xx.name}}), list(dsk))
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[xx])
+    compute_as_if_collection(Array, graph, list(dsk))
 
 
 def from_npy_stack(dirname, mmap_mode='r'):

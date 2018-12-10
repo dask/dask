@@ -10,7 +10,7 @@ from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
 from ..optimization import cull, fuse, inline_functions
 from ..utils import ensure_dict
-from ..sharedict import ShareDict
+from ..highlevelgraph import HighLevelGraph
 
 from numbers import Integral
 
@@ -34,7 +34,7 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
     keys = list(flatten(keys))
 
     # High level stage optimization
-    if isinstance(dsk, ShareDict):
+    if isinstance(dsk, HighLevelGraph):
         dsk = optimize_atop(dsk, keys=keys)
 
     # Low level task optimizations

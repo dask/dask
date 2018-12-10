@@ -8,7 +8,7 @@ from numbers import Integral, Number
 import numpy as np
 from toolz import accumulate, sliding_window
 
-from .. import sharedict
+from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
 from ..compatibility import Sequence
 from . import chunk
@@ -488,9 +488,8 @@ def diag(v):
         if v.chunks[0] == v.chunks[1]:
             dsk = {(name, i): (np.diag, row[i])
                    for i, row in enumerate(v.__dask_keys__())}
-            return Array(sharedict.merge(v.dask, (name, dsk),
-                                         dependencies={name: {v.name}}),
-                         name, (v.chunks[0],), dtype=v.dtype)
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
+            return Array(graph, name, (v.chunks[0],), dtype=v.dtype)
         else:
             raise NotImplementedError("Extracting diagonals from non-square "
                                       "chunked arrays")
@@ -505,9 +504,8 @@ def diag(v):
             else:
                 dsk[key] = (np.zeros, (m, n))
 
-    return Array(sharedict.merge(v.dask, (name, dsk),
-                                 dependencies={name: {v.name}}),
-                 name, (chunks_1d, chunks_1d), dtype=v.dtype)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
+    return Array(graph, name, (chunks_1d, chunks_1d), dtype=v.dtype)
 
 
 def triu(m, k=0):
@@ -554,8 +552,8 @@ def triu(m, k=0):
                 dsk[(name, i, j)] = (np.triu, (m.name, i, j), k - (chunk * (j - i)))
             else:
                 dsk[(name, i, j)] = (m.name, i, j)
-    return Array(sharedict.merge((name, dsk), m.dask, dependencies={name: {m.name}}),
-                 name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
+    return Array(graph, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
 
 
 def tril(m, k=0):
@@ -602,8 +600,8 @@ def tril(m, k=0):
                 dsk[(name, i, j)] = (np.tril, (m.name, i, j), k - (chunk * (j - i)))
             else:
                 dsk[(name, i, j)] = (np.zeros, (m.chunks[0][i], m.chunks[1][j]))
-    dsk = sharedict.merge(m.dask, (name, dsk), dependencies={name: {m.name}})
-    return Array(dsk, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
+    return Array(graph, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
 
 
 def _np_fromfunction(func, shape, dtype, offset, func_kwargs):

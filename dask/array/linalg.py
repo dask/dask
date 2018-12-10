@@ -9,8 +9,9 @@ import toolz
 
 from ..base import tokenize
 from ..compatibility import apply
-from .. import sharedict
-from .core import top, dotmany, Array, concatenate
+from ..highlevelgraph import HighLevelGraph
+from .core import dotmany, Array, concatenate
+from .top import top
 from .creation import eye
 from .random import RandomState
 
@@ -121,30 +122,31 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
     qq, rr = np.linalg.qr(np.ones(shape=(1, 1), dtype=data.dtype))
 
-    dsk = sharedict.ShareDict()
-    dsk.update(data.dask)
+    layers = data.__dask_graph__().layers.copy()
+    dependencies = data.__dask_graph__().dependencies.copy()
 
     # Block qr
     name_qr_st1 = 'qr' + token
     dsk_qr_st1 = top(_wrapped_qr, name_qr_st1, 'ij', data.name, 'ij',
                      numblocks={data.name: numblocks})
-    dsk.update_with_key(dsk_qr_st1, key=name_qr_st1,
-                        dependencies={name_qr_st1, data.name})
+    layers[name_qr_st1] = dsk_qr_st1
+    dependencies[name_qr_st1] = data.__dask_layers__()
 
     # Block qr[0]
     name_q_st1 = 'getitem' + token + '-q1'
     dsk_q_st1 = dict(((name_q_st1, i, 0),
                       (operator.getitem, (name_qr_st1, i, 0), 0))
                      for i in range(numblocks[0]))
-    dsk.update_with_key(dsk_q_st1, key=name_q_st1,
-                        dependencies={name_qr_st1})
+    layers[name_q_st1] = dsk_q_st1
+    dependencies[name_q_st1] = {name_qr_st1}
 
     # Block qr[1]
     name_r_st1 = 'getitem' + token + '-r1'
     dsk_r_st1 = dict(((name_r_st1, i, 0),
                       (operator.getitem, (name_qr_st1, i, 0), 1))
                      for i in range(numblocks[0]))
-    dsk.update_with_key(dsk_r_st1, key=name_r_st1, dependencies={name_qr_st1})
+    layers[name_r_st1] = dsk_r_st1
+    dependencies[name_r_st1] = {name_qr_st1}
 
     # Next step is to obtain a QR decomposition for the stacked R factors, so either:
     # - gather R factors into a single core and do a QR decomposition
@@ -185,19 +187,20 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
                                            [(name_r_st1, idx, 0)
                                             for idx, _ in sub_block_info])))
                              for i, sub_block_info in enumerate(all_blocks))
-        dsk.update_with_key(dsk_r_stacked, key=name_r_stacked,
-                            dependencies={name_r_st1})
+        layers[name_r_stacked] = dsk_r_stacked
+        dependencies[name_r_stacked] = {name_r_st1}
 
         # retrieve R_stacked for recursion with tsqr
         vchunks_rstacked = tuple([sum(map(lambda x: x[1], sub_block_info)) for sub_block_info in all_blocks])
-        dsk.dependencies[name_r_stacked] = {data.name}
-        r_stacked = Array(dsk, name_r_stacked,
+        graph = HighLevelGraph(layers, dependencies)
+        # dsk.dependencies[name_r_stacked] = {data.name}
+        r_stacked = Array(graph, name_r_stacked,
                           shape=(sum(vchunks_rstacked), n), chunks=(vchunks_rstacked, (n)), dtype=rr.dtype)
 
         # recurse
         q_inner, r_inner = tsqr(r_stacked, _max_vchunk_size=cr_max)
-        dsk.update(q_inner.dask)
-        dsk.update(r_inner.dask)
+        layers = toolz.merge(q_inner.dask.layers, r_inner.dask.layers)
+        dependencies = toolz.merge(q_inner.dask.dependencies, r_inner.dask.dependencies)
 
         # Q_inner: "unstack"
         name_q_st2 = 'getitem-' + token + '-q2'
@@ -208,22 +211,22 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
                          for i, sub_block_info in enumerate(all_blocks)
                          for j, e in zip([x[0] for x in sub_block_info],
                                          _cumsum_blocks([x[1] for x in sub_block_info])))
-        dsk.update_with_key(dsk_q_st2, key=name_q_st2,
-                            dependencies={q_inner.name})
+        layers[name_q_st2] = dsk_q_st2
+        dependencies[name_q_st2] = q_inner.__dask_layers__()
 
         # R: R_inner
         name_r_st2 = 'r-inner-' + token
         dsk_r_st2 = {(name_r_st2, 0, 0): (r_inner.name, 0, 0)}
-        dsk.update_with_key(dsk_r_st2, key=name_r_st2,
-                            dependencies={r_inner.name})
+        layers[name_r_st2] = dsk_r_st2
+        dependencies[name_r_st2] = r_inner.__dask_layers__()
 
         # Q: Block qr[0] (*) Q_inner
         name_q_st3 = 'dot-' + token + '-q3'
         dsk_q_st3 = top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
                         name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
                                                      name_q_st2: numblocks})
-        dsk.update_with_key(dsk_q_st3, key=name_q_st3,
-                            dependencies={name_q_st1, name_q_st2, name_q_st3})
+        layers[name_q_st3] = dsk_q_st3
+        dependencies[name_q_st3] = {name_q_st1, name_q_st2, name_q_st3}
     else:
         # Do single core computation
 
@@ -232,22 +235,22 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         name_r_st1_stacked = 'stack' + token + '-r1'
         dsk_r_st1_stacked = {(name_r_st1_stacked, 0, 0): (np.vstack,
                                                           (tuple, to_stack))}
-        dsk.update_with_key(dsk_r_st1_stacked, key=name_r_st1_stacked,
-                            dependencies={name_r_st1})
+        layers[name_r_st1_stacked] = dsk_r_st1_stacked
+        dependencies[name_r_st1_stacked] = {name_r_st1}
 
         # In-core QR computation
         name_qr_st2 = 'qr' + token + '-qr2'
         dsk_qr_st2 = top(np.linalg.qr, name_qr_st2, 'ij', name_r_st1_stacked, 'ij',
                          numblocks={name_r_st1_stacked: (1, 1)})
-        dsk.update_with_key(dsk_qr_st2, key=name_qr_st2,
-                            dependencies={name_r_st1_stacked})
+        layers[name_qr_st2] = dsk_qr_st2
+        dependencies[name_qr_st2] = {name_r_st1_stacked}
 
         # In-core qr[0]
         name_q_st2_aux = 'getitem' + token + '-q2-aux'
         dsk_q_st2_aux = {(name_q_st2_aux, 0, 0): (operator.getitem,
                                                   (name_qr_st2, 0, 0), 0)}
-        dsk.update_with_key(dsk_q_st2_aux, key=name_q_st2_aux,
-                            dependencies={name_qr_st2})
+        layers[name_q_st2_aux] = dsk_q_st2_aux
+        dependencies[name_q_st2_aux] = {name_qr_st2}
 
         if not any(np.isnan(c) for cs in data.chunks for c in cs):
             # when chunks are all known...
@@ -256,7 +259,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             block_slices = [(slice(e[0], e[1]), slice(0, n))
                             for e in _cumsum_blocks(q2_block_sizes)]
             dsk_q_blockslices = {}
-            dependencies = set()
+            deps = set()
         else:
             # when chunks are not already known...
 
@@ -287,33 +290,33 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
                                             dsk_q2_cumsum,
                                             dsk_block_slices)
 
-            dependencies = {data.name, name_q2bs, name_q2cs}
+            deps = {data.name, name_q2bs, name_q2cs}
             block_slices = [(name_blockslice, i) for i in range(numblocks[0])]
 
-        dsk.update_with_key(dsk_q_blockslices, key='q-blocksizes' + token,
-                            dependencies=dependencies)
+        layers['q-blocksizes' + token] = dsk_q_blockslices
+        dependencies['q-blocksizes' + token] = deps
 
         # In-core qr[0] unstacking
         name_q_st2 = 'getitem' + token + '-q2'
         dsk_q_st2 = dict(((name_q_st2, i, 0),
                           (operator.getitem, (name_q_st2_aux, 0, 0), b))
                          for i, b in enumerate(block_slices))
-        dsk.update_with_key(dsk_q_st2, key=name_q_st2,
-                            dependencies={name_q_st2_aux})
+        layers[name_q_st2] = dsk_q_st2
+        dependencies[name_q_st2] = {name_q_st2_aux, 'q-blocksizes' + token}
 
         # Q: Block qr[0] (*) In-core qr[0]
         name_q_st3 = 'dot' + token + '-q3'
         dsk_q_st3 = top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
                         name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
                                                      name_q_st2: numblocks})
-        dsk.update_with_key(dsk_q_st3, key=name_q_st3,
-                            dependencies={name_q_st1, name_q_st2})
+        layers[name_q_st3] = dsk_q_st3
+        dependencies[name_q_st3] = {name_q_st1, name_q_st2}
 
         # R: In-core qr[1]
         name_r_st2 = 'getitem' + token + '-r2'
         dsk_r_st2 = {(name_r_st2, 0, 0): (operator.getitem, (name_qr_st2, 0, 0), 1)}
-        dsk.update_with_key(dsk_r_st2, key=name_r_st2,
-                            dependencies={name_qr_st2})
+        layers[name_r_st2] = dsk_r_st2
+        dependencies[name_r_st2] = {name_qr_st2}
 
     if not compute_svd:
         is_unknown_m = np.isnan(data.shape[0]) or any(np.isnan(c) for c in data.chunks[0])
@@ -343,11 +346,12 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             r_shape = (n, n) if data.shape[0] >= data.shape[1] else data.shape
             r_chunks = r_shape
 
-        dsk.dependencies[name_q_st3] = {data.name}
-        dsk.dependencies[name_r_st2] = {data.name}
-        q = Array(dsk, name_q_st3,
+        # dsk.dependencies[name_q_st3] = {data.name}
+        # dsk.dependencies[name_r_st2] = {data.name}
+        graph = HighLevelGraph(layers, dependencies)
+        q = Array(graph, name_q_st3,
                   shape=q_shape, chunks=q_chunks, dtype=qq.dtype)
-        r = Array(dsk, name_r_st2,
+        r = Array(graph, name_r_st2,
                   shape=r_shape, chunks=r_chunks, dtype=rr.dtype)
         return q, r
     else:
@@ -373,11 +377,16 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
                         name_u_st2, 'kj', numblocks={name_q_st3: numblocks,
                                                      name_u_st2: (1, 1)})
 
-        dsk.update_with_key(dsk_svd_st2, key=name_svd_st2, dependencies={name_r_st2})
-        dsk.update_with_key(dsk_u_st2, key=name_u_st2, dependencies={name_svd_st2})
-        dsk.update_with_key(dsk_u_st4, key=name_u_st4, dependencies={name_q_st3, name_u_st2})
-        dsk.update_with_key(dsk_s_st2, key=name_s_st2, dependencies={name_svd_st2})
-        dsk.update_with_key(dsk_v_st2, key=name_v_st2, dependencies={name_svd_st2})
+        layers[name_svd_st2] = dsk_svd_st2
+        dependencies[name_svd_st2] = {name_r_st2}
+        layers[name_u_st2] = dsk_u_st2
+        dependencies[name_u_st2] = {name_svd_st2}
+        layers[name_u_st4] = dsk_u_st4
+        dependencies[name_u_st4] = {name_q_st3, name_u_st2}
+        layers[name_s_st2] = dsk_s_st2
+        dependencies[name_s_st2] = {name_svd_st2}
+        layers[name_v_st2] = dsk_v_st2
+        dependencies[name_v_st2] = {name_svd_st2}
 
         uu, ss, vvh = np.linalg.svd(np.ones(shape=(1, 1), dtype=data.dtype))
 
@@ -389,11 +398,10 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         m_vh = n_u
         n_vh = n
         d_vh = max(m_vh, n_vh)  # full matrix returned: but basically n
-        u = Array(dsk, name_u_st4, shape=(m_u, n_u), chunks=(data.chunks[0], (n_u,)),
-                  dtype=uu.dtype)
-        s = Array(dsk, name_s_st2, shape=(n_s,), chunks=((n_s,),), dtype=ss.dtype)
-        vh = Array(dsk, name_v_st2, shape=(d_vh, d_vh), chunks=((n,), (n,)),
-                   dtype=vvh.dtype)
+        graph = HighLevelGraph(layers, dependencies)
+        u = Array(graph, name_u_st4, shape=(m_u, n_u), chunks=(data.chunks[0], (n_u,)), dtype=uu.dtype)
+        s = Array(graph, name_s_st2, shape=(n_s,), chunks=((n_s,),), dtype=ss.dtype)
+        vh = Array(graph, name_v_st2, shape=(d_vh, d_vh), chunks=((n,), (n,)), dtype=vvh.dtype)
         return u, s, vh
 
 
@@ -444,44 +452,43 @@ def sfqr(data, name=None):
 
     qq, rr = np.linalg.qr(np.ones(shape=(1, 1), dtype=data.dtype))
 
-    dsk = sharedict.ShareDict()
-    dsk.update(data.dask)
+    layers = data.__dask_graph__().layers.copy()
+    dependencies = data.__dask_graph__().dependencies.copy()
 
     # data = A = [A_1 A_rest]
     name_A_1 = prefix + 'A_1'
     name_A_rest = prefix + 'A_rest'
-    dsk.update_with_key({
-        (name_A_1, 0, 0): (data.name, 0, 0)
-    }, key=name_A_1, dependencies={data.name})
-    dsk.update_with_key({
-        (name_A_rest, 0, idx): (data.name, 0, 1 + idx)
-        for idx in range(nc - 1)
-    }, key=name_A_rest, dependencies={data.name})
+    layers[name_A_1] = {(name_A_1, 0, 0): (data.name, 0, 0)}
+    dependencies[name_A_1] = data.__dask_layers__()
+    layers[name_A_rest] = {(name_A_rest, 0, idx): (data.name, 0, 1 + idx)
+                           for idx in range(nc - 1)}
+    dependencies[name_A_rest] = data.__dask_layers__()
 
     # Q R_1 = A_1
     name_Q_R1 = prefix + 'Q_R_1'
     name_Q = prefix + 'Q'
     name_R_1 = prefix + 'R_1'
-    dsk.update_with_key({
-        (name_Q_R1, 0, 0): (np.linalg.qr, (name_A_1, 0, 0))
-    }, key=name_Q_R1, dependencies={name_A_1})
-    dsk.update_with_key({
-        (name_Q, 0, 0): (operator.getitem, (name_Q_R1, 0, 0), 0)
-    }, key=name_Q, dependencies={name_Q_R1})
-    dsk.update_with_key({
-        (name_R_1, 0, 0): (operator.getitem, (name_Q_R1, 0, 0), 1),
-    }, key=name_R_1, dependencies={name_Q_R1})
+    layers[name_Q_R1] = {(name_Q_R1, 0, 0): (np.linalg.qr, (name_A_1, 0, 0))}
+    dependencies[name_Q_R1] = {name_A_1}
 
-    Q = Array(dsk, name_Q,
+    layers[name_Q] = {(name_Q, 0, 0): (operator.getitem, (name_Q_R1, 0, 0), 0)}
+    dependencies[name_Q] = {name_Q_R1}
+
+    layers[name_R_1] = {(name_R_1, 0, 0): (operator.getitem, (name_Q_R1, 0, 0), 1)}
+    dependencies[name_R_1] = {name_Q_R1}
+
+    graph = HighLevelGraph(layers, dependencies)
+
+    Q = Array(graph, name_Q,
               shape=(m, min(m, n)), chunks=(m, min(m, n)), dtype=qq.dtype)
-    R_1 = Array(dsk, name_R_1,
+    R_1 = Array(graph, name_R_1,
                 shape=(min(m, n), cc), chunks=(cr, cc), dtype=rr.dtype)
 
     # R = [R_1 Q'A_rest]
     Rs = [R_1]
 
     if nc > 1:
-        A_rest = Array(dsk, name_A_rest,
+        A_rest = Array(graph, name_A_rest,
                        shape=(min(m, n), n - cc), chunks=((cr), data.chunks[1][1:]), dtype=rr.dtype)
         Rs.append(Q.T.dot(A_rest))
 
@@ -780,12 +787,16 @@ def lu(a):
                 dsk[name_u, i, j] = (name_lu, i, j)
                 # l_permuted is not referred in upper triangulars
 
-    dsk = sharedict.merge(a.dask, (name_p, dsk), (name_l, dsk), (name_u, dsk),
-                          dependencies={name_p: {a.name}, name_l: {a.name}, name_u: {a.name}})
     pp, ll, uu = scipy.linalg.lu(np.ones(shape=(1, 1), dtype=a.dtype))
-    p = Array(dsk, name_p, shape=a.shape, chunks=a.chunks, dtype=pp.dtype)
-    l = Array(dsk, name_l, shape=a.shape, chunks=a.chunks, dtype=ll.dtype)
-    u = Array(dsk, name_u, shape=a.shape, chunks=a.chunks, dtype=uu.dtype)
+
+    graph = HighLevelGraph.from_collections(name_p, dsk, dependencies=[a])
+    p = Array(graph, name_p, shape=a.shape, chunks=a.chunks, dtype=pp.dtype)
+
+    graph = HighLevelGraph.from_collections(name_l, dsk, dependencies=[a])
+    l = Array(graph, name_l, shape=a.shape, chunks=a.chunks, dtype=ll.dtype)
+
+    graph = HighLevelGraph.from_collections(name_u, dsk, dependencies=[a])
+    u = Array(graph, name_u, shape=a.shape, chunks=a.chunks, dtype=uu.dtype)
 
     return p, l, u
 
@@ -871,10 +882,10 @@ def solve_triangular(a, b, lower=False):
                     target = (operator.sub, target, (sum, prevs))
                 dsk[_key(i, j)] = (scipy.linalg.solve_triangular, (a.name, i, i), target)
 
-    dsk = sharedict.merge(a.dask, b.dask, (name, dsk), dependencies={name: {a.name, b.name}})
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a, b])
     res = _solve_triangular_lower(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype))
-    return Array(dsk, name, shape=b.shape, chunks=b.chunks, dtype=res.dtype)
+    return Array(graph, name, shape=b.shape, chunks=b.chunks, dtype=res.dtype)
 
 
 def solve(a, b, sym_pos=False):
@@ -1020,12 +1031,13 @@ def _cholesky(a):
                 dsk[name_upper, j, i] = (_solve_triangular_lower, (name, j, j), target)
                 dsk[name, i, j] = (np.transpose, (name_upper, j, i))
 
-    dsk = sharedict.merge(a.dask, (name, dsk), (name_upper, dsk), dependencies={name: {a.name}, name_upper: {a.name}})
+    graph_upper = HighLevelGraph.from_collections(name_upper, dsk, dependencies=[a])
+    graph_lower = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
     cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
 
-    lower = Array(dsk, name, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
+    lower = Array(graph_lower, name, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
     # do not use .T, because part of transposed blocks are already calculated
-    upper = Array(dsk, name_upper, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
+    upper = Array(graph_upper, name_upper, shape=a.shape, chunks=a.chunks, dtype=cho.dtype)
     return lower, upper
 
 
@@ -1079,9 +1091,9 @@ def lstsq(a, b):
     # rank
     rname = 'lstsq-rank-' + token
     rdsk = {(rname, ): (np.linalg.matrix_rank, (r.name, 0, 0))}
-    rdsk = sharedict.merge(r.dask, (rname, rdsk), dependencies={rname: {r.name}})
+    graph = HighLevelGraph.from_collections(rname, rdsk, dependencies=[r])
     # rank must be an integer
-    rank = Array(rdsk, rname, shape=(), chunks=(), dtype=int)
+    rank = Array(graph, rname, shape=(), chunks=(), dtype=int)
 
     # singular
     sname = 'lstsq-singular-' + token
@@ -1090,10 +1102,10 @@ def lstsq(a, b):
                          (np.sqrt,
                           (np.linalg.eigvals,
                            (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))))}
-    sdsk = sharedict.merge(rt.dask, (sname, sdsk), dependencies={sname: {rt.name}})
+    graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt])
     _, _, _, ss = np.linalg.lstsq(np.array([[1, 0], [1, 2]], dtype=a.dtype),
                                   np.array([0, 1], dtype=b.dtype))
-    s = Array(sdsk, sname, shape=(r.shape[0], ),
+    s = Array(graph, sname, shape=(r.shape[0], ),
               chunks=r.shape[0], dtype=ss.dtype)
 
     return x, residuals, rank, s

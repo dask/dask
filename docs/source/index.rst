@@ -226,6 +226,7 @@ often a better choice. If you are a *core developer*, then you should start here
 * :doc:`custom-graphs`
 * :doc:`optimize`
 * :doc:`custom-collections`
+* :doc:`high-level-graphs`
 
 .. toctree::
    :maxdepth: 1
@@ -237,6 +238,7 @@ often a better choice. If you are a *core developer*, then you should start here
    custom-graphs.rst
    optimize.rst
    custom-collections.rst
+   high-level-graphs.rst
 
 
 **Help & reference**
