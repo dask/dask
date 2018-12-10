@@ -502,7 +502,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             kwargs['sort'] = True
         dtypes = pd.concat([x.dtypes, meta.dtypes], axis=1, **kwargs)
         bad_dtypes = [(col, a, b) for col, a, b in dtypes.fillna('-').itertuples()
-                     if not equal_dtypes(a, b)]
+                      if not equal_dtypes(a, b)]
         if bad_dtypes:
             errmsg = ("Partition type: `%s`\n%s" %
                       (type(meta).__name__,

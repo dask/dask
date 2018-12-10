@@ -3307,16 +3307,11 @@ def elemwise(op, *args, **kwargs):
     divisions = dfs[0].divisions
     _is_broadcastable = partial(is_broadcastable, dfs)
     dfs = list(remove(_is_broadcastable, dfs))
-    n = len(divisions) - 1
 
     other = [(i, arg) for i, arg in enumerate(args)
              if not isinstance(arg, (_Frame, Scalar, Array))]
 
     # adjust the key length of Scalar
-    keys = [d.__dask_keys__() * n
-            if isinstance(d, Scalar) or _is_broadcastable(d)
-            else core.flatten(d.__dask_keys__()) for d in dasks]
-
     dsk = broadcast(op, _name, *args, **kwargs)
 
     graph = HighLevelGraph.from_collections(_name, dsk, dependencies=dasks)
@@ -3671,7 +3666,6 @@ def map_partitions(func, *args, **kwargs):
     kwargs3 = {}
     from ..array.core import normalize_arg
     for k, v in kwargs.items():
-        vv = v
         v = normalize_arg(v)
         v, collections = unpack_collections(v)
         dependencies.extend(collections)
