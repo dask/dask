@@ -3,6 +3,7 @@ from operator import add, setitem
 import pickle
 from random import random
 import types
+import warnings
 
 from toolz import identity, partial, merge
 import pytest
@@ -40,45 +41,46 @@ class Tuple(object):
 
 
 def test_to_task_dask():
-    a = delayed(1, name='a')
-    b = delayed(2, name='b')
-    task, dask = to_task_dask([a, b, 3])
-    assert task == ['a', 'b', 3]
+    with warnings.catch_warnings(record=True):
+        a = delayed(1, name='a')
+        b = delayed(2, name='b')
+        task, dask = to_task_dask([a, b, 3])
+        assert task == ['a', 'b', 3]
 
-    task, dask = to_task_dask((a, b, 3))
-    assert task == (tuple, ['a', 'b', 3])
-    assert dict(dask) == merge(a.dask, b.dask)
+        task, dask = to_task_dask((a, b, 3))
+        assert task == (tuple, ['a', 'b', 3])
+        assert dict(dask) == merge(a.dask, b.dask)
 
-    task, dask = to_task_dask({a: 1, b: 2})
-    assert (task == (dict, [['b', 2], ['a', 1]]) or
-            task == (dict, [['a', 1], ['b', 2]]))
-    assert dict(dask) == merge(a.dask, b.dask)
+        task, dask = to_task_dask({a: 1, b: 2})
+        assert (task == (dict, [['b', 2], ['a', 1]]) or
+                task == (dict, [['a', 1], ['b', 2]]))
+        assert dict(dask) == merge(a.dask, b.dask)
 
-    f = namedtuple('f', ['x', 'y'])
-    x = f(1, 2)
-    task, dask = to_task_dask(x)
-    assert task == x
-    assert dict(dask) == {}
+        f = namedtuple('f', ['x', 'y'])
+        x = f(1, 2)
+        task, dask = to_task_dask(x)
+        assert task == x
+        assert dict(dask) == {}
 
-    task, dask = to_task_dask(slice(a, b, 3))
-    assert task == (slice, 'a', 'b', 3)
-    assert dict(dask) == merge(a.dask, b.dask)
+        task, dask = to_task_dask(slice(a, b, 3))
+        assert task == (slice, 'a', 'b', 3)
+        assert dict(dask) == merge(a.dask, b.dask)
 
-    # Issue https://github.com/dask/dask/issues/2107
-    class MyClass(dict):
-        pass
+        # Issue https://github.com/dask/dask/issues/2107
+        class MyClass(dict):
+            pass
 
-    task, dask = to_task_dask(MyClass())
-    assert type(task) is MyClass
-    assert dict(dask) == {}
+        task, dask = to_task_dask(MyClass())
+        assert type(task) is MyClass
+        assert dict(dask) == {}
 
-    # Custom dask objects
-    x = Tuple({'a': 1, 'b': 2, 'c': (add, 'a', 'b')}, ['a', 'b', 'c'])
-    task, dask = to_task_dask(x)
-    assert task in dask
-    f = dask.pop(task)
-    assert f == (tuple, ['a', 'b', 'c'])
-    assert dask == x._dask
+        # Custom dask objects
+        x = Tuple({'a': 1, 'b': 2, 'c': (add, 'a', 'b')}, ['a', 'b', 'c'])
+        task, dask = to_task_dask(x)
+        assert task in dask
+        f = dask.pop(task)
+        assert f == (tuple, ['a', 'b', 'c'])
+        assert dask == x._dask
 
 
 def test_delayed():
@@ -105,6 +107,7 @@ def test_delayed_with_dataclass():
 
     def return_nested(obj):
         return obj["a"].a
+
     final = delayed(return_nested)(with_class)
 
     assert final.compute() == 3
@@ -398,7 +401,8 @@ def test_array_delayed():
     assert val.sum().compute() == (arr + arr + 1).sum()
     assert val[0, 0].compute() == (arr + arr + 1)[0, 0]
 
-    task, dsk = to_task_dask(darr)
+    with warnings.catch_warnings(record=True):
+        task, dsk = to_task_dask(darr)
     orig = set(darr.dask)
     final = set(dsk)
     assert orig.issubset(final)

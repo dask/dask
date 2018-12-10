@@ -192,9 +192,8 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
         locations = list(range(0, nrows, chunksize)) + [len(data)]
         divisions = [None] * len(locations)
 
-    dsk = dict(((name, i), data.iloc[start: stop])
-               for i, (start, stop) in enumerate(zip(locations[:-1],
-                                                     locations[1:])))
+    dsk = {(name, i): data.iloc[start: stop]
+           for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))}
     return new_dd_object(dsk, name, data, divisions)
 
 

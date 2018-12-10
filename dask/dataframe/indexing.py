@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 from datetime import datetime
 from collections import defaultdict
 
-from toolz import merge
 import bisect
 import numpy as np
 import pandas as pd
@@ -11,6 +10,7 @@ import pandas as pd
 from .core import new_dd_object, Series
 from . import methods
 from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
 
 
 class _IndexerBase(object):
@@ -151,8 +151,8 @@ class _LocIndexer(_IndexerBase):
         else:
             divisions = [None, None]
             dsk = {(name, 0): meta.head(0)}
-        return new_dd_object(merge(self.obj.dask, dsk), name,
-                             meta=meta, divisions=divisions)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
+        return new_dd_object(graph, name, meta=meta, divisions=divisions)
 
     def _loc_element(self, iindexer, cindexer):
         name = 'loc-%s' % tokenize(iindexer, self.obj)
@@ -165,8 +165,8 @@ class _LocIndexer(_IndexerBase):
                            slice(iindexer, iindexer), cindexer)}
 
         meta = self._make_meta(iindexer, cindexer)
-        return new_dd_object(merge(self.obj.dask, dsk), name,
-                             meta=meta, divisions=[iindexer, iindexer])
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
+        return new_dd_object(graph, name, meta=meta, divisions=[iindexer, iindexer])
 
     def _get_partitions(self, keys):
         if isinstance(keys, (list, np.ndarray)):
@@ -236,8 +236,8 @@ class _LocIndexer(_IndexerBase):
         assert len(divisions) == len(dsk) + 1
 
         meta = self._make_meta(iindexer, cindexer)
-        return new_dd_object(merge(self.obj.dask, dsk), name,
-                             meta=meta, divisions=divisions)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
+        return new_dd_object(graph, name, meta=meta, divisions=divisions)
 
 
 def _partition_of_index_value(divisions, val):

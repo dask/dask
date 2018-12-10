@@ -111,12 +111,12 @@ class GetFunctionTestMixin(object):
         d['x0'] = 0
         assert self.get(d, 'x10000') == 10000
 
-    def test_with_sharedict(self):
-        from .sharedict import ShareDict
+    def test_with_HighLevelGraph(self):
+        from .highlevelgraph import HighLevelGraph
 
-        dsk = ShareDict()
-        dsk.update({'x': 1,
-                    'y': (inc, 'x')})
-        dsk.update({'z': (add, (inc, 'x'), 'y')})
-
-        assert self.get(dsk, 'z') == 4
+        layers = {'a': {'x': 1,
+                        'y': (inc, 'x')},
+                  'b': {'z': (add, (inc, 'x'), 'y')}}
+        dependencies = {'a': (), 'b': {'a'}}
+        graph = HighLevelGraph(layers, dependencies)
+        assert self.get(graph, 'z') == 4

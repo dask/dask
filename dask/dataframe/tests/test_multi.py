@@ -228,7 +228,7 @@ def test_hash_join(how, shuffle):
     c = hash_join(a, 'x', b, 'z', 'outer', npartitions=3, shuffle=shuffle)
     assert c.npartitions == 3
 
-    result = c.compute()
+    result = c.compute(scheduler='single-threaded')
     expected = pd.merge(A, B, 'outer', None, 'x', 'z')
 
     list_eq(result, expected)
@@ -387,6 +387,7 @@ def test_merge_tasks_passes_through():
     assert not any('partd' in k[0] for k in cc.dask)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('shuffle', ['disk', 'tasks'])
 @pytest.mark.parametrize('how', ['inner', 'outer', 'left', 'right'])
 def test_merge_by_index_patterns(how, shuffle):

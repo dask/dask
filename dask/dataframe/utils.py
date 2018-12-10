@@ -18,7 +18,7 @@ except ImportError:
     # pandas < 0.19.2
     from pandas.core.common import is_datetime64tz_dtype
 
-from ..compatibility import PY2, Iterator
+from ..compatibility import PY2, Iterator, Mapping
 from ..core import get_deps
 from ..local import get_sync
 from ..utils import asciitable, is_arraylike, Dispatch
@@ -649,7 +649,7 @@ def assert_eq(a, b, check_names=True, check_dtypes=True,
 def assert_dask_graph(dask, label):
     if hasattr(dask, 'dask'):
         dask = dask.dask
-    assert isinstance(dask, dict)
+    assert isinstance(dask, Mapping)
     for k in dask:
         if isinstance(k, tuple):
             k = k[0]

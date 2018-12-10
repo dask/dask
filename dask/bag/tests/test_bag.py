@@ -57,31 +57,31 @@ def test_bag_map():
     def myadd(a=1, b=2, c=3):
         return a + b + c
 
-    assert db.map(myadd, b).compute() == list(map(myadd, x))
-    assert db.map(myadd, a=b).compute() == list(map(myadd, x))
-    assert db.map(myadd, b, b2).compute() == list(map(myadd, x, x2))
-    assert db.map(myadd, b, 10).compute() == [myadd(i, 10) for i in x]
-    assert db.map(myadd, 10, b=b).compute() == [myadd(10, b=i) for i in x]
+    assert_eq(db.map(myadd, b), list(map(myadd, x)))
+    assert_eq(db.map(myadd, a=b), list(map(myadd, x)))
+    assert_eq(db.map(myadd, b, b2), list(map(myadd, x, x2)))
+    assert_eq(db.map(myadd, b, 10), [myadd(i, 10) for i in x])
+    assert_eq(db.map(myadd, 10, b=b), [myadd(10, b=i) for i in x])
 
     sol = [myadd(i, b=j, c=100) for (i, j) in zip(x, x2)]
-    assert db.map(myadd, b, b=b2, c=100).compute() == sol
+    assert_eq(db.map(myadd, b, b=b2, c=100), sol)
 
     sol = [myadd(i, c=100) for (i, j) in zip(x, x2)]
-    assert db.map(myadd, b, c=100).compute() == sol
+    assert_eq(db.map(myadd, b, c=100), sol)
 
     x_sum = sum(x)
     sol = [myadd(x_sum, b=i, c=100) for i in x2]
-    assert db.map(myadd, b.sum(), b=b2, c=100).compute() == sol
+    assert_eq(db.map(myadd, b.sum(), b=b2, c=100), sol)
 
     sol = [myadd(i, b=x_sum, c=100) for i in x2]
-    assert db.map(myadd, b2, b.sum(), c=100).compute() == sol
+    assert_eq(db.map(myadd, b2, b.sum(), c=100), sol)
 
     sol = [myadd(a=100, b=x_sum, c=i) for i in x2]
-    assert db.map(myadd, a=100, b=b.sum(), c=b2).compute() == sol
+    assert_eq(db.map(myadd, a=100, b=b.sum(), c=b2), sol)
 
     a = dask.delayed(10)
-    assert db.map(myadd, b, a).compute() == [myadd(i, 10) for i in x]
-    assert db.map(myadd, b, b=a).compute() == [myadd(i, b=10) for i in x]
+    assert_eq(db.map(myadd, b, a), [myadd(i, 10) for i in x])
+    assert_eq(db.map(myadd, b, b=a), [myadd(i, b=10) for i in x])
 
     # Mispatched npartitions
     fewer_parts = db.from_sequence(range(100), npartitions=5)
@@ -405,23 +405,23 @@ def test_map_partitions_args_kwargs():
         return [max(a, b) for (a, b) in zip(x, y)]
 
     sol = maximum(x, y=10)
-    assert db.map_partitions(maximum, dx, y=10).compute() == sol
-    assert dx.map_partitions(maximum, y=10).compute() == sol
-    assert dx.map_partitions(maximum, 10).compute() == sol
+    assert_eq(db.map_partitions(maximum, dx, y=10), sol)
+    assert_eq(dx.map_partitions(maximum, y=10), sol)
+    assert_eq(dx.map_partitions(maximum, 10), sol)
 
     sol = maximum(x, y)
-    assert db.map_partitions(maximum, dx, dy).compute() == sol
-    assert dx.map_partitions(maximum, y=dy).compute() == sol
-    assert dx.map_partitions(maximum, dy).compute() == sol
+    assert_eq(db.map_partitions(maximum, dx, dy), sol)
+    assert_eq(dx.map_partitions(maximum, y=dy), sol)
+    assert_eq(dx.map_partitions(maximum, dy), sol)
 
     dy_mean = dy.mean().apply(int)
     sol = maximum(x, int(sum(y) / len(y)))
-    assert dx.map_partitions(maximum, y=dy_mean).compute() == sol
-    assert dx.map_partitions(maximum, dy_mean).compute() == sol
+    assert_eq(dx.map_partitions(maximum, y=dy_mean), sol)
+    assert_eq(dx.map_partitions(maximum, dy_mean), sol)
 
     dy_mean = dask.delayed(dy_mean)
-    assert dx.map_partitions(maximum, y=dy_mean).compute() == sol
-    assert dx.map_partitions(maximum, dy_mean).compute() == sol
+    assert_eq(dx.map_partitions(maximum, y=dy_mean), sol)
+    assert_eq(dx.map_partitions(maximum, dy_mean), sol)
 
 
 def test_random_sample_size():

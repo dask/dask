@@ -6,6 +6,7 @@ import numpy as np
 
 import dask
 import dask.array as da
+from dask.highlevelgraph import HighLevelGraph
 from dask.array.top import TOP, atop
 from dask.array.top import rewrite_atop, index_subs, optimize_atop
 from dask.array.utils import assert_eq
@@ -117,7 +118,7 @@ def test_optimize_atop():
     # dsk = da.optimization.optimize_atop(y.dask)
     dsk = da.optimization.optimize_atop(y.dask)
 
-    assert isinstance(dsk, dask.sharedict.ShareDict)
+    assert isinstance(dsk, HighLevelGraph)
 
     assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
 
@@ -132,7 +133,7 @@ def test_atop_diamond_fusion():
     d = (((c + 1) + 2) + 3)
 
     dsk = da.optimization.optimize_atop(d.dask)
-    assert isinstance(dsk, dask.sharedict.ShareDict)
+    assert isinstance(dsk, HighLevelGraph)
 
     assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
 
@@ -149,12 +150,12 @@ def test_atop_non_atop_output():
     assert z_top_before == z_top_after, "z_top mutated"
 
     dsk = optimize_atop(z.dask, keys=list(dask.core.flatten(z.__dask_keys__())))
-    assert isinstance(dsk, dask.sharedict.ShareDict)
+    assert isinstance(dsk, HighLevelGraph)
     assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
 
-    dsk = optimize_atop(dask.sharedict.merge(w.dask, z.dask),
+    dsk = optimize_atop(HighLevelGraph.merge(w.dask, z.dask),
                         keys=list(dask.core.flatten([w.__dask_keys__(), z.__dask_keys__()])))
-    assert isinstance(dsk, dask.sharedict.ShareDict)
+    assert isinstance(dsk, HighLevelGraph)
     assert len([layer for layer in z.dask.dicts.values() if isinstance(layer, TOP)]) >= 1
 
 
@@ -355,6 +356,17 @@ def test_svd():
     assert_eq(z, z)
 
 
+def test_args_delayed():
+    x = da.arange(10, chunks=(5,))
+    y = dask.delayed(lambda: 100)()
+
+    z = atop(add, 'i', x, 'i', y, None, dtype=x.dtype)
+    assert_eq(z, np.arange(10) + 100)
+
+    z = atop(lambda x, y: x + y, 'i', x, 'i', y=y, dtype=x.dtype)
+    assert_eq(z, np.arange(10) + 100)
+
+
 @pytest.mark.parametrize('tup', [
     (1, 2),
     collections.namedtuple('foo', ['a', 'b'])(1, 2),
@@ -391,6 +403,8 @@ def test_validate_top_inputs():
 
 
 def test_gh_4176():
+    from dask.sharedict import ShareDict
+
     def foo(A):
         return A[None, ...]
 
@@ -398,14 +412,14 @@ def test_gh_4176():
 
     name = 'D'
 
-    dsk = da.core.top(
+    dsk = da.top.top(
         foo, name, ("nsrc", "ntime", "nbl", "npol"),
         A.name, ("ntime", "nbl", "npol"),
         new_axes={"nsrc": 1},
         numblocks={a.name: a.numblocks for a in (A,)}
     )
 
-    array_dsk = dask.sharedict.ShareDict()
+    array_dsk = ShareDict()
     array_dsk.update(dsk)
     array_dsk.update(A.__dask_graph__())
 

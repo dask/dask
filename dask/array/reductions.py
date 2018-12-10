@@ -20,8 +20,9 @@ from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
 from ..compatibility import getargspec, builtins
 from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
 from ..utils import ignoring, funcname, Dispatch
-from .. import config, sharedict
+from .. import config
 
 # Generic functions to support chunks of different types
 empty_lookup = Dispatch('empty')
@@ -220,8 +221,8 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
         dummy = dict(i for i in enumerate(p) if i[0] not in decided)
         g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
         dsk[(name,) + k] = (func, g)
-    return Array(sharedict.merge(x.dask, (name, dsk), dependencies={name: {x.name}}),
-                 name, out_chunks, dtype=dtype)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
+    return Array(graph, name, out_chunks, dtype=dtype)
 
 
 @wraps(chunk.sum)
@@ -643,8 +644,8 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
     dsk = dict(((name,) + k, (chunk, (old,) + k, axis, off)) for (k, off)
                in zip(keys, offset_info))
     # The dtype of `tmp` doesn't actually matter, just need to provide something
-    tmp = Array(sharedict.merge(x.dask, (name, dsk), dependencies={name: {x.name}}),
-                name, chunks, dtype=x.dtype)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
+    tmp = Array(graph, name, chunks, dtype=x.dtype)
     dtype = np.argmin([1]).dtype
     result = _tree_reduce(tmp, agg, axis, False, dtype, split_every, combine)
     return handle_out(out, result)
@@ -754,8 +755,8 @@ def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
                                       (operator.getitem, (m.name,) + old, slc))
             dsk[(name,) + ind] = (binop, this_slice, (m.name,) + ind)
 
-    result = Array(sharedict.merge(m.dask, (name, dsk), dependencies={name: {m.name}}),
-                   name, x.chunks, m.dtype)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
+    result = Array(graph, name, x.chunks, m.dtype)
     return handle_out(out, result)
 
 

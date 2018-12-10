@@ -8,13 +8,14 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from .core import (DataFrame, Series, aca, map_partitions, merge,
+from .core import (DataFrame, Series, aca, map_partitions,
                    new_dd_object, no_default, split_out_on_index)
 from .methods import drop_columns
 from .shuffle import shuffle
 from .utils import make_meta, insert_meta_param_description, raise_on_meta_error
 from ..base import tokenize
 from ..utils import derived_from, M, funcname, itemgetter
+from ..highlevelgraph import HighLevelGraph
 
 
 # #############################################
@@ -868,8 +869,8 @@ class _GroupBy(object):
                                (cumpart_ext._name, i), (name_cum, i),
                                index, 0 if columns is None else columns,
                                aggregate, initial)
-        return new_dd_object(merge(dask, cumpart_ext.dask, cumlast.dask),
-                             name, chunk(self._meta), self.obj.divisions)
+        graph = HighLevelGraph.from_collections(name, dask, dependencies=[cumpart_ext, cumlast])
+        return new_dd_object(graph, name, chunk(self._meta), self.obj.divisions)
 
     @derived_from(pd.core.groupby.GroupBy)
     def cumsum(self, axis=0):

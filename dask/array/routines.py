@@ -10,10 +10,10 @@ from numbers import Real, Integral
 import numpy as np
 from toolz import concat, sliding_window, interleave
 
-from .. import sharedict
 from ..compatibility import Iterable
 from ..core import flatten
 from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname
 from . import chunk
 from .creation import arange, diag, empty, indices
@@ -550,11 +550,9 @@ def bincount(x, weights=None, minlength=None):
 
     chunks = ((minlength,),)
 
-    dsk = sharedict.merge((name, dsk), x.dask, dependencies={name: {x.name}})
-    if weights is not None:
-        dsk.update(weights.dask)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x] if weights is None else [x, weights])
 
-    return Array(dsk, name, chunks, dtype)
+    return Array(graph, name, chunks, dtype)
 
 
 @wraps(np.digitize)
@@ -641,11 +639,9 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
                for i, (k, w) in enumerate(zip(a_keys, w_keys))}
         dtype = weights.dtype
 
-    all_dsk = sharedict.merge(a.dask, (name, dsk), dependencies={name: {a.name}})
-    if weights is not None:
-        all_dsk.update(weights.dask)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a] if weights is None else [a, weights])
 
-    mapped = Array(all_dsk, name, chunks, dtype=dtype)
+    mapped = Array(graph, name, chunks, dtype=dtype)
     n = mapped.sum(axis=0)
 
     # We need to replicate normed and density options from numpy
@@ -863,15 +859,10 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     if return_counts:
         out_dtype.append(("counts", np.intp))
 
-    out = Array(
-        sharedict.merge(*(
-            [(name, dsk)] +
-            [o.dask for o in out_parts if hasattr(o, "__dask_keys__")]
-        ), dependencies={name: {o.name for o in out_parts if hasattr(o, '__dask_keys__')}}),
-        name,
-        ((np.nan,),),
-        out_dtype
-    )
+    dependencies = [o for o in out_parts if hasattr(o, '__dask_keys__')]
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
+    chunks = ((np.nan,),)
+    out = Array(graph, name, chunks, out_dtype)
 
     # Split out all results to return to the user.
 
@@ -1228,8 +1219,8 @@ def coarsen(reduction, x, axes, trim_excess=False):
                    for i, bds in enumerate(x.chunks))
 
     dt = reduction(np.empty((1,) * x.ndim, dtype=x.dtype)).dtype
-    return Array(sharedict.merge(x.dask, (name, dsk), dependencies={name: {x.name}}),
-                 name, chunks, dtype=dt)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
+    return Array(graph, name, chunks, dtype=dt)
 
 
 def split_at_breaks(array, breaks, axis=0):
