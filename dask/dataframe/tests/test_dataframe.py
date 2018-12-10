@@ -3354,7 +3354,6 @@ def test_setitem():
 def test_broadcast():
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2)
-    y = ddf - (ddf.sum() + 1)
     assert_eq(ddf - (ddf.sum() + 1),
               df - (df.sum() + 1))
 

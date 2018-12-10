@@ -48,8 +48,8 @@ def test_fuse_ave_width():
 
     b = s.__dask_optimize__(s.dask, s.__dask_keys__())
 
-    assert len(a) < len(b)
     assert len(a) <= 15
+    assert len(b) <= 15
 
 
 def test_optimize_atop():

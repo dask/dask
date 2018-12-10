@@ -3,6 +3,7 @@ from ..array.core import Array
 
 from .core import _Frame, Scalar
 
+
 def broadcast(func, name, *args, **kwargs):
     pairs = []
     numblocks = {}
