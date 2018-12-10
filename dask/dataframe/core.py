@@ -3693,6 +3693,7 @@ def apply_and_enforce(func, args, kwargs, meta):
     """Apply a function, and enforce the output to match meta
 
     Ensures the output has the same columns, even if empty."""
+    # TODO: this is no longer used in map_partitions above
     df = func(*args, **kwargs)
     if isinstance(df, (pd.DataFrame, pd.Series, pd.Index)):
         if len(df) == 0:
