@@ -898,7 +898,7 @@ def test_stack_unknown_chunk_sizes(np_func, dsk_func, nan_chunk):
     with pytest.raises(ValueError):
         dsk_func((x, x))
 
-    np_stacked = np_func((y,y))
+    np_stacked = np_func((y, y))
     dsk_stacked = dsk_func((x, x), allow_unknown_chunksizes=True)
     assert_eq(np_stacked, dsk_stacked)
 
