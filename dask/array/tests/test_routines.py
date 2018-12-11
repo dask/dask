@@ -881,7 +881,7 @@ def test_dstack():
     assert_eq(np.dstack((x, y)), da.dstack((a, b)))
 
 
-@pytest.mark.parametrize('np_func,dsk_func, nan_chunk', [
+@pytest.mark.parametrize('np_func,dsk_func,nan_chunk', [
     (np.hstack, da.hstack, 0),
     (np.dstack, da.dstack, 1),
     (np.vstack, da.vstack, 2),
