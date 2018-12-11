@@ -881,6 +881,21 @@ def test_dstack():
     assert_eq(np.dstack((x, y)), da.dstack((a, b)))
 
 
+@pytest.mark.parametrize('np_func, dsk_func', [
+    (np.vstack, da.vstack),
+    (np.hstack, da.hstack),
+    (np.dstack, da.dstack)
+])
+def test_stack_unknown_chunk_sizes(np_func, dsk_func):
+    x = da.ones((10, 10, 10), chunks=(1, 1, 1), dtype=np.int)
+    x._chunks = ((np.nan,) * 10, (1,)*10, (1,)*10)
+    y = np.ones((10, 10, 10), dtype=np.int)
+
+    np_stacked = np_func((y,y))
+    dsk_stacked = dsk_func((x, x), allow_unknown_chunksizes=True)
+    assert_eq(np_stacked, dsk_stacked)
+
+
 def test_take():
     x = np.arange(400).reshape((20, 20))
     a = da.from_array(x, chunks=(5, 5))

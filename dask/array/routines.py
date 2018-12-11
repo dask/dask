@@ -98,9 +98,9 @@ def atleast_1d(*arys):
 
 
 @wraps(np.vstack)
-def vstack(tup):
+def vstack(tup, allow_unknown_chunksizes=False):
     tup = tuple(atleast_2d(x) for x in tup)
-    return concatenate(tup, axis=0)
+    return concatenate(tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
 
 @wraps(np.hstack)
