@@ -3676,7 +3676,8 @@ def map_partitions(func, *args, **kwargs):
         dependencies.extend(collections)
         kwargs3[k] = v
 
-    dsk = broadcast(func, name, *args2, dependencies=dependencies, **kwargs3)
+    dsk = broadcast(apply_and_enforce, name, *args2, dependencies=dependencies,
+                    _func=func, _meta=meta, **kwargs3)
     dfs = [df for df in args if isinstance(df, _Frame)]
     # dsk = {}
     # for i in range(dfs[0].npartitions):
@@ -3688,11 +3689,12 @@ def map_partitions(func, *args, **kwargs):
     return new_dd_object(graph, name, meta, dfs[0].divisions)
 
 
-def apply_and_enforce(func, args, kwargs, meta):
+def apply_and_enforce(*args, **kwargs):
     """Apply a function, and enforce the output to match meta
 
     Ensures the output has the same columns, even if empty."""
-    # TODO: this is no longer used in map_partitions above
+    func = kwargs.pop('_func')
+    meta = kwargs.pop('_meta')
     df = func(*args, **kwargs)
     if isinstance(df, (pd.DataFrame, pd.Series, pd.Index)):
         if len(df) == 0:
