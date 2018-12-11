@@ -98,23 +98,23 @@ def atleast_1d(*arys):
 
 
 @wraps(np.vstack)
-def vstack(tup):
+def vstack(tup, allow_unknown_chunksizes=False):
     tup = tuple(atleast_2d(x) for x in tup)
-    return concatenate(tup, axis=0)
+    return concatenate(tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
 
 @wraps(np.hstack)
-def hstack(tup):
+def hstack(tup, allow_unknown_chunksizes=False):
     if all(x.ndim == 1 for x in tup):
-        return concatenate(tup, axis=0)
+        return concatenate(tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes)
     else:
-        return concatenate(tup, axis=1)
+        return concatenate(tup, axis=1, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
 
 @wraps(np.dstack)
-def dstack(tup):
+def dstack(tup, allow_unknown_chunksizes=False):
     tup = tuple(atleast_3d(x) for x in tup)
-    return concatenate(tup, axis=2)
+    return concatenate(tup, axis=2, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
 
 @wraps(np.swapaxes)
