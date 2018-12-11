@@ -887,12 +887,12 @@ def test_dstack():
     (np.vstack, da.vstack, 2),
 ])
 def test_stack_unknown_chunk_sizes(np_func, dsk_func, nan_chunk):
-    s = (100, 100, 100)
-    x = da.ones(s, chunks=(10, 10, 10), dtype=np.int)
-    y = np.ones(s, dtype=np.int)
+    shape = (100, 100, 100)
+    x = da.ones(shape, chunks=(50, 50, 50))
+    y = np.ones(shape)
 
     tmp = list(x._chunks)
-    tmp[nan_chunk] = (np.nan,) * 10
+    tmp[nan_chunk] = (np.nan,) * 2
     x._chunks = tuple(tmp)
 
     with pytest.raises(ValueError):
