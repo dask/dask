@@ -257,6 +257,19 @@ def test_SerializableLock_name_collision():
     assert d.lock not in (a.lock, b.lock, c.lock)
 
 
+def test_SerializableLock_locked():
+    a = SerializableLock('a')
+    with a:
+        assert a.locked()
+
+
+def test_SerializableLock_acquire_blocking():
+    a = SerializableLock('a')
+    assert a.acquire(blocking=True)
+    assert not a.acquire(blocking=False)
+    a.release()
+
+
 def test_funcname():
     def foo(a, b, c):
         pass

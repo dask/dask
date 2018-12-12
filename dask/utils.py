@@ -777,11 +777,11 @@ class SerializableLock(object):
             self.lock = Lock()
             SerializableLock._locks[self.token] = self.lock
 
-    def acquire(self, *args):
-        return self.lock.acquire(*args)
+    def acquire(self, *args, **kwargs):
+        return self.lock.acquire(*args, **kwargs)
 
-    def release(self, *args):
-        return self.lock.release(*args)
+    def release(self, *args, **kwargs):
+        return self.lock.release(*args, **kwargs)
 
     def __enter__(self):
         self.lock.__enter__()
@@ -789,9 +789,8 @@ class SerializableLock(object):
     def __exit__(self, *args):
         self.lock.__exit__(*args)
 
-    @property
     def locked(self):
-        return self.locked
+        return self.lock.locked()
 
     def __getstate__(self):
         return self.token
