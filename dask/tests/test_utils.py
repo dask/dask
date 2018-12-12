@@ -260,8 +260,10 @@ def test_SerializableLock_name_collision():
 
 def test_SerializableLock_locked():
     a = SerializableLock('a')
+    assert not a.locked()
     with a:
         assert a.locked()
+    assert not a.locked()
 
 
 @pytest.mark.skipif(PY2, reason="no blocking= keyword in Python 2")
