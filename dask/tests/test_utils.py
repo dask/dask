@@ -5,6 +5,7 @@ import pickle
 import numpy as np
 import pytest
 
+from dask.compatibility import PY2
 from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
                         memory_repr, methodcaller, M, skip_doctest,
                         SerializableLock, funcname, ndeepmap, ensure_dict,
@@ -263,6 +264,7 @@ def test_SerializableLock_locked():
         assert a.locked()
 
 
+@pytest.mark.skipif(PY2, reason="no blocking= keyword in Python 2")
 def test_SerializableLock_acquire_blocking():
     a = SerializableLock('a')
     assert a.acquire(blocking=True)
