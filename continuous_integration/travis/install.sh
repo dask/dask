@@ -40,7 +40,6 @@ conda install -q -c conda-forge \
     blosc \
     bokeh \
     boto3 \
-    moto \
     botocore \
     httpretty \
     chest \
@@ -90,6 +89,7 @@ pip install --upgrade \
     mmh3 \
     pytest-xdist \
     xxhash \
+    moto
 
 if [[ ${UPSTREAM_DEV} ]]; then
     echo "Installing PyArrow dev"
