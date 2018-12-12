@@ -5,6 +5,7 @@ import pickle
 import numpy as np
 import pytest
 
+from dask.compatibility import PY2
 from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
                         memory_repr, methodcaller, M, skip_doctest,
                         SerializableLock, funcname, ndeepmap, ensure_dict,
@@ -255,6 +256,22 @@ def test_SerializableLock_name_collision():
     assert a.lock is not b.lock
     assert a.lock is c.lock
     assert d.lock not in (a.lock, b.lock, c.lock)
+
+
+def test_SerializableLock_locked():
+    a = SerializableLock('a')
+    assert not a.locked()
+    with a:
+        assert a.locked()
+    assert not a.locked()
+
+
+@pytest.mark.skipif(PY2, reason="no blocking= keyword in Python 2")
+def test_SerializableLock_acquire_blocking():
+    a = SerializableLock('a')
+    assert a.acquire(blocking=True)
+    assert not a.acquire(blocking=False)
+    a.release()
 
 
 def test_funcname():
