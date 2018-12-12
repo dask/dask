@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import sys
+import os
 from contextlib import contextmanager
 
 import pytest
@@ -32,49 +33,76 @@ files = {'test/accounts.1.json':  (b'{"amount": 100, "name": "Alice"}\n'
                                    b'{"amount": 800, "name": "Dennis"}\n')}
 
 
+@contextmanager
+def ensure_safe_environment_variables():
+    """
+    Get a context manager to safely set environment variables
+    All changes will be undone on close, hence environment variables set
+    within this contextmanager will neither persist nor change global state.
+    """
+    saved_environ = dict(os.environ)
+    try:
+        yield
+    finally:
+        os.environ.clear()
+        os.environ.update(saved_environ)
+
+
 @pytest.yield_fixture
 def s3():
-    # writable local S3 system
-    import moto
-    try:
-        m = moto.mock_s3()
-        m.start()
-        client = boto3.client('s3')
-        client.create_bucket(Bucket=test_bucket_name, ACL='public-read-write')
-        for f, data in files.items():
-            client.put_object(Bucket=test_bucket_name, Key=f, Body=data)
-        yield s3fs.S3FileSystem(anon=True)
-    finally:
-        m.reset()
-        m.start()
-        m.stop()
-        httpretty.HTTPretty.disable()
-        httpretty.HTTPretty.reset()
+    with ensure_safe_environment_variables():
+        # temporary workaround as moto fails for botocore >= 1.11 otherwise,
+        # see https://github.com/spulec/moto/issues/1924 & 1952
+        os.environ.setdefault("AWS_ACCESS_KEY_ID", "foobar_key")
+        os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "foobar_secret")
 
-
-@contextmanager
-def s3_context(bucket, files):
-    m = moto.mock_s3()
-    m.start()
-    client = boto3.client('s3')
-    client.create_bucket(Bucket=bucket, ACL='public-read-write')
-    for f, data in files.items():
-        client.put_object(Bucket=bucket, Key=f, Body=data)
-
-    yield DaskS3FileSystem(anon=True)
-
-    for f, data in files.items():
+        # writable local S3 system
+        import moto
         try:
-            client.delete_object(Bucket=bucket, Key=f, Body=data)
-        except Exception:
-            pass
+            m = moto.mock_s3()
+            m.start()
+            client = boto3.client('s3')
+            client.create_bucket(Bucket=test_bucket_name, ACL='public-read-write')
+            for f, data in files.items():
+                client.put_object(Bucket=test_bucket_name, Key=f, Body=data)
+            yield s3fs.S3FileSystem(anon=True)
         finally:
             m.reset()
             m.start()
             m.stop()
-            httpretty = pytest.importorskip('httpretty')
             httpretty.HTTPretty.disable()
             httpretty.HTTPretty.reset()
+
+
+@contextmanager
+def s3_context(bucket, files):
+    with ensure_safe_environment_variables():
+        # temporary workaround as moto fails for botocore >= 1.11 otherwise,
+        # see https://github.com/spulec/moto/issues/1924 & 1952
+        os.environ.setdefault("AWS_ACCESS_KEY_ID", "foobar_key")
+        os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "foobar_secret")
+
+        m = moto.mock_s3()
+        m.start()
+        client = boto3.client('s3')
+        client.create_bucket(Bucket=bucket, ACL='public-read-write')
+        for f, data in files.items():
+            client.put_object(Bucket=bucket, Key=f, Body=data)
+
+        yield DaskS3FileSystem(anon=True)
+
+        for f, data in files.items():
+            try:
+                client.delete_object(Bucket=bucket, Key=f, Body=data)
+            except Exception:
+                pass
+            finally:
+                m.reset()
+                m.start()
+                m.stop()
+                httpretty = pytest.importorskip('httpretty')
+                httpretty.HTTPretty.disable()
+                httpretty.HTTPretty.reset()
 
 
 def test_get_s3():
