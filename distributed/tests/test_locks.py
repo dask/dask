@@ -65,6 +65,18 @@ def test_acquires_with_zero_timeout(c, s, a, b):
     yield lock.release()
 
 
+@gen_cluster(client=True)
+def test_acquires_blocking(c, s, a, b):
+    lock = Lock('x')
+    yield lock.acquire(blocking=False)
+    assert lock.locked()
+    yield lock.release()
+    assert not lock.locked()
+
+    with pytest.raises(ValueError):
+        lock.acquire(blocking=False, timeout=1)
+
+
 def test_timeout_sync(client):
     with Lock('x') as lock:
         assert Lock('x').acquire(timeout=0.1) is False

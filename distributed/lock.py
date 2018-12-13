@@ -98,14 +98,17 @@ class Lock(object):
         self.id = uuid.uuid4().hex
         self._locked = False
 
-    def acquire(self, timeout=None):
+    def acquire(self, blocking=True, timeout=None):
         """ Acquire the lock
 
         Parameters
         ----------
-        timeout: number
+        blocking : bool, optional
+            If false, don't wait on the lock in the scheduler at all.
+        timeout : number, optional
             Seconds to wait on the lock in the scheduler.  This does not
             include local coroutine time, network transfer time, etc..
+            It is forbidden to specify a timeout when blocking is false.
 
         Examples
         --------
@@ -116,6 +119,12 @@ class Lock(object):
         -------
         True or False whether or not it sucessfully acquired the lock
         """
+        if not blocking:
+            if timeout is not None:
+                raise ValueError(
+                    "can't specify a timeout for a non-blocking call")
+            timeout = 0
+
         result = self.client.sync(self.client.scheduler.lock_acquire,
                                   name=self.name, id=self.id, timeout=timeout)
         self._locked = True
