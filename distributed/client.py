@@ -3905,7 +3905,7 @@ def ensure_default_get(client):
 def redict_collection(c, dsk):
     from dask.delayed import Delayed
     if isinstance(c, Delayed):
-        return Delayed(c.key, [dsk])
+        return Delayed(c.key, dsk)
     else:
         cc = copy.copy(c)
         cc.dask = dsk
