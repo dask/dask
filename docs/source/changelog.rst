@@ -1,6 +1,24 @@
 Changelog
 =========
 
+1.25.1 - 2018-12-15
+-------------------
+
+-  Serialize numpy.ma.masked objects properly (:pr:`2384`) `Jim Crist`_
+-  Turn off bokeh property validation in dashboard (:pr:`2387`) `Jim Crist`_
+-  Fully initialize WorkerState objects (:pr:`2388`) `Jim Crist`_
+-  Fix typo in scheduler docstring (:pr:`2393`) `Russ Bubley`_
+-  DOC: fix typo in distributed.worker.Worker docstring (:pr:`2395`) `Loïc Estève`_
+-  Remove clients and workers from event log after removal (:pr:`2394`) `tjb900`_
+-  Support msgpack 0.6.0 by providing length keywords (:pr:`2399`) `tjb900`_
+-  Use async-await on large messages test (:pr:`2404`) `Matthew Rocklin`_
+-  Fix race condition in normalize_collection (:pr:`2386`) `Jim Crist`_
+-  Fix redict collection after HighLevelGraph fix upstream (:pr:`2413`) `Matthew Rocklin`_
+-  Add a blocking argument to Lock.acquire(`) (:pr:`2412`) `Stephan Hoyer`_
+-  Fix long traceback test (:pr:`2417`) `Matthew Rocklin`_
+-  Update x509 certificates to current OpenSSL standards. (:pr:`2418`) `Diane Trout`_
+
+
 1.25.0 - 2018-11-28
 -------------------
 
@@ -859,3 +877,6 @@ significantly without many new features.
 .. _`Tom Rochette`: https://github.com/tomzx
 .. _`Roy Wedge`: https://github.com/rwedge
 .. _`Michael Wheeler`: https://github.com/mikewheel
+.. _`Diane Trout`: https://github.com/detrout
+.. _`tjb900`: https://github.com/tjb900
+.. _`Stephan Hoyer`: https://github.com/shoyer
