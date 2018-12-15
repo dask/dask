@@ -33,7 +33,7 @@ req_template = """
     dir = cadir
     database  = $dir/index.txt
     crlnumber = $dir/crl.txt
-    default_md = sha1
+    default_md = sha256
     default_days = 3600
     default_crl_days = 3600
     certificate = tls-ca-cert.pem
@@ -81,7 +81,7 @@ def make_cert_key(hostname, sign=False):
         with open(req_file, 'w') as f:
             f.write(req)
         args = ['req', '-new', '-days', '3650', '-nodes',
-                '-newkey', 'rsa:1024', '-keyout', key_file,
+                '-newkey', 'rsa:2048', '-keyout', key_file,
                 '-config', req_file]
         if sign:
             with tempfile.NamedTemporaryFile(delete=False) as f:
