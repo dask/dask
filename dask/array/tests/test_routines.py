@@ -287,6 +287,13 @@ def test_tensordot_2(axes):
               np.tensordot(x, x, axes=axes))
 
 
+def test_tensordot_more_than_26_dims():
+    ndim = 27
+    x = np.broadcast_to(1, [2] * ndim)
+    dx = da.from_array(x, chunks=-1)
+    assert_eq(da.tensordot(dx, dx, ndim), np.array(2**ndim))
+
+
 def test_dot_method():
     x = np.arange(400).reshape((20, 20))
     a = da.from_array(x, chunks=(5, 5))
