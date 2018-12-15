@@ -75,11 +75,12 @@ class ThreadPoolExecutor(thread.ThreadPoolExecutor):
         super(ThreadPoolExecutor, self).__init__(*args, **kwargs)
         self._rejoin_list = []
         self._rejoin_lock = threading.Lock()
+        self._thread_name_prefix = kwargs.get('thread_name_prefix', 'DaskThreadPoolExecutor')
 
     def _adjust_thread_count(self):
         if len(self._threads) < self._max_workers:
             t = threading.Thread(target=_worker,
-                                 name="ThreadPoolExecutor-%d-%d" % (os.getpid(), next(self._counter)),
+                                 name=self._thread_name_prefix + "-%d-%d" % (os.getpid(), next(self._counter)),
                                  args=(self, self._work_queue))
             t.daemon = True
             self._threads.add(t)

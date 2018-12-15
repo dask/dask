@@ -19,7 +19,10 @@ logger = logging.getLogger(__name__)
 
 FRAME_OFFLOAD_THRESHOLD = 10 * 1024 ** 2   # 10 MB
 
-_offload_executor = ThreadPoolExecutor(max_workers=1)
+try:
+    _offload_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='Dask-Offload')
+except TypeError:
+    _offload_executor = ThreadPoolExecutor(max_workers=1)
 finalize(_offload_executor, _offload_executor.shutdown)
 
 

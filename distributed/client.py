@@ -250,7 +250,10 @@ class Future(WrappedKey):
         """
         cls = Future
         if cls._cb_executor is None or cls._cb_executor_pid != os.getpid():
-            cls._cb_executor = ThreadPoolExecutor(1)
+            try:
+                cls._cb_executor = ThreadPoolExecutor(1, thread_name_prefix="Dask-Callback-Thread")
+            except TypeError:
+                cls._cb_executor = ThreadPoolExecutor(1)
             cls._cb_executor_pid = os.getpid()
 
         def execute_callback(fut):

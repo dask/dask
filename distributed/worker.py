@@ -424,8 +424,8 @@ class Worker(ServerNode):
         self.status = None
         self._closed = Event()
         self.reconnect = reconnect
-        self.executor = executor or ThreadPoolExecutor(self.ncores)
-        self.actor_executor = ThreadPoolExecutor(1)
+        self.executor = executor or ThreadPoolExecutor(self.ncores, thread_name_prefix="Dask-Worker-Threads'")
+        self.actor_executor = ThreadPoolExecutor(1, thread_name_prefix="Dask-Actor-Threads")
         self.name = name
         self.scheduler_delay = 0
         self.stream_comms = dict()
