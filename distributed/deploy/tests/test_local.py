@@ -245,7 +245,7 @@ def test_repeated():
 @pytest.mark.parametrize('processes', [True, False])
 def test_bokeh(loop, processes):
     pytest.importorskip('bokeh')
-    import requests
+    requests = pytest.importorskip('requests')
     with LocalCluster(scheduler_port=0, silence_logs=False, loop=loop,
                       processes=processes, diagnostics_port=0) as c:
         bokeh_port = c.scheduler.services['bokeh'].port

@@ -45,7 +45,7 @@ from distributed.utils import (ignoring, mp_context, sync, tmp_text, tokey,
                                tmpfile)
 from distributed.utils_test import (cluster, slow, slowinc, slowadd, slowdec,
                                     randominc, inc, dec, div, throws, geninc, asyncinc,
-                                    gen_cluster, gen_test, double, deep, popen,
+                                    gen_cluster, gen_test, double, popen,
                                     captured_logger, varying, map_varying,
                                     wait_for, async_wait_for, pristine_loop)
 from distributed.utils_test import (client as c, client_secondary as c2,# noqa F401
@@ -2467,21 +2467,20 @@ def test_persist(c):
     assert (zz == z).all()
 
 
-@pytest.mark.avoid_travis  # This hangs intermittently.  We don't know why.
 @gen_cluster(timeout=60, client=True)
 def test_long_traceback(c, s, a, b):
     from distributed.protocol.pickle import dumps
 
-    n = sys.getrecursionlimit()
-    sys.setrecursionlimit(500)
+    def deep(n):
+        if n == 0:
+            1 / 0
+        else:
+            return deep(n - 1)
 
-    try:
-        x = c.submit(deep, 1000)
-        yield wait([x])
-        assert len(dumps(c.futures[x.key].traceback)) < 10000
-        assert isinstance(c.futures[x.key].exception, RuntimeError)
-    finally:
-        sys.setrecursionlimit(n)
+    x = c.submit(deep, 200)
+    yield wait([x])
+    assert len(dumps(c.futures[x.key].traceback)) < 10000
+    assert isinstance(c.futures[x.key].exception, ZeroDivisionError)
 
 
 @gen_cluster(client=True)
