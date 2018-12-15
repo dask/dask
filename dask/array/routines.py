@@ -226,8 +226,8 @@ def tensordot(lhs, rhs, axes=2):
 
     dt = np.promote_types(lhs.dtype, rhs.dtype)
 
-    left_index = list(alphabet[:lhs.ndim])
-    right_index = list(ALPHABET[:rhs.ndim])
+    left_index = list(range(lhs.ndim))
+    right_index = list(range(lhs.ndim, lhs.ndim + rhs.ndim))
     out_index = left_index + right_index
 
     for l, r in zip(left_axes, right_axes):
