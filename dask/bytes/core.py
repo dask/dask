@@ -295,6 +295,7 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
         raise ValueError("When writing data, only one filename mask can be specified.")
     for curr_path in paths:
         if '*' in curr_path:
+            glob = True
             if 'w' in mode:
                 # expand using name_function
                 expanded_paths.extend(_expand_paths(curr_path, name_function, num))
@@ -302,9 +303,10 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
                 # expand using glob
                 expanded_paths.extend(fs.glob(curr_path))
         else:
+            glob = False
             expanded_paths.append(curr_path)
     # if we generated more paths that asked for, trim the list
-    if 'w' in mode and len(expanded_paths) > num:
+    if 'w' in mode and len(expanded_paths) > num and glob:
         expanded_paths = expanded_paths[:num]
     return expanded_paths
 
