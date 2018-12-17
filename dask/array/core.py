@@ -629,11 +629,19 @@ def map_blocks(func, *args, **kwargs):
             vv = v
             v = v[0]
             [(key, task)] = v.dsk.items()  # unpack subgraph callable
+
+            if new_axis:
+                # anything using the keys in dsk is incorrect, as the
+                # original array doesn't have values for `new_axis`.
+                old_k = tuple(x for i, x in enumerate(k) if i not in new_axis)
+            else:
+                old_k = k
+
             info = {i: {'shape': shapes[i],
                         'num-chunks': num_chunks[i],
                         'array-location': [(starts[i][ij][j], starts[i][ij][j + 1])
-                                           for ij, j in enumerate(k[1:])],
-                        'chunk-location': k[1:]}
+                                           for ij, j in enumerate(old_k[1:])],
+                        'chunk-location': old_k[1:]}
                     for i in shapes}
 
             v = copy.copy(v)  # Need to copy and unpack subgraph callable
