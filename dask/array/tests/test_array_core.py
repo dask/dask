@@ -1125,6 +1125,27 @@ def test_map_blocks_block_info():
     assert_eq(z, x + x + 1 + 100)
 
 
+def test_map_blocks_block_info_with_axis():
+    # https://github.com/dask/dask/issues/4298
+    values = da.from_array(np.array(['a', 'a', 'b', 'c']), 2)
+
+    def func(x, block_info=None):
+        assert set(block_info.keys()) == {0}
+        assert block_info[0]['shape'] == (4,)
+        assert block_info[0]['num_chunks'] == (2,)
+
+        assert block_info['chunk-location'] in {(0,), (1,)}
+
+        if block_info['chunk-location'] == (0,):
+            assert block_info['array-location'] == [(0, 2)]
+        elif block_info['chunk-location'] == (1,):
+            assert block_info['array-location'] == [(2, 4)]
+
+        return np.ones((len(x), 3))
+
+    values.map_blocks(func, chunks=((2, 2), 3), new_axis=1, dtype='f8')
+
+
 def test_map_blocks_with_constants():
     d = da.arange(10, chunks=3)
     e = d.map_blocks(add, 100, dtype=d.dtype)
