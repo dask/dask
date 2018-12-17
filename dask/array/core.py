@@ -650,7 +650,11 @@ def map_blocks(func, *args, **kwargs):
         chunks2 = []
         for i, (c, nb) in enumerate(zip(chunks, out.numblocks)):
             if isinstance(c, tuple):
-                if not len(c) == nb:
+                # We only check cases where numblocks > 1. Becuase of
+                # broadcasting, we can't (easily) validate the chunks
+                # when the number of blocks is 1.
+                # See https://github.com/dask/dask/issues/4299 for more.
+                if nb > 1 and len(c) != nb:
                     raise ValueError("Dimension {0} has {1} blocks, "
                                      "chunks specified with "
                                      "{2} blocks".format(i, nb, len(c)))

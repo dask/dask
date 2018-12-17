@@ -2626,6 +2626,15 @@ def test_map_blocks_with_changed_dimension():
     assert_eq(e, x.sum(axis=1)[:, None, None])
 
 
+def test_map_blocks_with_changed_dimension_and_broadcast_chunks():
+    # https://github.com/dask/dask/issues/4299
+    a = da.from_array([1, 2, 3], 3)
+    b = da.from_array(np.array([0, 1, 2, 0, 1, 2]), chunks=3)
+    result = da.map_blocks(operator.add, a, b, chunks=b.chunks)
+    expected = da.from_array(np.array([1, 3, 5, 1, 3, 5]), chunks=3)
+    assert_eq(result, expected)
+
+
 def test_broadcast_chunks():
     assert broadcast_chunks() == ()
 
