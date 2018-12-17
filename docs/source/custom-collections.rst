@@ -422,10 +422,9 @@ Adding the Core Dask Methods to Your Class
 
 Defining the above interface will allow your object to used by the core Dask
 functions (``dask.compute``, ``dask.persist``, ``dask.visualize``, etc.). To
-add corresponding method versions of these subclasses from
-``dask.base.DaskMethodsMixin``, which adds implementations of ``compute``,
+add corresponding method versions of these, you can subclass from
+``dask.base.DaskMethodsMixin`` which adds implementations of ``compute``,
 ``persist``, and ``visualize`` based on the interface above.
-
 
 .. _example-dask-collection:
 
