@@ -27,7 +27,7 @@ from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
                      is_arraylike)
-from ..array import Array
+from ..array.core import Array, normalize_arg
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..sizeof import sizeof
 from ..delayed import delayed, Delayed, unpack_collections
@@ -3622,8 +3622,8 @@ def map_partitions(func, *args, **kwargs):
     if meta is not no_default:
         meta = make_meta(meta)
 
-    kwargs2 = {k: delayed(v) if not is_dask_collection(v) and sizeof(v) > 1e6 else v
-               for k, v in kwargs.items()}
+    # Normalize keyword arguments
+    kwargs2 = {k: normalize_arg(v) for k, v in kwargs.items()}
 
     assert callable(func)
     if name is not None:
@@ -3667,11 +3667,8 @@ def map_partitions(func, *args, **kwargs):
         else:
             args2.append(arg)
 
-    # Normalize keyword arguments
     kwargs3 = {}
-    from ..array.core import normalize_arg
-    for k, v in kwargs.items():
-        v = normalize_arg(v)
+    for k, v in kwargs2.items():
         v, collections = unpack_collections(v)
         dependencies.extend(collections)
         kwargs3[k] = v
