@@ -70,7 +70,7 @@ attached directly to bags with ``.str.methodname``:
    >>> b = db.read_text('myfile.*.csv').str.strip().str.split(',')
 
 
-``db.from_avro``
+``db.read_avro``
 ----------------
 
 Dask Bag can read binary files in the `Avro`_ format if `fastavro`_ is installed.
