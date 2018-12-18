@@ -100,7 +100,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
         return self._name
 
     def __dask_layers__(self):
-        return [self.key]
+        return (self.key,)
 
     __dask_optimize__ = globalmethod(optimize, key='dataframe_optimize',
                                      falsey=dont_optimize)
@@ -262,7 +262,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return [(self._name, i) for i in range(self.npartitions)]
 
     def __dask_layers__(self):
-        return [self._name]
+        return (self._name,)
 
     def __dask_tokenize__(self):
         return self._name

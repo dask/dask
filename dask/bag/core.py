@@ -408,7 +408,7 @@ class Bag(DaskMethodsMixin):
         return [(self.name, i) for i in range(self.npartitions)]
 
     def __dask_layers__(self):
-        return {self.name}
+        return (self.name,)
 
     def __dask_tokenize__(self):
         return self.name
