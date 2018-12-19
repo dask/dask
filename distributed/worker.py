@@ -1594,8 +1594,10 @@ class Worker(ServerNode):
                 if self.validate:
                     self.validate_state()
 
+                # dep states may have changed before gather_dep runs
+                # if a dep is no longer in-flight then don't fetch it
                 deps = tuple(dep for dep in deps
-                                 if self.dep_state.get(dep) in ('waiting', 'flight'))
+                                 if self.dep_state.get(dep) == 'flight')
 
                 self.log.append(('request-dep', dep, worker, deps))
                 logger.debug("Request %d keys", len(deps))
