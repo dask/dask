@@ -2074,6 +2074,15 @@ class Client(Node):
         >>> client.run_on_scheduler(get_number_of_tasks)  # doctest: +SKIP
         100
 
+        Run asynchronous functions in the background:
+
+        >>> async def print_state(dask_scheduler):  # doctest: +SKIP
+        ...    while True:
+        ...        print(dask_scheduler.status)
+        ...        await gen.sleep(1)
+
+        >>> c.run(print_state, wait=False)  # doctest: +SKIP
+
         See Also
         --------
         Client.run: Run a function on all workers
@@ -2122,6 +2131,9 @@ class Client(Node):
         **kwargs: keyword arguments for remote function
         workers: list
             Workers on which to run the function. Defaults to all known workers.
+        wait: boolean (optional)
+            If the function is asynchronous whether or not to wait until that
+            function finishes.
 
         Examples
         --------
@@ -2144,6 +2156,15 @@ class Client(Node):
         >>> c.run(get_hostname)  # doctest: +SKIP
         {'192.168.0.100:9000': 'running',
          '192.168.0.101:9000': 'running}
+
+        Run asynchronous functions in the background:
+
+        >>> async def print_state(dask_worker):  # doctest: +SKIP
+        ...    while True:
+        ...        print(dask_worker.status)
+        ...        await gen.sleep(1)
+
+        >>> c.run(print_state, wait=False)  # doctest: +SKIP
         """
         return self.sync(self._run, function, *args, **kwargs)
 
@@ -3013,10 +3034,10 @@ class Client(Node):
 
         Examples
         --------
-        >>> client = Client()
-        >>> client.write_scheduler_file('scheduler.json')
+        >>> client = Client()  # doctest: +SKIP
+        >>> client.write_scheduler_file('scheduler.json')  # doctest: +SKIP
         # connect to previous client's scheduler
-        >>> client2 = Client(scheduler_file='scheduler.json')
+        >>> client2 = Client(scheduler_file='scheduler.json')  # doctest: +SKIP
         """
         if self.scheduler_file:
             raise ValueError('Scheduler file already set')
