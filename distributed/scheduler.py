@@ -3068,7 +3068,7 @@ class Scheduler(ServerNode):
             self.unknown_durations[prefix].add(ts)
             return default
 
-    def run_function(self, stream, function, args=(), kwargs={}):
+    def run_function(self, stream, function, args=(), kwargs={}, wait=True):
         """ Run a function within this process
 
         See Also
@@ -3077,7 +3077,7 @@ class Scheduler(ServerNode):
         """
         from .worker import run
         self.log_event('all', {'action': 'run-function', 'function': function})
-        return run(self, stream, function=function, args=args, kwargs=kwargs)
+        return run(self, stream, function=function, args=args, kwargs=kwargs, wait=wait)
 
     def set_metadata(self, stream=None, keys=None, value=None):
         try:

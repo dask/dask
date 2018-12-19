@@ -399,7 +399,7 @@ def test_run_coroutine_dask_worker(c, s, a, b):
         yield gen.sleep(0.001)
         raise gen.Return(dask_worker.id)
 
-    response = yield c._run_coroutine(f)
+    response = yield c.run(f)
     assert response == {a.address: a.id, b.address: b.id}
 
 
@@ -866,7 +866,7 @@ def test_get_client_coroutine(c, s, a, b):
         result = yield future
         raise gen.Return(result)
 
-    results = yield c.run_coroutine(f)
+    results = yield c.run(f)
     assert results == {a.address: 11,
                        b.address: 11}
 
@@ -879,7 +879,7 @@ def test_get_client_coroutine_sync(client, s, a, b):
         result = yield future
         raise gen.Return(result)
 
-    results = client.run_coroutine(f)
+    results = client.run(f)
     assert results == {a['address']: 11,
                        b['address']: 11}
 

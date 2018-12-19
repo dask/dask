@@ -1960,13 +1960,14 @@ class Worker(ServerNode):
         # logger.info("Finish job %d, %s", i, key)
         raise gen.Return(result)
 
-    def run(self, comm, function, args=(), kwargs=None):
+    def run(self, comm, function, args=(), wait=True, kwargs=None):
         kwargs = kwargs or {}
-        return run(self, comm, function=function, args=args, kwargs=kwargs)
+        return run(self, comm, function=function, args=args, kwargs=kwargs,
+                   wait=wait)
 
     def run_coroutine(self, comm, function, args=(), kwargs=None, wait=True):
         return run(self, comm, function=function, args=args, kwargs=kwargs,
-                   is_coro=True, wait=wait)
+                   wait=wait)
 
     @gen.coroutine
     def actor_execute(self, comm=None, actor=None, function=None, args=(), kwargs={}):
@@ -2915,9 +2916,14 @@ def weight(k, v):
 
 
 @gen.coroutine
-def run(server, comm, function, args=(), kwargs={}, is_coro=False, wait=True):
-    assert wait or is_coro, "Combination not supported"
+def run(server, comm, function, args=(), kwargs={}, is_coro=None, wait=True):
     function = pickle.loads(function)
+    if is_coro is None:
+        is_coro = iscoroutinefunction(function)
+    else:
+        warnings.warn("The is_coro= parameter is deprecated. "
+                      "We now automatically detect coroutines/async functions")
+    assert wait or is_coro, "Combination not supported"
     if args:
         args = pickle.loads(args)
     if kwargs:
@@ -2928,9 +2934,15 @@ def run(server, comm, function, args=(), kwargs={}, is_coro=False, wait=True):
         kwargs['dask_scheduler'] = server
     logger.info("Run out-of-band function %r", funcname(function))
     try:
-        result = function(*args, **kwargs)
-        if is_coro:
-            result = (yield result) if wait else None
+        if not is_coro:
+            result = function(*args, **kwargs)
+        else:
+            if wait:
+                result = yield function(*args, **kwargs)
+            else:
+                server.loop.add_callback(function, *args, **kwargs)
+                result = None
+
     except Exception as e:
         logger.warning(" Run Failed\n"
                        "Function: %s\n"

@@ -2048,9 +2048,11 @@ class Client(Node):
 
     @gen.coroutine
     def _run_on_scheduler(self, function, *args, **kwargs):
+        wait = kwargs.pop('wait', True)
         response = yield self.scheduler.run_function(function=dumps(function),
                                                      args=dumps(args),
-                                                     kwargs=dumps(kwargs))
+                                                     kwargs=dumps(kwargs),
+                                                     wait=wait)
         if response['status'] == 'error':
             six.reraise(*clean_exception(**response))
         else:
@@ -2084,9 +2086,11 @@ class Client(Node):
     def _run(self, function, *args, **kwargs):
         nanny = kwargs.pop('nanny', False)
         workers = kwargs.pop('workers', None)
+        wait = kwargs.pop('wait', True)
         responses = yield self.scheduler.broadcast(msg=dict(op='run',
                                                             function=dumps(function),
                                                             args=dumps(args),
+                                                            wait=wait,
                                                             kwargs=dumps(kwargs)),
                                                    workers=workers, nanny=nanny)
         results = {}
@@ -2095,7 +2099,8 @@ class Client(Node):
                 results[key] = resp['result']
             elif resp['status'] == 'error':
                 six.reraise(*clean_exception(**resp))
-        raise gen.Return(results)
+        if wait:
+            raise gen.Return(results)
 
     def run(self, function, *args, **kwargs):
         """
@@ -2142,27 +2147,6 @@ class Client(Node):
         """
         return self.sync(self._run, function, *args, **kwargs)
 
-    @gen.coroutine
-    def _run_coroutine(self, function, *args, **kwargs):
-        workers = kwargs.pop('workers', None)
-        wait = kwargs.pop('wait', True)
-        responses = yield self.scheduler.broadcast(msg=dict(op='run_coroutine',
-                                                            function=dumps(function),
-                                                            args=dumps(args),
-                                                            kwargs=dumps(kwargs),
-                                                            wait=wait),
-                                                   workers=workers)
-        if not wait:
-            raise gen.Return(None)
-        else:
-            results = {}
-            for key, resp in responses.items():
-                if resp['status'] == 'OK':
-                    results[key] = resp['result']
-                elif resp['status'] == 'error':
-                    six.reraise(*clean_exception(**resp))
-            raise gen.Return(results)
-
     def run_coroutine(self, function, *args, **kwargs):
         """
         Spawn a coroutine on all workers.
@@ -2184,7 +2168,10 @@ class Client(Node):
             Workers on which to run the function. Defaults to all known workers.
 
         """
-        return self.sync(self._run_coroutine, function, *args, **kwargs)
+        warnings.warn("This method has been deprecated. "
+                      "Instead use Client.run which detects async functions "
+                      "automatically")
+        return self.run(function, *args, **kwargs)
 
     def _graph_to_futures(self, dsk, keys, restrictions=None,
                           loose_restrictions=None, priority=None,
