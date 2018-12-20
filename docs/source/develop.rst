@@ -33,7 +33,7 @@ repository and several other repositories for different components.  A
 non-exhaustive list follows:
 
 *  http://github.com/dask/dask: The main code repository holding parallel
-   algorithms, the single-machine scheduler, and most documentation.
+   algorithms, the single-machine scheduler, and most documentation
 *  http://github.com/dask/distributed: The distributed memory scheduler
 *  http://github.com/dask/dask-ml: Machine learning algorithms
 *  http://github.com/dask/s3fs: S3 Filesystem interface
@@ -42,7 +42,7 @@ non-exhaustive list follows:
 *  ...
 
 Git and Github can be challenging at first.  Fortunately good materials exist
-on the internet.  Rather than repeat these materials here we refer you to
+on the internet.  Rather than repeat these materials here, we refer you to
 Pandas' documentation and links on this subject at
 http://pandas.pydata.org/pandas-docs/stable/contributing.html
 
@@ -51,12 +51,12 @@ Issues
 ------
 
 The community discusses and tracks known bugs and potential features in the
-`Github Issue Tracker`_.  If you have a new idea or have identified a bug then
+`Github Issue Tracker`_.  If you have a new idea or have identified a bug, then
 you should raise it there to start public discussion.
 
-If you are looking for an introductory issue to get started with development
+If you are looking for an introductory issue to get started with development,
 then check out the `introductory label`_, which contains issues that are good
-for starting developers.  Generally familiarity with Python, NumPy, Pandas, and
+for starting developers.  Generally, familiarity with Python, NumPy, Pandas, and
 some parallel computing are assumed.
 
 .. _`introductory label`: https://github.com/dask/dask/issues?q=is%3Aissue+is%3Aopen+label%3Aintroductory
@@ -68,7 +68,7 @@ Development Environment
 Download code
 ~~~~~~~~~~~~~
 
-Clone the main dask git repository (or whatever repository you're working on.)::
+Clone the main Dask git repository (or whatever repository you're working on)::
 
    git clone git@github.com:dask/dask.git
 
@@ -77,7 +77,7 @@ Install
 ~~~~~~~
 
 You may want to install larger dependencies like NumPy and Pandas using a
-binary package manager, like conda_.  You can skip this step if you already
+binary package manager like conda_.  You can skip this step if you already
 have these libraries, don't care to use them, or have sufficient build
 environment on your computer to compile them when installing with ``pip``::
 
@@ -85,12 +85,12 @@ environment on your computer to compile them when installing with ``pip``::
 
 .. _conda: http://conda.pydata.org/docs/
 
-Install dask and dependencies::
+Install Dask and dependencies::
 
    cd dask
    pip install -e .[complete]
 
-For development dask uses the following additional dependencies::
+For development, Dask uses the following additional dependencies::
 
    pip install pytest moto mock
 
@@ -124,7 +124,7 @@ Test
 Dask employs extensive unit tests to ensure correctness of code both for today
 and for the future.  Test coverage is expected for all code contributions.
 
-Tests are written in a py.test style with bare functions.
+Tests are written in a py.test style with bare functions:
 
 .. code-block:: python
 
@@ -139,7 +139,7 @@ Tests are written in a py.test style with bare functions.
                fib(x)
 
 These tests should compromise well between covering all branches and fail cases
-and running quickly (slow test suites get run less often.)
+and running quickly (slow test suites get run less often).
 
 You can run tests locally by running ``py.test`` in the local dask directory::
 
@@ -161,8 +161,8 @@ Tests are organized within the various modules' subdirectories::
     dask/dataframe/tests/test_*.py
     dask/diagnostics/tests/test_*.py
 
-For the Dask collections like dask.array and dask.dataframe behavior is
-typically tested directly against the Numpy or Pandas libraries using the
+For the Dask collections like Dask Array and Dask DataFrame, behavior is
+typically tested directly against the NumPy or Pandas libraries using the
 ``assert_eq`` functions:
 
 .. code-block:: python
@@ -180,10 +180,10 @@ typically tested directly against the Numpy or Pandas libraries using the
        assert_eq(nx.max(), dx.max())
        ...
 
-This technique helps to ensure compatibility with upstream libraries, and tends
+This technique helps to ensure compatibility with upstream libraries and tends
 to be simpler than testing correctness directly.  Additionally, by passing Dask
 collections directly to the ``assert_eq`` function rather than call compute
-manually the testing suite is able to run a number of checks on the lazy
+manually, the testing suite is able to run a number of checks on the lazy
 collections themselves.
 
 
@@ -191,9 +191,9 @@ Docstrings
 ~~~~~~~~~~
 
 User facing functions should roughly follow the numpydoc_ standard, including
-sections for ``Parameters``, ``Examples`` and general explanatory prose.
+sections for ``Parameters``, ``Examples``, and general explanatory prose.
 
-By default examples will be doc-tested.  Reproducible examples in documentation
+By default, examples will be doc-tested.  Reproducible examples in documentation
 is valuable both for testing and, more importantly, for communication of common
 usage to the user.  Documentation trumps testing in this case and clear
 examples should take precedence over using the docstring as testing space.
@@ -227,12 +227,12 @@ after the line.
 
 .. _numpydoc: https://github.com/numpy/numpy/blob/master/doc/HOWTO_DOCUMENT.rst.txt
 
-Docstrings are currently tested under Python 3.6 on travis.ci.  You can test
+Docstrings are currently tested under Python 3.6 on Travis.ci.  You can test
 docstrings with pytest as follows::
 
    py.test dask --doctest-modules
 
-Docstring testing requires graphviz to be installed. This can be done via::
+Docstring testing requires ``graphviz`` to be installed. This can be done via::
 
    conda install -y graphviz
 
@@ -240,7 +240,7 @@ Docstring testing requires graphviz to be installed. This can be done via::
 Style
 ~~~~~
 
-Dask verifies style uniformity with the ``flake8`` tool.::
+Dask verifies style uniformity with the ``flake8`` tool::
 
    pip install flake8
    flake8 dask
@@ -250,8 +250,8 @@ Changelog
 ~~~~~~~~~
 
 Every significative code contribution should be listed in the
-:doc:`changelog` under the corresponding version. When submitting a Pull
-Request in Github please add to that file explaining what was added/modified.
+:doc:`changelog` under the corresponding version.  When submitting a Pull
+Request in Github, please add to that file explaining what was added/modified.
 
 
 Contributing to Documentation
@@ -262,12 +262,12 @@ Documentation is maintained in the RestructuredText markup language (``.rst``
 files) in ``dask/docs/source``.  The documentation consists both of prose
 and API documentation.
 
-To build the documentation locally, first install requirements::
+To build the documentation locally, first install the necessary requirements::
 
    cd docs/
    pip install -r requirements-docs.txt
 
-Then build documentation with ``make``::
+Then build the documentation with ``make``::
 
    make html
 
