@@ -50,7 +50,7 @@ Create Bags
    from_delayed
    read_text
    from_url
-   from_avro
+   read_avro
    range
 
 Top-level functions
