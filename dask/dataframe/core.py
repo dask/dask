@@ -28,6 +28,7 @@ from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
                      is_arraylike)
 from ..array.core import Array, normalize_arg
+from ..array.top import _top
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..sizeof import sizeof
 from ..delayed import delayed, Delayed, unpack_collections
@@ -2037,7 +2038,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     def __getitem__(self, key):
         if isinstance(key, Series) and self.divisions == key.divisions:
             name = 'index-%s' % tokenize(self, key)
-            dsk = broadcast(operator.getitem, name, self, key)
+            dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return Series(graph, name, self._meta, self.divisions)
         raise NotImplementedError()
@@ -2481,7 +2482,7 @@ class DataFrame(_Frame):
 
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
-            dsk = broadcast(operator.getitem, name, self, key)
+            dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         elif isinstance(key, slice):
@@ -2491,7 +2492,7 @@ class DataFrame(_Frame):
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
 
-            dsk = broadcast(operator.getitem, name, self, key)
+            dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         if isinstance(key, Series):
@@ -2500,7 +2501,7 @@ class DataFrame(_Frame):
             if self.divisions != key.divisions:
                 from .multi import _maybe_align_partitions
                 self, key = _maybe_align_partitions([self, key])
-            dsk = broadcast(operator.getitem, name, self, key)
+            dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return new_dd_object(graph, name, self, self.divisions)
         raise NotImplementedError(key)
@@ -3317,7 +3318,7 @@ def elemwise(op, *args, **kwargs):
              if not isinstance(arg, (_Frame, Scalar, Array))]
 
     # adjust the key length of Scalar
-    dsk = broadcast(op, _name, *args, **kwargs)
+    dsk = partitionwise_graph(op, _name, *args, **kwargs)
 
     graph = HighLevelGraph.from_collections(_name, dsk, dependencies=dasks)
 
@@ -3673,8 +3674,15 @@ def map_partitions(func, *args, **kwargs):
         dependencies.extend(collections)
         kwargs3[k] = v
 
-    dsk = broadcast(apply_and_enforce, name, *args2, dependencies=dependencies,
-                    _func=func, _meta=meta, **kwargs3)
+    dsk = partitionwise_graph(
+        apply_and_enforce,
+        name,
+        *args2,
+        dependencies=dependencies,
+        _func=func,
+        _meta=meta,
+        **kwargs3
+    )
     dfs = [df for df in args if isinstance(df, _Frame)]
     # dsk = {}
     # for i in range(dfs[0].npartitions):
@@ -3776,7 +3784,7 @@ def _rename_dask(df, names):
     metadata = _rename(names, df._meta)
     name = 'rename-{0}'.format(tokenize(df, metadata))
 
-    dsk = broadcast(_rename, name, metadata, df)
+    dsk = partitionwise_graph(_rename, name, metadata, df)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
     return new_dd_object(graph, name, metadata, df.divisions)
 
@@ -4518,4 +4526,60 @@ def new_dd_object(dsk, name, meta, divisions):
         return get_parallel_type(meta)(dsk, name, meta, divisions)
 
 
-from .broadcast import broadcast
+def partitionwise_graph(func, name, *args, **kwargs):
+    """
+    Apply a function partition-wise across arguments to create layer of a graph
+
+    This applies a function, ``func``, in an embarrassingly parallel fashion
+    across partitions/chunks in the provided arguments.  It handles Dataframes,
+    Arrays, and scalars smoothly, and relies on the ``atop`` machinery of
+    dask.array to provide a nicely symbolic graph.
+
+    It is most commonly used in other graph-building functions to create the
+    appropriate layer of the resulting dataframe.
+
+    Parameters
+    ----------
+    func: callable
+    name: str
+        descriptive name for the operation
+    *args:
+    **kwargs:
+
+    Returns
+    -------
+    out: TOP graph
+
+    Examples
+    --------
+    >>> subgraph = partitionwise_graph(function, x, y, z=123)  # doctest: +SKIP
+    >>> layer = partitionwise_graph(function, df, x, z=123)  # doctest: +SKIP
+    >>> graph = HighLevelGraph.from_collections(name, layer, dependencies=[df, x])  # doctest: +SKIP
+    >>> result = new_dd_object(graph, name, metadata, df.divisions)  # doctest: +SKIP
+
+    See Also
+    --------
+    map_partitions
+    """
+    pairs = []
+    numblocks = {}
+    for arg in args:
+        if isinstance(arg, _Frame):
+            pairs.extend([arg._name, 'i'])
+            numblocks[arg._name] = (arg.npartitions,)
+        elif isinstance(arg, Scalar):
+            pairs.extend([arg._name, 'i'])
+            numblocks[arg._name] = (1,)
+        elif isinstance(arg, Array):
+            if arg.ndim == 1:
+                pairs.extend([arg.name, 'i'])
+            elif arg.ndim == 0:
+                pairs.extend([arg.name, ''])
+            elif arg.ndim == 2:
+                pairs.extend([arg.name, 'ij'])
+            else:
+                raise ValueError("Can't add multi-dimensional array to dataframes")
+            numblocks[arg._name] = arg.numblocks
+        else:
+            pairs.extend([arg, None])
+    return _top(func, name, 'i', *pairs, numblocks=numblocks, concatenate=True, **kwargs)
