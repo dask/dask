@@ -3,8 +3,8 @@ Internal Data Ingestion
 
 Dask contains internal tools for extensible data ingestion in the
 ``dask.bytes`` package.  *These functions are developer-focused rather than for
-direct consumption by users.  These functions power user facing functions like
-``dd.read_csv`` and ``db.read_text`` which are probably more useful for most
+direct consumption by users.  These functions power user facing functions like* 
+``dd.read_csv`` *and* ``db.read_text`` *which are probably more useful for most
 users.*
 
 .. currentmodule:: dask.bytes
@@ -32,7 +32,7 @@ Delimiters
 
 The ``read_bytes`` function takes a path (or globstring of paths) and produces
 a sample of the first file and a list of delayed objects for each of the other
-files.  If passed a delimiter such as ``delimiter=b'\n'`` it will ensure that
+files.  If passed a delimiter such as ``delimiter=b'\n'``, it will ensure that
 the blocks of bytes start directly after a delimiter and end directly before a
 delimiter.  This allows other functions, like ``pd.read_csv``, to operate on
 these delayed values with expected behavior.
@@ -46,13 +46,13 @@ Locations
 
 These functions dispatch to other functions that handle different storage
 backends, like S3 and HDFS.  These storage backends register themselves with
-protocols and so are called whenever the path is prepended with a string like
+protocols, and so are called whenever the path is prepended with a string like
 the following::
 
    s3://bucket/keys-*.csv
 
 The various back-ends accept optional extra keywords, detailing authentication
-and other parameters, see :doc:`remote data services <remote-data-services>`
+and other parameters, see :doc:`remote data services <remote-data-services>`.
 
 Compression
 -----------
@@ -65,7 +65,7 @@ added directly to the codebase.
 
 However, not all compression technologies are available for all functions.  In
 particular, compression technologies like ``gzip`` do not support efficient
-random access and so are useful for streaming ``open_files`` but not useful for
+random access, and so are useful for streaming ``open_files`` but not useful for
 ``read_bytes`` which splits files at various points.
 
 Functions
