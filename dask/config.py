@@ -72,6 +72,8 @@ def update(old, new, priority='new'):
             old[k] = {}
 
         if type(v) is dict:
+            if old[k] is None:
+                old[k] = {}
             update(old[k], v, priority=priority)
         else:
             if priority == 'new' or k not in old:
