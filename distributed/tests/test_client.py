@@ -1871,7 +1871,7 @@ def test_repr_localcluster():
         assert cluster.scheduler.address in text
     finally:
         yield client.close()
-        yield cluster._close()
+        yield cluster.close()
 
 
 @gen_cluster(client=True)

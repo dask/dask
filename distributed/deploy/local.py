@@ -4,7 +4,7 @@ import atexit
 from datetime import timedelta
 import logging
 import math
-from time import sleep
+import warnings
 import weakref
 import toolz
 
@@ -13,7 +13,7 @@ from tornado import gen
 from .cluster import Cluster
 from ..core import CommClosedError
 from ..utils import (sync, ignoring, All, silence_logging, LoopRunner,
-        log_errors, thread_state)
+        log_errors, thread_state, parse_timedelta)
 from ..nanny import Nanny
 from ..scheduler import Scheduler
 from ..worker import Worker, _ncores
@@ -151,9 +151,12 @@ class LocalCluster(Cluster):
     def __await__(self):
         return self._started.__await__()
 
+    @property
+    def asynchronous(self):
+        return self._asynchronous or getattr(thread_state, 'asynchronous', False)
+
     def sync(self, func, *args, **kwargs):
-        asynchronous = kwargs.pop('asynchronous', None)
-        if asynchronous or self._asynchronous or getattr(thread_state, 'asynchronous', False):
+        if kwargs.pop('asynchronous', None) or self.asynchronous:
             callback_timeout = kwargs.pop('callback_timeout', None)
             future = func(*args, **kwargs)
             if callback_timeout is not None:
@@ -196,6 +199,10 @@ class LocalCluster(Cluster):
 
     @gen.coroutine
     def _start_worker(self, death_timeout=60, **kwargs):
+        if self.status and self.status.startswith('clos'):
+            warnings.warn("Tried to start a worker while status=='%s'" % self.status)
+            return
+
         if self.processes:
             W = Nanny
             kwargs['quiet'] = True
@@ -257,14 +264,22 @@ class LocalCluster(Cluster):
         self.sync(self._stop_worker, w)
 
     @gen.coroutine
-    def _close(self):
+    def _close(self, timeout='2s'):
         # Can be 'closing' as we're called by close() below
         if self.status == 'closed':
             return
+        self.status = 'closing'
+
+        self.scheduler.clear_task_state()
+
+        with ignoring(gen.TimeoutError):
+            yield gen.with_timeout(
+                timedelta(seconds=parse_timedelta(timeout)),
+                All([self._stop_worker(w) for w in self.workers]),
+            )
+        del self.workers[:]
 
         try:
-            with ignoring(gen.TimeoutError, CommClosedError, OSError):
-                yield All([w._close() for w in self.workers])
             with ignoring(gen.TimeoutError, CommClosedError, OSError):
                 yield self.scheduler.close(fast=True)
             del self.workers[:]
@@ -277,25 +292,17 @@ class LocalCluster(Cluster):
             return
 
         try:
-            self.scheduler.clear_task_state()
+            result = self.sync(self._close, callback_timeout=timeout)
+        except RuntimeError:  # IOLoop is closed
+            pass
 
-            for w in self.workers:
-                self.loop.add_callback(self._stop_worker, w)
-            for i in range(10):
-                if not self.workers:
-                    break
-                else:
-                    sleep(0.01)
-            del self.workers[:]
-            try:
-                self._loop_runner.run_sync(self._close, callback_timeout=timeout)
-            except RuntimeError:  # IOLoop is closed
-                pass
-            self._loop_runner.stop()
-        finally:
-            self.status = 'closed'
         with ignoring(AttributeError):
             silence_logging(self._old_logging_level)
+
+        if not self.asynchronous:
+            self._loop_runner.stop()
+
+        return result
 
     @gen.coroutine
     def scale_up(self, n, **kwargs):

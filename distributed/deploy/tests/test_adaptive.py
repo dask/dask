@@ -91,7 +91,7 @@ def test_adaptive_local_cluster_multi_workers():
                                  asynchronous=True)
     try:
         cluster.scheduler.allowed_failures = 1000
-        alc = Adaptive(cluster.scheduler, cluster, interval=100)
+        alc = cluster.adapt(interval=100)
         c = yield Client(cluster, asynchronous=True)
 
         futures = c.map(slowinc, range(100), delay=0.01)
@@ -120,8 +120,8 @@ def test_adaptive_local_cluster_multi_workers():
         yield c.gather(futures)
 
     finally:
-        yield c._close()
-        yield cluster._close()
+        yield c.close()
+        yield cluster.close()
 
 
 @gen_cluster(client=True, ncores=[('127.0.0.1', 1)] * 10, active_rpc_timeout=10)
@@ -199,8 +199,8 @@ def test_min_max():
             assert time() < start + 2
         assert frequencies(pluck(1, adapt.log)) == {'up': 2, 'down': 1}
     finally:
-        yield c._close()
-        yield cluster._close()
+        yield c.close()
+        yield cluster.close()
 
 
 @gen_test()
@@ -223,8 +223,8 @@ def test_avoid_churn():
 
         assert frequencies(pluck(1, adapt.log)) == {'up': 1}
     finally:
-        yield client._close()
-        yield cluster._close()
+        yield client.close()
+        yield cluster.close()
 
 
 @gen_test(timeout=None)
@@ -270,8 +270,8 @@ def test_adapt_quickly():
         yield gen.sleep(0.1)
         assert len(cluster.scheduler.workers) == 1
     finally:
-        yield client._close()
-        yield cluster._close()
+        yield client.close()
+        yield cluster.close()
 
 
 @gen_test(timeout=None)
@@ -295,8 +295,8 @@ def test_adapt_down():
             yield gen.sleep(0.1)
             assert time() < start + 1
     finally:
-        yield client._close()
-        yield cluster._close()
+        yield client.close()
+        yield cluster.close()
 
 
 @pytest.mark.xfail(reason="we currently only judge occupancy, not ntasks")
@@ -317,8 +317,8 @@ def test_no_more_workers_than_tasks():
 
         assert len(cluster.scheduler.workers) <= 1
     finally:
-        yield client._close()
-        yield cluster._close()
+        yield client.close()
+        yield cluster.close()
 
 
 def test_basic_no_loop():
@@ -358,8 +358,8 @@ def test_target_duration():
         assert adaptive.log[1][1:] == ('up', {'n': 20})
 
     finally:
-        yield client._close()
-        yield cluster._close()
+        yield client.close()
+        yield cluster.close()
 
 
 @gen_test(timeout=None)
@@ -391,7 +391,7 @@ def test_worker_keys():
         names = {ws.name for ws in cluster.scheduler.workers.values()}
         assert names == {'a-1', 'a-2'} or names == {'b-1', 'b-2'}
     finally:
-        yield cluster._close()
+        yield cluster.close()
 
 
 @gen_cluster(client=True, ncores=[])

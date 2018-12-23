@@ -50,7 +50,6 @@ def test_close_twice():
             cluster.close()
             sleep(0.5)
         log = log.getvalue()
-        print(log)
         assert not log
 
 
@@ -291,8 +290,8 @@ def test_scale_up_and_down():
     assert len(cluster.workers) == 1
     assert addr not in cluster.scheduler.ncores
 
-    yield c._close()
-    yield cluster._close()
+    yield c.close()
+    yield cluster.close()
 
 
 def test_silent_startup():
@@ -511,8 +510,8 @@ def test_scale_retires_workers():
         yield gen.sleep(0.01)
         assert time() < start + 3
 
-    yield c._close()
-    yield cluster._close()
+    yield c.close()
+    yield cluster.close()
 
 
 def test_local_tls_restart(loop):
