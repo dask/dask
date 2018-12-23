@@ -286,6 +286,7 @@ Create DataFrames
 .. autosummary::
    read_csv
    read_table
+   read_fwf
    read_parquet
    read_hdf
    read_json
@@ -357,6 +358,7 @@ Storage and Conversion
 
 .. autofunction:: read_csv
 .. autofunction:: read_table
+.. autofunction:: read_fwf
 .. autofunction:: read_parquet
 .. autofunction:: read_orc
 .. autofunction:: read_hdf

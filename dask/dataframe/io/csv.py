@@ -491,6 +491,7 @@ def make_reader(reader, reader_name, file_type):
 
 read_csv = make_reader(pd.read_csv, 'read_csv', 'CSV')
 read_table = make_reader(pd.read_table, 'read_table', 'delimited')
+read_fwf = make_reader(pd.read_fwf, 'read_fwf', 'fixed-width')
 
 
 def _write_csv(df, fil, **kwargs):
