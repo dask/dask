@@ -12,7 +12,7 @@ We need to balance the following concerns:
 
 1.  Intermediate results might be useful in future unknown computations
 2.  Intermediate results also fill up memory, reducing space for the rest of our
-    current computation.
+    current computation
 
 Negotiating between these two concerns helps us to leverage the memory that we
 have available to speed up future, unanticipated computations.  Which intermediate results
@@ -50,7 +50,7 @@ For example, we may now want to find the minimum of the amount column:
    -1000
 
 Under normal operations, this would need to read through the entire CSV file over
-again.  This is somewhat wasteful, and stymies interactive data exploration.
+again.  This is somewhat wasteful and stymies interactive data exploration.
 
 
 Two Simple Solutions
@@ -65,7 +65,7 @@ reading through the dataset only once:
    >>> dd.compute(df.amount.max(), df.amount.min())
    (1000, -1000)
 
-If we know that this column fits in memory then we can also explicitly
+If we know that this column fits in memory, then we can also explicitly
 compute the column and then continue forward with straight Pandas:
 
 .. code-block:: python
@@ -91,7 +91,7 @@ characteristics:
 2.  Cheap to store
 3.  Frequently used
 
-We can activate a fixed sized cache as a callback_.
+We can activate a fixed sized cache as a callback_:
 
 .. _callback: diagnostics.rst
 
@@ -107,7 +107,7 @@ to compute, cheap to store, and frequently used).
 
 Dask will hold on to 2GB of the
 best intermediate results it can find, evicting older results as better results
-come in.  If the ``df.amount`` column fits in 2GB then probably all of it will
+come in.  If the ``df.amount`` column fits in 2GB, then probably all of it will
 be stored while we keep working on it.
 
 If we start work on something else,
@@ -127,14 +127,14 @@ Cache tasks, not expressions
 ----------------------------
 
 This caching happens at the low-level scheduling layer, not the high-level
-dask.dataframe or dask.array layer.  We don't explicitly cache the column
+Dask DataFrame or Dask Array layer.  We don't explicitly cache the column
 ``df.amount``.  Instead, we cache the hundreds of small pieces of that column
 that form the dask graph.  It could be that we end up caching only a fraction
 of the column.
 
-This means that the opportunistic caching mechanism described above works for *all* dask
+This means that the opportunistic caching mechanism described above works for *all* Dask
 computations, as long as those computations employ a consistent naming scheme
-(as all of dask.dataframe, dask.array, and dask.delayed do.)
+(as all of Dask DataFrame, Dask Array, and Dask Delayed do).
 
 You can see which tasks are held by the cache by inspecting the following
 attributes of the cache object:
@@ -160,12 +160,12 @@ Disclaimer
 
 This feature is still experimental, and can cause your computation to fill up RAM.
 
-Restricting your cache to a fixed size like 2GB requires dask to accurately count
+Restricting your cache to a fixed size like 2GB requires Dask to accurately count
 the size of each of our objects in memory.  This can be tricky, particularly
 for Pythonic objects like lists and tuples, and for DataFrames that contain
 object dtypes.
 
 It is entirely possible that the caching mechanism will
 *undercount* the size of objects, causing it to use up more memory than
-anticipated which can lead to blowing up RAM and crashing your session.
+anticipated, which can lead to blowing up RAM and crashing your session.
 
