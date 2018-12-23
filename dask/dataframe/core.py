@@ -28,7 +28,7 @@ from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
                      is_arraylike)
 from ..array.core import Array, normalize_arg
-from ..array.top import _top
+from ..array.top import _top, TOP
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..sizeof import sizeof
 from ..delayed import delayed, Delayed, unpack_collections
@@ -3684,11 +3684,6 @@ def map_partitions(func, *args, **kwargs):
         **kwargs3
     )
     dfs = [df for df in args if isinstance(df, _Frame)]
-    # dsk = {}
-    # for i in range(dfs[0].npartitions):
-    #     values = [(a._name, i if isinstance(a, _Frame) else 0)
-    #               if isinstance(a, (_Frame, Scalar)) else a for a in args2]
-    #     dsk[(name, i)] = (apply_and_enforce, func, values, kwargs_task, meta)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, dfs[0].divisions)
@@ -4512,7 +4507,6 @@ def new_dd_object(dsk, name, meta, divisions):
         chunks = (((np.nan,) * (len(divisions) - 1),) +
                   tuple((d,) for d in meta.shape[1:]))
         if len(chunks) > 1:
-            from ..array.top import TOP
             layer = dsk.layers[name]
             if isinstance(layer, TOP):
                 layer.new_axes['j'] = chunks[1][0]
