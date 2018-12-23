@@ -27,6 +27,8 @@ File Formats:
     read_orc
     read_json
     read_sql_table
+    read_table
+    read_fwf
     from_bcolz
     from_array
     to_csv
@@ -76,9 +78,9 @@ Dask Delayed
 ------------
 
 For more complex situations not covered by the functions above, you may want to
-use :doc:`dask.delayed<delayed>`, which lets you construct Dask DataFrames out 
-of arbitrary Python function calls that load DataFrames.  This can allow you to 
-handle new formats easily or bake in particular logic around loading data if, 
+use :doc:`dask.delayed<delayed>`, which lets you construct Dask DataFrames out
+of arbitrary Python function calls that load DataFrames.  This can allow you to
+handle new formats easily or bake in particular logic around loading data if,
 for example, your data is stored with some special format.
 
 See :doc:`documentation on using dask.delayed with
@@ -115,7 +117,7 @@ information:
     :doc:`DataFrame documentation <dataframe>`
 
 As an example, we build a DataFrame manually that reads several CSV files that
-have a datetime index separated by day.  Note that you should **never** do this.  
+have a datetime index separated by day.  Note that you should **never** do this.
 The ``dd.read_csv`` function does this for you:
 
 .. code-block:: Python
