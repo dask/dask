@@ -15,7 +15,7 @@ conda remove --all -q -y -n %CONDA_ENV%
 
 @rem Create test environment
 @rem (note: no cytoolz as it seems to prevent faulthandler tracebacks on crash)
-conda create -n %CONDA_ENV% -q -y python=%PYTHON% pytest toolz
+conda create -n %CONDA_ENV% -q -y python=%PYTHON% pytest toolz donfig
 
 call activate %CONDA_ENV%
 
