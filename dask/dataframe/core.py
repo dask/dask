@@ -355,7 +355,6 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def _elemwise(self):
         return elemwise
 
-    @property
     def _repr_data(self):
         raise NotImplementedError
 
@@ -370,7 +369,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return divisions
 
     def __repr__(self):
-        data = self._repr_data.to_string(max_rows=5, show_dimensions=False)
+        data = self._repr_data().to_string(max_rows=5, show_dimensions=False)
         return """Dask {klass} Structure:
 {data}
 Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
@@ -1925,7 +1924,6 @@ class Series(_Frame):
         return self.reduction(methods.nbytes, np.sum, token='nbytes',
                               meta=int, split_every=False)
 
-    @property
     def _repr_data(self):
         return _repr_data_series(self._meta, self._repr_divisions)
 
@@ -2181,7 +2179,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @derived_from(pd.Series)
     def to_string(self, max_rows=5):
         # option_context doesn't affect
-        return self._repr_data.to_string(max_rows=max_rows)
+        return self._repr_data().to_string(max_rows=max_rows)
 
     @classmethod
     def _bind_operator_method(cls, name, op):
@@ -2818,8 +2816,8 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def to_string(self, max_rows=5):
         # option_context doesn't affect
-        return self._repr_data.to_string(max_rows=max_rows,
-                                         show_dimensions=False)
+        return self._repr_data().to_string(max_rows=max_rows,
+                                           show_dimensions=False)
 
     def _get_numeric_data(self, how='any', subset=None):
         # calculate columns to avoid unnecessary calculation
@@ -3148,12 +3146,11 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def to_html(self, max_rows=5):
         # pd.Series doesn't have html repr
-        data = self._repr_data.to_html(max_rows=max_rows,
-                                       show_dimensions=False)
+        data = self._repr_data().to_html(max_rows=max_rows,
+                                         show_dimensions=False)
         return self._HTML_FMT.format(data=data, name=key_split(self._name),
                                      task=len(self.dask))
 
-    @property
     def _repr_data(self):
         meta = self._meta
         index = self._repr_divisions
@@ -3165,8 +3162,11 @@ class DataFrame(_Frame):
 <div>Dask Name: {name}, {task} tasks</div>"""
 
     def _repr_html_(self):
-        data = self._repr_data.to_html(max_rows=5,
-                                       show_dimensions=False, notebook=True)
+        data = self._repr_data().to_html(
+            max_rows=5,
+            show_dimensions=False,
+            notebook=True
+        )
         return self._HTML_FMT.format(data=data, name=key_split(self._name),
                                      task=len(self.dask))
 
