@@ -150,6 +150,9 @@ def test_full_groupby_apply_multiarg():
         warnings.simplefilter('ignore')
         for c_lazy, d_lazy in [(c_scalar, d_scalar),
                                (c_delayed, d_delayed)]:
+            assert_eq(df.groupby('a').apply(func, c, d=d),
+                      ddf.groupby('a').apply(func, c, d=d_lazy))
+
             assert_eq(df.groupby('a').apply(func, c),
                       ddf.groupby('a').apply(func, c))
 
@@ -161,9 +164,6 @@ def test_full_groupby_apply_multiarg():
 
             assert_eq(df.groupby('a').apply(func, c),
                       ddf.groupby('a').apply(func, c_lazy, meta=meta))
-
-            assert_eq(df.groupby('a').apply(func, c, d=d),
-                      ddf.groupby('a').apply(func, c, d=d_lazy))
 
             assert_eq(df.groupby('a').apply(func, c, d=d),
                       ddf.groupby('a').apply(func, c, d=d_lazy, meta=meta))

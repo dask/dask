@@ -3,7 +3,9 @@ from __future__ import absolute_import, division, print_function
 
 from ..optimization import cull, fuse_getitem, fuse
 from .. import config, core
+from ..highlevelgraph import HighLevelGraph
 from ..utils import ensure_dict
+from ..array.top import optimize_atop
 
 try:
     import fastparquet  # noqa: F401
@@ -12,6 +14,10 @@ except ImportError:
 
 
 def optimize(dsk, keys, **kwargs):
+
+    if isinstance(dsk, HighLevelGraph):
+        dsk = optimize_atop(dsk, keys=list(core.flatten(keys)))
+
     dsk = ensure_dict(dsk)
     from .io import dataframe_from_ctable
     if isinstance(keys, list):

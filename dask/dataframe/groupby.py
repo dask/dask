@@ -869,7 +869,7 @@ class _GroupBy(object):
                                (cumpart_ext._name, i), (name_cum, i),
                                index, 0 if columns is None else columns,
                                aggregate, initial)
-        graph = HighLevelGraph.from_collections(name, dask, dependencies=[cumpart_ext, cumlast])
+        graph = HighLevelGraph.from_collections(name, dask, dependencies=[cumpart_raw, cumpart_ext, cumlast])
         return new_dd_object(graph, name, chunk(self._meta), self.obj.divisions)
 
     @derived_from(pd.core.groupby.GroupBy)
