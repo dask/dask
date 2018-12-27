@@ -501,13 +501,20 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         if PANDAS_VERSION >= LooseVersion('0.23.0'):
             kwargs['sort'] = True
         dtypes = pd.concat([x.dtypes, meta.dtypes], axis=1, **kwargs)
-        bad = [(col, a, b) for col, a, b in dtypes.fillna('-').itertuples()
-               if not equal_dtypes(a, b)]
-        if not bad:
+        bad_dtypes = [(col, a, b) for col, a, b in dtypes.fillna('-').itertuples()
+                      if not equal_dtypes(a, b)]
+        if bad_dtypes:
+            errmsg = ("Partition type: `%s`\n%s" %
+                      (type(meta).__name__,
+                       asciitable(['Column', 'Found', 'Expected'], bad_dtypes)))
+        elif not np.array_equal(np.nan_to_num(meta.columns),
+                                np.nan_to_num(x.columns)):
+            errmsg = ("The columns in the computed data do not match"
+                      " the columns in the provided metadata.\n"
+                      " %s\n  :%s" %
+                      (meta.columns, x.columns))
+        else:
             return x
-        errmsg = ("Partition type: `%s`\n%s" %
-                  (type(meta).__name__,
-                   asciitable(['Column', 'Found', 'Expected'], bad)))
     else:
         if equal_dtypes(x.dtype, meta.dtype):
             return x

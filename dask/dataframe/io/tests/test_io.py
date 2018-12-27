@@ -556,7 +556,7 @@ def test_from_delayed_misordered_meta():
 
     with pytest.raises(ValueError) as info:
         #produces dataframe which does not match meta
-        ddf.reset_index().compute()
+        ddf.reset_index().compute(scheduler='sync')
     msg = "The columns in the computed data do not match the columns in the" \
           " provided metadata"
     assert msg in str(info.value)

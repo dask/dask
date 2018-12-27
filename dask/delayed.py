@@ -466,7 +466,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         return [self.key]
 
     def __dask_layers__(self):
-        return [self.key]
+        return (self.key,)
 
     def __dask_tokenize__(self):
         return self.key
