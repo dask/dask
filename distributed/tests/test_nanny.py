@@ -333,3 +333,13 @@ def test_wait_for_scheduler():
     log = log.getvalue()
     assert 'error' not in log.lower(), log
     assert 'restart' not in log.lower(), log
+
+
+@gen_cluster(ncores=[], client=True)
+def test_environment_variable(c, s):
+    a = Nanny(s.address, loop=s.loop, memory_limit=0, env={"FOO": "123"})
+    b = Nanny(s.address, loop=s.loop, memory_limit=0, env={"FOO": "456"})
+    yield [a._start(), b._start()]
+    results = yield c.run(lambda: os.environ['FOO'])
+    assert results == {a.worker_address: "123", b.worker_address: "456"}
+    yield [a._close(), b._close()]

@@ -43,7 +43,7 @@ class Nanny(ServerNode):
             memory_limit='auto', reconnect=True, validate=False, quiet=False,
             resources=None, silence_logs=None, death_timeout=None, preload=(),
             preload_argv=[], security=None, contact_address=None,
-            listen_address=None, worker_class=None, **kwargs):
+            listen_address=None, worker_class=None, env=None, **kwargs):
 
         if scheduler_file:
             cfg = json_load_robust(scheduler_file)
@@ -63,6 +63,7 @@ class Nanny(ServerNode):
         self.preload = preload
         self.preload_argv = preload_argv
         self.Worker = Worker if worker_class is None else worker_class
+        self.env = env or {}
 
         self.contact_address = contact_address
         self.memory_terminate_fraction = dask.config.get('distributed.worker.memory.terminate')
@@ -215,7 +216,8 @@ class Nanny(ServerNode):
                 worker_start_args=(start_arg,),
                 silence_logs=self.silence_logs,
                 on_exit=self._on_exit,
-                worker=self.Worker
+                worker=self.Worker,
+                env=self.env,
             )
 
         self.auto_restart = True
@@ -322,7 +324,7 @@ class Nanny(ServerNode):
 class WorkerProcess(object):
 
     def __init__(self, worker_args, worker_kwargs, worker_start_args,
-                 silence_logs, on_exit, worker):
+                 silence_logs, on_exit, worker, env):
         self.status = 'init'
         self.silence_logs = silence_logs
         self.worker_args = worker_args
@@ -331,6 +333,7 @@ class WorkerProcess(object):
         self.on_exit = on_exit
         self.process = None
         self.Worker = worker
+        self.env = env
 
         # Initialized when worker is ready
         self.worker_dir = None
@@ -360,7 +363,9 @@ class WorkerProcess(object):
                         silence_logs=self.silence_logs,
                         init_result_q=self.init_result_q,
                         child_stop_q=self.child_stop_q,
-                        uid=uid, Worker=self.Worker),
+                        uid=uid,
+                        Worker=self.Worker,
+                        env=self.env),
         )
         self.process.daemon = True
         self.process.set_exit_callback(self._on_exit)
@@ -488,7 +493,8 @@ class WorkerProcess(object):
 
     @classmethod
     def _run(cls, worker_args, worker_kwargs, worker_start_args,
-             silence_logs, init_result_q, child_stop_q, uid, Worker):  # pragma: no cover
+             silence_logs, init_result_q, child_stop_q, uid, env, Worker):  # pragma: no cover
+        os.environ.update(env)
         try:
             from dask.multiprocessing import initialize_worker_process
         except ImportError:   # old Dask version
