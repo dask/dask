@@ -489,8 +489,8 @@ class Client(Node):
         Gives the client a name that will be included in logs generated on
         the scheduler for matters relating to this client
     direct_to_workers: bool (optional)
-        Can this client connect directly to workers or should it proxy through
-        the scheduler?
+        Whether or not to connect directly to the workers, or to ask
+        the scheduler to serve as intermediary.
     heartbeat_interval: int
         Time in milliseconds between heartbeats to scheduler
 
@@ -1609,6 +1609,10 @@ class Client(Node):
         errors: string
             Either 'raise' or 'skip' if we should raise if a future has erred
             or skip its inclusion in the output collection
+        direct: boolean
+            Whether or not to connect directly to the workers, or to ask
+            the scheduler to serve as intermediary.  This can also be set when
+            creating the Client.
         maxsize: int
             If the input is a queue then this produces an output queue with a
             maximum size.
@@ -1795,9 +1799,9 @@ class Client(Node):
             Whether to send each data element to all workers.
             By default we round-robin based on number of cores.
         direct: bool (defaults to automatically check)
-            Send data directly to workers, bypassing the central scheduler
-            This avoids burdening the scheduler but assumes that the client is
-            able to talk directly with the workers.
+            Whether or not to connect directly to the workers, or to ask
+            the scheduler to serve as intermediary.  This can also be set when
+            creating the Client.
         maxsize: int (optional)
             Maximum size of queue if using queues, 0 implies infinite
         hash: bool (optional)
@@ -2295,7 +2299,9 @@ class Client(Node):
         sync: bool (optional)
             Returns Futures if False or concrete values if True (default).
         direct: bool
-            Gather results directly from workers
+            Whether or not to connect directly to the workers, or to ask
+            the scheduler to serve as intermediary.  This can also be set when
+            creating the Client.
 
         Examples
         --------
