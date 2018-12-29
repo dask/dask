@@ -629,7 +629,7 @@ def _write_metadata(writes, filenames, fmd, path, fs, sep):
 # PyArrow interface
 
 def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
-                  categories=None, index=None, infer_divisions=None):
+                  categories=None, index=None, gather_statistics=None):
     from ...bytes.core import get_pyarrow_filesystem
     import pyarrow.parquet as pq
 
@@ -642,23 +642,15 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     if filters is not None:
         raise NotImplementedError("Predicate pushdown not implemented")
 
-    if isinstance(categories, string_types):
-        categories = [categories]
-    elif categories is None:
-        categories = []
-    else:
-        categories = list(categories)
-
-    if isinstance(columns, tuple):
-        columns = list(columns)
-
     dataset = pq.ParquetDataset(paths, filesystem=get_pyarrow_filesystem(fs))
     if dataset.partitions is not None:
         partitions = [n for n in dataset.partitions.partition_names
                       if n is not None]
     else:
         partitions = []
+
     schema = dataset.schema.to_arrow_schema()
+
     has_pandas_metadata = schema.metadata is not None and b'pandas' in schema.metadata
 
     if has_pandas_metadata:
@@ -678,43 +670,8 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
 
     all_columns = index_names + column_names
 
-    # Find non-empty pieces
-    non_empty_pieces = []
-    # Determine valid pieces
-    _open = lambda fn: pq.ParquetFile(fs.open(fn, mode='rb'))
-    for piece in dataset.pieces:
-        pf = piece.get_metadata(_open)
-        # non_empty_pieces.append(piece)
-        if pf.num_row_groups > 0:
-            non_empty_pieces.append(piece)
+    pieces = sorted(dataset.pieces, key=lambda piece: natural_sort_key(piece.path))
 
-    # Sort pieces naturally
-    # If a single input path resulted in multiple dataset pieces, then sort
-    # the pieces naturally. If multiple paths were supplied then we leave
-    # the order of the resulting pieces unmodified
-    if len(paths) == 1 and len(dataset.pieces) > 1:
-        non_empty_pieces = sorted(
-            non_empty_pieces, key=lambda piece: natural_sort_key(piece.path))
-
-    # Determine divisions
-    if len(index_names) == 1:
-
-        # Look up storage name of the single index column
-        divisions_names = [storage_name for storage_name, name
-                           in storage_name_mapping.items()
-                           if index_names[0] == name]
-
-        if divisions_names:
-            divisions_name = divisions_names[0]
-        else:
-            divisions_name = None
-    else:
-        divisions_name = None
-
-    divisions = _get_pyarrow_divisions(non_empty_pieces, divisions_name,
-                                       schema, infer_divisions)
-
-    # Build task
     dtypes = _get_pyarrow_dtypes(schema, categories)
     dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
@@ -722,24 +679,35 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
                              column_index_names)
     meta = clear_known_categories(meta, cols=categories)
 
-    task_name = 'read-parquet-' + tokenize(fs_token, paths, all_columns)
+    if gather_statistics:
+        stats = []
+        for piece in pieces:
+            metadata = piece.get_metadata(lambda fn: pq.ParquetFile(fs.open(fn, mode='rb')))
+            assert metadata.num_row_groups == 1  # TODO
+            row_group = metadata.row_group(0)
 
-    if non_empty_pieces:
-        task_plan = {
-            (task_name, i): (_read_pyarrow_parquet_piece,
-                             fs,
-                             piece,
-                             column_names,
-                             index_names,
-                             dataset.partitions,
-                             categories)
-            for i, piece in enumerate(non_empty_pieces)
-        }
+            s = {'num-rows': metadata.num_rows, 'columns': []}
+            for i, name in enumerate(schema.names):
+                column = row_group.column(i)
+                d = {'name': name}
+                if column.statistics:
+                    d.update({'min': column.statistics.min,
+                              'max': column.statistics.max,
+                              'null_count': column.statistics.null_count})
+                s['columns'].append(d)
+            stats.append(s)
+
     else:
-        meta = strip_unknown_categories(meta)
-        task_plan = {(task_name, 0): meta}
+        stats = None
 
-    return new_dd_object(task_plan, task_name, meta, divisions)
+    return (_read_pyarrow_parquet_piece,
+            meta,
+            stats,
+            [{'piece': piece,
+              'kwargs': {'index_cols': index_names,
+                         'partitions': dataset.partitions,
+                         'categories': categories}}
+              for piece in pieces])
 
 
 def _to_ns(val, unit):
@@ -1080,54 +1048,48 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     to_parquet
     """
     if isinstance(columns, str):
-        return read_parquet(path, [columns], filters, categories, index,
-                            storage_options, engine, infer_divisions)[columns]
+        df = read_parquet(path, [columns], filters, categories, index,
+                          storage_options, engine, infer_divisions)
+        return df[columns]
 
-    is_ParquetFile = False
-    try:
-        import fastparquet
-        if isinstance(path, fastparquet.api.ParquetFile):
-            if path.open != fastparquet.util.default_open:
-                assert (re.match('.*://', path.fn)), \
-                       ("ParquetFile: Path must contain protocol" +
-                        " (e.g., s3://...) when using other than the default" +
-                        " LocalFileSystem. Path given: " + path.fn)
+    name = 'read-parquet-' + tokenize(path, columns, filters, categories,
+                                      index, storage_options, engine,
+                                      infer_divisions)
 
-            assert (engine in ['auto', 'fastparquet']), \
-                   ("'engine' should be set to 'auto' or 'fastparquet' " +
-                    'when reading from fastparquet.ParquetFile')
-            is_ParquetFile = True
-    except ImportError:
-            pass
+    read = get_engine(engine)['read']
+    fs, fs_token, paths = get_fs_token_paths(
+        path, mode='rb',
+        storage_options=storage_options
+    )
 
-    if is_ParquetFile:
-        read = get_engine('fastparquet')['read']
-        if path.fn.endswith('_metadata'):
-            # remove '_metadata' from path
-            urlpath = path.fn[:-len('_metadata')]
-        else:
-            urlpath = path.fn
+    paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
-        fs, fs_token, paths = get_fs_token_paths(
-            urlpath,
-            mode='rb',
-            storage_options=storage_options
-        )
-        paths = path
+    func, meta, statistics, parts = read(fs, fs_token, paths, columns=columns, filters=filters,
+                                         categories=categories, index=index,
+                                         gather_statistics=infer_divisions)
+
+    if statistics:
+        # TODO: remove empty partitions
+        # TODO: determine divisions and index
+        # TODO: apply filters
+        divisions = [None] * (len(parts) + 1)
     else:
-        read = get_engine(engine)['read']
-        fs, fs_token, paths = get_fs_token_paths(
-            path, mode='rb',
-            storage_options=storage_options
-        )
+        divisions = [None] * (len(parts) + 1)
 
-        if isinstance(path, string_types) and len(paths) > 1:
-            # Sort paths naturally if multiple paths resulted from a single
-            # specification (by '*' globbing)
-            paths = sorted(paths, key=natural_sort_key)
+    subgraph = {(name, i): (read_parquet_part, func, fs, meta, part['piece'],
+                            list(meta.columns), part['kwargs'])
+                for i, part in enumerate(parts)}
 
-    return read(fs, fs_token, paths, columns=columns, filters=filters,
-                categories=categories, index=index, infer_divisions=infer_divisions)
+    return new_dd_object(subgraph, name, meta, divisions)
+
+
+def read_parquet_part(func, fs, meta, part, columns, kwargs):
+    """ Read a part of a parquet dataset """
+    df = func(fs, part, columns, **kwargs)
+    if len(df):
+        return df
+    else:
+        return meta[columns]
 
 
 def to_parquet(df, path, engine='auto', compression='default', write_index=None,
