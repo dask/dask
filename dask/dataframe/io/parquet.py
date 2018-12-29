@@ -10,7 +10,7 @@ from distutils.version import LooseVersion
 import numpy as np
 import pandas as pd
 
-from ..core import DataFrame, Series
+from ..core import DataFrame, new_dd_object
 from ..utils import (clear_known_categories, strip_unknown_categories,
                      UNKNOWN_CATEGORIES)
 from ...bytes.compression import compress
@@ -117,18 +117,14 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
     -------
     column_names : list of str
     index_names : list of str
-    out_type : {pd.Series, pd.DataFrame}
     """
     specified_columns = user_columns is not None
     specified_index = user_index is not None
-
-    out_type = DataFrame
 
     if user_columns is None:
         user_columns = list(data_columns)
     elif isinstance(user_columns, string_types):
         user_columns = [user_columns]
-        out_type = Series
     else:
         user_columns = list(user_columns)
 
@@ -167,7 +163,7 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
         column_names = data_columns
         index_names = data_index
 
-    return column_names, index_names, out_type
+    return column_names, index_names
 
 
 # ----------------------------------------------------------------------
@@ -201,7 +197,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
                                   "fastparquet engine for datasets that "
                                   "do not contain a global '_metadata' file")
 
-    (meta, filters, index_name, out_type, all_columns, index_names,
+    (meta, filters, index_name, all_columns, index_names,
      storage_name_mapping) = _pf_validation(
         pf, columns, index, categories, filters)
     rgs = [rg for rg in pf.row_groups if
@@ -211,7 +207,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     name = 'read-parquet-' + tokenize(fs_token, paths, all_columns, filters,
                                       categories)
     dsk = {(name, i): (_read_parquet_row_group, fs, pf.row_group_filename(rg),
-                       index_names, all_columns, rg, out_type == Series,
+                       index_names, all_columns, rg,
                        categories, pf.schema, pf.cats, pf.dtypes,
                        pf.file_scheme, storage_name_mapping)
            for i, rg in enumerate(rgs)}
@@ -219,7 +215,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
         # empty dataframe
         dsk = {(name, 0): meta}
         divisions = (None, None)
-        return out_type(dsk, name, meta, divisions)
+        return new_dd_object(dsk, name, meta, divisions)
 
     if index_names and infer_divisions is not False:
         index_name = meta.index.name
@@ -251,7 +247,7 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     if isinstance(divisions[0], np.datetime64):
         divisions = [pd.Timestamp(d) for d in divisions]
 
-    return out_type(dsk, name, meta, divisions)
+    return new_dd_object(dsk, name, meta, divisions)
 
 
 def _pf_validation(pf, columns, index, categories, filters):
@@ -295,7 +291,7 @@ def _pf_validation(pf, columns, index, categories, filters):
     if filters is None:
         filters = []
 
-    column_names, index_names, out_type = _normalize_index_columns(
+    column_names, index_names = _normalize_index_columns(
         columns, column_names, index, index_names)
 
     if categories is None:
@@ -332,10 +328,7 @@ def _pf_validation(pf, columns, index, categories, filters):
         elif meta.index.name == catcol:
             meta.index = meta.index.set_categories(pf.cats[catcol])
 
-    if out_type == Series:
-        assert len(meta.columns) == 1
-        meta = meta[meta.columns[0]]
-    return (meta, filters, index_names, out_type, all_columns, index_names,
+    return (meta, filters, index_names, all_columns, index_names,
             storage_name_mapping)
 
 
@@ -349,21 +342,21 @@ def _read_fp_multifile(fs, fs_token, paths, columns=None,
     pf = ParquetFile(paths[0], open_with=fs.open)
     pf.file_scheme = scheme
     pf.cats = _paths_to_cats(fns, scheme)
-    (meta, _, index_name, out_type, all_columns, index_names,
+    (meta, _, index_name, all_columns, index_names,
      storage_name_mapping) = _pf_validation(
         pf, columns, index, categories, [])
     name = 'read-parquet-' + tokenize(fs_token, paths, all_columns,
                                       categories)
     dsk = {(name, i): (_read_pf_simple, fs, path, base,
-                       index_names, all_columns, out_type == Series,
+                       index_names, all_columns,
                        categories, pf.cats,
                        pf.file_scheme, storage_name_mapping)
            for i, path in enumerate(paths)}
     divisions = (None, ) * (len(paths) + 1)
-    return out_type(dsk, name, meta, divisions)
+    return new_dd_object(dsk, name, meta, divisions)
 
 
-def _read_pf_simple(fs, path, base, index_names, all_columns, is_series,
+def _read_pf_simple(fs, path, base, index_names, all_columns,
                     categories, cats, scheme, storage_name_mapping):
     """Read dataset with fastparquet using ParquetFile machinery"""
     from fastparquet import ParquetFile
@@ -388,10 +381,7 @@ def _read_pf_simple(fs, path, base, index_names, all_columns, is_series,
                   for col in all_columns
                   if col not in (index_names or [])]
 
-    if is_series:
-        return df[df.columns[0]]
-    else:
-        return df
+    return df
 
 
 def _paths_to_cats(paths, scheme):
@@ -439,16 +429,14 @@ def _paths_to_cats(paths, scheme):
     return {k: list(v) for k, v in cats.items()}
 
 
-def _read_parquet_file(fs, base, fn, index, columns, series, categories,
+def _read_parquet_file(fs, base, fn, index, columns, categories,
                        cs, dt, scheme, storage_name_mapping, *args):
     """Read a single file with fastparquet, to be used in a task"""
     from fastparquet.api import ParquetFile
     from collections import OrderedDict
 
     name_storage_mapping = {v: k for k, v in storage_name_mapping.items()}
-    if not isinstance(columns, (tuple, list)):
-        columns = [columns,]
-        series = True
+    assert isinstance(columns, (tuple, list))
     if index:
         index, = index
         if index not in columns:
@@ -475,22 +463,17 @@ def _read_parquet_file(fs, base, fn, index, columns, series, categories,
                   for col in columns
                   if col != index]
 
-    if series:
-        return df[df.columns[0]]
-    else:
-        return df
+    return df
 
 
-def _read_parquet_row_group(fs, fn, index, columns, rg, series, categories,
+def _read_parquet_row_group(fs, fn, index, columns, rg, categories,
                             schema, cs, dt, scheme, storage_name_mapping, *args):
     from fastparquet.api import _pre_allocate
     from fastparquet.core import read_row_group_file
     from collections import OrderedDict
 
     name_storage_mapping = {v: k for k, v in storage_name_mapping.items()}
-    if not isinstance(columns, (tuple, list)):
-        columns = [columns,]
-        series = True
+    assert isinstance(columns, (tuple, list))
     if index:
         index, = index
         if index not in columns:
@@ -515,10 +498,7 @@ def _read_parquet_row_group(fs, fn, index, columns, rg, series, categories,
                   for col in columns
                   if col != index]
 
-    if series:
-        return df[df.columns[0]]
-    else:
-        return df
+    return df
 
 
 def _write_partition_fastparquet(df, fs, path, filename, fmd, compression,
@@ -693,7 +673,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
         column_index_names = [None]
 
     column_names += [p for p in partitions if p not in column_names]
-    column_names, index_names, out_type = _normalize_index_columns(
+    column_names, index_names = _normalize_index_columns(
         columns, column_names, index, index_names)
 
     all_columns = index_names + column_names
@@ -742,10 +722,6 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
                              column_index_names)
     meta = clear_known_categories(meta, cols=categories)
 
-    if out_type == Series:
-        assert len(meta.columns) == 1
-        meta = meta[meta.columns[0]]
-
     task_name = 'read-parquet-' + tokenize(fs_token, paths, all_columns)
 
     if non_empty_pieces:
@@ -755,7 +731,6 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
                              piece,
                              column_names,
                              index_names,
-                             out_type == Series,
                              dataset.partitions,
                              categories)
             for i, piece in enumerate(non_empty_pieces)
@@ -764,7 +739,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
         meta = strip_unknown_categories(meta)
         task_plan = {(task_name, 0): meta}
 
-    return out_type(task_plan, task_name, meta, divisions)
+    return new_dd_object(task_plan, task_name, meta, divisions)
 
 
 def _to_ns(val, unit):
@@ -893,7 +868,7 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
     return divisions
 
 
-def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
+def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols,
                                 partitions, categories):
     import pyarrow as pa
 
@@ -926,10 +901,7 @@ def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
         # Ensure proper ordering
         df = df.reindex(columns=columns, copy=False)
 
-    if is_series:
-        return df[df.columns[0]]
-    else:
-        return df[columns]
+    return df[columns]
 
 
 _pyarrow_write_table_kwargs = {'row_group_size', 'version', 'use_dictionary',
@@ -1107,6 +1079,10 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     --------
     to_parquet
     """
+    if isinstance(columns, str):
+        return read_parquet(path, [columns], filters, categories, index,
+                            storage_options, engine, infer_divisions)[columns]
+
     is_ParquetFile = False
     try:
         import fastparquet
