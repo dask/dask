@@ -774,6 +774,7 @@ def test_empty_partition(tmpdir, engine):
     ddf2.to_parquet(fn, engine=engine)
 
     ddf3 = dd.read_parquet(fn, engine=engine)
+    assert ddf3.npartitions < 5
     sol = ddf2.compute()
     assert_eq(sol, ddf3, check_names=False, check_index=False)
 

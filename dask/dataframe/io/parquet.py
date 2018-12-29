@@ -1078,8 +1078,12 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                                          gather_statistics=infer_divisions)
 
     if statistics:
-        # TODO: remove empty partitions
+        parts, statistics = zip(*[(part, stats)
+                                 for part, stats in zip(parts, statistics)
+                                 if stats['num-rows'] > 0])
+
         # TODO: apply filters
+
         out = sorted_columns(statistics)
 
         if len(out) == 1:
