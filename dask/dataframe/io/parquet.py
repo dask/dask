@@ -6,6 +6,7 @@ import copy
 import json
 import os
 from distutils.version import LooseVersion
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -422,7 +423,6 @@ def _paths_to_cats(paths, scheme):
         # Check that all partition names map to the same type after
         # transformation by val_to_num
         if len(vals_by_type) > 1:
-            import warnings
             examples = [x[0] for x in vals_by_type.values()]
             warnings.warn("Partition names coerce to values of different"
                           " types, e.g. %s" % examples)
@@ -1079,26 +1079,35 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
     if statistics:
         # TODO: remove empty partitions
-        # TODO: determine divisions and index
         # TODO: apply filters
-        divisions = [None] * (len(parts) + 1)
+        out = sorted_columns(statistics)
+
+        if len(out) == 1:
+            divisions = out[0]['divisions']
+            index = out[0]['name']
+        elif len(out) > 1:
+            warnings.warn("Multiple sorted columns found: " + ", ".join(o['name'] for o in out))
+            divisions = [None] * (len(parts) + 1)
+        else:
+            divisions = [None] * (len(parts) + 1)
     else:
         divisions = [None] * (len(parts) + 1)
 
     subgraph = {(name, i): (read_parquet_part, func, fs, meta, part['piece'],
-                            list(meta.columns), part['kwargs'])
+                            list(meta.columns), index, part['kwargs'])
                 for i, part in enumerate(parts)}
 
     return new_dd_object(subgraph, name, meta, divisions)
 
 
-def read_parquet_part(func, fs, meta, part, columns, kwargs):
+def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
     """ Read a part of a parquet dataset """
     df = func(fs, part, columns, **kwargs)
-    if len(df):
-        return df
-    else:
-        return meta[columns]
+    if not len(df):
+        df = meta
+    if index is not None:
+        df = df.set_index(index)
+    return df
 
 
 def to_parquet(df, path, engine='auto', compression='default', write_index=None,
@@ -1179,6 +1188,40 @@ def to_parquet(df, path, engine='auto', compression='default', write_index=None,
     if compute:
         out.compute()
         return None
+    return out
+
+
+def sorted_columns(statistics):
+    """ Find sorted columns given row-group statistics
+
+    This finds all columns that are sorted, along with appropriate divisions
+    values for those columns
+
+    Returns
+    -------
+    out: List of {'name': str, 'divisions': List[str]} dictionaries
+    """
+    out = []
+    for i, c in enumerate(statistics[0]['columns']):
+        if not all('min' in s['columns'][i] and 'max' in s['columns'][i] for s in statistics):
+            continue
+        divisions = [c['min']]
+        max = c['max']
+        success = True
+        for stats in statistics[1:]:
+            c = stats['columns'][i]
+            if c['min'] >= max:
+                divisions.append(c['min'])
+                max = c['max']
+            else:
+                success = False
+                break
+
+        if success:
+            divisions.append(max)
+            assert divisions == sorted(divisions)
+            out.append({'name': c['name'], 'divisions': divisions})
+
     return out
 
 
