@@ -680,13 +680,22 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     meta = clear_known_categories(meta, cols=categories)
 
     if gather_statistics:
-        stats = []
-        for piece in pieces:
-            metadata = piece.get_metadata(lambda fn: pq.ParquetFile(fs.open(fn, mode='rb')))
-            assert metadata.num_row_groups == 1  # TODO
-            row_group = metadata.row_group(0)
+        # Read from _metadata file
+        if dataset.metadata and dataset.metadata.num_row_groups == len(dataset.pieces):  # one rg per piece
+            row_groups = [
+                dataset.metadata.row_group(i)
+                for i in range(dataset.metadata.num_row_groups)
+            ]
+        # Read from each individual piece (possibly slow)
+        else:
+            row_groups = [
+                piece.get_metadata(lambda fn: pq.ParquetFile(fs.open(fn, mode='rb'))).row_group(0)
+                for piece in dataset.pieces
+            ]
 
-            s = {'num-rows': metadata.num_rows, 'columns': []}
+        stats = []
+        for row_group in row_groups:
+            s = {'num-rows': row_group.num_rows, 'columns': []}
             for i, name in enumerate(schema.names):
                 column = row_group.column(i)
                 d = {'name': name}
