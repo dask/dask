@@ -156,6 +156,7 @@ def test_read_bytes_blocksize_types(blocksize):
         testlines = b"".join(files.values()).split(b'\n')
         assert set(ourlines) == set(testlines)
 
+
 def test_read_bytes_blocksize_float_errs():
     with filetexts(files, mode='b'):
         with pytest.raises(TypeError):
