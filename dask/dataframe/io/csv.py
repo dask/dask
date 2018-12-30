@@ -19,7 +19,7 @@ except ImportError:
 
 from ...bytes import read_bytes, open_files
 from ...bytes.compression import seekable_files, files as cfiles
-from ...compatibility import PY2, PY3, Mapping
+from ...compatibility import PY2, PY3, Mapping, unicode
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
 
@@ -318,7 +318,7 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     else:
         path_converter = None
 
-    if isinstance(blocksize, str):
+    if isinstance(blocksize, (str, unicode)):
         blocksize = parse_bytes(blocksize)
     if blocksize and compression not in seekable_files:
         warn("Warning %s compression does not support breaking apart files\n"
