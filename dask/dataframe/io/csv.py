@@ -21,7 +21,7 @@ from ...bytes import read_bytes, open_files
 from ...bytes.compression import seekable_files, files as cfiles
 from ...compatibility import PY2, PY3, Mapping
 from ...delayed import delayed
-from ...utils import asciitable
+from ...utils import asciitable, parse_bytes
 
 from ..utils import clear_known_categories, PANDAS_VERSION
 
@@ -318,6 +318,8 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     else:
         path_converter = None
 
+    if isinstance(blocksize, str):
+        blocksize = parse_bytes(blocksize)
     if blocksize and compression not in seekable_files:
         warn("Warning %s compression does not support breaking apart files\n"
              "Please ensure that each individual file can fit in memory and\n"
@@ -424,10 +426,11 @@ urlpath : string or list
     to read from alternative filesystems. To read from multiple files you
     can pass a globstring or a list of paths, with the caveat that they
     must all have the same protocol.
-blocksize : int or None, optional
+blocksize : str, int or None, optional
     Number of bytes by which to cut up larger files. Default value is
     computed based on available physical memory and the number of cores.
     If ``None``, use a single block for each file.
+    Can be a number like 64000000 or a string like "64MB"
 collection : boolean, optional
     Return a dask.dataframe if True or list of dask.delayed objects if False
 sample : int, optional
