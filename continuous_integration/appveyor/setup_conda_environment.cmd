@@ -27,7 +27,7 @@ echo pandas %PANDAS% >> %CONDA_PREFIX%\conda-meta\pinned
 
 @rem Install optional dependencies for tests
 %CONDA_INSTALL% numpy pandas cloudpickle distributed
-%CONDA_INSTALL% bcolz bokeh h5py ipython lz4 psutil pytables s3fs scipy
+%CONDA_INSTALL% bcolz bokeh h5py ipython lz4 psutil pytables s3fs scipy pyarrow fastparquet
 
 %PIP_INSTALL% git+https://github.com/dask/partd --upgrade
 %PIP_INSTALL% git+https://github.com/dask/cachey --upgrade
