@@ -147,14 +147,17 @@ def test_read_bytes_blocksize_none():
         assert sum(map(len, values)) == len(files)
 
 
-def test_read_bytes_blocksize_float():
+@pytest.mark.parametrize('blocksize', [5.0, '5 B'])
+def test_read_bytes_blocksize_types(blocksize):
     with filetexts(files, mode='b'):
-        sample, vals = read_bytes('.test.account*', blocksize=5.0)
+        sample, vals = read_bytes('.test.account*', blocksize=blocksize)
         results = compute(*concat(vals))
         ourlines = b"".join(results).split(b'\n')
         testlines = b"".join(files.values()).split(b'\n')
         assert set(ourlines) == set(testlines)
 
+def test_read_bytes_blocksize_float_errs():
+    with filetexts(files, mode='b'):
         with pytest.raises(TypeError):
             read_bytes('.test.account*', blocksize=5.5)
 
@@ -205,7 +208,7 @@ def test_read_bytes_block():
 
 def test_read_bytes_delimited():
     with filetexts(files, mode='b'):
-        for bs in [5, 15, 45, 1500]:
+        for bs in [5, 15, 45, '1.5 kB']:
             _, values = read_bytes('.test.accounts*',
                                    blocksize=bs, delimiter=b'\n')
             _, values2 = read_bytes('.test.accounts*',
