@@ -423,6 +423,16 @@ def test_usecols():
         assert (df.compute().values == expected.values).all()
 
 
+def test_string_blocksize():
+    with filetext(timeseries) as fn:
+        a = dd.read_csv(fn, blocksize='30B')
+        b = dd.read_csv(fn, blocksize='30')
+        assert a.npartitions == b.npartitions
+
+        c = dd.read_csv(fn, blocksize='64MiB')
+        assert c.npartitions == 1
+
+
 def test_skipinitialspace():
     text = normalize_text("""
     name, amount
