@@ -4,14 +4,14 @@ User Interfaces
 Dask supports several user interfaces:
 
 -  High-Level
-    -  :doc:`Arrays <array>`: parallel Numpy
-    -  :doc:`Bags <bag>`: parallel lists
-    -  :doc:`DataFrames <dataframe>`: parallel Pandas
-    -  `Machine Learning <https://ml.dask.org>`_ : parallel Scikit-Learn
+    -  :doc:`Arrays <array>`: Parallel NumPy
+    -  :doc:`Bags <bag>`: Parallel lists
+    -  :doc:`DataFrames <dataframe>`: Parallel Pandas
+    -  `Machine Learning <https://ml.dask.org>`_ : Parallel Scikit-Learn
     -  Others from external projects, like `XArray <https://xarray.pydata.org>`_
 -  Low-Level
-    -  :doc:`Delayed <delayed>`: parallel function evaluation
-    -  :doc:`Futures <futures>`: real-time parallel function evaluation
+    -  :doc:`Delayed <delayed>`: Parallel function evaluation
+    -  :doc:`Futures <futures>`: Real-time parallel function evaluation
 
 Each of these user interfaces employs the same underlying parallel computing
 machinery, and so has the same scaling, diagnostics, resilience, and so on, but
@@ -26,8 +26,8 @@ High-Level Collections
 ----------------------
 
 Many people who start using Dask are explicitly looking for a scalable version of
-Numpy, Pandas, or Scikit-Learn.  For these situations, the starting point within
-Dask is usually fairly clear.  If you want scalable Numpy arrays, then start with Dask
+NumPy, Pandas, or Scikit-Learn.  For these situations, the starting point within
+Dask is usually fairly clear.  If you want scalable NumPy arrays, then start with Dask
 array; if you want scalable Pandas DataFrames, then start with Dask DataFrame, and so on.
 
 These high-level interfaces copy the standard interface with slight variations.
@@ -38,7 +38,7 @@ large subset of the API from the original project.
 
    # Arrays
    import dask.array as da
-   x = da.random.uniform(low=0, high=10, size=(10000, 10000),  # normal Numpy code
+   x = da.random.uniform(low=0, high=10, size=(10000, 10000),  # normal numpy code
                          chunks=(1000, 1000))  # break into chunks of size 1000x1000
 
    y = x + x.T - x.mean(axis=0)  # Use normal syntax for high level algorithms
@@ -154,7 +154,7 @@ efficient:
    min, max = dask.compute(y.min(), y.max())
 
 Note that the ``compute()`` function returns in-memory results.  It converts
-Dask DataFrames to Pandas DataFrames, Dask arrays to Numpy arrays, and Dask
+Dask DataFrames to Pandas DataFrames, Dask arrays to NumPy arrays, and Dask
 bags to lists.  *You should only call compute on results that will fit
 comfortably in memory*.  If your result does not fit in memory, then you might
 consider writing it to disk instead.
@@ -172,7 +172,7 @@ Persist into Distributed Memory
 
 Alternatively, if you are on a cluster, then you may want to trigger a
 computation and store the results in distributed memory.  In this case you do
-not want to call ``compute``, which would create a single Pandas, Numpy, or
+not want to call ``compute``, which would create a single Pandas, NumPy, or
 list result. Instead, you want to call ``persist``, which returns a new Dask
 object that points to actively computing, or already computed results spread
 around your cluster's memory.
@@ -311,14 +311,14 @@ The approaches above should suffice to convert any interface into any other.
 We often see some anti-patterns that do not work as well:
 
 1.  Calling low-level APIs (delayed or futures) on high-level objects (like
-    Dask arrays or DataFrames). This downgrades those objects to their Numpy or
+    Dask arrays or DataFrames). This downgrades those objects to their NumPy or
     Pandas equivalents, which may not be desired.
     Often people are looking for APIs like ``dask.array.map_blocks`` or
-    ``dask.dataframe.map_partitions`` instead
+    ``dask.dataframe.map_partitions`` instead.
 2.  Calling ``compute()`` on Future objects.
-    Often people want the ``.result()`` method instead
-3.  Calling Numpy/Pandas functions on high-level Dask objects or
-    high-level Dask functions on Numpy/Pandas objects
+    Often people want the ``.result()`` method instead.
+3.  Calling NumPy/Pandas functions on high-level Dask objects or
+    high-level Dask functions on NumPy/Pandas objects
 
 Conclusion
 ----------
@@ -332,11 +332,11 @@ For more information, see the documentation for the particular user interfaces
 below:
 
 -  High Level
-    -  :doc:`Arrays <array>`: parallel Numpy
-    -  :doc:`Bags <bag>`: parallel lists
-    -  :doc:`DataFrames <dataframe>`: parallel Pandas
-    -  `Machine Learning <https://ml.dask.org>`_ : parallel Scikit-Learn
+    -  :doc:`Arrays <array>`: Parallel NumPy
+    -  :doc:`Bags <bag>`: Parallel lists
+    -  :doc:`DataFrames <dataframe>`: Parallel Pandas
+    -  `Machine Learning <https://ml.dask.org>`_ : Parallel Scikit-Learn
     -  Others from external projects, like `XArray <https://xarray.pydata.org>`_
 -  Low Level
-    -  :doc:`Delayed <delayed>`: parallel function evaluation
-    -  :doc:`Futures <futures>`: real-time parallel function evaluation
+    -  :doc:`Delayed <delayed>`: Parallel function evaluation
+    -  :doc:`Futures <futures>`: Real-time parallel function evaluation
