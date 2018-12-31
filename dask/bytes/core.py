@@ -16,10 +16,10 @@ from .. import config
 from ..compatibility import unicode
 from ..base import tokenize
 from ..delayed import delayed
-from ..utils import import_required, is_integer
+from ..utils import import_required, is_integer, parse_bytes
 
 
-def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
+def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize="128 MiB",
                sample=True, compression=None, include_path=False, **kwargs):
     """Given a path or paths, return delayed objects that read from those paths.
 
@@ -44,8 +44,8 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         bytes.
     not_zero : bool
         Force seek of start-of-file delimiter, discarding header.
-    blocksize : int (=128MB)
-        Chunk size in bytes
+    blocksize : int, str
+        Chunk size in bytes, defaults to "128 MiB"
     compression : string or None
         String like 'gzip' or 'xz'.  Must support efficient random access.
     sample : bool or int
@@ -83,6 +83,8 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         raise IOError("%s resolved to no files" % urlpath)
 
     if blocksize is not None:
+        if isinstance(blocksize, (str, unicode)):
+            blocksize = parse_bytes(blocksize)
         if not is_integer(blocksize):
             raise TypeError("blocksize must be an integer")
         blocksize = int(blocksize)
