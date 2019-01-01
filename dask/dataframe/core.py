@@ -244,6 +244,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         Values along which we partition our blocks on the index
     """
     def __init__(self, dsk, name, meta, divisions):
+        if len(divisions) < 2:  # no partitions
+            dsk = {(name, 0): meta}
+            divisions = [None, None]
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
