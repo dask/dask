@@ -827,8 +827,32 @@ def test_partition_on_string(tmpdir, partition_on):
         assert set(df.bb[df.aa == val]) == set(out.bb[out.aa == val])
 
 
-def test_filters(tmpdir):
-    check_fastparquet()
+def test_filters(tmp_path):
+    df = pd.DataFrame({'x': range(10), 'y': list('aabbccddee')})
+    ddf = dd.from_pandas(df, npartitions=5)
+    assert ddf.npartitions == 5
+
+    ddf.to_parquet(tmp_path, engine='pyarrow')
+
+    a = dd.read_parquet(tmp_path, engine='pyarrow',
+                        filters=[('x', '>', 4)])
+    assert a.npartitions == 3
+    assert (a.x > 3).all().compute()
+
+    b = dd.read_parquet(tmp_path, engine='pyarrow',
+                        filters=[('y', '==', b'c')])
+    assert b.npartitions == 1
+    assert (b.y == 'c').all().compute()
+
+    c = dd.read_parquet(tmp_path, engine='pyarrow',
+                        filters=[('y', '==', b'c'),
+                                 ('x', '>', 6)])
+    assert c.npartitions <= 1
+    assert not len(c)
+    assert_eq(c, c)
+
+
+def old_test_filters(tmpdir):
     fn = str(tmpdir)
 
     df = pd.DataFrame({'at': ['ab', 'aa', 'ba', 'da', 'bb']})

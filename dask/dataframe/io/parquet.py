@@ -10,6 +10,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
+import toolz
 
 from ..core import DataFrame, new_dd_object
 from ..utils import (clear_known_categories, strip_unknown_categories,
@@ -628,7 +629,7 @@ def _write_metadata(writes, filenames, fmd, path, fs, sep):
 # ----------------------------------------------------------------------
 # PyArrow interface
 
-def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
+def _read_pyarrow(fs, fs_token, paths, columns=None,
                   categories=None, index=None, gather_statistics=None):
     from ...bytes.core import get_pyarrow_filesystem
     import pyarrow.parquet as pq
@@ -638,9 +639,6 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     # PyArrow >= 0.8.
     # We would like to resolve these to the correct dataframe names
     # as soon as possible.
-
-    if filters is not None:
-        raise NotImplementedError("Predicate pushdown not implemented")
 
     dataset = pq.ParquetDataset(paths, filesystem=get_pyarrow_filesystem(fs))
     if dataset.partitions is not None:
@@ -867,7 +865,7 @@ def get_engine(engine):
 
 
 def read_parquet(path, columns=None, filters=None, categories=None, index=None,
-                 storage_options=None, engine='auto', gather_statistics=None):
+                 storage_options=None, engine='auto', gather_statistics=True):
     """
     Read ParquetFile into a Dask DataFrame
 
@@ -943,7 +941,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
-    func, meta, statistics, parts = read(fs, fs_token, paths, columns=columns, filters=filters,
+    func, meta, statistics, parts = read(fs, fs_token, paths, columns=columns,
                                          categories=categories, index=index,
                                          gather_statistics=gather_statistics)
 
@@ -952,7 +950,8 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                                  for part, stats in zip(parts, statistics)
                                  if stats['num-rows'] > 0])
 
-        # TODO: apply filters
+        if filters:
+            parts, statistics = apply_filters(parts, statistics, filters)
 
         out = sorted_columns(statistics)
 
@@ -1084,6 +1083,9 @@ def sorted_columns(statistics):
     -------
     out: List of {'name': str, 'divisions': List[str]} dictionaries
     """
+    if not statistics:
+        return []
+
     out = []
     for i, c in enumerate(statistics[0]['columns']):
         if not all('min' in s['columns'][i] and 'max' in s['columns'][i] for s in statistics):
@@ -1106,6 +1108,48 @@ def sorted_columns(statistics):
             out.append({'name': c['name'], 'divisions': divisions})
 
     return out
+
+
+def apply_filters(parts, statistics, filters):
+    """ Apply filters onto parts/statistics pairs
+
+    Parameters
+    ----------
+    parts: list
+        Tokens corresponding to row groups to read in the future
+    statistics: List[dict]
+        List of statistics for each part, including min and max values
+    filters: List[Tuple[str, str, Any]]
+        List like [('x', '>', 5), ('y', '==', 'Alice')]
+
+    Returns
+    -------
+    parts, statistics: the same as the input, but possibly a subset
+    """
+    for column, operator, value in filters:
+        out_parts = []
+        out_statistics = []
+        for part, stats in zip(parts, statistics):
+            try:
+                c = toolz.groupby('name', stats['columns'])[column][0]
+                min = c['min']
+                max = c['max']
+            except KeyError:
+                out_parts.append(part)
+                out_statistics.append(stats)
+
+            if (operator == '==' and min <= value <= max or
+                operator == '<' and min < value or
+                operator == '<=' and min <= value or
+                operator == '>' and max > value or
+                operator == '>=' and max >= value
+            ):
+                out_parts.append(part)
+                out_statistics.append(stats)
+
+        parts, statistics = out_parts, out_statistics
+
+    return parts, statistics
 
 
 if PY3:
