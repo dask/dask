@@ -802,11 +802,6 @@ def test_to_parquet_default_writes_nulls(tmpdir):
     assert table[1].null_count == 2
 
 
-@write_read_engines(
-    xfail_pyarrow_fastparquet=pyarrow_fastparquet_msg,
-    xfail_pyarrow_pyarrow=("Race condition writing using pyarrow with partition_on. "
-                           "Fixed on master, but not on pyarrow 0.8.0")
-)
 def test_partition_on(tmpdir, write_engine, read_engine):
     tmpdir = str(tmpdir)
     df = pd.DataFrame({'a': np.random.choice(['A', 'B', 'C'], size=100),
@@ -817,6 +812,19 @@ def test_partition_on(tmpdir, write_engine, read_engine):
     out = dd.read_parquet(tmpdir, engine=read_engine).compute()
     for val in df.a.unique():
         assert set(df.b[df.a == val]) == set(out.b[out.a == val])
+
+
+@pytest.mark.parametrize('partition_on', ['aa', ['aa']])
+def test_partition_on_string(tmpdir, partition_on):
+    tmpdir = str(tmpdir)
+    df = pd.DataFrame({'aa': np.random.choice(['A', 'B', 'C'], size=100),
+                       'bb': np.random.random(size=100),
+                       'cc': np.random.randint(1, 5, size=100)})
+    d = dd.from_pandas(df, npartitions=2)
+    d.to_parquet(tmpdir, partition_on=partition_on, engine='pyarrow')
+    out = dd.read_parquet(tmpdir, engine='pyarrow').compute()
+    for val in df.aa.unique():
+        assert set(df.bb[df.aa == val]) == set(out.bb[out.aa == val])
 
 
 def test_filters(tmpdir):

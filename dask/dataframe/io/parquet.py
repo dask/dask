@@ -781,8 +781,10 @@ def _write_pyarrow(df, fs, fs_token, path, append=False,
     template = fs.sep.join([path, 'part.%i.parquet'])
 
     write = delayed(_write_partition_pyarrow, pure=False)
+
     first_kwargs = kwargs.copy()
     first_kwargs['metadata_path'] = fs.sep.join([path, '_common_metadata'])
+
     writes = [write(part, path, fs, template % i, partition_on,
                     **(kwargs if i else first_kwargs))
               for i, part in enumerate(df.to_delayed())]
@@ -1041,6 +1043,8 @@ def to_parquet(df, path, engine='auto', compression='default', write_index=True,
     read_parquet: Read parquet data to dask.dataframe
     """
     partition_on = partition_on or []
+    if isinstance(partition_on, string_types):
+        partition_on = [partition_on]
 
     if set(partition_on) - set(df.columns):
         raise ValueError('Partitioning on non-existent column')
