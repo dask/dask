@@ -1379,3 +1379,40 @@ def test_passing_parquetfile(tmpdir):
 
     # should pass, because no need to re-read metadata
     dd.read_parquet(pf)
+
+
+@pytest.mark.parametrize('df', [
+    pd.DataFrame({'x': [4, 5, 6, 1, 2, 3]}),
+    pd.DataFrame({'x': ['c', 'a', 'b']}),
+    pd.DataFrame({'x': ['cc', 'a', 'bbb']}),
+    pd.DataFrame({'x': [b'a', b'b', b'c']}),
+    pytest.param(pd.DataFrame({'x': pd.Categorical(['a', 'b', 'a'])}),
+        marks=pytest.mark.xfail(reason="https://issues.apache.org/jira/browse/ARROW-3652")),
+    pytest.param(pd.DataFrame({'x': pd.Categorical([1, 2, 1])}),
+        marks=pytest.mark.xfail(reason="https://issues.apache.org/jira/browse/ARROW-3652")),
+    pd.DataFrame({'x': list(map(pd.Timestamp, [3000000, 2000000, 1000000]))}), # ms
+    pytest.param(pd.DataFrame({'x': list(map(pd.Timestamp, [3000, 2000, 1000]))}),  # us
+        marks=pytest.mark.xfail(reason="Need to use allow_truncated_timestampe keyword")),
+    pd.DataFrame({'x': [3000, 2000, 1000]}).astype('M8[ns]'),
+    pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'),
+    pd.DataFrame({'x': [3, 2, 1]}).astype('M8[us]'),
+    pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ms]'),
+    pd.DataFrame({'x': [3, 2, 1]}).astype('uint16'),
+    pd.DataFrame({'x': [3, 2, 1]}).astype('float32'),
+    pd.DataFrame({'x': [3, 1, 2]}, index=[3, 2, 1]),
+    pd.DataFrame({'x': [4, 5, 6, 1, 2, 3]}, index=pd.Index([1, 2, 3, 4, 5, 6], name='foo')),
+    pd.DataFrame({'x': [1, 2, 3], 'y': [3, 2, 1]}),
+    pd.DataFrame({'x': [1, 2, 3], 'y': [3, 2, 1]}, columns=['y', 'x']),
+    pd.DataFrame({'0': [3, 2, 1]}),
+    pd.DataFrame({'x': [3, 2, None]}),
+    pd.DataFrame({'-': [3., 2., None]}),
+    pd.DataFrame({'.': [3., 2., None]}),
+    pd.DataFrame({' ': [3., 2., None]}),
+])
+def test_roundtrip_arrow(tmp_path, df):
+    if not df.index.name:
+        df.index.name = 'index'
+    ddf = dd.from_pandas(df, npartitions=2)
+    dd.to_parquet(ddf, tmp_path, engine='pyarrow', write_index=True)
+    ddf2 = dd.read_parquet(tmp_path, engine='pyarrow', gather_statistics=True)
+    assert_eq(ddf, ddf2)

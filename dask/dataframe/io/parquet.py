@@ -713,8 +713,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
             meta,
             stats,
             [{'piece': piece,
-              'kwargs': {'index_cols': index_names,
-                         'partitions': dataset.partitions,
+              'kwargs': {'partitions': dataset.partitions,
                          'categories': categories}}
               for piece in pieces])
 
@@ -745,138 +744,17 @@ def _to_ns(val, unit):
     return val * factor
 
 
-def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions):
-    """
-    Compute DataFrame divisions from a list of pyarrow dataset pieces
-
-    Parameters
-    ----------
-    pa_pieces : list[pyarrow.parquet.ParquetDatasetPiece]
-        List of dataset pieces. Each piece corresponds to a single partition in the eventual dask DataFrame
-    divisions_name : str|None
-        The name of the column to compute divisions for
-    pa_schema : pyarrow.lib.Schema
-        The pyarrow schema for the dataset
-    infer_divisions : bool or None
-        If True divisions must be inferred (otherwise an exception is raised). If False or None divisions are not
-        inferred
-    Returns
-    -------
-    list
-    """
-    # Local imports
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-
-    if infer_divisions is True and pa.__version__ < LooseVersion('0.9.0'):
-        raise NotImplementedError('infer_divisions=True requires pyarrow >=0.9.0')
-
-    # Check whether divisions_name is in the schema
-    # Note: get_field_index returns -1 if not found, but it does not accept None
-    if infer_divisions is True:
-        divisions_name_in_schema = divisions_name is not None and pa_schema.get_field_index(divisions_name) >= 0
-
-        if divisions_name_in_schema is False and infer_divisions is True:
-            raise ValueError(
-                'Unable to infer divisions for because no index column was discovered')
-    else:
-        divisions_name_in_schema = None
-
-    if pa_pieces and divisions_name_in_schema:
-        # We have pieces and a valid division column.
-        # Compute min/max for column in each row group
-        min_maxs = []
-        last_max = None
-
-        # Initialize index of divisions column within the row groups.
-        # To be computed during while processing the first piece below
-        for piece in pa_pieces:
-            pf = piece.get_metadata(pq.ParquetFile)
-            rg = pf.row_group(0)
-
-            # Compute division column index
-            rg_paths = [rg.column(i).path_in_schema for i in range(rg.num_columns)]
-            try:
-                divisions_col_index = rg_paths.index(divisions_name)
-            except ValueError:
-                # Divisions not valid
-                min_maxs = None
-                break
-
-            col_meta = rg.column(divisions_col_index)
-            stats = col_meta.statistics
-            if stats.has_min_max and (last_max is None or last_max < stats.min):
-                min_maxs.append((stats.min, stats.max))
-                last_max = stats.max
-            else:
-                # Divisions not valid
-                min_maxs = None
-                break
-
-        if min_maxs:
-            # We have min/max pairs
-            divisions = [mn for mn, mx in min_maxs] + [min_maxs[-1][1]]
-
-            # Handle conversion to pandas timestamp divisions
-            index_field = pa_schema.field_by_name(divisions_name)
-            if pa.types.is_timestamp(index_field.type):
-                time_unit = index_field.type.unit
-                divisions_ns = [_to_ns(d, time_unit) for d in
-                                divisions]
-                divisions = [pd.Timestamp(ns) for ns in divisions_ns]
-
-            # Handle encoding of bytes string
-            if index_field.type == pa.string():
-                # Parquet strings are always encoded as utf-8
-                encoding = 'utf-8'
-                divisions = [d.decode(encoding).strip() for d in divisions]
-
-        else:
-            if infer_divisions is True:
-                raise ValueError(
-                    ("Unable to infer divisions for index of '{index_name}' because it is not known to be "
-                     "sorted across partitions").format(index_name=divisions_name_in_schema))
-
-            divisions = (None,) * (len(pa_pieces) + 1)
-    elif pa_pieces:
-        divisions = (None,) * (len(pa_pieces) + 1)
-    else:
-        divisions = (None, None)
-    return divisions
-
-
-def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols,
+def _read_pyarrow_parquet_piece(fs, piece, columns,
                                 partitions, categories):
     import pyarrow as pa
 
     with fs.open(piece.path, mode='rb') as f:
-        table = piece.read(columns=index_cols + columns,
+        table = piece.read(columns=columns,
                            partitions=partitions,
                            use_pandas_metadata=True,
                            file=f)
 
-    if pa.__version__ < LooseVersion('0.9.0'):
-        df = table.to_pandas()
-        for cat in categories:
-            df[cat] = df[cat].astype('category')
-    else:
-        df = table.to_pandas(categories=categories)
-    has_index = not isinstance(df.index, pd.RangeIndex)
-
-    if not has_index and index_cols:
-        # Index should be set, but it isn't
-        df = df.set_index(index_cols)
-    elif has_index and df.index.names != index_cols:
-        # Index is set, but isn't correct
-        # This can happen when reading in not every column in a multi-index
-        df = df.reset_index(drop=False)
-        if index_cols:
-            df = df.set_index(index_cols)
-        drop = list(set(df.columns).difference(columns))
-        if drop:
-            df = df.drop(drop, axis=1)
-        # Ensure proper ordering
-        df = df.reindex(columns=columns, copy=False)
+    df = table.to_pandas(categories=categories)
 
     return df[columns]
 
@@ -889,7 +767,7 @@ _pyarrow_write_metadata_kwargs = {'version', 'use_deprecated_int96_timestamps',
                                   'coerce_timestamps'}
 
 
-def _write_pyarrow(df, fs, fs_token, path, write_index=None, append=False,
+def _write_pyarrow(df, fs, fs_token, path, append=False,
                    ignore_divisions=False, partition_on=None, **kwargs):
     if append:
         raise NotImplementedError("`append` not implemented for "
@@ -905,9 +783,6 @@ def _write_pyarrow(df, fs, fs_token, path, write_index=None, append=False,
                "%r" % list(set(kwargs).difference(_pyarrow_write_table_kwargs)))
         raise TypeError(msg)
 
-    if write_index is None and df.known_divisions:
-        write_index = True
-
     fs.mkdirs(path)
 
     template = fs.sep.join([path, 'part.%i.parquet'])
@@ -915,21 +790,21 @@ def _write_pyarrow(df, fs, fs_token, path, write_index=None, append=False,
     write = delayed(_write_partition_pyarrow, pure=False)
     first_kwargs = kwargs.copy()
     first_kwargs['metadata_path'] = fs.sep.join([path, '_common_metadata'])
-    writes = [write(part, path, fs, template % i, write_index, partition_on,
+    writes = [write(part, path, fs, template % i, partition_on,
                     **(kwargs if i else first_kwargs))
               for i, part in enumerate(df.to_delayed())]
     return delayed(writes)
 
 
-def _write_partition_pyarrow(df, path, fs, filename, write_index,
+def _write_partition_pyarrow(df, path, fs, filename,
                              partition_on, metadata_path=None, **kwargs):
     import pyarrow as pa
     from pyarrow import parquet
-    t = pa.Table.from_pandas(df, preserve_index=write_index)
+    t = pa.Table.from_pandas(df, preserve_index=False)
 
     if partition_on:
         parquet.write_to_dataset(t, path, partition_cols=partition_on,
-                                 preserve_index=write_index,
+                                 preserve_index=False,
                                  filesystem=fs, **kwargs)
     else:
         with fs.open(filename, 'wb') as fil:
@@ -997,7 +872,7 @@ def get_engine(engine):
 
 
 def read_parquet(path, columns=None, filters=None, categories=None, index=None,
-                 storage_options=None, engine='auto', infer_divisions=None):
+                 storage_options=None, engine='auto', gather_statistics=None):
     """
     Read ParquetFile into a Dask DataFrame
 
@@ -1058,12 +933,12 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     """
     if isinstance(columns, str):
         df = read_parquet(path, [columns], filters, categories, index,
-                          storage_options, engine, infer_divisions)
+                          storage_options, engine, gather_statistics)
         return df[columns]
 
     name = 'read-parquet-' + tokenize(path, columns, filters, categories,
                                       index, storage_options, engine,
-                                      infer_divisions)
+                                      gather_statistics)
 
     read = get_engine(engine)['read']
     fs, fs_token, paths = get_fs_token_paths(
@@ -1075,7 +950,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
     func, meta, statistics, parts = read(fs, fs_token, paths, columns=columns, filters=filters,
                                          categories=categories, index=index,
-                                         gather_statistics=infer_divisions)
+                                         gather_statistics=gather_statistics)
 
     if statistics:
         parts, statistics = zip(*[(part, stats)
@@ -1090,8 +965,13 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
             divisions = out[0]['divisions']
             index = out[0]['name']
         elif len(out) > 1:
-            warnings.warn("Multiple sorted columns found: " + ", ".join(o['name'] for o in out))
-            divisions = [None] * (len(parts) + 1)
+            if any(o['name'] == 'index' for o in out):
+                [o] = [o for o in out if o['name'] == 'index']
+                divisions = o['divisions']
+                index = o['name']
+            else:
+                warnings.warn("Multiple sorted columns found: " + ", ".join(o['name'] for o in out))
+                divisions = [None] * (len(parts) + 1)
         else:
             divisions = [None] * (len(parts) + 1)
     else:
@@ -1100,6 +980,8 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     subgraph = {(name, i): (read_parquet_part, func, fs, meta, part['piece'],
                             list(meta.columns), index, part['kwargs'])
                 for i, part in enumerate(parts)}
+    if index:
+        meta = meta.set_index(index)
 
     return new_dd_object(subgraph, name, meta, divisions)
 
@@ -1114,7 +996,7 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
     return df
 
 
-def to_parquet(df, path, engine='auto', compression='default', write_index=None,
+def to_parquet(df, path, engine='auto', compression='default', write_index=True,
                append=False, ignore_divisions=False, partition_on=None,
                storage_options=None, compute=True, **kwargs):
     """Store Dask.dataframe to Parquet files
@@ -1185,7 +1067,10 @@ def to_parquet(df, path, engine='auto', compression='default', write_index=None,
     # Trim any protocol information from the path before forwarding
     path = infer_storage_options(path)['path']
 
-    out = write(df, fs, fs_token, path, write_index=write_index, append=append,
+    if write_index:
+        df = df.reset_index()
+
+    out = write(df, fs, fs_token, path, append=append,
                 ignore_divisions=ignore_divisions, partition_on=partition_on,
                 **kwargs)
 
