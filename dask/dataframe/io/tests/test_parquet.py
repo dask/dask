@@ -491,7 +491,6 @@ def test_categorical(tmpdir, write_engine, read_engine):
 
 def test_append(tmpdir, engine):
     """Test that appended parquet equal to the original one."""
-    check_fastparquet()
     tmp = str(tmpdir)
     df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                        'i64': np.arange(1000, dtype=np.int64),
@@ -503,8 +502,8 @@ def test_append(tmpdir, engine):
     half = len(df) // 2
     ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
     ddf2 = dd.from_pandas(df.iloc[half:], chunksize=100)
-    ddf1.to_parquet(tmp)
-    ddf2.to_parquet(tmp, append=True)
+    ddf1.to_parquet(tmp, engine=engine)
+    ddf2.to_parquet(tmp, append=True, engine=engine)
 
     ddf3 = dd.read_parquet(tmp, engine=engine)
     assert_eq(df, ddf3)

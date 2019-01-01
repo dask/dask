@@ -761,12 +761,15 @@ _pyarrow_write_metadata_kwargs = {'version', 'use_deprecated_int96_timestamps',
                                   'coerce_timestamps'}
 
 
-def _write_pyarrow(df, fs, fs_token, path, append=False,
-                   partition_on=None, **kwargs):
+def _write_pyarrow(df, fs, fs_token, path, append=False, partition_on=None, **kwargs):
     import pyarrow.parquet as pq
+    from ...bytes.core import get_pyarrow_filesystem
     if append:
-        raise NotImplementedError("`append` not implemented for "
-                                  "`engine='pyarrow'`")
+        dataset = pq.ParquetDataset(path, filesystem=get_pyarrow_filesystem(fs))
+        start = len(dataset.pieces)
+        # TODO: check for hive directory structure
+    else:
+        start = 0
 
     # We can check only write_table kwargs, as it is a superset of kwargs for write functions
     if not set(kwargs).issubset(getargspec(pq.write_table).args):
@@ -783,7 +786,7 @@ def _write_pyarrow(df, fs, fs_token, path, append=False,
     first_kwargs = kwargs.copy()
     first_kwargs['metadata_path'] = fs.sep.join([path, '_common_metadata'])
 
-    writes = [write(part, path, fs, template % i, partition_on,
+    writes = [write(part, path, fs, template % (i + start), partition_on,
                     **(kwargs if i else first_kwargs))
               for i, part in enumerate(df.to_delayed())]
     return delayed(writes)
