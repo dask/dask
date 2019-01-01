@@ -828,6 +828,8 @@ def test_partition_on_string(tmpdir, partition_on):
 
 
 def test_filters(tmp_path):
+    # TODO: replace b'c' below with 'c'
+    # https://issues.apache.org/jira/browse/ARROW-4139
     df = pd.DataFrame({'x': range(10), 'y': list('aabbccddee')})
     ddf = dd.from_pandas(df, npartitions=5)
     assert ddf.npartitions == 5
