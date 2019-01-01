@@ -18,6 +18,11 @@ from ..base import tokenize
 from ..delayed import delayed
 from ..utils import import_required, is_integer
 
+try:
+    import pathlib
+except ImportError:  # Python 2.7
+    pathlib = False
+
 
 def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
                sample=True, compression=None, include_path=False, **kwargs):
@@ -345,7 +350,9 @@ def get_fs_token_paths(urlpath, mode='rb', num=1, name_function=None,
         fs, fs_token = get_fs(protocol, options)
         paths = expand_paths_if_needed(paths, mode, num, fs, name_function)
 
-    elif isinstance(urlpath, (str, unicode)) or hasattr(urlpath, 'name'):
+    elif (isinstance(urlpath, (str, unicode)) or
+            hasattr(urlpath, 'name') or
+            pathlib and isinstance(urlpath, pathlib.Path)):
         urlpath, protocol, options = infer_options(urlpath)
         update_storage_options(options, storage_options)
 
