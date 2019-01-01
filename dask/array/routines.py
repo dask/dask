@@ -253,7 +253,7 @@ def vdot(a, b):
     return dot(a.conj().ravel(), b.ravel())
 
 
-@safe_wraps(getattr(np, 'matmul'))
+@safe_wraps(np.matmul)
 def matmul(a, b):
     a = asanyarray(a)
     b = asanyarray(b)
