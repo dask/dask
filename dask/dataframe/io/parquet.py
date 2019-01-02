@@ -984,6 +984,12 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
     else:
         divisions = [None] * (len(parts) + 1)
 
+
+    if index and index not in columns:
+        columns = list(columns) + [index]
+
+    meta = meta[columns]
+
     subgraph = {(name, i): (read_parquet_part, func, fs, meta, part['piece'],
                             columns, index, part['kwargs'])
                 for i, part in enumerate(parts)}
@@ -995,8 +1001,6 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
 def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
     """ Read a part of a parquet dataset """
-    if index and index not in columns:
-        columns = tuple(columns) + (index,)
     df = func(fs, part, columns, **kwargs)
     if not len(df):
         df = meta
