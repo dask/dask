@@ -464,10 +464,8 @@ def test_append(tmpdir, engine):
     assert_eq(df, ddf3)
 
 
-def test_append_create(tmpdir):
+def test_append_create(tmp_path, engine):
     """Test that appended parquet equal to the original one."""
-    check_fastparquet()
-    tmp = str(tmpdir)
     df = pd.DataFrame({'i32': np.arange(1000, dtype=np.int32),
                        'i64': np.arange(1000, dtype=np.int64),
                        'f': np.arange(1000, dtype=np.float64),
@@ -478,10 +476,10 @@ def test_append_create(tmpdir):
     half = len(df) // 2
     ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
     ddf2 = dd.from_pandas(df.iloc[half:], chunksize=100)
-    ddf1.to_parquet(tmp, append=True)
-    ddf2.to_parquet(tmp, append=True)
+    ddf1.to_parquet(tmp_path, append=True, engine=engine)
+    ddf2.to_parquet(tmp_path, append=True, engine=engine)
 
-    ddf3 = dd.read_parquet(tmp, engine='fastparquet')
+    ddf3 = dd.read_parquet(tmp_path, engine=engine)
     assert_eq(df, ddf3)
 
 
@@ -632,10 +630,8 @@ def test_read_parquet_custom_columns(tmpdir, engine):
 
     df2 = dd.read_parquet(tmp,
                           columns=['i32', 'f'],
-                          engine=engine,
-                          infer_divisions=should_check_divs(engine))
-    assert_eq(df[['i32', 'f']], df2,
-              check_index=False, check_divisions=should_check_divs(engine))
+                          engine=engine)
+    assert_eq(df[['i32', 'f']], df2, check_index=False)
 
     import glob
     fns = glob.glob(os.path.join(tmp, '*.parquet'))
@@ -643,15 +639,12 @@ def test_read_parquet_custom_columns(tmpdir, engine):
                           columns=['i32'],
                           engine=engine).compute()
     df2.sort_values('i32', inplace=True)
-    assert_eq(df[['i32']], df2,
-              check_index=False, check_divisions=False)
+    assert_eq(df[['i32']], df2, check_index=False, check_divisions=False)
 
     df3 = dd.read_parquet(tmp,
                           columns=['f', 'i32'],
-                          engine=engine,
-                          infer_divisions=should_check_divs(engine))
-    assert_eq(df[['f', 'i32']], df3,
-              check_index=False, check_divisions=should_check_divs(engine))
+                          engine=engine)
+    assert_eq(df[['f', 'i32']], df3, check_index=False)
 
 
 @pytest.mark.parametrize('df,write_kwargs,read_kwargs', [
@@ -684,7 +677,6 @@ def test_read_parquet_custom_columns(tmpdir, engine):
     (pd.DataFrame({' ': [3., 2., None]}), {}, {}),
 ])
 def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs):
-    check_fastparquet()
     tmp = str(tmpdir)
     if df.index.name is None:
         df.index.name = 'index'
@@ -695,15 +687,14 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs):
     assert_eq(ddf, ddf2)
 
 
-def test_categories(tmpdir):
-    check_fastparquet()
+def test_categories(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
                        'y': list('caaab')})
     ddf = dd.from_pandas(df, npartitions=2)
     ddf['y'] = ddf.y.astype('category')
-    ddf.to_parquet(fn)
-    ddf2 = dd.read_parquet(fn, categories=['y'])
+    ddf.to_parquet(fn, engine=engine)
+    ddf2 = dd.read_parquet(fn, categories=['y'], engine=engine)
     with pytest.raises(NotImplementedError):
         ddf2.y.cat.categories
     assert set(ddf2.y.compute().cat.categories) == {'a', 'b', 'c'}
@@ -712,11 +703,11 @@ def test_categories(tmpdir):
     assert_eq(ddf.y, ddf2.y, check_names=False)
     with pytest.raises(TypeError):
         # attempt to load as category that which is not so encoded
-        ddf2 = dd.read_parquet(fn, categories=['x']).compute()
+        ddf2 = dd.read_parquet(fn, categories=['x'], engine=engine).compute()
 
     with pytest.raises(ValueError):
         # attempt to load as category unknown column
-        ddf2 = dd.read_parquet(fn, categories=['foo'])
+        ddf2 = dd.read_parquet(fn, categories=['foo'], engine=engine)
 
 
 def test_empty_partition(tmpdir, engine):

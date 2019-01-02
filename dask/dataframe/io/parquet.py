@@ -765,8 +765,12 @@ def _write_pyarrow(df, fs, fs_token, path, append=False, partition_on=None, **kw
     import pyarrow.parquet as pq
     from ...bytes.core import get_pyarrow_filesystem
     if append:
-        dataset = pq.ParquetDataset(path, filesystem=get_pyarrow_filesystem(fs))
-        start = len(dataset.pieces)
+        try:
+            dataset = pq.ParquetDataset(path, filesystem=get_pyarrow_filesystem(fs))
+        except Exception:
+            start = 0
+        else:
+            start = len(dataset.pieces)
         # TODO: check for hive directory structure
     else:
         start = 0
@@ -931,6 +935,8 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         df = read_parquet(path, [columns], filters, categories, index,
                           storage_options, engine, gather_statistics)
         return df[columns]
+    if columns is not None:
+        columns = list(columns)
 
     name = 'read-parquet-' + tokenize(path, columns, filters, categories,
                                       index, storage_options, engine,
