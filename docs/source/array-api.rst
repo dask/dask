@@ -357,7 +357,6 @@ Internal functions
 .. autosummary::
    atop
    normalize_chunks
-   top
 
 
 Other functions
@@ -694,7 +693,6 @@ Other functions
 .. autofunction:: map_blocks
 .. autofunction:: atop
 .. autofunction:: normalize_chunks
-.. autofunction:: top
 
 .. currentmodule:: dask.array
 

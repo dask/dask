@@ -18,13 +18,10 @@ import uuid
 import warnings
 
 try:
-    from cytoolz import (partition, concat, join, first,
-                         groupby, valmap, accumulate)
+    from cytoolz import (partition, concat, first, groupby, accumulate)
     from cytoolz.curried import pluck
-
 except ImportError:
-    from toolz import (partition, concat, join, first,
-                       groupby, valmap, accumulate)
+    from toolz import (partition, concat, first, groupby, accumulate)
     from toolz.curried import pluck
 from toolz import map, reduce, frequencies
 import numpy as np
@@ -33,11 +30,12 @@ from . import chunk
 from .. import config
 from ..base import (DaskMethodsMixin, tokenize, dont_optimize,
                     compute_as_if_collection, persist, is_dask_collection)
+from ..blockwise import broadcast_dimensions, subs
 from ..context import globalmethod
-from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
+from ..utils import (ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, Dispatch, factors,
-                     parse_bytes, has_keyword, M)
+                     parse_bytes, has_keyword, M, ndimlist)
 from ..compatibility import (unicode, zip_longest,
                              Iterable, Iterator, Mapping)
 from ..core import quote
@@ -48,7 +46,7 @@ from ..highlevelgraph import HighLevelGraph
 from ..bytes.core import get_mapper, get_fs_token_paths
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
-from .top import atop, subs
+from .top import atop
 
 
 config.update_defaults({'array': {
@@ -221,83 +219,6 @@ def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
     if rightfunc:
         B = map(rightfunc, B)
     return sum(map(partial(np.dot, **kwargs), A, B))
-
-
-def zero_broadcast_dimensions(lol, nblocks):
-    """
-
-    >>> lol = [('x', 1, 0), ('x', 1, 1), ('x', 1, 2)]
-    >>> nblocks = (4, 1, 2)  # note singleton dimension in second place
-    >>> lol = [[('x', 1, 0, 0), ('x', 1, 0, 1)],
-    ...        [('x', 1, 1, 0), ('x', 1, 1, 1)],
-    ...        [('x', 1, 2, 0), ('x', 1, 2, 1)]]
-
-    >>> zero_broadcast_dimensions(lol, nblocks)  # doctest: +NORMALIZE_WHITESPACE
-    [[('x', 1, 0, 0), ('x', 1, 0, 1)],
-     [('x', 1, 0, 0), ('x', 1, 0, 1)],
-     [('x', 1, 0, 0), ('x', 1, 0, 1)]]
-
-    See Also
-    --------
-    lol_tuples
-    """
-    f = lambda t: (t[0],) + tuple(0 if d == 1 else i for i, d in zip(t[1:], nblocks))
-    return homogeneous_deepmap(f, lol)
-
-
-def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)),
-                         consolidate=None):
-    """ Find block dimensions from arguments
-
-    Parameters
-    ----------
-    argpairs: iterable
-        name, ijk index pairs
-    numblocks: dict
-        maps {name: number of blocks}
-    sentinels: iterable (optional)
-        values for singleton dimensions
-    consolidate: func (optional)
-        use this to reduce each set of common blocks into a smaller set
-
-    Examples
-    --------
-    >>> argpairs = [('x', 'ij'), ('y', 'ji')]
-    >>> numblocks = {'x': (2, 3), 'y': (3, 2)}
-    >>> broadcast_dimensions(argpairs, numblocks)
-    {'i': 2, 'j': 3}
-
-    Supports numpy broadcasting rules
-
-    >>> argpairs = [('x', 'ij'), ('y', 'ij')]
-    >>> numblocks = {'x': (2, 1), 'y': (1, 3)}
-    >>> broadcast_dimensions(argpairs, numblocks)
-    {'i': 2, 'j': 3}
-
-    Works in other contexts too
-
-    >>> argpairs = [('x', 'ij'), ('y', 'ij')]
-    >>> d = {'x': ('Hello', 1), 'y': (1, (2, 3))}
-    >>> broadcast_dimensions(argpairs, d)
-    {'i': 'Hello', 'j': (2, 3)}
-    """
-    # List like [('i', 2), ('j', 1), ('i', 1), ('j', 2)]
-    argpairs2 = [(a, ind) for a, ind in argpairs if ind is not None]
-    L = concat([zip(inds, dims) for (x, inds), (x, dims)
-                in join(first, argpairs2, first, numblocks.items())])
-
-    g = groupby(0, L)
-    g = dict((k, set([d for i, d in v])) for k, v in g.items())
-
-    g2 = dict((k, v - set(sentinels) if len(v) > 1 else v) for k, v in g.items())
-
-    if consolidate:
-        return valmap(consolidate, g2)
-
-    if g2 and not set(map(len, g2.values())) == set([1]):
-        raise ValueError("Shapes do not align %s" % g)
-
-    return valmap(first, g2)
 
 
 def _concatenate2(arrays, axes=[]):
@@ -3438,15 +3359,6 @@ def deepfirst(seq):
         return seq
     else:
         return deepfirst(seq[0])
-
-
-def ndimlist(seq):
-    if not isinstance(seq, (list, tuple)):
-        return 0
-    elif not seq:
-        return 1
-    else:
-        return 1 + ndimlist(seq[0])
 
 
 def shapelist(a):

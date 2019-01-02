@@ -25,13 +25,14 @@ from dask.utils import ignoring, tmpfile, tmpdir, key_split
 from dask.utils_test import inc, dec
 
 from dask.array.core import (getem, getter, dotmany, concatenate3,
-                             broadcast_dimensions, Array, stack, concatenate,
+                             Array, stack, concatenate,
                              from_array, broadcast_shapes,
                              broadcast_to, blockdims_from_blockshape, store,
                              optimize, from_func, normalize_chunks,
                              broadcast_chunks, from_delayed,
-                             concatenate_axes, common_blockdim)
-from dask.array.top import top, atop
+                             common_blockdim, concatenate_axes)
+from dask.blockwise import (make_blockwise_graph as top, broadcast_dimensions)
+from dask.array.top import atop
 from dask.array.utils import assert_eq, same_keys
 
 # temporary until numpy functions migrated

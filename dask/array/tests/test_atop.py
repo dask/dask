@@ -7,8 +7,8 @@ import numpy as np
 import dask
 import dask.array as da
 from dask.highlevelgraph import HighLevelGraph
-from dask.array.top import TOP, atop
-from dask.array.top import rewrite_atop, index_subs, optimize_atop
+from dask.blockwise import (Blockwise, rewrite_blockwise, optimize_blockwise, index_subs, blockwise)
+from dask.array.top import atop
 from dask.array.utils import assert_eq
 from dask.utils_test import inc, dec
 
@@ -96,9 +96,9 @@ i, j, k = 'ijk'
      (c, 'j', {b: (add, _1, _2), c: (add, b, _0)}, [(456, None), (a, 'j'), (123, None)])],
 ])
 def test_rewrite(inputs, expected):
-    inputs = [TOP(*inp, numblocks={k: (1,) * len(v) for k, v in inp[-1] if v is not None})
+    inputs = [Blockwise(*inp, numblocks={k: (1,) * len(v) for k, v in inp[-1] if v is not None})
               for inp in inputs]
-    result = rewrite_atop(inputs)
+    result = rewrite_blockwise(inputs)
     result2 = (result.output,
                ''.join(result.output_indices),
                result.dsk,
@@ -111,16 +111,16 @@ def test_index_subs():
     assert index_subs(tuple('ij'), {'i': 'j', 'j': 'i'}) == tuple('ji')
 
 
-def test_optimize_atop():
+def test_optimize_blockwise():
     x = da.ones(10, chunks=(5,))
     y = ((((x + 1) + 2) + 3) + 4)
 
-    # dsk = da.optimization.optimize_atop(y.dask)
-    dsk = da.optimization.optimize_atop(y.dask)
+    # dsk = da.optimization.optimize_blockwise(y.dask)
+    dsk = da.optimization.optimize_blockwise(y.dask)
 
     assert isinstance(dsk, HighLevelGraph)
 
-    assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
+    assert len([layer for layer in dsk.dicts.values() if isinstance(layer, Blockwise)]) == 1
 
 
 @pytest.mark.xfail(reason="we only look for y-splits, not for total dependencies")
@@ -132,10 +132,10 @@ def test_atop_diamond_fusion():
     c = a + b
     d = (((c + 1) + 2) + 3)
 
-    dsk = da.optimization.optimize_atop(d.dask)
+    dsk = da.optimization.optimize_blockwise(d.dask)
     assert isinstance(dsk, HighLevelGraph)
 
-    assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
+    assert len([layer for layer in dsk.dicts.values() if isinstance(layer, Blockwise)]) == 1
 
 
 def test_atop_non_atop_output():
@@ -149,14 +149,14 @@ def test_atop_non_atop_output():
     z_top_after = tuple(z.dask.dicts[z.name].indices)
     assert z_top_before == z_top_after, "z_top mutated"
 
-    dsk = optimize_atop(z.dask, keys=list(dask.core.flatten(z.__dask_keys__())))
+    dsk = optimize_blockwise(z.dask, keys=list(dask.core.flatten(z.__dask_keys__())))
     assert isinstance(dsk, HighLevelGraph)
-    assert len([layer for layer in dsk.dicts.values() if isinstance(layer, TOP)]) == 1
+    assert len([layer for layer in dsk.dicts.values() if isinstance(layer, Blockwise)]) == 1
 
-    dsk = optimize_atop(HighLevelGraph.merge(w.dask, z.dask),
-                        keys=list(dask.core.flatten([w.__dask_keys__(), z.__dask_keys__()])))
+    dsk = optimize_blockwise(HighLevelGraph.merge(w.dask, z.dask),
+                             keys=list(dask.core.flatten([w.__dask_keys__(), z.__dask_keys__()])))
     assert isinstance(dsk, HighLevelGraph)
-    assert len([layer for layer in z.dask.dicts.values() if isinstance(layer, TOP)]) >= 1
+    assert len([layer for layer in z.dask.dicts.values() if isinstance(layer, Blockwise)]) >= 1
 
 
 def test_top_len():
@@ -412,7 +412,7 @@ def test_gh_4176():
 
     name = 'D'
 
-    dsk = da.top.top(
+    dsk = blockwise(
         foo, name, ("nsrc", "ntime", "nbl", "npol"),
         A.name, ("ntime", "nbl", "npol"),
         new_axes={"nsrc": 1},
@@ -435,8 +435,8 @@ def test_dont_merge_before_reductions():
     z = da.atop(sum, '', y, 'i', dtype=y.dtype)
     w = da.atop(sum, '', z, '', dtype=y.dtype)
 
-    dsk = optimize_atop(w.dask)
+    dsk = optimize_blockwise(w.dask)
 
-    assert len([d for d in dsk.dicts.values() if isinstance(d, TOP)]) == 2
+    assert len([d for d in dsk.dicts.values() if isinstance(d, Blockwise)]) == 2
 
     z.compute()

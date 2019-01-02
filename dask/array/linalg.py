@@ -8,10 +8,10 @@ import numpy as np
 import toolz
 
 from ..base import tokenize
+from ..blockwise import blockwise
 from ..compatibility import apply
 from ..highlevelgraph import HighLevelGraph
 from .core import dotmany, Array, concatenate
-from .top import top
 from .creation import eye
 from .random import RandomState
 
@@ -127,8 +127,8 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
     # Block qr
     name_qr_st1 = 'qr' + token
-    dsk_qr_st1 = top(_wrapped_qr, name_qr_st1, 'ij', data.name, 'ij',
-                     numblocks={data.name: numblocks})
+    dsk_qr_st1 = blockwise(_wrapped_qr, name_qr_st1, 'ij', data.name, 'ij',
+                           numblocks={data.name: numblocks})
     layers[name_qr_st1] = dsk_qr_st1
     dependencies[name_qr_st1] = data.__dask_layers__()
 
@@ -222,9 +222,9 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
         # Q: Block qr[0] (*) Q_inner
         name_q_st3 = 'dot-' + token + '-q3'
-        dsk_q_st3 = top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
-                        name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
-                                                     name_q_st2: numblocks})
+        dsk_q_st3 = blockwise(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
+                              name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
+                                                           name_q_st2: numblocks})
         layers[name_q_st3] = dsk_q_st3
         dependencies[name_q_st3] = {name_q_st1, name_q_st2, name_q_st3}
     else:
@@ -240,8 +240,8 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
         # In-core QR computation
         name_qr_st2 = 'qr' + token + '-qr2'
-        dsk_qr_st2 = top(np.linalg.qr, name_qr_st2, 'ij', name_r_st1_stacked, 'ij',
-                         numblocks={name_r_st1_stacked: (1, 1)})
+        dsk_qr_st2 = blockwise(np.linalg.qr, name_qr_st2, 'ij', name_r_st1_stacked, 'ij',
+                               numblocks={name_r_st1_stacked: (1, 1)})
         layers[name_qr_st2] = dsk_qr_st2
         dependencies[name_qr_st2] = {name_r_st1_stacked}
 
@@ -306,9 +306,9 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
         # Q: Block qr[0] (*) In-core qr[0]
         name_q_st3 = 'dot' + token + '-q3'
-        dsk_q_st3 = top(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
-                        name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
-                                                     name_q_st2: numblocks})
+        dsk_q_st3 = blockwise(np.dot, name_q_st3, 'ij', name_q_st1, 'ij',
+                              name_q_st2, 'ij', numblocks={name_q_st1: numblocks,
+                                                           name_q_st2: numblocks})
         layers[name_q_st3] = dsk_q_st3
         dependencies[name_q_st3] = {name_q_st1, name_q_st2}
 
@@ -357,8 +357,8 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
     else:
         # In-core SVD computation
         name_svd_st2 = 'svd' + token + '-2'
-        dsk_svd_st2 = top(np.linalg.svd, name_svd_st2, 'ij', name_r_st2, 'ij',
-                          numblocks={name_r_st2: (1, 1)})
+        dsk_svd_st2 = blockwise(np.linalg.svd, name_svd_st2, 'ij', name_r_st2, 'ij',
+                                numblocks={name_r_st2: (1, 1)})
         # svd[0]
         name_u_st2 = 'getitem' + token + '-u2'
         dsk_u_st2 = {(name_u_st2, 0, 0): (operator.getitem,
@@ -373,9 +373,9 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
                                           (name_svd_st2, 0, 0), 2)}
         # Q * U
         name_u_st4 = 'getitem' + token + '-u4'
-        dsk_u_st4 = top(dotmany, name_u_st4, 'ij', name_q_st3, 'ik',
-                        name_u_st2, 'kj', numblocks={name_q_st3: numblocks,
-                                                     name_u_st2: (1, 1)})
+        dsk_u_st4 = blockwise(dotmany, name_u_st4, 'ij', name_q_st3, 'ik',
+                              name_u_st2, 'kj', numblocks={name_q_st3: numblocks,
+                                                           name_u_st2: (1, 1)})
 
         layers[name_svd_st2] = dsk_svd_st2
         dependencies[name_svd_st2] = {name_r_st2}
