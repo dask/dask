@@ -629,7 +629,7 @@ def _write_metadata(writes, filenames, fmd, path, fs, sep):
 # ----------------------------------------------------------------------
 # PyArrow interface
 
-def _read_pyarrow(fs, fs_token, paths, columns=None,
+def _read_pyarrow(fs, fs_token, paths,
                   categories=None, index=None, gather_statistics=None):
     from ...bytes.core import get_pyarrow_filesystem
     import pyarrow.parquet as pq
@@ -648,6 +648,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None,
         partitions = []
 
     schema = dataset.schema.to_arrow_schema()
+    columns = None
 
     has_pandas_metadata = schema.metadata is not None and b'pandas' in schema.metadata
 
@@ -673,13 +674,12 @@ def _read_pyarrow(fs, fs_token, paths, columns=None,
     dtypes = _get_pyarrow_dtypes(schema, categories)
     dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
-    meta = _meta_from_dtypes(all_columns, dtypes, index_names,
-                             column_index_names)
+    meta = _meta_from_dtypes(all_columns, dtypes)
     meta = clear_known_categories(meta, cols=categories)
 
     if gather_statistics:
         # Read from _metadata file
-        if dataset.metadata and dataset.metadata.num_row_groups == len(dataset.pieces):  # one rg per piece
+        if dataset.metadata and dataset.metadata.num_row_groups == len(pieces):  # one rg per piece
             row_groups = [
                 dataset.metadata.row_group(i)
                 for i in range(dataset.metadata.num_row_groups)
@@ -688,7 +688,7 @@ def _read_pyarrow(fs, fs_token, paths, columns=None,
         else:
             row_groups = [
                 piece.get_metadata(lambda fn: pq.ParquetFile(fs.open(fn, mode='rb'))).row_group(0)
-                for piece in dataset.pieces
+                for piece in pieces
             ]
 
         stats = []
@@ -944,9 +944,17 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
-    func, meta, statistics, parts = read(fs, fs_token, paths, columns=columns,
+    func, meta, statistics, parts = read(fs, fs_token, paths,
                                          categories=categories, index=index,
                                          gather_statistics=gather_statistics)
+    if columns is None:
+        columns = meta.columns
+
+    if not set(columns).issubset(set(meta.columns)):
+        raise KeyError("The following columns were not found in the dataset %s\n"
+                       "The following columns were found %s"
+                       % (set(columns) - set(meta.columns),
+                          meta.columns))
 
     if statistics:
         parts, statistics = zip(*[(part, stats)
@@ -958,10 +966,12 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
         out = sorted_columns(statistics)
 
-        if len(out) == 1:
+        if index and out:
+            out = [o for o in out if o['name'] == index]  # only one valid column
+        if index is not False and len(out) == 1:
             divisions = out[0]['divisions']
             index = out[0]['name']
-        elif len(out) > 1:
+        elif index is not False and len(out) > 1:
             if any(o['name'] == 'index' for o in out):
                 [o] = [o for o in out if o['name'] == 'index']
                 divisions = o['divisions']
@@ -975,7 +985,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         divisions = [None] * (len(parts) + 1)
 
     subgraph = {(name, i): (read_parquet_part, func, fs, meta, part['piece'],
-                            list(meta.columns), index, part['kwargs'])
+                            columns, index, part['kwargs'])
                 for i, part in enumerate(parts)}
     if index:
         meta = meta.set_index(index)
@@ -985,10 +995,12 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
 
 def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
     """ Read a part of a parquet dataset """
+    if index and index not in columns:
+        columns = tuple(columns) + (index,)
     df = func(fs, part, columns, **kwargs)
     if not len(df):
         df = meta
-    if index is not None:
+    if index:
         df = df.set_index(index)
     return df
 
