@@ -14,7 +14,7 @@ from tornado.ioloop import IOLoop
 
 from distributed import Scheduler
 from distributed.security import Security
-from distributed.utils import get_ip_interface, ignoring
+from distributed.utils import get_ip_interface
 from distributed.cli.utils import (check_python_3, install_signal_handlers,
                                    uri_from_host_port)
 from distributed.preloading import preload_modules, validate_preload_argv
@@ -118,10 +118,16 @@ def main(host, port, bokeh_port, show, _bokeh, bokeh_whitelist, bokeh_prefix,
 
     services = {}
     if _bokeh:
-        with ignoring(ImportError):
+        try:
             from distributed.bokeh.scheduler import BokehScheduler
             services[('bokeh', bokeh_port)] = (BokehScheduler,
                                                {'prefix': bokeh_prefix})
+        except ImportError as error:
+            if str(error).startswith('No module named'):
+                logger.info('Web dashboard not loaded.  Unable to import bokeh')
+            else:
+                logger.info('Unable to import bokeh: %s' % str(error))
+
     scheduler = Scheduler(loop=loop, services=services,
                           scheduler_file=scheduler_file,
                           security=sec)
