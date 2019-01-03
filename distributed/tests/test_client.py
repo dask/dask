@@ -4560,7 +4560,6 @@ def test_fire_and_forget_err(c, s, a, b):
         assert time() < start + 1
 
 
-@pytest.mark.xfail(reason='Other tests bleed into the logs of this one')
 def test_quiet_client_close(loop):
     with captured_logger(logging.getLogger('distributed')) as logger:
         with Client(loop=loop, processes=False, threads_per_worker=4) as c:
@@ -4572,8 +4571,12 @@ def test_quiet_client_close(loop):
         lines = out.strip().split('\n')
         assert len(lines) <= 2
         for line in lines:
-            assert not line or 'Reconnecting' in line or set(line) == {'-'}
-        # assert not out
+            assert (
+                not line or
+                'Reconnecting' in line or
+                'garbage' in line or
+                set(line) == {'-'}
+            ), line
 
 
 @gen_cluster()
