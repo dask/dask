@@ -1,21 +1,22 @@
 import numbers
+import warnings
 
 import toolz
 
 from .. import base, utils
 from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..blockwise import blockwise
+from ..blockwise import blockwise as core_blockwise
 
 
-def atop(func, out_ind, *args, **kwargs):
+def blockwise(func, out_ind, *args, **kwargs):
     """ Tensor operation: Generalized inner and outer products
 
     A broad class of blocked algorithms and patterns can be specified with a
-    concise multi-index notation.  The ``atop`` function applies an in-memory
+    concise multi-index notation.  The ``blockwise`` function applies an in-memory
     function across multiple blocks of multiple inputs in a variety of ways.
-    Many dask.array operations are special cases of atop including elementwise,
-    broadcasting, reductions, tensordot, and transpose.
+    Many dask.array operations are special cases of blockwise including
+    elementwise, broadcasting, reductions, tensordot, and transpose.
 
     Parameters
     ----------
@@ -40,15 +41,15 @@ def atop(func, out_ind, *args, **kwargs):
     --------
     2D embarrassingly parallel operation from two arrays, x, and y.
 
-    >>> z = atop(operator.add, 'ij', x, 'ij', y, 'ij', dtype='f8')  # z = x + y  # doctest: +SKIP
+    >>> z = blockwise(operator.add, 'ij', x, 'ij', y, 'ij', dtype='f8')  # z = x + y  # doctest: +SKIP
 
     Outer product multiplying x by y, two 1-d vectors
 
-    >>> z = atop(operator.mul, 'ij', x, 'i', y, 'j', dtype='f8')  # doctest: +SKIP
+    >>> z = blockwise(operator.mul, 'ij', x, 'i', y, 'j', dtype='f8')  # doctest: +SKIP
 
     z = x.T
 
-    >>> z = atop(np.transpose, 'ji', x, 'ij', dtype=x.dtype)  # doctest: +SKIP
+    >>> z = blockwise(np.transpose, 'ji', x, 'ij', dtype=x.dtype)  # doctest: +SKIP
 
     The transpose case above is illustrative because it does same transposition
     both on each in-memory block by calling ``np.transpose`` and on the order
@@ -59,7 +60,7 @@ def atop(func, out_ind, *args, **kwargs):
 
     z = X + Y.T
 
-    >>> z = atop(lambda x, y: x + y.T, 'ij', x, 'ij', y, 'ji', dtype='f8')  # doctest: +SKIP
+    >>> z = blockwise(lambda x, y: x + y.T, 'ij', x, 'ij', y, 'ji', dtype='f8')  # doctest: +SKIP
 
     Any index, like ``i`` missing from the output index is interpreted as a
     contraction (note that this differs from Einstein convention; repeated
@@ -76,7 +77,7 @@ def atop(func, out_ind, *args, **kwargs):
     ...         result += x.dot(y)
     ...     return result
 
-    >>> z = atop(sequence_dot, '', x, 'i', y, 'i', dtype='f8')  # doctest: +SKIP
+    >>> z = blockwise(sequence_dot, '', x, 'i', y, 'i', dtype='f8')  # doctest: +SKIP
 
     Add new single-chunk dimensions with the ``new_axes=`` keyword, including
     the length of the new dimension.  New dimensions will always be in a single
@@ -85,7 +86,7 @@ def atop(func, out_ind, *args, **kwargs):
     >>> def f(x):
     ...     return x[:, None] * np.ones((1, 5))
 
-    >>> z = atop(f, 'az', x, 'a', new_axes={'z': 5}, dtype=x.dtype)  # doctest: +SKIP
+    >>> z = blockwise(f, 'az', x, 'a', new_axes={'z': 5}, dtype=x.dtype)  # doctest: +SKIP
 
     If the applied function changes the size of each chunk you can specify this
     with a ``adjust_chunks={...}`` dictionary holding a function for each index
@@ -94,12 +95,12 @@ def atop(func, out_ind, *args, **kwargs):
     >>> def double(x):
     ...     return np.concatenate([x, x])
 
-    >>> y = atop(double, 'ij', x, 'ij',
-    ...          adjust_chunks={'i': lambda n: 2 * n}, dtype=x.dtype)  # doctest: +SKIP
+    >>> y = blockwise(double, 'ij', x, 'ij',
+    ...               adjust_chunks={'i': lambda n: 2 * n}, dtype=x.dtype)  # doctest: +SKIP
 
     Include literals by indexing with None
 
-    >>> y = atop(add, 'ij', x, 'ij', 1234, None, dtype=x.dtype)  # doctest: +SKIP
+    >>> y = blockwise(add, 'ij', x, 'ij', 1234, None, dtype=x.dtype)  # doctest: +SKIP
 
     See Also
     --------
@@ -176,8 +177,8 @@ def atop(func, out_ind, *args, **kwargs):
         out = '%s-%s' % (token or utils.funcname(func).strip('_'),
                          base.tokenize(func, out_ind, argindsstr, dtype, **kwargs))
 
-    graph = blockwise(func, out, out_ind, *argindsstr, numblocks=numblocks,
-                      dependencies=dependencies, new_axes=new_axes, **kwargs2)
+    graph = core_blockwise(func, out, out_ind, *argindsstr, numblocks=numblocks,
+                           dependencies=dependencies, new_axes=new_axes, **kwargs2)
     graph = HighLevelGraph.from_collections(out, graph,
                                             dependencies=arrays + dependencies)
 
@@ -197,3 +198,8 @@ def atop(func, out_ind, *args, **kwargs):
     chunks = tuple(chunks)
 
     return Array(graph, out, chunks, dtype=dtype)
+
+
+def atop(*args, **kwargs):
+    warnings.warn("The da.atop function has moved to da.blockwise")
+    return blockwise(*args, **kwargs)

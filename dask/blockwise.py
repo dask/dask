@@ -123,7 +123,7 @@ class Blockwise(Mapping):
     See Also
     --------
     dask.blockwise.blockwise
-    dask.array.atop
+    dask.array.blockwise
     """
     def __init__(self, output, output_indices, dsk, indices,
                  numblocks, concatenate=None, new_axes=None):
@@ -276,7 +276,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
 
     See Also
     --------
-    dask.array.atop
+    dask.array.blockwise
     dask.blockwise.blockwise
     """
     numblocks = kwargs.pop('numblocks')

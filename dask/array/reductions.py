@@ -11,7 +11,8 @@ from numbers import Integral
 from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
-from .core import _concatenate2, Array, atop, handle_out
+from .core import _concatenate2, Array, handle_out
+from .blockwise import blockwise
 from ..blockwise import lol_tuples
 from .creation import arange
 from .ufunc import sqrt
@@ -141,7 +142,7 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
     # Map chunk across all blocks
     inds = tuple(range(x.ndim))
     # The dtype of `tmp` doesn't actually matter, and may be incorrect.
-    tmp = atop(chunk, inds, x, inds, axis=axis, keepdims=True, dtype=x.dtype)
+    tmp = blockwise(chunk, inds, x, inds, axis=axis, keepdims=True, dtype=x.dtype)
     tmp._chunks = tuple((output_size, ) * len(c) if i in axis else c
                         for i, c in enumerate(tmp.chunks))
     result = _tree_reduce(tmp, aggregate, axis, keepdims, dtype, split_every,

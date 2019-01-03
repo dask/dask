@@ -8,7 +8,6 @@ import dask
 import dask.array as da
 from dask.highlevelgraph import HighLevelGraph
 from dask.blockwise import (Blockwise, rewrite_blockwise, optimize_blockwise, index_subs, blockwise)
-from dask.array.top import atop
 from dask.array.utils import assert_eq
 from dask.utils_test import inc, dec
 
@@ -124,7 +123,7 @@ def test_optimize_blockwise():
 
 
 @pytest.mark.xfail(reason="we only look for y-splits, not for total dependencies")
-def test_atop_diamond_fusion():
+def test_blockwise_diamond_fusion():
     x = da.ones(10, chunks=(5,))
     y = (((x + 1) + 2) + 3)
     a = y * 2
@@ -138,7 +137,7 @@ def test_atop_diamond_fusion():
     assert len([layer for layer in dsk.dicts.values() if isinstance(layer, Blockwise)]) == 1
 
 
-def test_atop_non_atop_output():
+def test_blockwise_non_blockwise_output():
     x = da.ones(10, chunks=(5,))
     y = (((x + 1) + 2) + 3)
     w = y.sum()
@@ -182,7 +181,7 @@ def test_common_token_names_args(name):
     x = np.array(['a', 'bb', 'ccc'], dtype=object)
     d = da.from_array(x, chunks=2)
 
-    result = da.atop(add, 'i', d, 'i', name, None, dtype=object)
+    result = da.blockwise(add, 'i', d, 'i', name, None, dtype=object)
     expected = x + name
 
     assert_eq(result, expected)
@@ -193,32 +192,30 @@ def test_common_token_names_kwargs(name):
     x = np.array(['a', 'bb', 'ccc'], dtype=object)
     d = da.from_array(x, chunks=2)
 
-    result = da.atop(lambda x, y: x + y, 'i', d, 'i', y=name, dtype=object)
+    result = da.blockwise(lambda x, y: x + y, 'i', d, 'i', y=name, dtype=object)
     expected = x + name
 
     assert_eq(result, expected)
 
 
-def test_atop_names():
+def test_blockwise_names():
     x = da.ones(5, chunks=(2,))
-    y = atop(add, 'i', x, 'i', dtype=x.dtype)
+    y = da.blockwise(add, 'i', x, 'i', dtype=x.dtype)
     assert y.name.startswith('add')
 
 
-def test_atop_new_axes():
+def test_blockwise_new_axes():
     def f(x):
         return x[:, None] * np.ones((1, 7))
     x = da.ones(5, chunks=2)
-    y = atop(f, 'aq', x, 'a', new_axes={'q': 7}, concatenate=True,
-             dtype=x.dtype)
+    y = da.blockwise(f, 'aq', x, 'a', new_axes={'q': 7}, concatenate=True, dtype=x.dtype)
     assert y.chunks == ((2, 2, 1), (7,))
     assert_eq(y, np.ones((5, 7)))
 
     def f(x):
         return x[None, :] * np.ones((7, 1))
     x = da.ones(5, chunks=2)
-    y = atop(f, 'qa', x, 'a', new_axes={'q': 7}, concatenate=True,
-             dtype=x.dtype)
+    y = da.blockwise(f, 'qa', x, 'a', new_axes={'q': 7}, concatenate=True, dtype=x.dtype)
     assert y.chunks == ((7,), (2, 2, 1))
     assert_eq(y, np.ones((7, 5)))
 
@@ -227,106 +224,131 @@ def test_atop_new_axes():
         return y[:, None] * np.ones((1, 5))
 
     x = da.ones((4, 6), chunks=(2, 2))
-    y = atop(f, 'aq', x, 'ab', new_axes={'q': 5}, concatenate=True,
-             dtype=x.dtype)
+    y = da.blockwise(f, 'aq', x, 'ab', new_axes={'q': 5}, concatenate=True, dtype=x.dtype)
     assert y.chunks == ((2, 2), (5,))
     assert_eq(y, np.ones((4, 5)) * 6)
 
 
-def test_atop_new_axes_2():
+def test_blockwise_new_axes_2():
     x = da.ones((2, 2), chunks=(1, 1))
 
     def func(x):
         return np.stack([x, -x], axis=-1)
 
-    y = atop(func, ('x', 'y', 'sign'), x, ('x', 'y'), dtype=x.dtype,
-             concatenate=True, new_axes={'sign': 2})
+    y = da.blockwise(
+        func,
+        ('x', 'y', 'sign'),
+        x, ('x', 'y'),
+        dtype=x.dtype,
+        concatenate=True,
+        new_axes={'sign': 2}
+    )
 
     assert_eq(y, y)
 
 
 @pytest.mark.parametrize('concatenate', [True, False])
-def test_atop_stacked_new_axes(concatenate):
+def test_blockwise_stacked_new_axes(concatenate):
     def f(x):
         return x[..., None] * np.ones((1, 7))
 
     x = da.ones(5, chunks=2)
-    y = atop(f, 'aq', x, 'a', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
-    z = atop(f, 'abq', y, 'ab', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
+    y = da.blockwise(f, 'aq', x, 'a', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
+    z = da.blockwise(f, 'abq', y, 'ab', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
     assert z.chunks == ((2, 2, 1), (7,), (7,))
     assert_eq(z, np.ones((5, 7, 7)))
 
 
 @pytest.mark.parametrize('concatenate', [True, False])
-def test_atop_stacked_new_axes_front(concatenate):
+def test_blockwise_stacked_new_axes_front(concatenate):
     def f(x):
         if isinstance(x, list):
             x = np.concatenate(x)
         return x[None, ...] * np.ones(7)[(slice(None),) + (None,) * x.ndim]
 
     x = da.ones(5, chunks=2)
-    y = atop(f, 'qa', x, 'a', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
-    z = atop(f, 'qab', y, 'ab', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
+    y = da.blockwise(f, 'qa', x, 'a', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
+    z = da.blockwise(f, 'qab', y, 'ab', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
     assert z.chunks == ((7,), (7,), (2, 2, 1))
     assert_eq(z, np.ones((7, 7, 5)))
 
-    w = atop(lambda x: x[:, 0, 0], 'a', z, 'abc', dtype=x.dtype, concatenate=True)
+    w = da.blockwise(lambda x: x[:, 0, 0], 'a', z, 'abc', dtype=x.dtype, concatenate=True)
     assert w.chunks == ((7,),)
     assert_eq(w, np.ones((7,)))
 
 
 @pytest.mark.parametrize('concatenate', [True, False])
-def test_atop_stacked_new_axes_same_dim(concatenate):
+def test_blockwise_stacked_new_axes_same_dim(concatenate):
     def f(x):
         return x[..., None] * np.ones((1, 7))
 
     x = da.ones(5, chunks=2)
     y = da.zeros(5, chunks=2)
-    a = atop(f, 'aq', x, 'a', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
-    b = atop(f, 'aq', y, 'a', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
+    a = da.blockwise(f, 'aq', x, 'a', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
+    b = da.blockwise(f, 'aq', y, 'a', new_axes={'q': 7}, concatenate=concatenate, dtype=x.dtype)
     c = a + b
     assert c.chunks == ((2, 2, 1), (7,))
     assert_eq(c, np.ones((5, 7)))
 
 
-def test_atop_kwargs():
+def test_blockwise_kwargs():
     def f(a, b=0):
         return a + b
 
     x = da.ones(5, chunks=(2,))
-    y = atop(f, 'i', x, 'i', b=10, dtype=x.dtype)
+    y = da.blockwise(f, 'i', x, 'i', b=10, dtype=x.dtype)
     assert_eq(y, np.ones(5) + 10)
 
 
-def test_atop_chunks():
+def test_blockwise_chunks():
     x = da.ones((5, 5), chunks=((2, 1, 2), (3, 2)))
 
     def double(a, axis=0):
         return np.concatenate([a, a], axis=axis)
 
-    y = atop(double, 'ij', x, 'ij',
-             adjust_chunks={'i': lambda n: 2 * n}, axis=0, dtype=x.dtype)
+    y = da.blockwise(
+        double, 'ij',
+        x, 'ij',
+        adjust_chunks={'i': lambda n: 2 * n},
+        axis=0,
+        dtype=x.dtype
+    )
     assert y.chunks == ((4, 2, 4), (3, 2))
     assert_eq(y, np.ones((10, 5)))
 
-    y = atop(double, 'ij', x, 'ij',
-             adjust_chunks={'j': lambda n: 2 * n}, axis=1, dtype=x.dtype)
+    y = da.blockwise(
+        double, 'ij',
+        x, 'ij',
+        adjust_chunks={'j': lambda n: 2 * n},
+        axis=1,
+        dtype=x.dtype
+    )
     assert y.chunks == ((2, 1, 2), (6, 4))
     assert_eq(y, np.ones((5, 10)))
 
     x = da.ones((10, 10), chunks=(5, 5))
-    y = atop(double, 'ij', x, 'ij', axis=0,
-             adjust_chunks={'i': 10}, dtype=x.dtype)
+    y = da.blockwise(
+        double, 'ij',
+        x, 'ij',
+        axis=0,
+        adjust_chunks={'i': 10},
+        dtype=x.dtype
+    )
     assert y.chunks == ((10, 10), (5, 5))
     assert_eq(y, np.ones((20, 10)))
 
-    y = atop(double, 'ij', x, 'ij', axis=0,
-             adjust_chunks={'i': (10, 10)}, dtype=x.dtype)
+    y = da.blockwise(
+        double, 'ij',
+        x, 'ij',
+        axis=0,
+        adjust_chunks={'i': (10, 10)},
+        dtype=x.dtype
+    )
     assert y.chunks == ((10, 10), (5, 5))
     assert_eq(y, np.ones((20, 10)))
 
 
-def test_atop_numpy_arg():
+def test_blockwise_numpy_arg():
     x = da.arange(10, chunks=(5,))
     y = np.arange(1000)
 
@@ -360,10 +382,10 @@ def test_args_delayed():
     x = da.arange(10, chunks=(5,))
     y = dask.delayed(lambda: 100)()
 
-    z = atop(add, 'i', x, 'i', y, None, dtype=x.dtype)
+    z = da.blockwise(add, 'i', x, 'i', y, None, dtype=x.dtype)
     assert_eq(z, np.arange(10) + 100)
 
-    z = atop(lambda x, y: x + y, 'i', x, 'i', y=y, dtype=x.dtype)
+    z = da.blockwise(lambda x, y: x + y, 'i', x, 'i', y=y, dtype=x.dtype)
     assert_eq(z, np.arange(10) + 100)
 
 
@@ -377,10 +399,12 @@ def test_namedtuple(tup):
     def f(data, x):
         return data
 
-    B = da.atop(f, ("d1", "d2"),
-                A, ("d1", "d2"),
-                x=tup,
-                dtype=A.dtype)
+    B = da.blockwise(
+        f, ("d1", "d2"),
+        A, ("d1", "d2"),
+        x=tup,
+        dtype=A.dtype
+    )
 
     assert_eq(A, B)
 
@@ -389,14 +413,14 @@ def test_validate_top_inputs():
     A = da.random.random((20, 20), chunks=(10, 10))
 
     with pytest.raises(ValueError) as info:
-        da.atop(inc, 'jk', A, 'ij', dtype=A.dtype)
+        da.blockwise(inc, 'jk', A, 'ij', dtype=A.dtype)
 
     assert 'unknown dimension' in str(info.value).lower()
     assert 'k' in str(info.value)
     assert 'j' not in str(info.value)
 
     with pytest.raises(ValueError) as info:
-        da.atop(inc, 'ii', A, 'ij', dtype=A.dtype)
+        da.blockwise(inc, 'ii', A, 'ij', dtype=A.dtype)
 
     assert 'repeated' in str(info.value).lower()
     assert 'i' in str(info.value)
@@ -431,9 +455,9 @@ def test_gh_4176():
 
 def test_dont_merge_before_reductions():
     x = da.ones(10, chunks=(5,))
-    y = da.atop(inc, 'i', x, 'i', dtype=x.dtype)
-    z = da.atop(sum, '', y, 'i', dtype=y.dtype)
-    w = da.atop(sum, '', z, '', dtype=y.dtype)
+    y = da.blockwise(inc, 'i', x, 'i', dtype=x.dtype)
+    z = da.blockwise(sum, '', y, 'i', dtype=y.dtype)
+    w = da.blockwise(sum, '', z, '', dtype=y.dtype)
 
     dsk = optimize_blockwise(w.dask)
 

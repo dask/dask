@@ -46,7 +46,7 @@ from ..highlevelgraph import HighLevelGraph
 from ..bytes.core import get_mapper, get_fs_token_paths
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
-from .top import atop
+from .blockwise import blockwise
 
 
 config.update_defaults({'array': {
@@ -317,11 +317,11 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype='dtype', nout=
 
 
 def normalize_arg(x):
-    """ Normalize user provided arguments to atop or map_blocks
+    """ Normalize user provided arguments to blockwise or map_blocks
 
     We do a few things:
 
-    1.  If they are string literals that might collide with atop_token then we
+    1.  If they are string literals that might collide with blockwise_token then we
         quote them
     2.  IF they are large (as defined by sizeof) then we put them into the
         graph on their own by using dask.delayed
@@ -511,9 +511,9 @@ def map_blocks(func, *args, **kwargs):
         out_ind = tuple(out_ind)
         if max(new_axis) > max(out_ind):
             raise ValueError("New_axis values do not fill in all dimensions")
-    out = atop(func, out_ind, *concat(argpairs), name=name,
-               new_axes=new_axes, dtype=dtype, concatenate=True,
-               align_arrays=False, **kwargs)
+    out = blockwise(func, out_ind, *concat(argpairs), name=name,
+                    new_axes=new_axes, dtype=dtype, concatenate=True,
+                    align_arrays=False, **kwargs)
 
     if (has_keyword(func, 'block_id') or has_keyword(func, 'block_info') or drop_axis):
         dsk = out.dask.layers[out.name]
@@ -3080,7 +3080,7 @@ def elemwise(op, *args, **kwargs):
 
     See Also
     --------
-    atop
+    blockwise
     """
     out = kwargs.pop('out', None)
     if not set(['name', 'dtype']).issuperset(kwargs):
@@ -3125,16 +3125,16 @@ def elemwise(op, *args, **kwargs):
     name = kwargs.get('name', None) or '%s-%s' % (funcname(op),
                                                   tokenize(op, dt, *args))
 
-    atop_kwargs = dict(dtype=dt, name=name, token=funcname(op).strip('_'))
+    blockwise_kwargs = dict(dtype=dt, name=name, token=funcname(op).strip('_'))
     if need_enforce_dtype:
-        atop_kwargs['enforce_dtype'] = dt
-        atop_kwargs['enforce_dtype_function'] = op
+        blockwise_kwargs['enforce_dtype'] = dt
+        blockwise_kwargs['enforce_dtype_function'] = op
         op = _enforce_dtype
-    result = atop(op, expr_inds,
-                  *concat((a, tuple(range(a.ndim)[::-1])
-                           if not is_scalar_for_elemwise(a)
-                           else None) for a in args),
-                  **atop_kwargs)
+    result = blockwise(op, expr_inds,
+                       *concat((a, tuple(range(a.ndim)[::-1])
+                                if not is_scalar_for_elemwise(a)
+                                else None) for a in args),
+                       **blockwise_kwargs)
 
     return handle_out(out, result)
 
@@ -3173,7 +3173,7 @@ def _enforce_dtype(*args, **kwargs):
     """Calls a function and converts its result to the given dtype.
 
     The parameters have deliberately been given unwieldy names to avoid
-    clashes with keyword arguments consumed by atop
+    clashes with keyword arguments consumed by blockwise
 
     A dtype of `object` is treated as a special case and not enforced,
     because it is used as a dummy value in some places when the result will
