@@ -1,6 +1,21 @@
 Changelog
 =========
 
+1.25.2 - 2019-01-04
+-------------------
+
+-  Clean up LocalCluster logging better in async mode (:pr:`2448`) `Matthew Rocklin`_
+-  Add short error message if bokeh cannot be imported (:pr:`2444`) `Dirk Petersen`_
+-  Add optional environment variables to Nanny (:pr:`2431`) `Matthew Rocklin`_
+-  Make the direct keyword docstring entries uniform (:pr:`2441`) `Matthew Rocklin`_
+-  Make LocalCluster.close async friendly (:pr:`2437`) `Matthew Rocklin`_
+-  gather_dep: don't request dependencies we already found out we don't want (:pr:`2428`) `tjb900`_
+-  Add parameters to Client.run docstring (:pr:`2429`) `Matthew Rocklin`_
+-  Support coroutines and async-def functions in run/run_scheduler (:pr:`2427`) `Matthew Rocklin`_
+-  Name threads in ThreadPoolExecutors (:pr:`2408`) `Matthew Rocklin`_
+
+
+
 1.25.1 - 2018-12-15
 -------------------
 
@@ -880,3 +895,5 @@ significantly without many new features.
 .. _`Diane Trout`: https://github.com/detrout
 .. _`tjb900`: https://github.com/tjb900
 .. _`Stephan Hoyer`: https://github.com/shoyer
+.. _`tjb900`: https://github.com/tjb900
+.. _`Dirk Petersen`: https://github.com/dirkpetersen
