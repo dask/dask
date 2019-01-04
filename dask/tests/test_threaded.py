@@ -45,6 +45,7 @@ def test_reuse_pool():
         assert get({'x': (inc, 1)}, 'x') == 2
 
 
+@pytest.mark.skipif(PY2, reason="threading API changed")
 def test_pool_kwarg():
     def f():
         sleep(0.01)
