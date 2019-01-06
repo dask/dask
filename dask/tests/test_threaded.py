@@ -45,6 +45,19 @@ def test_reuse_pool():
         assert get({'x': (inc, 1)}, 'x') == 2
 
 
+@pytest.mark.skipif(PY2, reason="threading API changed")
+def test_pool_kwarg():
+    def f():
+        sleep(0.01)
+        return threading.get_ident()
+
+    dsk = {('x', i): (f,) for i in range(30)}
+    dsk['x'] = (len, (set, [('x', i) for i in range(len(dsk))]))
+
+    with ThreadPool(3) as pool:
+        assert get(dsk, 'x', pool=pool) == 3
+
+
 def test_threaded_within_thread():
     L = []
 
