@@ -30,7 +30,7 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     if not isinstance(shape, (tuple, list)):
         shape = (shape,)
 
-    chunks = kwargs.pop('chunks', None)
+    chunks = kwargs.pop('chunks', 'auto')
 
     dtype = kwargs.pop('dtype', None)
     if dtype is None:
