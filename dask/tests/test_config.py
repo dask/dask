@@ -1,5 +1,6 @@
 import yaml
 import os
+from collections import OrderedDict
 
 import pytest
 
@@ -13,7 +14,7 @@ from dask.utils import tmpfile
 
 def test_update():
     a = {'x': 1, 'y': {'a': 1}}
-    b = {'x': 2, 'z': 3, 'y': {'b': 2}}
+    b = {'x': 2, 'z': 3, 'y': OrderedDict({'b': 2})}
     update(b, a)
     assert b == {'x': 1, 'y': {'a': 1, 'b': 2}, 'z': 3}
 
