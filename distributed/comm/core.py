@@ -181,6 +181,7 @@ def connect(addr, timeout=None, deserialize=True, connection_args=None):
                % (addr, timeout, error))
         raise IOError(msg)
 
+    # This starts a thread
     while True:
         try:
             future = connector.connect(loc, deserialize=deserialize,

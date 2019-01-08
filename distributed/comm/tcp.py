@@ -11,6 +11,8 @@ try:
 except ImportError:
     ssl = None
 
+from concurrent.futures import ThreadPoolExecutor
+
 import dask
 import tornado
 from tornado import gen, netutil
@@ -320,6 +322,13 @@ class RequireEncryptionMixin(object):
 
 
 class BaseTCPConnector(Connector, RequireEncryptionMixin):
+    if PY3:  # see github PR #2403 discussion for more info
+        _executor = ThreadPoolExecutor(2)
+        _resolver = netutil.ExecutorResolver(close_executor=False,
+                                             executor=_executor)
+    else:
+        _resolver = None
+    client = TCPClient(resolver=_resolver)
 
     @gen.coroutine
     def connect(self, address, deserialize=True, **connection_args):
@@ -327,11 +336,11 @@ class BaseTCPConnector(Connector, RequireEncryptionMixin):
         ip, port = parse_host_port(address)
         kwargs = self._get_connect_args(**connection_args)
 
-        client = TCPClient()
         try:
-            stream = yield client.connect(ip, port,
+            stream = yield BaseTCPConnector.client.connect(ip, port,
                                           max_buffer_size=MAX_BUFFER_SIZE,
                                           **kwargs)
+
             # Under certain circumstances tornado will have a closed connnection with an error and not raise
             # a StreamClosedError.
             #
