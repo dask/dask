@@ -149,7 +149,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         if dtype.kind == "M":
             divisions = pd.date_range(
                 start=mini, end=maxi, freq='%iS' % (
-                    (maxi - mini) / npartitions).total_seconds()).tolist()
+                    (maxi - mini).total_seconds() / npartitions)).tolist()
             divisions[0] = mini
             divisions[-1] = maxi
         else:
