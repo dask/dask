@@ -345,3 +345,6 @@ def test_is_dataframe_like():
     assert not is_index_like(df)
     assert not is_index_like(df.x)
     assert is_index_like(df.index)
+
+    ddf = dd.from_pandas(df, npartitions=1)
+    assert is_dataframe_like(ddf)
