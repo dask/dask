@@ -142,6 +142,8 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         else:
             mini, maxi = limits
             dtype = pd.Series(limits).dtype
+        # print(minmax)
+        # print(dtype)
         if npartitions is None:
             q = sql.select([sql.func.count(index)]).select_from(table)
             count = pd.read_sql(q, engine)['count_1'][0]
@@ -152,8 +154,11 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
                     (maxi - mini).total_seconds() / npartitions)).tolist()
             divisions[0] = mini
             divisions[-1] = maxi
-        else:
+        elif dtype.kind in ['i', 'u', 'f']:
             divisions = np.linspace(mini, maxi, npartitions + 1).tolist()
+        else:
+            raise TypeError('Provided index column is of type "{}".  If divisions is not provided the '
+                            'index column type must be numeric or datetime.'.format(dtype))
 
     parts = []
     lowers, uppers = divisions[:-1], divisions[1:]
