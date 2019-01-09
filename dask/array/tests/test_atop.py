@@ -464,3 +464,12 @@ def test_dont_merge_before_reductions():
     assert len([d for d in dsk.dicts.values() if isinstance(d, Blockwise)]) == 2
 
     z.compute()
+
+
+def test_atop_legacy():
+    x = da.ones(10, chunks=(5,))
+    with pytest.warns(None):
+        y = da.atop(inc, 'i', x, 'i', dtype=x.dtype)
+    z = da.blockwise(inc, 'i', x, 'i', dtype=x.dtype)
+    assert_eq(y, z)
+    assert y.name == z.name
