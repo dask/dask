@@ -22,7 +22,7 @@ from .wrap import ones
 from .ufunc import multiply, sqrt
 
 from .core import (Array, map_blocks, elemwise, from_array, asarray,
-                   asanyarray, concatenate, stack, atop, broadcast_shapes,
+                   asanyarray, concatenate, stack, blockwise, broadcast_shapes,
                    is_scalar_for_elemwise, broadcast_to, tensordot_lookup)
 
 from .einsumfuncs import einsum  # noqa
@@ -129,8 +129,7 @@ def swapaxes(a, axis1, axis2):
     out = list(ind)
     out[axis1], out[axis2] = axis2, axis1
 
-    return atop(np.swapaxes, out, a, ind, axis1=axis1, axis2=axis2,
-                dtype=a.dtype)
+    return blockwise(np.swapaxes, out, a, ind, axis1=axis1, axis2=axis2, dtype=a.dtype)
 
 
 @wraps(np.transpose)
@@ -141,8 +140,8 @@ def transpose(a, axes=None):
     else:
         axes = tuple(range(a.ndim))[::-1]
     axes = tuple(d + a.ndim if d < 0 else d for d in axes)
-    return atop(np.transpose, axes, a, tuple(range(a.ndim)),
-                dtype=a.dtype, axes=axes)
+    return blockwise(np.transpose, axes, a, tuple(range(a.ndim)),
+                     dtype=a.dtype, axes=axes)
 
 
 def flip(m, axis):
@@ -234,10 +233,10 @@ def tensordot(lhs, rhs, axes=2):
         out_index.remove(right_index[r])
         right_index[r] = left_index[l]
 
-    intermediate = atop(_tensordot, out_index,
-                        lhs, left_index,
-                        rhs, right_index, dtype=dt,
-                        axes=(left_axes, right_axes))
+    intermediate = blockwise(_tensordot, out_index,
+                             lhs, left_index,
+                             rhs, right_index, dtype=dt,
+                             axes=(left_axes, right_axes))
 
     result = intermediate.sum(axis=left_axes)
     return result
@@ -276,7 +275,7 @@ def matmul(a, b):
     elif a.ndim > b.ndim:
         b = b[(a.ndim - b.ndim) * (np.newaxis,)]
 
-    out = atop(
+    out = blockwise(
         np.matmul, tuple(range(1, a.ndim + 1)),
         a, tuple(range(1, a.ndim - 1)) + (a.ndim - 1, 0,),
         b, tuple(range(1, a.ndim - 1)) + (0, a.ndim,),
@@ -299,7 +298,7 @@ def outer(a, b):
 
     dtype = np.outer(a.dtype.type(), b.dtype.type()).dtype
 
-    return atop(np.outer, "ij", a, "i", b, "j", dtype=dtype)
+    return blockwise(np.outer, "ij", a, "i", b, "j", dtype=dtype)
 
 
 def _inner_apply_along_axis(arr,
@@ -744,12 +743,12 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
     inverse mapping in Dask.
 
     Given Dask likes to have one array returned from functions like
-    ``atop``, some formatting is done to stuff all of the resulting arrays
+    ``blockwise``, some formatting is done to stuff all of the resulting arrays
     into one big NumPy structured array. Dask is then able to handle this
-    object and can split it apart into the separate results on the Dask
-    side, which then can be passed back to this function in concatenated
-    chunks for further reduction or can be return to the user to perform
-    other forms of analysis.
+    object and can split it apart into the separate results on the Dask side,
+    which then can be passed back to this function in concatenated chunks for
+    further reduction or can be return to the user to perform other forms of
+    analysis.
 
     By handling the problem in this way, it does not matter where a chunk
     is in a larger array or how big it is. The chunk can still be computed
@@ -812,7 +811,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     else:
         args.extend([None, None])
 
-    out = atop(
+    out = blockwise(
         _unique_internal, "i",
         *args,
         dtype=out_dtype,
@@ -901,12 +900,18 @@ def isin(element, test_elements, assume_unique=False, invert=False):
     test_elements = asarray(test_elements)
     element_axes = tuple(range(element.ndim))
     test_axes = tuple(i + element.ndim for i in range(test_elements.ndim))
-    mapped = atop(_isin_kernel, element_axes + test_axes,
-                  element, element_axes,
-                  test_elements, test_axes,
-                  adjust_chunks={axis: lambda _: 1 for axis in test_axes},
-                  dtype=bool,
-                  assume_unique=assume_unique)
+    mapped = blockwise(
+        _isin_kernel,
+        element_axes + test_axes,
+        element,
+        element_axes,
+        test_elements,
+        test_axes,
+        adjust_chunks={axis: lambda _: 1 for axis in test_axes},
+        dtype=bool,
+        assume_unique=assume_unique
+    )
+
     result = mapped.any(axis=test_axes)
     if invert:
         result = ~result
@@ -1002,8 +1007,8 @@ def compress(condition, a, axis=None):
                         if i == axis else slice(None)
                         for i in range(a.ndim))]
         inds = tuple(range(a.ndim))
-        out = atop(np.compress, inds, condition, (inds[axis],), a, inds,
-                   axis=axis, dtype=a.dtype)
+        out = blockwise(np.compress, inds, condition, (inds[axis],), a, inds,
+                        axis=axis, dtype=a.dtype)
         out._chunks = tuple((np.NaN,) * len(c) if i == axis else c
                             for i, c in enumerate(out.chunks))
         return out

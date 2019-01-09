@@ -9,7 +9,7 @@ try:
 except ImportError:
     from toolz import concat, merge, unique
 
-from .core import Array, asarray, atop, getitem, apply_infer_dtype
+from .core import Array, asarray, blockwise, getitem, apply_infer_dtype
 from ..highlevelgraph import HighLevelGraph
 from ..core import flatten
 
@@ -361,16 +361,20 @@ significantly.".format(dim))
             if len(relevant_chunksizes) > 1:
                 raise ValueError("Dimension `'{}'` with different chunksize present".format(dim))
 
-    ## Apply function - use atop here
+    ## Apply function - use blockwise here
     arginds = list(concat(zip(args, input_dimss)))
 
-    ### Use existing `atop` but only with loopdims to enforce
+    ### Use existing `blockwise` but only with loopdims to enforce
     ### concatenation for coredims that appear also at the output
-    ### Modifying `atop` could improve things here.
-    tmp = atop(func, loop_output_dims, *arginds,
-               dtype=int,  # Only dummy dtype, anyone will do
-               concatenate=True,
-               **kwargs)
+    ### Modifying `blockwise` could improve things here.
+    tmp = blockwise(
+        func,
+        loop_output_dims,
+        *arginds,
+        dtype=int,  # Only dummy dtype, anyone will do
+        concatenate=True,
+        **kwargs
+    )
 
     ## Prepare output shapes
     loop_output_shape = tmp.shape

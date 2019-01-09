@@ -18,13 +18,10 @@ import uuid
 import warnings
 
 try:
-    from cytoolz import (partition, concat, join, first,
-                         groupby, valmap, accumulate)
+    from cytoolz import (partition, concat, first, groupby, accumulate)
     from cytoolz.curried import pluck
-
 except ImportError:
-    from toolz import (partition, concat, join, first,
-                       groupby, valmap, accumulate)
+    from toolz import (partition, concat, first, groupby, accumulate)
     from toolz.curried import pluck
 from toolz import map, reduce, frequencies
 import numpy as np
@@ -33,11 +30,12 @@ from . import chunk
 from .. import config
 from ..base import (DaskMethodsMixin, tokenize, dont_optimize,
                     compute_as_if_collection, persist, is_dask_collection)
+from ..blockwise import broadcast_dimensions, subs
 from ..context import globalmethod
-from ..utils import (homogeneous_deepmap, ndeepmap, ignoring, concrete,
+from ..utils import (ndeepmap, ignoring, concrete,
                      is_integer, IndexCallable, funcname, derived_from,
                      SerializableLock, Dispatch, factors,
-                     parse_bytes, has_keyword, M)
+                     parse_bytes, has_keyword, M, ndimlist)
 from ..compatibility import (unicode, zip_longest,
                              Iterable, Iterator, Mapping)
 from ..core import quote
@@ -48,7 +46,7 @@ from ..highlevelgraph import HighLevelGraph
 from ..bytes.core import get_mapper, get_fs_token_paths
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
-from .top import atop, subs
+from .blockwise import blockwise
 
 
 config.update_defaults({'array': {
@@ -223,83 +221,6 @@ def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
     return sum(map(partial(np.dot, **kwargs), A, B))
 
 
-def zero_broadcast_dimensions(lol, nblocks):
-    """
-
-    >>> lol = [('x', 1, 0), ('x', 1, 1), ('x', 1, 2)]
-    >>> nblocks = (4, 1, 2)  # note singleton dimension in second place
-    >>> lol = [[('x', 1, 0, 0), ('x', 1, 0, 1)],
-    ...        [('x', 1, 1, 0), ('x', 1, 1, 1)],
-    ...        [('x', 1, 2, 0), ('x', 1, 2, 1)]]
-
-    >>> zero_broadcast_dimensions(lol, nblocks)  # doctest: +NORMALIZE_WHITESPACE
-    [[('x', 1, 0, 0), ('x', 1, 0, 1)],
-     [('x', 1, 0, 0), ('x', 1, 0, 1)],
-     [('x', 1, 0, 0), ('x', 1, 0, 1)]]
-
-    See Also
-    --------
-    lol_tuples
-    """
-    f = lambda t: (t[0],) + tuple(0 if d == 1 else i for i, d in zip(t[1:], nblocks))
-    return homogeneous_deepmap(f, lol)
-
-
-def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)),
-                         consolidate=None):
-    """ Find block dimensions from arguments
-
-    Parameters
-    ----------
-    argpairs: iterable
-        name, ijk index pairs
-    numblocks: dict
-        maps {name: number of blocks}
-    sentinels: iterable (optional)
-        values for singleton dimensions
-    consolidate: func (optional)
-        use this to reduce each set of common blocks into a smaller set
-
-    Examples
-    --------
-    >>> argpairs = [('x', 'ij'), ('y', 'ji')]
-    >>> numblocks = {'x': (2, 3), 'y': (3, 2)}
-    >>> broadcast_dimensions(argpairs, numblocks)
-    {'i': 2, 'j': 3}
-
-    Supports numpy broadcasting rules
-
-    >>> argpairs = [('x', 'ij'), ('y', 'ij')]
-    >>> numblocks = {'x': (2, 1), 'y': (1, 3)}
-    >>> broadcast_dimensions(argpairs, numblocks)
-    {'i': 2, 'j': 3}
-
-    Works in other contexts too
-
-    >>> argpairs = [('x', 'ij'), ('y', 'ij')]
-    >>> d = {'x': ('Hello', 1), 'y': (1, (2, 3))}
-    >>> broadcast_dimensions(argpairs, d)
-    {'i': 'Hello', 'j': (2, 3)}
-    """
-    # List like [('i', 2), ('j', 1), ('i', 1), ('j', 2)]
-    argpairs2 = [(a, ind) for a, ind in argpairs if ind is not None]
-    L = concat([zip(inds, dims) for (x, inds), (x, dims)
-                in join(first, argpairs2, first, numblocks.items())])
-
-    g = groupby(0, L)
-    g = dict((k, set([d for i, d in v])) for k, v in g.items())
-
-    g2 = dict((k, v - set(sentinels) if len(v) > 1 else v) for k, v in g.items())
-
-    if consolidate:
-        return valmap(consolidate, g2)
-
-    if g2 and not set(map(len, g2.values())) == set([1]):
-        raise ValueError("Shapes do not align %s" % g)
-
-    return valmap(first, g2)
-
-
 def _concatenate2(arrays, axes=[]):
     """ Recursively Concatenate nested lists of arrays along axes
 
@@ -396,11 +317,11 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype='dtype', nout=
 
 
 def normalize_arg(x):
-    """ Normalize user provided arguments to atop or map_blocks
+    """ Normalize user provided arguments to blockwise or map_blocks
 
     We do a few things:
 
-    1.  If they are string literals that might collide with atop_token then we
+    1.  If they are string literals that might collide with blockwise_token then we
         quote them
     2.  IF they are large (as defined by sizeof) then we put them into the
         graph on their own by using dask.delayed
@@ -590,9 +511,9 @@ def map_blocks(func, *args, **kwargs):
         out_ind = tuple(out_ind)
         if max(new_axis) > max(out_ind):
             raise ValueError("New_axis values do not fill in all dimensions")
-    out = atop(func, out_ind, *concat(argpairs), name=name,
-               new_axes=new_axes, dtype=dtype, concatenate=True,
-               align_arrays=False, **kwargs)
+    out = blockwise(func, out_ind, *concat(argpairs), name=name,
+                    new_axes=new_axes, dtype=dtype, concatenate=True,
+                    align_arrays=False, **kwargs)
 
     if (has_keyword(func, 'block_id') or has_keyword(func, 'block_info') or drop_axis):
         dsk = out.dask.layers[out.name]
@@ -3159,7 +3080,7 @@ def elemwise(op, *args, **kwargs):
 
     See Also
     --------
-    atop
+    blockwise
     """
     out = kwargs.pop('out', None)
     if not set(['name', 'dtype']).issuperset(kwargs):
@@ -3204,16 +3125,16 @@ def elemwise(op, *args, **kwargs):
     name = kwargs.get('name', None) or '%s-%s' % (funcname(op),
                                                   tokenize(op, dt, *args))
 
-    atop_kwargs = dict(dtype=dt, name=name, token=funcname(op).strip('_'))
+    blockwise_kwargs = dict(dtype=dt, name=name, token=funcname(op).strip('_'))
     if need_enforce_dtype:
-        atop_kwargs['enforce_dtype'] = dt
-        atop_kwargs['enforce_dtype_function'] = op
+        blockwise_kwargs['enforce_dtype'] = dt
+        blockwise_kwargs['enforce_dtype_function'] = op
         op = _enforce_dtype
-    result = atop(op, expr_inds,
-                  *concat((a, tuple(range(a.ndim)[::-1])
-                           if not is_scalar_for_elemwise(a)
-                           else None) for a in args),
-                  **atop_kwargs)
+    result = blockwise(op, expr_inds,
+                       *concat((a, tuple(range(a.ndim)[::-1])
+                                if not is_scalar_for_elemwise(a)
+                                else None) for a in args),
+                       **blockwise_kwargs)
 
     return handle_out(out, result)
 
@@ -3252,7 +3173,7 @@ def _enforce_dtype(*args, **kwargs):
     """Calls a function and converts its result to the given dtype.
 
     The parameters have deliberately been given unwieldy names to avoid
-    clashes with keyword arguments consumed by atop
+    clashes with keyword arguments consumed by blockwise
 
     A dtype of `object` is treated as a special case and not enforced,
     because it is used as a dummy value in some places when the result will
@@ -3438,15 +3359,6 @@ def deepfirst(seq):
         return seq
     else:
         return deepfirst(seq[0])
-
-
-def ndimlist(seq):
-    if not isinstance(seq, (list, tuple)):
-        return 0
-    elif not seq:
-        return 1
-    else:
-        return 1 + ndimlist(seq[0])
 
 
 def shapelist(a):

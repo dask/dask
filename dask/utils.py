@@ -1024,3 +1024,12 @@ def has_keyword(func, keyword):
                 return keyword in inspect.getargspec(func).args
     except Exception:
         return False
+
+
+def ndimlist(seq):
+    if not isinstance(seq, (list, tuple)):
+        return 0
+    elif not seq:
+        return 1
+    else:
+        return 1 + ndimlist(seq[0])
