@@ -7,7 +7,7 @@ import numpy as np
 
 from ..base import normalize_token
 from .core import (concatenate_lookup, tensordot_lookup, map_blocks,
-                   asanyarray, atop)
+                   asanyarray, blockwise)
 from .routines import _average
 
 
@@ -121,7 +121,7 @@ def _wrap_masked(f):
         ainds = tuple(range(a.ndim))[::-1]
         vinds = tuple(range(value.ndim))[::-1]
         oinds = max(ainds, vinds, key=len)
-        return atop(f, oinds, a, ainds, value, vinds, dtype=a.dtype)
+        return blockwise(f, oinds, a, ainds, value, vinds, dtype=a.dtype)
 
     return _
 
@@ -139,7 +139,7 @@ def masked_equal(a, value):
     if getattr(value, 'shape', ()):
         raise ValueError("da.ma.masked_equal doesn't support array `value`s")
     inds = tuple(range(a.ndim))
-    return atop(np.ma.masked_equal, inds, a, inds, value, (), dtype=a.dtype)
+    return blockwise(np.ma.masked_equal, inds, a, inds, value, (), dtype=a.dtype)
 
 
 @wraps(np.ma.masked_invalid)
@@ -169,8 +169,15 @@ def masked_where(condition, a):
     a = asanyarray(a)
     ainds = tuple(range(a.ndim))
     cinds = tuple(range(condition.ndim))
-    return atop(np.ma.masked_where, ainds, condition, cinds, a, ainds,
-                dtype=a.dtype)
+    return blockwise(
+        np.ma.masked_where,
+        ainds,
+        condition,
+        cinds,
+        a,
+        ainds,
+        dtype=a.dtype
+    )
 
 
 @wraps(np.ma.masked_values)
@@ -231,7 +238,7 @@ def masked_array(data, mask=np.ma.nomask, fill_value=None,
     else:
         kwargs['dtype'] = data.dtype
 
-    return atop(_masked_array, *arginds, **kwargs)
+    return blockwise(_masked_array, *arginds, **kwargs)
 
 
 def _set_fill_value(x, fill_value):

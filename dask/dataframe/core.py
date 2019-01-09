@@ -28,7 +28,7 @@ from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
                      is_arraylike)
 from ..array.core import Array, normalize_arg
-from ..array.top import _top, TOP
+from ..blockwise import blockwise, Blockwise
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..sizeof import sizeof
 from ..delayed import delayed, Delayed, unpack_collections
@@ -4508,7 +4508,7 @@ def new_dd_object(dsk, name, meta, divisions):
                   tuple((d,) for d in meta.shape[1:]))
         if len(chunks) > 1:
             layer = dsk.layers[name]
-            if isinstance(layer, TOP):
+            if isinstance(layer, Blockwise):
                 layer.new_axes['j'] = chunks[1][0]
                 layer.output_indices = layer.output_indices + ('j',)
             else:
@@ -4526,8 +4526,8 @@ def partitionwise_graph(func, name, *args, **kwargs):
 
     This applies a function, ``func``, in an embarrassingly parallel fashion
     across partitions/chunks in the provided arguments.  It handles Dataframes,
-    Arrays, and scalars smoothly, and relies on the ``atop`` machinery of
-    dask.array to provide a nicely symbolic graph.
+    Arrays, and scalars smoothly, and relies on the ``blockwise`` machinery
+    to provide a nicely symbolic graph.
 
     It is most commonly used in other graph-building functions to create the
     appropriate layer of the resulting dataframe.
@@ -4542,7 +4542,7 @@ def partitionwise_graph(func, name, *args, **kwargs):
 
     Returns
     -------
-    out: TOP graph
+    out: Blockwise graph
 
     Examples
     --------
@@ -4576,4 +4576,4 @@ def partitionwise_graph(func, name, *args, **kwargs):
             numblocks[arg._name] = arg.numblocks
         else:
             pairs.extend([arg, None])
-    return _top(func, name, 'i', *pairs, numblocks=numblocks, concatenate=True, **kwargs)
+    return blockwise(func, name, 'i', *pairs, numblocks=numblocks, concatenate=True, **kwargs)

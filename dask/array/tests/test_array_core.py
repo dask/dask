@@ -25,13 +25,13 @@ from dask.utils import ignoring, tmpfile, tmpdir, key_split
 from dask.utils_test import inc, dec
 
 from dask.array.core import (getem, getter, dotmany, concatenate3,
-                             broadcast_dimensions, Array, stack, concatenate,
+                             Array, stack, concatenate,
                              from_array, broadcast_shapes,
                              broadcast_to, blockdims_from_blockshape, store,
                              optimize, from_func, normalize_chunks,
                              broadcast_chunks, from_delayed,
-                             concatenate_axes, common_blockdim)
-from dask.array.top import top, atop
+                             common_blockdim, concatenate_axes)
+from dask.blockwise import (make_blockwise_graph as top, broadcast_dimensions)
 from dask.array.utils import assert_eq, same_keys
 
 # temporary until numpy functions migrated
@@ -98,15 +98,15 @@ def test_top_literals():
          ('z', 1, 1): (add, ('x', 1, 1), 123)}
 
 
-def test_atop_literals():
+def test_blockwise_literals():
     x = da.ones((10, 10), chunks=(5, 5))
-    z = atop(add, 'ij', x, 'ij', 100, None, dtype=x.dtype)
+    z = da.blockwise(add, 'ij', x, 'ij', 100, None, dtype=x.dtype)
     assert_eq(z, x + 100)
 
-    z = atop(lambda x, y, z: x * y + z, 'ij', 2, None,  x, 'ij', 100, None, dtype=x.dtype)
+    z = da.blockwise(lambda x, y, z: x * y + z, 'ij', 2, None,  x, 'ij', 100, None, dtype=x.dtype)
     assert_eq(z, 2 * x + 100)
 
-    z = atop(getitem, 'ij', x, 'ij', slice(None), None, dtype=x.dtype)
+    z = da.blockwise(getitem, 'ij', x, 'ij', slice(None), None, dtype=x.dtype)
     assert_eq(z, x)
 
 
@@ -2921,7 +2921,7 @@ def test_concatenate_axes():
         concatenate_axes([x, x], axes=[0, 1, 2, 3])  # too many axes
 
 
-def test_atop_concatenate():
+def test_blockwise_concatenate():
     x = da.ones((4, 4, 4), chunks=(2, 2, 2))
     y = da.ones((4, 4), chunks=(2, 2))
 
@@ -2934,10 +2934,10 @@ def test_atop_concatenate():
 
         return (a + b).sum(axis=(1, 2))
 
-    z = atop(f, 'i', x, 'ijk', y, 'jk', concatenate=True, dtype=x.dtype)
+    z = da.blockwise(f, 'i', x, 'ijk', y, 'jk', concatenate=True, dtype=x.dtype)
     assert_eq(z, np.ones(4) * 32)
 
-    z = atop(add, 'ij', y, 'ij', y, 'ij', concatenate=True, dtype=x.dtype)
+    z = da.blockwise(add, 'ij', y, 'ij', y, 'ij', concatenate=True, dtype=x.dtype)
     assert_eq(z, np.ones((4, 4)) * 2)
 
     def f(a, b, c):
@@ -2951,8 +2951,7 @@ def test_atop_concatenate():
 
         return np.ones(5)
 
-    z = atop(f, 'j', x, 'ijk', y, 'ki', y, 'ij', concatenate=True,
-             dtype=x.dtype)
+    z = da.blockwise(f, 'j', x, 'ijk', y, 'ki', y, 'ij', concatenate=True, dtype=x.dtype)
     assert_eq(z, np.ones(10), check_shape=False)
 
 
@@ -2994,10 +2993,10 @@ def test_elemwise_uneven_chunks():
     assert z.chunks == ((2, 2), (4, 2, 4), (2, 3, 2, 3))
 
 
-def test_uneven_chunks_atop():
+def test_uneven_chunks_blockwise():
     x = da.random.random((10, 10), chunks=((2, 3, 2, 3), (5, 5)))
     y = da.random.random((10, 10), chunks=((4, 4, 2), (4, 2, 4)))
-    z = atop(np.dot, 'ik', x, 'ij', y, 'jk', dtype=x.dtype, concatenate=True)
+    z = da.blockwise(np.dot, 'ik', x, 'ij', y, 'jk', dtype=x.dtype, concatenate=True)
     assert z.chunks == (x.chunks[0], y.chunks[1])
 
     assert_eq(z, x.compute().dot(y))
@@ -3203,23 +3202,27 @@ def test_zero_slice_dtypes():
 
 def test_zero_sized_array_rechunk():
     x = da.arange(5, chunks=1)[:0]
-    y = da.atop(identity, 'i', x, 'i', dtype=x.dtype)
+    y = da.blockwise(identity, 'i', x, 'i', dtype=x.dtype)
     assert_eq(x, y)
 
 
-def test_atop_zero_shape():
-    da.atop(lambda x: x, 'i',
-            da.arange(10, chunks=10), 'i',
-            da.from_array(np.ones((0, 2)), ((0,), 2)), 'ab',
-            da.from_array(np.ones((0,)), ((0,),)), 'a',
-            dtype='float64')
+def test_blockwise_zero_shape():
+    da.blockwise(
+        lambda x: x, 'i',
+        da.arange(10, chunks=10), 'i',
+        da.from_array(np.ones((0, 2)), ((0,), 2)), 'ab',
+        da.from_array(np.ones((0,)), ((0,),)), 'a',
+        dtype='float64'
+    )
 
 
-def test_atop_zero_shape_new_axes():
-    da.atop(lambda x: np.ones(42), 'i',
-            da.from_array(np.ones((0, 2)), ((0,), 2)), 'ab',
-            da.from_array(np.ones((0,)), ((0,),)), 'a',
-            dtype='float64', new_axes={'i': 42})
+def test_blockwise_zero_shape_new_axes():
+    da.blockwise(
+        lambda x: np.ones(42), 'i',
+        da.from_array(np.ones((0, 2)), ((0,), 2)), 'ab',
+        da.from_array(np.ones((0,)), ((0,),)), 'a',
+        dtype='float64', new_axes={'i': 42}
+    )
 
 
 def test_broadcast_against_zero_shape():
@@ -3277,7 +3280,7 @@ def test_stack_errs():
     assert len(str(e.value)) < 105
 
 
-def test_atop_with_numpy_arrays():
+def test_blockwise_with_numpy_arrays():
     x = np.ones(10)
     y = da.ones(10, chunks=(5,))
 
@@ -3607,15 +3610,15 @@ def test_map_blocks_large_inputs_delayed():
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
 
-def test_atop_large_inputs_delayed():
+def test_blockwise_large_inputs_delayed():
     a = da.ones(10, chunks=(5,))
     b = np.ones(1000000)
 
-    c = atop(add, 'i', a, 'i', b, None, dtype=a.dtype)
+    c = da.blockwise(add, 'i', a, 'i', b, None, dtype=a.dtype)
     assert any(b is v for v in c.dask.values())
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 
-    d = atop(lambda x, y: x + y, 'i', a, 'i', y=b, dtype=a.dtype)
+    d = da.blockwise(lambda x, y: x + y, 'i', a, 'i', y=b, dtype=a.dtype)
     assert any(b is v for v in d.dask.values())
     assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
 

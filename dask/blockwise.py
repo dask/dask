@@ -1,14 +1,16 @@
 import itertools
-import numbers
 
 import numpy as np
-import toolz
+try:
+    import cytoolz as toolz
+except ImportError:
+    import toolz
 
-from .. import base, core, utils
-from ..compatibility import apply, Mapping
-from ..delayed import to_task_dask, unpack_collections
-from ..highlevelgraph import HighLevelGraph
-from ..optimization import SubgraphCallable
+from . import core, utils
+from .compatibility import apply, Mapping
+from .delayed import to_task_dask
+from .highlevelgraph import HighLevelGraph
+from .optimization import SubgraphCallable
 
 
 def subs(task, substitution):
@@ -35,20 +37,21 @@ def index_subs(ind, substitution):
         return tuple([substitution.get(c, c) for c in ind])
 
 
-def atop_token(i, prefix='_'):
+def blockwise_token(i, prefix='_'):
     return prefix + '%d' % i
 
 
-def _top(func, output, output_indices, *arrind_pairs, **kwargs):
-    """ Create a TOP symbolic mutable mapping, given the inputs to top
+def blockwise(func, output, output_indices, *arrind_pairs, **kwargs):
+    """ Create a Blockwise symbolic mutable mapping
 
-    This is like the ``top`` function, but rather than construct a dict, it
-    returns a symbolic TOP object.
+
+    This is like the ``make_blockwise_graph`` function, but rather than construct a dict, it
+    returns a symbolic Blockwise object.
 
     See Also
     --------
-    top
-    TOP
+    make_blockwise_graph
+    Blockwise
     """
     numblocks = kwargs.pop('numblocks')
     concatenate = kwargs.pop('concatenate', None)
@@ -62,7 +65,7 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     unique_indices = {i for ii in arrind_pairs[1::2]
                       if ii is not None
                       for i in ii} | set(output_indices)
-    sub = {k: atop_token(i, '.')
+    sub = {k: blockwise_token(i, '.')
            for i, k in enumerate(sorted(unique_indices))}
     output_indices = index_subs(tuple(output_indices), sub)
     arrind_pairs[1::2] = [tuple(a) if a is not None else a
@@ -82,14 +85,14 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
     new_keys = {n for c in dependencies for n in c.__dask_layers__()}
     if kwargs:
         # replace keys in kwargs with _0 tokens
-        new_tokens = tuple(atop_token(i) for i in range(len(inputs), len(inputs) + len(new_keys)))
+        new_tokens = tuple(blockwise_token(i) for i in range(len(inputs), len(inputs) + len(new_keys)))
         sub = dict(zip(new_keys, new_tokens))
         inputs = inputs + tuple(new_keys)
         inputs_indices = inputs_indices + (None,) * len(new_keys)
         kwargs = subs(kwargs, sub)
 
     indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
-    keys = tuple(map(atop_token, range(len(inputs))))
+    keys = tuple(map(blockwise_token, range(len(inputs))))
 
     # Construct local graph
     if not kwargs:
@@ -102,13 +105,12 @@ def _top(func, output, output_indices, *arrind_pairs, **kwargs):
         subgraph = {output: (apply, func, _keys, kwargs2)}
 
     # Construct final output
-    top = TOP(output, output_indices, subgraph, indices,
-              numblocks=numblocks, concatenate=concatenate, new_axes=new_axes)
-    return top
-    return HighLevelGraph.from_collections(output, top, dependencies=dependencies)
+    subgraph = Blockwise(output, output_indices, subgraph, indices,
+                         numblocks=numblocks, concatenate=concatenate, new_axes=new_axes)
+    return subgraph
 
 
-class TOP(Mapping):
+class Blockwise(Mapping):
     """ Tensor Operation
 
     This is a lazily constructed mapping for tensor operation graphs.
@@ -120,8 +122,8 @@ class TOP(Mapping):
 
     See Also
     --------
-    top
-    atop
+    dask.blockwise.blockwise
+    dask.array.blockwise
     """
     def __init__(self, output, output_indices, dsk, indices,
                  numblocks, concatenate=None, new_axes=None):
@@ -139,9 +141,9 @@ class TOP(Mapping):
         if hasattr(self, '_cached_dict'):
             return self._cached_dict
         else:
-            keys = tuple(map(atop_token, range(len(self.indices))))
+            keys = tuple(map(blockwise_token, range(len(self.indices))))
             func = SubgraphCallable(self.dsk, self.output, keys)
-            self._cached_dict = top(
+            self._cached_dict = make_blockwise_graph(
                 func,
                 self.output,
                 self.output_indices,
@@ -171,14 +173,14 @@ class TOP(Mapping):
         return {k: v for k, v in d.items() if k in self.output_indices}
 
 
-def top(func, output, out_indices, *arrind_pairs, **kwargs):
+def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     """ Tensor operation
 
     Applies a function, ``func``, across blocks from many different input
     dasks.  We arrange the pattern with which those blocks interact with sets
     of matching indices.  E.g.::
 
-        top(func, 'z', 'i', 'x', 'i', 'y', 'i')
+        make_blockwise_graph(func, 'z', 'i', 'x', 'i', 'y', 'i')
 
     yield an embarrassingly parallel communication pattern and is read as
 
@@ -186,7 +188,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
 
     More complex patterns may emerge, including multiple indices::
 
-        top(func, 'z', 'ij', 'x', 'ij', 'y', 'ji')
+        make_blockwise_graph(func, 'z', 'ij', 'x', 'ij', 'y', 'ji')
 
         $$ z_{ij} = func(x_{ij}, y_{ji}) $$
 
@@ -199,7 +201,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     Simple embarrassing map operation
 
     >>> inc = lambda x: x + 1
-    >>> top(inc, 'z', 'ij', 'x', 'ij', numblocks={'x': (2, 2)})  # doctest: +SKIP
+    >>> make_blockwise_graph(inc, 'z', 'ij', 'x', 'ij', numblocks={'x': (2, 2)})  # doctest: +SKIP
     {('z', 0, 0): (inc, ('x', 0, 0)),
      ('z', 0, 1): (inc, ('x', 0, 1)),
      ('z', 1, 0): (inc, ('x', 1, 0)),
@@ -208,7 +210,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     Simple operation on two datasets
 
     >>> add = lambda x, y: x + y
-    >>> top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij', numblocks={'x': (2, 2),
+    >>> make_blockwise_graph(add, 'z', 'ij', 'x', 'ij', 'y', 'ij', numblocks={'x': (2, 2),
     ...                                                      'y': (2, 2)})  # doctest: +SKIP
     {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
      ('z', 0, 1): (add, ('x', 0, 1), ('y', 0, 1)),
@@ -220,7 +222,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     >>> addT = lambda x, y: x + y.T  # Transpose each chunk
     >>> #                                        z_ij ~ x_ij y_ji
     >>> #               ..         ..         .. notice swap
-    >>> top(addT, 'z', 'ij', 'x', 'ij', 'y', 'ji', numblocks={'x': (2, 2),
+    >>> make_blockwise_graph(addT, 'z', 'ij', 'x', 'ij', 'y', 'ji', numblocks={'x': (2, 2),
     ...                                                       'y': (2, 2)})  # doctest: +SKIP
     {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
      ('z', 0, 1): (add, ('x', 0, 1), ('y', 1, 0)),
@@ -229,7 +231,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
 
     Dot product with contraction over ``j`` index.  Yields list arguments
 
-    >>> top(dotmany, 'z', 'ik', 'x', 'ij', 'y', 'jk', numblocks={'x': (2, 2),
+    >>> make_blockwise_graph(dotmany, 'z', 'ik', 'x', 'ij', 'y', 'jk', numblocks={'x': (2, 2),
     ...                                                          'y': (2, 2)})  # doctest: +SKIP
     {('z', 0, 0): (dotmany, [('x', 0, 0), ('x', 0, 1)],
                             [('y', 0, 0), ('y', 1, 0)]),
@@ -242,7 +244,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
 
     Pass ``concatenate=True`` to concatenate arrays ahead of time
 
-    >>> top(f, 'z', 'i', 'x', 'ij', 'y', 'ij', concatenate=True,
+    >>> make_blockwise_graph(f, 'z', 'i', 'x', 'ij', 'y', 'ij', concatenate=True,
     ...     numblocks={'x': (2, 2), 'y': (2, 2,)})  # doctest: +SKIP
     {('z', 0): (f, (concatenate_axes, [('x', 0, 0), ('x', 0, 1)], (1,)),
                    (concatenate_axes, [('y', 0, 0), ('y', 0, 1)], (1,)))
@@ -251,7 +253,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
 
     Supports Broadcasting rules
 
-    >>> top(add, 'z', 'ij', 'x', 'ij', 'y', 'ij', numblocks={'x': (1, 2),
+    >>> make_blockwise_graph(add, 'z', 'ij', 'x', 'ij', 'y', 'ij', numblocks={'x': (1, 2),
     ...                                                      'y': (2, 2)})  # doctest: +SKIP
     {('z', 0, 0): (add, ('x', 0, 0), ('y', 0, 0)),
      ('z', 0, 1): (add, ('x', 0, 1), ('y', 0, 1)),
@@ -261,26 +263,29 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     Support keyword arguments with apply
 
     >>> def f(a, b=0): return a + b
-    >>> top(f, 'z', 'i', 'x', 'i', numblocks={'x': (2,)}, b=10)  # doctest: +SKIP
+    >>> make_blockwise_graph(f, 'z', 'i', 'x', 'i', numblocks={'x': (2,)}, b=10)  # doctest: +SKIP
     {('z', 0): (apply, f, [('x', 0)], {'b': 10}),
      ('z', 1): (apply, f, [('x', 1)], {'b': 10})}
 
     Include literals by indexing with ``None``
 
-    >>> top(add, 'z', 'i', 'x', 'i', 100, None,  numblocks={'x': (2,)})  # doctest: +SKIP
+    >>> make_blockwise_graph(add, 'z', 'i', 'x', 'i', 100, None,  numblocks={'x': (2,)})  # doctest: +SKIP
     {('z', 0): (add, ('x', 0), 100),
      ('z', 1): (add, ('x', 1), 100)}
 
 
     See Also
     --------
-    atop
+    dask.array.blockwise
+    dask.blockwise.blockwise
     """
-    from .core import broadcast_dimensions, zero_broadcast_dimensions, concatenate_axes
     numblocks = kwargs.pop('numblocks')
     concatenate = kwargs.pop('concatenate', None)
     new_axes = kwargs.pop('new_axes', {})
     argpairs = list(toolz.partition(2, arrind_pairs))
+
+    if concatenate is True:
+        from dask.array.core import concatenate_axes as concatenate
 
     assert set(numblocks) == {name for name, ind in argpairs if ind is not None}
 
@@ -317,7 +322,7 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
                     tups2 = tups
                 if concatenate and isinstance(tups2, list):
                     axes = [n for n, i in enumerate(ind) if i in dummies]
-                    tups2 = (concatenate_axes, tups2, axes)
+                    tups2 = (concatenate, tups2, axes)
                 args.append(tups2)
         valtups.append(args)
 
@@ -342,197 +347,6 @@ def top(func, output, out_indices, *arrind_pairs, **kwargs):
     dsk.update(dict(zip(keys, vals)))
 
     return dsk
-
-
-def atop(func, out_ind, *args, **kwargs):
-    """ Tensor operation: Generalized inner and outer products
-
-    A broad class of blocked algorithms and patterns can be specified with a
-    concise multi-index notation.  The ``atop`` function applies an in-memory
-    function across multiple blocks of multiple inputs in a variety of ways.
-    Many dask.array operations are special cases of atop including elementwise,
-    broadcasting, reductions, tensordot, and transpose.
-
-    Parameters
-    ----------
-    func : callable
-        Function to apply to individual tuples of blocks
-    out_ind : iterable
-        Block pattern of the output, something like 'ijk' or (1, 2, 3)
-    *args : sequence of Array, index pairs
-        Sequence like (x, 'ij', y, 'jk', z, 'i')
-    **kwargs : dict
-        Extra keyword arguments to pass to function
-    dtype : np.dtype
-        Datatype of resulting array.
-    concatenate : bool, keyword only
-        If true concatenate arrays along dummy indices, else provide lists
-    adjust_chunks : dict
-        Dictionary mapping index to function to be applied to chunk sizes
-    new_axes : dict, keyword only
-        New indexes and their dimension lengths
-
-    Examples
-    --------
-    2D embarrassingly parallel operation from two arrays, x, and y.
-
-    >>> z = atop(operator.add, 'ij', x, 'ij', y, 'ij', dtype='f8')  # z = x + y  # doctest: +SKIP
-
-    Outer product multiplying x by y, two 1-d vectors
-
-    >>> z = atop(operator.mul, 'ij', x, 'i', y, 'j', dtype='f8')  # doctest: +SKIP
-
-    z = x.T
-
-    >>> z = atop(np.transpose, 'ji', x, 'ij', dtype=x.dtype)  # doctest: +SKIP
-
-    The transpose case above is illustrative because it does same transposition
-    both on each in-memory block by calling ``np.transpose`` and on the order
-    of the blocks themselves, by switching the order of the index ``ij -> ji``.
-
-    We can compose these same patterns with more variables and more complex
-    in-memory functions
-
-    z = X + Y.T
-
-    >>> z = atop(lambda x, y: x + y.T, 'ij', x, 'ij', y, 'ji', dtype='f8')  # doctest: +SKIP
-
-    Any index, like ``i`` missing from the output index is interpreted as a
-    contraction (note that this differs from Einstein convention; repeated
-    indices do not imply contraction.)  In the case of a contraction the passed
-    function should expect an iterable of blocks on any array that holds that
-    index.  To receive arrays concatenated along contracted dimensions instead
-    pass ``concatenate=True``.
-
-    Inner product multiplying x by y, two 1-d vectors
-
-    >>> def sequence_dot(x_blocks, y_blocks):
-    ...     result = 0
-    ...     for x, y in zip(x_blocks, y_blocks):
-    ...         result += x.dot(y)
-    ...     return result
-
-    >>> z = atop(sequence_dot, '', x, 'i', y, 'i', dtype='f8')  # doctest: +SKIP
-
-    Add new single-chunk dimensions with the ``new_axes=`` keyword, including
-    the length of the new dimension.  New dimensions will always be in a single
-    chunk.
-
-    >>> def f(x):
-    ...     return x[:, None] * np.ones((1, 5))
-
-    >>> z = atop(f, 'az', x, 'a', new_axes={'z': 5}, dtype=x.dtype)  # doctest: +SKIP
-
-    If the applied function changes the size of each chunk you can specify this
-    with a ``adjust_chunks={...}`` dictionary holding a function for each index
-    that modifies the dimension size in that index.
-
-    >>> def double(x):
-    ...     return np.concatenate([x, x])
-
-    >>> y = atop(double, 'ij', x, 'ij',
-    ...          adjust_chunks={'i': lambda n: 2 * n}, dtype=x.dtype)  # doctest: +SKIP
-
-    Include literals by indexing with None
-
-    >>> y = atop(add, 'ij', x, 'ij', 1234, None, dtype=x.dtype)  # doctest: +SKIP
-
-    See Also
-    --------
-    top - dict formulation of this function, contains most logic
-    """
-    out = kwargs.pop('name', None)      # May be None at this point
-    token = kwargs.pop('token', None)
-    dtype = kwargs.pop('dtype', None)
-    adjust_chunks = kwargs.pop('adjust_chunks', None)
-    new_axes = kwargs.pop('new_axes', {})
-    align_arrays = kwargs.pop('align_arrays', True)
-
-    # Input Validation
-    if len(set(out_ind)) != len(out_ind):
-        raise ValueError("Repeated elements not allowed in output index",
-                         [k for k, v in toolz.frequencies(out_ind).items() if v > 1])
-    new = (set(out_ind)
-           - {a for arg in args[1::2] if arg is not None for a in arg}
-           - set(new_axes or ()))
-    if new:
-        raise ValueError("Unknown dimension", new)
-
-    from .core import Array, unify_chunks, normalize_arg
-
-    if dtype is None:
-        raise ValueError("Must specify dtype of output array")
-
-    if align_arrays:
-        chunkss, arrays = unify_chunks(*args)
-    else:
-        arg, ind = max([(a, i) for (a, i) in toolz.partition(2, args) if i is not None],
-                       key=lambda ai: len(ai[1]))
-        chunkss = dict(zip(ind, arg.chunks))
-        arrays = args[::2]
-
-    for k, v in new_axes.items():
-        if not isinstance(v, tuple):
-            v = (v,)
-        chunkss[k] = v
-    arginds = list(zip(arrays, args[1::2]))
-
-    for arg, ind in arginds:
-        if hasattr(arg, 'ndim') and hasattr(ind, '__len__') and arg.ndim != len(ind):
-            raise ValueError("Index string %s does not match array dimension %d"
-                             % (ind, arg.ndim))
-
-    numblocks = {a.name: a.numblocks for a, ind in arginds if ind is not None}
-
-    dependencies = []
-    arrays = []
-
-    # Normalize arguments
-    argindsstr = []
-    for a, ind in arginds:
-        if ind is None:
-            a = normalize_arg(a)
-            a, collections = unpack_collections(a)
-            dependencies.extend(collections)
-        else:
-            arrays.append(a)
-            a = a.name
-        argindsstr.extend((a, ind))
-
-    # Normalize keyword arguments
-    kwargs2 = {}
-    for k, v in kwargs.items():
-        v = normalize_arg(v)
-        v, collections = unpack_collections(v)
-        dependencies.extend(collections)
-        kwargs2[k] = v
-
-    # Finish up the name
-    if not out:
-        out = '%s-%s' % (token or utils.funcname(func).strip('_'),
-                         base.tokenize(func, out_ind, argindsstr, dtype, **kwargs))
-
-    graph = _top(func, out, out_ind, *argindsstr, numblocks=numblocks,
-                 dependencies=dependencies, new_axes=new_axes, **kwargs2)
-    graph = HighLevelGraph.from_collections(out, graph,
-                                            dependencies=arrays + dependencies)
-
-    chunks = [chunkss[i] for i in out_ind]
-    if adjust_chunks:
-        for i, ind in enumerate(out_ind):
-            if ind in adjust_chunks:
-                if callable(adjust_chunks[ind]):
-                    chunks[i] = tuple(map(adjust_chunks[ind], chunks[i]))
-                elif isinstance(adjust_chunks[ind], numbers.Integral):
-                    chunks[i] = tuple(adjust_chunks[ind] for _ in chunks[i])
-                elif isinstance(adjust_chunks[ind], (tuple, list)):
-                    chunks[i] = tuple(adjust_chunks[ind])
-                else:
-                    raise NotImplementedError(
-                        "adjust_chunks values must be callable, int, or tuple")
-    chunks = tuple(chunks)
-
-    return Array(graph, out, chunks, dtype=dtype)
 
 
 def lol_tuples(head, ind, values, dummies):
@@ -576,15 +390,15 @@ def lol_tuples(head, ind, values, dummies):
                 for v in dummies[ind[0]]]
 
 
-def optimize_atop(full_graph, keys=()):
-    """ High level optimization of stacked TOP layers
+def optimize_blockwise(full_graph, keys=()):
+    """ High level optimization of stacked Blockwise layers
 
-    For operations that have multiple TOP operations one after the other, like
-    ``x.T + 123`` we can fuse these into a single TOP operation.  This happens
+    For operations that have multiple Blockwise operations one after the other, like
+    ``x.T + 123`` we can fuse these into a single Blockwise operation.  This happens
     before any actual tasks are generated, and so can reduce overhead.
 
-    This finds groups of TOP operations that can be safely fused, and then
-    passes them to ``rewrite_atop`` for rewriting.
+    This finds groups of Blockwise operations that can be safely fused, and then
+    passes them to ``rewrite_blockwise`` for rewriting.
 
     Parameters
     ----------
@@ -599,7 +413,7 @@ def optimize_atop(full_graph, keys=()):
 
     See Also
     --------
-    rewrite_atop
+    rewrite_blockwise
     """
     keep = {k[0] if type(k) is tuple else k for k in keys}
     layers = full_graph.dicts
@@ -618,16 +432,16 @@ def optimize_atop(full_graph, keys=()):
             continue
         seen.add(layer)
 
-        # Outer loop walks through possible output TOP layers
-        if isinstance(layers[layer], TOP):
-            top_layers = {layer}
-            deps = set(top_layers)
+        # Outer loop walks through possible output Blockwise layers
+        if isinstance(layers[layer], Blockwise):
+            blockwise_layers = {layer}
+            deps = set(blockwise_layers)
             while deps:  # we gather as many sub-layers as we can
                 dep = deps.pop()
                 if dep not in layers:
                     stack.append(dep)
                     continue
-                if not isinstance(layers[dep], TOP):
+                if not isinstance(layers[dep], Blockwise):
                     stack.append(dep)
                     continue
                 if (dep != layer and dep in keep):
@@ -638,7 +452,7 @@ def optimize_atop(full_graph, keys=()):
                     continue
 
                 # passed everything, proceed
-                top_layers.add(dep)
+                blockwise_layers.add(dep)
 
                 # traverse further to this child's children
                 for d in full_graph.dependencies.get(dep, ()):
@@ -651,8 +465,8 @@ def optimize_atop(full_graph, keys=()):
                     else:
                         stack.append(d)
 
-            # Merge these TOP layers into one
-            new_layer = rewrite_atop([layers[l] for l in top_layers])
+            # Merge these Blockwise layers into one
+            new_layer = rewrite_blockwise([layers[l] for l in blockwise_layers])
             out[layer] = new_layer
             dependencies[layer] = {k for k, v in new_layer.indices if v is not None}
         else:
@@ -663,24 +477,24 @@ def optimize_atop(full_graph, keys=()):
     return HighLevelGraph(out, dependencies)
 
 
-def rewrite_atop(inputs):
-    """ Rewrite a stack of atop expressions into a single atop expression
+def rewrite_blockwise(inputs):
+    """ Rewrite a stack of Blockwise expressions into a single blockwise expression
 
-    Given a set of TOP layers, combine them into a single layer.  The provided
+    Given a set of Blockwise layers, combine them into a single layer.  The provided
     layers are expected to fit well together.  That job is handled by
-    ``optimize_atop``
+    ``optimize_blockwise``
 
     Parameters
     ----------
-    inputs : List[TOP]
+    inputs : List[Blockwise]
 
     Returns
     -------
-    top : TOP
+    blockwise: Blockwise
 
     See Also
     --------
-    optimize_atop
+    optimize_blockwise
     """
     inputs = {inp.output: inp for inp in inputs}
     dependencies = {inp.output: {d for d, v in inp.indices
@@ -713,12 +527,12 @@ def rewrite_atop(inputs):
 
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
-            dsk = {k: subs(v, {atop_token(i): dep}) for k, v in dsk.items()}
+            dsk = {k: subs(v, {blockwise_token(i): dep}) for k, v in dsk.items()}
 
             # Remove current input from input indices
             # [('a', 'i'), ('b', 'i')] -> [('a', 'i')]
             _, current_dep_indices = indices.pop(i)
-            sub = {atop_token(i): atop_token(i - 1) for i in range(i + 1, len(indices) + 1)}
+            sub = {blockwise_token(i): blockwise_token(i - 1) for i in range(i + 1, len(indices) + 1)}
             dsk = subs(dsk, sub)
 
             # Change new input_indices to match give index from current computation
@@ -746,9 +560,9 @@ def rewrite_atop(inputs):
                     contains = False
 
                 if contains:  # use old inputs if available
-                    sub[atop_token(i)] = atop_token(indices.index(index))
+                    sub[blockwise_token(i)] = blockwise_token(indices.index(index))
                 else:
-                    sub[atop_token(i)] = atop_token(len(indices))
+                    sub[blockwise_token(i)] = blockwise_token(len(indices))
                     indices.append(index)
             new_dsk = subs(inputs[dep].dsk, sub)
 
@@ -772,7 +586,7 @@ def rewrite_atop(inputs):
             sub[i] = len(new_indices)
             new_indices.append(x)
 
-    sub = {atop_token(k): atop_token(v) for k, v in sub.items()}
+    sub = {blockwise_token(k): blockwise_token(v) for k, v in sub.items()}
     dsk = {k: subs(v, sub) for k, v in dsk.items()}
 
     indices_check = {k for k, v in indices if v is not None}
@@ -780,7 +594,84 @@ def rewrite_atop(inputs):
     numblocks = {k: v for k, v in numblocks.items()
                  if v is None or k in indices_check}
 
-    out = TOP(root, inputs[root].output_indices, dsk, new_indices,
-              numblocks=numblocks, new_axes=new_axes, concatenate=concatenate)
+    out = Blockwise(root, inputs[root].output_indices, dsk, new_indices,
+                    numblocks=numblocks, new_axes=new_axes, concatenate=concatenate)
 
     return out
+
+
+def zero_broadcast_dimensions(lol, nblocks):
+    """
+
+    >>> lol = [('x', 1, 0), ('x', 1, 1), ('x', 1, 2)]
+    >>> nblocks = (4, 1, 2)  # note singleton dimension in second place
+    >>> lol = [[('x', 1, 0, 0), ('x', 1, 0, 1)],
+    ...        [('x', 1, 1, 0), ('x', 1, 1, 1)],
+    ...        [('x', 1, 2, 0), ('x', 1, 2, 1)]]
+
+    >>> zero_broadcast_dimensions(lol, nblocks)  # doctest: +NORMALIZE_WHITESPACE
+    [[('x', 1, 0, 0), ('x', 1, 0, 1)],
+     [('x', 1, 0, 0), ('x', 1, 0, 1)],
+     [('x', 1, 0, 0), ('x', 1, 0, 1)]]
+
+    See Also
+    --------
+    lol_tuples
+    """
+    f = lambda t: (t[0],) + tuple(0 if d == 1 else i for i, d in zip(t[1:], nblocks))
+    return utils.homogeneous_deepmap(f, lol)
+
+
+def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)),
+                         consolidate=None):
+    """ Find block dimensions from arguments
+
+    Parameters
+    ----------
+    argpairs: iterable
+        name, ijk index pairs
+    numblocks: dict
+        maps {name: number of blocks}
+    sentinels: iterable (optional)
+        values for singleton dimensions
+    consolidate: func (optional)
+        use this to reduce each set of common blocks into a smaller set
+
+    Examples
+    --------
+    >>> argpairs = [('x', 'ij'), ('y', 'ji')]
+    >>> numblocks = {'x': (2, 3), 'y': (3, 2)}
+    >>> broadcast_dimensions(argpairs, numblocks)
+    {'i': 2, 'j': 3}
+
+    Supports numpy broadcasting rules
+
+    >>> argpairs = [('x', 'ij'), ('y', 'ij')]
+    >>> numblocks = {'x': (2, 1), 'y': (1, 3)}
+    >>> broadcast_dimensions(argpairs, numblocks)
+    {'i': 2, 'j': 3}
+
+    Works in other contexts too
+
+    >>> argpairs = [('x', 'ij'), ('y', 'ij')]
+    >>> d = {'x': ('Hello', 1), 'y': (1, (2, 3))}
+    >>> broadcast_dimensions(argpairs, d)
+    {'i': 'Hello', 'j': (2, 3)}
+    """
+    # List like [('i', 2), ('j', 1), ('i', 1), ('j', 2)]
+    argpairs2 = [(a, ind) for a, ind in argpairs if ind is not None]
+    L = toolz.concat([zip(inds, dims) for (x, inds), (x, dims)
+                     in toolz.join(toolz.first, argpairs2, toolz.first, numblocks.items())])
+
+    g = toolz.groupby(0, L)
+    g = dict((k, set([d for i, d in v])) for k, v in g.items())
+
+    g2 = dict((k, v - set(sentinels) if len(v) > 1 else v) for k, v in g.items())
+
+    if consolidate:
+        return toolz.valmap(consolidate, g2)
+
+    if g2 and not set(map(len, g2.values())) == set([1]):
+        raise ValueError("Shapes do not align %s" % g)
+
+    return toolz.valmap(toolz.first, g2)
