@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 from toolz import concat
 
+import dask
 import dask.array as da
 from dask.array.utils import assert_eq, same_keys
 
@@ -131,9 +132,8 @@ def test_arange():
     with pytest.raises(TypeError) as exc:
         da.arange(10, chunks=-1, whatsthis=1)
     assert 'whatsthis' in str(exc)
-    with pytest.raises(TypeError) as exc:
-        da.arange(10)
-    assert 'chunks' in str(exc)
+
+    assert da.arange(10).chunks == ((10,),)
 
 
 @pytest.mark.parametrize("start,stop,step,dtype", [
@@ -529,3 +529,9 @@ def test_pad_udf(kwargs):
     da_r = da.pad(da_a, pad_width, udf_pad, kwargs=kwargs)
 
     assert_eq(np_r, da_r)
+
+
+def test_auto_chunks():
+    with dask.config.set({'array.chunk-size': '50 MiB'}):
+        x = da.ones((10000, 10000))
+        assert 4 < x.npartitions < 32

@@ -2321,8 +2321,6 @@ def test_raise_on_no_chunks():
         assert "dask" in str(e)
         assert ".org" in str(e)
 
-    pytest.raises(ValueError, lambda: da.ones(6))
-
 
 def test_chunks_is_immutable():
     x = da.ones(6, chunks=3)

@@ -237,7 +237,7 @@ def _fftfreq_block(i, n, d):
 
 
 @wraps(np.fft.fftfreq)
-def fftfreq(n, d=1.0, chunks=None):
+def fftfreq(n, d=1.0, chunks='auto'):
     n = int(n)
     d = float(d)
 
@@ -247,7 +247,7 @@ def fftfreq(n, d=1.0, chunks=None):
 
 
 @wraps(np.fft.rfftfreq)
-def rfftfreq(n, d=1.0, chunks=None):
+def rfftfreq(n, d=1.0, chunks='auto'):
     n = int(n)
     d = float(d)
 

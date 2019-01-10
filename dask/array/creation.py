@@ -175,7 +175,7 @@ def full_like(a, fill_value, dtype=None, chunks=None):
     )
 
 
-def linspace(start, stop, num=50, endpoint=True, retstep=False, chunks=None,
+def linspace(start, stop, num=50, endpoint=True, retstep=False, chunks='auto',
              dtype=None):
     """
     Return `num` evenly spaced values over the closed interval [`start`,
@@ -214,9 +214,6 @@ def linspace(start, stop, num=50, endpoint=True, retstep=False, chunks=None,
     dask.array.arange
     """
     num = int(num)
-
-    if chunks is None:
-        raise ValueError("Must supply a chunks= keyword argument")
 
     chunks = normalize_chunks(chunks, (num,))
 
@@ -296,17 +293,16 @@ def arange(*args, **kwargs):
         arange takes 3 positional arguments: arange([start], stop, [step])
         ''')
 
-    try:
-        chunks = kwargs.pop('chunks')
-    except KeyError:
-        raise TypeError("Required argument 'chunks' not found")
+    chunks = kwargs.pop('chunks', 'auto')
 
     num = int(max(np.ceil((stop - start) / step), 0))
-    chunks = normalize_chunks(chunks, (num,))
 
     dtype = kwargs.pop('dtype', None)
     if dtype is None:
         dtype = np.arange(start, stop, step * num if num else step).dtype
+
+    chunks = normalize_chunks(chunks, (num,), dtype=dtype)
+
     if kwargs:
         raise TypeError("Unexpected keyword argument(s): %s" %
                         ",".join(kwargs.keys()))
@@ -364,7 +360,7 @@ def meshgrid(*xi, **kwargs):
     return grid
 
 
-def indices(dimensions, dtype=int, chunks=None):
+def indices(dimensions, dtype=int, chunks='auto'):
     """
     Implements NumPy's ``indices`` for Dask Arrays.
 
@@ -388,9 +384,6 @@ def indices(dimensions, dtype=int, chunks=None):
     -------
     grid : dask array
     """
-    if chunks is None:
-        raise ValueError("Must supply a chunks= keyword argument")
-
     dimensions = tuple(dimensions)
     dtype = np.dtype(dtype)
     chunks = tuple(chunks)
@@ -613,9 +606,8 @@ def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
 
 
 @wraps(np.fromfunction)
-def fromfunction(func, chunks=None, shape=None, dtype=None, **kwargs):
-    if chunks:
-        chunks = normalize_chunks(chunks, shape)
+def fromfunction(func, chunks='auto', shape=None, dtype=None, **kwargs):
+    chunks = normalize_chunks(chunks, shape)
     name = 'fromfunction-' + tokenize(func, chunks, shape, dtype, kwargs)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
     aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in chunks]
