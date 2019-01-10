@@ -952,6 +952,10 @@ class Array(DaskMethodsMixin):
                 return NotImplemented
 
         if method == '__call__':
+            if numpy_ufunc is np.matmul:
+                from .routines import matmul
+                # special case until apply_gufunc handles optional dimensions
+                return matmul(*inputs, **kwargs)
             if numpy_ufunc.signature is not None:
                 from .gufunc import apply_gufunc
                 return apply_gufunc(numpy_ufunc,
