@@ -18,6 +18,7 @@ except ImportError:
     # pandas < 0.19.2
     from pandas.core.common import is_datetime64tz_dtype
 
+from ..base import is_dask_collection
 from ..compatibility import PY2, Iterator, Mapping
 from ..core import get_deps
 from ..local import get_sync
@@ -449,6 +450,22 @@ def _nonempty_series(s, idx=None):
     return pd.Series(data, name=s.name, index=idx)
 
 
+def is_dataframe_like(df):
+    """ Looks like a Pandas DataFrame """
+    return set(dir(df)) > {'dtypes', 'columns', 'groupby', 'head'}
+
+
+def is_series_like(s):
+    """ Looks like a Pandas Series """
+    return set(dir(s)) > {'name', 'dtype', 'groupby', 'head'}
+
+
+def is_index_like(s):
+    """ Looks like a Pandas Index """
+    attrs = set(dir(s))
+    return attrs > {'name', 'dtype'} and 'head' not in attrs
+
+
 def check_meta(x, meta, funcname=None, numeric_equal=True):
     """Check that the dask metadata matches the result.
 
@@ -485,13 +502,10 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             return a == b
         return (a.kind in eq_types and b.kind in eq_types) or (a == b)
 
-    from .core import parallel_types
-    if not isinstance(meta, parallel_types()):
+    if (not (is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta))
+            or is_dask_collection(meta)):
         raise TypeError("Expected partition to be DataFrame, Series, or "
                         "Index, got `%s`" % type(meta).__name__)
-
-    def is_dataframe_like(df):
-        return all(hasattr(df, attr) for attr in ['dtypes', 'columns', 'groupby', 'head'])
 
     if type(x) != type(meta):
         errmsg = ("Expected partition of type `%s` but got "

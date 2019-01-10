@@ -4,7 +4,9 @@ import pandas.util.testing as tm
 import dask.dataframe as dd
 from dask.dataframe.utils import (shard_df_on_index, meta_nonempty, make_meta,
                                   raise_on_meta_error, check_meta,
-                                  UNKNOWN_CATEGORIES, PANDAS_VERSION)
+                                  UNKNOWN_CATEGORIES, PANDAS_VERSION,
+                                  is_dataframe_like, is_series_like,
+                                  is_index_like)
 
 import pytest
 
@@ -328,3 +330,21 @@ def test_check_meta():
         '| e      | category | -        |\n'
         '+--------+----------+----------+')
     assert str(err.value) == exp
+
+
+def test_is_dataframe_like():
+    df = pd.DataFrame({'x': [1, 2, 3]})
+    assert is_dataframe_like(df)
+    assert not is_dataframe_like(df.x)
+    assert not is_dataframe_like(df.index)
+
+    assert not is_series_like(df)
+    assert is_series_like(df.x)
+    assert not is_series_like(df.index)
+
+    assert not is_index_like(df)
+    assert not is_index_like(df.x)
+    assert is_index_like(df.index)
+
+    ddf = dd.from_pandas(df, npartitions=1)
+    assert is_dataframe_like(ddf)
