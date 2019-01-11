@@ -45,7 +45,7 @@ jobs:
     - env: &py37_env
       - PYTHON=3.7
       - NUMPY=1.15.0
-      - PANDAS=0.23.4
+      - PANDAS>=0.24.0rc1
       - *test_and_lint
       - *no_coverage
       - *no_optimize

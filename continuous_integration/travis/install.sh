@@ -35,7 +35,7 @@ fi;
 # Install dependencies.
 conda install -q -c conda-forge \
     numpy \
-    pandas \
+    conda-forge/label/rc::pandas \
     bcolz \
     blosc \
     bokeh \
