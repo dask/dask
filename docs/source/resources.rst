@@ -71,7 +71,7 @@ resource requirements during compute or persist calls.
 
     x = dd.read_csv(...)
     y = x.map_partitions(func1)
-    z = y.map_parititons(func2)
+    z = y.map_partitions(func2)
 
     z.compute(resources={tuple(y.__dask_keys__()): {'GPU': 1})
 
