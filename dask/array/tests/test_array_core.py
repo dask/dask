@@ -857,6 +857,16 @@ def test_matmul():
     assert_eq(operator.matmul(z, a), operator.matmul(c, x))
 
 
+def test_matmul_array_ufunc():
+    # regression test for https://github.com/dask/dask/issues/4353
+    x = np.random.random((5, 5))
+    y = np.random.random((5, 2))
+    a = from_array(x, chunks=(1, 5))
+    b = from_array(y, chunks=(5, 1))
+    result = b.__array_ufunc__(np.matmul, '__call__', a, b)
+    assert_eq(result, x.dot(y))
+
+
 def test_T():
     x = np.arange(400).reshape((20, 20))
     a = from_array(x, chunks=(5, 5))
