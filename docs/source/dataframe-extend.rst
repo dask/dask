@@ -118,12 +118,65 @@ a list of your objects (homogeneously typed):
        ...
 
 
+.. _extensionarrays:
+
 Extension Arrays
 ----------------
 
 Rather than subclassing Pandas DataFrames, you may be interested in extending
-Pandas with `Extension Arrays <https://pandas.pydata.org/pandas-docs/stable/extending.html>`_.
+Pandas with `Extension Arrays
+<https://pandas.pydata.org/pandas-docs/stable/extending.html>`_.
 
-API support for extension arrays isn't in Dask DataFrame yet (though this would
-be a good contribution), but many of the complications above will go away if
-your objects are genuinely Pandas DataFrames, rather than a subclass.
+All of the first-party extension arrays (those implemented in pandas itself)
+are supported directly by dask.
+
+Developers implementing third-party extension arrays (outside of pandas) will
+need to do register their ``ExtensionDtype`` with Dask so that it works
+correctly in ``dask.dataframe``.
+
+For example, we'll register the *test-only* ``DecimalDtype`` from pandas
+test suite.
+
+.. code-block:: python
+
+   from decimal import Decimal
+   from dask.dataframe.extensions import make_array_nonempty
+   from pandas.tests.extension.decimal import DecimalArray, DecimalDtype
+
+   @make_array_nonempty.register(DecimalDtype)
+   def _(dtype):
+       return DecimalArray._from_sequence([Decimal('0'), Decimal('NaN')],
+                                          dtype=dtype)
+
+Internally, Dask will use this to create a small dummy Series for tracking
+metadata through operations.
+
+.. code-block:: python
+
+   >>> make_array_nonempty(DecimalDtype())
+   <DecimalArray>
+   [Decimal('0'), Decimal('NaN')]
+   Length: 2, dtype: decimal
+
+So you (or your users) can now create and store a dask ``DataFrame`` or
+``Series`` with your extension array contained within.
+
+.. code-block:: python
+
+   >>> from decimal import Decimal
+   >>> import dask.dataframe as dd
+   >>> import pandas as pd
+   >>> from pandas.tests.extension.decimal import DecimalArray
+   >>> ser = pd.Series(DecimalArray([Decimal('0.0')] * 10))
+   >>> dser = dd.from_pandas(ser, 3)
+   >>> dser
+   Dask Series Structure:
+   npartitions=3
+   0    decimal
+   4        ...
+   8        ...
+   9        ...
+   dtype: decimal
+   Dask Name: from_pandas, 3 tasks
+
+Notice the ``decimal`` dtype.
