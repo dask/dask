@@ -13,13 +13,13 @@ import pandas as pd
 import pandas.util.testing as tm
 from pandas.api.types import (
     is_categorical_dtype, is_scalar, is_sparse, is_period_dtype,
-    is_interval_dtype,
 )
 try:
-    from pandas.api.types import is_datetime64tz_dtype
+    from pandas.api.types import is_datetime64tz_dtype, is_interval_dtype
 except ImportError:
     # pandas < 0.19.2
     from pandas.core.common import is_datetime64tz_dtype
+    is_interval_dtype = lambda dtype: False
 
 from ..base import is_dask_collection
 from ..compatibility import PY2, Iterator, Mapping

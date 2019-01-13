@@ -33,7 +33,7 @@ if ! [[ ${UPSTREAM_DEV} ]]; then
 fi;
 
 # Install dependencies.
-conda install -q -c conda-forge -c conda-forge/label/rc \
+conda install -q -c conda-forge/label/rc -c conda-forge \
     numpy \
     pandas \
     bcolz \

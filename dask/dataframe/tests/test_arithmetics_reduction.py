@@ -1093,7 +1093,7 @@ def test_series_comparison_nan(comparison):
               comparison_pd(s_nan, fill_value=fill_value))
 
 
-skip_if_no_intna = pytest.mark.skipif(HAS_INT_NA, reason="integer na")
+skip_if_no_intna = pytest.mark.skipif(not HAS_INT_NA, reason="integer na")
 
 
 @skip_if_no_intna
