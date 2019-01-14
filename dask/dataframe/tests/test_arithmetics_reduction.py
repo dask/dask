@@ -7,7 +7,8 @@ import pandas as pd
 
 import dask.dataframe as dd
 from dask.dataframe.utils import (
-    assert_eq, assert_dask_graph, make_meta, HAS_INT_NA
+    assert_eq, assert_dask_graph, make_meta, HAS_INT_NA,
+    PANDAS_GT_0240
 )
 
 
@@ -1003,7 +1004,17 @@ def test_reductions_frame_dtypes():
     assert_eq(df.std(ddof=0), ddf.std(ddof=0))
     assert_eq(df.var(ddof=0), ddf.var(ddof=0))
     assert_eq(df.sem(ddof=0), ddf.sem(ddof=0))
-    assert_eq(df.mean(), ddf.mean())
+
+    result = ddf.mean()
+    expected = df.mean()
+
+    if PANDAS_GT_0240:
+        # https://github.com/pandas-dev/pandas/issues/24752
+        # It's not clear whether this will be included by
+        # default.
+        expected = expected.drop('dt').astype(float)
+
+    assert_eq(expected, result)
 
     assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
 
