@@ -200,7 +200,7 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
 
 def _extract_graph_and_keys(vals):
     """Given a list of dask vals, return a single graph and a list of keys such
-    that ``get(dsk, keys)`` is equivalent to ``[v.compute() v in vals]``."""
+    that ``get(dsk, keys)`` is equivalent to ``[v.compute() for v in vals]``."""
     from .highlevelgraph import HighLevelGraph
 
     graphs = [v.__dask_graph__() for v in vals]
