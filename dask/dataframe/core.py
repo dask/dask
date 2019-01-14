@@ -42,7 +42,8 @@ from .optimize import optimize
 from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
                     raise_on_meta_error, clear_known_categories,
                     is_categorical_dtype, has_known_categories, PANDAS_VERSION,
-                    index_summary)
+                    index_summary, is_dataframe_like, is_series_like,
+                    is_index_like)
 
 no_default = '__no_default__'
 
@@ -86,7 +87,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
         self.dask = dsk
         self._name = name
         meta = make_meta(meta)
-        if isinstance(meta, (pd.DataFrame, pd.Series, pd.Index)):
+        if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
             raise TypeError("Expected meta to specify scalar, got "
                             "{0}".format(type(meta).__name__))
         self._meta = meta
@@ -1012,7 +1013,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             # Control whether or not dask's partition alignment happens.
             # We don't want for a pandas Series.
             # We do want it for a dask Series
-            if isinstance(value, pd.Series):
+            if is_series_like(value):
                 args = ()
                 kwargs = {'value': value}
             else:
@@ -1357,7 +1358,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                   token=self._token_prefix + fn,
                                   skipna=skipna, axis=axis)
         else:
-            scalar = not isinstance(meta, pd.Series)
+            scalar = not is_series_like(meta)
             result = aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
                          combine=idxmaxmin_combine, meta=meta,
                          aggregate_kwargs={'scalar': scalar},
@@ -1377,7 +1378,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                                   token=self._token_prefix + fn,
                                   skipna=skipna, axis=axis)
         else:
-            scalar = not isinstance(meta, pd.Series)
+            scalar = not is_series_like(meta)
             result = aca([self], chunk=idxmaxmin_chunk, aggregate=idxmaxmin_agg,
                          combine=idxmaxmin_combine, meta=meta,
                          aggregate_kwargs={'scalar': scalar},
@@ -1658,7 +1659,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         # categorical dtypes. This operation isn't allowed currently anyway. We
         # get the metadata with a non-empty frame to throw the error instead of
         # segfaulting.
-        if isinstance(self._meta, pd.DataFrame) and is_categorical_dtype(dtype):
+        if is_dataframe_like(self._meta) and is_categorical_dtype(dtype):
             meta = self._meta_nonempty.astype(dtype)
         else:
             meta = self._meta.astype(dtype)
@@ -2112,7 +2113,9 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @insert_meta_param_description(pad=12)
     @derived_from(pd.Series)
     def map(self, arg, na_action=None, meta=no_default):
-        if not (isinstance(arg, (pd.Series, dict)) or callable(arg)):
+        if not (isinstance(arg, dict) or
+                callable(arg) or
+                is_series_like(arg) and not is_dask_collection(arg)):
             raise TypeError("arg must be pandas.Series, dict or callable."
                             " Got {0}".format(type(arg)))
         name = 'map-' + tokenize(self, arg, na_action)
@@ -2486,7 +2489,8 @@ class DataFrame(_Frame):
         elif isinstance(key, slice):
             return self.loc[key]
 
-        if isinstance(key, (pd.Series, np.ndarray, pd.Index, list)):
+        if (isinstance(key, (np.ndarray, list)) or (
+                not is_dask_collection(key) and (is_series_like(key) or is_index_like(key)))):
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
 
@@ -2700,7 +2704,7 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def assign(self, **kwargs):
         for k, v in kwargs.items():
-            if not (isinstance(v, (Series, Scalar, pd.Series)) or
+            if not (isinstance(v, Scalar) or is_series_like(v) or
                     callable(v) or pd.api.types.is_scalar(v)):
                 raise TypeError("Column assignment doesn't support type "
                                 "{0}".format(type(v).__name__))
@@ -2845,7 +2849,7 @@ class DataFrame(_Frame):
               left_index=False, right_index=False, suffixes=('_x', '_y'),
               indicator=False, npartitions=None, shuffle=None):
 
-        if not isinstance(right, (DataFrame, pd.DataFrame)):
+        if not is_dataframe_like(right):
             raise ValueError('right must be DataFrame')
 
         from .multi import merge
@@ -2859,7 +2863,7 @@ class DataFrame(_Frame):
     def join(self, other, on=None, how='left',
              lsuffix='', rsuffix='', npartitions=None, shuffle=None):
 
-        if not isinstance(other, (DataFrame, pd.DataFrame)):
+        if not is_dataframe_like(other):
             raise ValueError('other must be DataFrame')
 
         from .multi import merge
@@ -2874,7 +2878,7 @@ class DataFrame(_Frame):
             msg = ('Unable to appending dd.Series to dd.DataFrame.'
                    'Use pd.Series to append as row.')
             raise ValueError(msg)
-        elif isinstance(other, pd.Series):
+        elif is_series_like(other):
             other = other.to_frame().T
         return super(DataFrame, self).append(other)
 
@@ -2911,7 +2915,7 @@ class DataFrame(_Frame):
                 if isinstance(other, Series):
                     msg = 'Unable to {0} dd.Series with axis=1'.format(name)
                     raise ValueError(msg)
-                elif isinstance(other, pd.Series):
+                elif is_series_like(other):
                     # Special case for pd.Series to avoid unwanted partitioning
                     # of other. We pass it in as a kwarg to prevent this.
                     meta = _emulate(op, self, other=other, axis=axis,
@@ -3379,7 +3383,8 @@ def handle_out(out, result):
 
 def _maybe_from_pandas(dfs):
     from .io import from_pandas
-    dfs = [from_pandas(df, 1) if isinstance(df, (pd.Series, pd.DataFrame))
+    dfs = [from_pandas(df, 1)
+           if (is_series_like(df) or is_dataframe_like(df)) and not is_dask_collection(df)
            else df for df in dfs]
     return dfs
 
@@ -3390,7 +3395,7 @@ def hash_shard(df, nparts, split_out_setup=None, split_out_setup_kwargs=None):
     else:
         h = df
     h = hash_pandas_object(h, index=False)
-    if isinstance(h, pd.Series):
+    if is_series_like(h):
         h = h._values
     h %= nparts
     return {i: df.iloc[h == i] for i in range(nparts)}
@@ -3696,11 +3701,11 @@ def apply_and_enforce(*args, **kwargs):
     func = kwargs.pop('_func')
     meta = kwargs.pop('_meta')
     df = func(*args, **kwargs)
-    if isinstance(df, (pd.DataFrame, pd.Series, pd.Index)):
+    if is_dataframe_like(df) or is_series_like(df) or is_index_like(df):
         if len(df) == 0:
             return meta
 
-        if isinstance(df, pd.DataFrame):
+        if is_dataframe_like(df):
             # Need nan_to_num otherwise nan comparison gives False
             if not np.array_equal(np.nan_to_num(meta.columns),
                                   np.nan_to_num(df.columns)):
@@ -3735,8 +3740,8 @@ def _rename(columns, df):
     if isinstance(columns, Iterator):
         columns = list(columns)
 
-    if isinstance(df, pd.DataFrame):
-        if isinstance(columns, pd.DataFrame):
+    if is_dataframe_like(df):
+        if is_dataframe_like(columns):
             columns = columns.columns
         if not isinstance(columns, pd.Index):
             columns = pd.Index(columns)
@@ -3749,8 +3754,8 @@ def _rename(columns, df):
         df = df.copy(deep=False)
         df.columns = columns
         return df
-    elif isinstance(df, (pd.Series, pd.Index)):
-        if isinstance(columns, (pd.Series, pd.Index)):
+    elif is_series_like(df) or is_index_like(df):
+        if is_series_like(columns) or is_index_like(columns):
             columns = columns.name
         if df.name == columns:
             return df
@@ -3801,7 +3806,7 @@ def quantile(df, q):
     else:
         meta = df._meta_nonempty.quantile(q)
 
-    if isinstance(meta, pd.Series):
+    if is_series_like(meta):
         # Index.quantile(list-like) must be pd.Series, not pd.Index
         df_name = df.name
         finalize_tsk = lambda tsk: (pd.Series, tsk, q, None, df_name)
@@ -4032,7 +4037,7 @@ def _take_last(a, skipna=True):
         # in each columns
         group_dummy = np.ones(len(a.index))
         last_row = a.groupby(group_dummy).last()
-        if isinstance(a, pd.DataFrame):
+        if isinstance(a, pd.DataFrame):  # TODO: handle explicit pandas reference
             return pd.Series(last_row.values[0], index=a.columns)
         else:
             return last_row.values[0]
@@ -4239,7 +4244,7 @@ def repartition_npartitions(df, npartitions):
             if np.issubdtype(divisions.dtype, np.datetime64):
                 divisions = divisions.values.astype('float64')
 
-            if isinstance(divisions, pd.Series):
+            if is_series_like(divisions):
                 divisions = divisions.values
 
             n = len(divisions)
@@ -4320,7 +4325,7 @@ def repartition(df, divisions=None, force=False):
                                     df._name, tmp, out, force=force)
         graph = HighLevelGraph.from_collections(out, dsk, dependencies=[df])
         return new_dd_object(graph, out, df._meta, divisions)
-    elif isinstance(df, (pd.Series, pd.DataFrame)):
+    elif is_dataframe_like(df) or is_series_like(df):
         name = 'repartition-dataframe-' + token
         from .utils import shard_df_on_index
         dfs = shard_df_on_index(df, divisions[1:-1])
@@ -4332,7 +4337,7 @@ def repartition(df, divisions=None, force=False):
 def _reduction_chunk(x, aca_chunk=None, **kwargs):
     o = aca_chunk(x, **kwargs)
     # Return a dataframe so that the concatenated version is also a dataframe
-    return o.to_frame().T if isinstance(o, pd.Series) else o
+    return o.to_frame().T if is_series_like(o) else o
 
 
 def _reduction_combine(x, aca_combine=None, **kwargs):
@@ -4340,7 +4345,7 @@ def _reduction_combine(x, aca_combine=None, **kwargs):
         x = pd.Series(x)
     o = aca_combine(x, **kwargs)
     # Return a dataframe so that the concatenated version is also a dataframe
-    return o.to_frame().T if isinstance(o, pd.Series) else o
+    return o.to_frame().T if is_series_like(o) else o
 
 
 def _reduction_aggregate(x, aca_aggregate=None, **kwargs):
@@ -4356,7 +4361,7 @@ def idxmaxmin_chunk(x, fn=None, skipna=True):
         value = getattr(x, minmax)(skipna=skipna)
     else:
         idx = value = pd.Series([], dtype='i8')
-    if isinstance(idx, pd.Series):
+    if is_series_like(idx):
         return pd.DataFrame({'idx': idx, 'value': value})
     return pd.DataFrame({'idx': [idx], 'value': [value]})
 
