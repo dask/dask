@@ -12,7 +12,8 @@ from .core import (DataFrame, Series, aca, map_partitions,
                    new_dd_object, no_default, split_out_on_index)
 from .methods import drop_columns
 from .shuffle import shuffle
-from .utils import make_meta, insert_meta_param_description, raise_on_meta_error
+from .utils import (make_meta, insert_meta_param_description,
+                    raise_on_meta_error, PANDAS_VERSION)
 from ..base import tokenize
 from ..utils import derived_from, M, funcname, itemgetter
 from ..highlevelgraph import HighLevelGraph
@@ -218,15 +219,15 @@ class Aggregation(object):
         self.__name__ = name
 
 
-def _groupby_aggregate(df, aggfunc=None, levels=None):
-    return aggfunc(df.groupby(level=levels, sort=False))
+def _groupby_aggregate(df, aggfunc=None, levels=None, **kwargs):
+    return aggfunc(df.groupby(level=levels, sort=False, **kwargs))
 
 
 def _apply_chunk(df, *index, **kwargs):
     func = kwargs.pop('chunk')
     columns = kwargs.pop('columns')
 
-    g = _groupby_raise_unaligned(df, by=index)
+    g = _groupby_raise_unaligned(df, by=index, **kwargs)
 
     if isinstance(df, pd.Series) or columns is None:
         return func(g)
@@ -236,22 +237,33 @@ def _apply_chunk(df, *index, **kwargs):
         return func(g[columns])
 
 
-def _var_chunk(df, *index):
-    if isinstance(df, pd.Series):
-        df = df.to_frame()
-    g = _groupby_raise_unaligned(df, by=index)
+def _var_chunk(df, *index, **kwargs):
+    columns = kwargs.pop('columns')
+
+    g = _groupby_raise_unaligned(df, by=index, **kwargs)
+
+    if not isinstance(df, pd.Series) and columns is not None:
+        if isinstance(columns, (tuple, list, set, pd.Index)):
+            columns = list(columns)
+        g = g[columns]
+
     x = g.sum()
-    x2 = g.agg(lambda x: (x**2).sum()).rename(columns=lambda c: c + '-x2')
-    n = g.count().rename(columns=lambda c: c + '-count')
+    if isinstance(x, pd.Series):
+        x2 = g.agg(lambda x: (x**2).sum()).rename(x.name + '-x2')
+        n = g.count().rename(x.name + '-count')
+    else:
+        x2 = g.agg(lambda x: (x**2).sum()).rename(columns=lambda c: c + '-x2')
+        n = g.count().rename(columns=lambda c: c + '-count')
+
     return pd.concat([x, x2, n], axis=1)
 
 
-def _var_combine(g, levels):
-    return g.groupby(level=levels, sort=False).sum()
+def _var_combine(g, levels, **kwargs):
+    return g.groupby(level=levels, sort=False, **kwargs).sum()
 
 
-def _var_agg(g, levels, ddof):
-    g = g.groupby(level=levels, sort=False).sum()
+def _var_agg(g, levels, ddof, **kwargs):
+    g = g.groupby(level=levels, sort=False, **kwargs).sum()
     nc = len(g.columns)
     x = g[g.columns[:nc // 3]]
     x2 = g[g.columns[nc // 3:2 * nc // 3]].rename(columns=lambda c: c[:-3])
@@ -263,6 +275,40 @@ def _var_agg(g, levels, ddof):
     div[div < 0] = 0
     result /= div
     result[(n - ddof) == 0] = np.nan
+    assert isinstance(result, pd.DataFrame)
+    return result
+
+
+def _mean_chunk(df, *index, **kwargs):
+    columns = kwargs.pop('columns')
+
+    g = _groupby_raise_unaligned(df, by=index, **kwargs)
+
+    if not isinstance(df, pd.Series) and columns is not None:
+        if isinstance(columns, (tuple, list, set, pd.Index)):
+            columns = list(columns)
+        g = g[columns]
+
+    x = g.sum()
+    if isinstance(x, pd.Series):
+        n = g.count().rename(x.name + '-count')
+    else:
+        n = g.count().rename(columns=lambda c: c + '-count')
+
+    return pd.concat([x, n], axis=1)
+
+
+def _mean_combine(g, levels, **kwargs):
+    return g.groupby(level=levels, sort=False, **kwargs).sum()
+
+
+def _mean_agg(g, levels, **kwargs):
+    g = g.groupby(level=levels, sort=False, **kwargs).sum()
+    nc = len(g.columns)
+    x = g[g.columns[:nc // 2]]
+    n = g[g.columns[-nc // 2:]].rename(columns=lambda c: c[:-6])
+
+    result = x / n
     assert isinstance(result, pd.DataFrame)
     return result
 
@@ -735,8 +781,12 @@ class _GroupBy(object):
         The key for grouping
     slice: str, list
         The slice keys applied to GroupBy result
+    observed : boolean, default False
+        This only applies if any of the groupers are Categoricals
+        If True: only show observed values for categorical groupers.
+        If False: show all values for categorical groupers.
     """
-    def __init__(self, df, by=None, slice=None):
+    def __init__(self, df, by=None, slice=None, observed=False):
 
         assert isinstance(df, (DataFrame, Series))
         self.obj = df
@@ -771,6 +821,13 @@ class _GroupBy(object):
 
         self._meta = self.obj._meta.groupby(index_meta)
 
+        # other parameters relevant for grouping
+        if observed and PANDAS_VERSION < "0.23.0":
+            raise ValueError("Your version of pandas is '{}'. "
+                             "The 'observed' keyword was added in pandas "
+                             "0.23.0.".format(PANDAS_VERSION))
+        self._observed = observed
+
     @property
     def _meta_nonempty(self):
         """
@@ -796,17 +853,30 @@ class _GroupBy(object):
             aggfunc = func
 
         meta = func(self._meta)
-        columns = meta.name if isinstance(meta, pd.Series) else meta.columns
+        if self._slice is None:
+            # pandas shows different behaviour for observed=True if a slice
+            # of GroupBy is applied, even if it contains all columns
+            columns = None
+        elif isinstance(meta, pd.Series):
+            columns = meta.name
+        else:
+            columns = meta.columns
 
         token = self._token_prefix + token
         levels = _determine_levels(self.index)
 
-        return aca([self.obj, self.index] if not isinstance(self.index, list) else [self.obj] + self.index,
-                   chunk=_apply_chunk,
-                   chunk_kwargs=dict(chunk=func, columns=columns),
-                   aggregate=_groupby_aggregate,
+        if not isinstance(self.index, list):
+            args = [self.obj, self.index]
+        else:
+            args = [self.obj] + self.index
+
+        groupby_kwargs = dict(observed=self._observed)
+        chunk_kwargs = dict(chunk=func, columns=columns, **groupby_kwargs)
+        aggregate_kwargs = dict(aggfunc=aggfunc, levels=levels, **groupby_kwargs)
+
+        return aca(args, chunk=_apply_chunk, chunk_kwargs=chunk_kwargs,
+                   aggregate=_groupby_aggregate, aggregate_kwargs=aggregate_kwargs,
                    meta=meta, token=token, split_every=split_every,
-                   aggregate_kwargs=dict(aggfunc=aggfunc, levels=levels),
                    split_out=split_out, split_out_setup=split_out_on_index)
 
     def _cum_agg(self, token, chunk, aggregate, initial):
@@ -922,8 +992,42 @@ class _GroupBy(object):
 
     @derived_from(pd.core.groupby.GroupBy)
     def mean(self, split_every=None, split_out=1):
-        return (self.sum(split_every=split_every, split_out=split_out) /
-                self.count(split_every=split_every, split_out=split_out))
+
+        meta = self._meta.var()
+        if self._slice is None:
+            # pandas shows different behaviour for observed=True if a slice
+            # of GroupBy is applied, even if it contains all columns
+            columns = None
+        elif isinstance(meta, pd.Series):
+            columns = meta.name
+        else:
+            columns = meta.columns
+
+        is_series = isinstance(meta, pd.Series)
+
+        levels = _determine_levels(self.index)
+
+        if not isinstance(self.index, list):
+            args = [self.obj, self.index]
+        else:
+            args = [self.obj] + self.index
+
+        groupby_kwargs = dict(observed=self._observed)
+        chunk_kwargs = dict(columns=columns, **groupby_kwargs)
+        aggregate_kwargs = dict(levels=levels, **groupby_kwargs)
+        combine_kwargs = dict(levels=levels, **groupby_kwargs)
+
+        result = aca(args, chunk=_mean_chunk, chunk_kwargs=chunk_kwargs,
+                     aggregate=_mean_agg, aggregate_kwargs=aggregate_kwargs,
+                     combine=_mean_combine, combine_kwargs=combine_kwargs,
+                     token=self._token_prefix + 'mean',
+                     split_every=split_every, split_out=split_out,
+                     split_out_setup=split_out_on_index)
+
+        if is_series:
+            result = result[result.columns[0]]
+
+        return result
 
     @derived_from(pd.core.groupby.GroupBy)
     def size(self, split_every=None, split_out=1):
@@ -932,20 +1036,40 @@ class _GroupBy(object):
 
     @derived_from(pd.core.groupby.GroupBy)
     def var(self, ddof=1, split_every=None, split_out=1):
+
+        meta = self._meta.var()
+        if self._slice is None:
+            # pandas shows different behaviour for observed=True if a slice
+            # of GroupBy is applied, even if it contains all columns
+            columns = None
+        elif isinstance(meta, pd.Series):
+            columns = meta.name
+        else:
+            columns = meta.columns
+
+        is_series = isinstance(meta, pd.Series)
+
         levels = _determine_levels(self.index)
-        result = aca([self.obj, self.index] if not isinstance(self.index, list) else [self.obj] + self.index,
-                     chunk=_var_chunk,
-                     aggregate=_var_agg, combine=_var_combine,
+
+        if not isinstance(self.index, list):
+            args = [self.obj, self.index]
+        else:
+            args = [self.obj] + self.index
+
+        groupby_kwargs = dict(observed=self._observed)
+        chunk_kwargs = dict(columns=columns, **groupby_kwargs)
+        aggregate_kwargs = dict(ddof=ddof, levels=levels, **groupby_kwargs)
+        combine_kwargs = dict(levels=levels, **groupby_kwargs)
+
+        result = aca(args, chunk=_var_chunk, chunk_kwargs=chunk_kwargs,
+                     aggregate=_var_agg, aggregate_kwargs=aggregate_kwargs,
+                     combine=_var_combine, combine_kwargs=combine_kwargs,
                      token=self._token_prefix + 'var',
-                     aggregate_kwargs={'ddof': ddof, 'levels': levels},
-                     combine_kwargs={'levels': levels},
                      split_every=split_every, split_out=split_out,
                      split_out_setup=split_out_on_index)
 
-        if isinstance(self.obj, Series):
+        if is_series:
             result = result[result.columns[0]]
-        if self._slice:
-            result = result[self._slice]
 
         return result
 
@@ -1145,9 +1269,11 @@ class DataFrameGroupBy(_GroupBy):
 
     def __getitem__(self, key):
         if isinstance(key, list):
-            g = DataFrameGroupBy(self.obj, by=self.index, slice=key)
+            g = DataFrameGroupBy(self.obj, by=self.index, slice=key,
+                                 observed=self._observed)
         else:
-            g = SeriesGroupBy(self.obj, by=self.index, slice=key)
+            g = SeriesGroupBy(self.obj, by=self.index, slice=key,
+                              observed=self._observed)
 
         # error is raised from pandas
         g._meta = g._meta[key]
@@ -1179,7 +1305,7 @@ class SeriesGroupBy(_GroupBy):
 
     _token_prefix = 'series-groupby-'
 
-    def __init__(self, df, by=None, slice=None):
+    def __init__(self, df, by=None, slice=None, **kwargs):
         # for any non series object, raise pandas-compat error message
 
         if isinstance(df, Series):
@@ -1197,7 +1323,7 @@ class SeriesGroupBy(_GroupBy):
                 # raise error from pandas, if applicable
                 df._meta.groupby(by)
 
-        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice)
+        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice, **kwargs)
 
     def nunique(self, split_every=None, split_out=1):
         name = self._meta.obj.name

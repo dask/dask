@@ -21,7 +21,6 @@ def agg_func(request):
     """
     return request.param
 
-
 def groupby_internal_repr():
     pdf = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7, 8, 9, 10],
                         'y': list('abcbabbcda')})
@@ -542,9 +541,7 @@ def test_split_apply_combine_on_series():
     assert_dask_graph(ddf.groupby('b').a.var(), 'series-groupby-var')
     assert_dask_graph(ddf.groupby('b').a.first(), 'series-groupby-first')
     assert_dask_graph(ddf.groupby('b').a.last(), 'series-groupby-last')
-    # mean consists from sum and count operations
-    assert_dask_graph(ddf.groupby('b').a.mean(), 'series-groupby-sum')
-    assert_dask_graph(ddf.groupby('b').a.mean(), 'series-groupby-count')
+    assert_dask_graph(ddf.groupby('b').a.mean(), 'series-groupby-mean')
     assert_dask_graph(ddf.groupby('b').a.nunique(), 'series-groupby-nunique')
     assert_dask_graph(ddf.groupby('b').a.size(), 'series-groupby-size')
 
@@ -554,9 +551,7 @@ def test_split_apply_combine_on_series():
     assert_dask_graph(ddf.groupby('b').count(), 'dataframe-groupby-count')
     assert_dask_graph(ddf.groupby('b').first(), 'dataframe-groupby-first')
     assert_dask_graph(ddf.groupby('b').last(), 'dataframe-groupby-last')
-    # mean consists from sum and count operations
-    assert_dask_graph(ddf.groupby('b').mean(), 'dataframe-groupby-sum')
-    assert_dask_graph(ddf.groupby('b').mean(), 'dataframe-groupby-count')
+    assert_dask_graph(ddf.groupby('b').mean(), 'dataframe-groupby-mean')
     assert_dask_graph(ddf.groupby('b').size(), 'dataframe-groupby-size')
 
 
@@ -1502,3 +1497,44 @@ def test_groupby_select_column_agg():
     actual = ddf.groupby('A')['B'].agg('var')
     expected = pdf.groupby('A')['B'].agg('var')
     assert_eq(actual, expected)
+
+
+@pytest.mark.skipif(PANDAS_VERSION < '0.23.0',
+                    reason="Need 0.23.0 for observed=True parameter")
+@pytest.mark.parametrize('df', [
+    pd.DataFrame({
+        'c1': pd.Categorical(['v11', 'v12', 'v11'], ['v11', 'v12', 'v13']),
+        'c2': pd.Categorical(['v21', 'v22', 'v23']),
+        'c3': [1, 4, 7]})])
+@pytest.mark.parametrize('cols_group, cols_out', [('c1', 'c3'),
+                                                  ('c1', ['c3']),
+                                                  (['c1', 'c2'], None),
+                                                  (['c1', 'c2'], 'c3'),
+                                                  (['c2', 'c1'], ['c3'])])
+def test_groupby_observed(df, agg_func, cols_group, cols_out):
+
+    # nunique is not supported in specs
+    if agg_func == 'nunique':
+        return
+    
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    expected_g = df.groupby(cols_group, observed=True)
+    result_g = ddf.groupby(cols_group, observed=True)
+    if cols_out is not None:
+        expected_g = expected_g[cols_out]
+        result_g = result_g[cols_out]
+
+    expected_f = getattr(expected_g, agg_func)
+    result_f = getattr(result_g, agg_func)
+
+    expected = expected_f()
+    result = result_f().compute()
+
+    # when applying groupby(['c1', 'c2'])(['c3']).sum(), pandas returns nans
+    if agg_func in ['sum', 'count']:
+        expected = expected.fillna(0.)
+    if agg_func == 'mean':
+        expected = expected.astype(float)
+
+    assert_eq(result, expected)
