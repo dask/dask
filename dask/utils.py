@@ -438,7 +438,10 @@ def _skip_doctest(line):
     if stripped == '>>>' or stripped.startswith('>>> #'):
         return stripped
     elif '>>>' in stripped and '+SKIP' not in stripped:
-        return line + '  # doctest: +SKIP'
+        if '# doctest:' in line:
+            return line + ', +SKIP'
+        else:
+            return line + '#doctest: +SKIP'
     else:
         return line
 
