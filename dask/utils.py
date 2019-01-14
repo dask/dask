@@ -441,7 +441,7 @@ def _skip_doctest(line):
         if '# doctest:' in line:
             return line + ', +SKIP'
         else:
-            return line + '#doctest: +SKIP'
+            return line + '  # doctest: +SKIP'
     else:
         return line
 
