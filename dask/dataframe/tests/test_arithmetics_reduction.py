@@ -1,5 +1,4 @@
 from datetime import datetime
-from distutils.version import LooseVersion
 import warnings
 
 import pytest
