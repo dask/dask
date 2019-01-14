@@ -9,7 +9,10 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq, assert_dask_graph, assert_max_deps, PANDAS_VERSION
+from dask.dataframe.utils import (
+    assert_eq, assert_dask_graph, assert_max_deps, PANDAS_VERSION,
+    PANDAS_GT_0240
+)
 
 AGG_FUNCS = ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'nunique', 'first', 'last']
 
@@ -146,10 +149,16 @@ def test_full_groupby_apply_multiarg():
 
     meta = df.groupby('a').apply(func, c)
 
+    cases = [(c_scalar, d_scalar),
+             (c_delayed, d_delayed)]
+
+    if PANDAS_GT_0240:
+        # TODO: avoid segfault
+        cases = cases[:1]
+
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        for c_lazy, d_lazy in [(c_scalar, d_scalar),
-                               (c_delayed, d_delayed)]:
+        for c_lazy, d_lazy in cases:
             assert_eq(df.groupby('a').apply(func, c, d=d),
                       ddf.groupby('a').apply(func, c, d=d_lazy))
 
