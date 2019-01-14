@@ -334,15 +334,14 @@ if LooseVersion(np.__version__) < '1.15.0':
         return arr[_make_along_axis_idx(arr_shape, indices, axis)]
 
 
-def _make_sliced_dtype(dtype, index):
-    if LooseVersion(np.__version__) == LooseVersion("1.14.0"):
-        return _make_sliced_dtype_np_ge_14(dtype, index)
-    else:
-        return _make_sliced_dtype_np_lt_14(dtype, index)
-
-
-def _make_sliced_dtype_np_ge_14(dtype, index):
-    # For https://github.com/numpy/numpy/pull/6053, NumPy >= 1.14
+def _make_sliced_dtype_np_ge_16(dtype, index):
+    # This was briefly added in 1.14.0
+    # https://github.com/numpy/numpy/pull/6053, NumPy >= 1.14
+    # which was then reverted in 1.14.1 with
+    # https://github.com/numpy/numpy/pull/10411
+    # And then was finally released with
+    # https://github.com/numpy/numpy/pull/12447
+    # in version 1.16.0
     new = {
         'names': index,
         'formats': [dtype.fields[name][0] for name in index],
@@ -356,6 +355,13 @@ def _make_sliced_dtype_np_lt_14(dtype, index):
     # For numpy < 1.14
     dt = np.dtype([(name, dtype[name]) for name in index])
     return dt
+
+
+if LooseVersion(np.__version__) >= LooseVersion("1.16.0") or \
+   LooseVersion(np.__version__) == LooseVersion("1.14.0"):
+    _make_sliced_dtype = _make_sliced_dtype_np_ge_16
+else:
+    _make_sliced_dtype = _make_sliced_dtype_np_lt_14
 
 
 class _Recurser(object):
