@@ -8,6 +8,7 @@ import warnings
 import weakref
 import toolz
 
+from dask.utils import factors
 from tornado import gen
 
 from .cluster import Cluster
@@ -99,8 +100,7 @@ class LocalCluster(Cluster):
             self._old_logging_level = silence_logging(level=silence_logs)
         if n_workers is None and threads_per_worker is None:
             if processes:
-                n_workers = _ncores
-                threads_per_worker = 1
+                n_workers, threads_per_worker = nprocesses_nthreads(_ncores)
             else:
                 n_workers = 1
                 threads_per_worker = _ncores
@@ -370,6 +370,34 @@ class LocalCluster(Cluster):
             return self.scheduler.address
         except ValueError:
             return '<unstarted>'
+
+
+def nprocesses_nthreads(n):
+    """
+    The default breakdown of processes and threads for a given number of cores
+
+    Parameters
+    ----------
+    n: int
+        Number of available cores
+
+    Examples
+    --------
+    >>> nprocesses_nthreads(4)
+    (4, 1)
+    >>> nprocesses_nthreads(32)
+    (8, 4)
+
+    Returns
+    -------
+    nprocesses, nthreads
+    """
+    if n <= 4:
+        processes = n
+    else:
+        processes = min(f for f in factors(n) if f >= math.sqrt(n))
+    threads = n // processes
+    return (processes, threads)
 
 
 clusters_to_close = weakref.WeakSet()
