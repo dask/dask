@@ -21,6 +21,7 @@ def agg_func(request):
     """
     return request.param
 
+
 def groupby_internal_repr():
     pdf = pd.DataFrame({'x': [1, 2, 3, 4, 6, 7, 8, 9, 10],
                         'y': list('abcbabbcda')})
@@ -1516,7 +1517,7 @@ def test_groupby_observed(df, agg_func, cols_group, cols_out):
     # nunique is not supported in specs
     if agg_func == 'nunique':
         return
-    
+
     ddf = dd.from_pandas(df, npartitions=2)
 
     expected_g = df.groupby(cols_group, observed=True)
