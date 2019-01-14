@@ -36,7 +36,7 @@ jobs:
     - env: &py36_env
       - PYTHON=3.6
       - NUMPY=1.14.1
-      - PANDAS=0.22.0
+      - PANDAS=0.24.0rc1
       - *test_and_lint
       - *coverage
       - *no_optimize
@@ -45,7 +45,7 @@ jobs:
     - env: &py37_env
       - PYTHON=3.7
       - NUMPY=1.15.0
-      - PANDAS>=0.24.0rc1
+      - PANDAS=0.23.4
       - *test_and_lint
       - *no_coverage
       - *no_optimize
