@@ -12,7 +12,7 @@ if sparse:
     # Test failures on older versions of Numba.
     # Conda-Forge provides 0.35.0 on windows right now, causing failures like
     # searchsorted() got an unexpected keyword argument 'side'
-    pytest.importorskip("numba", min_version="0.4a.0")
+    pytest.importorskip("numba", minversion="0.40.0")
 
 
 if LooseVersion(np.__version__) < '1.11.2':
