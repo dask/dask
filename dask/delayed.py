@@ -606,6 +606,16 @@ class DelayedAttr(Delayed):
         self._attr = attr
         self._key = 'getattr-%s' % tokenize(obj, attr, pure=True)
 
+    def __getattr__(self, attr):
+        # Calling np.dtype(dask.delayed(...)) used to result in a segfault, as
+        # numpy recursively tries to get `dtype` from the object. This is
+        # likely a bug in numpy. For now, we can do a dumb for if
+        # `x.dtype().dtype()` is called (which shouldn't ever show up in real
+        # code). See https://github.com/dask/dask/pull/4374#issuecomment-454381465
+        if attr == 'dtype' and self._attr == 'dtype':
+            raise AttributeError("Attribute %s not found" % attr)
+        super(DelayedAttr, self).__getattr__(attr)
+
     @property
     def dask(self):
         layer = {self._key: (getattr, self._obj._key, self._attr)}
