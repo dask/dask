@@ -79,6 +79,7 @@ def test_tensordot():
               da.tensordot(xx, yy, axes=((1, 2), (1, 0))))
 
 
+@pytest.mark.xfail(reason="upstream change", strict=False)
 @pytest.mark.parametrize('func', functions)
 def test_mixed_concatenate(func):
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
@@ -96,6 +97,7 @@ def test_mixed_concatenate(func):
     assert_eq(dd, ss)
 
 
+@pytest.mark.xfail(reason="upstream change", strict=False)
 @pytest.mark.parametrize('func', functions)
 def test_mixed_random(func):
     d = da.random.random((4, 3, 4), chunks=(1, 2, 2))
@@ -110,6 +112,7 @@ def test_mixed_random(func):
     assert_eq(dd, ss)
 
 
+@pytest.mark.xfail(reason="upstream change", strict=False)
 def test_mixed_output_type():
     y = da.random.random((10, 10), chunks=(5, 5))
     y[y < 0.8] = 0
