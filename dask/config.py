@@ -168,7 +168,7 @@ def collect_yaml(paths=paths):
                 data = yaml.load(f.read()) or {}
                 data = normalize_nested_keys(data)
                 configs.append(data)
-        except OSError:
+        except (OSError, IOError):
             # Ignore permission errors
             pass
 

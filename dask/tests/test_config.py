@@ -1,6 +1,7 @@
 import yaml
 import os
 import stat
+import sys
 from collections import OrderedDict
 from contextlib import contextmanager
 
@@ -93,6 +94,8 @@ def no_read_permissions(path):
         os.chmod(path, perm_orig)
 
 
+@pytest.mark.skipif(sys.platform == 'win32',
+                    reason="Can't make writeonly file on windows")
 @pytest.mark.parametrize('kind', ['directory', 'file'])
 def test_collect_yaml_permission_errors(tmpdir, kind):
     a = {'x': 1, 'y': 2}
