@@ -21,6 +21,7 @@ except ImportError:
     from pandas.core.common import is_datetime64tz_dtype
     is_interval_dtype = lambda dtype: False
 
+from .extensions import make_array_nonempty
 from ..base import is_dask_collection
 from ..compatibility import PY2, Iterator, Mapping
 from ..core import get_deps
@@ -445,6 +446,7 @@ def _nonempty_scalar(x):
 
 @meta_nonempty.register(pd.Series)
 def _nonempty_series(s, idx=None):
+    # TODO: Use register dtypes with make_array_nonempty
     if idx is None:
         idx = _nonempty_index(s.index)
     dtype = s.dtype
@@ -480,6 +482,8 @@ def _nonempty_series(s, idx=None):
             data = pd.array([entry, entry], dtype=dtype)
         else:
             data = np.array([entry, entry], dtype=dtype)
+    elif type(dtype) in make_array_nonempty._lookup:
+        data = make_array_nonempty(dtype)
     else:
         entry = _scalar_from_dtype(dtype)
         data = np.array([entry, entry], dtype=dtype)
