@@ -8,6 +8,12 @@ import dask.array as da
 from dask.array.utils import assert_eq
 
 sparse = pytest.importorskip('sparse')
+if sparse:
+    # Test failures on older versions of Numba.
+    # Conda-Forge provides 0.35.0 on windows right now, causing failures like
+    # searchsorted() got an unexpected keyword argument 'side'
+    pytest.importorskip("numba", min_version="0.4a.0")
+
 
 if LooseVersion(np.__version__) < '1.11.2':
     pytestmark = pytest.mark.skip
