@@ -179,7 +179,7 @@ def test_read_glob(tmpdir, write_engine, read_engine):
     if write_engine == read_engine == 'fastparquet' and os.name == 'nt':
         # fastparquet or dask is not normalizing filepaths correctly on
         # windows.
-        pytest.skip(reason="filepath bug.")
+        pytest.skip("filepath bug.")
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
     if os.path.exists(os.path.join(fn, '_metadata')):
@@ -205,7 +205,7 @@ def test_read_list(tmpdir, write_engine, read_engine):
     if write_engine == read_engine == 'fastparquet' and os.name == 'nt':
         # fastparquet or dask is not normalizing filepaths correctly on
         # windows.
-        pytest.skip(reason="filepath bug.")
+        pytest.skip("filepath bug.")
 
     tmpdir = str(tmpdir)
     ddf.to_parquet(tmpdir, engine=write_engine)
