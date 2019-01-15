@@ -2896,14 +2896,14 @@ class DataFrame(_Frame):
             Suffix to apply to overlapping column names in the left and
             right side, respectively
         indicator : boolean or string, default False
-            If True, adds a column to output DataFrame called “_merge” with
+            If True, adds a column to output DataFrame called "_merge" with
             information on the source of each row. If string, column with
             information on source of each row will be added to output DataFrame,
             and column will be named value of string. Information column is
-            Categorical-type and takes on a value of “left_only” for observations
-            whose merge key only appears in ‘left’ DataFrame, “right_only” for
-            observations whose merge key only appears in ‘right’ DataFrame,
-            and “both” if the observation’s merge key is found in both.
+            Categorical-type and takes on a value of "left_only" for observations
+            whose merge key only appears in `left` DataFrame, "right_only" for
+            observations whose merge key only appears in `right` DataFrame,
+            and "both" if the observation’s merge key is found in both.
         npartitions: int, None, or 'auto'
             The ideal number of output partitions. This is only utilised when
             performing a hash_join (merging on columns only). If `None`
