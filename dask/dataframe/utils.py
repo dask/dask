@@ -15,10 +15,14 @@ from pandas.api.types import (
     is_categorical_dtype, is_scalar, is_sparse, is_period_dtype,
 )
 try:
-    from pandas.api.types import is_datetime64tz_dtype, is_interval_dtype
+    from pandas.api.types import is_datetime64tz_dtype
 except ImportError:
     # pandas < 0.19.2
     from pandas.core.common import is_datetime64tz_dtype
+
+try:
+    from pandas.api.types import is_interval_dtype
+except ImportError:
     is_interval_dtype = lambda dtype: False
 
 from .extensions import make_array_nonempty
