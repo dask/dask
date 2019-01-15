@@ -116,7 +116,7 @@ fi;
 if [[ ${PANDAS_RC} == "1" ]]; then
     echo "Installing Pandas RC"
     conda uninstall -y --force pandas ||:
-    conda install -c conda-forge/label/rc pandas>=0.24.0rc1
+    conda install -c conda-forge/label/rc 'pandas>=0.24.0rc1'
     # overwrite old pin
     echo "numpy $NUMPY" > $CONDA_PREFIX/conda-meta/pinned
 
