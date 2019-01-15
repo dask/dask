@@ -748,7 +748,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         Aggregate both the sum and count of a Series at the same time:
 
         >>> def sum_and_count(x):
-        ...     return pd.Series({'sum': x.sum(), 'count': x.count()})
+        ...     return pd.Series({'count': x.count(), 'sum': x.sum()},
+        ...                      index=['count', 'sum'])
         >>> res = ddf.x.reduction(sum_and_count, aggregate=lambda x: x.sum())
         >>> res.compute()
         count      50
@@ -761,7 +762,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         index, and sum each group to get the final result.
 
         >>> def sum_and_count(x):
-        ...     return pd.DataFrame({'sum': x.sum(), 'count': x.count()})
+        ...     return pd.DataFrame({'count': x.count(), 'sum': x.sum()},
+        ...                         columns=['count', 'sum'])
         >>> res = ddf.reduction(sum_and_count,
         ...                     aggregate=lambda x: x.groupby(level=0).sum())
         >>> res.compute()
