@@ -115,7 +115,7 @@ fi;
 
 if [[ ${PANDAS_RC} == "1" ]]; then
     echo "Installing Pandas RC"
-    conda uninstall -y pandas ||:
+    conda uninstall -y --force pandas ||:
     conda install -c conda-forge/label/rc pandas
 
 fi;
