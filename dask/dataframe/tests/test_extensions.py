@@ -2,19 +2,22 @@ from decimal import Decimal
 import pytest
 
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 
-pd = pytest.importorskip("pandas", minversion="0.24.0rc1")
+pd = pytest.importorskip("pandas", minversion="0.23.4")
 
-
-from pandas.tests.extension.decimal import DecimalArray, DecimalDtype
+from pandas.tests.extension.decimal.array import DecimalArray, DecimalDtype
 from dask.dataframe.extensions import make_array_nonempty
 
 
 @make_array_nonempty.register(DecimalDtype)
 def _(dtype):
+    kwargs = {}
+    if PANDAS_VERSION >= "0.24.0rc1":
+        kwargs['dtype'] = dtype
+
     return DecimalArray._from_sequence([Decimal('0'), Decimal('NaN')],
-                                       dtype=dtype)
+                                       **kwargs)
 
 
 def test_register_extension_type():
