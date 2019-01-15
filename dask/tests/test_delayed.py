@@ -168,6 +168,7 @@ def test_np_dtype_of_delayed():
     x = delayed(1)
     with pytest.raises(TypeError):
         np.dtype(x)
+    assert delayed(np.array([1], dtype='f8')).dtype.compute() == np.dtype('f8')
 
 
 def test_delayed_errors():
