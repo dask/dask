@@ -161,6 +161,15 @@ def test_method_getattr_call_same_task():
     assert getattr not in set(v[0] for v in o.__dask_graph__().values())
 
 
+def test_np_dtype_of_delayed():
+    # This used to result in a segfault due to recursion, see
+    # https://github.com/dask/dask/pull/4374#issuecomment-454381465
+    np = pytest.importorskip('numpy')
+    x = delayed(1)
+    with pytest.raises(TypeError):
+        np.dtype(x)
+
+
 def test_delayed_errors():
     a = delayed([1, 2, 3])
     # Immutable
