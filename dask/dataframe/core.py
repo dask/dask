@@ -2851,7 +2851,7 @@ class DataFrame(_Frame):
 
         Parameters
         ----------
-        right: ``dask.dataframe.DataFrame``
+        right: dask.dataframe.DataFrame
         how : {'left', 'right', 'outer', 'inner'}, default: 'inner'
             How to handle the operation of the two objects.
             * left: use calling frame's index (or column if on is specified)
@@ -2892,11 +2892,11 @@ class DataFrame(_Frame):
             The ideal number of output partitions. This is only utilised when
             performing a hash_join (merging on columns only). If `None`
             npartitions = max(lhs.npartitions, rhs.npartitions)
-        shuffle: string, optional
+        shuffle: {'disk', 'tasks'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
 
-        Notes:
+        Notes
         -----
         1. Joining on indices: In this case the divisions are
         aligned using the function ``dask.dataframe.multi.align_partitions``.
