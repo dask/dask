@@ -186,16 +186,15 @@ class TCP(Comm):
 
             frames = []
             for length in lengths:
-                if PY3 and self._iostream_has_read_into:
-                    frame = bytearray(length)
-                    if length:
+                if length:
+                    if PY3 and self._iostream_has_read_into:
+                        frame = bytearray(length)
                         n = yield stream.read_into(frame)
                         assert n == length, (n, length)
-                else:
-                    if length:
-                        frame = yield stream.read_bytes(length)
                     else:
-                        frame = b''
+                        frame = yield stream.read_bytes(length)
+                else:
+                    frame = b''
                 frames.append(frame)
         except StreamClosedError as e:
             self.stream = None
