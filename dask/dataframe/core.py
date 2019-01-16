@@ -2852,7 +2852,7 @@ class DataFrame(_Frame):
 
         Parameters
         ----------
-        right: ``dask.dataframe.DataFrame``
+        right: dask.dataframe.DataFrame
         how : {'left', 'right', 'outer', 'inner'}, default: 'inner'
             How to handle the operation of the two objects.
             * left: use calling frame's index (or column if on is specified)
