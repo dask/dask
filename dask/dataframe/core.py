@@ -4495,6 +4495,30 @@ def get_parallel_type_frame(o):
     return get_parallel_type(o._meta)
 
 
+@get_parallel_type.register_lazy('cudf')
+@meta_nonempty.register_lazy('cudf')
+@make_meta.register_lazy('cudf')
+def _register_cudf():
+    import cudf
+    import dask_cudf
+    get_parallel_type.register(cudf.DataFrame, lambda _: dask_cudf.DataFrame)
+    get_parallel_type.register(cudf.Series, lambda _: dask_cudf.Series)
+    get_parallel_type.register(cudf.Index, lambda _: dask_cudf.Index)
+
+    @meta_nonempty.register((cudf.DataFrame, cudf.Series, cudf.Index))
+    def _(x):
+        y = meta_nonempty(x.to_pandas())  # TODO: add iloc[:5]
+        return cudf.from_pandas(y)
+
+    @make_meta.register((cudf.Series, cudf.DataFrame))
+    def _(x):
+        return x.head(0)
+
+    @make_meta.register(cudf.Index)
+    def _(x):
+        return x[:0]
+
+
 def parallel_types():
     return tuple(k for k, v in get_parallel_type._lookup.items()
                  if v is not get_parallel_type_object)
