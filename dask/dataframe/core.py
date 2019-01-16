@@ -60,7 +60,7 @@ def _concat(args):
         return args
     if isinstance(first(core.flatten(args)), np.ndarray):
         return da.core.concatenate3(args)
-    if not isinstance(args[0], parallel_types()):
+    if not has_parallel_type(args[0]):
         try:
             return pd.Series(args)
         except Exception:
@@ -3651,7 +3651,7 @@ def map_partitions(func, *args, **kwargs):
                  (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
         return Scalar(graph, name, meta)
-    elif not (isinstance(meta, parallel_types()) or is_arraylike(meta)):
+    elif not (has_parallel_type(meta) or is_arraylike(meta)):
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
         meta = _concat([meta])
@@ -4500,12 +4500,18 @@ def parallel_types():
                  if v is not get_parallel_type_object)
 
 
+def has_parallel_type(x):
+    """ Does this object have a dask dataframe equivalent? """
+    get_parallel_type(x)  # trigger lazy registration
+    return isinstance(x, parallel_types())
+
+
 def new_dd_object(dsk, name, meta, divisions):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
-    if isinstance(meta, parallel_types()):
+    if has_parallel_type(meta):
         return get_parallel_type(meta)(dsk, name, meta, divisions)
     elif is_arraylike(meta):
         import dask.array as da
