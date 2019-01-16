@@ -28,6 +28,18 @@ an ``Client`` with no arguments:
    >>> client
    <Client: scheduler=127.0.0.1:8786 processes=8 cores=8>
 
+.. note::
+
+   Within a Python script you need to start a local cluster in the
+   ``if __name__ == '__main__'`` block:
+
+   .. code-block:: python
+
+      if __name__ == '__main__':
+          cluster = LocalCluster()
+          client = Client(cluster)
+          # Your code follows here
+
 API
 ---
 
