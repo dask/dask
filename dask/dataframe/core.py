@@ -2841,7 +2841,6 @@ class DataFrame(_Frame):
             return self.map_partitions(M.drop, labels, axis=axis, errors=errors)
         raise NotImplementedError("Drop currently only works for axis=1")
 
-    @derived_from(pd.DataFrame)
     def merge(self, right, how='inner', on=None, left_on=None, right_on=None,
               left_index=False, right_index=False, suffixes=('_x', '_y'),
               indicator=False, npartitions=None, shuffle=None):
