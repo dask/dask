@@ -2893,7 +2893,7 @@ class DataFrame(_Frame):
             The ideal number of output partitions. This is only utilised when
             performing a hash_join (merging on columns only). If `None`
             npartitions = max(lhs.npartitions, rhs.npartitions)
-        shuffle: string, optional
+        shuffle: {'disk', 'tasks'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
 
