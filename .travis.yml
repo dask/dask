@@ -37,7 +37,6 @@ jobs:
       - PYTHON=3.6
       - NUMPY=1.14.1
       - PANDAS=0.22.0
-      - PANDAS_RC=1
       - *test_and_lint
       - *coverage
       - *no_optimize

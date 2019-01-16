@@ -113,16 +113,6 @@ if [[ ${UPSTREAM_DEV} ]]; then
     pip install --pre --no-deps --upgrade --timeout=60 -f $PRE_WHEELS numpy pandas
 fi;
 
-if [[ ${PANDAS_RC} == "1" ]]; then
-    echo "Installing Pandas RC"
-    echo "numpy $NUMPY" > $CONDA_PREFIX/conda-meta/pinned
-    conda uninstall -y --force pandas ||:
-    # overwrite old pin
-    conda install -c conda-forge/label/rc 'pandas>=0.24.0rc1'
-
-fi;
-
-
 
 # Install dask
 pip install --no-deps -e .[complete]
