@@ -2897,7 +2897,7 @@ class DataFrame(_Frame):
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
 
-        Notes:
+        Notes
         -----
         1. Joining on indices: In this case the divisions are
         aligned using the function ``dask.dataframe.multi.align_partitions``.
