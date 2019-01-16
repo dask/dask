@@ -2854,7 +2854,6 @@ class DataFrame(_Frame):
         right: dask.dataframe.DataFrame
         how : {'left', 'right', 'outer', 'inner'}, default: 'inner'
             How to handle the operation of the two objects:
-            
             - left: use calling frame's index (or column if on is specified)
             - right: use other frame's index
             - outer: form union of calling frame's index (or column if on is
@@ -2902,19 +2901,19 @@ class DataFrame(_Frame):
 
         There are three ways to join dataframes:
 
-        1. Joining on indices. In this case the divisions are 
-           aligned using the function ``dask.dataframe.multi.align_partitions``. 
+        1. Joining on indices. In this case the divisions are
+           aligned using the function ``dask.dataframe.multi.align_partitions``.
            Afterwards, each partition is merged with the pandas merge function.
 
-        2. Joining one on index and one on column. In this case the divisions of 
-           dataframe merged by index (:math:`d_i`) are used to divide the column 
-           merged dataframe (:math:`d_c`) one using 
-           ``dask.dataframe.multi.rearrange_by_divisions``. In this case the 
-           merged dataframe (:math:`d_m`) has the exact same divisions 
-           as (:math:`d_i`). This can lead to issues if you merge multiple rows from 
+        2. Joining one on index and one on column. In this case the divisions of
+           dataframe merged by index (:math:`d_i`) are used to divide the column
+           merged dataframe (:math:`d_c`) one using
+           ``dask.dataframe.multi.rearrange_by_divisions``. In this case the
+           merged dataframe (:math:`d_m`) has the exact same divisions
+           as (:math:`d_i`). This can lead to issues if you merge multiple rows from
            (:math:`d_c`) to one row in (:math:`d_i`).
 
-        3. Joining both on columns. In this case a hash join is performed using 
+        3. Joining both on columns. In this case a hash join is performed using
            ``dask.dataframe.multi.hash_join``.
 
         """
