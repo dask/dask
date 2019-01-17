@@ -3205,6 +3205,9 @@ def test_map_partition_array(func):
 
 def test_map_partition_sparse():
     sparse = pytest.importorskip('sparse')
+    # Aviod searchsorted failure.
+    pytest.importorskip("numba", minversion="0.40.0")
+
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
                        'y': [6.0, 7.0, 8.0, 9.0, 10.0]},
                       index=['a', 'b', 'c', 'd', 'e'])

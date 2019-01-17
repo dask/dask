@@ -613,7 +613,7 @@ def test_visualize():
 @pytest.mark.skipif(sys.flags.optimize,
                     reason="graphviz exception with Python -OO flag")
 def test_visualize_order():
-    pytest.importorskip('matplotlib')
+    pytest.importorskip('matplotlib.pyplot')
     x = da.arange(5, chunks=2)
     with tmpfile(extension='dot') as fn:
         x.visualize(color='order', filename=fn, cmap='RdBu')

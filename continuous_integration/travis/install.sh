@@ -51,6 +51,7 @@ conda install -q -c conda-forge \
     h5py \
     ipython \
     lz4 \
+    numba \
     partd \
     psutil \
     pytables \
@@ -62,10 +63,10 @@ conda install -q -c conda-forge \
     sqlalchemy \
     toolz
 
-pip install --upgrade --no-deps git+https://github.com/dask/partd
+pip install --upgrade --no-deps locket git+https://github.com/dask/partd
 pip install --upgrade --no-deps git+https://github.com/dask/zict
 pip install --upgrade --no-deps git+https://github.com/dask/distributed
-pip install --upgrade --no-deps git+https://github.com/mrocklin/sparse
+pip install --upgrade --no-deps git+https://github.com/pydata/sparse
 pip install --upgrade --no-deps git+https://github.com/dask/s3fs
 
 if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]] && [[ $NUMPY < '1.14.0' ]]; then
