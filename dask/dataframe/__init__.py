@@ -11,7 +11,7 @@ try:
                      read_fwf)
     from .optimize import optimize
     from .multi import merge, concat
-    from . import rolling
+    from . import rolling, backends
     from ..base import compute
     from .reshape import get_dummies, pivot_table, melt
     from .utils import assert_eq
