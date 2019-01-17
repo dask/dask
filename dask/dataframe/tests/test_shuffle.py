@@ -259,8 +259,9 @@ def test_rearrange(shuffle, scheduler):
     a = result.compute(scheduler=scheduler)
     get = dask.base.get_scheduler(scheduler=scheduler)
     parts = get(result.dask, result.__dask_keys__())
+
     for i in a.y.drop_duplicates():
-        assert sum(i in part.y for part in parts) == 1
+        assert sum(i in set(part.y) for part in parts) == 1
 
 
 def test_rearrange_by_column_with_narrow_divisions():

@@ -5,7 +5,9 @@ import pytest
 
 import dask.dataframe as dd
 
-from dask.dataframe.utils import assert_eq, make_meta, PANDAS_VERSION
+from dask.dataframe.utils import (
+    assert_eq, make_meta, PANDAS_VERSION, PANDAS_GT_0240
+)
 
 
 skip_if_no_get_dummies_sparse = pytest.mark.skipif(PANDAS_VERSION < '0.23.0',
@@ -95,7 +97,11 @@ def test_get_dummies_sparse():
     res = dd.get_dummies(ds, sparse=True)
     assert_eq(exp, res)
 
-    assert res.compute().a.dtype == 'uint8'
+    if PANDAS_GT_0240:
+        exp_dtype = 'Sparse[uint8, 0]'
+    else:
+        exp_dtype = 'uint8'
+    assert res.compute().a.dtype == exp_dtype
     assert pd.api.types.is_sparse(res.a.compute())
 
     exp = pd.get_dummies(s.to_frame(name='a'), sparse=True)
@@ -116,7 +122,11 @@ def test_get_dummies_sparse_mix():
     res = dd.get_dummies(ddf, sparse=True)
     assert_eq(exp, res)
 
-    assert res.compute().A_a.dtype == 'uint8'
+    if PANDAS_GT_0240:
+        exp_dtype = 'Sparse[uint8, 0]'
+    else:
+        exp_dtype = 'uint8'
+    assert res.compute().A_a.dtype == exp_dtype
     assert pd.api.types.is_sparse(res.A_a.compute())
 
 

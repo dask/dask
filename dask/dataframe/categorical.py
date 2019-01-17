@@ -245,6 +245,10 @@ class CategoricalAccessor(Accessor):
 
         # Reorder to keep cat:code relationship, filtering unused (-1)
         ordered, mask = present.reindex(meta_cat.categories)
+        if mask is None:
+            # PANDAS-23963: old and new categories match.
+            return self._series
+
         new_categories = ordered[mask != -1]
         meta = meta_cat.set_categories(new_categories, ordered=meta_cat.ordered)
         return self._series.map_partitions(self._delegate_method, 'cat',
