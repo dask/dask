@@ -14,7 +14,7 @@ from ...compatibility import unicode, PY3
 from ... import array as da
 from ...delayed import delayed
 
-from ..core import DataFrame, Series, Index, new_dd_object, parallel_types
+from ..core import DataFrame, Series, Index, new_dd_object, has_parallel_type
 from ..shuffle import set_partition
 from ..utils import insert_meta_param_description, check_meta, make_meta
 
@@ -165,7 +165,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     if isinstance(getattr(data, 'index', None), pd.MultiIndex):
         raise NotImplementedError("Dask does not support MultiIndex Dataframes.")
 
-    if not isinstance(data, parallel_types()):
+    if not has_parallel_type(data):
         raise TypeError("Input must be a pandas DataFrame or Series")
 
     if ((npartitions is None) == (chunksize is None)):
