@@ -16,7 +16,8 @@ from dask.base import compute_as_if_collection
 from dask.compatibility import PY2
 from dask.utils import put_lines, M
 
-from dask.dataframe.core import repartition_divisions, aca, _concat, Scalar
+from dask.dataframe.core import (repartition_divisions, aca, _concat, Scalar,
+                                 has_parallel_type)
 from dask.dataframe import methods
 from dask.dataframe.utils import (assert_eq, make_meta, assert_max_deps,
                                   PANDAS_VERSION)
@@ -3364,3 +3365,9 @@ def test_scalar_with_array():
 
     da.utils.assert_eq(df.x.values + df.x.mean(),
                        ddf.x.values + ddf.x.mean())
+
+
+def test_has_parallel_type():
+    assert has_parallel_type(pd.DataFrame())
+    assert has_parallel_type(pd.Series())
+    assert not has_parallel_type(123)
