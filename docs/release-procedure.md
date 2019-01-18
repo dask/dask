@@ -26,8 +26,8 @@ Release per project:
 
 *   Update `dask-core` feedstock on [conda-forge](https://conda-forge.github.io)
 
-    Typically this is handled by a bot, but in some cases you have to modify
-    version numbers.
+    Typically this is handled by a conda-forge bot within an hour or two,
+    but in some cases you have to modify version or build numbers.
 
     If for some reason you have to do this manually, then follow these steps:
 
