@@ -14,7 +14,7 @@ from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
 from .compatibility import (apply, long, unicode, Iterator, is_dataclass,
-                            dataclass_fields, Mapping)
+                            dataclass_fields, Mapping, cPickle)
 from .context import thread_state
 from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex
@@ -729,10 +729,18 @@ def register_numpy():
                     x.shape, x.strides, offset)
         if x.dtype.hasobject:
             try:
-                data = hash_buffer_hex('-'.join(x.flat).encode('utf-8'))
+                # string fast-path
+                data = hash_buffer_hex('-'.join(x.flat).encode(encoding='utf-8', errors='surrogatepass'))
+            except UnicodeDecodeError:
+                # bytes fast-path
+                data = hash_buffer_hex(b'-'.join(x.flat))
             except TypeError:
-                data = hash_buffer_hex(b'-'.join([unicode(item).encode('utf-8') for item in
-                                                  x.flat]))
+                # object data w/o fast-path, use fast cPickle
+                try:
+                    data = hash_buffer_hex(cPickle.dumps(x, cPickle.HIGHEST_PROTOCOL))
+                except Exception:
+                    # pickling not supported, use UUID4-based fallback
+                    data = uuid.uuid4().hex
         else:
             try:
                 data = hash_buffer_hex(x.ravel(order='K').view('i1'))

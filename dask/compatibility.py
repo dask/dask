@@ -111,6 +111,8 @@ if PY3:
             raise exc.with_traceback(tb)
         raise exc
 
+    import pickle as cPickle
+
 else:
     import __builtin__ as builtins
     import copy_reg as copyreg
@@ -301,6 +303,9 @@ else:
     except ImportError:
         # Fallback to top-level definition
         pass
+
+
+    import cPickle
 
 
 def getargspec(func):
