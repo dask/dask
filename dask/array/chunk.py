@@ -10,6 +10,7 @@ from . import numpy_compat as npcompat
 from ..compatibility import Container, Iterable, Sequence
 from ..core import flatten
 from ..utils import ignoring
+from . import core
 
 from numbers import Integral
 
@@ -281,7 +282,8 @@ def einsum(*operands, **kwargs):
     subscripts = kwargs.pop('subscripts')
     ncontract_inds = kwargs.pop('ncontract_inds')
     dtype = kwargs.pop('kernel_dtype')
-    chunk = np.einsum(subscripts, *operands, dtype=dtype, **kwargs)
+    einsum = core.einsum_lookup.dispatch(type(operands[0]))
+    chunk = einsum(subscripts, *operands, dtype=dtype, **kwargs)
 
     # Avoid concatenate=True in blockwise by adding 1's
     # for the contracted dimensions
