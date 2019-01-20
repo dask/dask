@@ -2038,7 +2038,10 @@ def test_to_dask_array(as_frame, lengths):
 
 def test_apply():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
-    ddf = dd.from_pandas(df, npartitions=2)
+
+    # Also tests for unordered columns, but with same content
+    ddf = pd.DataFrame({'y': [10, 20, 30, 40], 'x': [1, 2, 3, 4], })
+    ddf = dd.from_pandas(ddf, npartitions=2)
 
     func = lambda row: row['x'] + row['y']
     assert_eq(ddf.x.apply(lambda x: x + 1, meta=("x", int)),

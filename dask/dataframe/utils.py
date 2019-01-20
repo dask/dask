@@ -657,12 +657,13 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
 
 
 def _maybe_sort(a):
-    # sort by value, then index
+    # sort column names, then by value, then index
     try:
         if isinstance(a, pd.DataFrame):
             if set(a.index.names) & set(a.columns):
                 a.index.names = ['-overlapped-index-name-%d' % i
                                  for i in range(len(a.index.names))]
+            a.sort_index(1, inplace=True)
             a = a.sort_values(by=a.columns.tolist())
         else:
             a = a.sort_values()
