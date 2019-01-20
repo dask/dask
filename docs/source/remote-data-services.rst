@@ -187,7 +187,13 @@ The following parameters may be passed to s3fs using ``storage_options``:
     - use_ssl: Whether connections are encrypted and secure (default True)
 
     - client_kwargs: Dict passed to the `boto3 client`_, with keys such
-      as `region_name` or `endpoint_url`
+      as `region_name` or `endpoint_url`. Notice: do not pass the `config`
+      option here, which will cause an ``TypeError: client() got multiple
+      values for keyword argument 'config'``, pass it's content to
+      `config_kwargs` instead.
+
+    - config_kwargs: Dict passed to the `s3fs python client`_, which act as
+      the `boto3 client's config`_ option.
 
     - requester_pays: Set True if the authenticated user will assume transfer
       costs, which is required by some providers of bulk data
@@ -203,7 +209,28 @@ The following parameters may be passed to s3fs using ``storage_options``:
 .. _boto3 client: http://boto3.readthedocs.io/en/latest/reference/core/session.html#boto3.session.Session.client
 .. _boto3 Session: http://boto3.readthedocs.io/en/latest/reference/core/session.html
 .. _here: http://boto3.readthedocs.io/en/latest/guide/configuration.html#shared-credentials-file
+.. _s3fs python client: https://s3fs.readthedocs.io/en/latest/api.html#s3fs.core.S3FileSystem
+.. _boto3 client's config: https://botocore.amazonaws.com/v1/documentation/api/latest/reference/config.html
 
+Using Other S3-Compatible Services
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+By using the `endpoint_url` option, you may use other s3-compatible services,
+for example, using `AlibabaCloud OSS`:
+
+.. code-block:: python
+
+    dask_function(...,
+        storage_options={
+            "key": ...,
+            "secret": ...,
+            "client_kwargs": {
+                "endpoint_url": "http://some-region.some-s3-compatible.com",
+            },
+            # this dict goes to boto3 client's `config`
+            #   `addressing_style` is required by AlibabaCloud, other services may not
+            "config_kwargs": {"s3": {"addressing_style": "virtual"}},
+        })
 
 Google Cloud Storage
 --------------------
