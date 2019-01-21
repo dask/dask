@@ -57,16 +57,26 @@ config.update_defaults({'array': {
 
 concatenate_lookup = Dispatch('concatenate')
 tensordot_lookup = Dispatch('tensordot')
+einsum_lookup = Dispatch('einsum')
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
+einsum_lookup.register((object, np.ndarray), np.einsum)
 
 
 @tensordot_lookup.register_lazy('cupy')
 @concatenate_lookup.register_lazy('cupy')
+@einsum_lookup.register_lazy('cupy')
 def register_cupy():
     import cupy
     concatenate_lookup.register(cupy.ndarray, cupy.concatenate)
     tensordot_lookup.register(cupy.ndarray, cupy.tensordot)
+
+    @einsum_lookup.register(cupy.ndarray)
+    def _cupy_einsum(*args, **kwargs):
+        # NB: cupy does not accept `order` or `casting` kwargs - ignore
+        kwargs.pop('casting', None)
+        kwargs.pop('order', None)
+        return cupy.einsum(*args, **kwargs)
 
 
 @tensordot_lookup.register_lazy('sparse')

@@ -36,6 +36,7 @@ functions = [
     lambda x: x > 0.5,
     lambda x: x.rechunk((4, 4, 4)),
     lambda x: x.rechunk((2, 2, 1)),
+    lambda x: da.einsum("ijk,ijk", x, x)
 ]
 
 
