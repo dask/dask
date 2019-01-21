@@ -171,6 +171,9 @@ def deserialize(header, frames, deserializers=None):
     ----------
     header: dict
     frames: list of bytes
+    deserializers : Optional[Dict[str, Tuple[Callable, Callable, bool]]]
+        An optional dict mapping a name to a (de)serializer.
+        See `dask_serialize` and `dask_deserialize` for more.
 
     See Also
     --------

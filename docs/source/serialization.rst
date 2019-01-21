@@ -1,3 +1,5 @@
+.. _serialization:
+
 Serialization
 =============
 

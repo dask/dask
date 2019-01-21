@@ -40,19 +40,32 @@ class Comm(with_metaclass(ABCMeta)):
     # XXX add set_close_callback()?
 
     @abstractmethod
-    def read(self):
+    def read(self, deserializers=None):
         """
         Read and return a message (a Python object).
 
         This method is a coroutine.
+
+        Parameters
+        ----------
+        deserializers : Optional[Dict[str, Tuple[Callable, Callable, bool]]]
+            An optional dict appropriate for distributed.protocol.deserialize.
+            See :ref:`serialization` for more.
         """
 
     @abstractmethod
-    def write(self, msg):
+    def write(self, msg, on_error=None):
         """
         Write a message (a Python object).
 
         This method is a coroutine.
+
+        Parameters
+        ----------
+        msg :
+        on_error : Optional[str]
+            The behavior when serialization fails. See
+            ``distributed.protocol.core.dumps`` for valid values.
         """
 
     @abstractmethod
