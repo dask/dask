@@ -7,7 +7,7 @@ from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 pd = pytest.importorskip("pandas", minversion="0.23.4")
 
 from pandas.tests.extension.decimal.array import DecimalArray, DecimalDtype
-from dask.dataframe.extensions import make_array_nonempty
+from dask.dataframe.extensions import make_array_nonempty, make_scalar
 
 
 @make_array_nonempty.register(DecimalDtype)
@@ -20,6 +20,11 @@ def _(dtype):
                                        **kwargs)
 
 
+@make_scalar.register(Decimal)
+def _(x):
+    return Decimal('1')
+
+
 def test_register_extension_type():
     arr = DecimalArray._from_sequence([Decimal('1.0')] * 10)
     ser = pd.Series(arr)
@@ -29,3 +34,7 @@ def test_register_extension_type():
     df = pd.DataFrame({"A": ser})
     ddf = dd.from_pandas(df, 2)
     assert_eq(df, ddf)
+
+
+def test_scalar():
+    result = dd.utils.make_meta_object(Decimal("1.0"))

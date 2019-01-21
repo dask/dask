@@ -25,7 +25,7 @@ try:
 except ImportError:
     is_interval_dtype = lambda dtype: False
 
-from .extensions import make_array_nonempty
+from .extensions import make_array_nonempty, make_scalar
 from ..base import is_dask_collection
 from ..compatibility import PY2, Iterator, Mapping
 from ..core import get_deps
@@ -437,15 +437,41 @@ def _scalar_from_dtype(dtype):
         raise TypeError("Can't handle dtype: {0}".format(dtype))
 
 
+@make_scalar.register(np.dtype)
+def _(dtype):
+    return _scalar_from_dtype(dtype)
+
+
+@make_scalar.register(pd.Timestamp)
+def _(x):
+    return pd.Timestamp("2000", tz=x.tz)
+
+
+@make_scalar.register(pd.Timedelta)
+def _(x):
+    return pd.Timedelta("1H")
+
+
+@make_scalar.register(pd.Period)
+def _(x):
+    return pd.Period("2000", freq=x.freq)
+
+
+@make_scalar.register(pd.Interval)
+def _(x):
+    return pd.Interval(0, 1, closed=x.closed)
+
+
 def _nonempty_scalar(x):
-    if isinstance(x, (pd.Timestamp, pd.Timedelta, pd.Period)):
-        return x
-    elif np.isscalar(x):
+    if type(x) in make_scalar._lookup:
+        return make_scalar(x)
+
+    if np.isscalar(x):
         dtype = x.dtype if hasattr(x, 'dtype') else np.dtype(type(x))
-        return _scalar_from_dtype(dtype)
-    else:
-        raise TypeError("Can't handle meta of type "
-                        "'{0}'".format(type(x).__name__))
+        return make_scalar(dtype)
+
+    raise TypeError("Can't handle meta of type "
+                    "'{0}'".format(type(x).__name__))
 
 
 @meta_nonempty.register(pd.Series)
