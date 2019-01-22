@@ -1,4 +1,4 @@
-from .core import tensordot_lookup, concatenate_lookup
+from .core import tensordot_lookup, concatenate_lookup, einsum_lookup
 
 
 @tensordot_lookup.register_lazy('cupy')
@@ -7,6 +7,13 @@ def register_cupy():
     import cupy
     concatenate_lookup.register(cupy.ndarray, cupy.concatenate)
     tensordot_lookup.register(cupy.ndarray, cupy.tensordot)
+
+    @einsum_lookup.register(cupy.ndarray)
+    def _cupy_einsum(*args, **kwargs):
+        # NB: cupy does not accept `order` or `casting` kwargs - ignore
+        kwargs.pop('casting', None)
+        kwargs.pop('order', None)
+        return cupy.einsum(*args, **kwargs)
 
 
 @tensordot_lookup.register_lazy('sparse')

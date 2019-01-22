@@ -57,8 +57,10 @@ config.update_defaults({'array': {
 
 concatenate_lookup = Dispatch('concatenate')
 tensordot_lookup = Dispatch('tensordot')
+einsum_lookup = Dispatch('einsum')
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
+einsum_lookup.register((object, np.ndarray), np.einsum)
 
 
 class PerformanceWarning(Warning):

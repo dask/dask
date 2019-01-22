@@ -8,7 +8,7 @@ sparse arrays.
 The blocked algorithms in Dask Array normally parallelize around in-memory
 NumPy arrays.  However, if another in-memory array library supports the NumPy
 interface, then it too can take advantage of Dask Array's parallel algorithms.
-In particular the `sparse <https://github.com/mrocklin/sparse/>`_ array library
+In particular the `sparse <https://github.com/pydata/sparse/>`_ array library
 satisfies a subset of the NumPy API and works well with (and is tested against)
 Dask Array.
 
@@ -49,7 +49,7 @@ Requirements
 ------------
 
 Any in-memory library that copies the NumPy ndarray interface should work here.
-The `sparse <https://github.com/mrocklin/sparse/>`_ library is a minimal
+The `sparse <https://github.com/pydata/sparse/>`_ library is a minimal
 example.  In particular, an in-memory library should implement at least the
 following operations:
 

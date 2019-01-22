@@ -207,6 +207,23 @@ def test_tokenize_pandas():
     assert tokenize(a) == tokenize(b)
 
 
+@pytest.mark.skipif('not pd')
+def test_tokenize_pandas_invalid_unicode():
+    # see https://github.com/dask/dask/issues/2713
+    df = pd.DataFrame({'x\ud83d': [1, 2, 3], 'y\ud83d': ['4', 'asd\ud83d', None]}, index=[1, 2, 3])
+    tokenize(df)
+
+
+@pytest.mark.skipif('not pd')
+def test_tokenize_pandas_no_pickle():
+    class NoPickle(object):
+        # pickling not supported because it is a local class
+        pass
+
+    df = pd.DataFrame({'x': ['foo', None, NoPickle()]})
+    tokenize(df)
+
+
 def test_tokenize_kwargs():
     assert tokenize(5, x=1) == tokenize(5, x=1)
     assert tokenize(5) != tokenize(5, x=1)
@@ -547,6 +564,25 @@ def test_compute_array_dataframe():
     pd.util.testing.assert_series_equal(df_out, df.a + 2)
 
 
+@pytest.mark.skipif('not dd')
+def test_compute_dataframe_valid_unicode_in_bytes():
+    df = pd.DataFrame(
+        data=np.random.random((3, 1)),
+        columns=[u'ö'.encode('utf8')],
+    )
+    dd.from_pandas(df, npartitions=4)
+
+
+@pytest.mark.skipif('not dd')
+def test_compute_dataframe_invalid_unicode():
+    # see https://github.com/dask/dask/issues/2713
+    df = pd.DataFrame(
+        data=np.random.random((3, 1)),
+        columns=['\ud83d'],
+    )
+    dd.from_pandas(df, npartitions=4)
+
+
 @pytest.mark.skipif('not da or not db')
 def test_compute_array_bag():
     x = da.arange(5, chunks=2)
@@ -613,7 +649,7 @@ def test_visualize():
 @pytest.mark.skipif(sys.flags.optimize,
                     reason="graphviz exception with Python -OO flag")
 def test_visualize_order():
-    pytest.importorskip('matplotlib')
+    pytest.importorskip('matplotlib.pyplot')
     x = da.arange(5, chunks=2)
     with tmpfile(extension='dot') as fn:
         x.visualize(color='order', filename=fn, cmap='RdBu')

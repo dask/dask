@@ -154,7 +154,7 @@ def test_meta_duplicated():
 
 
 def test_meta_nonempty_empty_categories():
-    for dtype in ['O', 'f8', 'M8']:
+    for dtype in ['O', 'f8', 'M8[ns]']:
         # Index
         idx = pd.CategoricalIndex([], pd.Index([], dtype=dtype),
                                   ordered=True, name='foo')

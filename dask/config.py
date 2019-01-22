@@ -147,11 +147,15 @@ def collect_yaml(paths=paths):
     for path in paths:
         if os.path.exists(path):
             if os.path.isdir(path):
-                file_paths.extend(sorted([
-                    os.path.join(path, p)
-                    for p in os.listdir(path)
-                    if os.path.splitext(p)[1].lower() in ('.json', '.yaml', '.yml')
-                ]))
+                try:
+                    file_paths.extend(sorted([
+                        os.path.join(path, p)
+                        for p in os.listdir(path)
+                        if os.path.splitext(p)[1].lower() in ('.json', '.yaml', '.yml')
+                    ]))
+                except OSError:
+                    # Ignore permission errors
+                    pass
             else:
                 file_paths.append(path)
 
@@ -159,10 +163,14 @@ def collect_yaml(paths=paths):
 
     # Parse yaml files
     for path in file_paths:
-        with open(path) as f:
-            data = yaml.load(f.read()) or {}
-            data = normalize_nested_keys(data)
-            configs.append(data)
+        try:
+            with open(path) as f:
+                data = yaml.load(f.read()) or {}
+                data = normalize_nested_keys(data)
+                configs.append(data)
+        except (OSError, IOError):
+            # Ignore permission errors
+            pass
 
     return configs
 

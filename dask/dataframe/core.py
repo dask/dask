@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function
 
 from functools import wraps, partial
@@ -748,7 +749,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         Aggregate both the sum and count of a Series at the same time:
 
         >>> def sum_and_count(x):
-        ...     return pd.Series({'sum': x.sum(), 'count': x.count()})
+        ...     return pd.Series({'count': x.count(), 'sum': x.sum()},
+        ...                      index=['count', 'sum'])
         >>> res = ddf.x.reduction(sum_and_count, aggregate=lambda x: x.sum())
         >>> res.compute()
         count      50
@@ -761,7 +763,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         index, and sum each group to get the final result.
 
         >>> def sum_and_count(x):
-        ...     return pd.DataFrame({'sum': x.sum(), 'count': x.count()})
+        ...     return pd.DataFrame({'count': x.count(), 'sum': x.sum()},
+        ...                         columns=['count', 'sum'])
         >>> res = ddf.reduction(sum_and_count,
         ...                     aggregate=lambda x: x.groupby(level=0).sum())
         >>> res.compute()
@@ -2844,10 +2847,82 @@ class DataFrame(_Frame):
             return self.map_partitions(M.drop, labels, axis=axis, errors=errors)
         raise NotImplementedError("Drop currently only works for axis=1")
 
-    @derived_from(pd.DataFrame)
     def merge(self, right, how='inner', on=None, left_on=None, right_on=None,
               left_index=False, right_index=False, suffixes=('_x', '_y'),
               indicator=False, npartitions=None, shuffle=None):
+        """Merge the DataFrame with another DataFrame
+
+        This will merge the two datasets, either on the indices, a certain column
+        in each dataset or the index in one dataset and the column in another.
+
+        Parameters
+        ----------
+        right: dask.dataframe.DataFrame
+        how : {'left', 'right', 'outer', 'inner'}, default: 'inner'
+            How to handle the operation of the two objects:
+            - left: use calling frame's index (or column if on is specified)
+            - right: use other frame's index
+            - outer: form union of calling frame's index (or column if on is
+              specified) with other frame's index, and sort it
+              lexicographically
+            - inner: form intersection of calling frame's index (or column if
+              on is specified) with other frame's index, preserving the order
+              of the calling's one
+        on : label or list
+            Column or index level names to join on. These must be found in both
+            DataFrames. If on is None and not merging on indexes then this
+            defaults to the intersection of the columns in both DataFrames.
+        left_on : label or list, or array-like
+            Column to join on in the left DataFrame. Other than in pandas
+            arrays and lists are only support if their length is 1.
+        right_on : label or list, or array-like
+            Column to join on in the right DataFrame. Other than in pandas
+            arrays and lists are only support if their length is 1.
+        left_index : boolean, default False
+            Use the index from the left DataFrame as the join key.
+        right_index : boolean, default False
+            Use the index from the right DataFrame as the join key.
+        suffixes : 2-length sequence (tuple, list, ...)
+            Suffix to apply to overlapping column names in the left and
+            right side, respectively
+        indicator : boolean or string, default False
+            If True, adds a column to output DataFrame called "_merge" with
+            information on the source of each row. If string, column with
+            information on source of each row will be added to output DataFrame,
+            and column will be named value of string. Information column is
+            Categorical-type and takes on a value of "left_only" for observations
+            whose merge key only appears in `left` DataFrame, "right_only" for
+            observations whose merge key only appears in `right` DataFrame,
+            and "both" if the observation’s merge key is found in both.
+        npartitions: int, None, or 'auto'
+            The ideal number of output partitions. This is only utilised when
+            performing a hash_join (merging on columns only). If `None`
+            npartitions = max(lhs.npartitions, rhs.npartitions)
+        shuffle: {'disk', 'tasks'}, optional
+            Either ``'disk'`` for single-node operation or ``'tasks'`` for
+            distributed operation.  Will be inferred by your current scheduler.
+
+        Notes
+        -----
+
+        There are three ways to join dataframes:
+
+        1. Joining on indices. In this case the divisions are
+           aligned using the function ``dask.dataframe.multi.align_partitions``.
+           Afterwards, each partition is merged with the pandas merge function.
+
+        2. Joining one on index and one on column. In this case the divisions of
+           dataframe merged by index (:math:`d_i`) are used to divide the column
+           merged dataframe (:math:`d_c`) one using
+           ``dask.dataframe.multi.rearrange_by_divisions``. In this case the
+           merged dataframe (:math:`d_m`) has the exact same divisions
+           as (:math:`d_i`). This can lead to issues if you merge multiple rows from
+           (:math:`d_c`) to one row in (:math:`d_i`).
+
+        3. Joining both on columns. In this case a hash join is performed using
+           ``dask.dataframe.multi.hash_join``.
+
+        """
 
         if not is_dataframe_like(right):
             raise ValueError('right must be DataFrame')
