@@ -1409,6 +1409,28 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
     assert all(map(len, parts))
 
 
+@pytest.mark.parametrize('use_index', [True, False])
+@pytest.mark.parametrize('n', [1, 5])
+@pytest.mark.parametrize('partition_size', [1024, '1024', '1.024kB', '1kiB'])
+@pytest.mark.parametrize('dtype', [int, float])
+@pytest.mark.parametrize('transform', [lambda df: df, lambda df: df.x])
+def test_repartition_partition_size(use_index, n, partition_size, dtype, transform):
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6] * 10,
+                       'y': list('abdabd') * 10},
+                      index=pd.Series([10, 20, 30, 40, 50, 60] * 10, dtype=dtype))
+    df = transform(df)
+    mem_usage = df.memory_usage(deep=True)
+    if isinstance(mem_usage, pd.Series):
+        mem_usage = mem_usage.sum()
+
+    a = dd.from_pandas(df, npartitions=n, sort=use_index)
+    b = a.repartition(partition_size=partition_size)
+    assert_eq(a, b)
+    assert b.npartitions == np.ceil(mem_usage / 1024.0)
+    parts = dask.get(b.dask, b.__dask_keys__())
+    assert all(map(len, parts))
+
+
 def test_repartition_npartitions_same_limits():
     df = pd.DataFrame({'x': [1, 2, 3]},
                       index=[pd.Timestamp('2017-05-09 00:00:00.006000'),
