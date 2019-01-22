@@ -20,7 +20,7 @@ except ImportError:
 from .. import array as da
 from .. import core
 
-from ..utils import partial_by_order, Dispatch, IndexCallable
+from ..utils import parse_bytes, partial_by_order, Dispatch, IndexCallable
 from .. import threaded
 from ..compatibility import (apply, operator_div, bind_method, string_types,
                              Iterator, Sequence)
@@ -961,17 +961,22 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     # Note: iloc is implemented only on DataFrame
 
-    def repartition(self, divisions=None, npartitions=None, freq=None, force=False):
+    def repartition(self, divisions=None, npartitions=None, partition_size=None,
+                    freq=None, force=False):
         """ Repartition dataframe along new divisions
 
         Parameters
         ----------
         divisions : list, optional
-            List of partitions to be used. If specified npartitions will be
-            ignored.
+            List of partitions to be used. Only used if npartitions and
+            partition_size isn't specified.
         npartitions : int, optional
-            Number of partitions of output. Only used if divisions isn't
-            specified.
+            Number of partitions of output. Only used if partition_size
+            isn't specified.
+        partition_size: int or string, optional
+            Max number of bytes of memory for each partition. Use numbers or
+            strings like 5MB. If specified npartitions and divisions will be
+            ignored.
         freq : str, pd.Timedelta
             A period on which to partition timeseries data like ``'7D'`` or
             ``'12h'`` or ``pd.Timedelta(hours=12)``.  Assumes a datetime index.
@@ -986,6 +991,21 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         >>> df = df.repartition(divisions=[0, 5, 10, 20])  # doctest: +SKIP
         >>> df = df.repartition(freq='7d')  # doctest: +SKIP
         """
+
+        if partition_size is not None:
+            if npartitions is not None:
+                warnings.warn("When providing both partition_size and npartitions "
+                              "to repartition only partition_size is used.")
+            if isinstance(partition_size, string_types):
+                partition_size = parse_bytes(partition_size)
+            else:
+                partition_size = int(partition_size)
+            mem_usage = self.memory_usage(deep=True)
+            if is_series_like(mem_usage):
+                mem_usage = mem_usage.sum()
+            mem_usage = mem_usage.compute()
+            npartitions = max(1, int(np.ceil(mem_usage / partition_size)))
+
         if npartitions is not None and divisions is not None:
             warnings.warn("When providing both npartitions and divisions to "
                           "repartition only npartitions is used.")
@@ -997,8 +1017,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         elif freq is not None:
             return repartition_freq(self, freq=freq)
         else:
-            raise ValueError(
-                "Provide either divisions= or npartitions= to repartition")
+            raise ValueError("Provide either divisions=, npartitions= "
+                             "or partition_size= to repartition")
 
     @derived_from(pd.DataFrame)
     def fillna(self, value=None, method=None, limit=None, axis=None):
