@@ -234,7 +234,7 @@ def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None)
 
 def rearrange_by_column(df, col, npartitions=None, max_branch=None,
                         shuffle=None, compute=None):
-    shuffle = shuffle or config.get('shuffle', 'disk')
+    shuffle = shuffle or config.get('shuffle', None) or 'disk'
     if shuffle == 'disk':
         return rearrange_by_column_disk(df, col, npartitions, compute=compute)
     elif shuffle == 'tasks':
