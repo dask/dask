@@ -247,15 +247,6 @@ else:
 concat_dispatch = Dispatch('concat')
 
 
-@concat_dispatch.register_lazy('cudf')
-def register_cudf():
-    import cudf
-    concat_dispatch.register(
-        (cudf.DataFrame, cudf.Series, cudf.Index),
-        cudf.concat
-    )
-
-
 def concat(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
     """Concatenate, handling some edge cases:
 

@@ -22,7 +22,7 @@ except AttributeError:
 
 
 def normalize_to_array(x):
-    if 'cupy' in str(type(x)):
+    if 'cupy' in str(type(x)):  # TODO: avoid explicit reference to cupy
         return x.get()
     else:
         return x
