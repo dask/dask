@@ -188,11 +188,9 @@ The following parameters may be passed to s3fs using ``storage_options``:
 
     - client_kwargs: Dict passed to the `boto3 client`_, with keys such
       as `region_name` or `endpoint_url`. Notice: do not pass the `config`
-      option here, which will cause an ``TypeError: client() got multiple
-      values for keyword argument 'config'``, pass it's content to
-      `config_kwargs` instead.
+      option here, please pass it's content to `config_kwargs` instead.
 
-    - config_kwargs: Dict passed to the `s3fs python client`_, which act as
+    - config_kwargs: Dict passed to the `s3fs.S3FileSystem`_, which passes it to
       the `boto3 client's config`_ option.
 
     - requester_pays: Set True if the authenticated user will assume transfer
@@ -209,7 +207,7 @@ The following parameters may be passed to s3fs using ``storage_options``:
 .. _boto3 client: http://boto3.readthedocs.io/en/latest/reference/core/session.html#boto3.session.Session.client
 .. _boto3 Session: http://boto3.readthedocs.io/en/latest/reference/core/session.html
 .. _here: http://boto3.readthedocs.io/en/latest/guide/configuration.html#shared-credentials-file
-.. _s3fs python client: https://s3fs.readthedocs.io/en/latest/api.html#s3fs.core.S3FileSystem
+.. _s3fs.S3FileSystem: https://s3fs.readthedocs.io/en/latest/api.html#s3fs.core.S3FileSystem
 .. _boto3 client's config: https://botocore.amazonaws.com/v1/documentation/api/latest/reference/config.html
 
 Using Other S3-Compatible Services
