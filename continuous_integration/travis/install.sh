@@ -43,7 +43,7 @@ conda install -q \
     netcdf4 \
     paramiko \
     psutil \
-    pytest=3.7 \
+    pytest \
     pytest-timeout \
     python=$PYTHON \
     requests \

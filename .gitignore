@@ -1,11 +1,15 @@
 *.pyc
 *.py~
 build/
+dist/
 *.egg-info
 docs/build
 continuous_integration/hdfs-initialized
+.DS_Store
 .cache
+*.lock
 .#*
 .idea/
 .pytest_cache/
 dask-worker-space/
+.vscode/
