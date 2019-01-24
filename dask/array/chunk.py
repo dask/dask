@@ -277,17 +277,6 @@ def view(x, dtype, order='C'):
         return x.T.view(dtype).T
 
 
-def einsum(*operands, **kwargs):
-    subscripts = kwargs.pop('subscripts')
-    ncontract_inds = kwargs.pop('ncontract_inds')
-    dtype = kwargs.pop('kernel_dtype')
-    chunk = np.einsum(subscripts, *operands, dtype=dtype, **kwargs)
-
-    # Avoid concatenate=True in blockwise by adding 1's
-    # for the contracted dimensions
-    return chunk.reshape(chunk.shape + (1,) * ncontract_inds)
-
-
 def slice_with_int_dask_array(x, idx, offset, x_size, axis):
     """ Chunk function of `slice_with_int_dask_array_on_axis`.
     Slice one chunk of x by one chunk of idx.

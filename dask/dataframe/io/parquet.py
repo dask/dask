@@ -907,8 +907,10 @@ def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
         df = table.to_pandas()
         for cat in categories:
             df[cat] = df[cat].astype('category')
-    else:
+    elif pa.__version__ < LooseVersion('0.11.0'):
         df = table.to_pandas(categories=categories)
+    else:
+        df = table.to_pandas(categories=categories, date_as_object=False)
     has_index = not isinstance(df.index, pd.RangeIndex)
 
     if not has_index and index_cols:
