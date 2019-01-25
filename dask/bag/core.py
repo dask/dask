@@ -823,9 +823,19 @@ class Bag(DaskMethodsMixin):
 
         Unordered without repeats.
 
+        Parameters
+        ----------
+        key: callable
+            Defines uniqueness such as in `toolz.unique`
+
+        Examples
+        --------
         >>> b = from_sequence(['Alice', 'Bob', 'Alice'])
         >>> sorted(b.distinct())
         ['Alice', 'Bob']
+        >>> b = from_sequence([{'name': 'Alice'}, {'name': 'Bob'}, {'name': 'Alice'}])
+        >>> sorted(b.distinct(key=lambda x: x['name']))
+        [{'name': 'Alice'}, {'name': 'Bob'}]
         """
         key = key if callable(key) else toolz.curried.get(key)
         perpartition = lambda seq: list(toolz.unique(seq, key=key))
