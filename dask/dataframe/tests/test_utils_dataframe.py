@@ -4,7 +4,9 @@ import pandas.util.testing as tm
 import dask.dataframe as dd
 from dask.dataframe.utils import (shard_df_on_index, meta_nonempty, make_meta,
                                   raise_on_meta_error, check_meta,
-                                  UNKNOWN_CATEGORIES, PANDAS_VERSION)
+                                  UNKNOWN_CATEGORIES, PANDAS_VERSION,
+                                  is_dataframe_like, is_series_like,
+                                  is_index_like)
 
 import pytest
 
@@ -66,10 +68,11 @@ def test_make_meta():
     assert meta.name == 'a'
 
     # With index
-    meta = make_meta({'a': 'i8', 'b': 'i4'}, pd.Int64Index([1, 2], name='foo'))
+    meta = make_meta({'a': 'i8', 'b': 'i4'},
+                     index=pd.Int64Index([1, 2], name='foo'))
     assert isinstance(meta.index, pd.Int64Index)
     assert len(meta.index) == 0
-    meta = make_meta(('a', 'i8'), pd.Int64Index([1, 2], name='foo'))
+    meta = make_meta(('a', 'i8'), index=pd.Int64Index([1, 2], name='foo'))
     assert isinstance(meta.index, pd.Int64Index)
     assert len(meta.index) == 0
 
@@ -151,7 +154,7 @@ def test_meta_duplicated():
 
 
 def test_meta_nonempty_empty_categories():
-    for dtype in ['O', 'f8', 'M8']:
+    for dtype in ['O', 'f8', 'M8[ns]']:
         # Index
         idx = pd.CategoricalIndex([], pd.Index([], dtype=dtype),
                                   ordered=True, name='foo')
@@ -222,6 +225,17 @@ def test_meta_nonempty_index():
     levels = [pd.Int64Index([1], name='a'),
               pd.Float64Index([1.0], name='b')]
     idx = pd.MultiIndex(levels=levels, labels=[[0], [0]], names=['a', 'b'])
+    res = meta_nonempty(idx)
+    assert type(res) is pd.MultiIndex
+    for idx1, idx2 in zip(idx.levels, res.levels):
+        assert type(idx1) is type(idx2)
+        assert idx1.name == idx2.name
+    assert res.names == idx.names
+
+    levels = [pd.Int64Index([1], name='a'),
+              pd.CategoricalIndex(data=['b'], categories=['b'], name='b'),
+              pd.TimedeltaIndex([np.timedelta64(1, 'D')], name='timedelta')]
+    idx = pd.MultiIndex(levels=levels, labels=[[0], [0], [0]], names=['a', 'b', 'timedelta'])
     res = meta_nonempty(idx)
     assert type(res) is pd.MultiIndex
     for idx1, idx2 in zip(idx.levels, res.levels):
@@ -304,29 +318,33 @@ def test_check_meta():
     with pytest.raises(ValueError) as err:
         check_meta(df2, meta2, funcname='from_delayed')
 
-    if PANDAS_VERSION >= '0.21.0':
-        exp = (
-            'Metadata mismatch found in `from_delayed`.\n'
-            '\n'
-            'Partition type: `DataFrame`\n'
-            '+--------+-------------------------------------------------------------+------------------------------------------------+\n'  # noqa
-            '| Column | Found                                                       | Expected                                       |\n'  # noqa
-            '+--------+-------------------------------------------------------------+------------------------------------------------+\n'  # noqa
-            '| a      | object                                                      | CategoricalDtype(categories=[], ordered=False) |\n'  # noqa
-            '| c      | -                                                           | float64                                        |\n'  # noqa
-            "| e      | CategoricalDtype(categories=['x', 'y', 'z'], ordered=False) | -                                              |\n"  # noqa
-            '+--------+-------------------------------------------------------------+------------------------------------------------+'    # noqa
-        )
-    else:
-        exp = (
-            'Metadata mismatch found in `from_delayed`.\n'
-            '\n'
-            'Partition type: `DataFrame`\n'
-            '+--------+----------+----------+\n'
-            '| Column | Found    | Expected |\n'
-            '+--------+----------+----------+\n'
-            '| a      | object   | category |\n'
-            '| c      | -        | float64  |\n'
-            '| e      | category | -        |\n'
-            '+--------+----------+----------+')
+    exp = (
+        'Metadata mismatch found in `from_delayed`.\n'
+        '\n'
+        'Partition type: `DataFrame`\n'
+        '+--------+----------+----------+\n'
+        '| Column | Found    | Expected |\n'
+        '+--------+----------+----------+\n'
+        '| a      | object   | category |\n'
+        '| c      | -        | float64  |\n'
+        '| e      | category | -        |\n'
+        '+--------+----------+----------+')
     assert str(err.value) == exp
+
+
+def test_is_dataframe_like():
+    df = pd.DataFrame({'x': [1, 2, 3]})
+    assert is_dataframe_like(df)
+    assert not is_dataframe_like(df.x)
+    assert not is_dataframe_like(df.index)
+
+    assert not is_series_like(df)
+    assert is_series_like(df.x)
+    assert not is_series_like(df.index)
+
+    assert not is_index_like(df)
+    assert not is_index_like(df.x)
+    assert is_index_like(df.index)
+
+    ddf = dd.from_pandas(df, npartitions=1)
+    assert is_dataframe_like(ddf)

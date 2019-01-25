@@ -16,6 +16,8 @@ def test_make_timeseries():
     assert df['A'].head().dtype == float
     assert df['B'].head().dtype == int
     assert df['C'].head().dtype == object
+    assert df.index.name == 'timestamp'
+    assert df.head().index.name == df.index.name
     assert df.divisions == tuple(pd.DatetimeIndex(start='2000', end='2015',
                                                   freq='6M'))
 
@@ -37,6 +39,13 @@ def test_make_timeseries():
     assert a._name != c._name
     assert a._name != d._name
     assert a._name != e._name
+
+
+def test_make_timeseries_no_args():
+    df = dd.demo.make_timeseries()
+    assert 1 < df.npartitions < 1000
+    assert len(df.columns) > 1
+    assert len(set(df.dtypes)) > 1
 
 
 def test_no_overlaps():

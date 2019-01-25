@@ -42,7 +42,7 @@ make = {float: make_float,
 
 
 def make_timeseries_part(start, end, dtypes, freq, state_data):
-    index = pd.DatetimeIndex(start=start, end=end, freq=freq)
+    index = pd.DatetimeIndex(start=start, end=end, freq=freq, name='timestamp')
     state = np.random.RandomState(state_data)
     columns = dict((k, make[dt](len(index), state)) for k, dt in dtypes.items())
     df = pd.DataFrame(columns, index=index, columns=sorted(columns))
@@ -51,7 +51,12 @@ def make_timeseries_part(start, end, dtypes, freq, state_data):
     return df
 
 
-def make_timeseries(start, end, dtypes, freq, partition_freq, seed=None):
+def make_timeseries(start='2000-01-01',
+                    end='2000-12-31',
+                    dtypes={'name': str, 'id': int, 'x': float, 'y': float},
+                    freq='10s',
+                    partition_freq='1M',
+                    seed=None):
     """ Create timeseries dataframe with random data
 
     Parameters

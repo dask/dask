@@ -1,16 +1,15 @@
 from __future__ import absolute_import, division, print_function
 
-from collections import Iterable, Iterator, defaultdict
-from functools import wraps, partial
+import io
 import itertools
 import math
-from operator import getitem
-import types
 import uuid
-from random import Random
-from warnings import warn
+import warnings
+from collections import defaultdict
 from distutils.version import LooseVersion
-
+from functools import wraps, partial
+from operator import getitem
+from random import Random
 
 from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
                    remove, compose, curry, first, second, accumulate, peek)
@@ -28,16 +27,19 @@ except ImportError:
     from toolz import (frequencies, merge_with, join, reduceby,
                        count, pluck, groupby, topk)
 
-from ..base import Base, tokenize, dont_optimize, is_dask_collection
-from ..bytes.core import write_bytes
-from ..compatibility import apply, urlopen
-from ..context import _globals, globalmethod
+from .. import config
+from .avro import to_avro
+from ..base import tokenize, dont_optimize, DaskMethodsMixin
+from ..bytes import open_files
+from ..compatibility import apply, urlopen, Iterable, Iterator
+from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict
-from ..delayed import Delayed
+from ..delayed import Delayed, unpack_collections
+from ..highlevelgraph import HighLevelGraph
 from ..multiprocessing import get as mpget
-from ..optimize import fuse, cull, inline
+from ..optimization import fuse, cull, inline
 from ..utils import (system_encoding, takes_multiple_arguments, funcname,
-                     digit, insert, ensure_dict)
+                     digit, insert, ensure_dict, ensure_bytes, ensure_unicode)
 
 
 no_default = '__no__default__'
@@ -108,6 +110,7 @@ def inline_singleton_lists(dsk, dependencies=None):
 
 def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
     """ Optimize a dask from a dask Bag. """
+    dsk = ensure_dict(dsk)
     dsk2, dependencies = cull(dsk, keys)
     dsk3, dependencies = fuse(dsk2, keys + (fuse_keys or []), dependencies,
                               rename_keys=rename_fused_keys)
@@ -116,9 +119,28 @@ def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
     return dsk5
 
 
+def _to_textfiles_chunk(data, lazy_file, last_endline):
+    with lazy_file as f:
+        if isinstance(f, io.TextIOWrapper):
+            endline = u'\n'
+            ensure = ensure_unicode
+        else:
+            endline = b'\n'
+            ensure = ensure_bytes
+        started = False
+        for d in data:
+            if started:
+                f.write(endline)
+            else:
+                started = True
+            f.write(ensure(d))
+        if last_endline:
+            f.write(endline)
+
+
 def to_textfiles(b, path, name_function=None, compression='infer',
-                 encoding=system_encoding, compute=True, get=None,
-                 storage_options=None):
+                 encoding=system_encoding, compute=True, storage_options=None,
+                 last_endline=False, **kwargs):
     """ Write dask Bag to disk, one filename per partition, one line per element.
 
     **Paths**: This will create one file for each partition in your bag. You
@@ -171,22 +193,26 @@ def to_textfiles(b, path, name_function=None, compression='infer',
     then calling ``to_textfiles`` :
 
     >>> b_dict.map(json.dumps).to_textfiles("/path/to/data/*.json")  # doctest: +SKIP
-    """
-    from dask import delayed
-    (writes,names) = write_bytes(b.to_delayed(), path, name_function, compression,
-                                 encoding=encoding, **(storage_options or {}))
 
-    # Use Bag optimizations on these delayed objects
-    dsk = ensure_dict(delayed(writes).dask)
-    dsk2 = Bag.__dask_optimize__(dsk, [w.key for w in writes])
-    out = [Delayed(w.key, dsk2) for w in writes]
+    **Last endline**: By default the last line does not end with a newline
+    character. Pass ``last_endline=True`` to invert the default.
+    """
+    mode = 'wb' if encoding is None else 'wt'
+    files = open_files(path, compression=compression, mode=mode,
+                       encoding=encoding, name_function=name_function,
+                       num=b.npartitions, **(storage_options or {}))
+
+    name = 'to-textfiles-' + uuid.uuid4().hex
+    dsk = {(name, i): (_to_textfiles_chunk, (b.name, i), f, last_endline)
+           for i, f in enumerate(files)}
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[b])
+    out = type(b)(graph, name, b.npartitions)
 
     if compute:
-        get = get or _globals.get('get', None) or Bag.__dask_scheduler__
-        delayed(out).compute(get=get)
-        return names
+        out.compute(**kwargs)
+        return [f.path for f in files]
     else:
-        return out
+        return out.to_delayed()
 
 
 def finalize(results):
@@ -268,7 +294,7 @@ def robust_wraps(wrapper):
     return _
 
 
-class Item(Base):
+class Item(DaskMethodsMixin):
     def __init__(self, dsk, key):
         self.dask = dsk
         self.key = key
@@ -318,22 +344,28 @@ class Item(Base):
     def apply(self, func):
         name = 'apply-{0}-{1}'.format(funcname(func), tokenize(self, func))
         dsk = {name: (func, self.key)}
-        return Item(merge(self.dask, dsk), name)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
+        return Item(graph, name)
 
-    __int__ = __float__ = __complex__ = __bool__ = Base.compute
+    __int__ = __float__ = __complex__ = __bool__ = DaskMethodsMixin.compute
 
-    def to_delayed(self):
-        """ Convert bag item to dask.delayed.
+    def to_delayed(self, optimize_graph=True):
+        """Convert into a ``dask.delayed`` object.
 
-        Returns a single value.
+        Parameters
+        ----------
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            ``dask.delayed`` objects.
         """
         from dask.delayed import Delayed
-        dsk = self.__dask_optimize__(self.__dask_graph__(),
-                                     self.__dask_keys__())
+        dsk = self.__dask_graph__()
+        if optimize_graph:
+            dsk = self.__dask_optimize__(dsk, self.__dask_keys__())
         return Delayed(self.key, dsk)
 
 
-class Bag(Base):
+class Bag(DaskMethodsMixin):
     """ Parallel collection of Python objects
 
     Examples
@@ -363,6 +395,8 @@ class Bag(Base):
     30
     """
     def __init__(self, dsk, name, npartitions):
+        if not isinstance(dsk, HighLevelGraph):
+            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self.name = name
         self.npartitions = npartitions
@@ -372,6 +406,9 @@ class Bag(Base):
 
     def __dask_keys__(self):
         return [(self.name, i) for i in range(self.npartitions)]
+
+    def __dask_layers__(self):
+        return (self.name,)
 
     def __dask_tokenize__(self):
         return self.name
@@ -502,13 +539,15 @@ class Bag(Base):
         """
         name = 'starmap-{0}-{1}'.format(funcname(func),
                                         tokenize(self, func, kwargs))
-        dsk = self.dask.copy()
+        dependencies = [self]
         if kwargs:
-            kw_dsk, kwargs = unpack_scalar_dask_kwargs(kwargs)
-            dsk.update(kw_dsk)
-        dsk.update({(name, i): (reify, (starmap_chunk, func, (self.name, i), kwargs))
-                   for i in range(self.npartitions)})
-        return type(self)(dsk, name, self.npartitions)
+            kwargs, collections = unpack_scalar_dask_kwargs(kwargs)
+            dependencies.extend(collections)
+
+        dsk = {(name, i): (reify, (starmap_chunk, func, (self.name, i), kwargs))
+               for i in range(self.npartitions)}
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
+        return type(self)(graph, name, self.npartitions)
 
     @property
     def _args(self):
@@ -535,7 +574,8 @@ class Bag(Base):
                                        tokenize(self, predicate))
         dsk = dict(((name, i), (reify, (filter, predicate, (self.name, i))))
                    for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
+        return type(self)(graph, name, self.npartitions)
 
     def random_sample(self, prob, random_state=None):
         """ Return elements from bag with probability of ``prob``.
@@ -554,9 +594,9 @@ class Bag(Base):
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(5))
         >>> list(b.random_sample(0.5, 42))
-        [1, 4]
+        [1, 3]
         >>> list(b.random_sample(0.5, 42))
-        [1, 4]
+        [1, 3]
         """
         if not 0 <= prob <= 1:
             raise ValueError('prob must be a number in the interval [0, 1]')
@@ -567,7 +607,8 @@ class Bag(Base):
         state_data = random_state_data_python(self.npartitions, random_state)
         dsk = {(name, i): (reify, (random_sample, (self.name, i), state, prob))
                for i, state in zip(range(self.npartitions), state_data)}
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
+        return type(self)(graph, name, self.npartitions)
 
     def remove(self, predicate):
         """ Remove elements in collection that match predicate.
@@ -584,7 +625,8 @@ class Bag(Base):
                                        tokenize(self, predicate))
         dsk = dict(((name, i), (reify, (remove, predicate, (self.name, i))))
                    for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
+        return type(self)(graph, name, self.npartitions)
 
     def map_partitions(self, func, *args, **kwargs):
         """Apply a function to every partition across one or more bags.
@@ -594,6 +636,10 @@ class Bag(Base):
         Parameters
         ----------
         func : callable
+            The function to be called on every partition.
+            This function should expect an ``Iterator`` or ``Iterable`` for
+            every partition and should return an ``Iterator`` or ``Iterable``
+            in return.
         *args, **kwargs : Bag, Item, Delayed, or object
             Arguments and keyword arguments to pass to ``func``.
             Partitions from this bag will be the first argument, and these will
@@ -643,7 +689,8 @@ class Bag(Base):
         else:
             dsk = dict(((name, i), (list, (pluck, key, (self.name, i), default)))
                        for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
+        return type(self)(graph, name, self.npartitions)
 
     def unzip(self, n):
         """Transform a bag of tuples to ``n`` bags of their elements.
@@ -665,10 +712,19 @@ class Bag(Base):
 
     @wraps(to_textfiles)
     def to_textfiles(self, path, name_function=None, compression='infer',
-                     encoding=system_encoding, compute=True, get=None,
-                     storage_options=None):
+                     encoding=system_encoding, compute=True,
+                     storage_options=None, last_endline=False, **kwargs):
         return to_textfiles(self, path, name_function, compression, encoding,
-                            compute, get=get, storage_options=storage_options)
+                            compute, storage_options=storage_options,
+                            last_endline=last_endline, **kwargs)
+
+    @wraps(to_avro)
+    def to_avro(self, filename, schema, name_function=None,
+                storage_options=None,
+                codec='null', sync_interval=16000, metadata=None, compute=True,
+                **kwargs):
+        return to_avro(self, filename, schema, name_function, storage_options,
+                       codec, sync_interval, metadata, compute, **kwargs)
 
     def fold(self, binop, combine=None, initial=no_default, split_every=None):
         """ Parallelizable reduction
@@ -726,16 +782,19 @@ class Bag(Base):
             return self.reduction(reduce(binop), reduce(combine),
                                   split_every=split_every)
 
-    def frequencies(self, split_every=None):
+    def frequencies(self, split_every=None, sort=False):
         """ Count number of occurrences of each distinct element.
 
         >>> b = from_sequence(['Alice', 'Bob', 'Alice'])
         >>> dict(b.frequencies())  # doctest: +SKIP
         {'Alice': 2, 'Bob', 1}
         """
-        return self.reduction(frequencies, merge_frequencies,
-                              out_type=Bag, split_every=split_every,
-                              name='frequencies').map_partitions(dictitems)
+        result = self.reduction(frequencies, merge_frequencies,
+                                out_type=Bag, split_every=split_every,
+                                name='frequencies').map_partitions(dictitems)
+        if sort:
+            result = result.map_partitions(sorted, key=second, reverse=True)
+        return result
 
     def topk(self, k, key=None, split_every=None):
         """ K largest elements in collection
@@ -822,11 +881,12 @@ class Bag(Base):
         dsk[(fmt, 0)] = (empty_safe_aggregate, aggregate,
                          [(b, j) for j in range(k)], True)
 
+        graph = HighLevelGraph.from_collections(fmt, dsk, dependencies=[self])
         if out_type is Item:
             dsk[fmt] = dsk.pop((fmt, 0))
-            return Item(merge(self.dask, dsk), fmt)
+            return Item(graph, fmt)
         else:
-            return Bag(merge(self.dask, dsk), fmt, 1)
+            return Bag(graph, fmt, 1)
 
     def sum(self, split_every=None):
         """ Sum all elements """
@@ -892,22 +952,67 @@ class Bag(Base):
     def join(self, other, on_self, on_other=None):
         """ Joins collection with another collection.
 
-        Other collection must be an Iterable, and not a Bag.
+        Other collection must be one of the following:
 
+        1.  An iterable.  We recommend tuples over lists for internal
+            performance reasons.
+        2.  A delayed object, pointing to a tuple.  This is recommended if the
+            other collection is sizable and you're using the distributed
+            scheduler.  Dask is able to pass around data wrapped in delayed
+            objects with greater sophistication.
+        3.  A Bag with a single partition
+
+        You might also consider Dask Dataframe, whose join operations are much
+        more heavily optimized.
+
+        Parameters
+        ----------
+        other: Iterable, Delayed, Bag
+            Other collection on which to join
+        on_self: callable
+            Function to call on elements in this collection to determine a
+            match
+        on_other: callable (defaults to on_self)
+            Function to call on elements in the other collection to determine a
+            match
+
+        Examples
+        --------
         >>> people = from_sequence(['Alice', 'Bob', 'Charlie'])
         >>> fruit = ['Apple', 'Apricot', 'Banana']
         >>> list(people.join(fruit, lambda x: x[0]))  # doctest: +SKIP
         [('Apple', 'Alice'), ('Apricot', 'Alice'), ('Banana', 'Bob')]
         """
-        assert isinstance(other, Iterable)
-        assert not isinstance(other, Bag)
+        name = 'join-' + tokenize(self, other, on_self, on_other)
+        dsk = {}
+        if isinstance(other, Bag):
+            if other.npartitions == 1:
+                dsk.update(other.dask)
+                other = other.__dask_keys__()[0]
+                dsk['join-%s-other' % name] = (list, other)
+            else:
+                msg = ("Multi-bag joins are not implemented. "
+                       "We recommend Dask dataframe if appropriate")
+                raise NotImplementedError(msg)
+        elif isinstance(other, Delayed):
+            dsk.update(other.dask)
+            other = other._key
+        elif isinstance(other, Iterable):
+            other = other
+        else:
+            msg = ("Joined argument must be single-partition Bag, "
+                   " delayed object, or Iterable, got %s" %
+                   type(other).__name)
+            raise TypeError(msg)
+
         if on_other is None:
             on_other = on_self
-        name = 'join-' + tokenize(self, other, on_self, on_other)
-        dsk = dict(((name, i), (list, (join, on_other, other,
-                                       on_self, (self.name, i))))
-                   for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+
+        dsk.update({(name, i): (list, (join, on_other, other,
+                                       on_self, (self.name, i)))
+                   for i in range(self.npartitions)})
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
+        return type(self)(graph, name, self.npartitions)
 
     def product(self, other):
         """ Cartesian product between two bags. """
@@ -918,7 +1023,8 @@ class Bag(Base):
                    (list, (itertools.product, (self.name, i),
                                               (other.name, j))))
                    for i in range(n) for j in range(m))
-        return type(self)(merge(self.dask, other.dask, dsk), name, n * m)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, other])
+        return type(self)(graph, name, n * m)
 
     def foldby(self, key, binop, initial=no_default, combine=None,
                combine_initial=no_default, split_every=None):
@@ -1048,9 +1154,10 @@ class Bag(Base):
             dsk[(e, 0)] = (dictitems, (merge_with, (partial, reduce, combine),
                                        [(b, j) for j in range(k)]))
 
-        return type(self)(merge(self.dask, dsk), e, 1)
+        graph = HighLevelGraph.from_collections(e, dsk, dependencies=[self])
+        return type(self)(graph, e, 1)
 
-    def take(self, k, npartitions=1, compute=True):
+    def take(self, k, npartitions=1, compute=True, warn=True):
         """ Take the first k elements.
 
         Parameters
@@ -1064,6 +1171,9 @@ class Bag(Base):
             returned. Pass -1 to use all partitions.
         compute : bool, optional
             Whether to compute the result, default is True.
+        warn : bool, optional
+            Whether to warn if the number of elements returned is less than
+            requested, default is True.
 
         >>> b = from_sequence(range(10))
         >>> b.take(3)  # doctest: +SKIP
@@ -1087,11 +1197,12 @@ class Bag(Base):
                 dsk[(name_p, i)] = (list, (take, k, (self.name, i)))
 
             concat = (toolz.concat, ([(name_p, i) for i in range(npartitions)]))
-            dsk[(name, 0)] = (safe_take, k, concat)
+            dsk[(name, 0)] = (safe_take, k, concat, warn)
         else:
-            dsk = {(name, 0): (safe_take, k, (self.name, 0))}
+            dsk = {(name, 0): (safe_take, k, (self.name, 0), warn)}
 
-        b = Bag(merge(self.dask, dsk), name, 1)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
+        b = Bag(graph, name, 1)
 
         if compute:
             return tuple(b.compute())
@@ -1111,13 +1222,14 @@ class Bag(Base):
         name = 'flatten-' + tokenize(self)
         dsk = dict(((name, i), (list, (toolz.concat, (self.name, i))))
                    for i in range(self.npartitions))
-        return type(self)(merge(self.dask, dsk), name, self.npartitions)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
+        return type(self)(graph, name, self.npartitions)
 
     def __iter__(self):
         return iter(self.compute())
 
     def groupby(self, grouper, method=None, npartitions=None, blocksize=2**20,
-                max_branch=None):
+                max_branch=None, shuffle=None):
         """ Group collection by key function
 
         This requires a full dataset read, serialization and shuffle.
@@ -1127,7 +1239,7 @@ class Bag(Base):
         ----------
         grouper: function
             Function on which to group elements
-        method: str
+        shuffle: str
             Either 'disk' for an on-disk shuffle or 'tasks' to use the task
             scheduling framework.  Use 'disk' if you are on a single machine
             and 'tasks' if you are on a distributed cluster.
@@ -1151,20 +1263,22 @@ class Bag(Base):
         --------
         Bag.foldby
         """
-        if method is None:
-            get = _globals.get('get')
-            if (isinstance(get, types.MethodType) and
-               'distributed' in get.__func__.__module__):
-                method = 'tasks'
+        if method is not None:
+            raise Exception("The method= keyword has been moved to shuffle=")
+        if shuffle is None:
+            shuffle = config.get('shuffle', None)
+        if shuffle is None:
+            if 'distributed' in config.get('scheduler', ''):
+                shuffle = 'tasks'
             else:
-                method = 'disk'
-        if method == 'disk':
+                shuffle = 'disk'
+        if shuffle == 'disk':
             return groupby_disk(self, grouper, npartitions=npartitions,
                                 blocksize=blocksize)
-        elif method == 'tasks':
+        elif shuffle == 'tasks':
             return groupby_tasks(self, grouper, max_branch=max_branch)
         else:
-            msg = "Shuffle method must be 'disk' or 'tasks'"
+            msg = "Shuffle must be 'disk' or 'tasks'"
             raise NotImplementedError(msg)
 
     def to_dataframe(self, meta=None, columns=None):
@@ -1214,13 +1328,12 @@ class Bag(Base):
         import pandas as pd
         import dask.dataframe as dd
         if meta is None:
-            if isinstance(columns, pd.DataFrame):
-                warn("Passing metadata to `columns` is deprecated. Please "
-                     "use the `meta` keyword instead.")
-                meta = columns
-            else:
-                head = self.take(1)[0]
-                meta = pd.DataFrame([head], columns=columns)
+            head = self.take(1, warn=False)
+            if len(head) == 0:
+                raise ValueError("`dask.bag.Bag.to_dataframe` failed to "
+                                 "properly infer metadata, please pass in "
+                                 "metadata via the `meta` keyword")
+            meta = pd.DataFrame(list(head), columns=columns)
         elif columns is not None:
             raise ValueError("Can't specify both `meta` and `columns`")
         else:
@@ -1236,14 +1349,24 @@ class Bag(Base):
         divisions = [None] * (self.npartitions + 1)
         return dd.DataFrame(dsk, name, meta, divisions)
 
-    def to_delayed(self):
-        """ Convert bag to list of dask Delayed.
+    def to_delayed(self, optimize_graph=True):
+        """Convert into a list of ``dask.delayed`` objects, one per partition.
 
-        Returns list of Delayed, one per partition.
+        Parameters
+        ----------
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            ``dask.delayed`` objects.
+
+        See Also
+        --------
+        dask.bag.from_delayed
         """
         from dask.delayed import Delayed
         keys = self.__dask_keys__()
-        dsk = self.__dask_optimize__(self.__dask_graph__(), keys)
+        dsk = self.__dask_graph__()
+        if optimize_graph:
+            dsk = self.__dask_optimize__(dsk, keys)
         return [Delayed(k, dsk) for k in keys]
 
     def repartition(self, npartitions):
@@ -1287,7 +1410,8 @@ class Bag(Base):
                     j += 1
                 last = new
 
-        return Bag(dsk=merge(self.dask, dsk), name=new_name, npartitions=npartitions)
+        graph = HighLevelGraph.from_collections(new_name, dsk, dependencies=[self])
+        return Bag(graph, name=new_name, npartitions=npartitions)
 
     def accumulate(self, binop, initial=no_default):
         """ Repeatedly apply binary function to a sequence, accumulating results.
@@ -1323,7 +1447,8 @@ class Bag(Base):
             dsk[(a, i)] = (accumulate_part, binop, (self.name, i), (c, i - 1))
             dsk[(b, i)] = (first, (a, i))
             dsk[(c, i)] = (second, (a, i))
-        return Bag(merge(self.dask, dsk), b, self.npartitions)
+        graph = HighLevelGraph.from_collections(b, dsk, dependencies=[self])
+        return Bag(graph, b, self.npartitions)
 
 
 def accumulate_part(binop, seq, initial, is_first=False):
@@ -1451,7 +1576,8 @@ def concat(bags):
     counter = itertools.count(0)
     dsk = {(name, next(counter)): key
            for bag in bags for key in bag.__dask_keys__()}
-    return Bag(merge(dsk, *[b.dask for b in bags]), name, len(dsk))
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=bags)
+    return Bag(graph, name, len(dsk))
 
 
 def reify(seq):
@@ -1494,14 +1620,14 @@ def from_delayed(values):
               if not isinstance(v, Delayed) and hasattr(v, 'key')
               else v
               for v in values]
-    dsk = merge(ensure_dict(v.dask) for v in values)
 
     name = 'bag-from-delayed-' + tokenize(*values)
     names = [(name, i) for i in range(len(values))]
-    values = [(reify, v.key) for v in values]
-    dsk2 = dict(zip(names, values))
+    values2 = [(reify, v.key) for v in values]
+    dsk = dict(zip(names, values2))
 
-    return Bag(merge(dsk, dsk2), name, len(values))
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=values)
+    return Bag(graph, name, len(values))
 
 
 def merge_distinct(seqs):
@@ -1593,8 +1719,8 @@ def bag_zip(*bags):
     dsk = dict(
         ((name, i), (reify, (zip,) + tuple((bag.name, i) for bag in bags)))
         for i in range(npartitions))
-    bags_dsk = merge(*(bag.dask for bag in bags))
-    return Bag(merge(bags_dsk, dsk), name, npartitions)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=bags)
+    return Bag(graph, name, npartitions)
 
 
 def map_chunk(f, args, bag_kwargs, kwargs):
@@ -1647,20 +1773,18 @@ def unpack_scalar_dask_kwargs(kwargs):
     supported.  Returns a merged dask graph and a task resulting in a keyword
     dict.
     """
-    dsk = {}
     kwargs2 = {}
+    dependencies = []
     for k, v in kwargs.items():
-        if isinstance(v, (Delayed, Item)):
-            dsk.update(ensure_dict(v.dask))
-            kwargs2[k] = v.key
-        elif is_dask_collection(v):
-            raise NotImplementedError("dask.bag doesn't support kwargs of "
-                                      "type %s" % type(v).__name__)
-        else:
+        vv, collections = unpack_collections(v)
+        if not collections:
             kwargs2[k] = v
-    if dsk:
-        kwargs = (dict, (zip, list(kwargs2), list(kwargs2.values())))
-    return dsk, kwargs
+        else:
+            kwargs2[k] = vv
+            dependencies.extend(collections)
+    if dependencies:
+        kwargs2 = (dict, (zip, list(kwargs2), list(kwargs2.values())))
+    return kwargs2, dependencies
 
 
 def bag_map(func, *args, **kwargs):
@@ -1721,6 +1845,7 @@ def bag_map(func, *args, **kwargs):
     """
     name = 'map-%s-%s' % (funcname(func), tokenize(func, args, kwargs))
     dsk = {}
+    dependencies = []
 
     bags = []
     args2 = []
@@ -1728,10 +1853,9 @@ def bag_map(func, *args, **kwargs):
         if isinstance(a, Bag):
             bags.append(a)
             args2.append(a)
-            dsk.update(a.dask)
         elif isinstance(a, (Item, Delayed)):
+            dependencies.append(a)
             args2.append((itertools.repeat, a.key))
-            dsk.update(ensure_dict(a.dask))
         else:
             args2.append((itertools.repeat, a))
 
@@ -1741,12 +1865,11 @@ def bag_map(func, *args, **kwargs):
         if isinstance(v, Bag):
             bag_kwargs[k] = v
             bags.append(v)
-            dsk.update(v.dask)
         else:
             other_kwargs[k] = v
 
-    kw_dsk, other_kwargs = unpack_scalar_dask_kwargs(other_kwargs)
-    dsk.update(kw_dsk)
+    other_kwargs, collections = unpack_scalar_dask_kwargs(other_kwargs)
+    dependencies.extend(collections)
 
     if not bags:
         raise ValueError("At least one argument must be a Bag.")
@@ -1765,15 +1888,17 @@ def bag_map(func, *args, **kwargs):
         return (dict, (zip, list(bag_kwargs),
                        [(b.name, n) for b in bag_kwargs.values()]))
 
-    dsk.update({(name, n): (reify, (map_chunk, func, build_args(n),
-                                    build_bag_kwargs(n), other_kwargs))
-                for n in range(npartitions)})
+    dsk = {(name, n): (reify, (map_chunk, func, build_args(n),
+                               build_bag_kwargs(n), other_kwargs))
+           for n in range(npartitions)}
 
     # If all bags are the same type, use that type, otherwise fallback to Bag
     return_type = set(map(type, bags))
     return_type = return_type.pop() if len(return_type) == 1 else Bag
 
-    return return_type(dsk, name, npartitions)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=bags + dependencies)
+
+    return return_type(graph, name, npartitions)
 
 
 def map_partitions(func, *args, **kwargs):
@@ -1813,19 +1938,32 @@ def map_partitions(func, *args, **kwargs):
     """
     name = 'map-partitions-%s-%s' % (funcname(func),
                                      tokenize(func, args, kwargs))
-
-    # Extract bag arguments, build initial graph
-    bags = []
     dsk = {}
-    for vals in [args, kwargs.values()]:
-        for a in vals:
-            if isinstance(a, (Bag, Item, Delayed)):
-                dsk.update(ensure_dict(a.dask))
-                if isinstance(a, Bag):
-                    bags.append(a)
-            elif is_dask_collection(a):
-                raise NotImplementedError("dask.bag doesn't support args of "
-                                          "type %s" % type(a).__name__)
+    dependencies = []
+
+    bags = []
+    args2 = []
+    for a in args:
+        if isinstance(a, Bag):
+            bags.append(a)
+            args2.append(a)
+        elif isinstance(a, (Item, Delayed)):
+            args2.append((itertools.repeat, a.key))
+            dependencies.append(a)
+        else:
+            args2.append((itertools.repeat, a))
+
+    bag_kwargs = {}
+    other_kwargs = {}
+    for k, v in kwargs.items():
+        if isinstance(v, Bag):
+            bag_kwargs[k] = v
+            bags.append(v)
+        else:
+            other_kwargs[k] = v
+
+    other_kwargs, collections = unpack_scalar_dask_kwargs(other_kwargs)
+    dependencies.extend(collections)
 
     if not bags:
         raise ValueError("At least one argument must be a Bag.")
@@ -1835,29 +1973,32 @@ def map_partitions(func, *args, **kwargs):
         raise ValueError("All bags must have the same number of partitions.")
     npartitions = npartitions.pop()
 
-    def build_task(n):
-        args2 = [(a.name, n) if isinstance(a, Bag) else a.key
-                 if isinstance(a, (Item, Delayed)) else a for a in args]
+    def build_args(n):
+        return [(a.name, n) if isinstance(a, Bag) else a for a in args2]
 
-        if any(isinstance(v, (Bag, Item, Delayed)) for v in kwargs.values()):
-            vals = [(v.name, n) if isinstance(v, Bag) else v.key
-                    if isinstance(v, (Item, Delayed)) else v
-                    for v in kwargs.values()]
-            kwargs2 = (dict, (zip, list(kwargs), vals))
-        else:
-            kwargs2 = kwargs
+    def build_bag_kwargs(n):
+        if not bag_kwargs:
+            return {}
+        return (dict, (zip, list(bag_kwargs),
+                       [(b.name, n) for b in bag_kwargs.values()]))
 
-        if kwargs2 or len(args2) > 1:
-            return (apply, func, args2, kwargs2)
-        return (func, args2[0])
-
-    dsk.update({(name, n): build_task(n) for n in range(npartitions)})
+    if kwargs:
+        dsk = {(name, n): (apply,
+                           func,
+                           build_args(n),
+                           (merge, build_bag_kwargs(n), other_kwargs))
+               for n in range(npartitions)}
+    else:
+        dsk = {(name, n): (func,) + tuple(build_args(n))
+               for n in range(npartitions)}
 
     # If all bags are the same type, use that type, otherwise fallback to Bag
     return_type = set(map(type, bags))
     return_type = return_type.pop() if len(return_type) == 1 else Bag
 
-    return return_type(dsk, name, npartitions)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=bags + dependencies)
+
+    return return_type(graph, name, npartitions)
 
 
 def _reduce(binop, sequence, initial=no_default):
@@ -1877,7 +2018,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     max_branch = max_branch or 32
     n = b.npartitions
 
-    stages = int(math.ceil(math.log(n) / math.log(max_branch)))
+    stages = int(math.ceil(math.log(n) / math.log(max_branch))) or 1
     if stages > 1:
         k = int(math.ceil(n ** (1 / stages)))
     else:
@@ -1922,9 +2063,10 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
                 (list, (dict.items, (groupby, grouper, (pluck, 1, j)))))
                for i, j in enumerate(join))
 
-    dsk = merge(b2.dask, start, end, *(groups + splits + joins))
-
-    return type(b)(dsk, 'shuffle-' + token, len(inputs))
+    name = 'shuffle-' + token
+    dsk = merge(start, end, *(groups + splits + joins))
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[b2])
+    return type(b)(graph, name, len(inputs))
 
 
 def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
@@ -1934,7 +2076,7 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
 
     import partd
     p = ('partd-' + token,)
-    dirname = _globals.get('temporary_directory', None)
+    dirname = config.get('temporary_directory', None)
     if dirname:
         file = (apply, partd.File, (), {'dir': dirname})
     else:
@@ -1964,7 +2106,9 @@ def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
                  (collect, grouper, i, p, barrier_token))
                 for i in range(npartitions))
 
-    return type(b)(merge(b.dask, dsk1, dsk2, dsk3, dsk4), name, npartitions)
+    dsk = merge(dsk1, dsk2, dsk3, dsk4)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[b])
+    return type(b)(graph, name, npartitions)
 
 
 def empty_safe_apply(func, part, is_last):
@@ -1986,12 +2130,12 @@ def empty_safe_aggregate(func, parts, is_last):
     return empty_safe_apply(func, parts2, is_last)
 
 
-def safe_take(n, b):
+def safe_take(n, b, warn=True):
     r = list(take(n, b))
-    if len(r) != n:
-        warn("Insufficient elements for `take`. {0} elements requested, "
-             "only {1} elements available. Try passing larger `npartitions` "
-             "to `take`.".format(n, len(r)))
+    if len(r) != n and warn:
+        warnings.warn("Insufficient elements for `take`. {0} elements "
+                      "requested, only {1} elements available. Try passing "
+                      "larger `npartitions` to `take`.".format(n, len(r)))
     return r
 
 

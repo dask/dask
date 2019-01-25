@@ -1,11 +1,15 @@
 from datetime import datetime
+import warnings
 
 import pytest
 import numpy as np
 import pandas as pd
 
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq, assert_dask_graph, make_meta
+from dask.dataframe.utils import (
+    assert_eq, assert_dask_graph, make_meta, HAS_INT_NA,
+    PANDAS_GT_0240
+)
 
 
 @pytest.mark.slow
@@ -630,6 +634,7 @@ def test_reductions(split_every):
                      (boolds, bools)]:
         assert isinstance(dds, dd.Series)
         assert isinstance(pds, pd.Series)
+
         assert_eq(dds.sum(split_every=split_every), pds.sum())
         assert_eq(dds.prod(split_every=split_every), pds.prod())
         assert_eq(dds.min(split_every=split_every), pds.min())
@@ -688,9 +693,49 @@ def test_reductions(split_every):
     # nunique is performed using drop-duplicates
     assert_dask_graph(ddf1.b.nunique(split_every=split_every), 'drop-duplicates')
 
+    # testing index
     assert_eq(ddf1.index.min(split_every=split_every), pdf1.index.min())
     assert_eq(ddf1.index.max(split_every=split_every), pdf1.index.max())
     assert_eq(ddf1.index.count(split_every=split_every), pd.notnull(pdf1.index).sum())
+
+
+@pytest.mark.parametrize('frame,axis,out',
+                         [(pd.DataFrame({'a': [1, 2, 3],
+                                         'b': [4, 5, 6]},
+                                        index=[0, 1, 3]),
+                          0, pd.Series([])),
+                          (pd.DataFrame({'a': [1, 2, 3],
+                                        'b': [4, 5, 6]},
+                                        index=[0, 1, 3]),
+                           1, pd.Series([])),
+                          (pd.Series([1, 2.5, 6]), None, None)])
+@pytest.mark.parametrize('redfunc', ['sum', 'prod', 'min', 'max', 'mean', 'var', 'std'])
+def test_reductions_out(frame, axis, out, redfunc):
+    dsk_in = dd.from_pandas(frame, 3)
+    dsk_out = dd.from_pandas(pd.Series([0]), 1).sum()
+
+    if out is not None:
+        dsk_out = dd.from_pandas(out, 3)
+
+    np_redfunc = getattr(np, redfunc)
+    pd_redfunc = getattr(frame.__class__, redfunc)
+    dsk_redfunc = getattr(dsk_in.__class__, redfunc)
+
+    if redfunc in ['var', 'std']:
+        # numpy has default ddof value 0 while
+        # dask and pandas have 1, so ddof should be passed
+        # explicitly when calling np.var(dask)
+        np_redfunc(dsk_in, axis=axis, ddof=1, out=dsk_out)
+    else:
+        np_redfunc(dsk_in, axis=axis, out=dsk_out)
+
+    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
+
+    dsk_redfunc(dsk_in, axis=axis, split_every=False, out=dsk_out)
+    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
+
+    dsk_redfunc(dsk_in, axis=axis, split_every=2, out=dsk_out)
+    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
 
 
 @pytest.mark.parametrize('split_every', [False, 2])
@@ -710,6 +755,31 @@ def test_allany(split_every):
 
     assert_eq(ddf.A.all(split_every=split_every), df.A.all())
     assert_eq(ddf.A.any(split_every=split_every), df.A.any())
+
+    # testing numpy functions with out param
+    ddf_out_axis_default = dd.from_pandas(pd.Series([False, False, False, False, False],
+                                                    index=['A', 'B', 'C', 'D', 'E']), 10)
+    ddf_out_axis1 = dd.from_pandas(pd.Series(np.random.choice([True, False], size=(100,))), 10)
+
+    # all
+    ddf.all(split_every=split_every, out=ddf_out_axis_default)
+    assert_eq(ddf_out_axis_default, df.all())
+
+    ddf.all(axis=1, split_every=split_every, out=ddf_out_axis1)
+    assert_eq(ddf_out_axis1, df.all(axis=1))
+
+    ddf.all(split_every=split_every, axis=0, out=ddf_out_axis_default)
+    assert_eq(ddf_out_axis_default, df.all(axis=0))
+
+    # any
+    ddf.any(split_every=split_every, out=ddf_out_axis_default)
+    assert_eq(ddf_out_axis_default, df.any())
+
+    ddf.any(axis=1, split_every=split_every, out=ddf_out_axis1)
+    assert_eq(ddf_out_axis1, df.any(axis=1))
+
+    ddf.any(split_every=split_every, axis=0, out=ddf_out_axis_default)
+    assert_eq(ddf_out_axis_default, df.any(axis=0))
 
 
 @pytest.mark.parametrize('split_every', [False, 2])
@@ -918,6 +988,10 @@ def test_reductions_frame_dtypes():
                        'float': [1., 2., 3., 4., np.nan, 6., 7., 8.],
                        'dt': [pd.NaT] + [datetime(2011, i, 1) for i in range(1, 8)],
                        'str': list('abcdefgh')})
+
+    if HAS_INT_NA:
+        df['intna'] = pd.array([1, 2, 3, 4, None, 6, 7, 8], dtype=pd.Int64Dtype())
+
     ddf = dd.from_pandas(df, 3)
     assert_eq(df.sum(), ddf.sum())
     assert_eq(df.prod(), ddf.prod())
@@ -930,7 +1004,17 @@ def test_reductions_frame_dtypes():
     assert_eq(df.std(ddof=0), ddf.std(ddof=0))
     assert_eq(df.var(ddof=0), ddf.var(ddof=0))
     assert_eq(df.sem(ddof=0), ddf.sem(ddof=0))
-    assert_eq(df.mean(), ddf.mean())
+
+    result = ddf.mean()
+    expected = df.mean()
+
+    if PANDAS_GT_0240:
+        # https://github.com/pandas-dev/pandas/issues/24752
+        # It's not clear whether this will be included by
+        # default.
+        expected = expected.drop('dt').astype(float)
+
+    assert_eq(expected, result)
 
     assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
 
@@ -957,48 +1041,73 @@ def test_reductions_frame_nan(split_every):
     assert_eq(df.sem(ddof=0), ddf.sem(ddof=0, split_every=split_every))
     assert_eq(df.mean(), ddf.mean(split_every=split_every))
 
-    assert_eq(df.sum(skipna=False),
-              ddf.sum(skipna=False, split_every=split_every))
-    assert_eq(df.prod(skipna=False),
-              ddf.prod(skipna=False, split_every=split_every))
-    assert_eq(df.min(skipna=False),
-              ddf.min(skipna=False, split_every=split_every))
-    assert_eq(df.max(skipna=False),
-              ddf.max(skipna=False, split_every=split_every))
-    assert_eq(df.std(skipna=False),
-              ddf.std(skipna=False, split_every=split_every))
-    assert_eq(df.var(skipna=False),
-              ddf.var(skipna=False, split_every=split_every))
-    assert_eq(df.sem(skipna=False),
-              ddf.sem(skipna=False, split_every=split_every))
-    assert_eq(df.std(skipna=False, ddof=0),
-              ddf.std(skipna=False, ddof=0, split_every=split_every))
-    assert_eq(df.var(skipna=False, ddof=0),
-              ddf.var(skipna=False, ddof=0, split_every=split_every))
-    assert_eq(df.sem(skipna=False, ddof=0),
-              ddf.sem(skipna=False, ddof=0, split_every=split_every))
-    assert_eq(df.mean(skipna=False),
-              ddf.mean(skipna=False, split_every=split_every))
+    with warnings.catch_warnings(record=True):
+        assert_eq(df.sum(skipna=False),
+                  ddf.sum(skipna=False, split_every=split_every))
+        assert_eq(df.prod(skipna=False),
+                  ddf.prod(skipna=False, split_every=split_every))
+        assert_eq(df.min(skipna=False),
+                  ddf.min(skipna=False, split_every=split_every))
+        assert_eq(df.max(skipna=False),
+                  ddf.max(skipna=False, split_every=split_every))
+        assert_eq(df.std(skipna=False),
+                  ddf.std(skipna=False, split_every=split_every))
+        assert_eq(df.var(skipna=False),
+                  ddf.var(skipna=False, split_every=split_every))
+        assert_eq(df.sem(skipna=False),
+                  ddf.sem(skipna=False, split_every=split_every))
+        assert_eq(df.std(skipna=False, ddof=0),
+                  ddf.std(skipna=False, ddof=0, split_every=split_every))
+        assert_eq(df.var(skipna=False, ddof=0),
+                  ddf.var(skipna=False, ddof=0, split_every=split_every))
+        assert_eq(df.sem(skipna=False, ddof=0),
+                  ddf.sem(skipna=False, ddof=0, split_every=split_every))
+        assert_eq(df.mean(skipna=False),
+                  ddf.mean(skipna=False, split_every=split_every))
 
-    assert_eq(df.sum(axis=1, skipna=False),
-              ddf.sum(axis=1, skipna=False, split_every=split_every))
-    assert_eq(df.prod(axis=1, skipna=False),
-              ddf.prod(axis=1, skipna=False, split_every=split_every))
-    assert_eq(df.min(axis=1, skipna=False),
-              ddf.min(axis=1, skipna=False, split_every=split_every))
-    assert_eq(df.max(axis=1, skipna=False),
-              ddf.max(axis=1, skipna=False, split_every=split_every))
-    assert_eq(df.std(axis=1, skipna=False),
-              ddf.std(axis=1, skipna=False, split_every=split_every))
-    assert_eq(df.var(axis=1, skipna=False),
-              ddf.var(axis=1, skipna=False, split_every=split_every))
-    assert_eq(df.sem(axis=1, skipna=False),
-              ddf.sem(axis=1, skipna=False, split_every=split_every))
-    assert_eq(df.std(axis=1, skipna=False, ddof=0),
-              ddf.std(axis=1, skipna=False, ddof=0, split_every=split_every))
-    assert_eq(df.var(axis=1, skipna=False, ddof=0),
-              ddf.var(axis=1, skipna=False, ddof=0, split_every=split_every))
-    assert_eq(df.sem(axis=1, skipna=False, ddof=0),
-              ddf.sem(axis=1, skipna=False, ddof=0, split_every=split_every))
-    assert_eq(df.mean(axis=1, skipna=False),
-              ddf.mean(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.sum(axis=1, skipna=False),
+                  ddf.sum(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.prod(axis=1, skipna=False),
+                  ddf.prod(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.min(axis=1, skipna=False),
+                  ddf.min(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.max(axis=1, skipna=False),
+                  ddf.max(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.std(axis=1, skipna=False),
+                  ddf.std(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.var(axis=1, skipna=False),
+                  ddf.var(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.sem(axis=1, skipna=False),
+                  ddf.sem(axis=1, skipna=False, split_every=split_every))
+        assert_eq(df.std(axis=1, skipna=False, ddof=0),
+                  ddf.std(axis=1, skipna=False, ddof=0, split_every=split_every))
+        assert_eq(df.var(axis=1, skipna=False, ddof=0),
+                  ddf.var(axis=1, skipna=False, ddof=0, split_every=split_every))
+        assert_eq(df.sem(axis=1, skipna=False, ddof=0),
+                  ddf.sem(axis=1, skipna=False, ddof=0, split_every=split_every))
+        assert_eq(df.mean(axis=1, skipna=False),
+                  ddf.mean(axis=1, skipna=False, split_every=split_every))
+
+
+@pytest.mark.parametrize('comparison', ['lt', 'gt', 'le', 'ge', 'ne', 'eq'])
+def test_series_comparison_nan(comparison):
+    s = pd.Series([1, 2, 3, 4, 5, 6, 7])
+    s_nan = pd.Series([1, -1, 8, np.nan, 5, 6, 2.4])
+    ds = dd.from_pandas(s, 3)
+    ds_nan = dd.from_pandas(s_nan, 3)
+
+    fill_value = 7
+    comparison_pd = getattr(s, comparison)
+    comparison_dd = getattr(ds, comparison)
+    assert_eq(comparison_dd(ds_nan, fill_value=fill_value),
+              comparison_pd(s_nan, fill_value=fill_value))
+
+
+skip_if_no_intna = pytest.mark.skipif(not HAS_INT_NA, reason="integer na")
+
+
+@skip_if_no_intna
+def test_sum_intna():
+    a = pd.Series([1, None, 2], dtype=pd.Int32Dtype())
+    b = dd.from_pandas(a, 2)
+    assert_eq(a.sum(), b.sum())

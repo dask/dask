@@ -2,37 +2,41 @@ from __future__ import print_function, division, absolute_import
 
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
-import sys
 
 try:
     import psutil
 except ImportError:
     psutil = None
 
+import numpy as np
 import pandas as pd
+try:
+    from pandas.api.types import CategoricalDtype
+    _HAS_CDT = True
+except ImportError:
+    _HAS_CDT = False
 
-from ...bytes import read_bytes
-from ...bytes.core import write_bytes
+
+from ...bytes import read_bytes, open_files
 from ...bytes.compression import seekable_files, files as cfiles
-from ...compatibility import PY2, PY3
+from ...compatibility import PY2, PY3, Mapping, unicode
 from ...delayed import delayed
-from ...utils import asciitable
+from ...utils import asciitable, parse_bytes
 
 from ..utils import clear_known_categories, PANDAS_VERSION
 
 from .io import from_delayed
 
 if PANDAS_VERSION >= '0.20.0':
-    from pandas.api.types import is_integer_dtype, is_float_dtype
+    from pandas.api.types import (is_integer_dtype, is_float_dtype,
+                                  is_object_dtype, is_datetime64_any_dtype)
 else:
-    from pandas.types.common import is_integer_dtype, is_float_dtype
-
-
-delayed = delayed(pure=True)
+    from pandas.types.common import (is_integer_dtype, is_float_dtype,
+                                     is_object_dtype, is_datetime64_any_dtype)
 
 
 def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
-                     write_header=True, enforce=False):
+                     write_header=True, enforce=False, path=None):
     """ Convert a block of bytes to a Pandas DataFrame
 
     Parameters
@@ -47,6 +51,8 @@ def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
         A dictionary of keyword arguments to be passed to ``reader``
     dtypes : dict
         DTypes to assign to columns
+    path : tuple
+        A tuple containing path column name, path to file, and all paths.
 
     See Also
     --------
@@ -65,6 +71,11 @@ def pandas_read_text(reader, b, header, kwargs, dtypes=None, columns=None,
         raise ValueError("Columns do not match", df.columns, columns)
     elif columns:
         df.columns = columns
+    if path:
+        colname, path, paths = path
+        code = paths.index(path)
+        df = df.assign(**{
+            colname: pd.Categorical.from_codes(np.full(len(df), code), paths)})
     return df
 
 
@@ -78,22 +89,29 @@ def coerce_dtypes(df, dtypes):
     df: Pandas DataFrame
     dtypes: dict like {'x': float}
     """
-    bad = []
+    bad_dtypes = []
+    bad_dates = []
     errors = []
     for c in df.columns:
         if c in dtypes and df.dtypes[c] != dtypes[c]:
             actual = df.dtypes[c]
             desired = dtypes[c]
             if is_float_dtype(actual) and is_integer_dtype(desired):
-                bad.append((c, actual, desired))
+                bad_dtypes.append((c, actual, desired))
+            elif is_object_dtype(actual) and is_datetime64_any_dtype(desired):
+                # This can only occur when parse_dates is specified, but an
+                # invalid date is encountered. Pandas then silently falls back
+                # to object dtype. Since `object_array.astype(datetime)` will
+                # silently overflow, error here and report.
+                bad_dates.append(c)
             else:
                 try:
                     df[c] = df[c].astype(dtypes[c])
                 except Exception as e:
-                    bad.append((c, actual, desired))
+                    bad_dtypes.append((c, actual, desired))
                     errors.append((c, e))
 
-    if bad:
+    if bad_dtypes:
         if errors:
             ex = '\n'.join("- %s\n  %r" % (c, e) for c, e in
                            sorted(errors, key=lambda x: str(x[0])))
@@ -107,26 +125,47 @@ def coerce_dtypes(df, dtypes):
                      "to interpret\n"
                      "all unspecified integer columns as floats.")
 
-        bad = sorted(bad, key=lambda x: str(x[0]))
-        table = asciitable(['Column', 'Found', 'Expected'], bad)
+        bad_dtypes = sorted(bad_dtypes, key=lambda x: str(x[0]))
+        table = asciitable(['Column', 'Found', 'Expected'], bad_dtypes)
         dtype_kw = ('dtype={%s}' % ',\n'
-                    '       '.join("%r: '%s'" % (k, v) for (k, v, _) in bad))
+                    '       '.join("%r: '%s'" % (k, v)
+                                   for (k, v, _) in bad_dtypes))
 
-        msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n"
-               "\n"
-               "{table}\n"
-               "\n{exceptions}"
-               "Usually this is due to dask's dtype inference failing, and\n"
-               "*may* be fixed by specifying dtypes manually by adding:\n\n"
-               "{dtype_kw}\n\n"
-               "to the call to `read_csv`/`read_table`."
-               "{extra}").format(table=table, exceptions=exceptions,
-                                 dtype_kw=dtype_kw, extra=extra)
+        dtype_msg = (
+            "{table}\n\n"
+            "{exceptions}"
+            "Usually this is due to dask's dtype inference failing, and\n"
+            "*may* be fixed by specifying dtypes manually by adding:\n\n"
+            "{dtype_kw}\n\n"
+            "to the call to `read_csv`/`read_table`."
+            "{extra}").format(table=table, exceptions=exceptions,
+                              dtype_kw=dtype_kw, extra=extra)
+    else:
+        dtype_msg = None
+
+    if bad_dates:
+        also = " also " if bad_dtypes else " "
+        cols = '\n'.join("- %s" % c for c in bad_dates)
+        date_msg = (
+            "The following columns{also}failed to properly parse as dates:\n\n"
+            "{cols}\n\n"
+            "This is usually due to an invalid value in that column. To\n"
+            "diagnose and fix it's recommended to drop these columns from the\n"
+            "`parse_dates` keyword, and manually convert them to dates later\n"
+            "using `dd.to_datetime`.").format(also=also, cols=cols)
+    else:
+        date_msg = None
+
+    if bad_dtypes or bad_dates:
+        rule = "\n\n%s\n\n" % ('-' * 61)
+        msg = ("Mismatched dtypes found in `pd.read_csv`/`pd.read_table`.\n\n"
+               "%s" % (rule.join(filter(None, [dtype_msg, date_msg]))))
         raise ValueError(msg)
 
 
 def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
-                          collection=True, enforce=False):
+                          collection=True, enforce=False,
+                          specified_dtypes=None, path=None):
     """ Convert blocks of bytes to a dask.dataframe or other high-level object
 
     This accepts a list of lists of values of bytes where each list corresponds
@@ -148,31 +187,72 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
     kwargs : dict
         Keyword arguments to pass down to ``reader``
     collection: boolean, optional (defaults to True)
+    path : tuple, optional
+        A tuple containing column name for path and list of all paths
 
     Returns
     -------
     A dask.dataframe or list of delayed values
     """
     dtypes = head.dtypes.to_dict()
+    # dtypes contains only instances of CategoricalDtype, which causes issues
+    # in coerce_dtypes for non-uniform categories accross partitions.
+    # We will modify `dtype` (which is inferred) to
+    # 1. contain instances of CategoricalDtypes for user-provided types
+    # 2. contain 'category' for data inferred types
+    categoricals = head.select_dtypes(include=['category']).columns
+
+    known_categoricals = []
+    unknown_categoricals = categoricals
+
+    if _HAS_CDT:
+        if isinstance(specified_dtypes, Mapping):
+            known_categoricals = [
+                k for k in categoricals
+                if isinstance(specified_dtypes.get(k), CategoricalDtype) and
+                specified_dtypes.get(k).categories is not None
+            ]
+            unknown_categoricals = categoricals.difference(known_categoricals)
+        elif isinstance(specified_dtypes, CategoricalDtype):
+            if specified_dtypes.categories is None:
+                known_categoricals = []
+                unknown_categoricals = categoricals
+
+    # Fixup the dtypes
+    for k in unknown_categoricals:
+        dtypes[k] = 'category'
+
     columns = list(head.columns)
-    delayed_pandas_read_text = delayed(pandas_read_text)
+    delayed_pandas_read_text = delayed(pandas_read_text, pure=True)
     dfs = []
-    for blocks in block_lists:
+    colname, paths = path or (None, None)
+
+    for i, blocks in enumerate(block_lists):
         if not blocks:
             continue
+        if path:
+            path_info = (colname, paths[i], paths)
+        else:
+            path_info = None
         df = delayed_pandas_read_text(reader, blocks[0], header, kwargs,
                                       dtypes, columns, write_header=False,
-                                      enforce=enforce)
+                                      enforce=enforce, path=path_info)
+
         dfs.append(df)
         rest_kwargs = kwargs.copy()
         rest_kwargs.pop('skiprows', None)
         for b in blocks[1:]:
             dfs.append(delayed_pandas_read_text(reader, b, header, rest_kwargs,
                                                 dtypes, columns,
-                                                enforce=enforce))
+                                                enforce=enforce, path=path_info))
 
     if collection:
-        head = clear_known_categories(head)
+        if path:
+            head = head.assign(**{
+                colname: pd.Categorical.from_codes(np.zeros(len(head)), paths)
+            })
+        if len(unknown_categoricals):
+            head = clear_known_categories(head, cols=unknown_categoricals)
         return from_delayed(dfs, head)
     else:
         return dfs
@@ -198,12 +278,15 @@ else:
 def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                 lineterminator=None, compression=None, sample=256000,
                 enforce=False, assume_missing=False, storage_options=None,
+                include_path_column=False,
                 **kwargs):
     reader_name = reader.__name__
     if lineterminator is not None and len(lineterminator) == 1:
         kwargs['lineterminator'] = lineterminator
     else:
         lineterminator = '\n'
+    if include_path_column and isinstance(include_path_column, bool):
+        include_path_column = 'path'
     if 'index' in kwargs or 'index_col' in kwargs:
         raise ValueError("Keyword 'index' not supported "
                          "dd.{0}(...).set_index('my-index') "
@@ -218,12 +301,25 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                          "recommended to use `dd.{0}(...)."
                          "head(n=nrows)`".format(reader_name))
     if isinstance(kwargs.get('skiprows'), list):
-        raise TypeError("List of skiprows not supported for "
-                        "dd.{0}".format(reader_name))
+        # When skiprows is a list, we expect more than max(skiprows) to
+        # be included in the sample. This means that [0,2] will work well,
+        # but [0, 440] might not work.
+        skiprows = kwargs.get('skiprows')
+        lastskiprow = max(skiprows)
+        # find the firstrow that is not skipped, for use as header
+        firstrow = min(set(range(len(skiprows) + 1)) - set(skiprows))
+    else:
+        skiprows = lastskiprow = firstrow = kwargs.get('skiprows', 0)
     if isinstance(kwargs.get('header'), list):
         raise TypeError("List of header rows not supported for "
                         "dd.{0}".format(reader_name))
+    if isinstance(kwargs.get('converters'), dict) and include_path_column:
+        path_converter = kwargs.get('converters').get(include_path_column, None)
+    else:
+        path_converter = None
 
+    if isinstance(blocksize, (str, unicode)):
+        blocksize = parse_bytes(blocksize)
     if blocksize and compression not in seekable_files:
         warn("Warning %s compression does not support breaking apart files\n"
              "Please ensure that each individual file can fit in memory and\n"
@@ -233,13 +329,27 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     if compression not in seekable_files and compression not in cfiles:
         raise NotImplementedError("Compression format %s not installed" %
                                   compression)
-
+    if blocksize and blocksize < sample and lastskiprow != 0:
+        warn("Unexpected behavior can result from passing skiprows when\n"
+             "blocksize is smaller than sample size.\n"
+             "Setting ``sample=blocksize``")
+        sample = blocksize
     b_lineterminator = lineterminator.encode()
-    b_sample, values = read_bytes(urlpath, delimiter=b_lineterminator,
-                                  blocksize=blocksize,
-                                  sample=sample,
-                                  compression=compression,
-                                  **(storage_options or {}))
+    b_out = read_bytes(urlpath, delimiter=b_lineterminator,
+                       blocksize=blocksize,
+                       sample=sample,
+                       compression=compression,
+                       include_path=include_path_column,
+                       **(storage_options or {}))
+
+    if include_path_column:
+        b_sample, values, paths = b_out
+        if path_converter:
+            paths = [path_converter(path) for path in paths]
+        path = (include_path_column, paths)
+    else:
+        b_sample, values = b_out
+        path = None
 
     if not isinstance(values[0], (tuple, list)):
         values = [values]
@@ -247,22 +357,27 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     # Get header row, and check that sample is long enough. If the file
     # contains a header row, we need at least 2 nonempty rows + the number of
     # rows to skip.
-    skiprows = kwargs.get('skiprows', 0)
-    header = kwargs.get('header', 'infer')
+    names = kwargs.get('names', None)
+    header = kwargs.get('header', 'infer' if names is None else None)
     need = 1 if header is None else 2
-    parts = b_sample.split(b_lineterminator, skiprows + need)
+    parts = b_sample.split(b_lineterminator, lastskiprow + need)
     # If the last partition is empty, don't count it
     nparts = 0 if not parts else len(parts) - int(not parts[-1])
 
-    if nparts < skiprows + need and len(b_sample) >= sample:
+    if nparts < lastskiprow + need and len(b_sample) >= sample:
         raise ValueError("Sample is not large enough to include at least one "
                          "row of data. Please increase the number of bytes "
                          "in `sample` in the call to `read_csv`/`read_table`")
 
-    header = b'' if header is None else parts[skiprows] + b_lineterminator
+    header = b'' if header is None else parts[firstrow] + b_lineterminator
 
-    # Use sample to infer dtypes
+    # Use sample to infer dtypes and check for presense of include_path_column
     head = reader(BytesIO(b_sample), **kwargs)
+    if include_path_column and (include_path_column in head.columns):
+        raise ValueError("Files already contain the column name: %s, so the "
+                         "path column cannot use this name. Please set "
+                         "`include_path_column` to a unique name."
+                         % include_path_column)
 
     specified_dtypes = kwargs.get('dtype', {})
     if specified_dtypes is None:
@@ -275,13 +390,15 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
                 head[c] = head[c].astype(float)
 
     return text_blocks_to_pandas(reader, values, header, head, kwargs,
-                                 collection=collection, enforce=enforce)
+                                 collection=collection, enforce=enforce,
+                                 specified_dtypes=specified_dtypes,
+                                 path=path)
 
 
 READ_DOC_TEMPLATE = """
 Read {file_type} files into a Dask.DataFrame
 
-This parallelizes the ``pandas.{reader}`` function in the following ways:
+This parallelizes the :func:`pandas.{reader}` function in the following ways:
 
 - It supports loading many files at once using globstrings:
 
@@ -298,19 +415,22 @@ This parallelizes the ``pandas.{reader}`` function in the following ways:
     >>> df = dd.{reader}('hdfs:///myfiles.*.csv')  # doctest: +SKIP
     >>> df = dd.{reader}('hdfs://namenode.example.com/myfiles.*.csv')  # doctest: +SKIP
 
-Internally ``dd.{reader}`` uses ``pandas.{reader}`` and supports many of the
+Internally ``dd.{reader}`` uses :func:`pandas.{reader}` and supports many of the
 same keyword arguments with the same performance guarantees. See the docstring
-for ``pandas.{reader}`` for more information on available keyword arguments.
+for :func:`pandas.{reader}` for more information on available keyword arguments.
 
 Parameters
 ----------
-urlpath : string
-    Absolute or relative filepath, URL (may include protocols like
-    ``s3://``), or globstring for {file_type} files.
-blocksize : int or None, optional
+urlpath : string or list
+    Absolute or relative filepath(s). Prefix with a protocol like ``s3://``
+    to read from alternative filesystems. To read from multiple files you
+    can pass a globstring or a list of paths, with the caveat that they
+    must all have the same protocol.
+blocksize : str, int or None, optional
     Number of bytes by which to cut up larger files. Default value is
     computed based on available physical memory and the number of cores.
     If ``None``, use a single block for each file.
+    Can be a number like 64000000 or a string like "64MB"
 collection : boolean, optional
     Return a dask.dataframe if True or list of dask.delayed objects if False
 sample : int, optional
@@ -321,8 +441,12 @@ assume_missing : bool, optional
 storage_options : dict, optional
     Extra options that make sense for a particular storage connection, e.g.
     host, port, username, password, etc.
+include_path_column : bool or str, optional
+    Whether or not to include the path to each particular file. If True a new
+    column is added to the dataframe called ``path``. If str, sets new column
+    name. Default is False.
 **kwargs
-    Extra keyword arguments to forward to ``pandas.{reader}``.
+    Extra keyword arguments to forward to :func:`pandas.{reader}`.
 
 Notes
 -----
@@ -352,6 +476,7 @@ def make_reader(reader, reader_name, file_type):
     def read(urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
              lineterminator=None, compression=None, sample=256000,
              enforce=False, assume_missing=False, storage_options=None,
+             include_path_column=False,
              **kwargs):
         return read_pandas(reader, urlpath, blocksize=blocksize,
                            collection=collection,
@@ -359,6 +484,7 @@ def make_reader(reader, reader_name, file_type):
                            compression=compression, sample=sample,
                            enforce=enforce, assume_missing=assume_missing,
                            storage_options=storage_options,
+                           include_path_column=include_path_column,
                            **kwargs)
     read.__doc__ = READ_DOC_TEMPLATE.format(reader=reader_name,
                                             file_type=file_type)
@@ -368,25 +494,17 @@ def make_reader(reader, reader_name, file_type):
 
 read_csv = make_reader(pd.read_csv, 'read_csv', 'CSV')
 read_table = make_reader(pd.read_table, 'read_table', 'delimited')
+read_fwf = make_reader(pd.read_fwf, 'read_fwf', 'fixed-width')
 
 
-@delayed
-def _to_csv_chunk(df, **kwargs):
-    import io
-    if PY2:
-        out = io.BytesIO()
-    else:
-        out = io.StringIO()
-    df.to_csv(out, **kwargs)
-    out.seek(0)
-    if PY2:
-        return out.getvalue()
-    encoding = kwargs.get('encoding', sys.getdefaultencoding())
-    return out.getvalue().encode(encoding)
+def _write_csv(df, fil, **kwargs):
+    with fil as f:
+        df.to_csv(f, **kwargs)
 
 
 def to_csv(df, filename, name_function=None, compression=None, compute=True,
-           get=None, storage_options=None, **kwargs):
+           scheduler=None, storage_options=None,
+           header_first_partition_only=False, **kwargs):
     """
     Store Dask DataFrame to CSV files
 
@@ -454,6 +572,8 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
     header : boolean or list of string, default True
         Write out column names. If a list of string is given it is assumed
         to be aliases for the column names
+    header_first_partition_only : boolean, default False
+        If set, only write the header row in the first output file
     index : boolean, default True
         Write row names (index)
     index_label : string or sequence, or False, default None
@@ -496,18 +616,43 @@ def to_csv(df, filename, name_function=None, compression=None, compute=True,
         European data
     storage_options: dict
         Parameters passed on to the backend filesystem class.
+
     Returns
     -------
     The names of the file written if they were computed right away
     If not, the delayed tasks associated to the writing of the files
     """
-    values = [_to_csv_chunk(d, **kwargs) for d in df.to_delayed()]
-    (values, names) = write_bytes(values, filename, name_function, compression,
-                                  encoding=None, **(storage_options or {}))
+    if PY2:
+        default_encoding = None
+        mode = 'wb'
+    else:
+        default_encoding = 'utf-8'
+        mode = 'wt'
+
+    encoding = kwargs.get('encoding', default_encoding)
+
+    files = open_files(filename, compression=compression, mode=mode,
+                       encoding=encoding, name_function=name_function,
+                       num=df.npartitions, **(storage_options or {}))
+
+    to_csv_chunk = delayed(_write_csv, pure=False)
+
+    dfs = df.to_delayed()
+
+    # If we only want headers in the first file, turn headers off after the
+    # first partition
+
+    values = [to_csv_chunk(dfs[0], files[0], **kwargs)]
+
+    if len(dfs) > 1:
+        if header_first_partition_only:
+            kwargs['header'] = False
+        values.extend([to_csv_chunk(d, f, **kwargs)
+                       for d, f in zip(dfs[1:], files[1:])])
 
     if compute:
-        delayed(values).compute(get=get)
-        return names
+        delayed(values).compute(scheduler=scheduler)
+        return [f.path for f in files]
     else:
         return values
 

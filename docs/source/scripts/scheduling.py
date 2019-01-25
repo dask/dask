@@ -1,9 +1,9 @@
 from toolz import merge
 from time import time
 import dask
-from dask import threaded, multiprocessing, scheduler
+from dask import threaded, multiprocessing, local
+from dask.compatibility import Iterator
 from random import randint
-from collections import Iterator
 import matplotlib.pyplot as plt
 
 
@@ -43,7 +43,7 @@ import numpy as np
 
 x = np.logspace(0, 4, 10)
 trivial_results = dict()
-for get in [dask.get, threaded.get, scheduler.get_sync, multiprocessing.get]:
+for get in [dask.get, threaded.get, local.get_sync, multiprocessing.get]:
     y = list()
     for n in x:
         dsk, keys = trivial(int(n), 5)
@@ -80,7 +80,7 @@ plt.savefig('images/scaling-nodes.png')
 
 x = np.linspace(1, 100, 10)
 crosstalk_results = dict()
-for get in [threaded.get, scheduler.get_sync]:
+for get in [threaded.get, local.get_sync]:
     y = list()
     for n in x:
         dsk, keys = crosstalk(1000, 5, int(n))

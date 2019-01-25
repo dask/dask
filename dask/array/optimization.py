@@ -5,13 +5,21 @@ from operator import getitem
 import numpy as np
 
 from .core import getter, getter_nofancy, getter_inline
+from ..blockwise import optimize_blockwise
 from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
-from ..optimize import cull, fuse, inline_functions
+from ..optimization import cull, fuse, inline_functions
 from ..utils import ensure_dict
+from ..highlevelgraph import HighLevelGraph
 
+from numbers import Integral
 
+# All get* functions the optimizations know about
 GETTERS = (getter, getter_nofancy, getter_inline, getitem)
+# These get* functions aren't ever completely removed from the graph,
+# even if the index should be a no-op by numpy semantics. Some array-like's
+# don't completely follow semantics, making indexing always necessary.
+GETNOREMOVE = (getter, getter_nofancy)
 
 
 def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
@@ -23,8 +31,14 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
     2.  Remove full slicing, e.g. x[:]
     3.  Inline fast functions like getitem and np.transpose
     """
-    dsk = ensure_dict(dsk)
     keys = list(flatten(keys))
+
+    # High level stage optimization
+    if isinstance(dsk, HighLevelGraph):
+        dsk = optimize_blockwise(dsk, keys=keys)
+
+    # Low level task optimizations
+    dsk = ensure_dict(dsk)
     if fast_functions is not None:
         inline_functions_fast_functions = fast_functions
 
@@ -136,8 +150,8 @@ def optimize_slices(dsk):
                 a, a_index, a_lock = b, c_index, b_lock
                 a_asarray |= b_asarray
 
-            # Skip the get call if no asarray call, no lock, and nothing to do
-            if ((not a_asarray and not a_lock) and
+            # Skip the get call if not from from_array and nothing to do
+            if (get not in GETNOREMOVE and
                 ((type(a_index) is slice and not a_index.start and
                   a_index.stop is None and a_index.step is None) or
                  (type(a_index) is tuple and
@@ -179,7 +193,7 @@ def check_for_nonfusible_fancy_indexing(fancy, normal):
     # x[:, [1, 2], :][0, :, :] -> x[0, [1, 2], :] or
     # x[0, :, :][:, [1, 2], :] -> x[0, [1, 2], :]
     for f, n in zip_longest(fancy, normal, fillvalue=slice(None)):
-        if type(f) is not list and isinstance(n, int):
+        if type(f) is not list and isinstance(n, Integral):
             raise NotImplementedError("Can't handle normal indexing with "
                                       "integers and fancy indexing if the "
                                       "integers and fancy indices don't "
@@ -215,7 +229,7 @@ def fuse_slice(a, b):
     None
     """
     # None only works if the second side is a full slice
-    if a is None and b == slice(None, None):
+    if a is None and isinstance(b, slice) and b == slice(None, None):
         return None
 
     # Replace None with 0 and one in start and step
@@ -224,7 +238,7 @@ def fuse_slice(a, b):
     if isinstance(b, slice):
         b = normalize_slice(b)
 
-    if isinstance(a, slice) and isinstance(b, int):
+    if isinstance(a, slice) and isinstance(b, Integral):
         if b < 0:
             raise NotImplementedError()
         return a.start + b * a.step
@@ -247,7 +261,7 @@ def fuse_slice(a, b):
 
     if isinstance(b, list):
         return [fuse_slice(a, bb) for bb in b]
-    if isinstance(a, list) and isinstance(b, (int, slice)):
+    if isinstance(a, list) and isinstance(b, (Integral, slice)):
         return a[b]
 
     if isinstance(a, tuple) and not isinstance(b, tuple):
@@ -271,7 +285,7 @@ def fuse_slice(a, b):
         result = list()
         for i in range(len(a)):
             #  axis ceased to exist  or we're out of b
-            if isinstance(a[i], int) or j == len(b):
+            if isinstance(a[i], Integral) or j == len(b):
                 result.append(a[i])
                 continue
             while b[j] is None:  # insert any Nones on the rhs

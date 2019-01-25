@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Need to make test order deterministic when parallelizing tests, hence PYTHONHASHSEED
 # (see https://github.com/pytest-dev/pytest-xdist/issues/63)
 if [[ $PARALLEL == 'true' ]]; then
@@ -6,9 +7,9 @@ if [[ $PARALLEL == 'true' ]]; then
 fi
 
 if [[ $COVERAGE == 'true' ]]; then
-    echo "coverage run `which py.test` dask --runslow --doctest-modules --verbose $XTRATESTARGS"
-    coverage run `which py.test` dask --runslow --doctest-modules --verbose $XTRATESTARGS
+    echo "coverage run `which py.test` dask --runslow --doctest-modules $XTRATESTARGS"
+    coverage run `which py.test` dask --runslow --doctest-modules $XTRATESTARGS
 else
-    echo "py.test dask --runslow --verbose $XTRATESTARGS"
-    py.test dask --runslow --verbose $XTRATESTARGS
+    echo "py.test dask --runslow $XTRATESTARGS"
+    py.test dask --runslow $XTRATESTARGS
 fi

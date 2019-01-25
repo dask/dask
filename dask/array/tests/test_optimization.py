@@ -4,7 +4,7 @@ pytest.importorskip('numpy')
 import numpy as np
 import dask
 import dask.array as da
-from dask.optimize import fuse
+from dask.optimization import fuse
 from dask.utils import SerializableLock
 from dask.array.core import getter, getter_nofancy
 from dask.array.optimization import (getitem, optimize, optimize_slices,
@@ -139,6 +139,9 @@ def test_fuse_slice():
 
     with pytest.raises(NotImplementedError):
         fuse_slice(slice(10, 15, 2), -1)
+    # Regression test for #3076
+    with pytest.raises(NotImplementedError):
+        fuse_slice(None, np.array([0, 0]))
 
 
 def test_fuse_slice_with_lists():
@@ -242,14 +245,44 @@ def test_fuse_getter_with_asarray(chunks):
     assert_eq(z, x + 1)
 
 
+@pytest.mark.parametrize('get,remove',
+                         [(getter, False), (getter_nofancy, False), (getitem, True)])
+def test_remove_no_op_slices_if_get_is_not_getter_or_getter_nofancy(get, remove):
+    # Test that no-op slices are removed as long as get is not getter or
+    # getter_nofancy. This ensures that `get` calls are always made in all
+    # tasks created by `from_array`, even after optimization
+    null = slice(0,None)
+    opts = [((get, 'x', null, False, False),
+             'x' if remove else (get, 'x', null, False, False)),
+            ((getitem, (get, 'x', null, False, False), null),
+             'x' if remove else (get, 'x', null, False, False)),
+            ((getitem, (get, 'x', (null, null), False, False), ()),
+             'x' if remove else (get, 'x', (null, null), False, False))]
+    for orig, final in opts:
+        assert optimize_slices({'a': orig}) == {'a': final}
+
+
+@pytest.mark.xfail(reason='blockwise fusion doesnt respect this, which is ok')
 def test_turn_off_fusion():
     x = da.ones(10, chunks=(5,))
     y = da.sum(x + 1 + 2 + 3)
 
     a = y.__dask_optimize__(y.dask, y.__dask_keys__())
 
-    with dask.set_options(fuse_ave_width=0):
+    with dask.config.set(fuse_ave_width=0):
         b = y.__dask_optimize__(y.dask, y.__dask_keys__())
 
     assert dask.get(a, y.__dask_keys__()) == dask.get(b, y.__dask_keys__())
     assert len(a) < len(b)
+
+
+def test_gh3937():
+    # test for github issue #3937
+    x = da.from_array([1, 2, 3.], (2,))
+    x = da.concatenate((x, [x[-1]]))
+    y = x.rechunk((2,))
+    # This will produce Integral type indices that are not ints (np.int64), failing
+    # the optimizer
+    y = da.coarsen(np.sum, y, {0: 2})
+    # How to trigger the optimizer explicitly?
+    y.compute()

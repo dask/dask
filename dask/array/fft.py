@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
-import collections
+from ..compatibility import Sequence
 from functools import wraps
 import inspect
 
@@ -110,7 +110,7 @@ _out_chunk_fns = {'fft': _fft_out_chunks,
 
 
 def fft_wrap(fft_func, kind=None, dtype=None):
-    """ Wrap 1D complex FFT functions
+    """ Wrap 1D, 2D, and ND real and complex FFT functions
 
     Takes a function that behaves like ``numpy.fft`` functions and
     a specified kind to match it to that are named after the functions
@@ -119,9 +119,17 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     Supported kinds include:
 
         * fft
+        * fft2
+        * fftn
         * ifft
+        * ifft2
+        * ifftn
         * rfft
+        * rfft2
+        * rfftn
         * irfft
+        * irfft2
+        * irfftn
         * hfft
         * ihfft
 
@@ -160,8 +168,11 @@ def fft_wrap(fft_func, kind=None, dtype=None):
 
         _dtype = dtype
         if _dtype is None:
-            _dtype = fft_func(np.ones(len(axes) * (8,),
-                                      dtype=a.dtype)).dtype
+            sample = np.ones(a.ndim * (8,), dtype=a.dtype)
+            try:
+                _dtype = fft_func(sample, axes=axes).dtype
+            except TypeError:
+                _dtype = fft_func(sample).dtype
 
         for each_axis in axes:
             if len(a.chunks[each_axis]) != 1:
@@ -202,20 +213,20 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     return func
 
 
-fft = fft_wrap(np.fft.fft, dtype=np.complex_)
-fft2 = fft_wrap(np.fft.fft2, dtype=np.complex_)
-fftn = fft_wrap(np.fft.fftn, dtype=np.complex_)
-ifft = fft_wrap(np.fft.ifft, dtype=np.complex_)
-ifft2 = fft_wrap(np.fft.ifft2, dtype=np.complex_)
-ifftn = fft_wrap(np.fft.ifftn, dtype=np.complex_)
-rfft = fft_wrap(np.fft.rfft, dtype=np.complex_)
-rfft2 = fft_wrap(np.fft.rfft2, dtype=np.complex_)
-rfftn = fft_wrap(np.fft.rfftn, dtype=np.complex_)
-irfft = fft_wrap(np.fft.irfft, dtype=np.float_)
-irfft2 = fft_wrap(np.fft.irfft2, dtype=np.float_)
-irfftn = fft_wrap(np.fft.irfftn, dtype=np.float_)
-hfft = fft_wrap(np.fft.hfft, dtype=np.float_)
-ihfft = fft_wrap(np.fft.ihfft, dtype=np.complex_)
+fft = fft_wrap(np.fft.fft)
+fft2 = fft_wrap(np.fft.fft2)
+fftn = fft_wrap(np.fft.fftn)
+ifft = fft_wrap(np.fft.ifft)
+ifft2 = fft_wrap(np.fft.ifft2)
+ifftn = fft_wrap(np.fft.ifftn)
+rfft = fft_wrap(np.fft.rfft)
+rfft2 = fft_wrap(np.fft.rfft2)
+rfftn = fft_wrap(np.fft.rfftn)
+irfft = fft_wrap(np.fft.irfft)
+irfft2 = fft_wrap(np.fft.irfft2)
+irfftn = fft_wrap(np.fft.irfftn)
+hfft = fft_wrap(np.fft.hfft)
+ihfft = fft_wrap(np.fft.ihfft)
 
 
 def _fftfreq_block(i, n, d):
@@ -226,7 +237,7 @@ def _fftfreq_block(i, n, d):
 
 
 @wraps(np.fft.fftfreq)
-def fftfreq(n, d=1.0, chunks=None):
+def fftfreq(n, d=1.0, chunks='auto'):
     n = int(n)
     d = float(d)
 
@@ -236,7 +247,7 @@ def fftfreq(n, d=1.0, chunks=None):
 
 
 @wraps(np.fft.rfftfreq)
-def rfftfreq(n, d=1.0, chunks=None):
+def rfftfreq(n, d=1.0, chunks='auto'):
     n = int(n)
     d = float(d)
 
@@ -249,7 +260,7 @@ def rfftfreq(n, d=1.0, chunks=None):
 def _fftshift_helper(x, axes=None, inverse=False):
     if axes is None:
         axes = list(range(x.ndim))
-    elif not isinstance(axes, collections.Sequence):
+    elif not isinstance(axes, Sequence):
         axes = (axes,)
 
     y = x
@@ -266,6 +277,9 @@ def _fftshift_helper(x, axes=None, inverse=False):
         r = tuple(r)
 
         y = _concatenate([y[r], y[l]], axis=i)
+
+        if len(x.chunks[i]) == 1:
+            y = y.rechunk({i: x.chunks[i]})
 
     return y
 

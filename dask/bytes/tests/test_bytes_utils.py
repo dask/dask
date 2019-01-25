@@ -54,20 +54,6 @@ def test_seek_delimiter_endline():
     assert f.tell() == 7
 
 
-def test_ensure_protocol():
-    try:
-        import hdfs3  # noqa: F401
-        pytest.skip()
-    except ImportError:
-        pass
-
-    dd = pytest.importorskip('dask.dataframe')
-    try:
-        dd.read_csv('hdfs://data/*.csv')
-    except RuntimeError as e:
-        assert "hdfs3" in str(e)
-
-
 def test_infer_storage_options():
     so = infer_storage_options('/mnt/datasets/test.csv')
     assert so.pop('protocol') == 'file'
@@ -105,8 +91,16 @@ def test_infer_storage_options():
     assert so.pop('username') == 'User-name'
     assert so.pop('host') == 'Node-name.com'
 
-    assert infer_storage_options('s3://Bucket-name.com/test.csv')['host'] == 'Bucket-name.com'
-    assert infer_storage_options('http://127.0.0.1:8080/test.csv')['host'] == '127.0.0.1'
+    u = 'http://127.0.0.1:8080/test.csv'
+    assert infer_storage_options(u) == {'protocol': 'http', 'path': u}
+
+    # For s3 and gcs the netloc is actually the bucket name, so we want to
+    # include it in the path. Test that:
+    # - Parsing doesn't lowercase the bucket
+    # - The bucket is included in path
+    for protocol in ['s3', 'gcs', 'gs']:
+        options = infer_storage_options('%s://Bucket-name.com/test.csv' % protocol)
+        assert options['path'] == 'Bucket-name.com/test.csv'
 
     with pytest.raises(KeyError):
         infer_storage_options('file:///bucket/file.csv', {'path': 'collide'})

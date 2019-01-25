@@ -1,15 +1,16 @@
 from __future__ import absolute_import, division, print_function
 
 from operator import getitem
-from functools import partial
+from functools import partial, wraps
 
 import numpy as np
 from toolz import curry
 
-from .core import Array, elemwise, atop, apply_infer_dtype, asarray
-from ..base import is_dask_collection
-from .. import core, sharedict
-from ..utils import skip_doctest
+from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray
+from ..base import is_dask_collection, normalize_function
+from .. import core
+from ..highlevelgraph import HighLevelGraph
+from ..utils import skip_doctest, funcname
 
 
 def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
@@ -42,14 +43,56 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False):
     return wrapped
 
 
+class da_frompyfunc(object):
+    """A serializable `frompyfunc` object"""
+    def __init__(self, func, nin, nout):
+        self._ufunc = np.frompyfunc(func, nin, nout)
+        self._func = func
+        self.nin = nin
+        self.nout = nout
+        self._name = funcname(func)
+        self.__name__ = 'frompyfunc-%s' % self._name
+
+    def __repr__(self):
+        return 'da.frompyfunc<%s, %d, %d>' % (self._name, self.nin, self.nout)
+
+    def __dask_tokenize__(self):
+        return (normalize_function(self._func), self.nin, self.nout)
+
+    def __reduce__(self):
+        return (da_frompyfunc, (self._func, self.nin, self.nout))
+
+    def __call__(self, *args, **kwargs):
+        return self._ufunc(*args, **kwargs)
+
+    def __getattr__(self, a):
+        if not a.startswith('_'):
+            return getattr(self._ufunc, a)
+        raise AttributeError("%r object has no attribute "
+                             "%r" % (type(self).__name__, a))
+
+    def __dir__(self):
+        o = set(dir(type(self)))
+        o.update(self.__dict__)
+        o.update(dir(self._ufunc))
+        return list(o)
+
+
+@wraps(np.frompyfunc)
+def frompyfunc(func, nin, nout):
+    if nout > 1:
+        raise NotImplementedError("frompyfunc with more than one output")
+    return ufunc(da_frompyfunc(func, nin, nout))
+
+
 class ufunc(object):
     _forward_attrs = {'nin', 'nargs', 'nout', 'ntypes', 'identity',
                       'signature', 'types'}
 
     def __init__(self, ufunc):
-        if not isinstance(ufunc, np.ufunc):
-            raise TypeError("must be an instance of `ufunc`, "
-                            "got `%s" % type(ufunc).__name__)
+        if not isinstance(ufunc, (np.ufunc, da_frompyfunc)):
+            raise TypeError("must be an instance of `ufunc` or "
+                            "`da_frompyfunc`, got `%s" % type(ufunc).__name__)
         self._ufunc = ufunc
         self.__name__ = ufunc.__name__
         copy_docstring(self, ufunc)
@@ -67,9 +110,14 @@ class ufunc(object):
         return repr(self._ufunc)
 
     def __call__(self, *args, **kwargs):
-        dsk = [arg for arg in args if hasattr(arg, '_elemwise')]
-        if len(dsk) > 0:
-            return dsk[0]._elemwise(self._ufunc, *args, **kwargs)
+        dsks = [arg for arg in args if hasattr(arg, '_elemwise')]
+        if len(dsks) > 0:
+            for dsk in dsks:
+                result = dsk._elemwise(self._ufunc, *args, **kwargs)
+                if type(result) != type(NotImplemented):
+                    return result
+            raise TypeError("Parameters of such types "
+                            "are not supported by " + self.__name__)
         else:
             return self._ufunc(*args, **kwargs)
 
@@ -104,8 +152,15 @@ class ufunc(object):
         else:
             func = self._ufunc.outer
 
-        return atop(func, out_inds, A, A_inds, B, B_inds, dtype=dtype,
-                    token=self.__name__ + '.outer', **kwargs)
+        return blockwise(
+            func,
+            out_inds,
+            A, A_inds,
+            B, B_inds,
+            dtype=dtype,
+            token=self.__name__ + '.outer',
+            **kwargs
+        )
 
 
 # ufuncs, copied from this page:
@@ -122,6 +177,11 @@ true_divide = ufunc(np.true_divide)
 floor_divide = ufunc(np.floor_divide)
 negative = ufunc(np.negative)
 power = ufunc(np.power)
+try:
+    float_power = ufunc(np.float_power)
+except AttributeError:
+    # Absent for NumPy versions prior to 1.12.
+    pass
 remainder = ufunc(np.remainder)
 mod = ufunc(np.mod)
 # fmod: see below
@@ -172,6 +232,13 @@ minimum = ufunc(np.minimum)
 fmax = ufunc(np.fmax)
 fmin = ufunc(np.fmin)
 
+# bitwise functions
+bitwise_and = ufunc(np.bitwise_and)
+bitwise_or = ufunc(np.bitwise_or)
+bitwise_xor = ufunc(np.bitwise_xor)
+bitwise_not = ufunc(np.bitwise_not)
+invert = bitwise_not
+
 # floating functions
 isfinite = ufunc(np.isfinite)
 isinf = ufunc(np.isinf)
@@ -201,6 +268,8 @@ absolute = ufunc(np.absolute)
 clip = wrap_elemwise(np.clip)
 isreal = wrap_elemwise(np.isreal, array_wrap=True)
 iscomplex = wrap_elemwise(np.iscomplex, array_wrap=True)
+isneginf = wrap_elemwise(np.isneginf, array_wrap=True)
+isposinf = wrap_elemwise(np.isposinf, array_wrap=True)
 real = wrap_elemwise(np.real, array_wrap=True)
 imag = wrap_elemwise(np.imag, array_wrap=True)
 fix = wrap_elemwise(np.fix, array_wrap=True)
@@ -233,8 +302,10 @@ def frexp(x):
     ldt = l.dtype
     rdt = r.dtype
 
-    L = Array(sharedict.merge(tmp.dask, (left, ldsk)), left, chunks=tmp.chunks, dtype=ldt)
-    R = Array(sharedict.merge(tmp.dask, (right, rdsk)), right, chunks=tmp.chunks, dtype=rdt)
+    graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
+    L = Array(graph, left, chunks=tmp.chunks, dtype=ldt)
+    graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
+    R = Array(graph, right, chunks=tmp.chunks, dtype=rdt)
     return L, R
 
 
@@ -254,6 +325,8 @@ def modf(x):
     ldt = l.dtype
     rdt = r.dtype
 
-    L = Array(sharedict.merge(tmp.dask, (left, ldsk)), left, chunks=tmp.chunks, dtype=ldt)
-    R = Array(sharedict.merge(tmp.dask, (right, rdsk)), right, chunks=tmp.chunks, dtype=rdt)
+    graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
+    L = Array(graph, left, chunks=tmp.chunks, dtype=ldt)
+    graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
+    R = Array(graph, right, chunks=tmp.chunks, dtype=rdt)
     return L, R

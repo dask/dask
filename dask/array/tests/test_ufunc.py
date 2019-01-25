@@ -1,12 +1,16 @@
 from __future__ import absolute_import, division, print_function
 
+import pickle
 from functools import partial
+from operator import add
 
 import pytest
 np = pytest.importorskip('numpy')
 
 import dask.array as da
+from dask.array.ufunc import da_frompyfunc
 from dask.array.utils import assert_eq
+from dask.base import tokenize
 
 
 def test_ufunc_meta():
@@ -34,6 +38,7 @@ def test_ufunc():
 
 
 binary_ufuncs = ['add', 'arctan2', 'copysign', 'divide', 'equal',
+                 'bitwise_and', 'bitwise_or', 'bitwise_xor',
                  'floor_divide', 'fmax', 'fmin', 'fmod', 'greater',
                  'greater_equal', 'hypot', 'ldexp', 'less', 'less_equal',
                  'logaddexp', 'logaddexp2', 'logical_and', 'logical_or',
@@ -41,14 +46,21 @@ binary_ufuncs = ['add', 'arctan2', 'copysign', 'divide', 'equal',
                  'nextafter', 'not_equal', 'power', 'remainder', 'subtract',
                  'true_divide']
 
+try:
+    da.float_power
+    binary_ufuncs += ['float_power']
+except AttributeError:
+    # Absent for NumPy versions prior to 1.12.
+    pass
+
 unary_ufuncs = ['absolute', 'arccos', 'arccosh', 'arcsin', 'arcsinh', 'arctan',
-                'arctanh', 'cbrt', 'ceil', 'conj', 'cos', 'cosh', 'deg2rad',
-                'degrees', 'exp', 'exp2', 'expm1', 'fabs', 'fix', 'floor',
-                'i0', 'isfinite', 'isinf', 'isnan', 'log', 'log10', 'log1p',
-                'log2', 'logical_not', 'nan_to_num', 'negative', 'rad2deg',
-                'radians', 'reciprocal', 'rint', 'sign', 'signbit', 'sin',
-                'sinc', 'sinh', 'spacing', 'sqrt', 'square', 'tan', 'tanh',
-                'trunc']
+                'arctanh', 'bitwise_not', 'cbrt', 'ceil', 'conj', 'cos',
+                'cosh', 'deg2rad', 'degrees', 'exp', 'exp2', 'expm1', 'fabs',
+                'fix', 'floor', 'i0', 'invert','isfinite', 'isinf', 'isnan', 'log',
+                'log10', 'log1p', 'log2', 'logical_not', 'nan_to_num',
+                'negative', 'rad2deg', 'radians', 'reciprocal', 'rint', 'sign',
+                'signbit', 'sin', 'sinc', 'sinh', 'spacing', 'sqrt', 'square',
+                'tan', 'tanh', 'trunc']
 
 
 @pytest.mark.parametrize('ufunc', unary_ufuncs)
@@ -256,6 +268,64 @@ def test_angle():
     assert_eq(da.angle(comp), np.angle(comp))
 
 
+def test_issignedinf():
+    arr = np.random.randint(-1, 2, size=(20, 20)).astype(float) / 0
+    darr = da.from_array(arr, 3)
+
+    assert_eq(np.isneginf(arr), da.isneginf(darr))
+    assert_eq(np.isposinf(arr), da.isposinf(darr))
+
+
+def test_frompyfunc():
+    myadd = da.frompyfunc(add, 2, 1)
+    np_myadd = np.frompyfunc(add, 2, 1)
+
+    x = np.random.normal(0, 10, size=(10, 10))
+    dx = da.from_array(x, chunks=(3, 4))
+    y = np.random.normal(0, 10, size=10)
+    dy = da.from_array(y, chunks=2)
+
+    assert_eq(myadd(dx, dy), np_myadd(x, y))
+    assert_eq(myadd.outer(dx, dy), np_myadd.outer(x, y))
+
+    with pytest.raises(NotImplementedError):
+        da.frompyfunc(lambda x, y: (x + y, x - y), 2, 2)
+
+
+def test_frompyfunc_wrapper():
+    f = da_frompyfunc(add, 2, 1)
+    np_f = np.frompyfunc(add, 2, 1)
+    x = np.array([1, 2, 3])
+
+    # Callable
+    np.testing.assert_equal(f(x, 1), np_f(x, 1))
+
+    # picklable
+    f2 = pickle.loads(pickle.dumps(f))
+    np.testing.assert_equal(f2(x, 1), np_f(x, 1))
+
+    # Attributes
+    assert f.ntypes == np_f.ntypes
+    with pytest.raises(AttributeError):
+        f.not_an_attribute
+
+    # Tab completion
+    assert 'ntypes' in dir(f)
+
+    # Methods
+    np.testing.assert_equal(f.outer(x, x), np_f.outer(x, x))
+
+    # funcname
+    assert f.__name__ == 'frompyfunc-add'
+
+    # repr
+    assert repr(f) == "da.frompyfunc<add, 2, 1>"
+
+    # tokenize
+    assert (tokenize(da_frompyfunc(add, 2, 1)) ==
+            tokenize(da_frompyfunc(add, 2, 1)))
+
+
 @pytest.mark.skipif(np.__version__ < '1.13.0', reason='array_ufunc not present')
 def test_array_ufunc():
     x = np.arange(24).reshape((4, 6))
@@ -303,3 +373,11 @@ def test_out_numpy():
 
     assert 'ndarray' in str(info.value)
     assert 'Array' in str(info.value)
+
+
+@pytest.mark.skipif(np.__version__ < '1.13.0', reason='array_ufunc not present')
+def test_out_shape_mismatch():
+    x = da.arange(10, chunks=(5,))
+    y = da.arange(15, chunks=(5,))
+    with pytest.raises(ValueError):
+        assert np.log(x, out=y)

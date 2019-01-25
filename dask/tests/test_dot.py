@@ -19,13 +19,19 @@ from IPython.display import Image, SVG
 
 
 # Since graphviz doesn't store a graph, we need to parse the output
-label_re = re.compile('.*\[label=(.*?) shape=.*\]')
+label_re = re.compile(r'.*\[label=(.*?) shape=(.*?)\]')
 
 
 def get_label(line):
     m = label_re.match(line)
     if m:
         return m.group(1)
+
+
+def get_shape(line):
+    m = label_re.match(line)
+    if m:
+        return m.group(2)
 
 
 dsk = {'a': 1,
@@ -70,9 +76,21 @@ def test_to_graphviz():
     g = to_graphviz(dsk)
     labels = list(filter(None, map(get_label, g.body)))
     assert len(labels) == 10        # 10 nodes total
-    funcs = set(('add', 'sum', 'neg'))
-    assert set(labels).difference(dsk) == funcs
-    assert set(labels).difference(funcs) == set(dsk)
+    assert set(labels) == {'c', 'd', 'e', 'f', '""'}
+    shapes = list(filter(None, map(get_shape, g.body)))
+    assert set(shapes) == set(('box', 'circle'))
+
+
+def test_to_graphviz_custom():
+    g = to_graphviz(
+        dsk,
+        data_attributes={'a': {'shape': 'square'}},
+        function_attributes={'c': {'label': 'neg_c', 'shape': 'ellipse'}},
+    )
+    labels = set(filter(None, map(get_label, g.body)))
+    assert labels == {'neg_c', 'd', 'e', 'f', '""'}
+    shapes = list(filter(None, map(get_shape, g.body)))
+    assert set(shapes) == set(('box', 'circle', 'square', 'ellipse'))
 
 
 def test_to_graphviz_attributes():
@@ -89,48 +107,44 @@ def test_aliases():
     assert len(g.body) - len(labels) == 1   # Single edge
 
 
-def test_dot_graph(tmpdir):
+@pytest.mark.parametrize('format,typ', [
+    ('png', Image),
+    pytest.param('jpeg', Image, marks=pytest.mark.xfail(reason='jpeg not always supported in dot')),
+    ('dot', type(None)),
+    ('pdf', type(None)),
+    ('svg', SVG),
+])
+def test_dot_graph(tmpdir, format, typ):
     # Use a name that the shell would interpret specially to ensure that we're
     # not vulnerable to shell injection when interacting with `dot`.
     filename = str(tmpdir.join('$(touch should_not_get_created.txt)'))
 
-    # Map from format extension to expected return type.
-    result_types = {
-        'png': Image,
-        'jpeg': Image,
-        'dot': type(None),
-        'pdf': type(None),
-        'svg': SVG,
-    }
-    for format in result_types:
-        target = '.'.join([filename, format])
+    target = '.'.join([filename, format])
+    ensure_not_exists(target)
+    try:
+        result = dot_graph(dsk, filename=filename, format=format)
+
+        assert not os.path.exists('should_not_get_created.txt')
+        assert os.path.isfile(target)
+        assert isinstance(result, typ)
+    finally:
         ensure_not_exists(target)
-        try:
-            result = dot_graph(dsk, filename=filename, format=format)
-
-            assert not os.path.exists('should_not_get_created.txt')
-            assert os.path.isfile(target)
-            assert isinstance(result, result_types[format])
-        finally:
-            ensure_not_exists(target)
 
 
-def test_dot_graph_no_filename(tmpdir):
-    # Map from format extension to expected return type.
-    result_types = {
-        'png': Image,
-        'jpeg': Image,
-        'dot': type(None),
-        'pdf': type(None),
-        'svg': SVG,
-    }
-    for format in result_types:
-        before = tmpdir.listdir()
-        result = dot_graph(dsk, filename=None, format=format)
-        # We shouldn't write any files if filename is None.
-        after = tmpdir.listdir()
-        assert before == after
-        assert isinstance(result, result_types[format])
+@pytest.mark.parametrize('format,typ', [
+    ('png', Image),
+    pytest.param('jpeg', Image, marks=pytest.mark.xfail(reason='jpeg not always supported in dot')),
+    ('dot', type(None)),
+    ('pdf', type(None)),
+    ('svg', SVG),
+])
+def test_dot_graph_no_filename(tmpdir, format, typ):
+    before = tmpdir.listdir()
+    result = dot_graph(dsk, filename=None, format=format)
+    # We shouldn't write any files if filename is None.
+    after = tmpdir.listdir()
+    assert before == after
+    assert isinstance(result, typ)
 
 
 def test_dot_graph_defaults():

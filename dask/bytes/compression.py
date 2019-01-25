@@ -1,12 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
 import bz2
-import sys
 import zlib
 
 from toolz import identity
 
-from ..compatibility import gzip_compress, gzip_decompress, GzipFile
+from ..compatibility import gzip_compress, gzip_decompress, GzipFile, PY2
 from ..utils import ignoring
 
 
@@ -33,10 +32,17 @@ with ignoring(ImportError):
     decompress['snappy'] = snappy.decompress
 
 
-with ignoring(ImportError):
-    import lz4
-    compress['lz4'] = lz4.LZ4_compress
-    decompress['lz4'] = lz4.LZ4_uncompress
+try:
+    import lz4.block
+    compress['lz4'] = lz4.block.compress
+    decompress['lz4'] = lz4.block.decompress
+except ImportError:
+    try:
+        import lz4
+        compress['lz4'] = lz4.LZ4_compress
+        decompress['lz4'] = lz4.LZ4_uncompress
+    except ImportError:
+        pass
 
 with ignoring(ImportError):
     from ..compatibility import LZMAFile, lzma_compress, lzma_decompress
@@ -54,7 +60,7 @@ with ignoring(ImportError):
 #     seekable_files['xz'] = lzmaffi.LZMAFile
 
 
-if sys.version_info[0] >= 3:
+if not PY2:
     import bz2
     files['bz2'] = bz2.BZ2File
 

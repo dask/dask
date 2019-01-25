@@ -12,7 +12,6 @@ from dask.dataframe.io.io import _meta_from_array
 from dask.delayed import Delayed, delayed
 
 from dask.utils import tmpfile
-from dask.local import get_sync
 
 from dask.dataframe.utils import assert_eq, is_categorical_dtype
 
@@ -126,11 +125,11 @@ def test_from_bcolz_multiple_threads():
         d = dd.from_bcolz(t, chunksize=2)
         assert d.npartitions == 2
         assert is_categorical_dtype(d.dtypes['a'])
-        assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
-        assert list(d.a.compute(get=get_sync)) == ['a', 'b', 'a']
+        assert list(d.x.compute(scheduler='sync')) == [1, 2, 3]
+        assert list(d.a.compute(scheduler='sync')) == ['a', 'b', 'a']
 
         d = dd.from_bcolz(t, chunksize=2, index='x')
-        L = list(d.index.compute(get=get_sync))
+        L = list(d.index.compute(scheduler='sync'))
         assert L == [1, 2, 3] or L == [1, 3, 2]
 
         # Names
@@ -150,13 +149,13 @@ def test_from_bcolz():
     d = dd.from_bcolz(t, chunksize=2)
     assert d.npartitions == 2
     assert is_categorical_dtype(d.dtypes['a'])
-    assert list(d.x.compute(get=get_sync)) == [1, 2, 3]
-    assert list(d.a.compute(get=get_sync)) == ['a', 'b', 'a']
-    L = list(d.index.compute(get=get_sync))
+    assert list(d.x.compute(scheduler='sync')) == [1, 2, 3]
+    assert list(d.a.compute(scheduler='sync')) == ['a', 'b', 'a']
+    L = list(d.index.compute(scheduler='sync'))
     assert L == [0, 1, 2]
 
     d = dd.from_bcolz(t, chunksize=2, index='x')
-    L = list(d.index.compute(get=get_sync))
+    L = list(d.index.compute(scheduler='sync'))
     assert L == [1, 2, 3] or L == [1, 3, 2]
 
     # Names
@@ -324,7 +323,7 @@ def test_DataFrame_from_dask_array():
     assert isinstance(df, dd.DataFrame)
     tm.assert_index_equal(df.columns, pd.Index(['a', 'b', 'c']))
     assert list(df.divisions) == [0, 4, 8, 9]
-    assert (df.compute(get=get_sync).values == x.compute(get=get_sync)).all()
+    assert (df.compute(scheduler='sync').values == x.compute(scheduler='sync')).all()
 
     # dd.from_array should re-route to from_dask_array
     df2 = dd.from_array(x, columns=['a', 'b', 'c'])
@@ -340,7 +339,7 @@ def test_Series_from_dask_array():
     assert isinstance(ser, dd.Series)
     assert ser.name == 'a'
     assert list(ser.divisions) == [0, 4, 8, 9]
-    assert (ser.compute(get=get_sync).values == x.compute(get=get_sync)).all()
+    assert (ser.compute(scheduler='sync').values == x.compute(scheduler='sync')).all()
 
     ser = dd.from_dask_array(x)
     assert isinstance(ser, dd.Series)
@@ -350,6 +349,31 @@ def test_Series_from_dask_array():
     ser2 = dd.from_array(x)
     assert isinstance(ser2, dd.Series)
     assert_eq(ser, ser2)
+
+
+@pytest.mark.parametrize('as_frame', [True, False])
+def test_from_dask_array_index(as_frame):
+    s = dd.from_pandas(pd.Series(range(10), index=list('abcdefghij')),
+                       npartitions=3)
+    if as_frame:
+        s = s.to_frame()
+    result = dd.from_dask_array(s.values, index=s.index)
+    assert_eq(s, result)
+
+
+def test_from_dask_array_index_raises():
+    x = da.random.uniform(size=(10,), chunks=(5,))
+    with pytest.raises(ValueError) as m:
+        dd.from_dask_array(x, index=pd.Index(np.arange(10)))
+    assert m.match("must be an instance")
+
+    a = dd.from_pandas(pd.Series(range(12)), npartitions=2)
+    b = dd.from_pandas(pd.Series(range(12)), npartitions=4)
+    with pytest.raises(ValueError) as m:
+        dd.from_dask_array(a.values, index=b.index)
+
+    assert m.match("must have the same number")
+    assert m.match("4 != 2")
 
 
 def test_from_dask_array_compat_numpy_array():
@@ -515,6 +539,29 @@ def test_from_delayed():
     assert str(e.value).startswith('Metadata mismatch found in `from_delayed`')
 
 
+def test_from_delayed_misordered_meta():
+    df = pd.DataFrame(
+        columns=['(1)', '(2)', 'date', 'ent', 'val'],
+        data=[range(i * 5, i * 5 + 5) for i in range(3)],
+        index=range(3)
+    )
+
+    # meta with different order for columns
+    misordered_meta = pd.DataFrame(
+        columns=['date', 'ent', 'val', '(1)', '(2)'],
+        data=[range(5)]
+    )
+
+    ddf = dd.from_delayed([delayed(lambda: df)()], meta=misordered_meta)
+
+    with pytest.raises(ValueError) as info:
+        #produces dataframe which does not match meta
+        ddf.reset_index().compute(scheduler='sync')
+    msg = "The columns in the computed data do not match the columns in the" \
+          " provided metadata"
+    assert msg in str(info.value)
+
+
 def test_from_delayed_sorted():
     a = pd.DataFrame({'x': [1, 2]}, index=[1, 10])
     b = pd.DataFrame({'x': [4, 1]}, index=[100, 200])
@@ -528,17 +575,36 @@ def test_from_delayed_sorted():
 def test_to_delayed():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
+
+    # Frame
     a, b = ddf.to_delayed()
     assert isinstance(a, Delayed)
     assert isinstance(b, Delayed)
-
     assert_eq(a.compute(), df.iloc[:2])
 
+    # Scalar
+    x = ddf.x.sum()
+    dx = x.to_delayed()
+    assert isinstance(dx, Delayed)
+    assert_eq(dx.compute(), x)
 
-def test_to_delayed_optimizes():
+
+def test_to_delayed_optimize_graph():
     df = pd.DataFrame({'x': list(range(20))})
     ddf = dd.from_pandas(df, npartitions=20)
-    x = (ddf + 1).loc[:2]
+    ddf2 = (ddf + 1).loc[:2]
 
-    d = x.to_delayed()[0]
+    # Frame
+    d = ddf2.to_delayed()[0]
     assert len(d.dask) < 20
+    d2 = ddf2.to_delayed(optimize_graph=False)[0]
+    assert sorted(d2.dask) == sorted(ddf2.dask)
+    assert_eq(ddf2.get_partition(0), d.compute())
+    assert_eq(ddf2.get_partition(0), d2.compute())
+
+    # Scalar
+    x = ddf2.x.sum()
+    dx = x.to_delayed()
+    dx2 = x.to_delayed(optimize_graph=False)
+    assert len(dx.dask) < len(dx2.dask)
+    assert_eq(dx.compute(), dx2.compute())

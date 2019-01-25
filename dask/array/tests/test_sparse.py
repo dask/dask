@@ -8,8 +8,14 @@ import dask.array as da
 from dask.array.utils import assert_eq
 
 sparse = pytest.importorskip('sparse')
+if sparse:
+    # Test failures on older versions of Numba.
+    # Conda-Forge provides 0.35.0 on windows right now, causing failures like
+    # searchsorted() got an unexpected keyword argument 'side'
+    pytest.importorskip("numba", minversion="0.40.0")
 
-if LooseVersion(np.__version__) < '1.11.0':
+
+if LooseVersion(np.__version__) < '1.11.2':
     pytestmark = pytest.mark.skip
 
 
@@ -79,6 +85,7 @@ def test_tensordot():
               da.tensordot(xx, yy, axes=((1, 2), (1, 0))))
 
 
+@pytest.mark.xfail(reason="upstream change", strict=False)
 @pytest.mark.parametrize('func', functions)
 def test_mixed_concatenate(func):
     x = da.random.random((2, 3, 4), chunks=(1, 2, 2))
@@ -96,6 +103,7 @@ def test_mixed_concatenate(func):
     assert_eq(dd, ss)
 
 
+@pytest.mark.xfail(reason="upstream change", strict=False)
 @pytest.mark.parametrize('func', functions)
 def test_mixed_random(func):
     d = da.random.random((4, 3, 4), chunks=(1, 2, 2))
@@ -110,6 +118,7 @@ def test_mixed_random(func):
     assert_eq(dd, ss)
 
 
+@pytest.mark.xfail(reason="upstream change", strict=False)
 def test_mixed_output_type():
     y = da.random.random((10, 10), chunks=(5, 5))
     y[y < 0.8] = 0

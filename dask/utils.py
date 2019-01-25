@@ -3,24 +3,22 @@ from __future__ import absolute_import, division, print_function
 import functools
 import inspect
 import os
-import re
 import shutil
 import sys
 import tempfile
+import re
 from errno import ENOENT
-from collections import Iterator
 from contextlib import contextmanager
 from importlib import import_module
 from numbers import Integral
 from threading import Lock
-import multiprocessing as mp
 import uuid
 from weakref import WeakValueDictionary
 
-from .compatibility import getargspec, PY3, unicode, urlsplit, bind_method
+from .compatibility import (get_named_args, getargspec, PY3, unicode,
+                            bind_method, Iterator)
 from .core import get_deps
-from .context import _globals
-from .optimize import key_split    # noqa: F401
+from .optimization import key_split    # noqa: F401
 
 
 system_encoding = sys.getdefaultencoding()
@@ -269,7 +267,7 @@ def random_state_data(n, random_state=None):
     """
     import numpy as np
 
-    if not isinstance(random_state, np.random.RandomState):
+    if not all(hasattr(random_state, attr) for attr in ['normal', 'beta', 'bytes', 'uniform']):
         random_state = np.random.RandomState(random_state)
 
     random_data = random_state.bytes(624 * n * 4)  # `n * 624` 32-bit integers
@@ -407,12 +405,20 @@ class Dispatch(object):
                 return lk[cls2]
         raise TypeError("No dispatch for {0}".format(cls))
 
-    def __call__(self, arg):
+    def __call__(self, arg, *args, **kwargs):
         """
         Call the corresponding method based on type of argument.
         """
         meth = self.dispatch(type(arg))
-        return meth(arg)
+        return meth(arg, *args, **kwargs)
+
+    @property
+    def __doc__(self):
+        try:
+            func = self.dispatch(object)
+            return func.__doc__
+        except TypeError:
+            return "Single Dispatch for %s" % self.__name__
 
 
 def ensure_not_exists(filename):
@@ -432,7 +438,10 @@ def _skip_doctest(line):
     if stripped == '>>>' or stripped.startswith('>>> #'):
         return stripped
     elif '>>>' in stripped and '+SKIP' not in stripped:
-        return line + '  # doctest: +SKIP'
+        if '# doctest:' in line:
+            return line + ', +SKIP'
+        else:
+            return line + '  # doctest: +SKIP'
     else:
         return line
 
@@ -486,10 +495,10 @@ def derived_from(original_klass, version=None, ua_args=[]):
                 doc = ''
 
             try:
-                method_args = getargspec(method).args
-                original_args = getargspec(original_method).args
+                method_args = get_named_args(method)
+                original_args = get_named_args(original_method)
                 not_supported = [m for m in original_args if m not in method_args]
-            except TypeError:
+            except ValueError:
                 not_supported = []
 
             if len(ua_args) > 0:
@@ -553,11 +562,11 @@ def ensure_bytes(s):
     """ Turn string or bytes to bytes
 
     >>> ensure_bytes(u'123')
-    '123'
+    b'123'
     >>> ensure_bytes('123')
-    '123'
+    b'123'
     >>> ensure_bytes(b'123')
-    '123'
+    b'123'
     """
     if isinstance(s, bytes):
         return s
@@ -571,11 +580,11 @@ def ensure_unicode(s):
     """ Turn string or bytes to bytes
 
     >>> ensure_unicode(u'123')
-    u'123'
+    '123'
     >>> ensure_unicode('123')
-    u'123'
+    '123'
     >>> ensure_unicode(b'123')
-    u'123'
+    '123'
     """
     if isinstance(s, unicode):
         return s
@@ -714,6 +723,9 @@ class itemgetter(object):
     def __reduce__(self):
         return (itemgetter, (self.index,))
 
+    def __eq__(self, other):
+        return type(self) is type(other) and self.index == other.index
+
 
 class MethodCache(object):
     """Attribute access on this object returns a methodcaller for that
@@ -768,11 +780,11 @@ class SerializableLock(object):
             self.lock = Lock()
             SerializableLock._locks[self.token] = self.lock
 
-    def acquire(self, *args):
-        return self.lock.acquire(*args)
+    def acquire(self, *args, **kwargs):
+        return self.lock.acquire(*args, **kwargs)
 
-    def release(self, *args):
-        return self.lock.release(*args)
+    def release(self, *args, **kwargs):
+        return self.lock.release(*args, **kwargs)
 
     def __enter__(self):
         self.lock.__enter__()
@@ -780,9 +792,8 @@ class SerializableLock(object):
     def __exit__(self, *args):
         self.lock.__exit__(*args)
 
-    @property
     def locked(self):
-        return self.locked
+        return self.lock.locked()
 
     def __getstate__(self):
         return self.token
@@ -796,20 +807,17 @@ class SerializableLock(object):
     __repr__ = __str__
 
 
-def effective_get(get=None, collection=None):
-    """Get the effective get method used in a given situation"""
-    return (get or _globals.get('get') or
-            getattr(collection, '__dask_scheduler__', None))
-
-
-def get_scheduler_lock(get=None, collection=None):
+def get_scheduler_lock(collection=None, scheduler=None):
     """Get an instance of the appropriate lock for a certain situation based on
        scheduler used."""
     from . import multiprocessing
-    actual_get = effective_get(get, collection)
+    from .base import get_scheduler
+    actual_get = get_scheduler(collections=[collection],
+                               scheduler=scheduler)
 
     if actual_get == multiprocessing.get:
-        return mp.Manager().Lock()
+        return multiprocessing.get_context().Manager().Lock()
+
     return SerializableLock()
 
 
@@ -862,83 +870,6 @@ class OperatorMethodMixin(object):
         raise NotImplementedError
 
 
-# XXX: Kept to keep old versions of distributed/dask in sync. After
-# distributed's dask requirement is updated to > this commit, this function can
-# be moved to dask.bytes.utils.
-def infer_storage_options(urlpath, inherit_storage_options=None):
-    """ Infer storage options from URL path and merge it with existing storage
-    options.
-
-    Parameters
-    ----------
-    urlpath: str or unicode
-        Either local absolute file path or URL (hdfs://namenode:8020/file.csv)
-    storage_options: dict (optional)
-        Its contents will get merged with the inferred information from the
-        given path
-
-    Returns
-    -------
-    Storage options dict.
-
-    Examples
-    --------
-    >>> infer_storage_options('/mnt/datasets/test.csv')  # doctest: +SKIP
-    {"protocol": "file", "path", "/mnt/datasets/test.csv"}
-    >>> infer_storage_options(
-    ...          'hdfs://username:pwd@node:123/mnt/datasets/test.csv?q=1',
-    ...          inherit_storage_options={'extra': 'value'})  # doctest: +SKIP
-    {"protocol": "hdfs", "username": "username", "password": "pwd",
-    "host": "node", "port": 123, "path": "/mnt/datasets/test.csv",
-    "url_query": "q=1", "extra": "value"}
-    """
-    # Handle Windows paths including disk name in this special case
-    if re.match(r'^[a-zA-Z]:[\\/]', urlpath):
-        return {'protocol': 'file',
-                'path': urlpath}
-
-    parsed_path = urlsplit(urlpath)
-    protocol = parsed_path.scheme or 'file'
-    path = parsed_path.path
-    if protocol == 'file':
-        # Special case parsing file protocol URL on Windows according to:
-        # https://msdn.microsoft.com/en-us/library/jj710207.aspx
-        windows_path = re.match(r'^/([a-zA-Z])[:|]([\\/].*)$', path)
-        if windows_path:
-            path = '%s:%s' % windows_path.groups()
-
-    inferred_storage_options = {
-        'protocol': protocol,
-        'path': path,
-    }
-
-    if parsed_path.netloc:
-        # Parse `hostname` from netloc manually because `parsed_path.hostname`
-        # lowercases the hostname which is not always desirable (e.g. in S3):
-        # https://github.com/dask/dask/issues/1417
-        inferred_storage_options['host'] = parsed_path.netloc.rsplit('@', 1)[-1].rsplit(':', 1)[0]
-        if parsed_path.port:
-            inferred_storage_options['port'] = parsed_path.port
-        if parsed_path.username:
-            inferred_storage_options['username'] = parsed_path.username
-        if parsed_path.password:
-            inferred_storage_options['password'] = parsed_path.password
-
-    if parsed_path.query:
-        inferred_storage_options['url_query'] = parsed_path.query
-    if parsed_path.fragment:
-        inferred_storage_options['url_fragment'] = parsed_path.fragment
-
-    if inherit_storage_options:
-        if set(inherit_storage_options) & set(inferred_storage_options):
-            raise KeyError("storage options (%r) and path url options (%r) "
-                           "collision is detected"
-                           % (inherit_storage_options, inferred_storage_options))
-        inferred_storage_options.update(inherit_storage_options)
-
-    return inferred_storage_options
-
-
 def partial_by_order(*args, **kwargs):
     """
 
@@ -952,3 +883,156 @@ def partial_by_order(*args, **kwargs):
     for i, arg in other:
         args2.insert(i, arg)
     return function(*args2, **kwargs)
+
+
+def is_arraylike(x):
+    """ Is this object a numpy array or something similar?
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> x = np.ones(5)
+    >>> is_arraylike(x)
+    True
+    >>> is_arraylike(5)
+    False
+    >>> is_arraylike('cat')
+    False
+    """
+    from .base import is_dask_collection
+
+    return (
+        hasattr(x, 'shape') and x.shape and
+        hasattr(x, 'dtype') and
+        not any(is_dask_collection(n) for n in x.shape)
+    )
+
+
+def natural_sort_key(s):
+    """
+    Sorting `key` function for performing a natural sort on a collection of
+    strings
+
+    See https://en.wikipedia.org/wiki/Natural_sort_order
+
+    Parameters
+    ----------
+    s : str
+        A string that is an element of the collection being sorted
+
+    Returns
+    -------
+    tuple[str or int]
+        Tuple of the parts of the input string where each part is either a
+        string or an integer
+
+    Examples
+    --------
+    >>> a = ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
+    >>> sorted(a)
+    ['f0', 'f1', 'f10', 'f11', 'f19', 'f2', 'f20', 'f21', 'f8', 'f9']
+    >>> sorted(a, key=natural_sort_key)
+    ['f0', 'f1', 'f2', 'f8', 'f9', 'f10', 'f11', 'f19', 'f20', 'f21']
+    """
+    return [int(part) if part.isdigit() else part
+            for part in re.split(r'(\d+)', s)]
+
+
+def factors(n):
+    """ Return the factors of an integer
+
+    https://stackoverflow.com/a/6800214/616616
+    """
+    seq = ([i, n // i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)
+    return set(functools.reduce(list.__add__, seq))
+
+
+def parse_bytes(s):
+    """ Parse byte string to numbers
+
+    >>> parse_bytes('100')
+    100
+    >>> parse_bytes('100 MB')
+    100000000
+    >>> parse_bytes('100M')
+    100000000
+    >>> parse_bytes('5kB')
+    5000
+    >>> parse_bytes('5.4 kB')
+    5400
+    >>> parse_bytes('1kiB')
+    1024
+    >>> parse_bytes('1e6')
+    1000000
+    >>> parse_bytes('1e6 kB')
+    1000000000
+    >>> parse_bytes('MB')
+    1000000
+    >>> parse_bytes('5 foos')  # doctest: +SKIP
+    ValueError: Could not interpret 'foos' as a byte unit
+    """
+    s = s.replace(' ', '')
+    if not s[0].isdigit():
+        s = '1' + s
+
+    for i in range(len(s) - 1, -1, -1):
+        if not s[i].isalpha():
+            break
+    index = i + 1
+
+    prefix = s[:index]
+    suffix = s[index:]
+
+    try:
+        n = float(prefix)
+    except ValueError:
+        raise ValueError("Could not interpret '%s' as a number" % prefix)
+
+    try:
+        multiplier = byte_sizes[suffix.lower()]
+    except KeyError:
+        raise ValueError("Could not interpret '%s' as a byte unit" % suffix)
+
+    result = n * multiplier
+    return int(result)
+
+
+byte_sizes = {
+    'kB': 10**3,
+    'MB': 10**6,
+    'GB': 10**9,
+    'TB': 10**12,
+    'PB': 10**15,
+    'KiB': 2**10,
+    'MiB': 2**20,
+    'GiB': 2**30,
+    'TiB': 2**40,
+    'PiB': 2**50,
+    'B': 1,
+    '': 1,
+}
+byte_sizes = {k.lower(): v for k, v in byte_sizes.items()}
+byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and 'i' not in k})
+byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and 'i' in k})
+
+
+def has_keyword(func, keyword):
+    try:
+        if PY3:
+            return keyword in inspect.signature(func).parameters
+        else:
+            if isinstance(func, functools.partial):
+                return keyword in inspect.getargspec(func.func).args
+            else:
+                return keyword in inspect.getargspec(func).args
+    except Exception:
+        return False
+
+
+def ndimlist(seq):
+    if not isinstance(seq, (list, tuple)):
+        return 0
+    elif not seq:
+        return 1
+    else:
+        return 1 + ndimlist(seq[0])

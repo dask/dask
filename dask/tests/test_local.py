@@ -112,7 +112,7 @@ def test_cache_options():
         assert 'y' in cache
         return x + 1
 
-    with dask.set_options(cache=cache):
+    with dask.config.set(cache=cache):
         get_sync({'x': (inc2, 'y'), 'y': 1}, 'x')
 
 
@@ -138,20 +138,6 @@ def test_callback():
         assert isinstance(state, dict)
 
     get(dsk, 'a', start_callback=start_callback, end_callback=end_callback)
-
-
-def test_order_of_startstate():
-    dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b'),
-           'x': 1, 'y': (inc, 'x')}
-    result = start_state_from_dask(dsk)
-
-    assert result['ready'] == ['y', 'b']
-
-    dsk = {'x': 1, 'y': (inc, 'x'), 'z': (inc, 'y'),
-           'a': 1, 'b': (inc, 'a')}
-    result = start_state_from_dask(dsk)
-
-    assert result['ready'] == ['b', 'y']
 
 
 def test_exceptions_propagate():
