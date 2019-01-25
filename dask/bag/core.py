@@ -838,7 +838,7 @@ class Bag(DaskMethodsMixin):
         [{'name': 'Alice'}, {'name': 'Bob'}]
         """
         key = key if callable(key) else toolz.curried.get(key)
-        perpartition = lambda seq: list(toolz.unique(seq, key=key))
+        perpartition = toolz.compose(list, toolz.curried.unique(key=key))
         aggregate = merge_distinct(key=key)
         return self.reduction(perpartition,
                               aggregate,
