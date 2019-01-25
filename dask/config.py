@@ -105,7 +105,7 @@ def merge(*dicts):
 
 
 def normalize_key(key):
-    """ Replaces underscores with hyphens in string keys
+    """ Replaces hyphens with underscores in string keys
 
     Parameters
     ----------
@@ -113,12 +113,12 @@ def normalize_key(key):
         Key to assign.
     """
     if isinstance(key, string_types):
-        key = key.replace('_', '-')
+        key = key.replace('-', '_')
     return key
 
 
 def normalize_nested_keys(config):
-    """ Replaces underscores with hyphens for keys for a nested Mapping
+    """ Replaces hyphens with underscores for keys for a nested Mapping
 
     Examples
     --------
@@ -184,7 +184,7 @@ def collect_env(env=None):
 
     -  Lower-cases the key text
     -  Treats ``__`` (double-underscore) as nested access
-    -  Replaces ``_`` (underscore) with a hyphen.
+    -  Replaces ``-`` with ``_`` (underscore)
     -  Calls ``ast.literal_eval`` on the value
     """
     if env is None:

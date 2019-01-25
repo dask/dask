@@ -134,7 +134,7 @@ def test_env():
            }
 
     expected = {
-        'a-b': 123,
+        'a_b': 123,
         'c': True,
         'd': 'hello',
         'e': {'x': 123, 'y': 456},
@@ -305,8 +305,8 @@ def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmpdir):
 
 
 def test_rename():
-    aliases = {'foo-bar': 'foo.bar'}
-    config = {'foo-bar': 123}
+    aliases = {'foo_bar': 'foo.bar'}
+    config = {'foo_bar': 123}
     rename(aliases, config=config)
     assert config == {'foo': {'bar': 123}}
 
@@ -344,8 +344,8 @@ def test_expand_environment_variables(inp, out):
 
 
 @pytest.mark.parametrize('inp,out', [
-    ('custom_key', 'custom-key'),
-    ('custom-key', 'custom-key'),
+    ('custom-key', 'custom_key'),
+    ('custom_key', 'custom_key'),
     (1, 1),
     (2.3, 2.3)
 ])
@@ -354,13 +354,13 @@ def test_normalize_key(inp, out):
 
 
 def test_normalize_nested_keys():
-    config = {'key_1': 1,
-              'key_2': {'nested_key_1': 2},
-              'key_3': 3
+    config = {'key-1': 1,
+              'key-2': {'nested-key-1': 2},
+              'key-3': 3
               }
-    expected = {'key-1': 1,
-                'key-2': {'nested-key-1': 2},
-                'key-3': 3
+    expected = {'key_1': 1,
+                'key_2': {'nested_key_1': 2},
+                'key_3': 3
                 }
     assert normalize_nested_keys(config) == expected
 
@@ -384,3 +384,14 @@ def test_get_set_roundtrip(key):
 
 def test_merge_None_to_dict():
     assert dask.config.merge({'a': None, 'c': 0}, {'a': {'b': 1}}) == {'a': {'b': 1}, 'c': 0}
+
+
+def test_load_keys_with_underscores(tmpdir):
+    environ = {'ARROW_LIBHDFS_DIR': '/some/path'}
+    config = {'yarn': {'worker': {'env': environ}}}
+    path = str(tmpdir.join('config.yaml'))
+    with open(path, mode='w') as f:
+        yaml.dump(config, f)
+
+    config = merge(*collect_yaml(paths=[str(tmpdir)]))
+    assert get('yarn.worker.env', config=config) == environ

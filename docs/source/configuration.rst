@@ -127,7 +127,7 @@ resulting in configuration values like the following:
 
 Dask searches for all environment variables that start with ``DASK_``, then
 transforms keys by converting to lower case, changing double-underscores to
-nested structures, and changing single underscores to hyphens.
+nested structures, and changing hyphens to single underscores.
 
 Dask tries to parse all values with `ast.literal_eval
 <https://docs.python.org/3/library/ast.html#ast.literal_eval>`_, letting users
