@@ -14,6 +14,7 @@ from random import Random
 from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
                    remove, compose, curry, first, second, accumulate, peek)
 from toolz.compatibility import iteritems, zip
+import toolz.curried
 import toolz
 _implement_accumulate = LooseVersion(toolz.__version__) > '0.7.4'
 try:
@@ -817,7 +818,7 @@ class Bag(DaskMethodsMixin):
         return self.reduction(func, compose(func, toolz.concat), out_type=Bag,
                               split_every=split_every, name='topk')
 
-    def distinct(self):
+    def distinct(self, key=toolz.identity):
         """ Distinct elements of collection
 
         Unordered without repeats.
@@ -826,7 +827,12 @@ class Bag(DaskMethodsMixin):
         >>> sorted(b.distinct())
         ['Alice', 'Bob']
         """
-        return self.reduction(set, merge_distinct, out_type=Bag,
+        key = key if callable(key) else toolz.curried.get(key)
+        perpartition = lambda seq: list(toolz.unique(seq, key=key))
+        aggregate = merge_distinct(key=key)
+        return self.reduction(perpartition,
+                              aggregate,
+                              out_type=Bag,
                               name='distinct')
 
     def reduction(self, perpartition, aggregate, split_every=None,
@@ -1630,8 +1636,9 @@ def from_delayed(values):
     return Bag(graph, name, len(values))
 
 
-def merge_distinct(seqs):
-    return set().union(*seqs)
+@curry
+def merge_distinct(seqs, key=toolz.identity):
+    return toolz.pipe(seqs, toolz.concat, toolz.curried.unique(key=key), list)
 
 
 def merge_frequencies(seqs):

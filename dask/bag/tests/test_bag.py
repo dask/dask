@@ -14,7 +14,7 @@ import dask
 import dask.bag as db
 from dask.bag.core import (Bag, lazify, lazify_task, map, collect,
                            reduceby, reify, partition, inline_singleton_lists,
-                           optimize, from_delayed)
+                           optimize, from_delayed, merge_distinct)
 from dask.bag.utils import assert_eq
 from dask.compatibility import BZ2File, GzipFile, PY2, Iterator
 from dask.delayed import Delayed
@@ -225,6 +225,24 @@ def test_distinct():
     assert b.distinct().count().compute() == 5
     bag = db.from_sequence([0] * 50, npartitions=50)
     assert bag.filter(None).distinct().compute() == []
+
+
+def test_distinct_with_key():
+    bag = db.from_sequence([{'a': 0}, {'a': 0}, {'a': 1}])
+    expected = [{'a': 0}, {'a': 1}]
+    key = 'a'
+    key_func = lambda x: x[key]
+    assert bag.distinct(key_func).compute() == expected
+    assert bag.distinct(key).compute() == expected
+
+
+def test_merge_distinct():
+    a = [[0, 1], [1, 2]]
+    b = [[{'a': 0}, {'a': 1}], [{'a': 1}, {'a': 2}]]
+    key = 'a'
+    key_func = lambda x: x[key]
+    assert merge_distinct(a) == [0, 1, 2]
+    assert merge_distinct(b, key_func) == [{'a': 0}, {'a': 1}, {'a': 2}]
 
 
 def test_frequencies():
