@@ -103,11 +103,6 @@ as follows::
 
    py.test dask --verbose --doctest-modules
 
-To run tests in parallel append `-n $N` where `$N` represents the number
-of workers, like so::
-
-   py.test dask --verbose --doctest-modules -n 8
-
 .. _py.test: http://pytest.org/latest/
 
 
