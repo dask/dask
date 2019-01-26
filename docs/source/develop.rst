@@ -101,7 +101,7 @@ Run Tests
 Dask uses py.test_ for testing.  You can run tests from the main dask directory
 as follows::
 
-   py.test dask --verbose
+   py.test dask --verbose --doctest-modules
 
 .. _py.test: http://pytest.org/latest/
 
