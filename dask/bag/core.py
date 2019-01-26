@@ -834,7 +834,7 @@ class Bag(DaskMethodsMixin):
         >>> sorted(b.distinct())
         ['Alice', 'Bob']
         >>> b = from_sequence([{'name': 'Alice'}, {'name': 'Bob'}, {'name': 'Alice'}])
-        >>> b.distinct(key=lambda x: x['name'])
+        >>> b.distinct(key=lambda x: x['name']).compute()
         [{'name': 'Alice'}, {'name': 'Bob'}]
         """
         key = key if callable(key) else toolz.curried.get(key)
