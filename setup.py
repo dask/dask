@@ -24,8 +24,8 @@ packages = ['dask', 'dask.array', 'dask.bag', 'dask.bytes',
 tests = [p + '.tests' for p in packages]
 
 # Only include pytest-runner in setup_requires if we're invoking tests
-if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
-    setup_requires = ['pytest-runner']
+if {'pytest', 'test', 'ptr', }.intersection(sys.argv):
+    setup_requires = ['pytest-runner', 'pytest-xdist']
 else:
     setup_requires = []
 
@@ -50,6 +50,6 @@ setup(name='dask',
       long_description=open('README.rst').read() if exists('README.rst') else '',
       python_requires=">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*",
       setup_requires=setup_requires,
-      tests_require=['pytest'],
+      tests_require=['pytest', 'pytest-xdist'],
       extras_require=extras_require,
       zip_safe=False)
