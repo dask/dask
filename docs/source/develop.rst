@@ -92,7 +92,7 @@ Install Dask and dependencies::
 
 For development, Dask uses the following additional dependencies::
 
-   pip install pytest moto mock
+   pip install pytest moto mock pytest-xdist
 
 
 Run Tests
@@ -101,7 +101,12 @@ Run Tests
 Dask uses py.test_ for testing.  You can run tests from the main dask directory
 as follows::
 
-   py.test dask --verbose
+   py.test dask --verbose --doctest-modules
+
+To run tests in parallel append `-n $N` where `$N` represents the number
+of workers, like so::
+
+   py.test dask --verbose --doctest-modules -n 8
 
 .. _py.test: http://pytest.org/latest/
 
