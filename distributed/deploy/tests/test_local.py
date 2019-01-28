@@ -542,5 +542,16 @@ def test_default_process_thread_breakdown():
     assert nprocesses_nthreads(80) in ((10, 8), (16, 5))
 
 
+def test_asynchronous_property(loop):
+    with LocalCluster(4, scheduler_port=0, processes=False, silence_logs=False,
+                      diagnostics_port=None, loop=loop) as cluster:
+
+        @gen.coroutine
+        def _():
+            assert cluster.asynchronous
+
+        cluster.sync(_)
+
+
 if sys.version_info >= (3, 5):
     from distributed.deploy.tests.py3_test_deploy import *  # noqa F401

@@ -12,6 +12,7 @@ from dask.utils import factors
 from tornado import gen
 
 from .cluster import Cluster
+from ..compatibility import get_thread_identity
 from ..core import CommClosedError
 from ..utils import (sync, ignoring, All, silence_logging, LoopRunner,
         log_errors, thread_state, parse_timedelta)
@@ -153,7 +154,11 @@ class LocalCluster(Cluster):
 
     @property
     def asynchronous(self):
-        return self._asynchronous or getattr(thread_state, 'asynchronous', False)
+        return (
+            self._asynchronous or
+            getattr(thread_state, 'asynchronous', False) or
+            hasattr(self.loop, '_thread_identity') and self.loop._thread_identity == get_thread_identity()
+        )
 
     def sync(self, func, *args, **kwargs):
         if kwargs.pop('asynchronous', None) or self.asynchronous:
