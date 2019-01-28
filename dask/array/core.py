@@ -1846,7 +1846,6 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
         dtype = np.dtype(dtype)
     if chunks is None:
         raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
-
     if isinstance(chunks, list):
         chunks = tuple(chunks)
     if isinstance(chunks, (Number, str)):
