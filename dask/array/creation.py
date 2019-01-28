@@ -1,8 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-from functools import partial, wraps
+from functools import partial, wraps, reduce
 from itertools import product
-from operator import add
+from operator import add, getitem
 from numbers import Integral, Number
 
 import numpy as np
@@ -16,6 +16,7 @@ from .core import (Array, asarray, normalize_chunks,
                    stack, concatenate, block,
                    broadcast_to, broadcast_arrays)
 from .wrap import empty, ones, zeros, full
+from .utils import AxisError
 
 
 def empty_like(a, dtype=None, chunks=None):
@@ -499,6 +500,82 @@ def diag(v):
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
     return Array(graph, name, (chunks_1d, chunks_1d), dtype=v.dtype)
+
+
+@wraps(np.diagonal)
+def diagonal(a, offset=0, axis1=0, axis2=1):
+    name = 'diagonal-' + tokenize(a, offset, axis1, axis2)
+
+    if a.ndim < 2:
+        # NumPy uses `diag` as we do here.
+        raise ValueError("diag requires an array of at least two dimensions")
+
+    def _axis_fmt(axis, name, ndim):
+        if axis < 0:
+            t = ndim + axis
+            if t < 0:
+                msg = "{}: axis {} is out of bounds for array of dimension {}"
+                raise AxisError(msg.format(name, axis, ndim))
+            axis = t
+        return axis
+
+    axis1 = _axis_fmt(axis1, "axis1", a.ndim)
+    axis2 = _axis_fmt(axis2, "axis2", a.ndim)
+
+    if axis1 == axis2:
+        raise ValueError("axis1 and axis2 cannot be the same")
+
+    if isinstance(a, np.ndarray):
+        return diagonal(asarray(a), offset, axis1, axis2)
+
+    if not isinstance(a, Array):
+        raise TypeError("a must be a dask array or numpy array, "
+                        "got {0}".format(type(a)))
+
+    if axis1 > axis2:
+        axis1, axis2 = axis2, axis1
+        offset = -offset
+
+    def _diag_len(dim1, dim2, offset):
+        return max(0, min(min(dim1, dim2), dim1 + offset, dim2 - offset))
+
+    def _diagonal(x, offset, axis1, axis2):
+        return np.diagonal(asarray(x), axis1=axis1, axis2=axis2,
+                           offset=offset)
+
+    diag_chunks = []
+    chunk_offsets = []
+    cum1 = [0] + list(np.cumsum(a.chunks[axis1]))[:-1]
+    cum2 = [0] + list(np.cumsum(a.chunks[axis2]))[:-1]
+    for co1, c1 in zip(cum1, a.chunks[axis1]):
+        chunk_offsets.append([])
+        for co2, c2 in zip(cum2, a.chunks[axis2]):
+            k = offset + co1 - co2
+            diag_chunks.append(_diag_len(c1, c2, k))
+            chunk_offsets[-1].append(k)
+
+    dsk = {}
+    idx_set = set(range(a.ndim)) - set([axis1, axis2])
+    n1 = len(a.chunks[axis1])
+    n2 = len(a.chunks[axis2])
+    for idx in product(*(range(len(a.chunks[i])) for i in idx_set)):
+        for i, (i1, i2) in enumerate(product(range(n1), range(n2))):
+            tsk = reduce(getitem, idx[:axis1], a.__dask_keys__())[i1]
+            tsk = reduce(getitem, idx[axis1:axis2 - 1], tsk)[i2]
+            tsk = reduce(getitem, idx[axis2 - 1:], tsk)
+            k = chunk_offsets[i1][i2]
+            dsk[(name,) + idx + (i,)] = (_diagonal, tsk, k, axis1, axis2)
+
+    left_shape = tuple(a.shape[i] for i in idx_set)
+    right_shape = (_diag_len(a.shape[axis1], a.shape[axis2], offset),)
+    shape = left_shape + right_shape
+
+    left_chunks = tuple(a.chunks[i] for i in idx_set)
+    right_shape = (tuple(diag_chunks),)
+    chunks = left_chunks + right_shape
+
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
+    return Array(graph, name, shape=shape, chunks=chunks, dtype=a.dtype)
 
 
 def triu(m, k=0):
