@@ -1846,6 +1846,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
         dtype = np.dtype(dtype)
     if chunks is None:
         raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
+
     if isinstance(chunks, list):
         chunks = tuple(chunks)
     if isinstance(chunks, (Number, str)):
@@ -1867,6 +1868,20 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
             "Got chunks=%s, shape=%s" % (chunks, shape))
     if -1 in chunks:
         chunks = tuple(s if c == -1 else c for c, s in zip(chunks, shape))
+
+    # If specifying chunk size in bytes, use that value to set the limit.
+    # Verify there is only one consistent value of limit or chunk-bytes used.
+    for c in chunks:
+        if isinstance(c, str) and c != 'auto':
+            parsed = parse_bytes(c)
+            if limit is None:
+                limit = parsed
+            elif parsed != limit:
+                raise ValueError(
+                    "Only one consistent value of limit or chunk is allowed."
+                    "Used %s != %s" % (parsed, limit))
+    # Substitute byte limits with 'auto' now that limit is set.
+    chunks = tuple('auto' if isinstance(c, str) and c != 'auto' else c for c in chunks)
 
     if any(c == 'auto' for c in chunks):
         chunks = auto_chunks(chunks, shape, limit, dtype, previous_chunks)
