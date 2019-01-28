@@ -14,7 +14,6 @@ from random import Random
 from toolz import (merge, take, reduce, valmap, map, partition_all, filter,
                    remove, compose, curry, first, second, accumulate, peek)
 from toolz.compatibility import iteritems, zip
-import toolz.curried
 import toolz
 _implement_accumulate = LooseVersion(toolz.__version__) > '0.7.4'
 try:
