@@ -497,18 +497,18 @@ def _nonempty_series(s, idx=None):
 
 def is_dataframe_like(df):
     """ Looks like a Pandas DataFrame """
-    return set(dir(df)) > {'dtypes', 'columns', 'groupby', 'head'}
+    return set(dir(df)) > {'dtypes', 'columns', 'groupby', 'head'} and not isinstance(df, type)
 
 
 def is_series_like(s):
     """ Looks like a Pandas Series """
-    return set(dir(s)) > {'name', 'dtype', 'groupby', 'head'}
+    return set(dir(s)) > {'name', 'dtype', 'groupby', 'head'} and not isinstance(s, type)
 
 
 def is_index_like(s):
     """ Looks like a Pandas Index """
     attrs = set(dir(s))
-    return attrs > {'name', 'dtype'} and 'head' not in attrs
+    return attrs > {'name', 'dtype'} and 'head' not in attrs and not isinstance(s, type)
 
 
 def check_meta(x, meta, funcname=None, numeric_equal=True):

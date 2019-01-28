@@ -553,6 +553,12 @@ def test_map_partitions():
     assert result.dtype == np.float64 and result.compute() == 4.0
 
 
+def test_map_partitions_type():
+    result = d.map_partitions(type).compute(scheduler='single-threaded')
+    assert isinstance(result, pd.Series)
+    assert all(x == pd.DataFrame for x in result)
+
+
 def test_map_partitions_names():
     func = lambda x: x
     assert (sorted(dd.map_partitions(func, d, meta=d).dask) ==
