@@ -232,8 +232,8 @@ def test_distinct_with_key():
     expected = [{'a': 0}, {'a': 1}]
     key = 'a'
     key_func = lambda x: x[key]
-    assert bag.distinct(key_func).compute() == expected
-    assert bag.distinct(key).compute() == expected
+    assert_eq(bag.distinct(key_func), expected)
+    assert_eq(bag.distinct(key), expected)
 
 
 def test_merge_distinct():
