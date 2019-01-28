@@ -818,7 +818,7 @@ class Bag(DaskMethodsMixin):
         return self.reduction(func, compose(func, toolz.concat), out_type=Bag,
                               split_every=split_every, name='topk')
 
-    def distinct(self, key=toolz.identity):
+    def distinct(self, key=None):
         """ Distinct elements of collection
 
         Unordered without repeats.
@@ -840,9 +840,9 @@ class Bag(DaskMethodsMixin):
         >>> b.distinct(key='name').compute()
         [{'name': 'Alice'}, {'name': 'Bob'}]
         """
-        key = key if callable(key) else toolz.curried.get(key)
-        perpartition = toolz.compose(list, toolz.curried.unique(key=key))
-        aggregate = merge_distinct(key=key)
+        key_func = key if callable(key) or key is None else lambda x: x[key]
+        perpartition = lambda seq: list(toolz.unique(seq, key=key_func))
+        aggregate = merge_distinct(key=key_func)
         return self.reduction(perpartition,
                               aggregate,
                               out_type=Bag,
@@ -1650,8 +1650,13 @@ def from_delayed(values):
 
 
 @curry
-def merge_distinct(seqs, key=toolz.identity):
-    return toolz.pipe(seqs, toolz.concat, toolz.curried.unique(key=key), list)
+def merge_distinct(seqs, key=None):
+    if key is None:
+        return list(toolz.unique(toolz.concat(seqs)))
+    elif callable(key):
+        return list(toolz.unique(toolz.concat(seqs), key=key))
+    else:
+        return list(toolz.unique(toolz.concat(seqs), key=lambda x: x[key]))
 
 
 def merge_frequencies(seqs):
