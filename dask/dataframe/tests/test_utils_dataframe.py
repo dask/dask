@@ -337,14 +337,17 @@ def test_is_dataframe_like():
     assert is_dataframe_like(df)
     assert not is_dataframe_like(df.x)
     assert not is_dataframe_like(df.index)
+    assert not is_dataframe_like(pd.DataFrame)
 
     assert not is_series_like(df)
     assert is_series_like(df.x)
     assert not is_series_like(df.index)
+    assert not is_series_like(pd.Series)
 
     assert not is_index_like(df)
     assert not is_index_like(df.x)
     assert is_index_like(df.index)
+    assert not is_index_like(pd.Index)
 
     ddf = dd.from_pandas(df, npartitions=1)
     assert is_dataframe_like(ddf)
