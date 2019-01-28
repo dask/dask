@@ -825,7 +825,7 @@ class Bag(DaskMethodsMixin):
         Parameters
         ----------
         key: {callable,str}
-            Defines uniqueness of items in bag by calling `key` on each item.
+            Defines uniqueness of items in bag by calling ``key`` on each item.
             If a string is passed `key` is considered to be `lambda x: x[key]`.
 
         Examples
