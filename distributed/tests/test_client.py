@@ -3243,17 +3243,17 @@ def test_cancel_clears_processing(c, s, *workers):
 def test_default_get():
     with cluster() as (s, [a, b]):
         pre_get = dask.base.get_scheduler()
-        pre_shuffle = dask.config.get('shuffle', None)
+        pytest.raises(KeyError, dask.config.get, 'shuffle')
         with Client(s['address'], set_as_default=True) as c:
             assert dask.base.get_scheduler() == c.get
             assert dask.config.get('shuffle') == 'tasks'
 
         assert dask.base.get_scheduler() == pre_get
-        assert dask.config.get('shuffle') == pre_shuffle
+        pytest.raises(KeyError, dask.config.get, 'shuffle')
 
         c = Client(s['address'], set_as_default=False)
         assert dask.base.get_scheduler() == pre_get
-        assert dask.config.get('shuffle') == pre_shuffle
+        pytest.raises(KeyError, dask.config.get, 'shuffle')
         c.close()
 
         c = Client(s['address'], set_as_default=True)
@@ -3261,7 +3261,7 @@ def test_default_get():
         assert dask.base.get_scheduler() == c.get
         c.close()
         assert dask.base.get_scheduler() == pre_get
-        assert dask.config.get('shuffle') == pre_shuffle
+        pytest.raises(KeyError, dask.config.get, 'shuffle')
 
         with Client(s['address']) as c:
             assert dask.base.get_scheduler() == c.get

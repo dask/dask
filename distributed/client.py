@@ -606,11 +606,8 @@ class Client(Node):
 
         self._start_arg = address
         if set_as_default:
-            self._previous_scheduler = dask.config.get('scheduler', None)
-            dask.config.set(scheduler='dask.distributed')
-
-            self._previous_shuffle = dask.config.get('shuffle', None)
-            dask.config.set(shuffle='tasks')
+            self._set_config = dask.config.set(scheduler='dask.distributed',
+                                               shuffle='tasks')
 
         self._stream_handlers = {
             'key-in-memory': self._handle_key_in_memory,
@@ -1074,9 +1071,9 @@ class Client(Node):
                 pc.stop()
             self._scheduler_identity = {}
             with ignoring(AttributeError):
-                dask.config.set(scheduler=self._previous_scheduler)
-            with ignoring(AttributeError):
-                dask.config.set(shuffle=self._previous_shuffle)
+                # clear the dask.config set keys
+                with self._set_config:
+                    pass
             if self.get == dask.config.get('get', None):
                 del dask.config.config['get']
             if self.status == 'closed':
@@ -1159,13 +1156,6 @@ class Client(Node):
 
         if self._should_close_loop and not shutting_down():
             self._loop_runner.stop()
-
-        with ignoring(AttributeError):
-            dask.config.set(scheduler=self._previous_scheduler)
-        with ignoring(AttributeError):
-            dask.config.set(shuffle=self._previous_shuffle)
-        if self.get == dask.config.get('get', None):
-            del dask.config.config['get']
 
     def shutdown(self, *args, **kwargs):
         """ Deprecated, see close instead
