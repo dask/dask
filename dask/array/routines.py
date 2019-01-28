@@ -598,9 +598,10 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     >>> h.compute()
     array([5000, 5000])
     """
-    if bins is None or (range is None and bins is None):
-        raise ValueError('dask.array.histogram requires either bins '
-                         'or bins and range to be defined.')
+    if not np.iterable(bins) and (range is None or bins is None):
+        raise ValueError('dask.array.histogram requires either an iterable '
+                         'specifying the bins or the number of bins and a '
+                         'range to be defined.')
 
     if weights is not None and weights.chunks != a.chunks:
         raise ValueError('Input array and weights must have the same '
