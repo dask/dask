@@ -1008,11 +1008,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 partition_size = parse_bytes(partition_size)
             else:
                 partition_size = int(partition_size)
-            mem_usage = self.memory_usage(deep=True)
-            if is_series_like(mem_usage):
-                mem_usage = mem_usage.sum()
-            mem_usage = mem_usage.compute()
-            npartitions = max(1, int(np.ceil(mem_usage / partition_size)))
+            return repartition_size(self, partition_size)
 
         if npartitions is not None and divisions is not None:
             warnings.warn("When providing both npartitions and divisions to "
@@ -4397,6 +4393,66 @@ def repartition_freq(df, freq=None):
     return df.repartition(divisions=divisions)
 
 
+def repartition_size(df, size):
+    """
+    Repartition dataframe so that new partitions have approximately `size` memory usage each
+    """
+    mem_usages = df.map_partitions(total_mem_usage).compute()
+
+    # 1. split each partition that is larger than partition_size
+    nsplits = 1 + mem_usages // size
+    if np.any(nsplits > 1):
+        split_name = 'repartition-split-{}-{}'.format(size, tokenize(df))
+        df = _split_partitions(df, nsplits, split_name)
+        # update mem_usages to account for the split partitions
+        split_mem_usages = []
+        for n, usage in zip(nsplits, mem_usages):
+            split_mem_usages.extend([usage / n] * n)
+        mem_usages = pd.Series(split_mem_usages, dtype=mem_usages.dtype)
+
+    # 2. now that all partitions are less than size, concat them up to size
+    assert np.all(mem_usages <= size)
+    new_npartitions = list(map(len, iter_chunks(mem_usages, size)))
+    new_partitions_boundaries = np.cumsum(new_npartitions)
+    new_name = 'repartition-{}-{}'.format(size, tokenize(df))
+    return _repartition_from_boundaries(df, new_partitions_boundaries, new_name)
+
+
+def total_mem_usage(df):
+    mem_usage = df.memory_usage(deep=True)
+    if is_series_like(mem_usage):
+        mem_usage = mem_usage.sum()
+    return mem_usage
+
+
+def iter_chunks(sizes, max_size):
+    """Split sizes into chunks of total max_size each
+
+    Parameters
+    ----------
+    sizes : iterable of numbers
+        The sizes to be chunked
+    max_size : number
+        Maximum total size per chunk.
+        It must be greater or equal than each size in sizes
+    """
+    chunk, chunk_sum = [], 0
+    iter_sizes = iter(sizes)
+    size = next(iter_sizes, None)
+    while size is not None:
+        assert size <= max_size
+        if chunk_sum + size <= max_size:
+            chunk.append(size)
+            chunk_sum += size
+            size = next(iter_sizes, None)
+        else:
+            assert chunk
+            yield chunk
+            chunk, chunk_sum = [], 0
+    if chunk:
+        yield chunk
+
+
 def repartition_npartitions(df, npartitions):
     """ Repartition dataframe to a smaller number of partitions """
     new_name = 'repartition-%d-%s' % (npartitions, tokenize(df))
@@ -4406,18 +4462,7 @@ def repartition_npartitions(df, npartitions):
         npartitions_ratio = df.npartitions / npartitions
         new_partitions_boundaries = [int(new_partition_index * npartitions_ratio)
                                      for new_partition_index in range(npartitions + 1)]
-        dsk = {}
-        for new_partition_index in range(npartitions):
-            value = (methods.concat,
-                     [(df._name, old_partition_index) for old_partition_index in
-                      range(new_partitions_boundaries[new_partition_index],
-                            new_partitions_boundaries[new_partition_index + 1])])
-            dsk[new_name, new_partition_index] = value
-        divisions = [df.divisions[new_partition_index]
-                     for new_partition_index in new_partitions_boundaries]
-
-        graph = HighLevelGraph.from_collections(new_name, dsk, dependencies=[df])
-        return new_dd_object(graph, new_name, df._meta, divisions)
+        return _repartition_from_boundaries(df, new_partitions_boundaries, new_name)
     else:
         original_divisions = divisions = pd.Series(df.divisions)
         if (df.known_divisions and (np.issubdtype(divisions.dtype, np.datetime64) or
@@ -4446,26 +4491,44 @@ def repartition_npartitions(df, npartitions):
 
             return df.repartition(divisions=divisions)
         else:
-            ratio = npartitions / df.npartitions
-            split_name = 'split-%s' % tokenize(df, npartitions)
-            dsk = {}
-            last = 0
-            j = 0
-            for i in range(df.npartitions):
-                new = last + ratio
-                if i == df.npartitions - 1:
-                    k = npartitions - j
-                else:
-                    k = int(new - last)
-                dsk[(split_name, i)] = (split_evenly, (df._name, i), k)
-                for jj in range(k):
-                    dsk[(new_name, j)] = (getitem, (split_name, i), jj)
-                    j += 1
-                last = new
+            div, mod = divmod(npartitions, df.npartitions)
+            nsplits = [div] * df.npartitions
+            nsplits[-1] += mod
+            return _split_partitions(df, nsplits, new_name)
 
-            divisions = [None] * (npartitions + 1)
-            graph = HighLevelGraph.from_collections(new_name, dsk, dependencies=[df])
-            return new_dd_object(graph, new_name, df._meta, divisions)
+
+def _repartition_from_boundaries(df, new_partitions_boundaries, new_name):
+    if not isinstance(new_partitions_boundaries, list):
+        new_partitions_boundaries = list(new_partitions_boundaries)
+    if new_partitions_boundaries[0] > 0:
+        new_partitions_boundaries.insert(0, 0)
+    if new_partitions_boundaries[-1] < df.npartitions:
+        new_partitions_boundaries.append(df.npartitions)
+    dsk = {}
+    for i, (start, end) in enumerate(zip(new_partitions_boundaries, new_partitions_boundaries[1:])):
+        dsk[new_name, i] = (methods.concat, [(df._name, j) for j in range(start, end)])
+    divisions = [df.divisions[i] for i in new_partitions_boundaries]
+    graph = HighLevelGraph.from_collections(new_name, dsk, dependencies=[df])
+    return new_dd_object(graph, new_name, df._meta, divisions)
+
+
+def _split_partitions(df, nsplits, new_name):
+    if len(nsplits) != df.npartitions:
+        raise ValueError('nsplits should have len={}'.format(df.npartitions))
+
+    dsk = {}
+    split_name = 'split-{}'.format(tokenize(df, nsplits))
+    j = 0
+    for i, k in enumerate(nsplits):
+        # TODO: don't need to split for k==1
+        dsk[split_name, i] = (split_evenly, (df._name, i), k)
+        for jj in range(k):
+            dsk[new_name, j] = (getitem, (split_name, i), jj)
+            j += 1
+
+    divisions = [None] * (1 + sum(nsplits))
+    graph = HighLevelGraph.from_collections(new_name, dsk, dependencies=[df])
+    return new_dd_object(graph, new_name, df._meta, divisions)
 
 
 def repartition(df, divisions=None, force=False):
