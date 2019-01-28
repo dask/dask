@@ -4579,6 +4579,22 @@ def test_quiet_client_close(loop):
             ), line
 
 
+def test_quiet_client_close_when_cluster_is_closed_before_client(loop):
+    n_attempts = 5
+    # Trying a few times to reduce the flakiness of the test. Without the bug
+    # fix in #2477 and with 5 attempts, this test passes by chance in about 10%
+    # of the cases.
+    for _ in range(n_attempts):
+        with captured_logger(logging.getLogger('tornado.application')) as logger:
+            cluster = LocalCluster(loop=loop)
+            client = Client(cluster, loop=loop)
+            cluster.close()
+            client.close()
+
+        out = logger.getvalue()
+        assert 'CancelledError' not in out
+
+
 @gen_cluster()
 def test_close(s, a, b):
     c = yield Client(s.address, asynchronous=True)
