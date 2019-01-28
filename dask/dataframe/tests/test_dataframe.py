@@ -17,7 +17,7 @@ from dask.compatibility import PY2
 from dask.utils import put_lines, M
 
 from dask.dataframe.core import (repartition_divisions, aca, _concat, Scalar,
-                                 has_parallel_type)
+                                 has_parallel_type, iter_chunks, total_mem_usage)
 from dask.dataframe import methods
 from dask.dataframe.utils import (assert_eq, make_meta, assert_max_deps,
                                   PANDAS_VERSION)
@@ -1346,16 +1346,19 @@ def test_repartition_partition_size(use_index, n, partition_size, dtype, transfo
                        'y': list('abdabd') * 10},
                       index=pd.Series([10, 20, 30, 40, 50, 60] * 10, dtype=dtype))
     df = transform(df)
-    mem_usage = df.memory_usage(deep=True)
-    if isinstance(mem_usage, pd.Series):
-        mem_usage = mem_usage.sum()
-
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
     b = a.repartition(partition_size=partition_size)
-    assert_eq(a, b)
-    assert b.npartitions == np.ceil(mem_usage / 1024.0)
+    assert_eq(a, b, check_divisions=False)
+    assert np.alltrue(b.map_partitions(total_mem_usage).compute() <= 1024)
     parts = dask.get(b.dask, b.__dask_keys__())
     assert all(map(len, parts))
+
+
+def test_iter_chunks():
+    sizes = [14, 8, 5, 9, 7, 9, 1, 19, 8, 19]
+    assert list(iter_chunks(sizes, 19)) == [[14], [8, 5], [9, 7], [9, 1], [19], [8], [19]]
+    assert list(iter_chunks(sizes, 28)) == [[14, 8, 5], [9, 7, 9, 1], [19, 8], [19]]
+    assert list(iter_chunks(sizes, 67)) == [[14, 8, 5, 9, 7, 9, 1], [19, 8, 19]]
 
 
 def test_repartition_npartitions_same_limits():
