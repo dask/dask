@@ -48,6 +48,34 @@ When we submit tasks to the cluster we specify constraints per task
    final = client.submit(aggregate, processed, resources={'MEMORY': 70e9})
 
 
+Resources are applied separately to each worker process
+-------------------------------------------------------
+
+If you are using ``dask-worker --nprocs <nprocs>`` the resource will be applied
+separately to each of the ``nprocs`` worker processes. Suppose you have 2 GPUs
+on your machine, if you want to use two worker processes, you have 1 GPU per
+worker process so you need to do something like this::
+
+   dask-worker scheduler:8786 --nprocs 2 --resources "GPU=1"
+
+Here is an example that illustrates how to use resources to ensure each task is
+run inside a separate process, which is useful to execute non thread-safe tasks
+or tasks that uses multithreading internally::
+
+   dask-worker scheduler:8786 --nprocs 3 --nthreads 2 --resources "process=1"
+
+With the code below, there will be at most 3 tasks running concurrently and
+each task will run in a separate process:
+
+.. code-block:: python
+
+   from distributed import Client
+   client = Client('scheduler:8786')
+
+   futures = [client.submit(non_thread_safe_function, arg,
+                            resources={'process': 1}) for arg in args]
+
+
 Resources are Abstract
 ----------------------
 

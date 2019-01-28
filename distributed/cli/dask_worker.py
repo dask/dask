@@ -82,7 +82,9 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 @click.option('--local-directory', default='', type=str,
               help="Directory to place worker files")
 @click.option('--resources', type=str, default='',
-              help='Resources for task constraints like "GPU=2 MEM=10e9"')
+              help='Resources for task constraints like "GPU=2 MEM=10e9". '
+                   'Resources are applied separately to each worker process '
+                   "(only relevant when starting multiple worker processes with '--nprocs').")
 @click.option('--scheduler-file', type=str, default='',
               help='Filename to JSON encoded scheduler information. '
                    'Use with dask-scheduler --scheduler-file')
