@@ -3652,16 +3652,20 @@ def test_map_blocks_chunks():
 def test_nbytes_auto():
     chunks = normalize_chunks("800B", shape=(500,), dtype='float64')
     assert chunks == ((100, 100, 100, 100, 100),)
-    chunks = normalize_chunks("200B", shape=(10,10), dtype='float64')
+    chunks = normalize_chunks("200B", shape=(10, 10), dtype='float64')
     assert chunks == ((5, 5), (5, 5))
-    chunks = normalize_chunks("33B", shape=(10,10), dtype='float64')
+    chunks = normalize_chunks((5,"200B"), shape=(10, 10), dtype='float64')
+    assert chunks == ((5, 5), (5, 5))
+    chunks = normalize_chunks("33B", shape=(10, 10), dtype='float64')
     assert chunks == ((2, 2, 2, 2, 2), (2, 2, 2, 2, 2))
     chunks = normalize_chunks("1800B", shape=(10, 20, 30), dtype='float64')
     assert chunks == ((5, 5), (5, 5, 5, 5), (6, 6, 6, 6, 6))
 
     with pytest.raises(ValueError):
-        normalize_chunks(("10B"), shape=(10,), limit=5, dtype='float64')
+        normalize_chunks("10B", shape=(10,), limit=20, dtype='float64')
     with pytest.raises(ValueError):
-        normalize_chunks(("100B", "10B"), shape=(10,10), dtype='float64')
+        normalize_chunks("100B", shape=(10, 10), limit=20, dtype='float64')
     with pytest.raises(ValueError):
-        normalize_chunks(("100B", "10B"), shape=(10,10), limit=20, dtype='float64')
+        normalize_chunks(("100B", "10B"), shape=(10, 10), dtype='float64')
+    with pytest.raises(ValueError):
+        normalize_chunks(("10B", "10B"), shape=(10, 10), limit=20, dtype='float64')
