@@ -3,6 +3,7 @@ import os
 from time import sleep
 from distutils.version import LooseVersion
 
+from dask.compatibility import WINDOWS
 from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler
 from dask.threaded import get
 from dask.utils import ignoring, tmpfile
@@ -75,6 +76,7 @@ def test_two_gets():
     assert len(prof.results) == n + m + n
 
 
+@pytest.mark.skipif(WINDOWS, reason="https://github.com/dask/dask/issues/4432")
 @pytest.mark.skipif("not psutil")
 def test_resource_profiler():
     with ResourceProfiler(dt=0.01) as rprof:
@@ -99,6 +101,7 @@ def test_resource_profiler():
     assert len(rprof.results) > 0
 
 
+@pytest.mark.skipif(WINDOWS, reason="https://github.com/dask/dask/issues/4432")
 @pytest.mark.skipif("not psutil")
 def test_resource_profiler_multiple_gets():
     with ResourceProfiler(dt=0.01) as rprof:
@@ -147,6 +150,7 @@ def test_cache_profiler():
     assert CacheProfiler(metric=nbytes, metric_name='foo')._metric_name == 'foo'
 
 
+@pytest.mark.skipif(WINDOWS, reason="https://github.com/dask/dask/issues/4432")
 @pytest.mark.parametrize(
     'profiler',
     [Profiler,
@@ -235,6 +239,7 @@ def test_profiler_plot():
     assert len(record) == 0
 
 
+@pytest.mark.skipif(WINDOWS, reason="https://github.com/dask/dask/issues/4432")
 @pytest.mark.skipif("not bokeh")
 @pytest.mark.skipif("not psutil")
 def test_resource_profiler_plot():

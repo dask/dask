@@ -9,6 +9,7 @@ import types
 
 PY3 = sys.version_info[0] == 3
 PY2 = sys.version_info[0] == 2
+WINDOWS = sys.platform.startswith('win')
 
 class LZMAFile:
     def __init__(self, *args, **kwargs):
