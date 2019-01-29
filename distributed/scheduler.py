@@ -764,7 +764,6 @@ class Scheduler(ServerNode):
 
     def __init__(
             self,
-            center=None,
             loop=None,
             delete_interval='500ms',
             synchronize_worker_interval='60s',

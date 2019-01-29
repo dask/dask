@@ -21,16 +21,16 @@ Then launch ``dask-worker`` on the rest of the nodes, providing the address to t
 node that hosts ``dask-scheduler``::
 
    $ dask-worker 192.168.0.1:8786
-   Start worker at:            192.168.0.2:12345
-   Registered with center at:  192.168.0.1:8786
+   Start worker at:               192.168.0.2:12345
+   Registered with Scheduler at:  192.168.0.1:8786
 
    $ dask-worker 192.168.0.1:8786
-   Start worker at:            192.168.0.3:12346
-   Registered with center at:  192.168.0.1:8786
+   Start worker at:               192.168.0.3:12346
+   Registered with Scheduler at:  192.168.0.1:8786
 
    $ dask-worker 192.168.0.1:8786
-   Start worker at:            192.168.0.4:12347
-   Registered with center at:  192.168.0.1:8786
+   Start worker at:               192.168.0.4:12347
+   Registered with Scheduler at:  192.168.0.1:8786
 
 There are various mechanisms to deploy these executables on a cluster, ranging
 from manualy SSH-ing into all of the nodes to more automated systems like
