@@ -212,7 +212,7 @@ class _Tracker(Process):
         Process.__init__(self)
         self.daemon = True
         self.dt = dt
-        self.parent = psutil.Process(current_process().pid)
+        self.parent_pid = current_process().pid
         self.parent_conn, self.child_conn = Pipe()
 
     def shutdown(self):
@@ -226,6 +226,10 @@ class _Tracker(Process):
                                 if p.pid != pid and p.status() != 'zombie']
 
     def run(self):
+
+        import psutil
+        self.parent = psutil.Process(self.parent_pid)
+
         pid = current_process()
         data = []
         while True:
