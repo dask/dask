@@ -32,11 +32,13 @@ from distributed.deploy.utils_test import ClusterTest
 def test_simple(loop):
     with LocalCluster(4, scheduler_port=0, processes=False, silence_logs=False,
                       diagnostics_port=None, loop=loop) as c:
-        with Client(c.scheduler_address, loop=loop) as e:
+        with Client(c) as e:
             x = e.submit(inc, 1)
             x.result()
             assert x.key in c.scheduler.tasks
             assert any(w.data == {x.key: 2} for w in c.workers)
+
+            assert e.loop is c.loop
 
 
 @pytest.mark.skipif('sys.version_info[0] == 2', reason='fork issues')
@@ -131,7 +133,7 @@ class LocalTest(ClusterTest, unittest.TestCase):
 def test_Client_with_local(loop):
     with LocalCluster(1, scheduler_port=0, silence_logs=False,
                       diagnostics_port=None, loop=loop) as c:
-        with Client(c, loop=loop) as e:
+        with Client(c) as e:
             assert len(e.ncores()) == len(c.workers)
             assert c.scheduler_address in repr(c)
 
@@ -276,7 +278,7 @@ def test_scale_up_and_down():
     cluster = yield LocalCluster(0, scheduler_port=0, processes=False,
                                  silence_logs=False, diagnostics_port=None,
                                  loop=loop, asynchronous=True)
-    c = yield Client(cluster, loop=loop, asynchronous=True)
+    c = yield Client(cluster, asynchronous=True)
 
     assert not cluster.workers
 
@@ -492,7 +494,7 @@ def test_scale_retires_workers():
     cluster = yield MyCluster(0, scheduler_port=0, processes=False,
                               silence_logs=False, diagnostics_port=None,
                               loop=loop, asynchronous=True)
-    c = yield Client(cluster, loop=loop, asynchronous=True)
+    c = yield Client(cluster, asynchronous=True)
 
     assert not cluster.workers
 

@@ -572,6 +572,20 @@ class Client(Node):
         else:
             self.connection_args = self.security.get_connection_args('client')
 
+        if address is None:
+            address = dask.config.get('scheduler-address', None)
+            if address:
+                logger.info("Config value `scheduler-address` found: %s",
+                            address)
+
+        if isinstance(address, (rpc, PooledRPCCall)):
+            self.scheduler = address
+        elif hasattr(address, "scheduler_address"):
+            # It's a LocalCluster or LocalCluster-compatible object
+            self.cluster = address
+            with ignoring(AttributeError):
+                loop = address.loop
+
         self._connecting_to_scheduler = False
         self._asynchronous = asynchronous
         self._should_close_loop = not loop
@@ -591,18 +605,6 @@ class Client(Node):
                 heartbeat_interval * 1000,
                 io_loop=self.loop
         )
-
-        if address is None:
-            address = dask.config.get('scheduler-address', None)
-            if address:
-                logger.info("Config value `scheduler-address` found: %s",
-                            address)
-
-        if isinstance(address, (rpc, PooledRPCCall)):
-            self.scheduler = address
-        elif hasattr(address, "scheduler_address"):
-            # It's a LocalCluster or LocalCluster-compatible object
-            self.cluster = address
 
         self._start_arg = address
         if set_as_default:
