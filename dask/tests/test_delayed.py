@@ -600,3 +600,10 @@ def test_delayed_decorator_on_method():
     # For static methods (and regular functions), the decorated methods should
     # be Delayed objects.
     assert isinstance(A.addstatic, Delayed)
+
+
+def test_attribute_of_attribute():
+    x = delayed(123)
+    assert isinstance(x.a, Delayed)
+    assert isinstance(x.a.b, Delayed)
+    assert isinstance(x.a.b.c, Delayed)
