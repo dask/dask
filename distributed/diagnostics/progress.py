@@ -116,7 +116,7 @@ class Progress(SchedulerPlugin):
 
         if key in self.keys and finish == 'forgotten':
             logger.debug("A task was cancelled (%s), stopping progress", key)
-            self.stop(exception=True)
+            self.stop(exception=True, key=key)
 
     def restart(self, scheduler):
         self.stop()
