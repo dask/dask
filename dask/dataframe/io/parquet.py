@@ -368,7 +368,7 @@ def _read_pf_simple(fs, path, base, index_names, all_columns, is_series,
     """Read dataset with fastparquet using ParquetFile machinery"""
     from fastparquet import ParquetFile
     pf = ParquetFile(path, open_with=fs.open)
-    relpath = path.replace(base, '').lstrip('/')
+    relpath = os.path.split(path)[-1]
     for rg in pf.row_groups:
         for ch in rg.columns:
             ch.file_path = relpath
