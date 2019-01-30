@@ -79,6 +79,8 @@ def test_two_gets():
 @pytest.mark.skipif(sys.platform == 'win32', reason="https://github.com/dask/dask/issues/4432")
 @pytest.mark.skipif("not psutil")
 def test_resource_profiler():
+    print(sys.platform)
+    print(sys.platform == 'win32')
     with ResourceProfiler(dt=0.01) as rprof:
         get(dsk2, 'c')
     results = rprof.results
@@ -104,6 +106,8 @@ def test_resource_profiler():
 @pytest.mark.skipif(sys.platform == 'win32', reason="https://github.com/dask/dask/issues/4432")
 @pytest.mark.skipif("not psutil")
 def test_resource_profiler_multiple_gets():
+    print(sys.platform)
+    print(sys.platform == 'win32')
     with ResourceProfiler(dt=0.01) as rprof:
         get(dsk2, 'c')
         assert len(rprof.results) == 0
@@ -158,6 +162,8 @@ def test_cache_profiler():
                   marks=pytest.mark.skipif("not psutil")),
      CacheProfiler])
 def test_register(profiler):
+    print(sys.platform)
+    print(sys.platform == 'win32')
     prof = profiler()
     try:
         prof.register()
@@ -243,6 +249,8 @@ def test_profiler_plot():
 @pytest.mark.skipif("not bokeh")
 @pytest.mark.skipif("not psutil")
 def test_resource_profiler_plot():
+    print(sys.platform)
+    print(sys.platform == 'win32')
     with ResourceProfiler(dt=0.01) as rprof:
         get(dsk2, 'c')
     p = rprof.visualize(plot_width=500,
