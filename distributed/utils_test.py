@@ -136,7 +136,7 @@ def loop():
     start = time()
     while set(_global_clients):
         sleep(0.1)
-        assert time() < start + 5
+        assert time() < start + 10
 
     _cleanup_dangling()
 
