@@ -76,7 +76,7 @@ def test_two_gets():
     assert len(prof.results) == n + m + n
 
 
-@pytest.mark.skipif(sys.platform == 'win32', reason="https://github.com/dask/dask/issues/4432")
+@pytest.mark.skipif("sys.platform == 'win32'", reason="https://github.com/dask/dask/issues/4432")
 @pytest.mark.skipif("not psutil")
 def test_resource_profiler():
     print(sys.platform)
@@ -103,7 +103,7 @@ def test_resource_profiler():
     assert len(rprof.results) > 0
 
 
-@pytest.mark.skipif(sys.platform == 'win32', reason="https://github.com/dask/dask/issues/4432")
+@pytest.mark.skipif("sys.platform == 'win32'", reason="https://github.com/dask/dask/issues/4432")
 @pytest.mark.skipif("not psutil")
 def test_resource_profiler_multiple_gets():
     print(sys.platform)
@@ -154,7 +154,7 @@ def test_cache_profiler():
     assert CacheProfiler(metric=nbytes, metric_name='foo')._metric_name == 'foo'
 
 
-@pytest.mark.skipif(sys.platform == 'win32', reason="https://github.com/dask/dask/issues/4432")
+@pytest.mark.skipif("sys.platform == 'win32'", reason="https://github.com/dask/dask/issues/4432")
 @pytest.mark.parametrize(
     'profiler',
     [Profiler,
@@ -245,7 +245,7 @@ def test_profiler_plot():
     assert len(record) == 0
 
 
-@pytest.mark.skipif(sys.platform == 'win32', reason="https://github.com/dask/dask/issues/4432")
+@pytest.mark.skipif("sys.platform == 'win32'", reason="https://github.com/dask/dask/issues/4432")
 @pytest.mark.skipif("not bokeh")
 @pytest.mark.skipif("not psutil")
 def test_resource_profiler_plot():
