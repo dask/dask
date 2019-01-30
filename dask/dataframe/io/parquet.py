@@ -1122,7 +1122,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
                     'when reading from fastparquet.ParquetFile')
             is_ParquetFile = True
     except ImportError:
-            pass
+        pass
 
     if is_ParquetFile:
         read = get_engine('fastparquet')['read']

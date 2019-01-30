@@ -536,7 +536,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
     def equal_dtypes(a, b):
         if is_categorical_dtype(a) != is_categorical_dtype(b):
             return False
-        if (a is '-' or b is '-'):
+        if a == '-' or b == '-':
             return False
         if is_categorical_dtype(a) and is_categorical_dtype(b):
             # Pandas 0.21 CategoricalDtype compat
