@@ -7,7 +7,7 @@ from distutils.version import LooseVersion
 from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler
 from dask.threaded import get
 from dask.utils import ignoring, tmpfile
-from dask.compatibility import apply
+from dask.compatibility import apply, WINDOWS
 import pytest
 
 try:
@@ -76,7 +76,7 @@ def test_two_gets():
     assert len(prof.results) == n + m + n
 
 
-@pytest.mark.skipif("sys.platform == 'win32'", reason="https://github.com/dask/dask/issues/4432")
+@pytest.mark.xfail(WINDOWS, reason="https://github.com/dask/dask/issues/4432")
 @pytest.mark.skipif("not psutil")
 def test_resource_profiler():
     print(sys.platform)
@@ -103,7 +103,7 @@ def test_resource_profiler():
     assert len(rprof.results) > 0
 
 
-@pytest.mark.skipif("sys.platform == 'win32'", reason="https://github.com/dask/dask/issues/4432")
+@pytest.mark.xfail(WINDOWS, reason="https://github.com/dask/dask/issues/4432")
 @pytest.mark.skipif("not psutil")
 def test_resource_profiler_multiple_gets():
     print(sys.platform)
@@ -154,13 +154,13 @@ def test_cache_profiler():
     assert CacheProfiler(metric=nbytes, metric_name='foo')._metric_name == 'foo'
 
 
-@pytest.mark.skipif("sys.platform == 'win32'", reason="https://github.com/dask/dask/issues/4432")
 @pytest.mark.parametrize(
     'profiler',
     [Profiler,
      pytest.param(lambda: ResourceProfiler(dt=0.01),
                   marks=pytest.mark.skipif("not psutil")),
      CacheProfiler])
+@pytest.mark.xfail(WINDOWS, reason="https://github.com/dask/dask/issues/4432")
 def test_register(profiler):
     print(sys.platform)
     print(sys.platform == 'win32')
@@ -245,9 +245,9 @@ def test_profiler_plot():
     assert len(record) == 0
 
 
-@pytest.mark.skipif("sys.platform == 'win32'", reason="https://github.com/dask/dask/issues/4432")
 @pytest.mark.skipif("not bokeh")
 @pytest.mark.skipif("not psutil")
+@pytest.mark.xfail(WINDOWS, reason="https://github.com/dask/dask/issues/4432")
 def test_resource_profiler_plot():
     print(sys.platform)
     print(sys.platform == 'win32')
@@ -305,6 +305,7 @@ def test_cache_profiler_plot():
 
 @pytest.mark.skipif("not bokeh")
 @pytest.mark.skipif("not psutil")
+@pytest.mark.xfail(WINDOWS, reason="https://github.com/dask/dask/issues/4432")
 def test_plot_multiple():
     from dask.diagnostics.profile_visualize import visualize
     with ResourceProfiler(dt=0.01) as rprof:
