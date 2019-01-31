@@ -343,8 +343,9 @@ def _read_fp_multifile(fs, fs_token, paths, columns=None,
                        categories=None, index=None):
     """Read dataset with fastparquet by assuming metadata from first file"""
     from fastparquet import ParquetFile
-    from fastparquet.util import analyse_paths, get_file_scheme
+    from fastparquet.util import analyse_paths, get_file_scheme, join_path
     base, fns = analyse_paths(paths)
+    parsed_paths = [join_path(p) for p in paths]
     scheme = get_file_scheme(fns)
     pf = ParquetFile(paths[0], open_with=fs.open)
     pf.file_scheme = scheme
@@ -358,7 +359,7 @@ def _read_fp_multifile(fs, fs_token, paths, columns=None,
                        index_names, all_columns, out_type == Series,
                        categories, pf.cats,
                        pf.file_scheme, storage_name_mapping)
-           for i, path in enumerate(paths)}
+           for i, path in enumerate(parsed_paths)}
     divisions = (None, ) * (len(paths) + 1)
     return out_type(dsk, name, meta, divisions)
 
