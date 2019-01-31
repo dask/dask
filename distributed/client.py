@@ -2977,7 +2977,8 @@ class Client(Node):
             keys += list(map(tokey, {f.key for f in futures}))
         return self.sync(self.scheduler.call_stack, keys=keys or None)
 
-    def profile(self, key=None, start=None, stop=None, workers=None, merge_workers=True):
+    def profile(self, key=None, start=None, stop=None, workers=None,
+                merge_workers=True, plot=False, filename=None):
         """ Collect statistical profiling information about recent work
 
         Parameters
@@ -2989,16 +2990,49 @@ class Client(Node):
         stop: time
         workers: list
             List of workers to restrict profile information
+        plot: boolean or string
+            Whether or not to return a plot object
+        filename: str
+            Filename to save the plot
 
         Examples
         --------
         >>> client.profile()  # call on collections
+        >>> client.profile(filename='dask-profile.html')  # save to html file
         """
         if isinstance(workers, six.string_types + (Number,)):
             workers = [workers]
 
-        return self.sync(self.scheduler.profile, key=key, workers=workers,
-                         merge_workers=merge_workers, start=start, stop=stop)
+        return self.sync(self._profile, key=key, workers=workers,
+                         merge_workers=merge_workers, start=start, stop=stop,
+                         plot=plot, filename=filename)
+
+    @gen.coroutine
+    def _profile(self, key=None, start=None, stop=None, workers=None,
+                 merge_workers=True, plot=False, filename=None):
+        if isinstance(workers, six.string_types + (Number,)):
+            workers = [workers]
+
+        state = yield self.scheduler.profile(key=key, workers=workers,
+                merge_workers=merge_workers, start=start, stop=stop)
+
+        if filename:
+            plot = True
+
+        if plot:
+            from . import profile
+            data = profile.plot_data(state)
+            figure, source = profile.plot_figure(data, sizing_mode='stretch_both')
+
+            if plot == 'save' and not filename:
+                filename = 'dask-profile.html'
+
+            from bokeh.plotting import save
+            save(figure, title='Dask Profile', filename=filename)
+            raise gen.Return((state, figure))
+
+        else:
+            raise gen.Return(state)
 
     def scheduler_info(self, **kwargs):
         """ Basic information about the workers in the cluster

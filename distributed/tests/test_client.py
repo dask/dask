@@ -5485,5 +5485,18 @@ def test_released_dependencies(c, s, a, b):
         assert result == 101
 
 
+@gen_cluster(client=True, check_new_threads=False)
+def test_profile_bokeh(c, s, a, b):
+    pytest.importorskip('bokeh.plotting')
+    from bokeh.model import Model
+    yield c.map(slowinc, range(10), delay=0.2)
+    state, figure = yield c.profile(plot=True)
+    assert isinstance(figure, Model)
+
+    with tmpfile('html') as fn:
+        yield c.profile(filename=fn)
+        assert os.path.exists(fn)
+
+
 if sys.version_info >= (3, 5):
     from distributed.tests.py3_test_client import *  # noqa F401
