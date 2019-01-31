@@ -27,6 +27,7 @@ class Workers(RequestHandler):
         with log_errors():
             self.render('workers.html',
                         title='Workers',
+                        scheduler=self.server,
                         **toolz.merge(self.server.__dict__, ns, self.extra))
 
 
