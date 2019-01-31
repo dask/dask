@@ -1,6 +1,6 @@
 language: generic
 sudo: false
-dist: trusty
+dist: xenial
 os: linux
 
 _base_envs:
