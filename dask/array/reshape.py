@@ -139,7 +139,7 @@ def reshape(x, shape):
     1.  It assumes that the array is stored in `column-major order`_
     2.  It only allows for reshapings that collapse or merge dimensions like
         ``(1, 2, 3, 4) -> (1, 6, 4)`` or ``(64,) -> (4, 4, 4)``
-        
+
     .. _`column-major order`: https://en.wikipedia.org/wiki/
                               Row-_and_column-major_order
 
