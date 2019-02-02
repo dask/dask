@@ -97,7 +97,6 @@ class ClientState(object):
        collection) gets garbage-collected.
 
     """
-
     __slots__ = (
         'client_key',
         'wants_what',
@@ -1231,40 +1230,40 @@ class Scheduler(ServerNode):
     @gen.coroutine
     def heartbeat_worker(self, comm=None, address=None, resolve_address=True,
                           now=None, resources=None, host_info=None, metrics=None):
-            address = self.coerce_address(address, resolve_address)
-            address = normalize_address(address)
-            host = get_address_host(address)
+        address = self.coerce_address(address, resolve_address)
+        address = normalize_address(address)
+        host = get_address_host(address)
 
-            local_now = time()
-            now = now or time()
-            metrics = metrics or {}
-            host_info = host_info or {}
+        local_now = time()
+        now = now or time()
+        metrics = metrics or {}
+        host_info = host_info or {}
 
-            self.host_info[host]['last-seen'] = local_now
+        self.host_info[host]['last-seen'] = local_now
 
-            ws = self.workers.get(address)
-            if not ws:
-                return {'status': 'missing'}
+        ws = self.workers.get(address)
+        if not ws:
+            return {'status': 'missing'}
 
-            ws.last_seen = time()
+        ws.last_seen = time()
 
-            if metrics:
-                ws.metrics = metrics
+        if metrics:
+            ws.metrics = metrics
 
-            if host_info:
-                self.host_info[host].update(host_info)
+        if host_info:
+            self.host_info[host].update(host_info)
 
-            delay = time() - now
-            ws.time_delay = delay
+        delay = time() - now
+        ws.time_delay = delay
 
-            if resources:
-                self.add_resources(worker=address, resources=resources)
+        if resources:
+            self.add_resources(worker=address, resources=resources)
 
-            self.log_event(address, merge({'action': 'heartbeat'}, metrics))
+        self.log_event(address, merge({'action': 'heartbeat'}, metrics))
 
-            return {'status': 'OK',
-                    'time': time(),
-                    'heartbeat-interval': heartbeat_interval(len(self.workers))}
+        return {'status': 'OK',
+                'time': time(),
+                'heartbeat-interval': heartbeat_interval(len(self.workers))}
 
     @gen.coroutine
     def add_worker(self, comm=None, address=None, keys=(), ncores=None,

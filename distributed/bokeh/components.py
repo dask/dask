@@ -97,77 +97,77 @@ class TaskStream(DashboardComponent):
 
 
 def task_stream_figure(clear_interval='20s', **kwargs):
-        """
-        kwargs are applied to the bokeh.models.plots.Plot constructor
-        """
-        clear_interval = parse_timedelta(clear_interval, default='ms')
+    """
+    kwargs are applied to the bokeh.models.plots.Plot constructor
+    """
+    clear_interval = parse_timedelta(clear_interval, default='ms')
 
-        source = ColumnDataSource(data=dict(
-            start=[time() - clear_interval], duration=[0.1], key=['start'],
-            name=['start'], color=['white'], duration_text=['100 ms'],
-            worker=['foo'], y=[0], worker_thread=[1], alpha=[0.0])
-        )
+    source = ColumnDataSource(data=dict(
+        start=[time() - clear_interval], duration=[0.1], key=['start'],
+        name=['start'], color=['white'], duration_text=['100 ms'],
+        worker=['foo'], y=[0], worker_thread=[1], alpha=[0.0])
+    )
 
-        x_range = DataRange1d(range_padding=0)
-        y_range = DataRange1d(range_padding=0)
+    x_range = DataRange1d(range_padding=0)
+    y_range = DataRange1d(range_padding=0)
 
-        root = figure(
-            name='task_stream',
-            title="Task Stream",
-            id='bk-task-stream-plot',
-            x_range=x_range,
-            y_range=y_range,
-            toolbar_location="above",
-            x_axis_type='datetime',
-            min_border_right=35,
-            tools='',
-            **kwargs
-        )
+    root = figure(
+        name='task_stream',
+        title="Task Stream",
+        id='bk-task-stream-plot',
+        x_range=x_range,
+        y_range=y_range,
+        toolbar_location="above",
+        x_axis_type='datetime',
+        min_border_right=35,
+        tools='',
+        **kwargs
+    )
 
-        rect = root.rect(
-            source=source,
-            x="start",
-            y="y",
-            width="duration",
-            height=0.4,
-            fill_color="color",
-            line_color="color",
-            line_alpha=0.6,
-            fill_alpha="alpha",
-            line_width=3
-        )
-        rect.nonselection_glyph = None
+    rect = root.rect(
+        source=source,
+        x="start",
+        y="y",
+        width="duration",
+        height=0.4,
+        fill_color="color",
+        line_color="color",
+        line_alpha=0.6,
+        fill_alpha="alpha",
+        line_width=3
+    )
+    rect.nonselection_glyph = None
 
-        root.yaxis.major_label_text_alpha = 0
-        root.yaxis.minor_tick_line_alpha = 0
-        root.yaxis.major_tick_line_alpha = 0
-        root.xgrid.visible = False
+    root.yaxis.major_label_text_alpha = 0
+    root.yaxis.minor_tick_line_alpha = 0
+    root.yaxis.major_tick_line_alpha = 0
+    root.xgrid.visible = False
 
-        hover = HoverTool(
-            point_policy="follow_mouse",
-            tooltips="""
-                <div>
-                    <span style="font-size: 12px; font-weight: bold;">@name:</span>&nbsp;
-                    <span style="font-size: 10px; font-family: Monaco, monospace;">@duration_text</span>
-                </div>
-                """
-        )
+    hover = HoverTool(
+        point_policy="follow_mouse",
+        tooltips="""
+            <div>
+                <span style="font-size: 12px; font-weight: bold;">@name:</span>&nbsp;
+                <span style="font-size: 10px; font-family: Monaco, monospace;">@duration_text</span>
+            </div>
+            """
+    )
 
-        tap = TapTool(callback=OpenURL(url='/profile?key=@name'))
+    tap = TapTool(callback=OpenURL(url='/profile?key=@name'))
 
-        root.add_tools(
-            hover, tap,
-            BoxZoomTool(),
-            ResetTool(),
-            PanTool(dimensions="width"),
-            WheelZoomTool(dimensions="width")
-        )
-        if ExportTool:
-            export = ExportTool()
-            export.register_plot(root)
-            root.add_tools(export)
+    root.add_tools(
+        hover, tap,
+        BoxZoomTool(),
+        ResetTool(),
+        PanTool(dimensions="width"),
+        WheelZoomTool(dimensions="width")
+    )
+    if ExportTool:
+        export = ExportTool()
+        export.register_plot(root)
+        root.add_tools(export)
 
-        return source, root
+    return source, root
 
 
 class MemoryUsage(DashboardComponent):
