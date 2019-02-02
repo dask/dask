@@ -32,7 +32,7 @@ class PyArrowHadoopFileSystem(object):
     sep = "/"
 
     def __init__(self, **kwargs):
-        self.fs = pa.hdfs.HadoopFileSystem(update_hdfs_options(**kwargs))
+        self.fs = pa.hdfs.HadoopFileSystem(update_hdfs_options(kwargs))
 
     @classmethod
     def from_pyarrow(cls, fs):
