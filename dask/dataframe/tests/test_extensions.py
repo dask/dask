@@ -36,5 +36,15 @@ def test_register_extension_type():
     assert_eq(df, ddf)
 
 
+def test_reduction():
+    ser = pd.Series(DecimalArray._from_sequence([Decimal('0'),
+                                                 Decimal('1')]))
+    dser = dd.from_pandas(ser, 2)
+    assert_eq(ser.mean(skipna=False), dser.mean(skipna=False))
+
+    assert_eq(ser.to_frame().mean(skipna=False), dser.to_frame().mean(skipna=False))
+
+
 def test_scalar():
-    result = dd.utils.make_meta_object(Decimal("1.0"))
+    result = dd.utils.make_meta(Decimal("1.0"))
+    assert result == Decimal("1.0")
