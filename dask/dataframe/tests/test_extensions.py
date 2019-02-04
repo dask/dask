@@ -37,6 +37,7 @@ def test_register_extension_type():
 
 
 def test_reduction():
+    pytest.importorskip("pandas", minversion="0.24.0")
     ser = pd.Series(DecimalArray._from_sequence([Decimal('0'),
                                                  Decimal('1')]))
     dser = dd.from_pandas(ser, 2)
