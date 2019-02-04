@@ -148,6 +148,12 @@ test suite.
        return DecimalArray._from_sequence([Decimal('0'), Decimal('NaN')],
                                           dtype=dtype)
 
+
+   @make_scalar.register(Decimal)
+   def _(x):
+      return Decimal('1')
+
+
 Internally, Dask will use this to create a small dummy Series for tracking
 metadata through operations.
 
