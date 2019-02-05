@@ -22,8 +22,10 @@ except ImportError:
 
 try:
     from pandas.api.types import is_interval_dtype
+    HAS_INTERVAL = True
 except ImportError:
     is_interval_dtype = lambda dtype: False
+    HAS_INTERVAL= False
 
 from .extensions import make_array_nonempty, make_scalar
 from ..base import is_dask_collection
@@ -443,23 +445,16 @@ def _(dtype):
 
 
 @make_scalar.register(pd.Timestamp)
-def _(x):
-    return pd.Timestamp("2000", tz=x.tz)
-
-
 @make_scalar.register(pd.Timedelta)
-def _(x):
-    return pd.Timedelta("1H")
-
-
 @make_scalar.register(pd.Period)
 def _(x):
-    return pd.Period("2000", freq=x.freq)
+    return x
 
 
-@make_scalar.register(pd.Interval)
-def _(x):
-    return pd.Interval(0, 1, closed=x.closed)
+if HAS_INTERVAL:
+    @make_scalar.register(pd.Interval)
+    def _(x):
+        return x
 
 
 def _nonempty_scalar(x):
