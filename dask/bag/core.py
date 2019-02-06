@@ -33,7 +33,7 @@ from ..base import tokenize, dont_optimize, DaskMethodsMixin
 from ..bytes import open_files
 from ..compatibility import apply, urlopen, Iterable, Iterator
 from ..context import globalmethod
-from ..core import quote, istask, get_dependencies, reverse_dict
+from ..core import quote, istask, get_dependencies, reverse_dict, flatten
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
 from ..multiprocessing import get as mpget
@@ -85,7 +85,7 @@ def lazify(dsk):
     return valmap(lazify_task, dsk)
 
 
-def inline_singleton_lists(dsk, dependencies=None):
+def inline_singleton_lists(dsk, keys, dependencies=None):
     """ Inline lists that are only used once.
 
     >>> d = {'b': (list, 'a'),
@@ -100,10 +100,11 @@ def inline_singleton_lists(dsk, dependencies=None):
                         for k, v in dsk.items()}
     dependents = reverse_dict(dependencies)
 
-    keys = [k for k, v in dsk.items()
-            if istask(v) and v and v[0] is list and len(dependents[k]) == 1]
-    dsk = inline(dsk, keys, inline_constants=False)
-    for k in keys:
+    inline_keys = {k for k, v in dsk.items()
+                   if istask(v) and v and v[0] is list and len(dependents[k]) == 1}
+    inline_keys.difference_update(flatten(keys))
+    dsk = inline(dsk, inline_keys, inline_constants=False)
+    for k in inline_keys:
         del dsk[k]
     return dsk
 
@@ -114,7 +115,7 @@ def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=True, **kwargs):
     dsk2, dependencies = cull(dsk, keys)
     dsk3, dependencies = fuse(dsk2, keys + (fuse_keys or []), dependencies,
                               rename_keys=rename_fused_keys)
-    dsk4 = inline_singleton_lists(dsk3, dependencies)
+    dsk4 = inline_singleton_lists(dsk3, keys, dependencies)
     dsk5 = lazify(dsk4)
     return dsk5
 
