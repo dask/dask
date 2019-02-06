@@ -408,7 +408,8 @@ class LoopRunner(object):
             try:
                 self._loop.add_callback(self._loop.stop)
                 self._loop_thread.join(timeout=timeout)
-                self._loop.close()
+                with ignoring(KeyError):  # IOLoop can be missing
+                    self._loop.close()
             finally:
                 self._loop_thread = None
 
