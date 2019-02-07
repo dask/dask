@@ -931,7 +931,8 @@ def gen_cluster(ncores=[('127.0.0.1', 1), ('127.0.0.1', 2)],
                     bad = [t for t, v in threading._active.items()
                            if t not in active_threads_start and
                           "Threaded" not in v.name and
-                          "watch message" not in v.name]
+                          "watch message" not in v.name and
+                          "TCP-Executor" not in v.name]
                     if not bad:
                         break
                     else:

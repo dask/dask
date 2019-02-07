@@ -5375,7 +5375,7 @@ def test_scatter_error_cancel(c, s, a, b):
 
 def test_no_threads_lingering():
     active = dict(threading._active)
-    assert threading.active_count() < 30, list(active.values())
+    assert threading.active_count() < 40, list(active.values())
 
 
 @gen_cluster()

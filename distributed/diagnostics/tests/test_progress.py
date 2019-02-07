@@ -39,7 +39,7 @@ def test_many_Progress(c, s, a, b):
     start = time()
     while not all(b.status == 'finished' for b in bars):
         yield gen.sleep(0.1)
-        assert time() < start + 2
+        assert time() < start + 5
 
 
 @gen_cluster(client=True)
@@ -182,7 +182,7 @@ def test_AllProgress_lost_key(c, s, a, b, timeout=None):
     start = time()
     while len(p.state['memory']['inc']) > 0:
         yield gen.sleep(0.1)
-        assert time() < start + 2
+        assert time() < start + 5
 
 
 @gen_cluster(client=True)
