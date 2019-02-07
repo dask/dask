@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 import posixpath
 import re
 import requests
-import uuid
 
 from . import core
 from .glob import generic_glob
