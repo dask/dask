@@ -162,11 +162,13 @@ class HTTPFile(object):
         self.session = session if session is not None else requests.Session()
         self.blocksize = (block_size if block_size is not None
                           else DEFAULT_BLOCK_SIZE)
+
         try:
             self.size = file_size(url, self.session, allow_redirects=True,
                                   **self.kwargs)
         except (ValueError, requests.HTTPError):
             # No size information - only allow read() and no seek()
+            print(e)
             self.size = None
         self.cache = None
         self.closed = False

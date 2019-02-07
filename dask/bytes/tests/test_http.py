@@ -127,8 +127,7 @@ def test_parquet():
     df = dd.read_parquet([
         'https://github.com/Parquet/parquet-compatibility/raw/'
         'master/parquet-testdata/impala/1.1.1-NONE/'
-        'nation.impala.parquet'],
-        storage_options={'block_size': False}).compute()
+        'nation.impala.parquet']).compute()
     assert df.n_nationkey.tolist() == list(range(25))
     assert df.columns.tolist() == ['n_nationkey', 'n_name', 'n_regionkey',
                                    'n_comment']
