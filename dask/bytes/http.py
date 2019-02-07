@@ -219,6 +219,9 @@ class HTTPFile(object):
         if length == 0:
             # asked for no data, so supply no data and shortcut doing work
             return b''
+        if length < 0 and self.loc == 0:
+            # size was provided, but asked for whole file, so shortcut
+            return self._fetch_all()
         if self.size is None:
             if length >= 0:
                 # asked for specific amount of data, but we don't know how
@@ -227,9 +230,6 @@ class HTTPFile(object):
             else:
                 # asked for whole file
                 return self._fetch_all()
-        if length < 0 and self.loc == 0:
-            # size was provided, but asked for whole file, so shortcut
-            return self._fetch_all()
         if length < 0 or self.loc + length > self.size:
             end = self.size
         else:
@@ -368,8 +368,7 @@ def file_size(url, session, **kwargs):
     kwargs = kwargs.copy()
     ar = kwargs.pop('allow_redirects', True)
     head = kwargs.get('headers', {})
-    if 'Accept-Encoding' not in head:
-        head['Accept-Encoding'] = 'identity'
+    head['Accept-Encoding'] = 'identity'
     r = session.head(url, allow_redirects=ar, **kwargs)
     r.raise_for_status()
     if 'Content-Length' in r.headers:
