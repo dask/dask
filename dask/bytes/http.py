@@ -168,7 +168,6 @@ class HTTPFile(object):
                                   **self.kwargs)
         except (ValueError, requests.HTTPError):
             # No size information - only allow read() and no seek()
-            print(e)
             self.size = None
         self.cache = None
         self.closed = False
