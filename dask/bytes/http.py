@@ -24,7 +24,7 @@ class HTTPFileSystem(object):
     """
     sep = '/'
 
-    def __init__(self, simple_links=True, block_size=None,
+    def __init__(self, simple_links=True, block_size=None, same_schema=True,
                  **storage_options):
         """
         Parameters
@@ -35,6 +35,9 @@ class HTTPFileSystem(object):
         simple_links: bool
             If True, will consider both HTML <a> tags and anything that looks
             like a URL; if False, will consider only the former.
+        same_schema: bool
+            For ls, glob: only return paths having the same schema
+            (http/https) as the original URL.
         storage_options: key-value
             May be credentials, e.g., `{'auth': ('username', 'pword')}` or any
             other parameters passed on to requests
@@ -42,6 +45,7 @@ class HTTPFileSystem(object):
         self.block_size = (block_size if block_size is not None
                            else DEFAULT_BLOCK_SIZE)
         self.simple_links = simple_links
+        self.same_schema = same_schema
         self.kwargs = storage_options
         self.session = requests.Session()
 
@@ -58,8 +62,12 @@ class HTTPFileSystem(object):
             if isinstance(l, tuple):
                 l = l[1]
             if l.startswith('http'):
-                if l.replace('https', 'http').startswith(
+                if self.same_schema:
+                    if l.split(':', 1)[0] == url.split(':', 1)[0]:
+                        out.add(l)
+                elif l.replace('https', 'http').startswith(
                         url.replace('https', 'http')):
+                    # allowed to cross http <-> https
                     out.add(l)
             elif l.startswith('/') and len(l) > 1:
                 out.add(parts.scheme + '://' + parts.netloc + l)
@@ -179,12 +187,12 @@ class HTTPFile(object):
 
         Returns the position.
         """
-        if self.size is None:
+        if self.size is None and (where, whence) not in [(0, 0), (0, 1)]:
             raise ValueError('Cannot seek since size of file is not known')
         if whence == 0:
             nloc = where
         elif whence == 1:
-            nloc += where
+            nloc = self.loc + where
         elif whence == 2:
             nloc = self.size + where
         else:
