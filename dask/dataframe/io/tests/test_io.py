@@ -351,6 +351,31 @@ def test_Series_from_dask_array():
     assert_eq(ser, ser2)
 
 
+@pytest.mark.parametrize('as_frame', [True, False])
+def test_from_dask_array_index(as_frame):
+    s = dd.from_pandas(pd.Series(range(10), index=list('abcdefghij')),
+                       npartitions=3)
+    if as_frame:
+        s = s.to_frame()
+    result = dd.from_dask_array(s.values, index=s.index)
+    assert_eq(s, result)
+
+
+def test_from_dask_array_index_raises():
+    x = da.random.uniform(size=(10,), chunks=(5,))
+    with pytest.raises(ValueError) as m:
+        dd.from_dask_array(x, index=pd.Index(np.arange(10)))
+    assert m.match("must be an instance")
+
+    a = dd.from_pandas(pd.Series(range(12)), npartitions=2)
+    b = dd.from_pandas(pd.Series(range(12)), npartitions=4)
+    with pytest.raises(ValueError) as m:
+        dd.from_dask_array(a.values, index=b.index)
+
+    assert m.match("must have the same number")
+    assert m.match("4 != 2")
+
+
 def test_from_dask_array_compat_numpy_array():
     x = da.ones((3, 3, 3), chunks=2)
 
@@ -531,7 +556,7 @@ def test_from_delayed_misordered_meta():
 
     with pytest.raises(ValueError) as info:
         #produces dataframe which does not match meta
-        ddf.reset_index().compute()
+        ddf.reset_index().compute(scheduler='sync')
     msg = "The columns in the computed data do not match the columns in the" \
           " provided metadata"
     assert msg in str(info.value)

@@ -5,7 +5,7 @@ import pytest
 from operator import add, mul
 import subprocess
 import sys
-import warnings
+import time
 
 from toolz import merge
 
@@ -19,6 +19,7 @@ from dask.delayed import Delayed
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
 from dask.compatibility import long, unicode, PY2
+from dask.diagnostics import Profiler
 
 
 def import_or_none(path):
@@ -206,6 +207,23 @@ def test_tokenize_pandas():
     assert tokenize(a) == tokenize(b)
 
 
+@pytest.mark.skipif('not pd')
+def test_tokenize_pandas_invalid_unicode():
+    # see https://github.com/dask/dask/issues/2713
+    df = pd.DataFrame({'x\ud83d': [1, 2, 3], 'y\ud83d': ['4', 'asd\ud83d', None]}, index=[1, 2, 3])
+    tokenize(df)
+
+
+@pytest.mark.skipif('not pd')
+def test_tokenize_pandas_no_pickle():
+    class NoPickle(object):
+        # pickling not supported because it is a local class
+        pass
+
+    df = pd.DataFrame({'x': ['foo', None, NoPickle()]})
+    tokenize(df)
+
+
 def test_tokenize_kwargs():
     assert tokenize(5, x=1) == tokenize(5, x=1)
     assert tokenize(5) != tokenize(5, x=1)
@@ -345,13 +363,21 @@ def test_is_dask_collection():
     assert not is_dask_collection(DummyCollection)
 
 
+try:
+    import dataclasses
+    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
+    ADataClass = dataclasses.make_dataclass('ADataClass', [('a', int)])
+except ImportError:
+    dataclasses = None
+
+
 def test_unpack_collections():
     a = delayed(1) + 5
     b = a + 1
     c = a + 2
 
     def build(a, b, c, iterator):
-        return (a, b,               # Top-level collections
+        t = (a, b,                  # Top-level collections
                 {'a': a,            # dict
                  a: b,              # collections as keys
                  'b': [1, 2, [b]],  # list
@@ -359,6 +385,11 @@ def test_unpack_collections():
                  'd': (c, 2),       # tuple
                  'e': {a, 2, 3}},   # set
                 iterator)           # Iterator
+
+        if dataclasses is not None:
+            t[2]['f'] = ADataClass(a=a)
+
+        return t
 
     args = build(a, b, c, (i for i in [a, b, c]))
 
@@ -533,6 +564,25 @@ def test_compute_array_dataframe():
     pd.util.testing.assert_series_equal(df_out, df.a + 2)
 
 
+@pytest.mark.skipif('not dd')
+def test_compute_dataframe_valid_unicode_in_bytes():
+    df = pd.DataFrame(
+        data=np.random.random((3, 1)),
+        columns=[u'ö'.encode('utf8')],
+    )
+    dd.from_pandas(df, npartitions=4)
+
+
+@pytest.mark.skipif('not dd')
+def test_compute_dataframe_invalid_unicode():
+    # see https://github.com/dask/dask/issues/2713
+    df = pd.DataFrame(
+        data=np.random.random((3, 1)),
+        columns=['\ud83d'],
+    )
+    dd.from_pandas(df, npartitions=4)
+
+
 @pytest.mark.skipif('not da or not db')
 def test_compute_array_bag():
     x = da.arange(5, chunks=2)
@@ -599,7 +649,7 @@ def test_visualize():
 @pytest.mark.skipif(sys.flags.optimize,
                     reason="graphviz exception with Python -OO flag")
 def test_visualize_order():
-    pytest.importorskip('matplotlib')
+    pytest.importorskip('matplotlib.pyplot')
     x = da.arange(5, chunks=2)
     with tmpfile(extension='dot') as fn:
         x.visualize(color='order', filename=fn, cmap='RdBu')
@@ -626,6 +676,7 @@ def test_use_cloudpickle_to_tokenize_functions_in__main__():
 
 
 def inc_to_dec(dsk, keys):
+    dsk = dict(dsk)
     for key in dsk:
         if dsk[key][0] == inc:
             dsk[key] = (dec,) + dsk[key][1:]
@@ -811,7 +862,7 @@ def test_optimize_None():
         assert dsk == dict(y.dask)  # but they aren't
         return dask.get(dsk, keys)
 
-    with dask.config.set(array_optimize=None, get=my_get):
+    with dask.config.set(array_optimize=None, scheduler=my_get):
         y.compute()
 
 
@@ -833,20 +884,17 @@ def test_scheduler_keyword():
 
         with dask.config.set(scheduler='foo'):
             assert x.compute(scheduler='threads') == 2
-
-        with pytest.raises(ValueError):
-            x.compute(get=dask.threaded.get, scheduler='foo')
     finally:
         del named_schedulers['foo']
 
 
-def test_warn_get_keyword():
+def test_raise_get_keyword():
     x = delayed(inc)(1)
 
-    with warnings.catch_warnings(record=True) as record:
+    with pytest.raises(TypeError) as info:
         x.compute(get=dask.get)
 
-    assert 'scheduler=' in str(record[0].message)
+    assert 'scheduler=' in str(info.value)
 
 
 def test_get_scheduler():
@@ -856,3 +904,33 @@ def test_get_scheduler():
     with dask.config.set(scheduler='threads'):
         assert get_scheduler(scheduler='threads') is dask.threaded.get
     assert get_scheduler() is None
+
+
+def test_callable_scheduler():
+    called = [False]
+
+    def get(dsk, keys, *args, **kwargs):
+        called[0] = True
+        return dask.get(dsk, keys)
+
+    assert delayed(lambda: 1)().compute(scheduler=get) == 1
+    assert called[0]
+
+
+@pytest.mark.parametrize('scheduler', ['threads', 'processes'])
+def test_num_workers_config(scheduler):
+    # Regression test for issue #4082
+
+    @delayed
+    def f(x):
+        time.sleep(0.5)
+        return x
+
+    a = [f(i) for i in range(5)]
+    num_workers = 3
+    with dask.config.set(num_workers=num_workers), Profiler() as prof:
+        a = compute(*a, scheduler=scheduler)
+
+    workers = {i.worker_id for i in prof.results}
+
+    assert len(workers) == num_workers

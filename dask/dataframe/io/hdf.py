@@ -34,7 +34,7 @@ def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
     return None
 
 
-def to_hdf(df, path, key, mode='a', append=False, get=None, scheduler=None,
+def to_hdf(df, path, key, mode='a', append=False, scheduler=None,
            name_function=None, compute=True, lock=None, dask_kwargs={},
            **kwargs):
     """ Store Dask Dataframe to Hierarchical Data Format (HDF) files
@@ -56,23 +56,25 @@ def to_hdf(df, path, key, mode='a', append=False, get=None, scheduler=None,
 
     Parameters
     ----------
-    path: string
+    path : string
         Path to a target filename.  May contain a ``*`` to denote many filenames
-    key: string
+    key : string
         Datapath within the files.  May contain a ``*`` to denote many locations
-    name_function: function
+    name_function : function
         A function to convert the ``*`` in the above options to a string.
         Should take in a number from 0 to the number of partitions and return a
         string. (see examples below)
-    compute: bool
+    compute : bool
         Whether or not to execute immediately.  If False then this returns a
         ``dask.Delayed`` value.
-    lock: Lock, optional
+    lock : Lock, optional
         Lock to use to prevent concurrency issues.  By default a
         ``threading.Lock``, ``multiprocessing.Lock`` or ``SerializableLock``
         will be used depending on your scheduler if a lock is required. See
         dask.utils.get_scheduler_lock for more information about lock
         selection.
+    scheduler : string
+        The scheduler to use, like "threads" or "processes"
     **other:
         See pandas.to_hdf for more information
 
@@ -107,8 +109,12 @@ def to_hdf(df, path, key, mode='a', append=False, get=None, scheduler=None,
 
     Returns
     -------
-    None: if compute == True
-    delayed value: if compute == False
+    filenames : list
+        Returned if ``compute`` is True. List of file names that each partition
+        is saved to.
+    delayed : dask.Delayed
+        Returned if ``compute`` is False. Delayed object to execute ``to_hdf``
+        when computed.
 
     See Also
     --------
@@ -161,15 +167,13 @@ def to_hdf(df, path, key, mode='a', append=False, get=None, scheduler=None,
 
     # If user did not specify scheduler and write is sequential default to the
     # sequential scheduler. otherwise let the _get method choose the scheduler
-    if (get is None and
-            not config.get('get', None) and
-            scheduler is None and
+    if (scheduler is None and
             not config.get('scheduler', None) and
             single_node and single_file):
         scheduler = 'single-threaded'
 
     # handle lock default based on whether we're writing to a single entity
-    _actual_get = get_scheduler(get=get, collections=[df], scheduler=scheduler)
+    _actual_get = get_scheduler(collections=[df], scheduler=scheduler)
     if lock is None:
         if not single_node:
             lock = True
@@ -180,7 +184,7 @@ def to_hdf(df, path, key, mode='a', append=False, get=None, scheduler=None,
         else:
             lock = False
     if lock:
-        lock = get_scheduler_lock(get, df, scheduler=scheduler)
+        lock = get_scheduler_lock(df, scheduler=scheduler)
 
     kwargs.update({'format': 'table', 'mode': mode, 'append': append})
 
@@ -219,7 +223,7 @@ def to_hdf(df, path, key, mode='a', append=False, get=None, scheduler=None,
         keys = [(name, i) for i in range(df.npartitions)]
 
     if compute:
-        compute_as_if_collection(DataFrame, dsk, keys, get=get,
+        compute_as_if_collection(DataFrame, dsk, keys,
                                  scheduler=scheduler, **dask_kwargs)
         return filenames
     else:

@@ -8,7 +8,7 @@ from toolz import merge, merge_sorted
 
 from .core import Array
 from ..base import tokenize
-from .. import sharedict
+from ..highlevelgraph import HighLevelGraph
 from ..compatibility import Iterator
 
 
@@ -57,8 +57,8 @@ def percentile(a, q, interpolation='linear'):
         dtype = (np.array([], dtype=dtype) / 0.5).dtype
 
     dsk = merge(dsk, dsk2)
-    dsk = sharedict.merge(a.dask, (name2, dsk))
-    return Array(dsk, name2, chunks=((len(q),),), dtype=dtype)
+    graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[a])
+    return Array(graph, name2, chunks=((len(q),),), dtype=dtype)
 
 
 def merge_percentiles(finalq, qs, vals, interpolation='lower', Ns=None):

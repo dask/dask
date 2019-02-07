@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import copy
 import io
 import os
 from distutils.version import LooseVersion
@@ -15,11 +16,11 @@ from .. import config
 from ..compatibility import unicode
 from ..base import tokenize
 from ..delayed import delayed
-from ..utils import import_required, is_integer
+from ..utils import import_required, is_integer, parse_bytes
 
 
-def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
-               sample=True, compression=None, **kwargs):
+def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize="128 MiB",
+               sample=True, compression=None, include_path=False, **kwargs):
     """Given a path or paths, return delayed objects that read from those paths.
 
     The path may be a filename like ``'2015-01-01.csv'`` or a globstring
@@ -43,13 +44,16 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         bytes.
     not_zero : bool
         Force seek of start-of-file delimiter, discarding header.
-    blocksize : int (=128MB)
-        Chunk size in bytes
+    blocksize : int, str
+        Chunk size in bytes, defaults to "128 MiB"
     compression : string or None
         String like 'gzip' or 'xz'.  Must support efficient random access.
     sample : bool or int
         Whether or not to return a header sample. If an integer is given it is
         used as sample size, otherwise the default sample size is 10kB.
+    include_path : bool
+        Whether or not to include the path with the bytes representing a particular file.
+        Default is False.
     **kwargs : dict
         Extra options that make sense to a particular storage connection, e.g.
         host, port, username, password, etc.
@@ -58,6 +62,7 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     --------
     >>> sample, blocks = read_bytes('2015-*-*.csv', delimiter=b'\\n')  # doctest: +SKIP
     >>> sample, blocks = read_bytes('s3://bucket/2015-*-*.csv', delimiter=b'\\n')  # doctest: +SKIP
+    >>> sample, paths, blocks = read_bytes('2015-*-*.csv', include_path=True)  # doctest: +SKIP
 
     Returns
     -------
@@ -66,6 +71,10 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
     blocks : list of lists of ``dask.Delayed``
         Each list corresponds to a file, and each delayed object computes to a
         block of bytes from that file.
+    paths : list of strings, only included if include_path is True
+        List of same length as blocks, where each item is the path to the file
+        represented in the corresponding block.
+
     """
     fs, fs_token, paths = get_fs_token_paths(urlpath, mode='rb',
                                              storage_options=kwargs)
@@ -74,6 +83,8 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         raise IOError("%s resolved to no files" % urlpath)
 
     if blocksize is not None:
+        if isinstance(blocksize, (str, unicode)):
+            blocksize = parse_bytes(blocksize)
         if not is_integer(blocksize):
             raise TypeError("blocksize must be an integer")
         blocksize = int(blocksize)
@@ -106,20 +117,22 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         token = tokenize(fs_token, delimiter, path, fs.ukey(path),
                          compression, offset)
         keys = ['read-block-%s-%s' % (o, token) for o in offset]
-        out.append([delayed_read(OpenFile(fs, path, compression=compression),
-                                 o, l, delimiter, dask_key_name=key)
-                    for o, key, l in zip(offset, keys, length)])
+        values = [delayed_read(OpenFile(fs, path, compression=compression),
+                               o, l, delimiter, dask_key_name=key)
+                  for o, key, l in zip(offset, keys, length)]
+        out.append(values)
 
     if sample:
         with OpenFile(fs, paths[0], compression=compression) as f:
             nbytes = 10000 if sample is True else sample
             sample = read_block(f, 0, nbytes, delimiter)
-
+    if include_path:
+        return sample, out, paths
     return sample, out
 
 
 def read_block_from_file(lazy_file, off, bs, delimiter):
-    with lazy_file as f:
+    with copy.copy(lazy_file) as f:
         return read_block(f, off, bs, delimiter)
 
 
@@ -284,6 +297,7 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
         raise ValueError("When writing data, only one filename mask can be specified.")
     for curr_path in paths:
         if '*' in curr_path:
+            glob = True
             if 'w' in mode:
                 # expand using name_function
                 expanded_paths.extend(_expand_paths(curr_path, name_function, num))
@@ -291,9 +305,10 @@ def expand_paths_if_needed(paths, mode, num, fs, name_function):
                 # expand using glob
                 expanded_paths.extend(fs.glob(curr_path))
         else:
+            glob = False
             expanded_paths.append(curr_path)
     # if we generated more paths that asked for, trim the list
-    if 'w' in mode and len(expanded_paths) > num:
+    if 'w' in mode and len(expanded_paths) > num and glob:
         expanded_paths = expanded_paths[:num]
     return expanded_paths
 
@@ -409,13 +424,13 @@ def get_hdfs_driver(driver="auto"):
     A filesystem class
     """
     if driver == 'auto':
-        for d in ['hdfs3', 'pyarrow']:
+        for d in ['pyarrow', 'hdfs3']:
             try:
                 return get_hdfs_driver(d)
             except RuntimeError:
                 pass
         else:
-            raise RuntimeError("Please install either `hdfs3` or `pyarrow`")
+            raise RuntimeError("Please install either `pyarrow` (preferred) or `hdfs3`")
 
     elif driver == 'hdfs3':
         import_required('hdfs3', "`hdfs3` not installed")
@@ -465,6 +480,19 @@ def get_fs(protocol, storage_options=None):
                         "    pip install gcsfs")
         cls = _filesystems[protocol]
 
+    elif protocol in ['adl', 'adlfs']:
+
+        import_required('dask_adlfs',
+                        "Need to install `dask_adlfs` for Azure Datalake "
+                        "Storage support.\n"
+                        "First install azure-storage via pip or conda:\n"
+                        "    conda install -c conda-forge azure-storage\n"
+                        "    or\n"
+                        "    pip install azure-storage\n"
+                        "and then install `dask_adlfs` via pip:\n"
+                        "    pip install dask-adlfs")
+
+        cls = _filesystems[protocol]
     elif protocol == 'hdfs':
         cls = get_hdfs_driver(config.get("hdfs_driver", "auto"))
 

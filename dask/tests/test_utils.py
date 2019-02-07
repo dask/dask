@@ -5,14 +5,14 @@ import pickle
 import numpy as np
 import pytest
 
-import dask
-from dask.sharedict import ShareDict
+from dask.compatibility import PY2
 from dask.utils import (takes_multiple_arguments, Dispatch, random_state_data,
                         memory_repr, methodcaller, M, skip_doctest,
                         SerializableLock, funcname, ndeepmap, ensure_dict,
                         extra_titles, asciitable, itemgetter, partial_by_order,
-                        effective_get)
+                        has_keyword)
 from dask.utils_test import inc
+from dask.highlevelgraph import HighLevelGraph
 
 
 def test_takes_multiple_arguments():
@@ -51,7 +51,12 @@ def test_dispatch():
     foo.register(int, lambda a: a + 1)
     foo.register(float, lambda a: a - 1)
     foo.register(tuple, lambda a: tuple(foo(i) for i in a))
-    foo.register(object, lambda a: a)
+
+    def f(a):
+        """ My Docstring """
+        return a
+
+    foo.register(object, f)
 
     class Bar(object):
         pass
@@ -61,6 +66,24 @@ def test_dispatch():
     assert foo(1.0) == 0.0
     assert foo(b) == b
     assert foo((1, 2.0, b)) == (2, 1.0, b)
+
+    assert foo.__doc__ == f.__doc__
+
+
+def test_dispatch_kwargs():
+    foo = Dispatch()
+    foo.register(int, lambda a, b=10: a + b)
+
+    assert foo(1, b=20) == 21
+
+
+def test_dispatch_variadic_on_first_argument():
+    foo = Dispatch()
+    foo.register(int, lambda a, b: a + b)
+    foo.register(float, lambda a, b: a - b)
+
+    assert foo(1, 2) == 3
+    assert foo(1., 2.) == -1
 
 
 def test_dispatch_lazy():
@@ -139,6 +162,16 @@ def test_skip_doctest():
 >>> xxx  # doctest: +SKIP"""
 
     assert skip_doctest(None) == ''
+
+    example = """
+>>> 1 + 2  # doctest: +ELLIPSES
+3"""
+
+    expected = """
+>>> 1 + 2  # doctest: +ELLIPSES, +SKIP
+3"""
+    res = skip_doctest(example)
+    assert res == expected
 
 
 def test_extra_titles():
@@ -235,6 +268,22 @@ def test_SerializableLock_name_collision():
     assert d.lock not in (a.lock, b.lock, c.lock)
 
 
+def test_SerializableLock_locked():
+    a = SerializableLock('a')
+    assert not a.locked()
+    with a:
+        assert a.locked()
+    assert not a.locked()
+
+
+@pytest.mark.skipif(PY2, reason="no blocking= keyword in Python 2")
+def test_SerializableLock_acquire_blocking():
+    a = SerializableLock('a')
+    assert a.acquire(blocking=True)
+    assert not a.acquire(blocking=False)
+    a.release()
+
+
 def test_funcname():
     def foo(a, b, c):
         pass
@@ -293,10 +342,9 @@ def test_ndeepmap():
 def test_ensure_dict():
     d = {'x': 1}
     assert ensure_dict(d) is d
-    sd = ShareDict()
-    sd.update(d)
-    assert type(ensure_dict(sd)) is dict
-    assert ensure_dict(sd) == d
+    hlg = HighLevelGraph.from_collections('x', d)
+    assert type(ensure_dict(hlg)) is dict
+    assert ensure_dict(hlg) == d
 
     class mydict(dict):
         pass
@@ -320,13 +368,13 @@ def test_partial_by_order():
     assert partial_by_order(5, function=operator.add, other=[(1, 20)]) == 25
 
 
-def test_effective_get():
-    da = pytest.importorskip('dask.array')
-    x = da.arange(10, chunks=(5,))
+def test_has_keyword():
+    def foo(a, b, c=None):
+        pass
+    assert has_keyword(foo, 'a')
+    assert has_keyword(foo, 'b')
+    assert has_keyword(foo, 'c')
 
-    with pytest.warns(Warning) as record:
-        assert effective_get(collection=x) is dask.threaded.get
-        assert effective_get(get=dask.threaded.get) is dask.threaded.get
-
-    assert any('dask.base.get_scheduler' in str(warning)
-               for warning in record.list)
+    bar = functools.partial(foo, a=1)
+    assert has_keyword(bar, 'b')
+    assert has_keyword(bar, 'c')

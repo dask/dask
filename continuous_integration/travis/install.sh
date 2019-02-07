@@ -16,6 +16,7 @@ esac
 wget https://repo.continuum.io/miniconda/$MINICONDA_FILENAME -O miniconda.sh
 bash miniconda.sh -b -p $HOME/miniconda
 export PATH="$HOME/miniconda/bin:$PATH"
+export BOTO_CONFIG=/dev/null
 conda config --set always_yes yes --set changeps1 no --set remote_max_retries 10
 
 # Create conda environment
@@ -39,6 +40,8 @@ conda install -q -c conda-forge \
     blosc \
     bokeh \
     boto3 \
+    botocore \
+    httpretty \
     chest \
     cloudpickle \
     coverage \
@@ -48,10 +51,11 @@ conda install -q -c conda-forge \
     h5py \
     ipython \
     lz4 \
+    numba \
     partd \
     psutil \
     pytables \
-    "pytest<=3.1.1" \
+    pytest \
     requests \
     scikit-image \
     scikit-learn \
@@ -59,10 +63,10 @@ conda install -q -c conda-forge \
     sqlalchemy \
     toolz
 
-pip install --upgrade --no-deps git+https://github.com/dask/partd
+pip install --upgrade --no-deps locket git+https://github.com/dask/partd
 pip install --upgrade --no-deps git+https://github.com/dask/zict
 pip install --upgrade --no-deps git+https://github.com/dask/distributed
-pip install --upgrade --no-deps git+https://github.com/mrocklin/sparse
+pip install --upgrade --no-deps git+https://github.com/pydata/sparse
 pip install --upgrade --no-deps git+https://github.com/dask/s3fs
 
 if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]] && [[ $NUMPY < '1.14.0' ]]; then

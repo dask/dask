@@ -91,6 +91,7 @@ Top level user functions:
    imag
    indices
    insert
+   invert
    isclose
    iscomplex
    isfinite
@@ -113,7 +114,7 @@ Top level user functions:
    logical_not
    logical_or
    logical_xor
-   map_blocks
+   ~core.map_blocks
    map_overlap
    matmul
    max
@@ -144,7 +145,7 @@ Top level user functions:
    outer
    pad
    percentile
-   PerformanceWarning
+   ~core.PerformanceWarning
    piecewise
    prod
    ptp
@@ -180,6 +181,7 @@ Top level user functions:
    triu
    trunc
    unique
+   unravel_index
    var
    vdot
    vstack
@@ -319,6 +321,8 @@ Slightly Overlapping Computations
 .. autosummary::
    overlap.overlap
    overlap.map_overlap
+   overlap.trim_internal
+   overlap.trim_overlap
 
 
 Create and Store Arrays
@@ -351,9 +355,8 @@ Internal functions
 .. currentmodule:: dask.array.core
 
 .. autosummary::
-   atop
+   blockwise
    normalize_chunks
-   top
 
 
 Other functions
@@ -453,6 +456,7 @@ Other functions
 .. autofunction:: imag
 .. autofunction:: indices
 .. autofunction:: insert
+.. autofunction:: invert
 .. autofunction:: isclose
 .. autofunction:: iscomplex
 .. autofunction:: isfinite
@@ -539,6 +543,7 @@ Other functions
 .. autofunction:: triu
 .. autofunction:: trunc
 .. autofunction:: unique
+.. autofunction:: unravel_index
 .. autofunction:: var
 .. autofunction:: vdot
 .. autofunction:: vstack
@@ -558,6 +563,7 @@ Other functions
 .. autofunction:: solve_triangular
 .. autofunction:: svd
 .. autofunction:: svd_compressed
+.. autofunction:: sfqr
 .. autofunction:: tsqr
 
 .. currentmodule:: dask.array.ma
@@ -583,6 +589,8 @@ Other functions
 
 .. autofunction:: overlap
 .. autofunction:: map_overlap
+.. autofunction:: trim_internal
+.. autofunction:: trim_overlap
 
 .. currentmodule:: dask.array
 
@@ -622,6 +630,7 @@ Other functions
 .. autofunction:: beta
 .. autofunction:: binomial
 .. autofunction:: chisquare
+.. autofunction:: choice
 .. autofunction:: exponential
 .. autofunction:: f
 .. autofunction:: gamma
@@ -682,9 +691,8 @@ Other functions
 .. currentmodule:: dask.array.core
 
 .. autofunction:: map_blocks
-.. autofunction:: atop
+.. autofunction:: blockwise
 .. autofunction:: normalize_chunks
-.. autofunction:: top
 
 .. currentmodule:: dask.array
 

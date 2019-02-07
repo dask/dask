@@ -1,4 +1,5 @@
 import collections
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -8,7 +9,9 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq, assert_dask_graph, assert_max_deps, PANDAS_VERSION
+from dask.dataframe.utils import (
+    assert_eq, assert_dask_graph, assert_max_deps, PANDAS_VERSION,
+)
 
 AGG_FUNCS = ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'nunique', 'first', 'last']
 
@@ -118,10 +121,12 @@ def test_full_groupby():
     def func(df):
         return df.assign(b=df.b - df.b.mean())
 
-    assert ddf.groupby('a').apply(func)._name.startswith('func')
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        assert ddf.groupby('a').apply(func)._name.startswith('func')
 
-    assert_eq(df.groupby('a').apply(func),
-              ddf.groupby('a').apply(func))
+        assert_eq(df.groupby('a').apply(func),
+                  ddf.groupby('a').apply(func))
 
 
 def test_full_groupby_apply_multiarg():
@@ -143,25 +148,27 @@ def test_full_groupby_apply_multiarg():
 
     meta = df.groupby('a').apply(func, c)
 
-    for c_lazy, d_lazy in [(c_scalar, d_scalar),
-                           (c_delayed, d_delayed)]:
-        assert_eq(df.groupby('a').apply(func, c),
-                  ddf.groupby('a').apply(func, c))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        for c_lazy, d_lazy in [(c_scalar, d_scalar),
+                               (c_delayed, d_delayed)]:
+            assert_eq(df.groupby('a').apply(func, c, d=d),
+                      ddf.groupby('a').apply(func, c, d=d_lazy))
 
-        assert_eq(df.groupby('a').apply(func, c, d=d),
-                  ddf.groupby('a').apply(func, c, d=d))
+            assert_eq(df.groupby('a').apply(func, c),
+                      ddf.groupby('a').apply(func, c))
 
-        assert_eq(df.groupby('a').apply(func, c),
-                  ddf.groupby('a').apply(func, c_lazy), check_dtype=False)
+            assert_eq(df.groupby('a').apply(func, c, d=d),
+                      ddf.groupby('a').apply(func, c, d=d))
 
-        assert_eq(df.groupby('a').apply(func, c),
-                  ddf.groupby('a').apply(func, c_lazy, meta=meta))
+            assert_eq(df.groupby('a').apply(func, c),
+                      ddf.groupby('a').apply(func, c_lazy), check_dtype=False)
 
-        assert_eq(df.groupby('a').apply(func, c, d=d),
-                  ddf.groupby('a').apply(func, c, d=d_lazy))
+            assert_eq(df.groupby('a').apply(func, c),
+                      ddf.groupby('a').apply(func, c_lazy, meta=meta))
 
-        assert_eq(df.groupby('a').apply(func, c, d=d),
-                  ddf.groupby('a').apply(func, c, d=d_lazy, meta=meta))
+            assert_eq(df.groupby('a').apply(func, c, d=d),
+                      ddf.groupby('a').apply(func, c, d=d_lazy, meta=meta))
 
 
 @pytest.mark.parametrize('grouper', [
@@ -169,7 +176,8 @@ def test_full_groupby_apply_multiarg():
     lambda df: ['a', 'b'],
     lambda df: df['a'],
     lambda df: [df['a'], df['b']],
-    pytest.mark.xfail(reason="not yet supported")(lambda df: [df['a'] > 2, df['b'] > 1])
+    pytest.param(lambda df: [df['a'] > 2, df['b'] > 1], marks=pytest.mark.xfail(
+        reason="not yet supported"))
 ])
 @pytest.mark.parametrize('reverse', [True, False])
 def test_full_groupby_multilevel(grouper, reverse):
@@ -187,8 +195,10 @@ def test_full_groupby_multilevel(grouper, reverse):
 
     # last one causes a DeprcationWarning from pandas.
     # See https://github.com/pandas-dev/pandas/issues/16481
-    assert_eq(df.groupby(grouper(df)).apply(func),
-              ddf.groupby(grouper(ddf)).apply(func))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        assert_eq(df.groupby(grouper(df)).apply(func),
+                  ddf.groupby(grouper(ddf)).apply(func))
 
 
 def test_groupby_dir():
@@ -647,7 +657,7 @@ def test_apply_shuffle():
     lambda df: df['AA'],
     lambda df: [df['AA'], df['AB']],
     lambda df: df['AA'] + 1,
-    pytest.mark.xfail("NotImplemented")(lambda df: [df['AA'] + 1, df['AB'] + 1]),
+    pytest.param(lambda df: [df['AA'] + 1, df['AB'] + 1], marks=pytest.mark.xfail("NotImplemented"))
 ])
 def test_apply_shuffle_multilevel(grouper):
     pdf = pd.DataFrame({'AB': [1, 2, 3, 4] * 5,
@@ -955,7 +965,8 @@ def test_series_aggregations_multilevel(grouper, agg_func):
     lambda df: df['a'] > 2,
     lambda df: [df['a'], df['b']],
     lambda df: [df['a'] > 2],
-    pytest.mark.xfail(reason="index dtype does not coincide: boolean != empty")(lambda df: [df['a'] > 2, df['b'] > 1])
+    pytest.param(lambda df: [df['a'] > 2, df['b'] > 1], marks=pytest.mark.xfail(
+        reason="index dtype does not coincide: boolean != empty"))
 ])
 @pytest.mark.parametrize('group_and_slice', [
     lambda df, grouper: df.groupby(grouper(df)),
@@ -1349,27 +1360,30 @@ def test_groupby_column_and_index_apply(group_args, apply_func):
     # Expected result
     expected = df.groupby(group_args).apply(apply_func)
 
-    # Compute on dask DataFrame with divisions (no shuffling)
-    result = ddf.groupby(group_args).apply(apply_func)
-    assert_eq(expected, result, check_divisions=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
 
-    # Check that partitioning is preserved
-    assert ddf.divisions == result.divisions
+        # Compute on dask DataFrame with divisions (no shuffling)
+        result = ddf.groupby(group_args).apply(apply_func)
+        assert_eq(expected, result, check_divisions=False)
 
-    # Check that no shuffling occurred.
-    # The groupby operation should add only 1 task per partition
-    assert len(result.dask) == (len(ddf.dask) + ddf.npartitions)
+        # Check that partitioning is preserved
+        assert ddf.divisions == result.divisions
 
-    # Compute on dask DataFrame without divisions (requires shuffling)
-    result = ddf_no_divs.groupby(group_args).apply(apply_func)
-    assert_eq(expected, result, check_divisions=False)
+        # Check that no shuffling occurred.
+        # The groupby operation should add only 1 task per partition
+        assert len(result.dask) == (len(ddf.dask) + ddf.npartitions)
 
-    # Check that divisions were preserved (all None in this case)
-    assert ddf_no_divs.divisions == result.divisions
+        # Compute on dask DataFrame without divisions (requires shuffling)
+        result = ddf_no_divs.groupby(group_args).apply(apply_func)
+        assert_eq(expected, result, check_divisions=False)
 
-    # Crude check to see if shuffling was performed.
-    # The groupby operation should add only more than 1 task per partition
-    assert len(result.dask) > (len(ddf_no_divs.dask) + ddf_no_divs.npartitions)
+        # Check that divisions were preserved (all None in this case)
+        assert ddf_no_divs.divisions == result.divisions
+
+        # Crude check to see if shuffling was performed.
+        # The groupby operation should add only more than 1 task per partition
+        assert len(result.dask) > (len(ddf_no_divs.dask) + ddf_no_divs.npartitions)
 
 
 custom_mean = dd.Aggregation(
@@ -1463,7 +1477,7 @@ def test_groupby_agg_custom__mode():
         'custom_mode',
         lambda s: s.apply(lambda s: [s.value_counts()]),
         agg_mode,
-        lambda s: s.map(lambda i: i[0].argmax()),
+        lambda s: s.map(lambda i: i[0].idxmax()),
     )
 
     d = pd.DataFrame({

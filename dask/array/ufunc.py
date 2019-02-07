@@ -6,9 +6,10 @@ from functools import partial, wraps
 import numpy as np
 from toolz import curry
 
-from .core import Array, elemwise, atop, apply_infer_dtype, asarray
+from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray
 from ..base import is_dask_collection, normalize_function
-from .. import core, sharedict
+from .. import core
+from ..highlevelgraph import HighLevelGraph
 from ..utils import skip_doctest, funcname
 
 
@@ -151,8 +152,15 @@ class ufunc(object):
         else:
             func = self._ufunc.outer
 
-        return atop(func, out_inds, A, A_inds, B, B_inds, dtype=dtype,
-                    token=self.__name__ + '.outer', **kwargs)
+        return blockwise(
+            func,
+            out_inds,
+            A, A_inds,
+            B, B_inds,
+            dtype=dtype,
+            token=self.__name__ + '.outer',
+            **kwargs
+        )
 
 
 # ufuncs, copied from this page:
@@ -229,6 +237,7 @@ bitwise_and = ufunc(np.bitwise_and)
 bitwise_or = ufunc(np.bitwise_or)
 bitwise_xor = ufunc(np.bitwise_xor)
 bitwise_not = ufunc(np.bitwise_not)
+invert = bitwise_not
 
 # floating functions
 isfinite = ufunc(np.isfinite)
@@ -293,8 +302,10 @@ def frexp(x):
     ldt = l.dtype
     rdt = r.dtype
 
-    L = Array(sharedict.merge(tmp.dask, (left, ldsk)), left, chunks=tmp.chunks, dtype=ldt)
-    R = Array(sharedict.merge(tmp.dask, (right, rdsk)), right, chunks=tmp.chunks, dtype=rdt)
+    graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
+    L = Array(graph, left, chunks=tmp.chunks, dtype=ldt)
+    graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
+    R = Array(graph, right, chunks=tmp.chunks, dtype=rdt)
     return L, R
 
 
@@ -314,6 +325,8 @@ def modf(x):
     ldt = l.dtype
     rdt = r.dtype
 
-    L = Array(sharedict.merge(tmp.dask, (left, ldsk)), left, chunks=tmp.chunks, dtype=ldt)
-    R = Array(sharedict.merge(tmp.dask, (right, rdsk)), right, chunks=tmp.chunks, dtype=rdt)
+    graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
+    L = Array(graph, left, chunks=tmp.chunks, dtype=ldt)
+    graph = HighLevelGraph.from_collections(right, rdsk, dependencies=[tmp])
+    R = Array(graph, right, chunks=tmp.chunks, dtype=rdt)
     return L, R

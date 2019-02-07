@@ -41,10 +41,10 @@ basedir = '/tmp/test-dask'
 
 
 # This fixture checks for a minimum pyarrow version
-@pytest.fixture(params=[pytest.mark.skipif(not hdfs3, 'hdfs3',
-                                           reason='hdfs3 not found'),
-                        pytest.mark.skipif(not PYARROW_DRIVER, 'pyarrow',
-                                           reason='required pyarrow version not found')])
+@pytest.fixture(params=[
+    pytest.param('hdfs3', marks=pytest.mark.skipif(not hdfs3, reason='hdfs3 not found')),
+    pytest.param('pyarrow', marks=pytest.mark.skipif(not PYARROW_DRIVER,
+                                                     reason='required pyarrow version not found'))])
 def hdfs(request):
     if request.param == 'hdfs3':
         hdfs = hdfs3.HDFileSystem(host='localhost', port=8020)
@@ -74,11 +74,11 @@ def test_fs_driver_backends():
     from dask.bytes.pyarrow import PyArrowHadoopFileSystem
 
     fs1, token1 = get_fs('hdfs')
-    assert isinstance(fs1, HDFS3HadoopFileSystem)
+    assert isinstance(fs1, PyArrowHadoopFileSystem)
 
-    with dask.config.set(hdfs_driver='pyarrow'):
+    with dask.config.set(hdfs_driver='hdfs3'):
         fs2, token2 = get_fs('hdfs')
-    assert isinstance(fs2, PyArrowHadoopFileSystem)
+    assert isinstance(fs2, HDFS3HadoopFileSystem)
 
     assert token1 != token2
 

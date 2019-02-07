@@ -287,6 +287,13 @@ def test_tensordot_2(axes):
               np.tensordot(x, x, axes=axes))
 
 
+def test_tensordot_more_than_26_dims():
+    ndim = 27
+    x = np.broadcast_to(1, [2] * ndim)
+    dx = da.from_array(x, chunks=-1)
+    assert_eq(da.tensordot(dx, dx, ndim), np.array(2**ndim))
+
+
 def test_dot_method():
     x = np.arange(400).reshape((20, 20))
     a = da.from_array(x, chunks=(5, 5))
@@ -449,11 +456,16 @@ def test_ediff1d(shape, to_end, to_begin):
     [(10, 15, 20), (), 2],
     [(10, 15, 20), (), -1],
     [(10, 15, 20), (), (0, 2)],
+    [(10, 15, 20), (np.exp(np.arange(10)), np.exp(np.arange(20)), ), (0, 2)],
+    [(10, 15, 20), (0.5, np.exp(np.arange(20)), ), (0, 2)],
+    [(10, 15, 20), (np.exp(np.arange(20)), ), -1],
 ])
 @pytest.mark.parametrize('edge_order', [
     1,
     2
 ])
+@pytest.mark.skipif(LooseVersion(np.__version__) < '1.13.0',
+                    reason="Old np.gradient does not support coordinate.")
 def test_gradient(shape, varargs, axis, edge_order):
     a = np.random.randint(0, 10, shape)
     d_a = da.from_array(a, chunks=(len(shape) * (5,)))
@@ -547,6 +559,15 @@ def test_histogram_alternative_bins_range():
     assert_eq(b1, b2)
 
 
+def test_histogram_bins_range_with_nan_array():
+    # Regression test for issue #3977
+    v = da.from_array(np.array([-2, np.nan, 2]), chunks=1)
+    (a1, b1) = da.histogram(v, bins=10, range=(-3, 3))
+    (a2, b2) = np.histogram(v, bins=10, range=(-3, 3))
+    assert_eq(a1, a2)
+    assert_eq(b1, b2)
+
+
 def test_histogram_return_type():
     v = da.random.random(100, chunks=10)
     bins = np.arange(0, 1.01, 0.01)
@@ -578,6 +599,20 @@ def test_histogram_extra_args_and_shapes():
 
         assert_eq(da.histogram(v, bins=bins, weights=w, density=True)[0],
                   da.histogram(v, bins=bins, weights=w, density=True)[0])
+
+
+@pytest.mark.parametrize("bins, hist_range", [
+    (None, None),
+    (10, None),
+    (None, (1, 10)),
+])
+def test_histogram_bin_range_raises(bins, hist_range):
+    data = da.random.random(10, chunks=2)
+    with pytest.raises(ValueError) as info:
+        da.histogram(data, bins=bins, range=hist_range)
+    err_msg = str(info.value)
+    assert 'bins' in err_msg
+    assert 'range' in err_msg
 
 
 def test_cov():
@@ -793,6 +828,15 @@ def test_ravel():
     assert_eq(np.ravel(x), da.ravel(a))
 
 
+def test_ravel_1D_no_op():
+    x = np.random.randint(10, size=100)
+    dx = da.from_array(x, chunks=10)
+    # known dims
+    assert_eq(dx.ravel(), x.ravel())
+    # Unknown dims
+    assert_eq(dx[dx > 2].ravel(), x[x > 2].ravel())
+
+
 @pytest.mark.parametrize('is_func', [True, False])
 @pytest.mark.parametrize('axis', [None, 0, -1, (0, -1)])
 def test_squeeze(is_func, axis):
@@ -856,6 +900,28 @@ def test_dstack():
     assert_eq(np.dstack((x[None, :], y[None, :])),
               da.dstack((a[None, :], b[None, :])))
     assert_eq(np.dstack((x, y)), da.dstack((a, b)))
+
+
+@pytest.mark.parametrize('np_func,dsk_func,nan_chunk', [
+    (np.hstack, da.hstack, 0),
+    (np.dstack, da.dstack, 1),
+    (np.vstack, da.vstack, 2),
+])
+def test_stack_unknown_chunk_sizes(np_func, dsk_func, nan_chunk):
+    shape = (100, 100, 100)
+    x = da.ones(shape, chunks=(50, 50, 50))
+    y = np.ones(shape)
+
+    tmp = list(x._chunks)
+    tmp[nan_chunk] = (np.nan,) * 2
+    x._chunks = tuple(tmp)
+
+    with pytest.raises(ValueError):
+        dsk_func((x, x))
+
+    np_stacked = np_func((y, y))
+    dsk_stacked = dsk_func((x, x), allow_unknown_chunksizes=True)
+    assert_eq(np_stacked, dsk_stacked)
 
 
 def test_take():
@@ -1249,6 +1315,47 @@ def test_nonzero_method():
 
         for i in range(len(x_nz)):
             assert_eq(d_nz[i], x_nz[i])
+
+
+@pytest.mark.skipif(
+    LooseVersion(np.__version__) < LooseVersion("1.14.0"),
+    reason="NumPy 1.14.0+ needed for `unravel_index` to take an empty shape."
+)
+def test_unravel_index_empty():
+    shape = tuple()
+    findices = np.array(0, dtype=int)
+    d_findices = da.from_array(findices, chunks=1)
+
+    indices = np.unravel_index(findices, shape)
+    d_indices = da.unravel_index(d_findices, shape)
+
+    assert isinstance(d_indices, type(indices))
+    assert len(d_indices) == len(indices) == 0
+
+
+def test_unravel_index():
+    for nindices, shape, order in [(0, (15,), 'C'),
+                                   (1, (15,), 'C'),
+                                   (3, (15,), 'C'),
+                                   (3, (15,), 'F'),
+                                   (2, (15, 16), 'C'),
+                                   (2, (15, 16), 'F')]:
+        arr = np.random.random(shape)
+        darr = da.from_array(arr, chunks=1)
+
+        findices = np.random.randint(np.prod(shape, dtype=int), size=nindices)
+        d_findices = da.from_array(findices, chunks=1)
+
+        indices = np.unravel_index(findices, shape, order)
+        d_indices = da.unravel_index(d_findices, shape, order)
+
+        assert isinstance(d_indices, type(indices))
+        assert len(d_indices) == len(indices)
+
+        for i in range(len(indices)):
+            assert_eq(d_indices[i], indices[i])
+
+        assert_eq(darr.vindex[d_indices], arr[indices])
 
 
 def test_coarsen():

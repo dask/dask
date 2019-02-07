@@ -24,15 +24,14 @@ from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir, key_split
 from dask.utils_test import inc, dec
 
-from dask.array import chunk
-
-from dask.array.core import (getem, getter, top, dotmany, concatenate3,
-                             broadcast_dimensions, Array, stack, concatenate,
-                             from_array, elemwise, broadcast_shapes,
+from dask.array.core import (getem, getter, dotmany, concatenate3,
+                             Array, stack, concatenate,
+                             from_array, broadcast_shapes,
                              broadcast_to, blockdims_from_blockshape, store,
                              optimize, from_func, normalize_chunks,
-                             broadcast_chunks, atop, from_delayed,
-                             concatenate_axes, common_blockdim)
+                             broadcast_chunks, from_delayed,
+                             common_blockdim, concatenate_axes)
+from dask.blockwise import (make_blockwise_graph as top, broadcast_dimensions)
 from dask.array.utils import assert_eq, same_keys
 
 # temporary until numpy functions migrated
@@ -99,15 +98,15 @@ def test_top_literals():
          ('z', 1, 1): (add, ('x', 1, 1), 123)}
 
 
-def test_atop_literals():
+def test_blockwise_literals():
     x = da.ones((10, 10), chunks=(5, 5))
-    z = atop(add, 'ij', x, 'ij', 100, None, dtype=x.dtype)
+    z = da.blockwise(add, 'ij', x, 'ij', 100, None, dtype=x.dtype)
     assert_eq(z, x + 100)
 
-    z = atop(lambda x, y, z: x * y + z, 'ij', 2, None,  x, 'ij', 100, None, dtype=x.dtype)
+    z = da.blockwise(lambda x, y, z: x * y + z, 'ij', 2, None,  x, 'ij', 100, None, dtype=x.dtype)
     assert_eq(z, 2 * x + 100)
 
-    z = atop(getitem, 'ij', x, 'ij', slice(None), None, dtype=x.dtype)
+    z = da.blockwise(getitem, 'ij', x, 'ij', slice(None), None, dtype=x.dtype)
     assert_eq(z, x)
 
 
@@ -707,35 +706,23 @@ def test_block_tuple():
         e.match(r'tuple')
 
 
-def test_binops():
-    a = Array(dict((('a', i), np.array([0])) for i in range(3)),
-              'a', chunks=((1, 1, 1),), dtype='i8')
-    b = Array(dict((('b', i), np.array([0])) for i in range(3)),
-              'b', chunks=((1, 1, 1),), dtype='i8')
-
-    result = elemwise(add, a, b, name='c')
-    assert result.dask == merge(a.dask, b.dask,
-                                dict((('c', i), (add, ('a', i), ('b', i)))
-                                     for i in range(3)))
-
-    result = elemwise(pow, a, 2, name='c')
-    assert "'a', 0" in str(result.dask[('c', 0)])
-    assert "2" in str(result.dask[('c', 0)])
-
-
 def test_broadcast_shapes():
-    assert () == broadcast_shapes()
-    assert (2, 5) == broadcast_shapes((2, 5))
-    assert (0, 5) == broadcast_shapes((0, 1), (1, 5))
-    assert np.allclose(
-        (2, np.nan), broadcast_shapes((1, np.nan), (2, 1)), equal_nan=True
-    )
-    assert np.allclose(
-        (2, np.nan), broadcast_shapes((2, 1), (1, np.nan)), equal_nan=True
-    )
-    assert (3, 4, 5) == broadcast_shapes((3, 4, 5), (4, 1), ())
-    assert (3, 4) == broadcast_shapes((3, 1), (1, 4), (4,))
-    assert (5, 6, 7, 3, 4) == broadcast_shapes((3, 1), (), (5, 6, 7, 1, 4))
+    with warnings.catch_warnings(record=True) as record:
+        assert () == broadcast_shapes()
+        assert (2, 5) == broadcast_shapes((2, 5))
+        assert (0, 5) == broadcast_shapes((0, 1), (1, 5))
+        assert np.allclose(
+            (2, np.nan), broadcast_shapes((1, np.nan), (2, 1)), equal_nan=True
+        )
+        assert np.allclose(
+            (2, np.nan), broadcast_shapes((2, 1), (1, np.nan)), equal_nan=True
+        )
+        assert (3, 4, 5) == broadcast_shapes((3, 4, 5), (4, 1), ())
+        assert (3, 4) == broadcast_shapes((3, 1), (1, 4), (4,))
+        assert (5, 6, 7, 3, 4) == broadcast_shapes((3, 1), (), (5, 6, 7, 1, 4))
+
+    assert not record
+
     pytest.raises(ValueError, lambda: broadcast_shapes((3,), (3, 4)))
     pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (2, 3, 1)))
     pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (1, np.nan)))
@@ -870,6 +857,16 @@ def test_matmul():
     assert_eq(operator.matmul(z, a), operator.matmul(c, x))
 
 
+def test_matmul_array_ufunc():
+    # regression test for https://github.com/dask/dask/issues/4353
+    x = np.random.random((5, 5))
+    y = np.random.random((5, 2))
+    a = from_array(x, chunks=(1, 5))
+    b = from_array(y, chunks=(5, 1))
+    result = b.__array_ufunc__(np.matmul, '__call__', a, b)
+    assert_eq(result, x.dot(y))
+
+
 def test_T():
     x = np.arange(400).reshape((20, 20))
     a = from_array(x, chunks=(5, 5))
@@ -882,7 +879,7 @@ def test_broadcast_to():
     a = from_array(x, chunks=(3, 1, 3))
 
     for shape in [a.shape, (5, 0, 6), (5, 4, 6), (2, 5, 1, 6), (3, 4, 5, 4, 6)]:
-        xb = chunk.broadcast_to(x, shape)
+        xb = np.broadcast_to(x, shape)
         ab = broadcast_to(a, shape)
 
         assert_eq(xb, ab)
@@ -922,7 +919,7 @@ def test_broadcast_to_chunks():
             ((5, 3, 6), (3, -1, 3), ((3, 2), (3,), (3, 3))),
             ((5, 3, 6), (3, 1, 3), ((3, 2), (1, 1, 1,), (3, 3))),
             ((2, 5, 3, 6), (1, 3, 1, 3), ((1, 1), (3, 2), (1, 1, 1,), (3, 3)))]:
-        xb = chunk.broadcast_to(x, shape)
+        xb = np.broadcast_to(x, shape)
         ab = broadcast_to(a, shape, chunks=chunks)
         assert_eq(xb, ab)
         assert ab.chunks == expected_chunks
@@ -1138,6 +1135,27 @@ def test_map_blocks_block_info():
     assert_eq(z, x + x + 1 + 100)
 
 
+def test_map_blocks_block_info_with_axis():
+    # https://github.com/dask/dask/issues/4298
+    values = da.from_array(np.array(['a', 'a', 'b', 'c']), 2)
+
+    def func(x, block_info=None):
+        assert set(block_info.keys()) == {0}
+        assert block_info[0]['shape'] == (4,)
+        assert block_info[0]['num_chunks'] == (2,)
+
+        assert block_info['chunk-location'] in {(0,), (1,)}
+
+        if block_info['chunk-location'] == (0,):
+            assert block_info['array-location'] == [(0, 2)]
+        elif block_info['chunk-location'] == (1,):
+            assert block_info['array-location'] == [(2, 4)]
+
+        return np.ones((len(x), 3))
+
+    values.map_blocks(func, chunks=((2, 2), 3), new_axis=1, dtype='f8')
+
+
 def test_map_blocks_with_constants():
     d = da.arange(10, chunks=3)
     e = d.map_blocks(add, 100, dtype=d.dtype)
@@ -1184,14 +1202,12 @@ def test_map_blocks_dtype_inference():
     def foo(x):
         raise RuntimeError("Woops")
 
-    try:
+    with pytest.raises(ValueError) as e:
         dx.map_blocks(foo)
-    except Exception as e:
-        assert e.args[0].startswith("`dtype` inference failed")
-        assert "Please specify the dtype explicitly" in e.args[0]
-        assert 'RuntimeError' in e.args[0]
-    else:
-        assert False, "Should have errored"
+    msg = str(e.value)
+    assert msg.startswith("`dtype` inference failed")
+    assert "Please specify the dtype explicitly" in msg
+    assert 'RuntimeError' in msg
 
 
 def test_from_function_requires_block_args():
@@ -1279,17 +1295,17 @@ def test_store_kwargs():
 
     called[0] = False
     at = np.zeros(shape=(10, 10))
-    store([a], [at], get=get_func, foo="test kwarg")
+    store([a], [at], scheduler=get_func, foo="test kwarg")
     assert called[0]
 
     called[0] = False
     at = np.zeros(shape=(10, 10))
-    a.store(at, get=get_func, foo="test kwarg")
+    a.store(at, scheduler=get_func, foo="test kwarg")
     assert called[0]
 
     called[0] = False
     at = np.zeros(shape=(10, 10))
-    store([a], [at], get=get_func, return_store=True, foo="test kwarg")
+    store([a], [at], scheduler=get_func, return_stored=True, foo="test kwarg")
     assert called[0]
 
 
@@ -1943,8 +1959,9 @@ def test_slicing_with_non_ndarrays():
 
 
 def test_getter():
-    assert type(getter(np.matrix([[1]]), 0)) is np.ndarray
-    assert type(getter(np.matrix([[1]]), 0, asarray=False)) is np.matrix
+    with warnings.catch_warnings(record=True):
+        assert type(getter(np.matrix([[1]]), 0)) is np.ndarray
+        assert type(getter(np.matrix([[1]]), 0, asarray=False)) is np.matrix
     assert_eq(getter([1, 2, 3, 4, 5], slice(1, 4)), np.array([2, 3, 4]))
 
     assert_eq(getter(np.arange(5), (None, slice(None, None))),
@@ -2075,11 +2092,12 @@ def test_from_array_no_asarray(asarray, cls):
         for c in concat(chunks):
             assert type(c) is cls
 
-    x = np.matrix(np.arange(100).reshape((10, 10)))
-    dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
-    assert_chunks_are_of_type(dx)
-    assert_chunks_are_of_type(dx[0:5])
-    assert_chunks_are_of_type(dx[0:5][:, 0])
+    with warnings.catch_warnings(record=True):
+        x = np.matrix(np.arange(100).reshape((10, 10)))
+        dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
+        assert_chunks_are_of_type(dx)
+        assert_chunks_are_of_type(dx[0:5])
+        assert_chunks_are_of_type(dx[0:5][:, 0])
 
 
 def test_from_array_getitem():
@@ -2149,12 +2167,33 @@ def test_asarray_h5py():
 
 
 def test_asanyarray():
-    x = np.matrix([1, 2, 3])
-    dx = da.asanyarray(x)
-    assert dx.numblocks == (1, 1)
-    chunks = compute_as_if_collection(Array, dx.dask, dx.__dask_keys__())
-    assert isinstance(chunks[0][0], np.matrix)
-    assert da.asanyarray(dx) is dx
+    with warnings.catch_warnings(record=True):
+        x = np.matrix([1, 2, 3])
+        dx = da.asanyarray(x)
+        assert dx.numblocks == (1, 1)
+        chunks = compute_as_if_collection(Array, dx.dask, dx.__dask_keys__())
+        assert isinstance(chunks[0][0], np.matrix)
+        assert da.asanyarray(dx) is dx
+
+
+def test_asanyarray_dataframe():
+    pd = pytest.importorskip('pandas')
+    dd = pytest.importorskip('dask.dataframe')
+
+    df = pd.DataFrame({'x': [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    x = np.asanyarray(df)
+    dx = da.asanyarray(ddf)
+    assert isinstance(dx, da.Array)
+
+    assert_eq(x, dx)
+
+    x = np.asanyarray(df.x)
+    dx = da.asanyarray(ddf.x)
+    assert isinstance(dx, da.Array)
+
+    assert_eq(x, dx)
 
 
 def test_from_func():
@@ -2289,9 +2328,8 @@ def test_raise_on_no_chunks():
         Array(x.dask, x.name, chunks=None, dtype=x.dtype, shape=None)
         assert False
     except ValueError as e:
-        assert "dask.pydata.org" in str(e)
-
-    pytest.raises(ValueError, lambda: da.ones(6))
+        assert "dask" in str(e)
+        assert ".org" in str(e)
 
 
 def test_chunks_is_immutable():
@@ -2582,14 +2620,6 @@ def test_map_blocks_with_changed_dimension():
     with pytest.raises(ValueError):
         d.map_blocks(lambda b: b.sum(axis=0), chunks=((4, 4, 4),), drop_axis=0)
 
-    # Can't drop axis with more than 1 block
-    with pytest.raises(ValueError):
-        d.map_blocks(lambda b: b.sum(axis=1), drop_axis=1, dtype=d.dtype)
-
-    # Adding axis with a gap
-    with pytest.raises(ValueError):
-        d.map_blocks(lambda b: b, new_axis=(3, 4))
-
     d = da.from_array(x, chunks=(4, 8))
     e = d.map_blocks(lambda b: b.sum(axis=1), drop_axis=1, dtype=d.dtype)
     assert e.chunks == ((4, 3),)
@@ -2607,6 +2637,10 @@ def test_map_blocks_with_changed_dimension():
     assert e.chunks == ((1,), (4, 4), (4, 4), (1,))
     assert_eq(e, x[None, :, :, None])
 
+    # Adding axis with a gap
+    with pytest.raises(ValueError):
+        d.map_blocks(lambda b: b, new_axis=(3, 4))
+
     # Both new_axis and drop_axis
     d = da.from_array(x, chunks=(8, 4))
     e = d.map_blocks(lambda b: b.sum(axis=0)[:, None, None],
@@ -2619,6 +2653,15 @@ def test_map_blocks_with_changed_dimension():
                      drop_axis=1, new_axis=(1, 2), dtype=d.dtype)
     assert e.chunks == ((4, 4), (1,), (1,))
     assert_eq(e, x.sum(axis=1)[:, None, None])
+
+
+def test_map_blocks_with_changed_dimension_and_broadcast_chunks():
+    # https://github.com/dask/dask/issues/4299
+    a = da.from_array([1, 2, 3], 3)
+    b = da.from_array(np.array([0, 1, 2, 0, 1, 2]), chunks=3)
+    result = da.map_blocks(operator.add, a, b, chunks=b.chunks)
+    expected = da.from_array(np.array([1, 3, 5, 1, 3, 5]), chunks=3)
+    assert_eq(result, expected)
 
 
 def test_broadcast_chunks():
@@ -2786,86 +2829,6 @@ def test_cumulative():
         x.cumsum(axis=-4)
 
 
-def test_atop_names():
-    x = da.ones(5, chunks=(2,))
-    y = atop(add, 'i', x, 'i', dtype=x.dtype)
-    assert y.name.startswith('add')
-
-
-def test_atop_new_axes():
-    def f(x):
-        return x[:, None] * np.ones((1, 7))
-    x = da.ones(5, chunks=2)
-    y = atop(f, 'aq', x, 'a', new_axes={'q': 7}, concatenate=True,
-             dtype=x.dtype)
-    assert y.chunks == ((2, 2, 1), (7,))
-    assert_eq(y, np.ones((5, 7)))
-
-    def f(x):
-        return x[None, :] * np.ones((7, 1))
-    x = da.ones(5, chunks=2)
-    y = atop(f, 'qa', x, 'a', new_axes={'q': 7}, concatenate=True,
-             dtype=x.dtype)
-    assert y.chunks == ((7,), (2, 2, 1))
-    assert_eq(y, np.ones((7, 5)))
-
-    def f(x):
-        y = x.sum(axis=1)
-        return y[:, None] * np.ones((1, 5))
-
-    x = da.ones((4, 6), chunks=(2, 2))
-    y = atop(f, 'aq', x, 'ab', new_axes={'q': 5}, concatenate=True,
-             dtype=x.dtype)
-    assert y.chunks == ((2, 2), (5,))
-    assert_eq(y, np.ones((4, 5)) * 6)
-
-
-def test_atop_kwargs():
-    def f(a, b=0):
-        return a + b
-
-    x = da.ones(5, chunks=(2,))
-    y = atop(f, 'i', x, 'i', b=10, dtype=x.dtype)
-    assert_eq(y, np.ones(5) + 10)
-
-
-def test_atop_chunks():
-    x = da.ones((5, 5), chunks=((2, 1, 2), (3, 2)))
-
-    def double(a, axis=0):
-        return np.concatenate([a, a], axis=axis)
-
-    y = atop(double, 'ij', x, 'ij',
-             adjust_chunks={'i': lambda n: 2 * n}, axis=0, dtype=x.dtype)
-    assert y.chunks == ((4, 2, 4), (3, 2))
-    assert_eq(y, np.ones((10, 5)))
-
-    y = atop(double, 'ij', x, 'ij',
-             adjust_chunks={'j': lambda n: 2 * n}, axis=1, dtype=x.dtype)
-    assert y.chunks == ((2, 1, 2), (6, 4))
-    assert_eq(y, np.ones((5, 10)))
-
-    x = da.ones((10, 10), chunks=(5, 5))
-    y = atop(double, 'ij', x, 'ij', axis=0,
-             adjust_chunks={'i': 10}, dtype=x.dtype)
-    assert y.chunks == ((10, 10), (5, 5))
-    assert_eq(y, np.ones((20, 10)))
-
-    y = atop(double, 'ij', x, 'ij', axis=0,
-             adjust_chunks={'i': (10, 10)}, dtype=x.dtype)
-    assert y.chunks == ((10, 10), (5, 5))
-    assert_eq(y, np.ones((20, 10)))
-
-
-def test_atop_raises_on_incorrect_indices():
-    x = da.arange(5, chunks=3)
-    with pytest.raises(ValueError) as info:
-        da.atop(lambda x: x, 'ii', x, 'ii', dtype=int)
-
-    assert 'ii' in str(info.value)
-    assert '1' in str(info.value)
-
-
 def test_from_delayed():
     v = delayed(np.ones)((5, 3))
     x = from_delayed(v, shape=(5, 3), dtype=np.ones(0).dtype)
@@ -2966,7 +2929,7 @@ def test_concatenate_axes():
         concatenate_axes([x, x], axes=[0, 1, 2, 3])  # too many axes
 
 
-def test_atop_concatenate():
+def test_blockwise_concatenate():
     x = da.ones((4, 4, 4), chunks=(2, 2, 2))
     y = da.ones((4, 4), chunks=(2, 2))
 
@@ -2979,10 +2942,10 @@ def test_atop_concatenate():
 
         return (a + b).sum(axis=(1, 2))
 
-    z = atop(f, 'i', x, 'ijk', y, 'jk', concatenate=True, dtype=x.dtype)
+    z = da.blockwise(f, 'i', x, 'ijk', y, 'jk', concatenate=True, dtype=x.dtype)
     assert_eq(z, np.ones(4) * 32)
 
-    z = atop(add, 'ij', y, 'ij', y, 'ij', concatenate=True, dtype=x.dtype)
+    z = da.blockwise(add, 'ij', y, 'ij', y, 'ij', concatenate=True, dtype=x.dtype)
     assert_eq(z, np.ones((4, 4)) * 2)
 
     def f(a, b, c):
@@ -2996,8 +2959,7 @@ def test_atop_concatenate():
 
         return np.ones(5)
 
-    z = atop(f, 'j', x, 'ijk', y, 'ki', y, 'ij', concatenate=True,
-             dtype=x.dtype)
+    z = da.blockwise(f, 'j', x, 'ijk', y, 'ki', y, 'ij', concatenate=True, dtype=x.dtype)
     assert_eq(z, np.ones(10), check_shape=False)
 
 
@@ -3039,10 +3001,10 @@ def test_elemwise_uneven_chunks():
     assert z.chunks == ((2, 2), (4, 2, 4), (2, 3, 2, 3))
 
 
-def test_uneven_chunks_atop():
+def test_uneven_chunks_blockwise():
     x = da.random.random((10, 10), chunks=((2, 3, 2, 3), (5, 5)))
     y = da.random.random((10, 10), chunks=((4, 4, 2), (4, 2, 4)))
-    z = atop(np.dot, 'ik', x, 'ij', y, 'jk', dtype=x.dtype, concatenate=True)
+    z = da.blockwise(np.dot, 'ik', x, 'ij', y, 'jk', dtype=x.dtype, concatenate=True)
     assert z.chunks == (x.chunks[0], y.chunks[1])
 
     assert_eq(z, x.compute().dot(y))
@@ -3057,19 +3019,6 @@ def test_warn_bad_rechunking():
 
     assert record
     assert '20' in record[0].message.args[0]
-
-
-def test_optimize_fuse_keys():
-    x = da.ones(10, chunks=(5,))
-    y = x + 1
-    z = y + 1
-
-    dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
-    assert not set(y.dask) & set(dsk)
-
-    dsk = z.__dask_optimize__(z.dask, z.__dask_keys__(),
-                              fuse_keys=y.__dask_keys__())
-    assert all(k in dsk for k in y.__dask_keys__())
 
 
 def test_concatenate_stack_dont_warn():
@@ -3261,23 +3210,27 @@ def test_zero_slice_dtypes():
 
 def test_zero_sized_array_rechunk():
     x = da.arange(5, chunks=1)[:0]
-    y = da.atop(identity, 'i', x, 'i', dtype=x.dtype)
+    y = da.blockwise(identity, 'i', x, 'i', dtype=x.dtype)
     assert_eq(x, y)
 
 
-def test_atop_zero_shape():
-    da.atop(lambda x: x, 'i',
-            da.arange(10, chunks=10), 'i',
-            da.from_array(np.ones((0, 2)), ((0,), 2)), 'ab',
-            da.from_array(np.ones((0,)), ((0,),)), 'a',
-            dtype='float64')
+def test_blockwise_zero_shape():
+    da.blockwise(
+        lambda x: x, 'i',
+        da.arange(10, chunks=10), 'i',
+        da.from_array(np.ones((0, 2)), ((0,), 2)), 'ab',
+        da.from_array(np.ones((0,)), ((0,),)), 'a',
+        dtype='float64'
+    )
 
 
-def test_atop_zero_shape_new_axes():
-    da.atop(lambda x: np.ones(42), 'i',
-            da.from_array(np.ones((0, 2)), ((0,), 2)), 'ab',
-            da.from_array(np.ones((0,)), ((0,),)), 'a',
-            dtype='float64', new_axes={'i': 42})
+def test_blockwise_zero_shape_new_axes():
+    da.blockwise(
+        lambda x: np.ones(42), 'i',
+        da.from_array(np.ones((0, 2)), ((0,), 2)), 'ab',
+        da.from_array(np.ones((0,)), ((0,),)), 'a',
+        dtype='float64', new_axes={'i': 42}
+    )
 
 
 def test_broadcast_against_zero_shape():
@@ -3335,7 +3288,7 @@ def test_stack_errs():
     assert len(str(e.value)) < 105
 
 
-def test_atop_with_numpy_arrays():
+def test_blockwise_with_numpy_arrays():
     x = np.ones(10)
     y = da.ones(10, chunks=(5,))
 
@@ -3644,3 +3597,75 @@ def test_3851():
         da.argmax(Y, axis=0).compute()
 
     assert not record
+
+
+def test_3925():
+    x = da.from_array(np.array(['a', 'b', 'c'], dtype=object), chunks=-1)
+    assert (x[0] == x[0]).compute(scheduler='sync')
+
+
+def test_map_blocks_large_inputs_delayed():
+    a = da.ones(10, chunks=(5,))
+    b = np.ones(1000000)
+
+    c = a.map_blocks(add, b)
+    assert any(b is v for v in c.dask.values())
+    assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
+
+    d = a.map_blocks(lambda x, y: x + y.sum(), y=b)
+    assert_eq(d, d)
+    assert any(b is v for v in d.dask.values())
+    assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
+
+
+def test_blockwise_large_inputs_delayed():
+    a = da.ones(10, chunks=(5,))
+    b = np.ones(1000000)
+
+    c = da.blockwise(add, 'i', a, 'i', b, None, dtype=a.dtype)
+    assert any(b is v for v in c.dask.values())
+    assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
+
+    d = da.blockwise(lambda x, y: x + y, 'i', a, 'i', y=b, dtype=a.dtype)
+    assert any(b is v for v in d.dask.values())
+    assert repr(dict(c.dask)).count(repr(b)[:10]) == 1  # only one occurrence
+
+
+def test_slice_reversed():
+    x = da.ones(10, chunks=-1)
+    y = x[6:3]
+
+    assert_eq(y, np.ones(0))
+
+
+def test_map_blocks_chunks():
+    x = da.arange(400, chunks=(100,))
+    y = da.arange(40, chunks=(10,))
+
+    def func(a, b):
+        return np.array([a.max(), b.max()])
+
+    assert_eq(da.map_blocks(func, x, y, chunks=(2,), dtype=x.dtype),
+              np.array([99, 9, 199, 19, 299, 29, 399, 39]))
+
+
+def test_nbytes_auto():
+    chunks = normalize_chunks("800B", shape=(500,), dtype='float64')
+    assert chunks == ((100, 100, 100, 100, 100),)
+    chunks = normalize_chunks("200B", shape=(10, 10), dtype='float64')
+    assert chunks == ((5, 5), (5, 5))
+    chunks = normalize_chunks((5,"200B"), shape=(10, 10), dtype='float64')
+    assert chunks == ((5, 5), (5, 5))
+    chunks = normalize_chunks("33B", shape=(10, 10), dtype='float64')
+    assert chunks == ((2, 2, 2, 2, 2), (2, 2, 2, 2, 2))
+    chunks = normalize_chunks("1800B", shape=(10, 20, 30), dtype='float64')
+    assert chunks == ((5, 5), (5, 5, 5, 5), (6, 6, 6, 6, 6))
+
+    with pytest.raises(ValueError):
+        normalize_chunks("10B", shape=(10,), limit=20, dtype='float64')
+    with pytest.raises(ValueError):
+        normalize_chunks("100B", shape=(10, 10), limit=20, dtype='float64')
+    with pytest.raises(ValueError):
+        normalize_chunks(("100B", "10B"), shape=(10, 10), dtype='float64')
+    with pytest.raises(ValueError):
+        normalize_chunks(("10B", "10B"), shape=(10, 10), limit=20, dtype='float64')

@@ -2,6 +2,7 @@ import textwrap
 from distutils.version import LooseVersion
 from itertools import product
 from operator import add
+import warnings
 
 import pandas as pd
 import pandas.util.testing as tm
@@ -15,7 +16,8 @@ from dask.base import compute_as_if_collection
 from dask.compatibility import PY2
 from dask.utils import put_lines, M
 
-from dask.dataframe.core import repartition_divisions, aca, _concat, Scalar
+from dask.dataframe.core import (repartition_divisions, aca, _concat, Scalar,
+                                 has_parallel_type)
 from dask.dataframe import methods
 from dask.dataframe.utils import (assert_eq, make_meta, assert_max_deps,
                                   PANDAS_VERSION)
@@ -175,7 +177,7 @@ def test_index_names():
 
 @pytest.mark.parametrize(
     'npartitions',
-    [1, pytest.mark.xfail(2, reason='pandas join removes freq')]
+    [1, pytest.param(2, marks=pytest.mark.xfail)]
 )
 def test_timezone_freq(npartitions):
     s_naive = pd.Series(pd.date_range('20130101', periods=10))
@@ -286,8 +288,12 @@ def test_describe():
     ds = dd.from_pandas(s, 4)
     ddf = dd.from_pandas(df, 4)
 
-    assert_eq(s.describe(), ds.describe())
     assert_eq(df.describe(), ddf.describe())
+    assert_eq(s.describe(), ds.describe())
+
+    test_quantiles = [0.25, 0.75]
+    assert_eq(df.describe(percentiles=test_quantiles),
+              ddf.describe(percentiles=test_quantiles))
     assert_eq(s.describe(), ds.describe(split_every=2))
     assert_eq(df.describe(), ddf.describe(split_every=2))
 
@@ -547,6 +553,12 @@ def test_map_partitions():
     assert result.dtype == np.float64 and result.compute() == 4.0
 
 
+def test_map_partitions_type():
+    result = d.map_partitions(type).compute(scheduler='single-threaded')
+    assert isinstance(result, pd.Series)
+    assert all(x == pd.DataFrame for x in result)
+
+
 def test_map_partitions_names():
     func = lambda x: x
     assert (sorted(dd.map_partitions(func, d, meta=d).dask) ==
@@ -603,6 +615,7 @@ def test_map_partitions_method_names():
     assert b.dtype == 'i8'
 
 
+@pytest.mark.xfail(reason='now we use SubgraphCallables')
 def test_map_partitions_keeps_kwargs_readable():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
     a = dd.from_pandas(df, npartitions=2)
@@ -614,7 +627,7 @@ def test_map_partitions_keeps_kwargs_readable():
 
     # NOTE: we'd like to ensure that we keep the keyword arguments readable
     # in the dask graph
-    assert "['x', 5]" in str(b.dask)
+    assert "['x', 5]" in str(dict(b.dask)) or "{'x': 5}" in str(dict(b.dask))
     assert_eq(df.x + 5, b)
 
     assert a.x.map_partitions(f, x=5)._name != a.x.map_partitions(f, x=6)._name
@@ -925,6 +938,13 @@ def test_assign():
         d.assign(foo=d_unknown.a)
 
 
+def test_assign_callable():
+    df = dd.from_pandas(pd.DataFrame({"A": range(10)}), npartitions=2)
+    a = df.assign(B=df.A.shift())
+    b = df.assign(B=lambda x: x.A.shift())
+    assert_eq(a, b)
+
+
 def test_map():
     assert_eq(d.a.map(lambda x: x + 1), full.a.map(lambda x: x + 1))
     lk = dict((v, v + 1) for v in full.a.values)
@@ -969,6 +989,28 @@ def test_unknown_divisions():
 
     assert_eq(d.a.sum(), full.a.sum())
     assert_eq(d.a + d.b + 1, full.a + full.b + 1)
+
+
+@pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
+                    reason="Parameter min_count not implemented in "
+                           "DataFrame.sum() and DataFrame.prod()")
+def test_with_min_count():
+    dfs = [pd.DataFrame([[None, 2, 3],
+                         [None, 5, 6],
+                         [5, 4, 9]]),
+           pd.DataFrame([[2, None, None],
+                         [None, 5, 6],
+                         [5, 4, 9]])]
+    ddfs = [dd.from_pandas(df, npartitions=4) for df in dfs]
+    axes = [0, 1]
+
+    for df, ddf in zip(dfs, ddfs):
+        for axis in axes:
+            for min_count in [0, 1, 2, 3]:
+                assert_eq(df.sum(min_count=min_count, axis=axis),
+                          ddf.sum(min_count=min_count, axis=axis))
+                assert_eq(df.prod(min_count=min_count, axis=axis),
+                          ddf.prod(min_count=min_count, axis=axis))
 
 
 @pytest.mark.parametrize('join', ['inner', 'outer', 'left', 'right'])
@@ -2623,34 +2665,35 @@ def test_idxmaxmin(idx, skipna):
     df.d.iloc[78] = np.nan
     ddf = dd.from_pandas(df, npartitions=3)
 
-    assert_eq(df.idxmax(axis=1, skipna=skipna),
-              ddf.idxmax(axis=1, skipna=skipna))
-    assert_eq(df.idxmin(axis=1, skipna=skipna),
-              ddf.idxmin(axis=1, skipna=skipna))
+    with warnings.catch_warnings(record=True):
+        assert_eq(df.idxmax(axis=1, skipna=skipna),
+                  ddf.idxmax(axis=1, skipna=skipna))
+        assert_eq(df.idxmin(axis=1, skipna=skipna),
+                  ddf.idxmin(axis=1, skipna=skipna))
 
-    assert_eq(df.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna))
-    assert_eq(df.idxmax(skipna=skipna),
-              ddf.idxmax(skipna=skipna, split_every=2))
-    assert (ddf.idxmax(skipna=skipna)._name !=
-            ddf.idxmax(skipna=skipna, split_every=2)._name)
+        assert_eq(df.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna))
+        assert_eq(df.idxmax(skipna=skipna),
+                  ddf.idxmax(skipna=skipna, split_every=2))
+        assert (ddf.idxmax(skipna=skipna)._name !=
+                ddf.idxmax(skipna=skipna, split_every=2)._name)
 
-    assert_eq(df.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna))
-    assert_eq(df.idxmin(skipna=skipna),
-              ddf.idxmin(skipna=skipna, split_every=2))
-    assert (ddf.idxmin(skipna=skipna)._name !=
-            ddf.idxmin(skipna=skipna, split_every=2)._name)
+        assert_eq(df.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna))
+        assert_eq(df.idxmin(skipna=skipna),
+                  ddf.idxmin(skipna=skipna, split_every=2))
+        assert (ddf.idxmin(skipna=skipna)._name !=
+                ddf.idxmin(skipna=skipna, split_every=2)._name)
 
-    assert_eq(df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
-    assert_eq(df.a.idxmax(skipna=skipna),
-              ddf.a.idxmax(skipna=skipna, split_every=2))
-    assert (ddf.a.idxmax(skipna=skipna)._name !=
-            ddf.a.idxmax(skipna=skipna, split_every=2)._name)
+        assert_eq(df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
+        assert_eq(df.a.idxmax(skipna=skipna),
+                  ddf.a.idxmax(skipna=skipna, split_every=2))
+        assert (ddf.a.idxmax(skipna=skipna)._name !=
+                ddf.a.idxmax(skipna=skipna, split_every=2)._name)
 
-    assert_eq(df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
-    assert_eq(df.a.idxmin(skipna=skipna),
-              ddf.a.idxmin(skipna=skipna, split_every=2))
-    assert (ddf.a.idxmin(skipna=skipna)._name !=
-            ddf.a.idxmin(skipna=skipna, split_every=2)._name)
+        assert_eq(df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
+        assert_eq(df.a.idxmin(skipna=skipna),
+                  ddf.a.idxmin(skipna=skipna, split_every=2))
+        assert (ddf.a.idxmin(skipna=skipna)._name !=
+                ddf.a.idxmin(skipna=skipna, split_every=2)._name)
 
 
 def test_idxmaxmin_empty_partitions():
@@ -2716,6 +2759,16 @@ def test_getitem_column_types(col_type):
     cols = col_type(['C', 'A', 'B'])
 
     assert_eq(df[cols], ddf[cols])
+
+
+def test_ipython_completion():
+    df = pd.DataFrame({'a': [1], 'b': [2]})
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    completions = ddf._ipython_key_completions_()
+    assert 'a' in completions
+    assert 'b' in completions
+    assert 'c' not in completions
 
 
 def test_diff():
@@ -3032,6 +3085,13 @@ def test_boundary_slice_nonmonotonic():
     tm.assert_frame_equal(result, expected)
 
 
+def test_boundary_slice_empty():
+    df = pd.DataFrame()
+    result = methods.boundary_slice(df, 1, 4)
+    expected = pd.DataFrame()
+    tm.assert_frame_equal(result, expected)
+
+
 @pytest.mark.parametrize('start, stop, right_boundary, left_boundary, drop', [
     (-1, None, False, False, [-1, -2]),
     (-1, None, False, True, [-2]),
@@ -3151,6 +3211,9 @@ def test_map_partition_array(func):
 
 def test_map_partition_sparse():
     sparse = pytest.importorskip('sparse')
+    # Aviod searchsorted failure.
+    pytest.importorskip("numba", minversion="0.40.0")
+
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
                        'y': [6.0, 7.0, 8.0, 9.0, 10.0]},
                       index=['a', 'b', 'c', 'd', 'e'])
@@ -3182,6 +3245,9 @@ def test_mixed_dask_array_operations():
               ddf.x + ddf.index.values)
     assert_eq(df.index.values + df.x,
               ddf.index.values + ddf.x)
+
+    assert_eq(df.x + df.x.values.sum(),
+              ddf.x + ddf.x.values.sum())
 
 
 def test_mixed_dask_array_operations_errors():
@@ -3249,3 +3315,68 @@ def test_dask_dataframe_holds_scipy_sparse_containers():
     vs = y.to_delayed().flatten().tolist()
     values = dask.compute(*vs, scheduler='single-threaded')
     assert all(isinstance(v, sparse.csr_matrix) for v in values)
+
+
+def test_map_partitions_delays_large_inputs():
+    df = pd.DataFrame({'x': [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    big = np.ones(1000000)
+
+    b = ddf.map_partitions(lambda x, y: x, y=big)
+    assert any(big is v for v in b.dask.values())
+
+    a = ddf.map_partitions(lambda x, y: x, big)
+    assert any(big is v for v in a.dask.values())
+
+
+def test_partitions_indexer():
+    df = pd.DataFrame({'x': range(10)})
+    ddf = dd.from_pandas(df, npartitions=5)
+
+    assert_eq(ddf.partitions[0], ddf.get_partition(0))
+    assert_eq(ddf.partitions[3], ddf.get_partition(3))
+    assert_eq(ddf.partitions[-1], ddf.get_partition(4))
+
+    assert ddf.partitions[:3].npartitions == 3
+    assert ddf.x.partitions[:3].npartitions == 3
+
+    assert ddf.x.partitions[::2].compute().tolist() == [0, 1, 4, 5, 8, 9]
+
+
+def test_mod_eq():
+    df = pd.DataFrame({'a': [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    assert_eq(df, ddf)
+    assert_eq(df.a, ddf.a)
+    assert_eq(df.a + 2, ddf.a + 2)
+    assert_eq(df.a + 2 == 0, ddf.a + 2 == 0)
+
+
+def test_setitem():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4]})
+    ddf = dd.from_pandas(df.copy(), 2)
+    df[df.columns] = 1
+    ddf[ddf.columns] = 1
+    assert_eq(df, ddf)
+
+
+def test_broadcast():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf - (ddf.sum() + 1),
+              df - (df.sum() + 1))
+
+
+def test_scalar_with_array():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    da.utils.assert_eq(df.x.values + df.x.mean(),
+                       ddf.x.values + ddf.x.mean())
+
+
+def test_has_parallel_type():
+    assert has_parallel_type(pd.DataFrame())
+    assert has_parallel_type(pd.Series())
+    assert not has_parallel_type(123)

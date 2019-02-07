@@ -24,7 +24,7 @@ files = {'.test.accounts.1.json':  ('{"amount": 100, "name": "Alice"}\n'
 expected = ''.join([files[v] for v in sorted(files)])
 
 fmt_bs = ([(fmt, None) for fmt in compression.files] +
-          [(fmt, 10) for fmt in compression.seekable_files] +
+          [(fmt, "10 B") for fmt in compression.seekable_files] +
           [(fmt, None) for fmt in compression.seekable_files])
 encodings = ['ascii', 'utf-8'] # + ['utf-16', 'utf-16-le', 'utf-16-be']
 fmt_bs_enc = [(fmt, bs, encoding) for fmt, bs in fmt_bs
@@ -50,6 +50,17 @@ def test_read_text(fmt, bs, encoding):
                            encoding=encoding, collection=False)
         L = compute(*blocks)
         assert ''.join(line for block in L for line in block) == expected
+
+
+def test_files_per_partition():
+    files3 = {'{:02}.txt'.format(n): 'line from {:02}' for n in range(20)}
+    with filetexts(files3):
+        b = read_text('*.txt', files_per_partition=10)
+
+        l = len(b.take(100, npartitions=1))
+        assert l == 10, "10 files should be grouped into one partition"
+
+        assert b.count().compute() == 20, "All 20 lines should be read"
 
 
 def test_errors():

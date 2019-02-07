@@ -6,7 +6,7 @@ import uuid
 
 import numpy as np
 import pandas as pd
-from toolz import merge
+import toolz
 
 from .methods import drop_columns
 from .core import DataFrame, Series, _Frame, _concat, map_partitions
@@ -16,6 +16,7 @@ from .utils import PANDAS_VERSION
 from .. import base, config
 from ..base import tokenize, compute, compute_as_if_collection
 from ..delayed import delayed
+from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
 
@@ -51,16 +52,21 @@ def set_index(df, index, npartitions=None, shuffle=None, compute=False,
         index2 = index
 
     if divisions is None:
-        divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
         if repartition:
-            parts = df.to_delayed()
+            index2, df = base.optimize(index2, df)
+            parts = df.to_delayed(optimize_graph=False)
             sizes = [delayed(sizeof)(part) for part in parts]
         else:
+            index2, = base.optimize(index2)
             sizes = []
-        iparts = index2.to_delayed()
+
+        divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
+        iparts = index2.to_delayed(optimize_graph=False)
         mins = [ipart.min() for ipart in iparts]
         maxes = [ipart.max() for ipart in iparts]
-        divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes)
+        sizes, mins, maxes = base.optimize(sizes, mins, maxes)
+        divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes,
+                                                     optimize_graph=False)
         divisions = divisions.tolist()
 
         empty_dataframe_detected = pd.isnull(divisions).all()
@@ -228,7 +234,7 @@ def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None)
 
 def rearrange_by_column(df, col, npartitions=None, max_branch=None,
                         shuffle=None, compute=None):
-    shuffle = shuffle or config.get('shuffle', 'disk')
+    shuffle = shuffle or config.get('shuffle', None) or 'disk'
     if shuffle == 'disk':
         return rearrange_by_column_disk(df, col, npartitions, compute=compute)
     elif shuffle == 'tasks':
@@ -278,12 +284,16 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     dsk2 = {(name, i): (shuffle_group_3, key, column, npartitions, p)
             for i, key in enumerate(df.__dask_keys__())}
 
-    dsk = merge(df.dask, dsk1, dsk2)
+    dependencies = []
+    layer = {}
     if compute:
+        graph = HighLevelGraph.merge(df.dask, dsk1, dsk2)
         keys = [p, sorted(dsk2)]
-        pp, values = compute_as_if_collection(DataFrame, dsk, keys)
+        pp, values = compute_as_if_collection(DataFrame, graph, keys)
         dsk1 = {p: pp}
-        dsk = dict(zip(sorted(dsk2), values))
+        dsk2 = dict(zip(sorted(dsk2), values))
+    else:
+        dependencies.append(df)
 
     # Barrier
     barrier_token = 'barrier-' + always_new_token
@@ -296,9 +306,10 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
 
     divisions = (None,) * (npartitions + 1)
 
-    dsk = merge(dsk, dsk1, dsk3, dsk4)
+    layer = toolz.merge(dsk1, dsk2, dsk3, dsk4)
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=dependencies)
 
-    return DataFrame(dsk, name, df._meta, divisions)
+    return DataFrame(graph, name, df._meta, divisions)
 
 
 def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
@@ -357,8 +368,9 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
                 ('shuffle-join-' + token, stages, inp))
                for i, inp in enumerate(inputs))
 
-    dsk = merge(df.dask, start, end, *(groups + splits + joins))
-    df2 = DataFrame(dsk, 'shuffle-' + token, df, df.divisions)
+    dsk = toolz.merge(start, end, *(groups + splits + joins))
+    graph = HighLevelGraph.from_collections('shuffle-' + token, dsk, dependencies=[df])
+    df2 = DataFrame(graph, 'shuffle-' + token, df, df.divisions)
 
     if npartitions is not None and npartitions != df.npartitions:
         parts = [i % df.npartitions for i in range(npartitions)]
@@ -370,8 +382,8 @@ def rearrange_by_column_tasks(df, column, max_branch=32, npartitions=None):
             dsk[('repartition-get-' + token, p)] = \
                 (shuffle_group_get, ('repartition-group-' + token, parts[p]), p)
 
-        df3 = DataFrame(merge(df2.dask, dsk), 'repartition-get-' + token, df2,
-                        [None] * (npartitions + 1))
+        graph2 = HighLevelGraph.from_collections('repartition-get-' + token, dsk, dependencies=[df2])
+        df3 = DataFrame(graph2, 'repartition-get-' + token, df2, [None] * (npartitions + 1))
     else:
         df3 = df2
         df3.divisions = (None,) * (df.npartitions + 1)
@@ -456,12 +468,9 @@ def shuffle_group(df, col, stage, k, npartitions):
     c = ind._values
     typ = np.min_scalar_type(npartitions * 2)
 
-    npartitions, k, stage = [np.array(x, dtype=np.min_scalar_type(x))[()]
-                             for x in [npartitions, k, stage]]
-
     c = np.mod(c, npartitions).astype(typ, copy=False)
-    c = np.floor_divide(c, k ** stage, out=c)
-    c = np.mod(c, k, out=c)
+    np.floor_divide(c, k ** stage, out=c)
+    np.mod(c, k, out=c)
 
     indexer, locations = groupsort_indexer(c.astype(np.int64), k)
     df2 = df.take(indexer)

@@ -1,18 +1,21 @@
 from __future__ import print_function, division, absolute_import
 
+import posixpath
 import re
 import requests
 import uuid
-from fsspec.spec import AbstractFileSystem
 
 from . import core
+from .glob import generic_glob
+from ..compatibility import urlparse
 
 DEFAULT_BLOCK_SIZE = 5 * 2 ** 20
 # https://stackoverflow.com/a/15926317/3821154
 ex = re.compile(r"""<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1""")
+ex2 = re.compile(r"""(http[s]?://[-a-zA-Z0-9@:%_+.~#?&/=]+)""")
 
 
-class HTTPFileSystem(AbstractFileSystem):
+class HTTPFileSystem(object):
     """
     Simple File-System for fetching data via HTTP(S)
 
@@ -21,40 +24,65 @@ class HTTPFileSystem(AbstractFileSystem):
     """
     sep = '/'
 
-    def __init__(self, **storage_options):
+    def __init__(self, simple_links=True, block_size=None,
+                 **storage_options):
         """
         Parameters
         ----------
+        block_size: int
+            Blocks to read bytes; if 0, will default to raw requests file-like
+            objects instead of HTTPFile instances
+        simple_links: bool
+            If True, will consider both HTML <a> tags and anything that looks
+            like a URL; if False, will consider only the former.
         storage_options: key-value
             May be credentials, e.g., `{'auth': ('username', 'pword')}` or any
-            other parameters for requests
+            other parameters passed on to requests
         """
-        self.block_size = storage_options.pop('block_size', DEFAULT_BLOCK_SIZE)
+        self.block_size = (block_size if block_size is not None
+                           else DEFAULT_BLOCK_SIZE)
+        self.simple_links = simple_links
         self.kwargs = storage_options
         self.session = requests.Session()
 
-    def ls(self, url, detail=True):
+    def ls(self, url, detail=False):
         # ignoring URL-encoded arguments
         r = requests.get(url, **self.kwargs)
-        links = ex.findall(r.text)
+        if self.simple_links:
+            links = ex2.findall(r.text) + ex.findall(r.text)
+        else:
+            links = ex.findall(r.text)
         out = set()
-        for u, l in links:
+        parts = urlparse(url)
+        for l in links:
+            if isinstance(l, tuple):
+                l = l[1]
             if l.startswith('http'):
-                if l.startswith(url):
+                if l.replace('https', 'http').startswith(
+                        url.replace('https', 'http')):
                     out.add(l)
+            elif l.startswith('/') and len(l) > 1:
+                out.add(parts.scheme + '://' + parts.netloc + l)
             else:
-                if l not in ['..', '../']:
+                if l not in ['..', '../', '']:
                     # Ignore FTP-like "parent"
-                    out.add('/'.join([url.rstrip('/'), l]))
+                    out.add('/'.join([url.rstrip('/'), l.lstrip('/')]))
+        out = out - {url, url + '/'}
         if detail:
             return [{'name': u, 'type': 'directory'
-                     if u.endswith('/') else 'file'} for u in out]
+                     if self.isdir(u) else 'file'} for u in out]
         else:
             return list(sorted(out))
 
     def mkdirs(self, url):
         """Make any intermediate directories to make path writable"""
         raise NotImplementedError
+
+    def isdir(self, path):
+        return True
+
+    def glob(self, path):
+        return sorted(generic_glob(self, posixpath, path))
 
     def open(self, url, mode='rb', block_size=None, **kwargs):
         """Make a file-like object
@@ -73,9 +101,15 @@ class HTTPFileSystem(AbstractFileSystem):
         if mode != 'rb':
             raise NotImplementedError
         block_size = block_size if block_size is not None else self.block_size
-        kw = self.kwargs.copy()
-        kw.update(kwargs)
-        return HTTPFile(url, self.session, block_size, **kw)
+        if block_size:
+            return HTTPFile(url, self.session, block_size, **self.kwargs)
+        else:
+            kw = self.kwargs.copy()
+            kw['stream'] = True
+            r = self.session.get(url, **kw)
+            r.raise_for_status()
+            r.raw.decode_content = True
+            return r.raw
 
     def ukey(self, url):
         """Unique identifier; assume HTTP files are static, unchanging"""
@@ -109,7 +143,7 @@ class HTTPFile(object):
         connections where the server allows this
     block_size: int or None
         The amount of read-ahead to do, in bytes. Default is 5MB, or the value
-        configured for the FileSystem creating this file
+        configured for the FileSystem creating this file.
     kwargs: all other key-values are passed to reqeuests calls.
     """
 

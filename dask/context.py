@@ -5,7 +5,6 @@ from __future__ import absolute_import, division, print_function
 
 import threading
 from functools import partial
-import warnings
 from . import config
 
 _globals = config.config
@@ -14,16 +13,14 @@ _globals = config.config
 thread_state = threading.local()
 
 
-_warned_set_options = [False]
-
-
 def set_options(*args, **kwargs):
     """ Deprecated: see dask.config.set instead """
-    if not _warned_set_options[0]:
-        warnings.warn("The dask.set_options function has been deprecated. "
-                      "Please use dask.config.set instead")
-        _warned_set_options[0] = True
-    return config.set(*args, **kwargs)
+    raise TypeError("The dask.set_options function has been deprecated.\n"
+                    "Please use dask.config.set instead\n\n"
+                    "  Before: with dask.set_options(foo='bar'):\n"
+                    "              ...\n"
+                    "  After:  with dask.config.set(foo='bar'):\n"
+                    "              ...")
 
 
 def globalmethod(default=None, key=None, falsey=None):
@@ -53,10 +50,10 @@ def globalmethod(default=None, key=None, falsey=None):
     >>> f = Foo()
     >>> f.bar()
     1
-    >>> with dask.set_options(bar=lambda: 2):
+    >>> with dask.config.set(bar=lambda: 2):
     ...     print(f.bar())
     2
-    >>> with dask.set_options(bar=False):
+    >>> with dask.config.set(bar=False):
     ...     print(f.bar())
     3
     """
@@ -68,7 +65,7 @@ def globalmethod(default=None, key=None, falsey=None):
 class GlobalMethod(object):
     def __init__(self, default, key, falsey=None):
         self._default = default
-        self._key = key
+        self._key = config.normalize_key(key)
         self._falsey = falsey
 
     def __get__(self, instance, owner=None):

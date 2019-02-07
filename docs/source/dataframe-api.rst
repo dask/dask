@@ -55,6 +55,7 @@ Dataframe
     DataFrame.ndim
     DataFrame.nlargest
     DataFrame.npartitions
+    DataFrame.partitions
     DataFrame.pow
     DataFrame.quantile
     DataFrame.query
@@ -83,6 +84,7 @@ Dataframe
     DataFrame.to_delayed
     DataFrame.to_hdf
     DataFrame.to_json
+    DataFrame.to_parquet
     DataFrame.to_records
     DataFrame.truediv
     DataFrame.values
@@ -196,7 +198,6 @@ Series
    Series.to_delayed
    Series.to_frame
    Series.to_hdf
-   Series.to_parquet
    Series.to_string
    Series.to_timestamp
    Series.truediv
@@ -285,6 +286,7 @@ Create DataFrames
 .. autosummary::
    read_csv
    read_table
+   read_fwf
    read_parquet
    read_hdf
    read_json
@@ -356,6 +358,7 @@ Storage and Conversion
 
 .. autofunction:: read_csv
 .. autofunction:: read_table
+.. autofunction:: read_fwf
 .. autofunction:: read_parquet
 .. autofunction:: read_orc
 .. autofunction:: read_hdf

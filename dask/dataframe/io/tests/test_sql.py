@@ -55,6 +55,42 @@ def test_empty(db):
         assert pd_dataframe.empty is True
 
 
+@pytest.mark.skip(reason="Requires a postgres server. Sqlite does not support multiple schemas.")
+def test_empty_other_schema():
+    from sqlalchemy import create_engine, MetaData, Table, Column, Integer, event, DDL
+    # Database configurations.
+    pg_host = 'localhost'
+    pg_port = '5432'
+    pg_user = 'user'
+    pg_pass = 'pass'
+    pg_db = 'db'
+    db_url = 'postgresql://%s:%s@%s:%s/%s' % (pg_user, pg_pass, pg_host, pg_port, pg_db)
+
+    # Create an empty table in a different schema.
+    table_name = 'empty_table'
+    schema_name = 'other_schema'
+    engine = create_engine(db_url)
+    metadata = MetaData()
+    table = Table(table_name, metadata,
+                  Column('id', Integer, primary_key=True),
+                  Column('col2', Integer), schema=schema_name)
+    # Create the schema and the table.
+    event.listen(metadata, 'before_create', DDL("CREATE SCHEMA IF NOT EXISTS %s" % schema_name))
+    metadata.create_all(engine)
+
+    # Read the empty table from the other schema.
+    dask_df = read_sql_table(table.name, db_url, index_col='id', schema=table.schema, npartitions=1)
+
+    # Validate that the retrieved table is empty.
+    assert dask_df.index.name == 'id'
+    assert dask_df.col2.dtype == np.dtype('int64')
+    pd_dataframe = dask_df.compute()
+    assert pd_dataframe.empty is True
+
+    # Drop the schema and the table.
+    engine.execute("DROP SCHEMA IF EXISTS %s CASCADE" % schema_name)
+
+
 def test_needs_rational(db):
     import datetime
     now = datetime.datetime.now()
@@ -206,3 +242,18 @@ def test_select_from_select(db):
                     ).select_from(sql.table('test'))
     out = read_sql_table(s1, db, npartitions=2, index_col='number')
     assert_eq(out, df[['name']])
+
+
+def test_extra_connection_engine_keywords(capsys, db):
+    data = read_sql_table('test', db, npartitions=2, index_col='number', engine_kwargs={'echo': False}
+                          ).compute()
+    # no captured message from the stdout with the echo=False parameter (this is the default)
+    out, err = capsys.readouterr()
+    assert "SELECT" not in out
+    assert_eq(data, df)
+    # with the echo=True sqlalchemy parameter, you should get all SQL queries in the stdout
+    data = read_sql_table('test', db, npartitions=2, index_col='number', engine_kwargs={'echo': True}
+                          ).compute()
+    out, err = capsys.readouterr()
+    assert "SELECT" in out
+    assert_eq(data, df)

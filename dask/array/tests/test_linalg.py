@@ -348,8 +348,8 @@ def _check_lu_result(p, l, u, A):
     assert np.allclose(p.dot(l).dot(u), A)
 
     # check triangulars
-    assert_eq(l, da.tril(l))
-    assert_eq(u, da.triu(u))
+    assert_eq(l, da.tril(l), check_graph=False)
+    assert_eq(u, da.triu(u), check_graph=False)
 
 
 def test_lu_1():
@@ -367,9 +367,9 @@ def test_lu_1():
         dA = da.from_array(A, chunks=(chunk, chunk))
         p, l, u = scipy.linalg.lu(A)
         dp, dl, du = da.linalg.lu(dA)
-        assert_eq(p, dp)
-        assert_eq(l, dl)
-        assert_eq(u, du)
+        assert_eq(p, dp, check_graph=False)
+        assert_eq(l, dl, check_graph=False)
+        assert_eq(u, du, check_graph=False)
         _check_lu_result(dp, dl, du, A)
 
     A3 = np.array([[ 7,  3,  2,  1,  4,  1],
@@ -521,24 +521,24 @@ def test_solve(shape, chunk):
     db = da.from_array(b, chunk)
 
     res = da.linalg.solve(dA, db)
-    assert_eq(res, scipy.linalg.solve(A, b))
-    assert_eq(dA.dot(res), b.astype(float))
+    assert_eq(res, scipy.linalg.solve(A, b), check_graph=False)
+    assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # tall-and-skinny matrix
     b = np.random.randint(1, 10, (shape, 5))
     db = da.from_array(b, (chunk, 5))
 
     res = da.linalg.solve(dA, db)
-    assert_eq(res, scipy.linalg.solve(A, b))
-    assert_eq(dA.dot(res), b.astype(float))
+    assert_eq(res, scipy.linalg.solve(A, b), check_graph=False)
+    assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # matrix
     b = np.random.randint(1, 10, (shape, shape))
     db = da.from_array(b, (chunk, chunk))
 
     res = da.linalg.solve(dA, db)
-    assert_eq(res, scipy.linalg.solve(A, b))
-    assert_eq(dA.dot(res), b.astype(float))
+    assert_eq(res, scipy.linalg.solve(A, b), check_graph=False)
+    assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
 
 @pytest.mark.parametrize(('shape', 'chunk'), [(20, 10), (50, 10)])
@@ -549,8 +549,8 @@ def test_inv(shape, chunk):
     dA = da.from_array(A, (chunk, chunk))
 
     res = da.linalg.inv(dA)
-    assert_eq(res, scipy.linalg.inv(A))
-    assert_eq(dA.dot(res), np.eye(shape, dtype=float))
+    assert_eq(res, scipy.linalg.inv(A), check_graph=False)
+    assert_eq(dA.dot(res), np.eye(shape, dtype=float), check_graph=False)
 
 
 def _get_symmat(size):
@@ -572,24 +572,24 @@ def test_solve_sym_pos(shape, chunk):
     db = da.from_array(b, chunk)
 
     res = da.linalg.solve(dA, db, sym_pos=True)
-    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True))
-    assert_eq(dA.dot(res), b.astype(float))
+    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True), check_graph=False)
+    assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # tall-and-skinny matrix
     b = np.random.randint(1, 10, (shape, 5))
     db = da.from_array(b, (chunk, 5))
 
     res = da.linalg.solve(dA, db, sym_pos=True)
-    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True))
-    assert_eq(dA.dot(res), b.astype(float))
+    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True), check_graph=False)
+    assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # matrix
     b = np.random.randint(1, 10, (shape, shape))
     db = da.from_array(b, (chunk, chunk))
 
     res = da.linalg.solve(dA, db, sym_pos=True)
-    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True))
-    assert_eq(dA.dot(res), b.astype(float))
+    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True), check_graph=False)
+    assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
 
 @pytest.mark.parametrize(('shape', 'chunk'), [(20, 10), (12, 3), (30, 3), (30, 6)])
@@ -597,8 +597,8 @@ def test_cholesky(shape, chunk):
 
     A = _get_symmat(shape)
     dA = da.from_array(A, (chunk, chunk))
-    assert_eq(da.linalg.cholesky(dA), scipy.linalg.cholesky(A))
-    assert_eq(da.linalg.cholesky(dA, lower=True), scipy.linalg.cholesky(A, lower=True))
+    assert_eq(da.linalg.cholesky(dA), scipy.linalg.cholesky(A), check_graph=False)
+    assert_eq(da.linalg.cholesky(dA, lower=True), scipy.linalg.cholesky(A, lower=True), check_graph=False)
 
 
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"),
@@ -659,10 +659,6 @@ def test_no_chunks_svd():
     [(5,), (2,), 0],
     [(5,), (2,), (0,)],
     [(5, 6), (2, 2), None],
-    [(5, 6), (2, 2), 0],
-    [(5, 6), (2, 2), 1],
-    [(5, 6), (2, 2), (0, 1)],
-    [(5, 6), (2, 2), (1, 0)],
 ])
 @pytest.mark.parametrize("norm", [
     None,
@@ -683,6 +679,40 @@ def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
     d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
 
     assert_eq(a_r, d_r)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("shape, chunks", [
+    [(5,), (2,)],
+    [(5, 3), (2, 2)],
+    [(4, 5, 3), (2, 2, 2)],
+    [(4, 5, 2, 3), (2, 2, 2, 2)],
+    [(2, 5, 2, 4, 3), (2, 2, 2, 2, 2)],
+])
+@pytest.mark.parametrize("norm", [
+    None,
+    1,
+    -1,
+    np.inf,
+    -np.inf,
+])
+@pytest.mark.parametrize("keepdims", [
+    False,
+    True,
+])
+def test_norm_any_slice(shape, chunks, norm, keepdims):
+    a = np.random.random(shape)
+    d = da.from_array(a, chunks=chunks)
+
+    for firstaxis in range(len(shape)):
+        for secondaxis in range(len(shape)):
+            if firstaxis != secondaxis:
+                axis = (firstaxis, secondaxis)
+            else:
+                axis = firstaxis
+            a_r = np.linalg.norm(a, ord=norm, axis=axis, keepdims=keepdims)
+            d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
+            assert_eq(a_r, d_r)
 
 
 @pytest.mark.parametrize("shape, chunks, axis", [
@@ -730,9 +760,30 @@ def test_norm_2dim(shape, chunks, axis, norm, keepdims):
 
     # Need one chunk on last dimension for svd.
     if norm == "nuc" or norm == 2 or norm == -2:
-        d = d.rechunk((d.chunks[0], d.shape[1]))
+        d = d.rechunk({-1: -1})
 
     a_r = np.linalg.norm(a, ord=norm, axis=axis, keepdims=keepdims)
     d_r = da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
 
     assert_eq(a_r, d_r)
+
+
+@pytest.mark.parametrize("shape, chunks, axis", [
+    [(3, 2, 4), (2, 2, 2), (1, 2)],
+    [(2, 3, 4, 5), (2, 2, 2, 2), (-1, -2)],
+])
+@pytest.mark.parametrize("norm", [
+    "nuc",
+    2,
+    -2
+])
+@pytest.mark.parametrize("keepdims", [
+    False,
+    True,
+])
+def test_norm_implemented_errors(shape, chunks, axis, norm, keepdims):
+    a = np.random.random(shape)
+    d = da.from_array(a, chunks=chunks)
+    if len(shape) > 2 and len(axis) == 2:
+        with pytest.raises(NotImplementedError):
+            da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)

@@ -1,13 +1,13 @@
 # coding=utf-8
 from __future__ import absolute_import, division, print_function
 
-import pytest
+from itertools import repeat
 import math
 import os
 import random
-from itertools import repeat
 
 import partd
+import pytest
 from toolz import merge, join, filter, identity, valmap, groupby, pluck
 
 import dask
@@ -57,31 +57,31 @@ def test_bag_map():
     def myadd(a=1, b=2, c=3):
         return a + b + c
 
-    assert db.map(myadd, b).compute() == list(map(myadd, x))
-    assert db.map(myadd, a=b).compute() == list(map(myadd, x))
-    assert db.map(myadd, b, b2).compute() == list(map(myadd, x, x2))
-    assert db.map(myadd, b, 10).compute() == [myadd(i, 10) for i in x]
-    assert db.map(myadd, 10, b=b).compute() == [myadd(10, b=i) for i in x]
+    assert_eq(db.map(myadd, b), list(map(myadd, x)))
+    assert_eq(db.map(myadd, a=b), list(map(myadd, x)))
+    assert_eq(db.map(myadd, b, b2), list(map(myadd, x, x2)))
+    assert_eq(db.map(myadd, b, 10), [myadd(i, 10) for i in x])
+    assert_eq(db.map(myadd, 10, b=b), [myadd(10, b=i) for i in x])
 
     sol = [myadd(i, b=j, c=100) for (i, j) in zip(x, x2)]
-    assert db.map(myadd, b, b=b2, c=100).compute() == sol
+    assert_eq(db.map(myadd, b, b=b2, c=100), sol)
 
     sol = [myadd(i, c=100) for (i, j) in zip(x, x2)]
-    assert db.map(myadd, b, c=100).compute() == sol
+    assert_eq(db.map(myadd, b, c=100), sol)
 
     x_sum = sum(x)
     sol = [myadd(x_sum, b=i, c=100) for i in x2]
-    assert db.map(myadd, b.sum(), b=b2, c=100).compute() == sol
+    assert_eq(db.map(myadd, b.sum(), b=b2, c=100), sol)
 
     sol = [myadd(i, b=x_sum, c=100) for i in x2]
-    assert db.map(myadd, b2, b.sum(), c=100).compute() == sol
+    assert_eq(db.map(myadd, b2, b.sum(), c=100), sol)
 
     sol = [myadd(a=100, b=x_sum, c=i) for i in x2]
-    assert db.map(myadd, a=100, b=b.sum(), c=b2).compute() == sol
+    assert_eq(db.map(myadd, a=100, b=b.sum(), c=b2), sol)
 
     a = dask.delayed(10)
-    assert db.map(myadd, b, a).compute() == [myadd(i, 10) for i in x]
-    assert db.map(myadd, b, b=a).compute() == [myadd(i, b=10) for i in x]
+    assert_eq(db.map(myadd, b, a), [myadd(i, 10) for i in x])
+    assert_eq(db.map(myadd, b, b=a), [myadd(i, b=10) for i in x])
 
     # Mispatched npartitions
     fewer_parts = db.from_sequence(range(100), npartitions=5)
@@ -245,6 +245,11 @@ def test_frequencies():
     assert_eq(bag2, [])
 
 
+def test_frequencies_sorted():
+    b = db.from_sequence(['a', 'b', 'b', 'b', 'c', 'c'])
+    assert list(b.frequencies(sort=True).compute()) == [('b', 3), ('c', 2), ('a', 1)]
+
+
 def test_topk():
     assert list(b.topk(4)) == [4, 4, 4, 3]
     c = b.topk(4, key=lambda x: -x)
@@ -400,23 +405,23 @@ def test_map_partitions_args_kwargs():
         return [max(a, b) for (a, b) in zip(x, y)]
 
     sol = maximum(x, y=10)
-    assert db.map_partitions(maximum, dx, y=10).compute() == sol
-    assert dx.map_partitions(maximum, y=10).compute() == sol
-    assert dx.map_partitions(maximum, 10).compute() == sol
+    assert_eq(db.map_partitions(maximum, dx, y=10), sol)
+    assert_eq(dx.map_partitions(maximum, y=10), sol)
+    assert_eq(dx.map_partitions(maximum, 10), sol)
 
     sol = maximum(x, y)
-    assert db.map_partitions(maximum, dx, dy).compute() == sol
-    assert dx.map_partitions(maximum, y=dy).compute() == sol
-    assert dx.map_partitions(maximum, dy).compute() == sol
+    assert_eq(db.map_partitions(maximum, dx, dy), sol)
+    assert_eq(dx.map_partitions(maximum, y=dy), sol)
+    assert_eq(dx.map_partitions(maximum, dy), sol)
 
     dy_mean = dy.mean().apply(int)
     sol = maximum(x, int(sum(y) / len(y)))
-    assert dx.map_partitions(maximum, y=dy_mean).compute() == sol
-    assert dx.map_partitions(maximum, dy_mean).compute() == sol
+    assert_eq(dx.map_partitions(maximum, y=dy_mean), sol)
+    assert_eq(dx.map_partitions(maximum, dy_mean), sol)
 
     dy_mean = dask.delayed(dy_mean)
-    assert dx.map_partitions(maximum, y=dy_mean).compute() == sol
-    assert dx.map_partitions(maximum, dy_mean).compute() == sol
+    assert_eq(dx.map_partitions(maximum, y=dy_mean), sol)
+    assert_eq(dx.map_partitions(maximum, dy_mean), sol)
 
 
 def test_random_sample_size():
@@ -497,18 +502,24 @@ def test_inline_singleton_lists():
     inp = {'b': (list, 'a'),
            'c': (f, 'b', 1)}
     out = {'c': (f, (list, 'a'), 1)}
-    assert inline_singleton_lists(inp) == out
+    assert inline_singleton_lists(inp, ['c']) == out
 
     out = {'c': (f, 'a', 1)}
     assert optimize(inp, ['c'], rename_fused_keys=False) == out
 
+    # If list is an output key, don't fuse it
+    assert inline_singleton_lists(inp, ['b', 'c']) == inp
+    assert optimize(inp, ['b', 'c'], rename_fused_keys=False) == inp
+
     inp = {'b': (list, 'a'),
            'c': (f, 'b', 1),
            'd': (f, 'b', 2)}
-    assert inline_singleton_lists(inp) == inp
+    assert inline_singleton_lists(inp, ['c', 'd']) == inp
 
-    inp = {'b': (4, 5)} # doesn't inline constants
-    assert inline_singleton_lists(inp) == inp
+    # Doesn't inline constants
+    inp = {'b': (4, 5),
+           'c': (f, 'b')}
+    assert inline_singleton_lists(inp, ['c']) == inp
 
 
 def test_take():
@@ -1133,7 +1144,8 @@ def test_groupby_tasks_names():
 
 
 @pytest.mark.parametrize('size,npartitions,groups', [(1000, 20, 100),
-                                                     (12345, 234, 1042)])
+                                                     (12345, 234, 1042),
+                                                     (100, 1, 50)])
 def test_groupby_tasks_2(size, npartitions, groups):
     func = lambda x: x % groups
     b = db.range(size, npartitions=npartitions).groupby(func, shuffle='tasks')
