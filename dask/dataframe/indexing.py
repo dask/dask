@@ -47,15 +47,15 @@ class _iLocIndexer(_IndexerBase):
         msg = ("'DataFrame.iloc' only supports selecting columns. "
                "It must be used like 'df.iloc[:, column_indexer]'.")
         if not isinstance(key, tuple):
-            raise ValueError(msg)
+            raise NotImplementedError(msg)
 
-        if len(key) != 2:
-            raise ValueError(msg)
+        if len(key) > 2:
+            raise ValueError("Too many indexers")
 
         iindexer, cindexer = key
 
         if iindexer != slice(None):
-            raise ValueError(msg)
+            raise NotImplementedError(msg)
 
         return self._iloc(iindexer, cindexer)
 
