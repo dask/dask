@@ -31,7 +31,9 @@ def _register_cudf():
     def _(x):
         return x[:0]
 
-    concat_dispatch.register(
-        (cudf.DataFrame, cudf.Series, cudf.Index),
-        cudf.concat
-    )
+    @concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+    def _(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
+        assert axis == 0
+        assert join == 'outer'
+        assert filter_warning is True
+        return cudf.concat(dfs)
