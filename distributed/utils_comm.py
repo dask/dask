@@ -7,6 +7,7 @@ import random
 from tornado import gen
 from tornado.gen import Return
 
+from dask.optimization import SubgraphCallable
 from toolz import merge, concat, groupby, drop
 
 from .core import rpc
@@ -177,11 +178,30 @@ def unpack_remotedata(o, byte_keys=False, myset=None):
 
     typ = type(o)
 
+    if typ is tuple:
+        if not o:
+            return o
+        if type(o[0]) is SubgraphCallable:
+            sc = o[0]
+            futures = set()
+            dsk = {k: unpack_remotedata(v, byte_keys, futures)
+                   for k, v in sc.dsk.items()}
+            args = tuple(unpack_remotedata(i, byte_keys, futures) for i in o[1:])
+            if futures:
+                myset.update(futures)
+                futures = (tuple(tokey(f.key) for f in futures)
+                           if byte_keys else tuple(f.key for f in futures))
+                inkeys = sc.inkeys + futures
+                return (SubgraphCallable(dsk, sc.outkey, inkeys, sc.name),) + args + futures
+            else:
+                return o
+        else:
+            return tuple(unpack_remotedata(item, byte_keys, myset) for item in o)
     if typ in collection_types:
         if not o:
             return o
         outs = [unpack_remotedata(item, byte_keys, myset) for item in o]
-        return type(o)(outs)
+        return typ(outs)
     elif typ is dict:
         if o:
             values = [unpack_remotedata(v, byte_keys, myset) for v in o.values()]

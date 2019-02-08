@@ -26,6 +26,7 @@ import weakref
 import dask
 from dask.base import tokenize, normalize_token, collections_to_dsk
 from dask.core import flatten, get_dependencies
+from dask.optimization import SubgraphCallable
 from dask.compatibility import apply, unicode
 try:
     from cytoolz import first, groupby, merge, valmap, keymap
@@ -3964,11 +3965,13 @@ def futures_of(o, client=None):
         x = stack.pop()
         if type(x) in (tuple, set, list):
             stack.extend(x)
-        if type(x) is dict:
+        elif type(x) is dict:
             stack.extend(x.values())
-        if isinstance(x, Future):
+        elif type(x) is SubgraphCallable:
+            stack.extend(x.dsk.values())
+        elif isinstance(x, Future):
             futures.add(x)
-        if dask.is_dask_collection(x):
+        elif dask.is_dask_collection(x):
             stack.extend(x.__dask_graph__().values())
 
     if client is not None:
