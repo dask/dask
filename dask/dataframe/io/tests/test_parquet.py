@@ -827,32 +827,34 @@ def test_partition_on(tmpdir, write_engine, read_engine):
         assert set(df.b[df.a == val]) == set(out.b[out.a == val])
 
 
-def test_filters(tmpdir):
-    check_fastparquet()
+@write_read_engines_xfail
+def test_filters(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
 
     df = pd.DataFrame({'at': ['ab', 'aa', 'ba', 'da', 'bb']})
     ddf = dd.from_pandas(df, npartitions=1)
 
     # Ok with 1 partition and filters
-    ddf.repartition(npartitions=1, force=True).to_parquet(fn, write_index=False)
-    ddf2 = dd.read_parquet(fn, index=False,
+    ddf.repartition(npartitions=1, force=True).to_parquet(fn, write_index=False,
+                                                          engine=write_engine)
+    ddf2 = dd.read_parquet(fn, index=False, engine=read_engine,
                            filters=[('at', '==', 'aa')]).compute()
     assert_eq(ddf2, ddf)
 
     # with >1 partition and no filters
-    ddf.repartition(npartitions=2, force=True).to_parquet(fn)
-    dd.read_parquet(fn).compute()
+    ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
+    dd.read_parquet(fn, engine=read_engine).compute()
     assert_eq(ddf2, ddf)
 
     # with >1 partition and filters using base fastparquet
-    ddf.repartition(npartitions=2, force=True).to_parquet(fn)
-    df2 = fastparquet.ParquetFile(fn).to_pandas(filters=[('at', '==', 'aa')])
-    assert len(df2) > 0
+    if read_engine == 'fastparquet':
+        ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
+        df2 = fastparquet.ParquetFile(fn).to_pandas(filters=[('at', '==', 'aa')])
+        assert len(df2) > 0
 
     # with >1 partition and filters
-    ddf.repartition(npartitions=2, force=True).to_parquet(fn)
-    dd.read_parquet(fn, filters=[('at', '==', 'aa')]).compute()
+    ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
+    dd.read_parquet(fn, engine=read_engine, filters=[('at', '==', 'aa')]).compute()
     assert len(ddf2) > 0
 
 
@@ -1166,18 +1168,6 @@ def test_parse_pandas_metadata_null_index():
     assert column_names == e_column_names
     assert mapping == e_mapping
     assert column_index_names == e_column_index_names
-
-
-def test_pyarrow_raises_filters_categoricals(tmpdir):
-    check_pyarrow()
-    tmp = str(tmpdir)
-    data = pd.DataFrame({"A": [1, 2]})
-    df = dd.from_pandas(data, npartitions=2)
-
-    df.to_parquet(tmp, write_index=False, engine="pyarrow")
-
-    with pytest.raises(NotImplementedError):
-        dd.read_parquet(tmp, engine="pyarrow", filters=["A>1"])
 
 
 def test_read_no_metadata(tmpdir, engine):

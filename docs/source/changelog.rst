@@ -2,6 +2,43 @@ Changelog
 =========
 
 
+1.1.1 / 2019-01-31
+------------------
+
+Array
++++++
+
+-  Add support for cupy.einsum (:pr:`4402`) `Johnnie Gray`_
+-  Provide byte size in chunks keyword (:pr:`4434`) `Adam Beberg`_
+-  Raise more informative error for histogram bins and range (:pr:`4430`) `James Bourbeau`_
+
+DataFrame
++++++++++
+
+-  Lazily register more cudf functions and move to backends file (:pr:`4396`) `Matthew Rocklin`_
+-  Fix ORC tests for pyarrow 0.12.0 (:pr:`4413`) `Jim Crist`_
+-  rearrange_by_column: ensure that shuffle arg defaults to 'disk' if it's None in dask.config (:pr:`4414`) `George Sakkis`_
+-  Implement filters for _read_pyarrow (:pr:`4415`) `George Sakkis`_
+-  Avoid checking against types in is_dataframe_like (:pr:`4418`) `Matthew Rocklin`_
+-  Pass username as 'user' when using pyarrow (:pr:`4438`) `Roma Sokolov`_
+
+Delayed
+-------
+
+-  Fix DelayedAttr return value (:pr:`4440`) `Matthew Rocklin`_
+
+Documentation
++++++++++++++
+
+-  Use SVG for pipeline graphic (:pr:`4406`) `John A Kirkham`_
+-  Add doctest-modules to py.test documentation (:pr:`4427`) `Daniel Severo`_
+
+Core
+++++
+
+-  Work around psutil 5.5.0 not allowing pickling Process objects `Dimplexion`_
+
+
 1.1.0 / 2019-01-18
 ------------------
 
@@ -1735,3 +1772,8 @@ Other
 .. _`Takahiro Kojima`: https://github.com/515hikaru
 .. _`Stuart Berg`: https://github.com/stuarteberg
 .. _`Guillaume Eynard-Bontemps`: https://github.com/guillaumeeb
+.. _`Adam Beberg`: https://github.com/beberg
+.. _`Johnnie Gray`: https://github.com/jcmgray
+.. _`Roma Sokolov`: https://github.com/little-arhat
+.. _`Daniel Severo`: https://github.com/daniel-severo
+.. _`Dimplexion`: https://github.com/Dimplexion

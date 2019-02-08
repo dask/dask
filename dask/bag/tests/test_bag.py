@@ -502,18 +502,24 @@ def test_inline_singleton_lists():
     inp = {'b': (list, 'a'),
            'c': (f, 'b', 1)}
     out = {'c': (f, (list, 'a'), 1)}
-    assert inline_singleton_lists(inp) == out
+    assert inline_singleton_lists(inp, ['c']) == out
 
     out = {'c': (f, 'a', 1)}
     assert optimize(inp, ['c'], rename_fused_keys=False) == out
 
+    # If list is an output key, don't fuse it
+    assert inline_singleton_lists(inp, ['b', 'c']) == inp
+    assert optimize(inp, ['b', 'c'], rename_fused_keys=False) == inp
+
     inp = {'b': (list, 'a'),
            'c': (f, 'b', 1),
            'd': (f, 'b', 2)}
-    assert inline_singleton_lists(inp) == inp
+    assert inline_singleton_lists(inp, ['c', 'd']) == inp
 
-    inp = {'b': (4, 5)} # doesn't inline constants
-    assert inline_singleton_lists(inp) == inp
+    # Doesn't inline constants
+    inp = {'b': (4, 5),
+           'c': (f, 'b')}
+    assert inline_singleton_lists(inp, ['c']) == inp
 
 
 def test_take():

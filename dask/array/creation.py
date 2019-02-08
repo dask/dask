@@ -694,15 +694,15 @@ def expand_pad_value(array, pad_value):
     elif (isinstance(pad_value, Sequence) and
           len(pad_value) == 2 and
           all(isinstance(pw, Number) for pw in pad_value)):
-            pad_value = tuple(
-                (pad_value[0], pad_value[1]) for _ in range(array.ndim)
-            )
+        pad_value = tuple(
+            (pad_value[0], pad_value[1]) for _ in range(array.ndim)
+        )
     elif (isinstance(pad_value, Sequence) and
           len(pad_value) == array.ndim and
           all(isinstance(pw, Sequence) for pw in pad_value) and
           all((len(pw) == 2) for pw in pad_value) and
           all(all(isinstance(w, Number) for w in pw) for pw in pad_value)):
-            pad_value = tuple((pw[0], pw[1]) for pw in pad_value)
+        pad_value = tuple((pw[0], pw[1]) for pw in pad_value)
     else:
         raise TypeError(
             "`pad_value` must be composed of integral typed values."
@@ -768,7 +768,7 @@ def pad_edge(array, pad_width, mode, *args):
         pad_shapes, pad_chunks = get_pad_shapes_chunks(result, pad_width, (d,))
         pad_arrays = [result, result]
 
-        if mode is "constant":
+        if mode == "constant":
             constant_values = args[0][d]
             constant_values = [
                 asarray(c).astype(result.dtype) for c in constant_values
@@ -788,12 +788,12 @@ def pad_edge(array, pad_width, mode, *args):
 
             pad_arrays = [result[sl] for sl in pad_slices]
 
-            if mode is "edge":
+            if mode == "edge":
                 pad_arrays = [
                     broadcast_to(a, s, c)
                     for a, s, c in zip(pad_arrays, pad_shapes, pad_chunks)
                 ]
-            elif mode is "linear_ramp":
+            elif mode == "linear_ramp":
                 end_values = args[0][d]
 
                 pad_arrays = [

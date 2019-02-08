@@ -601,6 +601,20 @@ def test_histogram_extra_args_and_shapes():
                   da.histogram(v, bins=bins, weights=w, density=True)[0])
 
 
+@pytest.mark.parametrize("bins, hist_range", [
+    (None, None),
+    (10, None),
+    (None, (1, 10)),
+])
+def test_histogram_bin_range_raises(bins, hist_range):
+    data = da.random.random(10, chunks=2)
+    with pytest.raises(ValueError) as info:
+        da.histogram(data, bins=bins, range=hist_range)
+    err_msg = str(info.value)
+    assert 'bins' in err_msg
+    assert 'range' in err_msg
+
+
 def test_cov():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(4, 4))
