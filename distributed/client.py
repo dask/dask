@@ -774,7 +774,7 @@ class Client(Node):
         if self.status in ('running', 'closing'):
             try:
                 self.scheduler_comm.send(msg)
-            except CommClosedError:
+            except (CommClosedError, AttributeError):
                 if self.status == 'running':
                     raise
         elif self.status in ('connecting', 'newly-created'):
