@@ -405,14 +405,15 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         started_cbs = []
         succeeded = False
         try:
+            keyorder = order(dsk)
+
+            state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
+
+            # extend started_cbs AFTER state is initialized
             for cb in callbacks:
                 if cb[0]:
                     cb[0](dsk)
                 started_cbs.append(cb)
-
-            keyorder = order(dsk)
-
-            state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
 
             for _, start_state, _, _, _ in callbacks:
                 if start_state:

@@ -29,6 +29,23 @@ def test_get_without_computation():
     assert get(dsk, 'x') == 1
 
 
+def test_broken_callback():
+    from dask.callbacks import Callback
+
+    def _f_ok(*args, **kwargs):
+        pass
+
+    def _f_broken(*args, **kwargs):
+        raise ValueError('my_exception')
+
+    dsk = {'x': 1}
+
+    with Callback(start=_f_broken, finish=_f_ok):
+        with Callback(start=_f_ok, finish=_f_ok):
+            with pytest.raises(ValueError, match='my_exception'):
+                get(dsk, 'x')
+
+
 def bad(x):
     raise ValueError()
 
