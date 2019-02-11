@@ -142,8 +142,7 @@ def read_sql_table(table, uri, index_col, divisions=None, npartitions=None,
         else:
             mini, maxi = limits
             dtype = pd.Series(limits).dtype
-        # print(minmax)
-        # print(dtype)
+
         if npartitions is None:
             q = sql.select([sql.func.count(index)]).select_from(table)
             count = pd.read_sql(q, engine)['count_1'][0]
