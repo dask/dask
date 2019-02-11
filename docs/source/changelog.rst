@@ -552,7 +552,7 @@ Core
 Array
 +++++
 
-- Add to/read_zarr for Zarr-format datasets and arrays (:pr:`3460`) `Martin Durant`_
+- Add to/from_zarr for Zarr-format datasets and arrays (:pr:`3460`) `Martin Durant`_
 - Experimental addition of generalized ufunc support, ``apply_gufunc``, ``gufunc``, and
   ``as_gufunc`` (:pr:`3109`) (:pr:`3526`) (:pr:`3539`) `Markus Gonser`_
 - Avoid unnecessary rechunking tasks (:pr:`3529`) `Matthew Rocklin`_
