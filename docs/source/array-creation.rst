@@ -275,7 +275,7 @@ or your own custom zarr Array:
    >>> z = zarr.create((10,), dtype=float, store=zarr.ZipStore("output.zarr"))
    >>> arr.to_zarr(z)
 
-To retrieve those data, you would do ``da.read_zarr`` with exactly the same arguments. The
+To retrieve those data, you would do ``da.from_zarr`` with exactly the same arguments. The
 chunking of the resultant Dask array is defined by how the files were saved, unless
 otherwise specified.
 
