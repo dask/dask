@@ -1523,7 +1523,7 @@ def from_sequence(seq, partition_size=None, npartitions=None):
         d = {(name, 0): []}
 
     return Bag(d, name, len(d))
- 
+
 
 def from_url(urls):
     """Create a dask Bag from a url.
