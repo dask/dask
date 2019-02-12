@@ -80,6 +80,7 @@ Top level user functions:
    fmin
    fmod
    frexp
+   from_block_function
    fromfunction
    frompyfunc
    full
@@ -445,6 +446,7 @@ Other functions
 .. autofunction:: fmin
 .. autofunction:: fmod
 .. autofunction:: frexp
+.. autofunction:: from_block_function
 .. autofunction:: fromfunction
 .. autofunction:: frompyfunc
 .. autofunction:: full
