@@ -301,14 +301,14 @@ def from_block_function(func, shape, chunks='auto', dtype=None, name=None, **kwa
     arrays with the ones on the main diagonal.
 
     >>> def eye_chunk(block_info):
-            location = block_info['array-location']
-            r0, r1 = location[0]
-            c0, c1 = location[1]
-            if r0 == c0:
-                return np.eye(r1 - r0, c1 - c0)
-            else:
-                return np.zeros((r1 - r0, c1 - c0))
-    >>> from_block_function(eye_chunk, (4, 4), chunks=2, dtype=float).compute()
+    ...     location = block_info['array-location']
+    ...     r0, r1 = location[0]
+    ...     c0, c1 = location[1]
+    ...     if r0 == c0:
+    ...         return np.eye(r1 - r0, c1 - c0)
+    ...     else:
+    ...         return np.zeros((r1 - r0, c1 - c0))
+    >>> from_block_function(eye_chunk, (4, 4), chunks=2, dtype=float)
     dask.array<eye_chunk, shape=(4, 4), dtype=float64, chunksize=(2, 2)>
     >>> _.compute()
     array([[1., 0., 0., 0.],
