@@ -540,7 +540,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
         return max(0, min(min(dim1, dim2), dim1 + offset, dim2 - offset))
 
     def _diagonal(x, offset, axis1, axis2):
-        return np.diagonal(asarray(x), axis1=axis1, axis2=axis2,
+        return np.diagonal(x, axis1=axis1, axis2=axis2,
                            offset=offset)
 
     diag_chunks = []
