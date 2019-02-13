@@ -1051,8 +1051,12 @@ def test_statistical_profiling_cycle(c, s, a, b):
     x = a.get_profile(start=time() + 10, stop=time() + 20)
     assert not x['count']
 
-    x = a.get_profile(start=0, stop=time())
-    assert x['count'] == sum(p['count'] for _, p in a.profile_history) + a.profile_recent['count']
+    for i in range(5):  # there is a chance that this will be slightly off. Try a few times
+        x = a.get_profile(start=0, stop=time())
+        if x['count'] == sum(p['count'] for _, p in a.profile_history) + a.profile_recent['count']:
+            break
+    else:
+        raise Exception(x['count'], sum(p['count'] for _, p in a.profile_history) + a.profile_recent['count'])
 
     y = a.get_profile(start=end - 0.300, stop=time())
     assert 0 < y['count'] <= x['count']
