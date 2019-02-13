@@ -244,7 +244,7 @@ class HTTPFile(object):
         requested, an exception is raised.
         """
         kwargs = self.kwargs.copy()
-        headers = self.kwargs.pop('headers', {})
+        headers = kwargs.pop('headers', {})
         headers['Range'] = 'bytes=%i-%i' % (start, end - 1)
         r = self.session.get(self.url, headers=headers, stream=True, **kwargs)
         r.raise_for_status()
