@@ -4520,11 +4520,14 @@ def _split_partitions(df, nsplits, new_name):
     split_name = 'split-{}'.format(tokenize(df, nsplits))
     j = 0
     for i, k in enumerate(nsplits):
-        # TODO: don't need to split for k==1
-        dsk[split_name, i] = (split_evenly, (df._name, i), k)
-        for jj in range(k):
-            dsk[new_name, j] = (getitem, (split_name, i), jj)
+        if k == 1:
+            dsk[new_name, j] = (df._name, i)
             j += 1
+        else:
+            dsk[split_name, i] = (split_evenly, (df._name, i), k)
+            for jj in range(k):
+                dsk[new_name, j] = (getitem, (split_name, i), jj)
+                j += 1
 
     divisions = [None] * (1 + sum(nsplits))
     graph = HighLevelGraph.from_collections(new_name, dsk, dependencies=[df])
