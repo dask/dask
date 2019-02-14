@@ -531,7 +531,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         to panda's implicit conversion of integer to floating upon encountering
         missingness, which is hard to infer statically.
     """
-    eq_types = {'i', 'f'} if numeric_equal else {}
+    eq_types = {'i', 'f', 'u'} if numeric_equal else set()
 
     def equal_dtypes(a, b):
         if is_categorical_dtype(a) != is_categorical_dtype(b):

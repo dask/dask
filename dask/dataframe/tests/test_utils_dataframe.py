@@ -287,7 +287,8 @@ def test_check_meta():
                        'b': [True, False, True],
                        'c': [1, 2.5, 3.5],
                        'd': [1, 2, 3],
-                       'e': pd.Categorical(['x', 'y', 'z'])})
+                       'e': pd.Categorical(['x', 'y', 'z']),
+                       'f': pd.Series([1, 2, 3], dtype=np.uint64)})
     meta = df.iloc[:0]
 
     # DataFrame metadata passthrough if correct
@@ -297,7 +298,10 @@ def test_check_meta():
     assert check_meta(e, meta.e) is e
     # numeric_equal means floats and ints are equivalent
     d = df.d
+    f = df.f
     assert check_meta(d, meta.d.astype('f8'), numeric_equal=True) is d
+    assert check_meta(f, meta.f.astype('f8'), numeric_equal=True) is f
+    assert check_meta(f, meta.f.astype('i8'), numeric_equal=True) is f
 
     # Series metadata error
     with pytest.raises(ValueError) as err:
