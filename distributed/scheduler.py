@@ -3954,7 +3954,7 @@ class Scheduler(ServerNode):
                     except KeyError:
                         pass
                     self.tasks[ts.key] = ts
-                for plugin in self.plugins:
+                for plugin in list(self.plugins):
                     try:
                         plugin.transition(key, start, finish2, *args, **kwargs)
                     except Exception:

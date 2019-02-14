@@ -1040,7 +1040,7 @@ def test_pause_executor(c, s, a):
     yield wait(futures)
 
 
-@gen_cluster(client=True, worker_kwargs={'profile_cycle_interval': 100})
+@gen_cluster(client=True, worker_kwargs={'profile_cycle_interval': '10 ms'})
 def test_statistical_profiling_cycle(c, s, a, b):
     futures = c.map(slowinc, range(20), delay=0.05)
     yield wait(futures)
