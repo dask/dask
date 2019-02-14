@@ -679,5 +679,18 @@ class BokehWorker(BokehServer):
         self.server = None
 
     @property
+    def extra(self):
+        return merge({'prefix': self.prefix}, template_variables)
+
+    @property
     def my_server(self):
         return self.worker
+
+    def listen(self, *args, **kwargs):
+        super(BokehWorker, self).listen(*args, **kwargs)
+
+        from .worker_html import routes
+        handlers = [(self.prefix + '/' + url, cls, {'server': self.my_server, 'extra': self.extra})
+                    for url, cls in routes]
+
+        self.server._tornado.add_handlers(r'.*', handlers)

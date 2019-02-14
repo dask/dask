@@ -42,6 +42,7 @@ conda install -q \
     mock \
     netcdf4 \
     paramiko \
+    prometheus_client \
     psutil \
     pytest \
     pytest-timeout \

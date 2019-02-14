@@ -31,6 +31,7 @@ call deactivate
     jupyter_client ^
     mock ^
     msgpack-python ^
+    prometheus_client ^
     psutil ^
     pytest ^
     python=%PYTHON% ^

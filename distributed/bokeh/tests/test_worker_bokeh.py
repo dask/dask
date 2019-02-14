@@ -118,3 +118,16 @@ def test_CommunicatingStream(c, s, a, b):
             len(first(bb.outgoing.data.values())))
     assert (len(first(aa.incoming.data.values())) and
             len(first(bb.incoming.data.values())))
+
+
+@gen_cluster(client=True,
+             check_new_threads=False,
+             worker_kwargs={'services': {('bokeh', 0):  BokehWorker}})
+def test_prometheus(c, s, a, b):
+    assert s.workers[a.address].services == {'bokeh': a.services['bokeh'].port}
+
+    http_client = AsyncHTTPClient()
+    for suffix in ['metrics']:
+        response = yield http_client.fetch('http://localhost:%d/%s'
+                                           % (a.services['bokeh'].port, suffix))
+        assert response.code == 200
