@@ -525,12 +525,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
     if axis1 == axis2:
         raise ValueError("axis1 and axis2 cannot be the same")
 
-    if isinstance(a, np.ndarray):
-        return diagonal(asarray(a), offset, axis1, axis2)
-
-    if not isinstance(a, Array):
-        raise TypeError("a must be a dask array or numpy array, "
-                        "got {0}".format(type(a)))
+    a = asarray(a)
 
     if axis1 > axis2:
         axis1, axis2 = axis2, axis1
@@ -538,10 +533,6 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
     def _diag_len(dim1, dim2, offset):
         return max(0, min(min(dim1, dim2), dim1 + offset, dim2 - offset))
-
-    def _diagonal(x, offset, axis1, axis2):
-        return np.diagonal(x, axis1=axis1, axis2=axis2,
-                           offset=offset)
 
     diag_chunks = []
     chunk_offsets = []
@@ -564,7 +555,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
             tsk = reduce(getitem, idx[axis1:axis2 - 1], tsk)[i2]
             tsk = reduce(getitem, idx[axis2 - 1:], tsk)
             k = chunk_offsets[i1][i2]
-            dsk[(name,) + idx + (i,)] = (_diagonal, tsk, k, axis1, axis2)
+            dsk[(name,) + idx + (i,)] = (np.diagonal, tsk, k, axis1, axis2)
 
     left_shape = tuple(a.shape[i] for i in idx_set)
     right_shape = (_diag_len(a.shape[axis1], a.shape[axis2], offset),)
