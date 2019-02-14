@@ -214,9 +214,10 @@ def start_worker(logdir, scheduler_addr, scheduler_port, worker_addr, nthreads, 
                  memory_limit,
                  worker_port,
                  nanny_port,
-                 remote_python=None):
+                 remote_python=None,
+                 remote_dask_worker='distributed.cli.dask_worker'):
 
-    cmd = ('{python} -m distributed.cli.dask_worker '
+    cmd = ('{python} -m {remote_dask_worker} '
            '{scheduler_addr}:{scheduler_port} '
            '--nthreads {nthreads} --nprocs {nprocs} ')
 
@@ -234,6 +235,7 @@ def start_worker(logdir, scheduler_addr, scheduler_port, worker_addr, nthreads, 
 
     cmd = cmd.format(
         python=remote_python or sys.executable,
+        remote_dask_worker=remote_dask_worker,
         scheduler_addr=scheduler_addr,
         scheduler_port=scheduler_port,
         worker_addr=worker_addr,
@@ -273,7 +275,8 @@ class SSHCluster(object):
     def __init__(self, scheduler_addr, scheduler_port, worker_addrs, nthreads=0, nprocs=1,
                  ssh_username=None, ssh_port=22, ssh_private_key=None,
                  nohost=False, logdir=None, remote_python=None,
-                 memory_limit=None, worker_port=None, nanny_port=None):
+                 memory_limit=None, worker_port=None, nanny_port=None,
+                 remote_dask_worker='distributed.cli.dask_worker'):
 
         self.scheduler_addr = scheduler_addr
         self.scheduler_port = scheduler_port
@@ -291,6 +294,7 @@ class SSHCluster(object):
         self.memory_limit = memory_limit
         self.worker_port = worker_port
         self.nanny_port = nanny_port
+        self.remote_dask_worker = remote_dask_worker
 
         # Generate a universal timestamp to use for log files
         import datetime
@@ -351,7 +355,8 @@ class SSHCluster(object):
                                          self.memory_limit,
                                          self.worker_port,
                                          self.nanny_port,
-                                         self.remote_python))
+                                         self.remote_python,
+                                         self.remote_dask_worker))
 
     def shutdown(self):
         all_processes = [self.scheduler] + self.workers
