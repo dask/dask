@@ -23,7 +23,7 @@ DataFrame
 -  Pass username as 'user' when using pyarrow (:pr:`4438`) `Roma Sokolov`_
 
 Delayed
--------
++++++++
 
 -  Fix DelayedAttr return value (:pr:`4440`) `Matthew Rocklin`_
 
