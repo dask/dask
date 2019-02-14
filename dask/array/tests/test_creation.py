@@ -1,3 +1,5 @@
+import threading
+
 import pytest
 pytest.importorskip('numpy')
 
@@ -87,6 +89,45 @@ def test_linspace(endpoint):
             sorted(da.linspace(1.4, 4.9, endpoint=endpoint, chunks=5, num=13).dask))
     assert (sorted(da.linspace(6, 49, endpoint=endpoint, chunks=5, dtype=float).dask) ==
             sorted(da.linspace(6, 49, endpoint=endpoint, chunks=5, dtype=float).dask))
+
+
+def _from_block_function_callback(block_info, calls, lock):
+    """Callback used in tests of from_block_function.
+
+    It generates a 2D array where each cell has value 1000*row+col.
+    It also appends the received `block_info` to `calls`, while
+    holding `lock`.
+    """
+    loc = block_info['array-location']
+    rows = np.arange(loc[0][0], loc[0][1])[:, np.newaxis]
+    cols = np.arange(loc[1][0], loc[1][1])[np.newaxis, :]
+    with lock:
+        calls.append(block_info)
+    return 1000 * rows + cols
+
+
+@pytest.mark.parametrize('dtype', [None])
+def test_from_block_function(dtype):
+    shape = (3, 4)
+    chunks = ((1, 2), 2)
+    num_chunks = (2, 2)
+    calls = []
+    lock = threading.Lock()
+    a = da.from_block_function(_from_block_function_callback, shape, chunks, dtype=dtype,
+                               calls=calls, lock=lock)
+    expected = np.array([[0, 1, 2, 3], [1000, 1001, 1002, 1003], [2000, 2001, 2002, 2003]])
+    assert_eq(a, expected)
+
+    if dtype is None:
+        # First call will be just to determine dtype
+        del calls[0]
+    calls.sort(key=lambda call: call['chunk-location'])
+    assert calls == [
+        {'shape': shape, 'num-chunks': num_chunks, 'chunk-location': (0, 0), 'array-location': [(0, 1), (0, 2)]},
+        {'shape': shape, 'num-chunks': num_chunks, 'chunk-location': (0, 1), 'array-location': [(0, 1), (2, 4)]},
+        {'shape': shape, 'num-chunks': num_chunks, 'chunk-location': (1, 0), 'array-location': [(1, 3), (0, 2)]},
+        {'shape': shape, 'num-chunks': num_chunks, 'chunk-location': (1, 1), 'array-location': [(1, 3), (2, 4)]}
+    ]
 
 
 def test_arange():
