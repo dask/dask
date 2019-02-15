@@ -531,21 +531,30 @@ def bincount(x, weights=None, minlength=None):
     if weights is not None:
         assert weights.chunks == x.chunks
 
-    # Call np.bincount on each block, possibly with weights
     token = tokenize(x, weights, minlength)
-    name = 'bincount-' + token
+    name = 'bincount-chunk' + token
     if weights is not None:
-        dsk = {(name, i): (np.bincount, (x.name, i), (weights.name, i), minlength)
-               for i, _ in enumerate(x.__dask_keys__())}
         dtype = np.bincount([1], weights=[1]).dtype
     else:
-        dsk = {(name, i): (np.bincount, (x.name, i), None, minlength)
-               for i, _ in enumerate(x.__dask_keys__())}
         dtype = np.bincount([]).dtype
 
-    # Sum up all of the intermediate bincounts per block
-    name = 'bincount-sum-' + token
-    dsk[(name, 0)] = (np.sum, list(dsk), 0)
+    name_reduce = 'bincount-partial-reduce-' + token
+    dsk = {}
+    for i, _ in enumerate(x.__dask_keys__()):
+        # Call np.bincount on each block, possibly with weights
+        if weights is not None:
+            dsk[(name, i)] = (np.bincount, (x.name, i), (weights.name, i), minlength)
+        else:
+            dsk[(name, i)] = (np.bincount, (x.name, i), None, minlength)
+        # Sum up all of the intermediate bincounts per block as they arrive
+        if i == 0:
+            dsk[(name_reduce, i)] = (np.copy, (name, i), 0)
+        else:
+            dsk[(name_reduce, i)] = (np.sum, [(name, i), (name_reduce, i - 1)], 0)
+
+    # coyp the final sum
+    name = 'bincount-final-' + token
+    dsk[(name, 0)] = (np.copy, (name_reduce, len(x.__dask_keys__()) - 1), 0)
 
     chunks = ((minlength,),)
 
