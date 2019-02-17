@@ -66,6 +66,7 @@ def test_prefix(c, s, a, b):
              check_new_threads=False,
              scheduler_kwargs={'services': {('bokeh', 0):  BokehScheduler}})
 def test_prometheus(c, s, a, b):
+    pytest.importorskip('prometheus_client')
     http_client = AsyncHTTPClient()
     response = yield http_client.fetch('http://localhost:%d/metrics'
                                        % s.services['bokeh'].port)
