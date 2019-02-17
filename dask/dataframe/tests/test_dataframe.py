@@ -1434,6 +1434,15 @@ def test_repartition_freq_month():
     assert 2 < ddf.npartitions <= 6
 
 
+def test_repartition_input_errors():
+    df = pd.DataFrame({'x': [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    with pytest.raises(ValueError):
+        ddf.repartition(npartitions=5, divisions=[None, None])
+    with pytest.raises(ValueError):
+        ddf.repartition(npartitions=5, partition_size='5MiB')
+
+
 def test_embarrassingly_parallel_operations():
     df = pd.DataFrame({'x': [1, 2, 3, 4, None, 6], 'y': list('abdabd')},
                       index=[10, 20, 30, 40, 50, 60])
