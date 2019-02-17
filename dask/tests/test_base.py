@@ -215,6 +215,12 @@ def test_tokenize_pandas_invalid_unicode():
 
 
 @pytest.mark.skipif('not pd')
+def test_tokenize_pandas_mixed_unicode_bytes():
+    df = pd.DataFrame({u'ö'.encode('utf8'): [1, 2, 3], u'ö': [u'ö', u'ö'.encode('utf8'), None]}, index=[1, 2, 3])
+    tokenize(df)
+
+
+@pytest.mark.skipif('not pd')
 def test_tokenize_pandas_no_pickle():
     class NoPickle(object):
         # pickling not supported because it is a local class

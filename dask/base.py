@@ -729,12 +729,13 @@ def register_numpy():
                     x.shape, x.strides, offset)
         if x.dtype.hasobject:
             try:
-                # string fast-path
-                data = hash_buffer_hex('-'.join(x.flat).encode(encoding='utf-8', errors='surrogatepass'))
-            except UnicodeDecodeError:
-                # bytes fast-path
-                data = hash_buffer_hex(b'-'.join(x.flat))
-            except TypeError:
+                try:
+                    # string fast-path
+                    data = hash_buffer_hex('-'.join(x.flat).encode(encoding='utf-8', errors='surrogatepass'))
+                except UnicodeDecodeError:
+                    # bytes fast-path
+                    data = hash_buffer_hex(b'-'.join(x.flat))
+            except (TypeError, UnicodeDecodeError):
                 # object data w/o fast-path, use fast cPickle
                 try:
                     data = hash_buffer_hex(cPickle.dumps(x, cPickle.HIGHEST_PROTOCOL))
