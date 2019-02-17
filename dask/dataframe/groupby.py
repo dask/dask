@@ -35,14 +35,14 @@ from ..highlevelgraph import HighLevelGraph
 # groupby operation. Therefore, the alignment has to be guaranteed by the
 # caller.
 #
-# To operate on matchings paritions, most groupby operations exploit the
+# To operate on matching partitions, most groupby operations exploit the
 # corresponding support in ``apply_concat_apply``. Specifically, this function
-# operates on matching paritiotns of frame-like objects passed as varargs.
+# operates on matching partitions of frame-like objects passed as varargs.
 #
 # After the inital chunk step, the passed index is implicitly passed along to
 # subsequent operations as the index of the parittions. Groupby operations on
-# the individual parttions can then access the index via the ``levels``
-# parameter of the ``groupby`` function. The correct arguments is determined by
+# the individual partitions can then access the index via the ``levels``
+# parameter of the ``groupby`` function. The correct argument is determined by
 # the ``_determine_levels`` function.
 #
 # To minimize overhead, series in an index that were obtained by getitem on the
