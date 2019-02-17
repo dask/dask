@@ -479,7 +479,7 @@ def _optimize_blockwise(full_graph, keys=()):
                 if layers[dep].concatenate != layers[layer].concatenate:
                     stack.append(dep)
                     continue
-                if sum(k == dep for k, _ in layers[layer].indices) > 1:
+                if sum(k == dep for k, ind in layers[layer].indices if ind is not None) > 1:
                     stack.append(dep)
                     continue
 
