@@ -124,6 +124,7 @@ def test_CommunicatingStream(c, s, a, b):
              check_new_threads=False,
              worker_kwargs={'services': {('bokeh', 0):  BokehWorker}})
 def test_prometheus(c, s, a, b):
+    pytest.importorskip('prometheus_client')
     assert s.workers[a.address].services == {'bokeh': a.services['bokeh'].port}
 
     http_client = AsyncHTTPClient()
