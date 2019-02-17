@@ -977,6 +977,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             Max number of bytes of memory for each partition. Use numbers or
             strings like 5MB. If specified npartitions and divisions will be
             ignored.
+            Note that this keyword argument triggers computation to determine
+            the memory size of each current partition, which may be expensive.
         freq : str, pd.Timedelta
             A period on which to partition timeseries data like ``'7D'`` or
             ``'12h'`` or ``pd.Timedelta(hours=12)``.  Assumes a datetime index.
@@ -4435,6 +4437,21 @@ def _repartition_from_boundaries(df, new_partitions_boundaries, new_name):
 
 
 def _split_partitions(df, nsplits, new_name):
+    """ Split a Dask dataframe into new partitions
+
+    Parameters
+    ----------
+    df: DataFrame or Series
+    nsplits: List[int]
+        Number of target dataframes for each partition
+        The length of nsplits should be the same as df.npartitions
+    new_name: str
+
+    See Also
+    --------
+    repartition_npartitions
+    repartition_size
+    """
     if len(nsplits) != df.npartitions:
         raise ValueError('nsplits should have len={}'.format(df.npartitions))
 
