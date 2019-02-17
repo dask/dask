@@ -44,7 +44,6 @@ def blockwise_token(i, prefix='_'):
 def blockwise(func, output, output_indices, *arrind_pairs, **kwargs):
     """ Create a Blockwise symbolic mutable mapping
 
-
     This is like the ``make_blockwise_graph`` function, but rather than construct a dict, it
     returns a symbolic Blockwise object.
 
@@ -120,6 +119,28 @@ class Blockwise(Mapping):
     dictionaries because we are able to fuse them during optimization,
     sometimes resulting in much lower overhead.
 
+    Parameters
+    ----------
+    output: str
+        The name of the output collection.  Used in keynames
+    output_indices: tuple
+        The output indices, like ``('i', 'j', 'k')`` used to determine the
+        structure of the block computations
+    dsk: dict
+        A small graph to apply per-output-block.  May include keys from the
+        input indices.
+    indices: Tuple[str, Tuple[str, str]]
+        An ordered mapping from input key name, like ``'x'``
+        to input indices, like ``('i', 'j')``
+        Or includes literals, which have ``None`` for an index value
+    numblocks: Dict[key, Sequence[int]]
+        Number of blocks along each dimension for each input
+    concatenate: boolean
+        Whether or not to pass contracted dimensions as a list of inputs or a
+        single input to the block function
+    new_axes: Dict
+        New index dimensions that may have been created, and their extent
+
     See Also
     --------
     dask.blockwise.blockwise
@@ -177,8 +198,8 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     """ Tensor operation
 
     Applies a function, ``func``, across blocks from many different input
-    dasks.  We arrange the pattern with which those blocks interact with sets
-    of matching indices.  E.g.::
+    collections.  We arrange the pattern with which those blocks interact with
+    sets of matching indices.  E.g.::
 
         make_blockwise_graph(func, 'z', 'i', 'x', 'i', 'y', 'i')
 
@@ -456,6 +477,9 @@ def _optimize_blockwise(full_graph, keys=()):
                     stack.append(dep)
                     continue
                 if layers[dep].concatenate != layers[layer].concatenate:
+                    stack.append(dep)
+                    continue
+                if sum(k == dep for k, _ in layers[layer].indices) > 1:
                     stack.append(dep)
                     continue
 
