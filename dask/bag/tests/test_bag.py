@@ -662,6 +662,13 @@ def test_from_long_sequence():
     assert set(b) == set(L)
 
 
+def test_from_empty_sequence():
+    b = db.from_sequence([])
+    assert b.npartitions == 1
+    df = b.to_dataframe(meta={'a': 'int'}).compute()
+    assert df.empty, 'DataFrame is not empty'
+
+
 def test_product():
     b2 = b.product(b)
     assert b2.npartitions == b.npartitions**2
