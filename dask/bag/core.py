@@ -1517,7 +1517,11 @@ def from_sequence(seq, partition_size=None, npartitions=None):
 
     parts = list(partition_all(partition_size, seq))
     name = 'from_sequence-' + tokenize(seq, partition_size)
-    d = dict(((name, i), list(part)) for i, part in enumerate(parts))
+    if len(parts) > 0:
+        d = dict(((name, i), list(part)) for i, part in enumerate(parts))
+    else:
+        d = {(name, 0): []}
+
     return Bag(d, name, len(d))
 
 
