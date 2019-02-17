@@ -1001,30 +1001,25 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         >>> df = df.repartition(divisions=[0, 5, 10, 20])  # doctest: +SKIP
         >>> df = df.repartition(freq='7d')  # doctest: +SKIP
         """
+        if sum([
+            partition_size is not None,
+            divisions is not None,
+            npartitions is not None,
+            freq is not None,
+        ]) != 1:
+            raise ValueError(
+                "Please provide exactly one of ``npartitions=``, ``freq=``, "
+                "``divisisions=``, ``partitions_size=`` keyword arguments"
+            )
 
         if partition_size is not None:
-            if npartitions is not None:
-                warnings.warn("When providing both partition_size and npartitions "
-                              "to repartition only partition_size is used.")
-            if isinstance(partition_size, string_types):
-                partition_size = parse_bytes(partition_size)
-            else:
-                partition_size = int(partition_size)
             return repartition_size(self, partition_size)
-
-        if npartitions is not None and divisions is not None:
-            warnings.warn("When providing both npartitions and divisions to "
-                          "repartition only npartitions is used.")
-
-        if npartitions is not None:
+        elif npartitions is not None:
             return repartition_npartitions(self, npartitions)
         elif divisions is not None:
             return repartition(self, divisions, force=force)
         elif freq is not None:
             return repartition_freq(self, freq=freq)
-        else:
-            raise ValueError("Provide either divisions=, npartitions= "
-                             "or partition_size= to repartition")
 
     @derived_from(pd.DataFrame)
     def fillna(self, value=None, method=None, limit=None, axis=None):
@@ -4399,6 +4394,10 @@ def repartition_size(df, size):
     """
     Repartition dataframe so that new partitions have approximately `size` memory usage each
     """
+    if isinstance(size, string_types):
+        size = parse_bytes(size)
+    size = int(size)
+
     mem_usages = df.map_partitions(total_mem_usage).compute()
 
     # 1. split each partition that is larger than partition_size
