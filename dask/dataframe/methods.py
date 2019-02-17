@@ -271,6 +271,12 @@ def concat(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
                     filter_warning=filter_warning)
 
 
+@concat_dispatch.register(list)
+def concat_list(dfs, *args, **kwargs):
+    func = concat_dispatch.dispatch(type(dfs[0]))
+    return func(dfs, *args, **kwargs)
+
+
 @concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True):
     if axis == 1:
