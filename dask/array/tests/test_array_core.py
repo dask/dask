@@ -3669,3 +3669,27 @@ def test_nbytes_auto():
         normalize_chunks(("100B", "10B"), shape=(10, 10), dtype='float64')
     with pytest.raises(ValueError):
         normalize_chunks(("10B", "10B"), shape=(10, 10), limit=20, dtype='float64')
+
+
+def test_cov_breakdown():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(x, chunks=(4, 4))
+    X = d + 1
+    X = da.dot(X, X.T)
+    g = X.dask
+    from dask.blockwise import _optimize_blockwise
+    g1 = _optimize_blockwise(g)
+    g2 = _optimize_blockwise(g1)
+
+    # g.visualize('g.pdf')
+    # g1.visualize('g1.pdf')
+    # g2.visualize('g2.pdf')
+    # dask.visualize(g, filename='dask.pdf')
+    # dask.visualize(g1, filename='dask1.pdf')
+    # dask.visualize(g2, filename='dask2.pdf')
+
+    add = g1.layers['add-da68e58d5e68dfb0b410e0db876f6fc1']
+    l1 = g1.layers['sum-bba3fc8e8b82dce35daaff3f2a1946c8']
+    l2 = g2.layers['sum-bba3fc8e8b82dce35daaff3f2a1946c8']
+
+    assert_eq(X.compute(optimize_graph=False), X)
