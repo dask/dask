@@ -1321,7 +1321,7 @@ def test_repartition_on_pandas_dataframe():
 @pytest.mark.parametrize('use_index', [True, False])
 @pytest.mark.parametrize('n', [1, 2, 4, 5])
 @pytest.mark.parametrize('k', [1, 2, 4, 5])
-@pytest.mark.parametrize('dtype', [int, float, 'M8[ns]'])
+@pytest.mark.parametrize('dtype', [float, 'M8[ns]'])
 @pytest.mark.parametrize('transform', [lambda df: df, lambda df: df.x])
 def test_repartition_npartitions(use_index, n, k, dtype, transform):
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6] * 10,
@@ -1338,13 +1338,12 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
 
 @pytest.mark.parametrize('use_index', [True, False])
 @pytest.mark.parametrize('n', [1, 5])
-@pytest.mark.parametrize('partition_size', [1024, '1024', '1.024kB', '1kiB'])
-@pytest.mark.parametrize('dtype', [int, float])
+@pytest.mark.parametrize('partition_size', ['1kiB'])
 @pytest.mark.parametrize('transform', [lambda df: df, lambda df: df.x])
-def test_repartition_partition_size(use_index, n, partition_size, dtype, transform):
+def test_repartition_partition_size(use_index, n, partition_size, transform):
     df = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6] * 10,
                        'y': list('abdabd') * 10},
-                      index=pd.Series([10, 20, 30, 40, 50, 60] * 10, dtype=dtype))
+                      index=pd.Series([10, 20, 30, 40, 50, 60] * 10))
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
     b = a.repartition(partition_size=partition_size)
