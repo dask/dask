@@ -390,7 +390,7 @@ def lol_tuples(head, ind, values, dummies):
                 for v in dummies[ind[0]]]
 
 
-def optimize_blockwise(full_graph, keys=()):
+def optimize_blockwise(graph, keys=()):
     """ High level optimization of stacked Blockwise layers
 
     For operations that have multiple Blockwise operations one after the other, like
@@ -415,6 +415,14 @@ def optimize_blockwise(full_graph, keys=()):
     --------
     rewrite_blockwise
     """
+    out = _optimize_blockwise(graph, keys=keys)
+    while out.dependencies != graph.dependencies:
+        graph = out
+        out = _optimize_blockwise(graph, keys=keys)
+    return out
+
+
+def _optimize_blockwise(full_graph, keys=()):
     keep = {k[0] if type(k) is tuple else k for k in keys}
     layers = full_graph.dicts
     dependents = core.reverse_dict(full_graph.dependencies)
