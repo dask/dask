@@ -250,7 +250,13 @@ def _var_chunk(df, *index):
     x2 = g2.sum().rename(columns=lambda c: c + '-x2')
 
     x2.index = x.index
-    return pd.concat([x, x2, n], axis=1)
+    df = x
+    for c in x2.columns:
+        df[c] = x2[c]
+    for c in n.columns:
+        df[c] = n[c]
+    df = df[list(x.columns) + list(x2.columns) + list(n.columns)]
+    return df
 
 
 def _var_combine(g, levels):
