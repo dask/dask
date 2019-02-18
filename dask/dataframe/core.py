@@ -2416,9 +2416,9 @@ class Index(Series):
                                    meta=self._meta.to_series())
 
     @derived_from(pd.Index)
-    def to_frame(self, index=True, name=None):
-        return self.map_partitions(M.to_frame, index, name,
-                                   meta=self._meta.to_frame(index, name))
+    def to_frame(self, name=None):
+        return self.map_partitions(M.to_frame, True, name,
+                                   meta=self._meta.to_frame(True, name))
 
 
 class DataFrame(_Frame):
