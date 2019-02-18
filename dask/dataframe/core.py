@@ -2415,6 +2415,11 @@ class Index(Series):
         return self.map_partitions(M.to_series,
                                    meta=self._meta.to_series())
 
+    @derived_from(pd.Index)
+    def to_frame(self, index=True, name=None):
+        return self.map_partitions(M.to_frame, index, name,
+                                   meta=self._meta.to_frame(index, name))
+
 
 class DataFrame(_Frame):
     """
