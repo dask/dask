@@ -286,3 +286,12 @@ def test_gh3937():
     y = da.coarsen(np.sum, y, {0: 2})
     # How to trigger the optimizer explicitly?
     y.compute()
+
+
+def test_double_dependencies():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(x, chunks=(4, 4))
+    X = d + 1
+    X = da.dot(X, X.T)
+
+    assert_eq(X.compute(optimize_graph=False), X)
