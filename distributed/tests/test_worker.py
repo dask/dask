@@ -1040,7 +1040,7 @@ def test_pause_executor(c, s, a):
     yield wait(futures)
 
 
-@gen_cluster(client=True, worker_kwargs={'profile_cycle_interval': '10 ms'})
+@gen_cluster(client=True, worker_kwargs={'profile_cycle_interval': '50 ms'})
 def test_statistical_profiling_cycle(c, s, a, b):
     futures = c.map(slowinc, range(20), delay=0.05)
     yield wait(futures)
@@ -1051,12 +1051,10 @@ def test_statistical_profiling_cycle(c, s, a, b):
     x = a.get_profile(start=time() + 10, stop=time() + 20)
     assert not x['count']
 
-    for i in range(5):  # there is a chance that this will be slightly off. Try a few times
-        x = a.get_profile(start=0, stop=time())
-        if x['count'] == sum(p['count'] for _, p in a.profile_history) + a.profile_recent['count']:
-            break
-    else:
-        raise Exception(x['count'], sum(p['count'] for _, p in a.profile_history) + a.profile_recent['count'])
+    x = a.get_profile(start=0, stop=time())
+    actual = sum(p['count'] for _, p in a.profile_history) + a.profile_recent['count']
+    x2 = a.get_profile(start=0, stop=time())
+    assert x['count'] <= actual <= x2['count']
 
     y = a.get_profile(start=end - 0.300, stop=time())
     assert 0 < y['count'] <= x['count']

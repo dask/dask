@@ -70,7 +70,8 @@ def test_fractional_timer():
 @contextlib.contextmanager
 def enable_gc_diagnosis_and_log(diag, level='INFO'):
     disable_gc_diagnosis(force=True)  # just in case
-    assert not gc.callbacks
+    if gc.callbacks:
+        print("Unexpected gc.callbacks", gc.callbacks)
 
     with captured_logger('distributed.utils_perf', level=level,
                          propagate=False) as sio:
