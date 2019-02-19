@@ -565,9 +565,16 @@ def typename(typ):
     Examples
     --------
     >>> typename(int)
-    'builtins.int'
+    'int'
+
+    >>> from dask.core import literal
+    >>> typename(literal)
+    'dask.core.literal'
     """
-    return typ.__module__ + '.' + typ.__name__
+    if not typ.__module__ or typ.__module__ == 'builtins':
+        return typ.__name__
+    else:
+        return typ.__module__ + '.' + typ.__name__
 
 
 def ensure_bytes(s):
