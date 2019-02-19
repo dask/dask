@@ -1305,3 +1305,11 @@ def test_bag_paths():
     assert b.to_textfiles('foo*') == ['foo0', 'foo1']
     os.remove('foo0')
     os.remove('foo1')
+
+
+def test_map_keynames():
+    b = db.from_sequence([1, 2, 3])
+    d = dict(b.map(inc).__dask_graph__())
+    assert 'inc' in map(dask.utils.key_split, d)
+
+    assert set(b.map(inc).__dask_graph__()) != set(b.map_partitions(inc).__dask_graph__())
