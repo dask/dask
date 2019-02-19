@@ -1306,6 +1306,7 @@ def test_bag_paths():
     os.remove('foo0')
     os.remove('foo1')
 
+
 def test_map_partitions_arg():
     def append_str(partition, s):
         return [x + s for x in partition]
