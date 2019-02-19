@@ -405,10 +405,18 @@ def test_groupby_set_index():
                   lambda: ddf.groupby(df.index.month, as_index=False))
 
 
-def test_split_apply_combine_on_series():
-    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7],
-                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2]},
-                       index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+@pytest.mark.parametrize('empty', [True, False])
+def test_split_apply_combine_on_series(empty):
+    if empty:
+        pdf = pd.DataFrame({'a': [1.], 'b': [1.]}, index=[0]).iloc[:0]
+        # There's a bug in pandas where df.groupby(...).var(ddof=0) results in
+        # no columns. Just skip these checks for now.
+        ddofs = []
+    else:
+        ddofs = [0, 1, 2]
+        pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7],
+                            'b': [4, 2, 7, 3, 3, 1, 1, 1, 2]},
+                           index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
     ddf = dd.from_pandas(pdf, npartitions=3)
 
     for ddkey, pdkey in [('b', 'b'), (ddf.b, pdf.b), (ddf.b + 1, pdf.b + 1)]:
@@ -420,7 +428,7 @@ def test_split_apply_combine_on_series():
         assert_eq(ddf.groupby(ddkey).a.size(), pdf.groupby(pdkey).a.size())
         assert_eq(ddf.groupby(ddkey).a.first(), pdf.groupby(pdkey).a.first())
         assert_eq(ddf.groupby(ddkey).a.last(), pdf.groupby(pdkey).a.last())
-        for ddof in [0, 1, 2]:
+        for ddof in ddofs:
             assert_eq(ddf.groupby(ddkey).a.var(ddof),
                       pdf.groupby(pdkey).a.var(ddof))
             assert_eq(ddf.groupby(ddkey).a.std(ddof),
@@ -435,7 +443,7 @@ def test_split_apply_combine_on_series():
         assert_eq(ddf.groupby(ddkey).first(), pdf.groupby(pdkey).first())
         assert_eq(ddf.groupby(ddkey).last(), pdf.groupby(pdkey).last())
 
-        for ddof in [0, 1, 2]:
+        for ddof in ddofs:
             assert_eq(ddf.groupby(ddkey).var(ddof),
                       pdf.groupby(pdkey).var(ddof), check_dtype=False)
             assert_eq(ddf.groupby(ddkey).std(ddof),
@@ -450,7 +458,7 @@ def test_split_apply_combine_on_series():
         assert_eq(ddf.a.groupby(ddkey).first(), pdf.a.groupby(pdkey).first(), check_names=False)
         assert_eq(ddf.a.groupby(ddkey).last(), pdf.a.groupby(pdkey).last(), check_names=False)
 
-        for ddof in [0, 1, 2]:
+        for ddof in ddofs:
             assert_eq(ddf.a.groupby(ddkey).var(ddof),
                       pdf.a.groupby(pdkey).var(ddof))
             assert_eq(ddf.a.groupby(ddkey).std(ddof),
@@ -495,7 +503,7 @@ def test_split_apply_combine_on_series():
         assert_eq(ddf.groupby(ddf.a > i).first(), pdf.groupby(pdf.a > i).first())
         assert_eq(ddf.groupby(ddf.a > i).last(), pdf.groupby(pdf.a > i).last())
 
-        for ddof in [0, 1, 2]:
+        for ddof in ddofs:
             assert_eq(ddf.groupby(ddf.b > i).std(ddof),
                       pdf.groupby(pdf.b > i).std(ddof))
 
@@ -520,7 +528,7 @@ def test_split_apply_combine_on_series():
         assert_eq(ddf.groupby(ddkey).first(), pdf.groupby(pdkey).first())
         assert_eq(ddf.groupby(ddkey).last(), pdf.groupby(pdkey).last())
 
-        for ddof in [0, 1, 2]:
+        for ddof in ddofs:
             assert_eq(ddf.groupby(ddkey).b.std(ddof),
                       pdf.groupby(pdkey).b.std(ddof))
 
