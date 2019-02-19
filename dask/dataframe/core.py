@@ -27,7 +27,7 @@ from ..compatibility import (apply, operator_div, bind_method, string_types,
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
-                     is_arraylike)
+                     is_arraylike, typename)
 from ..array.core import Array, normalize_arg
 from ..blockwise import blockwise, Blockwise
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
@@ -90,7 +90,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
         meta = make_meta(meta)
         if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
             raise TypeError("Expected meta to specify scalar, got "
-                            "{0}".format(type(meta).__name__))
+                            "{0}".format(typename(type(meta))))
         self._meta = meta
 
     def __dask_graph__(self):
@@ -253,8 +253,8 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         meta = make_meta(meta)
         if not isinstance(meta, self._partition_type):
             raise TypeError("Expected meta to specify type {0}, got type "
-                            "{1}".format(self._partition_type.__name__,
-                                         type(meta).__name__))
+                            "{1}".format(typename(self._partition_type),
+                                         typename(type(meta))))
         self._meta = meta
         self.divisions = tuple(divisions)
 
