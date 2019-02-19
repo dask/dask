@@ -3240,9 +3240,34 @@ class DataFrame(_Frame):
         return pivot_table(self, index=index, columns=columns, values=values,
                            aggfunc=aggfunc)
 
-    def to_records(self, index=False):
+    def to_records(self, lengths=None, index=False):
         from .io import to_records
-        return to_records(self)
+        from dask.array.core import normalize_chunks
+
+        if lengths is True:
+            lengths = tuple(self.map_partitions(len).compute())
+
+        records = to_records(self)
+
+        if isinstance(lengths, Sequence):
+            lengths = tuple(lengths)
+
+            if len(lengths) != self.npartitions:
+                raise ValueError(
+                    "The number of items in 'lengths' does not match "
+                    "the number of partitions. "
+                    "{} != {}".format(len(lengths), self.npartitions)
+                )
+
+            if self.ndim == 1:
+                chunks = normalize_chunks((lengths,))
+            else:
+                chunks = normalize_chunks((lengths, (len(self.columns),)))
+
+            records._chunks = chunks
+        elif lengths is not None:
+            raise ValueError("Unexpected value for 'lengths': '{}'".format(lengths))
+        return records
 
     @derived_from(pd.DataFrame)
     def to_html(self, max_rows=5):
