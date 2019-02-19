@@ -343,7 +343,7 @@ class Item(DaskMethodsMixin):
         self.dask, self.key = state
 
     def apply(self, func):
-        name = 'apply-{0}-{1}'.format(funcname(func), tokenize(self, func))
+        name = '{0}-{1}'.format(funcname(func), tokenize(self, func, 'apply'))
         dsk = {name: (func, self.key)}
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return Item(graph, name)
@@ -538,8 +538,8 @@ class Bag(DaskMethodsMixin):
         >>> b.starmap(myadd, z=max_second).compute()
         [13, 17, 21, 25, 29]
         """
-        name = 'starmap-{0}-{1}'.format(funcname(func),
-                                        tokenize(self, func, kwargs))
+        name = '{0}-{1}'.format(funcname(func),
+                                tokenize(self, func, 'starmap', **kwargs))
         dependencies = [self]
         if kwargs:
             kwargs, collections = unpack_scalar_dask_kwargs(kwargs)
@@ -1849,7 +1849,7 @@ def bag_map(func, *args, **kwargs):
     >>> db.map(myadd, b, b.max()).compute()
     [4, 5, 6, 7, 8]
     """
-    name = 'map-%s-%s' % (funcname(func), tokenize(func, args, kwargs))
+    name = '%s-%s' % (funcname(func), tokenize(func, 'map', *args, **kwargs))
     dsk = {}
     dependencies = []
 
@@ -1942,8 +1942,8 @@ def map_partitions(func, *args, **kwargs):
     single graph, and then computes everything at once, and in some cases
     may be more efficient.
     """
-    name = 'map-partitions-%s-%s' % (funcname(func),
-                                     tokenize(func, args, kwargs))
+    name = '%s-%s' % (funcname(func),
+                      tokenize(func, 'map-partitions', *args, **kwargs))
     dsk = {}
     dependencies = []
 
