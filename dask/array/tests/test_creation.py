@@ -7,7 +7,7 @@ from toolz import concat
 
 import dask
 import dask.array as da
-from dask.array.utils import assert_eq, same_keys
+from dask.array.utils import assert_eq, same_keys, AxisError
 
 
 @pytest.mark.parametrize(
@@ -376,6 +376,89 @@ def test_diag():
 
     d = da.from_array(x, chunks=(4, 4))
     assert_eq(da.diag(d), np.diag(x))
+
+
+def test_diagonal():
+    v = np.arange(11)
+    with pytest.raises(ValueError):
+        da.diagonal(v)
+
+    v = np.arange(4).reshape((2, 2))
+    with pytest.raises(ValueError):
+        da.diagonal(v, axis1=0, axis2=0)
+
+    with pytest.raises(AxisError):
+        da.diagonal(v, axis1=-4)
+
+    with pytest.raises(AxisError):
+        da.diagonal(v, axis2=-4)
+
+    v = np.arange(4 * 5 * 6).reshape((4, 5, 6))
+    v = da.from_array(v, chunks=2)
+    assert_eq(da.diagonal(v), np.diagonal(v))
+    # Empty diagonal.
+    assert_eq(da.diagonal(v, offset=10), np.diagonal(v, offset=10))
+    assert_eq(da.diagonal(v, offset=-10), np.diagonal(v, offset=-10))
+
+    with pytest.raises(ValueError):
+        da.diagonal(v, axis1=-2)
+
+    # Negative axis.
+    assert_eq(da.diagonal(v, axis1=-1), np.diagonal(v, axis1=-1))
+    assert_eq(da.diagonal(v, offset=1, axis1=-1), np.diagonal(v, offset=1, axis1=-1))
+
+    # Heterogenous chunks.
+    v = np.arange(2 * 3 * 4 * 5 * 6).reshape((2, 3, 4, 5, 6))
+    v = da.from_array(v, chunks=(1, (1, 2), (1, 2, 1), (2, 1, 2), (5, 1)))
+
+    assert_eq(da.diagonal(v), np.diagonal(v))
+    assert_eq(da.diagonal(v, offset=2, axis1=3, axis2=1),
+              np.diagonal(v, offset=2, axis1=3, axis2=1))
+
+    assert_eq(da.diagonal(v, offset=-2, axis1=3, axis2=1),
+              np.diagonal(v, offset=-2, axis1=3, axis2=1))
+
+    assert_eq(da.diagonal(v, offset=-2, axis1=3, axis2=4),
+              np.diagonal(v, offset=-2, axis1=3, axis2=4))
+
+    assert_eq(da.diagonal(v, 1), np.diagonal(v, 1))
+    assert_eq(da.diagonal(v, -1), np.diagonal(v, -1))
+    # Positional arguments
+    assert_eq(da.diagonal(v, 1, 2, 1), np.diagonal(v, 1, 2, 1))
+
+    v = np.arange(2 * 3 * 4 * 5 * 6).reshape((2, 3, 4, 5, 6))
+    assert_eq(da.diagonal(v, axis1=1, axis2=3), np.diagonal(v, axis1=1, axis2=3))
+    assert_eq(da.diagonal(v, offset=1, axis1=1, axis2=3),
+              np.diagonal(v, offset=1, axis1=1, axis2=3))
+
+    assert_eq(da.diagonal(v, offset=1, axis1=3, axis2=1),
+              np.diagonal(v, offset=1, axis1=3, axis2=1))
+
+    assert_eq(da.diagonal(v, offset=-5, axis1=3, axis2=1),
+              np.diagonal(v, offset=-5, axis1=3, axis2=1))
+
+    assert_eq(da.diagonal(v, offset=-6, axis1=3, axis2=1),
+              np.diagonal(v, offset=-6, axis1=3, axis2=1))
+
+    assert_eq(da.diagonal(v, offset=-6, axis1=-3, axis2=1),
+              np.diagonal(v, offset=-6, axis1=-3, axis2=1))
+
+    assert_eq(da.diagonal(v, offset=-6, axis1=-3, axis2=1),
+              np.diagonal(v, offset=-6, axis1=-3, axis2=1))
+
+    v = da.from_array(v, chunks=2)
+    assert_eq(da.diagonal(v, offset=1, axis1=3, axis2=1),
+              np.diagonal(v, offset=1, axis1=3, axis2=1))
+    assert_eq(da.diagonal(v, offset=-1, axis1=3, axis2=1),
+              np.diagonal(v, offset=-1, axis1=3, axis2=1))
+
+    v = np.arange(384).reshape((8, 8, 6))
+    assert_eq(da.diagonal(v, offset=-1, axis1=2),
+              np.diagonal(v, offset=-1, axis1=2))
+
+    v = da.from_array(v, chunks=(4, 4, 2))
+    assert_eq(da.diagonal(v, offset=-1, axis1=2),
+              np.diagonal(v, offset=-1, axis1=2))
 
 
 @pytest.mark.parametrize('dtype', [None, 'f8', 'i8'])
