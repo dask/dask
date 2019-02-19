@@ -782,3 +782,17 @@ def test_set_index_does_not_repeat_work_due_to_optimizations(npartitions):
     ddf.set_index('x', npartitions=npartitions)
     ntimes = next(count)
     assert ntimes == nparts
+
+
+def test_set_index_errors_with_inplace_kwarg():
+    df = pd.DataFrame({
+        'a': [9, 8, 7],
+        'b': [6, 5, 4],
+        'c': [3, 2, 1]
+    })
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    ddf.set_index('a')
+
+    with pytest.raises(NotImplementedError):
+        ddf.set_index('a', inplace=True)
