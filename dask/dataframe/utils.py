@@ -398,13 +398,12 @@ def _nonempty_index(idx):
                                  name=idx.name)
     elif typ is pd.CategoricalIndex:
         if len(idx.categories) == 0:
-            data = _nonempty_index(idx.categories)
-            cats = None
+            data = pd.Categorical(_nonempty_index(idx.categories),
+                                  ordered=idx.ordered)
         else:
-            data = _nonempty_index(_nonempty_index(idx.categories))
-            cats = idx.categories
-        return pd.CategoricalIndex(data, categories=cats,
-                                   ordered=idx.ordered, name=idx.name)
+            data = pd.Categorical.from_codes(
+                [-1, 0], categories=idx.categories, ordered=idx.ordered)
+        return pd.CategoricalIndex(data, name=idx.name)
     elif typ is pd.MultiIndex:
         levels = [_nonempty_index(l) for l in idx.levels]
         labels = [[0, 0] for i in idx.levels]
