@@ -558,6 +558,18 @@ def funcname(func):
         return str(func)
 
 
+def typename(typ):
+    """
+    Return the name of a type
+
+    Examples
+    --------
+    >>> typename(int)
+    'builtins.int'
+    """
+    return typ.__module__ + '.' + typ.__name__
+
+
 def ensure_bytes(s):
     """ Turn string or bytes to bytes
 
