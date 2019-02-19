@@ -727,7 +727,8 @@ class Bag(DaskMethodsMixin):
         return to_avro(self, filename, schema, name_function, storage_options,
                        codec, sync_interval, metadata, compute, **kwargs)
 
-    def fold(self, binop, combine=None, initial=no_default, split_every=None):
+    def fold(self, binop, combine=None, initial=no_default, split_every=None,
+             out_type=Item):
         """ Parallelizable reduction
 
         Fold is like the builtin function ``reduce`` except that it works in
@@ -777,11 +778,11 @@ class Bag(DaskMethodsMixin):
         if initial is not no_default:
             return self.reduction(curry(_reduce, binop, initial=initial),
                                   curry(_reduce, combine),
-                                  split_every=split_every)
+                                  split_every=split_every, out_type=out_type)
         else:
             from toolz.curried import reduce
             return self.reduction(reduce(binop), reduce(combine),
-                                  split_every=split_every)
+                                  split_every=split_every, out_type=out_type)
 
     def frequencies(self, split_every=None, sort=False):
         """ Count number of occurrences of each distinct element.
