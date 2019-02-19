@@ -2610,7 +2610,7 @@ class DataFrame(_Frame):
         return self[list(cs)]
 
     def set_index(self, other, drop=True, sorted=False, npartitions=None,
-                  divisions=None, **kwargs):
+                  divisions=None, inplace=False, **kwargs):
         """Set the DataFrame index (row labels) using an existing column
 
         This realigns the dataset to be sorted by a new column.  This can have a
@@ -2673,6 +2673,8 @@ class DataFrame(_Frame):
         >>> divisions = pd.date_range('2000', '2010', freq='1D')
         >>> df2 = df.set_index('timestamp', sorted=True, divisions=divisions)  # doctest: +SKIP
         """
+        if inplace:
+            raise NotImplementedError("The inplace= keyword is not supported")
         pre_sorted = sorted
         del sorted
 
