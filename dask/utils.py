@@ -558,6 +558,25 @@ def funcname(func):
         return str(func)
 
 
+def typename(typ):
+    """
+    Return the name of a type
+
+    Examples
+    --------
+    >>> typename(int)
+    'int'
+
+    >>> from dask.core import literal
+    >>> typename(literal)
+    'dask.core.literal'
+    """
+    if not typ.__module__ or typ.__module__ == 'builtins':
+        return typ.__name__
+    else:
+        return typ.__module__ + '.' + typ.__name__
+
+
 def ensure_bytes(s):
     """ Turn string or bytes to bytes
 

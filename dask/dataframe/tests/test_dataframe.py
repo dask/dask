@@ -3380,3 +3380,12 @@ def test_has_parallel_type():
     assert has_parallel_type(pd.DataFrame())
     assert has_parallel_type(pd.Series())
     assert not has_parallel_type(123)
+
+
+def test_meta_error_message():
+    with pytest.raises(TypeError) as info:
+        dd.DataFrame({('x', 1): 123}, 'x', pd.Series(), [None, None])
+
+    assert 'Series' in str(info.value)
+    assert 'DataFrame' in str(info.value)
+    assert 'pandas' in str(info.value)
