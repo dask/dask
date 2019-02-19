@@ -1305,3 +1305,12 @@ def test_bag_paths():
     assert b.to_textfiles('foo*') == ['foo0', 'foo1']
     os.remove('foo0')
     os.remove('foo1')
+
+def test_map_partitions_arg():
+    def append_str(partition, s):
+        return [x + s for x in partition]
+
+    mybag = db.from_sequence(["a", "b", "c"])
+
+    assert_eq(mybag.map_partitions(append_str, "foo"),
+              ['afoo', 'bfoo', 'cfoo'])

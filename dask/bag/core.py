@@ -1956,7 +1956,7 @@ def map_partitions(func, *args, **kwargs):
             args2.append((itertools.repeat, a.key))
             dependencies.append(a)
         else:
-            args2.append((itertools.repeat, a))
+            args2.append(a)
 
     bag_kwargs = {}
     other_kwargs = {}
