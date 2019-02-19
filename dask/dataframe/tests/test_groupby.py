@@ -405,7 +405,11 @@ def test_groupby_set_index():
                   lambda: ddf.groupby(df.index.month, as_index=False))
 
 
-@pytest.mark.parametrize('empty', [True, False])
+@pytest.mark.parametrize('empty', [
+    pytest.param(True, marks=pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
+                 reason="Empty groupby-reductions fail for older pandas")),
+    pytest.param(False)
+])
 def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({'a': [1.], 'b': [1.]}, index=[0]).iloc[:0]
