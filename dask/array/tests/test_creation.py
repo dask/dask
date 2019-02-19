@@ -113,8 +113,10 @@ def test_from_block_function(dtype):
     num_chunks = (2, 2)
     calls = []
     lock = threading.Lock()
-    a = da.from_block_function(_from_block_function_callback, shape, chunks, dtype=dtype,
-                               calls=calls, lock=lock)
+    # Passes calls via *args and lock via **kwargs to test both
+    a = da.from_block_function(_from_block_function_callback, calls,
+                               shape=shape, chunks=chunks, dtype=dtype,
+                               lock=lock)
     expected = np.array([[0, 1, 2, 3], [1000, 1001, 1002, 1003], [2000, 2001, 2002, 2003]])
     assert_eq(a, expected)
 
