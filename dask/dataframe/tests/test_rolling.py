@@ -52,7 +52,7 @@ def test_map_overlap(npartitions):
         assert_eq(res, sol)
 
 
-def test_map_partitions_names():
+def test_map_overlap_names():
     npartitions = 3
     ddf = dd.from_pandas(df, npartitions)
 
@@ -70,7 +70,7 @@ def test_map_partitions_names():
     assert res4._name != res._name
 
 
-def test_map_partitions_errors():
+def test_map_overlap_errors():
     # Non-integer
     with pytest.raises(ValueError):
         ddf.map_overlap(shifted_sum, 0.5, 3, 0, 2, c=2)
@@ -87,6 +87,18 @@ def test_map_partitions_errors():
     with pytest.raises(TypeError):
         ddf.map_overlap(shifted_sum, pd.Timedelta('1s'), pd.Timedelta('1s'),
                         0, 2, c=2)
+
+
+def test_map_overlap_provide_meta():
+    df = pd.DataFrame({'x': [1, 2, 4, 7, 11],
+                       'y': [1., 2., 3., 4., 5.]}).rename_axis('myindex')
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # Provide meta spec, but not full metadata
+    res = ddf.map_overlap(lambda df: df.rolling(2).sum(), 2, 0,
+                          meta={'x': 'i8', 'y': 'i8'})
+    sol = df.rolling(2).sum()
+    assert_eq(res, sol)
 
 
 def mad(x):
