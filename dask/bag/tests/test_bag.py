@@ -1315,3 +1315,5 @@ def test_map_partitions_arg():
 
     assert_eq(mybag.map_partitions(append_str, "foo"),
               ['afoo', 'bfoo', 'cfoo'])
+    assert_eq(mybag.map_partitions(append_str, dask.delayed("foo")),
+              ['afoo', 'bfoo', 'cfoo'])

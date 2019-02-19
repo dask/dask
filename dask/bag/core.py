@@ -1953,7 +1953,7 @@ def map_partitions(func, *args, **kwargs):
             bags.append(a)
             args2.append(a)
         elif isinstance(a, (Item, Delayed)):
-            args2.append((itertools.repeat, a.key))
+            args2.append(a.key)
             dependencies.append(a)
         else:
             args2.append(a)
