@@ -218,6 +218,15 @@ def test_fold():
     assert set(e.fold(add, initial=[]).compute(scheduler='sync')) == set([1, 2, 3])
 
 
+def test_fold_bag():
+    def binop(tot, x):
+        tot.add(x)
+        return tot
+    c = b.fold(binop, combine=set.union, initial=set(), out_type=Bag)
+    assert isinstance(c, Bag)
+    assert_eq(c, list(set(range(5))))
+
+
 def test_distinct():
     assert sorted(b.distinct()) == [0, 1, 2, 3, 4]
     assert b.distinct().name == b.distinct().name
@@ -1317,3 +1326,11 @@ def test_map_partitions_arg():
               ['afoo', 'bfoo', 'cfoo'])
     assert_eq(mybag.map_partitions(append_str, dask.delayed("foo")),
               ['afoo', 'bfoo', 'cfoo'])
+
+
+def test_map_keynames():
+    b = db.from_sequence([1, 2, 3])
+    d = dict(b.map(inc).__dask_graph__())
+    assert 'inc' in map(dask.utils.key_split, d)
+
+    assert set(b.map(inc).__dask_graph__()) != set(b.map_partitions(inc).__dask_graph__())
