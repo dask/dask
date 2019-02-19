@@ -264,13 +264,13 @@ make_meta = Dispatch('make_meta')
 
 
 @make_meta.register((pd.Series, pd.DataFrame))
-def make_meta_pandas(x):
+def make_meta_pandas(x, index=None):
     return x.iloc[:0]
 
 
 @make_meta.register(pd.Index)
-def make_meta_index(x):
-    return x[:0]
+def make_meta_index(x, index=None):
+    return x[0:0]
 
 
 @make_meta.register(object)
@@ -305,7 +305,8 @@ def make_meta_object(x, index=None):
     elif is_arraylike(x):
         return x[:0]
 
-    index = index if index is None else index[0:0]
+    if index is not None:
+        index = make_meta(index)
 
     if isinstance(x, dict):
         return pd.DataFrame({c: _empty_series(c, d, index=index)
