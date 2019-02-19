@@ -2655,6 +2655,9 @@ class DataFrame(_Frame):
             that if ``sorted=True``, specified divisions are assumed to match
             the existing partitions in the data. If this is untrue, you should
             leave divisions empty and call ``repartition`` after ``set_index``.
+        inplace : bool, optional
+            Modifying the DataFrame in place is not supported by Dask.
+            Defaults to False.
         compute: bool
             Whether or not to trigger an immediate computation. Defaults to False.
 
