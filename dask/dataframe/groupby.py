@@ -35,14 +35,14 @@ from ..highlevelgraph import HighLevelGraph
 # groupby operation. Therefore, the alignment has to be guaranteed by the
 # caller.
 #
-# To operate on matchings paritions, most groupby operations exploit the
+# To operate on matching partitions, most groupby operations exploit the
 # corresponding support in ``apply_concat_apply``. Specifically, this function
-# operates on matching paritiotns of frame-like objects passed as varargs.
+# operates on matching partitions of frame-like objects passed as varargs.
 #
 # After the inital chunk step, the passed index is implicitly passed along to
 # subsequent operations as the index of the parittions. Groupby operations on
-# the individual parttions can then access the index via the ``levels``
-# parameter of the ``groupby`` function. The correct arguments is determined by
+# the individual partitions can then access the index via the ``levels``
+# parameter of the ``groupby`` function. The correct argument is determined by
 # the ``_determine_levels`` function.
 #
 # To minimize overhead, series in an index that were obtained by getitem on the
@@ -242,8 +242,14 @@ def _var_chunk(df, *index):
         df = df.to_frame()
     g = _groupby_raise_unaligned(df, by=index)
     x = g.sum()
-    x2 = g.agg(lambda x: (x**2).sum()).rename(columns=lambda c: c + '-x2')
+
     n = g.count().rename(columns=lambda c: c + '-count')
+
+    df2 = df ** 2
+    g2 = _groupby_raise_unaligned(df2, by=index)
+    x2 = g2.sum().rename(columns=lambda c: c + '-x2')
+
+    x2.index = x.index
     return pd.concat([x, x2, n], axis=1)
 
 
@@ -277,16 +283,21 @@ def _nunique_df_chunk(df, *index, **kwargs):
     name = kwargs.pop('name')
 
     g = _groupby_raise_unaligned(df, by=index)
-    grouped = g[[name]].apply(pd.DataFrame.drop_duplicates)
-
-    # we set the index here to force a possibly duplicate index
-    # for our reduce step
-    if isinstance(levels, list):
-        grouped.index = pd.MultiIndex.from_arrays([
-            grouped.index.get_level_values(level=level) for level in levels
-        ])
+    if len(df) > 0:
+        grouped = g[[name]].apply(pd.DataFrame.drop_duplicates)
+        # we set the index here to force a possibly duplicate index
+        # for our reduce step
+        if isinstance(levels, list):
+            grouped.index = pd.MultiIndex.from_arrays([
+                grouped.index.get_level_values(level=level) for level in levels
+            ])
+        else:
+            grouped.index = grouped.index.get_level_values(level=levels)
     else:
-        grouped.index = grouped.index.get_level_values(level=levels)
+        # Manually create empty version, since groupby-apply for empty frame
+        # results in df with no columns
+        grouped = g[[name]].nunique()
+        grouped = grouped.astype(df.dtypes[grouped.columns].to_dict())
 
     return grouped
 

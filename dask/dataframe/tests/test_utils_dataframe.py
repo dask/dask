@@ -209,7 +209,7 @@ def test_meta_nonempty_index():
     assert res.freq == idx.freq
     assert res.name == idx.name
 
-    idx = pd.CategoricalIndex(['a'], ['a', 'b'], ordered=True, name='foo')
+    idx = pd.CategoricalIndex(['xyx'], ['xyx', 'zzz'], ordered=True, name='foo')
     res = meta_nonempty(idx)
     assert type(res) is pd.CategoricalIndex
     assert (res.categories == idx.categories).all()
@@ -233,7 +233,7 @@ def test_meta_nonempty_index():
     assert res.names == idx.names
 
     levels = [pd.Int64Index([1], name='a'),
-              pd.CategoricalIndex(data=['b'], categories=['b'], name='b'),
+              pd.CategoricalIndex(data=['xyx'], categories=['xyx'], name='b'),
               pd.TimedeltaIndex([np.timedelta64(1, 'D')], name='timedelta')]
     idx = pd.MultiIndex(levels=levels, labels=[[0], [0], [0]], names=['a', 'b', 'timedelta'])
     res = meta_nonempty(idx)
@@ -287,7 +287,8 @@ def test_check_meta():
                        'b': [True, False, True],
                        'c': [1, 2.5, 3.5],
                        'd': [1, 2, 3],
-                       'e': pd.Categorical(['x', 'y', 'z'])})
+                       'e': pd.Categorical(['x', 'y', 'z']),
+                       'f': pd.Series([1, 2, 3], dtype=np.uint64)})
     meta = df.iloc[:0]
 
     # DataFrame metadata passthrough if correct
@@ -297,7 +298,10 @@ def test_check_meta():
     assert check_meta(e, meta.e) is e
     # numeric_equal means floats and ints are equivalent
     d = df.d
+    f = df.f
     assert check_meta(d, meta.d.astype('f8'), numeric_equal=True) is d
+    assert check_meta(f, meta.f.astype('f8'), numeric_equal=True) is f
+    assert check_meta(f, meta.f.astype('i8'), numeric_equal=True) is f
 
     # Series metadata error
     with pytest.raises(ValueError) as err:

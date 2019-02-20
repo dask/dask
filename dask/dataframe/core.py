@@ -27,7 +27,7 @@ from ..compatibility import (apply, operator_div, bind_method, string_types,
 from ..context import globalmethod
 from ..utils import (random_state_data, pseudorandom, derived_from, funcname,
                      memory_repr, put_lines, M, key_split, OperatorMethodMixin,
-                     is_arraylike)
+                     is_arraylike, typename)
 from ..array.core import Array, normalize_arg
 from ..blockwise import blockwise, Blockwise
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
@@ -90,7 +90,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
         meta = make_meta(meta)
         if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
             raise TypeError("Expected meta to specify scalar, got "
-                            "{0}".format(type(meta).__name__))
+                            "{0}".format(typename(type(meta))))
         self._meta = meta
 
     def __dask_graph__(self):
@@ -253,8 +253,8 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         meta = make_meta(meta)
         if not isinstance(meta, self._partition_type):
             raise TypeError("Expected meta to specify type {0}, got type "
-                            "{1}".format(self._partition_type.__name__,
-                                         type(meta).__name__))
+                            "{1}".format(typename(self._partition_type),
+                                         typename(type(meta))))
         self._meta = meta
         self.divisions = tuple(divisions)
 
@@ -385,7 +385,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
     @property
     def index(self):
         """Return dask Index instance"""
-        return self.map_partitions(getattr, 'index', token=self._name + '-index')
+        return self.map_partitions(getattr, 'index', token=self._name + '-index',
+                                   meta=self._meta.index)
 
     def reset_index(self, drop=False):
         """Reset the index to the default index.
@@ -2128,7 +2129,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         if meta is no_default:
             meta = _emulate(M.map, self, arg, na_action=na_action, udf=True)
         else:
-            meta = make_meta(meta)
+            meta = make_meta(meta, index=getattr(make_meta(self), 'index', None))
 
         return Series(graph, name, meta, self.divisions)
 
@@ -2610,7 +2611,7 @@ class DataFrame(_Frame):
         return self[list(cs)]
 
     def set_index(self, other, drop=True, sorted=False, npartitions=None,
-                  divisions=None, **kwargs):
+                  divisions=None, inplace=False, **kwargs):
         """Set the DataFrame index (row labels) using an existing column
 
         This realigns the dataset to be sorted by a new column.  This can have a
@@ -2655,6 +2656,9 @@ class DataFrame(_Frame):
             that if ``sorted=True``, specified divisions are assumed to match
             the existing partitions in the data. If this is untrue, you should
             leave divisions empty and call ``repartition`` after ``set_index``.
+        inplace : bool, optional
+            Modifying the DataFrame in place is not supported by Dask.
+            Defaults to False.
         compute: bool
             Whether or not to trigger an immediate computation. Defaults to False.
 
@@ -2673,6 +2677,8 @@ class DataFrame(_Frame):
         >>> divisions = pd.date_range('2000', '2010', freq='1D')
         >>> df2 = df.set_index('timestamp', sorted=True, divisions=divisions)  # doctest: +SKIP
         """
+        if inplace:
+            raise NotImplementedError("The inplace= keyword is not supported")
         pre_sorted = sorted
         del sorted
 
@@ -3578,8 +3584,9 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
     if not isinstance(args, (tuple, list)):
         args = [args]
 
-    npartitions = set(arg.npartitions for arg in args
-                      if isinstance(arg, _Frame))
+    dfs = [arg for arg in args if isinstance(arg, _Frame)]
+
+    npartitions = set(arg.npartitions for arg in dfs)
     if len(npartitions) > 1:
         raise ValueError("All arguments must have same number of partitions")
     npartitions = npartitions.pop()
@@ -3605,13 +3612,13 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
         dsk = {(a, 0, i, 0): (apply, chunk,
                               [(x._name, i) if isinstance(x, _Frame)
                                else x for x in args], chunk_kwargs)
-               for i in range(args[0].npartitions)}
+               for i in range(npartitions)}
 
     # Split
     if split_out and split_out > 1:
         split_prefix = 'split-%s' % token_key
         shard_prefix = 'shard-%s' % token_key
-        for i in range(args[0].npartitions):
+        for i in range(npartitions):
             dsk[(split_prefix, i)] = (hash_shard, (a, 0, i, 0), split_out,
                                       split_out_setup, split_out_setup_kwargs)
             for j in range(split_out):
@@ -3649,11 +3656,10 @@ def apply_concat_apply(args, chunk=None, aggregate=None, combine=None,
         meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
         meta = _emulate(aggregate, _concat([meta_chunk]), udf=True,
                         **aggregate_kwargs)
-    meta = make_meta(meta)
+    meta = make_meta(meta, index=(getattr(make_meta(dfs[0]), 'index', None)
+                                  if dfs else None))
 
-    dependencies = [arg for arg in args if isinstance(arg, _Frame)]
-
-    graph = HighLevelGraph.from_collections(b, dsk, dependencies=dependencies)
+    graph = HighLevelGraph.from_collections(b, dsk, dependencies=dfs)
 
     divisions = [None] * (split_out + 1)
 
@@ -3708,9 +3714,6 @@ def map_partitions(func, *args, **kwargs):
     meta = kwargs.pop('meta', no_default)
     name = kwargs.pop('token', None)
 
-    if meta is not no_default:
-        meta = make_meta(meta)
-
     # Normalize keyword arguments
     kwargs2 = {k: normalize_arg(v) for k, v in kwargs.items()}
 
@@ -3725,9 +3728,13 @@ def map_partitions(func, *args, **kwargs):
     from .multi import _maybe_align_partitions
     args = _maybe_from_pandas(args)
     args = _maybe_align_partitions(args)
+    dfs = [df for df in args if isinstance(df, _Frame)]
+    meta_index = getattr(make_meta(dfs[0]), 'index', None) if dfs else None
 
     if meta is no_default:
         meta = _emulate(func, *args, udf=True, **kwargs2)
+    else:
+        meta = make_meta(meta, index=meta_index)
 
     if all(isinstance(arg, Scalar) for arg in args):
         layer = {(name, 0):
@@ -3737,7 +3744,9 @@ def map_partitions(func, *args, **kwargs):
     elif not (has_parallel_type(meta) or is_arraylike(meta)):
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
-        meta = _concat([meta])
+        meta = make_meta(_concat([meta]), index=meta_index)
+
+    # Ensure meta is empty series
     meta = make_meta(meta)
 
     args2 = []
@@ -3771,7 +3780,6 @@ def map_partitions(func, *args, **kwargs):
         _meta=meta,
         **kwargs3
     )
-    dfs = [df for df in args if isinstance(df, _Frame)]
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, dfs[0].divisions)

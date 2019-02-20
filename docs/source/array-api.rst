@@ -58,6 +58,7 @@ Top level user functions:
    deg2rad
    degrees
    diag
+   diagonal
    diff
    digitize
    dot
@@ -424,6 +425,7 @@ Other functions
 .. autofunction:: deg2rad
 .. autofunction:: degrees
 .. autofunction:: diag
+.. autofunction:: diagonal
 .. autofunction:: diff
 .. autofunction:: digitize
 .. autofunction:: dot

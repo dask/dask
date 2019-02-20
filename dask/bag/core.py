@@ -343,7 +343,7 @@ class Item(DaskMethodsMixin):
         self.dask, self.key = state
 
     def apply(self, func):
-        name = 'apply-{0}-{1}'.format(funcname(func), tokenize(self, func))
+        name = '{0}-{1}'.format(funcname(func), tokenize(self, func, 'apply'))
         dsk = {name: (func, self.key)}
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return Item(graph, name)
@@ -538,8 +538,8 @@ class Bag(DaskMethodsMixin):
         >>> b.starmap(myadd, z=max_second).compute()
         [13, 17, 21, 25, 29]
         """
-        name = 'starmap-{0}-{1}'.format(funcname(func),
-                                        tokenize(self, func, kwargs))
+        name = '{0}-{1}'.format(funcname(func),
+                                tokenize(self, func, 'starmap', **kwargs))
         dependencies = [self]
         if kwargs:
             kwargs, collections = unpack_scalar_dask_kwargs(kwargs)
@@ -727,7 +727,8 @@ class Bag(DaskMethodsMixin):
         return to_avro(self, filename, schema, name_function, storage_options,
                        codec, sync_interval, metadata, compute, **kwargs)
 
-    def fold(self, binop, combine=None, initial=no_default, split_every=None):
+    def fold(self, binop, combine=None, initial=no_default, split_every=None,
+             out_type=Item):
         """ Parallelizable reduction
 
         Fold is like the builtin function ``reduce`` except that it works in
@@ -777,11 +778,11 @@ class Bag(DaskMethodsMixin):
         if initial is not no_default:
             return self.reduction(curry(_reduce, binop, initial=initial),
                                   curry(_reduce, combine),
-                                  split_every=split_every)
+                                  split_every=split_every, out_type=out_type)
         else:
             from toolz.curried import reduce
             return self.reduction(reduce(binop), reduce(combine),
-                                  split_every=split_every)
+                                  split_every=split_every, out_type=out_type)
 
     def frequencies(self, split_every=None, sort=False):
         """ Count number of occurrences of each distinct element.
@@ -1517,7 +1518,11 @@ def from_sequence(seq, partition_size=None, npartitions=None):
 
     parts = list(partition_all(partition_size, seq))
     name = 'from_sequence-' + tokenize(seq, partition_size)
-    d = dict(((name, i), list(part)) for i, part in enumerate(parts))
+    if len(parts) > 0:
+        d = dict(((name, i), list(part)) for i, part in enumerate(parts))
+    else:
+        d = {(name, 0): []}
+
     return Bag(d, name, len(d))
 
 
@@ -1844,7 +1849,7 @@ def bag_map(func, *args, **kwargs):
     >>> db.map(myadd, b, b.max()).compute()
     [4, 5, 6, 7, 8]
     """
-    name = 'map-%s-%s' % (funcname(func), tokenize(func, args, kwargs))
+    name = '%s-%s' % (funcname(func), tokenize(func, 'map', *args, **kwargs))
     dsk = {}
     dependencies = []
 
@@ -1937,8 +1942,8 @@ def map_partitions(func, *args, **kwargs):
     single graph, and then computes everything at once, and in some cases
     may be more efficient.
     """
-    name = 'map-partitions-%s-%s' % (funcname(func),
-                                     tokenize(func, args, kwargs))
+    name = '%s-%s' % (funcname(func),
+                      tokenize(func, 'map-partitions', *args, **kwargs))
     dsk = {}
     dependencies = []
 
