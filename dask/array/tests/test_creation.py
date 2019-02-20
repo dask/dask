@@ -10,6 +10,7 @@ from toolz import concat
 import dask
 import dask.array as da
 from dask.array.utils import assert_eq, same_keys
+from dask.array.creation import FromBlockFunctionInfo
 
 
 @pytest.mark.parametrize(
@@ -98,7 +99,7 @@ def _from_block_function_callback(block_info, calls, lock):
     It also appends the received `block_info` to `calls`, while
     holding `lock`.
     """
-    loc = block_info['array-location']
+    loc = block_info.array_location
     rows = np.arange(loc[0][0], loc[0][1])[:, np.newaxis]
     cols = np.arange(loc[1][0], loc[1][1])[np.newaxis, :]
     with lock:
@@ -106,7 +107,7 @@ def _from_block_function_callback(block_info, calls, lock):
     return 1000 * rows + cols
 
 
-@pytest.mark.parametrize('dtype', [None])
+@pytest.mark.parametrize('dtype', [None, np.int_])
 def test_from_block_function(dtype):
     shape = (3, 4)
     chunks = ((1, 2), 2)
@@ -123,12 +124,16 @@ def test_from_block_function(dtype):
     if dtype is None:
         # First call will be just to determine dtype
         del calls[0]
-    calls.sort(key=lambda call: call['chunk-location'])
+    calls.sort(key=lambda call: call.chunk_location)
     assert calls == [
-        {'shape': shape, 'num-chunks': num_chunks, 'chunk-location': (0, 0), 'array-location': [(0, 1), (0, 2)]},
-        {'shape': shape, 'num-chunks': num_chunks, 'chunk-location': (0, 1), 'array-location': [(0, 1), (2, 4)]},
-        {'shape': shape, 'num-chunks': num_chunks, 'chunk-location': (1, 0), 'array-location': [(1, 3), (0, 2)]},
-        {'shape': shape, 'num-chunks': num_chunks, 'chunk-location': (1, 1), 'array-location': [(1, 3), (2, 4)]}
+        FromBlockFunctionInfo(shape=shape, num_chunks=num_chunks, chunk_location=(0, 0),
+                              array_location=[(0, 1), (0, 2)], chunk_shape=(1, 2), dtype=np.dtype(np.int_)),
+        FromBlockFunctionInfo(shape=shape, num_chunks=num_chunks, chunk_location=(0, 1),
+                              array_location=[(0, 1), (2, 4)], chunk_shape=(1, 2), dtype=np.dtype(np.int_)),
+        FromBlockFunctionInfo(shape=shape, num_chunks=num_chunks, chunk_location=(1, 0),
+                              array_location=[(1, 3), (0, 2)], chunk_shape=(2, 2), dtype=np.dtype(np.int_)),
+        FromBlockFunctionInfo(shape=shape, num_chunks=num_chunks, chunk_location=(1, 1),
+                              array_location=[(1, 3), (2, 4)], chunk_shape=(2, 2), dtype=np.dtype(np.int_))
     ]
 
 

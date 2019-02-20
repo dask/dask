@@ -4,6 +4,7 @@ from functools import partial, wraps
 from itertools import product
 from operator import add
 from numbers import Integral, Number
+from collections import namedtuple
 
 import numpy as np
 from toolz import accumulate, sliding_window
@@ -247,13 +248,16 @@ def linspace(start, stop, num=50, endpoint=True, retstep=False, chunks='auto',
         return Array(dsk, name, chunks, dtype=dtype)
 
 
-def _call_from_block_function(func, shape, num_chunks, chunk_location, array_location, func_args, func_kwargs):
-    block_info = {
-        'shape': shape,
-        'num-chunks': num_chunks,
-        'chunk-location': chunk_location,
-        'array-location': list(array_location)
-    }
+FromBlockFunctionInfo = namedtuple(
+    'FromBlockFunctionInfo',
+    ['shape', 'num_chunks', 'chunk_location', 'array_location', 'chunk_shape', 'dtype'])
+
+
+def _call_from_block_function(func, shape, num_chunks, chunk_location, array_location, dtype,
+                              func_args, func_kwargs):
+    chunk_shape = tuple(loc[1] - loc[0] for loc in array_location)
+    block_info = FromBlockFunctionInfo(shape, num_chunks, chunk_location,
+                                       list(array_location), chunk_shape, dtype)
     return func(block_info, *func_args, **func_kwargs)
 
 
@@ -261,20 +265,30 @@ def from_block_function(func, *args, **kwargs):
     """
     Create an array from a function that builds individual blocks.
 
-    For each block, the function is passed a dictionary with information about
+    For each block, the function is passed an object with information about
     the block to construct, and should return a numpy array.
 
-    >>> block_info      # doctest: +SKIP
-    {'shape': (12, 20),
-     'num-chunks': (3, 4),
-     'chunk-location': (2, 1),
-     'array-location': [(8, 12), (5, 10)]
-    }
+    >>> block_info.shape              # doctest: +SKIP
+    (12, 20)
+    >>> block_info.num_chunks         # doctest: +SKIP
+    (3, 4)
+    >>> block_info.chunk_location     # doctest: +SKIP
+    (2, 1)
+    >>> block_info.array_location     # doctest: +SKIP
+    [(8, 12), (5, 10)]
+    >>> block_info.chunk_shape        # doctest: +SKIP
+    (4, 5)
+    >>> block_info.dtype              # doctest: +SKIP
+    dtype('float64')
 
-    The values in the dictionary are respectively the shape of the full
-    array, the number of chunks in the full array in each dimension, the
-    position of this block in chunks, and the position in the array
-    (for example, the slice corresponding to ``8:12, 5:10``).
+    The values are respectively
+    - the shape of the full array
+    - the number of chunks in the full array in each dimension
+    - the position of this block in chunks
+    - the position in the array (for example, the slice corresponding to
+      ``8:12, 5:10``)
+    - the shape of the chunk
+    - the dtype of the chunk
 
     Parameters
     ----------
@@ -291,7 +305,8 @@ def from_block_function(func, *args, **kwargs):
     dtype : np.dtype, optional
         The ``dtype`` of the output array. It is recommended to provide this.
         If not provided, will be inferred by applying the function to a small
-        set of fake data.
+        set of fake data. For that call, the `dtype` member of `block_info`
+        will be ``None``.
     name : str, optional
         The key name to use for the output array. If not provided,
         will be determined from `func`.
@@ -305,13 +320,12 @@ def from_block_function(func, *args, **kwargs):
     arrays with the ones on the main diagonal.
 
     >>> def eye_chunk(block_info):
-    ...     location = block_info['array-location']
-    ...     r0, r1 = location[0]
-    ...     c0, c1 = location[1]
+    ...     r0, r1 = block_info.array_location[0]
+    ...     c0, c1 = block_info.array_location[1]
     ...     if r0 == c0:
-    ...         return np.eye(r1 - r0, c1 - c0)
+    ...         return np.eye(r1 - r0, c1 - c0, dtype=block_info.dtype)
     ...     else:
-    ...         return np.zeros((r1 - r0, c1 - c0))
+    ...         return np.zeros(block_info.chunk_shape, dtype=block_info.dtype)
     >>> from_block_function(eye_chunk, shape=(4, 4), chunks=2, dtype=float)
     dask.array<eye_chunk, shape=(4, 4), dtype=float64, chunksize=(2, 2)>
     >>> _.compute()
@@ -329,14 +343,11 @@ def from_block_function(func, *args, **kwargs):
 
     if dtype is None:
         chunks = normalize_chunks(chunks, shape)
-        dummy_block_info = {
-            'shape': shape,
-            'num-chunks': shape,
-            'chunk-location': (0,) * len(shape),
-            'array-location': [(0, 1)] * len(shape)
-        }
+        dummy_block_info = FromBlockFunctionInfo(
+            shape, shape, (0,) * len(shape), [(0, 1)] * len(shape), (1,) * len(shape), None)
         dtype = apply_infer_dtype(func, (dummy_block_info,) + args, kwargs, 'from_block_function')
     else:
+        dtype = np.dtype(dtype)
         chunks = normalize_chunks(chunks, shape, dtype=dtype)
 
     # Allow user to omit shape when chunks are given in normalized form
@@ -348,7 +359,7 @@ def from_block_function(func, *args, **kwargs):
     locations = list(product(*locdims))
     num_chunks = tuple(len(bd) for bd in chunks)
     args = quote(args)
-    dsk = {key: (_call_from_block_function, func, shape, num_chunks, key[1:], location, args, kwargs)
+    dsk = {key: (_call_from_block_function, func, shape, num_chunks, key[1:], location, dtype, args, kwargs)
            for key, location in zip(keys, locations)}
     return Array(dsk, name, chunks, dtype=dtype)
 
@@ -518,14 +529,14 @@ def indices(dimensions, dtype=int, chunks='auto'):
     return grid
 
 
-def _eye_chunk(block_info, k, dtype):
-    location = block_info['array-location']
+def _eye_chunk(block_info, k):
+    location = block_info.array_location
     r0, r1 = location[0]
     c0, c1 = location[1]
     if c0 - r1 < k < c1 - r0:
-        return np.eye(r1 - r0, c1 - c0, k - (c0 - r0), dtype)
+        return np.eye(r1 - r0, c1 - c0, k - (c0 - r0), block_info.dtype)
     else:
-        return np.zeros((r1 - r0, c1 - c0), dtype)
+        return np.zeros(block_info.chunk_shape, block_info.dtype)
 
 
 def eye(N, chunks, M=None, k=0, dtype=float):
@@ -567,7 +578,7 @@ def eye(N, chunks, M=None, k=0, dtype=float):
         hchunks.append(M % chunks)
 
     return from_block_function(
-        _eye_chunk, k, dtype, chunks=(vchunks, hchunks), dtype=dtype, name='eye')
+        _eye_chunk, k, chunks=(vchunks, hchunks), dtype=dtype, name='eye')
 
 
 @wraps(np.diag)
@@ -706,15 +717,14 @@ def tril(m, k=0):
     return Array(graph, name, shape=m.shape, chunks=m.chunks, dtype=m.dtype)
 
 
-def _np_fromfunction(block_info, dtype, user_func, user_kwargs):
+def _np_fromfunction(block_info, user_func, user_kwargs):
     def offset_func(*args, **kwargs):
         args2 = list(map(add, args, offset))
         return user_func(*args2, **kwargs)
 
-    location = block_info['array-location']
+    location = block_info.array_location
     offset = [loc[0] for loc in location]
-    shape = [loc[1] - loc[0] for loc in location]
-    return np.fromfunction(offset_func, shape, dtype=dtype, **user_kwargs)
+    return np.fromfunction(offset_func, block_info.chunk_shape, dtype=block_info.dtype, **user_kwargs)
 
 
 @wraps(np.fromfunction)
@@ -722,7 +732,7 @@ def fromfunction(func, chunks='auto', shape=None, dtype=None, **kwargs):
     dtype = dtype or float
 
     return from_block_function(
-        _np_fromfunction, dtype, func, kwargs,
+        _np_fromfunction, func, kwargs,
         shape=shape, chunks=chunks, dtype=dtype, name='fromfunction')
 
 
