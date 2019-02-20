@@ -56,7 +56,8 @@ try:
     from .optimization import optimize
     from .creation import (arange, linspace, meshgrid, indices, diag, eye,
                            triu, tril, from_block_function, fromfunction,
-                           tile, repeat, pad, diagonal)
+                           tile, repeat, pad, diagonal,
+                           FromBlockFunctionInfo)
     from .gufunc import apply_gufunc, gufunc, as_gufunc
     from .utils import assert_eq
 
