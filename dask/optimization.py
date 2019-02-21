@@ -445,6 +445,7 @@ def default_fused_keys_renamer(keys):
         names.discard(first_name)
         names = sorted(names)
         names.append(first_key)
+        names = [name for name in names if name != 'from-delayed']
         return '-'.join(names)
     elif (typ is tuple and len(first_key) > 0 and
           isinstance(first_key[0], (str, unicode))):
@@ -453,6 +454,7 @@ def default_fused_keys_renamer(keys):
         names.discard(first_name)
         names = sorted(names)
         names.append(first_key[0])
+        names = [name for name in names if name != 'from-delayed']
         return ('-'.join(names),) + first_key[1:]
 
 
