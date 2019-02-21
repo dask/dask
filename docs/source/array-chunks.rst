@@ -93,6 +93,9 @@ This is most easily resolved with the ``to_dask_array`` method:
    >>> ddf.to_dask_array(lengths=True)
    ... dask.array<array, shape=(100, 1), dtype=float64, chunksize=(50, 1)>
 
+Specifying ``lengths=True`` immediately computes the chunk sizes. This enables
+downstream computations that rely on having known chunk sizes.
+
 
 Chunks Examples
 ---------------
