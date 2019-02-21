@@ -662,7 +662,11 @@ def _groupby_apply_funcs(df, *index, **kwargs):
         else:
             result[result_column] = r
 
-    return pd.DataFrame(result)
+    if hasattr(df, 'to_frame'):
+        DataFrame = type(df.to_frame())
+    else:
+        DataFrame = type(df)
+    return DataFrame(result)
 
 
 def _compute_sum_of_squares(grouped, column):
@@ -679,7 +683,11 @@ def _agg_finalize(df, aggregate_funcs, finalize_funcs, level):
     for result_column, func, kwargs in finalize_funcs:
         result[result_column] = func(df, **kwargs)
 
-    return pd.DataFrame(result)
+    if hasattr(df, 'to_frame'):
+        DataFrame = type(df.to_frame())
+    else:
+        DataFrame = type(df)
+    return DataFrame(result)
 
 
 def _apply_func_to_column(df_like, column, func):
