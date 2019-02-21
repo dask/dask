@@ -347,11 +347,10 @@ def mean_combine(pairs, sum=chunk.sum, numel=numel, dtype='f8', axis=None, **kwa
 def mean_agg(pairs, dtype='f8', axis=None, **kwargs):
     ns = deepmap(lambda pair: pair['n'], pairs)
     totals = deepmap(lambda pair: pair['total'], pairs)
-    n = _concatenate2(ns, axes=axis).sum(axis=axis, **kwargs)
-    total = _concatenate2(totals, axes=axis).sum(axis=axis, **kwargs)
+    n = _concatenate2(ns, axes=axis).sum(axis=axis, dtype=dtype, **kwargs)
+    total = _concatenate2(totals, axes=axis).sum(axis=axis, dtype=dtype, **kwargs)
 
-    return divide(total.sum(dtype=dtype, **kwargs),
-                  n.sum(dtype=dtype, **kwargs), dtype=dtype)
+    return divide(total, n, dtype=dtype)
 
 
 @wraps(chunk.mean)
