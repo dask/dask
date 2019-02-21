@@ -1316,6 +1316,18 @@ def test_bag_paths():
     os.remove('foo1')
 
 
+def test_map_partitions_arg():
+    def append_str(partition, s):
+        return [x + s for x in partition]
+
+    mybag = db.from_sequence(["a", "b", "c"])
+
+    assert_eq(mybag.map_partitions(append_str, "foo"),
+              ['afoo', 'bfoo', 'cfoo'])
+    assert_eq(mybag.map_partitions(append_str, dask.delayed("foo")),
+              ['afoo', 'bfoo', 'cfoo'])
+
+
 def test_map_keynames():
     b = db.from_sequence([1, 2, 3])
     d = dict(b.map(inc).__dask_graph__())
