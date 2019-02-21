@@ -2428,7 +2428,7 @@ def unify_chunks(*args, **kwargs):
     if not args:
         return {}, []
 
-    arginds = [(asarray(a) if ind is not None else a, ind)
+    arginds = [(asanyarray(a) if ind is not None else a, ind)
                for a, ind in partition(2, args)]  # [x, ij, y, jk]
     args = list(concat(arginds))  # [(x, ij), (y, jk)]
     warn = kwargs.get('warn', True)
@@ -2934,19 +2934,12 @@ def asarray(a, **kwargs):
     >>> da.asarray(y)
     dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3)>
     """
-    def frame_types():
-        try:
-            import dask.dataframe as dd
-            return (dd.Series, dd.DataFrame)
-        except ImportError:
-            return ()
-
     if isinstance(a, Array):
         return a
-    if isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-        a = stack(a)
-    elif isinstance(a, frame_types()):
+    elif hasattr(a, 'to_dask_array'):
         return a.to_dask_array()
+    elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
+        a = stack(a)
     elif not isinstance(getattr(a, 'shape', None), Iterable):
         a = np.asarray(a)
     return from_array(a, chunks=a.shape, getitem=getter_inline, **kwargs)

@@ -209,7 +209,7 @@ def test_meta_nonempty_index():
     assert res.freq == idx.freq
     assert res.name == idx.name
 
-    idx = pd.CategoricalIndex(['a'], ['a', 'b'], ordered=True, name='foo')
+    idx = pd.CategoricalIndex(['xyx'], ['xyx', 'zzz'], ordered=True, name='foo')
     res = meta_nonempty(idx)
     assert type(res) is pd.CategoricalIndex
     assert (res.categories == idx.categories).all()
@@ -233,7 +233,7 @@ def test_meta_nonempty_index():
     assert res.names == idx.names
 
     levels = [pd.Int64Index([1], name='a'),
-              pd.CategoricalIndex(data=['b'], categories=['b'], name='b'),
+              pd.CategoricalIndex(data=['xyx'], categories=['xyx'], name='b'),
               pd.TimedeltaIndex([np.timedelta64(1, 'D')], name='timedelta')]
     idx = pd.MultiIndex(levels=levels, labels=[[0], [0], [0]], names=['a', 'b', 'timedelta'])
     res = meta_nonempty(idx)

@@ -264,13 +264,13 @@ make_meta = Dispatch('make_meta')
 
 
 @make_meta.register((pd.Series, pd.DataFrame))
-def make_meta_pandas(x):
+def make_meta_pandas(x, index=None):
     return x.iloc[:0]
 
 
 @make_meta.register(pd.Index)
-def make_meta_index(x):
-    return x[:0]
+def make_meta_index(x, index=None):
+    return x[0:0]
 
 
 @make_meta.register(object)
@@ -305,7 +305,8 @@ def make_meta_object(x, index=None):
     elif is_arraylike(x):
         return x[:0]
 
-    index = index if index is None else index[0:0]
+    if index is not None:
+        index = make_meta(index)
 
     if isinstance(x, dict):
         return pd.DataFrame({c: _empty_series(c, d, index=index)
@@ -398,13 +399,12 @@ def _nonempty_index(idx):
                                  name=idx.name)
     elif typ is pd.CategoricalIndex:
         if len(idx.categories) == 0:
-            data = _nonempty_index(idx.categories)
-            cats = None
+            data = pd.Categorical(_nonempty_index(idx.categories),
+                                  ordered=idx.ordered)
         else:
-            data = _nonempty_index(_nonempty_index(idx.categories))
-            cats = idx.categories
-        return pd.CategoricalIndex(data, categories=cats,
-                                   ordered=idx.ordered, name=idx.name)
+            data = pd.Categorical.from_codes(
+                [-1, 0], categories=idx.categories, ordered=idx.ordered)
+        return pd.CategoricalIndex(data, name=idx.name)
     elif typ is pd.MultiIndex:
         levels = [_nonempty_index(l) for l in idx.levels]
         labels = [[0, 0] for i in idx.levels]

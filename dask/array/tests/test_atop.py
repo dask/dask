@@ -122,7 +122,6 @@ def test_optimize_blockwise():
     assert len([layer for layer in dsk.dicts.values() if isinstance(layer, Blockwise)]) == 1
 
 
-@pytest.mark.xfail(reason="we only look for y-splits, not for total dependencies")
 def test_blockwise_diamond_fusion():
     x = da.ones(10, chunks=(5,))
     y = (((x + 1) + 2) + 3)
