@@ -395,6 +395,16 @@ def merge(left, right, how, left_on, right_on,
     if not len(right):
         right = default_right
 
-    return pd.merge(left, right, how=how, left_on=left_on, right_on=right_on,
-                    left_index=left_index, right_index=right_index,
-                    suffixes=suffixes, indicator=indicator)
+    return merge_dispatch(left, right, how=how, left_on=left_on, right_on=right_on,
+                          left_index=left_index, right_index=right_index,
+                          suffixes=suffixes, indicator=indicator)
+
+
+try:
+    import multipledispatch
+except ImportError:
+    merge_dispatch = pd.merge
+else:
+    merge_dispatch = multipledispatch.Dispatcher('merge')
+
+    merge_dispatch.register((pd.DataFrame, pd.Series), (pd.DataFrame, pd.Series))(pd.merge)
