@@ -203,11 +203,11 @@ def require(divisions, parts, required=None):
 required = {'left': [0], 'right': [1], 'inner': [0, 1], 'outer': []}
 
 
-def merge_indexed_dataframes(lhs, rhs, **kwargs):
+def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwargs):
     """ Join two partitioned dataframes along their index """
     how = kwargs.get('how', 'left')
-    kwargs['left_index'] = True
-    kwargs['right_index'] = True
+    kwargs['left_index'] = left_index
+    kwargs['right_index'] = right_index
 
     (lhs, rhs), divisions, parts = align_partitions(lhs, rhs)
     divisions, parts = require(divisions, parts, required[how])
