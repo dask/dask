@@ -301,10 +301,9 @@ def single_partition_join(left, right, **kwargs):
 
     meta = methods.merge_dispatch(left._meta_nonempty, right._meta_nonempty, **kwargs)
     name = 'merge-' + tokenize(left, right, **kwargs)
-    _merge = methods.merge_dispatch.dispatch(type(left._meta), type(right._meta))
     if left.npartitions == 1:
         left_key = first(left.__dask_keys__())
-        dsk = {(name, i): (apply, _merge, [left_key, right_key], kwargs)
+        dsk = {(name, i): (apply, methods.merge_dispatch, [left_key, right_key], kwargs)
                for i, right_key in enumerate(right.__dask_keys__())}
 
         if kwargs.get('right_index') or right._contains_index_name(
@@ -315,7 +314,7 @@ def single_partition_join(left, right, **kwargs):
 
     elif right.npartitions == 1:
         right_key = first(right.__dask_keys__())
-        dsk = {(name, i): (apply, _merge, [left_key, right_key], kwargs)
+        dsk = {(name, i): (apply, methods.merge_dispatch, [left_key, right_key], kwargs)
                for i, left_key in enumerate(left.__dask_keys__())}
 
         if kwargs.get('left_index') or left._contains_index_name(
@@ -398,11 +397,10 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           right_index and right.known_divisions and not left_index):
         left_empty = left._meta_nonempty
         right_empty = right._meta_nonempty
-        _merge = methods.merge_dispatch.dispatch(type(left_empty), type(right_empty))
-        meta = _merge(left_empty, right_empty, how=how, on=on,
-                      left_on=left_on, right_on=right_on,
-                      left_index=left_index, right_index=right_index,
-                      suffixes=suffixes, indicator=indicator)
+        meta = methods.merge_dispatch(left_empty, right_empty, how=how, on=on,
+                                      left_on=left_on, right_on=right_on,
+                                      left_index=left_index, right_index=right_index,
+                                      suffixes=suffixes, indicator=indicator)
         if merge_indexed_left and left.known_divisions:
             right = rearrange_by_divisions(right, right_on, left.divisions,
                                            max_branch, shuffle=shuffle)
@@ -411,7 +409,7 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
             left = rearrange_by_divisions(left, left_on, right.divisions,
                                           max_branch, shuffle=shuffle)
             right = right.clear_divisions()
-        return map_partitions(_merge, left, right, meta=meta, how=how, on=on,
+        return map_partitions(methods.merge_dispatch, left, right, meta=meta, how=how, on=on,
                               left_on=left_on, right_on=right_on,
                               left_index=left_index, right_index=right_index,
                               suffixes=suffixes, indicator=indicator)
