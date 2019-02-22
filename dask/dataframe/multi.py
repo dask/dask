@@ -70,6 +70,7 @@ from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
 from .utils import strip_unknown_categories
+from ..utils import M
 
 
 def align_partitions(*dfs):
@@ -215,9 +216,9 @@ def merge_indexed_dataframes(lhs, rhs, **kwargs):
 
     dsk = dict()
     for i, (a, b) in enumerate(parts):
-        dsk[(name, i)] = (apply, methods.merge, [a, b], kwargs)
+        dsk[(name, i)] = (apply, M.merge, [a, b], kwargs)
 
-    meta = methods.merge(lhs._meta_nonempty, rhs._meta_nonempty, **kwargs)
+    meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **kwargs)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[lhs, rhs])
     return new_dd_object(graph, name, meta, divisions)
@@ -259,7 +260,7 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
                   suffixes=suffixes, indicator=indicator)
 
     # dummy result
-    meta = methods.merge(lhs._meta_nonempty, rhs._meta_nonempty, **kwargs)
+    meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **kwargs)
 
     if isinstance(left_on, list):
         left_on = (list, tuple(left_on))
@@ -269,7 +270,7 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
     token = tokenize(lhs2, rhs2, npartitions, shuffle, **kwargs)
     name = 'hash-join-' + token
 
-    dsk = {(name, i): (apply, methods.merge, [(lhs2._name, i), (rhs2._name, i)], kwargs)
+    dsk = {(name, i): (apply, M.merge, [(lhs2._name, i), (rhs2._name, i)], kwargs)
            for i in range(npartitions)}
 
     divisions = [None] * (npartitions + 1)
@@ -281,11 +282,11 @@ def single_partition_join(left, right, **kwargs):
     # if the merge is perfomed on_index, divisions can be kept, otherwise the
     # new index will not necessarily correspond the current divisions
 
-    meta = methods.merge(left._meta_nonempty, right._meta_nonempty, **kwargs)
+    meta = left._meta_nonempty.merge(right._meta_nonempty, **kwargs)
     name = 'merge-' + tokenize(left, right, **kwargs)
     if left.npartitions == 1:
         left_key = first(left.__dask_keys__())
-        dsk = {(name, i): (apply, methods.merge, [left_key, right_key], kwargs)
+        dsk = {(name, i): (apply, M.merge, [left_key, right_key], kwargs)
                for i, right_key in enumerate(right.__dask_keys__())}
 
         if kwargs.get('right_index') or right._contains_index_name(
@@ -296,7 +297,7 @@ def single_partition_join(left, right, **kwargs):
 
     elif right.npartitions == 1:
         right_key = first(right.__dask_keys__())
-        dsk = {(name, i): (apply, methods.merge, [left_key, right_key], kwargs)
+        dsk = {(name, i): (apply, M.merge, [left_key, right_key], kwargs)
                for i, left_key in enumerate(left.__dask_keys__())}
 
         if kwargs.get('left_index') or left._contains_index_name(
@@ -378,10 +379,10 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           right_index and right.known_divisions and not left_index):
         left_empty = left._meta_nonempty
         right_empty = right._meta_nonempty
-        meta = methods.merge(left_empty, right_empty, how=how, on=on,
-                             left_on=left_on, right_on=right_on,
-                             left_index=left_index, right_index=right_index,
-                             suffixes=suffixes, indicator=indicator)
+        meta = left_empty.merge(right_empty, how=how, on=on,
+                                left_on=left_on, right_on=right_on,
+                                left_index=left_index, right_index=right_index,
+                                suffixes=suffixes, indicator=indicator)
         if merge_indexed_left and left.known_divisions:
             right = rearrange_by_divisions(right, right_on, left.divisions,
                                            max_branch, shuffle=shuffle)
@@ -390,7 +391,7 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
             left = rearrange_by_divisions(left, left_on, right.divisions,
                                           max_branch, shuffle=shuffle)
             right = right.clear_divisions()
-        return map_partitions(methods.merge, left, right, meta=meta, how=how, on=on,
+        return map_partitions(M.merge, left, right, meta=meta, how=how, on=on,
                               left_on=left_on, right_on=right_on,
                               left_index=left_index, right_index=right_index,
                               suffixes=suffixes, indicator=indicator)

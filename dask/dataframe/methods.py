@@ -383,7 +383,3 @@ def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True)
     if ind is not None:
         out.index = ind
     return out
-
-
-def merge(left, right, **kwargs):
-    return left.merge(right, **kwargs)
