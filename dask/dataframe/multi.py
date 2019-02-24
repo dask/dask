@@ -61,7 +61,7 @@ import warnings
 from toolz import merge_sorted, unique, first
 import pandas as pd
 
-from ..base import tokenize
+from ..base import tokenize, is_dask_collection
 from ..compatibility import apply
 from ..highlevelgraph import HighLevelGraph
 from .core import (_Frame, DataFrame, Series, map_partitions, Index,
@@ -335,14 +335,14 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                         indicator=indicator)
 
     # Transform pandas objects into dask.dataframe objects
-    if isinstance(left, (pd.Series, pd.DataFrame)):
+    if not is_dask_collection(left):
         if right_index and left_on:  # change to join on index
             left = left.set_index(left[left_on])
             left_on = False
             left_index = True
         left = from_pandas(left, npartitions=1)  # turn into DataFrame
 
-    if isinstance(right, (pd.Series, pd.DataFrame)):
+    if not is_dask_collection(right):
         if left_index and right_on:  # change to join on index
             right = right.set_index(right[right_on])
             right_on = False
