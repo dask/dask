@@ -331,26 +331,26 @@ def nannumel(x, **kwargs):
 def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     n = numel(x, dtype=dtype, **kwargs)
     total = sum(x, dtype=dtype, **kwargs)
-    empty = empty_lookup.dispatch(type(n))
-    result = empty(n.shape, dtype=[('total', total.dtype), ('n', n.dtype)])
-    result['n'] = n
-    result['total'] = total
-    return result
+    return {'n': n, 'total': total}
 
 
-def mean_combine(pair, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
-    n = sum(pair['n'], **kwargs)
-    total = sum(pair['total'], **kwargs)
-    empty = empty_lookup.dispatch(type(n))
-    result = empty(n.shape, dtype=pair.dtype)
-    result['n'] = n
-    result['total'] = total
-    return result
+def mean_combine(pairs, sum=chunk.sum, numel=numel, dtype='f8', axis=None, **kwargs):
+    if not isinstance(pairs, list):
+        pairs = [pairs]
+    ns = deepmap(lambda pair: pair['n'], pairs)
+    totals = deepmap(lambda pair: pair['total'], pairs)
+    n = _concatenate2(ns, axes=axis).sum(axis=axis, **kwargs)
+    total = _concatenate2(totals, axes=axis).sum(axis=axis, **kwargs)
+    return {'n': n, 'total': total}
 
 
-def mean_agg(pair, dtype='f8', **kwargs):
-    return divide(pair['total'].sum(dtype=dtype, **kwargs),
-                  pair['n'].sum(dtype=dtype, **kwargs), dtype=dtype)
+def mean_agg(pairs, dtype='f8', axis=None, **kwargs):
+    ns = deepmap(lambda pair: pair['n'], pairs)
+    totals = deepmap(lambda pair: pair['total'], pairs)
+    n = _concatenate2(ns, axes=axis).sum(axis=axis, dtype=dtype, **kwargs)
+    total = _concatenate2(totals, axes=axis).sum(axis=axis, dtype=dtype, **kwargs)
+
+    return divide(total, n, dtype=dtype)
 
 
 @wraps(chunk.mean)
@@ -361,7 +361,7 @@ def mean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
         dt = getattr(np.mean(np.empty(shape=(1,), dtype=a.dtype)), 'dtype', object)
     return reduction(a, mean_chunk, mean_agg, axis=axis, keepdims=keepdims,
                      dtype=dt, split_every=split_every, combine=mean_combine,
-                     out=out)
+                     out=out, concatenate=False)
 
 
 def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None,
@@ -373,6 +373,7 @@ def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None,
     return reduction(a, partial(mean_chunk, sum=chunk.nansum, numel=nannumel),
                      mean_agg, axis=axis, keepdims=keepdims, dtype=dt,
                      split_every=split_every, out=out,
+                     concatenate=False,
                      combine=partial(mean_combine, sum=chunk.nansum, numel=nannumel))
 
 
