@@ -18,7 +18,7 @@ from ..utils import (sync, ignoring, All, silence_logging, LoopRunner,
         log_errors, thread_state, parse_timedelta)
 from ..nanny import Nanny
 from ..scheduler import Scheduler
-from ..worker import Worker, _ncores
+from ..worker import Worker, parse_memory_limit, _ncores
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +110,8 @@ class LocalCluster(Cluster):
         if n_workers and threads_per_worker is None:
             # Overcommit threads per worker, rather than undercommit
             threads_per_worker = max(1, int(math.ceil(_ncores / n_workers)))
+        if n_workers and 'memory_limit' not in worker_kwargs:
+            worker_kwargs['memory_limit'] = parse_memory_limit('auto', 1, n_workers)
 
         worker_kwargs.update({
             'ncores': threads_per_worker,

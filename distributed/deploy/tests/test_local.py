@@ -328,15 +328,17 @@ def test_remote_access(loop):
         sync(loop, assert_can_connect_from_everywhere_4_6, c.scheduler.port)
 
 
-def test_memory(loop):
-    with LocalCluster(scheduler_port=0, processes=False, silence_logs=False,
-                      diagnostics_port=None, loop=loop) as cluster:
+@pytest.mark.parametrize('n_workers', [None, 3])
+def test_memory(loop, n_workers):
+    with LocalCluster(n_workers=n_workers, scheduler_port=0, processes=False,
+                      silence_logs=False, diagnostics_port=None, loop=loop) as cluster:
         assert sum(w.memory_limit for w in cluster.workers) <= TOTAL_MEMORY
 
 
-def test_memory_nanny(loop):
-    with LocalCluster(scheduler_port=0, processes=True, silence_logs=False,
-                      diagnostics_port=None, loop=loop) as cluster:
+@pytest.mark.parametrize('n_workers', [None, 3])
+def test_memory_nanny(loop, n_workers):
+    with LocalCluster(n_workers=n_workers, scheduler_port=0, processes=True,
+                      silence_logs=False, diagnostics_port=None, loop=loop) as cluster:
         with Client(cluster.scheduler_address, loop=loop) as c:
             info = c.scheduler_info()
             assert (sum(w['memory_limit'] for w in info['workers'].values())

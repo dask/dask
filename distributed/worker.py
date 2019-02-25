@@ -2627,11 +2627,11 @@ class Reschedule(Exception):
     pass
 
 
-def parse_memory_limit(memory_limit, ncores):
+def parse_memory_limit(memory_limit, ncores, total_cores=_ncores):
     if memory_limit is None:
         return None
     if memory_limit == 'auto':
-        memory_limit = int(TOTAL_MEMORY * min(1, ncores / _ncores))
+        memory_limit = int(TOTAL_MEMORY * min(1, ncores / total_cores))
     with ignoring(ValueError, TypeError):
         x = float(memory_limit)
         if isinstance(x, float) and x <= 1:
