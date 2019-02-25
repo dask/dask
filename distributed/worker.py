@@ -829,7 +829,10 @@ class Worker(ServerNode):
 
             disable_gc_diagnosis()
 
-            logger.info("Stopping worker at %s", self.address)
+            try:
+                logger.info("Stopping worker at %s", self.address)
+            except ValueError:  # address not available if already closed
+                logger.info("Stopping worker")
             self.status = 'closing'
             setproctitle("dask-worker [closing]")
 
