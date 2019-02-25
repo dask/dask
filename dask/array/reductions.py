@@ -12,6 +12,7 @@ from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
 from .core import _concatenate2, Array, handle_out
+from .core import ones_like_lookup, todense_lookup
 from .blockwise import blockwise
 from ..blockwise import lol_tuples
 from .creation import arange
@@ -320,7 +321,10 @@ def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
 
 def numel(x, **kwargs):
     """ A reduction to count the number of elements """
-    return chunk.sum(np.ones_like(x), **kwargs)
+    ones_like = ones_like_lookup.dispatch(type(x))
+    ones = ones_like(x)
+    todense = todense_lookup.dispatch(type(ones))
+    return chunk.sum(todense(ones), **kwargs)
 
 
 def nannumel(x, **kwargs):
@@ -386,8 +390,10 @@ def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     u = total / n
     empty = empty_lookup.dispatch(type(n))
     M = empty(n.shape + (order - 1,), dtype=dtype)
+    diff = A - u
+    todense = todense_lookup.dispatch(type(diff))
     for i in range(2, order + 1):
-        M[..., i - 2] = sum((A - u)**i, dtype=dtype, **kwargs)
+        M[..., i - 2] = sum(todense(diff)**i, dtype=dtype, **kwargs)
     result = empty(n.shape, dtype=[('total', total.dtype),
                                    ('n', n.dtype),
                                    ('M', M.dtype, (order - 1,))])
