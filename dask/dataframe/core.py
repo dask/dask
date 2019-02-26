@@ -3793,9 +3793,8 @@ def apply_and_enforce(*args, **kwargs):
     meta = kwargs.pop('_meta')
     df = func(*args, **kwargs)
     if is_dataframe_like(df) or is_series_like(df) or is_index_like(df):
-        if len(df) == 0:
+        if not len(df):
             return meta
-
         if is_dataframe_like(df):
             # Need nan_to_num otherwise nan comparison gives False
             if not np.array_equal(np.nan_to_num(meta.columns),
