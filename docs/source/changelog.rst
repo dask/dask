@@ -1,6 +1,59 @@
 Changelog
 =========
 
+1.1.2 / 2019-02-25
+------------------
+
+Array
++++++
+
+-  Fix another unicode/mixed-type edge case in normalize_array (:pr:`4489`) `Marco Neumann`_
+-  Add dask.array.diagonal (:pr:`4431`) `Danilo Horta`_
+-  Call asanyarray in unify_chunks (:pr:`4506`) `Jim Crist`_
+-  Modify moment chunk functions to return dicts (:pr:`4519`) `Peter Andreas Entschev`_
+
+
+Bag
++++
+
+-  Don't inline output keys in dask.bag (:pr:`4464`) `Jim Crist`_
+-  Ensure that bag.from_sequence always includes at least one partition (:pr:`4475`) `Anderson Banihirwe`_
+-  Implement out_type for bag.fold (:pr:`4502`) `Matthew Rocklin`_
+-  Remove map from bag keynames (:pr:`4500`) `Matthew Rocklin`_
+-  Avoid itertools.repeat in map_partitions (:pr:`4507`) `Matthew Rocklin`_
+
+
+DataFrame
++++++++++
+
+-  Fix relative path parsing on windows when using fastparquet (:pr:`4445`) `Janne Vuorela`_
+-  Fix bug in pyarrow and hdfs (:pr:`4453`) (:pr:`4455`) `Michał Jastrzębski`_
+-  df getitem with integer slices is not implemented (:pr:`4466`) `Jim Crist`_
+-  Replace cudf-specific code with dask-cudf import (:pr:`4470`) `Matthew Rocklin`_
+-  Avoid groupby.agg(callable`) in groupby-var (:pr:`4482`) `Matthew Rocklin`_
+-  Consider uint types as numerical in check_meta (:pr:`4485`) `Marco Neumann`_
+-  Fix some typos in groupby comments (:pr:`4494`) `Daniel Saxton`_
+-  Add error message around set_index(inplace=True`) (:pr:`4501`) `Matthew Rocklin`_
+-  meta_nonempty works with categorical index (:pr:`4505`) `Jim Crist`_
+-  Add module name to expected meta error message (:pr:`4499`) `Matthew Rocklin`_
+-  groupby-nunique works on empty chunk (:pr:`4504`) `Jim Crist`_
+-  Propogate index metadata if not specified (:pr:`4509`) `Jim Crist`_
+
+Documentation
++++++++++++++
+
+-  Update docs to use ``from_zarr`` (:pr:`4472`) `John A Kirkham`_
+-  DOC: add section of `Using Other S3-Compatible Services` for remote-data-services (:pr:`4405`) `Aploium`_
+-  Fix header level of section in changelog (:pr:`4483`) `Bruce Merry`_
+-  Add quotes to pip install [skip-ci] (:pr:`4508`) `James Bourbeau`_
+
+Core
+++++
+
+-  Extend started_cbs AFTER state is initialized (:pr:`4460`) `Marco Neumann`_
+-  Fix bug in HTTPFile._fetch_range with headers (:pr:`4479`) (:pr:`4480`) `Ross Petchler`_
+-  Repeat optimize_blockwise for diamond fusion (:pr:`4492`) `Matthew Rocklin`_
+
 
 1.1.1 / 2019-01-31
 ------------------
@@ -23,7 +76,7 @@ DataFrame
 -  Pass username as 'user' when using pyarrow (:pr:`4438`) `Roma Sokolov`_
 
 Delayed
--------
++++++++
 
 -  Fix DelayedAttr return value (:pr:`4440`) `Matthew Rocklin`_
 
@@ -36,7 +89,7 @@ Documentation
 Core
 ++++
 
--  Work around psutil 5.5.0 not allowing pickling Process objects `Dimplexion`_
+-  Work around psutil 5.5.0 not allowing pickling Process objects `Janne Vuorela`_
 
 
 1.1.0 / 2019-01-18
@@ -1776,4 +1829,8 @@ Other
 .. _`Johnnie Gray`: https://github.com/jcmgray
 .. _`Roma Sokolov`: https://github.com/little-arhat
 .. _`Daniel Severo`: https://github.com/daniel-severo
-.. _`Dimplexion`: https://github.com/Dimplexion
+.. _`Michał Jastrzębski`: https://github.com/inc0
+.. _`Janne Vuorela`: https://github.com/Dimplexion
+.. _`Ross Petchler`: https://github.com/rpetchler
+.. _`Aploium`: https://github.com/aploium
+.. _`Peter Andreas Entschev`: https://github.com/pentschev

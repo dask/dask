@@ -615,6 +615,22 @@ def test_map_partitions_method_names():
     assert b.dtype == 'i8'
 
 
+def test_map_partitions_propagates_index_metadata():
+    index = pd.Series(list('abcde'), name='myindex')
+    df = pd.DataFrame({'A': np.arange(5, dtype=np.int32),
+                       'B': np.arange(10, 15, dtype=np.int32)},
+                      index=index)
+    ddf = dd.from_pandas(df, npartitions=2)
+    res = ddf.map_partitions(lambda df: df.assign(C=df.A + df.B),
+                             meta=[('A', 'i4'), ('B', 'i4'), ('C', 'i4')])
+    sol = df.assign(C=df.A + df.B)
+    assert_eq(res, sol)
+
+    res = ddf.map_partitions(lambda df: df.rename_axis("newindex"))
+    sol = df.rename_axis("newindex")
+    assert_eq(res, sol)
+
+
 @pytest.mark.xfail(reason='now we use SubgraphCallables')
 def test_map_partitions_keeps_kwargs_readable():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [5, 6, 7, 8]})
@@ -946,16 +962,21 @@ def test_assign_callable():
 
 
 def test_map():
-    assert_eq(d.a.map(lambda x: x + 1), full.a.map(lambda x: x + 1))
-    lk = dict((v, v + 1) for v in full.a.values)
-    assert_eq(d.a.map(lk), full.a.map(lk))
-    assert_eq(d.b.map(lk), full.b.map(lk))
+    df = pd.DataFrame({'a': range(9),
+                       'b': [4, 5, 6, 1, 2, 3, 0, 0, 0]},
+                      index=pd.Index([0, 1, 3, 5, 6, 8, 9, 9, 9], name='myindex'))
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    assert_eq(ddf.a.map(lambda x: x + 1), df.a.map(lambda x: x + 1))
+    lk = dict((v, v + 1) for v in df.a.values)
+    assert_eq(ddf.a.map(lk), df.a.map(lk))
+    assert_eq(ddf.b.map(lk), df.b.map(lk))
     lk = pd.Series(lk)
-    assert_eq(d.a.map(lk), full.a.map(lk))
-    assert_eq(d.b.map(lk), full.b.map(lk))
-    assert_eq(d.b.map(lk, meta=d.b), full.b.map(lk))
-    assert_eq(d.b.map(lk, meta=('b', 'i8')), full.b.map(lk))
-    pytest.raises(TypeError, lambda: d.a.map(d.b))
+    assert_eq(ddf.a.map(lk), df.a.map(lk))
+    assert_eq(ddf.b.map(lk), df.b.map(lk))
+    assert_eq(ddf.b.map(lk, meta=ddf.b), df.b.map(lk))
+    assert_eq(ddf.b.map(lk, meta=('b', 'i8')), df.b.map(lk))
+    pytest.raises(TypeError, lambda: ddf.a.map(d.b))
 
 
 def test_concat():
@@ -3380,3 +3401,12 @@ def test_has_parallel_type():
     assert has_parallel_type(pd.DataFrame())
     assert has_parallel_type(pd.Series())
     assert not has_parallel_type(123)
+
+
+def test_meta_error_message():
+    with pytest.raises(TypeError) as info:
+        dd.DataFrame({('x', 1): 123}, 'x', pd.Series(), [None, None])
+
+    assert 'Series' in str(info.value)
+    assert 'DataFrame' in str(info.value)
+    assert 'pandas' in str(info.value)

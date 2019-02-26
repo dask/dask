@@ -52,7 +52,6 @@ def test_fuse_ave_width():
     assert len(b) <= 15
 
 
-@pytest.mark.xfail(reason="need better high level fusion")
 def test_optimize_blockwise():
     from dask.array.optimization import optimize_blockwise
     df = pd.DataFrame({'x': range(10), 'y': range(10)})

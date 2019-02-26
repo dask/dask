@@ -86,7 +86,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         meta = kwargs.pop('meta')
     else:
         meta = _emulate(func, df, *args, **kwargs)
-    meta = make_meta(meta)
+    meta = make_meta(meta, index=df._meta.index)
 
     name = '{0}-{1}'.format(func_name, token)
     name_a = 'overlap-prepend-' + tokenize(df, before)
