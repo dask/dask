@@ -57,6 +57,7 @@ Dataframe
     DataFrame.npartitions
     DataFrame.partitions
     DataFrame.pow
+    DataFrame.prod
     DataFrame.quantile
     DataFrame.query
     DataFrame.radd
