@@ -937,7 +937,8 @@ class _GroupBy(object):
     def mean(self, split_every=None, split_out=1):
         s = self.sum(split_every=split_every, split_out=split_out)
         c = self.count(split_every=split_every, split_out=split_out)
-        c = c[s.columns]
+        if is_dataframe_like(s):
+            c = c[s.columns]
         return s / c
 
     @derived_from(pd.core.groupby.GroupBy)

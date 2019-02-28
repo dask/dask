@@ -1516,3 +1516,22 @@ def test_groupby_select_column_agg():
     actual = ddf.groupby('A')['B'].agg('var')
     expected = pdf.groupby('A')['B'].agg('var')
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize('func', [
+    lambda x: x.std(),
+    lambda x: x.groupby('x').std(),
+    lambda x: x.groupby('x').var(),
+    lambda x: x.groupby('x').mean(),
+    lambda x: x.groupby('x').sum(),
+    lambda x: x.groupby('x').z.std(),
+])
+def test_std_object_dtype(func):
+    df = pd.DataFrame({
+        'x': [1, 2, 1],
+        'y': ['a', 'b', 'c'],
+        'z': [11., 22., 33.],
+    })
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(func(df), func(ddf))
