@@ -240,6 +240,7 @@ def _apply_chunk(df, *index, **kwargs):
 def _var_chunk(df, *index):
     if is_series_like(df):
         df = df.to_frame()
+    df = df._get_numeric_data()
     g = _groupby_raise_unaligned(df, by=index)
     x = g.sum()
 
@@ -934,8 +935,11 @@ class _GroupBy(object):
 
     @derived_from(pd.core.groupby.GroupBy)
     def mean(self, split_every=None, split_out=1):
-        return (self.sum(split_every=split_every, split_out=split_out) /
-                self.count(split_every=split_every, split_out=split_out))
+        s = self.sum(split_every=split_every, split_out=split_out)
+        c = self.count(split_every=split_every, split_out=split_out)
+        if is_dataframe_like(s):
+            c = c[s.columns]
+        return s / c
 
     @derived_from(pd.core.groupby.GroupBy)
     def size(self, split_every=None, split_out=1):
