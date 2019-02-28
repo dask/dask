@@ -250,7 +250,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         self.dask = dsk
         self._name = name
         meta = make_meta(meta)
-        if not type(self)._is_partition_type(meta):
+        if not self._is_partition_type(meta):
             raise TypeError("Expected meta to specify type {0}, got type "
                             "{1}".format(type(self).__name__,
                                          typename(type(meta))))
@@ -1853,7 +1853,7 @@ class Series(_Frame):
     dask.dataframe.DataFrame
     """
     _partition_type = pd.Series
-    _is_partition_type = is_series_like
+    _is_partition_type = staticmethod(is_series_like)
     _token_prefix = 'series-'
 
     def __array_wrap__(self, array, context=None):
@@ -2327,7 +2327,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 class Index(Series):
 
     _partition_type = pd.Index
-    _is_partition_type = is_index_like
+    _is_partition_type = staticmethod(is_index_like)
     _token_prefix = 'index-'
 
     _dt_attributes = {'nanosecond', 'microsecond', 'millisecond', 'dayofyear',
@@ -2439,7 +2439,7 @@ class DataFrame(_Frame):
     """
 
     _partition_type = pd.DataFrame
-    _is_partition_type = is_dataframe_like
+    _is_partition_type = staticmethod(is_dataframe_like)
     _token_prefix = 'dataframe-'
 
     def __array_wrap__(self, array, context=None):
