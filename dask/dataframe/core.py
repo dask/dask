@@ -4292,7 +4292,7 @@ def repartition_freq(df, freq=None):
         start = df.divisions[0].ceil(freq)
     except ValueError:
         start = df.divisions[0]
-    divisions = pd.DatetimeIndex(start=start,
+    divisions = pd.date_range(start=start,
                                  end=df.divisions[-1],
                                  freq=freq).tolist()
     if not len(divisions):

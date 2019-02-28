@@ -390,7 +390,7 @@ def _nonempty_index(idx):
         return pd.DatetimeIndex(data, start=start, periods=2, freq=idx.freq,
                                 tz=idx.tz, name=idx.name)
     elif typ is pd.PeriodIndex:
-        return pd.PeriodIndex(start='1970-01-01', periods=2, freq=idx.freq,
+        return pd.date_range(start='1970-01-01', periods=2, freq=idx.freq,
                               name=idx.name)
     elif typ is pd.TimedeltaIndex:
         start = np.timedelta64(1, 'D')
