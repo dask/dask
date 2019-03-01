@@ -1,6 +1,30 @@
 Changelog
 =========
 
+1.1.3 / 2019-03-01
+------------------
+
+Array
++++++
+
+-  Modify mean chunk functions to return dicts rather than arrays (#4513) `Matthew Rocklin`_
+-  Change sparse installation in CI for NumPy/Python2 compatibility (#4537) `Matthew Rocklin`_
+
+DataFrame
++++++++++
+
+-  Make merge dispatchable on pandas/other dataframe types (#4522) `Matthew Rocklin`_
+-  read_sql_table - datetime index fix and  index type checking (#4474) `Joe Corbett`_
+-  Use generalized form of index checking (is_index_like) (#4531) `Ben Zaitlen`_
+-  Add tests for groupby reductions with object dtypes (#4535) `Matthew Rocklin`_
+-  Fixes #4467 : Updates time_series for pandas deprecation (#4530) `HSR05`_
+
+Documentation
++++++++++++++
+
+-  Add missing method to documentation index (#4528) `Bart Broere`_
+
+
 1.1.2 / 2019-02-25
 ------------------
 
