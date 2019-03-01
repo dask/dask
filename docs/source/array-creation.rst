@@ -115,7 +115,7 @@ See :doc:`documentation on using dask.delayed with collections<delayed-collectio
 From Dask DataFrame
 -------------------
 
-At the most basic level, Dask DataFrames have a ``to_dask_array`` method:
+There are several ways to create a Dask array from a Dask DataFrame. Dask DataFrames have a ``to_dask_array`` method:
 
 .. code-block:: python
 
