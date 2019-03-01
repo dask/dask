@@ -42,7 +42,7 @@ make = {float: make_float,
 
 
 def make_timeseries_part(start, end, dtypes, freq, state_data):
-    index = pd.DatetimeIndex(start=start, end=end, freq=freq, name='timestamp')
+    index = pd.date_range(start=start, end=end, freq=freq, name='timestamp')
     state = np.random.RandomState(state_data)
     columns = dict((k, make[dt](len(index), state)) for k, dt in dtypes.items())
     df = pd.DataFrame(columns, index=index, columns=sorted(columns))
@@ -87,8 +87,8 @@ def make_timeseries(start='2000-01-01',
     2000-01-01 06:00:00   960   Charlie  0.788245
     2000-01-01 08:00:00  1031     Kevin  0.466002
     """
-    divisions = list(pd.DatetimeIndex(start=start, end=end,
-                                      freq=partition_freq))
+    divisions = list(pd.date_range(start=start, end=end,
+                                   freq=partition_freq))
     state_data = random_state_data(len(divisions) - 1, seed)
     name = 'make-timeseries-' + tokenize(start, end, dtypes, freq,
                                          partition_freq, state_data)
