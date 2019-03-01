@@ -1390,7 +1390,7 @@ def test_repartition_object_index():
 def test_repartition_freq(npartitions, freq, start, end):
     start = pd.Timestamp(start)
     end = pd.Timestamp(end)
-    ind = pd.DatetimeIndex(start=start, end=end, freq='60s')
+    ind = pd.date_range(start=start, end=end, freq='60s')
     df = pd.DataFrame({'x': np.arange(len(ind))}, index=ind)
     ddf = dd.from_pandas(df, npartitions=npartitions, name='x')
 
