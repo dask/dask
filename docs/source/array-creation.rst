@@ -147,7 +147,7 @@ Specifying ``lengths=True`` triggers immediate computation of the chunk sizes.
 This enables downstream computations that rely on having known chunk sizes
 (e.g., slicing).
 
-``to_records`` also returns a Dask Array but does not compute the shape
+The Dask DataFrame ``to_records`` method also returns a Dask Array, but does not compute the shape
 information:
 
    >>> df.to_records()
