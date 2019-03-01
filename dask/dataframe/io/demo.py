@@ -88,7 +88,7 @@ def make_timeseries(start='2000-01-01',
     2000-01-01 08:00:00  1031     Kevin  0.466002
     """
     divisions = list(pd.date_range(start=start, end=end,
-                                      freq=partition_freq))
+                                   freq=partition_freq))
     state_data = random_state_data(len(divisions) - 1, seed)
     name = 'make-timeseries-' + tokenize(start, end, dtypes, freq,
                                          partition_freq, state_data)
