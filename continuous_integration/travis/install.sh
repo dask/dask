@@ -60,7 +60,6 @@ conda install -q -c conda-forge \
     scikit-image \
     scikit-learn \
     scipy \
-    sparse \
     sqlalchemy \
     toolz
 
@@ -73,6 +72,10 @@ if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]] && [[ $NUMPY < '1.14.
     conda install -q -c conda-forge fastparquet python-snappy cython
     conda remove --force fastparquet
     pip install --no-deps git+https://github.com/dask/fastparquet
+fi
+
+if [[ $NUMPY > '1.13.0' ]]; then
+    pip install sparse 
 fi
 
 if [[ $PYTHON == '2.7' ]]; then
