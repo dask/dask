@@ -77,6 +77,17 @@ result in an error.
    >>> x[100]
    ValueError: Array chunk sizes unknown
 
+This can also happen when creating a Dask array from a Dask DataFrame:
+
+.. code-block:: python
+
+   >>> ddf = dask.dataframe.from_pandas(...)
+   >>> ddf.to_dask_array()
+   ... dask.array<values, shape=(nan, 2), dtype=float64, chunksize=(nan, 2)>
+
+For details on how to avoid unknown chunk sizes, look at how to create a Dask
+array from a Dask DataFrame in the :doc:`documentation on Dask array creation
+<array-creation>`.
 
 Chunks Examples
 ---------------
