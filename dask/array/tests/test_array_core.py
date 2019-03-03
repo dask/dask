@@ -363,7 +363,7 @@ def test_concatenate():
 
 
 @pytest.mark.parametrize('dtypes', [(('>f8', '>f8'), '>f8'),
-                                    (('<f4', '<f8'), '<f8')])
+                                    (('<f4', '<f8'), '=f8')])
 def test_concatenate_types(dtypes):
     dts_in, dt_out = dtypes
     arrs = [np.zeros(4, dtype=dt) for dt in dts_in]
