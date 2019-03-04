@@ -240,14 +240,17 @@ def _apply_chunk(df, *index, **kwargs):
 def _var_chunk(df, *index):
     if is_series_like(df):
         df = df.to_frame()
-    df = df._get_numeric_data()
+
+    df = df.copy()
+    cols = df._get_numeric_data().columns
+
     g = _groupby_raise_unaligned(df, by=index)
     x = g.sum()
 
-    n = g.count().rename(columns=lambda c: c + '-count')
+    n = g[x.columns].count().rename(columns=lambda c: c + '-count')
 
-    df2 = df ** 2
-    g2 = _groupby_raise_unaligned(df2, by=index)
+    df[cols] = df[cols] ** 2
+    g2 = _groupby_raise_unaligned(df, by=index)
     x2 = g2.sum().rename(columns=lambda c: c + '-x2')
 
     x2.index = x.index

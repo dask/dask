@@ -1535,3 +1535,9 @@ def test_std_object_dtype(func):
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(func(df), func(ddf))
+
+
+def test_timeseries():
+    df = dask.datasets.timeseries().partitions[:2]
+    assert_eq(df.groupby('name').std(),
+              df.groupby('name').std())
