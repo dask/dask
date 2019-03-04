@@ -163,24 +163,51 @@ class IndividualPlots(RequestHandler):
         self.write(result)
 
 
+class _PrometheusCollector(object):
+    def __init__(self, server, prometheus_client):
+        self.server = server
+        self.prometheus_client = prometheus_client
+
+    def collect(self):
+        yield self.prometheus_client.core.GaugeMetricFamily(
+            'dask_scheduler_workers',
+            'Number of workers.',
+            value=len(self.server.workers),
+        )
+        yield self.prometheus_client.core.GaugeMetricFamily(
+            'dask_scheduler_clients',
+            'Number of clients.',
+            value=len(self.server.clients),
+        )
+
+
 class PrometheusHandler(RequestHandler):
+    _initialized = False
+
     def __init__(self, *args, **kwargs):
-        import prometheus_client # keep out of global namespace
+        import prometheus_client  # keep out of global namespace
         self.prometheus_client = prometheus_client
 
         super(PrometheusHandler, self).__init__(*args, **kwargs)
-        self.workers = self.prometheus_client.Gauge('workers_total',
-            'Total number of workers.',
-            namespace='scheduler')
-        self.clients = self.prometheus_client.Gauge('clients_total',
-            'Total number of clients.',
-            namespace='scheduler')
+
+        self._init()
+
+    def _init(self):
+        if PrometheusHandler._initialized:
+            return
+
+        self.prometheus_client.REGISTRY.register(
+            _PrometheusCollector(
+                self.server,
+                self.prometheus_client,
+            )
+        )
+
+        PrometheusHandler._initialized = True
 
     def get(self):
-        self.workers.set(len(self.server.workers))
-        self.clients.set(len(self.server.clients))
-
         self.write(self.prometheus_client.generate_latest())
+        self.set_header('Content-Type', 'text/plain; version=0.0.4')
 
 
 routes = [
