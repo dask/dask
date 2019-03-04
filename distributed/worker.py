@@ -232,7 +232,7 @@ class Worker(ServerNode):
         Fraction of memory at which we stop running new tasks
     executor: concurrent.futures.Executor
     resources: dict
-        Resources that thiw worker has like ``{'GPU': 2}``
+        Resources that this worker has like ``{'GPU': 2}``
 
     Examples
     --------
