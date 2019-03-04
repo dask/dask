@@ -404,16 +404,17 @@ def get_async(apply_async, num_workers, dsk, result, cache=None,
         _, _, pretask_cbs, posttask_cbs, _ = unpack_callbacks(callbacks)
         started_cbs = []
         succeeded = False
+        state = {} # if start_state_from_dask fails, we will have something
+                   # to pass to the final block.
         try:
-            keyorder = order(dsk)
-
-            state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
-
-            # extend started_cbs AFTER state is initialized
             for cb in callbacks:
                 if cb[0]:
                     cb[0](dsk)
                 started_cbs.append(cb)
+
+            keyorder = order(dsk)
+
+            state = start_state_from_dask(dsk, cache=cache, sortkey=keyorder.get)
 
             for _, start_state, _, _, _ in callbacks:
                 if start_state:
