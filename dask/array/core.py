@@ -1094,7 +1094,7 @@ class Array(DaskMethodsMixin):
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError('boolean index array should have 1 dimension')
             y = where(key, value, self)
-            self.dtype = y.dtype
+            self._meta = y._meta
             self.dask = y.dask
             self.name = y.name
             self._chunks = y.chunks
