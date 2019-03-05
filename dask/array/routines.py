@@ -994,13 +994,13 @@ def compress(condition, a, axis=None):
     condition = asarray(condition).astype(bool)
     a = asarray(a)
 
+    if condition.ndim != 1:
+        raise ValueError("Condition must be one dimensional")
+
     if axis is None:
         a = a.ravel()
         axis = 0
     axis = validate_axis(axis, a.ndim)
-
-    if condition.ndim != 1:
-        raise ValueError("Condition must be one dimensional")
 
     # Treat `condition` as filled with `False` (if it is too short)
     if len(condition) < a.shape[axis]:
