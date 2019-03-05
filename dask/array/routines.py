@@ -1008,18 +1008,10 @@ def compress(condition, a, axis=None):
                     if i == axis else slice(None)
                     for i in range(a.ndim))]
 
-    if isinstance(condition, Array):
-        inds = tuple(range(a.ndim))
-        out = blockwise(np.compress, inds, condition, (inds[axis],), a, inds,
-                        axis=axis, dtype=a.dtype)
-        out._chunks = tuple((np.NaN,) * len(c) if i == axis else c
-                            for i, c in enumerate(out.chunks))
-        return out
-    else:
-        # Optimized case when condition is known
-        slc = ((slice(None),) * axis + (condition, ) +
-               (slice(None),) * (a.ndim - axis - 1))
-        return a[slc]
+    # Use `condition` to select along 1 dimension
+    slc = ((slice(None),) * axis + (condition, ) +
+           (slice(None),) * (a.ndim - axis - 1))
+    return a[slc]
 
 
 @wraps(np.extract)
