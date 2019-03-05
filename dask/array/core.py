@@ -826,15 +826,14 @@ class Array(DaskMethodsMixin):
         self.name = name
         if dtype is None and meta is None:
             raise ValueError("You must specify the meta or dtype of the array")
-        if meta is None and dtype is not None:
-            nd = len(shape) if shape is not None else 1
-            meta = np.empty(shape=(0,) * nd, dtype=dtype)
-        else:
-            self._meta = meta
 
-        self._chunks = normalize_chunks(chunks, shape, dtype=meta.dtype)
+        self._chunks = normalize_chunks(chunks, shape, dtype=dtype or meta.dtype)
         if self._chunks is None:
             raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
+
+        if meta is None and dtype is not None:
+            meta = np.empty((0,) * self.ndim, dtype=dtype)
+        self._meta = meta
 
         for plugin in config.get('array_plugins', ()):
             result = plugin(self)
@@ -2129,7 +2128,7 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
                     dtype=x.dtype)
         dsk[original_name] = x
 
-    meta = np.empty_like(x, shape=(0,))
+    meta = x[tuple(slice(0, 0, None) for _ in range(x.ndim))]
 
     return Array(dsk, name, chunks, meta=meta)
 
