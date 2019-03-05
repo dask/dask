@@ -2417,11 +2417,16 @@ class Index(Series):
 
     @derived_from(pd.Index)
     def to_frame(self, name=None):
-        if PANDAS_VERSION < '0.24.0' and name is not None:
-            raise ValueError('renaming index is not supported on this PANDAS version')
-        elif PANDAS_VERSION >= '0.24.0':
+        if PANDAS_VERSION >= '0.24.0':
             return self.map_partitions(M.to_frame, True, name,
                                        meta=self._meta.to_frame(True, name))
+        else:
+            if name is not None:
+                raise ValueError("The 'name' keyword was added in pandas 0.24.0. "
+                                 "Your version of pandas is '{}'.".format(PANDAS_VERSION))
+            else:
+                return self.map_partitions(M.to_frame,
+                                           meta=self._meta.to_frame())
 
 
 class DataFrame(_Frame):
