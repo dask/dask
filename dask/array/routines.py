@@ -999,9 +999,6 @@ def compress(condition, a, axis=None):
         axis = 0
     axis = validate_axis(axis, a.ndim)
 
-    # Only coerce non-lazy values to numpy arrays
-    if not isinstance(condition, Array):
-        condition = np.array(condition, dtype=bool)
     if condition.ndim != 1:
         raise ValueError("Condition must be one dimensional")
 
