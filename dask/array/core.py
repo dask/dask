@@ -815,20 +815,24 @@ class Array(DaskMethodsMixin):
     --------
     dask.array.from_array
     """
-    __slots__ = 'dask', '_name', '_cached_keys', '_chunks', 'dtype'
+    __slots__ = 'dask', '_name', '_cached_keys', '_chunks', '_meta'
 
-    def __new__(cls, dask, name, chunks, dtype, shape=None):
+    def __new__(cls, dask, name, chunks, dtype=None, meta=None, shape=None):
         self = super(Array, cls).__new__(cls)
         assert isinstance(dask, Mapping)
         if not isinstance(dask, HighLevelGraph):
             dask = HighLevelGraph.from_collections(name, dask, dependencies=())
         self.dask = dask
         self.name = name
-        if dtype is None:
-            raise ValueError("You must specify the dtype of the array")
-        self.dtype = np.dtype(dtype)
+        if dtype is None and meta is None:
+            raise ValueError("You must specify the meta or dtype of the array")
+        if meta is None and dtype is not None:
+            nd = len(shape) if shape is not None else 1
+            meta = np.empty(shape=(0,) * nd, dtype=dtype)
+        else:
+            self._meta = meta
 
-        self._chunks = normalize_chunks(chunks, shape, dtype=self.dtype)
+        self._chunks = normalize_chunks(chunks, shape, dtype=meta.dtype)
         if self._chunks is None:
             raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
 
@@ -897,8 +901,8 @@ class Array(DaskMethodsMixin):
         return tuple(max(c) for c in self.chunks)
 
     @property
-    def _meta(self):
-        return np.empty(shape=(), dtype=self.dtype)
+    def dtype(self):
+        return self._meta.dtype
 
     def _get_chunks(self):
         return self._chunks
@@ -2125,7 +2129,9 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
                     dtype=x.dtype)
         dsk[original_name] = x
 
-    return Array(dsk, name, chunks, dtype=x.dtype)
+    meta = np.empty_like(x, shape=(0,))
+
+    return Array(dsk, name, chunks, meta=meta)
 
 
 def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
