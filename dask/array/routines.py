@@ -991,6 +991,9 @@ def squeeze(a, axis=None):
 
 @wraps(np.compress)
 def compress(condition, a, axis=None):
+    condition = asarray(condition).astype(bool)
+    a = asarray(a)
+
     if axis is None:
         a = a.ravel()
         axis = 0
