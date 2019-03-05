@@ -1002,11 +1002,13 @@ def compress(condition, a, axis=None):
     if condition.ndim != 1:
         raise ValueError("Condition must be one dimensional")
 
+    # Treat `condition` as filled with `False` (if it is too short)
+    if len(condition) < a.shape[axis]:
+        a = a[tuple(slice(None, len(condition))
+                    if i == axis else slice(None)
+                    for i in range(a.ndim))]
+
     if isinstance(condition, Array):
-        if len(condition) < a.shape[axis]:
-            a = a[tuple(slice(None, len(condition))
-                        if i == axis else slice(None)
-                        for i in range(a.ndim))]
         inds = tuple(range(a.ndim))
         out = blockwise(np.compress, inds, condition, (inds[axis],), a, inds,
                         axis=axis, dtype=a.dtype)
@@ -1015,10 +1017,6 @@ def compress(condition, a, axis=None):
         return out
     else:
         # Optimized case when condition is known
-        if len(condition) < a.shape[axis]:
-            condition = condition.copy()
-            condition.resize(a.shape[axis])
-
         slc = ((slice(None),) * axis + (condition, ) +
                (slice(None),) * (a.ndim - axis - 1))
         return a[slc]
