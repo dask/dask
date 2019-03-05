@@ -496,7 +496,7 @@ def diag(v):
             if i == j:
                 dsk[key] = (np.diag, blocks[i])
             else:
-                dsk[key] = (partial(np.zeros_like, shape=(m,n)), v._meta)
+                dsk[key] = (np.zeros, (m, n))
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
     return Array(graph, name, (chunks_1d, chunks_1d), dtype=v.dtype)
