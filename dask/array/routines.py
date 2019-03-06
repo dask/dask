@@ -1003,10 +1003,9 @@ def compress(condition, a, axis=None):
     axis = validate_axis(axis, a.ndim)
 
     # Treat `condition` as filled with `False` (if it is too short)
-    if len(condition) < a.shape[axis]:
-        a = a[tuple(slice(None, len(condition))
-                    if i == axis else slice(None)
-                    for i in range(a.ndim))]
+    a = a[tuple(slice(None, len(condition))
+                if i == axis else slice(None)
+                for i in range(a.ndim))]
 
     # Use `condition` to select along 1 dimension
     slc = ((slice(None),) * axis + (condition, ) +
