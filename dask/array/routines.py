@@ -1008,9 +1008,11 @@ def compress(condition, a, axis=None):
                 for i in range(a.ndim))]
 
     # Use `condition` to select along 1 dimension
-    slc = ((slice(None),) * axis + (condition, ) +
-           (slice(None),) * (a.ndim - axis - 1))
-    return a[slc]
+    a = a[tuple(condition
+                if i == axis else slice(None)
+                for i in range(a.ndim))]
+
+    return a
 
 
 @wraps(np.extract)
