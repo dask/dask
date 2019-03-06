@@ -223,7 +223,7 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None):
         g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
         dsk[(name,) + k] = (func, g)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
-    return Array(graph, name, out_chunks, dtype=dtype)
+    return Array(graph, name, out_chunks, meta=x._meta.astype(dtype))
 
 
 @wraps(chunk.sum)

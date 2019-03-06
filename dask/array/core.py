@@ -810,6 +810,11 @@ class Array(DaskMethodsMixin):
         Shape of the entire array
     chunks: iterable of tuples
         block sizes along each dimension
+    dtype : str or dtype
+        Typecode or data-type for the new Dask Array
+    meta : empty ndarray
+        empty ndarray created with same NumPy backend, ndim and dtype as the
+        Dask Array being created (overrides dtype)
 
     See Also
     --------
@@ -1144,7 +1149,7 @@ class Array(DaskMethodsMixin):
         dsk, chunks = slice_array(out, self.name, self.chunks, index2)
 
         graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
-        return Array(graph, out, chunks, dtype=self.dtype)
+        return Array(graph, out, chunks, meta=self._meta.astype(self.dtype))
 
     def _vindex(self, key):
         if not isinstance(key, tuple):
@@ -2128,7 +2133,8 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
                     dtype=x.dtype)
         dsk[original_name] = x
 
-    meta = x[tuple(slice(0, 0, None) for _ in range(x.ndim))]
+    nd = x.ndim if hasattr(x, 'ndim') else len(x.shape)
+    meta = x[tuple(slice(0, 0, None) for _ in range(nd))]
 
     return Array(dsk, name, chunks, meta=meta)
 
@@ -3145,7 +3151,7 @@ def handle_out(out, result):
                 "out=%s, result=%s" % (str(out.shape), str(result.shape)))
         out._chunks = result.chunks
         out.dask = result.dask
-        out.dtype = result.dtype
+        out._meta = result._meta
         out.name = result.name
     elif out is not None:
         msg = ("The out parameter is not fully supported."

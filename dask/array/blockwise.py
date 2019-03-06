@@ -3,6 +3,8 @@ import warnings
 
 import toolz
 
+import numpy as np
+
 from .. import base, utils
 from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph
@@ -196,6 +198,21 @@ def blockwise(func, out_ind, *args, **kwargs):
                     raise NotImplementedError(
                         "adjust_chunks values must be callable, int, or tuple")
     chunks = tuple(chunks)
+
+    # Attempt to construct meta, fallback to Array's dtype constructor if it's
+    # a basic type
+    try:
+        arrays = args[::2]
+        arrays_empty = [arr._meta if hasattr(arr, '_meta') else np.empty((0,))
+                        for arr in arrays]
+        meta = func(*arrays_empty)
+        if np.isscalar(meta):
+            ndim = max([a.ndim for a in arrays])
+            meta = arrays[0]._meta[tuple(slice(0, 0, None)
+                                   for _ in range(ndim))]
+        return Array(graph, out, chunks, meta=meta.astype(dtype))
+    except:
+        return Array(graph, out, chunks, dtype=dtype)
 
     return Array(graph, out, chunks, dtype=dtype)
 
