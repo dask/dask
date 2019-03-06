@@ -131,7 +131,7 @@ def test_read_bytes():
 def test_read_bytes_sample_delimiter():
     with filetexts(files, mode='b'):
         sample, values = read_bytes('.test.accounts.*',
-                                    sample='80 B', delimiter=b'\n')
+                                    sample=80, delimiter=b'\n')
         assert sample.endswith(b'\n')
         sample, values = read_bytes('.test.accounts.1.json',
                                     sample=80, delimiter=b'\n')
@@ -139,6 +139,12 @@ def test_read_bytes_sample_delimiter():
         sample, values = read_bytes('.test.accounts.1.json',
                                     sample=2, delimiter=b'\n')
         assert sample.endswith(b'\n')
+
+
+def test_parse_sample_bytes():
+    with filetexts(files, mode='b'):
+        sample, values = read_bytes('.test.accounts.*', sample='40 B')
+        assert len(sample) == 40
 
 
 def test_read_bytes_blocksize_none():
