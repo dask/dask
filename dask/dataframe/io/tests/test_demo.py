@@ -2,6 +2,7 @@ import pandas.util.testing as tm
 import pandas as pd
 import pytest
 
+import dask
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 
@@ -64,3 +65,15 @@ def test_daily_stock():
     assert isinstance(df, dd.DataFrame)
     assert 10 < df.npartitions < 31
     assert_eq(df, df)
+
+
+def test_make_timeseries_keywords():
+    df = dd.demo.make_timeseries('2000', '2001', {'A': int, 'B': int, 'C': str},
+                                 freq='1D', partition_freq='6M', A_lam=1000000, B_lam=2)
+    a_cardinality = df.A.nunique()
+    b_cardinality = df.B.nunique()
+
+    aa, bb = dask.compute(a_cardinality, b_cardinality, scheduler='single-threaded')
+
+    assert 100 < aa <= 10000000
+    assert 1 < bb <= 100
