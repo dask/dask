@@ -214,8 +214,6 @@ def blockwise(func, out_ind, *args, **kwargs):
     except:
         return Array(graph, out, chunks, dtype=dtype)
 
-    return Array(graph, out, chunks, dtype=dtype)
-
 
 def atop(*args, **kwargs):
     warnings.warn("The da.atop function has moved to da.blockwise")
