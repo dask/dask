@@ -434,7 +434,7 @@ def test_read_csv_index():
 def test_read_csv_skiprows_range():
     with filetext(csv_text) as fn:
         f = dd.read_csv(fn, skiprows=range(5))
-        result = f.compute(scheduler='sync')
+        result = f
         expected = pd.read_csv(fn, skiprows=range(5))
         assert_eq(result, expected)
 
