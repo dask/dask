@@ -146,6 +146,7 @@ def test_Client_solo(loop):
 
 @gen_test()
 def test_duplicate_clients():
+    pytest.importorskip('bokeh')
     c1 = yield Client(processes=False, silence_logs=False, diagnostics_port=9876)
     with pytest.warns(Exception) as info:
         c2 = yield Client(processes=False, silence_logs=False, diagnostics_port=9876)
