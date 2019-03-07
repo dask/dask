@@ -46,7 +46,9 @@ def make_timeseries_part(start, end, dtypes, freq, state_data, kwargs):
     state = np.random.RandomState(state_data)
     columns = {}
     for k, dt in dtypes.items():
-        kws = {kk.rsplit('_', 1)[1]: v for kk, v in kwargs.items() if kk.rsplit('_', 1)[0] == k}
+        kws = {kk.rsplit('_', 1)[1]: v
+               for kk, v in kwargs.items()
+               if kk.rsplit('_', 1)[0] == k}
         columns[k] = make[dt](len(index), state, **kws)
     df = pd.DataFrame(columns, index=index, columns=sorted(columns))
     if df.index[-1] == end:
@@ -206,9 +208,11 @@ def daily_stock(symbol, start, stop, freq=pd.Timedelta(seconds=1),
         s = df.iloc[i]
         if s.isnull().any():
             continue
-        part = delayed(generate_day)(s.name, s.loc['Open'], s.loc['High'], s.loc['Low'],
-                                     s.loc['Close'], s.loc['Volume'],
-                                     freq=freq, random_state=seed)
+        part = delayed(generate_day)(
+            s.name, s.loc['Open'], s.loc['High'], s.loc['Low'],
+            s.loc['Close'], s.loc['Volume'],
+            freq=freq, random_state=seed
+        )
         parts.append(part)
         divisions.append(s.name + pd.Timedelta(hours=9))
 
