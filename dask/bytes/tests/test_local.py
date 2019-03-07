@@ -141,6 +141,12 @@ def test_read_bytes_sample_delimiter():
         assert sample.endswith(b'\n')
 
 
+def test_parse_sample_bytes():
+    with filetexts(files, mode='b'):
+        sample, values = read_bytes('.test.accounts.*', sample='40 B')
+        assert len(sample) == 40
+
+
 def test_read_bytes_blocksize_none():
     with filetexts(files, mode='b'):
         sample, values = read_bytes('.test.accounts.*', blocksize=None)
