@@ -304,7 +304,7 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
         skiprows = lastskiprow = firstrow = kwargs.get('skiprows')
     elif kwargs.get('skiprows') is None:
         skiprows = lastskiprow = firstrow = 0
-    elif not callable(kwargs.get('skiprows')):
+    else:
         # When skiprows is a list, we expect more than max(skiprows) to
         # be included in the sample. This means that [0,2] will work well,
         # but [0, 440] might not work.
@@ -312,8 +312,6 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
         lastskiprow = max(skiprows)
         # find the firstrow that is not skipped, for use as header
         firstrow = min(set(range(len(skiprows) + 1)) - set(skiprows))
-    else:
-        skiprows = lastskiprow = firstrow = kwargs.get('skiprows', 0)
     if isinstance(kwargs.get('header'), list):
         raise TypeError("List of header rows not supported for "
                         "dd.{0}".format(reader_name))
