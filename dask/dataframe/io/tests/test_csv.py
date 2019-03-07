@@ -431,6 +431,14 @@ def test_read_csv_index():
         assert_eq(result, expected)
 
 
+def test_read_csv_skiprows_range():
+    with filetext(csv_text) as fn:
+        f = dd.read_csv(fn, skiprows=range(5))
+        result = f
+        expected = pd.read_csv(fn, skiprows=range(5))
+        assert_eq(result, expected)
+
+
 def test_usecols():
     with filetext(timeseries) as fn:
         df = dd.read_csv(fn, blocksize=30, usecols=['High', 'Low'])
