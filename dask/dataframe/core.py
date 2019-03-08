@@ -44,7 +44,7 @@ from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
                     raise_on_meta_error, clear_known_categories,
                     is_categorical_dtype, has_known_categories, PANDAS_VERSION,
                     index_summary, is_dataframe_like, is_series_like,
-                    is_index_like)
+                    is_index_like, valid_divisions)
 
 no_default = '__no_default__'
 
@@ -3419,13 +3419,16 @@ def elemwise(op, *args, **kwargs):
 
     divisions = dfs[0].divisions
     if isinstance(dfs[0], Index) and len(dfs) == 1:
-        divisions = op(
-            *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
-            **kwargs
-        )
-        from dask.array.slicing import issorted
-        if not issorted(divisions):
-            divisions = [None] * (dfs[0].npartitions + 1)
+        try:
+            divisions = op(
+                *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
+                **kwargs
+            )
+        except Exception:
+            pass
+        else:
+            if not valid_divisions(divisions):
+                divisions = [None] * (dfs[0].npartitions + 1)
 
     _is_broadcastable = partial(is_broadcastable, dfs)
     dfs = list(remove(_is_broadcastable, dfs))
@@ -3804,8 +3807,21 @@ def map_partitions(func, *args, **kwargs):
         **kwargs3
     )
 
+    divisions = dfs[0].divisions
+    if isinstance(dfs[0], Index) and len(dfs) == 1:
+        try:
+            divisions = func(
+                *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
+                **kwargs
+            )
+        except Exception:
+            pass
+        else:
+            if not valid_divisions(divisions):
+                divisions = [None] * (dfs[0].npartitions + 1)
+
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
-    return new_dd_object(graph, name, meta, dfs[0].divisions)
+    return new_dd_object(graph, name, meta, divisions)
 
 
 def apply_and_enforce(*args, **kwargs):

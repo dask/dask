@@ -801,3 +801,25 @@ def assert_max_deps(x, n, eq=True):
         assert max(map(len, dependencies.values())) == n
     else:
         assert max(map(len, dependencies.values())) <= n
+
+
+def valid_divisions(divisions):
+    """ Are the provided divisions valid?
+
+    Examples
+    --------
+    >>> valid_divisions([1, 2, 3])
+    True
+    >>> valid_divisions([3, 2, 1])
+    False
+    >>> valid_divisions([1, 1, 1])
+    False
+    >>> valid_divisions([0, 1, 1])
+    True
+    """
+    for i in range(len(divisions) - 1):
+        if divisions[i] >= divisions[i + 1]:
+            return False
+    if divisions[-2] > divisions[-1]:
+        return False
+    return True
