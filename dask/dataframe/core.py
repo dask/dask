@@ -2372,39 +2372,6 @@ class Index(Series):
         msg = "'{0}' object has no attribute 'index'"
         raise AttributeError(msg.format(self.__class__.__name__))
 
-    @classmethod
-    def _get_unary_operator(cls, op):
-        def unary(self):
-            out = elemwise(op, self)
-            if self.known_divisions:
-                divisions = op(pd.Index(self.divisions)).to_list()
-                from dask.array.slicing import issorted
-                if issorted(divisions):
-                    out.divisions = divisions
-                else:
-                    out.divisions = [None] * (self.npartitions + 1)
-            return out
-
-        return unary
-
-    @classmethod
-    def _get_binary_operator(cls, op, inv=False):
-        def binary(self, other):
-            if inv:
-                out = elemwise(op, other, self)
-            else:
-                out = elemwise(op, self, other)
-            if self.known_divisions and not is_dask_collection(other):
-                divisions = op(pd.Index(self.divisions), other).to_list()
-                from dask.array.slicing import issorted
-                if issorted(divisions):
-                    out.divisions = divisions
-                else:
-                    out.divisions = [None] * (self.npartitions + 1)
-            return out
-
-        return binary
-
     def __array_wrap__(self, array, context=None):
         return pd.Index(array, name=self.name)
 
@@ -3452,8 +3419,10 @@ def elemwise(op, *args, **kwargs):
 
     divisions = dfs[0].divisions
     if isinstance(dfs[0], Index) and len(dfs) == 1:
-        import pdb; pdb.set_trace()
-        divisions = op(pd.Index(dfs[0].divisions), *args, **kwargs)
+        divisions = op(
+            *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
+            **kwargs
+        )
         from dask.array.slicing import issorted
         if not issorted(divisions):
             divisions = [None] * (dfs[0].npartitions + 1)
