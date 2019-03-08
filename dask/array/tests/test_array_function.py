@@ -4,6 +4,7 @@ import pytest
 import dask.array as da
 from dask.array.utils import assert_eq
 
+
 def test_array_function_sparse_transpose():
     sparse = pytest.importorskip('sparse')
     x = da.random.random((500, 500), chunks=(100, 100))
@@ -16,6 +17,7 @@ def test_array_function_sparse_transpose():
 
     assert_eq(np.transpose(x), xT)
     assert_eq(np.transpose(y), yT.todense())
+
 
 @pytest.mark.xfail(reason="requires sparse support for __array_function__",
                    strict=False)
@@ -31,6 +33,7 @@ def test_array_function_sparse_tensordot():
 
     assert_eq(np.tensordot(x, y, axes=(2,0)),
               np.tensordot(xx, yy, axes=(2,0)).todense())
+
 
 def test_array_function_cupy_svd():
     cupy = pytest.importorskip('cupy')
