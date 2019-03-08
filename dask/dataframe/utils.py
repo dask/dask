@@ -816,7 +816,11 @@ def valid_divisions(divisions):
     False
     >>> valid_divisions([0, 1, 1])
     True
+    >>> valid_divisions(123)
+    False
     """
+    if not isinstance(divisions, (tuple, list)):
+        return False
     for i in range(len(divisions) - 1):
         if divisions[i] >= divisions[i + 1]:
             return False
