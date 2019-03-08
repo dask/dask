@@ -3387,6 +3387,7 @@ def elemwise(op, *args, **kwargs):
     """
     meta = kwargs.pop('meta', no_default)
     out = kwargs.pop('out', None)
+    transform_divisions = kwargs.pop('transform_divisions', False)
 
     _name = funcname(op) + '-' + tokenize(op, *args, **kwargs)
 
@@ -3412,7 +3413,7 @@ def elemwise(op, *args, **kwargs):
             dasks[i] = a
 
     divisions = dfs[0].divisions
-    if isinstance(dfs[0], Index) and len(dfs) == 1:
+    if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
         try:
             divisions = op(
                 *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
@@ -3733,6 +3734,7 @@ def map_partitions(func, *args, **kwargs):
     """
     meta = kwargs.pop('meta', no_default)
     name = kwargs.pop('token', None)
+    transform_divisions = kwargs.pop('transform_divisions', False)
 
     # Normalize keyword arguments
     kwargs2 = {k: normalize_arg(v) for k, v in kwargs.items()}
@@ -3802,7 +3804,7 @@ def map_partitions(func, *args, **kwargs):
     )
 
     divisions = dfs[0].divisions
-    if isinstance(dfs[0], Index) and len(dfs) == 1:
+    if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
         try:
             divisions = func(
                 *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
