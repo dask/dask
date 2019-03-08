@@ -388,6 +388,19 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return self.map_partitions(getattr, 'index', token=self._name + '-index',
                                    meta=self._meta.index)
 
+    @index.setter
+    def index(self, value):
+        def f(df, ind):
+            df = df.copy()
+            df.index = ind
+            return df
+
+        self.divisions = value.divisions
+        result = map_partitions(f, self, value)
+        self.dask = result.dask
+        self._name = result._name
+        self._meta = result._meta
+
     def reset_index(self, drop=False):
         """Reset the index to the default index.
 
@@ -2359,6 +2372,39 @@ class Index(Series):
         msg = "'{0}' object has no attribute 'index'"
         raise AttributeError(msg.format(self.__class__.__name__))
 
+    @classmethod
+    def _get_unary_operator(cls, op):
+        def unary(self):
+            out = elemwise(op, self)
+            if self.known_divisions:
+                divisions = op(pd.Index(self.divisions)).to_list()
+                from dask.array.slicing import issorted
+                if issorted(divisions):
+                    out.divisions = divisions
+                else:
+                    out.divisions = [None] * (self.npartitions + 1)
+            return out
+
+        return unary
+
+    @classmethod
+    def _get_binary_operator(cls, op, inv=False):
+        def binary(self, other):
+            if inv:
+                out = elemwise(op, other, self)
+            else:
+                out = elemwise(op, self, other)
+            if self.known_divisions and not is_dask_collection(other):
+                divisions = op(pd.Index(self.divisions), other).to_list()
+                from dask.array.slicing import issorted
+                if issorted(divisions):
+                    out.divisions = divisions
+                else:
+                    out.divisions = [None] * (self.npartitions + 1)
+            return out
+
+        return binary
+
     def __array_wrap__(self, array, context=None):
         return pd.Index(array, name=self.name)
 
@@ -3328,6 +3374,7 @@ for op in [operator.abs, operator.add, operator.and_, operator_div,
            operator.ne, operator.neg, operator.or_, operator.pow,
            operator.sub, operator.truediv, operator.floordiv, operator.xor]:
     _Frame._bind_operator(op)
+    Index._bind_operator(op)
     Scalar._bind_operator(op)
 
 for name in ['add', 'sub', 'mul', 'div',
@@ -3404,6 +3451,13 @@ def elemwise(op, *args, **kwargs):
             dasks[i] = a
 
     divisions = dfs[0].divisions
+    if isinstance(dfs[0], Index) and len(dfs) == 1:
+        import pdb; pdb.set_trace()
+        divisions = op(pd.Index(dfs[0].divisions), *args, **kwargs)
+        from dask.array.slicing import issorted
+        if not issorted(divisions):
+            divisions = [None] * (dfs[0].npartitions + 1)
+
     _is_broadcastable = partial(is_broadcastable, dfs)
     dfs = list(remove(_is_broadcastable, dfs))
 

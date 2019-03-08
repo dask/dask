@@ -728,9 +728,7 @@ def assert_dask_graph(dask, label):
 def assert_divisions(ddf):
     if not hasattr(ddf, 'divisions'):
         return
-    if not hasattr(ddf, 'index'):
-        return
-    if not ddf.known_divisions:
+    if not getattr(ddf, 'known_divisions', False):
         return
 
     def index(x):

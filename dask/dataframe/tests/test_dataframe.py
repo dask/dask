@@ -3410,3 +3410,27 @@ def test_meta_error_message():
     assert 'Series' in str(info.value)
     assert 'DataFrame' in str(info.value)
     assert 'pandas' in str(info.value)
+
+
+def test_assign_index():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    ddf_copy = ddf.copy()
+
+    ddf.index = ddf.index * 10
+
+    expected = df.copy()
+    expected.index = expected.index * 10
+
+    assert_eq(ddf, expected)
+    assert_eq(ddf_copy, df)
+
+
+def test_index_divisions():
+    df = pd.DataFrame({'x': [1, 2, 3, 4, 5]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(ddf.index + 1, df.index + 1)
+    assert_eq(10 * ddf.index, 10 * df.index)
+    assert_eq(-ddf.index, -df.index)

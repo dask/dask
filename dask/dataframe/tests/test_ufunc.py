@@ -38,7 +38,6 @@ _BASE_UFUNCS = ['conj', 'exp', 'log', 'log2', 'log10', 'log1p',
                                       index=list('abcdefghijklmnopqrst'))])
 @pytest.mark.parametrize('ufunc', _BASE_UFUNCS)
 def test_ufunc(pandas_input, ufunc):
-
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
 
