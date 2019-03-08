@@ -10,6 +10,7 @@ DataFrame
    dataframe-performance.rst
    dataframe-design.rst
    dataframe-groupby.rst
+   dataframe-joins.rst
    dataframe-indexing.rst
    dataframe-extend.rst
 
