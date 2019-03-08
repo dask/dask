@@ -3387,7 +3387,7 @@ def elemwise(op, *args, **kwargs):
     """
     meta = kwargs.pop('meta', no_default)
     out = kwargs.pop('out', None)
-    transform_divisions = kwargs.pop('transform_divisions', False)
+    transform_divisions = kwargs.pop('transform_divisions', True)
 
     _name = funcname(op) + '-' + tokenize(op, *args, **kwargs)
 
@@ -3734,7 +3734,7 @@ def map_partitions(func, *args, **kwargs):
     """
     meta = kwargs.pop('meta', no_default)
     name = kwargs.pop('token', None)
-    transform_divisions = kwargs.pop('transform_divisions', False)
+    transform_divisions = kwargs.pop('transform_divisions', True)
 
     # Normalize keyword arguments
     kwargs2 = {k: normalize_arg(v) for k, v in kwargs.items()}
