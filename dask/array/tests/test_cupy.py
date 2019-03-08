@@ -40,8 +40,8 @@ functions = [
     lambda x: x.rechunk((4, 4, 4)),
     lambda x: x.rechunk((2, 2, 1)),
     pytest.param(lambda x: da.einsum("ijk,ijk", x, x),
-                 marks=pytest.mark.xfail(reason=
-                     'depends on resolution of https://github.com/numpy/numpy/issues/12974'))
+                 marks=pytest.mark.xfail(
+                     reason='depends on resolution of https://github.com/numpy/numpy/issues/12974'))
 ]
 
 
