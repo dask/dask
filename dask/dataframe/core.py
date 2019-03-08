@@ -390,13 +390,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 
     @index.setter
     def index(self, value):
-        def f(df, ind):
-            df = df.copy()
-            df.index = ind
-            return df
-
         self.divisions = value.divisions
-        result = map_partitions(f, self, value)
+        result = map_partitions(methods.assign_index, self, value)
         self.dask = result.dask
         self._name = result._name
         self._meta = result._meta
@@ -3341,7 +3336,6 @@ for op in [operator.abs, operator.add, operator.and_, operator_div,
            operator.ne, operator.neg, operator.or_, operator.pow,
            operator.sub, operator.truediv, operator.floordiv, operator.xor]:
     _Frame._bind_operator(op)
-    Index._bind_operator(op)
     Scalar._bind_operator(op)
 
 for name in ['add', 'sub', 'mul', 'div',
