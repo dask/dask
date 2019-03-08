@@ -1,8 +1,35 @@
-import numpy as np
 import pytest
+np = pytest.importorskip('numpy', minversion='1.16')
 
 import dask.array as da
 from dask.array.utils import assert_eq
+
+
+functions = [
+    lambda x: np.concatenate([x, x, x]),
+    lambda x: np.cov(x, x),
+    lambda x: np.dot(x, x),
+    lambda x: np.dstack(x),
+    lambda x: np.flip(x, axis=0),
+    lambda x: np.hstack(x),
+    lambda x: np.matmul(x, x),
+    lambda x: np.mean(x),
+    lambda x: np.stack([x, x]),
+    lambda x: np.sum(x),
+    lambda x: np.var(x),
+    lambda x: np.vstack(x)
+]
+
+
+@pytest.mark.parametrize('func', functions)
+def test_array_function_dask(func):
+    x = np.random.random((100,100))
+    y = da.from_array(x, chunks=(50,50))
+    res_x = func(x)
+    res_y = func(y)
+
+    assert(isinstance(res_y, da.Array))
+    assert_eq(res_y, res_x)
 
 
 def test_array_function_sparse_transpose():
