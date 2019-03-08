@@ -47,6 +47,26 @@ This process is entirely lazy.  Neither creating the h5py object nor wrapping
 it with ``da.from_array`` have loaded any data.
 
 
+Random Data
+-----------
+
+For experimentation or benchmarking it is common to create arrays of random
+data.  The ``dask.array.random`` module implements most of the functions in the
+``numpy.random`` module.  We list some common functions below but for a full
+list see the :doc:`Array API <array-api>`:
+
+.. autosummary::
+   random.binomial
+   random.normal
+   random.poisson
+   random.random
+
+.. code-block:: python
+
+   >>> import dask.array as da
+   >>> x = da.random.random((10000, 10000), chunks=(1000, 1000))
+
+
 Concatenation and Stacking
 --------------------------
 
