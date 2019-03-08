@@ -26,7 +26,7 @@ operations.  They are best avoided if possible.
 Large to Small Joins
 --------------------
 
-Many join or merge computations combine a large tqble with one small one.  If
+Many join or merge computations combine a large table with one small one.  If
 the small table is either a single partition Dask DataFrame or even just a
 normal Pandas DataFrame then the computation can proceed in an embarrassingly
 parallel way, where each partition of the large dataframe is joined against the
@@ -37,7 +37,7 @@ that it is a single partition with the following
 
 .. code-block:: python
 
-    small.repartition(npartitions=1)
+    small = small.repartition(npartitions=1)
     result = big.merge(small)
 
 Sorted Joins
@@ -45,11 +45,11 @@ Sorted Joins
 
 The Pandas merge API supports the ``left_index=`` and ``right_index=`` options
 to perform joins on the index.  For Dask DataFrames these keyword options hold
-special significance if the index has known divisions (see :doc:`dataframe
-design <dataframe-design>`).  In this case the dataframe partitions are
-aligned along these divisions (which is generally fast) and then an
-embarrassingly parallel Pandas join happens across partition pairs.  This is
-generally relatively fast.
+special significance if the index has known divisions
+(see :ref:`dataframe-design-partitions`).
+In this case the dataframe partitions are aligned along these divisions (which
+is generally fast) and then an embarrassingly parallel Pandas join happens
+across partition pairs.  This is generally relatively fast.
 
 Sorted or indexed joins are a good solution to the large-large join problem.
 If you plan to join against a dataset repeatedly then it may be worthwhile to

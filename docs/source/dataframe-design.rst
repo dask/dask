@@ -72,6 +72,8 @@ callables (e.g. ``DataFrame.map_partitions``, ``DataFrame.apply``, etc...), as
 well as many creation functions (e.g. ``dd.from_delayed``).
 
 
+.. _dataframe-design-partitions:
+
 Partitions
 ----------
 
