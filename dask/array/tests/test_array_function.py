@@ -17,19 +17,38 @@ functions = [
     lambda x: np.stack([x, x]),
     lambda x: np.sum(x),
     lambda x: np.var(x),
-    lambda x: np.vstack(x)
+    lambda x: np.vstack(x),
+    lambda x: np.fft.fft(x.rechunk(x.shape) if isinstance(x, da.Array) else x),
+    lambda x: np.fft.fft2(x.rechunk(x.shape) if isinstance(x, da.Array) else x),
+    lambda x: np.linalg.norm(x)
+]
+
+
+notimpl_functions = [
+    lambda x: np.min_scalar_type(x),
+    lambda x: np.linalg.det(x),
+    lambda x: np.linalg.eigvals(x)
 ]
 
 
 @pytest.mark.parametrize('func', functions)
 def test_array_function_dask(func):
-    x = np.random.random((100,100))
-    y = da.from_array(x, chunks=(50,50))
+    x = np.random.random((100, 100))
+    y = da.from_array(x, chunks=(50, 50))
     res_x = func(x)
     res_y = func(y)
 
-    assert(isinstance(res_y, da.Array))
+    assert isinstance(res_y, da.Array)
     assert_eq(res_y, res_x)
+
+
+@pytest.mark.parametrize('func', unimpl_functions)
+def test_array_notimpl_function_dask(func):
+    x = np.random.random((100, 100))
+    y = da.from_array(x, chunks=(50, 50))
+
+    with pytest.raises(TypeError) as e:
+        res_y = func(y)
 
 
 def test_array_function_sparse_transpose():
@@ -58,8 +77,8 @@ def test_array_function_sparse_tensordot():
     xx = sparse.COO(x)
     yy = sparse.COO(y)
 
-    assert_eq(np.tensordot(x, y, axes=(2,0)),
-              np.tensordot(xx, yy, axes=(2,0)).todense())
+    assert_eq(np.tensordot(x, y, axes=(2, 0)),
+              np.tensordot(xx, yy, axes=(2, 0)).todense())
 
 
 def test_array_function_cupy_svd():
