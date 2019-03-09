@@ -2176,7 +2176,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return self.map_partitions(M.combine_first, other)
 
     def to_bag(self, index=False):
-        """ Craeate a Dask Bag from a Series """
+        """ Create a Dask Bag from a Series """
         from .io import to_bag
         return to_bag(self, index)
 
