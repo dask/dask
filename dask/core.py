@@ -113,6 +113,8 @@ def _execute_task(arg, cache, dsk=None):
     """
     if isinstance(arg, list):
         return [_execute_task(a, cache) for a in arg]
+    elif isinstance(arg, dict):
+        return {k: _execute_task(v, cache) for k, v in arg.items()}
     elif istask(arg):
         func, args = arg[0], arg[1:]
         args2 = [_execute_task(a, cache) for a in args]
