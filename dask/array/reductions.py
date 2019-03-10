@@ -321,10 +321,30 @@ def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
 
 def numel(x, **kwargs):
     """ A reduction to count the number of elements """
-    ones_like = ones_like_lookup.dispatch(type(x))
-    ones = ones_like(x)
-    todense = todense_lookup.dispatch(type(ones))
-    return chunk.sum(todense(ones), **kwargs)
+
+    if hasattr(x, 'mask'):
+        return chunk.sum(np.ones_like(x), **kwargs)
+
+    shape = x.shape
+    keepdims = kwargs.get('keepdims', False)
+    axis = kwargs.get('axis', None)
+    dtype = kwargs.get('dtype', np.float64)
+
+    if axis is None:
+        prod = np.prod(shape, dtype=dtype)
+        return np.full((1,) * len(shape), prod, dtype=dtype) if keepdims is True else prod
+
+    if not isinstance(axis, tuple or list):
+        axis = [axis]
+    else:
+        axis = sorted(axis)
+
+    prod = np.prod([shape[dim] for dim in axis])
+    if keepdims is True:
+        new_shape = [shape[dim] if dim not in axis else 1 for dim in range(len(shape))]
+    else:
+        new_shape = [shape[dim] for dim in range(len(shape)) if dim not in axis]
+    return np.full(new_shape, prod, dtype=dtype)
 
 
 def nannumel(x, **kwargs):
