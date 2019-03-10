@@ -386,17 +386,15 @@ def _nonempty_index(idx):
         # and https://github.com/pandas-dev/pandas/issues/16515
         # This doesn't mean `_meta_nonempty` should ever rely on
         # `self.monotonic_increasing` or `self.monotonic_decreasing`
-        data = [start, '1970-01-02'] if idx.freq is None else None
-        return pd.DatetimeIndex(data, start=start, periods=2, freq=idx.freq,
-                                tz=idx.tz, name=idx.name)
+        return pd.date_range(start=start, periods=2, freq=idx.freq,
+                             tz=idx.tz, name=idx.name)
     elif typ is pd.PeriodIndex:
         return pd.period_range(start='1970-01-01', periods=2, freq=idx.freq,
                                name=idx.name)
     elif typ is pd.TimedeltaIndex:
         start = np.timedelta64(1, 'D')
-        data = [start, start + 1] if idx.freq is None else None
-        return pd.TimedeltaIndex(data, start=start, periods=2, freq=idx.freq,
-                                 name=idx.name)
+        return pd.timedelta_range(start=start, periods=2, freq=idx.freq,
+                                  name=idx.name)
     elif typ is pd.CategoricalIndex:
         if len(idx.categories) == 0:
             data = pd.Categorical(_nonempty_index(idx.categories),
@@ -407,8 +405,8 @@ def _nonempty_index(idx):
         return pd.CategoricalIndex(data, name=idx.name)
     elif typ is pd.MultiIndex:
         levels = [_nonempty_index(l) for l in idx.levels]
-        labels = [[0, 0] for i in idx.levels]
-        return pd.MultiIndex(levels=levels, labels=labels, names=idx.names)
+        codes = [[0, 0] for i in idx.levels]
+        return pd.MultiIndex(levels=levels, codes=codes, names=idx.names)
     raise TypeError("Don't know how to handle index of "
                     "type {0}".format(type(idx).__name__))
 
