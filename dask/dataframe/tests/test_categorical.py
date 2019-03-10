@@ -269,7 +269,7 @@ def get_cat(x):
 def assert_array_index_eq(left, right, check_divisions=False):
     """left and right are equal, treating index and array as equivalent"""
     assert_eq(left, pd.Index(right) if isinstance(right, np.ndarray) else
-            right, check_divisions=check_divisions)
+              right, check_divisions=check_divisions)
 
 
 def test_return_type_known_categories():
@@ -315,9 +315,9 @@ class TestCategoricalAccessor:
         result = op(get_cat(ds))
         assert_eq(result, expected, check_divisions=False)
         assert_eq(get_cat(result._meta).categories,
-                get_cat(expected).categories, check_divisions=False)
+                  get_cat(expected).categories, check_divisions=False)
         assert_eq(get_cat(result._meta).ordered, get_cat(expected).ordered,
-                check_divisions=False)
+                  check_divisions=False)
 
     def test_categorical_empty(self):
         # GH 1705

@@ -1289,7 +1289,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         # Let pandas error on invalid arguments
         meta = self._meta_nonempty.shift(periods, freq=freq)
         out = self.map_partitions(M.shift, token='shift', periods=periods,
-                                  freq=freq, meta=meta)
+                                  freq=freq, meta=meta,
+                                  transform_divisions=False)
         return maybe_shift_divisions(out, periods, freq=freq)
 
     def _reduction_agg(self, name, axis=None, skipna=True,
@@ -2409,12 +2410,14 @@ class Index(Series):
                 raise ValueError("PeriodIndex doesn't accept `freq` argument")
             meta = self._meta_nonempty.shift(periods)
             out = self.map_partitions(M.shift, periods, meta=meta,
-                                      token='shift')
+                                      token='shift',
+                                      transform_divisions=False)
         else:
             # Pandas will raise for other index types that don't implement shift
             meta = self._meta_nonempty.shift(periods, freq=freq)
             out = self.map_partitions(M.shift, periods, token='shift',
-                                      meta=meta, freq=freq)
+                                      meta=meta, freq=freq,
+                                      transform_divisions=False)
         if freq is None:
             freq = meta.freq
         return maybe_shift_divisions(out, periods, freq=freq)
@@ -3419,6 +3422,8 @@ def elemwise(op, *args, **kwargs):
                 *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
                 **kwargs
             )
+            if isinstance(divisions, pd.Index):
+                divisions = divisions.tolist()
         except Exception:
             pass
         else:
@@ -3810,6 +3815,8 @@ def map_partitions(func, *args, **kwargs):
                 *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
                 **kwargs
             )
+            if isinstance(divisions, pd.Index):
+                divisions = divisions.tolist()
         except Exception:
             pass
         else:

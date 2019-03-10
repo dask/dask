@@ -2835,40 +2835,46 @@ def test_shift():
         ddf.shift(1.5)
 
 
-def test_shift_with_freq():
+@pytest.mark.parametrize('data_freq,divs1', [('B', False), ('D', True), ('H', True)])
+def test_shift_with_freq_DatetimeIndex(data_freq, divs1):
     df = tm.makeTimeDataFrame(30)
-    # DatetimeIndex
-    for data_freq, divs1 in [('B', False), ('D', True), ('H', True)]:
-        df = df.set_index(tm.makeDateIndex(30, freq=data_freq))
-        ddf = dd.from_pandas(df, npartitions=4)
-        for freq, divs2 in [('S', True), ('W', False),
-                            (pd.Timedelta(10, unit='h'), True)]:
-            for d, p in [(ddf, df), (ddf.A, df.A), (ddf.index, df.index)]:
-                res = d.shift(2, freq=freq)
-                assert_eq(res, p.shift(2, freq=freq))
-                assert res.known_divisions == divs2
-        # Index shifts also work with freq=None
-        res = ddf.index.shift(2)
-        assert_eq(res, df.index.shift(2))
-        assert res.known_divisions == divs1
+    df = df.set_index(tm.makeDateIndex(30, freq=data_freq))
+    ddf = dd.from_pandas(df, npartitions=4)
+    for freq, divs2 in [('S', True), ('W', False),
+                        (pd.Timedelta(10, unit='h'), True)]:
+        for d, p in [(ddf, df), (ddf.A, df.A), (ddf.index, df.index)]:
+            res = d.shift(2, freq=freq)
+            assert_eq(res, p.shift(2, freq=freq))
+            assert res.known_divisions == divs2
+    # Index shifts also work with freq=None
+    res = ddf.index.shift(2)
+    assert_eq(res, df.index.shift(2))
+    assert res.known_divisions == divs1
 
+
+@pytest.mark.parametrize('data_freq,divs', [('B', False), ('D', True), ('H', True)])
+def test_shift_with_freq_PeriodIndex(data_freq, divs):
+    df = tm.makeTimeDataFrame(30)
     # PeriodIndex
-    for data_freq, divs in [('B', False), ('D', True), ('H', True)]:
-        df = df.set_index(pd.period_range('2000-01-01', periods=30,
-                                          freq=data_freq))
-        ddf = dd.from_pandas(df, npartitions=4)
-        for d, p in [(ddf, df), (ddf.A, df.A)]:
-            res = d.shift(2, freq=data_freq)
-            assert_eq(res, p.shift(2, freq=data_freq))
-            assert res.known_divisions == divs
-        # PeriodIndex.shift doesn't have `freq` parameter
-        res = ddf.index.shift(2)
-        assert_eq(res, df.index.shift(2))
+    df = df.set_index(pd.period_range('2000-01-01', periods=30,
+                                      freq=data_freq))
+    ddf = dd.from_pandas(df, npartitions=4)
+    for d, p in [(ddf, df), (ddf.A, df.A)]:
+        res = d.shift(2, freq=data_freq)
+        assert_eq(res, p.shift(2, freq=data_freq))
         assert res.known_divisions == divs
+    # PeriodIndex.shift doesn't have `freq` parameter
+    res = ddf.index.shift(2)
+    assert_eq(res, df.index.shift(2))
+    assert res.known_divisions == divs
 
+    df = tm.makeTimeDataFrame(30)
     with pytest.raises(ValueError):
         ddf.index.shift(2, freq='D')  # freq keyword not supported
 
+
+def test_shift_with_freq_TimedeltaIndex():
+    df = tm.makeTimeDataFrame(30)
     # TimedeltaIndex
     for data_freq in ['T', 'D', 'H']:
         df = df.set_index(tm.makeTimedeltaIndex(30, freq=data_freq))
@@ -2883,6 +2889,8 @@ def test_shift_with_freq():
         assert_eq(res, df.index.shift(2))
         assert res.known_divisions
 
+
+def test_shift_with_freq_errors():
     # Other index types error
     df = tm.makeDataFrame()
     ddf = dd.from_pandas(df, npartitions=4)
