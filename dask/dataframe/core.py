@@ -3812,7 +3812,7 @@ def map_partitions(func, *args, **kwargs):
     if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
         try:
             divisions = func(
-                *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
+                *[pd.Index(a.divisions) if a is dfs[0] else a for a in args],
                 **kwargs
             )
             if isinstance(divisions, pd.Index):
