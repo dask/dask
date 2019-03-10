@@ -12,6 +12,7 @@ def timeseries(
     partition_freq='1d',
     dtypes={'name': str, 'id': int, 'x': float, 'y': float},
     seed=None,
+    **kwargs
 ):
     """ Create timeseries dataframe with random data
 
@@ -30,6 +31,9 @@ def timeseries(
         String like '1M' or '2Y' to divide the dataframe into partitions
     seed : int (optional)
         Randomstate seed
+    kwargs:
+        Keywords to pass down to individual column creation functions.
+        Keywords should be prefixed by the column name and then an underscore.
 
     Examples
     --------
@@ -42,11 +46,17 @@ def timeseries(
     2000-01-01 00:00:02   988    Wendy -0.526331  0.128641
     2000-01-01 00:00:03  1016   Yvonne  0.620456  0.767270
     2000-01-01 00:00:04   998   Ursula  0.684902 -0.463278
+    >>> df = dask.datasets.timeseries(
+    ...     '2000', '2010',
+    ...     freq='2H', partition_freq='1D', seed=1,  # data frequency
+    ...     dtypes={'value': float, 'name': str, 'id': int},  # data types
+    ...     id_lam=1000  # control number of items in id column
+    ... )
     """
     from dask.dataframe.io.demo import make_timeseries
     return make_timeseries(start=start, end=end, freq=freq,
                            partition_freq=partition_freq,
-                           seed=seed, dtypes=dtypes)
+                           seed=seed, dtypes=dtypes, **kwargs)
 
 
 def _generate_mimesis(field, schema_description, records_per_partition, seed):

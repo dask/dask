@@ -240,13 +240,17 @@ def _apply_chunk(df, *index, **kwargs):
 def _var_chunk(df, *index):
     if is_series_like(df):
         df = df.to_frame()
+
+    df = df.copy()
+    cols = df._get_numeric_data().columns
+
     g = _groupby_raise_unaligned(df, by=index)
     x = g.sum()
 
-    n = g.count().rename(columns=lambda c: c + '-count')
+    n = g[x.columns].count().rename(columns=lambda c: c + '-count')
 
-    df2 = df ** 2
-    g2 = _groupby_raise_unaligned(df2, by=index)
+    df[cols] = df[cols] ** 2
+    g2 = _groupby_raise_unaligned(df, by=index)
     x2 = g2.sum().rename(columns=lambda c: c + '-x2')
 
     x2.index = x.index
@@ -934,8 +938,11 @@ class _GroupBy(object):
 
     @derived_from(pd.core.groupby.GroupBy)
     def mean(self, split_every=None, split_out=1):
-        return (self.sum(split_every=split_every, split_out=split_out) /
-                self.count(split_every=split_every, split_out=split_out))
+        s = self.sum(split_every=split_every, split_out=split_out)
+        c = self.count(split_every=split_every, split_out=split_out)
+        if is_dataframe_like(s):
+            c = c[s.columns]
+        return s / c
 
     @derived_from(pd.core.groupby.GroupBy)
     def size(self, split_every=None, split_out=1):

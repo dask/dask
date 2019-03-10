@@ -2176,7 +2176,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         return self.map_partitions(M.combine_first, other)
 
     def to_bag(self, index=False):
-        """ Craeate a Dask Bag from a Series """
+        """ Create a Dask Bag from a Series """
         from .io import to_bag
         return to_bag(self, index)
 
@@ -3793,9 +3793,8 @@ def apply_and_enforce(*args, **kwargs):
     meta = kwargs.pop('_meta')
     df = func(*args, **kwargs)
     if is_dataframe_like(df) or is_series_like(df) or is_index_like(df):
-        if len(df) == 0:
+        if not len(df):
             return meta
-
         if is_dataframe_like(df):
             # Need nan_to_num otherwise nan comparison gives False
             if not np.array_equal(np.nan_to_num(meta.columns),
@@ -4293,9 +4292,9 @@ def repartition_freq(df, freq=None):
         start = df.divisions[0].ceil(freq)
     except ValueError:
         start = df.divisions[0]
-    divisions = pd.DatetimeIndex(start=start,
-                                 end=df.divisions[-1],
-                                 freq=freq).tolist()
+    divisions = pd.date_range(start=start,
+                              end=df.divisions[-1],
+                              freq=freq).tolist()
     if not len(divisions):
         divisions = [df.divisions[0], df.divisions[-1]]
     else:

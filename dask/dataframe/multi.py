@@ -61,7 +61,7 @@ import warnings
 from toolz import merge_sorted, unique, first
 import pandas as pd
 
-from ..base import tokenize
+from ..base import tokenize, is_dask_collection
 from ..compatibility import apply
 from ..highlevelgraph import HighLevelGraph
 from .core import (_Frame, DataFrame, Series, map_partitions, Index,
@@ -70,6 +70,7 @@ from .io import from_pandas
 from . import methods
 from .shuffle import shuffle, rearrange_by_divisions
 from .utils import strip_unknown_categories
+from ..utils import M
 
 
 def align_partitions(*dfs):
@@ -202,37 +203,23 @@ def require(divisions, parts, required=None):
 required = {'left': [0], 'right': [1], 'inner': [0, 1], 'outer': []}
 
 
-def merge_indexed_dataframes(lhs, rhs, how='left', lsuffix='', rsuffix='',
-                             indicator=False, left_on=None, right_on=None,
-                             left_index=True, right_index=True):
+def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwargs):
     """ Join two partitioned dataframes along their index """
+    how = kwargs.get('how', 'left')
+    kwargs['left_index'] = left_index
+    kwargs['right_index'] = right_index
 
     (lhs, rhs), divisions, parts = align_partitions(lhs, rhs)
     divisions, parts = require(divisions, parts, required[how])
 
-    left_empty = lhs._meta
-    right_empty = rhs._meta
-
-    name = 'join-indexed-' + tokenize(lhs, rhs, how, lsuffix, rsuffix,
-                                      indicator, left_on, right_on,
-                                      left_index, right_index)
+    name = 'join-indexed-' + tokenize(lhs, rhs, **kwargs)
 
     dsk = dict()
     for i, (a, b) in enumerate(parts):
-        if a is None and how in ('right', 'outer'):
-            a = left_empty
-        if b is None and how in ('left', 'outer'):
-            b = right_empty
+        dsk[(name, i)] = (apply, M.merge, [a, b], kwargs)
 
-        dsk[(name, i)] = (methods.merge, a, b, how, left_on, right_on,
-                          left_index, right_index,
-                          indicator, (lsuffix, rsuffix), left_empty,
-                          right_empty)
+    meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **kwargs)
 
-    meta = pd.merge(lhs._meta_nonempty, rhs._meta_nonempty, how=how,
-                    left_index=left_index, right_index=right_index,
-                    left_on=left_on, right_on=right_on,
-                    suffixes=(lsuffix, rsuffix), indicator=indicator)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[lhs, rhs])
     return new_dd_object(graph, name, meta, divisions)
 
@@ -268,26 +255,22 @@ def hash_join(lhs, left_on, rhs, right_on, how='inner',
     else:
         right_index = False
 
+    kwargs = dict(how=how, left_on=left_on, right_on=right_on,
+                  left_index=left_index, right_index=right_index,
+                  suffixes=suffixes, indicator=indicator)
+
     # dummy result
-    meta = pd.merge(lhs._meta_nonempty, rhs._meta_nonempty, how=how,
-                    left_on=left_on, right_on=right_on,
-                    left_index=left_index, right_index=right_index,
-                    suffixes=suffixes, indicator=indicator)
+    meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **kwargs)
 
     if isinstance(left_on, list):
         left_on = (list, tuple(left_on))
     if isinstance(right_on, list):
         right_on = (list, tuple(right_on))
 
-    token = tokenize(lhs2, left_on, rhs2, right_on, left_index, right_index,
-                     how, npartitions, suffixes, shuffle, indicator)
+    token = tokenize(lhs2, rhs2, npartitions, shuffle, **kwargs)
     name = 'hash-join-' + token
 
-    dsk = {(name, i): (methods.merge,
-                       (lhs2._name, i), (rhs2._name, i),
-                       how, left_on, right_on,
-                       left_index, right_index, indicator,
-                       suffixes, lhs._meta, rhs._meta)
+    dsk = {(name, i): (apply, M.merge, [(lhs2._name, i), (rhs2._name, i)], kwargs)
            for i in range(npartitions)}
 
     divisions = [None] * (npartitions + 1)
@@ -299,11 +282,11 @@ def single_partition_join(left, right, **kwargs):
     # if the merge is perfomed on_index, divisions can be kept, otherwise the
     # new index will not necessarily correspond the current divisions
 
-    meta = pd.merge(left._meta_nonempty, right._meta_nonempty, **kwargs)
+    meta = left._meta_nonempty.merge(right._meta_nonempty, **kwargs)
     name = 'merge-' + tokenize(left, right, **kwargs)
     if left.npartitions == 1:
         left_key = first(left.__dask_keys__())
-        dsk = {(name, i): (apply, pd.merge, [left_key, right_key], kwargs)
+        dsk = {(name, i): (apply, M.merge, [left_key, right_key], kwargs)
                for i, right_key in enumerate(right.__dask_keys__())}
 
         if kwargs.get('right_index') or right._contains_index_name(
@@ -314,7 +297,7 @@ def single_partition_join(left, right, **kwargs):
 
     elif right.npartitions == 1:
         right_key = first(right.__dask_keys__())
-        dsk = {(name, i): (apply, pd.merge, [left_key, right_key], kwargs)
+        dsk = {(name, i): (apply, M.merge, [left_key, right_key], kwargs)
                for i, left_key in enumerate(left.__dask_keys__())}
 
         if kwargs.get('left_index') or left._contains_index_name(
@@ -352,14 +335,14 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
                         indicator=indicator)
 
     # Transform pandas objects into dask.dataframe objects
-    if isinstance(left, (pd.Series, pd.DataFrame)):
+    if not is_dask_collection(left):
         if right_index and left_on:  # change to join on index
             left = left.set_index(left[left_on])
             left_on = False
             left_index = True
         left = from_pandas(left, npartitions=1)  # turn into DataFrame
 
-    if isinstance(right, (pd.Series, pd.DataFrame)):
+    if not is_dask_collection(right):
         if left_index and right_on:  # change to join on index
             right = right.set_index(right[right_on])
             right_on = False
@@ -376,8 +359,7 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
     # Both sides indexed
     if merge_indexed_left and merge_indexed_right:  # Do indexed join
         return merge_indexed_dataframes(left, right, how=how,
-                                        lsuffix=suffixes[0],
-                                        rsuffix=suffixes[1],
+                                        suffixes=suffixes,
                                         indicator=indicator,
                                         left_on=left_on,
                                         right_on=right_on,
@@ -397,10 +379,10 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
           right_index and right.known_divisions and not left_index):
         left_empty = left._meta_nonempty
         right_empty = right._meta_nonempty
-        meta = pd.merge(left_empty, right_empty, how=how, on=on,
-                        left_on=left_on, right_on=right_on,
-                        left_index=left_index, right_index=right_index,
-                        suffixes=suffixes, indicator=indicator)
+        meta = left_empty.merge(right_empty, how=how, on=on,
+                                left_on=left_on, right_on=right_on,
+                                left_index=left_index, right_index=right_index,
+                                suffixes=suffixes, indicator=indicator)
         if merge_indexed_left and left.known_divisions:
             right = rearrange_by_divisions(right, right_on, left.divisions,
                                            max_branch, shuffle=shuffle)
@@ -409,7 +391,7 @@ def merge(left, right, how='inner', on=None, left_on=None, right_on=None,
             left = rearrange_by_divisions(left, left_on, right.divisions,
                                           max_branch, shuffle=shuffle)
             right = right.clear_divisions()
-        return map_partitions(pd.merge, left, right, meta=meta, how=how, on=on,
+        return map_partitions(M.merge, left, right, meta=meta, how=how, on=on,
                               left_on=left_on, right_on=right_on,
                               left_index=left_index, right_index=right_index,
                               suffixes=suffixes, indicator=indicator)
