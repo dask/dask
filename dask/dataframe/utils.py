@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import math
 import re
 import textwrap
 from distutils.version import LooseVersion
@@ -821,8 +822,8 @@ def valid_divisions(divisions):
     """
     if not isinstance(divisions, (tuple, list)):
         return False
-    for i in range(len(divisions) - 1):
-        if divisions[i] >= divisions[i + 1]:
+    for i in range(len(divisions) - 2):
+        if divisions[i] >= divisions[i + 1] or math.isnan(divisions[i]):
             return False
     if divisions[-2] > divisions[-1]:
         return False
