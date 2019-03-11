@@ -473,30 +473,30 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
 
     # 1-dimensional arrays
     # top 5 elements, sorted descending
-    assert_eq(npfunc(a)[-k:][::-1],
+    assert_eq(npfunc(a.compute())[-k:][::-1],
               daskfunc(a, k, split_every=split_every))
     # bottom 5 elements, sorted ascending
-    assert_eq(npfunc(a)[:k],
+    assert_eq(npfunc(a.compute())[:k],
               daskfunc(a, -k, split_every=split_every))
 
     # n-dimensional arrays
     # also testing when k > chunk
     # top 5 elements, sorted descending
-    assert_eq(npfunc(b, axis=0)[-k:, :, :][::-1, :, :],
+    assert_eq(npfunc(b.compute(), axis=0)[-k:, :, :][::-1, :, :],
               daskfunc(b, k, axis=0, split_every=split_every))
-    assert_eq(npfunc(b, axis=1)[:, -k:, :][:, ::-1, :],
+    assert_eq(npfunc(b.compute(), axis=1)[:, -k:, :][:, ::-1, :],
               daskfunc(b, k, axis=1, split_every=split_every))
-    assert_eq(npfunc(b, axis=-1)[:, :, -k:][:, :, ::-1],
+    assert_eq(npfunc(b.compute(), axis=-1)[:, :, -k:][:, :, ::-1],
               daskfunc(b, k, axis=-1, split_every=split_every))
     with pytest.raises(ValueError):
         daskfunc(b, k, axis=3, split_every=split_every)
 
     # bottom 5 elements, sorted ascending
-    assert_eq(npfunc(b, axis=0)[:k, :, :],
+    assert_eq(npfunc(b.compute(), axis=0)[:k, :, :],
               daskfunc(b, -k, axis=0, split_every=split_every))
-    assert_eq(npfunc(b, axis=1)[:, :k, :],
+    assert_eq(npfunc(b.compute(), axis=1)[:, :k, :],
               daskfunc(b, -k, axis=1, split_every=split_every))
-    assert_eq(npfunc(b, axis=-1)[:, :, :k],
+    assert_eq(npfunc(b.compute(), axis=-1)[:, :, :k],
               daskfunc(b, -k, axis=-1, split_every=split_every))
     with pytest.raises(ValueError):
         daskfunc(b, -k, axis=3, split_every=split_every)
@@ -514,10 +514,10 @@ def test_topk_argtopk2(npfunc, daskfunc, split_every, chunksize):
     k = 5
 
     # top 5 elements, sorted descending
-    assert_eq(npfunc(a)[-k:][::-1],
+    assert_eq(npfunc(a.compute())[-k:][::-1],
               daskfunc(a, k, split_every=split_every))
     # bottom 5 elements, sorted ascending
-    assert_eq(npfunc(a)[:k],
+    assert_eq(npfunc(a.compute())[:k],
               daskfunc(a, -k, split_every=split_every))
 
 
