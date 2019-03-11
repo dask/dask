@@ -171,9 +171,13 @@ def _groupby_get_group(df, by_key, get_key, columns):
 # Aggregation
 ###############################################################
 
-# Implementation detail: use class to make it easier to pass inside spec
 class Aggregation(object):
-    """A user defined aggregation.
+    """User defined groupby-aggregation.
+
+    This class allows users to define their own custom aggregation in terms of
+    operations on Pandas dataframes in a map-reduce style. You need to specify
+    what operation to do on each chunk of data, how to combine those chunks of
+    data together, and then how to finalize the result.
 
     Parameters
     ----------
@@ -195,22 +199,27 @@ class Aggregation(object):
 
     Examples
     --------
+    We could implement ``sum`` as follows:
 
-    ``sum`` can be implemented as::
+    >>> custom_sum = dd.Aggregation(
+    ...     name='custom_sum',
+    ...     chunk=lambda s: s.sum(),
+    ...     agg=lambda s0: s0.sum()
+    ... )  # doctest: +SKIP
+    >>> df.groupby('g').agg(custom_sum)  # doctest: +SKIP
 
-        custom_sum = dd.Aggregation('custom_sum', lambda s: s.sum(), lambda s0: s0.sum())
-        df.groupby('g').agg(custom_sum)
+    We can implement ``mean`` as follows:
 
-    and ``mean`` can be implemented as::
+    >>> custom_mean = dd.Aggregation(
+    ...     name='custom_mean',
+    ...     chunk=lambda s: (s.count(), s.sum()),
+    ...     agg=lambda count, sum: (count.sum(), sum.sum()),
+    ...     finalize=lambda count, sum: sum / count,
+    ... )  # doctest: +SKIP
+    >>> df.groupby('g').agg(custom_mean)  # doctest: +SKIP
 
-        custom_mean = dd.Aggregation(
-            'custom_mean',
-            lambda s: (s.count(), s.sum()),
-            lambda count, sum: (count.sum(), sum.sum()),
-            lambda count, sum: sum / count,
-        )
-        df.groupby('g').agg(custom_mean)
-
+    Though of course, both of these are built-in and so you don't need to
+    implement them yourself.
     """
     def __init__(self, name, chunk, agg, finalize=None):
         self.chunk = chunk

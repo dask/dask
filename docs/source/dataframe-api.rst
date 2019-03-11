@@ -252,6 +252,9 @@ Groupby Operations
    SeriesGroupBy.first
    SeriesGroupBy.last
 
+.. autosummary::
+   Aggregation
+
 Rolling Operations
 ~~~~~~~~~~~~~~~~~~
 
@@ -351,6 +354,11 @@ SeriesGroupBy
 .. autoclass:: SeriesGroupBy
    :members:
    :inherited-members:
+
+Custom Aggregation
+~~~~~~~~~~~~~~~~~~
+.. autoclass:: Aggregation
+
 
 Storage and Conversion
 ~~~~~~~~~~~~~~~~~~~~~~
