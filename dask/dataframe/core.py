@@ -3383,6 +3383,11 @@ def elemwise(op, *args, **kwargs):
     meta: pd.DataFrame, pd.Series (optional)
         Valid metadata for the operation.  Will evaluate on a small piece of
         data if not provided.
+    transform_divisions: boolean
+        If the input is a ``dask.dataframe.Index`` we normally will also apply
+        the function onto the divisions and apply those transformed divisions
+        to the output.  You can pass ``transform_divisions=False`` to override
+        this behavior
 
     Examples
     --------

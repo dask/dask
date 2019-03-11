@@ -820,6 +820,8 @@ def valid_divisions(divisions):
     True
     >>> valid_divisions(123)
     False
+    >>> valid_divisions([0, float('nan'), 1])
+    False
     """
     if not isinstance(divisions, (tuple, list)):
         return False
@@ -830,6 +832,11 @@ def valid_divisions(divisions):
         if isinstance(x, numbers.Number) and math.isnan(x):
             return False
 
+    for x in divisions[-2:]:
+        if isinstance(x, numbers.Number) and math.isnan(x):
+            return False
+
     if divisions[-2] > divisions[-1]:
         return False
+
     return True
