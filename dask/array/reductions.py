@@ -12,7 +12,6 @@ from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
 from .core import _concatenate2, Array, handle_out
-from .core import todense_lookup
 from .blockwise import blockwise
 from ..blockwise import lol_tuples
 from .creation import arange
@@ -410,8 +409,7 @@ def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     n = numel(A, **kwargs).astype(np.int64)
     u = total / n
     diff = A - u
-    todense = todense_lookup.dispatch(type(diff))
-    xs = [sum(todense(A - u)**i, dtype=dtype, **kwargs) for i in range(2, order + 1)]
+    xs = [((A - u)**i).sum(dtype=dtype, **kwargs) for i in range(2, order + 1)]
     M = np.stack(xs, axis=-1)
     return {'total': total, 'n': n, 'M': M}
 
