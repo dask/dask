@@ -31,7 +31,7 @@ class ServerNode(Node, Server):
     # XXX avoid inheriting from Server? there is some large potential for confusion
     # between base and derived attribute namespaces...
 
-    def __init__(self, handlers=None, stream_handlers=None,
+    def __init__(self, handlers=None, blocked_handlers=None, stream_handlers=None,
                  connection_limit=512, deserialize=True,
                  connection_args=None, io_loop=None, serializers=None,
                  deserializers=None):
@@ -42,6 +42,7 @@ class ServerNode(Node, Server):
                       serializers=serializers,
                       deserializers=deserializers)
         Server.__init__(self, handlers=handlers,
+                        blocked_handlers=blocked_handlers,
                         stream_handlers=stream_handlers,
                         connection_limit=connection_limit,
                         deserialize=deserialize, io_loop=self.io_loop)

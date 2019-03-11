@@ -43,6 +43,12 @@ def get_total_physical_memory():
         return 2e9
 
 
+def raise_later(exc):
+    def _raise(*args, **kwargs):
+        raise exc
+    return _raise
+
+
 MAX_BUFFER_SIZE = get_total_physical_memory()
 
 tick_maximum_delay = parse_timedelta(dask.config.get('distributed.admin.tick.limit'), default='ms')
@@ -89,13 +95,16 @@ class Server(object):
     default_ip = ''
     default_port = 0
 
-    def __init__(self, handlers, stream_handlers=None, connection_limit=512,
+    def __init__(self, handlers, blocked_handlers=None, stream_handlers=None, connection_limit=512,
                  deserialize=True, io_loop=None):
         self.handlers = {
             'identity': self.identity,
             'connection_stream': self.handle_stream,
         }
         self.handlers.update(handlers)
+        if blocked_handlers is None:
+            blocked_handlers = dask.config.get('distributed.%s.blocked-handlers' % type(self).__name__.lower(), [])
+        self.blocked_handlers = blocked_handlers
         self.stream_handlers = {}
         self.stream_handlers.update(stream_handlers or {})
 
@@ -330,7 +339,13 @@ class Server(object):
 
                 result = None
                 try:
-                    handler = self.handlers[op]
+                    if op in self.blocked_handlers:
+                        _msg = ("The '{op}' handler has been explicitly disallowed "
+                                "in {obj}, possibly due to security concerns.")
+                        exc = ValueError(_msg.format(op=op, obj=type(self).__name__))
+                        handler = raise_later(exc)
+                    else:
+                        handler = self.handlers[op]
                 except KeyError:
                     logger.warning("No handler %s found in %s", op,
                                    type(self).__name__, exc_info=True)

@@ -252,6 +252,31 @@ def test_add_worker(s, a, b):
     yield w._close()
 
 
+@gen_cluster(scheduler_kwargs={'blocked_handlers': ['feed']})
+def test_blocked_handlers_are_respected(s, a, b):
+    def func(scheduler):
+        return dumps(dict(scheduler.worker_info))
+
+    comm = yield connect(s.address)
+    yield comm.write({'op': 'feed',
+                      'function': dumps(func),
+                      'interval': 0.01})
+
+    response = yield comm.read()
+
+    assert 'exception' in response
+    assert isinstance(response['exception'], ValueError)
+    assert "'feed' handler has been explicitly disallowed" in repr(response['exception'])
+
+    yield comm.close()
+
+
+def test_scheduler_init_pulls_blocked_handlers_from_config():
+    with dask.config.set({'distributed.scheduler.blocked-handlers': ['test-handler']}):
+        s = Scheduler()
+    assert s.blocked_handlers == ['test-handler']
+
+
 @gen_cluster()
 def test_feed(s, a, b):
     def func(scheduler):

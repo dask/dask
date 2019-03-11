@@ -11,6 +11,7 @@ distributed:
   scheduler:
     allowed-failures: 3     # number of retries before a task is considered bad
     bandwidth: 100000000    # 100 MB/s estimated worker-worker bandwidth
+    blocked-handlers: []
     default-data-size: 1000
     # Number of seconds to wait until workers or clients are removed from the events log
     # after they have been removed from the scheduler
@@ -22,6 +23,7 @@ distributed:
     preload-argv: []
 
   worker:
+    blocked-handlers: []
     multiprocessing-method: forkserver
     use-file-locking: True
     connections:            # Maximum concurrent connections for data

@@ -41,6 +41,15 @@ def test_simple(loop):
             assert e.loop is c.loop
 
 
+def test_local_cluster_supports_blocked_handlers(loop):
+    with LocalCluster(blocked_handlers=['run_function'], loop=loop) as c:
+        with Client(c) as client:
+            with pytest.raises(ValueError) as exc:
+                client.run_on_scheduler(lambda x: x, 42)
+
+    assert "'run_function' handler has been explicitly disallowed in Scheduler" in str(exc.value)
+
+
 @pytest.mark.skipif('sys.version_info[0] == 2', reason='fork issues')
 def test_close_twice():
     with LocalCluster() as cluster:
