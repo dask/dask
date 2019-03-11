@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from .core import new_dd_object, Series
+from .utils import is_index_like
 from . import methods
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
@@ -301,7 +302,7 @@ def _maybe_partial_time_string(index, indexer, kind):
     if data has DatetimeIndex/PeriodIndex
     """
     # do not pass dd.Index
-    assert isinstance(index, pd.Index)
+    assert is_index_like(index)
 
     if not isinstance(index, (pd.DatetimeIndex, pd.PeriodIndex)):
         return indexer
