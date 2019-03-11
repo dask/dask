@@ -1,6 +1,63 @@
 Changelog
 =========
 
+1.1.4 / 2019-03-08
+------------------
+
+Array
++++++
+
+-  Use mask selection in compress (:pr:`4548`) `John A Kirkham`_
+-  Use `asarray` in `extract` (:pr:`4549`) `John A Kirkham`_
+-  Use correct dtype when test concatenation. (:pr:`4539`) `Elliott Sales de Andrade`_
+-  Fix CuPy tests or properly marks as xfail (:pr:`4564`) `Peter Andreas Entschev`_
+
+Core
+++++
+
+-  Fix local scheduler callback to deal with custom caching (:pr:`4542`) `Yu Feng`_
+-  Use parse_bytes in read_bytes(sample=...) (:pr:`4554`) `Matthew Rocklin`_
+
+DataFrame
++++++++++
+
+-  Fix up groupby-standard deviation again on object dtype keys (:pr:`4541`) `Matthew Rocklin`_
+-  TST/CI: Updates for pandas 0.24.1 (:pr:`4551`) `Tom Augspurger`_
+-  Add ability to control number of unique elements in timeseries (:pr:`4557`) `Matthew Rocklin`_
+-  Add support in read_csv for parameter skiprows for other iterables (:pr:`4560`) `@JulianWgs`_
+
+Documentation
++++++++++++++
+
+-  DataFrame to Array conversion and unknown chunks (:pr:`4516`) `Scott Sievert`_
+-  Add docs for random array creation (:pr:`4566`) `Matthew Rocklin`_
+-  Fix typo in docstring (:pr:`4572`) `Shyam Saladi`_
+
+
+1.1.3 / 2019-03-01
+------------------
+
+Array
++++++
+
+-  Modify mean chunk functions to return dicts rather than arrays (:pr:`4513`) `Matthew Rocklin`_
+-  Change sparse installation in CI for NumPy/Python2 compatibility (:pr:`4537`) `Matthew Rocklin`_
+
+DataFrame
++++++++++
+
+-  Make merge dispatchable on pandas/other dataframe types (:pr:`4522`) `Matthew Rocklin`_
+-  read_sql_table - datetime index fix and  index type checking (:pr:`4474`) `Joe Corbett`_
+-  Use generalized form of index checking (is_index_like) (:pr:`4531`) `Ben Zaitlen`_
+-  Add tests for groupby reductions with object dtypes (:pr:`4535`) `Matthew Rocklin`_
+-  Fixes #4467 : Updates time_series for pandas deprecation (:pr:`4530`) `@HSR05`_
+
+Documentation
++++++++++++++
+
+-  Add missing method to documentation index (:pr:`4528`) `Bart Broere`_
+
+
 1.1.2 / 2019-02-25
 ------------------
 
@@ -30,10 +87,10 @@ DataFrame
 -  Fix bug in pyarrow and hdfs (:pr:`4453`) (:pr:`4455`) `Michał Jastrzębski`_
 -  df getitem with integer slices is not implemented (:pr:`4466`) `Jim Crist`_
 -  Replace cudf-specific code with dask-cudf import (:pr:`4470`) `Matthew Rocklin`_
--  Avoid groupby.agg(callable`) in groupby-var (:pr:`4482`) `Matthew Rocklin`_
+-  Avoid groupby.agg(callable) in groupby-var (:pr:`4482`) `Matthew Rocklin`_
 -  Consider uint types as numerical in check_meta (:pr:`4485`) `Marco Neumann`_
 -  Fix some typos in groupby comments (:pr:`4494`) `Daniel Saxton`_
--  Add error message around set_index(inplace=True`) (:pr:`4501`) `Matthew Rocklin`_
+-  Add error message around set_index(inplace=True) (:pr:`4501`) `Matthew Rocklin`_
 -  meta_nonempty works with categorical index (:pr:`4505`) `Jim Crist`_
 -  Add module name to expected meta error message (:pr:`4499`) `Matthew Rocklin`_
 -  groupby-nunique works on empty chunk (:pr:`4504`) `Jim Crist`_
@@ -117,11 +174,11 @@ DataFrame
 -  Adjust check for bad chunks in map_blocks (:pr:`4308`) `Tom Augspurger`_
 -  Add dask.dataframe.read_fwf (:pr:`4316`) `@slnguyen`_
 -  Use atop fusion in dask dataframe (:pr:`4229`) `Matthew Rocklin`_
--  Use parallel_types(`) in from_pandas (:pr:`4331`) `Matthew Rocklin`_
+-  Use parallel_types() in from_pandas (:pr:`4331`) `Matthew Rocklin`_
 -  Change DataFrame._repr_data to method (:pr:`4330`) `Matthew Rocklin`_
 -  Install pyarrow fastparquet for Appveyor (:pr:`4338`) `Gábor Lipták`_
 -  Remove explicit pandas checks and provide cudf lazy registration (:pr:`4359`) `Matthew Rocklin`_
--  Replace isinstance(..., pandas`) with is_dataframe_like (:pr:`4375`) `Matthew Rocklin`_
+-  Replace isinstance(..., pandas) with is_dataframe_like (:pr:`4375`) `Matthew Rocklin`_
 -  ENH: Support 3rd-party ExtensionArrays (:pr:`4379`) `Tom Augspurger`_
 -  Pandas 0.24.0 compat (:pr:`4374`) `Tom Augspurger`_
 
@@ -130,7 +187,7 @@ Documentation
 
 -  Fix link to 'map_blocks' function in array api docs (:pr:`4258`) `David Hoese`_
 -  Add a paragraph on Dask-Yarn in the cloud docs (:pr:`4260`) `Jim Crist`_
--  Copy edit documentation (:pr:`4267), (:pr:`4263`), (:pr:`4262`), (:pr:`4277`), (:pr:`4271`), (:pr:`4279), (:pr:`4265`), (:pr:`4295`), (:pr:`4293`), (:pr:`4296`), (:pr:`4302`), (:pr:`4306`), (:pr:`4318`), (:pr:`4314`), (:pr:`4309`), (:pr:`4317`), (:pr:`4326`), (:pr:`4325`), (:pr:`4322`), (:pr:`4332`), (:pr:`4333`), `Miguel Farrajota`_
+-  Copy edit documentation (:pr:`4267`), (:pr:`4263`), (:pr:`4262`), (:pr:`4277`), (:pr:`4271`), (:pr:`4279`), (:pr:`4265`), (:pr:`4295`), (:pr:`4293`), (:pr:`4296`), (:pr:`4302`), (:pr:`4306`), (:pr:`4318`), (:pr:`4314`), (:pr:`4309`), (:pr:`4317`), (:pr:`4326`), (:pr:`4325`), (:pr:`4322`), (:pr:`4332`), (:pr:`4333`), `Miguel Farrajota`_
 -  Fix typo in code example (:pr:`4272`) `Daniel Li`_
 -  Doc: Update array-api.rst (:pr:`4259`) (:pr:`4282`) `Prabakaran Kumaresshan`_
 -  Update hpc doc (:pr:`4266`) `Guillaume Eynard-Bontemps`_
@@ -346,7 +403,7 @@ Array
 -   Make da.RandomState extensible to other modules (:pr:`4041`) `Matthew Rocklin`_
 -   Support unknown dims in ravel no-op case (:pr:`4055`) `Jim Crist`_
 -   Add basic infrastructure for cupy (:pr:`4019`) `Matthew Rocklin`_
--   Avoid asarray and lock arguments for from_array(getitem`) (:pr:`4044`) `Matthew Rocklin`_
+-   Avoid asarray and lock arguments for from_array(getitem) (:pr:`4044`) `Matthew Rocklin`_
 -   Move local imports in `corrcoef` to global imports (:pr:`4030`) `John A Kirkham`_
 -   Move local `indices` import to global import (:pr:`4029`) `John A Kirkham`_
 -   Fix-up Dask Array's fromfunction w.r.t. dtype and kwargs (:pr:`4028`) `John A Kirkham`_
@@ -1834,3 +1891,8 @@ Other
 .. _`Ross Petchler`: https://github.com/rpetchler
 .. _`Aploium`: https://github.com/aploium
 .. _`Peter Andreas Entschev`: https://github.com/pentschev
+.. _`@JulianWgs`: https://github.com/JulianWgs
+.. _`Shyam Saladi`: https://github.com/smsaladi
+.. _`Joe Corbett`: https://github.com/jcorb
+.. _`@HSR05`: https://github.com/HSR05
+.. _`Ben Zaitlen`: https://github.com/quasiben

@@ -47,6 +47,26 @@ This process is entirely lazy.  Neither creating the h5py object nor wrapping
 it with ``da.from_array`` have loaded any data.
 
 
+Random Data
+-----------
+
+For experimentation or benchmarking it is common to create arrays of random
+data.  The ``dask.array.random`` module implements most of the functions in the
+``numpy.random`` module.  We list some common functions below but for a full
+list see the :doc:`Array API <array-api>`:
+
+.. autosummary::
+   random.binomial
+   random.normal
+   random.poisson
+   random.random
+
+.. code-block:: python
+
+   >>> import dask.array as da
+   >>> x = da.random.random((10000, 10000), chunks=(1000, 1000))
+
+
 Concatenation and Stacking
 --------------------------
 
@@ -115,17 +135,43 @@ See :doc:`documentation on using dask.delayed with collections<delayed-collectio
 From Dask DataFrame
 -------------------
 
-You can create Dask arrays from Dask DataFrames using the ``.values`` attribute
-or the ``.to_records()`` method:
+There are several ways to create a Dask array from a Dask DataFrame. Dask DataFrames have a ``to_dask_array`` method:
 
 .. code-block:: python
 
-   >>> x = df.values
-   >>> x = df.to_records()
+   >>> df = dask.dataframes.from_pandas(...)
+   >>> df.to_dask_array()
+   dask.array<values, shape=(nan, 3), dtype=float64, chunksize=(nan, 3)>
 
-However, these arrays do not have known chunk sizes (dask.dataframe does not
-track the number of rows in each partition), and so some operations like slicing
-will not operate correctly.
+This mirrors the `to_numpy
+<https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.to_numpy.html>`_
+function in Pandas. The ``values`` attribute is also supported:
+
+.. code-block:: python
+
+   >>> df.values
+   dask.array<values, shape=(nan, 3), dtype=float64, chunksize=(nan, 3)>
+
+However, these arrays do not have known chunk sizes because dask.dataframe does
+not track the number of rows in each partition. This means that some operations
+like slicing will not operate correctly.
+
+The chunk sizes can be computed:
+
+.. code-block:: python
+
+   >>> df.to_dask_array(lengths=True)
+   dask.array<array, shape=(100, 3), dtype=float64, chunksize=(50, 3)>
+
+Specifying ``lengths=True`` triggers immediate computation of the chunk sizes.
+This enables downstream computations that rely on having known chunk sizes
+(e.g., slicing).
+
+The Dask DataFrame ``to_records`` method also returns a Dask Array, but does not compute the shape
+information:
+
+   >>> df.to_records()
+   dask.array<to_records, shape=(nan,), dtype=(numpy.record, [('index', '<i8'), ('x', '<f8'), ('y', '<f8'), ('z', '<f8')]), chunksize=(nan,)>
 
 If you have a function that converts a Pandas DataFrame into a NumPy array,
 then calling ``map_partitions`` with that function on a Dask DataFrame will
@@ -133,7 +179,8 @@ produce a Dask array:
 
 .. code-block:: python
 
-   >>> x = df.map_partitions(np.asarray)
+   >>> df.map_partitions(np.asarray)
+   dask.array<asarray, shape=(nan, 3), dtype=float64, chunksize=(nan, 3)>
 
 
 Interactions with NumPy arrays
