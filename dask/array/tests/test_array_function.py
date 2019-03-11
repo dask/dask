@@ -5,7 +5,7 @@ import dask.array as da
 from dask.array.utils import assert_eq
 
 
-functions = [
+@pytest.mark.parametrize('func', [
     lambda x: np.concatenate([x, x, x]),
     lambda x: np.cov(x, x),
     lambda x: np.dot(x, x),
@@ -20,18 +20,7 @@ functions = [
     lambda x: np.vstack(x),
     lambda x: np.fft.fft(x.rechunk(x.shape) if isinstance(x, da.Array) else x),
     lambda x: np.fft.fft2(x.rechunk(x.shape) if isinstance(x, da.Array) else x),
-    lambda x: np.linalg.norm(x)
-]
-
-
-notimpl_functions = [
-    lambda x: np.min_scalar_type(x),
-    lambda x: np.linalg.det(x),
-    lambda x: np.linalg.eigvals(x)
-]
-
-
-@pytest.mark.parametrize('func', functions)
+    lambda x: np.linalg.norm(x)])
 def test_array_function_dask(func):
     x = np.random.random((100, 100))
     y = da.from_array(x, chunks=(50, 50))
@@ -42,13 +31,16 @@ def test_array_function_dask(func):
     assert_eq(res_y, res_x)
 
 
-@pytest.mark.parametrize('func', unimpl_functions)
+@pytest.mark.parametrize('func', [
+    lambda x: np.min_scalar_type(x),
+    lambda x: np.linalg.det(x),
+    lambda x: np.linalg.eigvals(x)])
 def test_array_notimpl_function_dask(func):
     x = np.random.random((100, 100))
     y = da.from_array(x, chunks=(50, 50))
 
-    with pytest.raises(TypeError) as e:
-        res_y = func(y)
+    with pytest.raises(TypeError):
+        func(y)
 
 
 def test_array_function_sparse_transpose():
@@ -58,11 +50,7 @@ def test_array_function_sparse_transpose():
 
     y = x.map_blocks(sparse.COO)
 
-    xT = da.transpose(x).compute()
-    yT = da.transpose(y).compute()
-
-    assert_eq(np.transpose(x), xT)
-    assert_eq(np.transpose(y), yT.todense())
+    assert_eq(np.transpose(x), np.transpose(y))
 
 
 @pytest.mark.xfail(reason="requires sparse support for __array_function__",
@@ -90,11 +78,6 @@ def test_array_function_cupy_svd():
     u_base, s_base, v_base = da.linalg.svd(y)
     u, s, v = np.linalg.svd(y)
 
-    # Using single-threaded for now, multi-threaded depends on
-    # https://github.com/cupy/cupy/pull/2053
-    assert_eq(u.compute(scheduler='single-threaded'),
-              u_base.compute(scheduler='single-threaded'))
-    assert_eq(s.compute(scheduler='single-threaded'),
-              s_base.compute(scheduler='single-threaded'))
-    assert_eq(v.compute(scheduler='single-threaded'),
-              v_base.compute(scheduler='single-threaded'))
+    assert_eq(u, u_base)
+    assert_eq(s, s_base)
+    assert_eq(v, v_base)
