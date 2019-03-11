@@ -29,7 +29,7 @@ Large to Small Joins
 Many join or merge computations combine a large table with one small one.  If
 the small table is either a single partition Dask DataFrame or even just a
 normal Pandas DataFrame then the computation can proceed in an embarrassingly
-parallel way, where each partition of the large dataframe is joined against the
+parallel way, where each partition of the large DataFrame is joined against the
 single small table.  This incurs almost no overhead relative to Pandas joins.
 
 If your smaller table can easily fit in memory, then you might want to ensure
@@ -47,7 +47,7 @@ The Pandas merge API supports the ``left_index=`` and ``right_index=`` options
 to perform joins on the index.  For Dask DataFrames these keyword options hold
 special significance if the index has known divisions
 (see :ref:`dataframe-design-partitions`).
-In this case the dataframe partitions are aligned along these divisions (which
+In this case the DataFrame partitions are aligned along these divisions (which
 is generally fast) and then an embarrassingly parallel Pandas join happens
 across partition pairs.  This is generally relatively fast.
 
