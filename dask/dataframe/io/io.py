@@ -101,7 +101,7 @@ def from_array(x, chunksize=50000, columns=None):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
+def from_pandas(data, npartitions=10, chunksize=None, sort=True, name=None):
     """
     Construct a Dask DataFrame from a Pandas DataFrame
 
