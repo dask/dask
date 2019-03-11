@@ -379,7 +379,7 @@ def _nonempty_index(idx):
         return typ([1, 2], name=idx.name)
     elif typ is pd.Index:
         return pd.Index(['a', 'b'], name=idx.name)
-    elif typ is pd.DatetimeIndex:
+    elif typ is pd.date_range:
         start = '1970-01-01'
         # Need a non-monotonic decreasing index to avoid issues with
         # partial string indexing see https://github.com/dask/dask/issues/2389
@@ -387,7 +387,7 @@ def _nonempty_index(idx):
         # This doesn't mean `_meta_nonempty` should ever rely on
         # `self.monotonic_increasing` or `self.monotonic_decreasing`
         data = [start, '1970-01-02'] if idx.freq is None else None
-        return pd.DatetimeIndex(data, start=start, periods=2, freq=idx.freq,
+        return pd.date_range(data, start=start, periods=2, freq=idx.freq,
                                 tz=idx.tz, name=idx.name)
     elif typ is pd.PeriodIndex:
         return pd.period_range(start='1970-01-01', periods=2, freq=idx.freq,
@@ -407,8 +407,8 @@ def _nonempty_index(idx):
         return pd.CategoricalIndex(data, name=idx.name)
     elif typ is pd.MultiIndex:
         levels = [_nonempty_index(l) for l in idx.levels]
-        labels = [[0, 0] for i in idx.levels]
-        return pd.MultiIndex(levels=levels, labels=labels, names=idx.names)
+        codes = [[0, 0] for i in idx.levels]
+        return pd.MultiIndex(levels=levels, codes=codes, names=idx.names)
     raise TypeError("Don't know how to handle index of "
                     "type {0}".format(type(idx).__name__))
 
