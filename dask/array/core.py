@@ -58,12 +58,10 @@ config.update_defaults({'array': {
 concatenate_lookup = Dispatch('concatenate')
 tensordot_lookup = Dispatch('tensordot')
 einsum_lookup = Dispatch('einsum')
-ones_like_lookup = Dispatch('ones_like')
 todense_lookup = Dispatch('todense')
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
 einsum_lookup.register((object, np.ndarray), np.einsum)
-ones_like_lookup.register((object, np.ndarray), np.ones_like)
 todense_lookup.register((object, np.ndarray), np.ndarray.view)
 
 
