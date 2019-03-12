@@ -38,7 +38,6 @@ _BASE_UFUNCS = ['conj', 'exp', 'log', 'log2', 'log10', 'log1p',
                                       index=list('abcdefghijklmnopqrst'))])
 @pytest.mark.parametrize('ufunc', _BASE_UFUNCS)
 def test_ufunc(pandas_input, ufunc):
-
     dafunc = getattr(da, ufunc)
     npfunc = getattr(np, ufunc)
 
@@ -71,7 +70,8 @@ def test_ufunc(pandas_input, ufunc):
 
     with pytest.warns(None):
         assert isinstance(dafunc(dask_input.index), dd.Index)
-        assert_eq(dafunc(dask_input.index), npfunc(pandas_input.index))
+        assert_eq(dafunc(dask_input.index), npfunc(pandas_input.index),
+                  check_divisions=ufunc != 'spacing')
 
         # applying NumPy ufunc is lazy
         if isinstance(npfunc, np.ufunc) and np.__version__ >= '1.13.0':
@@ -79,7 +79,8 @@ def test_ufunc(pandas_input, ufunc):
         else:
             assert isinstance(npfunc(dask_input.index), pd.Index)
 
-        assert_eq(npfunc(dask_input.index), npfunc(dask_input.index))
+        assert_eq(npfunc(dask_input.index), npfunc(dask_input.index),
+                  check_divisions=ufunc != 'spacing')
 
     # applying Dask ufunc to normal Series triggers computation
     with pytest.warns(None):

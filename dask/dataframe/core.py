@@ -44,7 +44,7 @@ from .utils import (meta_nonempty, make_meta, insert_meta_param_description,
                     raise_on_meta_error, clear_known_categories,
                     is_categorical_dtype, has_known_categories, PANDAS_VERSION,
                     index_summary, is_dataframe_like, is_series_like,
-                    is_index_like)
+                    is_index_like, valid_divisions)
 
 no_default = '__no_default__'
 
@@ -387,6 +387,14 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         """Return dask Index instance"""
         return self.map_partitions(getattr, 'index', token=self._name + '-index',
                                    meta=self._meta.index)
+
+    @index.setter
+    def index(self, value):
+        self.divisions = value.divisions
+        result = map_partitions(methods.assign_index, self, value)
+        self.dask = result.dask
+        self._name = result._name
+        self._meta = result._meta
 
     def reset_index(self, drop=False):
         """Reset the index to the default index.
@@ -1281,7 +1289,8 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         # Let pandas error on invalid arguments
         meta = self._meta_nonempty.shift(periods, freq=freq)
         out = self.map_partitions(M.shift, token='shift', periods=periods,
-                                  freq=freq, meta=meta)
+                                  freq=freq, meta=meta,
+                                  transform_divisions=False)
         return maybe_shift_divisions(out, periods, freq=freq)
 
     def _reduction_agg(self, name, axis=None, skipna=True,
@@ -2401,12 +2410,14 @@ class Index(Series):
                 raise ValueError("PeriodIndex doesn't accept `freq` argument")
             meta = self._meta_nonempty.shift(periods)
             out = self.map_partitions(M.shift, periods, meta=meta,
-                                      token='shift')
+                                      token='shift',
+                                      transform_divisions=False)
         else:
             # Pandas will raise for other index types that don't implement shift
             meta = self._meta_nonempty.shift(periods, freq=freq)
             out = self.map_partitions(M.shift, periods, token='shift',
-                                      meta=meta, freq=freq)
+                                      meta=meta, freq=freq,
+                                      transform_divisions=False)
         if freq is None:
             freq = meta.freq
         return maybe_shift_divisions(out, periods, freq=freq)
@@ -3372,6 +3383,11 @@ def elemwise(op, *args, **kwargs):
     meta: pd.DataFrame, pd.Series (optional)
         Valid metadata for the operation.  Will evaluate on a small piece of
         data if not provided.
+    transform_divisions: boolean
+        If the input is a ``dask.dataframe.Index`` we normally will also apply
+        the function onto the divisions and apply those transformed divisions
+        to the output.  You can pass ``transform_divisions=False`` to override
+        this behavior
 
     Examples
     --------
@@ -3379,6 +3395,7 @@ def elemwise(op, *args, **kwargs):
     """
     meta = kwargs.pop('meta', no_default)
     out = kwargs.pop('out', None)
+    transform_divisions = kwargs.pop('transform_divisions', True)
 
     _name = funcname(op) + '-' + tokenize(op, *args, **kwargs)
 
@@ -3404,6 +3421,20 @@ def elemwise(op, *args, **kwargs):
             dasks[i] = a
 
     divisions = dfs[0].divisions
+    if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
+        try:
+            divisions = op(
+                *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
+                **kwargs
+            )
+            if isinstance(divisions, pd.Index):
+                divisions = divisions.tolist()
+        except Exception:
+            pass
+        else:
+            if not valid_divisions(divisions):
+                divisions = [None] * (dfs[0].npartitions + 1)
+
     _is_broadcastable = partial(is_broadcastable, dfs)
     dfs = list(remove(_is_broadcastable, dfs))
 
@@ -3713,6 +3744,7 @@ def map_partitions(func, *args, **kwargs):
     """
     meta = kwargs.pop('meta', no_default)
     name = kwargs.pop('token', None)
+    transform_divisions = kwargs.pop('transform_divisions', True)
 
     # Normalize keyword arguments
     kwargs2 = {k: normalize_arg(v) for k, v in kwargs.items()}
@@ -3781,8 +3813,23 @@ def map_partitions(func, *args, **kwargs):
         **kwargs3
     )
 
+    divisions = dfs[0].divisions
+    if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
+        try:
+            divisions = func(
+                *[pd.Index(a.divisions) if a is dfs[0] else a for a in args],
+                **kwargs
+            )
+            if isinstance(divisions, pd.Index):
+                divisions = divisions.tolist()
+        except Exception:
+            pass
+        else:
+            if not valid_divisions(divisions):
+                divisions = [None] * (dfs[0].npartitions + 1)
+
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
-    return new_dd_object(graph, name, meta, dfs[0].divisions)
+    return new_dd_object(graph, name, meta, divisions)
 
 
 def apply_and_enforce(*args, **kwargs):

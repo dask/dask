@@ -266,9 +266,10 @@ def get_cat(x):
     return x if isinstance(x, pd.CategoricalIndex) else x.cat
 
 
-def assert_array_index_eq(left, right):
+def assert_array_index_eq(left, right, check_divisions=False):
     """left and right are equal, treating index and array as equivalent"""
-    assert_eq(left, pd.Index(right) if isinstance(right, np.ndarray) else right)
+    assert_eq(left, pd.Index(right) if isinstance(right, np.ndarray) else
+              right, check_divisions=check_divisions)
 
 
 def test_return_type_known_categories():
@@ -291,7 +292,7 @@ class TestCategoricalAccessor:
         s, ds = series
         expected = getattr(get_cat(s), prop)
         result = getattr(get_cat(ds), prop)
-        compare(result, expected)
+        compare(result, expected, check_divisions=False)
 
     @pytest.mark.parametrize('series', cat_series)
     @pytest.mark.parametrize('method, kwargs', [
@@ -312,9 +313,11 @@ class TestCategoricalAccessor:
         s, ds = series
         expected = op(get_cat(s))
         result = op(get_cat(ds))
-        assert_eq(result, expected)
-        assert_eq(get_cat(result._meta).categories, get_cat(expected).categories)
-        assert_eq(get_cat(result._meta).ordered, get_cat(expected).ordered)
+        assert_eq(result, expected, check_divisions=False)
+        assert_eq(get_cat(result._meta).categories,
+                  get_cat(expected).categories, check_divisions=False)
+        assert_eq(get_cat(result._meta).ordered, get_cat(expected).ordered,
+                  check_divisions=False)
 
     def test_categorical_empty(self):
         # GH 1705
