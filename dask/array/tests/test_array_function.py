@@ -1,10 +1,18 @@
 import pytest
 np = pytest.importorskip('numpy', minversion='1.16')
 
+import os
+
 import dask.array as da
 from dask.array.utils import assert_eq
 
 
+env_name = "NUMPY_EXPERIMENTAL_ARRAY_FUNCTION"
+missing_arrfunc_cond = env_name not in os.environ or os.environ[env_name] != "1"
+missing_arrfunc_reason = env_name + " undefined or disabled"
+
+
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize('func', [
     lambda x: np.concatenate([x, x, x]),
     lambda x: np.cov(x, x),
@@ -31,6 +39,7 @@ def test_array_function_dask(func):
     assert_eq(res_y, res_x)
 
 
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize('func', [
     lambda x: np.min_scalar_type(x),
     lambda x: np.linalg.det(x),
@@ -43,6 +52,7 @@ def test_array_notimpl_function_dask(func):
         func(y)
 
 
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 def test_array_function_sparse_transpose():
     sparse = pytest.importorskip('sparse')
     x = da.random.random((500, 500), chunks=(100, 100))
@@ -53,6 +63,7 @@ def test_array_function_sparse_transpose():
     assert_eq(np.transpose(x), np.transpose(y))
 
 
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.xfail(reason="requires sparse support for __array_function__",
                    strict=False)
 def test_array_function_sparse_tensordot():
@@ -69,6 +80,7 @@ def test_array_function_sparse_tensordot():
               np.tensordot(xx, yy, axes=(2, 0)).todense())
 
 
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 def test_array_function_cupy_svd():
     cupy = pytest.importorskip('cupy')
     x = cupy.random.random((500, 100))
