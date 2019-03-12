@@ -468,11 +468,11 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
     k = 5
     # Test at least 3 levels of aggregation when split_every=2
     # to stress the different chunk, combine, aggregate kernels
-    a = da.random.random(800, chunks=((120, 80, 100, 200, 300), ))
-    b = da.random.random((10, 20, 30), chunks=(4, 8, 8))
+    npa = np.random.random(800)
+    npb = np.random.random((10, 20, 30))
 
-    npa = a.compute()
-    npb = b.compute()
+    a = da.from_array(npa, chunks=((120, 80, 100, 200, 300), ))
+    b = da.from_array(npb, chunks=(4, 8, 8))
 
     # 1-dimensional arrays
     # top 5 elements, sorted descending
@@ -513,8 +513,8 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
 @pytest.mark.parametrize('chunksize', [1, 2, 3, 4, 5, 10])
 def test_topk_argtopk2(npfunc, daskfunc, split_every, chunksize):
     """Fine test use cases when k is larger than chunk size"""
-    a = da.random.random((10, ), chunks=chunksize)
-    npa = a.compute()
+    npa = np.random.random((10, ))
+    a = da.from_array(npa, chunks=chunksize)
     k = 5
 
     # top 5 elements, sorted descending
