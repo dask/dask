@@ -379,7 +379,7 @@ def _nonempty_index(idx):
         return typ([1, 2], name=idx.name)
     elif typ is pd.Index:
         return pd.Index(['a', 'b'], name=idx.name)
-    elif typ is pd.date_range:
+    elif typ is pd.DatetimeIndex:
         start = '1970-01-01'
         # Need a non-monotonic decreasing index to avoid issues with
         # partial string indexing see https://github.com/dask/dask/issues/2389
