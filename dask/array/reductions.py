@@ -408,8 +408,7 @@ def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     total = sum(A, dtype=dtype, **kwargs)
     n = numel(A, **kwargs).astype(np.int64)
     u = total / n
-    diff = A - u
-    xs = [((A - u)**i).sum(dtype=dtype, **kwargs) for i in range(2, order + 1)]
+    xs = [sum((A - u)**i, dtype=dtype, **kwargs) for i in range(2, order + 1)]
     M = np.stack(xs, axis=-1)
     return {'total': total, 'n': n, 'M': M}
 
