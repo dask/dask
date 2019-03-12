@@ -770,11 +770,11 @@ class _GroupBy(object):
 
         if isinstance(self.index, list):
             do_index_partition_align = all(
-                item.divisions == df.divisions if isinstance(item, Series) else True
+                item.npartitions == df.npartitions if isinstance(item, Series) else True
                 for item in self.index
             )
         elif isinstance(self.index, Series):
-            do_index_partition_align = df.divisions == self.index.divisions
+            do_index_partition_align = df.npartitions == self.index.npartitions
         else:
             do_index_partition_align = True
 
