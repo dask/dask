@@ -34,8 +34,6 @@ functions = [
     lambda x: da.transpose(x, (1, 2, 0)),
     lambda x: x.sum(),
     lambda x: x.mean(),
-    pytest.param(lambda x: x.std(),
-        marks=pytest.mark.xfail(reason="https://github.com/pydata/sparse/issues/237")),
     lambda x: x.dot(np.arange(x.shape[-1])),
     lambda x: x.dot(np.eye(x.shape[-1])),
     lambda x: da.tensordot(x, np.ones(x.shape[:2]), axes=[(0, 1), (0, 1)]),
