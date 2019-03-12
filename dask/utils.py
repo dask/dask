@@ -196,6 +196,10 @@ def filetexts(d, open=open, mode='t', use_tmpdir=True):
     """
     with (tmp_cwd() if use_tmpdir else noop_context()):
         for filename, text in d.items():
+            try:
+                os.makedirs(os.path.dirname(filename))
+            except OSError:
+                pass
             f = open(filename, 'w' + mode)
             try:
                 f.write(text)
