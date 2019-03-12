@@ -471,32 +471,35 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
     a = da.random.random(800, chunks=((120, 80, 100, 200, 300), ))
     b = da.random.random((10, 20, 30), chunks=(4, 8, 8))
 
+    npa = a.compute()
+    npb = b.compute()
+
     # 1-dimensional arrays
     # top 5 elements, sorted descending
-    assert_eq(npfunc(a.compute())[-k:][::-1],
+    assert_eq(npfunc(npa)[-k:][::-1],
               daskfunc(a, k, split_every=split_every))
     # bottom 5 elements, sorted ascending
-    assert_eq(npfunc(a.compute())[:k],
+    assert_eq(npfunc(npa)[:k],
               daskfunc(a, -k, split_every=split_every))
 
     # n-dimensional arrays
     # also testing when k > chunk
     # top 5 elements, sorted descending
-    assert_eq(npfunc(b.compute(), axis=0)[-k:, :, :][::-1, :, :],
+    assert_eq(npfunc(npb, axis=0)[-k:, :, :][::-1, :, :],
               daskfunc(b, k, axis=0, split_every=split_every))
-    assert_eq(npfunc(b.compute(), axis=1)[:, -k:, :][:, ::-1, :],
+    assert_eq(npfunc(npb, axis=1)[:, -k:, :][:, ::-1, :],
               daskfunc(b, k, axis=1, split_every=split_every))
-    assert_eq(npfunc(b.compute(), axis=-1)[:, :, -k:][:, :, ::-1],
+    assert_eq(npfunc(npb, axis=-1)[:, :, -k:][:, :, ::-1],
               daskfunc(b, k, axis=-1, split_every=split_every))
     with pytest.raises(ValueError):
         daskfunc(b, k, axis=3, split_every=split_every)
 
     # bottom 5 elements, sorted ascending
-    assert_eq(npfunc(b.compute(), axis=0)[:k, :, :],
+    assert_eq(npfunc(npb, axis=0)[:k, :, :],
               daskfunc(b, -k, axis=0, split_every=split_every))
-    assert_eq(npfunc(b.compute(), axis=1)[:, :k, :],
+    assert_eq(npfunc(npb, axis=1)[:, :k, :],
               daskfunc(b, -k, axis=1, split_every=split_every))
-    assert_eq(npfunc(b.compute(), axis=-1)[:, :, :k],
+    assert_eq(npfunc(npb, axis=-1)[:, :, :k],
               daskfunc(b, -k, axis=-1, split_every=split_every))
     with pytest.raises(ValueError):
         daskfunc(b, -k, axis=3, split_every=split_every)
@@ -511,13 +514,14 @@ def test_topk_argtopk1(npfunc, daskfunc, split_every):
 def test_topk_argtopk2(npfunc, daskfunc, split_every, chunksize):
     """Fine test use cases when k is larger than chunk size"""
     a = da.random.random((10, ), chunks=chunksize)
+    npa = a.compute()
     k = 5
 
     # top 5 elements, sorted descending
-    assert_eq(npfunc(a.compute())[-k:][::-1],
+    assert_eq(npfunc(npa)[-k:][::-1],
               daskfunc(a, k, split_every=split_every))
     # bottom 5 elements, sorted ascending
-    assert_eq(npfunc(a.compute())[:k],
+    assert_eq(npfunc(npa)[:k],
               daskfunc(a, -k, split_every=split_every))
 
 
