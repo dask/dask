@@ -332,7 +332,7 @@ class RandomState(object):
 
     @doc_wraps(np.random.RandomState.randint)
     def randint(self, low, high=None, size=None, chunks="auto", dtype='1'):
-        return self._wrap('randint', low, high, size=size, chunks=chunks, dtype)
+        return self._wrap('randint', low, high, size=size, chunks=chunks, dtype=dtype)
 
     @doc_wraps(np.random.RandomState.random_integers)
     def random_integers(self, low, high=None, size=None, chunks="auto"):
