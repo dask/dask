@@ -331,11 +331,7 @@ class RandomState(object):
         return self._wrap('power', a, size=size, chunks=chunks)
 
     @doc_wraps(np.random.RandomState.randint)
-<<<<<<< HEAD
     def randint(self, low, high=None, size=None, chunks="auto", dtype='l'):
-=======
-    def randint(self, low, high=None, size=None, chunks="auto", dtype='1'):
->>>>>>> d61fb358aab6fc46ffbfa6db2d022168dd5c69af
         return self._wrap('randint', low, high, size=size, chunks=chunks, dtype=dtype)
 
     @doc_wraps(np.random.RandomState.random_integers)
