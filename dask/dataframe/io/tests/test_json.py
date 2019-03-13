@@ -37,6 +37,17 @@ def test_read_json_basic(orient):
 
 @pytest.mark.parametrize('orient', ['split', 'records', 'index', 'columns',
                                     'values'])
+def test_read_json_meta(orient):
+    json_string = {}
+    for key, val in enumerate(range(5, 10)):
+        value = val if not val % 2 else float('NaN')
+        json_string['dtype' + str(key)] = [val, value]
+    with pytest.raises(ValueError):
+        df = dd.read_json(json_string, orient=orient, meta=pd.DataFrame(json_string)[:0])
+
+
+@pytest.mark.parametrize('orient', ['split', 'records', 'index', 'columns',
+                                    'values'])
 def test_write_json_basic(orient):
     with tmpdir() as path:
         fn = os.path.join(path, '1.json')

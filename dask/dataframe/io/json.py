@@ -4,6 +4,7 @@ import io
 import pandas as pd
 from dask.bytes import open_files, read_bytes
 import dask
+from ..utils import insert_meta_param_description, make_meta
 
 
 def to_json(df, url_path, orient='records', lines=None, storage_options=None,
@@ -72,9 +73,10 @@ def write_json_partition(df, openfile, kwargs):
         df.to_json(f, **kwargs)
 
 
+@insert_meta_param_description
 def read_json(url_path, orient='records', lines=None, storage_options=None,
               blocksize=None, sample=2**20, encoding='utf-8', errors='strict',
-              compression='infer', **kwargs):
+              compression='infer', meta=None, **kwargs):
     """Create a dataframe from a set of JSON files
 
     This utilises ``pandas.read_json()``, and most parameters are
@@ -151,8 +153,11 @@ def read_json(url_path, orient='records', lines=None, storage_options=None,
                                    **storage_options)
         chunks = list(dask.core.flatten(chunks))
         first = read_json_chunk(first, encoding, errors, kwargs)
+        if meta is None:
+            meta = first[:0]
+        meta = make_meta(meta)
         parts = [dask.delayed(read_json_chunk)(
-            chunk, encoding, errors, kwargs, meta=first[:0]
+            chunk, encoding, errors, kwargs, meta=meta
         ) for chunk in chunks]
 
     else:
