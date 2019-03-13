@@ -812,7 +812,6 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
     """
     # Local imports
     import pyarrow as pa
-    import pyarrow.parquet as pq
 
     if infer_divisions is True and pa.__version__ < LooseVersion('0.9.0'):
         raise NotImplementedError('infer_divisions=True requires pyarrow >=0.9.0')
