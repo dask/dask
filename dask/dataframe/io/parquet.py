@@ -700,9 +700,8 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     # Find non-empty pieces
     non_empty_pieces = []
     # Determine valid pieces
-    _open = lambda fn: pq.ParquetFile(fs.open(fn, mode='rb'))
     for piece in dataset.pieces:
-        pf = piece.get_metadata(_open)
+        pf = piece.get_metadata()
         # non_empty_pieces.append(piece)
         if pf.num_row_groups > 0:
             non_empty_pieces.append(piece)
@@ -838,7 +837,7 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
         # Initialize index of divisions column within the row groups.
         # To be computed during while processing the first piece below
         for piece in pa_pieces:
-            pf = piece.get_metadata(pq.ParquetFile)
+            pf = piece.get_metadata()
             rg = pf.row_group(0)
 
             # Compute division column index
