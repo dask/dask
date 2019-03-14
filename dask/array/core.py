@@ -1014,8 +1014,6 @@ class Array(DaskMethodsMixin):
         da_func = getattr(module, func.__name__)
         if da_func is func:
             return NotImplemented
-        if not any(issubclass(t, (Array, np.ndarray)) for t in types):
-            return NotImplemented
         return da_func(*args, **kwargs)
 
     @property
