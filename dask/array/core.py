@@ -684,7 +684,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
         sources_dsk,
         list(core.flatten([e.__dask_keys__() for e in sources]))
     )
-    sources2 = [Array(sources_dsk, e.name, e.chunks, e.dtype) for e in sources]
+    sources2 = [Array(sources_dsk, e.name, e.chunks, meta=e._meta) for e in sources]
 
     # Optimize all targets together
     targets2 = []
@@ -727,7 +727,7 @@ def store(sources, targets, lock=True, regions=None, compute=True,
             )
 
         result = tuple(
-            Array(load_store_dsk, 'load-store-%s' % t, s.chunks, s.dtype)
+            Array(load_store_dsk, 'load-store-%s' % t, s.chunks, meta=s._meta)
             for s, t in zip(sources, toks)
         )
 
@@ -1218,7 +1218,7 @@ class Array(DaskMethodsMixin):
         layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
         graph = HighLevelGraph.from_collections(name, layer, dependencies=[self])
-        return Array(graph, name, chunks, self.dtype)
+        return Array(graph, name, chunks, meta=self._meta)
 
     @property
     def blocks(self):
@@ -1725,7 +1725,7 @@ class Array(DaskMethodsMixin):
         if self.npartitions == 1:
             return self.map_blocks(M.copy)
         else:
-            return Array(self.dask, self.name, self.chunks, self.dtype)
+            return Array(self.dask, self.name, self.chunks, meta=self._meta)
 
     def __deepcopy__(self, memo):
         c = self.copy()
