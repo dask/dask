@@ -2437,6 +2437,7 @@ def test_dataframe_itertuples_with_name_none():
 
     for (a, b) in zip(df.itertuples(name=None), ddf.itertuples(name=None)):
         assert a == b
+        assert type(a) is type(b)
 
 
 def test_astype():
