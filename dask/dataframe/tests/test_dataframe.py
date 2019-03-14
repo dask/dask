@@ -2423,6 +2423,22 @@ def test_dataframe_itertuples():
         assert a == b
 
 
+def test_dataframe_itertuples_with_index_false():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    for (a, b) in zip(df.itertuples(index=False), ddf.itertuples(index=False)):
+        assert a == b
+
+
+def test_dataframe_itertuples_with_name_none():
+    df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    for (a, b) in zip(df.itertuples(name=None), ddf.itertuples(name=None)):
+        assert a == b
+
+
 def test_astype():
     df = pd.DataFrame({'x': [1, 2, 3, None], 'y': [10, 20, 30, 40]},
                       index=[10, 20, 30, 40])
