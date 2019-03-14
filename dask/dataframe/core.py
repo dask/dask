@@ -2990,10 +2990,10 @@ class DataFrame(_Frame):
                 yield row
 
     @derived_from(pd.DataFrame)
-    def itertuples(self, **kwargs):
+    def itertuples(self, index=True, name='Pandas'):
         for i in range(self.npartitions):
             df = self.get_partition(i).compute()
-            for row in df.itertuples(**kwargs):
+            for row in df.itertuples(index=index, name=name):
                 yield row
 
     @classmethod
