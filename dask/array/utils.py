@@ -121,6 +121,8 @@ def assert_eq(a, b, check_shape=True, check_graph=True, **kwargs):
 
     try:
         assert a.shape == b.shape
+        if hasattr(a, '_meta') and hasattr(b, '_meta'):
+            assert a._meta.ndim == b._meta.ndim
         assert allclose(a, b, **kwargs)
         return True
     except TypeError:
