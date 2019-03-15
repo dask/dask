@@ -211,7 +211,8 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32,
 
     partitions = index.map_partitions(partitioning_index,
                                       npartitions=npartitions or df.npartitions,
-                                      meta=pd.Series([0]))
+                                      meta=pd.Series([0]),
+                                      transform_divisions=False)
     df2 = df.assign(_partitions=partitions)
     df2._meta.index.name = df._meta.index.name
     df3 = rearrange_by_column(df2, '_partitions', npartitions=npartitions,

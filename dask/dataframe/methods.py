@@ -383,3 +383,9 @@ def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True)
     if ind is not None:
         out.index = ind
     return out
+
+
+def assign_index(df, ind):
+    df = df.copy()
+    df.index = ind
+    return df
