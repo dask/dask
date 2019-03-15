@@ -76,9 +76,9 @@ fi
 
 if [[ $NUMPY > '1.13.0' ]]; then
     if [[ $UPSTREAM_SPARSE == "true" ]]; then
-        pip install sparse
-    else
         pip install git+https://github.com/pydata/sparse
+    else
+        pip install sparse
     fi
 fi
 
