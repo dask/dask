@@ -502,7 +502,7 @@ def test_bincount_with_weights():
 
     dweights = da.from_array(weights, chunks=2)
     e = da.bincount(d, weights=dweights, minlength=6)
-    assert_eq(e, np.bincount(x, weights=dweights, minlength=6))
+    assert_eq(e, np.bincount(x, weights=dweights.compute(), minlength=6))
     assert same_keys(da.bincount(d, weights=dweights, minlength=6), e)
 
 
