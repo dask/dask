@@ -52,6 +52,7 @@ jobs:
       - *no_coverage
       - *no_optimize
       - *imports
+      - *array_function
 
     - env: &py36_dev
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
