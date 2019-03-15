@@ -582,7 +582,7 @@ def test_set_index_raises_error_on_bad_input():
 
 def test_set_index_sorted_true():
     df = pd.DataFrame({'x': [1, 2, 3, 4],
-                       'y': [10, 20, 30, 40],
+                       'y': [10, 20, 20, 40],
                        'z': [4, 3, 2, 1]})
     a = dd.from_pandas(df, 2, sort=False)
     assert not a.known_divisions
@@ -601,6 +601,9 @@ def test_set_index_sorted_true():
 
     with pytest.raises(ValueError):
         a.set_index(a.z, sorted=True)
+
+    with pytest.raises(ValueError):
+        a.set_index(a.y, sorted=True)
 
 
 def test_set_index_sorted_single_partition():
