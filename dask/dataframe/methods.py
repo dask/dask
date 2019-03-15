@@ -169,7 +169,7 @@ def assign(df, *pairs):
 def unique(x, series_name=None):
     # unique returns np.ndarray, it must be wrapped
     unq = x.unique()
-    return create_series_like(x, name=series_name)
+    return create_series_like(unq, name=series_name)
 
 
 def value_counts_combine(x):

@@ -517,8 +517,6 @@ def create_series_like(s, name=None):
     Series like object (pd.Series, cudf.Series)
         A series like object
     """
-
-
     if not isinstance(s, (pd.Series, np.ndarray, list, tuple)):
         obj = type(s)
         sr = obj(s)
@@ -527,6 +525,7 @@ def create_series_like(s, name=None):
 
     assert is_series_like(sr)
     return sr
+
 
 def is_series_like(s):
     """ Looks like a Pandas Series """
