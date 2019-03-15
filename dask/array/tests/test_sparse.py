@@ -36,6 +36,7 @@ functions = [
     lambda x: x.mean(),
     lambda x: x.moment(order=0),
     lambda x: x.std(),
+    lambda x: x.var(),
     lambda x: x.dot(np.arange(x.shape[-1])),
     lambda x: x.dot(np.eye(x.shape[-1])),
     lambda x: da.tensordot(x, np.ones(x.shape[:2]), axes=[(0, 1), (0, 1)]),
