@@ -6,7 +6,7 @@ from dask.dataframe.utils import (shard_df_on_index, meta_nonempty, make_meta,
                                   raise_on_meta_error, check_meta,
                                   UNKNOWN_CATEGORIES, PANDAS_VERSION,
                                   is_dataframe_like, is_series_like,
-                                  is_index_like)
+                                  is_index_like, create_series_like)
 
 import pytest
 
@@ -355,3 +355,13 @@ def test_is_dataframe_like():
 
     ddf = dd.from_pandas(df, npartitions=1)
     assert is_dataframe_like(ddf)
+
+
+def test_create_series_like():
+    df = pd.DataFrame({'x': [1, 2, 3]})
+
+    with pytest.raises(AssertionError):
+        create_series_like(df)
+
+    sr = create_series_like(df.x)
+    tm.assert_series_equal(df.x, sr)

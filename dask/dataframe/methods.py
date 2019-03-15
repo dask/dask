@@ -7,7 +7,7 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype
 from toolz import partition
 
-from .utils import PANDAS_VERSION
+from .utils import PANDAS_VERSION, create_series_like
 from ..utils import Dispatch
 if PANDAS_VERSION >= '0.20.0':
     from pandas.api.types import union_categoricals
@@ -168,7 +168,8 @@ def assign(df, *pairs):
 
 def unique(x, series_name=None):
     # unique returns np.ndarray, it must be wrapped
-    return pd.Series(x.unique(), name=series_name)
+    unq = x.unique()
+    return create_series_like(x, name=series_name)
 
 
 def value_counts_combine(x):

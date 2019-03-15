@@ -502,6 +502,32 @@ def is_dataframe_like(df):
     return set(dir(df)) > {'dtypes', 'columns', 'groupby', 'head'} and not isinstance(df, type)
 
 
+def create_series_like(s, name=None):
+    """ Create Series like Object
+
+    Parameters
+    ----------
+    s : sequence of values
+        numpy array/pandas series/cudf series
+    name : str
+        name of column
+
+    Returns
+    -------
+    Series like object (pd.Series, cudf.Series)
+        A series like object
+    """
+
+
+    if not isinstance(s, (pd.Series, np.ndarray, list, tuple)):
+        obj = type(s)
+        sr = obj(s)
+    else:
+        sr = pd.Series(s)
+
+    assert is_series_like(sr)
+    return sr
+
 def is_series_like(s):
     """ Looks like a Pandas Series """
     return set(dir(s)) > {'name', 'dtype', 'groupby', 'head'} and not isinstance(s, type)
