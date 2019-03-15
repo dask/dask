@@ -11,6 +11,8 @@ _base_envs:
   - &no_optimize XTRATESTARGS=
   - &imports TEST_IMPORTS='true'
   - &no_imports TEST_IMPORTS='false'
+  - &upstream_sparse UPSTREAM_SPARSE='true'
+  - &no_upstream_sparse UPSTREAM_SPARSE='false'
 
 jobs:
   fast_finish: true
@@ -23,6 +25,7 @@ jobs:
       - *no_coverage
       - *optimize
       - *no_imports
+      - *no_upstream_sparse
 
     - env:
       - PYTHON=3.5
@@ -32,6 +35,7 @@ jobs:
       - *no_coverage
       - *no_optimize
       - *no_imports
+      - *no_upstream_sparse
 
     - env: &py36_env
       - PYTHON=3.6
@@ -41,6 +45,7 @@ jobs:
       - *coverage
       - *no_optimize
       - *imports
+      - *no_upstream_sparse
 
     - env: &py37_env
       - PYTHON=3.7
@@ -50,6 +55,7 @@ jobs:
       - *no_coverage
       - *no_optimize
       - *imports
+      - *upstream_sparse
 
     - env: &py36_dev
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
@@ -59,6 +65,7 @@ jobs:
       - *no_coverage
       - *no_optimize
       - *no_imports
+      - *no_upstream_sparse
       if: type != pull_request
 
     - env: *py36_env

@@ -75,7 +75,11 @@ if [[ $PYTHONOPTIMIZE != '2' ]] && [[ $NUMPY > '1.11.0' ]] && [[ $NUMPY < '1.14.
 fi
 
 if [[ $NUMPY > '1.13.0' ]]; then
-    pip install sparse 
+    if [[ $UPSTREAM_SPARSE == "true" ]]; then
+        pip install sparse
+    else
+        pip install git+https://github.com/pydata/sparse
+    fi
 fi
 
 if [[ $PYTHON == '2.7' ]]; then
