@@ -13,6 +13,7 @@ _base_envs:
   - &no_imports TEST_IMPORTS='false'
   - &upstream_sparse UPSTREAM_SPARSE='true'
   - &no_upstream_sparse UPSTREAM_SPARSE='false'
+  - &array_function NUMPY_EXPERIMENTAL_ARRAY_FUNCTION='1'
 
 jobs:
   fast_finish: true
@@ -49,7 +50,7 @@ jobs:
 
     - env: &py37_env
       - PYTHON=3.7
-      - NUMPY=1.15.0
+      - NUMPY=1.16.2
       - PANDAS>=0.24.1
       - *test_and_lint
       - *no_coverage
