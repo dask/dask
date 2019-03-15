@@ -670,7 +670,7 @@ def test_set_index_on_empty():
 def test_compute_divisions():
     from dask.dataframe.shuffle import compute_divisions
     df = pd.DataFrame({'x': [1, 2, 3, 4],
-                       'y': [10, 20, 30, 40],
+                       'y': [10, 20, 20, 40],
                        'z': [4, 3, 2, 1]},
                       index=[1, 3, 10, 20])
     a = dd.from_pandas(df, 2, sort=False)
@@ -682,6 +682,11 @@ def test_compute_divisions():
 
     assert_eq(a, b, check_divisions=False)
     assert b.known_divisions
+
+    c = dd.from_pandas(df.set_index('y'), 2, sort=False)
+    # Partitions must not overlap
+    with pytest.raises(ValueError):
+        compute_divisions(c)
 
 
 def test_temporary_directory(tmpdir):
