@@ -536,5 +536,8 @@ def compute_divisions(df, **kwargs):
         raise ValueError("Partitions must be sorted ascending with the index",
                          mins, maxes)
 
+    if any(a >= b for a, b in zip(maxes[:1], mins[1:])):
+        raise ValueError("Partitions must not overlap.")
+
     divisions = tuple(mins) + (list(maxes)[-1],)
     return divisions
