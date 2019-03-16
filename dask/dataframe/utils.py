@@ -407,7 +407,7 @@ def _nonempty_index(idx):
             start = np.timedelta64(1, 'D')
             data = [start, start + 1] if idx.freq is None else None
             return pd.TimedeltaIndex(data, start=start, periods=2,
-                    freq=idx.freq, name=idx.name)
+                                     freq=idx.freq, name=idx.name)
     elif typ is pd.CategoricalIndex:
         if len(idx.categories) == 0:
             data = pd.Categorical(_nonempty_index(idx.categories),
