@@ -1,5 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
+import math
+import numbers
 import re
 import textwrap
 from distutils.version import LooseVersion
@@ -726,9 +728,7 @@ def assert_dask_graph(dask, label):
 def assert_divisions(ddf):
     if not hasattr(ddf, 'divisions'):
         return
-    if not hasattr(ddf, 'index'):
-        return
-    if not ddf.known_divisions:
+    if not getattr(ddf, 'known_divisions', False):
         return
 
     def index(x):
@@ -801,3 +801,40 @@ def assert_max_deps(x, n, eq=True):
         assert max(map(len, dependencies.values())) == n
     else:
         assert max(map(len, dependencies.values())) <= n
+
+
+def valid_divisions(divisions):
+    """ Are the provided divisions valid?
+
+    Examples
+    --------
+    >>> valid_divisions([1, 2, 3])
+    True
+    >>> valid_divisions([3, 2, 1])
+    False
+    >>> valid_divisions([1, 1, 1])
+    False
+    >>> valid_divisions([0, 1, 1])
+    True
+    >>> valid_divisions(123)
+    False
+    >>> valid_divisions([0, float('nan'), 1])
+    False
+    """
+    if not isinstance(divisions, (tuple, list)):
+        return False
+
+    for i, x in enumerate(divisions[:-2]):
+        if x >= divisions[i + 1]:
+            return False
+        if isinstance(x, numbers.Number) and math.isnan(x):
+            return False
+
+    for x in divisions[-2:]:
+        if isinstance(x, numbers.Number) and math.isnan(x):
+            return False
+
+    if divisions[-2] > divisions[-1]:
+        return False
+
+    return True
