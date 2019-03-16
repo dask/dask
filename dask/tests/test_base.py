@@ -654,6 +654,7 @@ def test_visualize():
 @pytest.mark.skipif(sys.flags.optimize,
                     reason="graphviz exception with Python -OO flag")
 def test_visualize_lists(tmpdir):
+    pytest.importorskip('graphviz')
     fn = os.path.join(str(tmpdir), 'myfile.dot')
     dask.visualize([{'abc-xyz': (add, 1, 2)}], filename=fn)
     with open(fn) as f:
