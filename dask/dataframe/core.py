@@ -2723,7 +2723,8 @@ class DataFrame(_Frame):
     def assign(self, **kwargs):
         for k, v in kwargs.items():
             if not (isinstance(v, Scalar) or is_series_like(v) or
-                    callable(v) or pd.api.types.is_scalar(v)):
+                    callable(v) or pd.api.types.is_scalar(v) or
+                    is_index_like(v)):
                 raise TypeError("Column assignment doesn't support type "
                                 "{0}".format(type(v).__name__))
             if callable(v):
