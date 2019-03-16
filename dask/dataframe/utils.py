@@ -498,23 +498,26 @@ def _nonempty_series(s, idx=None):
 def is_dataframe_like(df):
     """ Looks like a Pandas DataFrame """
     typ = type(df)
-    return all(hasattr(typ, name) for name in ('dtypes', 'columns', 'groupby', 'head'))
+    return (all(hasattr(typ, name)
+                for name in ('dtypes', 'groupby', 'head', 'merge', 'mean'))
+            and not
+            any(hasattr(typ, name)
+                for name in ('value_counts', 'dtype')))
 
 
 def is_series_like(s):
     """ Looks like a Pandas Series """
     typ = type(s)
-    return all(hasattr(typ, name) for name in ('name', 'dtype', 'groupby', 'head'))
+    return (all(hasattr(typ, name)
+                for name in ('name', 'dtype', 'groupby', 'head', 'mean'))
+            and 'index' not in typ.__name__.lower())
 
 
 def is_index_like(s):
     """ Looks like a Pandas Index """
     typ = type(s)
-    return (
-        hasattr(typ, 'name') and
-        hasattr(typ, 'dtype') and
-        not hasattr(typ, 'head')
-    )
+    return (all(hasattr(typ, name) for name in ('name', 'dtype'))
+            and 'index' in typ.__name__.lower())
 
 
 def check_meta(x, meta, funcname=None, numeric_equal=True):
