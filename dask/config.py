@@ -165,7 +165,7 @@ def collect_yaml(paths=paths):
     for path in file_paths:
         try:
             with open(path) as f:
-                data = yaml.load(f.read()) or {}
+                data = yaml.safe_load(f.read()) or {}
                 data = normalize_nested_keys(data)
                 configs.append(data)
         except (OSError, IOError):
