@@ -6,13 +6,8 @@ import sys
 import threading
 try:
     import yaml
-    from distutils.version import LooseVersion
-    if yaml.__version__ >= LooseVersion('5.1'):
-        yaml_load = yaml.safe_load
-    else:
-        yaml_load = yaml.load
 except ImportError:
-    yaml = yaml_load = None
+    yaml = None
 
 from .compatibility import makedirs, builtins, Mapping, string_types
 
@@ -170,7 +165,7 @@ def collect_yaml(paths=paths):
     for path in file_paths:
         try:
             with open(path) as f:
-                data = yaml_load(f.read()) or {}
+                data = yaml.safe_load(f.read()) or {}
                 data = normalize_nested_keys(data)
                 configs.append(data)
         except (OSError, IOError):
