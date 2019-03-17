@@ -450,10 +450,17 @@ def visualize(*args, **kwargs):
     filename = kwargs.pop('filename', 'mydask')
     optimize_graph = kwargs.pop('optimize_graph', False)
 
-    dsks = [arg for arg in args if isinstance(arg, Mapping)]
-    args = [arg for arg in args if is_dask_collection(arg)]
+    args2 = []
+    for arg in args:
+        if isinstance(arg, (list, tuple, set)):
+            args2.extend(arg)
+        else:
+            args2.append(arg)
 
-    dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
+    dsks = [arg for arg in args2 if isinstance(arg, Mapping)]
+    args3 = [arg for arg in args2 if is_dask_collection(arg)]
+
+    dsk = dict(collections_to_dsk(args3, optimize_graph=optimize_graph))
     for d in dsks:
         dsk.update(d)
 
