@@ -16,3 +16,5 @@ else
     echo "py.test dask --runslow $XTRATESTARGS"
     py.test dask --runslow $XTRATESTARGS
 fi
+
+set +e
