@@ -233,7 +233,6 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     Parameters
     ----------
-
     dsk: dict
         The dask graph to compute this DataFrame
     name: str
@@ -251,9 +250,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         self.dask = dsk
         self._name = name
         meta = make_meta(meta)
-        if not isinstance(meta, self._partition_type):
+        if not self._is_partition_type(meta):
             raise TypeError("Expected meta to specify type {0}, got type "
-                            "{1}".format(typename(self._partition_type),
+                            "{1}".format(type(self).__name__,
                                          typename(type(meta))))
         self._meta = meta
         self.divisions = tuple(divisions)
@@ -1862,8 +1861,8 @@ class Series(_Frame):
     --------
     dask.dataframe.DataFrame
     """
-
     _partition_type = pd.Series
+    _is_partition_type = staticmethod(is_series_like)
     _token_prefix = 'series-'
 
     def __array_wrap__(self, array, context=None):
@@ -2337,6 +2336,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
 class Index(Series):
 
     _partition_type = pd.Index
+    _is_partition_type = staticmethod(is_index_like)
     _token_prefix = 'index-'
 
     _dt_attributes = {'nanosecond', 'microsecond', 'millisecond', 'dayofyear',
@@ -2450,6 +2450,7 @@ class DataFrame(_Frame):
     """
 
     _partition_type = pd.DataFrame
+    _is_partition_type = staticmethod(is_dataframe_like)
     _token_prefix = 'dataframe-'
 
     def __array_wrap__(self, array, context=None):
@@ -2733,7 +2734,8 @@ class DataFrame(_Frame):
     def assign(self, **kwargs):
         for k, v in kwargs.items():
             if not (isinstance(v, Scalar) or is_series_like(v) or
-                    callable(v) or pd.api.types.is_scalar(v)):
+                    callable(v) or pd.api.types.is_scalar(v) or
+                    is_index_like(v)):
                 raise TypeError("Column assignment doesn't support type "
                                 "{0}".format(type(v).__name__))
             if callable(v):
