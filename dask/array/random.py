@@ -331,8 +331,8 @@ class RandomState(object):
         return self._wrap('power', a, size=size, chunks=chunks)
 
     @doc_wraps(np.random.RandomState.randint)
-    def randint(self, low, high=None, size=None, chunks="auto"):
-        return self._wrap('randint', low, high, size=size, chunks=chunks)
+    def randint(self, low, high=None, size=None, chunks="auto", dtype = 'l'):
+        return self._wrap('randint', low, high, size=size, chunks=chunks, dtype = dtype)
 
     @doc_wraps(np.random.RandomState.random_integers)
     def random_integers(self, low, high=None, size=None, chunks="auto"):
