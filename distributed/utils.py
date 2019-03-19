@@ -241,6 +241,11 @@ def sync(loop, func, *args, **kwargs):
     if PollIOLoop and ((isinstance(loop, PollIOLoop) and getattr(loop, '_closing', False)) or
             (hasattr(loop, 'asyncio_loop') and loop.asyncio_loop._closed)):
         raise RuntimeError("IOLoop is closed")
+    try:
+        if loop.asyncio_loop.is_closed():  # tornado 6
+            raise RuntimeError("IOLoop is closed")
+    except AttributeError:
+        pass
 
     timeout = kwargs.pop('callback_timeout', None)
 

@@ -51,7 +51,7 @@ conda install -q \
     scipy \
     tblib \
     toolz \
-    tornado=${TORNADO:-5}\
+    tornado=$TORNADO \
     $PACKAGES
 
 pip install -q pytest-repeat pytest-faulthandler
