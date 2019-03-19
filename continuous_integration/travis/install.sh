@@ -51,7 +51,7 @@ conda install -q \
     scipy \
     tblib \
     toolz \
-    tornado \
+    tornado=${TORNADO:-5}\
     $PACKAGES
 
 pip install -q pytest-repeat pytest-faulthandler
@@ -70,10 +70,6 @@ fi;
 
 # Install distributed
 pip install --no-deps -e .
-
-if [[ ! -z $TORNADO ]]; then
-    pip install -U tornado==$TORNADO
-fi
 
 # For debugging
 echo -e "--\n--Conda Environment\n--"

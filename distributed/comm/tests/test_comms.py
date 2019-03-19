@@ -624,8 +624,9 @@ def test_tls_reject_certificate():
     listener.start()
 
     with pytest.raises(EnvironmentError) as excinfo:
-        yield connect(listener.contact_address, timeout=0.5,
+        comm = yield connect(listener.contact_address, timeout=0.5,
                       connection_args={'ssl_context': bad_cli_ctx})
+        yield comm.write({'x': 'foo'})  # TODO: why is this necessary in Tornado 6 ?
 
     # The wrong error is reported on Python 2, see https://github.com/tornadoweb/tornado/pull/2028
     if sys.version_info >= (3,) and os.name != 'nt':
