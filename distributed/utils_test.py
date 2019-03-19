@@ -992,7 +992,7 @@ def popen(args, **kwargs):
     if sys.platform.startswith('win'):
         args[0] = os.path.join(sys.prefix, 'Scripts', args[0])
     else:
-        args[0] = os.path.join(sys.prefix, 'bin', args[0])
+        args[0] = os.path.join(os.environ.get('DESTDIR', '') + sys.prefix, 'bin', args[0])
     proc = subprocess.Popen(args, **kwargs)
     try:
         yield proc
