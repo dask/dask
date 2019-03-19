@@ -203,9 +203,14 @@ def blockwise(func, out_ind, *args, **kwargs):
     # a basic type
     try:
         arrays = args[::2]
-        args_meta = [arg._meta if hasattr(arg, '_meta') else np.empty((0,)) for arg in arrays]
+        ndims = [a.ndim if hasattr(a, 'ndim') else 0 for a in arrays]
+        args_meta = [arg._meta if hasattr(arg, '_meta') else arg
+                     for arg, nd in zip(arrays, ndims)]
         kwargs_meta = {k: v._meta if hasattr(v, '_meta') else v for k, v in kwargs.items()}
-        meta = func(*args_meta, **kwargs_meta)
+        try:
+            meta = func(*args_meta, **kwargs_meta)
+        except:
+            meta = func(*args_meta)
 
         if np.isscalar(meta):
             ndim = max([a.ndim for a in arrays])
