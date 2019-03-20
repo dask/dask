@@ -338,20 +338,27 @@ def test_check_meta():
 
 def test_is_dataframe_like():
     df = pd.DataFrame({'x': [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=1)
     assert is_dataframe_like(df)
+    assert is_dataframe_like(ddf)
     assert not is_dataframe_like(df.x)
+    assert not is_dataframe_like(ddf.x)
     assert not is_dataframe_like(df.index)
+    assert not is_dataframe_like(ddf.index)
     assert not is_dataframe_like(pd.DataFrame)
 
     assert not is_series_like(df)
+    assert not is_series_like(ddf)
     assert is_series_like(df.x)
+    assert is_series_like(ddf.x)
     assert not is_series_like(df.index)
+    assert not is_series_like(ddf.index)
     assert not is_series_like(pd.Series)
 
     assert not is_index_like(df)
+    assert not is_index_like(ddf)
     assert not is_index_like(df.x)
+    assert not is_index_like(ddf.x)
     assert is_index_like(df.index)
+    assert is_index_like(ddf.index)
     assert not is_index_like(pd.Index)
-
-    ddf = dd.from_pandas(df, npartitions=1)
-    assert is_dataframe_like(ddf)

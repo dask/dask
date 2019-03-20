@@ -376,8 +376,9 @@ def test_series_groupby_errors():
         ss.groupby([])  # dask should raise the same error
     assert msg in str(err.value)
 
-    sss = dd.from_pandas(s, npartitions=3)
-    pytest.raises(NotImplementedError, lambda: ss.groupby(sss))
+    sss = dd.from_pandas(s, npartitions=5)
+    with pytest.raises(NotImplementedError):
+        ss.groupby(sss)
 
     with pytest.raises(KeyError):
         s.groupby('x')  # pandas
@@ -1535,3 +1536,9 @@ def test_std_object_dtype(func):
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(func(df), func(ddf))
+
+
+def test_timeseries():
+    df = dask.datasets.timeseries().partitions[:2]
+    assert_eq(df.groupby('name').std(),
+              df.groupby('name').std())

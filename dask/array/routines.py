@@ -991,46 +991,34 @@ def squeeze(a, axis=None):
 
 @wraps(np.compress)
 def compress(condition, a, axis=None):
+    condition = asarray(condition).astype(bool)
+    a = asarray(a)
+
+    if condition.ndim != 1:
+        raise ValueError("Condition must be one dimensional")
+
     if axis is None:
         a = a.ravel()
         axis = 0
     axis = validate_axis(axis, a.ndim)
 
-    # Only coerce non-lazy values to numpy arrays
-    if not isinstance(condition, Array):
-        condition = np.array(condition, dtype=bool)
-    if condition.ndim != 1:
-        raise ValueError("Condition must be one dimensional")
+    # Treat `condition` as filled with `False` (if it is too short)
+    a = a[tuple(slice(None, len(condition))
+                if i == axis else slice(None)
+                for i in range(a.ndim))]
 
-    if isinstance(condition, Array):
-        if len(condition) < a.shape[axis]:
-            a = a[tuple(slice(None, len(condition))
-                        if i == axis else slice(None)
-                        for i in range(a.ndim))]
-        inds = tuple(range(a.ndim))
-        out = blockwise(np.compress, inds, condition, (inds[axis],), a, inds,
-                        axis=axis, dtype=a.dtype)
-        out._chunks = tuple((np.NaN,) * len(c) if i == axis else c
-                            for i, c in enumerate(out.chunks))
-        # add new dimensions in _meta to compensate for np.NaN dimensions in
-        # out_chunks
-        out._meta = out._meta.reshape((0,) * out.ndim)
-        return out
-    else:
-        # Optimized case when condition is known
-        if len(condition) < a.shape[axis]:
-            condition = condition.copy()
-            condition.resize(a.shape[axis])
+    # Use `condition` to select along 1 dimension
+    a = a[tuple(condition
+                if i == axis else slice(None)
+                for i in range(a.ndim))]
 
-        slc = ((slice(None),) * axis + (condition, ) +
-               (slice(None),) * (a.ndim - axis - 1))
-        return a[slc]
+    return a
 
 
 @wraps(np.extract)
 def extract(condition, arr):
-    if not isinstance(condition, Array):
-        condition = np.array(condition, dtype=bool)
+    condition = asarray(condition).astype(bool)
+    arr = asarray(arr)
     return compress(condition.ravel(), arr.ravel())
 
 

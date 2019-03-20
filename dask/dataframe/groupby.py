@@ -171,9 +171,13 @@ def _groupby_get_group(df, by_key, get_key, columns):
 # Aggregation
 ###############################################################
 
-# Implementation detail: use class to make it easier to pass inside spec
 class Aggregation(object):
-    """A user defined aggregation.
+    """User defined groupby-aggregation.
+
+    This class allows users to define their own custom aggregation in terms of
+    operations on Pandas dataframes in a map-reduce style. You need to specify
+    what operation to do on each chunk of data, how to combine those chunks of
+    data together, and then how to finalize the result.
 
     Parameters
     ----------
@@ -195,22 +199,27 @@ class Aggregation(object):
 
     Examples
     --------
+    We could implement ``sum`` as follows:
 
-    ``sum`` can be implemented as::
+    >>> custom_sum = dd.Aggregation(
+    ...     name='custom_sum',
+    ...     chunk=lambda s: s.sum(),
+    ...     agg=lambda s0: s0.sum()
+    ... )  # doctest: +SKIP
+    >>> df.groupby('g').agg(custom_sum)  # doctest: +SKIP
 
-        custom_sum = dd.Aggregation('custom_sum', lambda s: s.sum(), lambda s0: s0.sum())
-        df.groupby('g').agg(custom_sum)
+    We can implement ``mean`` as follows:
 
-    and ``mean`` can be implemented as::
+    >>> custom_mean = dd.Aggregation(
+    ...     name='custom_mean',
+    ...     chunk=lambda s: (s.count(), s.sum()),
+    ...     agg=lambda count, sum: (count.sum(), sum.sum()),
+    ...     finalize=lambda count, sum: sum / count,
+    ... )  # doctest: +SKIP
+    >>> df.groupby('g').agg(custom_mean)  # doctest: +SKIP
 
-        custom_mean = dd.Aggregation(
-            'custom_mean',
-            lambda s: (s.count(), s.sum()),
-            lambda count, sum: (count.sum(), sum.sum()),
-            lambda count, sum: sum / count,
-        )
-        df.groupby('g').agg(custom_mean)
-
+    Though of course, both of these are built-in and so you don't need to
+    implement them yourself.
     """
     def __init__(self, name, chunk, agg, finalize=None):
         self.chunk = chunk
@@ -240,14 +249,17 @@ def _apply_chunk(df, *index, **kwargs):
 def _var_chunk(df, *index):
     if is_series_like(df):
         df = df.to_frame()
-    df = df._get_numeric_data()
+
+    df = df.copy()
+    cols = df._get_numeric_data().columns
+
     g = _groupby_raise_unaligned(df, by=index)
     x = g.sum()
 
-    n = g.count().rename(columns=lambda c: c + '-count')
+    n = g[x.columns].count().rename(columns=lambda c: c + '-count')
 
-    df2 = df ** 2
-    g2 = _groupby_raise_unaligned(df2, by=index)
+    df[cols] = df[cols] ** 2
+    g2 = _groupby_raise_unaligned(df, by=index)
     x2 = g2.sum().rename(columns=lambda c: c + '-x2')
 
     x2.index = x.index
@@ -758,11 +770,11 @@ class _GroupBy(object):
 
         if isinstance(self.index, list):
             do_index_partition_align = all(
-                item.divisions == df.divisions if isinstance(item, Series) else True
+                item.npartitions == df.npartitions if isinstance(item, Series) else True
                 for item in self.index
             )
         elif isinstance(self.index, Series):
-            do_index_partition_align = df.divisions == self.index.divisions
+            do_index_partition_align = df.npartitions == self.index.npartitions
         else:
             do_index_partition_align = True
 

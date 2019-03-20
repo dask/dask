@@ -1010,6 +1010,20 @@ class Array(DaskMethodsMixin):
             x = np.array(x)
         return x
 
+    def __array_function__(self, func, types, args, kwargs):
+        import dask.array as module
+        for submodule in func.__module__.split('.')[1:]:
+            try:
+                module = getattr(module, submodule)
+            except AttributeError:
+                return NotImplemented
+        if not hasattr(module, func.__name__):
+            return NotImplemented
+        da_func = getattr(module, func.__name__)
+        if da_func is func:
+            return NotImplemented
+        return da_func(*args, **kwargs)
+
     @property
     def _elemwise(self):
         return elemwise
