@@ -1012,6 +1012,9 @@ def compress(condition, a, axis=None):
                         axis=axis, dtype=a.dtype)
         out._chunks = tuple((np.NaN,) * len(c) if i == axis else c
                             for i, c in enumerate(out.chunks))
+        # add new dimensions in _meta to compensate for np.NaN dimensions in
+        # out_chunks
+        out._meta = out._meta.reshape((0,) * out.ndim)
         return out
     else:
         # Optimized case when condition is known
