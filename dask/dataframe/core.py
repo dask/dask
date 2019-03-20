@@ -1024,7 +1024,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             # Control whether or not dask's partition alignment happens.
             # We don't want for a pandas Series.
             # We do want it for a dask Series
-            if is_series_like(value):
+            if is_series_like(value) and not is_dask_collection(value):
                 args = ()
                 kwargs = {'value': value}
             else:

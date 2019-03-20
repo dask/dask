@@ -1482,6 +1482,16 @@ def test_fillna():
               ddf.fillna(method='pad', limit=3))
 
 
+def test_fillna_duplicate_index():
+    @dask.delayed
+    def f():
+        return pd.DataFrame(dict(a=[1.0], b=[np.NaN]))
+
+    ddf = dd.from_delayed([f(), f()], meta=dict(a=float, b=float))
+    ddf.b = ddf.b.fillna(ddf.a)
+    ddf.compute()
+
+
 def test_fillna_multi_dataframe():
     df = tm.makeMissingDataframe(0.8, 42)
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
