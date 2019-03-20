@@ -148,7 +148,8 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
 
     reduced_meta = None
     if hasattr(x, '_meta'):
-        reduced_meta = blockwise(chunk, inds, x._meta, inds, axis=axis,
+        meta_inds = tuple(range(x._meta.ndim))
+        reduced_meta = blockwise(chunk, meta_inds, x._meta, meta_inds, axis=axis,
                                  keepdims=True, dtype=x.dtype)
 
     result = _tree_reduce(tmp, aggregate, axis, keepdims, dtype, split_every,

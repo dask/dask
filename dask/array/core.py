@@ -1157,7 +1157,8 @@ class Array(DaskMethodsMixin):
                     cond = any([isinstance(index2[i], t) for t in types])
                     new_index.append(slice(0, 0) if cond else index2[i])
                 else:
-                    new_index.append(tuple([Ellipsis if i is not None else None for i in index2]))
+                    new_index.append(tuple([Ellipsis if j is not None else None for j in
+                        index2[i]]))
             new_index = tuple(new_index)
             meta = self._meta[new_index].astype(self.dtype)
         else:
