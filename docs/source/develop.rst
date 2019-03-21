@@ -68,9 +68,12 @@ Development Environment
 Download code
 ~~~~~~~~~~~~~
 
-Clone the main Dask git repository (or whatever repository you're working on)::
+Make a fork of the main `Dask repository <https://github.com/dask/dask>`_ and
+clone the fork::
 
-   git clone git@github.com:dask/dask.git
+   git clone https://github.com/<your-github-username>/dask
+
+Contributions to Dask can then be made by submitting pull requests on GitHub.
 
 
 Install
