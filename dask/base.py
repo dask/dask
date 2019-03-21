@@ -265,7 +265,7 @@ def unpack_collections(*args, **kwargs):
                 tsk = (typ, [_unpack(i) for i in expr])
             elif typ in (dict, OrderedDict):
                 tsk = (typ, [[_unpack(k), _unpack(v)]
-                              for k, v in expr.items()])
+                             for k, v in expr.items()])
             elif is_dataclass(expr):
                 tsk = (apply, typ, (), (dict,
                        [[f.name, _unpack(getattr(expr, f.name))] for f in
