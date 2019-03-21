@@ -263,8 +263,8 @@ def unpack_collections(*args, **kwargs):
             typ = list if isinstance(expr, Iterator) else type(expr)
             if typ in (list, tuple, set):
                 tsk = (typ, [_unpack(i) for i in expr])
-            elif typ is dict:
-                tsk = (dict, [[_unpack(k), _unpack(v)]
+            elif typ in [dict, OrderedDict]:
+                tsk = (typ, [[_unpack(k), _unpack(v)]
                               for k, v in expr.items()])
             elif is_dataclass(expr):
                 tsk = (apply, typ, (), (dict,
