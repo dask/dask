@@ -55,11 +55,11 @@ The community discusses and tracks known bugs and potential features in the
 you should raise it there to start public discussion.
 
 If you are looking for an introductory issue to get started with development,
-then check out the `introductory label`_, which contains issues that are good
+then check out the `"good first issue" label`_, which contains issues that are good
 for starting developers.  Generally, familiarity with Python, NumPy, Pandas, and
 some parallel computing are assumed.
 
-.. _`introductory label`: https://github.com/dask/dask/issues?q=is%3Aissue+is%3Aopen+label%3Aintroductory
+.. _`"good first issue" label`: https://github.com/dask/dask/labels/good%20first%20issue
 
 
 Development Environment
@@ -68,9 +68,12 @@ Development Environment
 Download code
 ~~~~~~~~~~~~~
 
-Clone the main Dask git repository (or whatever repository you're working on)::
+Make a fork of the main `Dask repository <https://github.com/dask/dask>`_ and
+clone the fork::
 
-   git clone git@github.com:dask/dask.git
+   git clone https://github.com/<your-github-username>/dask
+
+Contributions to Dask can then be made by submitting pull requests on GitHub.
 
 
 Install
