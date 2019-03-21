@@ -2420,6 +2420,9 @@ class Index(Series):
         if PANDAS_VERSION >= '0.24.0':
             return self.map_partitions(M.to_frame, True, name,
                                        meta=self._meta.to_frame(True, name))
+        elif PANDAS_VERSION < '0.21.0':
+            raise NotImplementedError("The 'Index.to_frame' method was added in pandas 0.21.0 "
+                                      "Your version of pandas is '{}'.".format(PANDAS_VERSION))
         else:
             if name is not None:
                 raise ValueError("The 'name' keyword was added in pandas 0.24.0. "
