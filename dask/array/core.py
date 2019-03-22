@@ -1167,7 +1167,7 @@ class Array(DaskMethodsMixin):
             new_index = []
             for i in range(len(index2)):
                 if not isinstance(index2[i], tuple):
-                    types = [int, np.int_, list, np.ndarray]
+                    types = [Integral, list, np.ndarray]
                     cond = any([isinstance(index2[i], t) for t in types])
                     new_index.append(slice(0, 0) if cond else index2[i])
                 else:
@@ -2162,8 +2162,7 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
                     dtype=x.dtype)
         dsk[original_name] = x
 
-    nd = x.ndim if hasattr(x, 'ndim') else len(x.shape)
-    meta = x[tuple(slice(0, 0, None) for _ in range(nd))]
+    meta = x[tuple(slice(0, 0, None) for _ in range(x.ndim))]
 
     return Array(dsk, name, chunks, meta=meta)
 
