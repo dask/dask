@@ -249,7 +249,8 @@ def text_blocks_to_pandas(reader, block_lists, header, head, kwargs,
     if collection:
         if path:
             head = head.assign(**{
-                colname: pd.Categorical.from_codes(np.zeros(len(head)), paths)
+                colname: pd.Categorical.from_codes(
+                    np.zeros(len(head), dtype=int), paths)
             })
         if len(unknown_categoricals):
             head = clear_known_categories(head, cols=unknown_categoricals)
