@@ -183,34 +183,22 @@ def _tree_reduce(x, aggregate, axis, keepdims, dtype, split_every=None,
         if i in split_every and split_every[i] != 1:
             depth = int(builtins.max(depth, ceil(log(n, split_every[i]))))
     func = partial(combine or aggregate, axis=axis, keepdims=True)
-    meta_func = None if reduced_meta is None else func
     if concatenate:
         func = compose(func, partial(_concatenate2, axes=axis))
     for i in range(depth - 1):
         x = partial_reduce(func, x, split_every, True, dtype=dtype,
                            name=(name or funcname(combine or aggregate)) + '-partial',
-                           meta_func=meta_func, reduced_meta=reduced_meta)
+                           reduced_meta=reduced_meta)
     func = partial(aggregate, axis=axis, keepdims=keepdims)
-    meta_func = None if reduced_meta is None else func
     if concatenate:
         func = compose(func, partial(_concatenate2, axes=axis))
     return partial_reduce(func, x, split_every, keepdims=keepdims, dtype=dtype,
                           name=(name or funcname(aggregate)) + '-aggregate',
-                          meta_func=meta_func, reduced_meta=reduced_meta)
-
-
-def try_combinations(func, e, x, combinations):
-    if len(combinations) == 1:
-        return func(x, **combinations[0])
-
-    try:
-        return func(x, **combinations[0])
-    except e:
-        return try_combinations(func, e, x, combinations[1:])
+                          reduced_meta=reduced_meta)
 
 
 def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None,
-                   meta_func=None, reduced_meta=None):
+                   reduced_meta=None):
     """ Partial reduction across multiple axes.
 
     Parameters
@@ -250,12 +238,10 @@ def partial_reduce(func, x, split_every, keepdims=False, dtype=None, name=None,
     meta = x._meta
     if reduced_meta is not None:
         try:
-            # must try multiple argument combinations, some functions may not
-            # support all of them, or even none of them
-            meta = try_combinations(meta_func, TypeError, reduced_meta.compute(),
-                                    ({'dtype': dtype, 'keepdims':True, 'meta': True},
-                                     {'meta':True},
-                                     {}))
+            meta = func(reduced_meta.compute(), meta=True)
+        # no meta keyword argument exists for func, and it isn't required
+        except TypeError:
+            meta = func(reduced_meta.compute())
         # when no work can be computed on the empty array (e.g., func is a ufunc)
         except ValueError:
             pass
