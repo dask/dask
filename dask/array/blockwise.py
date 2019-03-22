@@ -209,7 +209,7 @@ def blockwise(func, out_ind, *args, **kwargs):
         kwargs_meta = {k: v._meta if hasattr(v, '_meta') else v for k, v in kwargs.items()}
         try:
             meta = func(*args_meta, **kwargs_meta)
-        except:
+        except TypeError:
             meta = func(*args_meta)
 
         if np.isscalar(meta):
