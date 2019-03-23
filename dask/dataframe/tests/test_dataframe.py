@@ -428,16 +428,6 @@ def test_clip(lower, upper):
     assert_eq(ds.clip(lower=lower), s.clip(lower=lower))
     assert_eq(ds.clip(upper=upper), s.clip(upper=upper))
 
-    assert_eq(ddf.clip_lower(lower), df.clip_lower(lower))
-    assert_eq(ddf.clip_lower(upper), df.clip_lower(upper))
-    assert_eq(ddf.clip_upper(lower), df.clip_upper(lower))
-    assert_eq(ddf.clip_upper(upper), df.clip_upper(upper))
-
-    assert_eq(ds.clip_lower(lower), s.clip_lower(lower))
-    assert_eq(ds.clip_lower(upper), s.clip_lower(upper))
-    assert_eq(ds.clip_upper(lower), s.clip_upper(lower))
-    assert_eq(ds.clip_upper(upper), s.clip_upper(upper))
-
 
 def test_squeeze():
     df = pd.DataFrame({'x': [1, 3, 6]})
@@ -1492,6 +1482,16 @@ def test_fillna():
               ddf.fillna(method='pad', limit=3))
 
 
+def test_fillna_duplicate_index():
+    @dask.delayed
+    def f():
+        return pd.DataFrame(dict(a=[1.0], b=[np.NaN]))
+
+    ddf = dd.from_delayed([f(), f()], meta=dict(a=float, b=float))
+    ddf.b = ddf.b.fillna(ddf.a)
+    ddf.compute()
+
+
 def test_fillna_multi_dataframe():
     df = tm.makeMissingDataframe(0.8, 42)
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
@@ -1984,7 +1984,7 @@ def test_rename_index():
 
 
 def test_to_timestamp():
-    index = pd.PeriodIndex(freq='A', start='1/1/2001', end='12/1/2004')
+    index = pd.period_range(freq='A', start='1/1/2001', end='12/1/2004')
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]}, index=index)
     ddf = dd.from_pandas(df, npartitions=3)
     assert_eq(ddf.to_timestamp(), df.to_timestamp())

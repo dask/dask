@@ -6,6 +6,7 @@ from operator import add, mul
 import subprocess
 import sys
 import time
+from collections import OrderedDict
 
 from toolz import merge
 
@@ -383,14 +384,15 @@ def test_unpack_collections():
     c = a + 2
 
     def build(a, b, c, iterator):
-        t = (a, b,                  # Top-level collections
-                {'a': a,            # dict
-                 a: b,              # collections as keys
-                 'b': [1, 2, [b]],  # list
-                 'c': 10,           # other builtins pass through unchanged
-                 'd': (c, 2),       # tuple
-                 'e': {a, 2, 3}},   # set
-                iterator)           # Iterator
+        t = (a, b,                              # Top-level collections
+                {'a': a,                        # dict
+                 a: b,                          # collections as keys
+                 'b': [1, 2, [b]],              # list
+                 'c': 10,                       # other builtins pass through unchanged
+                 'd': (c, 2),                   # tuple
+                 'e': {a, 2, 3},                # set
+                 'f': OrderedDict([('a', a)])}, # OrderedDict
+                iterator)                       # Iterator
 
         if dataclasses is not None:
             t[2]['f'] = ADataClass(a=a)
@@ -649,6 +651,17 @@ def test_visualize():
         x = Tuple(dsk, ['a', 'b', 'c'])
         visualize(x, filename=os.path.join(d, 'mydask.png'))
         assert os.path.exists(os.path.join(d, 'mydask.png'))
+
+
+@pytest.mark.skipif(sys.flags.optimize,
+                    reason="graphviz exception with Python -OO flag")
+def test_visualize_lists(tmpdir):
+    pytest.importorskip('graphviz')
+    fn = os.path.join(str(tmpdir), 'myfile.dot')
+    dask.visualize([{'abc-xyz': (add, 1, 2)}], filename=fn)
+    with open(fn) as f:
+        text = f.read()
+    assert 'abc-xyz' in text
 
 
 @pytest.mark.skipif('not da')
