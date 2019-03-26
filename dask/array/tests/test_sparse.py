@@ -138,6 +138,7 @@ def test_mixed_output_type():
 def test_metadata():
     y = da.random.random((10, 10), chunks=(5, 5))
     y[y < 0.8] = 0
+    z = sparse.COO.from_numpy(y.compute())
     y = y.map_blocks(sparse.COO.from_numpy)
 
     assert isinstance(y._meta, sparse.COO)
@@ -145,3 +146,6 @@ def test_metadata():
     assert isinstance(y.sum(axis=0)._meta, sparse.COO)
     assert isinstance(y.var(axis=0)._meta, sparse.COO)
     assert isinstance(y[:5, ::2]._meta, sparse.COO)
+    assert isinstance(y.rechunk((2, 2))._meta, sparse.COO)
+    assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
+    assert isinstance((y - z)._meta, sparse.COO)
