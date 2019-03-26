@@ -110,7 +110,7 @@ class HTTPFile(object):
         try:
             self.size = file_size(url, self.session, allow_redirects=True,
                                   **self.kwargs)
-        except ValueError:
+        except (ValueError, requests.HTTPError):
             # No size information - only allow read() and no seek()
             self.size = None
         self.cache = None
