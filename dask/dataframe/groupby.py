@@ -140,10 +140,10 @@ def _groupby_raise_unaligned(df, **kwargs):
     return df.groupby(**kwargs)
 
 
-def _groupby_slice_apply(df, grouper, key, func, *args, **kwargs):
+def _groupby_slice_apply(df, grouper, key, func, *args, group_keys=True, **kwargs):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
-    g = df.groupby(grouper)
+    g = df.groupby(grouper, group_keys=group_keys)
     if key:
         g = g[key]
     return g.apply(func, *args, **kwargs)
@@ -761,9 +761,10 @@ class _GroupBy(object):
     slice: str, list
         The slice keys applied to GroupBy result
     """
-    def __init__(self, df, by=None, slice=None):
+    def __init__(self, df, by=None, slice=None, group_keys=True):
 
         assert isinstance(df, (DataFrame, Series))
+        self.group_keys = group_keys
         self.obj = df
         # grouping key passed via groupby method
         self.index = _normalize_index(df, by)
@@ -794,7 +795,7 @@ class _GroupBy(object):
         else:
             index_meta = self.index
 
-        self._meta = self.obj._meta.groupby(index_meta)
+        self._meta = self.obj._meta.groupby(index_meta, group_keys=group_keys)
 
     @property
     def _meta_nonempty(self):
@@ -812,7 +813,7 @@ class _GroupBy(object):
         else:
             index_meta = self.index
 
-        grouped = sample.groupby(index_meta)
+        grouped = sample.groupby(index_meta, group_keys=self.group_keys)
         return _maybe_slice(grouped, self._slice)
 
     def _aca_agg(self, token, func, aggfunc=None, split_every=None,
@@ -1161,7 +1162,7 @@ class _GroupBy(object):
         # Perform embarrassingly parallel groupby-apply
         kwargs['meta'] = meta
         df5 = map_partitions(_groupby_slice_apply, df4, index2,
-                             self._slice, func, token=funcname(func), *args,
+                             self._slice, func, token=funcname(func), *args, group_keys=self.group_keys,
                              **kwargs)
 
         return df5
@@ -1207,7 +1208,7 @@ class SeriesGroupBy(_GroupBy):
 
     _token_prefix = 'series-groupby-'
 
-    def __init__(self, df, by=None, slice=None):
+    def __init__(self, df, by=None, slice=None, group_keys=True):
         # for any non series object, raise pandas-compat error message
 
         if isinstance(df, Series):
@@ -1225,7 +1226,7 @@ class SeriesGroupBy(_GroupBy):
                 # raise error from pandas, if applicable
                 df._meta.groupby(by)
 
-        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice)
+        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice, group_keys=group_keys)
 
     def nunique(self, split_every=None, split_out=1):
         name = self._meta.obj.name
