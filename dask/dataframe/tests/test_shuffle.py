@@ -602,7 +602,7 @@ def test_set_index_sorted_true():
     with pytest.raises(ValueError):
         a.set_index(a.z, sorted=True)
 
-    with pytest.raises(ValueError):
+    with pytest.warns(UserWarning):
         a.set_index(a.y, sorted=True)
 
 
@@ -687,8 +687,8 @@ def test_compute_divisions():
     assert b.known_divisions
 
     c = dd.from_pandas(df.set_index('y'), 2, sort=False)
-    # Partitions must not overlap
-    with pytest.raises(ValueError):
+    # Partitions overlap warning
+    with pytest.warns(UserWarning):
         compute_divisions(c)
 
 
