@@ -204,7 +204,8 @@ def blockwise(func, out_ind, *args, **kwargs):
     try:
         arrays = args[::2]
         ndims = [a.ndim if hasattr(a, 'ndim') else 0 for a in arrays]
-        args_meta = [arg._meta if hasattr(arg, '_meta') else arg
+        args_meta = [arg._meta if hasattr(arg, '_meta') else
+                     arg[tuple(slice(0, 0, None) for _ in range(nd))] if nd > 0 else arg
                      for arg, nd in zip(arrays, ndims)]
         kwargs_meta = {k: v._meta if hasattr(v, '_meta') else v for k, v in kwargs.items()}
         try:
