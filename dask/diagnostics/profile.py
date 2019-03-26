@@ -207,12 +207,10 @@ class ResourceProfiler(Callback):
 class _Tracker(Process):
     """Background process for tracking resource usage"""
     def __init__(self, dt=1):
-        psutil = import_required("psutil", "Tracking resource usage requires "
-                                           "`psutil` to be installed")
         Process.__init__(self)
         self.daemon = True
         self.dt = dt
-        self.parent = psutil.Process(current_process().pid)
+        self.parent_pid = current_process().pid
         self.parent_conn, self.child_conn = Pipe()
 
     def shutdown(self):
@@ -226,6 +224,11 @@ class _Tracker(Process):
                                 if p.pid != pid and p.status() != 'zombie']
 
     def run(self):
+
+        psutil = import_required("psutil", "Tracking resource usage requires "
+                                           "`psutil` to be installed")
+        self.parent = psutil.Process(self.parent_pid)
+
         pid = current_process()
         data = []
         while True:

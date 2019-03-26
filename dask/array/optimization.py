@@ -5,7 +5,7 @@ from operator import getitem
 import numpy as np
 
 from .core import getter, getter_nofancy, getter_inline
-from .top import optimize_atop
+from ..blockwise import optimize_blockwise
 from ..compatibility import zip_longest
 from ..core import flatten, reverse_dict
 from ..optimization import cull, fuse, inline_functions
@@ -35,7 +35,7 @@ def optimize(dsk, keys, fuse_keys=None, fast_functions=None,
 
     # High level stage optimization
     if isinstance(dsk, HighLevelGraph):
-        dsk = optimize_atop(dsk, keys=keys)
+        dsk = optimize_blockwise(dsk, keys=keys)
 
     # Low level task optimizations
     dsk = ensure_dict(dsk)

@@ -31,7 +31,9 @@ files = {'.test.accounts.1.json': (b'{"amount": 100, "name": "Alice"}\n'
 csv_files = {'.test.fakedata.1.csv': (b'a,b\n'
                                       b'1,2\n'),
              '.test.fakedata.2.csv': (b'a,b\n'
-                                      b'3,4\n')}
+                                      b'3,4\n'),
+             'subdir/.test.fakedata.2.csv': (b'a,b\n'
+                                             b'5,6\n')}
 
 
 try:
@@ -101,6 +103,15 @@ def test_urlpath_expand_read():
         assert len(paths) == 2
 
 
+@pytest.mark.skipif(sys.version_info < (3, 5),
+                    reason="Recursive glob is new in Python 3.5")
+def test_recursive_glob_expand():
+    """Make sure * is expanded in file paths when reading."""
+    with filetexts(csv_files, mode='b'):
+        _, _, paths = get_fs_token_paths('**/.*.csv')
+        assert len(paths) == 3
+
+
 def test_urlpath_expand_write():
     """Make sure * is expanded in file paths when writing."""
     _, _, paths = get_fs_token_paths('prefix-*.csv', mode='wb', num=2)
@@ -141,20 +152,30 @@ def test_read_bytes_sample_delimiter():
         assert sample.endswith(b'\n')
 
 
+def test_parse_sample_bytes():
+    with filetexts(files, mode='b'):
+        sample, values = read_bytes('.test.accounts.*', sample='40 B')
+        assert len(sample) == 40
+
+
 def test_read_bytes_blocksize_none():
     with filetexts(files, mode='b'):
         sample, values = read_bytes('.test.accounts.*', blocksize=None)
         assert sum(map(len, values)) == len(files)
 
 
-def test_read_bytes_blocksize_float():
+@pytest.mark.parametrize('blocksize', [5.0, '5 B'])
+def test_read_bytes_blocksize_types(blocksize):
     with filetexts(files, mode='b'):
-        sample, vals = read_bytes('.test.account*', blocksize=5.0)
+        sample, vals = read_bytes('.test.account*', blocksize=blocksize)
         results = compute(*concat(vals))
         ourlines = b"".join(results).split(b'\n')
         testlines = b"".join(files.values()).split(b'\n')
         assert set(ourlines) == set(testlines)
 
+
+def test_read_bytes_blocksize_float_errs():
+    with filetexts(files, mode='b'):
         with pytest.raises(TypeError):
             read_bytes('.test.account*', blocksize=5.5)
 
@@ -205,7 +226,7 @@ def test_read_bytes_block():
 
 def test_read_bytes_delimited():
     with filetexts(files, mode='b'):
-        for bs in [5, 15, 45, 1500]:
+        for bs in [5, 15, 45, '1.5 kB']:
             _, values = read_bytes('.test.accounts*',
                                    blocksize=bs, delimiter=b'\n')
             _, values2 = read_bytes('.test.accounts*',

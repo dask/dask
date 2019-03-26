@@ -502,7 +502,7 @@ def test_bincount_with_weights():
 
     dweights = da.from_array(weights, chunks=2)
     e = da.bincount(d, weights=dweights, minlength=6)
-    assert_eq(e, np.bincount(x, weights=dweights, minlength=6))
+    assert_eq(e, np.bincount(x, weights=dweights.compute(), minlength=6))
     assert same_keys(da.bincount(d, weights=dweights, minlength=6), e)
 
 
@@ -599,6 +599,20 @@ def test_histogram_extra_args_and_shapes():
 
         assert_eq(da.histogram(v, bins=bins, weights=w, density=True)[0],
                   da.histogram(v, bins=bins, weights=w, density=True)[0])
+
+
+@pytest.mark.parametrize("bins, hist_range", [
+    (None, None),
+    (10, None),
+    (None, (1, 10)),
+])
+def test_histogram_bin_range_raises(bins, hist_range):
+    data = da.random.random(10, chunks=2)
+    with pytest.raises(ValueError) as info:
+        da.histogram(data, bins=bins, range=hist_range)
+    err_msg = str(info.value)
+    assert 'bins' in err_msg
+    assert 'range' in err_msg
 
 
 def test_cov():

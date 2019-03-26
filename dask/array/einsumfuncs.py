@@ -6,11 +6,22 @@ from functools import wraps
 import numpy as np
 from numpy.compat import basestring
 
-from .core import (atop, asarray)
-from . import chunk
+from .core import blockwise, asarray, einsum_lookup
 
 einsum_symbols = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 einsum_symbols_set = set(einsum_symbols)
+
+
+def chunk_einsum(*operands, **kwargs):
+    subscripts = kwargs.pop('subscripts')
+    ncontract_inds = kwargs.pop('ncontract_inds')
+    dtype = kwargs.pop('kernel_dtype')
+    einsum = einsum_lookup.dispatch(type(operands[0]))
+    chunk = einsum(subscripts, *operands, dtype=dtype, **kwargs)
+
+    # Avoid concatenate=True in blockwise by adding 1's
+    # for the contracted dimensions
+    return chunk.reshape(chunk.shape + (1,) * ncontract_inds)
 
 
 # This function duplicates numpy's _parse_einsum_input() function
@@ -228,16 +239,16 @@ def einsum(*operands, **kwargs):
     contract_inds = all_inds - set(outputs)
     ncontract_inds = len(contract_inds)
 
-    # Introduce the contracted indices into the atop product
+    # Introduce the contracted indices into the blockwise product
     # so that we get numpy arrays, not lists
-    result = atop(chunk.einsum, tuple(outputs) + tuple(contract_inds),
-                  *(a for ap in zip(ops, inputs) for a in ap),
-                  # atop parameters
-                  adjust_chunks={ind: 1 for ind in contract_inds}, dtype=dtype,
-                  # np.einsum parameters
-                  subscripts=subscripts, kernel_dtype=einsum_dtype,
-                  ncontract_inds=ncontract_inds, order=order,
-                  casting=casting, **kwargs)
+    result = blockwise(chunk_einsum, tuple(outputs) + tuple(contract_inds),
+                       *(a for ap in zip(ops, inputs) for a in ap),
+                       # blockwise parameters
+                       adjust_chunks={ind: 1 for ind in contract_inds}, dtype=dtype,
+                       # np.einsum parameters
+                       subscripts=subscripts, kernel_dtype=einsum_dtype,
+                       ncontract_inds=ncontract_inds, order=order,
+                       casting=casting, **kwargs)
 
     # Now reduce over any extra contraction dimensions
     if ncontract_inds > 0:

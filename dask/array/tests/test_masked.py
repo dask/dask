@@ -348,3 +348,17 @@ def test_average_weights_with_masked_array():
     da_avg = da.ma.average(d_a, weights=d_weights, axis=1)
 
     assert_eq(np_avg, da_avg)
+
+
+def test_arithmetic_results_in_masked():
+    mask = np.array([[True, False],
+                     [True, True],
+                     [False, True]])
+    x = np.arange(6).reshape((3, 2))
+    masked = np.ma.array(x, mask=mask)
+    dx = da.from_array(x, chunks=(2, 2))
+
+    res = dx + masked
+    sol = x + masked
+    assert_eq(res, sol)
+    assert isinstance(res.compute(), np.ma.masked_array)

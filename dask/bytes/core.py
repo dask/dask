@@ -16,7 +16,7 @@ from .. import config
 from ..compatibility import unicode
 from ..base import tokenize
 from ..delayed import delayed
-from ..utils import import_required, is_integer
+from ..utils import import_required, is_integer, parse_bytes
 
 try:
     import pathlib
@@ -24,8 +24,8 @@ except ImportError:  # Python 2.7
     pathlib = False
 
 
-def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
-               sample=True, compression=None, include_path=False, **kwargs):
+def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize="128 MiB",
+               sample='10 kiB', compression=None, include_path=False, **kwargs):
     """Given a path or paths, return delayed objects that read from those paths.
 
     The path may be a filename like ``'2015-01-01.csv'`` or a globstring
@@ -49,13 +49,14 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         bytes.
     not_zero : bool
         Force seek of start-of-file delimiter, discarding header.
-    blocksize : int (=128MB)
-        Chunk size in bytes
+    blocksize : int, str
+        Chunk size in bytes, defaults to "128 MiB"
     compression : string or None
         String like 'gzip' or 'xz'.  Must support efficient random access.
-    sample : bool or int
-        Whether or not to return a header sample. If an integer is given it is
-        used as sample size, otherwise the default sample size is 10kB.
+    sample : int or string
+        Whether or not to return a header sample.
+        Values can be ``False`` for "no sample requested"
+        Or an integer or string value like ``2**20`` or ``"1 MiB"``
     include_path : bool
         Whether or not to include the path with the bytes representing a particular file.
         Default is False.
@@ -88,6 +89,8 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         raise IOError("%s resolved to no files" % urlpath)
 
     if blocksize is not None:
+        if isinstance(blocksize, (str, unicode)):
+            blocksize = parse_bytes(blocksize)
         if not is_integer(blocksize):
             raise TypeError("blocksize must be an integer")
         blocksize = int(blocksize)
@@ -126,9 +129,12 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize=2**27,
         out.append(values)
 
     if sample:
+        if sample is True:
+            sample = '10 kiB'  # backwards compatibility
+        if isinstance(sample, str):
+            sample = parse_bytes(sample)
         with OpenFile(fs, paths[0], compression=compression) as f:
-            nbytes = 10000 if sample is True else sample
-            sample = read_block(f, 0, nbytes, delimiter)
+            sample = read_block(f, 0, sample, delimiter)
     if include_path:
         return sample, out, paths
     return sample, out

@@ -6,7 +6,7 @@ from functools import partial, wraps
 import numpy as np
 from toolz import curry
 
-from .core import Array, elemwise, atop, apply_infer_dtype, asarray
+from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray
 from ..base import is_dask_collection, normalize_function
 from .. import core
 from ..highlevelgraph import HighLevelGraph
@@ -152,8 +152,15 @@ class ufunc(object):
         else:
             func = self._ufunc.outer
 
-        return atop(func, out_inds, A, A_inds, B, B_inds, dtype=dtype,
-                    token=self.__name__ + '.outer', **kwargs)
+        return blockwise(
+            func,
+            out_inds,
+            A, A_inds,
+            B, B_inds,
+            dtype=dtype,
+            token=self.__name__ + '.outer',
+            **kwargs
+        )
 
 
 # ufuncs, copied from this page:

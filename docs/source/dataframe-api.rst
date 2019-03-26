@@ -57,6 +57,7 @@ Dataframe
     DataFrame.npartitions
     DataFrame.partitions
     DataFrame.pow
+    DataFrame.prod
     DataFrame.quantile
     DataFrame.query
     DataFrame.radd
@@ -251,6 +252,9 @@ Groupby Operations
    SeriesGroupBy.first
    SeriesGroupBy.last
 
+.. autosummary::
+   Aggregation
+
 Rolling Operations
 ~~~~~~~~~~~~~~~~~~
 
@@ -350,6 +354,11 @@ SeriesGroupBy
 .. autoclass:: SeriesGroupBy
    :members:
    :inherited-members:
+
+Custom Aggregation
+~~~~~~~~~~~~~~~~~~
+.. autoclass:: Aggregation
+
 
 Storage and Conversion
 ~~~~~~~~~~~~~~~~~~~~~~

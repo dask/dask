@@ -1,8 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-from functools import partial, wraps
+from functools import partial, wraps, reduce
 from itertools import product
-from operator import add
+from operator import add, getitem
 from numbers import Integral, Number
 
 import numpy as np
@@ -16,6 +16,7 @@ from .core import (Array, asarray, normalize_chunks,
                    stack, concatenate, block,
                    broadcast_to, broadcast_arrays)
 from .wrap import empty, ones, zeros, full
+from .utils import AxisError
 
 
 def empty_like(a, dtype=None, chunks=None):
@@ -175,7 +176,7 @@ def full_like(a, fill_value, dtype=None, chunks=None):
     )
 
 
-def linspace(start, stop, num=50, endpoint=True, retstep=False, chunks=None,
+def linspace(start, stop, num=50, endpoint=True, retstep=False, chunks='auto',
              dtype=None):
     """
     Return `num` evenly spaced values over the closed interval [`start`,
@@ -214,9 +215,6 @@ def linspace(start, stop, num=50, endpoint=True, retstep=False, chunks=None,
     dask.array.arange
     """
     num = int(num)
-
-    if chunks is None:
-        raise ValueError("Must supply a chunks= keyword argument")
 
     chunks = normalize_chunks(chunks, (num,))
 
@@ -296,17 +294,16 @@ def arange(*args, **kwargs):
         arange takes 3 positional arguments: arange([start], stop, [step])
         ''')
 
-    try:
-        chunks = kwargs.pop('chunks')
-    except KeyError:
-        raise TypeError("Required argument 'chunks' not found")
+    chunks = kwargs.pop('chunks', 'auto')
 
     num = int(max(np.ceil((stop - start) / step), 0))
-    chunks = normalize_chunks(chunks, (num,))
 
     dtype = kwargs.pop('dtype', None)
     if dtype is None:
         dtype = np.arange(start, stop, step * num if num else step).dtype
+
+    chunks = normalize_chunks(chunks, (num,), dtype=dtype)
+
     if kwargs:
         raise TypeError("Unexpected keyword argument(s): %s" %
                         ",".join(kwargs.keys()))
@@ -364,7 +361,7 @@ def meshgrid(*xi, **kwargs):
     return grid
 
 
-def indices(dimensions, dtype=int, chunks=None):
+def indices(dimensions, dtype=int, chunks='auto'):
     """
     Implements NumPy's ``indices`` for Dask Arrays.
 
@@ -388,9 +385,6 @@ def indices(dimensions, dtype=int, chunks=None):
     -------
     grid : dask array
     """
-    if chunks is None:
-        raise ValueError("Must supply a chunks= keyword argument")
-
     dimensions = tuple(dimensions)
     dtype = np.dtype(dtype)
     chunks = tuple(chunks)
@@ -508,6 +502,73 @@ def diag(v):
     return Array(graph, name, (chunks_1d, chunks_1d), dtype=v.dtype)
 
 
+@wraps(np.diagonal)
+def diagonal(a, offset=0, axis1=0, axis2=1):
+    name = 'diagonal-' + tokenize(a, offset, axis1, axis2)
+
+    if a.ndim < 2:
+        # NumPy uses `diag` as we do here.
+        raise ValueError("diag requires an array of at least two dimensions")
+
+    def _axis_fmt(axis, name, ndim):
+        if axis < 0:
+            t = ndim + axis
+            if t < 0:
+                msg = "{}: axis {} is out of bounds for array of dimension {}"
+                raise AxisError(msg.format(name, axis, ndim))
+            axis = t
+        return axis
+
+    axis1 = _axis_fmt(axis1, "axis1", a.ndim)
+    axis2 = _axis_fmt(axis2, "axis2", a.ndim)
+
+    if axis1 == axis2:
+        raise ValueError("axis1 and axis2 cannot be the same")
+
+    a = asarray(a)
+
+    if axis1 > axis2:
+        axis1, axis2 = axis2, axis1
+        offset = -offset
+
+    def _diag_len(dim1, dim2, offset):
+        return max(0, min(min(dim1, dim2), dim1 + offset, dim2 - offset))
+
+    diag_chunks = []
+    chunk_offsets = []
+    cum1 = [0] + list(np.cumsum(a.chunks[axis1]))[:-1]
+    cum2 = [0] + list(np.cumsum(a.chunks[axis2]))[:-1]
+    for co1, c1 in zip(cum1, a.chunks[axis1]):
+        chunk_offsets.append([])
+        for co2, c2 in zip(cum2, a.chunks[axis2]):
+            k = offset + co1 - co2
+            diag_chunks.append(_diag_len(c1, c2, k))
+            chunk_offsets[-1].append(k)
+
+    dsk = {}
+    idx_set = set(range(a.ndim)) - set([axis1, axis2])
+    n1 = len(a.chunks[axis1])
+    n2 = len(a.chunks[axis2])
+    for idx in product(*(range(len(a.chunks[i])) for i in idx_set)):
+        for i, (i1, i2) in enumerate(product(range(n1), range(n2))):
+            tsk = reduce(getitem, idx[:axis1], a.__dask_keys__())[i1]
+            tsk = reduce(getitem, idx[axis1:axis2 - 1], tsk)[i2]
+            tsk = reduce(getitem, idx[axis2 - 1:], tsk)
+            k = chunk_offsets[i1][i2]
+            dsk[(name,) + idx + (i,)] = (np.diagonal, tsk, k, axis1, axis2)
+
+    left_shape = tuple(a.shape[i] for i in idx_set)
+    right_shape = (_diag_len(a.shape[axis1], a.shape[axis2], offset),)
+    shape = left_shape + right_shape
+
+    left_chunks = tuple(a.chunks[i] for i in idx_set)
+    right_shape = (tuple(diag_chunks),)
+    chunks = left_chunks + right_shape
+
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
+    return Array(graph, name, shape=shape, chunks=chunks, dtype=a.dtype)
+
+
 def triu(m, k=0):
     """
     Upper triangle of an array with elements above the `k`-th diagonal zeroed.
@@ -613,9 +674,8 @@ def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
 
 
 @wraps(np.fromfunction)
-def fromfunction(func, chunks=None, shape=None, dtype=None, **kwargs):
-    if chunks:
-        chunks = normalize_chunks(chunks, shape)
+def fromfunction(func, chunks='auto', shape=None, dtype=None, **kwargs):
+    chunks = normalize_chunks(chunks, shape)
     name = 'fromfunction-' + tokenize(func, chunks, shape, dtype, kwargs)
     keys = list(product([name], *[range(len(bd)) for bd in chunks]))
     aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in chunks]
@@ -702,15 +762,15 @@ def expand_pad_value(array, pad_value):
     elif (isinstance(pad_value, Sequence) and
           len(pad_value) == 2 and
           all(isinstance(pw, Number) for pw in pad_value)):
-            pad_value = tuple(
-                (pad_value[0], pad_value[1]) for _ in range(array.ndim)
-            )
+        pad_value = tuple(
+            (pad_value[0], pad_value[1]) for _ in range(array.ndim)
+        )
     elif (isinstance(pad_value, Sequence) and
           len(pad_value) == array.ndim and
           all(isinstance(pw, Sequence) for pw in pad_value) and
           all((len(pw) == 2) for pw in pad_value) and
           all(all(isinstance(w, Number) for w in pw) for pw in pad_value)):
-            pad_value = tuple((pw[0], pw[1]) for pw in pad_value)
+        pad_value = tuple((pw[0], pw[1]) for pw in pad_value)
     else:
         raise TypeError(
             "`pad_value` must be composed of integral typed values."
@@ -776,7 +836,7 @@ def pad_edge(array, pad_width, mode, *args):
         pad_shapes, pad_chunks = get_pad_shapes_chunks(result, pad_width, (d,))
         pad_arrays = [result, result]
 
-        if mode is "constant":
+        if mode == "constant":
             constant_values = args[0][d]
             constant_values = [
                 asarray(c).astype(result.dtype) for c in constant_values
@@ -796,12 +856,12 @@ def pad_edge(array, pad_width, mode, *args):
 
             pad_arrays = [result[sl] for sl in pad_slices]
 
-            if mode is "edge":
+            if mode == "edge":
                 pad_arrays = [
                     broadcast_to(a, s, c)
                     for a, s, c in zip(pad_arrays, pad_shapes, pad_chunks)
                 ]
-            elif mode is "linear_ramp":
+            elif mode == "linear_ramp":
                 end_values = args[0][d]
 
                 pad_arrays = [

@@ -211,8 +211,10 @@ def shuffle(df, index, shuffle=None, npartitions=None, max_branch=32,
 
     partitions = index.map_partitions(partitioning_index,
                                       npartitions=npartitions or df.npartitions,
-                                      meta=pd.Series([0]))
+                                      meta=pd.Series([0]),
+                                      transform_divisions=False)
     df2 = df.assign(_partitions=partitions)
+    df2._meta.index.name = df._meta.index.name
     df3 = rearrange_by_column(df2, '_partitions', npartitions=npartitions,
                               max_branch=max_branch, shuffle=shuffle,
                               compute=compute)
@@ -234,7 +236,7 @@ def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None)
 
 def rearrange_by_column(df, col, npartitions=None, max_branch=None,
                         shuffle=None, compute=None):
-    shuffle = shuffle or config.get('shuffle', 'disk')
+    shuffle = shuffle or config.get('shuffle', None) or 'disk'
     if shuffle == 'disk':
         return rearrange_by_column_disk(df, col, npartitions, compute=compute)
     elif shuffle == 'tasks':

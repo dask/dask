@@ -161,6 +161,16 @@ def test_method_getattr_call_same_task():
     assert getattr not in set(v[0] for v in o.__dask_graph__().values())
 
 
+def test_np_dtype_of_delayed():
+    # This used to result in a segfault due to recursion, see
+    # https://github.com/dask/dask/pull/4374#issuecomment-454381465
+    np = pytest.importorskip('numpy')
+    x = delayed(1)
+    with pytest.raises(TypeError):
+        np.dtype(x)
+    assert delayed(np.array([1], dtype='f8')).dtype.compute() == np.dtype('f8')
+
+
 def test_delayed_errors():
     a = delayed([1, 2, 3])
     # Immutable
@@ -590,3 +600,10 @@ def test_delayed_decorator_on_method():
     # For static methods (and regular functions), the decorated methods should
     # be Delayed objects.
     assert isinstance(A.addstatic, Delayed)
+
+
+def test_attribute_of_attribute():
+    x = delayed(123)
+    assert isinstance(x.a, Delayed)
+    assert isinstance(x.a.b, Delayed)
+    assert isinstance(x.a.b.c, Delayed)

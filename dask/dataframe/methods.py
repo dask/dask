@@ -7,7 +7,7 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype
 from toolz import partition
 
-from .utils import PANDAS_VERSION
+from .utils import PANDAS_VERSION, is_series_like
 from ..utils import Dispatch
 if PANDAS_VERSION >= '0.20.0':
     from pandas.api.types import union_categoricals
@@ -167,8 +167,12 @@ def assign(df, *pairs):
 
 
 def unique(x, series_name=None):
-    # unique returns np.ndarray, it must be wrapped
-    return pd.Series(x.unique(), name=series_name)
+    out = x.unique()
+    # out can be either an np.ndarray or may already be a series
+    # like object.  When out is an np.ndarray, it must be wrapped.
+    if not is_series_like(out):
+        out = pd.Series(out, name=series_name)
+    return out
 
 
 def value_counts_combine(x):
@@ -385,16 +389,7 @@ def concat_pandas(dfs, axis=0, join='outer', uniform=False, filter_warning=True)
     return out
 
 
-def merge(left, right, how, left_on, right_on,
-          left_index, right_index, indicator, suffixes,
-          default_left, default_right):
-
-    if not len(left):
-        left = default_left
-
-    if not len(right):
-        right = default_right
-
-    return pd.merge(left, right, how=how, left_on=left_on, right_on=right_on,
-                    left_index=left_index, right_index=right_index,
-                    suffixes=suffixes, indicator=indicator)
+def assign_index(df, ind):
+    df = df.copy()
+    df.index = ind
+    return df

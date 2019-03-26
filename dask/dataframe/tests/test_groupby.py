@@ -9,7 +9,9 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq, assert_dask_graph, assert_max_deps, PANDAS_VERSION
+from dask.dataframe.utils import (
+    assert_eq, assert_dask_graph, assert_max_deps, PANDAS_VERSION,
+)
 
 AGG_FUNCS = ['sum', 'mean', 'min', 'max', 'count', 'size', 'std', 'var', 'nunique', 'first', 'last']
 
@@ -374,8 +376,9 @@ def test_series_groupby_errors():
         ss.groupby([])  # dask should raise the same error
     assert msg in str(err.value)
 
-    sss = dd.from_pandas(s, npartitions=3)
-    pytest.raises(NotImplementedError, lambda: ss.groupby(sss))
+    sss = dd.from_pandas(s, npartitions=5)
+    with pytest.raises(NotImplementedError):
+        ss.groupby(sss)
 
     with pytest.raises(KeyError):
         s.groupby('x')  # pandas
@@ -403,10 +406,22 @@ def test_groupby_set_index():
                   lambda: ddf.groupby(df.index.month, as_index=False))
 
 
-def test_split_apply_combine_on_series():
-    pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7],
-                        'b': [4, 2, 7, 3, 3, 1, 1, 1, 2]},
-                       index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
+@pytest.mark.parametrize('empty', [
+    pytest.param(True, marks=pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
+                 reason="Empty groupby-reductions fail for older pandas")),
+    pytest.param(False)
+])
+def test_split_apply_combine_on_series(empty):
+    if empty:
+        pdf = pd.DataFrame({'a': [1.], 'b': [1.]}, index=[0]).iloc[:0]
+        # There's a bug in pandas where df.groupby(...).var(ddof=0) results in
+        # no columns. Just skip these checks for now.
+        ddofs = []
+    else:
+        ddofs = [0, 1, 2]
+        pdf = pd.DataFrame({'a': [1, 2, 6, 4, 4, 6, 4, 3, 7],
+                            'b': [4, 2, 7, 3, 3, 1, 1, 1, 2]},
+                           index=[0, 1, 3, 5, 6, 8, 9, 9, 9])
     ddf = dd.from_pandas(pdf, npartitions=3)
 
     for ddkey, pdkey in [('b', 'b'), (ddf.b, pdf.b), (ddf.b + 1, pdf.b + 1)]:
@@ -418,7 +433,7 @@ def test_split_apply_combine_on_series():
         assert_eq(ddf.groupby(ddkey).a.size(), pdf.groupby(pdkey).a.size())
         assert_eq(ddf.groupby(ddkey).a.first(), pdf.groupby(pdkey).a.first())
         assert_eq(ddf.groupby(ddkey).a.last(), pdf.groupby(pdkey).a.last())
-        for ddof in [0, 1, 2]:
+        for ddof in ddofs:
             assert_eq(ddf.groupby(ddkey).a.var(ddof),
                       pdf.groupby(pdkey).a.var(ddof))
             assert_eq(ddf.groupby(ddkey).a.std(ddof),
@@ -433,7 +448,7 @@ def test_split_apply_combine_on_series():
         assert_eq(ddf.groupby(ddkey).first(), pdf.groupby(pdkey).first())
         assert_eq(ddf.groupby(ddkey).last(), pdf.groupby(pdkey).last())
 
-        for ddof in [0, 1, 2]:
+        for ddof in ddofs:
             assert_eq(ddf.groupby(ddkey).var(ddof),
                       pdf.groupby(pdkey).var(ddof), check_dtype=False)
             assert_eq(ddf.groupby(ddkey).std(ddof),
@@ -448,7 +463,7 @@ def test_split_apply_combine_on_series():
         assert_eq(ddf.a.groupby(ddkey).first(), pdf.a.groupby(pdkey).first(), check_names=False)
         assert_eq(ddf.a.groupby(ddkey).last(), pdf.a.groupby(pdkey).last(), check_names=False)
 
-        for ddof in [0, 1, 2]:
+        for ddof in ddofs:
             assert_eq(ddf.a.groupby(ddkey).var(ddof),
                       pdf.a.groupby(pdkey).var(ddof))
             assert_eq(ddf.a.groupby(ddkey).std(ddof),
@@ -493,7 +508,7 @@ def test_split_apply_combine_on_series():
         assert_eq(ddf.groupby(ddf.a > i).first(), pdf.groupby(pdf.a > i).first())
         assert_eq(ddf.groupby(ddf.a > i).last(), pdf.groupby(pdf.a > i).last())
 
-        for ddof in [0, 1, 2]:
+        for ddof in ddofs:
             assert_eq(ddf.groupby(ddf.b > i).std(ddof),
                       pdf.groupby(pdf.b > i).std(ddof))
 
@@ -518,7 +533,7 @@ def test_split_apply_combine_on_series():
         assert_eq(ddf.groupby(ddkey).first(), pdf.groupby(pdkey).first())
         assert_eq(ddf.groupby(ddkey).last(), pdf.groupby(pdkey).last())
 
-        for ddof in [0, 1, 2]:
+        for ddof in ddofs:
             assert_eq(ddf.groupby(ddkey).b.std(ddof),
                       pdf.groupby(pdkey).b.std(ddof))
 
@@ -1502,3 +1517,28 @@ def test_groupby_select_column_agg():
     actual = ddf.groupby('A')['B'].agg('var')
     expected = pdf.groupby('A')['B'].agg('var')
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize('func', [
+    lambda x: x.std(),
+    lambda x: x.groupby('x').std(),
+    lambda x: x.groupby('x').var(),
+    lambda x: x.groupby('x').mean(),
+    lambda x: x.groupby('x').sum(),
+    lambda x: x.groupby('x').z.std(),
+])
+def test_std_object_dtype(func):
+    df = pd.DataFrame({
+        'x': [1, 2, 1],
+        'y': ['a', 'b', 'c'],
+        'z': [11., 22., 33.],
+    })
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    assert_eq(func(df), func(ddf))
+
+
+def test_timeseries():
+    df = dask.datasets.timeseries().partitions[:2]
+    assert_eq(df.groupby('name').std(),
+              df.groupby('name').std())

@@ -1,6 +1,222 @@
 Changelog
 =========
 
+1.1.4 / 2019-03-08
+------------------
+
+Array
++++++
+
+-  Use mask selection in compress (:pr:`4548`) `John A Kirkham`_
+-  Use `asarray` in `extract` (:pr:`4549`) `John A Kirkham`_
+-  Use correct dtype when test concatenation. (:pr:`4539`) `Elliott Sales de Andrade`_
+-  Fix CuPy tests or properly marks as xfail (:pr:`4564`) `Peter Andreas Entschev`_
+
+Core
+++++
+
+-  Fix local scheduler callback to deal with custom caching (:pr:`4542`) `Yu Feng`_
+-  Use parse_bytes in read_bytes(sample=...) (:pr:`4554`) `Matthew Rocklin`_
+
+DataFrame
++++++++++
+
+-  Fix up groupby-standard deviation again on object dtype keys (:pr:`4541`) `Matthew Rocklin`_
+-  TST/CI: Updates for pandas 0.24.1 (:pr:`4551`) `Tom Augspurger`_
+-  Add ability to control number of unique elements in timeseries (:pr:`4557`) `Matthew Rocklin`_
+-  Add support in read_csv for parameter skiprows for other iterables (:pr:`4560`) `@JulianWgs`_
+
+Documentation
++++++++++++++
+
+-  DataFrame to Array conversion and unknown chunks (:pr:`4516`) `Scott Sievert`_
+-  Add docs for random array creation (:pr:`4566`) `Matthew Rocklin`_
+-  Fix typo in docstring (:pr:`4572`) `Shyam Saladi`_
+
+
+1.1.3 / 2019-03-01
+------------------
+
+Array
++++++
+
+-  Modify mean chunk functions to return dicts rather than arrays (:pr:`4513`) `Matthew Rocklin`_
+-  Change sparse installation in CI for NumPy/Python2 compatibility (:pr:`4537`) `Matthew Rocklin`_
+
+DataFrame
++++++++++
+
+-  Make merge dispatchable on pandas/other dataframe types (:pr:`4522`) `Matthew Rocklin`_
+-  read_sql_table - datetime index fix and  index type checking (:pr:`4474`) `Joe Corbett`_
+-  Use generalized form of index checking (is_index_like) (:pr:`4531`) `Ben Zaitlen`_
+-  Add tests for groupby reductions with object dtypes (:pr:`4535`) `Matthew Rocklin`_
+-  Fixes #4467 : Updates time_series for pandas deprecation (:pr:`4530`) `@HSR05`_
+
+Documentation
++++++++++++++
+
+-  Add missing method to documentation index (:pr:`4528`) `Bart Broere`_
+
+
+1.1.2 / 2019-02-25
+------------------
+
+Array
++++++
+
+-  Fix another unicode/mixed-type edge case in normalize_array (:pr:`4489`) `Marco Neumann`_
+-  Add dask.array.diagonal (:pr:`4431`) `Danilo Horta`_
+-  Call asanyarray in unify_chunks (:pr:`4506`) `Jim Crist`_
+-  Modify moment chunk functions to return dicts (:pr:`4519`) `Peter Andreas Entschev`_
+
+
+Bag
++++
+
+-  Don't inline output keys in dask.bag (:pr:`4464`) `Jim Crist`_
+-  Ensure that bag.from_sequence always includes at least one partition (:pr:`4475`) `Anderson Banihirwe`_
+-  Implement out_type for bag.fold (:pr:`4502`) `Matthew Rocklin`_
+-  Remove map from bag keynames (:pr:`4500`) `Matthew Rocklin`_
+-  Avoid itertools.repeat in map_partitions (:pr:`4507`) `Matthew Rocklin`_
+
+
+DataFrame
++++++++++
+
+-  Fix relative path parsing on windows when using fastparquet (:pr:`4445`) `Janne Vuorela`_
+-  Fix bug in pyarrow and hdfs (:pr:`4453`) (:pr:`4455`) `Michał Jastrzębski`_
+-  df getitem with integer slices is not implemented (:pr:`4466`) `Jim Crist`_
+-  Replace cudf-specific code with dask-cudf import (:pr:`4470`) `Matthew Rocklin`_
+-  Avoid groupby.agg(callable) in groupby-var (:pr:`4482`) `Matthew Rocklin`_
+-  Consider uint types as numerical in check_meta (:pr:`4485`) `Marco Neumann`_
+-  Fix some typos in groupby comments (:pr:`4494`) `Daniel Saxton`_
+-  Add error message around set_index(inplace=True) (:pr:`4501`) `Matthew Rocklin`_
+-  meta_nonempty works with categorical index (:pr:`4505`) `Jim Crist`_
+-  Add module name to expected meta error message (:pr:`4499`) `Matthew Rocklin`_
+-  groupby-nunique works on empty chunk (:pr:`4504`) `Jim Crist`_
+-  Propogate index metadata if not specified (:pr:`4509`) `Jim Crist`_
+
+Documentation
++++++++++++++
+
+-  Update docs to use ``from_zarr`` (:pr:`4472`) `John A Kirkham`_
+-  DOC: add section of `Using Other S3-Compatible Services` for remote-data-services (:pr:`4405`) `Aploium`_
+-  Fix header level of section in changelog (:pr:`4483`) `Bruce Merry`_
+-  Add quotes to pip install [skip-ci] (:pr:`4508`) `James Bourbeau`_
+
+Core
+++++
+
+-  Extend started_cbs AFTER state is initialized (:pr:`4460`) `Marco Neumann`_
+-  Fix bug in HTTPFile._fetch_range with headers (:pr:`4479`) (:pr:`4480`) `Ross Petchler`_
+-  Repeat optimize_blockwise for diamond fusion (:pr:`4492`) `Matthew Rocklin`_
+
+
+1.1.1 / 2019-01-31
+------------------
+
+Array
++++++
+
+-  Add support for cupy.einsum (:pr:`4402`) `Johnnie Gray`_
+-  Provide byte size in chunks keyword (:pr:`4434`) `Adam Beberg`_
+-  Raise more informative error for histogram bins and range (:pr:`4430`) `James Bourbeau`_
+
+DataFrame
++++++++++
+
+-  Lazily register more cudf functions and move to backends file (:pr:`4396`) `Matthew Rocklin`_
+-  Fix ORC tests for pyarrow 0.12.0 (:pr:`4413`) `Jim Crist`_
+-  rearrange_by_column: ensure that shuffle arg defaults to 'disk' if it's None in dask.config (:pr:`4414`) `George Sakkis`_
+-  Implement filters for _read_pyarrow (:pr:`4415`) `George Sakkis`_
+-  Avoid checking against types in is_dataframe_like (:pr:`4418`) `Matthew Rocklin`_
+-  Pass username as 'user' when using pyarrow (:pr:`4438`) `Roma Sokolov`_
+
+Delayed
++++++++
+
+-  Fix DelayedAttr return value (:pr:`4440`) `Matthew Rocklin`_
+
+Documentation
++++++++++++++
+
+-  Use SVG for pipeline graphic (:pr:`4406`) `John A Kirkham`_
+-  Add doctest-modules to py.test documentation (:pr:`4427`) `Daniel Severo`_
+
+Core
+++++
+
+-  Work around psutil 5.5.0 not allowing pickling Process objects `Janne Vuorela`_
+
+
+1.1.0 / 2019-01-18
+------------------
+
+Array
++++++
+
+-  Fix the average function when there is a masked array (:pr:`4236`) `Damien Garaud`_
+-  Add allow_unknown_chunksizes to hstack and vstack (:pr:`4287`) `Paul Vecchio`_
+-  Fix tensordot for 27+ dimensions (:pr:`4304`) `Johnnie Gray`_
+-  Fixed block_info with axes. (:pr:`4301`) `Tom Augspurger`_
+-  Use safe_wraps for matmul (:pr:`4346`) `Mark Harfouche`_
+-  Use chunks="auto" in array creation routines (:pr:`4354`) `Matthew Rocklin`_
+-  Fix np.matmul in dask.array.Array.__array_ufunc__ (:pr:`4363`) `Stephan Hoyer`_
+-  COMPAT: Re-enable multifield copy->view change (:pr:`4357`) `Diane Trout`_
+-  Calling np.dtype on a delayed object works (:pr:`4387`) `Jim Crist`_
+-  Rework normalize_array for numpy data (:pr:`4312`) `Marco Neumann`_
+
+DataFrame
++++++++++
+
+-  Add fill_value support for series comparisons (:pr:`4250`) `James Bourbeau`_
+-  Add schema name in read_sql_table for empty tables (:pr:`4268`) `Mina Farid`_
+-  Adjust check for bad chunks in map_blocks (:pr:`4308`) `Tom Augspurger`_
+-  Add dask.dataframe.read_fwf (:pr:`4316`) `@slnguyen`_
+-  Use atop fusion in dask dataframe (:pr:`4229`) `Matthew Rocklin`_
+-  Use parallel_types() in from_pandas (:pr:`4331`) `Matthew Rocklin`_
+-  Change DataFrame._repr_data to method (:pr:`4330`) `Matthew Rocklin`_
+-  Install pyarrow fastparquet for Appveyor (:pr:`4338`) `Gábor Lipták`_
+-  Remove explicit pandas checks and provide cudf lazy registration (:pr:`4359`) `Matthew Rocklin`_
+-  Replace isinstance(..., pandas) with is_dataframe_like (:pr:`4375`) `Matthew Rocklin`_
+-  ENH: Support 3rd-party ExtensionArrays (:pr:`4379`) `Tom Augspurger`_
+-  Pandas 0.24.0 compat (:pr:`4374`) `Tom Augspurger`_
+
+Documentation
++++++++++++++
+
+-  Fix link to 'map_blocks' function in array api docs (:pr:`4258`) `David Hoese`_
+-  Add a paragraph on Dask-Yarn in the cloud docs (:pr:`4260`) `Jim Crist`_
+-  Copy edit documentation (:pr:`4267`), (:pr:`4263`), (:pr:`4262`), (:pr:`4277`), (:pr:`4271`), (:pr:`4279`), (:pr:`4265`), (:pr:`4295`), (:pr:`4293`), (:pr:`4296`), (:pr:`4302`), (:pr:`4306`), (:pr:`4318`), (:pr:`4314`), (:pr:`4309`), (:pr:`4317`), (:pr:`4326`), (:pr:`4325`), (:pr:`4322`), (:pr:`4332`), (:pr:`4333`), `Miguel Farrajota`_
+-  Fix typo in code example (:pr:`4272`) `Daniel Li`_
+-  Doc: Update array-api.rst (:pr:`4259`) (:pr:`4282`) `Prabakaran Kumaresshan`_
+-  Update hpc doc (:pr:`4266`) `Guillaume Eynard-Bontemps`_
+-  Doc: Replace from_avro with read_avro in documents (:pr:`4313`) `Prabakaran Kumaresshan`_
+-  Remove reference to "get" scheduler functions in docs (:pr:`4350`) `Matthew Rocklin`_
+-  Fix typo in docstring (:pr:`4376`) `Daniel Saxton`_
+-  Added documentation for dask.dataframe.merge (:pr:`4382`) `Jendrik Jördening`_
+
+Core
+++++
+
+-  Avoid recursion in dask.core.get (:pr:`4219`) `Matthew Rocklin`_
+-  Remove verbose flag from pytest setup.cfg (:pr:`4281`) `Matthew Rocklin`_
+-  Support Pytest 4.0 by specifying marks explicitly (:pr:`4280`) `Takahiro Kojima`_
+-  Add High Level Graphs (:pr:`4092`) `Matthew Rocklin`_
+-  Fix SerializableLock locked and acquire methods (:pr:`4294`) `Stephan Hoyer`_
+-  Pin boto3 to earlier version in tests to avoid moto conflict (:pr:`4276`) `Martin Durant`_
+-  Treat None as missing in config when updating (:pr:`4324`) `Matthew Rocklin`_
+-  Update Appveyor to Python 3.6 (:pr:`4337`) `Gábor Lipták`_
+-  Use parse_bytes more liberally in dask.dataframe/bytes/bag (:pr:`4339`) `Matthew Rocklin`_
+-  Add a better error message when cloudpickle is missing (:pr:`4342`) `Mark Harfouche`_
+-  Support pool= keyword argument in threaded/multiprocessing get functions (:pr:`4351`) `Matthew Rocklin`_
+-  Allow updates from arbitrary Mappings in config.update, not only dicts. (:pr:`4356`) `Stuart Berg`_
+-  Move dask/array/top.py code to dask/blockwise.py (:pr:`4348`) `Matthew Rocklin`_
+-  Add has_parallel_type (:pr:`4395`) `Matthew Rocklin`_
+-  CI: Update Appveyor (:pr:`4381`) `Tom Augspurger`_
+-  Ignore non-readable config files (:pr:`4388`) `Jim Crist`_
+
+
 1.0.0 / 2018-11-28
 ------------------
 
@@ -187,7 +403,7 @@ Array
 -   Make da.RandomState extensible to other modules (:pr:`4041`) `Matthew Rocklin`_
 -   Support unknown dims in ravel no-op case (:pr:`4055`) `Jim Crist`_
 -   Add basic infrastructure for cupy (:pr:`4019`) `Matthew Rocklin`_
--   Avoid asarray and lock arguments for from_array(getitem`) (:pr:`4044`) `Matthew Rocklin`_
+-   Avoid asarray and lock arguments for from_array(getitem) (:pr:`4044`) `Matthew Rocklin`_
 -   Move local imports in `corrcoef` to global imports (:pr:`4030`) `John A Kirkham`_
 -   Move local `indices` import to global import (:pr:`4029`) `John A Kirkham`_
 -   Fix-up Dask Array's fromfunction w.r.t. dtype and kwargs (:pr:`4028`) `John A Kirkham`_
@@ -446,7 +662,7 @@ Core
 Array
 +++++
 
-- Add to/read_zarr for Zarr-format datasets and arrays (:pr:`3460`) `Martin Durant`_
+- Add to/from_zarr for Zarr-format datasets and arrays (:pr:`3460`) `Martin Durant`_
 - Experimental addition of generalized ufunc support, ``apply_gufunc``, ``gufunc``, and
   ``as_gufunc`` (:pr:`3109`) (:pr:`3526`) (:pr:`3539`) `Markus Gonser`_
 - Avoid unnecessary rechunking tasks (:pr:`3529`) `Matthew Rocklin`_
@@ -1651,3 +1867,32 @@ Other
 .. _`Jonathan Fraine`: https://github.com/exowanderer
 .. _`Carlos Valiente`: https://github.com/carletes
 .. _`@milesial`: https://github.com/milesial
+.. _`Paul Vecchio`: https://github.com/vecchp
+.. _`Johnnie Gray`: https://github.com/jcmgray
+.. _`Diane Trout`: https://github.com/detrout
+.. _`Marco Neumann`: https://github.com/crepererum
+.. _`Mina Farid`: https://github.com/minafarid
+.. _`@slnguyen`: https://github.com/slnguyen
+.. _`Gábor Lipták`: https://github.com/gliptak
+.. _`David Hoese`: https://github.com/djhoese
+.. _`Daniel Li`: https://github.com/li-dan
+.. _`Prabakaran Kumaresshan`: https://github.com/nixphix
+.. _`Daniel Saxton`: https://github.com/dsaxton
+.. _`Jendrik Jördening`: https://github.com/jendrikjoe
+.. _`Takahiro Kojima`: https://github.com/515hikaru
+.. _`Stuart Berg`: https://github.com/stuarteberg
+.. _`Guillaume Eynard-Bontemps`: https://github.com/guillaumeeb
+.. _`Adam Beberg`: https://github.com/beberg
+.. _`Johnnie Gray`: https://github.com/jcmgray
+.. _`Roma Sokolov`: https://github.com/little-arhat
+.. _`Daniel Severo`: https://github.com/daniel-severo
+.. _`Michał Jastrzębski`: https://github.com/inc0
+.. _`Janne Vuorela`: https://github.com/Dimplexion
+.. _`Ross Petchler`: https://github.com/rpetchler
+.. _`Aploium`: https://github.com/aploium
+.. _`Peter Andreas Entschev`: https://github.com/pentschev
+.. _`@JulianWgs`: https://github.com/JulianWgs
+.. _`Shyam Saladi`: https://github.com/smsaladi
+.. _`Joe Corbett`: https://github.com/jcorb
+.. _`@HSR05`: https://github.com/HSR05
+.. _`Ben Zaitlen`: https://github.com/quasiben

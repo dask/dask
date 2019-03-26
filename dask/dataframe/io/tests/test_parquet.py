@@ -169,6 +169,11 @@ def test_read_glob(tmp_path, write_engine, read_engine):
 
 @write_read_engines()
 def test_read_list(tmpdir, write_engine, read_engine):
+    if write_engine == read_engine == 'fastparquet' and os.name == 'nt':
+        # fastparquet or dask is not normalizing filepaths correctly on
+        # windows.
+        pytest.skip("filepath bug.")
+
     tmpdir = str(tmpdir)
     ddf.to_parquet(tmpdir, engine=write_engine)
     files = sorted([os.path.join(tmpdir, f)
@@ -499,7 +504,7 @@ def test_append_with_partition(tmpdir):
                   ignore_divisions=True)
 
     out = dd.read_parquet(tmp).compute()
-    out['lon'] = out.lon.astype('int64')  # just to pass assert
+    out['lon'] = out.lon.astype('int')  # just to pass assert
     # sort required since partitioning breaks index order
     assert_eq(out.sort_values('value'), pd.concat([df0, df1])[out.columns],
               check_index=False)
@@ -807,24 +812,26 @@ def old_test_filters(tmpdir):
     ddf = dd.from_pandas(df, npartitions=1)
 
     # Ok with 1 partition and filters
-    ddf.repartition(npartitions=1, force=True).to_parquet(fn, write_index=False)
-    ddf2 = dd.read_parquet(fn, index=False,
+    ddf.repartition(npartitions=1, force=True).to_parquet(fn, write_index=False,
+                                                          engine=write_engine)
+    ddf2 = dd.read_parquet(fn, index=False, engine=read_engine,
                            filters=[('at', '==', 'aa')]).compute()
     assert_eq(ddf2, ddf)
 
     # with >1 partition and no filters
-    ddf.repartition(npartitions=2, force=True).to_parquet(fn)
-    dd.read_parquet(fn).compute()
+    ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
+    dd.read_parquet(fn, engine=read_engine).compute()
     assert_eq(ddf2, ddf)
 
     # with >1 partition and filters using base fastparquet
-    ddf.repartition(npartitions=2, force=True).to_parquet(fn)
-    df2 = fastparquet.ParquetFile(fn).to_pandas(filters=[('at', '==', 'aa')])
-    assert len(df2) > 0
+    if read_engine == 'fastparquet':
+        ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
+        df2 = fastparquet.ParquetFile(fn).to_pandas(filters=[('at', '==', 'aa')])
+        assert len(df2) > 0
 
     # with >1 partition and filters
-    ddf.repartition(npartitions=2, force=True).to_parquet(fn)
-    dd.read_parquet(fn, filters=[('at', '==', 'aa')]).compute()
+    ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
+    dd.read_parquet(fn, engine=read_engine, filters=[('at', '==', 'aa')]).compute()
     assert len(ddf2) > 0
 
 
@@ -1121,18 +1128,6 @@ def test_parse_pandas_metadata_null_index():
     assert column_index_names == e_column_index_names
 
 
-def test_pyarrow_raises_filters_categoricals(tmpdir):
-    check_pyarrow()
-    tmp = str(tmpdir)
-    data = pd.DataFrame({"A": [1, 2]})
-    df = dd.from_pandas(data, npartitions=2)
-
-    df.to_parquet(tmp, write_index=False, engine="pyarrow")
-
-    with pytest.raises(NotImplementedError):
-        dd.read_parquet(tmp, engine="pyarrow", filters=["A>1"])
-
-
 def test_read_no_metadata(tmpdir, engine):
     # use pyarrow.parquet to create a parquet file without
     # pandas metadata
@@ -1225,6 +1220,7 @@ def test_writing_parquet_with_kwargs(tmpdir, engine):
     fn = str(tmpdir)
     path1 = os.path.join(fn, 'normal')
     path2 = os.path.join(fn, 'partitioned')
+    pytest.importorskip("snappy")
 
     df = pd.DataFrame({'a': np.random.choice(['A', 'B', 'C'], size=100),
                        'b': np.random.random(size=100),
@@ -1265,6 +1261,7 @@ def test_writing_parquet_with_unknown_kwargs(tmpdir, engine):
 
 
 def test_select_partitioned_column(tmpdir, engine):
+    pytest.importorskip("snappy")
     if engine == 'pyarrow':
         import pyarrow as pa
         if pa.__version__ < LooseVersion('0.9.0'):

@@ -17,7 +17,7 @@ schedulers will advance as well.
 Example
 -------
 
-.. figure:: images/pipeline.png
+.. figure:: images/pipeline.svg
    :alt: "Dask graph for data pipeline"
    :align: right
 

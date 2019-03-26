@@ -259,8 +259,9 @@ def test_rearrange(shuffle, scheduler):
     a = result.compute(scheduler=scheduler)
     get = dask.base.get_scheduler(scheduler=scheduler)
     parts = get(result.dask, result.__dask_keys__())
+
     for i in a.y.drop_duplicates():
-        assert sum(i in part.y for part in parts) == 1
+        assert sum(i in set(part.y) for part in parts) == 1
 
 
 def test_rearrange_by_column_with_narrow_divisions():
@@ -781,3 +782,17 @@ def test_set_index_does_not_repeat_work_due_to_optimizations(npartitions):
     ddf.set_index('x', npartitions=npartitions)
     ntimes = next(count)
     assert ntimes == nparts
+
+
+def test_set_index_errors_with_inplace_kwarg():
+    df = pd.DataFrame({
+        'a': [9, 8, 7],
+        'b': [6, 5, 4],
+        'c': [3, 2, 1]
+    })
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    ddf.set_index('a')
+
+    with pytest.raises(NotImplementedError):
+        ddf.set_index('a', inplace=True)

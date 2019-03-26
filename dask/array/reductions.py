@@ -11,8 +11,9 @@ from numbers import Integral
 from toolz import compose, partition_all, get, accumulate, pluck
 
 from . import chunk
-from .core import _concatenate2, Array, atop, handle_out
-from .top import lol_tuples
+from .core import _concatenate2, Array, handle_out
+from .blockwise import blockwise
+from ..blockwise import lol_tuples
 from .creation import arange
 from .ufunc import sqrt
 from .utils import validate_axis
@@ -21,7 +22,7 @@ from .numpy_compat import ma_divide, divide as np_divide
 from ..compatibility import getargspec, builtins
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, funcname, Dispatch
+from ..utils import ignoring, funcname, Dispatch, deepmap
 from .. import config
 
 # Generic functions to support chunks of different types
@@ -141,7 +142,7 @@ def reduction(x, chunk, aggregate, axis=None, keepdims=False, dtype=None,
     # Map chunk across all blocks
     inds = tuple(range(x.ndim))
     # The dtype of `tmp` doesn't actually matter, and may be incorrect.
-    tmp = atop(chunk, inds, x, inds, axis=axis, keepdims=True, dtype=x.dtype)
+    tmp = blockwise(chunk, inds, x, inds, axis=axis, keepdims=True, dtype=x.dtype)
     tmp._chunks = tuple((output_size, ) * len(c) if i in axis else c
                         for i, c in enumerate(tmp.chunks))
     result = _tree_reduce(tmp, aggregate, axis, keepdims, dtype, split_every,
@@ -330,26 +331,26 @@ def nannumel(x, **kwargs):
 def mean_chunk(x, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     n = numel(x, dtype=dtype, **kwargs)
     total = sum(x, dtype=dtype, **kwargs)
-    empty = empty_lookup.dispatch(type(n))
-    result = empty(n.shape, dtype=[('total', total.dtype), ('n', n.dtype)])
-    result['n'] = n
-    result['total'] = total
-    return result
+    return {'n': n, 'total': total}
 
 
-def mean_combine(pair, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
-    n = sum(pair['n'], **kwargs)
-    total = sum(pair['total'], **kwargs)
-    empty = empty_lookup.dispatch(type(n))
-    result = empty(n.shape, dtype=pair.dtype)
-    result['n'] = n
-    result['total'] = total
-    return result
+def mean_combine(pairs, sum=chunk.sum, numel=numel, dtype='f8', axis=None, **kwargs):
+    if not isinstance(pairs, list):
+        pairs = [pairs]
+    ns = deepmap(lambda pair: pair['n'], pairs)
+    totals = deepmap(lambda pair: pair['total'], pairs)
+    n = _concatenate2(ns, axes=axis).sum(axis=axis, **kwargs)
+    total = _concatenate2(totals, axes=axis).sum(axis=axis, **kwargs)
+    return {'n': n, 'total': total}
 
 
-def mean_agg(pair, dtype='f8', **kwargs):
-    return divide(pair['total'].sum(dtype=dtype, **kwargs),
-                  pair['n'].sum(dtype=dtype, **kwargs), dtype=dtype)
+def mean_agg(pairs, dtype='f8', axis=None, **kwargs):
+    ns = deepmap(lambda pair: pair['n'], pairs)
+    totals = deepmap(lambda pair: pair['total'], pairs)
+    n = _concatenate2(ns, axes=axis).sum(axis=axis, dtype=dtype, **kwargs)
+    total = _concatenate2(totals, axes=axis).sum(axis=axis, dtype=dtype, **kwargs)
+
+    return divide(total, n, dtype=dtype)
 
 
 @wraps(chunk.mean)
@@ -360,7 +361,7 @@ def mean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
         dt = getattr(np.mean(np.empty(shape=(1,), dtype=a.dtype)), 'dtype', object)
     return reduction(a, mean_chunk, mean_agg, axis=axis, keepdims=keepdims,
                      dtype=dt, split_every=split_every, combine=mean_combine,
-                     out=out)
+                     out=out, concatenate=False)
 
 
 def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None,
@@ -372,6 +373,7 @@ def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None,
     return reduction(a, partial(mean_chunk, sum=chunk.nansum, numel=nannumel),
                      mean_agg, axis=axis, keepdims=keepdims, dtype=dt,
                      split_every=split_every, out=out,
+                     concatenate=False,
                      combine=partial(mean_combine, sum=chunk.nansum, numel=nannumel))
 
 
@@ -383,57 +385,45 @@ def moment_chunk(A, order=2, sum=chunk.sum, numel=numel, dtype='f8', **kwargs):
     total = sum(A, dtype=dtype, **kwargs)
     n = numel(A, **kwargs).astype(np.int64)
     u = total / n
-    empty = empty_lookup.dispatch(type(n))
-    M = empty(n.shape + (order - 1,), dtype=dtype)
-    for i in range(2, order + 1):
-        M[..., i - 2] = sum((A - u)**i, dtype=dtype, **kwargs)
-    result = empty(n.shape, dtype=[('total', total.dtype),
-                                   ('n', n.dtype),
-                                   ('M', M.dtype, (order - 1,))])
-    result['total'] = total
-    result['n'] = n
-    result['M'] = M
-    return result
+    xs = [sum((A - u)**i, dtype=dtype, **kwargs) for i in range(2, order + 1)]
+    M = np.stack(xs, axis=-1)
+    return {'total': total, 'n': n, 'M': M}
 
 
-def _moment_helper(Ms, ns, inner_term, order, sum, kwargs):
-    M = Ms[..., order - 2].sum(**kwargs) + sum(ns * inner_term ** order, **kwargs)
+def _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs):
+    M = Ms[..., order - 2].sum(axis=axis, **kwargs) + sum(ns * inner_term ** order, axis=axis, **kwargs)
     for k in range(1, order - 1):
         coeff = factorial(order) / (factorial(k) * factorial(order - k))
-        M += coeff * sum(Ms[..., order - k - 2] * inner_term**k, **kwargs)
+        M += coeff * sum(Ms[..., order - k - 2] * inner_term**k, axis=axis, **kwargs)
     return M
 
 
-def moment_combine(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
+def moment_combine(pairs, order=2, ddof=0, dtype='f8', sum=np.sum, axis=None, **kwargs):
+    if not isinstance(pairs, list):
+        pairs = [pairs]
+    totals = _concatenate2(deepmap(lambda pair: pair['total'], pairs), axes=axis)
+    ns = _concatenate2(deepmap(lambda pair: pair['n'], pairs), axes=axis)
+    Ms = _concatenate2(deepmap(lambda pair: pair['M'], pairs), axes=axis)
+
     kwargs['dtype'] = dtype
     kwargs['keepdims'] = True
 
-    totals = data['total']
-    ns = data['n']
-    Ms = data['M']
-    total = totals.sum(**kwargs)
-    n = sum(ns, **kwargs)
+    total = totals.sum(axis=axis, **kwargs)
+    n = ns.sum(axis=axis, **kwargs)
     mu = divide(total, n, dtype=dtype)
     inner_term = divide(totals, ns, dtype=dtype) - mu
-    empty = empty_lookup.dispatch(type(n))
-    M = empty(n.shape + (order - 1,), dtype=dtype)
 
-    for o in range(2, order + 1):
-        M[..., o - 2] = _moment_helper(Ms, ns, inner_term, o, sum, kwargs)
-
-    result = empty(n.shape, dtype=[('total', total.dtype),
-                                   ('n', n.dtype),
-                                   ('M', Ms.dtype, (order - 1,))])
-    result['total'] = total
-    result['n'] = n
-    result['M'] = M
-    return result
+    xs = [_moment_helper(Ms, ns, inner_term, o, sum, axis, kwargs) for o in range(2, order + 1)]
+    M = np.stack(xs, axis=-1)
+    return {'total': total, 'n': n, 'M': M}
 
 
-def moment_agg(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
-    totals = data['total']
-    ns = data['n']
-    Ms = data['M']
+def moment_agg(pairs, order=2, ddof=0, dtype='f8', sum=np.sum, axis=None, **kwargs):
+    if not isinstance(pairs, list):
+        pairs = [pairs]
+    totals = _concatenate2(deepmap(lambda pair: pair['total'], pairs), axes=axis)
+    ns = _concatenate2(deepmap(lambda pair: pair['n'], pairs), axes=axis)
+    Ms = _concatenate2(deepmap(lambda pair: pair['M'], pairs), axes=axis)
 
     kwargs['dtype'] = dtype
     # To properly handle ndarrays, the original dimensions need to be kept for
@@ -441,12 +431,12 @@ def moment_agg(data, order=2, ddof=0, dtype='f8', sum=np.sum, **kwargs):
     keepdim_kw = kwargs.copy()
     keepdim_kw['keepdims'] = True
 
-    n = sum(ns, **keepdim_kw)
-    mu = divide(totals.sum(**keepdim_kw), n, dtype=dtype)
+    n = ns.sum(axis=axis, **keepdim_kw)
+    mu = divide(totals.sum(axis=axis, **keepdim_kw), n, dtype=dtype)
     inner_term = divide(totals, ns, dtype=dtype) - mu
 
-    M = _moment_helper(Ms, ns, inner_term, order, sum, kwargs)
-    return divide(M, sum(n, **kwargs) - ddof, dtype=dtype)
+    M = _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs)
+    return divide(M, n.sum(axis=axis, **kwargs) - ddof, dtype=dtype)
 
 
 def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
@@ -470,6 +460,7 @@ def moment(a, order, axis=None, dtype=None, keepdims=False, ddof=0,
                      partial(moment_agg, order=order, ddof=ddof),
                      axis=axis, keepdims=keepdims,
                      dtype=dt, split_every=split_every, out=out,
+                     concatenate=False,
                      combine=partial(moment_combine, order=order))
 
 
@@ -482,7 +473,8 @@ def var(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None,
         dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), 'dtype', object)
     return reduction(a, moment_chunk, partial(moment_agg, ddof=ddof), axis=axis,
                      keepdims=keepdims, dtype=dt, split_every=split_every,
-                     combine=moment_combine, name='var', out=out)
+                     combine=moment_combine, name='var', out=out,
+                     concatenate=False)
 
 
 def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None,
@@ -494,7 +486,8 @@ def nanvar(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None,
     return reduction(a, partial(moment_chunk, sum=chunk.nansum, numel=nannumel),
                      partial(moment_agg, sum=np.nansum, ddof=ddof), axis=axis,
                      keepdims=keepdims, dtype=dt, split_every=split_every,
-                     combine=partial(moment_combine, sum=np.nansum), out=out)
+                     combine=partial(moment_combine, sum=np.nansum), out=out,
+                     concatenate=False)
 
 
 with ignoring(AttributeError):

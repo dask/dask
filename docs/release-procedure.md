@@ -4,6 +4,10 @@ co-released.  We may want to check their status while releasing
 
 Release per project:
 
+*   Raise an issue in the https://github.com/dask/dask issue tracker signalling
+    your intent to release and the motivation.  Let that issue collect comments
+    for a day to ensure that other maintainers are comfortable with releasing.
+
 *   Update release notes in docs/source/changelog.rst
 
 *   Commit
@@ -26,8 +30,8 @@ Release per project:
 
 *   Update `dask-core` feedstock on [conda-forge](https://conda-forge.github.io)
 
-    Typically this is handled by a bot, but in some cases you have to modify
-    version numbers.
+    Typically this is handled by a conda-forge bot within an hour or two,
+    but in some cases you have to modify version or build numbers.
 
     If for some reason you have to do this manually, then follow these steps:
 

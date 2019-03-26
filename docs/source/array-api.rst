@@ -58,6 +58,7 @@ Top level user functions:
    deg2rad
    degrees
    diag
+   diagonal
    diff
    digitize
    dot
@@ -277,6 +278,7 @@ Random
    random.pareto
    random.poisson
    random.power
+   random.randint
    random.random
    random.random_sample
    random.rayleigh
@@ -355,9 +357,8 @@ Internal functions
 .. currentmodule:: dask.array.core
 
 .. autosummary::
-   atop
+   blockwise
    normalize_chunks
-   top
 
 
 Other functions
@@ -424,6 +425,7 @@ Other functions
 .. autofunction:: deg2rad
 .. autofunction:: degrees
 .. autofunction:: diag
+.. autofunction:: diagonal
 .. autofunction:: diff
 .. autofunction:: digitize
 .. autofunction:: dot
@@ -649,6 +651,7 @@ Other functions
 .. autofunction:: pareto
 .. autofunction:: poisson
 .. autofunction:: power
+.. autofunction:: randint
 .. autofunction:: random
 .. autofunction:: random_sample
 .. autofunction:: rayleigh
@@ -692,9 +695,8 @@ Other functions
 .. currentmodule:: dask.array.core
 
 .. autofunction:: map_blocks
-.. autofunction:: atop
+.. autofunction:: blockwise
 .. autofunction:: normalize_chunks
-.. autofunction:: top
 
 .. currentmodule:: dask.array
 

@@ -163,6 +163,16 @@ def test_skip_doctest():
 
     assert skip_doctest(None) == ''
 
+    example = """
+>>> 1 + 2  # doctest: +ELLIPSES
+3"""
+
+    expected = """
+>>> 1 + 2  # doctest: +ELLIPSES, +SKIP
+3"""
+    res = skip_doctest(example)
+    assert res == expected
+
 
 def test_extra_titles():
     example = """

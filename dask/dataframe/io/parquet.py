@@ -338,8 +338,9 @@ def _read_fp_multifile(fs, fs_token, paths, columns=None,
                        categories=None, index=None):
     """Read dataset with fastparquet by assuming metadata from first file"""
     from fastparquet import ParquetFile
-    from fastparquet.util import analyse_paths, get_file_scheme
+    from fastparquet.util import analyse_paths, get_file_scheme, join_path
     base, fns = analyse_paths(paths)
+    parsed_paths = [join_path(p) for p in paths]
     scheme = get_file_scheme(fns)
     pf = ParquetFile(paths[0], open_with=fs.open)
     pf.file_scheme = scheme
@@ -353,7 +354,7 @@ def _read_fp_multifile(fs, fs_token, paths, columns=None,
                        index_names, all_columns,
                        categories, pf.cats,
                        pf.file_scheme, storage_name_mapping)
-           for i, path in enumerate(paths)}
+           for i, path in enumerate(parsed_paths)}
     divisions = (None, ) * (len(paths) + 1)
     return new_dd_object(dsk, name, meta, divisions)
 
@@ -641,6 +642,7 @@ def _read_pyarrow(fs, fs_token, paths,
     # as soon as possible.
 
     dataset = pq.ParquetDataset(paths, filesystem=get_pyarrow_filesystem(fs))
+
     if dataset.partitions is not None:
         partitions = [n for n in dataset.partitions.partition_names
                       if n is not None]
@@ -935,6 +937,7 @@ def read_parquet(path, columns=None, filters=None, categories=None, index=None,
         df = read_parquet(path, [columns], filters, categories, index,
                           storage_options, engine, gather_statistics)
         return df[columns]
+
     if columns is not None:
         columns = list(columns)
 

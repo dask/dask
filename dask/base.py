@@ -14,7 +14,7 @@ from toolz import merge, groupby, curry, identity
 from toolz.functoolz import Compose
 
 from .compatibility import (apply, long, unicode, Iterator, is_dataclass,
-                            dataclass_fields, Mapping)
+                            dataclass_fields, Mapping, cPickle)
 from .context import thread_state
 from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex
@@ -200,7 +200,7 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
 
 def _extract_graph_and_keys(vals):
     """Given a list of dask vals, return a single graph and a list of keys such
-    that ``get(dsk, keys)`` is equivalent to ``[v.compute() v in vals]``."""
+    that ``get(dsk, keys)`` is equivalent to ``[v.compute() for v in vals]``."""
     from .highlevelgraph import HighLevelGraph
 
     graphs = [v.__dask_graph__() for v in vals]
@@ -263,9 +263,9 @@ def unpack_collections(*args, **kwargs):
             typ = list if isinstance(expr, Iterator) else type(expr)
             if typ in (list, tuple, set):
                 tsk = (typ, [_unpack(i) for i in expr])
-            elif typ is dict:
-                tsk = (dict, [[_unpack(k), _unpack(v)]
-                              for k, v in expr.items()])
+            elif typ in (dict, OrderedDict):
+                tsk = (typ, [[_unpack(k), _unpack(v)]
+                             for k, v in expr.items()])
             elif is_dataclass(expr):
                 tsk = (apply, typ, (), (dict,
                        [[f.name, _unpack(getattr(expr, f.name))] for f in
@@ -450,10 +450,17 @@ def visualize(*args, **kwargs):
     filename = kwargs.pop('filename', 'mydask')
     optimize_graph = kwargs.pop('optimize_graph', False)
 
-    dsks = [arg for arg in args if isinstance(arg, Mapping)]
-    args = [arg for arg in args if is_dask_collection(arg)]
+    args2 = []
+    for arg in args:
+        if isinstance(arg, (list, tuple, set)):
+            args2.extend(arg)
+        else:
+            args2.append(arg)
 
-    dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
+    dsks = [arg for arg in args2 if isinstance(arg, Mapping)]
+    args3 = [arg for arg in args2 if is_dask_collection(arg)]
+
+    dsk = dict(collections_to_dsk(args3, optimize_graph=optimize_graph))
     for d in dsks:
         dsk.update(d)
 
@@ -729,10 +736,19 @@ def register_numpy():
                     x.shape, x.strides, offset)
         if x.dtype.hasobject:
             try:
-                data = hash_buffer_hex('-'.join(x.flat).encode('utf-8'))
-            except TypeError:
-                data = hash_buffer_hex(b'-'.join([unicode(item).encode('utf-8') for item in
-                                                  x.flat]))
+                try:
+                    # string fast-path
+                    data = hash_buffer_hex('-'.join(x.flat).encode(encoding='utf-8', errors='surrogatepass'))
+                except UnicodeDecodeError:
+                    # bytes fast-path
+                    data = hash_buffer_hex(b'-'.join(x.flat))
+            except (TypeError, UnicodeDecodeError):
+                # object data w/o fast-path, use fast cPickle
+                try:
+                    data = hash_buffer_hex(cPickle.dumps(x, cPickle.HIGHEST_PROTOCOL))
+                except Exception:
+                    # pickling not supported, use UUID4-based fallback
+                    data = uuid.uuid4().hex
         else:
             try:
                 data = hash_buffer_hex(x.ravel(order='K').view('i1'))
@@ -863,6 +879,8 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         elif scheduler.lower() in ('dask.distributed', 'distributed'):
             from distributed.worker import get_client
             return get_client().get
+        elif scheduler.lower() in ['processes', 'multiprocessing']:
+            raise ValueError("Please install cloudpickle to use the '%s' scheduler." % scheduler)
         else:
             raise ValueError("Expected one of [distributed, %s]" % ', '.join(sorted(named_schedulers)))
         # else:  # try to connect to remote scheduler with this name
