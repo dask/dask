@@ -2771,6 +2771,11 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     for i, ind in enumerate(inds):
         ind[axis] = -(i + 1)
 
+    metas = [getattr(s, '_meta', s) for s in seq]
+    metas = [m[tuple(slice(0, 0, None) for _ in range(m.ndim)) if
+             hasattr(m, 'ndim') else slice(0, 0, None)] for m in metas]
+    meta = np.concatenate(metas)
+
     uc_args = list(concat(zip(seq, inds)))
     _, seq = unify_chunks(*uc_args, warn=False)
 
@@ -2800,7 +2805,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     dsk = dict(zip(keys, values))
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=seq)
 
-    return Array(graph, name, chunks, dtype=dt)
+    return Array(graph, name, chunks, meta=meta.astype(dt))
 
 
 def load_store_chunk(x, out, index, lock, return_stored, load_stored):
