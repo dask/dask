@@ -63,6 +63,8 @@ conda install -q -c conda-forge \
     sqlalchemy \
     toolz
 
+pip install --upgrade codecov
+
 pip install --upgrade --no-deps locket git+https://github.com/dask/partd
 pip install --upgrade --no-deps git+https://github.com/dask/zict
 pip install --upgrade --no-deps git+https://github.com/dask/distributed

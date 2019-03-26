@@ -91,6 +91,7 @@ script:
   - if [[ $TEST_IMPORTS == 'true' ]]; then source continuous_integration/travis/test_imports.sh; fi
 
 after_success:
+  - codecov
   - source continuous_integration/travis/after_success.sh
 
 notifications:
