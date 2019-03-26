@@ -335,14 +335,12 @@ def numel(x, **kwargs):
 
     if not isinstance(axis, tuple or list):
         axis = [axis]
-    else:
-        axis = sorted(axis)
 
     prod = np.prod([shape[dim] for dim in axis])
     if keepdims is True:
-        new_shape = [shape[dim] if dim not in axis else 1 for dim in range(len(shape))]
+        new_shape = tuple(shape[dim] if dim not in axis else 1 for dim in range(len(shape)))
     else:
-        new_shape = [shape[dim] for dim in range(len(shape)) if dim not in axis]
+        new_shape = tuple(shape[dim] for dim in range(len(shape)) if dim not in axis)
     return np.full(new_shape, prod, dtype=dtype)
 
 
