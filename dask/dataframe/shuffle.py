@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import math
 from operator import getitem
 import uuid
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -535,6 +536,9 @@ def compute_divisions(df, **kwargs):
             any(a > b for a, b in zip(mins, maxes))):
         raise ValueError("Partitions must be sorted ascending with the index",
                          mins, maxes)
+
+    if any(a >= b for a, b in zip(maxes[:1], mins[1:])):
+        warnings.warn("Partition indices have overlap.")
 
     divisions = tuple(mins) + (list(maxes)[-1],)
     return divisions
