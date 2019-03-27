@@ -2117,6 +2117,12 @@ def test_apply_warns():
         ddf.apply(func, axis=1, meta=(None, int))
     assert len(w) == 0
 
+    with pytest.warns(UserWarning) as w:
+        ddf.apply(lambda x: x, axis=1)
+    assert len(w) == 1
+    assert "'x'" in str(w[0].message)
+    assert "int64" in str(w[0].message)
+
 
 def test_applymap():
     df = pd.DataFrame({'x': [1, 2, 3, 4], 'y': [10, 20, 30, 40]})

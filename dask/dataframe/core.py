@@ -2285,16 +2285,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         dask.Series.map_partitions
         """
         if meta is no_default:
-            msg = ("`meta` is not specified, inferred from partial data. "
-                   "Please provide `meta` if the result is unexpected.\n"
-                   "  Before: .apply(func)\n"
-                   "  After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
-                   "  or:     .apply(func, meta=('x', 'f8'))            for series result")
-            warnings.warn(msg)
-
             meta = _emulate(M.apply, self._meta_nonempty, func,
                             convert_dtype=convert_dtype,
                             args=args, udf=True, **kwds)
+            warnings.warn(meta_warning(meta))
 
         return map_partitions(M.apply, self, func,
                               convert_dtype, args, meta=meta, **kwds)
@@ -3145,15 +3139,9 @@ class DataFrame(_Frame):
             raise NotImplementedError(msg)
 
         if meta is no_default:
-            msg = ("`meta` is not specified, inferred from partial data. "
-                   "Please provide `meta` if the result is unexpected.\n"
-                   "  Before: .apply(func)\n"
-                   "  After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
-                   "  or:     .apply(func, meta=('x', 'f8'))            for series result")
-            warnings.warn(msg)
-
             meta = _emulate(M.apply, self._meta_nonempty, func,
                             args=args, udf=True, **kwds)
+            warnings.warn(meta_warning(meta))
 
         return map_partitions(M.apply, self, func, args=args, meta=meta, **kwds)
 
@@ -4746,3 +4734,26 @@ def partitionwise_graph(func, name, *args, **kwargs):
         else:
             pairs.extend([arg, None])
     return blockwise(func, name, 'i', *pairs, numblocks=numblocks, concatenate=True, **kwargs)
+
+
+def meta_warning(df):
+    """
+    Provide an informative message when the user is asked to provide metadata
+    """
+    if is_dataframe_like(df):
+        meta_str = {k: str(v) for k, v in df.dtypes.to_dict().items()}
+    elif is_series_like(df):
+        meta_str = (df.name, str(df.dtype))
+    else:
+        meta_str = None
+    msg = ("\nYou did not provide metadata, so Dask is running your "
+           "function on a small dataset to guess output types. "
+           "It is possible that Dask will guess incorrectly.\n"
+           "To provide an explicit output types or to silence this message, "
+           "please provide the `meta=` keyword, as described in the map or "
+           "apply function that you are using..")
+    if meta_str:
+        msg += ("\n"
+                "  Before: .apply(func)\n"
+                "  After:  .apply(func, meta=%s)\n" % str(meta_str))
+    return msg
