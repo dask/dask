@@ -199,7 +199,6 @@ def list_eq(aa, bb):
     else:
         b = bb
     tm.assert_index_equal(a.columns, b.columns)
-    # tm.assert_index_equal(a.index, b.index)  # Shouldn't this be a requirement?
 
     if isinstance(a, pd.DataFrame):
         av = a.sort_values(list(a.columns)).values
