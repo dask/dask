@@ -284,7 +284,7 @@ def single_partition_join(left, right, **kwargs):
 
     meta = left._meta_nonempty.merge(right._meta_nonempty, **kwargs)
     name = 'merge-' + tokenize(left, right, **kwargs)
-    if left.npartitions == 1:
+    if left.npartitions == 1 and kwargs['how'] in ('inner', 'right'):
         left_key = first(left.__dask_keys__())
         dsk = {(name, i): (apply, M.merge, [left_key, right_key], kwargs)
                for i, right_key in enumerate(right.__dask_keys__())}
@@ -295,7 +295,7 @@ def single_partition_join(left, right, **kwargs):
         else:
             divisions = [None for _ in right.divisions]
 
-    elif right.npartitions == 1:
+    elif right.npartitions == 1 and kwargs['how'] in ('inner', 'left'):
         right_key = first(right.__dask_keys__())
         dsk = {(name, i): (apply, M.merge, [left_key, right_key], kwargs)
                for i, left_key in enumerate(left.__dask_keys__())}

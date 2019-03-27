@@ -192,18 +192,14 @@ def test_merge_indexed_dataframe_to_indexed_dataframe():
 def list_eq(aa, bb):
     if isinstance(aa, dd.DataFrame):
         a = aa.compute(scheduler='sync')
-        a_index = aa.index.compute(scheduler='sync')
     else:
         a = aa
-        a_index = aa.index
+
     if isinstance(bb, dd.DataFrame):
         b = bb.compute(scheduler='sync')
-        b_index = bb.index.compute(scheduler='sync')
     else:
         b = bb
-        b_index = bb.index
 
-    tm.assert_numpy_array_equal(a_index.values, b_index.values)
     tm.assert_index_equal(a.columns, b.columns)
 
     if isinstance(a, pd.DataFrame):
@@ -758,6 +754,25 @@ def test_cheap_single_partition_merge_divisions():
     actual = bb.merge(aa, on='x', how='inner')
     assert not actual.known_divisions
     assert_divisions(actual)
+
+
+@pytest.mark.parametrize('how', ['left', 'right'])
+def test_cheap_single_parition_merge_left_right(how):
+    a = pd.DataFrame({'x':range(8), 'z': list('ababbdda')}, index=range(8))
+    aa = dd.from_pandas(a, npartitions=1)
+
+    b = pd.DataFrame({'x': [1, 2, 3, 4], 'z': list('abda')}, index=range(4))
+    bb = dd.from_pandas(b, npartitions=1)
+
+    actual = aa.merge(bb, left_index=True, right_on='x', how=how)
+    expected = a.merge(b, left_index=True, right_on='x', how=how)
+
+    assert_eq(actual, expected)
+
+    actual = aa.merge(bb, left_on='x', right_index=True, how=how)
+    expected = a.merge(b, left_on='x', right_index=True, how=how)
+
+    assert_eq(actual, expected)
 
 
 def test_cheap_single_partition_merge_on_index():
