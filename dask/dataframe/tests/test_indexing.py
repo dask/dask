@@ -410,6 +410,43 @@ def test_to_series():
     assert_eq(df.index.to_series(), ddf.index.to_series())
 
 
+@pytest.mark.skipif(PANDAS_VERSION < '0.21.0',
+                    reason="No index.to_frame method")
+def test_to_frame():
+
+    # Test for time index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=pd.date_range('2011-01-01', freq='H', periods=100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_frame(), ddf.index.to_frame())
+
+    # Test for numerical index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=range(100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_frame(), ddf.index.to_frame())
+
+
+@pytest.mark.skipif(PANDAS_VERSION < '0.24.0',
+                    reason="No renaming for index")
+def test_to_frame_name():
+    # Test for time index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=pd.date_range('2011-01-01', freq='H', periods=100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_frame(name='foo'), ddf.index.to_frame(name='foo'))
+
+    # Test for numerical index
+    df = pd.DataFrame({'A': np.random.randn(100)},
+                      index=range(100))
+    ddf = dd.from_pandas(df, 10)
+
+    assert_eq(df.index.to_frame(name='bar'), ddf.index.to_frame(name='bar'))
+
+
 @pytest.mark.parametrize('indexer', [
     0,
     [0],
