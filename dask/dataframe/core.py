@@ -4751,7 +4751,7 @@ def meta_warning(df):
            "It is possible that Dask will guess incorrectly.\n"
            "To provide an explicit output types or to silence this message, "
            "please provide the `meta=` keyword, as described in the map or "
-           "apply function that you are using..")
+           "apply function that you are using.")
     if meta_str:
         msg += ("\n"
                 "  Before: .apply(func)\n"
