@@ -750,6 +750,25 @@ def test_cheap_single_partition_merge_divisions():
     assert_divisions(actual)
 
 
+@pytest.mark.parametrize('how', ['left', 'right'])
+def test_cheap_single_parition_merge_left_right(how):
+    a = pd.DataFrame({'x':range(8), 'z': list('ababbdda')}, index=range(8))
+    aa = dd.from_pandas(a, npartitions=1)
+
+    b = pd.DataFrame({'x': [1, 2, 3, 4], 'z': list('abda')}, index=range(4))
+    bb = dd.from_pandas(b, npartitions=1)
+
+    actual = aa.merge(bb, left_index=True, right_on='x', how=how)
+    expected = a.merge(b, left_index=True, right_on='x', how=how)
+
+    assert_eq(actual, expected)
+
+    actual = aa.merge(bb, left_on='x', right_index=True, how=how)
+    expected = a.merge(b, left_on='x', right_index=True, how=how)
+
+    assert_eq(actual, expected)
+
+
 def test_cheap_single_partition_merge_on_index():
     a = pd.DataFrame({'x': [1, 2, 3, 4, 5, 6], 'y': list('abdabd')},
                      index=[10, 20, 30, 40, 50, 60])
