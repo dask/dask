@@ -305,6 +305,8 @@ def single_partition_join(left, right, **kwargs):
             divisions = left.divisions
         else:
             divisions = [None for _ in left.divisions]
+    else:
+        raise NotImplementedError("single_partition_join has no fallback for invalid calls")
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[left, right])
     return new_dd_object(graph, name, meta, divisions)
