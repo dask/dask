@@ -2427,6 +2427,25 @@ class Index(Series):
         return self.map_partitions(M.to_series,
                                    meta=self._meta.to_series())
 
+    @derived_from(pd.Index, ua_args=['index'])
+    def to_frame(self, index=True, name=None):
+        if not index:
+            raise NotImplementedError()
+
+        if PANDAS_VERSION >= '0.24.0':
+            return self.map_partitions(M.to_frame, index, name,
+                                       meta=self._meta.to_frame(index, name))
+        elif PANDAS_VERSION < '0.21.0':
+            raise NotImplementedError("The 'Index.to_frame' method was added in pandas 0.21.0 "
+                                      "Your version of pandas is '{}'.".format(PANDAS_VERSION))
+        else:
+            if name is not None:
+                raise ValueError("The 'name' keyword was added in pandas 0.24.0. "
+                                 "Your version of pandas is '{}'.".format(PANDAS_VERSION))
+            else:
+                return self.map_partitions(M.to_frame,
+                                           meta=self._meta.to_frame())
+
 
 class DataFrame(_Frame):
     """
