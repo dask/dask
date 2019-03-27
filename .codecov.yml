@@ -8,16 +8,39 @@ coverage:
   range: "90...100"
 
   status:
-    project: yes
-    patch: yes
-    changes: no
+    project:
+      default: off
+      array:
+        flags: array
+      bag:
+        flags: bag
+      bytes:
+        flags: bytes
+      dataframe:
+        flags: dataframe
+      diagnostics:
+        flags: diagnostics
+      tests:
+        flags: tests
 
-parsers:
-  gcov:
-    branch_detection:
-      conditional: yes
-      loop: yes
-      method: no
-      macro: no
+flags:
+  array:
+    paths:
+      - dask/array
+  bag:
+    paths:
+      - dask/bag
+  bytes:
+    paths:
+      - dask/bytes
+  dataframe:
+    paths:
+      - dask/dataframe
+  diagnostics:
+    paths:
+      - dask/diagnostics
+  tests:
+    paths:
+      - dask/tests
 
 comment: off
