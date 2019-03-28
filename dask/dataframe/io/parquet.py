@@ -1203,7 +1203,7 @@ def to_parquet(df, path, engine='auto', compression='default', write_index=None,
     Examples
     --------
     >>> df = dd.read_csv(...)  # doctest: +SKIP
-    >>> to_parquet('/path/to/output/', df, compression='snappy')  # doctest: +SKIP
+    >>> dd.to_parquet(df, '/path/to/output/', compression='snappy')  # doctest: +SKIP
 
     See Also
     --------
