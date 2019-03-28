@@ -2052,7 +2052,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return Series(graph, name, self._meta, self.divisions)
-        raise NotImplementedError()
+        raise NotImplementedError(
+            "Series getitem in only supported for other series objects "
+            "with matching partition structure"
+        )
 
     @derived_from(pd.DataFrame)
     def _get_numeric_data(self, how='any', subset=None):
