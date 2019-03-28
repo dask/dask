@@ -8,39 +8,8 @@ coverage:
   range: 90..100
 
   status:
-    project:
-      default: off
-      array:
-        flags: array
-      bag:
-        flags: bag
-      bytes:
-        flags: bytes
-      dataframe:
-        flags: dataframe
-      diagnostics:
-        flags: diagnostics
-      tests:
-        flags: tests
-
-flags:
-  array:
-    paths:
-      - dask/array
-  bag:
-    paths:
-      - dask/bag
-  bytes:
-    paths:
-      - dask/bytes
-  dataframe:
-    paths:
-      - dask/dataframe
-  diagnostics:
-    paths:
-      - dask/diagnostics
-  tests:
-    paths:
-      - dask/tests
+    project: yes
+    patch: yes
+    changes: no
 
 comment: off
