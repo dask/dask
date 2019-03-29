@@ -1542,3 +1542,27 @@ def test_timeseries():
     df = dask.datasets.timeseries().partitions[:2]
     assert_eq(df.groupby('name').std(),
               df.groupby('name').std())
+
+
+@pytest.mark.skipif(PANDAS_VERSION < '0.22.0',
+                    reason="Parameter min_count not implemented in "
+                           "DataFrame.sum() and DataFrame.prod()")
+@pytest.mark.parametrize('min_count', [0, 1, 2, 3])
+def test_with_min_count(min_count):
+    dfs = [pd.DataFrame({
+                        'group':['A', 'A', 'B'],
+                        'val1':[np.nan, 2, 3],
+                        'val2':[np.nan, 5, 6],
+                        'val3':[5, 4, 9]
+                        }),
+           pd.DataFrame({
+                        'group':['A', 'A', 'B'],
+                        'val1':[2, np.nan, np.nan],
+                        'val2':[np.nan, 5, 6],
+                        'val3':[5, 4, 9]
+                        })]
+    ddfs = [dd.from_pandas(df, npartitions=4) for df in dfs]
+
+    for df, ddf in zip(dfs, ddfs):
+        assert_eq(df.groupby('group').sum(min_count=min_count),
+                  ddf.groupby('group').sum(min_count=min_count))
