@@ -3,5 +3,15 @@ omit =
     */test_*.py
     dask/compatibility.py
     dask/_version.py
-source = 
+source =
     dask
+
+[report]
+# Regexes for lines to exclude from consideration
+exclude_lines =
+    pragma: no cover
+
+    raise AssertionError
+    raise NotImplementedError
+
+ignore_errors = True
