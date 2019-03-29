@@ -3967,7 +3967,9 @@ def quantile(df, q):
 
     # pandas uses quantile in [0, 1]
     # numpy / everyone else uses [0, 100]
+    # current implementation needs qs to be sorted, sort in-place to make sure
     qs = np.asarray(q) * 100
+    qs.sort(kind='mergesort')
     token = tokenize(df, qs)
 
     if len(qs) == 0:
