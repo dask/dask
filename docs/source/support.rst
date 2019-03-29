@@ -25,7 +25,7 @@ Conversation happens in the following places:
     4pm UTC (11am in New York, 8am in Los Angeles, 12am in Beijing) at
     https://appear.in/dask-dev
 
-.. _`Stack Overflow with the #dask tag`: http://stackoverflow.com/questions/tagged/dask
+.. _`Stack Overflow with the #dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`Github issue tracker`: https://github.com/dask/dask/issues/
 
 
