@@ -319,6 +319,21 @@ def test_describe_empty():
         ddf.A.describe()
     assert 'Cannot compute ``describe`` on object dtype.' in str(rec)
 
+    
+def test_describe_for_possibly_unsorted_q():
+    '''make sure describe is sorting quantiles parameter, q, properly.
+    
+    See https://github.com/dask/dask/issues/4642.
+    '''
+    # prepare test case where quantiles should equal values
+    A = da.arange(0, 101)
+    ds = dd.from_dask_array(A)
+    
+    for q in [None, [0.25, 0.50, 0.75], [0.25, 0.50, 0.75, 0.99], [0.75, 0.5, 0.25]]:
+        r = ds.describe(percentiles=q).compute()
+        assert_eq(r['25%'], 25.0)
+        assert_eq(r['50%'], 50.0)
+        assert_eq(r['75%'], 75.0)
 
 def test_cumulative():
     df = pd.DataFrame(np.random.randn(100, 5), columns=list('abcde'))
