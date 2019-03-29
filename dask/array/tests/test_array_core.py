@@ -3373,7 +3373,7 @@ def test_meta(dtype):
     (1000, 167, (125,) * 8),  # find close value
 ])
 def test_normalize_chunks_auto_1d(shape, limit, expected):
-    result = normalize_chunks('auto', (shape,), limit=limit * 8, dtype=np.float64)
+    result = normalize_chunks('auto', (shape,), limit=limit, dtype=np.float64)
     assert result == (expected,)
 
 

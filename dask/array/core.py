@@ -1977,7 +1977,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
             raise ValueError("Can not perform automatic rechunking with unknown "
                              "(nan) chunk sizes")
 
-    limit = max(1, limit // dtype.itemsize)
+    limit = max(1, limit)
 
     largest_block = np.prod([cs if isinstance(cs, Number) else max(cs)
                              for cs in chunks if cs != 'auto'])
@@ -1996,7 +1996,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                 ideal_shape.append(s)
 
         # How much larger or smaller the ideal chunk size is relative to what we have now
-        multiplier = limit / largest_block / np.prod(list(result.values()))
+        multiplier = limit / dtype.itemsize / largest_block / np.prod(list(result.values()))
         last_multiplier = 0
         last_autos = set()
 
@@ -2017,14 +2017,14 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     result[a] = round_to(proposed, ideal_shape[a])
 
             # recompute how much multiplier we have left, repeat
-            multiplier = limit / largest_block / np.prod(list(result.values()))
+            multiplier = limit / dtype.itemsize / largest_block / np.prod(list(result.values()))
 
         for k, v in result.items():
             chunks[k] = v
         return tuple(chunks)
 
     else:
-        size = (limit / largest_block) ** (1 / len(autos))
+        size = (limit / dtype.itemsize / largest_block) ** (1 / len(autos))
         small = [i for i in autos if shape[i] < size]
         if small:
             for i in small:
