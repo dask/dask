@@ -289,8 +289,8 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     if include_path_column and isinstance(include_path_column, bool):
         include_path_column = 'path'
     if 'index' in kwargs or 'index_col' in kwargs:
-        raise ValueError("Keyword 'index' not supported "
-                         "dd.{0}(...).set_index('my-index') "
+        raise ValueError("Keywords 'index' and 'index_col' not supported. "
+                         "Use dd.{0}(...).set_index('my-index') "
                          "instead".format(reader_name))
     for kw in ['iterator', 'chunksize']:
         if kw in kwargs:
