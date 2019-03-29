@@ -1,24 +1,39 @@
 Changelog
 =========
 
+1.26.1 - 2019-03-29
+-------------------
+
+-  Fix LocalCluster to not overallocate memory when overcommitting threads per worker (:pr:`2541`) `George Sakkis`_
+-  Make closing resilient to lacking an address (:pr:`2542`) `Matthew Rocklin`_
+-  fix typo in comment (:pr:`2546`) `Brett Jurman`_
+-  Fix double init of prometheus metrics (:pr:`2544`) `Marco Neumann`_
+-  Skip test_duplicate_clients without bokeh. (:pr:`2553`) `Elliott Sales de Andrade`_
+-  Add blocked_handlers to servers (:pr:`2556`) `Chris White`_
+-  Always yield Server.handle_comm coroutine (:pr:`2559`) `Tom Augspurger`_
+-  Use yaml.safe_load (:pr:`2566`) `Matthew Rocklin`_
+-  Fetch executables from build root. (:pr:`2551`) `Elliott Sales de Andrade`_
+-  Fix Torando 6 test failures (:pr:`2570`) `Matthew Rocklin`_
+-  Fix test_sync_closed_loop (:pr:`2572`) `Matthew Rocklin`_
+
 1.26.0 - 2019-02-25
 -------------------
 
--  Update style to fix recent flake8 update (#2500) (#2509) `Matthew Rocklin`_
--  Fix typo in gen_cluster log message (#2503) `Loïc Estève`_
--  Allow KeyError when closing event loop (#2498) `Matthew Rocklin`_
--  Avoid thread testing for TCP ThreadPoolExecutor (#2510) `Matthew Rocklin`_
--  Find Futures inside SubgraphCallable (#2505) `Jim Crist`_
--  Avoid AttributeError when closing and sending a message (#2514) `Matthew Rocklin`_
--  Add deprecation warning to dask_mpi.py (#2522) `jukent`_
--  Relax statistical profiling test (#2527) `Matthew Rocklin`_
--  Support alternative --remote-dask-worker SSHCluster() and dask-ssh CLI (#2526) `Adam Beberg`_
--  Iterate over full list of plugins in transition (#2518) `Matthew Rocklin`_
--  Create Prometheus Endpoint (#2499) `Adam Beberg`_
--  Use pytest.importorskip for prometheus test (#2533) `Matthew Rocklin`_
--  MAINT skip prometheus test when no installed (#2534) `Olivier Grisel`_
--  Fix intermittent testing failures (#2535) `Matthew Rocklin`_
--  Avoid using nprocs keyword in dask-ssh if set to one (#2531)  `Matthew Rocklin`_
+-  Update style to fix recent flake8 update (:pr:`2500`) (:pr:`2509`) `Matthew Rocklin`_
+-  Fix typo in gen_cluster log message (:pr:`2503`) `Loïc Estève`_
+-  Allow KeyError when closing event loop (:pr:`2498`) `Matthew Rocklin`_
+-  Avoid thread testing for TCP ThreadPoolExecutor (:pr:`2510`) `Matthew Rocklin`_
+-  Find Futures inside SubgraphCallable (:pr:`2505`) `Jim Crist`_
+-  Avoid AttributeError when closing and sending a message (:pr:`2514`) `Matthew Rocklin`_
+-  Add deprecation warning to dask_mpi.py (:pr:`2522`) `Julia Kent`_
+-  Relax statistical profiling test (:pr:`2527`) `Matthew Rocklin`_
+-  Support alternative --remote-dask-worker SSHCluster() and dask-ssh CLI (:pr:`2526`) `Adam Beberg`_
+-  Iterate over full list of plugins in transition (:pr:`2518`) `Matthew Rocklin`_
+-  Create Prometheus Endpoint (:pr:`2499`) `Adam Beberg`_
+-  Use pytest.importorskip for prometheus test (:pr:`2533`) `Matthew Rocklin`_
+-  MAINT skip prometheus test when no installed (:pr:`2534`) `Olivier Grisel`_
+-  Fix intermittent testing failures (:pr:`2535`) `Matthew Rocklin`_
+-  Avoid using nprocs keyword in dask-ssh if set to one (:pr:`2531`)  `Matthew Rocklin`_
 -  Bump minimum Tornado version to 5.0
 
 
@@ -70,7 +85,7 @@ Changelog
 -  Use async-await on large messages test (:pr:`2404`) `Matthew Rocklin`_
 -  Fix race condition in normalize_collection (:pr:`2386`) `Jim Crist`_
 -  Fix redict collection after HighLevelGraph fix upstream (:pr:`2413`) `Matthew Rocklin`_
--  Add a blocking argument to Lock.acquire(`) (:pr:`2412`) `Stephan Hoyer`_
+-  Add a blocking argument to Lock.acquire() (:pr:`2412`) `Stephan Hoyer`_
 -  Fix long traceback test (:pr:`2417`) `Matthew Rocklin`_
 -  Update x509 certificates to current OpenSSL standards. (:pr:`2418`) `Diane Trout`_
 
@@ -301,7 +316,7 @@ Changelog
 -  Fix bug where queues would not clean up cleanly (:pr:`1922`) `Matthew Rocklin`_
 -  Delete cached file safely in upload file (:pr:`1921`) `Matthew Rocklin`_
 -  Accept KeyError when closing tornado IOLoop in tests (:pr:`1937`) `Matthew Rocklin`_
--  Quiet the client and scheduler when gather(..., errors='skip'`) (:pr:`1936`) `Matthew Rocklin`_
+-  Quiet the client and scheduler when gather(..., errors='skip') (:pr:`1936`) `Matthew Rocklin`_
 -  Clarify couldn't gather keys warning (:pr:`1942`) `Kenneth Koski`_
 -  Support submit keywords in joblib (:pr:`1947`) `Matthew Rocklin`_
 -  Avoid use of external resources in bokeh server (:pr:`1934`) `Matthew Rocklin`_
@@ -941,3 +956,7 @@ significantly without many new features.
 .. _`Daniel Farrell`: https://github.com/danpf
 .. _`George Sakkis`: https://github.com/gsakkis
 .. _`Adam Beberg`: https://github.com/beberg
+.. _`Marco Neumann`: https://github.com/crepererum
+.. _`Elliott Sales de Andrade`: https://github.com/QuLogic
+.. _`Brett Jurman`: https://github.com/ibebrett
+.. _`Julia Kent`: https://github.com/jukent
