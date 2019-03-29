@@ -3946,6 +3946,11 @@ def quantile(df, q):
     q : list/array of floats
         Iterable of numbers ranging from 0 to 100 for the desired quantiles
     """
+    # current implementation needs qs to be sorted, sort in-place to make sure
+    q = np.asanyarray(q)
+    if q.ndim > 0:
+        q.sort(kind='mergesort')
+        
     assert isinstance(df, Series)
     from dask.array.percentile import _percentile, merge_percentiles
 
@@ -3967,9 +3972,7 @@ def quantile(df, q):
 
     # pandas uses quantile in [0, 1]
     # numpy / everyone else uses [0, 100]
-    # current implementation needs qs to be sorted, sort in-place to make sure
     qs = np.asarray(q) * 100
-    qs.sort(kind='mergesort')
     token = tokenize(df, qs)
 
     if len(qs) == 0:
