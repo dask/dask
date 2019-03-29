@@ -61,7 +61,7 @@ Additionally, ``set_index`` has a few options that can accelerate it in some
 situations.  For example, if you know that your dataset is sorted or you already
 know the values by which it is divided, you can provide these to accelerate the
 ``set_index`` operation.  For more information, see the `set_index docstring
-<http://docs.dask.org/en/latest/dataframe-api.html#dask.dataframe.DataFrame.set_index>`_.
+<https://docs.dask.org/en/latest/dataframe-api.html#dask.dataframe.DataFrame.set_index>`_.
 
 .. code-block:: python
 
@@ -189,12 +189,12 @@ Store Data in Apache Parquet Format
 
 HDF5 is a popular choice for Pandas users with high performance needs.  We
 encourage Dask DataFrame users to :doc:`store and load data <dataframe-create>`
-using Parquet instead.  `Apache Parquet <http://parquet.apache.org/>`_ is a
+using Parquet instead.  `Apache Parquet <https://parquet.apache.org/>`_ is a
 columnar binary format that is easy to split into multiple files (easier for
 parallel loading) and is generally much simpler to deal with than HDF5 (from
 the library's perspective).  It is also a common format used by other big data
-systems like `Apache Spark <http://spark.apache.org/>`_ and `Apache Impala
-<http://impala.apache.org/>`_, and so it is useful to interchange with other
+systems like `Apache Spark <https://spark.apache.org/>`_ and `Apache Impala
+<https://impala.apache.org/>`_, and so it is useful to interchange with other
 systems:
 
 .. code-block:: python
@@ -217,7 +217,7 @@ These libraries can be installed using:
    conda install fastparquet pyarrow -c conda-forge
 
 `fastparquet <https://github.com/dask/fastparquet/>`_ is a Python-based 
-implementation that uses the `Numba <http://numba.pydata.org/>`_ 
+implementation that uses the `Numba <https://numba.pydata.org/>`_
 Python-to-LLVM compiler. PyArrow is part of the
-`Apache Arrow <http://arrow.apache.org/>`_ project and uses the `C++
+`Apache Arrow <https://arrow.apache.org/>`_ project and uses the `C++
 implementation of Apache Parquet <https://github.com/apache/parquet-cpp>`_.

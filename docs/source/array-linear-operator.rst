@@ -25,4 +25,4 @@ Example
 solve this problem for this data.*
 
 
-.. _LinearOperator: http://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.LinearOperator.html
+.. _LinearOperator: https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.LinearOperator.html

@@ -42,7 +42,7 @@ the use of Dask today.  On the other hand, the distributed machine scheduler is
 more useful to larger organizations like universities, research labs, or private 
 companies.
 
-.. _Airflow: http://airflow.incubator.apache.org/
+.. _Airflow: https://airflow.apache.org/ 
 .. _Luigi: https://luigi.readthedocs.io/en/latest/
 .. _Celery: http://www.celeryproject.org/
 .. _Spark: https://spark.apache.org/
@@ -88,8 +88,8 @@ hardware.
     y = x[::10] - x.mean(axis=0)
     y.compute()
 
-.. _NumPy: http://www.numpy.org/
-.. _XArray: http://xarray.pydata.org/en/stable/
+.. _NumPy: https://www.numpy.org/
+.. _XArray: https://xarray.pydata.org/en/stable/
 
 Directory of CSV or tabular HDF files
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -110,7 +110,7 @@ without significantly changing their code.
    df = dd.read_csv('data/2016-*.*.csv', parse_dates=['timestamp'])
    df.groupby(df.timestamp.dt.hour).value.mean().compute()
 
-.. _Pandas: http://pandas.pydata.org/
+.. _Pandas: https://pandas.pydata.org/
 
 
 Directory of CSV files on HDFS

@@ -7,7 +7,7 @@ small memory footprint using Python iterators.  It is similar to a parallel
 version of PyToolz_ or a Pythonic version of the `PySpark RDD`_.
 
 .. _PyToolz: https://toolz.readthedocs.io/en/latest/
-.. _`PySpark RDD`: http://spark.apache.org/docs/latest/api/python/pyspark.html
+.. _`PySpark RDD`: https://spark.apache.org/docs/latest/api/python/pyspark.html
 
 Design
 ------
@@ -93,4 +93,4 @@ multiset's elements:
 So, a bag is like a list, but it doesn't guarantee an ordering among elements.
 There can be repeated elements but you can't ask for the ith element.
 
-.. _multiset: http://en.wikipedia.org/wiki/Bag_(mathematics)
+.. _multiset: https://en.wikipedia.org/wiki/Bag_(mathematics)

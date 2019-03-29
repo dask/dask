@@ -164,7 +164,7 @@ class ufunc(object):
 
 
 # ufuncs, copied from this page:
-# http://docs.scipy.org/doc/numpy/reference/ufuncs.html
+# https://docs.scipy.org/doc/numpy/reference/ufuncs.html
 
 # math operations
 add = ufunc(np.add)
@@ -256,7 +256,7 @@ ceil = ufunc(np.ceil)
 trunc = ufunc(np.trunc)
 
 # more math routines, from this page:
-# http://docs.scipy.org/doc/numpy/reference/routines.math.html
+# https://docs.scipy.org/doc/numpy/reference/routines.math.html
 degrees = ufunc(np.degrees)
 radians = ufunc(np.radians)
 rint = ufunc(np.rint)

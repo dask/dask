@@ -1359,7 +1359,7 @@ DataFrame
   (:pr:`1495`)
 - Add ``dataframe.reduction`` and ``series.reduction`` methods to apply generic
   row-wise reduction to dataframes and series (:pr:`1483`)
-- Add ``dataframe.select_dtypes``, which mirrors the `pandas method <http://pandas.pydata.org/pandas-docs/version/0.18.1/generated/pandas.DataFrame.select_dtypes.html>`_ (:pr:`1556`)
+- Add ``dataframe.select_dtypes``, which mirrors the `pandas method <https://pandas.pydata.org/pandas-docs/version/0.18.1/generated/pandas.DataFrame.select_dtypes.html>`_ (:pr:`1556`)
 - ``dataframe.read_hdf`` now supports reading ``Series`` (:pr:`1564`)
 - Support Pandas 0.19.0 (:pr:`1540`)
 - Implement ``select_dtypes`` (:pr:`1556`)

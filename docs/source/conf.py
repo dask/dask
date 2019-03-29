@@ -299,8 +299,8 @@ extlinks = {
 
 #  --Options for sphinx extensions -----------------------------------------------
 
-intersphinx_mapping = {'pandas': ('http://pandas.pydata.org/pandas-docs/stable/',
-                                  'http://pandas.pydata.org/pandas-docs/stable/objects.inv'),
+intersphinx_mapping = {'pandas': ('https://pandas.pydata.org/pandas-docs/stable/',
+                                  'https://pandas.pydata.org/pandas-docs/stable/objects.inv'),
                        'numpy': ('https://docs.scipy.org/doc/numpy/',
                                  'https://docs.scipy.org/doc/numpy/objects.inv')}
 

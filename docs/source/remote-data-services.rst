@@ -38,8 +38,8 @@ When specifying a storage location, a URL should be provided using the general
 form ``protocol://path/to/data``.  If no protocol is provided, the local
 file system is assumed (same as ``file://``).
 
-.. _hdfs3: http://hdfs3.readthedocs.io/
-.. _s3fs: http://s3fs.readthedocs.io/
+.. _hdfs3: https://hdfs3.readthedocs.io/
+.. _s3fs: https://s3fs.readthedocs.io/
 .. _azure-data-lake-store-python: https://github.com/Azure/azure-data-lake-store-python
 .. _gcsfs: https://github.com/dask/gcsfs/
 .. _pyarrow: https://arrow.apache.org/docs/python/
@@ -136,7 +136,7 @@ The following additional options may be passed to the ``hdfs3`` driver via
 The ``hdfs3`` driver can also be affected by a few environment variables. For more
 information on these, see the `hdfs3 documentation`_.
 
-.. _high availability: http://hdfs3.readthedocs.io/en/latest/hdfs.html#high-availability-mode
+.. _high availability: https://hdfs3.readthedocs.io/en/latest/hdfs.html#high-availability-mode
 .. _hdfs3 documentation: https://hdfs3.readthedocs.io/en/latest/hdfs.html#defaults
 
 Extra Configuration for PyArrow
@@ -174,7 +174,7 @@ credentials can be passed directly in the URL
 this case, however, the key/secret will be passed to all workers in-the-clear,
 so this method is only recommended on well-secured networks.
 
-.. _auth docs: http://boto3.readthedocs.io/en/latest/guide/configuration.html
+.. _auth docs: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html
 
 The following parameters may be passed to s3fs using ``storage_options``:
 
@@ -204,9 +204,9 @@ The following parameters may be passed to s3fs using ``storage_options``:
       such as `profile_name`, to pick one of the authentication sections from
       the configuration files referred to above (see `here`_)
 
-.. _boto3 client: http://boto3.readthedocs.io/en/latest/reference/core/session.html#boto3.session.Session.client
-.. _boto3 Session: http://boto3.readthedocs.io/en/latest/reference/core/session.html
-.. _here: http://boto3.readthedocs.io/en/latest/guide/configuration.html#shared-credentials-file
+.. _boto3 client: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html#boto3.session.Session.client
+.. _boto3 Session: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html
+.. _here: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html#shared-credentials-file
 .. _s3fs.S3FileSystem: https://s3fs.readthedocs.io/en/latest/api.html#s3fs.core.S3FileSystem
 .. _boto3 client's config: https://botocore.amazonaws.com/v1/documentation/api/latest/reference/config.html
 

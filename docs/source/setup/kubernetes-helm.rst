@@ -24,7 +24,7 @@ This document assumes that you have a Kubernetes cluster and Helm installed.
 If this is not the case, then you might consider setting up a Kubernetes cluster
 on one of the common cloud providers like Google, Amazon, or
 Microsoft.  We recommend the first part of the documentation in the guide
-`Zero to JupyterHub <http://zero-to-jupyterhub.readthedocs.io/en/latest/>`_
+`Zero to JupyterHub <https://zero-to-jupyterhub.readthedocs.io/en/latest/>`_
 that focuses on Kubernetes and Helm (you do not need to follow all of these
 instructions).  Also, JupyterHub is not necessary to deploy Dask:
 

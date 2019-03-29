@@ -84,7 +84,7 @@ You can launch a Dask network using ``mpirun`` or ``mpiexec`` and the
    from dask.distributed import Client
    client = Client(scheduler_file='/path/to/scheduler.json')
 
-This depends on the `mpi4py <http://mpi4py.readthedocs.io/>`_ library.  It only
+This depends on the `mpi4py <https://mpi4py.readthedocs.io/>`_ library.  It only
 uses MPI to start the Dask cluster and not for inter-node communication. MPI 
 implementations differ: the use of ``mpirun --np 4`` is specific to the 
 ``mpich`` or ``open-mpi`` MPI implementation installed through conda and linked
@@ -183,7 +183,7 @@ inefficient (small writes to a network file system are *much* slower than local
 storage for this use case) and potentially dangerous to the file system itself.
 
 See `this page
-<http://distributed.readthedocs.io/en/latest/worker.html#memory-management>`_
+<https://distributed.dask.org/en/latest/worker.html#memory-management>`_
 for more information on Dask's memory policies.  Consider changing the
 following values in your ``~/.config/dask/distributed.yaml`` file:
 
