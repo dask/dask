@@ -3946,7 +3946,7 @@ def quantile(df, q):
     q : list/array of floats
         Iterable of numbers ranging from 0 to 100 for the desired quantiles
     """
-    # current implementation needs q to be sorted so 
+    # current implementation needs q to be sorted so
     # sort if array-like, otherwise leave it alone
     q_ndarray = np.array(q)
     if q_ndarray.ndim > 0:
