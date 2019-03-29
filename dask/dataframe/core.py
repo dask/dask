@@ -1543,7 +1543,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         if percentiles is None:
             percentiles = [0.25, 0.5, 0.75]
         else:
-            percentiles = list(set(sorted(percentiles + [0.5])))
+            percentiles = sorted(set(list(percentiles) + [0.5]))
         stats = [num.count(split_every=split_every),
                  num.mean(split_every=split_every),
                  num.std(split_every=split_every),
