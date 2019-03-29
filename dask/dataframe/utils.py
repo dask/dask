@@ -514,7 +514,7 @@ def is_dataframe_like(df):
     """ Looks like a Pandas DataFrame """
     typ = type(df)
     return (all(hasattr(typ, name)
-                for name in ('groupby', 'head', 'merge', 'mean')) and
+                for name in ('groupby', 'head', 'merge')) and
             all(hasattr(df, name) for name in ('dtypes',)) and not
             any(hasattr(typ, name)
                 for name in ('value_counts', 'dtype')))
