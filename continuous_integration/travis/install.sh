@@ -64,6 +64,8 @@ conda install -q -c conda-forge \
     toolz \
     zarr
 
+pip install --upgrade codecov
+
 pip install --upgrade --no-deps locket git+https://github.com/dask/partd
 pip install --upgrade --no-deps git+https://github.com/dask/zict
 pip install --upgrade --no-deps git+https://github.com/dask/distributed
