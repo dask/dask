@@ -926,7 +926,6 @@ class _GroupBy(object):
 
     @derived_from(pd.core.groupby.GroupBy)
     def sum(self, split_every=None, split_out=1, min_count=None):
-        print(type(self))
         result = self._aca_agg(token='sum', func=M.sum, split_every=split_every,
                                split_out=split_out)
         if min_count:
