@@ -3946,11 +3946,13 @@ def quantile(df, q):
     q : list/array of floats
         Iterable of numbers ranging from 0 to 100 for the desired quantiles
     """
-    # current implementation needs q to be sorted, sort to make sure
-    q = np.asanyarray(q)
-    if q.ndim > 0:
-        q = np.sort(q, kind='mergesort')
-        
+    # current implementation needs q to be sorted so 
+    # sort if array-like, otherwise leave it alone
+    q_ndarray = np.array(q)
+    if q_ndarray.ndim > 0:
+        q_ndarray.sort(kind='mergesort')
+        q = q_ndarray
+
     assert isinstance(df, Series)
     from dask.array.percentile import _percentile, merge_percentiles
 
