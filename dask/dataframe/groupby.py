@@ -513,7 +513,8 @@ def _build_agg_args_single(result_column, func, input_column):
         'count': (M.count, M.sum),
         'size': (M.size, M.sum),
         'first': (M.first, M.first),
-        'last': (M.last, M.last)
+        'last': (M.last, M.last),
+        'prod': (M.prod, M.prod)
     }
 
     if func in simple_impl.keys():
@@ -925,9 +926,24 @@ class _GroupBy(object):
                              initial=-1)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def sum(self, split_every=None, split_out=1):
-        return self._aca_agg(token='sum', func=M.sum, split_every=split_every,
-                             split_out=split_out)
+    def sum(self, split_every=None, split_out=1, min_count=None):
+        result = self._aca_agg(token='sum', func=M.sum, split_every=split_every,
+                               split_out=split_out)
+        if min_count:
+            return result.where(self.count() >= min_count,
+                                other=np.NaN)
+        else:
+            return result
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def prod(self, split_every=None, split_out=1, min_count=None):
+        result = self._aca_agg(token='prod', func=M.prod, split_every=split_every,
+                               split_out=split_out)
+        if min_count:
+            return result.where(self.count() >= min_count,
+                                other=np.NaN)
+        else:
+            return result
 
     @derived_from(pd.core.groupby.GroupBy)
     def min(self, split_every=None, split_out=1):
