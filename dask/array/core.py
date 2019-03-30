@@ -48,7 +48,6 @@ from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis
 from .blockwise import blockwise
 
-
 config.update_defaults({'array': {
     'chunk-size': '128MiB',
     'rechunk-threshold': 4
@@ -1778,6 +1777,16 @@ class Array(DaskMethodsMixin):
         See function ``to_zarr()`` for parameters.
         """
         return to_zarr(self, *args, **kwargs)
+
+    def to_tiledb(self, uri, *args, **kwargs):
+        """Save array to the TileDB storage manager
+
+        See function ``to_tiledb()`` for argument documentation.
+
+        See https://docs.tiledb.io for details about the format and engine.
+        """
+        from .tiledb_io import to_tiledb
+        return to_tiledb(self, uri, *args, **kwargs)
 
 
 def ensure_int(f):

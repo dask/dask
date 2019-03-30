@@ -327,6 +327,31 @@ chunking of the resultant Dask array is defined by how the files were saved, unl
 otherwise specified.
 
 
+TileDB
+------
+
+`TileDB <https://docs.tiledb.io>`_  is a binary array format and storage manager with
+tunable chunking, layout, and compression options. The TileDB storage manager library
+includes support for scalable storage backends such as S3 API compatible object stores
+and HDFS, with automatic scaling, and supports multi-threaded and multi-process
+reads (consistent) and writes (eventually-consistent).
+
+To save data to a local TileDB array:
+
+.. code-block:: Python
+
+  >>> arr.to_tiledb('output.tdb')
+
+or to save to a bucket on S3:
+
+  >>> arr.to_tiledb('s3://mybucket/output.tdb',
+                    storage_options={'vfs.s3.aws_access_key_id': 'mykey',
+                                     'vfs.s3.aws_secret_access_key': 'mysecret'})
+
+Files may be retrieved by running `da.from_tiledb` with the same URI, and any
+necessary arguments.
+
+
 Plugins
 =======
 
