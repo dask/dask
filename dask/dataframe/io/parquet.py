@@ -213,7 +213,8 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     dsk = {(name, i): (_read_parquet_row_group, fs, pf.row_group_filename(rg),
                        index_names, all_columns, rg, out_type == Series,
                        categories, pf.schema, pf.cats, pf.dtypes,
-                       pf.file_scheme, storage_name_mapping, getattr(pf.tz, {}))
+                       pf.file_scheme, storage_name_mapping,
+                       getattr(pf, 'tz', {}))
            for i, rg in enumerate(rgs)}
     if not dsk:
         # empty dataframe
