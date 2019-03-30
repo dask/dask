@@ -1322,6 +1322,15 @@ def test_select_partitioned_column(tmpdir, engine):
     df_partitioned[df_partitioned.fake_categorical1 == 'A'].compute()
 
 
+def test_with_tz(tmpdir, engine):
+    fn = str(tmpdir)
+    df = pd.DataFrame([[0]], columns=['a'], dtype='datetime64[ns, UTC]')
+    df = dd.from_pandas(df, 1)
+    df.to_parquet(fn, engine=engine)
+    df2 = dd.read_parquet(fn, engine=engine)
+    assert_eq(df, df2, check_divisions=False, check_index=False)
+
+
 def test_arrow_partitioning(tmpdir):
     # Issue #3518
     pytest.importorskip('pyarrow')
