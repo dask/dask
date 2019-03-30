@@ -321,7 +321,8 @@ def test_describe_empty():
 
 
 def test_describe_for_possibly_unsorted_q():
-    '''make sure describe is sorting quantiles parameter, q, properly.
+    '''make sure describe is sorting percentiles parameter, q, properly
+    and can handle lists, tuples and ndarrays.
 
     See https://github.com/dask/dask/issues/4642.
     '''
@@ -330,10 +331,15 @@ def test_describe_for_possibly_unsorted_q():
     ds = dd.from_dask_array(A)
 
     for q in [None, [0.25, 0.50, 0.75], [0.25, 0.50, 0.75, 0.99], [0.75, 0.5, 0.25]]:
-        r = ds.describe(percentiles=q).compute()
-        assert_eq(r['25%'], 25.0)
-        assert_eq(r['50%'], 50.0)
-        assert_eq(r['75%'], 75.0)
+        for f_convert in [list, tuple, np.ndarray]:
+            if q is None:
+                r = ds.describe(percentiles=q).compute()
+            else:
+                r = ds.describe(percentiles=f_convert(q)).compute()
+
+            assert_eq(r['25%'], 25.0)
+            assert_eq(r['50%'], 50.0)
+            assert_eq(r['75%'], 75.0)
 
 
 def test_cumulative():
