@@ -1941,7 +1941,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
         A tuple of either dimensions or tuples of explicit chunk dimensions
         Some entries should be "auto"
     shape: Tuple[int]
-    limit: int
+    limit: int, str
         The maximum allowable size of a chunk in bytes
     previous_chunks: Tuple[Tuple[int]]
 
