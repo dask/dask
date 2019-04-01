@@ -1325,6 +1325,8 @@ def test_select_partitioned_column(tmpdir, engine):
 def test_with_tz(tmpdir, engine):
     if engine == 'pyarrow' and pa.__version__ < LooseVersion('0.11.0'):
         pytest.skip("pyarrow<0.11.0 did not support this")
+    if engine == 'fastparquet' and pa.__version__ < LooseVersion('0.3.0'):
+        pytest.skip("fastparquet<0.3.0 did not support this")
     fn = str(tmpdir)
     df = pd.DataFrame([[0]], columns=['a'], dtype='datetime64[ns, UTC]')
     df = dd.from_pandas(df, 1)
