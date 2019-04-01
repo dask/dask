@@ -300,8 +300,12 @@ def constant(x, axis, depth, value):
     chunks = list(x.chunks)
     chunks[axis] = (depth,)
 
-    c = wrap.full(tuple(map(sum, chunks)), value,
-                  chunks=tuple(chunks), dtype=x.dtype)
+    try:
+        c = wrap.full_like(x._meta, value, shape=tuple(map(sum, chunks)),
+                           chunks=tuple(chunks), dtype=x.dtype)
+    except AttributeError:
+        c = wrap.full(tuple(map(sum, chunks)), value,
+                      chunks=tuple(chunks), dtype=x.dtype)
 
     return concatenate([c, x, c], axis=axis)
 
@@ -441,7 +445,11 @@ def add_dummy_padding(x, depth, boundary):
             empty_chunks = list(x.chunks)
             empty_chunks[k] = (d,)
 
-            empty = wrap.empty(empty_shape, chunks=empty_chunks, dtype=x.dtype)
+            try:
+                empty = wrap.empty_like(x, shape=empty_shape,
+                                        chunks=empty_chunks, dtype=x.dtype)
+            except AttributeError:
+                empty = wrap.empty(empty_shape, chunks=empty_chunks, dtype=x.dtype)
 
             out_chunks = list(x.chunks)
             ax_chunks = list(out_chunks[k])
