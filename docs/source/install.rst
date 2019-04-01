@@ -33,8 +33,8 @@ choice for Dask users::
    pip install "dask[complete]"    # Install everything
 
 You can also install only the Dask library.  Modules like ``dask.array``,
-``dask.dataframe``, or ``dask.distributed`` won't work until you also install NumPy,
-Pandas, or Tornado, respectively.  This is common for downstream library
+``dask.dataframe``, ``dask.delayed``, or ``dask.distributed`` won't work until you also install NumPy,
+Pandas, Toolz, or Tornado, respectively.  This is common for downstream library
 maintainers::
 
    pip install dask                # Install only core parts of dask
@@ -44,6 +44,7 @@ We also maintain other dependency sets for different subsets of functionality::
    pip install "dask[array]"       # Install requirements for dask array
    pip install "dask[bag]"         # Install requirements for dask bag
    pip install "dask[dataframe]"   # Install requirements for dask dataframe
+   pip install "dask[delayed]"     # Install requirements for dask delayed
    pip install "dask[distributed]" # Install requirements for distributed dask
 
 We have these options so that users of the lightweight core Dask scheduler
