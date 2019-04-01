@@ -165,7 +165,7 @@ class HTTPFile(object):
             # asked for no data, so supply no data and shortcut doing work
             return b''
         if self.size is None:
-            if length >= 0:
+            if length >= 0:  # pragma: no cover
                 # asked for specific amount of data, but we don't know how
                 # much is available
                 raise ValueError('File size is unknown, must read all data')
