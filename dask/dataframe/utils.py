@@ -683,7 +683,7 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
 def _maybe_sort(a):
     # sort by value, then index
     try:
-        if isinstance(a, pd.DataFrame):
+        if is_dataframe_like(a):
             if set(a.index.names) & set(a.columns):
                 a.index.names = ['-overlapped-index-name-%d' % i
                                  for i in range(len(a.index.names))]
@@ -756,7 +756,7 @@ def assert_divisions(ddf):
         return
 
     def index(x):
-        if isinstance(x, pd.Index):
+        if is_index_like(x):
             return x
         try:
             return x.index.get_level_values(0)
@@ -798,11 +798,11 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
     if numeric_equal:
         eq_types.update(('i', 'f'))
 
-    if isinstance(res, pd.DataFrame):
+    if not is_dask_collection(res) and is_dataframe_like(res):
         for col, a, b in pd.concat([ddf._meta.dtypes, res.dtypes],
                                    axis=1).itertuples():
             assert (a.kind in eq_types and b.kind in eq_types) or (a == b)
-    elif isinstance(res, (pd.Series, pd.Index)):
+    elif not is_dask_collection(res) and (is_index_like(res) or is_series_like(res)):
         a = ddf._meta.dtype
         b = res.dtype
         assert (a.kind in eq_types and b.kind in eq_types) or (a == b)
