@@ -1374,3 +1374,12 @@ def test_roundtrip_arrow(tmp_path, df):
     dd.to_parquet(ddf, tmp_path, engine='pyarrow', write_index=True)
     ddf2 = dd.read_parquet(tmp_path, engine='pyarrow', gather_statistics=True)
     assert_eq(ddf, ddf2)
+
+
+def test_datasets_timeseries(tmp_path):
+    df = dask.datasets.timeseries().persist()
+    df.to_parquet(tmp_path)
+
+    df2 = dd.read_parquet(tmp_path)
+
+    assert_eq(df, df2)
