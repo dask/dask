@@ -1837,7 +1837,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
     >>> normalize_chunks({0: 2, 1: 3}, shape=(6, 6))
     ((2, 2, 2), (3, 3))
 
-    The value -1 gets mapped to full size
+    The values -1 and None get mapped to full size
 
     >>> normalize_chunks((5, -1), shape=(10, 10))
     ((5, 5), (10,))
@@ -1850,6 +1850,12 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
 
     >>> normalize_chunks(("auto",), shape=(20,), limit=5, dtype='uint8')
     ((5, 5, 5, 5),)
+
+    You can also use byte sizes (see ``dask.utils.parse_bytes``) in place of
+    "auto" to ask for a particular size
+
+    >>> normalize_chunks("1kiB", shape=(2000,), dtype='float32')
+    ((250, 250, 250, 250, 250, 250, 250, 250),)
 
     Respects null dimensions
 
@@ -1879,8 +1885,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None,
         raise ValueError(
             "Chunks and shape must be of the same length/dimension. "
             "Got chunks=%s, shape=%s" % (chunks, shape))
-    if -1 in chunks:
-        chunks = tuple(s if c == -1 else c for c, s in zip(chunks, shape))
+    if -1 in chunks or None in chunks:
+        chunks = tuple(s if c == -1 or c is None else c for c, s in zip(chunks, shape))
 
     # If specifying chunk size in bytes, use that value to set the limit.
     # Verify there is only one consistent value of limit or chunk-bytes used.
@@ -2075,7 +2081,8 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
         -   Explicit sizes of all blocks along all dimensions like
             ((1000, 1000, 500), (400, 400)).
 
-        -1 as a blocksize indicates the size of the corresponding dimension.
+        -1 or None as a blocksize indicate the size of the corresponding
+        dimension.
     name : str, optional
         The key name to use for the array. Defaults to a hash of ``x``.
         By default, hash uses python's standard sha1. This behaviour can be
