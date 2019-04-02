@@ -22,9 +22,8 @@ def assert_eq(a, b):
 def test_numel(dtype, keepdims):
     x = np.ones((2, 3, 4))
 
-    for length in range(x.ndim):
-        assert_eq(da.reductions.numel(x, axis=0, keepdims=keepdims, dtype=dtype),
-                  np.sum(x, axis=0, keepdims=keepdims, dtype=dtype))
+    assert_eq(da.reductions.numel(x, axis=0, keepdims=keepdims, dtype=dtype),
+              np.sum(x, axis=0, keepdims=keepdims, dtype=dtype))
 
     for length in range(x.ndim):
         for sub in itertools.combinations([d for d in range(x.ndim)], length):
