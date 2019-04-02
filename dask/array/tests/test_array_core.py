@@ -2278,15 +2278,17 @@ def test_normalize_chunks():
     assert normalize_chunks(((3, 3), (8,)), (6, 8)) == ((3, 3), (8, ))
     assert normalize_chunks((4, 5), (9,)) == ((4, 5), )
     assert normalize_chunks((4, 5), (9, 9)) == ((4, 4, 1), (5, 4))
-    assert normalize_chunks(-1, (5, 5)) == ((5,), (5, ))
-    assert normalize_chunks((3, -1), (5, 5)) == ((3, 2), (5, ))
+    assert normalize_chunks(-1, (5, 5)) == ((5,), (5,))
+    assert normalize_chunks((3, -1), (5, 5)) == ((3, 2), (5,))
+    assert normalize_chunks((3, None), (5, 5)) == ((3, 2), (5,))
     assert normalize_chunks({0: 3}, (5, 5)) == ((3, 2), (5,))
     assert normalize_chunks([[2, 2], [3, 3]]) == ((2, 2), (3, 3))
-    assert normalize_chunks(10, (30, 5)), ((10, 10, 10), (5,))
-    assert normalize_chunks((), (0, 0)), ((0,), (0,))
-    assert normalize_chunks(-1, (0, 3)), ((0,), (3,))
+    assert normalize_chunks(10, (30, 5)) == ((10, 10, 10), (5,))
+    assert normalize_chunks((), (0, 0)) == ((0,), (0,))
+    assert normalize_chunks(-1, (0, 3)) == ((0,), (3,))
     assert normalize_chunks("auto", shape=(20,), limit=5, dtype='uint8') == \
         ((5, 5, 5, 5),)
+    assert normalize_chunks(('auto', None), (5, 5), dtype=int) == ((5,), (5,))
 
     with pytest.raises(ValueError):
         normalize_chunks(((10,), ), (11, ))
@@ -3373,7 +3375,7 @@ def test_meta(dtype):
     (1000, 167, (125,) * 8),  # find close value
 ])
 def test_normalize_chunks_auto_1d(shape, limit, expected):
-    result = normalize_chunks('auto', (shape,), limit=limit * 8, dtype=np.float64)
+    result = normalize_chunks('auto', (shape,), limit=limit, dtype=np.uint8)
     assert result == (expected,)
 
 
@@ -3452,7 +3454,7 @@ def test_zarr_return_stored(compute):
         a = da.zeros((3, 3), chunks=(1, 1))
         a2 = a.to_zarr(d, compute=compute, return_stored=True)
         assert isinstance(a2, Array)
-        assert_eq(a, a2)
+        assert_eq(a, a2, check_graph=False)
         assert a2.chunks == a.chunks
 
 

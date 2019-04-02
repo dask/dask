@@ -897,6 +897,29 @@ def test_dataframe_quantile():
     pytest.raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1))
 
 
+def test_quantile_for_possibly_unsorted_q():
+    '''check that quantile is giving correct answers even when quantile parameter, q, may be unsorted.
+
+    See https://github.com/dask/dask/issues/4642.
+    '''
+    # prepare test case where percentiles should equal values
+    A = da.arange(0, 101)
+    ds = dd.from_dask_array(A)
+
+    for q in [[0.25, 0.50, 0.75], [0.25, 0.50, 0.75, 0.99], [0.75, 0.5, 0.25],
+              [0.25, 0.99, 0.75, 0.50]]:
+        r = ds.quantile(q).compute()
+        assert_eq(r.loc[0.25], 25.0)
+        assert_eq(r.loc[0.50], 50.0)
+        assert_eq(r.loc[0.75], 75.0)
+
+    r = ds.quantile([0.25]).compute()
+    assert_eq(r.loc[0.25], 25.0)
+
+    r = ds.quantile(0.25).compute()
+    assert_eq(r, 25.0)
+
+
 def test_index():
     assert_eq(d.index, full.index)
 
@@ -2116,6 +2139,12 @@ def test_apply_warns():
     with pytest.warns(None) as w:
         ddf.apply(func, axis=1, meta=(None, int))
     assert len(w) == 0
+
+    with pytest.warns(UserWarning) as w:
+        ddf.apply(lambda x: x, axis=1)
+    assert len(w) == 1
+    assert "'x'" in str(w[0].message)
+    assert "int64" in str(w[0].message)
 
 
 def test_applymap():

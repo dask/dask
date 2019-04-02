@@ -61,7 +61,10 @@ conda install -q -c conda-forge \
     scikit-learn \
     scipy \
     sqlalchemy \
-    toolz
+    toolz \
+    zarr
+
+pip install --upgrade codecov
 
 pip install --upgrade --no-deps locket git+https://github.com/dask/partd
 pip install --upgrade --no-deps git+https://github.com/dask/zict

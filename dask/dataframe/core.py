@@ -2052,7 +2052,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return Series(graph, name, self._meta, self.divisions)
-        raise NotImplementedError()
+        raise NotImplementedError(
+            "Series getitem in only supported for other series objects "
+            "with matching partition structure"
+        )
 
     @derived_from(pd.DataFrame)
     def _get_numeric_data(self, how='any', subset=None):
@@ -2285,16 +2288,10 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         dask.Series.map_partitions
         """
         if meta is no_default:
-            msg = ("`meta` is not specified, inferred from partial data. "
-                   "Please provide `meta` if the result is unexpected.\n"
-                   "  Before: .apply(func)\n"
-                   "  After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
-                   "  or:     .apply(func, meta=('x', 'f8'))            for series result")
-            warnings.warn(msg)
-
             meta = _emulate(M.apply, self._meta_nonempty, func,
                             convert_dtype=convert_dtype,
                             args=args, udf=True, **kwds)
+            warnings.warn(meta_warning(meta))
 
         return map_partitions(M.apply, self, func,
                               convert_dtype, args, meta=meta, **kwds)
@@ -2426,6 +2423,25 @@ class Index(Series):
     def to_series(self):
         return self.map_partitions(M.to_series,
                                    meta=self._meta.to_series())
+
+    @derived_from(pd.Index, ua_args=['index'])
+    def to_frame(self, index=True, name=None):
+        if not index:
+            raise NotImplementedError()
+
+        if PANDAS_VERSION >= '0.24.0':
+            return self.map_partitions(M.to_frame, index, name,
+                                       meta=self._meta.to_frame(index, name))
+        elif PANDAS_VERSION < '0.21.0':
+            raise NotImplementedError("The 'Index.to_frame' method was added in pandas 0.21.0 "
+                                      "Your version of pandas is '{}'.".format(PANDAS_VERSION))
+        else:
+            if name is not None:
+                raise ValueError("The 'name' keyword was added in pandas 0.24.0. "
+                                 "Your version of pandas is '{}'.".format(PANDAS_VERSION))
+            else:
+                return self.map_partitions(M.to_frame,
+                                           meta=self._meta.to_frame())
 
 
 class DataFrame(_Frame):
@@ -3126,15 +3142,9 @@ class DataFrame(_Frame):
             raise NotImplementedError(msg)
 
         if meta is no_default:
-            msg = ("`meta` is not specified, inferred from partial data. "
-                   "Please provide `meta` if the result is unexpected.\n"
-                   "  Before: .apply(func)\n"
-                   "  After:  .apply(func, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
-                   "  or:     .apply(func, meta=('x', 'f8'))            for series result")
-            warnings.warn(msg)
-
             meta = _emulate(M.apply, self._meta_nonempty, func,
                             args=args, udf=True, **kwds)
+            warnings.warn(meta_warning(meta))
 
         return map_partitions(M.apply, self, func, args=args, meta=meta, **kwds)
 
@@ -3936,6 +3946,13 @@ def quantile(df, q):
     q : list/array of floats
         Iterable of numbers ranging from 0 to 100 for the desired quantiles
     """
+    # current implementation needs q to be sorted so
+    # sort if array-like, otherwise leave it alone
+    q_ndarray = np.array(q)
+    if q_ndarray.ndim > 0:
+        q_ndarray.sort(kind='mergesort')
+        q = q_ndarray
+
     assert isinstance(df, Series)
     from dask.array.percentile import _percentile, merge_percentiles
 
@@ -4727,3 +4744,26 @@ def partitionwise_graph(func, name, *args, **kwargs):
         else:
             pairs.extend([arg, None])
     return blockwise(func, name, 'i', *pairs, numblocks=numblocks, concatenate=True, **kwargs)
+
+
+def meta_warning(df):
+    """
+    Provide an informative message when the user is asked to provide metadata
+    """
+    if is_dataframe_like(df):
+        meta_str = {k: str(v) for k, v in df.dtypes.to_dict().items()}
+    elif is_series_like(df):
+        meta_str = (df.name, str(df.dtype))
+    else:
+        meta_str = None
+    msg = ("\nYou did not provide metadata, so Dask is running your "
+           "function on a small dataset to guess output types. "
+           "It is possible that Dask will guess incorrectly.\n"
+           "To provide an explicit output types or to silence this message, "
+           "please provide the `meta=` keyword, as described in the map or "
+           "apply function that you are using.")
+    if meta_str:
+        msg += ("\n"
+                "  Before: .apply(func)\n"
+                "  After:  .apply(func, meta=%s)\n" % str(meta_str))
+    return msg
