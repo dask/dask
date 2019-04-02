@@ -186,12 +186,6 @@ def test_Client_twice(loop):
 def test_defaults():
     from distributed.worker import _ncores
 
-    with LocalCluster(scheduler_port=0, silence_logs=False,
-                      diagnostics_port=None) as c:
-        assert sum(w.ncores for w in c.workers) == _ncores
-        assert all(isinstance(w, Nanny) for w in c.workers)
-        assert all(w.ncores == 1 for w in c.workers)
-
     with LocalCluster(processes=False, scheduler_port=0, silence_logs=False,
                       diagnostics_port=None) as c:
         assert sum(w.ncores for w in c.workers) == _ncores
@@ -565,6 +559,23 @@ def test_asynchronous_property(loop):
             assert cluster.asynchronous
 
         cluster.sync(_)
+
+
+def test_protocol_inproc(loop):
+    with LocalCluster(protocol='inproc://', loop=loop, processes=False) as cluster:
+        assert cluster.scheduler.address.startswith('inproc://')
+
+
+def test_protocol_tcp(loop):
+    with LocalCluster(protocol='tcp', loop=loop, processes=False) as cluster:
+        assert cluster.scheduler.address.startswith('tcp://')
+
+
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
+                    reason="Need 127.0.0.2 to mean localhost")
+def test_protocol_ip(loop):
+    with LocalCluster(ip='tcp://127.0.0.2', loop=loop, processes=False) as cluster:
+        assert cluster.scheduler.address.startswith('tcp://127.0.0.2')
 
 
 if sys.version_info >= (3, 5):

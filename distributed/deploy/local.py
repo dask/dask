@@ -60,6 +60,10 @@ class LocalCluster(Cluster):
     service_kwargs: Dict[str, Dict]
         Extra keywords to hand to the running services
     security : Security
+    protocol: str (optional)
+        Protocol to use like ``tcp://``, ``tls://``, ``inproc://``
+        This defaults to sensible choice given other keyword arguments like
+        ``processes`` and ``security``
 
     Examples
     --------
@@ -85,7 +89,8 @@ class LocalCluster(Cluster):
                  loop=None, start=None, ip=None, scheduler_port=0,
                  silence_logs=logging.WARN, diagnostics_port=8787,
                  services=None, worker_services=None, service_kwargs=None,
-                 asynchronous=False, security=None, blocked_handlers=None, **worker_kwargs):
+                 asynchronous=False, security=None, protocol=None,
+                 blocked_handlers=None, **worker_kwargs):
         if start is not None:
             msg = ("The start= parameter is deprecated. "
                    "LocalCluster always starts. "
@@ -95,6 +100,20 @@ class LocalCluster(Cluster):
 
         self.status = None
         self.processes = processes
+
+        if protocol is None:
+            if ip and '://' in ip:
+                protocol = ip.split('://')[0]
+            elif security:
+                protocol = 'tls://'
+            elif not self.processes and not scheduler_port:
+                protocol = 'inproc://'
+            else:
+                protocol = 'tcp://'
+        if not protocol.endswith('://'):
+            protocol = protocol + '://'
+        self.protocol = protocol
+
         self.silence_logs = silence_logs
         self._asynchronous = asynchronous
         self.security = security
@@ -191,16 +210,21 @@ class LocalCluster(Cluster):
         """
         if self.status == 'running':
             return
-        if (ip is None) and (not self.scheduler_port) and (not self.processes):
-            # Use inproc transport for optimization
-            scheduler_address = 'inproc://'
-        elif ip is not None and ip.startswith('tls://'):
-            scheduler_address = ('%s:%d' % (ip, self.scheduler_port))
+
+        if self.protocol == 'inproc://':
+            address = self.protocol
         else:
             if ip is None:
                 ip = '127.0.0.1'
-            scheduler_address = (ip, self.scheduler_port)
-        self.scheduler.start(scheduler_address)
+
+            if '://' in ip:
+                address = ip
+            else:
+                address = self.protocol + ip
+            if self.scheduler_port:
+                address += ':' + str(self.scheduler_port)
+
+        self.scheduler.start(address)
 
         yield [self._start_worker(**self.worker_kwargs) for i in range(n_workers)]
 
