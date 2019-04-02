@@ -2149,7 +2149,7 @@ def from_array(x, chunks, name=None, lock=False, asarray=True, fancy=True,
     return Array(dsk, name, chunks, dtype=x.dtype)
 
 
-def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
+def from_zarr(url, component=None, storage_options=None, chunks=None,name=None, **kwargs):
     """Load array from the zarr storage format
 
     See https://zarr.readthedocs.io for details about the format.
@@ -2170,6 +2170,12 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
         Passed to ``da.from_array``, allows setting the chunks on
         initialisation, if the chunking scheme in the on-disc dataset is not
         optimal for the calculations to follow.
+    name : str, optional
+        The key name to use for the array. Defaults to a hash of ``x``.
+        By default, hash uses python's standard sha1. This behaviour can be
+        changed by installing cityhash, xxhash or murmurhash. If installed,
+        a large-factor speedup can be obtained in the tokenisation step.
+        Use ``name=False`` to generate a random name instead of hashing (fast)
     kwargs: passed to ``zarr.Array``.
     """
     import zarr
@@ -2186,7 +2192,9 @@ def from_zarr(url, component=None, storage_options=None, chunks=None, **kwargs):
         mapper = url
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     chunks = chunks if chunks is not None else z.chunks
-    return from_array(z, chunks, name='zarr-%s' % url)
+    if name is None:
+        name = 'from-zarr-' + tokenize(z, component, storage_options, chunks, **kwargs)
+    return from_array(z, chunks, name=name )
 
 
 def to_zarr(arr, url, component=None, storage_options=None,
