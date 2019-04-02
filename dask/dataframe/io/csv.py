@@ -371,7 +371,7 @@ def read_pandas(reader, urlpath, blocksize=AUTO_BLOCKSIZE, collection=True,
     # If the last partition is empty, don't count it
     nparts = 0 if not parts else len(parts) - int(not parts[-1])
 
-    if nparts < lastskiprow + need and len(b_sample) >= sample:
+    if sample is not False and nparts < lastskiprow + need and len(b_sample) >= sample:
         raise ValueError("Sample is not large enough to include at least one "
                          "row of data. Please increase the number of bytes "
                          "in `sample` in the call to `read_csv`/`read_table`")
