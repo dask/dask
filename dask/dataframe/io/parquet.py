@@ -700,6 +700,8 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     column_names, index_names, out_type = _normalize_index_columns(
         columns, column_names, index, index_names)
 
+    # TODO: here, index_name should not be in all_columns if it came from
+    # metadata rangeindex alone
     all_columns = index_names + column_names
 
     # Find non-empty pieces
@@ -898,8 +900,10 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
         else:
             if infer_divisions is True:
                 raise ValueError(
-                    ("Unable to infer divisions for index of '{index_name}' because it is not known to be "
-                     "sorted across partitions").format(index_name=divisions_name_in_schema))
+                    ("Unable to infer divisions for index of '{index_name}' "
+                     "because it is not known to be "
+                     "sorted across partitions").format(
+                        index_name=divisions_name_in_schema))
 
             divisions = (None,) * (len(pa_pieces) + 1)
     elif pa_pieces:

@@ -295,7 +295,8 @@ def test_columns_no_index(tmpdir, write_engine, read_engine):
     # No Index
     # --------
     # All columns, none as index
-    assert_eq(dd.read_parquet(fn, index=False, engine=read_engine, infer_divisions=False),
+    assert_eq(dd.read_parquet(fn, index=False, engine=read_engine,
+                              infer_divisions=False),
               ddf2, check_index=False, check_divisions=True)
 
     # Two columns, none as index
@@ -327,6 +328,8 @@ def test_infer_divisions_not_sorted(tmpdir, write_engine, read_engine):
 
 @write_read_engines_xfail
 def test_infer_divisions_no_index(tmpdir, write_engine, read_engine):
+    if read_engine == 'pyarrow' and pa.__version__ >= LooseVersion('0.13.0'):
+        pytest.skip("No longer an error from pyarrow 0.13.0")
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine, write_index=False)
 
