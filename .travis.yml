@@ -52,15 +52,15 @@ jobs:
       - *no_optimize
       - *imports
 
-    - env: &py36_dev
+    - env: &py37_dev
       - UPSTREAM_DEV=1  # Install nightly versions of NumPy, pandas, pyarrow
-      - NUMPY=1.13.0    # these are overridden later
-      - PANDAS=0.20.3
+      - NUMPY=1.16.2    # these are overridden later
+      - PANDAS>=0.24.2
       - *test_and_lint
       - *no_coverage
       - *no_optimize
       - *no_imports
-      if: type != pull_request
+      - *array_function
 
     - env: *py36_env
       if: type != pull_request
