@@ -28,6 +28,7 @@ from dask.base import tokenize, normalize_token, collections_to_dsk
 from dask.core import flatten, get_dependencies
 from dask.optimization import SubgraphCallable
 from dask.compatibility import apply, unicode
+from dask.utils import ensure_dict
 try:
     from cytoolz import first, groupby, merge, valmap, keymap
 except ImportError:
@@ -2354,7 +2355,7 @@ class Client(Node):
                 if tokey(key) in self.futures:
                     if not changed:
                         changed = True
-                        dsk = dict(dsk)
+                        dsk = ensure_dict(dsk)
                     dsk[key] = Future(key, self, inform=False)
 
         if changed:
