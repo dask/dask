@@ -1334,6 +1334,8 @@ def test_select_partitioned_column(tmpdir, engine):
     df_partitioned[df_partitioned.fake_categorical1 == 'A'].compute()
 
 
+@pytest.mark.xfail(
+    reason="Failing with PyArrow 0.13, see https://github.com/dask/dask/issues/4666")
 def test_with_tz(tmpdir, engine):
     if engine == 'pyarrow' and pa.__version__ < LooseVersion('0.11.0'):
         pytest.skip("pyarrow<0.11.0 did not support this")
