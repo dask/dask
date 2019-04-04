@@ -213,7 +213,8 @@ def _read_fastparquet(fs, fs_token, paths, columns=None, filters=None,
     dsk = {(name, i): (_read_parquet_row_group, fs, pf.row_group_filename(rg),
                        index_names, all_columns, rg, out_type == Series,
                        categories, pf.schema, pf.cats, pf.dtypes,
-                       pf.file_scheme, storage_name_mapping)
+                       pf.file_scheme, storage_name_mapping,
+                       getattr(pf, 'tz', {}))
            for i, rg in enumerate(rgs)}
     if not dsk:
         # empty dataframe
@@ -483,7 +484,8 @@ def _read_parquet_file(fs, base, fn, index, columns, series, categories,
 
 
 def _read_parquet_row_group(fs, fn, index, columns, rg, series, categories,
-                            schema, cs, dt, scheme, storage_name_mapping, *args):
+                            schema, cs, dt, scheme, storage_name_mapping, tz,
+                            *args):
     from fastparquet.api import _pre_allocate
     from fastparquet.core import read_row_group_file
     from collections import OrderedDict
@@ -501,7 +503,8 @@ def _read_parquet_row_group(fs, fn, index, columns, rg, series, categories,
     index = name_storage_mapping.get(index, index)
     cs = OrderedDict([(k, v) for k, v in cs.items() if k in columns])
 
-    df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt)
+    df, views = _pre_allocate(rg.num_rows, columns, categories, index, cs, dt,
+                              tz)
     read_row_group_file(fn, rg, columns, categories, schema, cs,
                         open=fs.open, assign=views, scheme=scheme)
 
