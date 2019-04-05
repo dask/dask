@@ -1035,7 +1035,6 @@ def test_columns_name(tmpdir, write_engine, read_engine):
 @pytest.mark.parametrize('compression,', ['default', None, 'gzip', 'snappy'])
 def test_writing_parquet_with_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
-
     if engine == 'fastparquet' and compression in ['snappy', 'default']:
         pytest.importorskip('snappy')
 
@@ -1050,8 +1049,10 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
         pf = fastparquet.ParquetFile(fn)
         assert pf.row_groups[0].columns[0].meta_data.codec == 1
 
-    out = dd.read_parquet(fn, engine=engine, infer_divisions=should_check_divs(engine))
-    assert_eq(out, ddf, check_index=(engine != 'fastparquet'), check_divisions=should_check_divs(engine))
+    out = dd.read_parquet(fn, engine=engine,
+                          infer_divisions=should_check_divs(engine))
+    assert_eq(out, ddf, check_index=(engine != 'fastparquet'),
+              check_divisions=should_check_divs(engine))
 
 
 @pytest.fixture(params=[

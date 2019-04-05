@@ -56,7 +56,6 @@ def _parse_pandas_metadata(pandas_metadata):
     """
     index_storage_names = [n['name'] if isinstance(n, dict) else n
                            for n in pandas_metadata['index_columns']]
-    index_storage_names = [n for n in index_storage_names if n]
     index_name_xpr = re.compile(r'__index_level_\d+__')
 
     # older metadatas will not have a 'field_name' field so we fall back
@@ -289,6 +288,8 @@ def _pf_validation(pf, columns, index, categories, filters):
         index_names, column_names, storage_name_mapping, column_index_names = (
             _parse_pandas_metadata(json.loads(pandas_md[0]))
         )
+        #  auto-ranges should not be created by fastparquet
+        index_names = [n for n in index_names if n is not None]
         column_names.extend(pf.cats)
     else:
         raise ValueError("File has multiple entries for 'pandas' metadata")
@@ -700,8 +701,6 @@ def _read_pyarrow(fs, fs_token, paths, columns=None, filters=None,
     column_names, index_names, out_type = _normalize_index_columns(
         columns, column_names, index, index_names)
 
-    # TODO: here, index_name should not be in all_columns if it came from
-    # metadata rangeindex alone
     all_columns = index_names + column_names
 
     # Find non-empty pieces
@@ -840,6 +839,7 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
                 for piece in pa_pieces:
                     divisions.append(divisions[-1]
                                      + piece.get_metadata().num_rows)
+                divisions[-1] -= 1  # non-include on final div
                 return divisions
             else:
                 raise ValueError(
@@ -936,7 +936,7 @@ def _read_pyarrow_parquet_piece(fs, piece, columns, index_cols, is_series,
     if not has_index and index_cols:
         # Index should be set, but it isn't
         df = df.set_index(index_cols)
-    elif has_index and index_cols and df.index.names != index_cols:
+    elif has_index and df.index.names != index_cols:
         # Index is set, but isn't correct
         # This can happen when reading in not every column in a multi-index
         df = df.reset_index(drop=False)
