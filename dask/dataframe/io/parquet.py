@@ -829,8 +829,8 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
     # Note: get_field_index returns -1 if not found, but it does not accept None
     if infer_divisions is True:
         divisions_name_in_schema = (
-                divisions_name is not None
-                and pa_schema.get_field_index(divisions_name) >= 0
+            divisions_name is not None
+            and pa_schema.get_field_index(divisions_name) >= 0
         )
 
         if divisions_name_in_schema is False:
