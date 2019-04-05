@@ -834,7 +834,9 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
         )
 
         if divisions_name_in_schema is False:
-            if divisions_name is None:
+            if (divisions_name is None and pa.__version__ >= LooseVersion(
+                    '0.13.0')):
+                # pyarrow < 0.13 does not expose num_rows
                 divisions = [0]
                 for piece in pa_pieces:
                     divisions.append(divisions[-1]
