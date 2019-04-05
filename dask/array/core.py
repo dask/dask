@@ -3508,6 +3508,14 @@ def concatenate3(arrays):
 
     advanced = max(core.flatten(arrays, container=(list, tuple)),
                    key=lambda x: getattr(x, '__array_priority__', 0))
+
+    if not isinstance(advanced, np.ndarray) and hasattr(advanced, '__array_function__'):
+        try:
+            x = unpack_singleton(arrays)
+            return _concatenate2(arrays, axes=tuple(range(x.ndim)))
+        except TypeError:
+            pass
+
     if concatenate_lookup.dispatch(type(advanced)) is not np.concatenate:
         x = unpack_singleton(arrays)
         return _concatenate2(arrays, axes=list(range(x.ndim)))
