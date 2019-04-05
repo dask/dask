@@ -158,6 +158,12 @@ def test_parse_sample_bytes():
         assert len(sample) == 40
 
 
+def test_read_bytes_no_sample():
+    with filetexts(files, mode='b'):
+        sample, _ = read_bytes('.test.accounts.1.json', sample=False)
+        assert sample is False
+
+
 def test_read_bytes_blocksize_none():
     with filetexts(files, mode='b'):
         sample, values = read_bytes('.test.accounts.*', blocksize=None)

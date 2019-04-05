@@ -621,6 +621,12 @@ def test_empty_csv_file():
         assert list(df.columns) == ['a', 'b']
 
 
+def test_read_csv_no_sample():
+    with filetexts(csv_files, mode='b') as fn:
+        df = dd.read_csv(fn, sample=False)
+        assert list(df.columns) == ['name', 'amount', 'id']
+
+
 def test_read_csv_sensitive_to_enforce():
     with filetexts(csv_files, mode='b'):
         a = dd.read_csv('2014-01-*.csv', enforce=True)

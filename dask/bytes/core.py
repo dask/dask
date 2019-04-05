@@ -48,7 +48,7 @@ def read_bytes(urlpath, delimiter=None, not_zero=False, blocksize="128 MiB",
         Chunk size in bytes, defaults to "128 MiB"
     compression : string or None
         String like 'gzip' or 'xz'.  Must support efficient random access.
-    sample : int or string
+    sample : int, string, or boolean
         Whether or not to return a header sample.
         Values can be ``False`` for "no sample requested"
         Or an integer or string value like ``2**20`` or ``"1 MiB"``

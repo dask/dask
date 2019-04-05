@@ -112,7 +112,16 @@ class HTTPFile(object):
                                   **self.kwargs)
         except ValueError:
             # No size information - only allow read() and no seek()
-            self.size = None
+            self.size = None  # pragma: no cover
+        except requests.HTTPError as err:
+            # If we got an HTTP error, it may be due to HEAD being unsupported,
+            # or it may be due to server/permissions/not-found errors. In the former
+            # case we disable read() and seek(), in the latter we re-raise.
+            code = err.response.status_code
+            if code >= 500 or code in (401, 403, 404):
+                raise err
+            self.size = None  # pragma: no cover
+
         self.cache = None
         self.closed = False
         self.start = None
