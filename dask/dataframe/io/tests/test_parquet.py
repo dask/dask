@@ -295,7 +295,8 @@ def test_columns_no_index(tmpdir, write_engine, read_engine):
     # No Index
     # --------
     # All columns, none as index
-    assert_eq(dd.read_parquet(fn, index=False, engine=read_engine, infer_divisions=False),
+    assert_eq(dd.read_parquet(fn, index=False, engine=read_engine,
+                              infer_divisions=False),
               ddf2, check_index=False, check_divisions=True)
 
     # Two columns, none as index
@@ -327,6 +328,8 @@ def test_infer_divisions_not_sorted(tmpdir, write_engine, read_engine):
 
 @write_read_engines_xfail
 def test_infer_divisions_no_index(tmpdir, write_engine, read_engine):
+    if read_engine == 'pyarrow' and pa.__version__ >= LooseVersion('0.13.0'):
+        pytest.skip("No longer an error from pyarrow 0.13.0")
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine, write_index=False)
 
@@ -460,8 +463,6 @@ def test_optimize(tmpdir, c):
 
 @pytest.mark.skipif(not hasattr(pd.DataFrame, 'to_parquet'),
                     reason="no to_parquet method")
-@pytest.mark.xfail(
-    reason="Failing with PyArrow 0.13, see https://github.com/dask/dask/issues/4666")
 @write_read_engines()
 def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
     fn = str(tmpdir.join('test.parquet'))
@@ -472,8 +473,6 @@ def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
 
 
 @write_read_engines_xfail
-@pytest.mark.xfail(
-    reason="Failing with PyArrow 0.13, see https://github.com/dask/dask/issues/4666")
 def test_categorical(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     df = pd.DataFrame({'x': ['a', 'b', 'c'] * 100}, dtype='category')
@@ -681,8 +680,6 @@ def test_ordering(tmpdir, write_engine, read_engine):
     assert_eq(ddf, ddf2, check_divisions=False)
 
 
-@pytest.mark.xfail(
-    reason="Failing with PyArrow 0.13, see https://github.com/dask/dask/issues/4666")
 def test_read_parquet_custom_columns(tmpdir, engine):
     import glob
     tmp = str(tmpdir)
@@ -834,8 +831,6 @@ def test_partition_on(tmpdir, write_engine, read_engine):
 
 
 @write_read_engines_xfail
-@pytest.mark.xfail(
-    reason="Failing with PyArrow 0.13, see https://github.com/dask/dask/issues/4666")
 def test_filters(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
 
@@ -941,8 +936,6 @@ def test_read_from_fastparquet_parquetfile(tmpdir):
 
 
 @pytest.mark.parametrize('scheduler', ['threads', 'processes'])
-@pytest.mark.xfail(
-    reason="Failing with PyArrow 0.13, see https://github.com/dask/dask/issues/4666")
 def test_to_parquet_lazy(tmpdir, scheduler, engine):
     tmpdir = str(tmpdir)
     df = pd.DataFrame({'a': [1, 2, 3, 4],
@@ -1040,11 +1033,8 @@ def test_columns_name(tmpdir, write_engine, read_engine):
 
 
 @pytest.mark.parametrize('compression,', ['default', None, 'gzip', 'snappy'])
-@pytest.mark.xfail(
-    reason="Failing with PyArrow 0.13, see https://github.com/dask/dask/issues/4666")
 def test_writing_parquet_with_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
-
     if engine == 'fastparquet' and compression in ['snappy', 'default']:
         pytest.importorskip('snappy')
 
@@ -1059,8 +1049,10 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
         pf = fastparquet.ParquetFile(fn)
         assert pf.row_groups[0].columns[0].meta_data.codec == 1
 
-    out = dd.read_parquet(fn, engine=engine, infer_divisions=should_check_divs(engine))
-    assert_eq(out, ddf, check_index=(engine != 'fastparquet'), check_divisions=should_check_divs(engine))
+    out = dd.read_parquet(fn, engine=engine,
+                          infer_divisions=should_check_divs(engine))
+    assert_eq(out, ddf, check_index=(engine != 'fastparquet'),
+              check_divisions=should_check_divs(engine))
 
 
 @pytest.fixture(params=[
@@ -1334,8 +1326,6 @@ def test_select_partitioned_column(tmpdir, engine):
     df_partitioned[df_partitioned.fake_categorical1 == 'A'].compute()
 
 
-@pytest.mark.xfail(
-    reason="Failing with PyArrow 0.13, see https://github.com/dask/dask/issues/4666")
 def test_with_tz(tmpdir, engine):
     if engine == 'pyarrow' and pa.__version__ < LooseVersion('0.11.0'):
         pytest.skip("pyarrow<0.11.0 did not support this")
@@ -1350,8 +1340,6 @@ def test_with_tz(tmpdir, engine):
     assert_eq(df, df2, check_divisions=False, check_index=False)
 
 
-@pytest.mark.xfail(
-    reason="Failing with PyArrow 0.13, see https://github.com/dask/dask/issues/4666")
 def test_arrow_partitioning(tmpdir):
     # Issue #3518
     pytest.importorskip('pyarrow')
