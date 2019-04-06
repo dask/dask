@@ -43,7 +43,7 @@ class Nanny(ServerNode):
             memory_limit='auto', reconnect=True, validate=False, quiet=False,
             resources=None, silence_logs=None, death_timeout=None, preload=(),
             preload_argv=[], security=None, contact_address=None,
-            listen_address=None, worker_class=None, env=None, **kwargs):
+            listen_address=None, worker_class=None, env=None, **worker_kwargs):
 
         if scheduler_file:
             cfg = json_load_robust(scheduler_file)
@@ -64,6 +64,7 @@ class Nanny(ServerNode):
         self.preload_argv = preload_argv
         self.Worker = Worker if worker_class is None else worker_class
         self.env = env or {}
+        self.worker_kwargs = worker_kwargs
 
         self.contact_address = contact_address
         self.memory_terminate_fraction = dask.config.get('distributed.worker.memory.terminate')
@@ -96,8 +97,7 @@ class Nanny(ServerNode):
                     'run': self.run}
 
         super(Nanny, self).__init__(handlers, io_loop=self.loop,
-                                    connection_args=self.connection_args,
-                                    **kwargs)
+                                    connection_args=self.connection_args)
 
         if self.memory_limit:
             pc = PeriodicCallback(self.memory_monitor, 100, io_loop=self.loop)
@@ -196,23 +196,26 @@ class Nanny(ServerNode):
                     self._given_worker_port)
 
         if self.process is None:
+            worker_kwargs = dict(scheduler_ip=self.scheduler_addr,
+                                 ncores=self.ncores,
+                                 local_dir=self.local_dir,
+                                 services=self.services,
+                                 service_ports={'nanny': self.port},
+                                 name=self.name,
+                                 memory_limit=self.memory_limit,
+                                 reconnect=self.reconnect,
+                                 resources=self.resources,
+                                 validate=self.validate,
+                                 silence_logs=self.silence_logs,
+                                 death_timeout=self.death_timeout,
+                                 preload=self.preload,
+                                 preload_argv=self.preload_argv,
+                                 security=self.security,
+                                 contact_address=self.contact_address)
+            worker_kwargs.update(self.worker_kwargs)
             self.process = WorkerProcess(
-                worker_args=(self.scheduler_addr,),
-                worker_kwargs=dict(ncores=self.ncores,
-                                   local_dir=self.local_dir,
-                                   services=self.services,
-                                   service_ports={'nanny': self.port},
-                                   name=self.name,
-                                   memory_limit=self.memory_limit,
-                                   reconnect=self.reconnect,
-                                   resources=self.resources,
-                                   validate=self.validate,
-                                   silence_logs=self.silence_logs,
-                                   death_timeout=self.death_timeout,
-                                   preload=self.preload,
-                                   preload_argv=self.preload_argv,
-                                   security=self.security,
-                                   contact_address=self.contact_address),
+                worker_args=tuple(),
+                worker_kwargs=worker_kwargs,
                 worker_start_args=(start_arg,),
                 silence_logs=self.silence_logs,
                 on_exit=self._on_exit,
