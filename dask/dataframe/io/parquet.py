@@ -843,7 +843,7 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
                                      + piece.get_metadata().num_rows)
                 divisions[-1] -= 1  # non-include on final div
                 return divisions
-            else:
+            else:   # pragma: no cover
                 raise ValueError(
                     'Unable to infer divisions for because no index column'
                     ' was discovered')
@@ -899,7 +899,7 @@ def _get_pyarrow_divisions(pa_pieces, divisions_name, pa_schema, infer_divisions
                 encoding = 'utf-8'
                 divisions = [d.decode(encoding).strip() for d in divisions]
 
-        else:
+        else:   # pragma: no cover
             if infer_divisions is True:
                 raise ValueError(
                     ("Unable to infer divisions for index of '{index_name}' "
