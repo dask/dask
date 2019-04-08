@@ -4,6 +4,7 @@ from functools import wraps
 from numbers import Number
 
 import numpy as np
+from crick import TDigest
 from toolz import merge, merge_sorted
 
 from .core import Array
@@ -32,10 +33,32 @@ def _percentile(a, q, interpolation='linear'):
     return np.percentile(a, q, interpolation=interpolation), n
 
 
-def percentile(a, q, interpolation='linear'):
+def _tdigest_chunk(a):
+
+    t = TDigest()
+    t.update(a)
+
+    return t
+
+
+def _percentiles_from_tdigest(qs, digests):
+
+    t = TDigest()
+    t.merge(*digests)
+
+    return np.array([t.quantile(q / 100.0) for q in qs])
+
+
+def percentile(a, q, interpolation='linear', use_tdigest=True):
     """ Approximate percentile of 1-D array
 
     See :func:`numpy.percentile` for more information
+
+    Note: this implementation will use t-digest for calculating the percentile
+          only if `use_tdigest` is set to True, the dtype of the array is integer
+          or floating type and interpolation is set to linear. Otherwise it falls
+          back to the internal implementation.
+
     """
     if not a.ndim == 1:
         raise NotImplementedError(
@@ -44,17 +67,32 @@ def percentile(a, q, interpolation='linear'):
         q = [q]
     q = np.array(q)
     token = tokenize(a, list(q), interpolation)
-    name = 'percentile_chunk-' + token
-    dsk = dict(((name, i), (_percentile, (key), q, interpolation))
-               for i, key in enumerate(a.__dask_keys__()))
-
-    name2 = 'percentile-' + token
-    dsk2 = {(name2, 0): (merge_percentiles, q, [q] * len(a.chunks[0]),
-                         sorted(dsk), interpolation)}
 
     dtype = a.dtype
     if np.issubdtype(dtype, np.integer):
         dtype = (np.array([], dtype=dtype) / 0.5).dtype
+
+    # Use t-digest if dtype is floating type and interpolation is allowed
+    if use_tdigest and np.issubdtype(dtype, np.floating) and interpolation == 'linear':
+
+        name = 'percentile_tdigest_chunk-' + token
+        dsk = dict(((name, i), (_tdigest_chunk, (key)))
+                for i, key in enumerate(a.__dask_keys__()))
+
+        name2 = 'percentile_tdigest-' + token
+
+        dsk2 = {(name2, 0): (_percentiles_from_tdigest, q, sorted(dsk))}
+
+    # Otherwise use the custom percentile algorithm
+    else:
+
+        name = 'percentile_chunk-' + token
+        dsk = dict(((name, i), (_percentile, (key), q, interpolation))
+                   for i, key in enumerate(a.__dask_keys__()))
+
+        name2 = 'percentile-' + token
+        dsk2 = {(name2, 0): (merge_percentiles, q, [q] * len(a.chunks[0]),
+                             sorted(dsk), interpolation)}
 
     dsk = merge(dsk, dsk2)
     graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[a])
