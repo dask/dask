@@ -1,5 +1,5 @@
 from .serialize import (serialize, dask_serialize, dask_deserialize,
-        register_generic)
+                        register_generic)
 
 import torch
 import numpy as np
@@ -7,12 +7,13 @@ import numpy as np
 
 @dask_serialize.register(torch.Tensor)
 def serialize_torch_Tensor(t):
-    header, frames = serialize(t.numpy())
+    requires_grad_ = t.requires_grad
+    header, frames = serialize(t.detach_().numpy())
     if t.grad is not None:
         grad_header, grad_frames = serialize(t.grad.numpy())
         header['grad'] = {'header': grad_header, 'start': len(frames)}
         frames += grad_frames
-    header['requires_grad'] = t.requires_grad
+    header['requires_grad'] = requires_grad_
     header['device'] = t.device.type
     return header, frames
 
@@ -22,7 +23,8 @@ def deserialize_torch_Tensor(header, frames):
     if header.get('grad', False):
         i = header['grad']['start']
         frames, grad_frames = frames[:i], frames[i:]
-        grad = dask_deserialize.dispatch(np.ndarray)(header['grad']['header'], grad_frames)
+        grad = dask_deserialize.dispatch(np.ndarray)(header['grad']['header'],
+                                                     grad_frames)
     else:
         grad = None
 
