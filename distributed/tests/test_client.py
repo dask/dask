@@ -609,6 +609,21 @@ def test_wait(c, s, a, b):
     assert x.status == y.status == 'finished'
 
 
+@gen_cluster(client=True)
+def test_wait_first_completed(c, s, a, b):
+    x = c.submit(slowinc, 1)
+    y = c.submit(slowinc, 1)
+    z = c.submit(inc, 2)
+
+    done, not_done = yield wait([x, y, z], return_when='FIRST_COMPLETED')
+
+    assert done == {z}
+    assert not_done == {x, y}
+    assert z.status == 'finished'
+    assert x.status == 'pending'
+    assert y.status == 'pending'
+
+
 @gen_cluster(client=True, timeout=2)
 def test_wait_timeout(c, s, a, b):
     future = c.submit(sleep, 0.3)

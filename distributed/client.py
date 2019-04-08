@@ -63,7 +63,7 @@ from .worker import dumps_task, get_client, get_worker, secede
 from .utils import (All, sync, funcname, ignoring, queue_to_iterator,
                     tokey, log_errors, str_graph, key_split, format_bytes, asciitable,
                     thread_state, no_default, PeriodicCallback, LoopRunner,
-                    parse_timedelta, shutting_down)
+                    parse_timedelta, shutting_down, Any)
 from .versions import get_versions
 
 
@@ -3637,35 +3637,43 @@ def CompatibleExecutor(*args, **kwargs):
     raise Exception("This has been moved to the Client.get_executor() method")
 
 
+ALL_COMPLETED = 'ALL_COMPLETED'
+FIRST_COMPLETED = 'FIRST_COMPLETED'
+
+
 @gen.coroutine
-def _wait(fs, timeout=None, return_when='ALL_COMPLETED'):
+def _wait(fs, timeout=None, return_when=ALL_COMPLETED):
     if timeout is not None and not isinstance(timeout, Number):
         raise TypeError("timeout= keyword received a non-numeric value.\n"
                         "Beware that wait expects a list of values\n"
                         "  Bad:  wait(x, y, z)\n"
                         "  Good: wait([x, y, z])")
     fs = futures_of(fs)
-    if return_when == 'ALL_COMPLETED':
-        future = All({f._state.wait() for f in fs})
-        if timeout is not None:
-            future = gen.with_timeout(timedelta(seconds=timeout), future)
-        yield future
-        done, not_done = set(fs), set()
-        cancelled = [f.key for f in done
-                     if f.status == 'cancelled']
-        if cancelled:
-            raise CancelledError(cancelled)
+    if return_when == ALL_COMPLETED:
+        wait_for = All
+    elif return_when == FIRST_COMPLETED:
+        wait_for = Any
     else:
-        raise NotImplementedError("Only return_when='ALL_COMPLETED' supported")
+        raise NotImplementedError("Only return_when='ALL_COMPLETED' and 'FIRST_COMPLETED' are "
+                                  "supported")
+
+    future = wait_for({f._state.wait() for f in fs})
+    if timeout is not None:
+        future = gen.with_timeout(timedelta(seconds=timeout), future)
+    yield future
+
+    done, not_done = ({fu for fu in fs if fu.status != 'pending'},
+                      {fu for fu in fs if fu.status == 'pending'})
+    cancelled = [f.key for f in done
+                 if f.status == 'cancelled']
+    if cancelled:
+        raise CancelledError(cancelled)
 
     raise gen.Return(DoneAndNotDoneFutures(done, not_done))
 
 
-ALL_COMPLETED = 'ALL_COMPLETED'
-
-
-def wait(fs, timeout=None, return_when='ALL_COMPLETED'):
-    """ Wait until all futures are complete
+def wait(fs, timeout=None, return_when=ALL_COMPLETED):
+    """ Wait until all/any futures are finished
 
     Parameters
     ----------
