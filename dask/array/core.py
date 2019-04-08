@@ -16,6 +16,7 @@ import pickle
 from threading import Lock
 import uuid
 import warnings
+from .utils import IS_NEP18_ACTIVE
 
 try:
     from cytoolz import (partition, concat, first, groupby, accumulate)
@@ -3509,7 +3510,8 @@ def concatenate3(arrays):
     advanced = max(core.flatten(arrays, container=(list, tuple)),
                    key=lambda x: getattr(x, '__array_priority__', 0))
 
-    if not isinstance(advanced, np.ndarray) and hasattr(advanced, '__array_function__'):
+    if (IS_NEP18_ACTIVE and not isinstance(advanced, np.ndarray) and
+            hasattr(advanced, '__array_function__')):
         try:
             x = unpack_singleton(arrays)
             return _concatenate2(arrays, axes=tuple(range(x.ndim)))
