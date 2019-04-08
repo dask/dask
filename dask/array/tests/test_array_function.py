@@ -1,15 +1,11 @@
 import pytest
-np = pytest.importorskip('numpy', minversion='1.16')
-
-import os
+import numpy as np
 
 import dask.array as da
-from dask.array.utils import assert_eq
+from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
 
-
-env_name = "NUMPY_EXPERIMENTAL_ARRAY_FUNCTION"
-missing_arrfunc_cond = env_name not in os.environ or os.environ[env_name] != "1"
-missing_arrfunc_reason = env_name + " undefined or disabled"
+missing_arrfunc_cond = not IS_NEP18_ACTIVE
+missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
