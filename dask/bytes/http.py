@@ -122,7 +122,7 @@ class HTTPFile(object):
                 raise err
             self.size = None  # pragma: no cover
 
-        self.cache = None
+        self.cache = b''
         self.closed = False
         self.start = None
         self.end = None
