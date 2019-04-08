@@ -1494,7 +1494,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 result.divisions = (min(self.columns), max(self.columns))
             return result
 
-    def quantile(self, q=0.5, axis=0):
+    def quantile(self, q=0.5, axis=0, use_tdigest=True):
         """ Approximate row-wise and precise column-wise quantiles of DataFrame
 
         Parameters
@@ -1504,6 +1504,11 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             Iterable of numbers ranging from 0 to 1 for the desired quantiles
         axis : {0, 1, 'index', 'columns'} (default 0)
             0 or 'index' for row-wise, 1 or 'columns' for column-wise
+
+        Note: this implementation will use t-digest for columns with floating
+              dtype if axis is set to 0 and `use_tdigest` is set to True.
+              Otherwise it falls back to the internal implementation.
+
         """
         axis = self._validate_axis(axis)
         keyname = 'quantiles-concat--' + tokenize(self, q, axis)
@@ -1518,7 +1523,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
             _raise_if_object_series(self, "quantile")
             meta = self._meta.quantile(q, axis=axis)
             num = self._get_numeric_data()
-            quantiles = tuple(quantile(self[c], q) for c in num.columns)
+            quantiles = tuple(quantile(self[c], q, use_tdigest) for c in num.columns)
 
             qnames = [(_q._name, 0) for _q in quantiles]
 
@@ -1533,7 +1538,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                 return DataFrame(graph, keyname, meta, quantiles[0].divisions)
 
     @derived_from(pd.DataFrame)
-    def describe(self, split_every=False, percentiles=None):
+    def describe(self, split_every=False, percentiles=None, use_tdigest=True):
         # currently, only numeric describe is supported
         num = self._get_numeric_data()
         if self.ndim == 2 and len(num.columns) == 0:
@@ -1548,7 +1553,7 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
                  num.mean(split_every=split_every),
                  num.std(split_every=split_every),
                  num.min(split_every=split_every),
-                 num.quantile(percentiles),
+                 num.quantile(percentiles, use_tdigest=use_tdigest),
                  num.max(split_every=split_every)]
         stats_names = [(s._name, 0) for s in stats]
 
@@ -2032,13 +2037,17 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
         return df
 
-    def quantile(self, q=0.5):
+    def quantile(self, q=0.5, use_tdigest=True):
         """ Approximate quantiles of Series
 
         q : list/array of floats, default 0.5 (50%)
             Iterable of numbers ranging from 0 to 1 for the desired quantiles
+
+        Note: this implementation will use t-digest is `use_tdigest` is set to true and the
+              dtype of df is floating. Otherwise it falls back to the internal implementation.
+
         """
-        return quantile(self, q)
+        return quantile(self, q, use_tdigest=use_tdigest)
 
     def _repartition_quantiles(self, npartitions, upsample=1.0):
         """ Approximate quantiles of Series used for repartitioning
@@ -3938,13 +3947,16 @@ def _rename_dask(df, names):
     return new_dd_object(graph, name, metadata, df.divisions)
 
 
-def quantile(df, q):
+def quantile(df, q, use_tdigest=True):
     """Approximate quantiles of Series.
 
     Parameters
     ----------
     q : list/array of floats
         Iterable of numbers ranging from 0 to 100 for the desired quantiles
+
+    Note: this implementation will use t-digest is `use_tdigest` is set to true and the
+          dtype of df is float. Otherwise it falls back to the internal implementation.
     """
     # current implementation needs q to be sorted so
     # sort if array-like, otherwise leave it alone
@@ -3954,7 +3966,8 @@ def quantile(df, q):
         q = q_ndarray
 
     assert isinstance(df, Series)
-    from dask.array.percentile import _percentile, merge_percentiles
+    from dask.array.percentile import (_percentile, merge_percentiles,
+                                       _tdigest_chunk, _percentiles_from_tdigest)
 
     # currently, only Series has quantile method
     if isinstance(df, Index):
@@ -3986,17 +3999,29 @@ def quantile(df, q):
         new_divisions = [np.min(q), np.max(q)]
 
     df = df.dropna()
-    name = 'quantiles-1-' + token
-    val_dsk = {(name, i): (_percentile, (getattr, key, 'values'), qs)
-               for i, key in enumerate(df.__dask_keys__())}
 
-    name3 = 'quantiles-3-' + token
-    merge_dsk = {(name3, 0): finalize_tsk((merge_percentiles, qs,
-                                           [qs] * df.npartitions,
-                                           sorted(val_dsk)))}
+    if use_tdigest and return_type == Series and np.issubdtype(meta.dtype, np.floating):
+
+        name = 'quantiles_tdigest-1-' + token
+        val_dsk = {(name, i): (_tdigest_chunk, (getattr, key, 'values'))
+                for i, key in enumerate(df.__dask_keys__())}
+
+        name2 = 'quantiles_tdigest-2-' + token
+        merge_dsk = {(name2, 0): finalize_tsk((_percentiles_from_tdigest, qs,
+                                            sorted(val_dsk)))}
+    else:
+
+        name = 'quantiles-1-' + token
+        val_dsk = {(name, i): (_percentile, (getattr, key, 'values'), qs)
+                for i, key in enumerate(df.__dask_keys__())}
+
+        name2 = 'quantiles-2-' + token
+        merge_dsk = {(name2, 0): finalize_tsk((merge_percentiles, qs,
+                                               [qs] * df.npartitions,
+                                               sorted(val_dsk)))}
     dsk = merge(val_dsk, merge_dsk)
-    graph = HighLevelGraph.from_collections(name3, dsk, dependencies=[df])
-    return return_type(graph, name3, meta, new_divisions)
+    graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[df])
+    return return_type(graph, name2, meta, new_divisions)
 
 
 def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
