@@ -266,7 +266,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock,
         assert index in x.names
         a = da.from_array(x[index], chunks=(chunksize * len(x.names),))
         q = np.linspace(0, 100, len(x) // chunksize + 2)
-        divisions = tuple(da.percentile(a, q).compute())
+        divisions = tuple(da.percentile(a, q, use_tdigest=False).compute())
         return set_partition(result, index, divisions, **kwargs)
     else:
         return result
