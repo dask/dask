@@ -47,7 +47,8 @@ from .utils import (funcname, get_ip, has_arg, _maybe_complex, log_errors,
                     ignoring, mp_context, import_file,
                     silence_logging, thread_state, json_load_robust, key_split,
                     format_bytes, DequeHandler, PeriodicCallback,
-                    parse_bytes, parse_timedelta, iscoroutinefunction)
+                    parse_bytes, parse_timedelta, iscoroutinefunction,
+                    warn_on_duration)
 from .utils_comm import pack_data, gather_from_workers
 from .utils_perf import ThrottledGC, enable_gc_diagnosis, disable_gc_diagnosis
 
@@ -377,9 +378,16 @@ class Worker(ServerNode):
         if silence_logs:
             silence_logging(level=silence_logs)
 
-        self._workspace = WorkSpace(os.path.abspath(local_dir))
-        self._workdir = self._workspace.new_work_dir(prefix='worker-')
-        self.local_dir = self._workdir.dir_path
+        with warn_on_duration(
+            '1s',
+            "Creating scratch directories is taking a surprisingly long time. "
+            "This is often due to running workers on a network file system. "
+            "Consider specifying a local-directory to point workers to write "
+            "scratch data to a local disk."
+        ):
+            self._workspace = WorkSpace(os.path.abspath(local_dir))
+            self._workdir = self._workspace.new_work_dir(prefix='worker-')
+            self.local_dir = self._workdir.dir_path
 
         self.security = security or Security()
         assert isinstance(self.security, Security)

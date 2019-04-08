@@ -1469,3 +1469,12 @@ def iscoroutinefunction(f):
     if sys.version_info >= (3, 5) and inspect.iscoroutinefunction(f):
         return True
     return False
+
+
+@contextmanager
+def warn_on_duration(duration, msg):
+    start = time()
+    yield
+    stop = time()
+    if stop - start > parse_timedelta(duration):
+        warnings.warn(msg, stacklevel=2)

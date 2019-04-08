@@ -5,6 +5,7 @@ from functools import partial
 import io
 import socket
 import sys
+from time import sleep
 import traceback
 
 import numpy as np
@@ -20,7 +21,7 @@ from distributed.utils import (All, sync, is_kernel, ensure_ip, str_graph,
                                iterator_to_queue, _maybe_complex, read_block, seek_delimiter,
                                funcname, ensure_bytes, open_port, get_ip_interface, nbytes,
                                set_thread_state, thread_state, LoopRunner,
-                               parse_bytes, parse_timedelta)
+                               parse_bytes, parse_timedelta, warn_on_duration)
 from distributed.utils_test import loop, loop_in_thread  # noqa: F401
 from distributed.utils_test import (div, has_ipv6, inc, throws, gen_test,
         captured_logger)
@@ -526,3 +527,17 @@ def test_all_exceptions_logging():
         yield gen.sleep(0.1)
 
     assert 'foo1234' not in sio.getvalue()
+
+
+def test_warn_on_duration():
+    with pytest.warns(None) as record:
+        with warn_on_duration('10s', 'foo'):
+            pass
+    assert not record
+
+    with pytest.warns(None) as record:
+        with warn_on_duration('1ms', 'foo'):
+            sleep(0.100)
+
+    assert record
+    assert any('foo' in str(rec.message) for rec in record)
