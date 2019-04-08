@@ -159,3 +159,17 @@ def validate_axis(axis, ndim):
     if axis < 0:
         axis += ndim
     return axis
+
+
+def _is_nep18_active():
+    class A():
+        def __array_function__(self, *args, **kwargs):
+            return True
+
+    try:
+        return np.concatenate([A()])
+    except ValueError:
+        return False
+
+
+IS_NEP18_ACTIVE = _is_nep18_active()
