@@ -3445,28 +3445,10 @@ def test_from_zarr_unique_name():
     assert da.from_zarr(a).name != da.from_zarr(b).name
 
 
-def test_from_zarr_unique_name():
+def test_from_zarr_name():
     zarr = pytest.importorskip('zarr')
     a = zarr.array([1, 2, 3])
-    b = zarr.array([4, 5, 6])
-
-    assert da.from_zarr(a).name != da.from_zarr(b).name
-
-
-def test_from_zarr_unique_name():
-    zarr = pytest.importorskip('zarr')
-    a = zarr.array([1, 2, 3])
-    b = zarr.array([4, 5, 6])
-
-    assert da.from_zarr(a).name != da.from_zarr(b).name
-
-
-def test_from_zarr_unique_name():
-    zarr = pytest.importorskip('zarr')
-    a = zarr.array([1, 2, 3])
-    b = zarr.array([4, 5, 6])
-
-    assert da.from_zarr(a).name != da.from_zarr(b).name
+    assert da.from_zarr(a, name='foo').name == 'foo'
 
 
 def test_zarr_roundtrip():

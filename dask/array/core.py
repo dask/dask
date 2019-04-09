@@ -2171,11 +2171,7 @@ def from_zarr(url, component=None, storage_options=None, chunks=None,name=None, 
         initialisation, if the chunking scheme in the on-disc dataset is not
         optimal for the calculations to follow.
     name : str, optional
-        The key name to use for the array. Defaults to a hash of ``x``.
-        By default, hash uses python's standard sha1. This behaviour can be
-        changed by installing cityhash, xxhash or murmurhash. If installed,
-        a large-factor speedup can be obtained in the tokenisation step.
-        Use ``name=False`` to generate a random name instead of hashing (fast)
+         An optional keyname for the dataframe.  Defaults to hashing the input 
     kwargs: passed to ``zarr.Array``.
     """
     import zarr
