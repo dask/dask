@@ -210,7 +210,7 @@ a few ways to handle this:
 1.  Open port ``8787`` to the outside world.  Often this involves asking your
     cluster administrator.
 2.  Use a different port that is publicly accessible using the
-    ``--bokeh-port PORT`` option on the ``dask-scheduler`` command.
+    ``--dashboard-address :8787`` option on the ``dask-scheduler`` command.
 3.  Use fancier techniques, like `Port Forwarding`_
 
 Running distributed on a remote machine can cause issues with viewing the web

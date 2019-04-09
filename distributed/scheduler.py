@@ -1050,27 +1050,31 @@ class Scheduler(ServerNode):
         else:
             return ws.host, port
 
-    def start_services(self, listen_ip):
+    def start_services(self, default_listen_ip):
+        if default_listen_ip == '0.0.0.0':
+            default_listen_ip = ''  # for IPV6
+
         for k, v in self.service_specs.items():
+            listen_ip = None
             if isinstance(k, tuple):
                 k, port = k
             else:
                 port = 0
+
+            if isinstance(port, (str, unicode)):
+                port = port.split(':')
+
+            if isinstance(port, (tuple, list)):
+                listen_ip, port = (port[0], int(port[1]))
 
             if isinstance(v, tuple):
                 v, kwargs = v
             else:
                 kwargs = {}
 
-            if listen_ip == '0.0.0.0':
-                listen_ip = ''  # for IPv6
-
             try:
                 service = v(self, io_loop=self.loop, **kwargs)
-                if isinstance(port, tuple):
-                    service.listen(port)
-                else:
-                    service.listen((listen_ip, port))
+                service.listen((listen_ip if listen_ip is not None else default_listen_ip, port))
                 self.services[k] = service
             except Exception as e:
                 warnings.warn("\nCould not launch service '%s' on port %s. " % (k, port) +

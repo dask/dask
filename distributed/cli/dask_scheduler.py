@@ -7,6 +7,7 @@ import os
 import shutil
 import sys
 import tempfile
+import warnings
 
 import click
 
@@ -40,8 +41,10 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
 @click.option('--tls-key', type=pem_file_option_type, default=None,
               help="private key file for TLS (in PEM format)")
 # XXX default port (or URI) values should be centralized somewhere
-@click.option('--bokeh-port', type=int, default=8787,
-              help="Bokeh port for visual diagnostics")
+@click.option('--bokeh-port', type=int, default=None,
+              help="Deprecated.  See --dashboard-address")
+@click.option('--dashboard-address', type=str, default=':8787',
+              help="Address on which to listen for diagnostics dashboard")
 @click.option('--bokeh/--no-bokeh', '_bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
 @click.option('--show/--no-show', default=False, help="Show web UI")
@@ -66,10 +69,18 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
                 type=click.UNPROCESSED, callback=validate_preload_argv)
 def main(host, port, bokeh_port, show, _bokeh, bokeh_whitelist, bokeh_prefix,
         use_xheaders, pid_file, scheduler_file, interface,
-        local_directory, preload, preload_argv, tls_ca_file, tls_cert, tls_key):
+        local_directory, preload, preload_argv, tls_ca_file, tls_cert, tls_key,
+        dashboard_address):
 
     enable_proctitle_on_current()
     enable_proctitle_on_children()
+
+    if bokeh_port is not None:
+        warnings.warn(
+            "The --bokeh-port flag has been renamed to --dashboard-address. "
+            "Consider adding ``--dashboard-address :%d`` " % bokeh_port
+        )
+        dashboard_address = bokeh_port
 
     sec = Security(tls_ca_file=tls_ca_file,
                    tls_scheduler_cert=tls_cert,
@@ -120,8 +131,8 @@ def main(host, port, bokeh_port, show, _bokeh, bokeh_whitelist, bokeh_prefix,
     if _bokeh:
         try:
             from distributed.bokeh.scheduler import BokehScheduler
-            services[('bokeh', bokeh_port)] = (BokehScheduler,
-                                               {'prefix': bokeh_prefix})
+            services[('bokeh', dashboard_address)] = (BokehScheduler,
+                                                      {'prefix': bokeh_prefix})
         except ImportError as error:
             if str(error).startswith('No module named'):
                 logger.info('Web dashboard not loaded.  Unable to import bokeh')

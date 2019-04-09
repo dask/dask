@@ -49,7 +49,7 @@ async def test_coro_test():
 
 @coro_test
 async def test_asyncio_start_close():
-    async with AioClient(processes=False, diagnostics_port=False) as c:
+    async with AioClient(processes=False, dashboard_address=False) as c:
         assert c.status == 'running'
         # AioClient has installed its AioLoop shim.
         assert isinstance(IOLoop.current(instance=False), BaseAsyncIOLoop)

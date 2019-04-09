@@ -1132,30 +1132,38 @@ def test_correct_bad_time_estimate(c, s, *workers):
     assert all(w.data for w in workers), [sorted(w.data) for w in workers]
 
 
-@pytest.mark.skipif(not sys.platform.startswith('linux'),
-                    reason="Need 127.0.0.* to mean localhost")
 @gen_test()
 def test_service_hosts():
     pytest.importorskip('bokeh')
     from distributed.bokeh.scheduler import BokehScheduler
 
-    for port in [0, ('127.0.0.3', 0)]:
-        for url, expected in [('tcp://0.0.0.0', ('::', '0.0.0.0')),
-                              ('tcp://127.0.0.2', '127.0.0.2'),
-                              ('tcp://127.0.0.2:38275', '127.0.0.2')]:
-            services = {('bokeh', port): BokehScheduler}
+    port = 0
+    for url, expected in [
+            ('tcp://0.0.0.0', ('::', '0.0.0.0')),
+            ('tcp://127.0.0.1', '127.0.0.1'),
+            ('tcp://127.0.0.1:38275', '127.0.0.1')]:
+        services = {('bokeh', port): BokehScheduler}
 
-            s = Scheduler(services=services)
-            yield s.start(url)
+        s = Scheduler(services=services)
+        yield s.start(url)
 
-            sock = first(s.services['bokeh'].server._http._sockets.values())
-            if isinstance(port, tuple):    # host explicitly overridden
-                assert sock.getsockname()[0] == port[0]
-            elif isinstance(expected, tuple):
-                assert sock.getsockname()[0] in expected
-            else:
-                assert sock.getsockname()[0] == expected
-            yield s.close()
+        sock = first(s.services['bokeh'].server._http._sockets.values())
+        if isinstance(expected, tuple):
+            assert sock.getsockname()[0] in expected
+        else:
+            assert sock.getsockname()[0] == expected
+        yield s.close()
+
+    port = ('127.0.0.1', 0)
+    for url in ['tcp://0.0.0.0', 'tcp://127.0.0.1', 'tcp://127.0.0.1:38275']:
+        services = {('bokeh', port): BokehScheduler}
+
+        s = Scheduler(services=services)
+        yield s.start(url)
+
+        sock = first(s.services['bokeh'].server._http._sockets.values())
+        assert sock.getsockname()[0] == '127.0.0.1'
+        yield s.close()
 
 
 @gen_cluster(client=True, worker_kwargs={'profile_cycle_interval': 100})

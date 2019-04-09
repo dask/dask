@@ -4,6 +4,7 @@ import atexit
 import logging
 import os
 from sys import exit
+import warnings
 
 import click
 from distributed import Nanny, Worker
@@ -40,8 +41,10 @@ pem_file_option_type = click.Path(exists=True, resolve_path=True)
               help="Serving computation port, defaults to random")
 @click.option('--nanny-port', type=int, default=0,
               help="Serving nanny port, defaults to random")
-@click.option('--bokeh-port', type=int, default=0,
-              help="Bokeh port, defaults to random port")
+@click.option('--bokeh-port', type=int, default=None,
+              help="Deprecated.  See --dashboard-address")
+@click.option('--dashboard-address', type=str, default=':0',
+              help="Address on which to listen for diagnostics dashboard")
 @click.option('--bokeh/--no-bokeh', 'bokeh', default=True, show_default=True,
               required=False, help="Launch Bokeh Web UI")
 @click.option('--listen-address', type=str, default=None,
@@ -102,9 +105,16 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
          memory_limit, pid_file, reconnect, resources, bokeh,
          bokeh_port, local_directory, scheduler_file, interface,
          death_timeout, preload, preload_argv, bokeh_prefix, tls_ca_file,
-         tls_cert, tls_key):
+         tls_cert, tls_key, dashboard_address):
     enable_proctitle_on_current()
     enable_proctitle_on_children()
+
+    if bokeh_port is not None:
+        warnings.warn(
+            "The --bokeh-port flag has been renamed to --dashboard-address. "
+            "Consider adding ``--dashboard-address :%d`` " % bokeh_port
+        )
+        dashboard_address = bokeh_port
 
     sec = Security(tls_ca_file=tls_ca_file,
                    tls_worker_cert=tls_cert,
@@ -177,7 +187,7 @@ def main(scheduler, host, worker_port, listen_address, contact_address,
                 result = (BokehWorker, {'prefix': bokeh_prefix})
             else:
                 result = BokehWorker
-            services[('bokeh', bokeh_port)] = result
+            services[('bokeh', dashboard_address)] = result
 
     if resources:
         resources = resources.replace(',', ' ').split()

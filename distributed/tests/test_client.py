@@ -1879,7 +1879,7 @@ def test_repr_async(c, s, a, b):
 
 @gen_test()
 def test_repr_localcluster():
-    cluster = yield LocalCluster(processes=False, diagnostics_port=None,
+    cluster = yield LocalCluster(processes=False, dashboard_address=None,
                                  asynchronous=True)
     client = yield Client(cluster, asynchronous=True)
     try:
@@ -4919,7 +4919,7 @@ def test_use_synchronous_client_in_async_context(loop, c):
 
 def test_quiet_quit_when_cluster_leaves(loop_in_thread):
     loop = loop_in_thread
-    with LocalCluster(loop=loop, scheduler_port=0, diagnostics_port=None,
+    with LocalCluster(loop=loop, scheduler_port=0, dashboard_address=None,
                       silence_logs=False) as cluster:
         with captured_logger('distributed.comm') as sio:
             with Client(cluster, loop=loop) as client:

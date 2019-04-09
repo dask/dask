@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import pytest
 pytest.importorskip('requests')
 
+import requests
 import sys
 from time import sleep
 from toolz import first
@@ -183,3 +184,25 @@ def test_respect_host_listen_address(loop, nanny, host):
 
                 listen_addresses = client.run(func)
                 assert all(host in v for v in listen_addresses.values())
+
+
+def test_bokeh_non_standard_ports(loop):
+    pytest.importorskip('bokeh')
+
+    with popen(['dask-scheduler', '--port', '3449', '--no-bokeh']):
+        with popen(['dask-worker', 'tcp://127.0.0.1:3449',
+                    '--dashboard-address', ':4833']) as proc:
+            with Client('127.0.0.1:3449', loop=loop) as c:
+                pass
+
+            start = time()
+            while True:
+                try:
+                    response = requests.get('http://127.0.0.1:4833/main')
+                    assert response.ok
+                    break
+                except Exception:
+                    sleep(0.5)
+                    assert time() < start + 20
+        with pytest.raises(Exception):
+            requests.get('http://localhost:4833/status/')

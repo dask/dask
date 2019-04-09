@@ -15,7 +15,7 @@ from distributed.metrics import time
 
 def test_get_scale_up_kwargs(loop):
     with LocalCluster(0, scheduler_port=0, silence_logs=False,
-                      diagnostics_port=None, loop=loop) as cluster:
+                      dashboard_address=None, loop=loop) as cluster:
 
         alc = Adaptive(cluster.scheduler, cluster, interval=100,
                        scale_factor=3)
@@ -62,7 +62,7 @@ def test_simultaneous_scale_up_and_down(c, s, *workers):
 
 def test_adaptive_local_cluster(loop):
     with LocalCluster(0, scheduler_port=0, silence_logs=False,
-                      diagnostics_port=None, loop=loop) as cluster:
+                      dashboard_address=None, loop=loop) as cluster:
         alc = Adaptive(cluster.scheduler, cluster, interval=100)
         with Client(cluster, loop=loop) as c:
             assert not c.ncores()
@@ -87,7 +87,7 @@ def test_adaptive_local_cluster(loop):
 @gen_test(timeout=30)
 def test_adaptive_local_cluster_multi_workers():
     cluster = yield LocalCluster(0, scheduler_port=0, silence_logs=False,
-                                 processes=False, diagnostics_port=None,
+                                 processes=False, dashboard_address=None,
                                  asynchronous=True)
     try:
         cluster.scheduler.allowed_failures = 1000
@@ -161,7 +161,7 @@ def test_adaptive_scale_down_override(c, s, *workers):
 def test_min_max():
     loop = IOLoop.current()
     cluster = yield LocalCluster(0, scheduler_port=0, silence_logs=False,
-                                 processes=False, diagnostics_port=None,
+                                 processes=False, dashboard_address=None,
                                  loop=loop, asynchronous=True)
     yield cluster._start()
     try:
@@ -212,7 +212,7 @@ def test_avoid_churn():
     """
     cluster = yield LocalCluster(0, asynchronous=True, processes=False,
                                  scheduler_port=0, silence_logs=False,
-                                 diagnostics_port=None)
+                                 dashboard_address=None)
     client = yield Client(cluster, asynchronous=True)
     try:
         adapt = Adaptive(cluster.scheduler, cluster, interval='20 ms', wait_count=5)
@@ -236,7 +236,7 @@ def test_adapt_quickly():
     """
     cluster = yield LocalCluster(0, asynchronous=True, processes=False,
                                  scheduler_port=0, silence_logs=False,
-                                 diagnostics_port=None)
+                                 dashboard_address=None)
     client = yield Client(cluster, asynchronous=True)
     adapt = Adaptive(cluster.scheduler, cluster, interval=20, wait_count=5,
                      maximum=10)
@@ -279,7 +279,7 @@ def test_adapt_down():
     """ Ensure that redefining adapt with a lower maximum removes workers """
     cluster = yield LocalCluster(0, asynchronous=True, processes=False,
                                  scheduler_port=0, silence_logs=False,
-                                 diagnostics_port=None)
+                                 dashboard_address=None)
     client = yield Client(cluster, asynchronous=True)
     cluster.adapt(interval='20ms', maximum=5)
 
@@ -304,7 +304,7 @@ def test_adapt_down():
 def test_no_more_workers_than_tasks():
     loop = IOLoop.current()
     cluster = yield LocalCluster(0, scheduler_port=0, silence_logs=False,
-                                 processes=False, diagnostics_port=None,
+                                 processes=False, dashboard_address=None,
                                  loop=loop, asynchronous=True)
     yield cluster._start()
     try:
@@ -324,7 +324,7 @@ def test_no_more_workers_than_tasks():
 def test_basic_no_loop():
     try:
         with LocalCluster(0, scheduler_port=0, silence_logs=False,
-                          diagnostics_port=None) as cluster:
+                          dashboard_address=None) as cluster:
             with Client(cluster) as client:
                 cluster.adapt()
                 future = client.submit(lambda x: x + 1, 1)
@@ -339,7 +339,7 @@ def test_target_duration():
     """ Ensure that redefining adapt with a lower maximum removes workers """
     cluster = yield LocalCluster(0, asynchronous=True, processes=False,
                                  scheduler_port=0, silence_logs=False,
-                                 diagnostics_port=None)
+                                 dashboard_address=None)
     client = yield Client(cluster, asynchronous=True)
     adaptive = cluster.adapt(interval='20ms', minimum=2, target_duration='5s')
 
@@ -367,7 +367,7 @@ def test_worker_keys():
     """ Ensure that redefining adapt with a lower maximum removes workers """
     cluster = yield LocalCluster(0, asynchronous=True, processes=False,
                                  scheduler_port=0, silence_logs=False,
-                                 diagnostics_port=None)
+                                 dashboard_address=None)
 
     try:
         yield [cluster.start_worker(name='a-1'),
