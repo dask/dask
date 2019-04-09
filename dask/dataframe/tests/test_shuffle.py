@@ -249,9 +249,9 @@ def test_shuffle_sort(shuffle):
 def test_rearrange(shuffle, scheduler):
     df = pd.DataFrame({'x': np.random.random(10)})
     ddf = dd.from_pandas(df, npartitions=4)
-    ddf2 = ddf.assign(y=ddf.x % 4)
+    ddf2 = ddf.assign(_partitions=ddf.x % 4)
 
-    result = rearrange_by_column(ddf2, 'y', max_branch=32, shuffle=shuffle)
+    result = rearrange_by_column(ddf2, '_partitions', max_branch=32, shuffle=shuffle)
     assert result.npartitions == ddf.npartitions
     assert set(ddf.dask).issubset(result.dask)
 
@@ -260,8 +260,8 @@ def test_rearrange(shuffle, scheduler):
     get = dask.base.get_scheduler(scheduler=scheduler)
     parts = get(result.dask, result.__dask_keys__())
 
-    for i in a.y.drop_duplicates():
-        assert sum(i in set(part.y) for part in parts) == 1
+    for i in a._partitions.drop_duplicates():
+        assert sum(i in set(part._partitions) for part in parts) == 1
 
 
 def test_rearrange_by_column_with_narrow_divisions():
