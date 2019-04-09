@@ -321,8 +321,8 @@ def test_describe_empty():
 
 
 def test_describe_for_possibly_unsorted_q():
-    '''make sure describe is sorting percentiles parameter, q, properly
-    and can handle lists, tuples and ndarrays.
+    '''make sure describe is sorting percentiles parameter, q, properly and can
+    handle lists, tuples and ndarrays.
 
     See https://github.com/dask/dask/issues/4642.
     '''
@@ -330,8 +330,9 @@ def test_describe_for_possibly_unsorted_q():
     A = da.arange(0, 101)
     ds = dd.from_dask_array(A)
 
-    for q in [None, [0.25, 0.50, 0.75], [0.25, 0.50, 0.75, 0.99], [0.75, 0.5, 0.25]]:
-        for f_convert in [list, tuple, np.ndarray]:
+    for q in [None, [0.25, 0.50, 0.75], [0.25, 0.50, 0.75, 0.99],
+              [0.75, 0.5, 0.25]]:
+        for f_convert in [list, tuple, np.array]:
             if q is None:
                 r = ds.describe(percentiles=q).compute()
             else:

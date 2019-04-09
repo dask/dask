@@ -1543,7 +1543,12 @@ Dask Name: {name}, {task} tasks""".format(klass=self.__class__.__name__,
         if percentiles is None:
             percentiles = [0.25, 0.5, 0.75]
         else:
-            percentiles = sorted(set(list(percentiles) + [0.5]))
+            # always include the the 50%tle to calculate the median
+            # unique removes duplicates and sorts quantiles
+            percentiles = np.array(percentiles)
+            percentiles = np.append(percentiles, 0.5)
+            percentiles = np.unique(percentiles)
+            percentiles = list(percentiles)
         stats = [num.count(split_every=split_every),
                  num.mean(split_every=split_every),
                  num.std(split_every=split_every),
