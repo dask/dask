@@ -15,7 +15,8 @@ from . import pickle
 from ..compatibility import PY2
 from ..utils import has_keyword
 from .compression import maybe_compress, decompress
-from .utils import unpack_frames, pack_frames_prelude, frame_split_size
+from .utils import (unpack_frames, pack_frames_prelude, frame_split_size,
+        ensure_bytes)
 
 
 lazy_registrations = {}
@@ -77,7 +78,7 @@ def msgpack_loads(header, frames):
 
 
 def serialization_error_loads(header, frames):
-    msg = '\n'.join([frame.decode('utf8') for frame in frames])
+    msg = '\n'.join([ensure_bytes(frame).decode('utf8') for frame in frames])
     raise TypeError(msg)
 
 
