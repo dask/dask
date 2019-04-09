@@ -6,6 +6,7 @@ import warnings
 from distutils.version import LooseVersion
 from functools import wraps, partial
 from numbers import Real, Integral
+from operator import add
 
 import numpy as np
 from toolz import concat, sliding_window, interleave
@@ -525,31 +526,39 @@ def gradient(f, *varargs, **kwargs):
 
 @wraps(np.bincount)
 def bincount(x, weights=None, minlength=None):
-    if minlength is None:
-        raise TypeError("Must specify minlength argument in da.bincount")
     assert x.ndim == 1
     if weights is not None:
         assert weights.chunks == x.chunks
 
-    # Call np.bincount on each block, possibly with weights
     token = tokenize(x, weights, minlength)
+    if minlength is not None:
+        dsk = {('minlength-' + token, 0): minlength}
+    else:
+        dsk = {('max-' + token, i): (np.amax, (x.name, i))
+               for i, _ in enumerate(x.__dask_keys__())}
+        dsk[('max-total-' + token, 0)] = (np.max, list(dsk), 0)
+        dsk[('minlength-' + token, 0)] = (add, 1, ('max-total-' + token, 0))
+
+    # Call np.bincount on each block, possibly with weights
     name = 'bincount-' + token
     if weights is not None:
-        dsk = {(name, i): (np.bincount, (x.name, i), (weights.name, i), minlength)
-               for i, _ in enumerate(x.__dask_keys__())}
-        dtype = np.bincount([1], weights=[1]).dtype
+        for i, _ in enumerate(x.__dask_keys__()):
+            dsk[(name, i)] = (np.bincount, (x.name, i), (weights.name, i), ('minlength-' + token, 0))
+            dtype = np.bincount([1], weights=[1]).dtype
     else:
-        dsk = {(name, i): (np.bincount, (x.name, i), None, minlength)
-               for i, _ in enumerate(x.__dask_keys__())}
-        dtype = np.bincount([]).dtype
+        for i, _ in enumerate(x.__dask_keys__()):
+            dsk[(name, i)] = (np.bincount, (x.name, i), None, ('minlength-' + token, 0))
+            dtype = np.bincount([]).dtype
 
     # Sum up all of the intermediate bincounts per block
+    bincount_list = [i for i in dsk if i[0] == name]
     name = 'bincount-sum-' + token
-    dsk[(name, 0)] = (np.sum, list(dsk), 0)
-
-    chunks = ((minlength,),)
+    dsk[(name, 0)] = (np.sum, bincount_list, 0)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x] if weights is None else [x, weights])
+
+    minlength = Array(graph, 'minlength-' + token, ((0,),), dtype)
+    chunks = ((minlength,),)
 
     return Array(graph, name, chunks, dtype)
 
